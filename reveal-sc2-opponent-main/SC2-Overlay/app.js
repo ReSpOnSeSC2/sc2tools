@@ -651,10 +651,19 @@
         if (!state) return;
         setIconSlot(e.leagueIcon, Icons.leagueIcon(state.league), state.league);
         safeText(e.wl, `${state.wins}W - ${state.losses}L`);
-        const delta = Number(state.mmrDelta) || 0;
-        const sign  = delta === 0 ? '' : (delta > 0 ? '+' : '');
-        safeText(e.mmr, `${sign}${delta} MMR`);
-        e.mmr.className = 'session-mmr ' + (delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat');
+        // No mock/fake data: when the backend can't determine the real
+        // MMR change (mmrDelta === null), surface that honestly with
+        // "xD" instead of pretending it's 0.
+        if (state.mmrDelta === null || state.mmrDelta === undefined ||
+            !Number.isFinite(Number(state.mmrDelta))) {
+            safeText(e.mmr, 'xD');
+            e.mmr.className = 'session-mmr flat';
+        } else {
+            const delta = Number(state.mmrDelta);
+            const sign  = delta === 0 ? '' : (delta > 0 ? '+' : '');
+            safeText(e.mmr, `${sign}${delta} MMR`);
+            e.mmr.className = 'session-mmr ' + (delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat');
+        }
         safeText(e.time, state.durationText || '0m');
         const s = state.currentStreak || {};
         if (s.type === 'win' && s.count >= 2) {

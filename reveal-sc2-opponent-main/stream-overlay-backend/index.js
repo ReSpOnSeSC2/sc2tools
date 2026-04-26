@@ -179,11 +179,15 @@ function defaultSession() {
     };
 }
 
-// Pull the per-game MMR estimate from config with safe defaults.
+// Pull the per-game MMR estimate from config. NO HIDDEN FALLBACK:
+// if the user has 0/0 (the default), we honor that and add nothing --
+// we'd rather show "xD" in the session widget than a made-up +25 that
+// turns out to be wrong. To opt in to estimates, set non-zero
+// winDelta/lossDelta in stream-overlay-config.json explicitly.
 function mmrEstimateDeltas() {
     const est = (config.session && config.session.mmrEstimate) || {};
-    const winDelta  = (typeof est.winDelta === 'number' && est.winDelta !== 0)  ? est.winDelta  :  25;
-    const lossDelta = (typeof est.lossDelta === 'number' && est.lossDelta !== 0) ? est.lossDelta : -25;
+    const winDelta  = (typeof est.winDelta  === 'number') ? est.winDelta  : 0;
+    const lossDelta = (typeof est.lossDelta === 'number') ? est.lossDelta : 0;
     return { winDelta, lossDelta };
 }
 
@@ -218,27 +222,16 @@ function loadSession() {
         const merged = { ...defaultSession(), ...data, metaCounts: data.metaCounts || {} };
 
         // Backfill mmrDelta for sessions saved by the older code path
-        // that didn't track it as a first-class field. If the absolute
-        // anchors disagree, trust them; otherwise estimate from W-L
-        // counts so a session that was running before this fix lands
-        // shows a sensible delta as soon as the backend restarts.
+        // that didn't track it as a first-class field. ONLY trust the
+        // real absolute anchors (mmrStart/mmrCurrent set by SC2Pulse or
+        // a real replay reading). We deliberately do NOT synthesize a
+        // delta from W-L counts here -- the user wants real numbers or
+        // an honest "xD" in the widget, not a fabricated +25 per win.
         if (!Number.isFinite(merged.mmrDelta) || merged.mmrDelta === 0) {
             if (Number.isFinite(merged.mmrStart) &&
                 Number.isFinite(merged.mmrCurrent) &&
                 merged.mmrStart !== merged.mmrCurrent) {
                 merged.mmrDelta = Math.round(merged.mmrCurrent - merged.mmrStart);
-            } else if ((merged.wins || 0) + (merged.losses || 0) > 0) {
-                const { winDelta, lossDelta } = mmrEstimateDeltas();
-                const delta =
-                    (merged.wins   || 0) * winDelta +
-                    (merged.losses || 0) * lossDelta;
-                merged.mmrDelta = delta;
-                // mmrStart was anchored to pre-session MMR (OCR at
-                // session start); advance mmrCurrent by the estimated
-                // delta so anchors and tracked field agree.
-                if (Number.isFinite(merged.mmrCurrent)) {
-                    merged.mmrCurrent = merged.mmrCurrent + delta;
-                }
             }
         }
         return merged;
@@ -277,21 +270,40 @@ function sessionSnapshot() {
     const totalMin = Math.max(0, Math.floor(elapsedMs / 60000));
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
-    // Prefer the tracked mmrDelta field, which accumulates per-game
-    // estimates when replay metadata lacks MMR. When both anchors are
-    // present they're authoritative and override the estimate.
-    let mmrDelta = Number.isFinite(session.mmrDelta) ? session.mmrDelta : 0;
-    if (Number.isFinite(session.mmrStart) && Number.isFinite(session.mmrCurrent)) {
-        const real = Math.round(session.mmrCurrent - session.mmrStart);
-        // Only override when the real anchors actually moved, so we
-        // don't wipe an estimate-derived delta back to 0 just because
-        // the OCR scanner happened to set mmrStart == mmrCurrent.
-        if (real !== 0) mmrDelta = real;
+
+    // mmrDelta resolution rules (no mock/fake data allowed):
+    //   1. Both real anchors known -> real delta (mmrCurrent - mmrStart).
+    //   2. Anchors missing AND user opted into a per-game estimate
+    //      (non-zero winDelta/lossDelta in config) -> trust the
+    //      accumulated session.mmrDelta.
+    //   3. Anchors missing AND no estimate configured AND any games
+    //      have been played -> null (frontend renders "xD").
+    //   4. Fresh session, 0 games -> 0 (no change yet, that's true).
+    const totalGames = (session.wins || 0) + (session.losses || 0);
+    const hasRealAnchors =
+        Number.isFinite(session.mmrStart) && Number.isFinite(session.mmrCurrent);
+    const { winDelta, lossDelta } = mmrEstimateDeltas();
+    const estimatesEnabled = winDelta !== 0 || lossDelta !== 0;
+
+    let mmrDelta;
+    if (hasRealAnchors) {
+        mmrDelta = Math.round(session.mmrCurrent - session.mmrStart);
+    } else if (estimatesEnabled) {
+        mmrDelta = Number.isFinite(session.mmrDelta) ? session.mmrDelta : 0;
+    } else if (totalGames === 0) {
+        mmrDelta = 0;
+    } else {
+        // Games played, no real anchor, no estimate -> we don't know.
+        mmrDelta = null;
     }
+
     return {
         wins: session.wins,
         losses: session.losses,
         mmrDelta,
+        // Tell the frontend whether mmrDelta is grounded in real data
+        // (Pulse/replay anchors) or only a configured estimate.
+        mmrDeltaReal: hasRealAnchors,
         mmrCurrent: session.mmrCurrent,
         league: mmrToLeague(session.mmrCurrent),
         durationText: h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`,
