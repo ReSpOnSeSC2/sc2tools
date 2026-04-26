@@ -100,10 +100,30 @@ class UserBuildDetector(BaseStrategyDetector):
 
             nexus_times = sorted([b['time'] for b in buildings if b['name'] == 'Nexus'])
             gate_times = sorted([b['time'] for b in buildings if b['name'] == 'Gateway'])
-            if len(nexus_times) >= 2 and nexus_times[1] < 300 and len(gate_times) >= 1 and gate_times[0] < nexus_times[1]:
+            # Count gateways FINISHED before the second Nexus -- this is what
+            # separates a 1-gate expand from a 2-gate expand. The previous
+            # rule only required len(gate_times) >= 1, which let any 2+ gate
+            # expand fall into Strange's bucket whenever the first warp-in
+            # happened to be a Sentry.
+            if len(nexus_times) >= 2 and nexus_times[1] < 300:
+                second_nexus = nexus_times[1]
+                gates_before_expand = sum(1 for t in gate_times if t < second_nexus)
                 first_unit = next((u['name'] for u in sorted(units, key=lambda x: x['time']) if u['name'] in ("Stalker", "Adept", "Sentry", "Zealot")), None)
-                if first_unit == "Sentry":
+
+                # 2 Gate Expand: 2+ gates finished before the natural goes
+                # down (the "safe" PvP opener).
+                if gates_before_expand >= 2:
+                    return "PvP - 2 Gate Expand"
+
+                # Strange's 1 Gate Expand: exactly 1 gate before the natural
+                # AND the first warp-in is a Sentry (the build's signature).
+                if gates_before_expand == 1 and first_unit == "Sentry":
                     return "PvP - Strange's 1 Gate Expand"
+
+                # Standard 1 Gate Expand: exactly 1 gate before the natural,
+                # first unit is anything other than a Sentry.
+                if gates_before_expand == 1 and first_unit in ("Stalker", "Adept", "Zealot"):
+                    return "PvP - 1 Gate Expand"
 
             if count_units("Adept", 360) >= 4 and count_units("Oracle", 390) >= 1:
                 return "PvP - AlphaStar (4 Adept/Oracle)"
