@@ -238,30 +238,60 @@ class OpponentProfiler:
         self._opponent_groups = final_groups
         self._aliases = aliases
 
-    def _games_for(self, name: str) -> List[Dict]:
-        """Lookup by canonical name, raw alias, or stripped-name fallback."""
+    def _games_for(
+        self, name: str, since: Optional[str] = None,
+    ) -> List[Dict]:
+        """Lookup by canonical name, raw alias, or stripped-name fallback.
+
+        When ``since`` is non-empty the result is filtered to games whose
+        ``date`` field lexically sorts at or after the cutoff. Games with
+        an empty / missing ``date`` are dropped under any non-None cutoff
+        (we cannot place them on the timeline so they cannot pass a
+        season filter).
+        """
         self._build_opponent_groups()
         groups = self._opponent_groups or {}
         aliases = self._aliases or {}
+        glist: List[Dict] = []
         if name in groups:
-            return groups[name]
-        canonical = aliases.get(name)
-        if canonical and canonical in groups:
-            return groups[canonical]
-        stripped = _strip_clan_tag(name).lower()
-        for canonical_name, glist in groups.items():
-            if _strip_clan_tag(canonical_name).lower() == stripped:
-                return glist
-        return []
+            glist = groups[name]
+        else:
+            canonical = aliases.get(name)
+            if canonical and canonical in groups:
+                glist = groups[canonical]
+            else:
+                stripped = _strip_clan_tag(name).lower()
+                for canonical_name, candidate in groups.items():
+                    if _strip_clan_tag(canonical_name).lower() == stripped:
+                        glist = candidate
+                        break
+        if since:
+            glist = [g for g in glist if (g.get("date") or "") >= since]
+        return glist
 
     # -------------------------------------------------------------- public API
 
-    def list_opponents(self, min_games: int = 1) -> List[Dict]:
-        """Return aggregated rows per opponent, sorted by total games desc."""
+    def list_opponents(
+        self,
+        min_games: int = 1,
+        since: Optional[str] = None,
+    ) -> List[Dict]:
+        """Return aggregated rows per opponent, sorted by total games desc.
+
+        When ``since`` is non-empty, games older than the cutoff are
+        dropped *before* the per-opponent W/L / total counts are computed,
+        and opponents whose surviving game count falls below ``min_games``
+        are omitted from the output. This is what makes the Opponents tab
+        respect the same season filter that drives the rest of the app
+        (instead of just hiding opponents whose last_seen falls outside
+        the window while still summing all-time W/L totals).
+        """
         self._build_opponent_groups()
         groups = self._opponent_groups or {}
         rows: List[Dict] = []
         for canonical, glist in groups.items():
+            if since:
+                glist = [g for g in glist if (g.get("date") or "") >= since]
             wins = sum(1 for g in glist if g.get("result") == "Win")
             losses = sum(1 for g in glist if g.get("result") == "Loss")
             total = len(glist)
@@ -278,7 +308,12 @@ class OpponentProfiler:
         rows.sort(key=lambda r: (-r["total"], r["name"].lower()))
         return rows
 
-    def profile(self, name: str, my_race: str = "") -> Dict:
+    def profile(
+        self,
+        name: str,
+        my_race: str = "",
+        since: Optional[str] = None,
+    ) -> Dict:
         """Build (and cache) the full DNA profile for a single opponent.
 
         ``my_race`` is the user's race for the matchup. It controls which
@@ -287,12 +322,19 @@ class OpponentProfiler:
         Pass ``""`` if unknown - timings will be empty in that case but the
         rest of the profile (race distribution, top strategies, map W/L,
         last-5) still renders normally.
+
+        ``since`` is an ISO-8601 timestamp string ("2026-04-01T00:00:00")
+        used as a lexical lower bound on each game's ``date`` field. When
+        provided, games strictly older than the cutoff are dropped before
+        every aggregation. ``None`` (the default) keeps the all-time
+        behavior. The cutoff participates in the cache key so swapping
+        seasons re-derives instead of returning a stale view.
         """
-        cache_key = (name, normalize_race(my_race))
+        cache_key = (name, normalize_race(my_race), since or "")
         if cache_key in self._profile_cache:
             return self._profile_cache[cache_key]
 
-        games = self._games_for(name)
+        games = self._games_for(name, since=since)
 
         # Modal opponent race = most common opp_race across the games we
         # have. Used for canonical timings ordering and for the matchup
@@ -422,7 +464,10 @@ class OpponentProfiler:
         return prof
 
     def predict_likely_strategies(
-        self, name: str, my_race: str = ""
+        self,
+        name: str,
+        my_race: str = "",
+        since: Optional[str] = None,
     ) -> List[Tuple[str, float]]:
         """Return `(strategy, probability)` pairs sorted by descending weight.
 
@@ -430,8 +475,10 @@ class OpponentProfiler:
         `my_race` is accepted for forward-compatibility (e.g. future filtering
         when matchup-aware tagging exists in the DB) and currently does not
         change the math.
+        ``since`` filters the underlying game list lexically (same contract
+        as ``profile``) so the prediction respects the active season filter.
         """
-        games = self._games_for(name)
+        games = self._games_for(name, since=since)
         if not games:
             return []
         sorted_games = sorted(games, key=lambda g: g.get("date", "") or "", reverse=True)

@@ -2207,7 +2207,7 @@ class App(ctk.CTk):
         search = self._opp_search_var.get().strip().lower()
 
         prof = self.analyzer.get_profiler()
-        rows = prof.list_opponents(min_games=min_games) if prof else []
+        rows = prof.list_opponents(min_games=min_games, since=self._season_cutoff_iso()) if prof else []
         if search:
             rows = [r for r in rows if search in r["name"].lower()]
         self._opp_summary_lbl.configure(
@@ -2311,7 +2311,8 @@ class App(ctk.CTk):
         # "Protoss - ...", "Terran - ..."), which is the only
         # race-of-record stored on the game payload itself today.
         my_race = self._infer_my_race_for_opponent(name)
-        prof = prof_obj.profile(name, my_race=my_race)
+        since = self._season_cutoff_iso()
+        prof = prof_obj.profile(name, my_race=my_race, since=since)
         if prof["total"] == 0:
             ctk.CTkLabel(
                 self._opp_detail_frame,
@@ -2411,7 +2412,7 @@ class App(ctk.CTk):
 
         prof_obj = self.analyzer.get_profiler()
         try:
-            predictions = prof_obj.predict_likely_strategies(prof["name"]) if prof_obj else []
+            predictions = prof_obj.predict_likely_strategies(prof["name"], since=self._season_cutoff_iso()) if prof_obj else []
         except Exception as exc:
             ctk.CTkLabel(
                 card, text=f"Could not compute predictions: {exc}",
@@ -2486,7 +2487,7 @@ class App(ctk.CTk):
 
         prof_obj = self.analyzer.get_profiler()
         try:
-            games = prof_obj._games_for(prof["name"]) if prof_obj else []
+            games = prof_obj._games_for(prof["name"], since=self._season_cutoff_iso()) if prof_obj else []
         except Exception:
             games = []
         recent = sorted(games, key=lambda g: g.get("date", "") or "", reverse=True)[:25]
@@ -2691,14 +2692,31 @@ class App(ctk.CTk):
         except Exception:
             return ""
         counts: Counter = Counter()
+        # Builds in this app are catalogued under one of two prefix
+        # conventions, both of which encode the user's race in the head
+        # of the build name:
+        #   * race-prefixed   "Zerg - 12 Pool" / "Protoss - Stargate Opener"
+        #   * matchup-prefixed "PvT - Phoenix into Robo" / "ZvP - 17 Hatch"
+        # We resolve both: the explicit race prefix wins, then the first
+        # letter of a matchup prefix (which is always the user's race).
         for g in games or []:
-            bn = (g.get("my_build") or "")
-            if bn.startswith("Zerg"):
+            bn = (g.get("my_build") or "").strip()
+            if not bn:
+                continue
+            head = bn.split(" - ", 1)[0]
+            head_lower = head.lower()
+            if head_lower.startswith("zerg"):
                 counts["Z"] += 1
-            elif bn.startswith("Protoss"):
+            elif head_lower.startswith("protoss"):
                 counts["P"] += 1
-            elif bn.startswith("Terran"):
+            elif head_lower.startswith("terran"):
                 counts["T"] += 1
+            elif len(head) >= 2 and head[1] in ("v", "V") and head[0].upper() in ("P", "T", "Z"):
+                counts[head[0].upper()] += 1
+            else:
+                first = head[:1].upper()
+                if first in ("P", "T", "Z") and (len(head) == 1 or not head[1].isalpha()):
+                    counts[first] += 1
         if not counts:
             return ""
         return counts.most_common(1)[0][0]
@@ -2795,7 +2813,11 @@ class App(ctk.CTk):
 
         try:
             prof_obj = self.analyzer.get_profiler()
-            games = prof_obj._games_for(opp_name) if prof_obj else []  # noqa: SLF001
+            since = self._season_cutoff_iso()
+            games = (
+                prof_obj._games_for(opp_name, since=since)  # noqa: SLF001
+                if prof_obj else []
+            )
         except Exception:
             games = []
 
@@ -3409,7 +3431,12 @@ class App(ctk.CTk):
 
         try:
             prof_obj = self.analyzer.get_profiler()
-            games = prof_obj._games_for(opp_name) if prof_obj else []  # noqa: SLF001
+            games = (
+                prof_obj._games_for(  # noqa: SLF001
+                    opp_name, since=self._season_cutoff_iso(),
+                )
+                if prof_obj else []
+            )
         except Exception:
             return []
 

@@ -498,19 +498,40 @@ class UserBuildDetector(BaseStrategyDetector):
 
             nexus_times = sorted([b["time"] for b in buildings if b["name"] == "Nexus"])
             gate_times = sorted([b["time"] for b in buildings if b["name"] == "Gateway"])
-            if (
-                len(nexus_times) >= 2
-                and nexus_times[1] < 300
-                and len(gate_times) >= 1
-                and gate_times[0] < nexus_times[1]
-            ):
+            # Count gateways that were finished BEFORE the second Nexus
+            # started warping in. This is what distinguishes the
+            # 1-gate expand (Strange's / standard) from the 2-gate expand
+            # (which is a separate, well-known PvP opener). Previously we
+            # only required `len(gate_times) >= 1`, which let any 2+ gate
+            # expand fall into the Strange's bucket as long as the first
+            # produced unit happened to be a Sentry.
+            if len(nexus_times) >= 2 and nexus_times[1] < 300:
+                second_nexus = nexus_times[1]
+                gates_before_expand = sum(1 for t in gate_times if t < second_nexus)
+
                 first_unit = next(
                     (u["name"] for u in sorted(units, key=lambda x: x["time"])
                      if u["name"] in ("Stalker", "Adept", "Sentry", "Zealot")),
                     None,
                 )
-                if first_unit == "Sentry":
+
+                # 2 Gate Expand: 2 (or more) gateways finished before the
+                # natural goes down. This is the "safe" PvP opener that
+                # protects against proxy 2-gate / early aggression while
+                # still taking the natural early.
+                if gates_before_expand >= 2:
+                    return "PvP - 2 Gate Expand"
+
+                # Strange's 1 Gate Expand: exactly 1 gateway before the
+                # natural, AND the first warp-in is a Sentry (the
+                # signature of the build).
+                if gates_before_expand == 1 and first_unit == "Sentry":
                     return "PvP - Strange's 1 Gate Expand"
+
+                # Standard 1 Gate Expand: exactly 1 gateway before the
+                # natural, first unit is something other than a Sentry.
+                if gates_before_expand == 1 and first_unit in ("Stalker", "Adept", "Zealot"):
+                    return "PvP - 1 Gate Expand"
 
             if count_units("Adept", 360) >= 4 and count_units("Oracle", 390) >= 1:
                 return "PvP - AlphaStar (4 Adept/Oracle)"

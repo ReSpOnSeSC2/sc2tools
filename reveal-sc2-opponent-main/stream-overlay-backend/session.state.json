@@ -1,14 +1,20 @@
 {
-  "startedAt": 1777227301585,
-  "wins": 0,
+  "startedAt": 1777233537592,
+  "wins": 1,
   "losses": 0,
-  "mmrStart": null,
-  "mmrCurrent": null,
-  "mmrDelta": 0,
+  "mmrStart": 7,
+  "mmrCurrent": 32,
+  "mmrDelta": 25,
   "currentStreak": {
-    "type": null,
-    "count": 0
+    "type": "win",
+    "count": 1
   },
-  "lastResultTime": null,
-  "metaCounts": {}
+  "lastResultTime": 1777235202488,
+  "metaCounts": {
+    "Protoss - Proxy Stargate Opener": 3,
+    "Terran - Bio / Mech / Sky / Stargate Comp": 3,
+    "Zerg - 3 Base Macro (Hatch First)": 3,
+    "Protoss - Robo Opener": 3,
+    "Protoss - Standard Expand": 2
+  }
 }

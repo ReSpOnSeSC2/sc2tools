@@ -17,7 +17,7 @@
   "sounds": { "enabled": false, "volume": 0.5 },
   "session": {
     "idleResetMs": 3600000,
-    "mmrEstimate": { "winDelta": 25, "lossDelta": -25 }
+    "mmrEstimate": { "winDelta": 0, "lossDelta": 0 }
   },
   "pulse": {
     "enabled": true,

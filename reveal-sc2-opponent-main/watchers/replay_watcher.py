@@ -69,6 +69,22 @@ SERVER_URL_DEEP = "http://localhost:3000/api/replay/deep"
 POST_TIMEOUT_SEC = 3
 DEEP_POST_TIMEOUT_SEC = 6
 
+# Catch-up scan tunables. See `_catch_up_at_startup` for context.
+#
+# CATCH_UP_BUFFER  - how far before the most-recent recorded game to
+#                    start scanning. Replay file mtimes don't always
+#                    line up with game dates (cloud-sync delays,
+#                    timezone drift), so we look back a buffer to
+#                    avoid missing anything that landed near the cutoff.
+# CATCH_UP_FALLBACK - if both DBs are empty / unreadable, scan only
+#                    the last N days. Stops a fresh install from
+#                    re-parsing a 10k-replay backlog on first launch.
+from datetime import datetime, timedelta  # noqa: E402
+import glob  # noqa: E402
+
+CATCH_UP_BUFFER = timedelta(hours=6)
+CATCH_UP_FALLBACK = timedelta(days=14)
+
 
 def _read_player_handle() -> str:
     """Read the configured player handle from data/config.json."""
@@ -235,37 +251,74 @@ class ReplayHandler(FileSystemEventHandler):
         if not _wait_for_file_ready(event.src_path):
             print("[Watcher] File never settled; skipping.")
             return
+        # Live broadcast + threaded deep parse: the on-disk handler
+        # always wants the live POST so the overlay fires its alerts.
+        self._process_replay_path(
+            event.src_path, do_live_post=True, do_deep_async=True,
+        )
 
-        # 1. Live parse (fast)
+    # --- shared per-replay pipeline --------------------------------------
+    def _process_replay_path(
+        self,
+        src_path: str,
+        *,
+        do_live_post: bool = True,
+        do_deep_async: bool = True,
+    ) -> str:
+        """Run the parse + persist pipeline for one .SC2Replay path.
+
+        ``do_live_post`` controls whether the fast live payload is
+        POSTed to the overlay (the catch-up scan suppresses this so
+        old games don't trigger stale 'Victory!' alerts).
+        ``do_deep_async`` controls whether the deep parse runs in a
+        background thread (live case) or inline on the calling thread
+        (catch-up case, where each game must fully persist before we
+        move on so the running totals are accurate).
+
+        Returns one of:
+          - 'live_only'    - live parse delivered, deep skipped
+          - 'deep_queued'  - live parse delivered, deep parse spawned
+          - 'deep_done'    - live parse delivered, deep persisted inline
+          - 'ai'           - 1v1 vs an A.I., no broadcast or persist
+          - 'unresolved'   - player handle resolution failed
+          - 'parse_failed' - live parse threw; logged to error file
+        """
         try:
-            ctx = parse_live(event.src_path, self.player_handle)
+            ctx = parse_live(src_path, self.player_handle)
         except Exception as e:
-            self.errors.log(event.src_path, f"live parse failed: {e}")
+            self.errors.log(src_path, f"live parse failed: {e}")
             self.errors.append(ERROR_LOG_FILE)
             print(f"[Watcher] Live parse failed: {e}")
-            return
+            return "parse_failed"
 
-        # AI guard - we never broadcast or persist AI matches.
         if ctx.is_ai_game:
             print("[Watcher] AI match - ignored.")
-            return
+            return "ai"
         if not ctx.me or not ctx.opponent:
             print("[Watcher] Player resolution failed; skipping.")
-            return
+            return "unresolved"
 
-        live_pl = _live_payload(ctx)
-        if live_pl:
-            _post_json(SERVER_URL_LIVE, live_pl, POST_TIMEOUT_SEC)
+        if do_live_post:
+            live_pl = _live_payload(ctx)
+            if live_pl:
+                _post_json(SERVER_URL_LIVE, live_pl, POST_TIMEOUT_SEC)
 
-        # 2. Deep parse (background thread, default-on)
-        if self.enable_deep:
+        if not self.enable_deep:
+            return "live_only"
+
+        if do_deep_async:
             t = threading.Thread(
                 target=self._run_deep_parse,
-                args=(event.src_path, ctx.game_id),
+                args=(src_path, ctx.game_id),
                 daemon=True,
-                name=f"deep-parse-{os.path.basename(event.src_path)}",
+                name=f"deep-parse-{os.path.basename(src_path)}",
             )
             t.start()
+            return "deep_queued"
+
+        # Synchronous path used by the catch-up scan.
+        self._run_deep_parse(src_path, ctx.game_id)
+        return "deep_done"
 
     # --- deep-parse worker ----------------------------------------------
     def _run_deep_parse(self, file_path: str, live_game_id: str) -> None:
@@ -377,6 +430,146 @@ class ReplayHandler(FileSystemEventHandler):
 
 
 # =========================================================
+# Startup catch-up scan
+# =========================================================
+def _parse_date(s: str):
+    """Tolerant date parser: 'YYYY-MM-DD HH:MM' first, then ISO."""
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s.strip(), fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _latest_recorded_dt():
+    """Newest game date across BOTH the Black Book and the analyzer
+    meta DB. The watcher writes to both stores via DataStore.link_game,
+    so the catch-up cutoff has to be the max of the two -- otherwise
+    we'd miss games that one store saw but the other didn't (which is
+    exactly what the recent corruption-rollback left behind)."""
+    from core.paths import HISTORY_FILE as _HF, META_DB_FILE as _MD
+    latest = None
+
+    try:
+        if os.path.exists(_HF):
+            with open(_HF, "r", encoding="utf-8-sig") as f:
+                bb = json.load(f)
+            for data in (bb or {}).values():
+                if not isinstance(data, dict):
+                    continue
+                for g in data.get("Games") or []:
+                    if isinstance(g, dict):
+                        d = _parse_date(g.get("Date") or "")
+                        if d and (latest is None or d > latest):
+                            latest = d
+                for mu in (data.get("Matchups") or {}).values():
+                    if not isinstance(mu, dict):
+                        continue
+                    for g in mu.get("Games") or []:
+                        if isinstance(g, dict):
+                            d = _parse_date(g.get("Date") or "")
+                            if d and (latest is None or d > latest):
+                                latest = d
+    except Exception as exc:
+        print(f"[catch-up] Warning: could not read Black Book: {exc}")
+
+    try:
+        if os.path.exists(_MD):
+            with open(_MD, "r", encoding="utf-8-sig") as f:
+                md = json.load(f)
+            for build in (md or {}).values():
+                if not isinstance(build, dict):
+                    continue
+                for g in build.get("games") or []:
+                    if isinstance(g, dict):
+                        d = _parse_date(g.get("date") or "")
+                        if d and (latest is None or d > latest):
+                            latest = d
+    except Exception as exc:
+        print(f"[catch-up] Warning: could not read meta DB: {exc}")
+
+    return latest
+
+
+def _enumerate_recent_replays(watch_dir, cutoff_dt):
+    """Paths of .SC2Replay files newer than cutoff, oldest first."""
+    cutoff_ts = cutoff_dt.timestamp()
+    out = []
+    pattern = os.path.join(watch_dir, "**", "*.SC2Replay")
+    for p in glob.iglob(pattern, recursive=True):
+        try:
+            mt = os.path.getmtime(p)
+        except OSError:
+            continue
+        if mt >= cutoff_ts:
+            out.append(p)
+    out.sort(key=lambda p: os.path.getmtime(p))
+    return out
+
+
+def _catch_up_at_startup(handler, watch_dir):
+    """Process any replays that landed while the watcher was off.
+
+    Cutoff is `max(Black-Book newest, meta-DB newest) - CATCH_UP_BUFFER`
+    so we re-import a small window around the last known game and let
+    DataStore.link_game's idempotency on game id handle anything that
+    was already there. Each game's deep parse runs INLINE rather than
+    queued -- catch-up is a one-shot blocking operation; we want the
+    totals printed at the end to reflect what actually persisted."""
+    print("[catch-up] Scanning for replays played while the watcher was off...")
+    if not os.path.exists(watch_dir):
+        print(f"[catch-up] WATCH_DIR not found: {watch_dir}; skipping.")
+        return
+
+    latest = _latest_recorded_dt()
+    if latest is None:
+        cutoff = datetime.now() - CATCH_UP_FALLBACK
+        print(
+            f"[catch-up] Both data stores empty/unreadable; scanning the "
+            f"last {CATCH_UP_FALLBACK.days} days only."
+        )
+    else:
+        cutoff = latest - CATCH_UP_BUFFER
+        print(
+            f"[catch-up] Newest recorded game: {latest:%Y-%m-%d %H:%M}; "
+            f"scanning replays newer than {cutoff:%Y-%m-%d %H:%M} "
+            f"(with {CATCH_UP_BUFFER} buffer)."
+        )
+
+    paths = _enumerate_recent_replays(watch_dir, cutoff)
+    if not paths:
+        print("[catch-up] No replays in the catch-up window.")
+        return
+
+    print(f"[catch-up] Found {len(paths)} candidate replay(s); processing...")
+
+    counters = {
+        "deep_done": 0, "live_only": 0, "ai": 0,
+        "unresolved": 0, "parse_failed": 0,
+    }
+    for i, path in enumerate(paths, start=1):
+        print(f"[catch-up] ({i}/{len(paths)}) {os.path.basename(path)}")
+        # Suppress live POST so the overlay doesn't fire stale alerts;
+        # run deep parse inline so persistence is sequential.
+        status = handler._process_replay_path(  # noqa: SLF001
+            path, do_live_post=False, do_deep_async=False,
+        )
+        counters[status] = counters.get(status, 0) + 1
+
+    print(
+        "[catch-up] Done. "
+        f"deep_done={counters.get('deep_done', 0)} "
+        f"live_only={counters.get('live_only', 0)} "
+        f"ignored_AI={counters.get('ai', 0)} "
+        f"unresolved={counters.get('unresolved', 0)} "
+        f"parse_failed={counters.get('parse_failed', 0)}"
+    )
+
+
+# =========================================================
 # CLI entry
 # =========================================================
 def main(watch_dir: Optional[str] = None) -> int:
@@ -385,15 +578,32 @@ def main(watch_dir: Optional[str] = None) -> int:
         print(f"[Watcher] Directory not found: {target}")
         return 1
 
-    # Resolve the player handle once so we can both log it and pass it
-    # to ReplayHandler. _read_player_handle() prefers data/config.json's
-    # last_player/player_name, falling back to DEFAULT_PLAYER.
     handle = _read_player_handle()
 
     print(f"[Watcher] Player handle: {handle!r} (substring match)")
     print(f"[Watcher] Watching:       {target}")
 
     handler = ReplayHandler(player_handle=handle, enable_deep=True)
+
+    # Catch up FIRST so a freshly-launched watcher absorbs anything
+    # played while it was off, BEFORE we attach the live observer.
+    # Doing it in this order avoids a tiny window where a brand-new
+    # replay could land mid-scan and get processed twice.
+    try:
+        _catch_up_at_startup(handler, target)
+    except Exception as exc:
+        # A failed catch-up shouldn't stop the live watcher from
+        # running. Log via the error logger and fall through.
+        import traceback as _tb
+        print("[catch-up] Aborted with an error:")
+        _tb.print_exc()
+        try:
+            handler.errors.log("catch-up", f"startup catch-up failed: {exc}")
+            handler.errors.append(ERROR_LOG_FILE)
+        except Exception:
+            pass
+
+    print("\n[Watcher] Live observer starting...")
     observer = Observer()
     observer.schedule(handler, target, recursive=True)
     observer.start()

@@ -1444,9 +1444,15 @@ class App(ctk.CTk):
             min_games = 1
         search_txt = (self._opp_search_var.get() or "").strip().lower()
 
+        # Pass the active season cutoff down to the profiler so the W/L
+        # counts and totals shown in the list reflect the season window
+        # (not just the all-time roll-up filtered by last_seen).
+        cutoff = self._season_cutoff_iso()
         try:
             profiler = self.analyzer.get_profiler()
-            rows = profiler.list_opponents(min_games=min_games)
+            rows = profiler.list_opponents(
+                min_games=min_games, since=cutoff,
+            )
         except Exception as exc:
             ctk.CTkLabel(
                 self._opp_list_frame,
@@ -1454,13 +1460,6 @@ class App(ctk.CTk):
                 text_color="#EF5350", font=FONT_SMALL, wraplength=300,
             ).pack(pady=20, padx=10)
             return
-
-        # Apply season filter by re-counting against the per-row last_seen
-        # date isn't accurate (rows are aggregated). Instead, hide rows whose
-        # most recent game falls outside the season window.
-        cutoff = self._season_cutoff_iso()
-        if cutoff is not None:
-            rows = [r for r in rows if (r.get("last_seen") or "") >= cutoff]
 
         if search_txt:
             rows = [r for r in rows if search_txt in (r.get("name", "") or "").lower()]
@@ -1556,7 +1555,11 @@ class App(ctk.CTk):
             # "Protoss - ...", "Terran - ..."), which is the only race-of-
             # record stored on the game payload itself today.
             my_race = self._infer_my_race_for_opponent(name)
-            prof = profiler.profile(name, my_race=my_race)
+            # Honor the active season filter so the profile's timings,
+            # map stats, top strategies, and recent games are all scoped
+            # to the same window the rest of the app shows.
+            since = self._season_cutoff_iso()
+            prof = profiler.profile(name, my_race=my_race, since=since)
         except Exception as exc:
             ctk.CTkLabel(
                 self._opp_detail_frame,
@@ -1712,7 +1715,9 @@ class App(ctk.CTk):
 
         # Predicted likely strategies (recency-weighted).
         try:
-            preds = profiler.predict_likely_strategies(name)
+            preds = profiler.predict_likely_strategies(
+                name, since=self._season_cutoff_iso(),
+            )
         except Exception:
             preds = []
         if preds:
@@ -1974,14 +1979,35 @@ class App(ctk.CTk):
         except Exception:
             return ""
         counts: Counter = Counter()
+        # Builds in this app are catalogued under one of two prefix
+        # conventions, both of which encode the user's race in the head
+        # of the build name:
+        #   * race-prefixed   "Zerg - 12 Pool" / "Protoss - Stargate Opener"
+        #   * matchup-prefixed "PvT - Phoenix into Robo" / "ZvP - 17 Hatch"
+        # We resolve both: the explicit race prefix wins, then the first
+        # letter of a matchup prefix (which is always the user's race).
         for g in games or []:
-            bn = (g.get("my_build") or "")
-            if bn.startswith("Zerg"):
+            bn = (g.get("my_build") or "").strip()
+            if not bn:
+                continue
+            head = bn.split(" - ", 1)[0]  # everything before the first " - "
+            head_lower = head.lower()
+            if head_lower.startswith("zerg"):
                 counts["Z"] += 1
-            elif bn.startswith("Protoss"):
+            elif head_lower.startswith("protoss"):
                 counts["P"] += 1
-            elif bn.startswith("Terran"):
+            elif head_lower.startswith("terran"):
                 counts["T"] += 1
+            elif len(head) >= 2 and head[1] in ("v", "V") and head[0].upper() in ("P", "T", "Z"):
+                # Matchup form: 'PvT', 'ZvP', 'TvZ'. First char is mine.
+                counts[head[0].upper()] += 1
+            else:
+                # Last-resort: a leading 'P'/'T'/'Z' followed by a non-alpha
+                # separator (e.g. "P - 4 Gate" if the user has a custom
+                # one-letter prefix). Conservative -- skip if ambiguous.
+                first = head[:1].upper()
+                if first in ("P", "T", "Z") and (len(head) == 1 or not head[1].isalpha()):
+                    counts[first] += 1
         if not counts:
             return ""
         return counts.most_common(1)[0][0]
@@ -2088,7 +2114,11 @@ class App(ctk.CTk):
 
         try:
             profiler = self.analyzer.get_profiler()
-            games = profiler._games_for(opp_name) if profiler else []  # noqa: SLF001
+            since = self._season_cutoff_iso()
+            games = (
+                profiler._games_for(opp_name, since=since)  # noqa: SLF001
+                if profiler else []
+            )
         except Exception:
             games = []
 
@@ -2756,7 +2786,9 @@ class App(ctk.CTk):
 
         try:
             profiler = self.analyzer.get_profiler()
-            games = profiler._games_for(opp_name)  # noqa: SLF001
+            games = profiler._games_for(  # noqa: SLF001
+                opp_name, since=self._season_cutoff_iso(),
+            )
         except Exception:
             return []
 
