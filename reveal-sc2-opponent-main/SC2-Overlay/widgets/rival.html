@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SC2 Overlay - Rival Alert (#6)</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../widget-mode.css">
+<script src="http://localhost:3000/socket.io/socket.io.js"></script>
+<script src="../icon-registry.js" defer></script>
+<script>
+  // Force the URL into single-widget mode even if the user opened
+  // this file directly (file://...) without the ?w= query string.
+  if (!new URLSearchParams(window.location.search).get('w')) {
+    history.replaceState(null, '', window.location.pathname + '?w=rival');
+  }
+</script>
+</head>
+<body>
+
+<div id="rival-widget" class="widget-container rival-widget">
+    <div class="accent-bar accent-rival"></div>
+    <div class="content">
+        <div class="header">
+            <span id="rival-icon" class="sc2-icon-slot"></span>
+            <span id="rival-tier-label">RIVAL</span>
+            <span id="rival-name" class="bright"></span>
+        </div>
+        <div class="footer">
+            <span id="rival-record"></span>
+            <span id="rival-last" class="dim"></span>
+        </div>
+    </div>
+</div>
+<script src="../app.js"></script>
+</body>
+</html>

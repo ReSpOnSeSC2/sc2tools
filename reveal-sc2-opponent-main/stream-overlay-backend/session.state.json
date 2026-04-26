@@ -1,0 +1,16 @@
+{
+  "startedAt": 1777154015614,
+  "wins": 1,
+  "losses": 0,
+  "mmrStart": null,
+  "mmrCurrent": null,
+  "mmrDelta": 0,
+  "currentStreak": {
+    "type": "win",
+    "count": 1
+  },
+  "lastResultTime": 1777155032201,
+  "metaCounts": {
+    "Zerg - 12 Pool (Custom Engine Example)": 1
+  }
+}

@@ -1,0 +1,750 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-04-25",
+  "source_note": "Compiled from competitive SC2 meta documentation (Spawning Tool, Icy Veins, Liquipedia). 2025-2026 meta builds for TvT, ZvZ, ZvT matchups.",
+  "matchups": {
+    "TvT": [
+      {
+        "id": "tvt_01",
+        "name": "Reaper FE into Bio",
+        "style": "macro",
+        "difficulty": "beginner",
+        "description": "Safe expand opener using a Reaper to scout, then transitioning into bio production with a natural expansion. The most common TvT standard opener.",
+        "steps": [
+          {"supply": 10, "time": "0:15", "action": "Supply Depot"},
+          {"supply": 12, "time": "0:55", "action": "Barracks"},
+          {"supply": 13, "time": "1:10", "action": "Refinery"},
+          {"supply": 15, "time": "2:00", "action": "Orbital Command (when Barracks completes)"},
+          {"supply": 15, "time": "2:05", "action": "Reaper (scout opponent's base)"},
+          {"supply": 17, "time": "2:20", "action": "Supply Depot"},
+          {"supply": 18, "time": "2:45", "action": "Command Center at natural expansion"},
+          {"supply": 19, "time": "3:00", "action": "Factory"},
+          {"supply": 20, "time": "3:30", "action": "Barracks #2"},
+          {"supply": 22, "time": "4:00", "action": "Starport (when Factory completes, lift Factory)"},
+          {"supply": 22, "time": "4:10", "action": "Tech Lab on Starport, Reactor on Barracks #2"},
+          {"supply": 24, "time": "4:30", "action": "2x Supply Depots"},
+          {"supply": 26, "time": "5:00", "action": "Orbital Command on natural CC"},
+          {"supply": 28, "time": "5:10", "action": "Medivac from Starport, Marines from Barracks"},
+          {"supply": 32, "time": "5:30", "action": "Barracks #3 and #4"},
+          {"supply": 36, "time": "6:30", "action": "Engineering Bay, begin 1/1 bio upgrades"},
+          {"supply": 40, "time": "7:00", "action": "Push or expand to 3rd base with bio army"}
+        ]
+      },
+      {
+        "id": "tvt_02",
+        "name": "Reaper FE into Cyclone-Marine",
+        "style": "aggressive-macro",
+        "difficulty": "intermediate",
+        "description": "Reaper expand into early Cyclone harassment loaded into a Medivac. The Cyclone's Lock-On ability pins down SCVs and bio units. Transitions into standard bio after harass.",
+        "steps": [
+          {"supply": 10, "time": "0:15", "action": "Supply Depot"},
+          {"supply": 12, "time": "0:55", "action": "Barracks"},
+          {"supply": 13, "time": "1:10", "action": "Refinery"},
+          {"supply": 15, "time": "2:00", "action": "Orbital Command"},
+          {"supply": 15, "time": "2:05", "action": "Reaper"},
+          {"supply": 17, "time": "2:20", "action": "Supply Depot"},
+          {"supply": 18, "time": "2:45", "action": "Command Center at natural"},
+          {"supply": 19, "time": "3:00", "action": "Factory with Tech Lab"},
+          {"supply": 20, "time": "3:30", "action": "Starport"},
+          {"supply": 22, "time": "3:45", "action": "Cyclone from Factory Tech Lab"},
+          {"supply": 23, "time": "4:20", "action": "Medivac from Starport"},
+          {"supply": 24, "time": "4:30", "action": "Supply Depots, Barracks #2"},
+          {"supply": 26, "time": "5:00", "action": "Load Cyclone into Medivac, harass opponent main"},
+          {"supply": 28, "time": "5:30", "action": "Natural Orbital Command, continue bio production"},
+          {"supply": 36, "time": "7:00", "action": "Engineering Bay, 1/1 upgrades, 3rd Command Center"}
+        ]
+      },
+      {
+        "id": "tvt_03",
+        "name": "1-1-1 Banshee Cloak",
+        "style": "aggressive",
+        "difficulty": "intermediate",
+        "description": "One Barracks, one Factory, one Starport rush to get a cloaked Banshee harassing before the opponent has detection. Destroys SCV lines if undetected.",
+        "steps": [
+          {"supply": 10, "time": "0:15", "action": "Supply Depot"},
+          {"supply": 12, "time": "0:55", "action": "Barracks"},
+          {"supply": 13, "time": "1:05", "action": "Refinery #1"},
+          {"supply": 14, "time": "1:20", "action": "Refinery #2"},
+          {"supply": 15, "time": "2:00", "action": "Orbital Command"},
+          {"supply": 15, "time": "2:05", "action": "Marine (optional for scouting defense)"},
+          {"supply": 16, "time": "2:15", "action": "Factory"},
+          {"supply": 18, "time": "3:00", "action": "Starport (when Factory completes)"},
+          {"supply": 19, "time": "3:05", "action": "Tech Lab on Starport"},
+          {"supply": 20, "time": "3:20", "action": "Banshee - begin Cloak research immediately"},
+          {"supply": 22, "time": "4:30", "action": "Banshee #2"},
+          {"supply": 23, "time": "5:00", "action": "Attack with cloaked Banshees, prioritize SCVs"},
+          {"supply": 25, "time": "5:30", "action": "Command Center at natural (if not taken yet)"},
+          {"supply": 28, "time": "6:00", "action": "Transition: add Barracks, Factory, begin bio or mech"}
+        ]
+      },
+      {
+        "id": "tvt_04",
+        "name": "Marine-Tank Timing Push",
+        "style": "aggressive",
+        "difficulty": "intermediate",
+        "description": "Classic TvT timing attack. Get a Siege Tank as early as possible with Marine support and push across the map. Forces opponent to respond or lose their natural base.",
+        "steps": [
+          {"supply": 10, "time": "0:15", "action": "Supply Depot"},
+          {"supply": 12, "time": "0:55", "action": "Barracks"},
+          {"supply": 13, "time": "1:10", "action": "Refinery"},
+          {"supply": 15, "time": "2:00", "action": "Orbital Command"},
+          {"supply": 15, "time": "2:05", "action": "Marine"},
+          {"supply": 16, "time": "2:15", "action": "Factory with Tech Lab"},
+          {"supply": 18, "time": "2:30", "action": "Supply Depot"},
+          {"supply": 18, "time": "3:30", "action": "Siege Tank from Factory"},
+          {"supply": 22, "time": "4:00", "action": "3x Marines, Barracks #2"},
+          {"supply": 24, "time": "4:30", "action": "Push: 1 Siege Tank + 4 Marines at 5:00 timing"},
+          {"supply": 26, "time": "5:00", "action": "Siege up outside opponent's natural, force response"},
+          {"supply": 28, "time": "5:30", "action": "Add Starport, natural CC"},
+          {"supply": 36, "time": "7:00", "action": "Medivacs, continue pressure or macro up"}
+        ]
+      },
+      {
+        "id": "tvt_05",
+        "name": "CC First Greedy Macro",
+        "style": "macro",
+        "difficulty": "beginner",
+        "description": "Build Command Center before Barracks for maximum economic advantage. High risk vs aggression but leads to overwhelming economy if opponent plays standard.",
+        "steps": [
+          {"supply": 10, "time": "0:15", "action": "Supply Depot"},
+          {"supply": 12, "time": "0:40", "action": "Command Center at natural expansion"},
+          {"supply": 13, "time": "1:05", "action": "Barracks"},
+          {"supply": 14, "time": "1:20", "action": "Refinery #1"},
+          {"supply": 15, "time": "2:00", "action": "Orbital on main, Orbital on natural"},
+          {"supply": 16, "time": "2:10", "action": "Refinery #2"},
+          {"supply": 18, "time": "2:30", "action": "Marine, Supply Depot"},
+          {"supply": 20, "time": "3:00", "action": "Factory, Barracks #2"},
+          {"supply": 24, "time": "3:30", "action": "Starport, Bunker at natural"},
+          {"supply": 28, "time": "4:00", "action": "Medivac, Marines, begin bio production"},
+          {"supply": 36, "time": "5:30", "action": "3rd Command Center, Engineering Bay"},
+          {"supply": 44, "time": "7:00", "action": "1/1 upgrades, 4 Barracks, strong bio army"}
+        ]
+      },
+      {
+        "id": "tvt_06",
+        "name": "Proxy 2-Rax Marine Rush",
+        "style": "cheese",
+        "difficulty": "intermediate",
+        "description": "Build two Barracks near the opponent's base hidden in fog of war and immediately flood Marines. Can end the game before opponent's bio is established if undetected.",
+        "steps": [
+          {"supply": 10, "time": "0:15", "action": "Supply Depot"},
+          {"supply": 11, "time": "0:40", "action": "SCV scouts for proxy location near opponent"},
+          {"supply": 11, "time": "0:50", "action": "Barracks #1 at proxy location (hidden)"},
+          {"supply": 11, "time": "1:00", "action": "Barracks #2 at proxy location (adjacent)"},
+          {"supply": 13, "time": "1:30", "action": "Supply Depot at home"},
+          {"supply": 13, "time": "2:00", "action": "Marines begin production from both Barracks"},
+          {"supply": 15, "time": "2:30", "action": "Attack with 4-6 Marines before opponent has Bunker"},
+          {"supply": 17, "time": "3:00", "action": "Continue rallying Marines to attack"},
+          {"supply": 20, "time": "3:30", "action": "If not winning: Refinery and Factory at home, tech up"}
+        ]
+      },
+      {
+        "id": "tvt_07",
+        "name": "Hellion Drop Harassment",
+        "style": "harass",
+        "difficulty": "advanced",
+        "description": "Early Hellion production loaded into a Medivac to drop into opponent's mineral line. Hellions in light mode shred SCVs. Use Medivac heal to keep Hellions alive longer.",
+        "steps": [
+          {"supply": 10, "time": "0:15", "action": "Supply Depot"},
+          {"supply": 12, "time": "0:55", "action": "Barracks"},
+          {"supply": 13, "time": "1:10", "action": "Refinery #1"},
+          {"supply": 14, "time": "1:20", "action": "Refinery #2"},
+          {"supply": 15, "time": "2:00", "action": "Orbital Command"},
+          {"supply": 15, "time": "2:10", "action": "Factory"},
+          {"supply": 17, "time": "2:30", "action": "Reactor on Factory"},
+          {"supply": 18, "time": "2:40", "action": "Starport with Tech Lab"},
+          {"supply": 20, "time": "3:00", "action": "2x Hellions from Factory Reactor"},
+          {"supply": 22, "time": "3:30", "action": "Medivac from Starport"},
+          {"supply": 22, "time": "4:00", "action": "2 more Hellions"},
+          {"supply": 24, "time": "4:20", "action": "Load 4 Hellions into Medivac, drop opponent's mineral line"},
+          {"supply": 26, "time": "4:45", "action": "Harass SCV line, use Medivac heal to sustain Hellions"},
+          {"supply": 28, "time": "5:30", "action": "Natural CC, add Barracks for bio transition"}
+        ]
+      },
+      {
+        "id": "tvt_08",
+        "name": "Bio with Liberator Support",
+        "style": "macro",
+        "difficulty": "intermediate",
+        "description": "Standard bio build using Liberators in Defender Mode to lock down territory and prevent bio runbys. Liberator zones cover choke points and ramps very effectively.",
+        "steps": [
+          {"supply": 10, "time": "0:15", "action": "Supply Depot"},
+          {"supply": 12, "time": "0:55", "action": "Barracks"},
+          {"supply": 13, "time": "1:10", "action": "Refinery"},
+          {"supply": 15, "time": "2:00", "action": "Orbital, Reaper (scout)"},
+          {"supply": 18, "time": "2:40", "action": "Natural CC, Factory"},
+          {"supply": 20, "time": "3:30", "action": "Starport with Reactor, Barracks #2"},
+          {"supply": 22, "time": "4:00", "action": "Liberator #1, place in Defender Mode at natural ramp"},
+          {"supply": 24, "time": "4:30", "action": "Liberator #2, Marines from Barracks"},
+          {"supply": 28, "time": "5:00", "action": "Natural Orbital, Barracks #3 and #4"},
+          {"supply": 36, "time": "6:00", "action": "Engineering Bay, 1/1 upgrades"},
+          {"supply": 44, "time": "7:30", "action": "3rd base, add Ghost Academy for late game"}
+        ]
+      },
+      {
+        "id": "tvt_09",
+        "name": "Full Mech (Thor-Cyclone-Hellion)",
+        "style": "macro",
+        "difficulty": "advanced",
+        "description": "Full mech composition in TvT. Thors absorb bio damage with massive HP; Cyclones handle fast units; Hellions deal area damage. Strong vs bio but vulnerable to air transitions.",
+        "steps": [
+          {"supply": 10, "time": "0:15", "action": "Supply Depot"},
+          {"supply": 12, "time": "0:55", "action": "Barracks (wall-off only)"},
+          {"supply": 13, "time": "1:10", "action": "Refinery #1"},
+          {"supply": 14, "time": "1:20", "action": "Refinery #2"},
+          {"supply": 15, "time": "2:00", "action": "Orbital, Factory with Tech Lab"},
+          {"supply": 16, "time": "2:30", "action": "Factory #2"},
+          {"supply": 18, "time": "3:00", "action": "Cyclone #1 from Tech Lab Factory, Hellions from #2"},
+          {"supply": 20, "time": "3:30", "action": "Natural CC, Armory"},
+          {"supply": 22, "time": "4:00", "action": "Factory #3, Thor #1"},
+          {"supply": 26, "time": "4:30", "action": "Begin Vehicle + Ship upgrades at Armory"},
+          {"supply": 30, "time": "5:30", "action": "Starport for Ravens (Point Defense Drone) and Vikings"},
+          {"supply": 36, "time": "7:00", "action": "3rd CC, continue mass mech production"}
+        ]
+      },
+      {
+        "id": "tvt_10",
+        "name": "Ghost-Marine-Medivac Composition",
+        "style": "macro",
+        "difficulty": "advanced",
+        "description": "Transition to Ghost-based late game. Ghosts EMP opponent's Medivacs and bio ball; Snipe handles medium targets. Usually reached from a bio expand opener around 6:30+.",
+        "steps": [
+          {"supply": 10, "time": "0:15", "action": "Standard Reaper FE opener (see tvt_01)"},
+          {"supply": 36, "time": "5:30", "action": "Engineering Bay, 1/1 upgrades"},
+          {"supply": 44, "time": "6:30", "action": "Ghost Academy"},
+          {"supply": 48, "time": "7:30", "action": "First Ghost - research Cloak"},
+          {"supply": 54, "time": "8:30", "action": "3rd Command Center, 2/2 upgrades"},
+          {"supply": 62, "time": "10:00", "action": "3-4 Ghosts in army, EMP bio armies before every engagement"},
+          {"supply": 70, "time": "11:30", "action": "3/3 upgrades, expand to 4th base"},
+          {"supply": 80, "time": "13:00", "action": "Full 3/3 Marine-Marauder-Medivac-Ghost deathball"}
+        ]
+      },
+      {
+        "id": "tvt_11",
+        "name": "2-Rax Early Pressure",
+        "style": "aggressive",
+        "difficulty": "beginner",
+        "description": "Two Barracks producing Marines early to apply pressure and deny opponent's scouting. Not a full all-in - creates early map control and delays their expansion timing.",
+        "steps": [
+          {"supply": 10, "time": "0:15", "action": "Supply Depot"},
+          {"supply": 12, "time": "0:55", "action": "Barracks #1"},
+          {"supply": 13, "time": "1:10", "action": "Refinery"},
+          {"supply": 15, "time": "2:00", "action": "Orbital Command"},
+          {"supply": 15, "time": "2:10", "action": "Barracks #2"},
+          {"supply": 16, "time": "2:20", "action": "Marine from Barracks #1"},
+          {"supply": 18, "time": "2:45", "action": "Marine #2, Marines from Barracks #2"},
+          {"supply": 20, "time": "3:00", "action": "Supply Depot, move Marines across map"},
+          {"supply": 22, "time": "3:30", "action": "Attack natural or deny expansion with 4 Marines"},
+          {"supply": 24, "time": "4:00", "action": "Factory, Starport - transition to standard bio"},
+          {"supply": 28, "time": "4:30", "action": "Natural CC, continue bio production"}
+        ]
+      },
+      {
+        "id": "tvt_12",
+        "name": "SkyTerran BC-Raven Transition",
+        "style": "macro",
+        "difficulty": "advanced",
+        "description": "Late game transition to Battlecruiser-Raven-Viking air superiority. Battlecruisers with Yamato Cannon delete Tanks and Thors. Ravens use Point Defense Drone vs bio. Counters both bio and mech.",
+        "steps": [
+          {"supply": 10, "time": "0:15", "action": "Standard Reaper FE bio opener"},
+          {"supply": 36, "time": "6:00", "action": "Fusion Core (begin when stable at 3 bases)"},
+          {"supply": 44, "time": "7:30", "action": "Battlecruiser #1 from Starport Tech Lab"},
+          {"supply": 50, "time": "8:30", "action": "Yamato Cannon research at Fusion Core"},
+          {"supply": 56, "time": "9:30", "action": "Battlecruiser #2, Raven #1 (Point Defense Drone research)"},
+          {"supply": 62, "time": "10:30", "action": "Vikings for air control, Raven Interference Matrix vs Medivacs"},
+          {"supply": 70, "time": "12:00", "action": "Mass BCs, Yamato on Tanks, Thors, and high-value targets"}
+        ]
+      }
+    ],
+    "ZvZ": [
+      {
+        "id": "zvz_01",
+        "name": "Hatch First Standard Macro",
+        "style": "macro",
+        "difficulty": "beginner",
+        "description": "The standard ZvZ macro opener: Hatchery at natural before Pool gives economic advantage if opponent doesn't all-in. Risky vs 12 Pool but dominant in macro mirror matchups.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural expansion"},
+          {"supply": 13, "time": "0:30", "action": "Overlord"},
+          {"supply": 17, "time": "1:00", "action": "Spawning Pool"},
+          {"supply": 17, "time": "1:10", "action": "Extractor (pull 3 drones to gas)"},
+          {"supply": 18, "time": "2:00", "action": "Overlord"},
+          {"supply": 19, "time": "2:20", "action": "Queen x2 (one per hatchery)"},
+          {"supply": 19, "time": "2:30", "action": "Zergling Speed (Metabolic Boost) research"},
+          {"supply": 22, "time": "3:00", "action": "4x Zerglings"},
+          {"supply": 26, "time": "3:30", "action": "Overlord, more Drones"},
+          {"supply": 28, "time": "4:00", "action": "Roach Warren OR 3rd Hatchery based on scout"},
+          {"supply": 36, "time": "5:30", "action": "Lair, Baneling Nest"},
+          {"supply": 44, "time": "7:00", "action": "Spire for Mutalisks or Roach-Ravager transition"}
+        ]
+      },
+      {
+        "id": "zvz_02",
+        "name": "12 Pool Speedling All-in",
+        "style": "cheese",
+        "difficulty": "beginner",
+        "description": "Very aggressive early pool to get Zerglings before opponent completes their Pool. Win condition is flooding the base before Spine Crawlers and Banelings are ready.",
+        "steps": [
+          {"supply": 9, "time": "0:00", "action": "Drone scout opponent base"},
+          {"supply": 12, "time": "0:35", "action": "Spawning Pool at 12 supply"},
+          {"supply": 13, "time": "0:45", "action": "Overlord"},
+          {"supply": 14, "time": "1:00", "action": "Extractor (3 drones to gas)"},
+          {"supply": 14, "time": "1:30", "action": "Pull 3 drones off gas after 100 gas banked"},
+          {"supply": 14, "time": "2:00", "action": "Zergling Speed research immediately when pool done"},
+          {"supply": 14, "time": "2:10", "action": "4x Zerglings"},
+          {"supply": 18, "time": "2:30", "action": "Attack opponent's natural with Speedlings"},
+          {"supply": 20, "time": "2:45", "action": "Queen at home for creep/inject"},
+          {"supply": 22, "time": "3:00", "action": "More Zerglings - maintain pressure"},
+          {"supply": 24, "time": "3:30", "action": "If not winning: take natural expansion"}
+        ]
+      },
+      {
+        "id": "zvz_03",
+        "name": "Roach-Ravager 2-Base All-in",
+        "style": "aggressive",
+        "difficulty": "intermediate",
+        "description": "Build Roach Warren quickly and produce mass Roaches transitioning into Ravagers. Corrosive Bile destroys Spine Crawlers in 2 shots. Push before opponent gets Banelings or Mutas.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Overlord"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool (17 Pool)"},
+          {"supply": 18, "time": "1:00", "action": "Extractor x2"},
+          {"supply": 19, "time": "1:40", "action": "Hatchery at natural"},
+          {"supply": 20, "time": "2:00", "action": "Roach Warren"},
+          {"supply": 22, "time": "2:30", "action": "Queens x2"},
+          {"supply": 26, "time": "3:00", "action": "Mass Roaches production begins"},
+          {"supply": 30, "time": "3:30", "action": "Overlord x2"},
+          {"supply": 36, "time": "4:00", "action": "Ravagers x4 (morph Roaches into Ravagers)"},
+          {"supply": 40, "time": "4:30", "action": "Push: Roach-Ravager army attacks opponent's natural"},
+          {"supply": 44, "time": "5:00", "action": "Corrosive Bile on Spine Crawlers and Hatcheries"},
+          {"supply": 48, "time": "5:30", "action": "Win or transition to macro if opponent holds"}
+        ]
+      },
+      {
+        "id": "zvz_04",
+        "name": "Ling-Bane-Muta Standard",
+        "style": "macro",
+        "difficulty": "intermediate",
+        "description": "Classic ZvZ composition: Zerglings and Banelings on the ground with Mutalisks for air harass and map control. Strong vs Roach builds. The dominant mid-game ZvZ style.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 16, "time": "0:40", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 20, "time": "2:00", "action": "Queen x2, Zergling Speed research"},
+          {"supply": 22, "time": "2:30", "action": "Zerglings x4"},
+          {"supply": 26, "time": "3:00", "action": "Baneling Nest"},
+          {"supply": 28, "time": "3:30", "action": "Lair"},
+          {"supply": 34, "time": "4:00", "action": "Banelings x4, more Zerglings"},
+          {"supply": 38, "time": "5:00", "action": "Spire (when Lair completes at ~4:30)"},
+          {"supply": 44, "time": "6:00", "action": "Mutalisk x6 (first Mutas out ~6:30)"},
+          {"supply": 52, "time": "7:00", "action": "Mutalisk x12 total, begin harassment"},
+          {"supply": 60, "time": "8:00", "action": "3rd Hatchery, Muta harass + Ling-Bane defense"}
+        ]
+      },
+      {
+        "id": "zvz_05",
+        "name": "3-Hatch Before Pool Greedy Macro",
+        "style": "macro",
+        "difficulty": "beginner",
+        "description": "Maximum economic expansion: 3 Hatcheries before Spawning Pool. Extremely risky vs aggression but gives unstoppable economy if opponent also plays greedy macro.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 15, "time": "0:35", "action": "Overlord"},
+          {"supply": 15, "time": "1:00", "action": "Hatchery at 3rd base"},
+          {"supply": 15, "time": "1:20", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:40", "action": "Extractor x2"},
+          {"supply": 20, "time": "2:20", "action": "Queen x3 (one per hatch), Spine Crawler x2 for defense"},
+          {"supply": 22, "time": "2:40", "action": "Zergling Speed"},
+          {"supply": 26, "time": "3:15", "action": "Zerglings x4 for defense and map presence"},
+          {"supply": 30, "time": "4:00", "action": "Roach Warren or Baneling Nest based on scout"},
+          {"supply": 40, "time": "5:30", "action": "Lair, Overlords"},
+          {"supply": 52, "time": "7:00", "action": "Massive economy advantage - choose composition vs opponent"}
+        ]
+      },
+      {
+        "id": "zvz_06",
+        "name": "Baneling Flood Early Aggression",
+        "style": "aggressive",
+        "difficulty": "intermediate",
+        "description": "Fast Baneling Nest with mass Banelings attacking before opponent has anti-light units ready. Devastating vs Zerglings. Requires precise timing to hit before Roach Warren or Spine Crawlers.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Overlord"},
+          {"supply": 15, "time": "0:40", "action": "Spawning Pool (15 Pool)"},
+          {"supply": 15, "time": "0:50", "action": "Extractor"},
+          {"supply": 17, "time": "1:40", "action": "Baneling Nest (immediately when Pool completes)"},
+          {"supply": 17, "time": "1:50", "action": "Overlord"},
+          {"supply": 19, "time": "2:00", "action": "Zergling Speed research"},
+          {"supply": 20, "time": "2:10", "action": "Zerglings x4"},
+          {"supply": 24, "time": "2:40", "action": "Natural Hatchery"},
+          {"supply": 26, "time": "3:00", "action": "Banelings x4-6 (morph from Zerglings)"},
+          {"supply": 30, "time": "3:30", "action": "Attack at 3:45 with Banelings + Zerglings"},
+          {"supply": 32, "time": "4:00", "action": "If held: take natural, macro up to Roach-Ravager"}
+        ]
+      },
+      {
+        "id": "zvz_07",
+        "name": "Roach-Hydra-Lurker Transition",
+        "style": "macro",
+        "difficulty": "advanced",
+        "description": "Long macro game build: Roaches into Hydralisks then Lurkers. Burrowed Lurkers shred Ling-Bane armies trying to move across the map. Strong defensive and offensive tool.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 20, "time": "2:00", "action": "Roach Warren, Queens x2"},
+          {"supply": 24, "time": "2:40", "action": "Roaches x4"},
+          {"supply": 28, "time": "3:20", "action": "Lair, 3rd Hatchery"},
+          {"supply": 34, "time": "4:00", "action": "Hydralisk Den (when Lair completes)"},
+          {"supply": 40, "time": "4:30", "action": "Hydralisks x4, Grooved Spines + Muscular Augments upgrades"},
+          {"supply": 46, "time": "5:30", "action": "Lurker Den (requires Lair)"},
+          {"supply": 50, "time": "6:30", "action": "Lurkers x4 (morph from Hydralisks)"},
+          {"supply": 56, "time": "7:30", "action": "Burrow Lurkers at ramps and key positions"}
+        ]
+      },
+      {
+        "id": "zvz_08",
+        "name": "Queen Walk Aggression",
+        "style": "aggressive",
+        "difficulty": "intermediate",
+        "description": "Produce extra Queens and walk them across the map for early aggression. Queens deal high damage vs Zerglings and can overwhelm defenses if opponent doesn't have Banelings ready.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor"},
+          {"supply": 20, "time": "2:00", "action": "Queen x1 at home, then 3 more Queens back to back"},
+          {"supply": 26, "time": "2:45", "action": "Walk 3 Queens across the map"},
+          {"supply": 26, "time": "3:15", "action": "Attack opponent's natural with Queens + Zerglings"},
+          {"supply": 30, "time": "3:30", "action": "More Zerglings produced at home hatch"},
+          {"supply": 34, "time": "4:00", "action": "If denied: Roach Warren or Lair at home, transition to macro"}
+        ]
+      },
+      {
+        "id": "zvz_09",
+        "name": "Mutalisk Timing Switch",
+        "style": "harass",
+        "difficulty": "advanced",
+        "description": "Fast Spire off 2 bases to get Mutalisk harassment at 6:00. First 6 Mutalisks attack before opponent can react. Forces Spore Crawlers everywhere and denies map control.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 20, "time": "2:00", "action": "Queens x2, Zergling Speed"},
+          {"supply": 24, "time": "2:30", "action": "Lair (ASAP - this is the priority spend)"},
+          {"supply": 26, "time": "2:40", "action": "Zerglings x4 for map control"},
+          {"supply": 30, "time": "3:30", "action": "Spire immediately when Lair finishes (~3:45)"},
+          {"supply": 36, "time": "4:30", "action": "3rd extractor pair, drone up"},
+          {"supply": 40, "time": "5:30", "action": "Mutalisk x6 (Spire finishes ~5:45-6:00)"},
+          {"supply": 48, "time": "6:00", "action": "Attack with first Mutas while droning at home"},
+          {"supply": 56, "time": "7:00", "action": "Mutalisk x12-15, dominate the skies, take 3rd base"}
+        ]
+      },
+      {
+        "id": "zvz_10",
+        "name": "Nydus Roach All-in",
+        "style": "cheese",
+        "difficulty": "advanced",
+        "description": "Build a hidden Nydus Worm inside the opponent's base and pour Roaches through it. Completely bypasses all surface defenses. Devastating if undetected.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 20, "time": "2:00", "action": "Roach Warren, Queens x2"},
+          {"supply": 24, "time": "2:40", "action": "Lair"},
+          {"supply": 26, "time": "3:00", "action": "Roaches x4 while Lair builds"},
+          {"supply": 30, "time": "4:00", "action": "Nydus Network (when Lair finishes)"},
+          {"supply": 32, "time": "4:20", "action": "Send Overlord to scout and find hidden placement spot"},
+          {"supply": 34, "time": "4:35", "action": "Place Nydus Worm in opponent's base near mineral line"},
+          {"supply": 38, "time": "5:00", "action": "Pour 8-10 Roaches through Nydus into opponent's base"},
+          {"supply": 44, "time": "5:15", "action": "Target Hatcheries, Spawning Pool, Queens first"},
+          {"supply": 50, "time": "5:30", "action": "Continuously send units through - overwhelm base"}
+        ]
+      },
+      {
+        "id": "zvz_11",
+        "name": "Ravager-Roach Timing Attack",
+        "style": "aggressive",
+        "difficulty": "intermediate",
+        "description": "Ravagers with Corrosive Bile destroy Spine Crawlers and Hatcheries. Push at 5:00-6:00 window before opponent has Lurkers or Mutalisks. Bile hits Spines for ~50% HP each.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 20, "time": "2:00", "action": "Roach Warren, Queens x2"},
+          {"supply": 24, "time": "2:40", "action": "Roaches x4"},
+          {"supply": 28, "time": "3:10", "action": "Ravagers x3 (morph from Roaches)"},
+          {"supply": 32, "time": "3:30", "action": "More Roaches x6 total, Glial Reconstitution (speed)"},
+          {"supply": 36, "time": "4:00", "action": "Push with 6 Roach + 3 Ravager"},
+          {"supply": 40, "time": "4:30", "action": "Corrosive Bile on Spine Crawlers and Queens"},
+          {"supply": 44, "time": "5:00", "action": "Keep production flowing from home - reinforce push"}
+        ]
+      },
+      {
+        "id": "zvz_12",
+        "name": "Hydra-Lurker-Viper Late Game",
+        "style": "macro",
+        "difficulty": "advanced",
+        "description": "End-game Zerg composition. Lurkers hold territory; Hydralisks deal ranged damage; Vipers Abduct Lurkers and use Blinding Cloud to counter stacked Mutalisks. Dominant in long games.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 22, "time": "2:20", "action": "Lair, 3rd Hatchery"},
+          {"supply": 28, "time": "3:30", "action": "Hydralisk Den"},
+          {"supply": 34, "time": "4:00", "action": "Hydralisks, Muscular Augments upgrade"},
+          {"supply": 40, "time": "5:00", "action": "Lurker Den"},
+          {"supply": 46, "time": "6:00", "action": "Lurkers x4"},
+          {"supply": 52, "time": "7:00", "action": "Hive"},
+          {"supply": 58, "time": "8:30", "action": "Vipers (from Hive)"},
+          {"supply": 64, "time": "9:30", "action": "Vipers x3, Abomination research"},
+          {"supply": 70, "time": "10:30", "action": "Full Hydra-Lurker-Viper army dominates late game"}
+        ]
+      }
+    ],
+    "ZvT": [
+      {
+        "id": "zvt_01",
+        "name": "Standard Macro Hatch-Gas-Pool",
+        "style": "macro",
+        "difficulty": "beginner",
+        "description": "Safe and standard ZvT opener: natural Hatchery first then Pool. Gives economic advantage against bio while being safe enough vs standard Reaper FE opens from Terran.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 16, "time": "0:40", "action": "Overlord"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 17, "time": "1:00", "action": "Extractor (3 drones to gas)"},
+          {"supply": 19, "time": "2:00", "action": "Queens x2 (one each hatch)"},
+          {"supply": 19, "time": "2:10", "action": "Zergling Speed research"},
+          {"supply": 22, "time": "2:30", "action": "Zerglings x4 (patrol vs Reaper harassment)"},
+          {"supply": 26, "time": "3:00", "action": "Extractor #2, more Drones"},
+          {"supply": 30, "time": "3:30", "action": "Roach Warren"},
+          {"supply": 34, "time": "4:00", "action": "3rd Hatchery, Overlords"},
+          {"supply": 40, "time": "5:00", "action": "Lair, continue droning to 66"},
+          {"supply": 50, "time": "6:30", "action": "Baneling Nest + Roach-Ravager production based on scout"}
+        ]
+      },
+      {
+        "id": "zvt_02",
+        "name": "Pool First Ling-Bane Aggression",
+        "style": "aggressive",
+        "difficulty": "intermediate",
+        "description": "12-14 Pool for fast Zerglings to deny the Reaper then Banelings to crush Marine-Marauder armies. Banelings deal massive damage to bio. Very strong vs standard Terran bio expand.",
+        "steps": [
+          {"supply": 12, "time": "0:35", "action": "Spawning Pool (pool first, very fast)"},
+          {"supply": 13, "time": "0:45", "action": "Extractor (3 drones)"},
+          {"supply": 13, "time": "0:55", "action": "Overlord"},
+          {"supply": 14, "time": "1:30", "action": "Zergling Speed immediately when pool done"},
+          {"supply": 16, "time": "1:40", "action": "Zerglings x4 (deny Reaper scout, chase off map)"},
+          {"supply": 18, "time": "2:00", "action": "Hatchery at natural"},
+          {"supply": 20, "time": "2:20", "action": "Baneling Nest"},
+          {"supply": 22, "time": "2:40", "action": "Queens x2"},
+          {"supply": 26, "time": "3:00", "action": "Banelings x4, more Zerglings"},
+          {"supply": 30, "time": "3:30", "action": "Attack Terran's natural: Banelings on Marines, Lings cleanup"},
+          {"supply": 34, "time": "4:00", "action": "If held: take 3rd base, continue Ling-Bane production"}
+        ]
+      },
+      {
+        "id": "zvt_03",
+        "name": "Roach-Ravager Timing Attack",
+        "style": "aggressive",
+        "difficulty": "intermediate",
+        "description": "Mass Roaches transitioning into Ravagers for a 5:30-6:00 timing. Corrosive Bile destroys Bunkers and sieged Tanks. Punishes greedy Terran expands and bio builds with no Siege Tanks.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 20, "time": "2:00", "action": "Roach Warren, Queens x2"},
+          {"supply": 24, "time": "2:40", "action": "Roaches x6"},
+          {"supply": 30, "time": "3:10", "action": "Ravagers x3-4 (morph), Glial Reconstitution (speed)"},
+          {"supply": 36, "time": "3:45", "action": "More Roaches - total force: 8 Roach + 4 Ravager"},
+          {"supply": 40, "time": "4:30", "action": "Move across map"},
+          {"supply": 44, "time": "5:00", "action": "Corrosive Bile on Bunkers and Tanks, Roaches tank for Ravagers"},
+          {"supply": 48, "time": "5:30", "action": "If winning: destroy natural. If held: macro to 3rd hatch"}
+        ]
+      },
+      {
+        "id": "zvt_04",
+        "name": "Ling-Bane-Muta Standard",
+        "style": "macro",
+        "difficulty": "intermediate",
+        "description": "The classic ZvT mid-game composition. Ling-Bane handles ground bio armies; Mutalisks harass and force expensive Turrets; together they create a two-front problem Terran struggles to solve.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 20, "time": "2:00", "action": "Queens x2, Zergling Speed"},
+          {"supply": 24, "time": "2:30", "action": "Baneling Nest"},
+          {"supply": 28, "time": "3:00", "action": "Lair"},
+          {"supply": 32, "time": "3:30", "action": "Banelings x4"},
+          {"supply": 36, "time": "4:00", "action": "Spire (when Lair completes at ~4:00)"},
+          {"supply": 40, "time": "5:00", "action": "3rd Hatchery"},
+          {"supply": 46, "time": "5:30", "action": "Mutalisk x6 (Spire finishes ~5:45)"},
+          {"supply": 54, "time": "6:30", "action": "Mutalisk x12, harass mineral lines and force Turret spending"},
+          {"supply": 64, "time": "8:00", "action": "Carapace + Melee/Missile upgrades, Hive transition if long game"}
+        ]
+      },
+      {
+        "id": "zvt_05",
+        "name": "Hydra-Lurker vs Bio",
+        "style": "macro",
+        "difficulty": "advanced",
+        "description": "Strong counter to Marine-Medivac bio play. Burrowed Lurkers shred Marine clusters; Hydralisks deal ranged damage to Medivacs and bio reinforcements.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 22, "time": "2:00", "action": "Queens x2, Zergling Speed"},
+          {"supply": 26, "time": "2:30", "action": "Lair"},
+          {"supply": 28, "time": "3:00", "action": "Hydralisk Den (when Lair finishes)"},
+          {"supply": 34, "time": "3:30", "action": "Hydralisks x4, Muscular Augments upgrade"},
+          {"supply": 40, "time": "4:00", "action": "3rd Hatchery"},
+          {"supply": 44, "time": "5:00", "action": "Lurker Den"},
+          {"supply": 50, "time": "6:00", "action": "Lurkers x4-6"},
+          {"supply": 56, "time": "7:00", "action": "Burrow Lurkers at key choke points, deny all pushes"},
+          {"supply": 62, "time": "8:00", "action": "Hive, Vipers for Blinding Cloud vs bio deathball"}
+        ]
+      },
+      {
+        "id": "zvt_06",
+        "name": "Ultralisk-Baneling Deathball",
+        "style": "macro",
+        "difficulty": "advanced",
+        "description": "Late game Zerg standard: Ultralisks tank massive bio damage; Banelings detonate on Marines for area kills; Zerglings clean up. The dominant Hive-tier ZvT composition.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Standard Macro opener (see zvt_01)"},
+          {"supply": 50, "time": "7:00", "action": "Hive (transition from Lair when at 3+ bases stable)"},
+          {"supply": 56, "time": "8:30", "action": "Ultralisk Cavern"},
+          {"supply": 60, "time": "9:30", "action": "Anabolic Synthesis (speed) + Chitinous Plating (armor)"},
+          {"supply": 64, "time": "10:30", "action": "Ultralisks x2 first pair"},
+          {"supply": 70, "time": "11:30", "action": "Zerg Carapace +3, Zerg Melee +3"},
+          {"supply": 76, "time": "12:30", "action": "Ultralisk x4-6 + Banelings + Zerglings deathball assembled"},
+          {"supply": 80, "time": "13:00", "action": "Engage: Ultralisks lead, Banelings flank and detonate on bio"}
+        ]
+      },
+      {
+        "id": "zvt_07",
+        "name": "Fast Mutalisk Harassment",
+        "style": "harass",
+        "difficulty": "advanced",
+        "description": "Fast Spire off 2 bases to harass at 5:30-6:00. Forces Terran to build Turrets (expensive) and delay push timing, giving Zerg time to take 3rd base and macro up.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 20, "time": "2:00", "action": "Queens x2, Zergling Speed"},
+          {"supply": 24, "time": "2:20", "action": "Lair (fast priority - spend gas here first)"},
+          {"supply": 26, "time": "2:40", "action": "Zerglings x4 for Reaper defense"},
+          {"supply": 30, "time": "3:30", "action": "Spire immediately when Lair completes"},
+          {"supply": 34, "time": "4:00", "action": "3rd Hatchery, Drone to 60+"},
+          {"supply": 40, "time": "5:00", "action": "Mutalisk production begins (Spire done ~5:30)"},
+          {"supply": 46, "time": "5:30", "action": "Attack SCV mineral lines, hit Turret-less bases first"},
+          {"supply": 54, "time": "6:30", "action": "Mutalisk x12-15, force Turret spending everywhere"},
+          {"supply": 60, "time": "7:30", "action": "Transition to Corruptor or Broodlord vs mech"}
+        ]
+      },
+      {
+        "id": "zvt_08",
+        "name": "Swarm Host vs Turtle Mech",
+        "style": "macro",
+        "difficulty": "advanced",
+        "description": "Counter to Terran Mech (Tank-Thor-Hellion). Swarm Hosts produce free Locusts, forcing Mech to constantly spend energy and fight. Combine with Vipers to Abduct Thors and Tanks.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 22, "time": "2:00", "action": "Queens x2, Zergling Speed"},
+          {"supply": 26, "time": "2:30", "action": "Lair"},
+          {"supply": 30, "time": "3:30", "action": "Infestation Pit (when Lair finishes)"},
+          {"supply": 36, "time": "4:00", "action": "3rd Hatchery"},
+          {"supply": 40, "time": "5:00", "action": "Swarm Hosts x4 from Infestation Pit"},
+          {"supply": 44, "time": "5:30", "action": "Position Swarm Hosts outside Mech line, spawn Locusts constantly"},
+          {"supply": 50, "time": "6:30", "action": "Hive, Viper Den"},
+          {"supply": 56, "time": "8:00", "action": "Vipers x3: Abduct key Mech units, Blinding Cloud on Thor clusters"},
+          {"supply": 62, "time": "9:00", "action": "Continue SH + Viper pick-offs, take 4th base for economy"}
+        ]
+      },
+      {
+        "id": "zvt_09",
+        "name": "Ling-Infestor vs Mech",
+        "style": "macro",
+        "difficulty": "advanced",
+        "description": "Infestors support Zerglings vs Terran mech. Fungal Growth immobilizes Hellion clusters and bio; Infested Terrans deal splash damage. Strong mid-game vs Tank-heavy compositions.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 22, "time": "2:00", "action": "Queens x2, Zergling Speed"},
+          {"supply": 26, "time": "2:30", "action": "Lair"},
+          {"supply": 30, "time": "3:00", "action": "Infestation Pit"},
+          {"supply": 34, "time": "4:00", "action": "Infestors x2 from Infestation Pit"},
+          {"supply": 38, "time": "4:30", "action": "Fungal Growth research, Zerglings x10"},
+          {"supply": 44, "time": "5:30", "action": "Infestors x4 total"},
+          {"supply": 50, "time": "6:00", "action": "Fungal Growth on Hellions and bio clusters to immobilize"},
+          {"supply": 56, "time": "7:00", "action": "3rd Hatchery, continue Ling-Infestor pressure"},
+          {"supply": 62, "time": "8:00", "action": "Neural Parasite on Thors and BCs, transition to Hive"}
+        ]
+      },
+      {
+        "id": "zvt_10",
+        "name": "Nydus Network All-in",
+        "style": "cheese",
+        "difficulty": "advanced",
+        "description": "Hidden Nydus Worm inside Terran's base bypasses wall and Bunker defense entirely. Pour Roaches directly into the mineral line. Very strong on maps with back-door placement spots.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 20, "time": "2:00", "action": "Roach Warren, Queens x2"},
+          {"supply": 24, "time": "2:40", "action": "Lair"},
+          {"supply": 26, "time": "3:00", "action": "Roaches x6 while Lair builds"},
+          {"supply": 30, "time": "4:00", "action": "Nydus Network when Lair finishes"},
+          {"supply": 32, "time": "4:20", "action": "Send Overlord to scout Terran main for placement"},
+          {"supply": 34, "time": "4:35", "action": "Place Nydus Worm hidden in Terran main near mineral line"},
+          {"supply": 38, "time": "5:00", "action": "Pour Roaches + Queens through Nydus"},
+          {"supply": 44, "time": "5:15", "action": "Target Command Centers and Barracks first"},
+          {"supply": 50, "time": "5:30", "action": "Continuously send units - if held, transition to macro"}
+        ]
+      },
+      {
+        "id": "zvt_11",
+        "name": "Fast Ravager 5:00 Timing",
+        "style": "aggressive",
+        "difficulty": "intermediate",
+        "description": "Early Ravagers with Corrosive Bile hit Terran's natural before defensive setup is complete. Bile destroys a Bunker in 2 shots. Timing hits at 4:30-5:00 before Siege Tanks arrive.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 18, "time": "1:05", "action": "Extractor x2"},
+          {"supply": 20, "time": "2:00", "action": "Roach Warren immediately, Queens x2"},
+          {"supply": 22, "time": "2:30", "action": "Roaches x4"},
+          {"supply": 26, "time": "2:50", "action": "Ravagers x2-3 (morph Roaches)"},
+          {"supply": 30, "time": "3:10", "action": "Zerglings x4 for flanking, Glial Reconstitution"},
+          {"supply": 34, "time": "3:40", "action": "Move out with 4 Roach + 3 Ravager + Zerglings"},
+          {"supply": 38, "time": "4:15", "action": "Corrosive Bile on Bunker (2 shots = destroyed)"},
+          {"supply": 40, "time": "4:30", "action": "Bile on CC, Lings flank the Marines"},
+          {"supply": 44, "time": "5:00", "action": "Win condition: destroy natural. If held: drone up to 3 bases"}
+        ]
+      },
+      {
+        "id": "zvt_12",
+        "name": "4-Hatch Economy vs Bio Expand",
+        "style": "macro",
+        "difficulty": "beginner",
+        "description": "Greediest economic opening vs Terran Reaper FE. 4 Hatcheries gives massive Drone advantage for long macro games. Only viable when scout confirms standard bio expand, not an all-in.",
+        "steps": [
+          {"supply": 13, "time": "0:17", "action": "Hatchery at natural"},
+          {"supply": 16, "time": "0:40", "action": "Overlord"},
+          {"supply": 17, "time": "0:50", "action": "Spawning Pool"},
+          {"supply": 17, "time": "1:00", "action": "Extractor (3 drones)"},
+          {"supply": 19, "time": "1:40", "action": "Hatchery at 3rd base"},
+          {"supply": 20, "time": "2:00", "action": "Queens x2, Zergling Speed"},
+          {"supply": 22, "time": "2:20", "action": "Spine Crawler x1 at natural (defense vs Reaper)"},
+          {"supply": 24, "time": "2:40", "action": "Hatchery at 4th base (very greedy)"},
+          {"supply": 26, "time": "3:00", "action": "Drone to 70+ across all 4 hatcheries"},
+          {"supply": 34, "time": "3:30", "action": "Roach Warren, Lair"},
+          {"supply": 40, "time": "4:30", "action": "Baneling Nest"},
+          {"supply": 54, "time": "6:00", "action": "Massive Ling-Bane-Roach army with dominant economy"},
+          {"supply": 70, "time": "8:00", "action": "Superior resource income leads to overwhelming late game"}
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SC2 Overlay - Scouting Report Card (#1)</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../widget-mode.css">
+<script src="http://localhost:3000/socket.io/socket.io.js"></script>
+<script src="../icon-registry.js" defer></script>
+<script>
+  // Force the URL into single-widget mode even if the user opened
+  // this file directly (file://...) without the ?w= query string.
+  if (!new URLSearchParams(window.location.search).get('w')) {
+    history.replaceState(null, '', window.location.pathname + '?w=scouting');
+  }
+</script>
+</head>
+<body>
+
+<div id="scout-widget" class="widget-container scout-widget">
+    <div class="accent-bar accent-cyan"></div>
+    <div class="scout-content">
+        <div class="scout-header">
+            <span id="scout-race-icon" class="sc2-icon-slot scout-race"></span>
+            <span id="scout-name" class="bright"></span>
+            <span id="scout-record" class="scout-record dim"></span>
+        </div>
+        <div id="scout-rival" class="scout-row scout-rival" style="display:none">
+            <span id="scout-rival-text"></span>
+        </div>
+        <div id="scout-fav" class="scout-row" style="display:none">
+            <span class="scout-label">FAVORITE OPENER</span>
+            <span id="scout-fav-icons" class="icon-row"></span>
+            <span id="scout-fav-text"></span>
+        </div>
+        <div id="scout-ans" class="scout-row" style="display:none">
+            <span class="scout-label">YOUR BEST ANSWER</span>
+            <span id="scout-ans-icons" class="icon-row"></span>
+            <span id="scout-ans-text"></span>
+        </div>
+        <div id="scout-cheese" class="scout-row scout-cheese" style="display:none">
+            <span class="scout-label">CHEESE</span>
+            <span id="scout-cheese-text"></span>
+        </div>
+    </div>
+</div>
+<script src="../app.js"></script>
+</body>
+</html>

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SC2 Overlay — Dev Panel</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0d1017;
+            --panel: #161b26;
+            --border: #2a3143;
+            --text: #e6ecf7;
+            --muted: #7b869e;
+            --accent: #00ccff;
+            --good: #00ff88;
+            --bad:  #ff3366;
+        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        body { margin: 0; background: var(--bg); color: var(--text); padding: 24px; }
+        h1 { margin: 0 0 4px 0; font-size: 1.4rem; letter-spacing: 1px; }
+        p.lead { color: var(--muted); margin: 0 0 24px 0; font-size: 0.9rem; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px 18px;
+        }
+        .card h2 {
+            font-size: 0.82rem;
+            letter-spacing: 2px;
+            color: var(--muted);
+            text-transform: uppercase;
+            margin: 0 0 12px 0;
+        }
+        label { display: block; font-size: 0.82rem; color: var(--muted); margin: 8px 0 4px; }
+        input, select {
+            width: 100%;
+            background: #0b0e15;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 0.95rem;
+        }
+        .row { display: flex; gap: 8px; }
+        .row > * { flex: 1; }
+        button {
+            cursor: pointer;
+            background: #1f2736;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 9px 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        button:hover  { background: #283145; border-color: var(--accent); }
+        button.go     { background: #1a3b2a; border-color: #2e6946; color: var(--good); }
+        button.go:hover { background: #22513a; }
+        button.danger { background: #3b1a22; border-color: #692e3a; color: var(--bad); }
+        button.danger:hover { background: #51222e; }
+        .status {
+            margin-top: 20px;
+            padding: 12px 14px;
+            background: #0b0e15;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            color: var(--muted);
+            max-height: 220px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 16px;
+        }
+        code { color: var(--accent); }
+    </style>
+</head>
+<body>
+
+    <div class="bar">
+        <div>
+            <h1>SC2 Overlay — Dev Panel</h1>
+            <p class="lead">Fire any event type without launching a game. Server: <code id="server-url">http://localhost:3000</code></p>
+        </div>
+        <div>
+            <button id="btn-refresh-session">Refresh session</button>
+            <button class="danger" id="btn-reset-session">Reset session</button>
+        </div>
+    </div>
+
+    <div class="grid">
+
+        <div class="card">
+            <h2>Match result</h2>
+            <div class="row">
+                <div>
+                    <label>My race</label>
+                    <select id="mr-myRace">
+                        <option>P</option><option>T</option><option>Z</option><option>R</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Opp race</label>
+                    <select id="mr-oppRace">
+                        <option>T</option><option>P</option><option>Z</option><option>R</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Result</label>
+                    <select id="mr-result">
+                        <option>Victory</option><option>Defeat</option>
+                    </select>
+                </div>
+            </div>
+            <label>Map</label>
+            <input id="mr-map" value="Site Delta LE" />
+            <label>Opponent name</label>
+            <input id="mr-oppName" value="TestOpponent" />
+            <label>Duration (seconds)</label>
+            <input id="mr-duration" type="number" value="425" />
+            <label>My MMR (optional)</label>
+            <input id="mr-myMmr" type="number" placeholder="4200" />
+            <div style="margin-top:12px;"><button class="go" id="fire-replay">Fire /api/replay</button></div>
+        </div>
+
+        <div class="card">
+            <h2>Opponent detected</h2>
+            <label>Opponent line (as written to opponent.txt)</label>
+            <input id="opp-text" value="Serral(6500Z, 78%)" />
+            <div style="margin-top:12px;"><button class="go" data-type="opponentDetected" data-build="opponent">Fire opponentDetected</button></div>
+        </div>
+
+        <div class="card">
+            <h2>Cheese history</h2>
+            <div class="row">
+                <div>
+                    <label>Result</label>
+                    <select id="ch-result">
+                        <option value="Defeat">Defeat (they cheesed us)</option>
+                        <option value="Victory">Victory (we cheesed them)</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Duration text</label>
+                    <input id="ch-dur" value="3:42" />
+                </div>
+            </div>
+            <label>Opponent</label>
+            <input id="ch-name" value="PrintF" />
+            <label>Map</label>
+            <input id="ch-map" value="Oceanborn LE" />
+            <div style="margin-top:12px;"><button class="go" data-type="cheeseHistory" data-build="cheese">Fire cheeseHistory</button></div>
+        </div>
+
+        <div class="card">
+            <h2>Rematch</h2>
+            <label>Opponent</label>
+            <input id="rm-name" value="PrintF" />
+            <div class="row">
+                <div><label>Wins</label>  <input id="rm-wins"   type="number" value="3" /></div>
+                <div><label>Losses</label><input id="rm-losses" type="number" value="5" /></div>
+            </div>
+            <div style="margin-top:12px;"><button class="go" data-type="rematch" data-build="rematch">Fire rematch</button></div>
+        </div>
+
+        <div class="card">
+            <h2>Streak splash</h2>
+            <label>Tier</label>
+            <select id="st-tier">
+                <option value="gg-go-again">gg-go-again (1 loss)</option>
+                <option value="tilt-warn">tilt-warn (3 losses)</option>
+                <option value="heating-up">heating-up (3 wins)</option>
+                <option value="on-fire">on-fire (5 wins)</option>
+                <option value="rampage">rampage (10 wins)</option>
+            </select>
+            <div style="margin-top:12px;"><button class="go" data-type="streak" data-build="streak">Fire streak</button></div>
+        </div>
+
+        <div class="card">
+            <h2>MMR delta</h2>
+            <div class="row">
+                <div><label>Delta</label>  <input id="md-delta"   type="number" value="23" /></div>
+                <div><label>Current</label><input id="md-current" type="number" value="4512" /></div>
+            </div>
+            <div style="margin-top:12px;"><button class="go" data-type="mmrDelta" data-build="mmrDelta">Fire mmrDelta</button></div>
+        </div>
+
+        <div class="card">
+            <h2>Rank change</h2>
+            <div class="row">
+                <div>
+                    <label>Direction</label>
+                    <select id="rk-dir"><option>up</option><option>down</option></select>
+                </div>
+                <div><label>League</label><input id="rk-league" value="Diamond 1" /></div>
+            </div>
+            <label>Subtext</label>
+            <input id="rk-sub" value="Promotion earned" />
+            <div style="margin-top:12px;"><button class="go" data-type="rankChange" data-build="rank">Fire rankChange</button></div>
+        </div>
+
+    </div>
+
+    <div id="status" class="status">Ready.</div>
+
+<script>
+(function () {
+    const API = location.origin;
+    const statusEl = document.getElementById('status');
+    document.getElementById('server-url').textContent = API;
+
+    function log(msg, obj) {
+        const ts = new Date().toLocaleTimeString();
+        const line = obj ? `[${ts}] ${msg} ${JSON.stringify(obj)}` : `[${ts}] ${msg}`;
+        statusEl.textContent = line + '\n' + statusEl.textContent;
+    }
+
+    const builders = {
+        opponent: () => ({ text: document.getElementById('opp-text').value }),
+        cheese: () => ({
+            result: document.getElementById('ch-result').value,
+            opponent: document.getElementById('ch-name').value,
+            map: document.getElementById('ch-map').value,
+            durationText: document.getElementById('ch-dur').value
+        }),
+        rematch: () => {
+            const wins = parseInt(document.getElementById('rm-wins').value, 10) || 0;
+            const losses = parseInt(document.getElementById('rm-losses').value, 10) || 0;
+            const total = wins + losses;
+            return {
+                opponent: document.getElementById('rm-name').value,
+                wins, losses, total,
+                winRate: total > 0 ? Math.round((wins / total) * 100) : 0
+            };
+        },
+        streak: () => {
+            const tier = document.getElementById('st-tier').value;
+            const presets = {
+                'gg-go-again': { text: 'GG GO AGAIN',   subtext: 'One more',             type: 'loss', count: 1 },
+                'tilt-warn':   { text: 'GLHF NEXT ONE', subtext: 'Shake it off',         type: 'loss', count: 3 },
+                'heating-up':  { text: 'HEATING UP',    subtext: '3 wins in a row',      type: 'win',  count: 3 },
+                'on-fire':     { text: 'ON FIRE',       subtext: '5 wins in a row',      type: 'win',  count: 5 },
+                'rampage':     { text: 'RAMPAGE',       subtext: '10 wins in a row',     type: 'win',  count: 10 }
+            };
+            return { tier, ...(presets[tier] || {}) };
+        },
+        mmrDelta: () => ({
+            delta: parseInt(document.getElementById('md-delta').value, 10) || 0,
+            current: parseInt(document.getElementById('md-current').value, 10) || 0
+        }),
+        rank: () => ({
+            direction: document.getElementById('rk-dir').value,
+            league: document.getElementById('rk-league').value,
+            subtext: document.getElementById('rk-sub').value
+        })
+    };
+
+    document.querySelectorAll('button[data-type]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const type    = btn.getAttribute('data-type');
+            const builder = btn.getAttribute('data-build');
+            const payload = builders[builder] ? builders[builder]() : {};
+            try {
+                const resp = await fetch(`${API}/api/test/event`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type, payload })
+                });
+                const data = await resp.json();
+                log(`Fired ${type}`, data);
+            } catch (err) {
+                log('Error: ' + err.message);
+            }
+        });
+    });
+
+    document.getElementById('fire-replay').addEventListener('click', async () => {
+        const payload = {
+            myRace:  document.getElementById('mr-myRace').value,
+            oppRace: document.getElementById('mr-oppRace').value,
+            map:     document.getElementById('mr-map').value,
+            result:  document.getElementById('mr-result').value,
+            oppName: document.getElementById('mr-oppName').value,
+            duration: parseInt(document.getElementById('mr-duration').value, 10) || null
+        };
+        const mmr = parseInt(document.getElementById('mr-myMmr').value, 10);
+        if (Number.isFinite(mmr)) payload.myMmr = mmr;
+
+        try {
+            const resp = await fetch(`${API}/api/replay`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            log('Fired /api/replay', data);
+        } catch (err) {
+            log('Error: ' + err.message);
+        }
+    });
+
+    document.getElementById('btn-refresh-session').addEventListener('click', async () => {
+        try {
+            const r = await fetch(`${API}/api/session`);
+            const s = await r.json();
+            log('Session', s);
+        } catch (err) {
+            log('Error: ' + err.message);
+        }
+    });
+
+    document.getElementById('btn-reset-session').addEventListener('click', async () => {
+        if (!confirm('Reset session (wins, losses, MMR, timer)?')) return;
+        try {
+            const r = await fetch(`${API}/api/session/reset`, { method: 'POST' });
+            const s = await r.json();
+            log('Session reset', s);
+        } catch (err) {
+            log('Error: ' + err.message);
+        }
+    });
+
+    log('Panel ready. Fire away.');
+})();
+</script>
+</body>
+</html>

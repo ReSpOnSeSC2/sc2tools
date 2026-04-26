@@ -1,0 +1,32 @@
+{
+  "events": {
+    "matchResult":            { "enabled": true, "durationMs": 15000, "priority": 5 },
+    "opponentDetected":       { "enabled": true, "durationMs": 20000, "priority": 5 },
+    "rematch":                { "enabled": true, "durationMs": 15000, "priority": 6 },
+    "cheeseHistory":          { "enabled": true, "durationMs": 18000, "priority": 8, "cheeseMaxSeconds": 300 },
+    "streak":                 { "enabled": true, "durationMs": 8000,  "priority": 7 },
+    "rankChange":             { "enabled": true, "durationMs": 12000, "priority": 9 },
+    "mmrDelta":               { "enabled": true, "durationMs": 10000, "priority": 4 },
+    "favoriteOpening":        { "enabled": true, "durationMs": 18000, "priority": 7, "minGames": 2 },
+    "bestAnswer":             { "enabled": true, "durationMs": 18000, "priority": 7, "minSamples": 2 },
+    "postGameStrategyReveal": { "enabled": true, "durationMs": 16000, "priority": 6 },
+    "metaCheck":              { "enabled": true, "durationMs": 12000, "priority": 5 },
+    "session":                { "enabled": true }
+  },
+  "twitch": { "enabled": true },
+  "sounds": { "enabled": false, "volume": 0.5 },
+  "session": {
+    "idleResetMs": 3600000,
+    "mmrEstimate": { "winDelta": 0, "lossDelta": 0 }
+  },
+  "pulse": {
+    "enabled": true,
+    "apiRoot": "https://sc2pulse.nephest.com/sc2/api",
+    "queue": "LOTV_1V1",
+    "characterIds": [],
+    "fetchDelayMs": 8000,
+    "freshSeconds": 900,
+    "retryDelayMs": 6000,
+    "retryAttempts": 5
+  }
+}

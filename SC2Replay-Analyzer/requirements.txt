@@ -1,0 +1,23 @@
+# Core UI + replay parsing
+customtkinter
+sc2reader
+
+# Optional graphing (the app launches without matplotlib but graphs disable)
+matplotlib
+
+# Analytics layer (used by analytics/feature_extractor.py and downstream
+# macro-score / win-probability / clustering modules to be added)
+numpy
+pandas
+scikit-learn
+# Spatial heatmaps (analytics/spatial.py) use scipy.stats.gaussian_kde for
+# the building/proxy/battle density grids. The module degrades to a 5-cell
+# stamp fallback if scipy can't be imported, so this is technically
+# optional, but install it to get the real KDE.
+scipy
+
+# Image support (used by customtkinter for icons / future asset loading)
+Pillow
+
+# Browser-based analyzer (web_analyzer.py)
+flask

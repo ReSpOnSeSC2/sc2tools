@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SC2 Overlay - Opponent (merged with rematch)</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../widget-mode.css">
+<script src="http://localhost:3000/socket.io/socket.io.js"></script>
+<script src="../icon-registry.js" defer></script>
+<script>
+  if (!new URLSearchParams(window.location.search).get('w')) {
+    history.replaceState(null, '', window.location.pathname + '?w=opponent');
+  }
+</script>
+</head>
+<body>
+
+<!-- Merged opponent widget: name + race + MMR + head-to-head record -->
+<div id="opponent-widget" class="widget-container">
+    <div class="accent-bar accent-cyan"></div>
+    <div class="content">
+        <div class="header">
+            <span id="opp-icon" class="sc2-icon-slot"></span>
+            <span id="opp-details" class="bright">Loading...</span>
+            <span id="opp-mmr" class="bright"></span>
+        </div>
+        <div class="footer">
+            <span id="opp-race" class="dim"></span>
+            <span id="opp-record"></span>
+            <span id="opp-winrate" class="dim"></span>
+        </div>
+    </div>
+</div>
+
+<script src="../app.js"></script>
+</body>
+</html>

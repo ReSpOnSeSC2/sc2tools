@@ -1,0 +1,304 @@
+/* =============================================================
+   Single-widget mode: activated when the page is loaded with
+   ?w=<name> URL param (or via SC2-Overlay/widgets/<name>.html).
+   The body gets class "single-widget" + "widget-<name>" so the
+   per-widget rules below can:
+
+     * make the body fully transparent (OBS Browser Source friendly)
+     * disable the absolute-position pinning baked into styles.css
+     * size the widget to fill its OBS Browser Source
+
+   In all-in-one mode (index.html, no ?w=) none of these rules
+   apply; the original layout from styles.css wins.
+   ============================================================= */
+
+html.single-widget,
+body.single-widget {
+    background: transparent !important;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Reset every widget container's absolute positioning. Each widget
+   will simply fill the OBS Browser Source it lives in, and the
+   streamer drags / sizes that source in OBS. */
+body.single-widget .widget-container,
+body.single-widget .session-widget,
+body.single-widget .topbuilds-widget,
+body.single-widget .streak-widget,
+body.single-widget .scout-widget,
+body.single-widget .rival-widget {
+    position: relative !important;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+    margin: 0;
+}
+
+/* Transient widgets (slide/fade in) -- in single-widget mode we
+   skip the off-screen translate so the widget is visible
+   immediately when its event fires; the .show class still toggles
+   opacity for the in/out transition. */
+body.single-widget .widget-container {
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    width: 100% !important;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+body.single-widget .widget-container.show { opacity: 1; }
+
+/* Streak splash centered inside its source */
+body.single-widget .streak-widget {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: none !important;
+}
+body.single-widget .streak-widget.show { transform: none !important; }
+body.single-widget .streak-widget .streak-inner { transform: none !important; }
+
+/* Persistent widgets (session, topbuilds) fill viewport */
+body.single-widget .session-widget,
+body.single-widget .topbuilds-widget {
+    width: 100% !important;
+    height: 100%;
+    box-sizing: border-box;
+    opacity: 1 !important;
+    transform: none !important;
+}
+
+/* Hide widgets that aren't the selected one. We do this by hiding
+   *every* widget by default in single-widget mode, then revealing
+   the one matching the body class. */
+body.single-widget #match-result-widget,
+body.single-widget #opponent-widget,
+body.single-widget #rematch-widget,
+body.single-widget #cheese-widget,
+body.single-widget #favopen-widget,
+body.single-widget #bestans-widget,
+body.single-widget #reveal-widget,
+body.single-widget #meta-widget,
+body.single-widget #mmr-delta-widget,
+body.single-widget #rank-widget,
+body.single-widget #streak-widget,
+body.single-widget #rival-widget,
+body.single-widget #scout-widget,
+body.single-widget #session-widget,
+body.single-widget #topbuilds-widget {
+    display: none;
+}
+
+/* Reveal the one matching widget. */
+body.single-widget.widget-match-result   #match-result-widget,
+body.single-widget.widget-opponent       #opponent-widget,
+body.single-widget.widget-rematch        #rematch-widget,
+body.single-widget.widget-cheese         #cheese-widget,
+body.single-widget.widget-fav-opening    #favopen-widget,
+body.single-widget.widget-best-answer    #bestans-widget,
+body.single-widget.widget-post-game      #reveal-widget,
+body.single-widget.widget-meta           #meta-widget,
+body.single-widget.widget-mmr-delta      #mmr-delta-widget,
+body.single-widget.widget-rank           #rank-widget,
+body.single-widget.widget-streak         #streak-widget,
+body.single-widget.widget-rival          #rival-widget,
+body.single-widget.widget-scouting       #scout-widget,
+body.single-widget.widget-session        #session-widget,
+body.single-widget.widget-topbuilds      #topbuilds-widget {
+    display: flex;
+}
+
+/* =============================================================
+   Container-relative typography (single-widget mode only).
+   1vw = 1% of the widget container's width, so text scales to
+   the OBS Browser Source size: bigger source = bigger numbers.
+   ============================================================= */
+
+body.single-widget {
+}
+
+/* ---- Session widget (W-L hero number) ---- */
+body.single-widget.widget-session #session-widget {
+    padding: 0;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+    flex-direction: row;
+    align-items: stretch;
+}
+body.single-widget.widget-session .accent-bar {
+    width: 4vw;
+    min-width: 4px;
+    border-radius: 0;
+}
+body.single-widget.widget-session .session-content {
+    padding: 4vw 6vw;
+    gap: 2vw;
+    justify-content: center;
+}
+body.single-widget.widget-session .session-label {
+    font-size: 5.5vw;
+    letter-spacing: 0.6vw;
+}
+body.single-widget.widget-session .session-streak {
+    font-size: 5vw;
+    padding: 0.5vw 2vw;
+}
+body.single-widget.widget-session .session-wl {
+    font-size: 22vw;
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: 0.3vw;
+}
+body.single-widget.widget-session .session-mmr {
+    font-size: 9vw;
+    line-height: 1;
+}
+body.single-widget.widget-session .session-time {
+    font-size: 7vw;
+    letter-spacing: 0.4vw;
+}
+body.single-widget.widget-session .session-league .sc2-icon {
+    width: 14vw;
+    height: 14vw;
+    margin-right: 2vw;
+}
+
+/* ---- Top-builds tile grid ---- */
+body.single-widget.widget-topbuilds #topbuilds-widget {
+    padding: 3vw 3.5vw;
+    border-radius: 1vw;
+    flex-direction: column;
+}
+body.single-widget.widget-topbuilds .topbuilds-title {
+    font-size: 4.5vw;
+    letter-spacing: 0.6vw;
+}
+body.single-widget.widget-topbuilds .topbuilds-grid {
+    gap: 1.5vw;
+    margin-top: 2vw;
+}
+body.single-widget.widget-topbuilds .topbuild-tile {
+    font-size: 4.5vw;
+    padding: 1.5vw 2vw;
+    gap: 2vw;
+}
+body.single-widget.widget-topbuilds .topbuild-tile .sc2-icon {
+    width: 6vw;
+    height: 6vw;
+}
+
+/* ---- Transient widgets (match result, scouting, etc.) ---- */
+body.single-widget .widget-container {
+    border-radius: 1.5vw;
+}
+body.single-widget .widget-container .accent-bar {
+    width: 2vw;
+    min-width: 4px;
+    border-radius: 1.5vw 0 0 1.5vw;
+}
+body.single-widget .widget-container .content {
+    padding: 4vw 5vw;
+    gap: 2vw;
+}
+body.single-widget .widget-container .content-tight {
+    padding: 3vw 4vw;
+}
+body.single-widget .widget-container .header {
+    font-size: 7vw;
+    letter-spacing: 0.3vw;
+}
+body.single-widget .widget-container .footer {
+    font-size: 5vw;
+    letter-spacing: 0.2vw;
+    gap: 2vw;
+}
+body.single-widget .widget-container .big {
+    font-size: 13vw;
+    line-height: 1;
+}
+body.single-widget .widget-container .sc2-icon-slot .sc2-icon {
+    width: 8vw;
+    height: 8vw;
+}
+body.single-widget .widget-container .icon-row .sc2-icon {
+    width: 6vw;
+    height: 6vw;
+}
+
+/* Match result -- huge matchup text + result word */
+body.single-widget.widget-match-result #mr-matchup,
+body.single-widget.widget-match-result #mr-result {
+    font-size: 9vw;
+}
+
+/* MMR delta is one hero number */
+body.single-widget.widget-mmr-delta #mmr-delta-value {
+    font-size: 28vw !important;
+    line-height: 1;
+}
+body.single-widget.widget-mmr-delta #mmr-delta-current {
+    font-size: 6vw;
+}
+
+/* Scouting report card */
+body.single-widget.widget-scouting .scout-content {
+    padding: 4vw 5vw;
+    gap: 2vw;
+}
+body.single-widget.widget-scouting .scout-header {
+    font-size: 7vw;
+    padding-bottom: 2vw;
+}
+body.single-widget.widget-scouting .scout-race .sc2-icon {
+    width: 10vw;
+    height: 10vw;
+}
+body.single-widget.widget-scouting .scout-row {
+    font-size: 5vw;
+    gap: 2vw;
+}
+body.single-widget.widget-scouting .scout-label {
+    font-size: 3.8vw;
+    letter-spacing: 0.4vw;
+    min-width: 25%;
+}
+
+/* Rival alert */
+body.single-widget.widget-rival .header { font-size: 8vw; }
+body.single-widget.widget-rival .footer { font-size: 5vw; }
+
+/* Post-game build timeline */
+body.single-widget.widget-post-game .build-timeline {
+    gap: 1.5vw 2vw;
+    padding-top: 2vw;
+}
+body.single-widget.widget-post-game .build-step {
+    font-size: 4vw;
+    padding: 1vw 1.5vw;
+}
+body.single-widget.widget-post-game .build-step .sc2-icon {
+    width: 5vw;
+    height: 5vw;
+}
+
+/* Streak splash text fills the source */
+body.single-widget.widget-streak .streak-text {
+    font-size: 22vw;
+    letter-spacing: 1vw;
+}
+body.single-widget.widget-streak .streak-sub {
+    font-size: 6vw;
+    letter-spacing: 0.4vw;
+}
+body.single-widget.widget-streak .streak-inner {
+    padding: 6vw 12vw;
+    border-radius: 2vw;
+}

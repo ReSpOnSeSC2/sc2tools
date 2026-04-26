@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SC2 Overlay - Match Result Pop-up</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../widget-mode.css">
+<script src="http://localhost:3000/socket.io/socket.io.js"></script>
+<script src="../icon-registry.js" defer></script>
+<script>
+  // Force the URL into single-widget mode even if the user opened
+  // this file directly (file://...) without the ?w= query string.
+  if (!new URLSearchParams(window.location.search).get('w')) {
+    history.replaceState(null, '', window.location.pathname + '?w=match-result');
+  }
+</script>
+</head>
+<body>
+
+<div id="match-result-widget" class="widget-container">
+    <div class="accent-bar accent-gold"></div>
+    <div class="content">
+        <div class="header">
+            <span class="matchup-block">
+                <span id="mr-icon-me" class="sc2-icon-slot"></span>
+                <span id="mr-matchup">PvT</span>
+                <span id="mr-icon-opp" class="sc2-icon-slot"></span>
+            </span>
+            <span id="mr-result" class="victory">VICTORY</span>
+        </div>
+        <div class="footer">
+            <span id="mr-map">Site Delta LE</span>
+            <span id="mr-duration" class="dim"></span>
+        </div>
+    </div>
+</div>
+<script src="../app.js"></script>
+</body>
+</html>

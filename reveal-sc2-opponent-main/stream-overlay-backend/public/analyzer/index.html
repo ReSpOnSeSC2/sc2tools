@@ -1,0 +1,2807 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <title>SC2 Meta Analyzer</title>
+  <!-- patch-marker:dna-v1 -->
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Tailwind play CDN: zero-build dev/prod styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            base:    { 900: '#0b0d11', 800: '#11141a', 700: '#181c24', 600: '#222732' },
+            accent:  { 400: '#7aa2ff', 500: '#5b8def', 600: '#3f6fdd' },
+            win:     { 500: '#3ddc97' },
+            loss:    { 500: '#ef476f' },
+            neutral: { 500: '#9aa3b2' },
+            gold:    { 500: '#f4c95d' },
+          },
+          fontFamily: {
+            sans: ['Inter','system-ui','-apple-system','Segoe UI','Roboto','sans-serif'],
+            mono: ['JetBrains Mono','SF Mono','Consolas','monospace'],
+          },
+          boxShadow: {
+            soft: '0 1px 2px rgba(0,0,0,.30), 0 4px 12px rgba(0,0,0,.20)',
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- React + Recharts UMD (must load BEFORE the JSX script below
+       so the `React` / `Recharts` globals are defined when Babel
+       evaluates our code). Recharts 2.x ships `umd/Recharts.js`
+       (not `.min.js`) so use that exact filename. -->
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+
+  <!-- Charts are now hand-rolled SVG inside the JSX block below --
+       no Recharts/Chart.js CDN required. This makes the analyzer
+       work even on locked-down networks where third-party CDNs are
+       blocked, and removes a class of "stuck loading" failures. -->
+
+  <!-- Babel standalone so we can write JSX directly in the page.
+       Note: keep this script as a classic script (no `type=module`)
+       so the JSX block below can read the UMD globals above. -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Socket.io client served by the backend itself -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <!-- Surface any boot-time failures into the page so the user can
+       see WHY the SPA didn't render instead of just a stuck spinner. -->
+  <script>
+    window.addEventListener('error', (e) => {
+      const root = document.getElementById('root');
+      if (!root) return;
+      root.innerHTML = `
+        <div style="padding:24px;font-family:monospace;color:#ef476f;background:#11141a;
+                    min-height:100vh;line-height:1.5">
+          <div style="font-size:18px;margin-bottom:8px">Analyzer failed to boot</div>
+          <div style="color:#9aa3b2;font-size:13px;white-space:pre-wrap">${
+            (e.message || 'unknown error') + '\n' + (e.filename || '') + ':' + (e.lineno || '?')
+          }</div>
+          <div style="margin-top:16px;color:#5d6677;font-size:12px">
+            Open DevTools (F12) → Console for the full stack trace.
+          </div>
+        </div>`;
+    });
+  </script>
+
+  <style>
+    html, body { background: #0b0d11; color: #e7eaf0; min-height: 100vh; }
+    body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    /* Tame scrollbar in dark UI */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: #11141a; }
+    ::-webkit-scrollbar-thumb { background: #2a3140; border-radius: 6px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3a4458; }
+    .ring-soft { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05); }
+    .table-striped tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+    .skeleton { background: linear-gradient(90deg, #181c24 25%, #222732 37%, #181c24 63%); background-size: 400% 100%; animation: skeleton 1.4s ease infinite; }
+    @keyframes skeleton { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+    .race-Z { color: #c084fc; }
+    .race-P { color: #fbbf24; }
+    .race-T { color: #60a5fa; }
+    .race-R { color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="flex items-center justify-center min-h-screen">
+      <div class="text-neutral-500 font-mono">loading analyzer…</div>
+    </div>
+  </div>
+
+  <script type="text/babel" data-presets="react">
+  // ============================================================
+  // SC2 META ANALYZER — single-file React SPA
+  // ============================================================
+  const { useState, useEffect, useMemo, useCallback, useRef, Fragment } = React;
+  // Charts are SVG-native (see HBarChart / StackedBars / LinePath
+  // below). No external charting library => no CDN dependency =>
+  // no "stuck loading" failures. HAS_RECHARTS kept as a constant
+  // for backward-compat with code paths that branched on it.
+  const HAS_RECHARTS = true;
+
+  // ---------- API helpers --------------------------------------
+  const API = '/api/analyzer';
+
+  function buildQuery(params) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === '' || v === null || v === undefined) return;
+      // Underscore-prefixed keys are client-only (e.g. _season is just a
+      // shorthand for setting since/until and shouldn't reach the API).
+      if (k.startsWith('_')) return;
+      q.set(k, v);
+    });
+    const s = q.toString();
+    return s ? `?${s}` : '';
+  }
+
+  async function api(endpoint, params) {
+    const r = await fetch(`${API}/${endpoint}${buildQuery(params)}`);
+    if (!r.ok) throw new Error(`${endpoint} ${r.status}`);
+    return r.json();
+  }
+
+  // ---------- Formatting ---------------------------------------
+  const pct  = (n) => `${Math.round((n || 0) * 100)}%`;
+  const pct1 = (n) => `${((n || 0) * 100).toFixed(1)}%`;
+  const fmtDate = (s) => {
+    if (!s) return '—';
+    const t = Date.parse(String(s).replace(' ', 'T'));
+    if (!Number.isFinite(t)) return s;
+    const d = new Date(t);
+    return d.toISOString().slice(0, 10);
+  };
+  const fmtAgo = (ms) => {
+    if (!ms) return '—';
+    const s = Math.max(0, (Date.now() - ms) / 1000);
+    if (s < 60)    return 'just now';
+    if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    return `${Math.floor(s / 86400)}d ago`;
+  };
+  const wrColor = (winRate, total) => {
+    if (!total) return '#5d6677';
+    if (winRate >= 0.65) return '#3ddc97';
+    if (winRate >= 0.55) return '#94d68a';
+    if (winRate >= 0.45) return '#f4c95d';
+    if (winRate >= 0.35) return '#f79e6c';
+    return '#ef476f';
+  };
+  const raceClass = (race) => {
+    const r = (race || '').charAt(0).toUpperCase();
+    return ['Z','P','T','R'].includes(r) ? `race-${r}` : 'text-neutral-400';
+  };
+
+  // ---------- Reusable bits ------------------------------------
+  function Card({ title, right, children, className = '' }) {
+    return (
+      <section className={`bg-base-800 ring-soft rounded-xl shadow-soft p-5 ${className}`}>
+        {(title || right) && (
+          <header className="flex items-center justify-between mb-4">
+            {title && <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase">{title}</h2>}
+            {right}
+          </header>
+        )}
+        {children}
+      </section>
+    );
+  }
+
+  function Stat({ label, value, sub, color }) {
+    return (
+      <div className="bg-base-700 ring-soft rounded-lg px-4 py-3">
+        <div className="text-[11px] uppercase tracking-wider text-neutral-500">{label}</div>
+        <div className="mt-1 text-2xl font-semibold tabular-nums" style={color ? { color } : null}>{value}</div>
+        {sub && <div className="text-xs text-neutral-500 mt-0.5">{sub}</div>}
+      </div>
+    );
+  }
+
+  function WrBar({ wins = 0, losses = 0, height = 6 }) {
+    const total = wins + losses;
+    const wr = total ? wins / total : 0;
+    return (
+      <div className="w-full bg-base-700 rounded-full overflow-hidden" style={{ height }}>
+        <div
+          className="h-full transition-all"
+          style={{ width: `${pct(wr)}`, background: wrColor(wr, total) }}
+        />
+      </div>
+    );
+  }
+
+  function EmptyState({ title = 'No data', sub }) {
+    return (
+      <div className="text-center py-16 text-neutral-500">
+        <div className="text-base">{title}</div>
+        {sub && <div className="text-xs mt-1 text-neutral-600">{sub}</div>}
+      </div>
+    );
+  }
+
+  // ============================================================
+  // INLINE SVG CHARTS (production-grade, no external deps)
+  // ------------------------------------------------------------
+  // Features common to all charts:
+  //   - Crosshair guide that snaps to the nearest data point
+  //   - Floating tooltip with the hovered datum
+  //   - Mouse-wheel zoom (Ctrl/Cmd-wheel zooms; plain wheel pans)
+  //   - Click-and-drag rectangle to zoom into a region
+  //   - Double-click to reset zoom
+  //   - "Reset zoom" pill appears when zoomed
+  //   - Crisp typography, clean axes, large dot/line widths
+  // ============================================================
+  const CHART_W = 1000;          // logical viewBox width
+  const CHART_GRID  = '#1e2330';
+  const CHART_AXIS  = '#cdd5e0';
+
+  // Hook: shared zoom + pan state for index-domain charts.
+  // `count` is total items in the dataset; viewport is [start, end].
+  function useZoomDomain(count) {
+    const [view, setView] = useState({ start: 0, end: count });
+    // Reset view when the dataset size actually changes.
+    useEffect(() => { setView({ start: 0, end: count }); }, [count]);
+    const zoomed = !(view.start === 0 && view.end === count);
+    const zoomTo = useCallback((s, e) => {
+      const a = Math.max(0, Math.min(s, e));
+      const b = Math.min(count, Math.max(s, e));
+      if (b - a >= 1) setView({ start: Math.floor(a), end: Math.ceil(b) });
+    }, [count]);
+    const reset = useCallback(() => setView({ start: 0, end: count }), [count]);
+    return { view, zoomTo, reset, zoomed };
+  }
+
+  // Toolbar pill -- "zoomed: 12 / 47 · reset"
+  function ZoomBadge({ view, count, onReset }) {
+    if (view.start === 0 && view.end === count) return null;
+    const span = view.end - view.start;
+    return (
+      <button onClick={onReset}
+        className="absolute top-2 right-2 z-10 text-[10px] uppercase tracking-wider
+                   bg-accent-500/20 text-accent-400 hover:bg-accent-500/30
+                   ring-soft rounded px-2 py-1">
+        zoomed: {span}/{count} · reset ↺
+      </button>
+    );
+  }
+
+  // Tooltip + drag-rectangle overlay shared by line/bar charts.
+  function ChartOverlay({ wrapRef, drag, tooltip }) {
+    // Resolve clamps without optional-chaining so the in-browser Babel
+    // doesn't have to handle ?. inside JSX attribute expressions.
+    const wrapW = (wrapRef && wrapRef.current && wrapRef.current.clientWidth)  || 9999;
+    const wrapH = (wrapRef && wrapRef.current && wrapRef.current.clientHeight) || 9999;
+    return (
+      <Fragment>
+        {drag && (
+          <div className="absolute pointer-events-none bg-accent-500/15 border border-accent-500/60"
+               style={{ left: drag.x1, top: 0, width: drag.x2 - drag.x1, height: '100%' }} />
+        )}
+        {tooltip && (
+          <div className="pointer-events-none absolute z-20 bg-base-900 ring-soft rounded px-3 py-2 text-xs text-neutral-100 shadow-soft"
+               style={{ left: Math.min(tooltip.x + 14, wrapW - 220),
+                        top:  Math.min(tooltip.y + 14, wrapH - 80),
+                        minWidth: 160 }}>
+            {tooltip.content}
+          </div>
+        )}
+      </Fragment>
+    );
+  }
+
+  // -------- HORIZONTAL BAR CHART (Maps tab) --------------------
+  function HBarChart({ data, height = 360, valueKey = 'winRate', maxValue = 100,
+                      format = (v) => `${v.toFixed(1)}%`, colorFor }) {
+    const wrapRef = useRef(null);
+    const [tip, setTip] = useState(null);
+    if (!data || data.length === 0) return <EmptyState sub="No data to chart" />;
+    const padL = 180, padR = 28, padT = 12, padB = 32;
+    const innerH = Math.max(60, height - padT - padB);
+    const rowH = innerH / data.length;
+    const xScale = (v) => padL + ((v / maxValue) * (CHART_W - padL - padR));
+    const ticks = [0, 25, 50, 75, 100];
+    return (
+      <div ref={wrapRef} className="relative w-full" style={{ height }}
+           onMouseLeave={() => setTip(null)}>
+        <svg viewBox={`0 0 ${CHART_W} ${height}`} preserveAspectRatio="none"
+             style={{ width: '100%', height: '100%' }}>
+          {ticks.map(t => (
+            <g key={t}>
+              <line x1={xScale(t)} x2={xScale(t)} y1={padT} y2={padT + innerH}
+                    stroke={CHART_GRID} strokeDasharray="3 3" />
+              <text x={xScale(t)} y={padT + innerH + 18} fill={CHART_AXIS}
+                    fontSize="12" textAnchor="middle">{t}%</text>
+            </g>
+          ))}
+          {data.map((d, i) => {
+            const v = Number(d[valueKey]) || 0;
+            const y = padT + i * rowH;
+            const barH = Math.max(4, rowH - 6);
+            const w = Math.max(0, xScale(v) - padL);
+            const fill = colorFor ? colorFor(d) : '#5b8def';
+            return (
+              <g key={d.name + i}
+                 onMouseMove={(e) => {
+                   const rect = wrapRef.current.getBoundingClientRect();
+                   setTip({ x: e.clientX - rect.left, y: e.clientY - rect.top,
+                            content: <div>
+                              <div className="font-semibold text-neutral-100">{d.name}</div>
+                              <div className="text-neutral-400">{format(v)}{d.games != null ? ` · ${d.games} games` : ''}</div>
+                            </div> });
+                 }}>
+                <text x={padL - 12} y={y + barH / 2 + 4} fill={CHART_AXIS}
+                      fontSize="13" textAnchor="end">{d.name}</text>
+                <rect x={padL} y={y + 3} width={w} height={barH} fill={fill} rx="3" />
+                {/* Value label inside bar if there's room, else outside */}
+                {w > 60 ? (
+                  <text x={padL + w - 8} y={y + barH / 2 + 4} fill="#0b0d11"
+                        fontSize="12" fontWeight="600" textAnchor="end">{format(v)}</text>
+                ) : (
+                  <text x={padL + w + 6} y={y + barH / 2 + 4} fill={CHART_AXIS}
+                        fontSize="12" textAnchor="start">{format(v)}</text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+        <ChartOverlay wrapRef={wrapRef} drag={null} tooltip={tip} />
+      </div>
+    );
+  }
+
+  // Shared X-domain chart (line + bars). Handles zoom / pan / drag /
+  // crosshair / tooltip in one place. The `series` prop is an array
+  // of { key, color, type: 'line'|'bar', accessor }.
+  function XDomainChart({ data, height = 280, series, formatX = (d) => d.date, formatY = (v) => String(v), yMax }) {
+    const wrapRef = useRef(null);
+    const svgRef = useRef(null);
+    const [tip, setTip] = useState(null);
+    const [drag, setDrag] = useState(null);
+    const zoom = useZoomDomain(data ? data.length : 0);
+    if (!data || data.length === 0) return <EmptyState sub="No data to chart" />;
+    const padL = 56, padR = 20, padT = 12, padB = 36;
+    const innerH = Math.max(60, height - padT - padB);
+    const innerW = CHART_W - padL - padR;
+    const view = data.slice(zoom.view.start, zoom.view.end);
+    const n = Math.max(1, view.length);
+    // y-domain: max of all series values in the visible window.
+    // Stacked series sum their layers per datum; line/bar series use
+    // their accessor directly. Falls back to 1 to avoid divide-by-0.
+    function valueFor(s, d) {
+      if (s.type === 'stack' && Array.isArray(s.stack)) {
+        let sum = 0;
+        for (const layer of s.stack) {
+          const v = (layer && typeof layer.accessor === 'function') ? layer.accessor(d) : 0;
+          sum += Number(v) || 0;
+        }
+        return sum;
+      }
+      return (typeof s.accessor === 'function') ? (Number(s.accessor(d)) || 0) : 0;
+    }
+    const yMaxComputed = (yMax != null)
+      ? yMax
+      : Math.max(1, ...view.flatMap(d => series.map(s => valueFor(s, d))));
+    const yScale = (v) => padT + innerH - (Math.min(yMaxComputed, Math.max(0, v)) / yMaxComputed) * innerH;
+    // For bar charts we slot bars within their column; for lines we
+    // anchor to the column center.
+    const colW = innerW / n;
+    const xCenter = (i) => padL + i * colW + colW / 2;
+
+    // Pixel position to data index (clamped).
+    function pxToIndex(pxFromLeft) {
+      const localX = pxFromLeft - padL;
+      const idx = Math.floor(localX / colW);
+      return Math.max(0, Math.min(view.length - 1, idx));
+    }
+
+    // Convert client coords to logical SVG coords for hit-testing.
+    function clientToLogical(clientX, clientY) {
+      const rect = svgRef.current.getBoundingClientRect();
+      const sx = (clientX - rect.left) / rect.width  * CHART_W;
+      const sy = (clientY - rect.top)  / rect.height * height;
+      return { sx, sy };
+    }
+
+    function onMouseMove(e) {
+      const { sx } = clientToLogical(e.clientX, e.clientY);
+      const i = pxToIndex(sx);
+      const d = view[i];
+      const xPix = xCenter(i);
+      const wrapRect = wrapRef.current.getBoundingClientRect();
+      setTip({
+        x: e.clientX - wrapRect.left,
+        y: e.clientY - wrapRect.top,
+        snapX: xPix,
+        i,
+        content: (
+          <div>
+            <div className="font-semibold text-neutral-100">{formatX(d)}</div>
+            {series.flatMap(s => {
+              // Stacked series: render one row per layer (e.g., wins / losses)
+              if (s.type === 'stack' && Array.isArray(s.stack)) {
+                return s.stack.map(layer => (
+                  <div key={s.key + ':' + layer.key} className="flex items-center gap-1.5 mt-0.5">
+                    <span className="inline-block w-2 h-2 rounded-sm" style={{ background: layer.color }} />
+                    <span className="text-neutral-400">{layer.label || layer.key}: <span className="text-neutral-200">{formatY(layer.accessor(d), layer.key)}</span></span>
+                  </div>
+                ));
+              }
+              // Plain line / bar
+              const v = (typeof s.accessor === 'function') ? s.accessor(d) : null;
+              return [(
+                <div key={s.key} className="flex items-center gap-1.5 mt-0.5">
+                  <span className="inline-block w-2 h-2 rounded-sm" style={{ background: s.color }} />
+                  <span className="text-neutral-400">{s.label}: <span className="text-neutral-200">{formatY(v, s.key)}</span></span>
+                </div>
+              )];
+            })}
+          </div>
+        )
+      });
+      if (drag) setDrag({ ...drag, x2: e.clientX - wrapRect.left });
+    }
+    function onMouseDown(e) {
+      const wrapRect = wrapRef.current.getBoundingClientRect();
+      const x = e.clientX - wrapRect.left;
+      setDrag({ x1: x, x2: x });
+    }
+    function onMouseUp(e) {
+      if (!drag) return;
+      const wrapRect = wrapRef.current.getBoundingClientRect();
+      const a = Math.min(drag.x1, drag.x2);
+      const b = Math.max(drag.x1, drag.x2);
+      setDrag(null);
+      if (b - a < 8) return; // treat as click
+      // Convert pixel range to logical -> slice of `view` -> absolute slice
+      const ratioA = a / wrapRect.width;
+      const ratioB = b / wrapRect.width;
+      const localA = ratioA * CHART_W;
+      const localB = ratioB * CHART_W;
+      const iA = pxToIndex(localA);
+      const iB = pxToIndex(localB) + 1;
+      zoom.zoomTo(zoom.view.start + iA, zoom.view.start + iB);
+    }
+    function onDoubleClick() { zoom.reset(); }
+    function onWheel(e) {
+      // Wheel zoom: positive deltaY = zoom out, negative = zoom in.
+      // Centered on mouse position.
+      e.preventDefault();
+      const wrapRect = wrapRef.current.getBoundingClientRect();
+      const ratio = (e.clientX - wrapRect.left) / wrapRect.width;
+      const i = pxToIndex(ratio * CHART_W);
+      const absoluteCenter = zoom.view.start + i;
+      const span = zoom.view.end - zoom.view.start;
+      const factor = e.deltaY > 0 ? 1.25 : 0.8;
+      const newSpan = Math.max(2, Math.min(data.length, Math.round(span * factor)));
+      const newStart = Math.max(0, absoluteCenter - Math.floor(newSpan * (i / Math.max(1, view.length - 1))));
+      const newEnd   = Math.min(data.length, newStart + newSpan);
+      zoom.zoomTo(newStart, newEnd);
+    }
+
+    // Y-axis ticks (4-5 nice ones)
+    const niceTicks = (max) => {
+      if (max <= 1)   return [0, 0.25, 0.5, 0.75, 1];
+      const step = Math.pow(10, Math.floor(Math.log10(max)));
+      const norm = max / step;
+      const niceStep = (norm < 2 ? 0.5 : norm < 5 ? 1 : 2) * step;
+      const out = []; for (let v = 0; v <= max + 1e-9; v += niceStep) out.push(v);
+      return out;
+    };
+    const yTicks = niceTicks(yMaxComputed);
+    const everyN = Math.max(1, Math.ceil(view.length / 10));
+
+    return (
+      <div ref={wrapRef} className="relative w-full select-none" style={{ height }}
+           onMouseLeave={() => { setTip(null); setDrag(null); }}>
+        <ZoomBadge view={zoom.view} count={data.length} onReset={zoom.reset} />
+        <svg ref={svgRef}
+             viewBox={`0 0 ${CHART_W} ${height}`} preserveAspectRatio="none"
+             style={{ width: '100%', height: '100%', cursor: drag ? 'crosshair' : 'crosshair' }}
+             onMouseMove={onMouseMove}
+             onMouseDown={onMouseDown}
+             onMouseUp={onMouseUp}
+             onDoubleClick={onDoubleClick}
+             onWheel={onWheel}>
+          {/* Y gridlines + ticks */}
+          {yTicks.map(t => (
+            <g key={t}>
+              <line x1={padL} x2={CHART_W - padR} y1={yScale(t)} y2={yScale(t)}
+                    stroke={CHART_GRID} strokeDasharray="3 3" />
+              <text x={padL - 8} y={yScale(t) + 4} fill={CHART_AXIS}
+                    fontSize="12" textAnchor="end">{formatY(t, '__yaxis')}</text>
+            </g>
+          ))}
+          {/* X axis line */}
+          <line x1={padL} x2={CHART_W - padR} y1={padT + innerH} y2={padT + innerH}
+                stroke="#2a3140" />
+          {/* X tick labels */}
+          {view.map((d, i) => i % everyN === 0 ? (
+            <text key={i} x={xCenter(i)} y={padT + innerH + 20}
+                  fill={CHART_AXIS} fontSize="11" textAnchor="middle">
+              {formatX(d).slice(-5)}
+            </text>
+          ) : null)}
+
+          {/* Series rendering */}
+          {series.map(s => {
+            if (s.type === 'bar') {
+              return view.map((d, i) => {
+                const v = s.accessor(d) || 0;
+                const h = (v / yMaxComputed) * innerH;
+                const x = padL + i * colW + colW * 0.12;
+                const w = colW * 0.76;
+                return <rect key={`${s.key}-${i}`} x={x} y={padT + innerH - h}
+                             width={w} height={h} fill={s.color} opacity={s.opacity || 0.9} />;
+              });
+            }
+            if (s.type === 'stack') {
+              // s.stack = [{ key, color, accessor }]
+              return view.map((d, i) => {
+                let acc = 0;
+                const x = padL + i * colW + colW * 0.12;
+                const w = colW * 0.76;
+                return (
+                  <g key={`${s.key}-${i}`}>
+                    {s.stack.map(layer => {
+                      const v = layer.accessor(d) || 0;
+                      const h = (v / yMaxComputed) * innerH;
+                      const y = padT + innerH - acc - h;
+                      acc += h;
+                      return <rect key={layer.key} x={x} y={y} width={w} height={h} fill={layer.color} />;
+                    })}
+                  </g>
+                );
+              });
+            }
+            // line
+            const pts = view.map((d, i) => ({ x: xCenter(i), y: yScale(s.accessor(d) || 0) }));
+            const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+            return (
+              <g key={s.key}>
+                <path d={path} fill="none" stroke={s.color} strokeWidth="2.5"
+                      strokeLinecap="round" strokeLinejoin="round" />
+                {pts.map((p, i) => (
+                  <circle key={i} cx={p.x} cy={p.y} r="3.5"
+                          fill="#11141a" stroke={s.color} strokeWidth="2" />
+                ))}
+              </g>
+            );
+          })}
+
+          {/* Crosshair */}
+          {tip && (
+            <line x1={tip.snapX} x2={tip.snapX} y1={padT} y2={padT + innerH}
+                  stroke="#5b8def" strokeOpacity="0.6" strokeDasharray="4 4" />
+          )}
+        </svg>
+        <ChartOverlay wrapRef={wrapRef} drag={drag} tooltip={tip} />
+        <div className="absolute bottom-1 left-3 text-[10px] text-neutral-600 font-mono pointer-events-none">
+          drag to zoom · wheel to zoom · double-click to reset
+        </div>
+      </div>
+    );
+  }
+
+  // Convenience wrappers so the call sites stay tidy.
+  function StackedBars({ data, height = 280 }) {
+    return <XDomainChart
+      data={data}
+      height={height}
+      series={[{
+        key: 'wl', type: 'stack', label: 'Games', color: '#3ddc97',
+        stack: [
+          { key: 'wins',   label: 'Wins',   color: '#3ddc97', accessor: d => d.wins   || 0 },
+          { key: 'losses', label: 'Losses', color: '#ef476f', accessor: d => d.losses || 0 },
+        ]
+      }]}
+      formatX={(d) => d.date}
+      formatY={(v) => Math.round(v == null ? 0 : v)}
+    />;
+  }
+
+  function LinePath({ data, height = 280, valueKey = 'winRate' }) {
+    return <XDomainChart
+      data={data}
+      height={height}
+      yMax={1}
+      series={[{
+        key: valueKey, type: 'line', label: 'Win rate',
+        color: '#5b8def', accessor: d => d[valueKey] || 0,
+      }]}
+      formatX={(d) => d.date}
+      formatY={(v, k) => k === valueKey || k === '__yaxis' ? `${Math.round(v * 100)}%` : v}
+    />;
+  }
+
+  // Error boundary wrapper -- catches a child render error and shows
+  // a small panel inline instead of bringing down the whole SPA.
+  // Used around each tab so a bug in one tab doesn't blank the rest.
+  class ErrorBoundary extends React.Component {
+    constructor(props) { super(props); this.state = { error: null }; }
+    static getDerivedStateFromError(error) { return { error }; }
+    componentDidCatch(error, info) {
+      console.error('[Analyzer] component error:', error, info);
+    }
+    render() {
+      if (!this.state.error) return this.props.children;
+      const e = this.state.error;
+      return (
+        <div className="bg-loss-500/10 border border-loss-500/40 rounded p-4 text-sm">
+          <div className="font-semibold text-loss-500 mb-1">{this.props.label || 'Component'} failed to render</div>
+          <pre className="text-xs text-neutral-300 whitespace-pre-wrap">{String(e && (e.stack || e.message || e))}</pre>
+          <button onClick={() => this.setState({ error: null })}
+            className="mt-3 text-xs bg-base-700 hover:bg-base-600 ring-soft rounded px-3 py-1 text-neutral-300">
+            try again
+          </button>
+        </div>
+      );
+    }
+  }
+
+  function Skeleton({ rows = 6 }) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="h-9 rounded skeleton" />
+        ))}
+      </div>
+    );
+  }
+
+  // ---------- Sortable column header --------------------------
+  // Click to toggle ascending/descending; click a different column
+  // to sort by it. Used by every data table in the SPA so columns
+  // behave consistently. The parent component owns the sort state
+  // and passes (sortBy, sortDir, onSort) -- this header is purely
+  // presentational + click-target.
+  function SortableTh({ col, label, sortBy, sortDir, onSort, align = 'left', width }) {
+    const active = sortBy === col;
+    const arrow = !active ? '⇅' : (sortDir === 'asc' ? '▲' : '▼');
+    const alignClass = align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left';
+    const widthStyle = width ? { width } : null;
+    return (
+      <th
+        onClick={() => onSort(col)}
+        style={widthStyle}
+        className={`select-none cursor-pointer py-2 px-3 ${alignClass} hover:bg-base-600 transition`}
+      >
+        <span className="inline-flex items-center gap-1">
+          {label}
+          <span className={`text-[9px] ${active ? 'text-accent-400' : 'text-neutral-600'}`}>{arrow}</span>
+        </span>
+      </th>
+    );
+  }
+
+  // Hook: simple sort state + comparator factory.
+  // `defaultDir` is 'asc' or 'desc' for the *initial* click on a column.
+  function useSort(defaultCol, defaultDir = 'desc') {
+    const [sortBy, setSortBy]   = useState(defaultCol);
+    const [sortDir, setSortDir] = useState(defaultDir);
+    const onSort = useCallback((col) => {
+      setSortBy(prev => {
+        if (prev === col) {
+          // Toggle direction on same column.
+          setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+          return prev;
+        }
+        // New column: reset to default direction.
+        setSortDir(defaultDir);
+        return col;
+      });
+    }, [defaultDir]);
+    const sortRows = useCallback((rows, accessor) => {
+      const arr = [...(rows || [])];
+      arr.sort((a, b) => {
+        const av = accessor(a, sortBy);
+        const bv = accessor(b, sortBy);
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        let cmp;
+        if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
+        else cmp = String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+      return arr;
+    }, [sortBy, sortDir]);
+    return { sortBy, sortDir, onSort, sortRows };
+  }
+
+  // ---------- Season helpers ----------------------------------
+  // Quick-set the since/until filters from a coarse "Last 30 days /
+  // 90 days / etc." dropdown. Mirrors the season selector the old
+  // Flask web_analyzer.py exposed so users keep the same shorthand.
+  const SEASONS = [
+    { id: '',    label: 'All time',      days: null },
+    { id: '7',   label: 'Last 7 days',   days: 7    },
+    { id: '30',  label: 'Last 30 days',  days: 30   },
+    { id: '90',  label: 'Last 90 days',  days: 90   },
+    { id: '183', label: 'Last 6 months', days: 183  },
+    { id: '365', label: 'Last year',     days: 365  },
+  ];
+  function isoDaysAgo(days) {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return d.toISOString().slice(0, 10);
+  }
+  function isoToday() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  // ---------- Global Filters -----------------------------------
+  function FilterBar({ filters, onChange, onReset }) {
+    const set = (k, v) => onChange({ ...filters, [k]: v });
+    const setSeason = (id) => {
+      const s = SEASONS.find(x => x.id === id) || SEASONS[0];
+      const next = { ...filters, _season: s.id };
+      if (s.days == null) {
+        delete next.since; delete next.until;
+      } else {
+        next.since = isoDaysAgo(s.days);
+        next.until = isoToday();
+      }
+      onChange(next);
+    };
+    return (
+      <div className="flex flex-wrap items-end gap-3 bg-base-800 ring-soft rounded-xl p-3">
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">Season</label>
+          <select value={filters._season || ''} onChange={(e) => setSeason(e.target.value)}
+            className="bg-base-700 ring-soft rounded px-2 py-1 text-sm">
+            {SEASONS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">Since</label>
+          <input type="date" value={filters.since || ''}
+            onChange={(e) => set('since', e.target.value)}
+            className="bg-base-700 ring-soft rounded px-2 py-1 text-sm" />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">Until</label>
+          <input type="date" value={filters.until || ''} onChange={(e) => set('until', e.target.value)}
+            className="bg-base-700 ring-soft rounded px-2 py-1 text-sm" />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">My race</label>
+          <select value={filters.race || ''} onChange={(e) => set('race', e.target.value)}
+            className="bg-base-700 ring-soft rounded px-2 py-1 text-sm">
+            <option value="">all</option><option value="Z">Zerg</option>
+            <option value="P">Protoss</option><option value="T">Terran</option>
+            <option value="R">Random</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">Opp race</label>
+          <select value={filters.opp_race || ''} onChange={(e) => set('opp_race', e.target.value)}
+            className="bg-base-700 ring-soft rounded px-2 py-1 text-sm">
+            <option value="">all</option><option value="Z">Zerg</option>
+            <option value="P">Protoss</option><option value="T">Terran</option>
+            <option value="R">Random</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">Map</label>
+          <input type="text" value={filters.map || ''} onChange={(e) => set('map', e.target.value)}
+            placeholder="contains…"
+            className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-32" />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">MMR min</label>
+          <input type="number" value={filters.mmr_min || ''} onChange={(e) => set('mmr_min', e.target.value)}
+            className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-20" />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">MMR max</label>
+          <input type="number" value={filters.mmr_max || ''} onChange={(e) => set('mmr_max', e.target.value)}
+            className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-20" />
+        </div>
+        <button onClick={onReset}
+          className="bg-base-700 hover:bg-base-600 ring-soft rounded px-3 py-1 text-xs text-neutral-300">
+          reset
+        </button>
+      </div>
+    );
+  }
+
+  // ---------- Data hook ----------------------------------------
+  function useApi(endpoint, params, deps = []) {
+    const [state, setState] = useState({ data: null, loading: true, error: null });
+    const ctrl = useRef(null);
+    useEffect(() => {
+      if (ctrl.current) ctrl.current.abort();
+      ctrl.current = new AbortController();
+      setState({ data: null, loading: true, error: null });
+      fetch(`${API}/${endpoint}${buildQuery(params)}`, { signal: ctrl.current.signal })
+        .then(r => r.ok ? r.json() : Promise.reject(new Error(`${r.status}`)))
+        .then(data => setState({ data, loading: false, error: null }))
+        .catch(err => {
+          if (err.name === 'AbortError') return;
+          setState({ data: null, loading: false, error: err.message });
+        });
+      return () => ctrl.current && ctrl.current.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, deps);
+    return state;
+  }
+
+  // ---------- Tabs ---------------------------------------------
+  function DashboardTab({ filters, dbRev }) {
+    const { data, loading } = useApi('summary', filters, [JSON.stringify(filters), dbRev]);
+    if (loading) return <Skeleton rows={3} />;
+    if (!data) return <EmptyState />;
+    const t = data.totals || {};
+    const matchups = Object.entries(data.byMatchup || {})
+      .map(([k, v]) => ({ name: k, ...v, total: v.wins + v.losses }))
+      .sort((a, b) => b.total - a.total);
+    return (
+      <div className="space-y-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Stat label="Total games"  value={t.total || 0} />
+          <Stat label="Wins"   value={t.wins || 0}   color="#3ddc97" />
+          <Stat label="Losses" value={t.losses || 0} color="#ef476f" />
+          <Stat label="Win rate" value={pct1(t.winRate)} color={wrColor(t.winRate, t.total)} />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <Card title="By matchup">
+            {matchups.length === 0 ? <EmptyState sub="No games match the current filters" /> : (
+              <div className="space-y-3">
+                {matchups.map(m => (
+                  <div key={m.name}>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-neutral-300">{m.name}</span>
+                      <span className="tabular-nums text-neutral-400">
+                        {m.wins}W-{m.losses}L · <span style={{ color: wrColor(m.wins / Math.max(1, m.total), m.total) }}>{pct(m.wins / Math.max(1, m.total))}</span>
+                      </span>
+                    </div>
+                    <WrBar wins={m.wins} losses={m.losses} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+          <Card title="Recent games">
+            <div className="overflow-x-auto -mx-2">
+              <table className="w-full text-sm table-striped">
+                <thead className="text-neutral-500 text-[11px] uppercase">
+                  <tr>
+                    <th className="text-left py-1 px-2">Date</th>
+                    <th className="text-left py-1 px-2">Opp</th>
+                    <th className="text-left py-1 px-2">Map</th>
+                    <th className="text-right py-1 px-2">Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.recent || []).map(g => (
+                    <tr key={g.id || `${g.date}-${g.opponent}`} className="border-t border-base-700">
+                      <td className="py-1 px-2 text-neutral-400 font-mono text-xs">{fmtDate(g.date)}</td>
+                      <td className="py-1 px-2"><span className={raceClass(g.opp_race)}>{(g.opp_race || '?')[0].toUpperCase()}</span> {g.opponent || '—'}</td>
+                      <td className="py-1 px-2 text-neutral-400">{g.map || '—'}</td>
+                      <td className={`py-1 px-2 text-right font-semibold ${g.result === 'Win' || g.result === 'Victory' ? 'text-win-500' : g.result === 'Loss' || g.result === 'Defeat' ? 'text-loss-500' : 'text-neutral-500'}`}>
+                        {g.result || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  function BuildsTab({ filters, dbRev, onOpen }) {
+    const [hideEmpty, setHideEmpty] = useState(true);
+    const [search, setSearch] = useState('');
+    const sort = useSort('total', 'desc');
+    const { data, loading } = useApi('builds', filters, [JSON.stringify(filters), dbRev]);
+    const items = useMemo(() => {
+      let r = data || [];
+      if (hideEmpty) r = r.filter(b => b.total > 0);
+      if (search) r = r.filter(b => b.name.toLowerCase().includes(search.toLowerCase()));
+      return sort.sortRows(r, (row, col) => row[col]);
+    }, [data, sort.sortBy, sort.sortDir, hideEmpty, search]);
+    if (loading) return <Skeleton rows={10} />;
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="search builds…"
+            className="bg-base-700 ring-soft rounded px-3 py-1.5 text-sm w-64" />
+          <label className="text-xs flex items-center gap-1.5 text-neutral-400">
+            <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)}
+              className="accent-accent-500" /> Hide empty
+          </label>
+          <span className="text-xs text-neutral-500 ml-2">click any column to sort · click a row to open deep dive →</span>
+          <CsvButton kind="builds" filters={filters} />
+        </div>
+        <div className="bg-base-800 ring-soft rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-base-700 text-[11px] uppercase text-neutral-400">
+              <tr>
+                <SortableTh col="name"       label="Build" {...sort} align="left" />
+                <SortableTh col="wins"       label="Wins" {...sort} align="right" width="5rem" />
+                <SortableTh col="losses"     label="Losses" {...sort} align="right" width="5rem" />
+                <SortableTh col="total"      label="Total" {...sort} align="right" width="5rem" />
+                <SortableTh col="winRate"    label="Win rate" {...sort} align="right" width="6rem" />
+                <th className="px-3 w-48">&nbsp;</th>
+                <SortableTh col="lastPlayed" label="Last" {...sort} align="right" width="7rem" />
+                <th className="text-right py-2 px-3 w-12 text-neutral-500">→</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0
+                ? <tr><td colSpan="8"><EmptyState /></td></tr>
+                : items.map(b => (
+                <tr key={b.name}
+                    onClick={() => onOpen && onOpen(b.name)}
+                    className="border-t border-base-700 hover:bg-accent-500/10 cursor-pointer group">
+                  <td className="py-1.5 px-3 text-neutral-200 group-hover:text-accent-400">{b.name}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-win-500">{b.wins}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-loss-500">{b.losses}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-neutral-300">{b.total}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums" style={{ color: wrColor(b.winRate, b.total) }}>{pct1(b.winRate)}</td>
+                  <td className="py-1.5 px-3"><WrBar wins={b.wins} losses={b.losses} /></td>
+                  <td className="py-1.5 px-3 text-right text-xs text-neutral-500">{b.lastPlayed ? fmtAgo(b.lastPlayed) : '—'}</td>
+                  <td className="py-1.5 px-3 text-right text-neutral-600 group-hover:text-accent-400">→</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================
+
+  // ============================================================
+  // BUILD DEEP DIVE  (drill-down from My Builds tab)
+  // Server returns games newest-first; we render that order verbatim.
+  // ============================================================
+  function BuildDeepDive({ buildName, filters, onBack, dbRev }) {
+    const { data, loading, error } = useApi(
+      `builds/${encodeURIComponent(buildName)}`, filters,
+      [buildName, JSON.stringify(filters || {}), dbRev]
+    );
+    if (loading) return <Skeleton rows={6} />;
+    if (error || !data) return (
+      <div>
+        <BackBtn onClick={onBack} />
+        <EmptyState title="Build not found" sub={buildName} />
+      </div>
+    );
+    const t = data.totals || {};
+    const byStrat = Object.entries(data.byOppStrategy || {})
+      .map(([name, v]) => ({ name, ...v, total: v.wins + v.losses, winRate: (v.wins + v.losses) ? v.wins / (v.wins + v.losses) : 0 }))
+      .sort((a, b) => b.total - a.total);
+    const byMap = Object.entries(data.byMap || {})
+      .map(([name, v]) => ({ name, ...v, total: v.wins + v.losses, winRate: (v.wins + v.losses) ? v.wins / (v.wins + v.losses) : 0 }))
+      .sort((a, b) => b.total - a.total);
+    const byOpp = Object.entries(data.byOpponent || {})
+      .map(([name, v]) => ({ name, ...v, total: v.wins + v.losses, winRate: (v.wins + v.losses) ? v.wins / (v.wins + v.losses) : 0 }))
+      .sort((a, b) => b.total - a.total).slice(0, 12);
+    const games = data.games || [];
+    return (
+      <div className="space-y-5">
+        <BackBtn onClick={onBack} />
+        <div className="flex items-end justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-neutral-100">{data.name}</h1>
+            <div className="text-xs text-neutral-500">Deep dive · {games.length} games (newest first)</div>
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            <Stat label="Games" value={t.total || 0} />
+            <Stat label="W"     value={t.wins || 0}   color="#3ddc97" />
+            <Stat label="L"     value={t.losses || 0} color="#ef476f" />
+            <Stat label="WR"    value={pct1(t.winRate)} color={wrColor(t.winRate, t.total)} />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <Card title="Vs opponent strategy">
+            {byStrat.length === 0 ? <EmptyState sub="No strategies tagged" /> :
+              <div className="space-y-2">
+                {byStrat.slice(0, 12).map(s => (
+                  <div key={s.name}>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-neutral-300">{s.name}</span>
+                      <span className="tabular-nums text-neutral-400">{s.wins}-{s.losses} · <span style={{ color: wrColor(s.winRate, s.total) }}>{pct(s.winRate)}</span></span>
+                    </div>
+                    <WrBar wins={s.wins} losses={s.losses} />
+                  </div>
+                ))}
+              </div>
+            }
+          </Card>
+          <Card title="Vs map">
+            {byMap.length === 0 ? <EmptyState sub="No map data" /> :
+              <div className="space-y-2">
+                {byMap.slice(0, 12).map(m => (
+                  <div key={m.name}>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-neutral-300">{m.name}</span>
+                      <span className="tabular-nums text-neutral-400">{m.wins}-{m.losses} · <span style={{ color: wrColor(m.winRate, m.total) }}>{pct(m.winRate)}</span></span>
+                    </div>
+                    <WrBar wins={m.wins} losses={m.losses} />
+                  </div>
+                ))}
+              </div>
+            }
+          </Card>
+        </div>
+        <Card title="Top opponents on this build">
+          {byOpp.length === 0 ? <EmptyState sub="No opponent data" /> :
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {byOpp.map(o => (
+                <div key={o.name} className="bg-base-700 ring-soft rounded px-3 py-2 flex items-center justify-between">
+                  <span className="text-sm text-neutral-300 truncate" title={o.name}>{o.name}</span>
+                  <span className="tabular-nums text-xs text-neutral-400 ml-3 whitespace-nowrap">
+                    {o.wins}-{o.losses} · <span style={{ color: wrColor(o.winRate, o.total) }}>{pct(o.winRate)}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          }
+        </Card>
+        <Card title={`All games · ${games.length} (newest first)`}>
+          <div className="overflow-x-auto -mx-2 max-h-[560px]">
+            <GamesTableWithBuildOrder games={games} />
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // ============================================================
+  // BUILD-ORDER TIMELINE  (per-game, click-to-expand)
+  // ============================================================
+  // Color-classify build-order events by race so the timeline reads at a
+  // glance. Tailwind classes are duplicated from the .race-X CSS at top
+  // of the file but applied per-event.
+  const RACE_DOT_CLASS = {
+    Protoss: 'bg-amber-400', Terran: 'bg-blue-400',
+    Zerg: 'bg-purple-400',   Neutral: 'bg-neutral-500',
+  };
+  const CATEGORY_BADGE_CLASS = {
+    townhall: 'bg-yellow-700/60 text-yellow-200',
+    builder: 'bg-blue-700/60 text-blue-200',
+    tech: 'bg-purple-700/60 text-purple-200',
+    defense: 'bg-red-700/60 text-red-200',
+    supply: 'bg-cyan-700/60 text-cyan-200',
+    worker: 'bg-neutral-700/60 text-neutral-300',
+    army: 'bg-orange-700/60 text-orange-200',
+    caster: 'bg-fuchsia-700/60 text-fuchsia-200',
+    air: 'bg-sky-700/60 text-sky-200',
+    detector: 'bg-emerald-700/60 text-emerald-200',
+    transport: 'bg-teal-700/60 text-teal-200',
+    hero: 'bg-rose-700/60 text-rose-200',
+    spawn: 'bg-neutral-700/40 text-neutral-400',
+    upgrade: 'bg-indigo-700/60 text-indigo-200',
+    unknown: 'bg-neutral-700/40 text-neutral-500',
+  };
+
+  function BuildOrderTimeline({ gameId }) {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [showAll, setShowAll] = useState(false);
+    const [filter, setFilter] = useState('all');
+
+    useEffect(() => {
+      let cancelled = false;
+      setLoading(true); setError(null);
+      fetch(`${API}/games/${encodeURIComponent(gameId)}/build-order`)
+        .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j)))
+        .then(j => { if (!cancelled) { setData(j); setLoading(false); } })
+        .catch(e => { if (!cancelled) { setError(e.error || 'fetch failed'); setLoading(false); } });
+      return () => { cancelled = true; };
+    }, [gameId]);
+
+    if (loading) return <div className="text-xs text-neutral-500 px-3 py-2">loading build order…</div>;
+    if (error) return <div className="text-xs text-loss-500 px-3 py-2">build-order unavailable: {error}</div>;
+    if (!data) return null;
+
+    const allEvents = data.events || [];
+    const earlyEvents = data.early_events || [];
+    const events = showAll ? allEvents : earlyEvents;
+    const filtered = filter === 'all'
+      ? events
+      : filter === 'buildings'
+        ? events.filter(e => e.is_building)
+        : filter === 'units'
+          ? events.filter(e => !e.is_building && e.category !== 'upgrade')
+          : events.filter(e => e.category === 'upgrade');
+
+    if (allEvents.length === 0) {
+      return <div className="text-xs text-neutral-500 px-3 py-2">No build_log on this game.</div>;
+    }
+
+    return (
+      <div className="bg-base-900 ring-soft rounded-lg p-3 my-2 border border-base-700">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <span className="text-[11px] uppercase tracking-wider text-neutral-500">Build Order</span>
+          <span className="text-xs text-neutral-400">
+            {showAll ? `full · ${allEvents.length} events` : `first 5 min · ${earlyEvents.length} events`}
+          </span>
+          <div className="ml-auto flex items-center gap-1 text-xs">
+            <button
+              className={`px-2 py-0.5 rounded ${filter === 'all' ? 'bg-accent-500 text-white' : 'bg-base-700 text-neutral-300'}`}
+              onClick={() => setFilter('all')}>All</button>
+            <button
+              className={`px-2 py-0.5 rounded ${filter === 'buildings' ? 'bg-accent-500 text-white' : 'bg-base-700 text-neutral-300'}`}
+              onClick={() => setFilter('buildings')}>Buildings</button>
+            <button
+              className={`px-2 py-0.5 rounded ${filter === 'units' ? 'bg-accent-500 text-white' : 'bg-base-700 text-neutral-300'}`}
+              onClick={() => setFilter('units')}>Units</button>
+            <button
+              className={`px-2 py-0.5 rounded ${filter === 'upgrades' ? 'bg-accent-500 text-white' : 'bg-base-700 text-neutral-300'}`}
+              onClick={() => setFilter('upgrades')}>Upgrades</button>
+            <button
+              className="px-2 py-0.5 rounded bg-base-700 text-neutral-300 ml-2"
+              onClick={() => setShowAll(s => !s)}>
+              {showAll ? 'Show 5 min' : 'Show all'}
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-[420px] overflow-y-auto">
+          {filtered.map((e, i) => (
+            <div key={i} className="flex items-center gap-2 bg-base-800 rounded px-2 py-1">
+              <span className="font-mono text-[11px] text-neutral-400 w-10 tabular-nums">{e.time_display}</span>
+              <span className={`inline-block w-2 h-2 rounded-full ${RACE_DOT_CLASS[e.race] || RACE_DOT_CLASS.Neutral}`} />
+              <span className="text-sm text-neutral-200 flex-1 truncate" title={e.name}>{e.display}</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded ${CATEGORY_BADGE_CLASS[e.category] || CATEGORY_BADGE_CLASS.unknown}`}>
+                {e.category}
+              </span>
+            </div>
+          ))}
+        </div>
+        {filtered.length === 0 && (
+          <div className="text-xs text-neutral-500 px-2 py-3">No events match this filter.</div>
+        )}
+      </div>
+    );
+  }
+
+  // Renders a click-to-expand macro breakdown panel for one game. Reuses
+  // the /games/:id/build-order payload (which now includes top_3_leaks and
+  // macro_breakdown). For games without a stored breakdown, offers a
+  // "Recompute" button that POSTs to /games/:id/macro-breakdown to re-parse
+  // the replay file.
+  function MacroBreakdownPanel({ gameId, initialMacro }) {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [recomputing, setRecomputing] = useState(false);
+
+    useEffect(() => {
+      let cancelled = false;
+      setLoading(true); setError(null);
+      fetch(`${API}/games/${encodeURIComponent(gameId)}/build-order`)
+        .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j)))
+        .then(j => { if (!cancelled) { setData(j); setLoading(false); } })
+        .catch(e => { if (!cancelled) { setError(e.error || 'fetch failed'); setLoading(false); } });
+      return () => { cancelled = true; };
+    }, [gameId]);
+
+    const recompute = () => {
+      setRecomputing(true); setError(null);
+      fetch(`${API}/games/${encodeURIComponent(gameId)}/macro-breakdown`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+        .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j)))
+        .then(j => {
+          // Merge fresh breakdown into local data for instant rerender.
+          setData(d => Object.assign({}, d, {
+            macro_score: j.macro_score,
+            top_3_leaks: j.top_3_leaks || [],
+            macro_breakdown: {
+              score: j.score, race: j.race,
+              game_length_sec: j.game_length_sec, raw: j.raw || {},
+              all_leaks: j.all_leaks || [], top_3_leaks: j.top_3_leaks || [],
+            },
+          }));
+          setRecomputing(false);
+        })
+        .catch(e => { setError(e.error || 'recompute failed'); setRecomputing(false); });
+    };
+
+    if (loading) return <div className="text-xs text-neutral-500 px-3 py-2">loading macro breakdown…</div>;
+    if (error)   return <div className="text-xs text-loss-500 px-3 py-2">macro unavailable: {error}</div>;
+    if (!data)   return null;
+
+    const score = typeof data.macro_score === 'number' ? data.macro_score : initialMacro;
+    const breakdown = data.macro_breakdown || null;
+    const raw = (breakdown && breakdown.raw) || {};
+    const leaks = (breakdown && Array.isArray(breakdown.all_leaks) && breakdown.all_leaks.length > 0)
+      ? breakdown.all_leaks
+      : (Array.isArray(data.top_3_leaks) ? data.top_3_leaks : []);
+    const race = (breakdown && breakdown.race) || '';
+
+    const headlineColor =
+      typeof score !== 'number' ? 'text-neutral-500'
+      : score >= 75 ? 'text-win-500'
+      : score >= 50 ? 'text-gold-500' : 'text-loss-500';
+
+    const wins = [];
+    if (raw && (raw.supply_block_penalty || 0) <= 0)
+      wins.push('No meaningful supply block - production never stalled.');
+    if (raw && (raw.race_penalty || 0) <= 0) {
+      if (race === 'Zerg')   wins.push('Inject cadence kept up with hatchery uptime.');
+      else if (race === 'Protoss') wins.push('Chrono usage matched nexus uptime.');
+      else if (race === 'Terran')  wins.push('MULE drops kept pace with orbital energy.');
+    }
+    if (raw && (raw.float_penalty || 0) <= 0)
+      wins.push('Bank stayed under control - no sustained float.');
+    if (typeof raw.sq === 'number' && raw.sq >= 80)
+      wins.push(`Spending Quotient ${raw.sq.toFixed(0)} - Master/Pro-tier macro pacing.`);
+    else if (typeof raw.sq === 'number' && raw.sq >= 70)
+      wins.push(`Spending Quotient ${raw.sq.toFixed(0)} - solid Diamond-tier macro pacing.`);
+
+    const racePenaltyLabel =
+      race === 'Zerg' ? 'Inject penalty'
+      : race === 'Protoss' ? 'Chrono penalty'
+      : race === 'Terran' ? 'MULE penalty'
+      : 'Race-mechanic penalty';
+
+    return (
+      <div className="bg-base-900 ring-soft rounded-lg p-3 my-2 border border-base-700">
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <span className="text-[11px] uppercase tracking-wider text-neutral-500">Macro Breakdown</span>
+          <span className={`text-2xl font-bold tabular-nums ${headlineColor}`}>
+            {typeof score === 'number' ? score : '—'}
+            <span className="text-sm text-neutral-500 font-normal"> / 100</span>
+          </span>
+          <div className="ml-auto">
+            <button
+              onClick={recompute}
+              disabled={recomputing}
+              className="px-2.5 py-1 text-xs rounded bg-base-700 hover:bg-base-600 text-neutral-200 disabled:opacity-50"
+              title="Re-parse the replay file to (re)compute the macro breakdown.">
+              {recomputing ? 'Recomputing…' : 'Recompute'}
+            </button>
+          </div>
+        </div>
+
+        {breakdown ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* How it was calculated */}
+            <div className="bg-base-800 rounded p-3">
+              <div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-2">How this number was calculated</div>
+              <div className="text-xs text-neutral-400 mb-2">
+                Headline = Spending Quotient (SQ) - 5, then small penalties for the
+                SC2-specific macro disciplines (clamped 0..100).
+              </div>
+              <table className="w-full text-xs">
+                <tbody className="divide-y divide-base-700">
+                  {typeof raw.sq === 'number' && (
+                    <tr><td className="py-1 text-neutral-300">Spending Quotient (SQ)</td>
+                        <td className="py-1 text-right tabular-nums text-neutral-200">{raw.sq.toFixed(1)}</td></tr>
+                  )}
+                  {typeof raw.base_score === 'number' && (
+                    <tr><td className="py-1 text-neutral-300">Base score (SQ - 5)</td>
+                        <td className="py-1 text-right tabular-nums text-neutral-200">{raw.base_score.toFixed(1)}</td></tr>
+                  )}
+                  <tr><td className="py-1 text-neutral-300">Supply-block penalty</td>
+                      <td className={`py-1 text-right tabular-nums ${(raw.supply_block_penalty || 0) > 0 ? 'text-loss-500' : 'text-win-500'}`}>
+                        -{Number(raw.supply_block_penalty || 0).toFixed(1)}
+                      </td></tr>
+                  <tr><td className="py-1 text-neutral-300">{racePenaltyLabel}</td>
+                      <td className={`py-1 text-right tabular-nums ${(raw.race_penalty || 0) > 0 ? 'text-loss-500' : 'text-win-500'}`}>
+                        -{Number(raw.race_penalty || 0).toFixed(1)}
+                      </td></tr>
+                  <tr><td className="py-1 text-neutral-300">Mineral-float penalty</td>
+                      <td className={`py-1 text-right tabular-nums ${(raw.float_penalty || 0) > 0 ? 'text-loss-500' : 'text-win-500'}`}>
+                        -{Number(raw.float_penalty || 0).toFixed(1)}
+                      </td></tr>
+                  <tr className="font-semibold">
+                    <td className="py-1 text-neutral-200">Final score (clamped)</td>
+                    <td className={`py-1 text-right tabular-nums ${headlineColor}`}>
+                      {typeof score === 'number' ? score : '—'}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Discipline metrics */}
+              {(raw.injects_actual != null || raw.chronos_actual != null || raw.mules_actual != null
+                || raw.supply_blocked_seconds != null || raw.mineral_float_spikes != null) && (
+                <div className="mt-3 text-xs text-accent-400">
+                  <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1">Discipline metrics</div>
+                  {raw.injects_actual != null && raw.injects_expected != null && (
+                    <div>Injects: {raw.injects_actual} of ~{raw.injects_expected} expected
+                      ({Math.round(100 * raw.injects_actual / Math.max(1, raw.injects_expected))}%)</div>
+                  )}
+                  {raw.chronos_actual != null && raw.chronos_expected != null && (
+                    <div>Chronos: {raw.chronos_actual} of ~{raw.chronos_expected} expected
+                      ({Math.round(100 * raw.chronos_actual / Math.max(1, raw.chronos_expected))}%)</div>
+                  )}
+                  {raw.mules_actual != null && raw.mules_expected != null && (
+                    <div>MULEs: {raw.mules_actual} of ~{raw.mules_expected} expected
+                      ({Math.round(100 * raw.mules_actual / Math.max(1, raw.mules_expected))}%)</div>
+                  )}
+                  {raw.supply_blocked_seconds != null && (
+                    <div>Supply-blocked: {Math.round(raw.supply_blocked_seconds)}s total</div>
+                  )}
+                  {raw.mineral_float_spikes != null && (
+                    <div>Mineral float spikes (&gt;800 after 4:00): {raw.mineral_float_spikes} sample(s)</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* What you did well + leaks */}
+            <div className="bg-base-800 rounded p-3 space-y-3">
+              {wins.length > 0 && (
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-win-500 mb-1">What you did well</div>
+                  <ul className="text-xs text-neutral-200 space-y-1 list-disc pl-4">
+                    {wins.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </div>
+              )}
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-loss-500 mb-1">Where you lost economy</div>
+                {leaks.length === 0 ? (
+                  <div className="text-xs text-neutral-500">No notable leaks detected.</div>
+                ) : (
+                  <ul className="space-y-2">
+                    {leaks.map((lk, i) => (
+                      <li key={i} className="bg-base-900 rounded p-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-neutral-100">{lk.name}</span>
+                          {typeof lk.penalty === 'number' && lk.penalty > 0 && (
+                            <span className="ml-auto text-[11px] font-semibold text-loss-500 tabular-nums">
+                              -{lk.penalty.toFixed(1)} pts
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-neutral-400 mt-0.5">{lk.detail || ''}</div>
+                        {typeof lk.mineral_cost === 'number' && lk.mineral_cost > 0 && (
+                          <div className="text-[11px] text-gold-500 mt-0.5">~{lk.mineral_cost} min lost</div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : leaks.length > 0 ? (
+          /* Older games without macro_breakdown but with top_3_leaks: show summary only. */
+          <div className="bg-base-800 rounded p-3">
+            <div className="text-[11px] uppercase tracking-wider text-loss-500 mb-2">Top leaks</div>
+            <ul className="space-y-2">
+              {leaks.map((lk, i) => (
+                <li key={i} className="bg-base-900 rounded p-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-neutral-100">{lk.name}</span>
+                    {typeof lk.penalty === 'number' && lk.penalty > 0 && (
+                      <span className="ml-auto text-[11px] font-semibold text-loss-500 tabular-nums">
+                        -{Number(lk.penalty).toFixed(1)} pts
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-neutral-400 mt-0.5">{lk.detail || ''}</div>
+                  {typeof lk.mineral_cost === 'number' && lk.mineral_cost > 0 && (
+                    <div className="text-[11px] text-gold-500 mt-0.5">~{lk.mineral_cost} min lost</div>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <div className="text-[11px] text-neutral-500 mt-2">
+              Detailed breakdown not stored for this game. Click "Recompute" to re-parse the replay.
+            </div>
+          </div>
+        ) : (
+          <div className="bg-base-800 rounded p-3 text-xs text-neutral-500">
+            No macro detail stored for this game. Click "Recompute" to re-parse the replay.
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function GamesTableWithBuildOrder({ games }) {
+    // expandedId tracks which row's drawer is open; expandedMode controls
+    // whether the drawer shows the build-order timeline ('build') or the
+    // macro breakdown ('macro'). Both come from clicks on the same row.
+    const [expandedId, setExpandedId] = useState(null);
+    const [expandedMode, setExpandedMode] = useState('build');
+    return (
+      <table className="w-full text-sm">
+        <thead className="text-neutral-500 text-[11px] uppercase sticky top-0 bg-base-800">
+          <tr>
+            <th className="text-left py-1 px-2 w-6"></th>
+            <th className="text-left py-1 px-2">Date</th>
+            <th className="text-left py-1 px-2">Map</th>
+            <th className="text-left py-1 px-2">Opponent</th>
+            <th className="text-left py-1 px-2">Race</th>
+            <th className="text-left py-1 px-2">Strategy</th>
+            <th className="text-right py-1 px-2">Macro</th>
+            <th className="text-right py-1 px-2">Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {games.map((g, i) => {
+            // A "real" id is one that came off the actual game record. The
+            // synthetic `_idx_N` fallback exists only as a React key; we
+            // must NOT use it to fetch /games/:id/build-order or the
+            // backend will return 404 "game not found". Rows without a
+            // real id are rendered non-interactive (no expand caret, no
+            // macro click) instead of producing a broken expand drawer.
+            const realId = g.id || g.game_id || null;
+            const id = realId || `_idx_${i}`;
+            const expandable = !!realId;
+            const isOpen = expandable && expandedId === id;
+            const macro = typeof g.macro_score === 'number' ? g.macro_score : null;
+            const macroColor = macro == null
+              ? 'text-neutral-500'
+              : macro >= 75 ? 'text-win-500'
+              : macro >= 50 ? 'text-gold-500' : 'text-loss-500';
+            const macroOpen = isOpen && expandedMode === 'macro';
+            return (
+              <Fragment key={id}>
+                <tr
+                  className={"border-t border-base-700 "
+                    + (expandable ? "cursor-pointer hover:bg-base-700/40 " : "")
+                    + (isOpen ? "bg-base-700/30" : "")}
+                  onClick={() => {
+                    if (!expandable) return;
+                    if (isOpen && expandedMode === 'build') { setExpandedId(null); }
+                    else { setExpandedId(id); setExpandedMode('build'); }
+                  }}
+                >
+                  <td className="py-1 px-2 text-neutral-500 select-none">
+                    {expandable ? (isOpen ? '▾' : '▸') : ''}
+                  </td>
+                  <td className="py-1 px-2 text-neutral-400 font-mono text-xs">{fmtDate(g.date)}</td>
+                  <td className="py-1 px-2 text-neutral-300">{g.map || '—'}</td>
+                  <td className="py-1 px-2 text-neutral-300">{g.opponent || '—'}</td>
+                  <td className={`py-1 px-2 ${raceClass(g.opp_race)}`}>{(g.opp_race || '?')[0].toUpperCase()}</td>
+                  <td className="py-1 px-2 text-neutral-400">{g.opp_strategy || '—'}</td>
+                  <td className="py-1 px-2 text-right">
+                    {macro == null ? (
+                      <span className="font-semibold tabular-nums text-neutral-500">—</span>
+                    ) : expandable ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (macroOpen) { setExpandedId(null); }
+                          else { setExpandedId(id); setExpandedMode('macro'); }
+                        }}
+                        className={`font-semibold tabular-nums underline decoration-dotted underline-offset-2 hover:opacity-80 ${macroColor}`}
+                        title="Click to see how this score was calculated">
+                        {macro}
+                      </button>
+                    ) : (
+                      <span
+                        className={`font-semibold tabular-nums ${macroColor}`}
+                        title="Replay metadata missing - run the analyzer on this replay to enable click-through.">
+                        {macro}
+                      </span>
+                    )}
+                  </td>
+                  <td className={`py-1 px-2 text-right font-semibold ${g.result === 'Win' || g.result === 'Victory' ? 'text-win-500' : g.result === 'Loss' || g.result === 'Defeat' ? 'text-loss-500' : 'text-neutral-500'}`}>
+                    {g.result || '—'}
+                  </td>
+                </tr>
+                {isOpen && (
+                  <tr className="bg-base-800/40">
+                    <td colSpan={8} className="px-2 pb-3">
+                      {expandedMode === 'macro'
+                        ? <MacroBreakdownPanel gameId={id} initialMacro={macro} />
+                        : <BuildOrderTimeline gameId={id} />}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
+
+  // ============================================================
+  // OPPONENT DNA CARDS (used inside OpponentProfile below)
+  // ============================================================
+  function StrategyTendencyChart({ strategies }) {
+    if (!strategies || strategies.length === 0)
+      return <EmptyState sub="No strategy data yet" />;
+    const total = strategies.reduce((s, x) => s + (x.count || 0), 0) || 1;
+    const data = strategies.map(s => ({
+      name: s.strategy,
+      winRate: (100 * (s.count || 0)) / total,
+      games: s.count,
+      _color: wrColor(s.winRate, s.wins + s.losses),
+    }));
+    return (
+      <HBarChart
+        data={data}
+        height={Math.max(160, 40 * data.length + 60)}
+        valueKey="winRate"
+        maxValue={100}
+        format={(v) => `${v.toFixed(0)}%`}
+        colorFor={(d) => d._color}
+      />
+    );
+  }
+
+  function MedianTimingsGrid({ timings }) {
+    const ORDER = ['Pool','Gateway','Barracks','Hatchery','Nexus','CommandCenter','Robo','Stargate','Spire','Twilight','Forge'];
+    if (!timings) return <EmptyState sub="No build_log data on these games" />;
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+        {ORDER.map(tok => {
+          const info = timings[tok] || { medianDisplay: '-', sampleCount: 0 };
+          const empty = info.sampleCount === 0;
+          return (
+            <div key={tok} className="bg-base-700 ring-soft rounded-lg px-3 py-2">
+              <div className="text-[11px] uppercase tracking-wider text-neutral-500">{tok}</div>
+              <div className={`mt-0.5 text-xl font-semibold tabular-nums ${empty ? 'text-neutral-600' : 'text-neutral-100'}`}>
+                {info.medianDisplay}
+              </div>
+              <div className="text-[10px] text-neutral-500 tabular-nums">n={info.sampleCount}</div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function Last5GamesTimeline({ games }) {
+    if (!games || games.length === 0)
+      return <EmptyState sub="No recent games" />;
+    return (
+      <div className="space-y-2">
+        {games.map((g, i) => {
+          const result = g.result || g.Result || '';
+          const isWin  = result === 'Win'  || result === 'Victory';
+          const isLoss = result === 'Loss' || result === 'Defeat';
+          const color = isWin ? '#3ddc97' : isLoss ? '#ef476f' : '#9aa3b2';
+          const date = g.date || g.Date || '';
+          const map = g.map || g.Map || '';
+          const len = g.game_length || g.GameLength || 0;
+          const lenStr = len ? ` (${Math.floor(len/60)}:${String(len%60).padStart(2,'0')})` : '';
+          return (
+            <div key={i} className="bg-base-700 ring-soft rounded-lg px-3 py-2">
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-sm" style={{ color }}>
+                  {fmtDate(date)} · {result || '—'}{lenStr}
+                </span>
+                <span className="text-xs text-neutral-500 truncate ml-3 max-w-[40%]" title={map}>{map || '—'}</span>
+              </div>
+              <div className="text-xs text-neutral-400 mt-0.5">
+                opp: <span className="text-neutral-300">{g.opp_strategy || '—'}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function PredictedStrategiesList({ predictions }) {
+    if (!predictions || predictions.length === 0)
+      return <EmptyState sub="Not enough games to predict" />;
+    return (
+      <div className="space-y-1.5">
+        {predictions.slice(0, 8).map((p, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <div className="w-12 text-right tabular-nums text-sm font-semibold text-accent-400">{pct(p.probability)}</div>
+            <div className="flex-1 bg-base-700 rounded-full h-2 overflow-hidden">
+              <div className="h-full bg-accent-500" style={{ width: `${(p.probability * 100).toFixed(1)}%` }} />
+            </div>
+            <div className="text-sm text-neutral-300 flex-1 min-w-[40%]">{p.strategy}</div>
+          </div>
+        ))}
+        <div className="text-[10px] text-neutral-600 mt-2">recency-weighted: last 10 games count 2× · all others 1×</div>
+      </div>
+    );
+  }
+
+  function StrategiesTab({ filters, dbRev }) {
+    const { data, loading } = useApi('opp-strategies', filters, [JSON.stringify(filters), dbRev]);
+    if (loading) return <Skeleton rows={6} />;
+    const items = data || [];
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-neutral-200">Win rate vs opponent strategies</h2>
+          <CsvButton kind="opp-strategies" filters={filters} />
+        </div>
+        {items.length === 0 ? <EmptyState /> : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {items.map(s => (
+              <div key={s.name} className="bg-base-800 ring-soft rounded-lg p-4">
+                <div className="text-sm font-medium text-neutral-200 truncate" title={s.name}>{s.name}</div>
+                <div className="mt-2 flex items-baseline justify-between">
+                  <span className="text-2xl font-semibold tabular-nums" style={{ color: wrColor(s.winRate, s.total) }}>{pct1(s.winRate)}</span>
+                  <span className="text-xs text-neutral-500 tabular-nums">{s.wins}W - {s.losses}L</span>
+                </div>
+                <WrBar wins={s.wins} losses={s.losses} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function BuildVsStrategyTab({ filters, dbRev }) {
+    const [search, setSearch] = useState('');
+    const sort = useSort('total', 'desc');
+    const { data, loading } = useApi('build-vs-strategy', filters, [JSON.stringify(filters), dbRev]);
+    const rows = useMemo(() => {
+      let r = data || [];
+      if (search) {
+        const s = search.toLowerCase();
+        r = r.filter(x => x.my_build.toLowerCase().includes(s) || x.opp_strat.toLowerCase().includes(s));
+      }
+      return sort.sortRows(r, (row, col) => row[col]);
+    }, [data, search, sort.sortBy, sort.sortDir]);
+    if (loading) return <Skeleton rows={10} />;
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="search build or strategy…"
+            className="bg-base-700 ring-soft rounded px-3 py-1.5 text-sm w-72" />
+          <span className="text-xs text-neutral-500 ml-2">click any column header to sort</span>
+          <CsvButton kind="build-vs-strategy" filters={filters} />
+        </div>
+        <div className="bg-base-800 ring-soft rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-base-700 text-[11px] uppercase text-neutral-400">
+              <tr>
+                <SortableTh col="my_build"  label="My build" {...sort} align="left" />
+                <SortableTh col="opp_strat" label="vs Opponent strategy" {...sort} align="left" />
+                <SortableTh col="wins"      label="W" {...sort} align="right" width="5rem" />
+                <SortableTh col="losses"    label="L" {...sort} align="right" width="5rem" />
+                <SortableTh col="total"     label="Total" {...sort} align="right" width="5rem" />
+                <SortableTh col="winRate"   label="Win rate" {...sort} align="right" width="6rem" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? <tr><td colSpan="6"><EmptyState /></td></tr> :
+                rows.map(r => (
+                <tr key={`${r.my_build}|${r.opp_strat}`} className="border-t border-base-700 hover:bg-base-700/40">
+                  <td className="py-1.5 px-3 text-neutral-200">{r.my_build}</td>
+                  <td className="py-1.5 px-3 text-neutral-300">{r.opp_strat}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-win-500">{r.wins}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-loss-500">{r.losses}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-neutral-300">{r.total}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums" style={{ color: wrColor(r.winRate, r.total) }}>{pct1(r.winRate)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  function MapsTab({ filters, dbRev }) {
+    const sort = useSort('total', 'desc');
+    const { data, loading } = useApi('maps', filters, [JSON.stringify(filters), dbRev]);
+    const items = useMemo(
+      () => sort.sortRows(data || [], (row, col) => row[col]),
+      [data, sort.sortBy, sort.sortDir]
+    );
+    if (loading) return <Skeleton rows={8} />;
+    const chartData = (data || []).slice(0, 12).map(m => ({ name: m.name, winRate: m.winRate * 100, games: m.total }));
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-neutral-200">Win rate by map</h2>
+          <CsvButton kind="maps" filters={filters} />
+        </div>
+        {items.length === 0 ? <EmptyState /> : (
+          <Fragment>
+            <Card title="Top 12 by games played (win rate)">
+              <HBarChart
+                data={chartData}
+                height={320}
+                valueKey="winRate"
+                maxValue={100}
+                format={(v) => `${v.toFixed(1)}%`}
+                colorFor={(d) => wrColor(d.winRate / 100, d.games)}
+              />
+            </Card>
+            <div className="bg-base-800 ring-soft rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-base-700 text-[11px] uppercase text-neutral-400">
+                  <tr>
+                    <SortableTh col="name"    label="Map" {...sort} align="left" />
+                    <SortableTh col="wins"    label="W" {...sort} align="right" width="5rem" />
+                    <SortableTh col="losses"  label="L" {...sort} align="right" width="5rem" />
+                    <SortableTh col="total"   label="Total" {...sort} align="right" width="5rem" />
+                    <SortableTh col="winRate" label="Win rate" {...sort} align="right" width="6rem" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(m => (
+                    <tr key={m.name} className="border-t border-base-700 hover:bg-base-700/40">
+                      <td className="py-1.5 px-3 text-neutral-200">{m.name}</td>
+                      <td className="py-1.5 px-3 text-right tabular-nums text-win-500">{m.wins}</td>
+                      <td className="py-1.5 px-3 text-right tabular-nums text-loss-500">{m.losses}</td>
+                      <td className="py-1.5 px-3 text-right tabular-nums text-neutral-300">{m.total}</td>
+                      <td className="py-1.5 px-3 text-right tabular-nums" style={{ color: wrColor(m.winRate, m.total) }}>{pct1(m.winRate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Fragment>
+        )}
+      </div>
+    );
+  }
+
+  function MatchupsTab({ filters, dbRev }) {
+    const { data, loading } = useApi('matchups', filters, [JSON.stringify(filters), dbRev]);
+    if (loading) return <Skeleton rows={4} />;
+    const items = data || [];
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-neutral-200">Matchup overview</h2>
+          <CsvButton kind="matchups" filters={filters} />
+        </div>
+        {items.length === 0 ? <EmptyState /> : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {items.map(m => (
+              <Card key={m.name}>
+                <div className="text-xs uppercase text-neutral-500">{m.name}</div>
+                <div className="mt-2 text-3xl font-semibold tabular-nums" style={{ color: wrColor(m.winRate, m.total) }}>{pct1(m.winRate)}</div>
+                <div className="mt-1 text-xs text-neutral-500 tabular-nums">{m.wins}W - {m.losses}L · {m.total} games</div>
+                <div className="mt-3"><WrBar wins={m.wins} losses={m.losses} height={8} /></div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function OpponentsTab({ filters, dbRev, onOpen }) {
+    const [search, setSearch] = useState('');
+    const [minGames, setMinGames] = useState(1);
+    // Merge the global filter bar (since/until/race/opp_race/map/mmr/etc.)
+    // into the per-tab params before hitting the API. Without this,
+    // changing the season filter would refresh every other tab but leave
+    // Opponents stuck on the unfiltered, whole-history result set.
+    const params = useMemo(
+      () => Object.assign({}, filters || {}, {
+        search, min_games: minGames, limit: 1000,
+      }),
+      [filters, search, minGames]
+    );
+    const sort = useSort('lastPlayed', 'desc');
+    const { data, loading } = useApi('opponents', params, [JSON.stringify(params), dbRev]);
+    const items = useMemo(
+      () => sort.sortRows(data || [], (row, col) => row[col]),
+      [data, sort.sortBy, sort.sortDir]
+    );
+    if (loading) return <Skeleton rows={10} />;
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="search opponent name or ID…"
+            className="bg-base-700 ring-soft rounded px-3 py-1.5 text-sm w-72" />
+          <div className="flex items-center gap-2">
+            <span className="text-xs uppercase text-neutral-500">Min games</span>
+            <input type="number" min="1" value={minGames} onChange={(e) => setMinGames(Number(e.target.value) || 1)}
+              className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-16" />
+          </div>
+          <span className="text-xs text-neutral-500">click any column to sort · click a row to open deep dive →</span>
+          <CsvButton kind="opponents" filters={params} />
+        </div>
+        <div className="bg-base-800 ring-soft rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-base-700 text-[11px] uppercase text-neutral-400">
+              <tr>
+                <SortableTh col="name"       label="Opponent" {...sort} align="left" />
+                <SortableTh col="pulseId"    label="Pulse ID" {...sort} align="left" width="8rem" />
+                <SortableTh col="wins"       label="W" {...sort} align="right" width="5rem" />
+                <SortableTh col="losses"     label="L" {...sort} align="right" width="5rem" />
+                <SortableTh col="games"      label="Games" {...sort} align="right" width="5rem" />
+                <SortableTh col="winRate"    label="Win rate" {...sort} align="right" width="6rem" />
+                <SortableTh col="lastPlayed" label="Last" {...sort} align="right" width="8rem" />
+                <th className="text-right py-2 px-3 w-12 text-neutral-500">→</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? <tr><td colSpan="8"><EmptyState /></td></tr> :
+                items.map(o => (
+                <tr key={o.pulseId} onClick={() => onOpen(o.pulseId)}
+                    className="border-t border-base-700 hover:bg-accent-500/10 cursor-pointer group">
+                  <td className="py-1.5 px-3 text-neutral-200 group-hover:text-accent-400">{o.name || <span className="text-neutral-500 italic">unnamed</span>}</td>
+                  <td className="py-1.5 px-3 text-xs text-neutral-500 font-mono">{o.pulseId}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-win-500">{o.wins}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-loss-500">{o.losses}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-neutral-300">{o.games}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums" style={{ color: wrColor(o.winRate, o.games) }}>{pct1(o.winRate)}</td>
+                  <td className="py-1.5 px-3 text-right text-xs text-neutral-500">{o.lastPlayed ? fmtAgo(o.lastPlayed) : '—'}</td>
+                  <td className="py-1.5 px-3 text-right text-neutral-600 group-hover:text-accent-400">→</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  function OpponentProfile({ pulseId, onBack, dbRev }) {
+    const { data, loading, error } = useApi(`opponents/${encodeURIComponent(pulseId)}`, null, [pulseId, dbRev]);
+    if (loading) return <Skeleton rows={6} />;
+    if (error || !data) return (
+      <div>
+        <BackBtn onClick={onBack} />
+        <EmptyState title="Opponent not found" sub={pulseId} />
+      </div>
+    );
+    const t = data.totals || {};
+    const byMap = Object.entries(data.byMap || {}).map(([k, v]) => ({ name: k, ...v, total: v.wins + v.losses, winRate: (v.wins + v.losses) ? v.wins / (v.wins + v.losses) : 0 })).sort((a, b) => b.total - a.total);
+    const byStrategy = Object.entries(data.byStrategy || {}).map(([k, v]) => ({ name: k, ...v, total: v.wins + v.losses, winRate: (v.wins + v.losses) ? v.wins / (v.wins + v.losses) : 0 })).sort((a, b) => b.total - a.total);
+    return (
+      <div className="space-y-5">
+        <BackBtn onClick={onBack} />
+        <div className="flex items-end justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-neutral-100">{data.name || 'unnamed'}</h1>
+            <div className="text-xs text-neutral-500 font-mono">Pulse ID {data.pulseId}</div>
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            <Stat label="Games" value={t.total || 0} />
+            <Stat label="W"     value={t.wins || 0}   color="#3ddc97" />
+            <Stat label="L"     value={t.losses || 0} color="#ef476f" />
+            <Stat label="WR"    value={pct1(t.winRate)} color={wrColor(t.winRate, t.total)} />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <Card title="By map">
+            {byMap.length === 0 ? <EmptyState sub="No maps yet" /> :
+              <div className="space-y-2">
+                {byMap.map(m => (
+                  <div key={m.name}>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-neutral-300">{m.name}</span>
+                      <span className="tabular-nums text-neutral-400">{m.wins}-{m.losses} · <span style={{ color: wrColor(m.winRate, m.total) }}>{pct(m.winRate)}</span></span>
+                    </div>
+                    <WrBar wins={m.wins} losses={m.losses} />
+                  </div>
+                ))}
+              </div>
+            }
+          </Card>
+          <Card title="By strategy">
+            {byStrategy.length === 0 ? <EmptyState sub="No strategies tagged yet" /> :
+              <div className="space-y-2">
+                {byStrategy.map(s => (
+                  <div key={s.name}>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-neutral-300">{s.name}</span>
+                      <span className="tabular-nums text-neutral-400">{s.wins}-{s.losses} · <span style={{ color: wrColor(s.winRate, s.total) }}>{pct(s.winRate)}</span></span>
+                    </div>
+                    <WrBar wins={s.wins} losses={s.losses} />
+                  </div>
+                ))}
+              </div>
+            }
+          </Card>
+        </div>
+
+        {/* DNA additions: build tendencies, predicted, timings, last 5. */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <Card title="Build tendencies (top 5 strategies)">
+            <ErrorBoundary label="Build tendencies">
+              <StrategyTendencyChart strategies={data.topStrategies || []} />
+            </ErrorBoundary>
+          </Card>
+          <Card title="Likely strategies next">
+            <ErrorBoundary label="Likely strategies">
+              <PredictedStrategiesList predictions={data.predictedStrategies || []} />
+            </ErrorBoundary>
+          </Card>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <Card title="Median key timings  (from build_log)">
+            <ErrorBoundary label="Median timings">
+              <MedianTimingsGrid timings={data.medianTimings} />
+            </ErrorBoundary>
+            <div className="text-[10px] text-neutral-600 mt-2">
+              Timings reflect whichever player's buildings appear in build_log on these games. '-' means no samples.
+            </div>
+          </Card>
+          <Card title="Last 5 games">
+            <ErrorBoundary label="Last 5 games">
+              <Last5GamesTimeline games={data.last5Games || []} />
+            </ErrorBoundary>
+          </Card>
+        </div>
+        {/* Phase-2 spatial: proxy patterns this opponent has shown vs me. */}
+        <Card title="Proxy patterns vs you">
+          <ErrorBoundary label="Proxy patterns">
+            <OpponentProxyPatterns opponentName={data.name || ''} />
+          </ErrorBoundary>
+        </Card>
+
+        <Card title={`All games (${(data.games || []).length}) · newest first`}>
+          <div className="overflow-x-auto -mx-2 max-h-[480px]">
+            {/* Reuse the build-deep-dive games table so opponent games get
+                the same row-click → build order + macro-click → breakdown
+                affordances as everywhere else. We pre-normalise field
+                casing (Date/date, Map/map, Result/result) so the shared
+                table doesn't have to handle the Black-Book schema. */}
+            <GamesTableWithBuildOrder
+              games={[...(data.games || [])]
+                .map(g => ({
+                  ...g,
+                  date:    g.date || g.Date,
+                  map:     g.map || g.Map,
+                  result:  g.result || g.Result,
+                  opponent: g.opponent || data.name || '',
+                  opp_race: g.opp_race
+                            || (g.Matchup && g.Matchup.replace(/^vs\s*/i, '').charAt(0))
+                            || '',
+                  // game id is essential for the /games/:id/build-order
+                  // and /games/:id/macro-breakdown endpoints. Enrichment
+                  // now copies the meta-DB id; fall back to alt names.
+                  id: g.id || g.game_id || g.GameId || g.gameId,
+                }))
+                .sort((a, b) => Date.parse(String(b.date || '').replace(' ', 'T'))
+                              - Date.parse(String(a.date || '').replace(' ', 'T')))}
+            />
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  function BackBtn({ onClick }) {
+    return (
+      <button onClick={onClick}
+        className="text-xs uppercase tracking-wider text-neutral-400 hover:text-neutral-200">
+        ← back
+      </button>
+    );
+  }
+
+  function TrendsTab({ filters, dbRev }) {
+    const [bucket, setBucket] = useState('week');
+    const params = useMemo(() => ({ ...filters, bucket }), [filters, bucket]);
+    const { data, loading } = useApi('timeseries', params, [JSON.stringify(params), dbRev]);
+    if (loading) return <Skeleton rows={4} />;
+    const series = data || [];
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <h2 className="text-base font-semibold text-neutral-200">Trends</h2>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs uppercase text-neutral-500">Bucket</span>
+            <select value={bucket} onChange={(e) => setBucket(e.target.value)}
+              className="bg-base-700 ring-soft rounded px-2 py-1 text-sm">
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+            </select>
+          </div>
+        </div>
+        {series.length === 0 ? <EmptyState /> : (
+          <Fragment>
+            <Card title="Games per period (W stacked on L)">
+              <StackedBars data={series} height={240} />
+            </Card>
+            <Card title="Win rate trend">
+              <LinePath data={series} height={240} valueKey="winRate" yMax={1} />
+            </Card>
+          </Fragment>
+        )}
+      </div>
+    );
+  }
+
+  // ============================================================
+  // ML / Predict tab
+  //
+  // Three panels:
+  //   1. Status + train (live progress over Socket.io 'ml_train_progress'
+  //      and 'ml_train_complete' events).
+  //   2. What-if mid-game predictor (slider-driven; debounced fetch
+  //      to /api/analyzer/ml/predict).
+  //   3. Pre-game predictor (history-based; calls /ml/pregame, with
+  //      a per-component breakdown).
+  //
+  // The Python ML CLI behind these endpoints is spawned per request by
+  // analyzer.js; training is the long-running case and runs detached.
+  // ============================================================
+  function MlTab({ dbRev }) {
+    const [status, setStatus] = useState(null);
+    const [statusErr, setStatusErr] = useState('');
+    const [opts, setOpts] = useState({ races: [], opponents: [], maps: [], strategies: [] });
+    const [training, setTraining] = useState(false);
+    const [progress, setProgress] = useState({ done: 0, total: 0, pct: 0 });
+    const [trainMsg, setTrainMsg] = useState('');
+
+    const refreshStatus = async () => {
+      try {
+        const r = await fetch(`${API}/ml/status`);
+        const j = await r.json();
+        setStatus(j);
+        setStatusErr('');
+        if (j && j.live && j.live.running) {
+          setTraining(true);
+          setProgress({
+            done: j.live.done | 0, total: j.live.total | 0,
+            pct: j.live.total ? Math.round(100 * j.live.done / j.live.total) : 0,
+          });
+          setTrainMsg(j.live.lastMessage || '');
+        }
+      } catch (e) {
+        setStatusErr(e.message);
+      }
+    };
+
+    const refreshOptions = async () => {
+      try {
+        const r = await fetch(`${API}/ml/options`);
+        const j = await r.json();
+        setOpts(j || { races: [], opponents: [], maps: [], strategies: [] });
+      } catch (_) { /* keep defaults */ }
+    };
+
+    useEffect(() => {
+      refreshStatus();
+      refreshOptions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dbRev]);
+
+    // Subscribe to live training events.
+    useEffect(() => {
+      let sock;
+      try {
+        sock = io({ transports: ['websocket', 'polling'] });
+        sock.on('ml_train_progress', (p) => {
+          setTraining(true);
+          setProgress({
+            done: p.done | 0, total: p.total | 0,
+            pct: p.pct | 0,
+          });
+          setTrainMsg(`Parsing replay ${p.done}/${p.total} (${p.pct}%)`);
+        });
+        sock.on('ml_train_complete', (p) => {
+          setTraining(false);
+          setTrainMsg(p.message || (p.code === 0 ? 'Training complete.' : 'Training failed.'));
+          refreshStatus();
+        });
+      } catch (_) {}
+      return () => { try { sock && sock.disconnect(); } catch (_) {} };
+    }, []);
+
+    const startTraining = async () => {
+      if (training) return;
+      if (!confirm('Train the WP model? This re-parses every replay (1-5 minutes typically).')) return;
+      setTraining(true);
+      setTrainMsg('Starting...');
+      setProgress({ done: 0, total: 0, pct: 0 });
+      try {
+        const r = await fetch(`${API}/ml/train`, { method: 'POST' });
+        const j = await r.json();
+        if (!r.ok || !j.ok) {
+          setTraining(false);
+          setTrainMsg(j.message || 'Training rejected.');
+        }
+      } catch (e) {
+        setTraining(false);
+        setTrainMsg('Failed: ' + e.message);
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        <MlStatusCard
+          status={status}
+          statusErr={statusErr}
+          training={training}
+          progress={progress}
+          trainMsg={trainMsg}
+          onTrain={startTraining}
+          onRefresh={refreshStatus}
+        />
+        <MacroBackfillCard />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <WhatIfPanel status={status} />
+          <PregamePanel opts={opts} />
+        </div>
+      </div>
+    );
+  }
+
+  // Card that triggers a bulk macro recompute on the server. Mirrors the
+  // "Backfill Macro Scores" button from the desktop SC2ReplayAnalyzer.py
+  // sidebar. Subscribes to Socket.io 'macro_backfill_progress' /
+  // 'macro_backfill_done' events for live status.
+  function MacroBackfillCard() {
+    const [state, setState] = useState({ running: false, phase: 'idle', done: 0, total: 0,
+                                          updated: 0, errors: 0, lastMessage: '' });
+    const [error, setError] = useState('');
+    // When checked, the backend re-parses every reachable replay even if
+    // its macro_score/breakdown are already stored. Use after the macro
+    // engine itself changes (e.g. fixed chrono/inject/MULE counting) so
+    // existing stored breakdowns get refreshed with the new logic.
+    const [force, setForce] = useState(false);
+
+    const refresh = async () => {
+      try {
+        const r = await fetch(`${API}/macro/backfill/status`);
+        const j = await r.json();
+        if (j && j.ok) setState((s) => Object.assign({}, s, j));
+      } catch (_) { /* ignore */ }
+    };
+
+    useEffect(() => { refresh(); }, []);
+    useEffect(() => {
+      let sock;
+      try {
+        sock = io({ transports: ['websocket', 'polling'] });
+        sock.on('macro_backfill_progress', (p) => {
+          setState((s) => Object.assign({}, s, {
+            running: true, phase: 'running',
+            done: p.i || s.done, total: p.total || s.total,
+            updated: s.updated + (p.ok ? 1 : 0),
+            errors:  s.errors  + (p.ok ? 0 : 1),
+            lastMessage: `${p.i || 0}/${p.total || 0} ${p.file || ''}`,
+          }));
+        });
+        sock.on('macro_backfill_done', (d) => {
+          setState((s) => Object.assign({}, s, {
+            running: false, phase: d.phase || 'done',
+            lastMessage: `done · updated ${d.updated || 0} · errors ${d.errors || 0}`,
+          }));
+        });
+      } catch (_) { /* socket optional */ }
+      return () => { try { sock && sock.disconnect(); } catch (_) {} };
+    }, []);
+
+    const start = async () => {
+      setError('');
+      try {
+        const r = await fetch(`${API}/macro/backfill/start`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force }),
+        });
+        const j = await r.json();
+        if (!r.ok || !j.ok) { setError(j.error || 'failed to start'); return; }
+        setState((s) => Object.assign({}, s, {
+          running: true, phase: 'running', done: 0, total: 0,
+          updated: 0, errors: 0,
+          lastMessage: force ? 'starting (force re-parse)…' : 'starting…',
+        }));
+      } catch (e) { setError(e.message); }
+    };
+
+    const pct = state.total > 0 ? Math.round(100 * state.done / state.total) : 0;
+
+    return (
+      <div className="bg-base-800 ring-soft rounded-xl p-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-neutral-100">Macro score backfill</h2>
+            <div className="text-sm text-neutral-400 mt-1">
+              {force ? (
+                <>
+                  <span className="text-gold-500 font-semibold">Force mode:</span>{' '}
+                  re-parses <em>every</em> reachable replay and overwrites
+                  existing macro scores. Use this after the macro engine
+                  itself changes (e.g. chrono/inject/MULE fix). Slow.
+                </>
+              ) : (
+                <>
+                  Default: only processes replays that don't yet have a
+                  macro score. Cheap; runs after every batch of new games.
+                  Writes results back to <code className="text-neutral-300">meta_database.json</code>.
+                </>
+              )}
+            </div>
+            {error && <div className="text-sm text-loss-500 mt-1">{error}</div>}
+          </div>
+          <div className="flex gap-2 items-center">
+            <button onClick={refresh}
+              className="text-xs bg-base-700 hover:bg-base-600 ring-soft rounded px-3 py-1.5 text-neutral-300">
+              Refresh
+            </button>
+            <button onClick={start} disabled={state.running}
+              className="text-sm bg-accent-500 hover:bg-accent-600 disabled:opacity-50 ring-soft rounded px-3 py-1.5 text-white font-semibold">
+              {state.running
+                ? 'Running…'
+                : (force ? 'Force re-parse all' : 'Backfill new replays')}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-2">
+          <label className="inline-flex items-center gap-2 text-xs text-neutral-500 cursor-pointer select-none"
+                 title="Edge case: re-parse every reachable replay even if its macro is already stored. Only needed after the macro engine itself changes so old stored breakdowns get refreshed. Leave OFF for the normal incremental backfill.">
+            <input type="checkbox" checked={force}
+                   onChange={(e) => setForce(e.target.checked)}
+                   disabled={state.running}
+                   className="accent-accent-500" />
+            Force re-parse all <span className="text-neutral-600">(edge case)</span>
+          </label>
+        </div>
+
+        {(state.running || state.total > 0) && (
+          <div className="mt-3">
+            <div className="flex items-center gap-3 text-xs text-neutral-400 mb-1">
+              <span>{state.done}/{state.total} processed</span>
+              <span className="text-win-500">+{state.updated} updated</span>
+              {state.errors > 0 && <span className="text-loss-500">{state.errors} errors</span>}
+              <span className="ml-auto truncate">{state.lastMessage}</span>
+            </div>
+            <div className="h-2 bg-base-700 rounded overflow-hidden">
+              <div className="h-full bg-accent-500" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function MlStatusCard({ status, statusErr, training, progress, trainMsg, onTrain, onRefresh }) {
+    const trained = status && status.trained;
+    const auc = trained && status.auc != null ? status.auc.toFixed(3) : 'n/a';
+    const last = trained ? (status.last_trained || '?') : '';
+    const need = status && status.needed > 0;
+    return (
+      <div className="bg-base-800 ring-soft rounded-xl p-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-neutral-100">Win-Probability model</h2>
+            {statusErr ? (
+              <div className="text-sm text-loss-500 mt-1">{statusErr}</div>
+            ) : !status ? (
+              <div className="text-sm text-neutral-500 mt-1">Loading status...</div>
+            ) : trained ? (
+              <div className="text-sm text-neutral-300 mt-1">
+                <span className="text-win-500 font-semibold">Trained</span>
+                {' · '}<span className="tabular-nums">{status.games_used}</span> games
+                {' · '}<span className="tabular-nums">{status.snapshots}</span> snapshots
+                {' · AUC '}<b className="tabular-nums">{auc}</b>
+                {' · last trained '}<span className="text-neutral-400">{last}</span>
+              </div>
+            ) : (
+              <div className="text-sm text-neutral-300 mt-1">
+                <span className="text-loss-500 font-semibold">Untrained</span>
+                {' · '}{status.message || ''}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 items-center">
+            <button onClick={onRefresh}
+              className="text-xs bg-base-700 hover:bg-base-600 ring-soft rounded px-3 py-1.5 text-neutral-300">
+              Refresh
+            </button>
+            <button onClick={onTrain} disabled={training || need}
+              className={"text-sm rounded px-4 py-1.5 transition " + (
+                training || need
+                  ? 'bg-base-700 text-neutral-500 cursor-not-allowed'
+                  : 'bg-accent-500 hover:bg-accent-500/90 text-white'
+              )}>
+              {training ? 'Training...' : trained ? 'Retrain Model' : 'Train Model'}
+            </button>
+          </div>
+        </div>
+        {(training || trainMsg) && (
+          <div className="mt-3">
+            <div className="h-2 bg-base-700 rounded overflow-hidden">
+              <div className="h-full bg-accent-500 transition-all"
+                   style={{ width: (progress.pct || 0) + '%' }} />
+            </div>
+            <div className="text-xs text-neutral-400 mt-1.5">{trainMsg}</div>
+          </div>
+        )}
+        <div className="text-[11px] text-neutral-500 mt-2">
+          Training spawns the Python ML CLI (<code>scripts/ml_cli.py</code>) in
+          the SC2Replay-Analyzer project; live progress streams over Socket.io.
+        </div>
+      </div>
+    );
+  }
+
+  // -- What-if predictor (mid-game snapshot)
+  function WhatIfPanel({ status }) {
+    const FEATS = [
+      { key: 'minute',          label: 'Game minute',              min: 0,    max: 30,   step: 1,  def: 8 },
+      { key: 'supply_diff',     label: 'Supply diff (you-opp)',    min: -100, max: 100,  step: 1,  def: 0 },
+      { key: 'army_value_diff', label: 'Army value diff',          min: -5000,max: 5000, step: 50, def: 0 },
+      { key: 'income_min_diff', label: 'Mineral income diff /min', min: -3000,max: 3000, step: 25, def: 0 },
+      { key: 'income_gas_diff', label: 'Gas income diff /min',     min: -2000,max: 2000, step: 25, def: 0 },
+      { key: 'nexus_count_diff',label: 'Base count diff',          min: -5,   max: 5,    step: 1,  def: 0 },
+      { key: 'tech_score_self', label: 'Your tech score',          min: 0,    max: 30,   step: 1,  def: 5 },
+      { key: 'tech_score_opp',  label: 'Opp tech score',           min: 0,    max: 30,   step: 1,  def: 5 },
+    ];
+    const initial = Object.fromEntries(FEATS.map(f => [f.key, f.def]));
+    const [vals, setVals] = useState(initial);
+    const [matchup, setMatchup] = useState('');
+    const [pred, setPred] = useState(null);
+    const [predErr, setPredErr] = useState('');
+    const trained = status && status.trained;
+    const fetchPred = useRef(null);
+
+    useEffect(() => {
+      if (!trained) { setPred(null); setPredErr(''); return; }
+      if (fetchPred.current) clearTimeout(fetchPred.current);
+      fetchPred.current = setTimeout(async () => {
+        const q = new URLSearchParams();
+        Object.entries(vals).forEach(([k, v]) => q.set(k, v));
+        if (matchup) q.set('matchup', matchup);
+        try {
+          const r = await fetch(`${API}/ml/predict?${q.toString()}`);
+          const j = await r.json();
+          if (!j.ok) { setPred(null); setPredErr(j.message || ''); }
+          else { setPred(j.p_win); setPredErr(''); }
+        } catch (e) { setPredErr(e.message); }
+      }, 200);
+      return () => { if (fetchPred.current) clearTimeout(fetchPred.current); };
+    }, [vals, matchup, trained]);
+
+    const pct = pred != null ? (pred * 100) : null;
+    return (
+      <div className="bg-base-800 ring-soft rounded-xl p-4">
+        <h3 className="text-base font-semibold text-neutral-100">What-if predictor (mid-game)</h3>
+        <p className="text-xs text-neutral-500 mt-0.5">
+          Set the relative state; the model returns p(Win) for that snapshot.
+        </p>
+        {!trained ? (
+          <EmptyState title="Train the model first" sub="The what-if predictor needs a fitted WP model." />
+        ) : (
+          <Fragment>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              {FEATS.map(f => (
+                <div key={f.key}>
+                  <label className="block text-[11px] text-neutral-400">{f.label}</label>
+                  <div className="flex items-center gap-2">
+                    <input type="range" min={f.min} max={f.max} step={f.step} value={vals[f.key]}
+                      onChange={e => setVals(v => ({ ...v, [f.key]: Number(e.target.value) }))}
+                      className="flex-1" />
+                    <span className="tabular-nums w-14 text-right text-xs text-neutral-300">{vals[f.key]}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3">
+              <label className="block text-[11px] text-neutral-400">Matchup (optional)</label>
+              <select value={matchup} onChange={e => setMatchup(e.target.value)}
+                className="bg-base-700 ring-soft rounded px-2 py-1 text-sm">
+                <option value="">(unspecified)</option>
+                <option value="PvT">PvT</option>
+                <option value="PvZ">PvZ</option>
+                <option value="PvP">PvP</option>
+              </select>
+            </div>
+            <div className="mt-4 bg-base-700 rounded-lg p-3 text-center">
+              <div className="text-[11px] uppercase tracking-wider text-neutral-500">Predicted p(Win)</div>
+              <div className="text-3xl font-semibold tabular-nums mt-1"
+                   style={{ color: pct == null ? '#9ca3af' : (pct >= 50 ? '#66BB6A' : '#EF5350') }}>
+                {pct == null ? '—' : pct.toFixed(0) + '%'}
+              </div>
+              <div className="h-2 bg-base-800 rounded mt-2 overflow-hidden">
+                <div className="h-full transition-all"
+                     style={{
+                       width: pct == null ? '0%' : Math.max(0, Math.min(100, pct)) + '%',
+                       background: pct == null ? '#404040' : (pct >= 50 ? '#66BB6A' : '#EF5350'),
+                     }} />
+              </div>
+              {predErr && <div className="text-xs text-loss-500 mt-2">{predErr}</div>}
+            </div>
+          </Fragment>
+        )}
+      </div>
+    );
+  }
+
+  // -- Pre-game predictor (history-based)
+  function PregamePanel({ opts }) {
+    const [filters, setFilters] = useState({});
+    const [result, setResult] = useState(null);
+    const [err, setErr] = useState('');
+    const set = (k, v) => setFilters(f => ({ ...f, [k]: v }));
+
+    const run = async () => {
+      const q = new URLSearchParams();
+      Object.entries(filters).forEach(([k, v]) => { if (v) q.set(k, v); });
+      try {
+        const r = await fetch(`${API}/ml/pregame?${q.toString()}`);
+        const j = await r.json();
+        if (!j.ok) { setResult(null); setErr(j.message || 'No data.'); }
+        else { setResult(j); setErr(''); }
+      } catch (e) { setErr(e.message); }
+    };
+
+    const pct = result && result.p_win != null ? result.p_win * 100 : null;
+    return (
+      <div className="bg-base-800 ring-soft rounded-xl p-4">
+        <h3 className="text-base font-semibold text-neutral-100">Pre-game predictor (history-based)</h3>
+        <p className="text-xs text-neutral-500 mt-0.5">
+          Historical win-rate against this matchup / opponent / map / strategy.
+        </p>
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <div>
+            <label className="block text-[11px] text-neutral-400">Your race</label>
+            <select value={filters.myrace || ''} onChange={e => set('myrace', e.target.value)}
+              className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-full">
+              <option value="">(any)</option>
+              {(opts.races || []).map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] text-neutral-400">Opp race</label>
+            <select value={filters.opprace || ''} onChange={e => set('opprace', e.target.value)}
+              className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-full">
+              <option value="">(any)</option>
+              {(opts.races || []).map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] text-neutral-400">Opponent</label>
+            <select value={filters.opponent || ''} onChange={e => set('opponent', e.target.value)}
+              className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-full">
+              <option value="">(any)</option>
+              {(opts.opponents || []).slice(0, 500).map(o =>
+                <option key={o} value={o}>{o.length > 40 ? o.slice(0, 40) + '...' : o}</option>
+              )}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] text-neutral-400">Map</label>
+            <select value={filters.map || ''} onChange={e => set('map', e.target.value)}
+              className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-full">
+              <option value="">(any)</option>
+              {(opts.maps || []).map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="block text-[11px] text-neutral-400">Opp strategy</label>
+            <select value={filters.strategy || ''} onChange={e => set('strategy', e.target.value)}
+              className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-full">
+              <option value="">(any)</option>
+              {(opts.strategies || []).map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+        <button onClick={run}
+          className="mt-3 text-sm bg-accent-500 hover:bg-accent-500/90 text-white rounded px-4 py-1.5">
+          Predict
+        </button>
+        <div className="mt-4 bg-base-700 rounded-lg p-3">
+          <div className="text-[11px] uppercase tracking-wider text-neutral-500 text-center">Predicted p(Win)</div>
+          <div className="text-3xl font-semibold tabular-nums mt-1 text-center"
+               style={{ color: pct == null ? '#9ca3af' : (pct >= 50 ? '#66BB6A' : '#EF5350') }}>
+            {pct == null ? '—' : pct.toFixed(0) + '%'}
+          </div>
+          <div className="h-2 bg-base-800 rounded mt-2 overflow-hidden">
+            <div className="h-full transition-all"
+                 style={{
+                   width: pct == null ? '0%' : Math.max(0, Math.min(100, pct)) + '%',
+                   background: pct == null ? '#404040' : (pct >= 50 ? '#66BB6A' : '#EF5350'),
+                 }} />
+          </div>
+          {result && (
+            <div className="text-xs text-neutral-400 mt-3">
+              {result.total > 0 ? (
+                <Fragment>
+                  Joint match: <b>{result.wins}-{result.total - result.wins}</b>
+                  {' (' + (result.raw_win_rate * 100).toFixed(0) + '% raw, smoothed to ' + (result.p_win * 100).toFixed(0) + '%)'}
+                </Fragment>
+              ) : (
+                <Fragment>{result.method}</Fragment>
+              )}
+              {result.components && result.components.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {result.components.map((c, i) => (
+                    <li key={i} className="flex justify-between gap-3">
+                      <span>{c.label}</span>
+                      <span className="tabular-nums">
+                        <b>{c.wins}-{c.total - c.wins}</b>
+                        {' · '}
+                        <span style={{ color: c.win_rate >= 0.5 ? '#66BB6A' : '#EF5350' }}>
+                          {(c.win_rate * 100).toFixed(0)}%
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {err && <div className="text-xs text-loss-500 mt-2">{err}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  function CsvButton({ kind, filters }) {
+    const href = `${API}/export.csv?kind=${kind}${buildQuery(filters).replace('?', '&')}`;
+    return (
+      <a href={href} target="_blank" rel="noopener"
+         className="text-xs bg-base-700 hover:bg-base-600 ring-soft rounded px-3 py-1.5 text-neutral-300">
+        &#x2913; Export CSV
+      </a>
+    );
+  }
+
+  // ============================================================
+  // (Removed) MAP INTEL TAB
+  //
+  // The standalone map-intel heatmaps view was removed at the user's
+  // request - building/proxy/battle/death-zone heatmap rendering and the
+  // viridis/RdYlGn_r colormaps lived here. The opponent-profile page's
+  // "Proxy patterns vs you" widget (OpponentProxyPatterns below) still
+  // hits /spatial/opponent-proxies, so that endpoint remains live; the
+  // other /spatial/* endpoints can be retired in a future cleanup if no
+  // other consumer adopts them.
+  // ============================================================
+
+  // Sidebar widget shown on the opponent-profile page. Lists this opponent's
+  // proxy locations across all games against the user, with a tiny scatter
+  // visualization grouped by map. Uses /api/analyzer/spatial/opponent-proxies.
+  function OpponentProxyPatterns({ opponentName }) {
+    const [data, setData] = useState(null);
+    const [err, setErr] = useState(null);
+    useEffect(() => {
+      if (!opponentName) return;
+      let cancelled = false;
+      fetch(`${API}/spatial/opponent-proxies?opponent=${encodeURIComponent(opponentName)}`)
+        .then(r => r.json())
+        .then(j => {
+          if (cancelled) return;
+          if (!j || j.ok === false) setErr((j && j.message) || 'no data');
+          else setData(j.result || j);
+        })
+        .catch(e => !cancelled && setErr(String(e)));
+      return () => { cancelled = true; };
+    }, [opponentName]);
+    if (err) return <div className="text-xs text-loss-500">Proxy patterns: {err}</div>;
+    if (!data) return <div className="text-xs text-neutral-500">Loading proxy patterns…</div>;
+    const points = data.points || [];
+    if (!points.length) {
+      return <EmptyState title="No proxy patterns" sub={`Scanned ${data.games_scanned} game(s).`} />;
+    }
+    // Group points by map for the per-map breakdown line.
+    const byMap = data.by_map || {};
+    return (
+      <div className="space-y-3">
+        <div className="text-xs text-neutral-400">
+          {data.proxies_found} proxy building(s) across {data.games_scanned} game(s)
+        </div>
+        <ul className="space-y-1 max-h-64 overflow-y-auto pr-1 text-xs">
+          {Object.entries(byMap).map(([map, n]) => (
+            <li key={map} className="flex justify-between text-neutral-300">
+              <span>{map}</span>
+              <span className="tabular-nums text-gold-500">{n}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="text-[10px] text-neutral-600">
+          Distance threshold matches the strategy detector's `_is_proxy` rule.
+          Tap "Map Intel" for a full heatmap of opponent proxy locations.
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================
+  // DEFINITIONS TAB -- searchable build/strategy glossary
+  //
+  // Mirrors the "Definitions" tab in the desktop SC2ReplayAnalyzer.py.
+  // The catalog is sourced from the python project's
+  // detectors/definitions.py and exposed by GET /definitions on the
+  // backend. Filterable by race + free-text search.
+  // ============================================================
+  function DefinitionsTab() {
+    const [items, setItems] = useState(null);
+    const [error, setError] = useState(null);
+    const [search, setSearch] = useState('');
+    const [race, setRace] = useState('All');
+
+    useEffect(() => {
+      let cancelled = false;
+      fetch(`${API}/definitions`)
+        .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j)))
+        .then(j => { if (!cancelled) setItems(Array.isArray(j.items) ? j.items : []); })
+        .catch(e => { if (!cancelled) setError(e.error || 'fetch failed'); });
+      return () => { cancelled = true; };
+    }, []);
+
+    if (error) return <EmptyState title="Definitions unavailable" sub={error} />;
+    if (items == null) return <EmptyState title="Loading definitions…" />;
+
+    const q = search.trim().toLowerCase();
+    const filtered = items.filter(it => {
+      if (race !== 'All' && !it.name.startsWith(race)) return false;
+      if (q && !(it.name.toLowerCase().includes(q) || it.description.toLowerCase().includes(q))) return false;
+      return true;
+    });
+
+    // Group by race prefix for visual sectioning.
+    const grouped = filtered.reduce((acc, it) => {
+      const prefix = it.name.split(' - ')[0] || 'Other';
+      (acc[prefix] = acc[prefix] || []).push(it);
+      return acc;
+    }, {});
+
+    const races = ['All', 'Zerg', 'Protoss', 'Terran'];
+
+    return (
+      <div className="p-4 space-y-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-lg font-semibold text-neutral-100">Build &amp; Strategy Definitions</h2>
+          <span className="text-xs text-neutral-500">
+            {filtered.length} of {items.length} entries
+          </span>
+        </div>
+        <div className="text-xs text-neutral-400 max-w-3xl">
+          The detection rules used by the analyzer to label opponent strategies and
+          your own builds. Use these to interpret labels in the rest of the SPA.
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="text" value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search builds and strategies…"
+            className="bg-base-800 border border-base-700 rounded px-3 py-1.5 text-sm text-neutral-100 placeholder-neutral-500 w-64 focus:outline-none focus:border-accent-500"
+          />
+          <div className="flex items-center gap-1 ml-2">
+            {races.map(r => (
+              <button
+                key={r}
+                onClick={() => setRace(r)}
+                className={"px-2.5 py-1 text-xs rounded transition " + (
+                  race === r
+                    ? 'bg-accent-500 text-white'
+                    : 'bg-base-700 text-neutral-300 hover:bg-base-600'
+                )}>
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <EmptyState title="No matches" sub="Try a different search or race filter." />
+        ) : (
+          <div className="space-y-4">
+            {Object.keys(grouped).sort().map(group => (
+              <div key={group}>
+                <div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-2">{group}</div>
+                <div className="space-y-1.5">
+                  {grouped[group].map(it => (
+                    <div key={it.name} className="bg-base-800 rounded p-3 border border-base-700">
+                      <div className="text-sm font-semibold text-neutral-100">{it.name}</div>
+                      <div className="text-xs text-neutral-400 mt-1">{it.description}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const TABS = [
+    { id: 'dashboard',  label: 'Dashboard' },
+    { id: 'builds',     label: 'My Builds' },
+    { id: 'strategies', label: 'Opp Strategies' },
+    { id: 'bvs',        label: 'Build vs Strategy' },
+    { id: 'maps',       label: 'Maps' },
+    { id: 'matchups',   label: 'Matchups' },
+    { id: 'opponents',  label: 'Opponents' },
+    { id: 'trends',     label: 'Trends' },
+    { id: 'ml',         label: 'ML / Predict' },
+    // Definitions stays at the very end (mirrors the SC2ReplayAnalyzer.py
+    // tab order) so the build/strategy glossary is always one click away.
+    { id: 'definitions', label: 'Definitions' },
+  ];
+
+  function App() {
+    const [tab, setTab] = useState('dashboard');
+    const [filters, setFilters] = useState({});
+    const [dbRev, setDbRev] = useState(0);
+    const [openPulseId, setOpenPulseId] = useState(null);
+    const [openBuildName, setOpenBuildName] = useState(null);
+    const [conn, setConn] = useState({ status: 'connecting' });
+
+    useEffect(() => {
+      try {
+        const sock = io({ transports: ['websocket', 'polling'] });
+        sock.on('connect',    () => setConn({ status: 'live' }));
+        sock.on('disconnect', () => setConn({ status: 'offline' }));
+        sock.on('analyzer_db_changed', (msg) => { setDbRev(r => r + 1); });
+        return () => sock.disconnect();
+      } catch (err) {
+        console.warn('socket.io unavailable:', err);
+        setConn({ status: 'offline' });
+      }
+    }, []);
+
+    const renderBody = () => {
+      if (openBuildName) {
+        return <BuildDeepDive buildName={openBuildName} filters={filters}
+                              onBack={() => setOpenBuildName(null)} dbRev={dbRev} />;
+      }
+      if (openPulseId) {
+        return <OpponentProfile pulseId={openPulseId} onBack={() => setOpenPulseId(null)} dbRev={dbRev} />;
+      }
+      switch (tab) {
+        case 'dashboard':  return <DashboardTab filters={filters} dbRev={dbRev} />;
+        case 'builds':     return <BuildsTab filters={filters} dbRev={dbRev} onOpen={setOpenBuildName} />;
+        case 'strategies': return <StrategiesTab filters={filters} dbRev={dbRev} />;
+        case 'bvs':        return <BuildVsStrategyTab filters={filters} dbRev={dbRev} />;
+        case 'maps':       return <MapsTab filters={filters} dbRev={dbRev} />;
+        case 'matchups':   return <MatchupsTab filters={filters} dbRev={dbRev} />;
+        case 'opponents':  return <OpponentsTab filters={filters} dbRev={dbRev} onOpen={setOpenPulseId} />;
+        case 'trends':     return <TrendsTab filters={filters} dbRev={dbRev} />;
+        case 'ml':         return <MlTab dbRev={dbRev} />;
+        case 'definitions': return <DefinitionsTab />;
+        default:           return <EmptyState title="Unknown tab" />;
+      }
+    };
+
+    return (
+      <div className="min-h-screen flex flex-col">
+        <header className="border-b border-base-700 bg-base-800/60 backdrop-blur sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
+            <div className="text-lg font-semibold text-neutral-100">SC2 Meta Analyzer</div>
+            <span className={"text-[10px] uppercase tracking-wider px-2 py-0.5 rounded " + (
+              conn.status === 'live'    ? 'bg-win-500/20 text-win-500' :
+              conn.status === 'offline' ? 'bg-loss-500/20 text-loss-500' :
+                                          'bg-base-700 text-neutral-500')}>
+              {conn.status}
+            </span>
+            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-base-700 text-neutral-500"
+                  title="Charts are rendered inline via SVG -- no external dependency">
+              charts: built-in
+            </span>
+            <nav className="ml-auto flex flex-wrap gap-1">
+              {TABS.map(t => (
+                <button key={t.id} onClick={() => { setOpenPulseId(null); setOpenBuildName(null); setTab(t.id); }}
+                  className={"px-3 py-1.5 text-sm rounded transition " + (
+                    tab === t.id && !openPulseId && !openBuildName
+                      ? 'bg-accent-500 text-white'
+                      : 'text-neutral-400 hover:bg-base-700 hover:text-neutral-200')}>
+                  {t.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </header>
+
+        {!openPulseId && !openBuildName && (
+          <div className="max-w-7xl mx-auto w-full px-4 pt-4">
+            <FilterBar filters={filters} onChange={setFilters} onReset={() => setFilters({})} />
+          </div>
+        )}
+
+        <main className="max-w-7xl mx-auto w-full px-4 py-4 flex-1">
+          <ErrorBoundary label={openBuildName ? `Build "${openBuildName}"` : openPulseId ? 'Opponent profile' : `Tab "${tab}"`}>
+            {renderBody()}
+          </ErrorBoundary>
+        </main>
+
+        <footer className="border-t border-base-700 text-[11px] text-neutral-600 py-3 px-4 text-center">
+          Data refreshes automatically when new replays land &middot; backend `/api/analyzer`
+        </footer>
+      </div>
+    );
+  }
+
+  try {
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  } catch (err) {
+    document.getElementById('root').innerHTML =
+      '<pre style="padding:24px;color:#ef476f;font-family:monospace;white-space:pre-wrap">' +
+      String(err && err.stack || err) + '</pre>';
+  }
+  </script>
+</body>
+</html>

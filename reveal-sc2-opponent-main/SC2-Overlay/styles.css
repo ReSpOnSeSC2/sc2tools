@@ -1,0 +1,469 @@
+/* ===========================================================
+   SC2 Stream Overlay — production styles
+   Transparent background for OBS Browser Source.
+   Segoe UI / system font stack to match Windows UI.
+   =========================================================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    background-color: transparent;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* --------- Shared transient widget shell --------- */
+.widget-container {
+    position: absolute;
+    display: flex;
+    background: linear-gradient(135deg, #11141c 0%, #1a1e29 100%);
+    border: 1px solid #2a3143;
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.75),
+                0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+    width: 340px;
+    color: #ffffff;
+    pointer-events: none;
+    opacity: 0;
+    transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1),
+                opacity 0.45s ease;
+    z-index: 10;
+}
+
+/* Slot layouts — where in the frame each widget lives */
+.slot-top-center {
+    top: 40px;
+    left: 50%;
+    transform: translate(-50%, -160%);
+}
+.slot-top-center.show {
+    transform: translate(-50%, 0);
+    opacity: 1;
+}
+.slot-top-center.offset-1 { top: 118px; }
+.slot-top-center.offset-2 { top: 196px; }
+.slot-top-center.offset-3 { top: 274px; }
+.slot-top-center.offset-4 { top: 352px; }
+.slot-top-center.offset-5 { top: 430px; }
+
+.slot-top-right {
+    top: 40px;
+    right: 40px;
+    transform: translateX(160%);
+    width: 240px;
+}
+.slot-top-right.show {
+    transform: translateX(0);
+    opacity: 1;
+}
+.slot-top-right.offset-mmr { top: 130px; }
+
+/* Accent bars */
+.accent-bar {
+    width: 6px;
+    border-radius: 10px 0 0 10px;
+}
+.accent-gold   { background: #e5c100; box-shadow: 0 0 10px rgba(229, 193, 0, 0.55); }
+.accent-cyan   { background: #00ccff; box-shadow: 0 0 10px rgba(0, 204, 255, 0.55); }
+.accent-purple { background: #a06bff; box-shadow: 0 0 10px rgba(160, 107, 255, 0.55); }
+.accent-red    { background: #ff3366; box-shadow: 0 0 14px rgba(255, 51, 102, 0.7); }
+
+.content {
+    padding: 16px 20px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.content-tight { padding: 12px 16px; gap: 4px; }
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 800;
+    font-size: 1.35rem;
+    letter-spacing: 1px;
+    line-height: 1.15;
+}
+
+.footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.95rem;
+    color: #7b869e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bright { color: #ffffff; }
+.dim    { color: #7b869e; font-weight: 500; }
+.big    { font-size: 1.8rem; line-height: 1; }
+
+/* Result colors */
+.victory {
+    color: #00ff88;
+    text-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
+}
+.defeat {
+    color: #ff3366;
+    text-shadow: 0 0 10px rgba(255, 51, 102, 0.4);
+}
+
+/* Matchup text style */
+#mr-matchup { color: #a0aabf; }
+
+/* --------- SC2 icon system --------- */
+/* A single inline icon (race badge, league shield, etc.). */
+.sc2-icon {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    vertical-align: middle;
+    image-rendering: -webkit-optimize-contrast; /* keep crisp at 28px */
+    object-fit: contain;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+}
+
+/* A slot for one inline icon. We use spans (not imgs) so the icon
+   can be omitted gracefully -- the slot just collapses to width:0. */
+.sc2-icon-slot {
+    display: inline-flex;
+    align-items: center;
+    margin: 0 6px;
+    line-height: 0;
+}
+.sc2-icon-slot:empty { display: none; }
+
+.sc2-icon-slot.league .sc2-icon { width: 36px; height: 36px; }
+
+/* Matchup container groups: [me race] PvT [opp race] */
+.matchup-block {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Horizontal row of strategy icons inside a footer line. */
+.icon-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+}
+.icon-row:empty { display: none; }
+.icon-row .sc2-icon {
+    width: 26px;
+    height: 26px;
+}
+
+/* --------- Rival alert (#6) --------- */
+.rival-widget {
+    background: linear-gradient(135deg, #2b1f0a 0%, #3a2810 100%);
+    border-color: #8a5a16;
+    width: 380px;
+    animation: rival-pulse 2s ease-in-out infinite;
+}
+.rival-widget .header { color: #ffcc33; }
+.rival-widget .footer { color: #ffe7a0; }
+.accent-rival { background: #ffcc33; box-shadow: 0 0 14px rgba(255, 204, 51, 0.7); }
+@keyframes rival-pulse {
+    0%, 100% { box-shadow: 0 12px 32px rgba(0,0,0,0.75), 0 0 18px rgba(255, 204, 51, 0.18); }
+    50%      { box-shadow: 0 12px 32px rgba(0,0,0,0.75), 0 0 32px rgba(255, 204, 51, 0.55); }
+}
+
+/* --------- Scouting report (#1) --------- */
+.scout-widget {
+    width: 460px;
+    background: linear-gradient(135deg, #0d1320 0%, #131c2e 100%);
+}
+.scout-content {
+    padding: 14px 18px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.scout-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.25rem;
+    font-weight: 800;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding-bottom: 8px;
+}
+.scout-race .sc2-icon { width: 32px; height: 32px; }
+.scout-record { margin-left: auto; font-size: 0.95rem; }
+.scout-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.95rem;
+}
+.scout-label {
+    font-size: 0.7rem;
+    color: #7b869e;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    min-width: 110px;
+    text-transform: uppercase;
+}
+.scout-rival { color: #ffcc33; font-weight: 700; }
+.scout-cheese { color: #ff8899; font-weight: 700; }
+
+/* --------- #8 Top builds tile grid (bottom-right, persistent) --------- */
+.topbuilds-widget {
+    position: absolute;
+    bottom: 40px;
+    right: 40px;
+    width: 280px;
+    background: linear-gradient(135deg, rgba(17, 20, 28, 0.88) 0%, rgba(26, 30, 41, 0.88) 100%);
+    border: 1px solid #2a3143;
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.7);
+    color: #ffffff;
+    backdrop-filter: blur(2px);
+    z-index: 5;
+    padding: 10px 12px;
+    opacity: 0;
+    transform: translateX(20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.topbuilds-widget.show { opacity: 1; transform: translateX(0); }
+
+.topbuilds-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #7b869e;
+    text-transform: uppercase;
+}
+.topbuilds-grid {
+    margin-top: 8px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+}
+.topbuild-tile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.04);
+    font-size: 0.78rem;
+}
+.topbuild-tile .topbuild-icons {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+.topbuild-tile .topbuild-icons .sc2-icon {
+    width: 18px;
+    height: 18px;
+}
+.topbuild-tile .topbuild-name {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #c5cde0;
+}
+.topbuild-tile .topbuild-record {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+/* --------- #3 Build-order timeline (animated reveal) --------- */
+.reveal-widget { width: 460px; }
+.build-timeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+.build-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px 3px 4px;
+    border-radius: 4px;
+    background: rgba(160, 107, 255, 0.12);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #e7defc;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.build-step.show { opacity: 1; transform: translateY(0); }
+.build-step .sc2-icon { width: 18px; height: 18px; }
+.build-step .build-time {
+    font-variant-numeric: tabular-nums;
+    color: #a06bff;
+    margin-right: 2px;
+}
+
+/* --------- Cheese widget gets an extra pulse glow --------- */
+.cheese-widget {
+    background: linear-gradient(135deg, #1a0f15 0%, #28121a 100%);
+    border-color: #55192b;
+    animation: cheese-pulse 2.2s ease-in-out infinite;
+}
+.cheese-widget .header { color: #ff3366; }
+.cheese-widget .footer { color: #ffb3c5; }
+
+@keyframes cheese-pulse {
+    0%, 100% { box-shadow: 0 12px 32px rgba(0,0,0,0.75), 0 0 20px rgba(255,51,102,0.15); }
+    50%      { box-shadow: 0 12px 32px rgba(0,0,0,0.75), 0 0 36px rgba(255,51,102,0.45); }
+}
+
+/* --------- Streak splash (big center) --------- */
+.streak-widget {
+    position: absolute;
+    top: 30%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.7);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.45s cubic-bezier(0.2, 1.4, 0.4, 1),
+                opacity 0.45s ease;
+    z-index: 20;
+}
+.streak-widget.show {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+}
+.streak-inner {
+    padding: 24px 64px;
+    border-radius: 14px;
+    text-align: center;
+    background: linear-gradient(135deg, rgba(17, 20, 28, 0.92), rgba(26, 30, 41, 0.92));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+.streak-text {
+    font-size: 3.6rem;
+    font-weight: 900;
+    letter-spacing: 4px;
+    line-height: 1;
+    text-transform: uppercase;
+}
+.streak-sub {
+    margin-top: 10px;
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    color: #c5cde0;
+    text-transform: uppercase;
+}
+
+/* Tier flavor */
+.streak-widget.tier-heating-up  .streak-text { color: #ffcc33; text-shadow: 0 0 24px rgba(255, 204, 51, 0.7); }
+.streak-widget.tier-on-fire     .streak-text { color: #ff8800; text-shadow: 0 0 28px rgba(255, 136, 0, 0.85); }
+.streak-widget.tier-rampage     .streak-text {
+    background: linear-gradient(90deg, #ff3366, #ffcc33, #00ff88, #00ccff, #ff3366);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: rainbow-shift 2.5s linear infinite;
+    text-shadow: 0 0 30px rgba(255, 204, 51, 0.6);
+}
+.streak-widget.tier-gg-go-again .streak-text { color: #a0aabf; }
+.streak-widget.tier-tilt-warn   .streak-text { color: #66a8ff; text-shadow: 0 0 20px rgba(102, 168, 255, 0.5); }
+
+@keyframes rainbow-shift {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 300% 50%; }
+}
+
+/* --------- Persistent session widget (bottom-left) --------- */
+.session-widget {
+    position: absolute;
+    bottom: 40px;
+    left: 40px;
+    display: flex;
+    min-width: 240px;
+    background: linear-gradient(135deg, rgba(17, 20, 28, 0.88) 0%, rgba(26, 30, 41, 0.88) 100%);
+    border: 1px solid #2a3143;
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.7);
+    color: #ffffff;
+    backdrop-filter: blur(2px);
+    z-index: 5;
+    opacity: 0;
+    transform: translateX(-20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.session-widget.show { opacity: 1; transform: translateX(0); }
+
+.session-content {
+    padding: 12px 18px 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+}
+.session-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+.session-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #7b869e;
+    text-transform: uppercase;
+}
+.session-streak {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+.session-streak.win-streak  { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
+.session-streak.loss-streak { background: rgba(255, 51, 102, 0.15); color: #ff3366; }
+
+.session-main { margin-top: 2px; align-items: center; }
+.session-league .sc2-icon { width: 28px; height: 28px; margin-right: 6px; }
+.session-wl {
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: #ffffff;
+}
+.session-mmr {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+.session-mmr.up   { color: #00ff88; }
+.session-mmr.down { color: #ff3366; }
+.session-mmr.flat { color: #7b869e; }
+
+.session-time {
+    font-size: 0.85rem;
+    color: #7b869e;
+    letter-spacing: 1px;
+}

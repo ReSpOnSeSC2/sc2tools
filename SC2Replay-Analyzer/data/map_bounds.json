@@ -1,0 +1,80 @@
+{
+  "_README": "Map metadata used by ui/map_viewer.py. Bounds describe the playable area in SC2 cell coordinates (origin = bottom-left). starting_locations are in the same coordinate system. Add new maps with scripts/extract_map_bounds.py. The '_default' entry is used as a fallback when a map name is not found.",
+  "_default": {
+    "x_min": 0,
+    "x_max": 200,
+    "y_min": 0,
+    "y_max": 200,
+    "starting_locations": []
+  },
+  "Equilibrium LE": {
+    "x_min": 8,
+    "x_max": 184,
+    "y_min": 8,
+    "y_max": 184,
+    "starting_locations": [[28.5, 156.5], [163.5, 35.5]]
+  },
+  "Goldenaura LE": {
+    "x_min": 12,
+    "x_max": 188,
+    "y_min": 12,
+    "y_max": 188,
+    "starting_locations": [[33.5, 161.5], [166.5, 38.5]]
+  },
+  "Oceanborn LE": {
+    "x_min": 8,
+    "x_max": 176,
+    "y_min": 8,
+    "y_max": 176,
+    "starting_locations": [[28.5, 148.5], [155.5, 35.5]]
+  },
+  "Site Delta LE": {
+    "x_min": 12,
+    "x_max": 180,
+    "y_min": 16,
+    "y_max": 184,
+    "starting_locations": [[33.5, 156.5], [158.5, 43.5]]
+  },
+  "Hard Lead LE": {
+    "x_min": 8,
+    "x_max": 192,
+    "y_min": 8,
+    "y_max": 168,
+    "starting_locations": [[26.5, 140.5], [173.5, 35.5]]
+  },
+  "Whispers of Gold LE": {
+    "x_min": 12,
+    "x_max": 180,
+    "y_min": 12,
+    "y_max": 180,
+    "starting_locations": [[34.5, 154.5], [157.5, 37.5]]
+  },
+  "Crimson Court LE": {
+    "x_min": 8,
+    "x_max": 184,
+    "y_min": 8,
+    "y_max": 192,
+    "starting_locations": [[28.5, 164.5], [163.5, 35.5]]
+  },
+  "Frostline LE": {
+    "x_min": 8,
+    "x_max": 168,
+    "y_min": 12,
+    "y_max": 188,
+    "starting_locations": [[26.5, 161.5], [149.5, 38.5]]
+  },
+  "Persephone LE": {
+    "x_min": 12,
+    "x_max": 180,
+    "y_min": 12,
+    "y_max": 180,
+    "starting_locations": [[33.5, 156.5], [158.5, 35.5]]
+  },
+  "Amphion LE": {
+    "x_min": 8,
+    "x_max": 192,
+    "y_min": 8,
+    "y_max": 184,
+    "starting_locations": [[28.5, 156.5], [171.5, 35.5]]
+  }
+}
