@@ -1073,12 +1073,23 @@
     unknown: 'bg-neutral-700/40 text-neutral-500',
   };
 
-  function BuildOrderTimeline({ gameId }) {
+  function BuildOrderTimeline({ gameId, perspective: perspectiveProp }) {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [showAll, setShowAll] = useState(false);
     const [filter, setFilter] = useState('all');
+    // 'opponent' shows the opponent's build, 'me' shows the user's. The
+    // OpponentProfile passes perspective="opponent" so that drawer
+    // defaults to the OPPONENT'S build (which is the entire point of
+    // viewing an opponent card). Other surfaces default to "me".
+    const [perspective, setPerspective] = useState(perspectiveProp || 'me');
+    // Tracks the on-demand opponent-build extraction state. Older games
+    // don't have opp_build_log persisted yet; clicking "Extract" POSTs
+    // to /games/:id/opp-build-order, which re-parses the replay and
+    // writes opp_build_log + opp_early_build_log back to meta_database.
+    const [extracting, setExtracting] = useState(false);
+    const [extractError, setExtractError] = useState(null);
 
     useEffect(() => {
       let cancelled = false;
@@ -1094,8 +1105,18 @@
     if (error) return <div className="text-xs text-loss-500 px-3 py-2">build-order unavailable: {error}</div>;
     if (!data) return null;
 
-    const allEvents = data.events || [];
-    const earlyEvents = data.early_events || [];
+    const myAllEvents     = data.events || [];
+    const myEarlyEvents   = data.early_events || [];
+    const oppAllEvents    = data.opp_events || [];
+    const oppEarlyEvents  = data.opp_early_events || [];
+    const oppAvailable    = !!data.opp_build_available && oppAllEvents.length > 0;
+
+    // Effective perspective: if the caller asked for the opponent's
+    // build but we don't have it yet, surface the extract affordance
+    // instead of silently flipping back to the user's build.
+    const wantOpp = perspective === 'opponent';
+    const allEvents   = wantOpp ? oppAllEvents   : myAllEvents;
+    const earlyEvents = wantOpp ? oppEarlyEvents : myEarlyEvents;
     const events = showAll ? allEvents : earlyEvents;
     const filtered = filter === 'all'
       ? events
@@ -1105,6 +1126,80 @@
           ? events.filter(e => !e.is_building && e.category !== 'upgrade')
           : events.filter(e => e.category === 'upgrade');
 
+    const myRace = data.my_race || data.myRace || '';
+    const oppName = data.opponent || '';
+    const oppRace = (data.opp_race || '').toString();
+    const headerLabel = wantOpp
+      ? `${oppName || 'Opponent'}'s Build${oppRace ? ` (${oppRace})` : ''}`
+      : `Your Build${myRace ? ` (${myRace})` : ''}${oppName ? ` vs ${oppName}` : ''}${oppRace ? ` [${oppRace.charAt(0).toUpperCase()}]` : ''}`;
+
+    const extractOppBuild = () => {
+      setExtracting(true); setExtractError(null);
+      fetch(`${API}/games/${encodeURIComponent(gameId)}/opp-build-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+        .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j)))
+        .then(j => {
+          // Merge the freshly-extracted events into local state so the
+          // timeline rerenders without a full refetch.
+          setData(d => Object.assign({}, d, {
+            opp_events:        j.opp_events || [],
+            opp_early_events:  j.opp_early_events || [],
+            opp_build_available: (j.opp_events || []).length > 0,
+            opp_race: j.opp_race || (d && d.opp_race),
+          }));
+          setExtracting(false);
+          setPerspective('opponent');
+        })
+        .catch(e => {
+          setExtractError(e.error || String(e));
+          setExtracting(false);
+        });
+    };
+
+    // Empty-state branches.
+    if (wantOpp && !oppAvailable) {
+      return (
+        <div className="bg-base-900 ring-soft rounded-lg p-3 my-2 border border-base-700">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className="text-[11px] uppercase tracking-wider text-neutral-500">
+              {oppName || 'Opponent'}'s Build{oppRace ? ` (${oppRace})` : ''}
+            </span>
+            <div className="ml-auto flex items-center gap-1 text-xs">
+              <button
+                className="px-2 py-0.5 rounded bg-base-700 text-neutral-300"
+                onClick={() => setPerspective('me')}>
+                Show your build
+              </button>
+            </div>
+          </div>
+          <div className="text-xs text-neutral-400 px-1 py-2">
+            {extracting
+              ? 'Re-parsing the replay file to pull the opponent’s build order…'
+              : 'Opponent’s build order is not stored for this game yet.'}
+          </div>
+          {extractError && (
+            <div className="text-xs text-loss-500 px-1 pb-2">Extract failed: {extractError}</div>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={extractOppBuild}
+              disabled={extracting}
+              className="px-2.5 py-1 text-xs rounded bg-accent-500 text-white hover:opacity-90 disabled:opacity-50"
+              title="Re-parse the replay file to extract the opponent's build order.">
+              {extracting ? 'Extracting…' : 'Extract opponent build'}
+            </button>
+            <span className="text-[10px] text-neutral-500">
+              Requires the original .SC2Replay file to still be on disk
+              ({data.game_id ? `id ${data.game_id}` : 'this game'}).
+            </span>
+          </div>
+        </div>
+      );
+    }
+
     if (allEvents.length === 0) {
       return <div className="text-xs text-neutral-500 px-3 py-2">No build_log on this game.</div>;
     }
@@ -1112,10 +1207,29 @@
     return (
       <div className="bg-base-900 ring-soft rounded-lg p-3 my-2 border border-base-700">
         <div className="flex items-center gap-2 mb-2 flex-wrap">
-          <span className="text-[11px] uppercase tracking-wider text-neutral-500">Build Order</span>
+          <span className="text-[11px] uppercase tracking-wider text-neutral-500">
+            {headerLabel}
+          </span>
           <span className="text-xs text-neutral-400">
             {showAll ? `full · ${allEvents.length} events` : `first 5 min · ${earlyEvents.length} events`}
           </span>
+          {/* Perspective toggle -- shown whenever we have at least one
+              of the two timelines. "Opponent" is highlighted by default
+              when this drawer is opened from the opponent profile. */}
+          <div className="flex items-center gap-1 text-xs">
+            <button
+              className={`px-2 py-0.5 rounded ${wantOpp ? 'bg-accent-500 text-white' : 'bg-base-700 text-neutral-300'}`}
+              onClick={() => setPerspective('opponent')}
+              disabled={!oppAvailable}
+              title={oppAvailable ? '' : 'Opponent build not extracted for this game yet'}>
+              Opponent
+            </button>
+            <button
+              className={`px-2 py-0.5 rounded ${!wantOpp ? 'bg-accent-500 text-white' : 'bg-base-700 text-neutral-300'}`}
+              onClick={() => setPerspective('me')}>
+              You
+            </button>
+          </div>
           <div className="ml-auto flex items-center gap-1 text-xs">
             <button
               className={`px-2 py-0.5 rounded ${filter === 'all' ? 'bg-accent-500 text-white' : 'bg-base-700 text-neutral-300'}`}
@@ -1136,6 +1250,19 @@
             </button>
           </div>
         </div>
+        {!wantOpp && (
+          <div className="text-[10px] text-neutral-500 mb-2">
+            This is YOUR build (captured from the replay). Switch to
+            "Opponent" to see {oppName || 'their'} build.
+            {oppName ? ` Detected strategy: "${data.opp_strategy || '—'}".` : ''}
+          </div>
+        )}
+        {wantOpp && (
+          <div className="text-[10px] text-neutral-500 mb-2">
+            {oppName || 'Opponent'}'s deduped first-5-min milestones.
+            Detected strategy: "{data.opp_strategy || '—'}".
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-[420px] overflow-y-auto">
           {filtered.map((e, i) => (
             <div key={i} className="flex items-center gap-2 bg-base-800 rounded px-2 py-1">
@@ -1395,10 +1522,13 @@
     );
   }
 
-  function GamesTableWithBuildOrder({ games }) {
+  function GamesTableWithBuildOrder({ games, perspective }) {
     // expandedId tracks which row's drawer is open; expandedMode controls
     // whether the drawer shows the build-order timeline ('build') or the
     // macro breakdown ('macro'). Both come from clicks on the same row.
+    // `perspective` is forwarded to BuildOrderTimeline so the OpponentProfile
+    // can default the drawer to the opponent's build (callers that don't
+    // pass it get the user's build, the historical default).
     const [expandedId, setExpandedId] = useState(null);
     const [expandedMode, setExpandedMode] = useState('build');
     return (
@@ -1484,7 +1614,7 @@
                     <td colSpan={8} className="px-2 pb-3">
                       {expandedMode === 'macro'
                         ? <MacroBreakdownPanel gameId={id} initialMacro={macro} />
-                        : <BuildOrderTimeline gameId={id} />}
+                        : <BuildOrderTimeline gameId={id} perspective={perspective} />}
                     </td>
                   </tr>
                 )}
@@ -1938,8 +2068,28 @@
                   map:     g.map || g.Map,
                   result:  g.result || g.Result,
                   opponent: g.opponent || data.name || '',
+                  // Opponent race resolution -- prefer the meta-DB-enriched
+                  // opp_race when present. Otherwise parse the Matchup key,
+                  // which is shaped "<MY_RACE>v<OPP_RACE>" (e.g.
+                  // "PROTOSSvTERRAN"). The previous version took
+                  // charAt(0) of the whole string after stripping a "vs "
+                  // prefix, so it returned the USER'S race ("P") instead of
+                  // the opponent's ("T"). Now we explicitly take the part
+                  // AFTER the "v" separator.
                   opp_race: g.opp_race
-                            || (g.Matchup && g.Matchup.replace(/^vs\s*/i, '').charAt(0))
+                            || (function(){
+                                  const mu = g.Matchup || '';
+                                  if (!mu) return '';
+                                  const stripped = String(mu).replace(/^vs\s*/i, '');
+                                  // Split on "v" / " v " / "vs" so both
+                                  // "PROTOSSvTERRAN" and "PROTOSS vs TERRAN"
+                                  // resolve to the trailing race.
+                                  const parts = stripped.split(/\s*v(?:s)?\s*/i);
+                                  const oppPart = parts.length > 1
+                                    ? parts[parts.length - 1]
+                                    : parts[0];
+                                  return (oppPart || '').charAt(0).toUpperCase();
+                                })()
                             || '',
                   // game id is essential for the /games/:id/build-order
                   // and /games/:id/macro-breakdown endpoints. Enrichment
@@ -1948,6 +2098,7 @@
                 }))
                 .sort((a, b) => Date.parse(String(b.date || '').replace(' ', 'T'))
                               - Date.parse(String(a.date || '').replace(' ', 'T')))}
+              perspective="opponent"
             />
           </div>
         </Card>

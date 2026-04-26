@@ -1,16 +1,19 @@
 {
-  "startedAt": 1777154015614,
-  "wins": 1,
-  "losses": 0,
+  "startedAt": 1777207442416,
+  "wins": 2,
+  "losses": 2,
   "mmrStart": null,
   "mmrCurrent": null,
   "mmrDelta": 0,
   "currentStreak": {
     "type": "win",
-    "count": 1
+    "count": 2
   },
-  "lastResultTime": 1777155032201,
+  "lastResultTime": 1777213247206,
   "metaCounts": {
-    "Zerg - 12 Pool (Custom Engine Example)": 1
+    "Protoss - Proxy Stargate Opener": 1,
+    "Terran - Bio / Mech / Sky / Stargate Comp": 1,
+    "Zerg - 3 Base Macro (Hatch First)": 1,
+    "Protoss - Robo Opener": 1
   }
 }

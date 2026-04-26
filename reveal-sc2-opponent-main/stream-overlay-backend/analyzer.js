@@ -582,6 +582,14 @@ function _enrichFromMeta(g, oppName) {
     if (!match) return g;
     // Prefer Black-Book fields that are present, fill in the rest from meta.
     if (!g.opp_strategy && match.opp_strategy) g.opp_strategy = match.opp_strategy;
+    // Opponent race -- meta_database.json stores the authoritative full
+    // race name ("Terran"/"Protoss"/"Zerg"). Black-Book records often
+    // lack opp_race entirely (only the "PROTOSSvTERRAN" Matchup key
+    // carries it), which previously caused the opponent profile table
+    // to fall back to charAt(0) of the Matchup -- yielding the USER's
+    // race ("P") instead of the opponent's. Copy it here so the table,
+    // race filters, and race-derived UI all see the right value.
+    if (!g.opp_race && match.opp_race) g.opp_race = match.opp_race;
     if (!g.Map && match.map) g.Map = match.map;
     if (!g.map && match.map) g.map = match.map;
     if (!g.build_log && Array.isArray(match.build_log)) g.build_log = match.build_log;
@@ -1074,10 +1082,28 @@ router.get('/games/:gameId/build-order', (req, res) => {
     const { game, build } = found;
     const events = parseBuildLogLines(game.build_log || []);
     const earlyEvents = parseBuildLogLines(game.early_build_log || []);
+    // Opponent build log -- captured by buildorder_cli.py (manually or via
+    // /games/:id/opp-build-order). When absent, opp_events comes back
+    // empty and the frontend offers a button to extract on demand.
+    const oppEvents = parseBuildLogLines(game.opp_build_log || []);
+    const oppEarlyEvents = parseBuildLogLines(game.opp_early_build_log || []);
+    // Derive the user's race from the build-name prefix ("Protoss - X",
+    // "Terran - Y", "Zerg - Z", or matchup-prefixed "PvT - ..."). Used by
+    // the frontend to label the timeline as YOUR build, since the
+    // build_log only ever contains the user's milestones.
+    const _myRace = (function () {
+        if (game.my_race) return game.my_race;
+        const b = String(build || '');
+        if (/^Protoss\b/i.test(b) || /^P[vV]/.test(b)) return 'Protoss';
+        if (/^Terran\b/i.test(b)  || /^T[vV]/.test(b)) return 'Terran';
+        if (/^Zerg\b/i.test(b)    || /^Z[vV]/.test(b)) return 'Zerg';
+        return '';
+    })();
     res.json({
         ok: true,
         game_id: game.id || game.game_id,
         my_build: build,
+        my_race: _myRace,
         opp_strategy: game.opp_strategy || null,
         opponent: game.opponent,
         opp_race: game.opp_race,
@@ -1092,11 +1118,119 @@ router.get('/games/:gameId/build-order', (req, res) => {
         // alone and can be backfilled via /macro/backfill.
         macro_breakdown: (game.macro_breakdown && typeof game.macro_breakdown === 'object')
                             ? game.macro_breakdown : null,
-        // The full timeline + a 5-minute slice for fast scouting display.
+        // YOUR full timeline + 5-minute slice (the build_log captured at
+        // replay-watch time only contains the user's milestones).
         events,
         early_events: earlyEvents.length > 0 ? earlyEvents : events.filter(e => e.time <= 300),
+        // OPPONENT's timeline + 5-minute slice. Empty arrays mean the
+        // opp build log hasn't been extracted yet for this game; the
+        // frontend can call POST /games/:id/opp-build-order to populate.
+        opp_events: oppEvents,
+        opp_early_events: oppEarlyEvents.length > 0
+            ? oppEarlyEvents
+            : oppEvents.filter(e => e.time <= 300),
+        opp_build_available: oppEvents.length > 0,
         catalog_available: !!SC2_CATALOG,
     });
+});
+
+// --------------------------------------------------------------
+// OPPONENT BUILD-ORDER EXTRACTION
+// --------------------------------------------------------------
+// Re-parse a single replay file via scripts/buildorder_cli.py to extract
+// the OPPONENT's first-5-min build log (and full build log), then
+// persist them to meta_database.json so subsequent reads are cheap.
+// Mirrors the macro recompute pattern below.
+function spawnBuildOrderCli(args) {
+    return new Promise((resolve, reject) => {
+        const scriptPath = path.join(ROOT, 'scripts', 'buildorder_cli.py');
+        if (!fs.existsSync(scriptPath)) {
+            return reject(new Error(
+                `buildorder_cli.py not found at ${scriptPath}`
+            ));
+        }
+        // Prefer the SC2_PYTHON env var if set (lets users pin a venv);
+        // otherwise fall back to "python" / "python3" on the PATH.
+        const pyCmd = process.env.SC2_PYTHON
+            || (process.platform === 'win32' ? 'python' : 'python3');
+        const proc = spawn(pyCmd, [scriptPath, ...args], {
+            cwd: ROOT, windowsHide: true,
+            env: Object.assign({}, process.env, { PYTHONIOENCODING: 'utf-8' }),
+        });
+        let stdout = '', stderr = '';
+        proc.stdout.on('data', (b) => { stdout += b.toString('utf8'); });
+        proc.stderr.on('data', (b) => { stderr += b.toString('utf8'); });
+        proc.on('error', (err) => reject(err));
+        proc.on('close', (code) => {
+            const records = stdout.split('\n')
+                .map(l => l.trim()).filter(Boolean)
+                .map(l => { try { return JSON.parse(l); } catch (_) { return null; } })
+                .filter(Boolean);
+            if (code !== 0 && records.length === 0) {
+                return reject(new Error(stderr.trim() || `buildorder_cli exit ${code}`));
+            }
+            resolve(records);
+        });
+    });
+}
+
+router.post('/games/:gameId/opp-build-order', (req, res) => {
+    const found = findGameById(req.params.gameId);
+    if (!found) return res.status(404).json({ ok: false, error: 'game not found' });
+    const { game } = found;
+    const fp = game.file_path;
+    if (!fp) return res.status(400).json({ ok: false, error: 'no file_path on this game' });
+    if (!fs.existsSync(fp)) {
+        return res.status(404).json({
+            ok: false, error: `replay file not found on disk: ${fp}`,
+        });
+    }
+    const playerName = (req.body && req.body.player) || getDefaultPlayerName();
+    const cliArgs = ['extract', '--replay', fp];
+    if (playerName) { cliArgs.push('--player', playerName); }
+    spawnBuildOrderCli(cliArgs)
+        .then((records) => {
+            const r = records.find(x => x && x.ok);
+            if (!r) {
+                const err = (records.find(x => x && x.error) || {}).error
+                    || 'no result from buildorder_cli';
+                return res.status(500).json({ ok: false, error: err });
+            }
+            // Persist back to meta DB so we don't re-parse the next read.
+            game.opp_build_log       = Array.isArray(r.opp_build_log)
+                ? r.opp_build_log : [];
+            game.opp_early_build_log = Array.isArray(r.opp_early_build_log)
+                ? r.opp_early_build_log : [];
+            // Backfill the user's logs if they happen to be missing too.
+            if ((!Array.isArray(game.build_log) || game.build_log.length === 0)
+                    && Array.isArray(r.build_log)) {
+                game.build_log = r.build_log;
+            }
+            if ((!Array.isArray(game.early_build_log) || game.early_build_log.length === 0)
+                    && Array.isArray(r.early_build_log)) {
+                game.early_build_log = r.early_build_log;
+            }
+            try { persistMetaDb(); } catch (_) { /* best-effort */ }
+
+            const events      = parseBuildLogLines(game.opp_build_log || []);
+            const earlyEvents = parseBuildLogLines(game.opp_early_build_log || []);
+            res.json({
+                ok: true,
+                opp_events: events,
+                opp_early_events: earlyEvents.length > 0
+                    ? earlyEvents
+                    : events.filter(e => e.time <= 300),
+                opp_race: r.opp_race || game.opp_race || null,
+                opp_name: r.opp_name || game.opponent || null,
+                my_race:  r.my_race || null,
+            });
+        })
+        .catch((err) => {
+            res.status(500).json({
+                ok: false,
+                error: String((err && err.message) || err),
+            });
+        });
 });
 
 // On-demand macro recompute for a single game. Spawns the python

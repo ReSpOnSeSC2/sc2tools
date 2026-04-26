@@ -2384,7 +2384,24 @@ class App(ctk.CTk):
         def render_bo(game: Dict):
             for w in bo_holder.winfo_children():
                 w.destroy()
-            log = game.get("build_log") or []
+            # In the OPPONENT card, the user wants to see the OPPONENT's
+            # build order. Prefer opp_build_log when persisted; fall back
+            # to opp_early_build_log; fall back to the user's build_log
+            # only if no opponent log was captured (legacy games).
+            opp_log = game.get("opp_build_log") or game.get("opp_early_build_log") or []
+            my_log = game.get("build_log") or []
+            using_opp = bool(opp_log)
+            log = opp_log if using_opp else my_log
+            label_txt = (
+                f"OPPONENT'S build order ({len(log)} milestones)"
+                if using_opp
+                else "YOUR build order (opponent's not captured for this game)"
+            )
+            ctk.CTkLabel(
+                bo_holder, text=label_txt,
+                text_color=("#3ddc97" if using_opp else "gray"),
+                font=FONT_SMALL, anchor="w",
+            ).pack(anchor="w", pady=(0, 4))
             if not log:
                 ctk.CTkLabel(
                     bo_holder, text="(no build_log on this game)",

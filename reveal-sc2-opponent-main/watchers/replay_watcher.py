@@ -321,6 +321,17 @@ class ReplayHandler(FileSystemEventHandler):
         opp_clean = opp.name.split("]")[-1].strip() if "]" in opp.name else opp.name
         pulse_id = self.store.black_book.find_by_name(opp_clean) or f"unknown:{opp_clean}"
 
+        # OPPONENT build-log lines, deduped so the timeline shows real
+        # milestones (buildings, upgrades, first-of-each-unit) rather
+        # than N zergling lines. Persisting this alongside the user's
+        # build_log lets the analyzer SPA render the OPPONENT'S build
+        # order in the opponent-card view -- not just the user's.
+        from core.event_extractor import build_log_lines as _bl
+        opp_full_log = _bl(ctx.opp_events, cutoff_seconds=None, dedupe_units=True) \
+            if ctx.opp_events else []
+        opp_early_log = _bl(ctx.opp_events, cutoff_seconds=300, dedupe_units=True) \
+            if ctx.opp_events else []
+
         # Build the analyzer game record (matches the analyzer's schema).
         analyzer_game: Dict[str, Any] = {
             "id": ctx.game_id,
@@ -331,7 +342,10 @@ class ReplayHandler(FileSystemEventHandler):
             "result": me.result if me.result else "Unknown",
             "date": ctx.date_iso,
             "game_length": ctx.length_seconds,
-            "build_log": ctx.build_log,
+            "build_log": ctx.build_log,                 # YOUR build
+            "early_build_log": ctx.early_build_log,     # YOUR early build
+            "opp_build_log": opp_full_log,              # OPPONENT'S build
+            "opp_early_build_log": opp_early_log,       # OPPONENT'S early build
             "file_path": ctx.file_path,
             "opp_pulse_id": pulse_id,
         }
