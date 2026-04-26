@@ -10,7 +10,7 @@ import csv
 import json
 import os
 import threading
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 
 import sc2reader
 
