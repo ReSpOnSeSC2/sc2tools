@@ -1031,18 +1031,60 @@ function computeMedianTimingsForMatchup(games, myRace, oppRace) {
     return computeMatchupAwareMedianTimings(filtered, myRace);
 }
 
+// Resolve `myRace` for a single game. Falls back through the layered
+// schema this app sees in the wild:
+//   1. Explicit `my_race` field (set by the live overlay watcher).
+//   2. Black-Book `Matchup` key prefix ("PvT", "PROTOSSvTERRAN", ...).
+//   3. `my_build` prefix ("Zerg - 12 Pool", "Protoss - Stargate Opener").
+//   4. `build`/`build_name` prefix (per-game alias of the same).
+// Returns 'P'/'T'/'Z' or '' if no signal is available.
+function _resolveMyRaceFromGame(g) {
+    if (!g) return '';
+    const direct = TimingCatalog.normalizeRace(g.my_race);
+    if (direct) return direct;
+    const mu = g.Matchup || g.matchup || '';
+    if (mu) {
+        // "PvT" -> "P", "PROTOSSvTERRAN" -> "P", "ZvP" -> "Z".
+        const head = String(mu).split(/[vV]/)[0].trim();
+        if (head) {
+            const r = TimingCatalog.normalizeRace(head);
+            if (r) return r;
+            // Try the very first character ("P", "T", "Z") so prefixes
+            // like "PvT" still resolve when the head doesn't normalize.
+            const first = TimingCatalog.normalizeRace(head[0]);
+            if (first) return first;
+        }
+    }
+    for (const field of ['my_build', 'build', 'build_name']) {
+        const bn = String(g[field] || '');
+        if (!bn) continue;
+        // Build names start with "Zerg - ...", "Protoss - ...", "Terran - ...".
+        if (/^zerg/i.test(bn))    return 'Z';
+        if (/^protoss/i.test(bn)) return 'P';
+        if (/^terran/i.test(bn))  return 'T';
+        // Or PvT-style matchup prefix on the build itself.
+        const mhead = bn.split(/[vV]/)[0].trim();
+        const r = TimingCatalog.normalizeRace(mhead) || TimingCatalog.normalizeRace(mhead[0]);
+        if (r) return r;
+    }
+    return '';
+}
+
 // Resolve `myRace` for an opponent-detail payload. Prefer the most
-// recent game's `my_race`, fall back to the most common one across all
-// games. Returns the normalized 'P'/'T'/'Z' or '' if unknown.
+// recent game's resolved race, fall back to the most common one across
+// all games. Returns 'P'/'T'/'Z' or '' if unknown. Reads through
+// `_resolveMyRaceFromGame` so it picks up Matchup / my_build / build
+// fallbacks when the explicit `my_race` field is missing (which is
+// the common case for Black-Book-only records).
 function _resolveMyRace(games) {
     if (!games || games.length === 0) return '';
     for (const g of games) {
-        const r = TimingCatalog.normalizeRace(g.my_race);
+        const r = _resolveMyRaceFromGame(g);
         if (r) return r;
     }
     const c = Object.create(null);
     for (const g of games) {
-        const r = TimingCatalog.normalizeRace(g.my_race);
+        const r = _resolveMyRaceFromGame(g);
         if (r) c[r] = (c[r] || 0) + 1;
     }
     let best = '';
