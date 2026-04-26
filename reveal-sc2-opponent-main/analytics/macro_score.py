@@ -262,6 +262,18 @@ def _count_ability(abilities: List[Dict], names: set) -> int:
     return sum(1 for a in abilities if a.get("ability_name") in names)
 
 
+def _count_category(abilities: List[Dict], category: str) -> int:
+    """Count ability events whose pre-classified ``category`` matches.
+
+    The extractor (`core.event_extractor.extract_macro_events`) tags
+    every macro ability with ``category in {'inject','chrono','mule'}``.
+    Counting via the tag is robust to inject/chrono/MULE name variations
+    across replay versions ("ChronoBoostEnergyCost" vs "ChronoBoost" vs
+    "Effect_ChronoBoost").
+    """
+    return sum(1 for a in abilities if a.get("category") == category)
+
+
 def _mineral_float_count(stats: List[Dict]) -> int:
     return sum(
         1 for s in stats
@@ -336,7 +348,9 @@ def compute_macro_score(
     if race == "Zerg":
         alive = _alive_seconds(bases, BASE_TYPES_ZERG, game_end)
         expected = _expected(alive, INJECT_PERIOD_SEC)
-        actual = _count_ability(abilities, {"InjectLarva", "SpawnLarva", "QueenSpawnLarva"})
+        actual = _count_category(abilities, "inject")
+        if actual == 0:
+            actual = _count_ability(abilities, {"InjectLarva", "SpawnLarva", "QueenSpawnLarva"})
         race_penalty = _efficiency_penalty(actual, expected, INJECT_MAX_PENALTY, grace_cycles=4)
         raw["injects_actual"] = actual
         raw["injects_expected"] = expected
@@ -352,7 +366,9 @@ def compute_macro_score(
     elif race == "Protoss":
         alive = _alive_seconds(bases, BASE_TYPES_PROTOSS, game_end)
         expected = _expected(alive, CHRONO_PERIOD_SEC)
-        actual = _count_ability(abilities, {"ChronoBoostEnergyCost", "ChronoBoost"})
+        actual = _count_category(abilities, "chrono")
+        if actual == 0:
+            actual = _count_ability(abilities, {"ChronoBoostEnergyCost", "ChronoBoost"})
         race_penalty = _efficiency_penalty(actual, expected, CHRONO_MAX_PENALTY, grace_cycles=5)
         raw["chronos_actual"] = actual
         raw["chronos_expected"] = expected
@@ -368,7 +384,9 @@ def compute_macro_score(
     elif race == "Terran":
         alive = _alive_seconds(bases, BASE_TYPES_TERRAN, game_end)
         expected = _expected(alive, MULE_PERIOD_SEC)
-        actual = _count_ability(abilities, {"CalldownMULE"})
+        actual = _count_category(abilities, "mule")
+        if actual == 0:
+            actual = _count_ability(abilities, {"CalldownMULE"})
         race_penalty = _efficiency_penalty(actual, expected, MULE_MAX_PENALTY, grace_cycles=2)
         raw["mules_actual"] = actual
         raw["mules_expected"] = expected
@@ -425,4 +443,3 @@ def macro_score_color(score: Optional[int]) -> str:
     if score >= 50:
         return "#FBC02D"
     return "#EF5350"
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
