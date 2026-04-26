@@ -2,6 +2,10 @@ import time
 import os
 import json
 import requests  # <-- New import for handling HTTP POST
+
+# Atomic JSON writer -- prevents partial writes when SC2 quits and our
+# process tree is torn down mid-write.
+from core.atomic_io import atomic_write_json
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -112,9 +116,9 @@ def update_single_replay(game_data):
                 "Duration": game_data.get("duration")
             })
 
-            # FIXED: Also changed writing encoding to 'utf-8-sig' for consistency
-            with open(HISTORY_FILE, 'w', encoding='utf-8-sig') as f:
-                json.dump(history, f, indent=4)
+            # Atomic write: tmp + os.replace. Survives mid-write
+            # process termination without leaving a half-written file.
+            atomic_write_json(HISTORY_FILE, history, indent=4, encoding='utf-8-sig')
             print(f"Local JSON Updated! Added game vs {opp_name} ({game_data['result']}).")
         else:
             print("Duplicate game detected. Skipping local JSON update.")

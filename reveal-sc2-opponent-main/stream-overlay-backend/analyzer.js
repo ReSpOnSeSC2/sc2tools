@@ -47,6 +47,11 @@ try {
     SC2_CATALOG = null;
 }
 
+// Matchup-aware timing taxonomy. Same module the SPA frontend loads at
+// `/static/analyzer/timing_catalog.js` -- one source of truth, no drift.
+// Mirrors `analytics/timing_catalog.py` in the Python repos.
+const TimingCatalog = require('./public/analyzer/timing_catalog');
+
 // --------------------------------------------------------------
 // PATHS
 // --------------------------------------------------------------
@@ -760,19 +765,15 @@ function opponents(query) {
 
 
 // --------------------------------------------------------------
-// DNA helpers (median build-log timings + recency-weighted predict)
+// DNA helpers (matchup-aware median timings + recency-weighted predict)
 // --------------------------------------------------------------
 
 // Build_log line regex: "[m:ss] BuildingName".
 const _TIMING_RE = /^\[(\d+):(\d{2})\]\s+(\w+)/;
 
-// Tokens we report median timings for. Substring match against the
-// building name token, so "Pool" matches "SpawningPool", "Robo" matches
-// "RoboticsFacility", "Twilight" matches "TwilightCouncil", etc.
-const KEY_TIMING_BUILDINGS = [
-    'Pool','Gateway','Barracks','Hatchery','Nexus','CommandCenter',
-    'Robo','Stargate','Spire','Twilight','Forge'
-];
+// Trend thresholds (mirror analytics.opponent_profiler._compute_trend).
+const _TREND_ABS_SECONDS = 5.0;
+const _TREND_REL_FRACTION = 0.05;
 
 function _formatSeconds(sec) {
     const t = Math.max(0, Math.floor(sec));
@@ -786,39 +787,281 @@ function _median(arr) {
     return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2;
 }
 
-// Pull median first-occurrence timings out of `games[i].build_log`.
-// `build_log` can be either snake_case (meta_database) or capitalised
-// (MyOpponentHistory). Falls back gracefully if the field is absent.
-function parseBuildLogTimings(games) {
-    const perToken = Object.fromEntries(KEY_TIMING_BUILDINGS.map(t => [t, []]));
-    for (const g of games || []) {
-        const log = g.build_log || g.BuildLog || g.Build_Log || g.buildLog;
-        if (!Array.isArray(log) || log.length === 0) continue;
-        const seenInGame = {};
-        for (const line of log) {
-            const m = _TIMING_RE.exec(String(line || ''));
-            if (!m) continue;
-            const sec = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-            const lower = m[3].toLowerCase();
-            for (const tok of KEY_TIMING_BUILDINGS) {
-                if (lower.includes(tok.toLowerCase())) {
-                    if (seenInGame[tok] === undefined || sec < seenInGame[tok]) {
-                        seenInGame[tok] = sec;
-                    }
-                }
-            }
-        }
-        for (const [tok, sec] of Object.entries(seenInGame)) perToken[tok].push(sec);
+// Inclusive method (matches Python statistics.quantiles(method='inclusive')).
+// p=0.25 returns the 25th percentile, p=0.75 the 75th. Result stays inside
+// [min, max] of the sample, which avoids confusing the UI.
+function _percentileInclusive(sortedAsc, p) {
+    const n = sortedAsc.length;
+    if (n === 0) return null;
+    if (n === 1) return sortedAsc[0];
+    const rank = p * (n - 1);
+    const lo = Math.floor(rank);
+    const hi = Math.ceil(rank);
+    if (lo === hi) return sortedAsc[lo];
+    const frac = rank - lo;
+    return sortedAsc[lo] + frac * (sortedAsc[hi] - sortedAsc[lo]);
+}
+
+// Mann-Kendall-lite over chronologically ordered samples. < 4 samples
+// returns 'unknown'; otherwise compares the medians of the two halves
+// against an absolute (5s) and relative (5%) threshold floor.
+function _computeTrend(secondsChrono) {
+    const n = secondsChrono.length;
+    if (n < 4) return 'unknown';
+    const mid = Math.floor(n / 2);
+    const m1 = _median(secondsChrono.slice(0, mid));
+    const m2 = _median(secondsChrono.slice(mid));
+    const diff = m2 - m1;
+    const threshold = Math.max(_TREND_ABS_SECONDS, _TREND_REL_FRACTION * m1);
+    if (Math.abs(diff) < threshold) return 'stable';
+    return diff > 0 ? 'later' : 'earlier';
+}
+
+function _emptyTokenRow(token, source) {
+    return {
+        sampleCount: 0,
+        medianSeconds: null, medianDisplay: '-',
+        p25Seconds: null,    p25Display:    '-',
+        p75Seconds: null,    p75Display:    '-',
+        minSeconds: null,    minDisplay:    '-',
+        maxSeconds: null,    maxDisplay:    '-',
+        lastSeenSeconds: null, lastSeenDisplay: '-',
+        winRateWhenBuilt: null,
+        trend: 'unknown',
+        source: source,
+        samples: [],
+    };
+}
+
+// Build-log fields can come in several casings / formats from the
+// upstream JSON files. Resolve once.
+function _readBuildLog(g, key) {
+    const cap = key.charAt(0).toUpperCase() + key.slice(1);
+    return g[key] || g[cap] || g[key + 'Log'] || g[cap + 'Log'] || null;
+}
+
+// Walk a build_log and return the smallest seconds at which a line
+// whose name contains `tokenSubstring` appears (first-occurrence wins).
+function _firstOccurrenceSeconds(log, tokenSubstring) {
+    if (!Array.isArray(log) || log.length === 0) return null;
+    const tokLower = tokenSubstring.toLowerCase();
+    let best = null;
+    for (const line of log) {
+        const m = _TIMING_RE.exec(String(line || ''));
+        if (!m) continue;
+        const name = m[3].toLowerCase();
+        if (name.indexOf(tokLower) === -1) continue;
+        const sec = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+        if (best === null || sec < best) best = sec;
     }
+    return best;
+}
+
+/**
+ * Compute matchup-aware median first-occurrence timings.
+ *
+ * Mirrors `OpponentProfiler._compute_median_timings` in
+ * `analytics/opponent_profiler.py`. For each game in `games`:
+ *   1. Derive the per-game matchup from `g.opp_race` and `myRace`.
+ *   2. `relevantTokens(myRace, oppRace)` decides which tokens are eligible
+ *      for THAT game (PvZ never collects Barracks samples).
+ *   3. Source the timing from `opp_build_log` for opponent-race tokens
+ *      and `build_log` for the user's-race tokens.
+ *
+ * Results are keyed by `internalName` and ordered by
+ * `relevantTokens(myRace, modalOppRace)`. Tokens with no samples still
+ * appear with `sampleCount === 0`.
+ *
+ * Returns `{}` if `myRace` is unknown.
+ */
+function computeMatchupAwareMedianTimings(games, myRace) {
+    const my = TimingCatalog.normalizeRace(myRace);
+    if (!my) return {};
+    const list = games || [];
+
+    // Modal opponent race for canonical ordering.
+    const oppCount = Object.create(null);
+    for (const g of list) {
+        const r = TimingCatalog.normalizeRace(g.opp_race);
+        if (r) oppCount[r] = (oppCount[r] || 0) + 1;
+    }
+    let modalOpp = '';
+    let modalCount = -1;
+    for (const r of Object.keys(oppCount)) {
+        if (oppCount[r] > modalCount) { modalCount = oppCount[r]; modalOpp = r; }
+    }
+
+    const ownInternalSet = new Set(
+        TimingCatalog.RACE_BUILDINGS[my].map(t => t.internalName)
+    );
+
+    if (!modalOpp) {
+        // No usable opp_race in any game -- return own-race tokens with empty rows.
+        const out = {};
+        TimingCatalog.RACE_BUILDINGS[my].forEach(tok => {
+            out[tok.internalName] = _emptyTokenRow(
+                tok, ownInternalSet.has(tok.internalName) ? 'build_log' : 'opp_build_log'
+            );
+        });
+        return out;
+    }
+
+    const ordering = TimingCatalog.relevantTokens(my, modalOpp);
+    if (ordering.length === 0) return {};
+
+    // Per-token sample collection.
+    const samples = Object.create(null);
+    for (const tok of ordering) samples[tok.internalName] = [];
+
+    for (const g of list) {
+        const oppRace = TimingCatalog.normalizeRace(g.opp_race);
+        if (!oppRace) continue;
+        const eligible = TimingCatalog.relevantTokens(my, oppRace);
+        if (eligible.length === 0) continue;
+        const dateStr = g.date || g.Date || '';
+        const mapName = g.map || g.Map || '';
+        const result = g.result || g.Result || '';
+        const won = (result === 'Win' || result === 'Victory');
+        const gameId = g.id || g.game_id || g.GameId || g.gameId || null;
+
+        const myLog = _readBuildLog(g, 'build_log');
+        const oppLog = _readBuildLog(g, 'opp_build_log');
+
+        for (const tok of eligible) {
+            if (samples[tok.internalName] === undefined) continue;
+            const log = ownInternalSet.has(tok.internalName) ? myLog : oppLog;
+            const sec = _firstOccurrenceSeconds(log, tok.token);
+            if (sec === null) continue;
+            samples[tok.internalName].push({
+                seconds: sec,
+                display: _formatSeconds(sec),
+                date: dateStr,
+                map: mapName,
+                won: won,
+                result: result || '',
+                gameId: gameId,
+                oppRace: oppRace,
+                myRace: my,
+            });
+        }
+    }
+
+    // Build the output in canonical order.
     const out = {};
-    for (const tok of KEY_TIMING_BUILDINGS) {
-        const samples = perToken[tok];
-        const med = _median(samples);
-        out[tok] = (med == null)
-            ? { medianSeconds: null, medianDisplay: '-', sampleCount: 0 }
-            : { medianSeconds: med, medianDisplay: _formatSeconds(med), sampleCount: samples.length };
+    for (const tok of ordering) {
+        const source = ownInternalSet.has(tok.internalName) ? 'build_log' : 'opp_build_log';
+        const list2 = samples[tok.internalName];
+        if (!list2 || list2.length === 0) {
+            out[tok.internalName] = _emptyTokenRow(tok, source);
+            continue;
+        }
+        list2.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+        const secondsList = list2.map(s => s.seconds);
+        const sortedAsc = [...secondsList].sort((a, b) => a - b);
+        const n = secondsList.length;
+        const med = _median(secondsList);
+        const p25 = Math.round(_percentileInclusive(sortedAsc, 0.25));
+        const p75 = Math.round(_percentileInclusive(sortedAsc, 0.75));
+        const mn = sortedAsc[0];
+        const mx = sortedAsc[n - 1];
+        const lastSeen = list2[list2.length - 1].seconds;
+        const winsCount = list2.reduce((a, s) => a + (s.won ? 1 : 0), 0);
+
+        out[tok.internalName] = {
+            sampleCount: n,
+            medianSeconds: med,
+            medianDisplay: _formatSeconds(med),
+            p25Seconds: p25,
+            p25Display: _formatSeconds(p25),
+            p75Seconds: p75,
+            p75Display: _formatSeconds(p75),
+            minSeconds: mn,
+            minDisplay: _formatSeconds(mn),
+            maxSeconds: mx,
+            maxDisplay: _formatSeconds(mx),
+            lastSeenSeconds: lastSeen,
+            lastSeenDisplay: _formatSeconds(lastSeen),
+            winRateWhenBuilt: winsCount / n,
+            trend: _computeTrend(secondsList),
+            source: source,
+            samples: list2.slice().reverse(),
+        };
     }
     return out;
+}
+
+
+/**
+ * Per-matchup wrapper around `computeMatchupAwareMedianTimings`.
+ *
+ * Mirrors `OpponentProfiler._compute_median_timings_for_matchup` in
+ * `analytics/opponent_profiler.py`. Filters `games` to those whose
+ * `opp_race` matches the requested race before delegating, so the
+ * resulting timings dict is scoped to that matchup only. Token order
+ * is forced to the requested matchup so the same building shows up in
+ * the same column whether the matchup has 1 game or 100.
+ *
+ * Returns `{}` when `myRace` is unknown. When `oppRace` is unknown /
+ * blank, falls back to the all-matchup view (matches the Python
+ * wrapper's behavior - convenient for the "All" chip case).
+ */
+function computeMedianTimingsForMatchup(games, myRace, oppRace) {
+    const my  = TimingCatalog.normalizeRace(myRace);
+    const opp = TimingCatalog.normalizeRace(oppRace);
+    if (!my) return {};
+    if (!opp) return computeMatchupAwareMedianTimings(games, myRace);
+    const filtered = (games || []).filter(g =>
+        TimingCatalog.normalizeRace(g.opp_race) === opp
+    );
+    if (filtered.length === 0) {
+        // Empty-shape: own-race tokens with sample_count=0, so the UI
+        // can render "no samples in this matchup" cards in stable slots.
+        const out = {};
+        const ownInternalSet = new Set(
+            TimingCatalog.RACE_BUILDINGS[my].map(t => t.internalName)
+        );
+        const ordering = TimingCatalog.relevantTokens(my, opp);
+        for (const tok of ordering) {
+            const source = ownInternalSet.has(tok.internalName)
+                ? 'build_log' : 'opp_build_log';
+            out[tok.internalName] = _emptyTokenRow(tok, source);
+        }
+        return out;
+    }
+    return computeMatchupAwareMedianTimings(filtered, myRace);
+}
+
+// Resolve `myRace` for an opponent-detail payload. Prefer the most
+// recent game's `my_race`, fall back to the most common one across all
+// games. Returns the normalized 'P'/'T'/'Z' or '' if unknown.
+function _resolveMyRace(games) {
+    if (!games || games.length === 0) return '';
+    for (const g of games) {
+        const r = TimingCatalog.normalizeRace(g.my_race);
+        if (r) return r;
+    }
+    const c = Object.create(null);
+    for (const g of games) {
+        const r = TimingCatalog.normalizeRace(g.my_race);
+        if (r) c[r] = (c[r] || 0) + 1;
+    }
+    let best = '';
+    let bestN = -1;
+    for (const r of Object.keys(c)) if (c[r] > bestN) { bestN = c[r]; best = r; }
+    return best;
+}
+
+function _resolveModalOppRace(games) {
+    if (!games || games.length === 0) return '';
+    const c = Object.create(null);
+    for (const g of games) {
+        const r = TimingCatalog.normalizeRace(g.opp_race);
+        if (r) c[r] = (c[r] || 0) + 1;
+    }
+    let best = '';
+    let bestN = -1;
+    for (const r of Object.keys(c)) if (c[r] > bestN) { bestN = c[r]; best = r; }
+    return best;
 }
 
 // Recency-weighted distribution over `opp_strategy`. Last 10 games
@@ -927,7 +1170,43 @@ function opponentDetail(pulseId) {
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
 
-    const medianTimings = parseBuildLogTimings(games);
+    // Matchup-aware median timings. `myRace` and `oppRaceModal` drive
+    // canonical token ordering and the matchup label the SPA renders.
+    const myRace = _resolveMyRace(games);
+    const oppRaceModal = _resolveModalOppRace(games);
+    const medianTimings = computeMatchupAwareMedianTimings(games, myRace);
+    const medianTimingsOrder = Object.keys(medianTimings);
+    const matchupLabel = TimingCatalog.matchupLabel(myRace, oppRaceModal);
+
+    // Per-matchup chip data + per-matchup timing payload. The SPA's
+    // `MedianTimingsGrid` reads `matchupCounts` to render chip labels
+    // (e.g. "PvZ (8)") and reads `matchupTimings[label]` when the user
+    // selects a specific matchup. The default "All" chip continues to
+    // use the unfiltered `medianTimings` field (so legacy clients keep
+    // working unchanged).
+    const matchupCounts = {};
+    if (myRace) {
+        for (const g of games) {
+            const r = TimingCatalog.normalizeRace(g.opp_race);
+            if (!r) continue;
+            const ml = TimingCatalog.matchupLabel(myRace, r);
+            if (!ml) continue;
+            matchupCounts[ml] = (matchupCounts[ml] || 0) + 1;
+        }
+    }
+    const matchupTimings = {};
+    if (myRace) {
+        for (const ml of Object.keys(matchupCounts)) {
+            // Pull the opp_race out of the label tail ("PvZ" -> "Z").
+            const opp = ml.slice(-1);
+            const t = computeMedianTimingsForMatchup(games, myRace, opp);
+            matchupTimings[ml] = {
+                timings: t,
+                order: Object.keys(t),
+            };
+        }
+    }
+
     const last5Games = games.slice(0, 5);
     const predictedStrategies = recencyWeightedStrategies(games);
 
@@ -940,6 +1219,12 @@ function opponentDetail(pulseId) {
         games,
         topStrategies,
         medianTimings,
+        medianTimingsOrder,
+        matchupLabel,
+        matchupCounts,
+        matchupTimings,
+        myRace,
+        oppRaceModal,
         last5Games,
         predictedStrategies,
     };

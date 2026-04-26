@@ -100,6 +100,14 @@ except Exception:
     HAS_PSE = False
 
 
+from pathlib import Path  # noqa: E402  -- TIMING_CARDS_PATCH_V1 imports
+from analytics.timing_catalog import (  # noqa: E402
+    RACE_BUILDINGS,
+    TimingToken,
+    matchup_label as timing_matchup_label,
+    normalize_race,
+)
+
 # =====================================================================
 # THEME / FONTS
 # =====================================================================
@@ -125,6 +133,125 @@ def wr_color(wins: int, total: int) -> str:
     if total == 0:
         return COLOR_NEUTRAL
     return COLOR_WIN if (wins / total) >= 0.5 else COLOR_LOSS
+
+# --- Timing-card extras (TIMING_CARDS_PATCH_V1) ----------------------
+# Bold variant of FONT_BODY for in-card emphasis (token names, labels).
+FONT_BOLD = ("Arial", 12, "bold")
+# Hero number on each timing card; readable from across the screen so the
+# median time pops out at a glance.
+FONT_LARGE = ("Arial", 18, "bold")
+
+
+def _resolve_icons_dir() -> Optional[str]:
+    """Return the first existing SC2-Overlay/icons directory, or None.
+
+    Resolution order: this repo's own ``SC2-Overlay/icons`` (the canonical
+    home of the asset set), then the sibling ``SC2Replay-Analyzer`` copy
+    in case both repos live next to each other on disk.
+    """
+    here = Path(__file__).resolve()
+    repo_root = here.parents[1]            # gui/analyzer_app.py -> repo
+    parent = repo_root.parent              # SC2TOOLS/
+    candidates = [
+        repo_root / "SC2-Overlay" / "icons",
+        parent / "SC2Replay-Analyzer" / "SC2-Overlay" / "icons",
+    ]
+    for path in candidates:
+        try:
+            if path.is_dir():
+                return str(path)
+        except OSError:
+            continue
+    return None
+
+
+ICONS_DIR: Optional[str] = _resolve_icons_dir()
+
+
+class Tooltip:
+    """Hover tooltip attached to a single widget.
+
+    Show on ``<Enter>``, hide on ``<Leave>`` or any mouse press. The tip
+    is a borderless ``Toplevel`` so it can escape the parent's clipping
+    rectangle. Used by the matchup-aware timing cards in the Opponents
+    tab to surface min/max/last-seen on hover.
+    """
+
+    _DELAY_MS = 350
+
+    def __init__(self, widget: tk.Misc, text: str = "") -> None:
+        self._widget = widget
+        self._text = text or ""
+        self._after_id: Optional[str] = None
+        self._tip: Optional[tk.Toplevel] = None
+        self._label: Optional[tk.Label] = None
+        widget.bind("<Enter>", self._on_enter, add="+")
+        widget.bind("<Leave>", self._on_leave, add="+")
+        widget.bind("<ButtonPress>", self._on_leave, add="+")
+
+    def update_text(self, text: str) -> None:
+        self._text = text or ""
+        if self._tip is not None and self._label is not None:
+            try:
+                self._label.configure(text=self._text)
+            except tk.TclError:
+                self._tip = None
+                self._label = None
+
+    def _on_enter(self, _event: object = None) -> None:
+        self._cancel_pending()
+        if not self._text:
+            return
+        self._after_id = self._widget.after(self._DELAY_MS, self._show)
+
+    def _on_leave(self, _event: object = None) -> None:
+        self._cancel_pending()
+        self._hide()
+
+    def _cancel_pending(self) -> None:
+        if self._after_id is not None:
+            try:
+                self._widget.after_cancel(self._after_id)
+            except tk.TclError:
+                pass
+            self._after_id = None
+
+    def _show(self) -> None:
+        if self._tip is not None or not self._text:
+            return
+        try:
+            x = self._widget.winfo_rootx() + 14
+            y = self._widget.winfo_rooty() + self._widget.winfo_height() + 6
+        except tk.TclError:
+            return
+        try:
+            tip = tk.Toplevel(self._widget)
+        except tk.TclError:
+            return
+        tip.wm_overrideredirect(True)
+        try:
+            tip.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        tip.geometry(f"+{x}+{y}")
+        label = tk.Label(
+            tip, text=self._text, justify="left",
+            background="#1f1f1f", foreground="#e6e6e6",
+            relief="solid", borderwidth=1,
+            font=("Arial", 10), padx=8, pady=4,
+        )
+        label.pack()
+        self._tip = tip
+        self._label = label
+
+    def _hide(self) -> None:
+        if self._tip is not None:
+            try:
+                self._tip.destroy()
+            except tk.TclError:
+                pass
+        self._tip = None
+        self._label = None
 
 
 # =====================================================================
@@ -968,6 +1095,22 @@ class App(ctk.CTk):
         self._opp_selected: Optional[str] = None
         self._opp_list_frame: Optional[ctk.CTkScrollableFrame] = None
         self._opp_detail_frame: Optional[ctk.CTkScrollableFrame] = None
+
+        # ---- Median-key-timings card state (TIMING_CARDS_PATCH_V1) ----
+        # Per-tab UI state (segmented filter chip, etc.). Survives section
+        # re-renders so toggling Both/Opp tech/Your tech doesn't reset on
+        # every profile load.
+        self._opp_ui_state: Dict[str, object] = {
+            "timing_source_filter": "Both",
+        }
+        # CTkImage cache keyed by token internal_name. Process-lifetime so
+        # the icons survive Opponents-tab re-renders without re-decoding
+        # the underlying PNGs (which flickers visibly).
+        self._timing_icon_cache: Dict[str, "ctk.CTkImage"] = {}
+        # Owned by `_render_opp_timings_card`. The source-filter callback
+        # reads/writes this dict so it can rebuild the grid body without
+        # re-deriving the profile payload.
+        self._timing_grid_state: Dict[str, object] = {}
         # Track which tabs need re-rendering because the underlying DB
         # changed since they were last drawn. Empty set == all clean.
         self._dirty_tabs: Set[str] = set()
@@ -1162,9 +1305,8 @@ class App(ctk.CTk):
                     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                         conf = json.load(f) or {}
                 conf["season_filter"] = self.season_filter_var.get()
-                os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-                with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                    json.dump(conf, f)
+                from core.atomic_io import atomic_write_json
+                atomic_write_json(CONFIG_FILE, conf, indent=None)
             except Exception as e:
                 print(f"[Analyzer] Season filter save failed: {e}")
         except Exception as e:
@@ -1213,8 +1355,8 @@ class App(ctk.CTk):
                     except Exception:
                         conf = {}
                 conf["last_player"] = choice
-                with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                    json.dump(conf, f)
+                from core.atomic_io import atomic_write_json
+                atomic_write_json(CONFIG_FILE, conf, indent=None)
             except Exception as exc:
                 print(f"[Analyzer] Config save failed: {exc}")
 
@@ -2163,7 +2305,13 @@ class App(ctk.CTk):
             ).pack(pady=30)
             return
 
-        prof = prof_obj.profile(name)
+        # Pass my_race so the timings grid can run matchup-aware. The
+        # race is inferred from the build-name prefixes on this
+        # opponent's games (builds are catalogued as "Zerg - ...",
+        # "Protoss - ...", "Terran - ..."), which is the only
+        # race-of-record stored on the game payload itself today.
+        my_race = self._infer_my_race_for_opponent(name)
+        prof = prof_obj.profile(name, my_race=my_race)
         if prof["total"] == 0:
             ctk.CTkLabel(
                 self._opp_detail_frame,
@@ -2495,44 +2643,1022 @@ class App(ctk.CTk):
             ).pack(side="left")
         ctk.CTkLabel(card, text="", height=4).pack()
 
+    # ====================================================================
+    # Median key timings - matchup-aware card grid (TIMING_CARDS_PATCH_V1)
+    # ====================================================================
+    #
+    # Mirrors the SPA `MedianTimingsGrid` (the ``analyzer/index.html``
+    # React component) and the SC2Replay-Analyzer desktop port. The card
+    # body, source filter, drilldown modal, and tooltip wiring all live
+    # in this section so the rest of the Opponents tab stays untouched.
+    # ====================================================================
+
+    # Trend glyph + accent color, matching the SPA's TREND_GLYPHS table so
+    # the desktop and web visuals stay in lockstep when a user has both
+    # open side-by-side.
+    _TIMING_TREND_GLYPHS = {
+        "later":   {"glyph": "▲", "label": "trending later",   "color": "#F79E6C"},
+        "earlier": {"glyph": "▼", "label": "trending earlier", "color": "#3DDC97"},
+        "stable":  {"glyph": "–", "label": "stable",           "color": "#9AA3B2"},
+        "unknown": {"glyph": "·", "label": "not enough data",  "color": "#5D6677"},
+    }
+
+    @staticmethod
+    def _wr_pill_color(rate: Optional[float], n: int) -> str:
+        """Win-rate-when-built pill color. Greys out the no-confidence case."""
+        if rate is None or not n:
+            return "#5D6677"
+        if rate >= 0.6:
+            return "#3DDC97"
+        if rate >= 0.4:
+            return "#F4C95D"
+        return "#EF476F"
+
+    def _infer_my_race_for_opponent(self, opp_name: str) -> str:
+        """Return the user's modal race across this opponent's games.
+
+        Build names in this app are catalogued by race prefix
+        (``"Zerg - 12 Pool"``, ``"Protoss - Stargate Opener"``,
+        ``"Terran - 1-1-1 Standard"``), so the modal prefix is a reliable
+        proxy for the user's race when the per-game payload doesn't carry
+        ``my_race`` directly. Returns ``""`` if the games have no race-
+        prefixed builds (which keeps timings empty rather than guessing).
+        """
+        from collections import Counter
+        try:
+            prof_obj = self.analyzer.get_profiler()
+            games = prof_obj._games_for(opp_name) if prof_obj else []  # noqa: SLF001
+        except Exception:
+            return ""
+        counts: Counter = Counter()
+        for g in games or []:
+            bn = (g.get("my_build") or "")
+            if bn.startswith("Zerg"):
+                counts["Z"] += 1
+            elif bn.startswith("Protoss"):
+                counts["P"] += 1
+            elif bn.startswith("Terran"):
+                counts["T"] += 1
+        if not counts:
+            return ""
+        return counts.most_common(1)[0][0]
+
+    def _building_icon_path(self, icon_file: str) -> Optional[str]:
+        """Resolve ``icon_file`` against ``ICONS_DIR/buildings``, if reachable."""
+        if not ICONS_DIR or not icon_file:
+            return None
+        candidate = os.path.join(ICONS_DIR, "buildings", icon_file)
+        return candidate if os.path.exists(candidate) else None
+
+    def _get_timing_icon(
+        self, internal_name: str, icon_file: str
+    ) -> Optional["ctk.CTkImage"]:
+        """Return a cached 40x40 CTkImage for this token, or None on failure.
+
+        Process-lifetime cache; failures (missing file, Pillow not
+        installed, decode error) are memoised as ``None`` so we don't
+        retry the file system on every re-render.
+        """
+        cache = self._timing_icon_cache
+        if internal_name in cache:
+            return cache[internal_name]
+
+        path = self._building_icon_path(icon_file)
+        if not path:
+            cache[internal_name] = None
+            return None
+
+        try:
+            from PIL import Image  # Pillow is already a dep in this app
+            img = Image.open(path).convert("RGBA")
+            ck_img = ctk.CTkImage(light_image=img, dark_image=img, size=(40, 40))
+        except Exception as exc:
+            try:
+                logger = getattr(self.analyzer, "error_logger", None)
+                if logger is not None:
+                    logger.errors.append({
+                        "file": path,
+                        "error": f"timing icon load failed: {exc}",
+                    })
+            except Exception:
+                pass
+            ck_img = None
+        cache[internal_name] = ck_img
+        return ck_img
+
+    def _active_matchup_for_opp(self, opp_name: str, available: List[str]) -> str:
+        """Return the persisted matchup chip for this opponent, or "All".
+
+        Falls back to "All" if the persisted value isn't in ``available``
+        (e.g. the chip was valid before but the matchup has since dropped
+        out under the season filter).
+        """
+        per_opp = self._opp_ui_state.setdefault("per_opp", {})
+        bucket = per_opp.setdefault(opp_name, {})
+        chosen = str(bucket.get("matchup") or "All")
+        if chosen != "All" and chosen not in available:
+            chosen = "All"
+            bucket["matchup"] = chosen
+        return chosen
+
+    def _set_active_matchup_for_opp(self, opp_name: str, matchup: str) -> None:
+        per_opp = self._opp_ui_state.setdefault("per_opp", {})
+        per_opp.setdefault(opp_name, {})["matchup"] = matchup or "All"
+
+    def _matchup_chip_labels(self, prof: Dict) -> List[Tuple[str, int]]:
+        """Return ``[(label, count), ...]`` chip data sorted by count desc."""
+        counts = prof.get("matchup_counts") or {}
+        if not isinstance(counts, dict) or not counts:
+            return []
+        return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+
+    def _profile_for_matchup(
+        self, prof: Dict, opp_name: str, matchup: str,
+    ) -> Dict:
+        """Return a profile dict whose timings are filtered to ``matchup``.
+
+        ``matchup == "All"`` returns ``prof`` unchanged. For a specific
+        label like ``"PvZ"`` we re-run
+        ``OpponentProfiler._compute_median_timings_for_matchup`` over
+        that opponent's games and splice the result into a shallow copy
+        of ``prof`` so the rest of the rendering pipeline (which reads
+        ``median_timings`` / ``median_timings_order`` / ``matchup_label``
+        without caring how they were derived) Just Works.
+        """
+        if not matchup or matchup == "All":
+            return prof
+
+        from analytics.opponent_profiler import OpponentProfiler
+
+        my_race = prof.get("my_race") or self._infer_my_race_for_opponent(opp_name)
+        opp_race = (matchup[-1:] or "").upper()
+
+        try:
+            prof_obj = self.analyzer.get_profiler()
+            games = prof_obj._games_for(opp_name) if prof_obj else []  # noqa: SLF001
+        except Exception:
+            games = []
+
+        try:
+            t = OpponentProfiler._compute_median_timings_for_matchup(
+                games, my_race, opp_race,
+            )
+        except Exception:
+            t = {}
+
+        out = dict(prof)
+        out["median_timings"] = t
+        out["median_timings_order"] = list(t.keys())
+        out["matchup_label"] = matchup
+        return out
+
     def _render_opp_timings_card(self, prof: Dict) -> None:
+        """Render the matchup-aware Median Key Timings grid for an opponent.
+
+        Reads ``prof.median_timings`` / ``median_timings_order`` /
+        ``matchup_label`` / ``matchup_counts`` from the upgraded
+        ``OpponentProfiler``. The matchup chip row sits above the
+        source-filter chips; selecting a specific matchup re-runs
+        ``_compute_median_timings_for_matchup`` over the games filtered
+        to that matchup. The "All" chip remains the default and uses the
+        modal opponent race for ordering, exactly like before.
+        """
+        ml = prof.get("matchup_label") or ""
+        opp_name = prof.get("name") or ""
+
         card = ctk.CTkFrame(self._opp_detail_frame, fg_color=("gray85", "gray18"))
         card.pack(fill="x", padx=4, pady=6)
+        title_text = (
+            f"Median Key Timings - {ml}" if ml else "Median Key Timings"
+        )
         ctk.CTkLabel(
-            card, text="Median Key Timings  (from build_log)",
-            font=FONT_HEADING, anchor="w",
+            card, text=title_text, font=FONT_HEADING, anchor="w",
         ).pack(anchor="w", padx=14, pady=(10, 4))
         ctk.CTkLabel(
             card,
-            text="Timings reflect whichever player's buildings appear in the log; "
-                 "'-' means no samples yet.",
+            text="Opponent tech parsed from opp_build_log; your tech from build_log.",
             text_color="gray", font=FONT_SMALL, anchor="w",
-        ).pack(anchor="w", padx=14)
-        grid = ctk.CTkFrame(card, fg_color="transparent")
-        grid.pack(fill="x", padx=14, pady=(4, 10))
-        timings = prof.get("median_timings") or {}
-        col, row_idx = 0, 0
-        for token, info in timings.items():
-            cell = ctk.CTkFrame(grid, fg_color=("gray90", "gray22"), corner_radius=6)
-            cell.grid(row=row_idx, column=col, padx=4, pady=4, sticky="ew")
+        ).pack(anchor="w", padx=14, pady=(0, 4))
+
+        # ---- Matchup chips ("All  PvZ (8)  PvT (3) ...") ---------------
+        # Only render when 2+ matchups are present. A single-matchup
+        # opponent doesn't need a selector. Lives ABOVE the source-filter
+        # chips so it reads as the primary scoping control.
+        chips = self._matchup_chip_labels(prof)
+        active = self._active_matchup_for_opp(opp_name, [m for m, _ in chips])
+        if len(chips) >= 2:
+            chip_row1 = ctk.CTkFrame(card, fg_color="transparent")
+            chip_row1.pack(fill="x", padx=14, pady=(0, 4))
             ctk.CTkLabel(
-                cell, text=token, font=("Arial", 11, "bold"), anchor="w",
-            ).pack(anchor="w", padx=8, pady=(4, 0))
-            disp = info.get("median_display", "-")
-            n = info.get("sample_count", 0)
-            value_color = "gray" if n == 0 else GRAPH_FG
+                chip_row1, text="Matchup:",
+                font=FONT_SMALL, text_color="gray",
+            ).pack(side="left", padx=(0, 6))
+
+            values = ["All"] + [f"{m} ({n})" for m, n in chips]
+            display_to_raw = {"All": "All"}
+            for m, n in chips:
+                display_to_raw[f"{m} ({n})"] = m
+            raw_to_display = {v: k for k, v in display_to_raw.items()}
+            current_display = raw_to_display.get(active, "All")
+            mu_var = ctk.StringVar(value=current_display)
+
+            def _on_matchup_change(choice: str) -> None:
+                raw = display_to_raw.get(choice, "All")
+                self._set_active_matchup_for_opp(opp_name, raw)
+                new_prof = self._profile_for_matchup(prof, opp_name, raw)
+                self._timing_grid_state["matchup_label"] = (
+                    new_prof.get("matchup_label") or ""
+                )
+                self._timing_grid_state["order"] = list(
+                    new_prof.get("median_timings_order") or []
+                )
+                self._render_timing_grid_body(
+                    grid_holder, new_prof,
+                    str(self._opp_ui_state.get("timing_source_filter") or "Both"),
+                )
+
+            ctk.CTkSegmentedButton(
+                chip_row1,
+                values=values,
+                variable=mu_var,
+                command=_on_matchup_change,
+            ).pack(side="left")
+
+        view_prof = self._profile_for_matchup(prof, opp_name, active)
+
+        # ---- Source-filter chips (Both / Opp tech / Your tech) ---------
+        chip_row = ctk.CTkFrame(card, fg_color="transparent")
+        chip_row.pack(fill="x", padx=14, pady=(0, 6))
+        ctk.CTkLabel(
+            chip_row, text="Show:", font=FONT_SMALL, text_color="gray",
+        ).pack(side="left", padx=(0, 6))
+
+        current = str(self._opp_ui_state.get("timing_source_filter") or "Both")
+        if current not in ("Both", "Opp tech", "Your tech"):
+            current = "Both"
+
+        seg_var = ctk.StringVar(value=current)
+
+        def _on_filter_change(choice: str) -> None:
+            self._opp_ui_state["timing_source_filter"] = choice
+            mu = self._active_matchup_for_opp(opp_name, [m for m, _ in chips])
+            local_prof = self._profile_for_matchup(prof, opp_name, mu)
+            self._render_timing_grid_body(grid_holder, local_prof, choice)
+
+        ctk.CTkSegmentedButton(
+            chip_row,
+            values=["Both", "Opp tech", "Your tech"],
+            variable=seg_var,
+            command=_on_filter_change,
+        ).pack(side="left")
+
+        # ---- Live summary line (matches the SPA's aria-live status) ----
+        summary_lbl = ctk.CTkLabel(
+            card, text="", font=FONT_SMALL, text_color="gray", anchor="w",
+        )
+        summary_lbl.pack(anchor="w", padx=14, pady=(0, 4))
+        self._timing_grid_state["summary_lbl"] = summary_lbl
+        self._timing_grid_state["order"] = list(
+            view_prof.get("median_timings_order") or []
+        )
+        self._timing_grid_state["matchup_label"] = view_prof.get("matchup_label") or ""
+        self._timing_grid_state["opp_name"] = opp_name
+        self._timing_grid_state["matchup_counts"] = prof.get("matchup_counts") or {}
+        self._timing_grid_state["active_matchup"] = active
+
+        grid_holder = ctk.CTkScrollableFrame(
+            card, height=320, fg_color=("gray80", "gray18"),
+        )
+        grid_holder.pack(fill="both", expand=True, padx=10, pady=(2, 10))
+
+        self._render_timing_grid_body(grid_holder, view_prof, current)
+
+    def _render_timing_grid_body(
+        self,
+        grid_holder: "ctk.CTkScrollableFrame",
+        prof: Dict,
+        source_filter: str,
+    ) -> None:
+        """Populate the card grid honoring the active source filter."""
+        for w in grid_holder.winfo_children():
+            w.destroy()
+
+        timings: Dict[str, Dict] = prof.get("median_timings") or {}
+        order: List[str] = list(prof.get("median_timings_order") or [])
+        ml = prof.get("matchup_label") or ""
+        opp_name = prof.get("name") or ""
+
+        def _passes(info: Dict) -> bool:
+            src = info.get("source") or ""
+            if source_filter == "Opp tech":
+                return src == "opp_build_log"
+            if source_filter == "Your tech":
+                return src == "build_log"
+            return True
+
+        visible: List[str] = [
+            tok for tok in order
+            if tok in timings and _passes(timings[tok])
+        ]
+
+        # Refresh the live summary line. When a specific matchup is
+        # active, surface "(N games)" alongside the matchup label so the
+        # user knows the sample count behind the chip selection.
+        summary_lbl = self._timing_grid_state.get("summary_lbl")
+        if summary_lbl is not None:
+            suffix = ""
+            if source_filter == "Opp tech":
+                suffix = " - opponent tech only"
+            elif source_filter == "Your tech":
+                suffix = " - your tech only"
+            active = str(self._timing_grid_state.get("active_matchup") or "All")
+            counts = self._timing_grid_state.get("matchup_counts") or {}
+            mu_suffix = ""
+            if active != "All" and isinstance(counts, dict) and counts.get(active):
+                n = counts[active]
+                mu_suffix = f" ({n} game{'s' if n != 1 else ''})"
+            if ml:
+                txt = (
+                    f"Showing {len(visible)} of {len(order)} timings "
+                    f"for {ml}{mu_suffix}{suffix}"
+                )
+            else:
+                txt = f"Showing {len(visible)} of {len(order)} timings{suffix}"
+            try:
+                summary_lbl.configure(text=txt)
+            except Exception:
+                pass
+
+        # Empty state - only fires when EVERY visible card has zero
+        # samples after filtering, matching the prompt's contract.
+        all_empty = all(
+            (timings.get(tok, {}) or {}).get("sample_count", 0) == 0
+            for tok in visible
+        )
+        if not visible or all_empty:
             ctk.CTkLabel(
-                cell, text=disp, text_color=value_color,
-                font=("Arial", 13, "bold"), anchor="w",
-            ).pack(anchor="w", padx=8)
+                grid_holder,
+                text="(no key building timings yet)",
+                text_color="gray", font=FONT_SMALL,
+            ).pack(pady=12, padx=10)
+            return
+
+        CARD_MIN_W = 200
+        CARD_PAD = 6
+
+        tok_lookup: Dict[str, TimingToken] = {}
+        for tokens in RACE_BUILDINGS.values():
+            for t in tokens:
+                tok_lookup[t.internal_name] = t
+
+        cards: List[tk.Widget] = []
+        for internal_name in visible:
+            info = timings.get(internal_name) or {}
+            tok = tok_lookup.get(internal_name)
+            try:
+                card = self._build_timing_card(
+                    grid_holder, internal_name, info, tok, opp_name, ml,
+                )
+                cards.append(card)
+            except Exception as exc:
+                # Log-and-skip: a single malformed token must never take
+                # down the whole grid.
+                try:
+                    logger = getattr(self.analyzer, "error_logger", None)
+                    if logger is not None:
+                        logger.errors.append({
+                            "file": f"timing-card:{internal_name}",
+                            "error": f"render failed: {exc}",
+                        })
+                except Exception:
+                    pass
+
+        def _relayout(_event: object = None) -> None:
+            try:
+                width = max(1, grid_holder.winfo_width())
+            except tk.TclError:
+                return
+            cols = max(1, width // (CARD_MIN_W + CARD_PAD))
+            for idx, card in enumerate(cards):
+                r, c = divmod(idx, cols)
+                try:
+                    card.grid(
+                        row=r, column=c,
+                        padx=CARD_PAD, pady=CARD_PAD, sticky="nsew",
+                    )
+                except tk.TclError:
+                    continue
+            for c in range(cols):
+                grid_holder.grid_columnconfigure(c, weight=1, uniform="tcards")
+            for c in range(cols, cols + 6):
+                grid_holder.grid_columnconfigure(c, weight=0, uniform="")
+
+        _relayout()
+        grid_holder.bind("<Configure>", _relayout)
+
+    def _build_timing_card(
+        self,
+        parent: "ctk.CTkScrollableFrame",
+        internal_name: str,
+        info: Dict,
+        tok: Optional[TimingToken],
+        opp_name: str,
+        matchup_label_str: str,
+    ) -> "ctk.CTkFrame":
+        """Construct a single timing card. Returns the unparented frame."""
+        sample_count = int(info.get("sample_count") or 0)
+        empty = sample_count == 0
+
+        bg = ("gray82", "gray23") if not empty else ("gray80", "gray19")
+        card = ctk.CTkFrame(parent, fg_color=bg, corner_radius=8)
+
+        top = ctk.CTkFrame(card, fg_color="transparent")
+        top.pack(fill="x", padx=10, pady=(8, 2))
+
+        icon_img = None
+        if tok is not None:
+            icon_img = self._get_timing_icon(internal_name, tok.icon_file)
+
+        if icon_img is not None:
+            ctk.CTkLabel(top, text="", image=icon_img).pack(side="left", padx=(0, 8))
+        else:
+            ctk.CTkFrame(
+                top, width=40, height=40, fg_color=("gray75", "gray30"),
+                corner_radius=4,
+            ).pack(side="left", padx=(0, 8))
+
+        text_col = ctk.CTkFrame(top, fg_color="transparent")
+        text_col.pack(side="left", fill="x", expand=True)
+
+        display_name = tok.display_name if tok is not None else internal_name
+        ctk.CTkLabel(
+            text_col, text=display_name, font=FONT_BOLD, anchor="w",
+            text_color=("gray20", "gray90") if not empty else ("gray45", "gray55"),
+        ).pack(anchor="w")
+
+        median_display = info.get("median_display") or "-"
+        ctk.CTkLabel(
+            text_col,
+            text=median_display,
+            font=FONT_LARGE, anchor="w",
+            text_color=(
+                ("#1a1a1a", "#F2F4F8") if not empty
+                else ("gray55", "gray45")
+            ),
+        ).pack(anchor="w", pady=(2, 0))
+
+        sub_text = ""
+        if not empty:
+            p25 = info.get("p25_display") or "-"
+            p75 = info.get("p75_display") or "-"
+            if sample_count >= 2 and p25 != "-" and p75 != "-":
+                sub_text = f"{p25}-{p75}"
+            else:
+                sub_text = "single sample"
+        ctk.CTkLabel(
+            card,
+            text=sub_text,
+            font=FONT_SMALL, text_color="gray", anchor="w",
+        ).pack(anchor="w", padx=10, pady=(0, 0))
+
+        if empty:
             ctk.CTkLabel(
-                cell, text=f"n={n}", text_color="gray", font=FONT_SMALL,
-            ).pack(anchor="w", padx=8, pady=(0, 4))
-            col += 1
-            if col >= 4:
-                col, row_idx = 0, row_idx + 1
-        for c in range(4):
-            grid.grid_columnconfigure(c, weight=1)
+                card,
+                text="no samples in this matchup",
+                font=FONT_SMALL, text_color="gray", anchor="w",
+            ).pack(anchor="w", padx=10, pady=(0, 0))
+
+        bot = ctk.CTkFrame(card, fg_color="transparent")
+        bot.pack(fill="x", padx=10, pady=(4, 8))
+
+        ctk.CTkLabel(
+            bot, text=f"n={sample_count}",
+            font=FONT_SMALL, text_color="gray", anchor="w",
+        ).pack(side="left")
+
+        if not empty:
+            wr = info.get("win_rate_when_built")
+            wr_pct = (
+                f"{int(round(wr * 100))}%" if isinstance(wr, (int, float))
+                else "-"
+            )
+            wr_color_hex = self._wr_pill_color(
+                wr if isinstance(wr, (int, float)) else None, sample_count
+            )
+            ctk.CTkLabel(
+                bot, text=wr_pct,
+                font=FONT_SMALL, text_color="white",
+                fg_color=wr_color_hex, corner_radius=8,
+                width=44, height=18,
+            ).pack(side="left", padx=(8, 0))
+
+        trend = self._TIMING_TREND_GLYPHS.get(
+            info.get("trend") or "unknown",
+            self._TIMING_TREND_GLYPHS["unknown"],
+        )
+        ctk.CTkLabel(
+            bot,
+            text=trend["glyph"],
+            font=FONT_BOLD,
+            text_color=trend["color"],
+        ).pack(side="right")
+
+        # ---- Tooltip ---------------------------------------------------
+        if empty:
+            tip_text = (
+                "No samples in this matchup\n"
+                + (
+                    "opponent's structures (sc2reader)"
+                    if (info.get("source") or "") == "opp_build_log"
+                    else "your build (proxy for matchup tendencies)"
+                )
+            )
+        else:
+            mn = info.get("min_display") or "-"
+            mx = info.get("max_display") or "-"
+            ls = info.get("last_seen_display") or "-"
+            src_label = (
+                "opponent's structures (sc2reader)"
+                if (info.get("source") or "") == "opp_build_log"
+                else "your build (proxy for matchup tendencies)"
+            )
+            tip_text = (
+                f"range {mn}-{mx}\n"
+                f"last seen at {ls}\n"
+                f"{src_label}\n"
+                f"n={sample_count} matchup samples"
+            )
+        Tooltip(card, text=tip_text)
+
+        # ---- Click + keyboard to drill down ---------------------------
+        if not empty:
+            def _on_click(_event: object = None) -> str:
+                self._open_timing_drilldown(
+                    internal_name, tok, info, opp_name, matchup_label_str,
+                )
+                return "break"
+
+            def _on_focus_in(_event: object = None) -> None:
+                self._card_focus_visible(card, on=True)
+
+            def _on_focus_out(_event: object = None) -> None:
+                self._card_focus_visible(card, on=False)
+
+            for w in (card, top, text_col, bot):
+                try:
+                    w.bind("<Button-1>", _on_click, add="+")
+                except Exception:
+                    pass
+            try:
+                card.configure(cursor="hand2")
+                card.configure(takefocus=True)
+                card.bind("<Return>", _on_click, add="+")
+                card.bind("<space>",  _on_click, add="+")
+                card.bind("<FocusIn>",  _on_focus_in,  add="+")
+                card.bind("<FocusOut>", _on_focus_out, add="+")
+            except Exception:
+                pass
+
+        return card
+
+    @staticmethod
+    def _card_focus_visible(card: "ctk.CTkFrame", on: bool) -> None:
+        """Toggle a visible focus halo on a timing card."""
+        try:
+            if on:
+                card.configure(fg_color=("gray72", "gray30"), border_width=2,
+                               border_color="#42A5F5")
+            else:
+                card.configure(fg_color=("gray82", "gray23"), border_width=0)
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
+    # Drilldown modal: lists every contributing game. Matches the
+    # CTkToplevel pattern used elsewhere in this file (Visualizer window,
+    # macro breakdown, debug log) so we don't introduce a new framework.
+    # ------------------------------------------------------------------
+    def _open_timing_drilldown(
+        self,
+        internal_name: str,
+        tok: Optional[TimingToken],
+        info: Dict,
+        opp_name: str,
+        matchup_label_str: str,
+    ) -> None:
+        sample_count = int(info.get("sample_count") or 0)
+        if sample_count == 0:
+            return  # Defensive: empty cards already gate this on the binding.
+
+        display_name = tok.display_name if tok is not None else internal_name
+
+        t = ctk.CTkToplevel(self)
+        t.geometry("680x640")
+        t.title(f"{display_name} - timings vs {opp_name}")
+        t.transient(self)
+        t.lift()
+        t.after(150, t.focus_force)
+        try:
+            t.grab_set()
+        except Exception:
+            pass
+
+        head = ctk.CTkFrame(t, fg_color=("gray85", "gray18"))
+        head.pack(fill="x", padx=12, pady=(12, 6))
+
+        head_top = ctk.CTkFrame(head, fg_color="transparent")
+        head_top.pack(fill="x", padx=10, pady=(8, 2))
+
+        if tok is not None:
+            icon_img = self._get_timing_icon(internal_name, tok.icon_file)
+            if icon_img is not None:
+                ctk.CTkLabel(head_top, text="", image=icon_img).pack(
+                    side="left", padx=(0, 10)
+                )
+
+        ctk.CTkLabel(
+            head_top, text=display_name, font=FONT_TITLE, anchor="w",
+        ).pack(side="left")
+
+        sub_bits: List[str] = []
+        if matchup_label_str:
+            sub_bits.append(matchup_label_str)
+        sub_bits.append(f"n={sample_count}")
+        sub_bits.append(f"median {info.get('median_display') or '-'}")
+        if sample_count >= 2:
+            p25 = info.get("p25_display") or "-"
+            p75 = info.get("p75_display") or "-"
+            if p25 != "-" and p75 != "-":
+                sub_bits.append(f"({p25}-{p75})")
+            mn = info.get("min_display") or "-"
+            mx = info.get("max_display") or "-"
+            if mn != "-" and mx != "-":
+                sub_bits.append(f"range {mn}-{mx}")
+        ctk.CTkLabel(
+            head, text=" · ".join(sub_bits),
+            font=FONT_SMALL, text_color="gray", anchor="w",
+        ).pack(anchor="w", padx=10, pady=(0, 6))
+
+        src_label = (
+            "opponent's structures (sc2reader)"
+            if (info.get("source") or "") == "opp_build_log"
+            else "your build (proxy for matchup tendencies)"
+        )
+        ctk.CTkLabel(
+            head, text=f"{src_label} · sorted newest first",
+            font=FONT_SMALL, text_color="gray", anchor="w",
+        ).pack(anchor="w", padx=10, pady=(0, 8))
+
+        # Body: lazy chunked rendering so opponents with hundreds of
+        # contributing games don't make the modal hitch on open.
+        body = ctk.CTkScrollableFrame(t)
+        body.pack(fill="both", expand=True, padx=12, pady=4)
+
+        rows = self._collect_timing_drilldown_rows(internal_name, opp_name)
+        if not rows:
+            ctk.CTkLabel(
+                body,
+                text="No contributing games found in the current DB.",
+                text_color="gray", font=FONT_SMALL,
+            ).pack(pady=20)
+        else:
+            state = {"rendered": 0}
+            load_more_btn_holder: List[Optional["ctk.CTkButton"]] = [None]
+
+            def _render_next_chunk() -> None:
+                start = state["rendered"]
+                end = min(start + self._DRILLDOWN_CHUNK, len(rows))
+                for i in range(start, end):
+                    self._render_timing_drilldown_row(body, rows[i])
+                state["rendered"] = end
+                btn = load_more_btn_holder[0]
+                if btn is not None:
+                    if state["rendered"] >= len(rows):
+                        try:
+                            btn.destroy()
+                        except Exception:
+                            pass
+                        load_more_btn_holder[0] = None
+                    else:
+                        remaining = len(rows) - state["rendered"]
+                        next_n = min(self._DRILLDOWN_CHUNK, remaining)
+                        try:
+                            btn.configure(
+                                text=(
+                                    f"Load next {next_n} "
+                                    f"({state['rendered']}/{len(rows)} shown)"
+                                )
+                            )
+                        except Exception:
+                            pass
+
+            _render_next_chunk()
+            if state["rendered"] < len(rows):
+                remaining = len(rows) - state["rendered"]
+                next_n = min(self._DRILLDOWN_CHUNK, remaining)
+                load_more_btn_holder[0] = ctk.CTkButton(
+                    body,
+                    text=f"Load next {next_n} ({state['rendered']}/{len(rows)} shown)",
+                    fg_color="transparent", border_width=1,
+                    text_color="gray", height=28,
+                    command=_render_next_chunk,
+                )
+                load_more_btn_holder[0].pack(fill="x", padx=4, pady=(8, 4))
+
+        # Footer: Copy-to-clipboard (Markdown table) + Close. The export
+        # uses the ENTIRE rows list, not just the rows currently painted
+        # into the body, so the user always gets the complete data set.
+        footer = ctk.CTkFrame(t, fg_color="transparent")
+        footer.pack(fill="x", padx=12, pady=(4, 12))
+
+        copy_btn_label = ctk.StringVar(value="Copy timings to clipboard")
+
+        def _copy_to_clipboard() -> None:
+            md = self._format_drilldown_markdown(
+                display_name, info, rows, matchup_label_str,
+            )
+            try:
+                t.clipboard_clear()
+                t.clipboard_append(md)
+                t.update()
+            except Exception:
+                pass
+            copy_btn_label.set("Copied!")
+            t.after(1400, lambda: copy_btn_label.set("Copy timings to clipboard"))
+
+        ctk.CTkButton(
+            footer, textvariable=copy_btn_label, width=200,
+            fg_color="transparent", border_width=1, text_color="gray",
+            command=_copy_to_clipboard,
+        ).pack(side="left")
+        ctk.CTkButton(
+            footer, text="Close", width=120, command=t.destroy,
+        ).pack(side="right")
+
+    def _collect_timing_drilldown_rows(
+        self, internal_name: str, opp_name: str,
+    ) -> List[Dict]:
+        """Return one row per contributing game, sorted newest first.
+
+        Mirrors the per-token resolution rule used by the build-order
+        viewer card: opponent-race tokens come from ``opp_build_log``
+        (or the legacy ``opp_early_build_log`` fallback used elsewhere
+        in this file), user's-race tokens come from ``build_log``.
+        """
+        from analytics.opponent_profiler import _TIMING_RE
+
+        try:
+            prof_obj = self.analyzer.get_profiler()
+            games = prof_obj._games_for(opp_name) if prof_obj else []  # noqa: SLF001
+        except Exception:
+            return []
+
+        tok: Optional[TimingToken] = None
+        own_race = ""
+        for race, tokens in RACE_BUILDINGS.items():
+            for t in tokens:
+                if t.internal_name == internal_name:
+                    tok = t
+                    own_race = race
+                    break
+            if tok is not None:
+                break
+        if tok is None:
+            return []
+
+        my_race = self._infer_my_race_for_opponent(opp_name)
+        is_my_token = (own_race == normalize_race(my_race))
+        tok_lower = tok.token.lower()
+
+        rows: List[Dict] = []
+        for g in games or []:
+            if is_my_token:
+                log = g.get("build_log") or []
+            else:
+                # Match the build-order viewer's source-resolution rule:
+                # prefer opp_build_log; fall back to opp_early_build_log
+                # (legacy field) before giving up.
+                log = (
+                    g.get("opp_build_log")
+                    or g.get("opp_early_build_log")
+                    or []
+                )
+            best_t: Optional[int] = None
+            for line in log:
+                m = _TIMING_RE.match(line)
+                if not m:
+                    continue
+                mins, secs, raw = int(m.group(1)), int(m.group(2)), m.group(3)
+                if tok_lower in raw.lower():
+                    t_sec = mins * 60 + secs
+                    if best_t is None or t_sec < best_t:
+                        best_t = t_sec
+            if best_t is None:
+                continue
+
+            opp_race = (g.get("opp_race") or "")[:1].upper() or "?"
+            mine_letter = (my_race or "?")[:1].upper() or "?"
+            rows.append({
+                "date": (g.get("date") or "")[:10],
+                "map": g.get("map") or "-",
+                "my_race": mine_letter,
+                "opp_race": opp_race,
+                "timestamp_seconds": best_t,
+                "timestamp_display": (
+                    f"{best_t // 60}:{best_t % 60:02d}"
+                ),
+                "result": g.get("result") or "?",
+                "source": "build_log" if is_my_token else "opp_build_log",
+                "id": g.get("id"),
+                "my_build": g.get("my_build") or "",
+            })
+
+        rows.sort(key=lambda r: (r.get("date") or ""), reverse=True)
+        return rows
+
+    # Chunk size for the drilldown's lazy row renderer. 50 keeps the
+    # initial paint snappy and matches the cross-app spec.
+    _DRILLDOWN_CHUNK = 50
+
+    @staticmethod
+    def _format_drilldown_markdown(
+        display_name: str,
+        info: Dict,
+        rows: List[Dict],
+        matchup_label_str: str,
+    ) -> str:
+        """Render the contributing games as a Markdown table for export."""
+        n = int(info.get("sample_count") or 0)
+        med = info.get("median_display") or "-"
+        p25 = info.get("p25_display") or "-"
+        p75 = info.get("p75_display") or "-"
+        mn = info.get("min_display") or "-"
+        mx = info.get("max_display") or "-"
+        ml = matchup_label_str or "(matchup unknown)"
+
+        lines: List[str] = []
+        lines.append(f"### {display_name} - {ml} (n={n})")
+        if n >= 2 and p25 != "-" and p75 != "-":
+            lines.append(
+                f"median {med} (p25-p75 {p25}-{p75}, range {mn}-{mx})"
+            )
+        else:
+            lines.append(f"median {med}")
+        lines.append("")
+        lines.append("| Time | Date | Map | Matchup | Result | Source |")
+        lines.append("|------|------|-----|---------|--------|--------|")
+        for r in rows:
+            ts = r.get("timestamp_display") or "-"
+            date = r.get("date") or "-"
+            mp = (r.get("map") or "-").replace("|", "/")
+            mu = f"{r.get('my_race') or '?'} vs {r.get('opp_race') or '?'}"
+            res = r.get("result") or "?"
+            src_short = (
+                "opp_log" if (r.get("source") or "") == "opp_build_log"
+                else "my_log"
+            )
+            lines.append(
+                f"| {ts} | {date} | {mp} | {mu} | {res} | {src_short} |"
+            )
+        return "\n".join(lines) + "\n"
+
+    @staticmethod
+    def _fmt_relative_date(date_str: str) -> str:
+        """Return a coarse relative-date label ('3d ago', '2mo ago')."""
+        if not date_str:
+            return "-"
+        try:
+            from datetime import datetime
+            d = datetime.fromisoformat(date_str.replace(" ", "T")[:19])
+        except Exception:
+            return date_str[:10] or "-"
+        try:
+            from datetime import datetime as _dt
+            delta_days = (_dt.now() - d).days
+        except Exception:
+            return date_str[:10] or "-"
+        if delta_days <= 0:
+            return "today"
+        if delta_days == 1:
+            return "yesterday"
+        if delta_days < 30:
+            return f"{delta_days}d ago"
+        if delta_days < 365:
+            return f"{delta_days // 30}mo ago"
+        return f"{delta_days // 365}y ago"
+
+    def _open_game_from_drilldown(self, r: Dict) -> None:
+        """Click handler: open the existing full-game GameVisualizerWindow."""
+        game_id = r.get("id")
+        if not game_id:
+            messagebox.showinfo(
+                "Game record missing",
+                "This drilldown row has no stored game id; cannot open "
+                "the full-game viewer.",
+            )
+            return
+        game_record: Optional[Dict] = None
+        try:
+            for build_name, bd in (self.analyzer.db or {}).items():
+                if not isinstance(bd, dict):
+                    continue
+                for og in bd.get("games", []) or []:
+                    if og.get("id") == game_id:
+                        game_record = og
+                        break
+                if game_record is not None:
+                    break
+        except Exception:
+            game_record = None
+        if game_record is None or not game_record.get("file_path"):
+            messagebox.showinfo(
+                "Game record unavailable",
+                "Could not locate the original replay file for this "
+                "game. The visualizer requires the .SC2Replay file to "
+                "be present on disk.",
+            )
+            return
+        if not getattr(self.analyzer, "selected_player_name", None):
+            messagebox.showerror(
+                "No Profile Selected",
+                "Please select your player name in the main window "
+                "before opening the visualizer.",
+            )
+            return
+        try:
+            GameVisualizerWindow(
+                self, game_record, self.analyzer.selected_player_name,
+            )
+        except Exception as exc:
+            messagebox.showerror("Failed to open game", str(exc))
+
+    def _render_timing_drilldown_row(self, parent: tk.Widget, r: Dict) -> None:
+        """One row of the drilldown list. Click opens the full-game view."""
+        result = r.get("result") or ""
+        is_win = result == "Win"
+        is_loss = result == "Loss"
+        color = COLOR_WIN if is_win else (COLOR_LOSS if is_loss else COLOR_NEUTRAL)
+
+        row = ctk.CTkFrame(parent, fg_color=("gray85", "gray22"))
+        row.pack(fill="x", pady=3, padx=2)
+
+        line1 = ctk.CTkFrame(row, fg_color="transparent")
+        line1.pack(fill="x", padx=10, pady=(6, 0))
+
+        ctk.CTkLabel(
+            line1, text=r.get("timestamp_display") or "-",
+            font=FONT_BOLD, anchor="w", width=64,
+        ).pack(side="left")
+        ctk.CTkLabel(
+            line1, text=r.get("map") or "-",
+            font=FONT_SMALL, anchor="w",
+        ).pack(side="left", padx=(8, 0), fill="x", expand=True)
+        ctk.CTkLabel(
+            line1,
+            text=f"{r.get('my_race') or '?'} vs {r.get('opp_race') or '?'}",
+            font=FONT_SMALL, text_color="gray", width=60, anchor="e",
+        ).pack(side="right")
+        pill = ctk.CTkLabel(
+            line1,
+            text="W" if is_win else ("L" if is_loss else "?"),
+            font=FONT_BOLD, text_color="white",
+            fg_color=color, corner_radius=8,
+            width=24, height=18,
+        )
+        pill.pack(side="right", padx=(0, 6))
+
+        line2 = ctk.CTkFrame(row, fg_color="transparent")
+        line2.pack(fill="x", padx=10, pady=(0, 6))
+        date_str = r.get("date") or ""
+        rel = self._fmt_relative_date(date_str)
+        date_lbl = ctk.CTkLabel(
+            line2,
+            text=f"{rel} - {date_str or '-'}",
+            font=FONT_SMALL, text_color="gray", anchor="w",
+        )
+        date_lbl.pack(side="left")
+        Tooltip(date_lbl, text=(date_str or "(unknown date)"))
+        src_short = (
+            "opp_log" if (r.get("source") or "") == "opp_build_log"
+            else "my_log"
+        )
+        ctk.CTkLabel(
+            line2, text=src_short,
+            font=FONT_SMALL, text_color="gray", anchor="e",
+        ).pack(side="right")
+
+        def _on_click(_event: object = None) -> None:
+            self._open_game_from_drilldown(r)
+        for w in (row, line1, line2, date_lbl):
+            try:
+                w.bind("<Button-1>", _on_click, add="+")
+            except Exception:
+                pass
+        try:
+            row.configure(cursor="hand2")
+        except Exception:
+            pass
+
 
     def _render_opp_last5_card(self, prof: Dict) -> None:
         card = ctk.CTkFrame(self._opp_detail_frame, fg_color=("gray85", "gray18"))

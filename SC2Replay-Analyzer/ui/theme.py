@@ -22,6 +22,13 @@ FONT_TITLE = ("Arial", 20, "bold")
 FONT_HEADING = ("Arial", 14, "bold")
 FONT_BODY = ("Arial", 12)
 FONT_SMALL = ("Arial", 10)
+# Bold variant of FONT_BODY for in-card emphasis (token names, labels). Kept
+# distinct from FONT_HEADING so the timing-card grid can highlight values
+# without competing visually with section headers.
+FONT_BOLD = ("Arial", 12, "bold")
+# Hero number on each timing card; readable from across the screen so the
+# median time pops out at a glance.
+FONT_LARGE = ("Arial", 18, "bold")
 
 
 def wr_color(wins: int, total: int) -> str:

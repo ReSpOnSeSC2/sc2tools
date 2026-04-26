@@ -138,7 +138,7 @@ function loadConfig() {
             const parsed = JSON.parse(raw);
             return deepMerge(DEFAULT_CONFIG, parsed);
         }
-        fs.writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2));
+        _atomicWriteJsonSync(CONFIG_PATH, DEFAULT_CONFIG, 2);
         return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
     } catch (err) {
         console.error('[Config] Load failed, using defaults:', err.message);
@@ -245,7 +245,7 @@ let session = loadSession();
 
 function saveSession() {
     try {
-        fs.writeFileSync(SESSION_STATE_PATH, JSON.stringify(session, null, 2));
+        _atomicWriteJsonSync(SESSION_STATE_PATH, session, 2);
     } catch (err) {
         console.error('[Session] Save failed:', err.message);
     }
@@ -853,6 +853,46 @@ if (!fs.existsSync(PUBLIC_DIR)) fs.mkdirSync(PUBLIC_DIR, { recursive: true });
 if (!fs.existsSync(SOUNDS_DIR)) fs.mkdirSync(SOUNDS_DIR, { recursive: true });
 app.use('/static', express.static(PUBLIC_DIR));
 
+// Expose the SC2-Overlay icon library at `/static/icons/...` so the
+// analyzer SPA can render building / race PNGs from the same canonical
+// folder the desktop GUI uses. The `MedianTimingsGrid` component in
+// public/analyzer/index.html resolves icons via `buildingIconUrl()` ->
+// `/static/icons/buildings/<icon_file>`.
+const SC2_OVERLAY_ICONS_DIR = path.join(ROOT, 'SC2-Overlay', 'icons');
+if (fs.existsSync(SC2_OVERLAY_ICONS_DIR)) {
+    app.use('/static/icons', express.static(SC2_OVERLAY_ICONS_DIR, {
+        fallthrough: true,
+        maxAge: '7d',
+    }));
+}
+
+// ------------------------------------------------------------------
+// ATOMIC JSON WRITER
+// ------------------------------------------------------------------
+// Wraps fs.writeFileSync(path, data) with a tmp + rename pattern so a
+// process kill mid-flush can't leave a half-written JSON file on disk
+// (the bug that left meta_database.json / MyOpponentHistory.json /
+// overlay.config.json truncated in 04/2026). Mirrors the semantics of
+// `core.atomic_io.atomic_write_json` on the Python side.
+function _atomicWriteJsonSync(target, data, indent = 2) {
+    const dir = path.dirname(target);
+    fs.mkdirSync(dir, { recursive: true });
+    // Pick a unique sibling temp filename. We avoid os.tmpdir so the
+    // os.rename below can be atomic (same-filesystem requirement).
+    const tmp = path.join(
+        dir,
+        '.tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10) + '.json'
+    );
+    try {
+        const body = JSON.stringify(data, null, indent);
+        fs.writeFileSync(tmp, body);
+        fs.renameSync(tmp, target);
+    } catch (err) {
+        try { fs.unlinkSync(tmp); } catch (_) { /* ignore */ }
+        throw err;
+    }
+}
+
 // ------------------------------------------------------------------
 // META ANALYZER API + SPA
 // ------------------------------------------------------------------
@@ -1236,7 +1276,7 @@ app.get('/api/config', (_req, res) => res.json(config));
 app.post('/api/config', (req, res) => {
     try {
         config = deepMerge(config, req.body || {});
-        fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+        _atomicWriteJsonSync(CONFIG_PATH, config, 2);
         io.emit('config_snapshot', config);
         console.log('[Config] Updated via API.');
         res.json({ ok: true, config });

@@ -26,7 +26,4 @@
     "characterIds": [],
     "fetchDelayMs": 8000,
     "freshSeconds": 900,
-    "retryDelayMs": 6000,
-    "retryAttempts": 5
-  }
-}
+    "retryDelayMs": 6000}}

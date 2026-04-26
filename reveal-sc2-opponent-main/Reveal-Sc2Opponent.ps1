@@ -145,10 +145,48 @@ function Get-History {
     return @{}
 }
 
+# Atomic write helper -- prevents partial writes if the process is killed
+# mid-flush. Writes to a sibling temp file in the same directory then
+# atomically renames into place. Mirrors `core.atomic_io.atomic_write_json`
+# on the Python side and `_atomicWriteJsonSync` on the Node side.
+#
+# Background: PowerShell's default `Set-Content` / `Out-File` / even
+# `WriteAllText` are NOT atomic. If the script is killed (Ctrl-C, machine
+# sleep, process tree teardown when SC2 quits, etc.) while writing 2-4 MB
+# of opponent history we end up with an unclosed-brace JSON file that
+# `analyzer.js` then refuses to parse. The tmp + Move-Item dance below
+# guarantees the destination file is either fully-written-good or
+# untouched -- never half-written.
+function Write-FileAtomic {
+    param(
+        [Parameter(Mandatory)] [string] $TargetPath,
+        [Parameter(Mandatory)] [string] $Content,
+        [System.Text.Encoding] $Encoding = [System.Text.Encoding]::UTF8
+    )
+    $dir = Split-Path -Parent $TargetPath
+    if (-not [string]::IsNullOrEmpty($dir) -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    $tmp = Join-Path $dir (".tmp_" + [Guid]::NewGuid().ToString("N") + ".json")
+    try {
+        [System.IO.File]::WriteAllText($tmp, $Content, $Encoding)
+        # On Windows, `Move-Item -Force` calls MoveFileEx with REPLACE_EXISTING,
+        # which is atomic on NTFS. Equivalent to os.replace() on POSIX.
+        Move-Item -LiteralPath $tmp -Destination $TargetPath -Force
+    } catch {
+        if (Test-Path -LiteralPath $tmp) {
+            try { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue } catch {}
+        }
+        throw
+    }
+}
+
 function Save-History {
     param($HistoryData)
     $Json = $HistoryData | ConvertTo-Json -Depth 10
-    [System.IO.File]::WriteAllText($HistoryFilePath, $Json, [System.Text.Encoding]::UTF8)
+    # Atomic write: tmp + rename. Survives a mid-write kill without
+    # leaving a half-written file on disk.
+    Write-FileAtomic -TargetPath $HistoryFilePath -Content $Json -Encoding ([System.Text.Encoding]::UTF8)
 }
 
 function Update-OpponentHistory {

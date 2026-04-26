@@ -13,41 +13,51 @@ What this profile actually shows
   ratio >= 0.85 collapsed via `difflib.SequenceMatcher`).
 * `profile` - one opponent's full record: race distribution, top-5 of their
   observed strategies (with W/L per strategy), per-map W/L, last-5 game
-  summary, and median key-building timings extracted from the user's
-  `build_log` per game (Pool/Gateway/Barracks/Hatchery/Nexus/CommandCenter/
-  Robo/Stargate/Spire/Twilight/Forge).
+  summary, and **matchup-aware median key-building timings** keyed by
+  sc2reader internal_name (``"SpawningPool"``, ``"RoboticsFacility"``).
+  Timings are sourced from ``opp_build_log`` for opponent-race tokens and
+  ``build_log`` for the user's-race tokens, so each card honestly reflects
+  whose buildings it represents (see ``source`` field).
 * `predict_likely_strategies` - recency-weighted distribution over their
   observed `opp_strategy` values (last 10 games count 2x).
 
-Caveat: today's `build_log` records the user's own buildings, not the
-opponent's. The Pool/Hatchery/Barracks/etc. timings will only populate when
-those buildings appear in the user's log. The profiler degrades gracefully
-when a building never appears (`sample_count == 0`).
+Matchup awareness
+-----------------
+``profile(name, my_race=...)`` accepts the user's race so the timings grid
+can be filtered to only buildings that are actually relevant to the matchup
+that was played (PvZ never shows Barracks; ZvT shows Barracks for the
+opponent and Hatchery for the user). The taxonomy lives in
+``analytics.timing_catalog`` and is shared verbatim with the SPA web build.
 """
 
 import re
 from collections import Counter, defaultdict
 from difflib import SequenceMatcher
-from statistics import median
+from statistics import StatisticsError, median, quantiles
 from typing import Dict, List, Optional, Tuple
+
+from analytics.timing_catalog import (
+    RACE_BUILDINGS,
+    TimingToken,
+    matchup_label,
+    normalize_race,
+    relevant_tokens,
+)
 
 
 # Build-log lines look like "[m:ss] BuildingName" - extract minutes, seconds, name.
 _TIMING_RE = re.compile(r"^\[(\d+):(\d{2})\]\s+(\w+)")
-
-# Tokens we look for substring-matched against the building name in each
-# build_log line. Substring lets "Pool" match "SpawningPool", "Robo" match
-# "RoboticsFacility"/"RoboticsBay", "Twilight" match "TwilightCouncil".
-KEY_TIMING_BUILDINGS: Tuple[str, ...] = (
-    "Pool", "Gateway", "Barracks", "Hatchery", "Nexus", "CommandCenter",
-    "Robo", "Stargate", "Spire", "Twilight", "Forge",
-)
 
 # Strip leading "[XYZ]" / "[ABCD]" clan tags before comparing names.
 _CLAN_TAG_RE = re.compile(r"^\[[^\]]{1,8}\]\s*")
 
 # Threshold for collapsing two stripped names under SequenceMatcher.ratio().
 _FUZZY_THRESHOLD = 0.85
+
+# Trend detection thresholds (see _compute_trend). Either threshold must be
+# crossed for the trend to register as "earlier"/"later".
+_TREND_ABS_SECONDS = 5.0   # absolute floor: shifts < 5 sec are noise
+_TREND_REL_FRACTION = 0.05  # 5% of first-half median
 
 
 def _strip_clan_tag(name: str) -> str:
@@ -61,6 +71,66 @@ def _format_seconds(seconds: float) -> str:
     """Format game-seconds as `M:SS`."""
     total = int(seconds)
     return f"{total // 60}:{total % 60:02d}"
+
+
+def _compute_trend(timestamps_chrono: List[int]) -> str:
+    """Mann-Kendall-lite trend over chronologically ordered timings.
+
+    Splits the sample in half (first half = older games, second half =
+    newer games) and compares medians. Returns one of:
+
+    - ``"earlier"`` - second-half median is meaningfully *less* than first
+    - ``"later"``   - second-half median is meaningfully *greater* than first
+    - ``"stable"``  - difference within both absolute (5s) and relative
+                      (5% of first-half median) thresholds
+    - ``"unknown"`` - sample_count < 4 (not enough signal)
+
+    The thresholds are deliberately conservative: a 3-second drift across a
+    ladder season is noise, but a 12-second shift in opener tempo is a
+    real trend worth surfacing in the UI.
+    """
+    n = len(timestamps_chrono)
+    if n < 4:
+        return "unknown"
+    mid = n // 2
+    first = timestamps_chrono[:mid]
+    second = timestamps_chrono[mid:]
+    m1 = median(first)
+    m2 = median(second)
+    diff = m2 - m1
+    threshold = max(_TREND_ABS_SECONDS, _TREND_REL_FRACTION * m1)
+    if abs(diff) < threshold:
+        return "stable"
+    return "later" if diff > 0 else "earlier"
+
+
+def _empty_token_row(token: TimingToken, source: str) -> Dict:
+    """Build the canonical no-data row for one ``TimingToken``.
+
+    All numeric fields are ``None`` and all display fields are ``"-"``.
+    ``trend`` is ``"unknown"`` (no samples => no signal). ``source`` is
+    ``"opp_build_log"`` for opponent-race tokens and ``"build_log"`` for
+    the user's-race tokens, so the UI can label provenance even on
+    empty cards.
+    """
+    return {
+        "sample_count": 0,
+        "median_seconds": None,
+        "median_display": "-",
+        "p25_seconds": None,
+        "p25_display": "-",
+        "p75_seconds": None,
+        "p75_display": "-",
+        "min_seconds": None,
+        "min_display": "-",
+        "max_seconds": None,
+        "max_display": "-",
+        "last_seen_seconds": None,
+        "last_seen_display": "-",
+        "win_rate_when_built": None,
+        "trend": "unknown",
+        "source": source,
+    }
 
 
 class OpponentProfiler:
@@ -80,7 +150,8 @@ class OpponentProfiler:
         self._opponent_groups: Optional[Dict[str, List[Dict]]] = None
         # raw observed name -> canonical display name (for lookup by alias)
         self._aliases: Optional[Dict[str, str]] = None
-        self._profile_cache: Dict[str, Dict] = {}
+        # Cache key is (opponent_name, my_race) so swapping races invalidates.
+        self._profile_cache: Dict[Tuple[str, str], Dict] = {}
 
     # ------------------------------------------------------------------ cache
 
@@ -207,20 +278,54 @@ class OpponentProfiler:
         rows.sort(key=lambda r: (-r["total"], r["name"].lower()))
         return rows
 
-    def profile(self, name: str) -> Dict:
-        """Build (and cache) the full DNA profile for a single opponent."""
-        if name in self._profile_cache:
-            return self._profile_cache[name]
+    def profile(self, name: str, my_race: str = "") -> Dict:
+        """Build (and cache) the full DNA profile for a single opponent.
+
+        ``my_race`` is the user's race for the matchup. It controls which
+        timings are eligible per game (PvZ filters out Barracks, etc.) and
+        is used to pick the modal opponent race for canonical token order.
+        Pass ``""`` if unknown - timings will be empty in that case but the
+        rest of the profile (race distribution, top strategies, map W/L,
+        last-5) still renders normally.
+        """
+        cache_key = (name, normalize_race(my_race))
+        if cache_key in self._profile_cache:
+            return self._profile_cache[cache_key]
 
         games = self._games_for(name)
+
+        # Modal opponent race = most common opp_race across the games we
+        # have. Used for canonical timings ordering and for the matchup
+        # label in the profile payload.
+        opp_races_norm = [normalize_race(g.get("opp_race")) for g in games]
+        opp_races_norm = [r for r in opp_races_norm if r]
+        modal_opp = (
+            Counter(opp_races_norm).most_common(1)[0][0]
+            if opp_races_norm else ""
+        )
+        my_norm = normalize_race(my_race)
+
         if not games:
+            timings = self._empty_timings(my_race, modal_opp)
             empty = {
-                "name": name, "total": 0, "wins": 0, "losses": 0, "win_rate": 0.0,
-                "last_seen": "", "race_distribution": {}, "top_strategies": [],
-                "map_performance": [], "median_timings": self._empty_timings(),
+                "name": name,
+                "total": 0,
+                "wins": 0,
+                "losses": 0,
+                "win_rate": 0.0,
+                "last_seen": "",
+                "race_distribution": {},
+                "top_strategies": [],
+                "map_performance": [],
+                "median_timings": timings,
+                "median_timings_order": list(timings.keys()),
+                "matchup_label": matchup_label(my_race, modal_opp),
+                "matchup_counts": {},
+                "my_race": my_norm,
+                "opp_race_modal": modal_opp,
                 "last_5_games": [],
             }
-            self._profile_cache[name] = empty
+            self._profile_cache[cache_key] = empty
             return empty
 
         wins = sum(1 for g in games if g.get("result") == "Win")
@@ -268,7 +373,22 @@ class OpponentProfiler:
             key=lambda r: -r["total"],
         )
 
-        timings = self._compute_median_timings(games)
+        timings = self._compute_median_timings(games, my_race)
+
+        # Per-matchup counts for the timings card's "All / PvZ (8) / PvT (3)"
+        # selector chips. Keyed by canonical matchup label ("PvZ", "ZvT").
+        # Only populated when my_race is known; the UI hides the chip row
+        # when this dict is empty.
+        matchup_counts: Dict[str, int] = {}
+        if my_norm:
+            for g in games:
+                opp_r = normalize_race(g.get("opp_race"))
+                if not opp_r:
+                    continue
+                ml = matchup_label(my_norm, opp_r)
+                if not ml:
+                    continue
+                matchup_counts[ml] = matchup_counts.get(ml, 0) + 1
 
         sorted_games = sorted(games, key=lambda g: g.get("date", "") or "", reverse=True)
         last5 = [{
@@ -291,9 +411,14 @@ class OpponentProfiler:
             "top_strategies": top_strats,
             "map_performance": map_rows,
             "median_timings": timings,
+            "median_timings_order": list(timings.keys()),
+            "matchup_label": matchup_label(my_race, modal_opp),
+            "matchup_counts": matchup_counts,
+            "my_race": my_norm,
+            "opp_race_modal": modal_opp,
             "last_5_games": last5,
         }
-        self._profile_cache[name] = prof
+        self._profile_cache[cache_key] = prof
         return prof
 
     def predict_likely_strategies(
@@ -327,42 +452,222 @@ class OpponentProfiler:
     # ------------------------------------------------------------ timing helpers
 
     @staticmethod
-    def _empty_timings() -> Dict[str, Dict]:
+    def _empty_timings(my_race: str = "", opp_race: str = "") -> Dict[str, Dict]:
+        """Return the canonical empty-timings shape for a matchup.
+
+        Same dict shape as ``_compute_median_timings``, but every numeric
+        field is ``None``, every display field is ``"-"``, and every
+        ``sample_count`` is ``0``. Tokens are sourced from the same
+        ``relevant_tokens(my_race, opp_race)`` call the populated path uses,
+        so the UI gets stable, matchup-relevant slots even when no data
+        has been collected yet.
+
+        Returns ``{}`` when ``my_race`` is unknown.
+        When ``opp_race`` is unknown but ``my_race`` is known, falls back to
+        the user's-race tokens in canonical order so the UI still has
+        something honest to render.
+        """
+        my = normalize_race(my_race)
+        if not my:
+            return {}
+        opp = normalize_race(opp_race)
+        if opp:
+            ordering = relevant_tokens(my, opp)
+        else:
+            ordering = list(RACE_BUILDINGS[my])
+        own_internal_set = {tok.internal_name for tok in RACE_BUILDINGS[my]}
         return {
-            tok: {"median_seconds": None, "median_display": "-", "sample_count": 0}
-            for tok in KEY_TIMING_BUILDINGS
+            tok.internal_name: _empty_token_row(
+                tok,
+                "build_log" if tok.internal_name in own_internal_set else "opp_build_log",
+            )
+            for tok in ordering
         }
 
     @staticmethod
-    def _compute_median_timings(games: List[Dict]) -> Dict[str, Dict]:
-        """Median first-occurrence timing per token across `games`."""
-        per_building: Dict[str, List[int]] = defaultdict(list)
-        for g in games:
-            seen_in_game: Dict[str, int] = {}
-            for line in (g.get("build_log") or []):
-                m = _TIMING_RE.match(line)
-                if not m:
-                    continue
-                mins, secs, raw_name = int(m.group(1)), int(m.group(2)), m.group(3)
-                t = mins * 60 + secs
-                lower = raw_name.lower()
-                for token in KEY_TIMING_BUILDINGS:
-                    if token.lower() in lower:
-                        if token not in seen_in_game or t < seen_in_game[token]:
-                            seen_in_game[token] = t
-            for token, t in seen_in_game.items():
-                per_building[token].append(t)
+    def _compute_median_timings(games: List[Dict], my_race: str) -> Dict[str, Dict]:
+        """Matchup-aware median first-occurrence timings keyed by ``internal_name``.
 
+        For each game in ``games``:
+
+        1. Derive the per-game matchup from ``g["opp_race"]`` and ``my_race``.
+        2. ``relevant_tokens(my_race, opp_race)`` decides which tokens are
+           eligible *for that game* (PvZ never collects Barracks samples).
+        3. For each eligible token, source the timing from
+           ``opp_build_log`` (opponent-race tokens) or ``build_log``
+           (user's-race tokens). Tokens that don't match the player's race
+           on either side are silently skipped.
+
+        Results are keyed by token in the order returned by
+        ``relevant_tokens(my_race, modal_opp_race)`` where ``modal_opp_race``
+        is the most common opponent race across ``games``. Tokens with no
+        samples still appear (with ``sample_count == 0``) so the UI can
+        render stable, matchup-relevant "no data" cards.
+
+        Per-token output (matches the ``_empty_token_row`` shape):
+        ``sample_count`` / ``median_seconds`` / ``median_display`` /
+        ``p25_seconds`` / ``p25_display`` / ``p75_seconds`` /
+        ``p75_display`` / ``min_seconds`` / ``min_display`` /
+        ``max_seconds`` / ``max_display`` / ``last_seen_seconds`` /
+        ``last_seen_display`` / ``win_rate_when_built`` / ``trend`` /
+        ``source``.
+
+        Returns ``{}`` when ``my_race`` is unknown. Returns the empty-shape
+        dict (own-race tokens, all empty) when no game has a usable
+        ``opp_race``.
+        """
+        my = normalize_race(my_race)
+        if not my:
+            return {}
+
+        games = games or []
+
+        # Modal opponent race for canonical ordering. If none of the games
+        # carry an opp_race we still return a stable shape (own-race tokens
+        # in canonical order) so the UI can render empty cards.
+        opp_races_norm = [normalize_race(g.get("opp_race")) for g in games]
+        opp_races_norm = [r for r in opp_races_norm if r]
+        if not opp_races_norm:
+            return OpponentProfiler._empty_timings(my_race, "")
+        modal_opp = Counter(opp_races_norm).most_common(1)[0][0]
+
+        ordering = relevant_tokens(my, modal_opp)
+        if not ordering:
+            return {}
+
+        own_internal_set = {tok.internal_name for tok in RACE_BUILDINGS[my]}
+
+        # Per-token sample collection.
+        #   internal_name -> [(seconds, date_str, won_bool), ...]
+        samples: Dict[str, List[Tuple[int, str, bool]]] = defaultdict(list)
+
+        for g in games:
+            opp_race = normalize_race(g.get("opp_race"))
+            if not opp_race:
+                continue
+            eligible = relevant_tokens(my, opp_race)
+            if not eligible:
+                continue
+            date_str = g.get("date", "") or ""
+            won = g.get("result") == "Win"
+
+            for tok in eligible:
+                if tok.internal_name in own_internal_set:
+                    log = g.get("build_log") or []
+                else:
+                    log = g.get("opp_build_log") or []
+
+                # First-occurrence wins: scan the log, keep the smallest
+                # timestamp whose building name contains this token.
+                tok_lower = tok.token.lower()
+                best_t: Optional[int] = None
+                for line in log:
+                    m = _TIMING_RE.match(line)
+                    if not m:
+                        continue
+                    mins, secs, raw_name = int(m.group(1)), int(m.group(2)), m.group(3)
+                    if tok_lower in raw_name.lower():
+                        t = mins * 60 + secs
+                        if best_t is None or t < best_t:
+                            best_t = t
+                if best_t is not None:
+                    samples[tok.internal_name].append((best_t, date_str, won))
+
+        # Build the output, in canonical order.
         out: Dict[str, Dict] = {}
-        for token in KEY_TIMING_BUILDINGS:
-            samples = per_building.get(token, [])
-            if samples:
-                med = median(samples)
-                out[token] = {
-                    "median_seconds": float(med),
-                    "median_display": _format_seconds(med),
-                    "sample_count": len(samples),
-                }
+        for tok in ordering:
+            source = (
+                "build_log"
+                if tok.internal_name in own_internal_set
+                else "opp_build_log"
+            )
+            sample_list = samples.get(tok.internal_name, [])
+            if not sample_list:
+                out[tok.internal_name] = _empty_token_row(tok, source)
+                continue
+
+            # Chronological sort for trend calculation. Empty date strings
+            # sort to the front, which is fine - they just count as the
+            # "older" half.
+            sample_list_sorted = sorted(sample_list, key=lambda x: x[1])
+            seconds_list = [s[0] for s in sample_list_sorted]
+            wins_in_token = sum(1 for s in sample_list_sorted if s[2])
+            n = len(seconds_list)
+
+            med = median(seconds_list)
+            if n >= 2:
+                try:
+                    q = quantiles(seconds_list, n=4, method="inclusive")
+                    p25 = int(round(q[0]))
+                    p75 = int(round(q[2]))
+                except StatisticsError:
+                    p25 = p75 = int(round(med))
             else:
-                out[token] = {"median_seconds": None, "median_display": "-", "sample_count": 0}
+                p25 = p75 = int(round(med))
+
+            mn = int(min(seconds_list))
+            mx = int(max(seconds_list))
+            last_seen_t = int(sample_list_sorted[-1][0])
+            win_rate = wins_in_token / n
+            trend = _compute_trend(seconds_list)
+
+            out[tok.internal_name] = {
+                "sample_count": n,
+                "median_seconds": float(med),
+                "median_display": _format_seconds(med),
+                "p25_seconds": p25,
+                "p25_display": _format_seconds(p25),
+                "p75_seconds": p75,
+                "p75_display": _format_seconds(p75),
+                "min_seconds": mn,
+                "min_display": _format_seconds(mn),
+                "max_seconds": mx,
+                "max_display": _format_seconds(mx),
+                "last_seen_seconds": last_seen_t,
+                "last_seen_display": _format_seconds(last_seen_t),
+                "win_rate_when_built": win_rate,
+                "trend": trend,
+                "source": source,
+            }
+
         return out
+
+    @staticmethod
+    def _compute_median_timings_for_matchup(
+        games: List[Dict], my_race: str, opp_race: str,
+    ) -> Dict[str, Dict]:
+        """Per-matchup variant of :meth:`_compute_median_timings`.
+
+        Filters ``games`` to those with ``opp_race == opp_race`` *before*
+        delegating to ``_compute_median_timings``. The returned dict has
+        the same shape and ordering rules as the all-matchup view, except
+        the modal opponent race is forced to ``opp_race`` so token
+        ordering stays stable for that matchup even when only one game
+        survives the filter.
+
+        Behavior contract:
+
+        * ``opp_race`` blank / unknown -> falls back to the unfiltered
+          all-matchup view (so callers can pass the user's "All"
+          selection straight through without branching).
+        * ``my_race`` blank / unknown -> returns ``{}`` exactly like
+          ``_compute_median_timings``.
+        * No games left after filtering -> returns the empty-shape dict
+          for ``(my_race, opp_race)`` so the UI still gets matchup-
+          relevant slots to render as "no samples in this matchup".
+        """
+        my = normalize_race(my_race)
+        opp = normalize_race(opp_race)
+        if not my:
+            return {}
+        if not opp:
+            # No matchup constraint -> behave exactly like the all view.
+            return OpponentProfiler._compute_median_timings(games, my_race)
+
+        filtered = [
+            g for g in (games or [])
+            if normalize_race(g.get("opp_race")) == opp
+        ]
+        if not filtered:
+            return OpponentProfiler._empty_timings(my_race, opp_race)
+        return OpponentProfiler._compute_median_timings(filtered, my_race)

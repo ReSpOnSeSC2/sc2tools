@@ -5,6 +5,10 @@ import sc2reader
 from datetime import datetime
 import concurrent.futures
 
+# Atomic JSON writer -- prevents partial writes if the process is killed
+# mid-flush (the bug that left MyOpponentHistory.json truncated in 04/2026).
+from core.atomic_io import atomic_write_json
+
 # --- CONFIGURATION ---
 HISTORY_FILE = "MyOpponentHistory.json"
 REPLAYS_DIR = r"C:\Users\jay19\OneDrive\Pictures\Documents\StarCraft II\Accounts\50983875\1-S2-1-267727"
@@ -200,9 +204,9 @@ def backfill_history():
 
             games_processed += 1
 
-    # 5. Save the updated history
-    with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
-        json.dump(history, f, indent=4)
+    # 5. Save the updated history (atomic write so a kill mid-flush
+    # can't leave the file in a half-written state).
+    atomic_write_json(HISTORY_FILE, history, indent=4)
 
     print("\n--- SUMMARY ---")
     print(f"Successfully added: {games_processed} new games.")

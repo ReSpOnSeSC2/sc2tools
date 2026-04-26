@@ -45,9 +45,8 @@ def initialize_custom_builds() -> None:
     if os.path.exists(CUSTOM_BUILDS_FILE):
         return
     try:
-        os.makedirs(os.path.dirname(CUSTOM_BUILDS_FILE), exist_ok=True)
-        with open(CUSTOM_BUILDS_FILE, "w", encoding="utf-8") as f:
-            json.dump(_DEFAULT_DATA, f, indent=4)
+        from core.atomic_io import atomic_write_json
+        atomic_write_json(CUSTOM_BUILDS_FILE, _DEFAULT_DATA, indent=4)
     except Exception as exc:  # pragma: no cover
         print(f"[CustomBuilds] Failed to initialize: {exc}")
 

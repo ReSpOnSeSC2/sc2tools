@@ -41,6 +41,13 @@
   <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 
+  <!-- Shared key-timing taxonomy. UMD module that exposes
+       `window.TimingCatalog`. Mirrors `analytics/timing_catalog.py`
+       byte-for-byte (in spirit) so the SPA, the Node API, and the
+       desktop GUI all share one source of truth for which buildings
+       are matchup-relevant and what their icons / display names are. -->
+  <script src="/static/analyzer/timing_catalog.js"></script>
+
   <!-- Charts are now hand-rolled SVG inside the JSX block below --
        no Recharts/Chart.js CDN required. This makes the analyzer
        work even on locked-down networks where third-party CDNs are
@@ -162,6 +169,59 @@
     const r = (race || '').charAt(0).toUpperCase();
     return ['Z','P','T','R'].includes(r) ? `race-${r}` : 'text-neutral-400';
   };
+  // Building-icon URL resolver.
+  // Source of truth lives in `analytics/timing_catalog.py`; the JS twin
+  // is loaded as a `<script src="/static/analyzer/timing_catalog.js">`
+  // tag at the top of this page and exposed as `window.TimingCatalog`.
+  // The Express server (index.js) mounts the SC2-Overlay/icons folder
+  // at `/static/icons/...`. Reuse this resolver everywhere a building
+  // icon is rendered so the URL pattern is defined exactly once.
+  const _BUILDING_ICON_FALLBACK = '/static/icons/buildings/';
+  function buildingIconUrl(internalName) {
+    if (!internalName) return null;
+    const TC = window.TimingCatalog;
+    if (TC && typeof TC.tokenByInternalName === 'function') {
+      const t = TC.tokenByInternalName(internalName);
+      if (t && t.iconFile) return _BUILDING_ICON_FALLBACK + t.iconFile;
+    }
+    // Fallback: lowercase the internal name. Keeps the page from showing
+    // a broken image if the catalog script hasn't loaded for any reason.
+    return _BUILDING_ICON_FALLBACK + String(internalName).toLowerCase() + '.png';
+  }
+  function buildingDisplayName(internalName, fallback) {
+    const TC = window.TimingCatalog;
+    if (TC && typeof TC.tokenByInternalName === 'function') {
+      const t = TC.tokenByInternalName(internalName);
+      if (t && t.displayName) return t.displayName;
+    }
+    return fallback || internalName || '';
+  }
+  // Win-rate-when-built pill color. Mirrors `wrColor` but uses softer
+  // tones for the "n=1" / no-confidence edge case.
+  function wrPillColor(rate, n) {
+    if (rate == null || !n) return '#5d6677';
+    if (rate >= 0.6) return '#3ddc97';
+    if (rate >= 0.4) return '#f4c95d';
+    return '#ef476f';
+  }
+  // Trend arrow + aria-label for a given trend string.
+  const TREND_GLYPHS = {
+    later:   { glyph: '▲', label: 'trending later',   color: '#f79e6c' },
+    earlier: { glyph: '▼', label: 'trending earlier', color: '#3ddc97' },
+    stable:  { glyph: '–', label: 'stable',           color: '#9aa3b2' },
+    unknown: { glyph: '·', label: 'not enough data',  color: '#5d6677' },
+  };
+  function fmtRelDate(s) {
+    if (!s) return '';
+    const t = Date.parse(String(s).replace(' ', 'T'));
+    if (!Number.isFinite(t)) return String(s).slice(0, 10);
+    const days = Math.floor((Date.now() - t) / 86400000);
+    if (days <= 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 30) return days + 'd ago';
+    if (days < 365) return Math.floor(days / 30) + 'mo ago';
+    return Math.floor(days / 365) + 'y ago';
+  }
 
   // ---------- Reusable bits ------------------------------------
   function Card({ title, right, children, className = '' }) {
@@ -1522,17 +1582,35 @@
     );
   }
 
-  function GamesTableWithBuildOrder({ games, perspective }) {
+  function GamesTableWithBuildOrder({ games, perspective, targetGameId, targetGameSeq }) {
     // expandedId tracks which row's drawer is open; expandedMode controls
     // whether the drawer shows the build-order timeline ('build') or the
     // macro breakdown ('macro'). Both come from clicks on the same row.
     // `perspective` is forwarded to BuildOrderTimeline so the OpponentProfile
     // can default the drawer to the opponent's build (callers that don't
     // pass it get the user's build, the historical default).
+    // `targetGameId` / `targetGameSeq` are an external focus signal: the
+    // timings-drilldown 'open game →' link bumps the seq with the gameId
+    // it wants to bring into view. We honor it by expanding the row and
+    // scrolling the row into view; the seq bump means clicking the same
+    // game twice still re-fires the effect.
     const [expandedId, setExpandedId] = useState(null);
     const [expandedMode, setExpandedMode] = useState('build');
+    const tableRef = useRef(null);
+    useEffect(() => {
+      if (!targetGameId || !tableRef.current) return;
+      setExpandedId(targetGameId);
+      setExpandedMode('build');
+      const el = tableRef.current.querySelector(
+        `[data-game-row-id="${CSS && CSS.escape ? CSS.escape(targetGameId) : targetGameId}"]`
+      );
+      if (el && typeof el.scrollIntoView === 'function') {
+        try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        catch (_) { el.scrollIntoView(); }
+      }
+    }, [targetGameId, targetGameSeq]);
     return (
-      <table className="w-full text-sm">
+      <table ref={tableRef} className="w-full text-sm">
         <thead className="text-neutral-500 text-[11px] uppercase sticky top-0 bg-base-800">
           <tr>
             <th className="text-left py-1 px-2 w-6"></th>
@@ -1566,6 +1644,7 @@
             return (
               <Fragment key={id}>
                 <tr
+                  data-game-row-id={id}
                   className={"border-t border-base-700 "
                     + (expandable ? "cursor-pointer hover:bg-base-700/40 " : "")
                     + (isOpen ? "bg-base-700/30" : "")}
@@ -1651,24 +1730,689 @@
     );
   }
 
-  function MedianTimingsGrid({ timings }) {
-    const ORDER = ['Pool','Gateway','Barracks','Hatchery','Nexus','CommandCenter','Robo','Stargate','Spire','Twilight','Forge'];
-    if (!timings) return <EmptyState sub="No build_log data on these games" />;
+  /**
+   * Drilldown drawer - opens when a timing card is clicked, shows every
+   * game that contributed a sample for that token, sorted newest first.
+   *
+   * Layout: right-side off-canvas panel with backdrop. Focus is trapped
+   * inside the panel while open; Escape closes it. We intentionally do
+   * NOT introduce a new dialog framework -- this is a small fixed-
+   * position div using the same `bg-base-800 ring-soft` chrome as the
+   * Cards elsewhere in the SPA.
+   */
+  function TimingsDrilldownDrawer({
+    open, onClose, token, info, matchupLabel, onOpenGame
+  }) {
+    const panelRef = useRef(null);
+    const closeBtnRef = useRef(null);
+    const copyBtnRef = useRef(null);
+    const [copyState, setCopyState] = useState('idle'); // idle | copied | error
+    useEffect(() => {
+      if (!open) return undefined;
+      // Escape closes; Tab cycles focus inside the panel only (focus
+      // trap). The trap is a small handler -- we just keep tabs from
+      // jumping to elements outside the panel by snapping focus back to
+      // either the close button or the copy button at the boundary.
+      const focusables = () => {
+        if (!panelRef.current) return [];
+        return Array.from(panelRef.current.querySelectorAll(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )).filter(el => el.offsetParent !== null);
+      };
+      const onKey = (e) => {
+        if (e.key === 'Escape') { onClose(); return; }
+        if (e.key !== 'Tab') return;
+        const list = focusables();
+        if (list.length === 0) return;
+        const first = list[0];
+        const last  = list[list.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault(); last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault(); first.focus();
+        }
+      };
+      document.addEventListener('keydown', onKey);
+      // Initial focus: the Close button (pre-existing affordance).
+      const t = setTimeout(() => {
+        const node = panelRef.current && panelRef.current.querySelector('[data-autofocus]');
+        if (node) node.focus();
+      }, 30);
+      return () => { document.removeEventListener('keydown', onKey); clearTimeout(t); };
+    }, [open, onClose]);
+    // Reset the copy button label each time the drawer reopens on a new token.
+    useEffect(() => { setCopyState('idle'); }, [token, open]);
+
+    if (!open || !token || !info) return null;
+    const samples = Array.isArray(info.samples) ? info.samples : [];
+    const display = buildingDisplayName(token, token);
+    const iconUrl = buildingIconUrl(token);
+    const trend = TREND_GLYPHS[info.trend] || TREND_GLYPHS.unknown;
+
+    const sourceLabel = info.source === 'opp_build_log'
+      ? "opponent's structures (sc2reader)"
+      : 'your build (proxy for matchup tendencies)';
+
+    function copyAsMarkdown() {
+      const lines = [];
+      const ml = matchupLabel || '(matchup unknown)';
+      const n  = info.sampleCount || 0;
+      lines.push(`### ${display} — ${ml} (n=${n})`);
+      if (n >= 2 && info.p25Display && info.p75Display) {
+        lines.push(
+          `median ${info.medianDisplay} (p25–p75 ${info.p25Display}–${info.p75Display}` +
+          ((info.minDisplay && info.maxDisplay)
+            ? `, range ${info.minDisplay}–${info.maxDisplay})`
+            : ')')
+        );
+      } else {
+        lines.push(`median ${info.medianDisplay || '—'}`);
+      }
+      lines.push('');
+      lines.push('| Time | Date | Map | Matchup | Result | Source |');
+      lines.push('|------|------|-----|---------|--------|--------|');
+      for (const s of samples) {
+        const ts = s.display || _format_seconds_safe(s.seconds);
+        const dt = String(s.date || '').slice(0, 10) || '—';
+        const mp = String(s.map || '—').replace(/\|/g, '/');
+        const mu = `${(s.myRace || '?')[0].toUpperCase()} vs ${(s.oppRace || '?')[0].toUpperCase()}`;
+        const res = s.result || (s.won ? 'Win' : 'Loss');
+        const srcShort = info.source === 'opp_build_log' ? 'opp_log' : 'my_log';
+        lines.push(`| ${ts} | ${dt} | ${mp} | ${mu} | ${res} | ${srcShort} |`);
+      }
+      const md = lines.join('\n') + '\n';
+      // Prefer the Async Clipboard API; fall back to a hidden <textarea>
+      // selection if the page isn't running on https / clipboard-perms
+      // are denied (which is common on some local LAN deployments).
+      const done = () => {
+        setCopyState('copied');
+        setTimeout(() => setCopyState('idle'), 1400);
+      };
+      const fail = () => {
+        setCopyState('error');
+        setTimeout(() => setCopyState('idle'), 1800);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(md).then(done).catch(() => {
+          try {
+            const ta = document.createElement('textarea');
+            ta.value = md;
+            ta.style.position = 'fixed';
+            ta.style.left = '-1000px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            done();
+          } catch (_) { fail(); }
+        });
+      } else {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = md;
+          ta.style.position = 'fixed';
+          ta.style.left = '-1000px';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          done();
+        } catch (_) { fail(); }
+      }
+    }
+
+    const copyLabel = copyState === 'copied'
+      ? 'Copied!'
+      : copyState === 'error'
+      ? 'Copy failed'
+      : 'Copy timings to clipboard';
+
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-        {ORDER.map(tok => {
-          const info = timings[tok] || { medianDisplay: '-', sampleCount: 0 };
-          const empty = info.sampleCount === 0;
-          return (
-            <div key={tok} className="bg-base-700 ring-soft rounded-lg px-3 py-2">
-              <div className="text-[11px] uppercase tracking-wider text-neutral-500">{tok}</div>
-              <div className={`mt-0.5 text-xl font-semibold tabular-nums ${empty ? 'text-neutral-600' : 'text-neutral-100'}`}>
-                {info.medianDisplay}
+      <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true"
+           aria-label={`${display} — drilldown`}>
+        <div
+          className="flex-1 bg-black/60"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+        <aside
+          ref={panelRef}
+          className="w-[min(560px,95vw)] h-full bg-base-800 ring-soft shadow-soft
+                     flex flex-col"
+        >
+          <header className="flex items-center gap-3 px-5 py-4 border-b border-base-700">
+            {iconUrl && (
+              <img src={iconUrl} alt="" className="w-9 h-9 object-contain"
+                   onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-neutral-100 truncate">
+                {display}
               </div>
-              <div className="text-[10px] text-neutral-500 tabular-nums">n={info.sampleCount}</div>
+              <div className="text-[11px] text-neutral-500 truncate">
+                {matchupLabel ? `${matchupLabel} · ` : ''}n={info.sampleCount} · median {info.medianDisplay}
+                {info.p25Display && info.p75Display && info.sampleCount >= 2
+                  ? ` (${info.p25Display}–${info.p75Display})` : ''}
+                {info.minDisplay && info.maxDisplay && info.sampleCount >= 2
+                  ? ` · range ${info.minDisplay}–${info.maxDisplay}` : ''}
+              </div>
             </div>
+            <span title={trend.label} aria-label={trend.label}
+                  style={{ color: trend.color }}
+                  className="text-base font-semibold tabular-nums">{trend.glyph}</span>
+            <button
+              ref={closeBtnRef}
+              data-autofocus
+              onClick={onClose}
+              className="text-xs uppercase tracking-wider text-neutral-400
+                         hover:text-neutral-100 px-2 py-1 ring-soft rounded"
+              aria-label="Close drilldown"
+            >Close</button>
+          </header>
+          <div className="px-5 py-3 text-[11px] text-neutral-500 border-b border-base-700">
+            {sourceLabel}{' · '}sorted newest first
+          </div>
+          <div className="flex-1 overflow-y-auto" data-testid="timings-drilldown-list">
+            {samples.length === 0 ? (
+              <EmptyState title="No contributing games"
+                          sub="This token has no samples in the current games." />
+            ) : (
+              <VirtualizedSampleList
+                samples={samples}
+                source={info.source || ''}
+                onOpenGame={onOpenGame}
+              />
+            )}
+          </div>
+          <footer className="flex items-center gap-2 px-5 py-3 border-t border-base-700">
+            <button
+              ref={copyBtnRef}
+              type="button"
+              onClick={copyAsMarkdown}
+              className={
+                'text-xs px-3 py-1.5 rounded ring-soft transition-colors ' +
+                (copyState === 'copied'
+                  ? 'bg-win-500/20 text-win-500'
+                  : copyState === 'error'
+                  ? 'bg-loss-500/20 text-loss-500'
+                  : 'bg-base-700 hover:bg-base-700/70 text-neutral-300')
+              }
+              aria-label="Copy contributing games as Markdown"
+              title="Copies a Markdown table of every contributing game to your clipboard."
+            >{copyLabel}</button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="ml-auto text-xs px-3 py-1.5 rounded ring-soft
+                         bg-base-700 hover:bg-base-700/70 text-neutral-300"
+            >Close</button>
+          </footer>
+        </aside>
+      </div>
+    );
+  }
+  function _format_seconds_safe(s) {
+    if (s == null) return '—';
+    const n = Math.max(0, Math.floor(s));
+    return Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0');
+  }
+
+  /**
+   * IntersectionObserver-based virtual list for the drilldown samples.
+   *
+   * react-window isn't a dependency of this SPA (see package.json), so
+   * this is a hand-rolled windowing pattern: render lightweight
+   * placeholder rows for everything outside the viewport, swap in the
+   * full row template for items the IntersectionObserver flags as
+   * visible. Cuts initial DOM cost on opponents with hundreds of
+   * contributing games while keeping native scroll (no virtual height
+   * math, no jumpy scrollbar).
+   */
+  function VirtualizedSampleList({ samples, source, onOpenGame }) {
+    const containerRef = useRef(null);
+    const [visible, setVisible] = useState(() => {
+      // Pre-flag the first 30 rows visible so the user sees something
+      // immediately while the observer wires up.
+      const set = new Set();
+      for (let i = 0; i < Math.min(30, samples.length); i++) set.add(i);
+      return set;
+    });
+    useEffect(() => {
+      // Reset when the sample set changes (e.g. switching matchup chip).
+      const set = new Set();
+      for (let i = 0; i < Math.min(30, samples.length); i++) set.add(i);
+      setVisible(set);
+    }, [samples]);
+    useEffect(() => {
+      const root = containerRef.current;
+      if (!root) return undefined;
+      // No IntersectionObserver in the (rare) ancient browser case ->
+      // render everything. Better to pay the DOM cost once than to
+      // silently hide rows.
+      if (typeof IntersectionObserver === 'undefined') {
+        const all = new Set();
+        for (let i = 0; i < samples.length; i++) all.add(i);
+        setVisible(all);
+        return undefined;
+      }
+      const io = new IntersectionObserver((entries) => {
+        setVisible(prev => {
+          let changed = false;
+          const next = new Set(prev);
+          for (const e of entries) {
+            const i = parseInt(e.target.dataset.idx, 10);
+            if (Number.isNaN(i)) continue;
+            if (e.isIntersecting && !next.has(i)) { next.add(i); changed = true; }
+          }
+          return changed ? next : prev;
+        });
+      }, { root, rootMargin: '200px 0px', threshold: 0.01 });
+      // Observe every placeholder once it's mounted. Querying the DOM
+      // here keeps the observer in sync with React renders without
+      // forcing each row to wire up its own ref.
+      const stubs = root.querySelectorAll('[data-virtual-row]');
+      stubs.forEach(s => io.observe(s));
+      return () => io.disconnect();
+    }, [samples]);
+
+    const srcShort = source === 'opp_build_log' ? 'opp_log' : 'my_log';
+
+    return (
+      <ul ref={containerRef}
+          className="divide-y divide-base-700"
+          data-testid="timings-drilldown-virtual-list">
+        {samples.map((s, i) => {
+          const key = (s.gameId || 'g') + ':' + i;
+          if (!visible.has(i)) {
+            // Placeholder: same vertical footprint as a real row so the
+            // scrollbar tracks correctly. Carries the data-idx the
+            // observer needs to flip it visible.
+            return (
+              <li key={key}
+                  data-virtual-row
+                  data-idx={i}
+                  className="h-[58px]"
+                  aria-hidden="true" />
+            );
+          }
+          const isWin = (s.result === 'Win' || s.result === 'Victory' || !!s.won);
+          const isLoss = (s.result === 'Loss' || s.result === 'Defeat' || (!isWin && s.won === false));
+          const pillBg = isWin ? '#3ddc97' : isLoss ? '#ef476f' : '#9aa3b2';
+          const canOpen = !!s.gameId && typeof onOpenGame === 'function';
+          const onRowClick = canOpen ? () => onOpenGame(s.gameId) : undefined;
+          return (
+            <li key={key}
+                data-virtual-row
+                data-idx={i}
+                role={canOpen ? 'button' : undefined}
+                tabIndex={canOpen ? 0 : -1}
+                onClick={onRowClick}
+                onKeyDown={canOpen ? ((e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(); }
+                }) : undefined}
+                className={
+                  'px-5 py-3 hover:bg-base-700/40 focus-within:bg-base-700/40 ' +
+                  (canOpen ? 'cursor-pointer' : '')
+                }>
+              <div className="flex items-center gap-3 text-sm">
+                <span className="font-mono tabular-nums text-neutral-200 w-12">
+                  {s.display || _format_seconds_safe(s.seconds)}
+                </span>
+                <span className="text-neutral-300 truncate flex-1" title={s.map || ''}>
+                  {s.map || '—'}
+                </span>
+                <span className={raceClass(s.myRace) + ' text-xs font-mono'}>
+                  {(s.myRace || '?')[0].toUpperCase()}
+                </span>
+                <span className="text-neutral-600 text-xs">vs</span>
+                <span className={raceClass(s.oppRace) + ' text-xs font-mono'}>
+                  {(s.oppRace || '?')[0].toUpperCase()}
+                </span>
+                <span
+                  className="text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded text-white"
+                  style={{ background: pillBg }}
+                  title={isWin ? 'Win' : isLoss ? 'Loss' : 'Result unknown'}
+                >{isWin ? 'W' : isLoss ? 'L' : '?'}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between
+                              text-[11px] text-neutral-500">
+                <span title={s.date} className="font-mono">
+                  {fmtRelDate(s.date)} · {String(s.date || '').slice(0, 10) || '—'}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span
+                    className="text-[10px] uppercase tracking-wider text-neutral-500
+                               px-1.5 py-0.5 rounded bg-base-700"
+                    title={source === 'opp_build_log'
+                      ? "parsed from opponent's build log (sc2reader)"
+                      : "parsed from your build log"}
+                  >{srcShort}</span>
+                  {canOpen ? (
+                    <span className="text-accent-400 hover:text-accent-500
+                                     underline decoration-dotted underline-offset-2"
+                          aria-hidden="true">open game →</span>
+                  ) : null}
+                </span>
+              </div>
+            </li>
           );
         })}
+      </ul>
+    );
+  }
+
+  /**
+   * Matchup-aware Median Timings grid.
+   *
+   * Source of order: `data.medianTimingsOrder` from the API payload.
+   * Source of taxonomy (display name, icon, race ownership): the
+   * `window.TimingCatalog` script tag loaded at the top of the page.
+   *
+   * UI features:
+   *   - Building icon (top-left), display name, hero median, p25-p75
+   *     range, sample-count badge, win-rate pill, trend arrow.
+   *   - Empty cards (sampleCount === 0) render dimmed + non-clickable
+   *     subline "no samples"; still keyboard-focusable so screen-reader
+   *     users can scan the matchup-relevant slots.
+   *   - Click opens the side drilldown drawer with the contributing games.
+   *   - Source filter pills above the grid filter by `source`. Choice
+   *     persists in localStorage under `analyzer.timings.sourceFilter`.
+   *   - aria-live summary line announces matchup + filter changes.
+   */
+  function MedianTimingsGrid({
+    timings, order, matchupLabel, opponentName,
+    matchupCounts, matchupTimings, onOpenGame
+  }) {
+    // Source filter ('both' | 'opp' | 'self'), persisted in localStorage.
+    const SF_KEY = 'analyzer.timings.sourceFilter';
+    const [sourceFilter, setSourceFilter] = useState(() => {
+      try {
+        const v = window.localStorage && window.localStorage.getItem(SF_KEY);
+        return (v === 'opp' || v === 'self') ? v : 'both';
+      } catch (_) { return 'both'; }
+    });
+    useEffect(() => {
+      try { window.localStorage && window.localStorage.setItem(SF_KEY, sourceFilter); }
+      catch (_) { /* private mode: just live with in-memory state */ }
+    }, [sourceFilter]);
+
+    // Per-matchup selector ('All' | matchup label, e.g. 'PvZ').
+    // Persisted per-opponent under analyzer.timings.matchup[<opp_name>]
+    // so each opponent remembers the last matchup the user inspected.
+    const MS_KEY = 'analyzer.timings.matchup';
+    const opponentKey = (opponentName || matchupLabel || '__none__');
+    const matchupChips = matchupCounts && Object.keys(matchupCounts).length > 0
+      ? Object.entries(matchupCounts).sort((a, b) => b[1] - a[1])
+      : [];
+    const [activeMatchup, setActiveMatchup] = useState(() => {
+      try {
+        const v = window.localStorage && window.localStorage.getItem(MS_KEY);
+        const obj = v ? JSON.parse(v) : null;
+        const stored = obj && obj[opponentKey];
+        // Validate: only honor the saved value if it's still a real chip.
+        if (stored === 'All' || stored == null) return 'All';
+        if (matchupCounts && matchupCounts[stored]) return stored;
+        return 'All';
+      } catch (_) { return 'All'; }
+    });
+    useEffect(() => {
+      try {
+        if (!window.localStorage) return;
+        const v = window.localStorage.getItem(MS_KEY);
+        const obj = (v ? JSON.parse(v) : null) || {};
+        obj[opponentKey] = activeMatchup;
+        window.localStorage.setItem(MS_KEY, JSON.stringify(obj));
+      } catch (_) { /* private mode: just live with in-memory state */ }
+    }, [activeMatchup, opponentKey]);
+
+    // Pick the timings/order/label that match the active matchup chip.
+    // 'All' = the unfiltered backend payload; per-matchup = the
+    // backend-precomputed `matchupTimings[label]` blob.
+    let activeTimings = timings;
+    let activeOrder = order;
+    let activeLabel = matchupLabel;
+    if (activeMatchup !== 'All' && matchupTimings && matchupTimings[activeMatchup]) {
+      activeTimings = matchupTimings[activeMatchup].timings;
+      activeOrder = matchupTimings[activeMatchup].order;
+      activeLabel = activeMatchup;
+    }
+
+    // Drilldown state.
+    const [drillToken, setDrillToken] = useState(null);
+
+    if (!activeTimings || !activeOrder || activeOrder.length === 0) {
+      return (
+        <EmptyState
+          title="No matchup-relevant timings"
+          sub="This opponent has no games with both build logs parsed yet."
+        />
+      );
+    }
+
+    // Apply source filter to the canonical order. Tokens not in `activeTimings`
+    // are silently dropped, so we never render a building outside the
+    // backend's matchup-relevant list.
+    const visibleTokens = activeOrder.filter(tok => {
+      const info = activeTimings[tok];
+      if (!info) return false;
+      if (sourceFilter === 'opp')  return info.source === 'opp_build_log';
+      if (sourceFilter === 'self') return info.source === 'build_log';
+      return true;
+    });
+
+    const total = activeOrder.length;
+    const filterSuffix = sourceFilter === 'opp'
+      ? ' — opponent tech only'
+      : sourceFilter === 'self' ? ' — your tech only' : '';
+    const matchupSuffix = activeMatchup === 'All'
+      ? ''
+      : ` (${matchupCounts && matchupCounts[activeMatchup] || 0} game${
+          (matchupCounts && matchupCounts[activeMatchup]) === 1 ? '' : 's'})`;
+    const summary = activeLabel
+      ? `Showing ${visibleTokens.length} of ${total} timings for ${activeLabel}${matchupSuffix}${filterSuffix}`
+      : `Showing ${visibleTokens.length} of ${total} timings${filterSuffix}`;
+
+    const filterBtn = (key, label) => {
+      const active = sourceFilter === key;
+      return (
+        <button
+          key={key}
+          type="button"
+          onClick={() => setSourceFilter(key)}
+          aria-pressed={active}
+          className={
+            'px-3 py-1 rounded-full text-xs ring-soft transition-colors ' +
+            (active
+              ? 'bg-accent-500/20 text-accent-400'
+              : 'bg-base-700 text-neutral-400 hover:text-neutral-200')
+          }
+        >{label}</button>
+      );
+    };
+
+    // Per-matchup chip ("All" + one per matchup the opponent has
+    // played). Same pill chrome as the source filter so the two rows
+    // read as a coherent control bar.
+    const matchupBtn = (key, label, count) => {
+      const active = activeMatchup === key;
+      return (
+        <button
+          key={key}
+          type="button"
+          onClick={() => setActiveMatchup(key)}
+          aria-pressed={active}
+          className={
+            'px-3 py-1 rounded-full text-xs ring-soft transition-colors ' +
+            (active
+              ? 'bg-accent-500/20 text-accent-400'
+              : 'bg-base-700 text-neutral-400 hover:text-neutral-200')
+          }
+        >{count == null ? label : `${label} (${count})`}</button>
+      );
+    };
+
+    return (
+      <div data-testid="median-timings-grid">
+        {matchupChips.length > 0 ? (
+          <div
+            className="flex flex-wrap items-center gap-2 mb-2"
+            data-testid="median-timings-matchup-chips"
+          >
+            {matchupBtn('All', 'All', null)}
+            {matchupChips.map(([ml, n]) => matchupBtn(ml, ml, n))}
+          </div>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          {filterBtn('both', 'Both')}
+          {filterBtn('opp',  "Opponent's tech")}
+          {filterBtn('self', 'Your tech')}
+        </div>
+        <div
+          aria-live="polite"
+          className="text-[11px] text-neutral-500 mb-2"
+          data-testid="median-timings-summary"
+        >{summary}</div>
+        {visibleTokens.length === 0 ? (
+          <EmptyState
+            title="No timings for this filter"
+            sub="Try the other source pill or 'Both'."
+          />
+        ) : (
+          <div
+            className="grid gap-2"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}
+          >
+            {visibleTokens.map(tok => (
+              <TimingCard
+                key={tok}
+                token={tok}
+                info={activeTimings[tok]}
+                onClick={() => {
+                  // Don't open the drawer on empty cards.
+                  if ((activeTimings[tok] || {}).sampleCount > 0) setDrillToken(tok);
+                }}
+              />
+            ))}
+          </div>
+        )}
+        <TimingsDrilldownDrawer
+          open={!!drillToken}
+          onClose={() => setDrillToken(null)}
+          token={drillToken}
+          info={drillToken ? activeTimings[drillToken] : null}
+          matchupLabel={activeLabel}
+          onOpenGame={onOpenGame}
+        />
+      </div>
+    );
+  }
+
+  /**
+   * One card in the grid. Renders the icon + median + metadata.
+   * Empty cards (sampleCount === 0) get dimmed styling and are still
+   * Tab-focusable but never open the drilldown.
+   */
+  function TimingCard({ token, info, onClick }) {
+    info = info || {};
+    const empty = !info.sampleCount;
+    const iconUrl = buildingIconUrl(token);
+    const display = buildingDisplayName(token, token);
+    const trend = TREND_GLYPHS[info.trend] || TREND_GLYPHS.unknown;
+    const wrPctStr = (info.winRateWhenBuilt == null)
+      ? '—'
+      : Math.round(info.winRateWhenBuilt * 100) + '%';
+    const wrPillBg = wrPillColor(info.winRateWhenBuilt, info.sampleCount);
+    const sourceLabel = info.source === 'opp_build_log'
+      ? "opponent's structures (sc2reader)"
+      : 'your build (proxy for matchup tendencies)';
+
+    // Tooltip content. Composed once so hover/focus produce the same text.
+    const tipLines = [];
+    if (info.sampleCount) {
+      if (info.minDisplay && info.maxDisplay)
+        tipLines.push(`range ${info.minDisplay}–${info.maxDisplay}`);
+      if (info.lastSeenDisplay && info.lastSeenDisplay !== '-')
+        tipLines.push(`last seen at ${info.lastSeenDisplay}`);
+      tipLines.push(sourceLabel);
+      tipLines.push(`n=${info.sampleCount} matchup samples`);
+    } else {
+      tipLines.push('No samples in this matchup');
+      tipLines.push(sourceLabel);
+    }
+    const tipTitle = tipLines.join('\n');
+
+    const ariaLabel = empty
+      ? `${display} — no samples`
+      : `${display}, median ${info.medianDisplay}, n=${info.sampleCount}, `
+        + `win rate ${wrPctStr}, ${trend.label}`;
+
+    return (
+      <div
+        role={empty ? undefined : 'button'}
+        tabIndex={empty ? -1 : 0}
+        aria-label={ariaLabel}
+        aria-disabled={empty || undefined}
+        onClick={empty ? undefined : onClick}
+        onKeyDown={empty ? undefined : ((e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick && onClick(); }
+        })}
+        title={tipTitle}
+        className={
+          'bg-base-700 ring-soft rounded-lg px-3 py-2 ' +
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ' +
+          (empty
+            ? 'opacity-60 cursor-default'
+            : 'cursor-pointer hover:bg-base-700/80 focus:ring-2 focus:ring-accent-500')
+        }
+        data-testid="timing-card"
+        data-token={token}
+        data-empty={empty ? '1' : '0'}
+        data-empty-card={empty ? '1' : '0'}
+        data-source={info.source || ''}
+      >
+        <div className="flex items-start gap-2">
+          {iconUrl ? (
+            <img
+              src={iconUrl}
+              alt=""
+              width={28} height={28}
+              className={'w-7 h-7 object-contain flex-none ' + (empty ? 'opacity-50' : '')}
+              onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+            />
+          ) : (
+            <div className="w-7 h-7 rounded bg-base-800 flex-none" aria-hidden="true" />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] uppercase tracking-wider text-neutral-500 truncate">
+              {display}
+            </div>
+            <div className={'mt-0.5 text-xl font-semibold tabular-nums '
+                + (empty ? 'text-neutral-600' : 'text-neutral-100')}>
+              {info.medianDisplay || '-'}
+            </div>
+            {!empty && info.p25Display && info.p75Display && info.sampleCount >= 2 ? (
+              <div className="text-[10px] text-neutral-500 tabular-nums">
+                {info.p25Display} — {info.p75Display}
+              </div>
+            ) : empty ? (
+              <div className="text-[10px] text-neutral-600">no samples</div>
+            ) : (
+              <div className="text-[10px] text-neutral-600">single sample</div>
+            )}
+          </div>
+        </div>
+        <div className="mt-1 flex items-center gap-1 text-[10px]">
+          <span className="text-neutral-500 tabular-nums">n={info.sampleCount}</span>
+          {!empty ? (
+            <span
+              className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+              style={{ background: wrPillBg + '22', color: wrPillBg }}
+              title={`win rate when built: ${wrPctStr}`}
+            >{wrPctStr}</span>
+          ) : null}
+          <span className="ml-auto" aria-label={trend.label}
+                title={trend.label} style={{ color: trend.color }}>{trend.glyph}</span>
+        </div>
       </div>
     );
   }
@@ -1960,6 +2704,17 @@
 
   function OpponentProfile({ pulseId, onBack, dbRev }) {
     const { data, loading, error } = useApi(`opponents/${encodeURIComponent(pulseId)}`, null, [pulseId, dbRev]);
+    // Lifted state so the timings-drilldown 'open game →' link can
+    // ask the games table at the bottom of the page to expand a
+    // specific row. Bumping `targetSeq` re-fires the effect that scrolls
+    // and expands even if the user clicks the same gameId twice.
+    const [targetGameId, setTargetGameId] = useState(null);
+    const [targetSeq, setTargetSeq] = useState(0);
+    const handleOpenGame = (id) => {
+      if (!id) return;
+      setTargetGameId(id);
+      setTargetSeq(s => s + 1);
+    };
     if (loading) return <Skeleton rows={6} />;
     if (error || !data) return (
       <div>
@@ -2032,12 +2787,22 @@
           </Card>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <Card title="Median key timings  (from build_log)">
+          <Card title={`Median key timings${data.matchupLabel ? ' \u2014 ' + data.matchupLabel : ''}`}>
             <ErrorBoundary label="Median timings">
-              <MedianTimingsGrid timings={data.medianTimings} />
+              <MedianTimingsGrid
+                timings={data.medianTimings}
+                order={data.medianTimingsOrder || []}
+                matchupLabel={data.matchupLabel || ''}
+                opponentName={data.name || data.pulseId || ''}
+                matchupCounts={data.matchupCounts || {}}
+                matchupTimings={data.matchupTimings || {}}
+                onOpenGame={handleOpenGame}
+              />
             </ErrorBoundary>
             <div className="text-[10px] text-neutral-600 mt-2">
-              Timings reflect whichever player's buildings appear in build_log on these games. '-' means no samples.
+              Opponent-tech cards are sourced from <code className="font-mono">opp_build_log</code> (sc2reader);
+              your-tech cards from your <code className="font-mono">build_log</code>. Click a card to see the
+              contributing games. '-' means no samples in this matchup.
             </div>
           </Card>
           <Card title="Last 5 games">
@@ -2061,6 +2826,8 @@
                 casing (Date/date, Map/map, Result/result) so the shared
                 table doesn't have to handle the Black-Book schema. */}
             <GamesTableWithBuildOrder
+              targetGameId={targetGameId}
+              targetGameSeq={targetSeq}
               games={[...(data.games || [])]
                 .map(g => ({
                   ...g,
@@ -2141,818 +2908,4 @@
               <StackedBars data={series} height={240} />
             </Card>
             <Card title="Win rate trend">
-              <LinePath data={series} height={240} valueKey="winRate" yMax={1} />
-            </Card>
-          </Fragment>
-        )}
-      </div>
-    );
-  }
-
-  // ============================================================
-  // ML / Predict tab
-  //
-  // Three panels:
-  //   1. Status + train (live progress over Socket.io 'ml_train_progress'
-  //      and 'ml_train_complete' events).
-  //   2. What-if mid-game predictor (slider-driven; debounced fetch
-  //      to /api/analyzer/ml/predict).
-  //   3. Pre-game predictor (history-based; calls /ml/pregame, with
-  //      a per-component breakdown).
-  //
-  // The Python ML CLI behind these endpoints is spawned per request by
-  // analyzer.js; training is the long-running case and runs detached.
-  // ============================================================
-  function MlTab({ dbRev }) {
-    const [status, setStatus] = useState(null);
-    const [statusErr, setStatusErr] = useState('');
-    const [opts, setOpts] = useState({ races: [], opponents: [], maps: [], strategies: [] });
-    const [training, setTraining] = useState(false);
-    const [progress, setProgress] = useState({ done: 0, total: 0, pct: 0 });
-    const [trainMsg, setTrainMsg] = useState('');
-
-    const refreshStatus = async () => {
-      try {
-        const r = await fetch(`${API}/ml/status`);
-        const j = await r.json();
-        setStatus(j);
-        setStatusErr('');
-        if (j && j.live && j.live.running) {
-          setTraining(true);
-          setProgress({
-            done: j.live.done | 0, total: j.live.total | 0,
-            pct: j.live.total ? Math.round(100 * j.live.done / j.live.total) : 0,
-          });
-          setTrainMsg(j.live.lastMessage || '');
-        }
-      } catch (e) {
-        setStatusErr(e.message);
-      }
-    };
-
-    const refreshOptions = async () => {
-      try {
-        const r = await fetch(`${API}/ml/options`);
-        const j = await r.json();
-        setOpts(j || { races: [], opponents: [], maps: [], strategies: [] });
-      } catch (_) { /* keep defaults */ }
-    };
-
-    useEffect(() => {
-      refreshStatus();
-      refreshOptions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dbRev]);
-
-    // Subscribe to live training events.
-    useEffect(() => {
-      let sock;
-      try {
-        sock = io({ transports: ['websocket', 'polling'] });
-        sock.on('ml_train_progress', (p) => {
-          setTraining(true);
-          setProgress({
-            done: p.done | 0, total: p.total | 0,
-            pct: p.pct | 0,
-          });
-          setTrainMsg(`Parsing replay ${p.done}/${p.total} (${p.pct}%)`);
-        });
-        sock.on('ml_train_complete', (p) => {
-          setTraining(false);
-          setTrainMsg(p.message || (p.code === 0 ? 'Training complete.' : 'Training failed.'));
-          refreshStatus();
-        });
-      } catch (_) {}
-      return () => { try { sock && sock.disconnect(); } catch (_) {} };
-    }, []);
-
-    const startTraining = async () => {
-      if (training) return;
-      if (!confirm('Train the WP model? This re-parses every replay (1-5 minutes typically).')) return;
-      setTraining(true);
-      setTrainMsg('Starting...');
-      setProgress({ done: 0, total: 0, pct: 0 });
-      try {
-        const r = await fetch(`${API}/ml/train`, { method: 'POST' });
-        const j = await r.json();
-        if (!r.ok || !j.ok) {
-          setTraining(false);
-          setTrainMsg(j.message || 'Training rejected.');
-        }
-      } catch (e) {
-        setTraining(false);
-        setTrainMsg('Failed: ' + e.message);
-      }
-    };
-
-    return (
-      <div className="space-y-4">
-        <MlStatusCard
-          status={status}
-          statusErr={statusErr}
-          training={training}
-          progress={progress}
-          trainMsg={trainMsg}
-          onTrain={startTraining}
-          onRefresh={refreshStatus}
-        />
-        <MacroBackfillCard />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <WhatIfPanel status={status} />
-          <PregamePanel opts={opts} />
-        </div>
-      </div>
-    );
-  }
-
-  // Card that triggers a bulk macro recompute on the server. Mirrors the
-  // "Backfill Macro Scores" button from the desktop SC2ReplayAnalyzer.py
-  // sidebar. Subscribes to Socket.io 'macro_backfill_progress' /
-  // 'macro_backfill_done' events for live status.
-  function MacroBackfillCard() {
-    const [state, setState] = useState({ running: false, phase: 'idle', done: 0, total: 0,
-                                          updated: 0, errors: 0, lastMessage: '' });
-    const [error, setError] = useState('');
-    // When checked, the backend re-parses every reachable replay even if
-    // its macro_score/breakdown are already stored. Use after the macro
-    // engine itself changes (e.g. fixed chrono/inject/MULE counting) so
-    // existing stored breakdowns get refreshed with the new logic.
-    const [force, setForce] = useState(false);
-
-    const refresh = async () => {
-      try {
-        const r = await fetch(`${API}/macro/backfill/status`);
-        const j = await r.json();
-        if (j && j.ok) setState((s) => Object.assign({}, s, j));
-      } catch (_) { /* ignore */ }
-    };
-
-    useEffect(() => { refresh(); }, []);
-    useEffect(() => {
-      let sock;
-      try {
-        sock = io({ transports: ['websocket', 'polling'] });
-        sock.on('macro_backfill_progress', (p) => {
-          setState((s) => Object.assign({}, s, {
-            running: true, phase: 'running',
-            done: p.i || s.done, total: p.total || s.total,
-            updated: s.updated + (p.ok ? 1 : 0),
-            errors:  s.errors  + (p.ok ? 0 : 1),
-            lastMessage: `${p.i || 0}/${p.total || 0} ${p.file || ''}`,
-          }));
-        });
-        sock.on('macro_backfill_done', (d) => {
-          setState((s) => Object.assign({}, s, {
-            running: false, phase: d.phase || 'done',
-            lastMessage: `done · updated ${d.updated || 0} · errors ${d.errors || 0}`,
-          }));
-        });
-      } catch (_) { /* socket optional */ }
-      return () => { try { sock && sock.disconnect(); } catch (_) {} };
-    }, []);
-
-    const start = async () => {
-      setError('');
-      try {
-        const r = await fetch(`${API}/macro/backfill/start`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ force }),
-        });
-        const j = await r.json();
-        if (!r.ok || !j.ok) { setError(j.error || 'failed to start'); return; }
-        setState((s) => Object.assign({}, s, {
-          running: true, phase: 'running', done: 0, total: 0,
-          updated: 0, errors: 0,
-          lastMessage: force ? 'starting (force re-parse)…' : 'starting…',
-        }));
-      } catch (e) { setError(e.message); }
-    };
-
-    const pct = state.total > 0 ? Math.round(100 * state.done / state.total) : 0;
-
-    return (
-      <div className="bg-base-800 ring-soft rounded-xl p-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-neutral-100">Macro score backfill</h2>
-            <div className="text-sm text-neutral-400 mt-1">
-              {force ? (
-                <>
-                  <span className="text-gold-500 font-semibold">Force mode:</span>{' '}
-                  re-parses <em>every</em> reachable replay and overwrites
-                  existing macro scores. Use this after the macro engine
-                  itself changes (e.g. chrono/inject/MULE fix). Slow.
-                </>
-              ) : (
-                <>
-                  Default: only processes replays that don't yet have a
-                  macro score. Cheap; runs after every batch of new games.
-                  Writes results back to <code className="text-neutral-300">meta_database.json</code>.
-                </>
-              )}
-            </div>
-            {error && <div className="text-sm text-loss-500 mt-1">{error}</div>}
-          </div>
-          <div className="flex gap-2 items-center">
-            <button onClick={refresh}
-              className="text-xs bg-base-700 hover:bg-base-600 ring-soft rounded px-3 py-1.5 text-neutral-300">
-              Refresh
-            </button>
-            <button onClick={start} disabled={state.running}
-              className="text-sm bg-accent-500 hover:bg-accent-600 disabled:opacity-50 ring-soft rounded px-3 py-1.5 text-white font-semibold">
-              {state.running
-                ? 'Running…'
-                : (force ? 'Force re-parse all' : 'Backfill new replays')}
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-2">
-          <label className="inline-flex items-center gap-2 text-xs text-neutral-500 cursor-pointer select-none"
-                 title="Edge case: re-parse every reachable replay even if its macro is already stored. Only needed after the macro engine itself changes so old stored breakdowns get refreshed. Leave OFF for the normal incremental backfill.">
-            <input type="checkbox" checked={force}
-                   onChange={(e) => setForce(e.target.checked)}
-                   disabled={state.running}
-                   className="accent-accent-500" />
-            Force re-parse all <span className="text-neutral-600">(edge case)</span>
-          </label>
-        </div>
-
-        {(state.running || state.total > 0) && (
-          <div className="mt-3">
-            <div className="flex items-center gap-3 text-xs text-neutral-400 mb-1">
-              <span>{state.done}/{state.total} processed</span>
-              <span className="text-win-500">+{state.updated} updated</span>
-              {state.errors > 0 && <span className="text-loss-500">{state.errors} errors</span>}
-              <span className="ml-auto truncate">{state.lastMessage}</span>
-            </div>
-            <div className="h-2 bg-base-700 rounded overflow-hidden">
-              <div className="h-full bg-accent-500" style={{ width: `${pct}%` }} />
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  function MlStatusCard({ status, statusErr, training, progress, trainMsg, onTrain, onRefresh }) {
-    const trained = status && status.trained;
-    const auc = trained && status.auc != null ? status.auc.toFixed(3) : 'n/a';
-    const last = trained ? (status.last_trained || '?') : '';
-    const need = status && status.needed > 0;
-    return (
-      <div className="bg-base-800 ring-soft rounded-xl p-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-neutral-100">Win-Probability model</h2>
-            {statusErr ? (
-              <div className="text-sm text-loss-500 mt-1">{statusErr}</div>
-            ) : !status ? (
-              <div className="text-sm text-neutral-500 mt-1">Loading status...</div>
-            ) : trained ? (
-              <div className="text-sm text-neutral-300 mt-1">
-                <span className="text-win-500 font-semibold">Trained</span>
-                {' · '}<span className="tabular-nums">{status.games_used}</span> games
-                {' · '}<span className="tabular-nums">{status.snapshots}</span> snapshots
-                {' · AUC '}<b className="tabular-nums">{auc}</b>
-                {' · last trained '}<span className="text-neutral-400">{last}</span>
-              </div>
-            ) : (
-              <div className="text-sm text-neutral-300 mt-1">
-                <span className="text-loss-500 font-semibold">Untrained</span>
-                {' · '}{status.message || ''}
-              </div>
-            )}
-          </div>
-          <div className="flex gap-2 items-center">
-            <button onClick={onRefresh}
-              className="text-xs bg-base-700 hover:bg-base-600 ring-soft rounded px-3 py-1.5 text-neutral-300">
-              Refresh
-            </button>
-            <button onClick={onTrain} disabled={training || need}
-              className={"text-sm rounded px-4 py-1.5 transition " + (
-                training || need
-                  ? 'bg-base-700 text-neutral-500 cursor-not-allowed'
-                  : 'bg-accent-500 hover:bg-accent-500/90 text-white'
-              )}>
-              {training ? 'Training...' : trained ? 'Retrain Model' : 'Train Model'}
-            </button>
-          </div>
-        </div>
-        {(training || trainMsg) && (
-          <div className="mt-3">
-            <div className="h-2 bg-base-700 rounded overflow-hidden">
-              <div className="h-full bg-accent-500 transition-all"
-                   style={{ width: (progress.pct || 0) + '%' }} />
-            </div>
-            <div className="text-xs text-neutral-400 mt-1.5">{trainMsg}</div>
-          </div>
-        )}
-        <div className="text-[11px] text-neutral-500 mt-2">
-          Training spawns the Python ML CLI (<code>scripts/ml_cli.py</code>) in
-          the SC2Replay-Analyzer project; live progress streams over Socket.io.
-        </div>
-      </div>
-    );
-  }
-
-  // -- What-if predictor (mid-game snapshot)
-  function WhatIfPanel({ status }) {
-    const FEATS = [
-      { key: 'minute',          label: 'Game minute',              min: 0,    max: 30,   step: 1,  def: 8 },
-      { key: 'supply_diff',     label: 'Supply diff (you-opp)',    min: -100, max: 100,  step: 1,  def: 0 },
-      { key: 'army_value_diff', label: 'Army value diff',          min: -5000,max: 5000, step: 50, def: 0 },
-      { key: 'income_min_diff', label: 'Mineral income diff /min', min: -3000,max: 3000, step: 25, def: 0 },
-      { key: 'income_gas_diff', label: 'Gas income diff /min',     min: -2000,max: 2000, step: 25, def: 0 },
-      { key: 'nexus_count_diff',label: 'Base count diff',          min: -5,   max: 5,    step: 1,  def: 0 },
-      { key: 'tech_score_self', label: 'Your tech score',          min: 0,    max: 30,   step: 1,  def: 5 },
-      { key: 'tech_score_opp',  label: 'Opp tech score',           min: 0,    max: 30,   step: 1,  def: 5 },
-    ];
-    const initial = Object.fromEntries(FEATS.map(f => [f.key, f.def]));
-    const [vals, setVals] = useState(initial);
-    const [matchup, setMatchup] = useState('');
-    const [pred, setPred] = useState(null);
-    const [predErr, setPredErr] = useState('');
-    const trained = status && status.trained;
-    const fetchPred = useRef(null);
-
-    useEffect(() => {
-      if (!trained) { setPred(null); setPredErr(''); return; }
-      if (fetchPred.current) clearTimeout(fetchPred.current);
-      fetchPred.current = setTimeout(async () => {
-        const q = new URLSearchParams();
-        Object.entries(vals).forEach(([k, v]) => q.set(k, v));
-        if (matchup) q.set('matchup', matchup);
-        try {
-          const r = await fetch(`${API}/ml/predict?${q.toString()}`);
-          const j = await r.json();
-          if (!j.ok) { setPred(null); setPredErr(j.message || ''); }
-          else { setPred(j.p_win); setPredErr(''); }
-        } catch (e) { setPredErr(e.message); }
-      }, 200);
-      return () => { if (fetchPred.current) clearTimeout(fetchPred.current); };
-    }, [vals, matchup, trained]);
-
-    const pct = pred != null ? (pred * 100) : null;
-    return (
-      <div className="bg-base-800 ring-soft rounded-xl p-4">
-        <h3 className="text-base font-semibold text-neutral-100">What-if predictor (mid-game)</h3>
-        <p className="text-xs text-neutral-500 mt-0.5">
-          Set the relative state; the model returns p(Win) for that snapshot.
-        </p>
-        {!trained ? (
-          <EmptyState title="Train the model first" sub="The what-if predictor needs a fitted WP model." />
-        ) : (
-          <Fragment>
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              {FEATS.map(f => (
-                <div key={f.key}>
-                  <label className="block text-[11px] text-neutral-400">{f.label}</label>
-                  <div className="flex items-center gap-2">
-                    <input type="range" min={f.min} max={f.max} step={f.step} value={vals[f.key]}
-                      onChange={e => setVals(v => ({ ...v, [f.key]: Number(e.target.value) }))}
-                      className="flex-1" />
-                    <span className="tabular-nums w-14 text-right text-xs text-neutral-300">{vals[f.key]}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3">
-              <label className="block text-[11px] text-neutral-400">Matchup (optional)</label>
-              <select value={matchup} onChange={e => setMatchup(e.target.value)}
-                className="bg-base-700 ring-soft rounded px-2 py-1 text-sm">
-                <option value="">(unspecified)</option>
-                <option value="PvT">PvT</option>
-                <option value="PvZ">PvZ</option>
-                <option value="PvP">PvP</option>
-              </select>
-            </div>
-            <div className="mt-4 bg-base-700 rounded-lg p-3 text-center">
-              <div className="text-[11px] uppercase tracking-wider text-neutral-500">Predicted p(Win)</div>
-              <div className="text-3xl font-semibold tabular-nums mt-1"
-                   style={{ color: pct == null ? '#9ca3af' : (pct >= 50 ? '#66BB6A' : '#EF5350') }}>
-                {pct == null ? '—' : pct.toFixed(0) + '%'}
-              </div>
-              <div className="h-2 bg-base-800 rounded mt-2 overflow-hidden">
-                <div className="h-full transition-all"
-                     style={{
-                       width: pct == null ? '0%' : Math.max(0, Math.min(100, pct)) + '%',
-                       background: pct == null ? '#404040' : (pct >= 50 ? '#66BB6A' : '#EF5350'),
-                     }} />
-              </div>
-              {predErr && <div className="text-xs text-loss-500 mt-2">{predErr}</div>}
-            </div>
-          </Fragment>
-        )}
-      </div>
-    );
-  }
-
-  // -- Pre-game predictor (history-based)
-  function PregamePanel({ opts }) {
-    const [filters, setFilters] = useState({});
-    const [result, setResult] = useState(null);
-    const [err, setErr] = useState('');
-    const set = (k, v) => setFilters(f => ({ ...f, [k]: v }));
-
-    const run = async () => {
-      const q = new URLSearchParams();
-      Object.entries(filters).forEach(([k, v]) => { if (v) q.set(k, v); });
-      try {
-        const r = await fetch(`${API}/ml/pregame?${q.toString()}`);
-        const j = await r.json();
-        if (!j.ok) { setResult(null); setErr(j.message || 'No data.'); }
-        else { setResult(j); setErr(''); }
-      } catch (e) { setErr(e.message); }
-    };
-
-    const pct = result && result.p_win != null ? result.p_win * 100 : null;
-    return (
-      <div className="bg-base-800 ring-soft rounded-xl p-4">
-        <h3 className="text-base font-semibold text-neutral-100">Pre-game predictor (history-based)</h3>
-        <p className="text-xs text-neutral-500 mt-0.5">
-          Historical win-rate against this matchup / opponent / map / strategy.
-        </p>
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          <div>
-            <label className="block text-[11px] text-neutral-400">Your race</label>
-            <select value={filters.myrace || ''} onChange={e => set('myrace', e.target.value)}
-              className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-full">
-              <option value="">(any)</option>
-              {(opts.races || []).map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[11px] text-neutral-400">Opp race</label>
-            <select value={filters.opprace || ''} onChange={e => set('opprace', e.target.value)}
-              className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-full">
-              <option value="">(any)</option>
-              {(opts.races || []).map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[11px] text-neutral-400">Opponent</label>
-            <select value={filters.opponent || ''} onChange={e => set('opponent', e.target.value)}
-              className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-full">
-              <option value="">(any)</option>
-              {(opts.opponents || []).slice(0, 500).map(o =>
-                <option key={o} value={o}>{o.length > 40 ? o.slice(0, 40) + '...' : o}</option>
-              )}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[11px] text-neutral-400">Map</label>
-            <select value={filters.map || ''} onChange={e => set('map', e.target.value)}
-              className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-full">
-              <option value="">(any)</option>
-              {(opts.maps || []).map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-          <div className="col-span-2">
-            <label className="block text-[11px] text-neutral-400">Opp strategy</label>
-            <select value={filters.strategy || ''} onChange={e => set('strategy', e.target.value)}
-              className="bg-base-700 ring-soft rounded px-2 py-1 text-sm w-full">
-              <option value="">(any)</option>
-              {(opts.strategies || []).map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-        </div>
-        <button onClick={run}
-          className="mt-3 text-sm bg-accent-500 hover:bg-accent-500/90 text-white rounded px-4 py-1.5">
-          Predict
-        </button>
-        <div className="mt-4 bg-base-700 rounded-lg p-3">
-          <div className="text-[11px] uppercase tracking-wider text-neutral-500 text-center">Predicted p(Win)</div>
-          <div className="text-3xl font-semibold tabular-nums mt-1 text-center"
-               style={{ color: pct == null ? '#9ca3af' : (pct >= 50 ? '#66BB6A' : '#EF5350') }}>
-            {pct == null ? '—' : pct.toFixed(0) + '%'}
-          </div>
-          <div className="h-2 bg-base-800 rounded mt-2 overflow-hidden">
-            <div className="h-full transition-all"
-                 style={{
-                   width: pct == null ? '0%' : Math.max(0, Math.min(100, pct)) + '%',
-                   background: pct == null ? '#404040' : (pct >= 50 ? '#66BB6A' : '#EF5350'),
-                 }} />
-          </div>
-          {result && (
-            <div className="text-xs text-neutral-400 mt-3">
-              {result.total > 0 ? (
-                <Fragment>
-                  Joint match: <b>{result.wins}-{result.total - result.wins}</b>
-                  {' (' + (result.raw_win_rate * 100).toFixed(0) + '% raw, smoothed to ' + (result.p_win * 100).toFixed(0) + '%)'}
-                </Fragment>
-              ) : (
-                <Fragment>{result.method}</Fragment>
-              )}
-              {result.components && result.components.length > 0 && (
-                <ul className="mt-2 space-y-1">
-                  {result.components.map((c, i) => (
-                    <li key={i} className="flex justify-between gap-3">
-                      <span>{c.label}</span>
-                      <span className="tabular-nums">
-                        <b>{c.wins}-{c.total - c.wins}</b>
-                        {' · '}
-                        <span style={{ color: c.win_rate >= 0.5 ? '#66BB6A' : '#EF5350' }}>
-                          {(c.win_rate * 100).toFixed(0)}%
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-          {err && <div className="text-xs text-loss-500 mt-2">{err}</div>}
-        </div>
-      </div>
-    );
-  }
-
-  function CsvButton({ kind, filters }) {
-    const href = `${API}/export.csv?kind=${kind}${buildQuery(filters).replace('?', '&')}`;
-    return (
-      <a href={href} target="_blank" rel="noopener"
-         className="text-xs bg-base-700 hover:bg-base-600 ring-soft rounded px-3 py-1.5 text-neutral-300">
-        &#x2913; Export CSV
-      </a>
-    );
-  }
-
-  // ============================================================
-  // (Removed) MAP INTEL TAB
-  //
-  // The standalone map-intel heatmaps view was removed at the user's
-  // request - building/proxy/battle/death-zone heatmap rendering and the
-  // viridis/RdYlGn_r colormaps lived here. The opponent-profile page's
-  // "Proxy patterns vs you" widget (OpponentProxyPatterns below) still
-  // hits /spatial/opponent-proxies, so that endpoint remains live; the
-  // other /spatial/* endpoints can be retired in a future cleanup if no
-  // other consumer adopts them.
-  // ============================================================
-
-  // Sidebar widget shown on the opponent-profile page. Lists this opponent's
-  // proxy locations across all games against the user, with a tiny scatter
-  // visualization grouped by map. Uses /api/analyzer/spatial/opponent-proxies.
-  function OpponentProxyPatterns({ opponentName }) {
-    const [data, setData] = useState(null);
-    const [err, setErr] = useState(null);
-    useEffect(() => {
-      if (!opponentName) return;
-      let cancelled = false;
-      fetch(`${API}/spatial/opponent-proxies?opponent=${encodeURIComponent(opponentName)}`)
-        .then(r => r.json())
-        .then(j => {
-          if (cancelled) return;
-          if (!j || j.ok === false) setErr((j && j.message) || 'no data');
-          else setData(j.result || j);
-        })
-        .catch(e => !cancelled && setErr(String(e)));
-      return () => { cancelled = true; };
-    }, [opponentName]);
-    if (err) return <div className="text-xs text-loss-500">Proxy patterns: {err}</div>;
-    if (!data) return <div className="text-xs text-neutral-500">Loading proxy patterns…</div>;
-    const points = data.points || [];
-    if (!points.length) {
-      return <EmptyState title="No proxy patterns" sub={`Scanned ${data.games_scanned} game(s).`} />;
-    }
-    // Group points by map for the per-map breakdown line.
-    const byMap = data.by_map || {};
-    return (
-      <div className="space-y-3">
-        <div className="text-xs text-neutral-400">
-          {data.proxies_found} proxy building(s) across {data.games_scanned} game(s)
-        </div>
-        <ul className="space-y-1 max-h-64 overflow-y-auto pr-1 text-xs">
-          {Object.entries(byMap).map(([map, n]) => (
-            <li key={map} className="flex justify-between text-neutral-300">
-              <span>{map}</span>
-              <span className="tabular-nums text-gold-500">{n}</span>
-            </li>
-          ))}
-        </ul>
-        <div className="text-[10px] text-neutral-600">
-          Distance threshold matches the strategy detector's `_is_proxy` rule.
-          Tap "Map Intel" for a full heatmap of opponent proxy locations.
-        </div>
-      </div>
-    );
-  }
-
-  // ============================================================
-  // DEFINITIONS TAB -- searchable build/strategy glossary
-  //
-  // Mirrors the "Definitions" tab in the desktop SC2ReplayAnalyzer.py.
-  // The catalog is sourced from the python project's
-  // detectors/definitions.py and exposed by GET /definitions on the
-  // backend. Filterable by race + free-text search.
-  // ============================================================
-  function DefinitionsTab() {
-    const [items, setItems] = useState(null);
-    const [error, setError] = useState(null);
-    const [search, setSearch] = useState('');
-    const [race, setRace] = useState('All');
-
-    useEffect(() => {
-      let cancelled = false;
-      fetch(`${API}/definitions`)
-        .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j)))
-        .then(j => { if (!cancelled) setItems(Array.isArray(j.items) ? j.items : []); })
-        .catch(e => { if (!cancelled) setError(e.error || 'fetch failed'); });
-      return () => { cancelled = true; };
-    }, []);
-
-    if (error) return <EmptyState title="Definitions unavailable" sub={error} />;
-    if (items == null) return <EmptyState title="Loading definitions…" />;
-
-    const q = search.trim().toLowerCase();
-    const filtered = items.filter(it => {
-      if (race !== 'All' && !it.name.startsWith(race)) return false;
-      if (q && !(it.name.toLowerCase().includes(q) || it.description.toLowerCase().includes(q))) return false;
-      return true;
-    });
-
-    // Group by race prefix for visual sectioning.
-    const grouped = filtered.reduce((acc, it) => {
-      const prefix = it.name.split(' - ')[0] || 'Other';
-      (acc[prefix] = acc[prefix] || []).push(it);
-      return acc;
-    }, {});
-
-    const races = ['All', 'Zerg', 'Protoss', 'Terran'];
-
-    return (
-      <div className="p-4 space-y-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="text-lg font-semibold text-neutral-100">Build &amp; Strategy Definitions</h2>
-          <span className="text-xs text-neutral-500">
-            {filtered.length} of {items.length} entries
-          </span>
-        </div>
-        <div className="text-xs text-neutral-400 max-w-3xl">
-          The detection rules used by the analyzer to label opponent strategies and
-          your own builds. Use these to interpret labels in the rest of the SPA.
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <input
-            type="text" value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search builds and strategies…"
-            className="bg-base-800 border border-base-700 rounded px-3 py-1.5 text-sm text-neutral-100 placeholder-neutral-500 w-64 focus:outline-none focus:border-accent-500"
-          />
-          <div className="flex items-center gap-1 ml-2">
-            {races.map(r => (
-              <button
-                key={r}
-                onClick={() => setRace(r)}
-                className={"px-2.5 py-1 text-xs rounded transition " + (
-                  race === r
-                    ? 'bg-accent-500 text-white'
-                    : 'bg-base-700 text-neutral-300 hover:bg-base-600'
-                )}>
-                {r}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {filtered.length === 0 ? (
-          <EmptyState title="No matches" sub="Try a different search or race filter." />
-        ) : (
-          <div className="space-y-4">
-            {Object.keys(grouped).sort().map(group => (
-              <div key={group}>
-                <div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-2">{group}</div>
-                <div className="space-y-1.5">
-                  {grouped[group].map(it => (
-                    <div key={it.name} className="bg-base-800 rounded p-3 border border-base-700">
-                      <div className="text-sm font-semibold text-neutral-100">{it.name}</div>
-                      <div className="text-xs text-neutral-400 mt-1">{it.description}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  const TABS = [
-    { id: 'dashboard',  label: 'Dashboard' },
-    { id: 'builds',     label: 'My Builds' },
-    { id: 'strategies', label: 'Opp Strategies' },
-    { id: 'bvs',        label: 'Build vs Strategy' },
-    { id: 'maps',       label: 'Maps' },
-    { id: 'matchups',   label: 'Matchups' },
-    { id: 'opponents',  label: 'Opponents' },
-    { id: 'trends',     label: 'Trends' },
-    { id: 'ml',         label: 'ML / Predict' },
-    // Definitions stays at the very end (mirrors the SC2ReplayAnalyzer.py
-    // tab order) so the build/strategy glossary is always one click away.
-    { id: 'definitions', label: 'Definitions' },
-  ];
-
-  function App() {
-    const [tab, setTab] = useState('dashboard');
-    const [filters, setFilters] = useState({});
-    const [dbRev, setDbRev] = useState(0);
-    const [openPulseId, setOpenPulseId] = useState(null);
-    const [openBuildName, setOpenBuildName] = useState(null);
-    const [conn, setConn] = useState({ status: 'connecting' });
-
-    useEffect(() => {
-      try {
-        const sock = io({ transports: ['websocket', 'polling'] });
-        sock.on('connect',    () => setConn({ status: 'live' }));
-        sock.on('disconnect', () => setConn({ status: 'offline' }));
-        sock.on('analyzer_db_changed', (msg) => { setDbRev(r => r + 1); });
-        return () => sock.disconnect();
-      } catch (err) {
-        console.warn('socket.io unavailable:', err);
-        setConn({ status: 'offline' });
-      }
-    }, []);
-
-    const renderBody = () => {
-      if (openBuildName) {
-        return <BuildDeepDive buildName={openBuildName} filters={filters}
-                              onBack={() => setOpenBuildName(null)} dbRev={dbRev} />;
-      }
-      if (openPulseId) {
-        return <OpponentProfile pulseId={openPulseId} onBack={() => setOpenPulseId(null)} dbRev={dbRev} />;
-      }
-      switch (tab) {
-        case 'dashboard':  return <DashboardTab filters={filters} dbRev={dbRev} />;
-        case 'builds':     return <BuildsTab filters={filters} dbRev={dbRev} onOpen={setOpenBuildName} />;
-        case 'strategies': return <StrategiesTab filters={filters} dbRev={dbRev} />;
-        case 'bvs':        return <BuildVsStrategyTab filters={filters} dbRev={dbRev} />;
-        case 'maps':       return <MapsTab filters={filters} dbRev={dbRev} />;
-        case 'matchups':   return <MatchupsTab filters={filters} dbRev={dbRev} />;
-        case 'opponents':  return <OpponentsTab filters={filters} dbRev={dbRev} onOpen={setOpenPulseId} />;
-        case 'trends':     return <TrendsTab filters={filters} dbRev={dbRev} />;
-        case 'ml':         return <MlTab dbRev={dbRev} />;
-        case 'definitions': return <DefinitionsTab />;
-        default:           return <EmptyState title="Unknown tab" />;
-      }
-    };
-
-    return (
-      <div className="min-h-screen flex flex-col">
-        <header className="border-b border-base-700 bg-base-800/60 backdrop-blur sticky top-0 z-10">
-          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
-            <div className="text-lg font-semibold text-neutral-100">SC2 Meta Analyzer</div>
-            <span className={"text-[10px] uppercase tracking-wider px-2 py-0.5 rounded " + (
-              conn.status === 'live'    ? 'bg-win-500/20 text-win-500' :
-              conn.status === 'offline' ? 'bg-loss-500/20 text-loss-500' :
-                                          'bg-base-700 text-neutral-500')}>
-              {conn.status}
-            </span>
-            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-base-700 text-neutral-500"
-                  title="Charts are rendered inline via SVG -- no external dependency">
-              charts: built-in
-            </span>
-            <nav className="ml-auto flex flex-wrap gap-1">
-              {TABS.map(t => (
-                <button key={t.id} onClick={() => { setOpenPulseId(null); setOpenBuildName(null); setTab(t.id); }}
-                  className={"px-3 py-1.5 text-sm rounded transition " + (
-                    tab === t.id && !openPulseId && !openBuildName
-                      ? 'bg-accent-500 text-white'
-                      : 'text-neutral-400 hover:bg-base-700 hover:text-neutral-200')}>
-                  {t.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-        </header>
-
-        {!openPulseId && !openBuildName && (
-          <div className="max-w-7xl mx-auto w-full px-4 pt-4">
-            <FilterBar filters={filters} onChange={setFilters} onReset={() => setFilters({})} />
-          </div>
-        )}
-
-        <main className="max-w-7xl mx-auto w-full px-4 py-4 flex-1">
-          <ErrorBoundary label={openBuildName ? `Build "${openBuildName}"` : openPulseId ? 'Opponent profile' : `Tab "${tab}"`}>
-            {renderBody()}
-          </ErrorBoundary>
-        </main>
-
-        <footer className="border-t border-base-700 text-[11px] text-neutral-600 py-3 px-4 text-center">
-          Data refreshes automatically when new replays land &middot; backend `/api/analyzer`
-        </footer>
-      </div>
-    );
-  }
-
-  try {
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-  } catch (err) {
-    document.getElementById('root').innerHTML =
-      '<pre style="padding:24px;color:#ef476f;font-family:monospace;white-space:pre-wrap">' +
-      String(err && err.stack || err) + '</pre>';
-  }
-  </script>
-</body>
-</html>
+         
