@@ -1,6 +1,34 @@
+# Generated databases - large, regenerable, keep growing
+**/meta_database.json
+**/meta_database.json.backup-*
+**/meta_database.json.initial_backup_done
+**/spatial_cache.json
+
+# Trained ML models - binary, large, regenerable
+**/wp_model.pkl
+*.pkl
+
+# Personal/runtime data
+**/MyOpponentHistory.json
+opponent.txt
+character_ids.txt
+
+# Junk/scratch files
+**/New Text Document.txt
+*_sync_test.txt
+**/_test_*.py
 *.log
 *.tmp
 .env
-node_modules/
+
+# Python artifacts
 __pycache__/
+*.pyc
+*.pyo
+
+# Node
+node_modules/
+
+# OS
 .DS_Store
+Thumbs.db
