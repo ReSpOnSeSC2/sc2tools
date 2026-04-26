@@ -244,6 +244,71 @@ _INTERESTING_ABILITIES = {
 }
 
 
+# Substring buckets for the macro ability counter. Modern sc2reader
+# replays sometimes report ability names like "Effect_ChronoBoost",
+# "QueenMP_SpawnLarva" or other engine-internal variants depending on
+# replay version. Substring matching is much more forgiving than the
+# exact-name set above and keeps the macro engine working across the
+# Wings/HotS/LotV/balance-test patch zoo. The exact set is still tried
+# first as a fast path.
+_INJECT_TOKENS = ("inject", "spawnlarva")
+_CHRONO_TOKENS = ("chronoboost", "chrono",)
+_MULE_TOKENS = ("calldownmule", "mule",)
+
+def _normalize_ability_name(event):
+    """Best-effort extraction of the canonical ability name.
+
+    Tries (1) ``event.ability_name`` (sc2reader's parsed display name),
+    (2) ``event.ability.name`` (the wrapped Ability object), and
+    (3) ``event.ability_link``-keyed fallback by lowercasing whatever
+    string-y attr we can find. Returns the name or None.
+    """
+    name = getattr(event, "ability_name", None)
+    if name:
+        return name
+    ability = getattr(event, "ability", None)
+    if ability is not None:
+        n = getattr(ability, "name", None)
+        if n:
+            return n
+        # Some sc2reader versions wrap as a dict-like with a build_name.
+        n = getattr(ability, "build_name", None)
+        if n:
+            return n
+    # Last resort: cast a couple of common alt attributes to string.
+    for attr in ("ability_command_name", "ability_id"):
+        v = getattr(event, attr, None)
+        if v:
+            return str(v)
+    return None
+
+def _classify_macro_ability(name: str):
+    """Bucket an ability name into 'inject' / 'chrono' / 'mule' or None.
+
+    Exact-match against ``_INTERESTING_ABILITIES`` first (fast path),
+    then a lowercased substring search against the token lists. This is
+    the entry-point that lets us survive ability-name churn across SC2
+    patches.
+    """
+    if not name:
+        return None
+    if name in _INTERESTING_ABILITIES:
+        if "Inject" in name or "SpawnLarva" in name:
+            return "inject"
+        if "Chrono" in name:
+            return "chrono"
+        if "MULE" in name:
+            return "mule"
+    low = name.lower()
+    if any(tok in low for tok in _INJECT_TOKENS):
+        return "inject"
+    if any(tok in low for tok in _CHRONO_TOKENS):
+        return "chrono"
+    if any(tok in low for tok in _MULE_TOKENS):
+        return "mule"
+    return None
+
+
 def _resolve_unit_id(event):
     """Return the most stable unit-id we can pull off a tracker event."""
     unit = getattr(event, "unit", None)
@@ -361,7 +426,20 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
         pass
 
     # Game-event pass for ability uses (inject / chrono / MULE).
+    #
+    # Robust to ability-name churn: we use ``_classify_macro_ability``
+    # which both checks the exact ``_INTERESTING_ABILITIES`` set AND
+    # falls back to substring matching ("chrono", "inject"/"spawnlarva",
+    # "mule"). That fixes the long-standing "0/119 chronos" bug in
+    # modern LotV replays where the ability surfaces as e.g.
+    # "ChronoBoostEnergyCost" / "Effect_ChronoBoost" / "QueenMP_SpawnLarva"
+    # depending on patch.
+    #
+    # We also categorize each match so the breakdown popup can show
+    # per-discipline counts without re-walking the events.
     game_events = getattr(replay, "events", None) or []
+    out.setdefault("ability_counts",
+                   {"inject": 0, "chrono": 0, "mule": 0, "other": 0})
     try:
         for event in game_events:
             try:
@@ -371,12 +449,18 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
                     pid = getattr(player, "pid", None) if player else None
                 if pid != my_pid:
                     continue
-                ability_name = getattr(event, "ability_name", None)
-                if ability_name in _INTERESTING_ABILITIES:
-                    out["ability_events"].append({
-                        "ability_name": ability_name,
-                        "time": int(getattr(event, "second", 0)),
-                    })
+                name = _normalize_ability_name(event)
+                if not name:
+                    continue
+                bucket = _classify_macro_ability(name)
+                if bucket is None:
+                    continue
+                out["ability_events"].append({
+                    "ability_name": name,
+                    "category": bucket,
+                    "time": int(getattr(event, "second", 0)),
+                })
+                out["ability_counts"][bucket] += 1
             except Exception:
                 continue
     except Exception:
