@@ -105,6 +105,14 @@ def _safe_int(value, default: int = 0) -> int:
         return default
 
 
+def _get_player_mmr(p) -> Optional[int]:
+    for attr in ("scaled_rating", "mmr", "highest_league"):
+        val = getattr(p, attr, None)
+        if isinstance(val, (int, float)) and val > 0:
+            return int(val)
+    return None
+
+
 def _player_to_info(p) -> PlayerInfo:
     return PlayerInfo(
         pid=getattr(p, "pid", 0) or 0,
@@ -112,7 +120,7 @@ def _player_to_info(p) -> PlayerInfo:
         race=getattr(p, "play_race", "") or "",
         result=getattr(p, "result", "Unknown") or "Unknown",
         handle=getattr(p, "toon_handle", None),
-        mmr=_safe_int(getattr(p, "scaled_rating", None), 0) or None,
+        mmr=_get_player_mmr(p),
         is_human=getattr(p, "is_human", True),
         is_observer=getattr(p, "is_observer", False),
     )
