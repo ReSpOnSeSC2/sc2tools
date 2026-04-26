@@ -182,8 +182,8 @@ function defaultSession() {
 // Pull the per-game MMR estimate from config with safe defaults.
 function mmrEstimateDeltas() {
     const est = (config.session && config.session.mmrEstimate) || {};
-    const winDelta  = Number.isFinite(est.winDelta)  ? est.winDelta  :  25;
-    const lossDelta = Number.isFinite(est.lossDelta) ? est.lossDelta : -25;
+    const winDelta  = (typeof est.winDelta === 'number' && est.winDelta !== 0)  ? est.winDelta  :  25;
+    const lossDelta = (typeof est.lossDelta === 'number' && est.lossDelta !== 0) ? est.lossDelta : -25;
     return { winDelta, lossDelta };
 }
 
@@ -908,13 +908,20 @@ app.post('/api/replay', (req, res) => {
     if (Number.isFinite(r.myMmr)) {
         if (session.mmrStart == null) session.mmrStart = r.myMmr;
         const prev = session.mmrCurrent;
-        session.mmrCurrent = r.myMmr;
+
+        // r.myMmr is the pre-match MMR. Add estimate for immediate post-match feedback
+        const { winDelta, lossDelta } = mmrEstimateDeltas();
+        const matchDelta = isWin ? winDelta : (isLoss ? lossDelta : 0);
+
+        session.mmrCurrent = r.myMmr + matchDelta;
         recomputeSessionMmrDelta();
-        if (Number.isFinite(prev) && prev !== r.myMmr) {
+
+        if (Number.isFinite(prev) && prev !== session.mmrCurrent) {
             emitEvent('mmrDelta', {
-                delta: r.myMmr - prev,
-                current: r.myMmr,
-                previous: prev
+                delta: session.mmrCurrent - prev,
+                current: session.mmrCurrent,
+                previous: prev,
+                estimated: matchDelta !== 0
             });
         }
     } else if (isWin || isLoss) {
