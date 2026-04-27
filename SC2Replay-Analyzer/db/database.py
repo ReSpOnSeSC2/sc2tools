@@ -7,6 +7,7 @@ applied automatically.
 """
 
 import csv
+import copy
 import json
 import os
 import threading
@@ -266,6 +267,15 @@ class ReplayAnalyzer:
             self._profiler.invalidate()
         except Exception:
             pass
+
+    def _cached(self, key, compute_func):
+        cached = self._stats_cache.get(key)
+        if cached and cached[0] == self._db_revision:
+            return copy.deepcopy(cached[1])
+
+        result = compute_func()
+        self._stats_cache[key] = (self._db_revision, result)
+        return copy.deepcopy(result)
 
     def scan_for_players(self, file_paths: List[str], scan_limit: int = 50) -> List[str]:
         """Scan replay headers and surface candidate human-player names.
