@@ -7,6 +7,7 @@ applied automatically.
 """
 
 import csv
+import copy
 import json
 import os
 import threading
@@ -30,12 +31,19 @@ from .migrations import (
 class ReplayAnalyzer:
     def __init__(self):
         self._schema_version: int = CURRENT_SCHEMA_VERSION
-        self.db: Dict = self.load_database()
         self.potential_player_names: Set[str] = set()
         self.selected_player_name: Optional[str] = None
         self.error_logger = ErrorLogger()
         self._lock = threading.Lock()
+
+        # Bumped every time the in-memory db is replaced or mutated.
+        # Aggregation caches key off this so they recompute only when needed.
+        self._db_revision: int = 0
+        self._stats_cache: Dict[str, "tuple[int, Any]"] = {}
+
+        self.db: Dict = self.load_database()
         self._known_game_ids: Set[str] = self._build_game_id_index()
+
         # Opponent DNA profiler. Holds a reference to `self.db` so in-place
         # mutations (adding games, deleting games) are visible. The cache is
         # invalidated by `save_database()` after every persisted mutation.
@@ -47,6 +55,15 @@ class ReplayAnalyzer:
 
     def _build_game_id_index(self) -> Set[str]:
         return {g.get('id') for bd in self.db.values() for g in bd.get('games', []) if g.get('id')}
+
+    def _cached(self, key: str, compute):
+        """Return cached aggregation for `key` if valid; otherwise compute."""
+        cached = self._stats_cache.get(key)
+        if cached is not None and cached[0] == self._db_revision:
+            return cached[1]
+        result = compute()
+        self._stats_cache[key] = (self._db_revision, result)
+        return result
 
     def load_database(self) -> Dict:
         """Load the persisted DB, recovering as much as possible if it's truncated.
@@ -61,6 +78,10 @@ class ReplayAnalyzer:
         self.load_error: Optional[str] = None
         self.load_warning: Optional[str] = None
         data: Dict = {}
+        self._db_revision += 1
+
+        with self._lock:
+            self._invalidate_cache()
 
         if os.path.exists(DB_FILE):
             try:
@@ -110,6 +131,8 @@ class ReplayAnalyzer:
         for build in KNOWN_BUILDS:
             if build not in data:
                 data[build] = {"games": [], "wins": 0, "losses": 0}
+        self._db_revision += 1
+        self._stats_cache.clear()
         return data
 
     @staticmethod
@@ -210,6 +233,8 @@ class ReplayAnalyzer:
         we just wrote to make sure we never replace a good DB with a bad one.
         """
         with self._lock:
+            self._db_revision += 1
+            self._stats_cache.clear()
             try:
                 tmp = DB_FILE + ".tmp"
                 # Re-stamp the schema version on every save so future loads
@@ -239,12 +264,23 @@ class ReplayAnalyzer:
                 os.replace(tmp, DB_FILE)
             except Exception as e:
                 print(f"Save failed: {e}")
+
+            self._invalidate_cache()
         # Cache invalidation lives outside the lock so a long-running profiler
         # rebuild can't deadlock against the writer.
         try:
             self._profiler.invalidate()
         except Exception:
             pass
+
+    def _cached(self, key, compute_func):
+        cached = self._stats_cache.get(key)
+        if cached and cached[0] == self._db_revision:
+            return copy.deepcopy(cached[1])
+
+        result = compute_func()
+        self._stats_cache[key] = (self._db_revision, result)
+        return copy.deepcopy(result)
 
     def scan_for_players(self, file_paths: List[str], scan_limit: int = 50) -> List[str]:
         """Scan replay headers and surface candidate human-player names.
@@ -289,6 +325,7 @@ class ReplayAnalyzer:
             return
         self.db[build_name]['wins'] = sum(1 for g in self.db[build_name]['games'] if g['result'] == "Win")
         self.db[build_name]['losses'] = sum(1 for g in self.db[build_name]['games'] if g['result'] == "Loss")
+        self._invalidate_cache()
 
     def move_game(self, game_id: str, old_build: str, new_build: str):
         with self._lock:
@@ -300,6 +337,7 @@ class ReplayAnalyzer:
                 self.db[new_build]['games'].append(game_data)
                 self.recalc_stats(old_build)
                 self.recalc_stats(new_build)
+            self._invalidate_cache()
         self.save_database()
 
     def rename_user_build(self, old_name: str, new_name: str):
@@ -312,6 +350,7 @@ class ReplayAnalyzer:
                 del self.db[old_name]
             else:
                 self.db[new_name] = self.db.pop(old_name)
+            self._invalidate_cache()
         self.save_database()
 
     def update_game_opponent_strategy(self, game_id: str, new_strat: str):
@@ -320,6 +359,7 @@ class ReplayAnalyzer:
                 for game in bd['games']:
                     if game['id'] == game_id:
                         game['opp_strategy'] = new_strat
+                        self._invalidate_cache()
                         self.save_database()
                         return
 
@@ -329,6 +369,7 @@ class ReplayAnalyzer:
                 self.db[build_name]['games'] = [g for g in self.db[build_name]['games'] if g['id'] != game_id]
                 self._known_game_ids.discard(game_id)
                 self.recalc_stats(build_name)
+            self._invalidate_cache()
         self.save_database()
 
     def get_all_build_names(self) -> List[str]:
@@ -358,67 +399,75 @@ class ReplayAnalyzer:
                 writer.writerows(rows)
 
     def get_map_stats(self) -> Dict[str, Dict]:
-        mstats: Dict[str, Dict] = {}
-        with self._lock:
-            for bd in self.db.values():
-                for g in bd['games']:
-                    m = g.get('map', 'Unknown')
-                    if m not in mstats:
-                        mstats[m] = {'wins': 0, 'losses': 0, 'other': 0}
-                    if g['result'] == 'Win':
-                        mstats[m]['wins'] += 1
-                    elif g['result'] == 'Loss':
-                        mstats[m]['losses'] += 1
-                    else:
-                        mstats[m]['other'] += 1
-        return mstats
+        def _compute() -> Dict[str, Dict]:
+            mstats: Dict[str, Dict] = {}
+            with self._lock:
+                for bd in self.db.values():
+                    for g in bd['games']:
+                        m = g.get('map', 'Unknown')
+                        if m not in mstats:
+                            mstats[m] = {'wins': 0, 'losses': 0, 'other': 0}
+                        if g['result'] == 'Win':
+                            mstats[m]['wins'] += 1
+                        elif g['result'] == 'Loss':
+                            mstats[m]['losses'] += 1
+                        else:
+                            mstats[m]['other'] += 1
+            return mstats
+        return self._cached("map_stats", _compute)
 
     def get_opponent_stats(self) -> Dict[str, Dict]:
-        ostats: Dict[str, Dict] = {}
-        with self._lock:
-            for bd in self.db.values():
-                for g in bd['games']:
-                    strat = g.get('opp_strategy', 'Unknown')
-                    if strat not in ostats:
-                        ostats[strat] = {'wins': 0, 'losses': 0}
-                    if g['result'] == 'Win':
-                        ostats[strat]['wins'] += 1
-                    elif g['result'] == 'Loss':
-                        ostats[strat]['losses'] += 1
-        return ostats
+        def _compute() -> Dict[str, Dict]:
+            ostats: Dict[str, Dict] = {}
+            with self._lock:
+                for bd in self.db.values():
+                    for g in bd['games']:
+                        strat = g.get('opp_strategy', 'Unknown')
+                        if strat not in ostats:
+                            ostats[strat] = {'wins': 0, 'losses': 0}
+                        if g['result'] == 'Win':
+                            ostats[strat]['wins'] += 1
+                        elif g['result'] == 'Loss':
+                            ostats[strat]['losses'] += 1
+            return ostats
+        return self._cached("opponent_stats", _compute)
 
     def get_matchup_stats(self) -> Dict[str, Dict]:
-        mustats: Dict[str, Dict] = {}
-        with self._lock:
-            for bd in self.db.values():
-                for g in bd['games']:
-                    mu = f"vs {g.get('opp_race', 'Unknown')}"
-                    if mu not in mustats:
-                        mustats[mu] = {'wins': 0, 'losses': 0}
-                    if g['result'] == 'Win':
-                        mustats[mu]['wins'] += 1
-                    elif g['result'] == 'Loss':
-                        mustats[mu]['losses'] += 1
-        return mustats
+        def _compute() -> Dict[str, Dict]:
+            mustats: Dict[str, Dict] = {}
+            with self._lock:
+                for bd in self.db.values():
+                    for g in bd['games']:
+                        mu = f"vs {g.get('opp_race', 'Unknown')}"
+                        if mu not in mustats:
+                            mustats[mu] = {'wins': 0, 'losses': 0}
+                        if g['result'] == 'Win':
+                            mustats[mu]['wins'] += 1
+                        elif g['result'] == 'Loss':
+                            mustats[mu]['losses'] += 1
+            return mustats
+        return self._cached("matchup_stats", _compute)
 
     def get_build_vs_strategy_stats(self) -> List[Dict]:
-        stats: Dict = {}
-        with self._lock:
-            for bname, bd in self.db.items():
-                for g in bd['games']:
-                    key = (bname, g.get('opp_strategy', 'Unknown'))
-                    if key not in stats:
-                        stats[key] = {'wins': 0, 'losses': 0}
-                    if g['result'] == 'Win':
-                        stats[key]['wins'] += 1
-                    elif g['result'] == 'Loss':
-                        stats[key]['losses'] += 1
-        return sorted(
-            [
-                {'my_build': k[0], 'opp_strat': k[1], 'wins': v['wins'], 'losses': v['losses'],
-                 'total': v['wins'] + v['losses']}
-                for k, v in stats.items()
-            ],
-            key=lambda x: x['total'],
-            reverse=True,
-        )
+        def _compute() -> List[Dict]:
+            stats: Dict = {}
+            with self._lock:
+                for bname, bd in self.db.items():
+                    for g in bd['games']:
+                        key = (bname, g.get('opp_strategy', 'Unknown'))
+                        if key not in stats:
+                            stats[key] = {'wins': 0, 'losses': 0}
+                        if g['result'] == 'Win':
+                            stats[key]['wins'] += 1
+                        elif g['result'] == 'Loss':
+                            stats[key]['losses'] += 1
+            return sorted(
+                [
+                    {'my_build': k[0], 'opp_strat': k[1], 'wins': v['wins'], 'losses': v['losses'],
+                     'total': v['wins'] + v['losses']}
+                    for k, v in stats.items()
+                ],
+                key=lambda x: x['total'],
+                reverse=True,
+            )
+        return self._cached("build_vs_strategy_stats", _compute)
