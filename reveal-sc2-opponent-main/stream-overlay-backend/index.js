@@ -37,6 +37,7 @@ const os = require('os');
 const cors = require('cors');
 const { Server } = require('socket.io');
 const tmi = require('tmi.js');
+const { mmrToLeague } = require('./utils');
 // Analyzer module (meta_database.json + MyOpponentHistory.json
 // aggregations served as JSON to the new web SPA at /analyzer).
 const analyzer = require('./analyzer');
@@ -148,6 +149,7 @@ function loadConfig() {
 
 function deepMerge(base, override) {
     if (Array.isArray(base) || typeof base !== 'object' || base === null) return override ?? base;
+    if (Array.isArray(override) || typeof override !== 'object' || override === null) return override ?? base;
     const out = { ...base };
     for (const k of Object.keys(override || {})) {
         out[k] = (k in base) ? deepMerge(base[k], override[k]) : override[k];
@@ -254,16 +256,7 @@ function saveSession() {
 // MMR -> league name. Approximate boundaries based on Blizzard's
 // 1v1 ladder ranges; close enough for a stream overlay badge. Edit
 // here if Blizzard rebalances the ladder.
-function mmrToLeague(mmr) {
-    if (!Number.isFinite(mmr)) return null;
-    if (mmr >= 5000) return 'Grandmaster';
-    if (mmr >= 4400) return 'Master';
-    if (mmr >= 3500) return 'Diamond';
-    if (mmr >= 2800) return 'Platinum';
-    if (mmr >= 2200) return 'Gold';
-    if (mmr >= 1700) return 'Silver';
-    return 'Bronze';
-}
+// (Moved to utils.js)
 
 function sessionSnapshot() {
     const elapsedMs = Date.now() - session.startedAt;
@@ -1605,7 +1598,7 @@ fs.watchFile(CHARACTER_IDS_PATH, { interval: 2000 }, () => {
     }
 });
 
-if (process.env.NODE_ENV !== 'test') {
+if (require.main === module) {
     server.listen(PORT, async () => {
         console.log(`[Server] Listening on http://localhost:${PORT}`);
         console.log(`[Server] Dev panel: http://localhost:${PORT}/static/debug.html`);
@@ -1626,18 +1619,23 @@ if (process.env.NODE_ENV !== 'test') {
         catch (err) { console.warn('[Analyzer] startWatching failed:', err.message); }
         console.log(`[Server] Analyzer:  http://localhost:${PORT}/analyzer`);
     });
-}
 
-function shutdown(reason) {
-    console.log(`[Server] Shutting down: ${reason}`);
-    try { saveSession(); } catch (_) {}
-    process.exit(0);
+    function shutdown(reason) {
+        console.log(`[Server] Shutting down: ${reason}`);
+        try { saveSession(); } catch (_) {}
+        process.exit(0);
+    }
+    process.on('SIGINT',  () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 process.on('SIGINT',  () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-// For testing purposes
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports.describePulseTeam = describePulseTeam;
-    module.exports.PULSE_REGION_LABEL = PULSE_REGION_LABEL;
+// EXPORT FOR TESTING
+if (process.env.NODE_ENV === 'test') {
+    module.exports = {
+        loadConfig,
+        DEFAULT_CONFIG,
+        deepMerge
+    };
 }
