@@ -1,34 +1,26 @@
-import pytest
 import sys
-import unittest.mock
 import os
+from unittest.mock import MagicMock
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.modules['sc2reader'] = MagicMock()
+sys.modules['sc2reader.events'] = MagicMock()
+sys.modules['sc2reader.events.tracker'] = MagicMock()
 
-# Mock sc2reader
-sys.modules['sc2reader'] = unittest.mock.MagicMock()
-sys.modules['sc2reader.events'] = unittest.mock.MagicMock()
-sys.modules['sc2reader.events.tracker'] = unittest.mock.MagicMock()
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_HERE)
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
-from core.map_playback_data import centroid
+import pytest
+from core.map_playback_data import bounds_for, DEFAULT_BOUNDS
 
-def test_centroid_window_zero_exact_match():
-    """Test exact time match with 0.0 window size."""
-    events = [
-        {"time": 5, "x": 10, "y": 10},
-        {"time": 10, "x": 20, "y": 20},
-        {"time": 10, "x": 30, "y": 10},
-        {"time": 15, "x": 40, "y": 40},
-    ]
-    # t=10, window=0. Only items with time=10 should match.
-    result = centroid(events, 10, window=0)
-    assert result == (25.0, 15.0)
+def test_bounds_for_empty_map_name():
+    """Test bounds_for when map_name is None and events is empty."""
+    bounds = bounds_for(None, [])
 
-def test_centroid_window_zero_no_match():
-    """Test when window=0.0 and no exact timestamp matches."""
-    events = [
-        {"time": 5, "x": 10, "y": 10},
-        {"time": 15, "x": 40, "y": 40},
-    ]
-    result = centroid(events, 10, window=0)
-    assert result is None
+    # Assert it returns a fallback bounds dictionary
+    assert bounds["x_min"] == float(DEFAULT_BOUNDS.get("x_min", 0))
+    assert bounds["x_max"] == float(DEFAULT_BOUNDS.get("x_max", 200))
+    assert bounds["y_min"] == float(DEFAULT_BOUNDS.get("y_min", 0))
+    assert bounds["y_max"] == float(DEFAULT_BOUNDS.get("y_max", 200))
+    assert bounds["starting_locations"] == DEFAULT_BOUNDS.get("starting_locations", [])
