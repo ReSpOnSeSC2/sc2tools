@@ -1,0 +1,331 @@
+"""Smoke test for the median-key-timings card grid.
+
+This test instantiates a hidden Tk root, drives the
+``OpponentProfiler`` -> ``App._render_timing_grid_body`` pipeline against
+a small in-memory fixture, and asserts that the rendered widget tree
+carries the expected number of card frames per matchup.
+
+The point is to catch obvious renderer breakage (missing token in the
+profile payload, divide-by-zero on win-rate, the wrong widget being
+created when ``sample_count == 0``, etc.) without requiring a live SC2
+replay file or any GUI focus. The Tk root stays withdrawn so this can
+run on CI machines without a display.
+
+Run from the repo root:
+
+    python -m analytics._test_timing_cards_smoke
+
+Exits 0 on pass, 1 on failure.
+"""
+
+from __future__ import annotations
+
+import sys
+import traceback
+from typing import Dict, List
+
+
+# ---------------------------------------------------------------------------
+# Fixture builders (kept local so this test doesn't share state with
+# `_test_timings.py` and stays self-contained).
+# ---------------------------------------------------------------------------
+
+
+def _line(seconds: int, name: str) -> str:
+    return f"[{seconds // 60}:{seconds % 60:02d}] {name}"
+
+
+def _game(
+    *,
+    opp_race: str,
+    result: str = "Win",
+    date: str = "2026-04-01",
+    map_name: str = "Smoke Map",
+    build_log: List[str] = (),
+    opp_build_log: List[str] = (),
+    opponent: str = "TestOpp",
+    my_build: str = "Zerg - Standard",
+) -> Dict:
+    return {
+        "id": f"{opponent}-{date}",
+        "opponent": opponent,
+        "opp_race": opp_race,
+        "opp_strategy": "Standard",
+        "result": result,
+        "date": date,
+        "map": map_name,
+        "build_log": list(build_log),
+        "opp_build_log": list(opp_build_log),
+        "game_length": 720,
+        "my_build": my_build,
+    }
+
+
+def _zvt_db() -> Dict:
+    """3-game ZvT history with samples for both Hatchery and Barracks."""
+    return {
+        "Zerg - 17 Hatch 18 Gas 17 Pool": {
+            "games": [
+                _game(
+                    opp_race="T", result="Win", date="2026-04-01",
+                    build_log=[_line(13, "Hatchery"), _line(72, "SpawningPool")],
+                    opp_build_log=[_line(20, "CommandCenter"), _line(60, "Barracks")],
+                ),
+                _game(
+                    opp_race="T", result="Loss", date="2026-04-02",
+                    build_log=[_line(15, "Hatchery"), _line(75, "SpawningPool")],
+                    opp_build_log=[_line(18, "CommandCenter"), _line(58, "Barracks")],
+                ),
+                _game(
+                    opp_race="T", result="Win", date="2026-04-03",
+                    build_log=[_line(14, "Hatchery"), _line(78, "SpawningPool")],
+                    opp_build_log=[_line(22, "CommandCenter"), _line(64, "Barracks")],
+                ),
+            ]
+        }
+    }
+
+
+def _pvz_db() -> Dict:
+    """One PvZ game so we can test matchup-specific token filtering."""
+    return {
+        "Protoss - Stargate Opener": {
+            "games": [
+                _game(
+                    opp_race="Z", result="Win", date="2026-04-04",
+                    opponent="ZergOpp",
+                    my_build="Protoss - Stargate Opener",
+                    build_log=[_line(20, "Nexus"), _line(45, "Pylon")],
+                    opp_build_log=[_line(15, "Hatchery"), _line(60, "SpawningPool")],
+                ),
+            ]
+        }
+    }
+
+
+# ---------------------------------------------------------------------------
+# Assertions / drivers
+# ---------------------------------------------------------------------------
+
+
+def _assert(cond: bool, msg: str) -> None:
+    if not cond:
+        raise AssertionError(msg)
+
+
+def _count_card_frames(grid_holder) -> int:
+    """Count the timing cards in the grid holder's child tree.
+
+    Cards are top-level ``CTkFrame`` children whose internal name reflects
+    the wrapping label name; we just count direct frame children that have
+    an embedded label whose text matches a known building display name.
+    """
+    import customtkinter as ctk
+    from analytics.timing_catalog import RACE_BUILDINGS
+
+    display_names: set = set()
+    for race_tokens in RACE_BUILDINGS.values():
+        for tok in race_tokens:
+            display_names.add(tok.display_name)
+
+    cards = 0
+    for child in grid_holder.winfo_children():
+        if not isinstance(child, ctk.CTkFrame):
+            continue
+        # Each card has a top row whose text col contains the display name
+        # label as the FIRST CTkLabel descendant.
+        found_name = False
+        stack = list(child.winfo_children())
+        while stack:
+            w = stack.pop()
+            if isinstance(w, ctk.CTkLabel):
+                try:
+                    txt = w.cget("text")
+                except Exception:
+                    txt = ""
+                if txt in display_names:
+                    found_name = True
+                    break
+            stack.extend(getattr(w, "winfo_children", lambda: [])())
+        if found_name:
+            cards += 1
+    return cards
+
+
+def _drive_render_for_db(db: Dict, opp_name: str, expected_min_cards: int):
+    """Build a profile payload, render the grid, and assert card count."""
+    import tkinter as tk
+    import customtkinter as ctk
+
+    # Hidden root - never withdrawn? withdrawn keeps the window invisible
+    # and blocks the Tk event loop from grabbing focus on CI.
+    root = ctk.CTk()
+    root.withdraw()
+
+    from analytics.opponent_profiler import OpponentProfiler
+    from ui.app import App
+
+    profiler = OpponentProfiler(db)
+    # Pick my_race off the build prefix the same way `App` does.
+    sample_game = next(iter(next(iter(db.values()))["games"]))
+    bn = sample_game.get("my_build", "")
+    if bn.startswith("Zerg"):
+        my_race = "Z"
+    elif bn.startswith("Protoss"):
+        my_race = "P"
+    elif bn.startswith("Terran"):
+        my_race = "T"
+    else:
+        my_race = ""
+
+    prof = profiler.profile(opp_name, my_race=my_race)
+    _assert(
+        prof.get("median_timings_order"),
+        "profile must produce a non-empty median_timings_order for the fixture",
+    )
+
+    # Build a host frame and run the body renderer in isolation. We bypass
+    # the full `_render_timing_grid` so the test doesn't depend on the
+    # surrounding Opponents-tab layout.
+    holder = ctk.CTkScrollableFrame(root)
+    holder.pack()
+
+    # Stub-instance: bind only the attributes `_render_timing_grid_body`
+    # actually touches. This keeps the test free of having to construct
+    # a fully-wired App / DB.
+    class _Stub:
+        _opp_ui_state = {"timing_source_filter": "Both"}
+        _timing_icon_cache = {}
+        _timing_grid_state: Dict = {}
+
+        class _Analyzer:
+            error_logger = type("L", (), {"errors": []})()
+
+        analyzer = _Analyzer()
+
+        # Bind the methods we need off the real class so the rendering
+        # logic under test is the one shipped to users.
+        _wr_pill_color = staticmethod(App._wr_pill_color)
+        _TIMING_TREND_GLYPHS = App._TIMING_TREND_GLYPHS
+        _building_icon_path = App._building_icon_path
+        _get_timing_icon = App._get_timing_icon
+        _build_timing_card = App._build_timing_card
+        _render_timing_grid_body = App._render_timing_grid_body
+        _open_timing_drilldown = App._open_timing_drilldown
+        _collect_timing_drilldown_rows = App._collect_timing_drilldown_rows
+        _render_timing_drilldown_row = staticmethod(App._render_timing_drilldown_row)
+        _infer_my_race_for_opponent = App._infer_my_race_for_opponent
+
+    stub = _Stub()
+    App._render_timing_grid_body(stub, holder, prof, opp_name, "Both")  # type: ignore[arg-type]
+
+    # Force pending geometry events so winfo_children includes the just-
+    # gridded card frames.
+    root.update_idletasks()
+
+    n_cards = _count_card_frames(holder)
+    _assert(
+        n_cards >= expected_min_cards,
+        f"Expected at least {expected_min_cards} card frame(s) for {opp_name}, "
+        f"got {n_cards}. Token order from profile: "
+        f"{prof.get('median_timings_order')}",
+    )
+
+    # Also sanity-check the matchup label on the profile - the grid's
+    # title pulls from this, and the SPA / desktop must agree on it.
+    if my_race and (sample_game.get("opp_race") or ""):
+        _assert(
+            prof.get("matchup_label"),
+            "matchup_label must be non-empty when both races are known",
+        )
+
+    root.destroy()
+    return prof, n_cards
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+
+def test_zvt_renders_card_grid() -> None:
+    """ZvT fixture should render at least one card per relevant token."""
+    from analytics.timing_catalog import relevant_tokens
+
+    expected = len(relevant_tokens("Z", "T"))
+    _assert(expected > 0, "relevant_tokens('Z','T') must be non-empty")
+    prof, n = _drive_render_for_db(_zvt_db(), "TestOpp", expected_min_cards=expected)
+    _assert(
+        prof.get("matchup_label") == "ZvT",
+        f"Expected ZvT label, got {prof.get('matchup_label')!r}",
+    )
+    _assert(
+        "Hatchery" in prof.get("median_timings", {}),
+        "ZvT timings must include Hatchery (own race)",
+    )
+    _assert(
+        "Barracks" in prof.get("median_timings", {}),
+        "ZvT timings must include Barracks (opp race)",
+    )
+    print(f"  ZvT rendered {n} card frame(s) (expected >= {expected}).")
+
+
+def test_pvz_renders_card_grid() -> None:
+    """PvZ fixture should render the PvZ token set, no Barracks."""
+    from analytics.timing_catalog import relevant_tokens
+
+    expected = len(relevant_tokens("P", "Z"))
+    _assert(expected > 0, "relevant_tokens('P','Z') must be non-empty")
+    prof, n = _drive_render_for_db(_pvz_db(), "ZergOpp", expected_min_cards=expected)
+    _assert(
+        prof.get("matchup_label") == "PvZ",
+        f"Expected PvZ label, got {prof.get('matchup_label')!r}",
+    )
+    _assert(
+        "Barracks" not in prof.get("median_timings", {}),
+        "PvZ must not surface Barracks",
+    )
+    print(f"  PvZ rendered {n} card frame(s) (expected >= {expected}).")
+
+
+# ---------------------------------------------------------------------------
+# Driver
+# ---------------------------------------------------------------------------
+
+
+# Tk is required to drive the live renderer. Headless CI runners
+# (sandboxes without python3-tk) should report a clean SKIP instead of
+# a false failure. The probe is cheap and reliable: try to import
+# tkinter exactly once at module init.
+try:
+    import tkinter as _tk_probe  # noqa: F401
+    _TK_AVAILABLE = True
+except ImportError:
+    _TK_AVAILABLE = False
+
+
+def main() -> int:
+    if not _TK_AVAILABLE:
+        print("SKIP: tkinter not installed in this environment")
+        print("  (install python3-tk to enable the live renderer smoke test)")
+        return 0
+    tests = [
+        test_zvt_renders_card_grid,
+        test_pvz_renders_card_grid,
+    ]
+    failures = 0
+    for fn in tests:
+        name = fn.__name__
+        try:
+            fn()
+            print(f"PASS {name}")
+        except Exception:
+            failures += 1
+            print(f"FAIL {name}")
+            traceback.print_exc()
+    print(f"\n{len(tests) - failures}/{len(tests)} passed")
+    return 0 if failures == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

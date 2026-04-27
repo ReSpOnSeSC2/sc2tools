@@ -6803,6 +6803,7 @@
         // Definitions stays at the very end (mirrors the SC2ReplayAnalyzer.py
         // tab order) so the build/strategy glossary is always one click away.
         { id: "definitions", label: "Definitions" },
+        { id: "settings", label: "Settings" },
       ];
 
       // ============================================================
@@ -8585,6 +8586,1405 @@
         );
       }
 
+      // ============================================================
+      // SETTINGS PAGE (Stage 2.4)
+      // ------------------------------------------------------------
+      // Persistent settings UI -- same fields as the Stage 2.2 wizard,
+      // editable any time after onboarding. Backed by:
+      //   GET/PATCH /api/profile          (Stage 2.1)
+      //   GET/PATCH /api/config           (Stage 2.1)
+      //   POST     /api/onboarding/*      (Stage 2.2 -- Test buttons)
+      //   GET      /api/backups           (Stage 2.3)
+      //   POST     /api/backups/create
+      //   POST     /api/backups/restore
+      //   DELETE   /api/backups/:name
+      //
+      // The page is a sticky-save-bar + tab-rail layout. Edits update
+      // a "pending" copy of profile/config; on Save we send PATCH
+      // requests for whichever document changed and reload the
+      // server's normalized echo.
+      //
+      // Out of scope for this stage:
+      //   - Diagnostics body  (Stage 4)
+      //   - Cloud sync opt-in (Stage 14)
+      //   - Community builds  (Stage 7)
+      //   - Schema migrations (Stage 14)
+      // ============================================================
+
+      const SETTINGS_TABS = [
+        { id: "profile",     label: "Profile" },
+        { id: "folders",     label: "Replay folders" },
+        { id: "macro",       label: "Macro engine" },
+        { id: "builds",      label: "Build classifier" },
+        { id: "overlay",     label: "Stream overlay" },
+        { id: "backups",     label: "Backups" },
+        { id: "diagnostics", label: "Diagnostics" },
+        { id: "privacy",     label: "Privacy" },
+        { id: "about",       label: "About" },
+      ];
+
+      const SETTINGS_DISCIPLINES = [
+        { id: "chrono",            label: "Chrono boost (Protoss)" },
+        { id: "inject",            label: "Larva inject (Zerg)" },
+        { id: "mule",              label: "MULE drop (Terran)" },
+        { id: "supply",            label: "Supply blocks" },
+        { id: "worker_production", label: "Continuous worker production" },
+      ];
+
+      const SETTINGS_RACES = ["Protoss", "Terran", "Zerg", "Random"];
+
+      const SETTINGS_REGIONS = [
+        { id: "us",  label: "Americas (us)" },
+        { id: "eu",  label: "Europe (eu)" },
+        { id: "kr",  label: "Korea (kr)" },
+        { id: "cn",  label: "China (cn)" },
+        { id: "sea", label: "South-East Asia (sea)" },
+      ];
+
+      const SETTINGS_PERSPECTIVES = [
+        { id: "me",       label: "Me" },
+        { id: "opponent", label: "Opponent" },
+        { id: "both",     label: "Both" },
+      ];
+
+      const SETTINGS_BACKUP_KIND_STYLES = {
+        pre:    "bg-amber-500/20 text-amber-300",
+        broken: "bg-loss-500/20 text-loss-500",
+        backup: "bg-accent-500/20 text-accent-300",
+        bak:    "bg-base-700 text-neutral-400",
+      };
+
+      const SETTINGS_BACKUP_BASES = [
+        { id: "meta_database.json",      label: "meta_database.json" },
+        { id: "profile.json",            label: "profile.json" },
+        { id: "config.json",             label: "config.json" },
+        { id: "MyOpponentHistory.json",  label: "MyOpponentHistory.json" },
+        { id: "custom_builds.json",      label: "custom_builds.json" },
+      ];
+
+      const SETTINGS_GITHUB_URL = "https://github.com/ReSpOnSeSC2/sc2tools";
+      const SETTINGS_VERSION = "0.2.4";
+
+      // --- helpers -----------------------------------------------
+
+      async function settingsFetchJson(url, init) {
+        const res = await fetch(url, init || {});
+        let body = null;
+        try { body = await res.json(); } catch (_e) { /* may be empty */ }
+        return { ok: res.ok, status: res.status, body: body || {} };
+      }
+
+      function settingsSetByPath(obj, segs, value) {
+        if (!segs.length) return value;
+        const [head, ...rest] = segs;
+        const next = (obj && typeof obj === "object" && !Array.isArray(obj))
+          ? { ...obj } : {};
+        next[head] = settingsSetByPath(next[head], rest, value);
+        return next;
+      }
+
+      function settingsHumanizeBytes(n) {
+        if (typeof n !== "number" || !Number.isFinite(n)) return "—";
+        if (n < 1024) return n + " B";
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+        return (n / (1024 * 1024)).toFixed(1) + " MB";
+      }
+
+      function settingsFormatDate(iso) {
+        if (!iso) return "—";
+        try { return new Date(iso).toLocaleString(); }
+        catch (_e) { return iso; }
+      }
+
+      function settingsArraysEqual(a, b) {
+        if (a === b) return true;
+        if (!Array.isArray(a) || !Array.isArray(b)) return false;
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i += 1) {
+          if (!Object.is(a[i], b[i])) return false;
+        }
+        return true;
+      }
+
+      function settingsDiffPaths(a, b, path) {
+        const here = path || [];
+        if (Object.is(a, b)) return [];
+        if (a === null || b === null
+            || typeof a !== "object" || typeof b !== "object"
+            || Array.isArray(a) !== Array.isArray(b)) {
+          return [here];
+        }
+        if (Array.isArray(a)) {
+          return settingsArraysEqual(a, b) ? [] : [here];
+        }
+        const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+        const out = [];
+        keys.forEach(k => {
+          out.push(...settingsDiffPaths(a[k], b[k], [...here, k]));
+        });
+        return out;
+      }
+
+      function settingsCollectErrors(profileErrors, configErrors) {
+        const out = {};
+        const push = (key, msg) => {
+          if (!key) return;
+          out[key] = out[key] || [];
+          out[key].push(msg);
+        };
+        const collect = (errs) => {
+          if (!Array.isArray(errs)) return;
+          errs.forEach(e => {
+            const raw = String(e.instancePath || e.dataPath || "");
+            const cleaned = raw.replace(/^\//, "").replace(/\//g, ".");
+            const key = cleaned
+              || (e.params && e.params.missingProperty)
+              || "";
+            push(key, e.message || "invalid value");
+          });
+        };
+        collect(profileErrors); collect(configErrors);
+        return out;
+      }
+
+      // --- shared atoms ------------------------------------------
+
+      function SettingsLabel({ children, htmlFor, hint }) {
+        return (
+          <label htmlFor={htmlFor}
+                 className="block text-sm font-medium text-neutral-200 mb-1">
+            {children}
+            {hint ? (
+              <span className="ml-2 text-[11px] font-normal text-neutral-500">
+                {hint}
+              </span>
+            ) : null}
+          </label>
+        );
+      }
+
+      function SettingsInput(props) {
+        const { invalid, ...rest } = props;
+        const cls =
+          "w-full px-3 py-2 text-sm rounded bg-base-900 border " +
+          (invalid ? "border-loss-500 " : "border-base-700 ") +
+          "text-neutral-100 placeholder-neutral-600 focus:outline-none " +
+          "focus:ring-2 focus:ring-accent-500 focus:border-accent-500 " +
+          "motion-reduce:transition-none transition-colors";
+        return <input {...rest} className={cls} />;
+      }
+
+      function SettingsSelect(props) {
+        const { invalid, options, ...rest } = props;
+        const cls =
+          "w-full px-3 py-2 text-sm rounded bg-base-900 border " +
+          (invalid ? "border-loss-500 " : "border-base-700 ") +
+          "text-neutral-100 focus:outline-none focus:ring-2 " +
+          "focus:ring-accent-500 focus:border-accent-500 " +
+          "motion-reduce:transition-none transition-colors";
+        return (
+          <select {...rest} className={cls}>
+            {options.map(o => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </select>
+        );
+      }
+
+      function SettingsCheckbox({ id, checked, onChange, disabled, label, hint }) {
+        const wrap = "flex items-start gap-2 text-sm "
+          + (disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer");
+        return (
+          <label htmlFor={id} className={wrap}>
+            <input id={id} type="checkbox" checked={!!checked}
+                   disabled={!!disabled}
+                   onChange={(e) => onChange(e.target.checked)}
+                   className="mt-0.5 accent-accent-500" />
+            <span>
+              <span className="text-neutral-200">{label}</span>
+              {hint ? (
+                <span className="block text-[11px] text-neutral-500">{hint}</span>
+              ) : null}
+            </span>
+          </label>
+        );
+      }
+
+      function SettingsButton({ children, onClick, kind, disabled,
+                                ariaLabel, title }) {
+        const k = kind || "primary";
+        const base = "px-3 py-1.5 text-sm rounded transition "
+          + "motion-reduce:transition-none focus:outline-none "
+          + "focus-visible:ring-2 focus-visible:ring-accent-500";
+        const styles = {
+          primary: " bg-accent-500 text-white hover:bg-accent-400 "
+            + "disabled:opacity-50 disabled:cursor-not-allowed",
+          secondary: " bg-base-700 text-neutral-200 hover:bg-base-600 "
+            + "disabled:opacity-50 disabled:cursor-not-allowed",
+          danger: " bg-loss-500/30 text-loss-500 hover:bg-loss-500/50 "
+            + "disabled:opacity-50 disabled:cursor-not-allowed",
+          ghost: " text-neutral-400 hover:text-neutral-100 "
+            + "hover:bg-base-700 disabled:opacity-50 "
+            + "disabled:cursor-not-allowed",
+        };
+        return (
+          <button type="button" onClick={onClick} disabled={disabled}
+                  aria-label={ariaLabel} title={title}
+                  className={base + (styles[k] || styles.primary)}>
+            {children}
+          </button>
+        );
+      }
+
+      function SettingsErrorList({ errors }) {
+        if (!errors || !errors.length) return null;
+        return (
+          <ul className="mt-1 text-xs text-loss-500 list-disc list-inside"
+              aria-live="polite">
+            {errors.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
+        );
+      }
+
+      function SettingsSaveBar({ dirtyCount, saving, error,
+                                 onSave, onDiscard }) {
+        const visible = dirtyCount > 0 || !!error;
+        if (!visible) return null;
+        return (
+          <div className="sticky top-[57px] z-10 -mx-4 px-4 py-2
+                          bg-amber-500/10 border-y border-amber-500/30
+                          flex items-center gap-3 flex-wrap"
+               role="region" aria-live="polite"
+               aria-label="Unsaved settings changes">
+            <span className="text-sm text-amber-300">
+              {dirtyCount} unsaved {dirtyCount === 1 ? "change" : "changes"}
+            </span>
+            {error ? (
+              <span className="text-xs text-loss-500">{error}</span>
+            ) : null}
+            <div className="ml-auto flex gap-2">
+              <SettingsButton kind="ghost" onClick={onDiscard}
+                              disabled={saving}>Discard</SettingsButton>
+              <SettingsButton kind="primary" onClick={onSave}
+                              disabled={saving || dirtyCount === 0}>
+                {saving ? "Saving…" : "Save"}
+              </SettingsButton>
+            </div>
+          </div>
+        );
+      }
+
+      function SettingsTabRail({ tab, onChange }) {
+        return (
+          <nav aria-label="Settings sections"
+               className="md:w-56 shrink-0 flex md:flex-col gap-1
+                          overflow-x-auto md:overflow-visible">
+            {SETTINGS_TABS.map(t => {
+              const active = tab === t.id;
+              const cls = "text-left px-3 py-2 text-sm rounded transition "
+                + "motion-reduce:transition-none focus:outline-none "
+                + "focus-visible:ring-2 focus-visible:ring-accent-500 "
+                + (active
+                  ? "bg-base-700 text-neutral-100"
+                  : "text-neutral-400 hover:bg-base-700/60 "
+                    + "hover:text-neutral-200");
+              return (
+                <button key={t.id} onClick={() => onChange(t.id)}
+                        aria-current={active ? "page" : undefined}
+                        className={cls}>
+                  {t.label}
+                </button>
+              );
+            })}
+          </nav>
+        );
+      }
+
+      // --- panels ------------------------------------------------
+
+      function SettingsProfileBattleNetGroup({ bn, errors, onPatch }) {
+        return (
+          <>
+            <div>
+              <SettingsLabel htmlFor="settings-battle-tag">
+                Battle tag
+              </SettingsLabel>
+              <SettingsInput id="settings-battle-tag"
+                value={bn.battle_tag || ""}
+                onChange={(e) => onPatch(
+                  ["battlenet", "battle_tag"], e.target.value)}
+                placeholder="ReSpOnSe#0"
+                invalid={!!errors["battlenet.battle_tag"]} />
+              <SettingsErrorList errors={errors["battlenet.battle_tag"]} />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <SettingsLabel htmlFor="settings-character-id"
+                  hint="from SC2Pulse">Character id</SettingsLabel>
+                <SettingsInput id="settings-character-id"
+                  value={bn.character_id || ""}
+                  onChange={(e) => onPatch(
+                    ["battlenet", "character_id"], e.target.value)}
+                  placeholder="1-S2-1-267727"
+                  invalid={!!errors["battlenet.character_id"]} />
+                <SettingsErrorList errors={errors["battlenet.character_id"]} />
+              </div>
+              <div>
+                <SettingsLabel htmlFor="settings-account-id">
+                  Account id
+                </SettingsLabel>
+                <SettingsInput id="settings-account-id"
+                  value={bn.account_id || ""}
+                  onChange={(e) => onPatch(
+                    ["battlenet", "account_id"], e.target.value)}
+                  placeholder="50983875"
+                  invalid={!!errors["battlenet.account_id"]} />
+                <SettingsErrorList errors={errors["battlenet.account_id"]} />
+              </div>
+            </div>
+            <div>
+              <SettingsLabel htmlFor="settings-region">Region</SettingsLabel>
+              <SettingsSelect id="settings-region" value={bn.region || "us"}
+                onChange={(e) => onPatch(
+                  ["battlenet", "region"], e.target.value)}
+                options={SETTINGS_REGIONS}
+                invalid={!!errors["battlenet.region"]} />
+              <SettingsErrorList errors={errors["battlenet.region"]} />
+            </div>
+          </>
+        );
+      }
+
+      function SettingsProfileRacesGroup({ races, errors, onPatch }) {
+        const list = races || [];
+        const toggle = (race) => {
+          const next = list.includes(race)
+            ? list.filter(r => r !== race)
+            : [...list, race];
+          onPatch(["races"], next);
+        };
+        return (
+          <div>
+            <SettingsLabel>Races you regularly play</SettingsLabel>
+            <div className="flex flex-wrap gap-3 mt-1">
+              {SETTINGS_RACES.map(r => (
+                <SettingsCheckbox key={r} id={"settings-race-" + r}
+                  checked={list.includes(r)} onChange={() => toggle(r)}
+                  label={r} />
+              ))}
+            </div>
+            <SettingsErrorList errors={errors["races"]} />
+          </div>
+        );
+      }
+
+      function SettingsProfileTuningGroup({ profile, errors, onPatch }) {
+        const mmrChange = (e) => {
+          if (e.target.value === "") { onPatch(["mmr_target"], null); return; }
+          const v = Number(e.target.value);
+          onPatch(["mmr_target"], Number.isFinite(v) ? v : null);
+        };
+        return (
+          <>
+            <div>
+              <SettingsLabel htmlFor="settings-mmr-target" hint="optional">
+                MMR target
+              </SettingsLabel>
+              <SettingsInput id="settings-mmr-target" type="number"
+                min="0" max="8000"
+                value={profile.mmr_target == null
+                  ? "" : String(profile.mmr_target)}
+                onChange={mmrChange}
+                placeholder="e.g. 4500"
+                invalid={!!errors["mmr_target"]} />
+              <SettingsErrorList errors={errors["mmr_target"]} />
+            </div>
+            <div>
+              <SettingsLabel htmlFor="settings-replay-name">
+                In-replay player name
+              </SettingsLabel>
+              <SettingsInput id="settings-replay-name"
+                value={profile.preferred_player_name_in_replays || ""}
+                onChange={(e) => onPatch(
+                  ["preferred_player_name_in_replays"], e.target.value)}
+                placeholder="ReSpOnSe"
+                invalid={!!errors["preferred_player_name_in_replays"]} />
+              <SettingsErrorList
+                errors={errors["preferred_player_name_in_replays"]} />
+            </div>
+          </>
+        );
+      }
+
+      function SettingsProfilePanel({ profile, errors, onPatch }) {
+        return (
+          <div className="space-y-4 max-w-xl">
+            <SettingsProfileBattleNetGroup bn={profile.battlenet || {}}
+              errors={errors} onPatch={onPatch} />
+            <SettingsProfileRacesGroup races={profile.races}
+              errors={errors} onPatch={onPatch} />
+            <SettingsProfileTuningGroup profile={profile}
+              errors={errors} onPatch={onPatch} />
+          </div>
+        );
+      }
+
+      function SettingsFolderRow({ folder, onRemove, onTest, testStatus }) {
+        return (
+          <li className="flex items-center gap-2 px-3 py-2 bg-base-900
+                         border border-base-700 rounded">
+            <span className="font-mono text-xs text-neutral-200 truncate flex-1"
+                  title={folder}>{folder}</span>
+            {testStatus ? (
+              <span className={"text-xs " + (testStatus.ok === true
+                ? "text-win-500" : testStatus.ok === false
+                  ? "text-loss-500" : "text-neutral-400")}>
+                {testStatus.message}
+              </span>
+            ) : null}
+            <SettingsButton kind="secondary" onClick={() => onTest(folder)}>
+              Test
+            </SettingsButton>
+            <SettingsButton kind="danger" onClick={() => onRemove(folder)}
+              ariaLabel={"Remove " + folder}>Remove</SettingsButton>
+          </li>
+        );
+      }
+
+      function settingsFolderTestStatus(body) {
+        const count = body
+          ? (body.replay_count != null
+            ? body.replay_count
+            : (Array.isArray(body.replays) ? body.replays.length : 0))
+          : 0;
+        if (typeof count === "number" && count > 0) {
+          return { ok: true, message: "✓ " + count + " replays found", count };
+        }
+        return { ok: false, message: "✗ no replays detected", count: 0 };
+      }
+
+      function useSettingsFolderTests() {
+        const [statuses, setStatuses] = useState({});
+        const setOne = (key, val) =>
+          setStatuses(prev => ({ ...prev, [key]: val }));
+        const test = async (folder) => {
+          setOne(folder, { ok: null, message: "Scanning…" });
+          const r = await settingsFetchJson(
+            "/api/onboarding/scan-replay-folders",
+            { method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ single_path: folder }) });
+          if (!r.ok) {
+            setOne(folder, { ok: false,
+              message: "✗ " + ((r.body && (r.body.error || "scan failed"))
+                || "scan failed"),
+              count: null });
+            return;
+          }
+          setOne(folder, settingsFolderTestStatus(r.body));
+        };
+        return { statuses, test };
+      }
+
+      function SettingsFolderAddRow({ onAdd }) {
+        const [draft, setDraft] = useState("");
+        const submit = () => {
+          if (!draft.trim()) return;
+          onAdd(draft.trim());
+          setDraft("");
+        };
+        return (
+          <div className="flex gap-2">
+            <SettingsInput value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={"C:\\Users\\you\\Documents\\StarCraft II"
+                + "\\Accounts\\..."} />
+            <SettingsButton onClick={submit} disabled={!draft.trim()}>
+              Add
+            </SettingsButton>
+          </div>
+        );
+      }
+
+      function SettingsFoldersPanel({ paths, errors, onPatch }) {
+        const folders = (paths && paths.replay_folders) || [];
+        const tester = useSettingsFolderTests();
+        const addFolder = (trimmed) => {
+          if (folders.includes(trimmed)) return;
+          onPatch(["paths", "replay_folders"], [...folders, trimmed]);
+        };
+        const removeFolder = (folder) => {
+          if (folders.length <= 1) {
+            window.alert("At least one replay folder is required.");
+            return;
+          }
+          const status = tester.statuses[folder];
+          const found = (status && status.count != null)
+            ? status.count + " replays" : "unknown count";
+          if (!window.confirm("Remove " + folder + "? (" + found + ")")) return;
+          onPatch(["paths", "replay_folders"],
+            folders.filter(f => f !== folder));
+        };
+        return (
+          <div className="space-y-3 max-w-2xl">
+            <p className="text-xs text-neutral-500">
+              Folders the watcher monitors for new .SC2Replay files. The
+              first entry is the canonical "My Replays" folder.
+            </p>
+            <ul className="space-y-2">
+              {folders.map(f => (
+                <SettingsFolderRow key={f} folder={f}
+                  onRemove={removeFolder} onTest={tester.test}
+                  testStatus={tester.statuses[f]} />
+              ))}
+            </ul>
+            <SettingsFolderAddRow onAdd={addFolder} />
+            <SettingsErrorList errors={errors["paths.replay_folders"]} />
+          </div>
+        );
+      }
+
+      function SettingsMacroPanel({ macroEngine, errors, onPatch }) {
+        const me = macroEngine || {};
+        const enabled = me.enabled_disciplines || [];
+        const toggle = (id) => {
+          const next = enabled.includes(id)
+            ? enabled.filter(d => d !== id)
+            : [...enabled, id];
+          onPatch(["macro_engine", "enabled_disciplines"], next);
+        };
+        return (
+          <div className="space-y-4 max-w-xl">
+            <div>
+              <SettingsLabel>Enabled disciplines</SettingsLabel>
+              <div className="space-y-1">
+                {SETTINGS_DISCIPLINES.map(d => (
+                  <SettingsCheckbox key={d.id} id={"settings-disc-" + d.id}
+                    checked={enabled.includes(d.id)}
+                    onChange={() => toggle(d.id)}
+                    label={d.label} />
+                ))}
+              </div>
+              <SettingsErrorList
+                errors={errors["macro_engine.enabled_disciplines"]} />
+            </div>
+            <div>
+              <SettingsLabel htmlFor="settings-min-game"
+                hint="games shorter than this are excluded">
+                Minimum game length (seconds)
+              </SettingsLabel>
+              <SettingsInput id="settings-min-game" type="number"
+                min="0" max="7200"
+                value={me.minimum_game_length_sec == null
+                  ? "" : String(me.minimum_game_length_sec)}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  onPatch(["macro_engine", "minimum_game_length_sec"],
+                    Number.isFinite(v) ? v : 0);
+                }}
+                invalid={!!errors["macro_engine.minimum_game_length_sec"]} />
+              <SettingsErrorList
+                errors={errors["macro_engine.minimum_game_length_sec"]} />
+            </div>
+            <div>
+              <SettingsLabel
+                hint="read-only — bumped when the engine ships a new version">
+                Engine version
+              </SettingsLabel>
+              <div className="px-3 py-2 text-sm rounded bg-base-900
+                              border border-base-700 text-neutral-400 font-mono">
+                {me.engine_version || "—"}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function SettingsBuildsActiveList({ definitions, defLoading,
+                                              defError, active, onToggle,
+                                              errors }) {
+        return (
+          <div>
+            <SettingsLabel
+              hint="select which builds the classifier scores against">
+              Active builds (built-in)
+            </SettingsLabel>
+            {defLoading
+              ? <p className="text-xs text-neutral-500">Loading…</p>
+              : null}
+            {defError ? (
+              <p className="text-xs text-loss-500">
+                Couldn't load build_definitions.json: {defError}
+              </p>
+            ) : null}
+            {!defLoading && !defError && definitions.length === 0 ? (
+              <p className="text-xs text-neutral-500">
+                No definitions found.
+              </p>
+            ) : null}
+            <ul className="grid grid-cols-1 md:grid-cols-2 gap-1
+                            max-h-96 overflow-auto pr-2">
+              {definitions.map(d => (
+                <li key={d.name}>
+                  <SettingsCheckbox id={"settings-bld-" + d.name}
+                    checked={active.includes(d.name)}
+                    onChange={() => onToggle(d.name)}
+                    label={d.name}
+                    hint={d.description} />
+                </li>
+              ))}
+            </ul>
+            <SettingsErrorList
+              errors={errors["build_classifier.active_definition_ids"]} />
+          </div>
+        );
+      }
+
+      function SettingsBuildsCommunityCard() {
+        return (
+          <div className="px-3 py-3 bg-base-900 border border-base-700
+                          rounded opacity-70"
+               title="Community-shared build database arrives in Stage 7.">
+            <div className="text-sm font-medium text-neutral-300">
+              Community builds (Stage 7)
+            </div>
+            <div className="text-xs text-neutral-500 mt-1">
+              Shared community build database. Disabled until Stage 7 ships
+              the server side. Your saved builds are still kept locally.
+            </div>
+          </div>
+        );
+      }
+
+      function SettingsBuildsPanel({ classifier, errors, onPatch,
+                                     definitions, defLoading, defError }) {
+        const c = classifier || {};
+        const active = c.active_definition_ids || [];
+        const toggleId = (id) => {
+          const next = active.includes(id)
+            ? active.filter(x => x !== id) : [...active, id];
+          onPatch(["build_classifier", "active_definition_ids"], next);
+        };
+        return (
+          <div className="space-y-4 max-w-3xl">
+            <SettingsBuildsActiveList definitions={definitions}
+              defLoading={defLoading} defError={defError}
+              active={active} onToggle={toggleId} errors={errors} />
+            <div>
+              <SettingsCheckbox id="settings-use-custom"
+                checked={!!c.use_custom_builds}
+                onChange={(v) => onPatch(
+                  ["build_classifier", "use_custom_builds"], v)}
+                label="Use my custom builds (data/custom_builds.json)"
+                hint="Custom-build IDs in your active list are still saved." />
+              <SettingsErrorList
+                errors={errors["build_classifier.use_custom_builds"]} />
+            </div>
+            <SettingsBuildsCommunityCard />
+          </div>
+        );
+      }
+
+      function settingsOverlayStatusClass(s) {
+        if (!s) return "";
+        return "text-xs " + (s.ok === true ? "text-win-500"
+          : s.ok === false ? "text-loss-500" : "text-neutral-400");
+      }
+
+      async function settingsRunOverlayTest(url, body) {
+        const r = await settingsFetchJson(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        return {
+          ok: r.ok && r.body && r.body.ok !== false,
+          message: r.body && r.body.message
+            ? r.body.message : (r.ok ? "OK" : "failed"),
+        };
+      }
+
+      function SettingsOverlayTwitchCard({ overlay, errors, onPatch }) {
+        const [status, setStatus] = useState(null);
+        const onTest = async () => {
+          setStatus({ ok: null, message: "Testing…" });
+          setStatus(await settingsRunOverlayTest(
+            "/api/onboarding/test/twitch",
+            { channel: overlay.twitch_channel || "" }));
+        };
+        return (
+          <div className="px-4 py-3 bg-base-900 border border-base-700
+                          rounded space-y-3">
+            <div className="text-sm font-semibold text-neutral-200">Twitch</div>
+            <div>
+              <SettingsLabel htmlFor="settings-twitch-channel">
+                Channel handle
+              </SettingsLabel>
+              <SettingsInput id="settings-twitch-channel"
+                value={overlay.twitch_channel || ""}
+                onChange={(e) => onPatch(
+                  ["stream_overlay", "twitch_channel"],
+                  e.target.value || null)}
+                placeholder="your_twitch_handle"
+                invalid={!!errors["stream_overlay.twitch_channel"]} />
+              <SettingsErrorList
+                errors={errors["stream_overlay.twitch_channel"]} />
+            </div>
+            <div className="flex items-center gap-2">
+              <SettingsButton kind="secondary" onClick={onTest}>
+                Test
+              </SettingsButton>
+              {status ? (
+                <span className={settingsOverlayStatusClass(status)}>
+                  {status.message}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        );
+      }
+
+      function SettingsObsHostPort({ obs, errors, onPatch }) {
+        return (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <SettingsLabel htmlFor="settings-obs-host">Host</SettingsLabel>
+              <SettingsInput id="settings-obs-host"
+                value={obs.host || ""}
+                onChange={(e) => onPatch(
+                  ["stream_overlay", "obs_websocket", "host"], e.target.value)}
+                placeholder="127.0.0.1"
+                invalid={!!errors["stream_overlay.obs_websocket.host"]} />
+              <SettingsErrorList
+                errors={errors["stream_overlay.obs_websocket.host"]} />
+            </div>
+            <div>
+              <SettingsLabel htmlFor="settings-obs-port">Port</SettingsLabel>
+              <SettingsInput id="settings-obs-port" type="number"
+                min="1" max="65535"
+                value={obs.port == null ? "" : String(obs.port)}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  onPatch(["stream_overlay", "obs_websocket", "port"],
+                    Number.isFinite(v) ? v : 4455);
+                }}
+                placeholder="4455"
+                invalid={!!errors["stream_overlay.obs_websocket.port"]} />
+              <SettingsErrorList
+                errors={errors["stream_overlay.obs_websocket.port"]} />
+            </div>
+          </div>
+        );
+      }
+
+      function SettingsOverlayObsCard({ overlay, errors, onPatch }) {
+        const obs = overlay.obs_websocket || {};
+        const [status, setStatus] = useState(null);
+        const onTest = async () => {
+          setStatus({ ok: null, message: "Testing…" });
+          setStatus(await settingsRunOverlayTest("/api/onboarding/test/obs", {
+            host: obs.host || "127.0.0.1",
+            port: obs.port || 4455,
+            password: obs.password || "",
+          }));
+        };
+        return (
+          <div className="px-4 py-3 bg-base-900 border border-base-700
+                          rounded space-y-3">
+            <div className="text-sm font-semibold text-neutral-200">
+              OBS WebSocket
+            </div>
+            <SettingsObsHostPort obs={obs} errors={errors} onPatch={onPatch} />
+            <div>
+              <SettingsLabel htmlFor="settings-obs-pass"
+                hint="leave empty if auth disabled">Password</SettingsLabel>
+              <SettingsInput id="settings-obs-pass" type="password"
+                value={obs.password || ""}
+                onChange={(e) => onPatch(
+                  ["stream_overlay", "obs_websocket", "password"],
+                  e.target.value || null)}
+                invalid={!!errors["stream_overlay.obs_websocket.password"]} />
+            </div>
+            <div className="flex items-center gap-2">
+              <SettingsButton kind="secondary" onClick={onTest}>
+                Test
+              </SettingsButton>
+              {status ? (
+                <span className={settingsOverlayStatusClass(status)}>
+                  {status.message}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        );
+      }
+
+      function SettingsOverlayPanel({ overlay, errors, onPatch }) {
+        const o = overlay || {};
+        return (
+          <div className="space-y-4 max-w-xl">
+            <SettingsCheckbox id="settings-overlay-enabled"
+              checked={!!o.enabled}
+              onChange={(v) => onPatch(["stream_overlay", "enabled"], v)}
+              label="Enable stream overlay event bus" />
+            <SettingsErrorList errors={errors["stream_overlay.enabled"]} />
+            <SettingsOverlayTwitchCard overlay={o} errors={errors}
+              onPatch={onPatch} />
+            <SettingsOverlayObsCard overlay={o} errors={errors}
+              onPatch={onPatch} />
+          </div>
+        );
+      }
+
+      function SettingsBackupRow({ snap, onRestore, onDelete }) {
+        const isSafety = snap.kind === "pre"
+          && String(snap.label || "").startsWith("restore-");
+        const chip = SETTINGS_BACKUP_KIND_STYLES[snap.kind]
+          || SETTINGS_BACKUP_KIND_STYLES.bak;
+        return (
+          <tr className="border-t border-base-700">
+            <td className="px-3 py-2 font-mono text-xs text-neutral-200
+                           break-all">{snap.name}</td>
+            <td className="px-3 py-2 text-xs text-neutral-400">{snap.base}</td>
+            <td className="px-3 py-2">
+              <span className={"text-[10px] uppercase tracking-wider "
+                + "px-2 py-0.5 rounded " + chip}>{snap.kind}</span>
+            </td>
+            <td className="px-3 py-2 text-xs text-neutral-400 whitespace-nowrap">
+              {settingsHumanizeBytes(snap.size)}
+            </td>
+            <td className="px-3 py-2 text-xs text-neutral-400 whitespace-nowrap">
+              {settingsFormatDate(snap.modified_iso)}
+            </td>
+            <td className="px-3 py-2">
+              <div className="flex gap-1 justify-end">
+                {isSafety ? (
+                  <span className="text-[11px] text-neutral-500"
+                        title="Safety snapshot from a recent restore — protected.">
+                    protected
+                  </span>
+                ) : (
+                  <>
+                    <SettingsButton kind="secondary"
+                      onClick={() => onRestore(snap)}>Restore</SettingsButton>
+                    <SettingsButton kind="danger"
+                      onClick={() => onDelete(snap)}>Delete</SettingsButton>
+                  </>
+                )}
+              </div>
+            </td>
+          </tr>
+        );
+      }
+
+      function useSettingsBackups() {
+        const [list, setList] = useState([]);
+        const [loading, setLoading] = useState(true);
+        const [error, setError] = useState(null);
+        const [busy, setBusy] = useState(false);
+        const [lastSafety, setLastSafety] = useState(null);
+        const refresh = async () => {
+          setLoading(true); setError(null);
+          const r = await settingsFetchJson("/api/backups");
+          setLoading(false);
+          if (!r.ok) {
+            setError((r.body && r.body.error) || "load failed");
+            return;
+          }
+          setList(Array.isArray(r.body.backups) ? r.body.backups : []);
+        };
+        useEffect(() => { refresh(); }, []);
+        return { list, loading, error, busy, setBusy,
+                 lastSafety, setLastSafety, refresh };
+      }
+
+      async function settingsRunBackupAction(url, init, label) {
+        const r = await settingsFetchJson(url, init);
+        if (!r.ok) {
+          window.alert(label + " failed: "
+            + ((r.body && r.body.error) || r.status));
+          return null;
+        }
+        return r.body;
+      }
+
+      function settingsConfirmRestore(snap) {
+        const msg = "Restore " + snap.base + " from " + snap.name + "?\n\n"
+          + "A safety snapshot of the current " + snap.base
+          + " will be created first.";
+        return window.confirm(msg);
+      }
+
+      function settingsConfirmDelete(snap) {
+        const isSafety = snap.kind === "pre"
+          && String(snap.label || "").startsWith("restore-");
+        if (isSafety) {
+          const extra = "This is a safety snapshot from a recent restore. "
+            + "Delete it ONLY if you've already verified the restore "
+            + "succeeded. Continue?";
+          if (!window.confirm(extra)) return false;
+        }
+        return window.confirm("Permanently delete " + snap.name
+          + "? This cannot be undone.");
+      }
+
+      function SettingsBackupsToolbar({ createBase, setCreateBase, onCreate,
+                                        onRefresh, busy, loading,
+                                        lastSafety, error }) {
+        return (
+          <>
+            <div className="flex items-end gap-2 flex-wrap">
+              <div>
+                <SettingsLabel htmlFor="settings-snap-base">
+                  Snapshot file
+                </SettingsLabel>
+                <SettingsSelect id="settings-snap-base"
+                  value={createBase}
+                  onChange={(e) => setCreateBase(e.target.value)}
+                  options={SETTINGS_BACKUP_BASES} />
+              </div>
+              <SettingsButton onClick={onCreate} disabled={busy}>
+                Create snapshot
+              </SettingsButton>
+              <SettingsButton kind="ghost" onClick={onRefresh}
+                disabled={busy || loading}>Refresh</SettingsButton>
+            </div>
+            {lastSafety ? (
+              <p className="text-xs text-neutral-500">
+                Safety snapshot:{" "}
+                <span className="font-mono">{lastSafety}</span>
+              </p>
+            ) : null}
+            {error ? (
+              <p className="text-xs text-loss-500">{error}</p>
+            ) : null}
+          </>
+        );
+      }
+
+      function SettingsBackupsEmptyRow({ message }) {
+        return (
+          <tr>
+            <td colSpan="6"
+                className="px-3 py-4 text-center text-neutral-500">
+              {message}
+            </td>
+          </tr>
+        );
+      }
+
+      function SettingsBackupsTableRows({ list, loading,
+                                          onRestore, onDelete }) {
+        if (loading) {
+          return <SettingsBackupsEmptyRow message="Loading…" />;
+        }
+        if (list.length === 0) {
+          return <SettingsBackupsEmptyRow message="No snapshots yet." />;
+        }
+        return list.map(s => (
+          <SettingsBackupRow key={s.name} snap={s}
+            onRestore={onRestore} onDelete={onDelete} />
+        ));
+      }
+
+      function SettingsBackupsTable({ list, loading, onRestore, onDelete }) {
+        return (
+          <div className="overflow-auto border border-base-700 rounded">
+            <table className="w-full text-sm">
+              <thead className="text-[10px] uppercase tracking-wider
+                                 text-neutral-500 bg-base-800/40">
+                <tr>
+                  <th className="px-3 py-2 text-left">Name</th>
+                  <th className="px-3 py-2 text-left">Base</th>
+                  <th className="px-3 py-2 text-left">Kind</th>
+                  <th className="px-3 py-2 text-left">Size</th>
+                  <th className="px-3 py-2 text-left">Modified</th>
+                  <th className="px-3 py-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <SettingsBackupsTableRows list={list} loading={loading}
+                  onRestore={onRestore} onDelete={onDelete} />
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+
+      function SettingsBackupsPanel() {
+        const [createBase, setCreateBase] = useState("meta_database.json");
+        const ctx = useSettingsBackups();
+        const onCreate = async () => {
+          ctx.setBusy(true);
+          await settingsRunBackupAction("/api/backups/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ base: createBase }),
+          }, "Create");
+          ctx.setBusy(false); ctx.refresh();
+        };
+        const onRestore = async (snap) => {
+          if (!settingsConfirmRestore(snap)) return;
+          ctx.setBusy(true);
+          const body = await settingsRunBackupAction(
+            "/api/backups/restore",
+            { method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ snapshot: snap.name }) },
+            "Restore");
+          ctx.setBusy(false);
+          if (body && body.pre_restore_snapshot
+              && body.pre_restore_snapshot.name) {
+            ctx.setLastSafety(body.pre_restore_snapshot.name);
+          }
+          ctx.refresh();
+        };
+        const onDelete = async (snap) => {
+          if (!settingsConfirmDelete(snap)) return;
+          ctx.setBusy(true);
+          await settingsRunBackupAction(
+            "/api/backups/" + encodeURIComponent(snap.name),
+            { method: "DELETE" }, "Delete");
+          ctx.setBusy(false); ctx.refresh();
+        };
+        return (
+          <div className="space-y-3">
+            <SettingsBackupsToolbar createBase={createBase}
+              setCreateBase={setCreateBase}
+              onCreate={onCreate} onRefresh={ctx.refresh}
+              busy={ctx.busy} loading={ctx.loading}
+              lastSafety={ctx.lastSafety} error={ctx.error} />
+            <SettingsBackupsTable list={ctx.list} loading={ctx.loading}
+              onRestore={onRestore} onDelete={onDelete} />
+          </div>
+        );
+      }
+
+      function SettingsDiagnosticsPanel() {
+        return (
+          <div className="space-y-3 max-w-xl">
+            <p className="text-sm text-neutral-300">
+              Diagnostics page is owned by Stage 4. The full health-check
+              view will live at{" "}
+              <code className="text-xs bg-base-900 px-1.5 py-0.5 rounded">
+                /diagnostics
+              </code>.
+            </p>
+            <p className="text-xs text-neutral-500">
+              For now, the wizard's identity-scan and folder-scan endpoints
+              are the closest equivalents; reproduce any error you saw in the
+              wizard's "Test" steps from the other tabs on this page.
+            </p>
+          </div>
+        );
+      }
+
+      function SettingsPrivacyPanel({ telemetry, errors, onPatch }) {
+        const t = telemetry || {};
+        return (
+          <div className="space-y-4 max-w-xl">
+            <SettingsCheckbox id="settings-telemetry-opt"
+              checked={!!t.opt_in}
+              onChange={(v) => onPatch(["telemetry", "opt_in"], v)}
+              label="Send anonymized usage telemetry"
+              hint={"Counts of events; never replay paths, opponent names, "
+                + "battle tags, or push tokens."} />
+            <SettingsErrorList errors={errors["telemetry.opt_in"]} />
+            <div className="px-3 py-3 bg-base-900 border border-base-700
+                            rounded">
+              <div className="text-sm font-medium text-neutral-300">
+                Retention
+              </div>
+              <p className="text-xs text-neutral-500 mt-1">
+                Replay-derived stats stay on this machine. Backups are kept
+                until you delete them. Logs roll over after 30 days.
+              </p>
+            </div>
+            <div className="px-3 py-3 bg-base-900 border border-base-700
+                            rounded opacity-70"
+                 title="Cloud sync arrives in Stage 14.">
+              <div className="text-sm font-medium text-neutral-300">
+                Cloud sync (Stage 14)
+              </div>
+              <p className="text-xs text-neutral-500 mt-1">
+                Opt-in cloud backup of profile/config/custom builds.
+                Disabled until Stage 14 ships.
+              </p>
+            </div>
+          </div>
+        );
+      }
+
+      function SettingsAboutPanel({ ui, errors, onPatch }) {
+        const u = ui || {};
+        const [updateMsg, setUpdateMsg] = useState(null);
+        const checkUpdate = () => {
+          setUpdateMsg("Update channel not wired yet — Stage 14 owns this. "
+            + "Visit GitHub to see the latest release.");
+        };
+        return (
+          <div className="space-y-4 max-w-xl">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <SettingsLabel htmlFor="settings-ui-theme">Theme</SettingsLabel>
+                <SettingsSelect id="settings-ui-theme"
+                  value={u.theme || "dark"}
+                  onChange={(e) => onPatch(["ui", "theme"], e.target.value)}
+                  options={[
+                    { id: "dark",  label: "Dark" },
+                    { id: "light", label: "Light" },
+                  ]}
+                  invalid={!!errors["ui.theme"]} />
+                <SettingsErrorList errors={errors["ui.theme"]} />
+              </div>
+              <div>
+                <SettingsLabel htmlFor="settings-ui-perspective">
+                  Default perspective
+                </SettingsLabel>
+                <SettingsSelect id="settings-ui-perspective"
+                  value={u.default_perspective || "me"}
+                  onChange={(e) => onPatch(
+                    ["ui", "default_perspective"], e.target.value)}
+                  options={SETTINGS_PERSPECTIVES}
+                  invalid={!!errors["ui.default_perspective"]} />
+                <SettingsErrorList errors={errors["ui.default_perspective"]} />
+              </div>
+            </div>
+            <div className="px-3 py-3 bg-base-900 border border-base-700
+                            rounded space-y-2">
+              <div className="text-sm text-neutral-300">
+                SC2Tools v{SETTINGS_VERSION}
+              </div>
+              <div className="text-xs text-neutral-500">
+                <a href={SETTINGS_GITHUB_URL} target="_blank"
+                   rel="noopener noreferrer"
+                   className="text-accent-300 hover:underline
+                              focus-visible:underline">
+                  View source on GitHub
+                </a>
+              </div>
+              <SettingsButton kind="secondary" onClick={checkUpdate}>
+                Check for updates
+              </SettingsButton>
+              {updateMsg ? (
+                <p className="text-xs text-neutral-500">{updateMsg}</p>
+              ) : null}
+            </div>
+          </div>
+        );
+      }
+
+      // --- container ---------------------------------------------
+
+      function useSettingsDocuments() {
+        const [profile, setProfile] = useState(null);
+        const [config, setConfig] = useState(null);
+        const [pendingProfile, setPendingProfile] = useState(null);
+        const [pendingConfig, setPendingConfig] = useState(null);
+        const [loading, setLoading] = useState(true);
+        const [loadError, setLoadError] = useState(null);
+        const loadAll = async () => {
+          setLoading(true); setLoadError(null);
+          const [p, c] = await Promise.all([
+            settingsFetchJson("/api/profile"),
+            settingsFetchJson("/api/config"),
+          ]);
+          if (!p.ok || !c.ok) {
+            setLoading(false);
+            setLoadError("Couldn't load settings. "
+              + "Open the wizard or check the backend is running.");
+            return;
+          }
+          setProfile(p.body); setPendingProfile(p.body);
+          setConfig(c.body); setPendingConfig(c.body);
+          setLoading(false);
+        };
+        useEffect(() => { loadAll(); }, []);
+        return { profile, config, pendingProfile, pendingConfig,
+                 loading, loadError, loadAll,
+                 setPendingProfile, setPendingConfig };
+      }
+
+      function useSettingsBuildDefinitions() {
+        const [definitions, setDefinitions] = useState([]);
+        const [defLoading, setDefLoading] = useState(true);
+        const [defError, setDefError] = useState(null);
+        useEffect(() => {
+          let cancelled = false;
+          (async () => {
+            setDefLoading(true); setDefError(null);
+            const r = await settingsFetchJson("/api/analyzer/definitions");
+            if (cancelled) return;
+            setDefLoading(false);
+            if (!r.ok) {
+              setDefError((r.body && r.body.error) || "load failed");
+              return;
+            }
+            setDefinitions(Array.isArray(r.body.items) ? r.body.items : []);
+          })();
+          return () => { cancelled = true; };
+        }, []);
+        return { definitions, defLoading, defError };
+      }
+
+      function settingsBuildSaveTasks(dirtyProfile, dirtyConfig,
+                                      pendingProfile, pendingConfig) {
+        const tasks = [];
+        if (dirtyProfile.length) {
+          tasks.push(settingsFetchJson("/api/profile", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(pendingProfile),
+          }).then(r => ({ kind: "profile", r })));
+        }
+        if (dirtyConfig.length) {
+          tasks.push(settingsFetchJson("/api/config", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(pendingConfig),
+          }).then(r => ({ kind: "config", r })));
+        }
+        return tasks;
+      }
+
+      function settingsExtractSaveErrors(results) {
+        let pErrs = null, cErrs = null, anyFailed = false;
+        results.forEach(({ kind, r }) => {
+          if (r.ok) return;
+          anyFailed = true;
+          if (Array.isArray(r.body && r.body.errors)) {
+            if (kind === "profile") pErrs = r.body.errors;
+            else cErrs = r.body.errors;
+          }
+        });
+        return { anyFailed, pErrs, cErrs };
+      }
+
+      function SettingsActivePanel({ tab, pendingProfile, pendingConfig,
+                                     errors, patchProfile, patchConfig,
+                                     defs }) {
+        if (!pendingProfile || !pendingConfig) return null;
+        switch (tab) {
+          case "profile":
+            return <SettingsProfilePanel profile={pendingProfile}
+              errors={errors} onPatch={patchProfile} />;
+          case "folders":
+            return <SettingsFoldersPanel paths={pendingConfig.paths}
+              errors={errors} onPatch={patchConfig} />;
+          case "macro":
+            return <SettingsMacroPanel
+              macroEngine={pendingConfig.macro_engine}
+              errors={errors} onPatch={patchConfig} />;
+          case "builds":
+            return <SettingsBuildsPanel
+              classifier={pendingConfig.build_classifier}
+              errors={errors} onPatch={patchConfig}
+              definitions={defs.definitions} defLoading={defs.defLoading}
+              defError={defs.defError} />;
+          case "overlay":
+            return <SettingsOverlayPanel
+              overlay={pendingConfig.stream_overlay}
+              errors={errors} onPatch={patchConfig} />;
+          case "backups": return <SettingsBackupsPanel />;
+          case "diagnostics": return <SettingsDiagnosticsPanel />;
+          case "privacy":
+            return <SettingsPrivacyPanel
+              telemetry={pendingConfig.telemetry}
+              errors={errors} onPatch={patchConfig} />;
+          case "about":
+            return <SettingsAboutPanel ui={pendingConfig.ui}
+              errors={errors} onPatch={patchConfig} />;
+          default: return null;
+        }
+      }
+
+      function SettingsLoadFailure({ message, onRetry }) {
+        return (
+          <div className="space-y-2">
+            <p className="text-sm text-loss-500">{message}</p>
+            <SettingsButton kind="secondary" onClick={onRetry}>
+              Retry
+            </SettingsButton>
+          </div>
+        );
+      }
+
+      function settingsComputeDirty(docs) {
+        const dirtyProfile = (docs.profile && docs.pendingProfile)
+          ? settingsDiffPaths(docs.profile, docs.pendingProfile, []) : [];
+        const dirtyConfig = (docs.config && docs.pendingConfig)
+          ? settingsDiffPaths(docs.config, docs.pendingConfig, []) : [];
+        return { dirtyProfile, dirtyConfig,
+                 dirtyCount: dirtyProfile.length + dirtyConfig.length };
+      }
+
+      function settingsMakePatchers(docs) {
+        return {
+          patchProfile: (segs, value) => docs.setPendingProfile(
+            prev => settingsSetByPath(prev || {}, segs, value)),
+          patchConfig: (segs, value) => docs.setPendingConfig(
+            prev => settingsSetByPath(prev || {}, segs, value)),
+        };
+      }
+
+      function SettingsView({ dbRev: _dbRev }) {
+        const [tab, setTab] = useState("profile");
+        const docs = useSettingsDocuments();
+        const defs = useSettingsBuildDefinitions();
+        const [errors, setErrors] = useState({});
+        const [saving, setSaving] = useState(false);
+        const [saveError, setSaveError] = useState(null);
+        const dirty = settingsComputeDirty(docs);
+        const patchers = settingsMakePatchers(docs);
+        const onDiscard = () => {
+          docs.setPendingProfile(docs.profile);
+          docs.setPendingConfig(docs.config);
+          setErrors({}); setSaveError(null);
+        };
+        const onSave = async () => {
+          setSaving(true); setSaveError(null); setErrors({});
+          const tasks = settingsBuildSaveTasks(
+            dirty.dirtyProfile, dirty.dirtyConfig,
+            docs.pendingProfile, docs.pendingConfig);
+          const verdict = settingsExtractSaveErrors(
+            await Promise.all(tasks));
+          if (verdict.anyFailed) {
+            setSaving(false);
+            setErrors(settingsCollectErrors(verdict.pErrs, verdict.cErrs));
+            setSaveError("Some changes were rejected. See inline errors.");
+            return;
+          }
+          await docs.loadAll(); setSaving(false);
+        };
+        if (docs.loading) {
+          return <p className="text-sm text-neutral-500">Loading settings…</p>;
+        }
+        if (docs.loadError) {
+          return <SettingsLoadFailure message={docs.loadError}
+            onRetry={docs.loadAll} />;
+        }
+        return (
+          <div className="space-y-4">
+            <SettingsSaveBar dirtyCount={dirty.dirtyCount} saving={saving}
+              error={saveError} onSave={onSave} onDiscard={onDiscard} />
+            <div className="flex flex-col md:flex-row gap-6">
+              <SettingsTabRail tab={tab} onChange={setTab} />
+              <section className="flex-1 min-w-0"
+                       aria-label={tab + " settings"}>
+                <SettingsActivePanel tab={tab}
+                  pendingProfile={docs.pendingProfile}
+                  pendingConfig={docs.pendingConfig}
+                  errors={errors}
+                  patchProfile={patchers.patchProfile}
+                  patchConfig={patchers.patchConfig}
+                  defs={defs} />
+              </section>
+            </div>
+          </div>
+        );
+      }
+
+
       function App() {
         const [tab, setTab] = useState("dashboard");
         const [filters, setFilters] = useState({});
@@ -8705,6 +10105,8 @@
               return <WidgetsTab />;
             case "definitions":
               return <DefinitionsTab />;
+            case "settings":
+              return <SettingsView dbRev={dbRev} />;
             default:
               return <EmptyState title="Unknown tab" />;
           }

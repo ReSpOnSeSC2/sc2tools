@@ -849,7 +849,10 @@ function detectBestAnswer(oppStrategy, myRace) {
 // EXPRESS + SOCKET.IO
 // ------------------------------------------------------------------
 const app = express();
-const PORT = 3000;
+// PORT honors the env var so SC2ReplayAnalyzer.py can set
+// SC2_TOOLS_PORT and pass through PORT (Stage 3 launcher).
+const DEFAULT_PORT = 3000;
+const PORT = Number.parseInt(process.env.PORT, 10) || DEFAULT_PORT;
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
@@ -1620,6 +1623,16 @@ app.get('/health', (_req, res) => res.json({
     session: sessionSnapshot(),
     historyPath: HISTORY_FILE_PATH,
     metaDbPath: META_DB_PATH
+}));
+
+// /api/health: schema-stable readiness endpoint used by the desktop
+// launcher (SC2ReplayAnalyzer.py) and the Stage-4 /diagnostics page.
+// Keep the response shape minimal so external pollers can rely on it.
+const PKG_VERSION = require('./package.json').version;
+app.get('/api/health', (_req, res) => res.json({
+    ok: true,
+    version: PKG_VERSION,
+    uptime_sec: Math.round(process.uptime())
 }));
 
 // ------------------------------------------------------------------

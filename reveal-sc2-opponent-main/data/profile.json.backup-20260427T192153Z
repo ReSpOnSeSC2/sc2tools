@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "battlenet": {
+    "battle_tag": "ReSpOnSe#0",
+    "character_id": "1-S2-1-267727",
+    "account_id": "50983875",
+    "region": "us"
+  },
+  "races": [
+    "Protoss"
+  ],
+  "mmr_target": null,
+  "preferred_player_name_in_replays": "ReSpOnSe"
+}
