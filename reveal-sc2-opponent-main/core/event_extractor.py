@@ -589,6 +589,71 @@ def _resolve_command_pid_simple(event):
     return None
 
 
+
+# ---------------------------------------------------------------------------
+# Unit name normalization for the playback viewer
+# ---------------------------------------------------------------------------
+# sc2reader emits a lot of variants (morphed, sieged, burrowed, "MP" suffix,
+# warp-in stage, etc). Map them all to a single canonical name so the
+# frontend can look up a single PNG icon per unit type.
+_UNIT_NAME_ALIASES = {
+    # Terran
+    "SiegeTank": "SiegeTank",          "SiegeTankSieged": "SiegeTank",
+    "VikingFighter": "Viking",         "VikingAssault": "Viking",
+    "HellionTank": "Hellbat",          "Hellion": "Hellion",
+    "ThorAP": "Thor",                  "ThorAA": "Thor",
+    "WidowMineBurrowed": "WidowMine",
+    "LiberatorAG": "Liberator",        "Liberator": "Liberator",
+    # Protoss
+    "WarpPrismPhasing": "WarpPrism",   "WarpPrism": "WarpPrism",
+    "ZealotWarp": "Zealot",            "StalkerWarp": "Stalker",
+    "SentryWarp": "Sentry",            "AdeptWarp": "Adept",
+    "DarkTemplarWarp": "DarkTemplar",  "HighTemplarWarp": "HighTemplar",
+    "ImmortalWarp": "Immortal",        "ColossusWarp": "Colossus",
+    "ObserverSiegeMode": "Observer",
+    # Zerg -- the "MP" suffix shows up in modern LotV replays
+    "BanelingMP": "Baneling",          "BanelingBurrowed": "Baneling",
+    "RoachBurrowed": "Roach",          "RoachMP": "Roach",
+    "ZerglingBurrowed": "Zergling",
+    "HydraliskBurrowed": "Hydralisk",
+    "InfestorBurrowed": "Infestor",
+    "LurkerMP": "Lurker",              "LurkerMPBurrowed": "Lurker",
+    "Lurker": "Lurker",                "LurkerBurrowed": "Lurker",
+    "RavagerBurrowed": "Ravager",
+    "SwarmHostMP": "SwarmHost",        "SwarmHostMPBurrowed": "SwarmHost",
+    "QueenBurrowed": "Queen",
+    "BroodLordCocoon": "BroodLord",
+    "OverseerSiegeMode": "Overseer",   "OverlordTransport": "Overlord",
+    "OverlordTransportCocoon": "Overlord",
+    "BroodLord": "BroodLord",
+}
+
+# What to NEVER track for movement: workers (too noisy), one-frame fluff,
+# spell summons, and cocoons (they're transient morphs). Overlord, Overseer,
+# Queen STAY in -- they move and are tactically interesting.
+_SKIP_FOR_TRACKING = {
+    "MULE", "Larva", "Egg", "Drone", "Probe", "SCV",
+    "Broodling", "BroodlingEscort",
+    "Changeling", "ChangelingMarine", "ChangelingMarineShield",
+    "ChangelingZergling", "ChangelingZealot",
+    "InfestedTerran",
+    "AutoTurret", "PointDefenseDrone", "Interceptor", "AdeptPhaseShift",
+    "OverseerCocoon", "BanelingCocoon", "RavagerCocoon", "LurkerCocoon",
+    "TransportOverlordCocoon", "BroodLordCocoon",
+    "LocustMP", "LocustMPFlying",
+    "Spray", "SprayProtoss", "SprayTerran", "SprayZerg",
+    # Building cocoons that sneak into the unit stream
+    "BanelingNestCocoon", "GreaterSpireCocoon",
+}
+
+def _canonical_unit_name(raw):
+    """Map a raw sc2reader unit_type_name to its canonical playback name."""
+    if not raw:
+        return raw
+    name = _clean_building_name(raw)
+    return _UNIT_NAME_ALIASES.get(name, name)
+
+
 def extract_unit_tracks(replay, my_pid):
     """Walk the replay once and produce per-unit movement tracks.
 
@@ -611,10 +676,10 @@ def extract_unit_tracks(replay, my_pid):
                     raw = _get_unit_type_name(ev)
                     if pid is None or raw is None:
                         continue
-                    name = _clean_building_name(raw)
+                    name = _canonical_unit_name(raw)
                     if name in KNOWN_BUILDINGS:
                         continue
-                    if name in SKIP_UNITS:
+                    if name in _SKIP_FOR_TRACKING:
                         continue
                     uid = getattr(ev, "unit_id", None)
                     if uid is None:
@@ -665,8 +730,8 @@ def extract_unit_tracks(replay, my_pid):
                     rec = units.get(uid)
                     raw = _get_unit_type_name(ev)
                     if rec is not None and raw:
-                        c = _clean_building_name(raw)
-                        if c not in KNOWN_BUILDINGS and c not in SKIP_UNITS:
+                        c = _canonical_unit_name(raw)
+                        if c not in KNOWN_BUILDINGS and c not in _SKIP_FOR_TRACKING:
                             rec["name"] = c
             except Exception:
                 continue

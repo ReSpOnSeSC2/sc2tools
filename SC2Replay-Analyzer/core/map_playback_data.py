@@ -177,6 +177,41 @@ def detect_battle_markers(
     return [m for m in markers if 0 <= m["time"] <= game_length]
 
 
+
+
+# Maps each town-hall name to the race it belongs to. The very first one a
+# player spawns is the authoritative starting location for that game in SC2
+# cell coords.
+_TOWNHALL_TYPES = {
+    "Nexus", "Hatchery", "Lair", "Hive",
+    "CommandCenter", "OrbitalCommand", "PlanetaryFortress",
+}
+
+
+def detect_spawn_locations(my_events: List[Dict], opp_events: List[Dict]) -> List[Dict]:
+    """Return [{owner: 'me'|'opp', x, y}, ...] using each player's earliest
+    town-hall placement as the spawn anchor. SC2 always spawns players with
+    a single town hall already in place, so the earliest building event of
+    that type is reliable. Empty list if neither player has one (corrupt
+    replay or all-in maps with shared bases)."""
+    out: List[Dict] = []
+    for owner, evs in (("me", my_events), ("opp", opp_events)):
+        first = None
+        for e in sorted(evs, key=lambda r: r.get("time", 0)):
+            if e.get("type") != "building":
+                continue
+            if e.get("name") not in _TOWNHALL_TYPES:
+                continue
+            x = e.get("x"); y = e.get("y")
+            if not (x and y):
+                continue
+            first = (float(x), float(y))
+            break
+        if first is not None:
+            out.append({"owner": owner, "x": first[0], "y": first[1]})
+    return out
+
+
 def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
     """Walk the replay once and produce all data the viewer needs."""
     try:
@@ -235,7 +270,27 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
     sorted_my_events = sorted(my_events, key=lambda e: e.get("time", 0))
     sorted_opp_events = sorted(opp_events, key=lambda e: e.get("time", 0))
 
-    bounds = bounds_for(getattr(replay, "map_name", None), sorted_my_events + sorted_opp_events)
+    # Use building events (which never move and always sit inside the
+    # playable area) for bounds derivation.
+    building_events = [e for e in (sorted_my_events + sorted_opp_events) if e.get("type") == "building"]
+    bounds_source = building_events or (sorted_my_events + sorted_opp_events)
+    bounds = bounds_for(getattr(replay, "map_name", None), bounds_source)
+
+    # Detect actual spawn locations from the very first town hall per player.
+    # These are reliable in SC2 cell coords and double as visual reference
+    # markers on the playback canvas + a tighter bounds anchor below.
+    spawn_locations = detect_spawn_locations(sorted_my_events, sorted_opp_events)
+    if spawn_locations:
+        # Always include the spawn coordinates inside the playable bounds.
+        # This catches the case where building events were sparse near a
+        # spawn and didn't extend the rect far enough.
+        margin = 6.0
+        sxs = [s["x"] for s in spawn_locations]
+        sys_ = [s["y"] for s in spawn_locations]
+        bounds["x_min"] = min(bounds["x_min"], min(sxs) - margin)
+        bounds["x_max"] = max(bounds["x_max"], max(sxs) + margin)
+        bounds["y_min"] = min(bounds["y_min"], min(sys_) - margin)
+        bounds["y_max"] = max(bounds["y_max"], max(sys_) + margin)
 
     # Walk again specifically for unit movement tracks. Wrapped so a
     # corrupt replay doesn't kill the whole payload -- worst case we emit
@@ -259,4 +314,5 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
         "opp_stats": stats_by_pid[opp.pid],
         "my_units": tracks.get("my_units", []),
         "opp_units": tracks.get("opp_units", []),
+        "spawn_locations": spawn_locations,
     }

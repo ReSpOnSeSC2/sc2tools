@@ -5917,6 +5917,43 @@
             }
           };
 
+          // ---- Spawn-location markers ---------------------------------------
+          // Drawn BEFORE buildings/units so the actual building icons stack
+          // on top. Each player's spawn is the first town hall placement
+          // detected by the Python extractor; the marker is a labeled ring
+          // sized large enough that you can visually confirm the alignment
+          // between SC2 coords and the underlying minimap.
+          if (Array.isArray(data.spawn_locations)) {
+            for (const s of data.spawn_locations) {
+              if (typeof s.x !== 'number' || typeof s.y !== 'number') continue;
+              const sp = project(s.x, s.y);
+              const isMe = s.owner === 'me';
+              const ring = isMe ? '#66BB6A' : '#EF5350';
+              const label = isMe ? (data.me_name || 'You') : (data.opp_name || 'Opp');
+              const r1 = Math.max(14, 18 * zoom);
+              const r2 = r1 + Math.max(2, 3 * zoom);
+              ctx.save();
+              ctx.lineWidth = Math.max(2, 2.5 * Math.sqrt(zoom));
+              ctx.strokeStyle = ring;
+              ctx.globalAlpha = 0.9;
+              ctx.beginPath(); ctx.arc(sp.x, sp.y, r1, 0, 2 * Math.PI); ctx.stroke();
+              ctx.globalAlpha = 0.45;
+              ctx.beginPath(); ctx.arc(sp.x, sp.y, r2, 0, 2 * Math.PI); ctx.stroke();
+              // Label
+              ctx.globalAlpha = 1;
+              ctx.font = `${Math.max(10, 11 * zoom)}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'top';
+              const ty = sp.y + r2 + 4;
+              const tw = ctx.measureText(label).width;
+              ctx.fillStyle = 'rgba(20,24,32,0.85)';
+              ctx.fillRect(sp.x - tw/2 - 4, ty - 1, tw + 8, Math.max(14, 13 * zoom));
+              ctx.fillStyle = ring;
+              ctx.fillText(label, sp.x, ty + 1);
+              ctx.restore();
+            }
+          }
+
           if (data.my_events) data.my_events.forEach(e => drawEvent(e, "#66BB6A", true));
           if (data.opp_events) data.opp_events.forEach(e => drawEvent(e, "#EF5350", false));
 
@@ -5951,7 +5988,17 @@
               ux = x0 + (x1 - x0) * f;
               uy = y0 + (y1 - y0) * f;
             }
-            const p = project(ux, uy);
+            const p0 = project(ux, uy);
+            // Per-unit deterministic offset so units sharing a position
+            // (e.g. 20 roaches that just hatched from the same warren)
+            // fan out into a small visible cluster instead of drawing 20
+            // icons stacked on the same pixel. Spread radius scales with
+            // zoom so the cluster stays compact when zoomed out.
+            const seed = (u.id || 0) * 2654435761 >>> 0;
+            const angle = (seed % 360) * Math.PI / 180;
+            const radius = ((seed >>> 9) & 7) * (1.5 + zoom * 0.6);
+            const p = { x: p0.x + Math.cos(angle) * radius, y: p0.y + Math.sin(angle) * radius };
+
             const sz = Math.max(8, 12 * zoom);
             const img = getIcon(u.name, 'unit');
             if (img.complete && img.naturalWidth > 0) {
@@ -5977,14 +6024,83 @@
         }, [data, time, zoom, pan, mapImage, iconTick]);
 
         // Input Handlers
-        const handleWheel = (e) => {
-          e.preventDefault();
-          if (e.deltaY < 0) {
-            setZoom(z => Math.min(8.0, z * 1.25));
-          } else {
-            setZoom(z => Math.max(0.25, z / 1.25));
-          }
-        };
+        // Wheel zoom is attached as a NATIVE listener (with passive:false) inside
+        // a useEffect below -- React 17+ uses passive listeners for onWheel, so
+        // calling e.preventDefault() in a JSX onWheel handler is a no-op and
+        // the page scrolls under us. This stub stays only for type symmetry.
+        const handleWheel = (_e) => {};
+
+        // Native non-passive wheel listener so we can preventDefault and keep
+        // the page from scrolling while the user zooms the canvas.
+        useEffect(() => {
+          const el = containerRef.current;
+          if (!el) return;
+          const onWheel = (e) => {
+            e.preventDefault();
+            if (e.deltaY < 0) setZoom(z => Math.min(8.0, z * 1.25));
+            else              setZoom(z => Math.max(0.25, z / 1.25));
+          };
+          el.addEventListener('wheel', onWheel, { passive: false });
+          return () => el.removeEventListener('wheel', onWheel);
+        }, []);
+
+        // Auto-hide controls / header. Show on mouse move, hide after 2s idle.
+        const [chromeVisible, setChromeVisible] = useState(true);
+        const chromeTimerRef = React.useRef(null);
+        useEffect(() => {
+          const el = containerRef.current;
+          if (!el) return;
+          const show = () => {
+            setChromeVisible(true);
+            if (chromeTimerRef.current) clearTimeout(chromeTimerRef.current);
+            chromeTimerRef.current = setTimeout(() => setChromeVisible(false), 2200);
+          };
+          el.addEventListener('mousemove', show);
+          el.addEventListener('mouseenter', show);
+          show();
+          return () => {
+            el.removeEventListener('mousemove', show);
+            el.removeEventListener('mouseenter', show);
+            if (chromeTimerRef.current) clearTimeout(chromeTimerRef.current);
+          };
+        }, []);
+
+        // Make the canvas fill its container so the map is as big as possible.
+        // Re-measures on window resize.
+        useEffect(() => {
+          const fit = () => {
+            const el = containerRef.current;
+            const cv = canvasRef.current;
+            if (!el || !cv) return;
+            const r = el.getBoundingClientRect();
+            // Square the canvas to the smaller dimension so the projection
+            // stays consistent (we already fit map bounds into a square in
+            // the drawer with PAD).
+            const sz = Math.max(400, Math.min(r.width, r.height));
+            if (cv.width !== sz)  cv.width  = sz;
+            if (cv.height !== sz) cv.height = sz;
+            // Bump iconTick to force a redraw at the new size.
+            setIconTick(t => t + 1);
+          };
+          fit();
+          window.addEventListener('resize', fit);
+          return () => window.removeEventListener('resize', fit);
+        }, [data]);
+
+        // Keyboard shortcuts: space=play/pause, arrows=seek 5s, Home=start.
+        useEffect(() => {
+          const onKey = (e) => {
+            if (!data) return;
+            if (e.target && (/INPUT|TEXTAREA|SELECT/).test(e.target.tagName)) return;
+            if (e.code === 'Space') { e.preventDefault(); setPlaying(p => !p); }
+            else if (e.code === 'ArrowLeft')  setTime(t => Math.max(0, t - 5));
+            else if (e.code === 'ArrowRight') setTime(t => Math.min(data.game_length, t + 5));
+            else if (e.code === 'Home')       setTime(0);
+            else if (e.code === 'End')        setTime(data.game_length);
+          };
+          window.addEventListener('keydown', onKey);
+          return () => window.removeEventListener('keydown', onKey);
+        }, [data]);
 
         const handlePointerDown = (e) => {
            dragRef.current = { startX: e.clientX, startY: e.clientY, pX: pan.x, pY: pan.y };
@@ -6037,28 +6153,12 @@
         const gameLen = Number.isFinite(data.game_length) ? data.game_length : 0;
 
         return (
-          <div className="flex flex-col h-[calc(100vh-60px)]">
-            {/* Header */}
-            <div className="flex items-center gap-4 bg-base-800 p-2 border-b border-base-700">
-              <button onClick={onBack} className="text-neutral-400 hover:text-white px-2 py-1 bg-base-700 rounded transition-colors text-sm">
-                ← Exit
-              </button>
-              <div className="flex flex-col">
-                <span className="font-semibold">{mapName}</span>
-                <span className="text-xs text-neutral-400">
-                  <span className="text-win-500">{meName}</span> vs <span className="text-loss-500">{oppName}</span>
-                </span>
-              </div>
-              <div className="flex-1" />
-              <div className="tabular-nums font-mono text-xl">
-                {formatTime(time)} / {formatTime(gameLen)}
-              </div>
-            </div>
-
-            {/* Canvas Area */}
+          <div className="fixed inset-0 z-30 bg-base-900 flex flex-col">
+            {/* Canvas Area -- fills the viewport. The header & controls are
+                overlaid on top with auto-hide so the map gets the full space. */}
             <div
               ref={containerRef}
-              className="flex-1 bg-base-900 relative overflow-hidden flex justify-center items-center cursor-move"
+              className="flex-1 bg-base-900 relative overflow-hidden flex justify-center items-center cursor-move select-none"
               onWheel={handleWheel}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
@@ -6069,14 +6169,38 @@
                 ref={canvasRef}
                 width={800}
                 height={800}
-                className="max-w-full max-h-full"
+                className="block"
                 style={{ touchAction: 'none' }}
               />
 
+              {/* Top overlay: title + back button (auto-hide) */}
+              <div className={"absolute top-0 left-0 right-0 z-20 pointer-events-none transition-opacity duration-200 " + (chromeVisible ? "opacity-100" : "opacity-0")}>
+                <div className="bg-gradient-to-b from-base-900/90 via-base-900/60 to-transparent px-4 py-3 flex items-center gap-4 pointer-events-auto">
+                  <button
+                    onClick={onBack}
+                    className="text-neutral-200 hover:text-white px-3 py-1.5 bg-base-700/80 hover:bg-base-600 rounded transition-colors text-sm shadow-lg"
+                  >
+                    ← Exit
+                  </button>
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-base">{mapName}</span>
+                    <span className="text-xs text-neutral-300">
+                      <span className="text-win-400">{meName}</span>
+                      <span className="text-neutral-400 mx-1">vs</span>
+                      <span className="text-loss-400">{oppName}</span>
+                    </span>
+                  </div>
+                  <div className="flex-1" />
+                  <div className="tabular-nums font-mono text-xl bg-base-900/70 px-3 py-1 rounded">
+                    {formatTime(time)} / {formatTime(gameLen)}
+                  </div>
+                </div>
+              </div>
+
               {/* Game Over Screen */}
               {time >= data.game_length && (
-                <div className="absolute inset-0 bg-base-900/80 backdrop-blur-sm flex items-center justify-center p-8 z-10">
-                  <div className="bg-base-800 border border-base-600 rounded-lg shadow-2xl p-6 w-full max-w-2xl transform scale-100 animate-in zoom-in-95 duration-200">
+                <div className="absolute inset-0 bg-base-900/85 backdrop-blur-sm flex items-center justify-center p-8 z-30">
+                  <div className="bg-base-800 border border-base-600 rounded-lg shadow-2xl p-6 w-full max-w-2xl">
                     <h2 className="text-3xl font-bold mb-2 text-center">
                       {data.result === 'Victory' ? (
                         <span className="text-win-500">VICTORY</span>
@@ -6087,7 +6211,6 @@
                       )}
                     </h2>
                     <p className="text-center text-neutral-400 mb-6">Game finished at {formatTime(data.game_length)}</p>
-
                     <div className="grid grid-cols-2 gap-4 mb-6">
                       <div className="bg-base-900 p-4 rounded border border-base-700">
                         <h3 className="text-win-400 font-semibold mb-2">{data.me_name} (You)</h3>
@@ -6104,27 +6227,16 @@
                         </ul>
                       </div>
                     </div>
-
                     {data.analysis && (
                       <div className="bg-base-900 p-4 rounded border border-base-700 mb-6">
                         <h3 className="font-semibold mb-2 text-neutral-200">Post-Game Analysis</h3>
                         <div className="space-y-3 text-sm">
-                          <div>
-                            <span className="text-win-400 font-semibold">Good: </span>
-                            <span className="text-neutral-300">{data.analysis.good.join(" ")}</span>
-                          </div>
-                          <div>
-                            <span className="text-loss-400 font-semibold">To Improve: </span>
-                            <span className="text-neutral-300">{data.analysis.bad.join(" ")}</span>
-                          </div>
-                          <div>
-                            <span className="text-gold-400 font-semibold">Tip: </span>
-                            <span className="text-neutral-300">{data.analysis.tips.join(" ")}</span>
-                          </div>
+                          <div><span className="text-win-400 font-semibold">Good: </span><span className="text-neutral-300">{data.analysis.good.join(" ")}</span></div>
+                          <div><span className="text-loss-400 font-semibold">To Improve: </span><span className="text-neutral-300">{data.analysis.bad.join(" ")}</span></div>
+                          <div><span className="text-gold-400 font-semibold">Tip: </span><span className="text-neutral-300">{data.analysis.tips.join(" ")}</span></div>
                         </div>
                       </div>
                     )}
-
                     <div className="flex justify-center gap-4">
                        <button
                          className="bg-base-700 hover:bg-base-600 px-4 py-2 rounded font-medium transition-colors"
@@ -6136,53 +6248,72 @@
                   </div>
                 </div>
               )}
-            </div>
 
-            {/* Playback Controls */}
-            <div className="bg-base-800 border-t border-base-700 p-3 flex items-center gap-4">
-              <button
-                onClick={() => setPlaying(!playing)}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors shadow-lg ${
-                  playing ? 'bg-amber-600 hover:bg-amber-500' : 'bg-win-600 hover:bg-win-500'
-                }`}
-              >
-                {playing ? '⏸' : '▶'}
-              </button>
+              {/* Bottom overlay: playback controls (auto-hide YouTube-style) */}
+              <div className={"absolute bottom-0 left-0 right-0 z-20 pointer-events-none transition-opacity duration-200 " + (chromeVisible ? "opacity-100" : "opacity-0")}>
+                <div className="bg-gradient-to-t from-base-900/95 via-base-900/80 to-transparent px-4 pt-8 pb-3 pointer-events-auto">
+                  {/* Scrubber row -- range input full width with timecodes */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setTime(t => Math.max(0, t - 10))}
+                      title="Back 10s (Left arrow = 5s)"
+                      className="w-9 h-9 rounded-full flex items-center justify-center bg-base-800/80 hover:bg-base-700 text-neutral-200 text-sm transition-colors"
+                    >
+                      ⏪
+                    </button>
+                    <button
+                      onClick={() => setPlaying(!playing)}
+                      title="Play / Pause (Space)"
+                      className={"w-12 h-12 rounded-full flex items-center justify-center transition-colors shadow-lg text-lg " + (
+                        playing ? 'bg-amber-600 hover:bg-amber-500' : 'bg-win-600 hover:bg-win-500'
+                      )}
+                    >
+                      {playing ? '⏸' : '▶'}
+                    </button>
+                    <button
+                      onClick={() => setTime(t => Math.min(data.game_length, t + 10))}
+                      title="Forward 10s (Right arrow = 5s)"
+                      className="w-9 h-9 rounded-full flex items-center justify-center bg-base-800/80 hover:bg-base-700 text-neutral-200 text-sm transition-colors"
+                    >
+                      ⏩
+                    </button>
 
-              <div className="flex-1 flex flex-col px-2">
-                <input
-                  type="range"
-                  min="0"
-                  max={data.game_length}
-                  value={time}
-                  step="0.5"
-                  onChange={e => {
-                    setTime(parseFloat(e.target.value));
-                  }}
-                  className="w-full accent-accent-500"
-                />
+                    <span className="tabular-nums font-mono text-xs text-neutral-300 ml-2 w-12 text-right">{formatTime(time)}</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max={data.game_length}
+                      value={time}
+                      step="0.5"
+                      onChange={e => setTime(parseFloat(e.target.value))}
+                      className="flex-1 accent-accent-500 h-1.5"
+                    />
+                    <span className="tabular-nums font-mono text-xs text-neutral-400 w-12">{formatTime(gameLen)}</span>
+
+                    <div className="flex bg-base-900/70 rounded overflow-hidden border border-base-700 ml-2">
+                      {[0.5, 1, 2, 4, 8].map(s => (
+                        <button
+                          key={s}
+                          onClick={() => setSpeed(s)}
+                          className={"px-2.5 py-1 text-xs font-mono border-r border-base-700 last:border-0 " + (
+                            speed === s ? 'bg-accent-600 text-white' : 'text-neutral-400 hover:bg-base-700'
+                          )}
+                        >
+                          {s}x
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => { setZoom(1); setPan({x:0, y:0}); }}
+                      title="Reset zoom & pan"
+                      className="px-3 py-1.5 text-xs bg-base-700/80 hover:bg-base-600 text-neutral-300 rounded transition-colors ml-2"
+                    >
+                      Reset View
+                    </button>
+                  </div>
+                </div>
               </div>
-
-              <div className="flex bg-base-900 rounded overflow-hidden border border-base-700">
-                {[0.5, 1, 2, 4, 8].map(s => (
-                  <button
-                    key={s}
-                    onClick={() => setSpeed(s)}
-                    className={`px-3 py-1.5 text-xs font-mono border-r border-base-700 last:border-0 ${
-                      speed === s ? 'bg-accent-600 text-white' : 'text-neutral-400 hover:bg-base-700'
-                    }`}
-                  >
-                    {s}x
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={() => { setZoom(1); setPan({x:0, y:0}); }}
-                className="px-3 py-1.5 text-xs bg-base-700 hover:bg-base-600 text-neutral-300 rounded transition-colors"
-              >
-                Reset View
-              </button>
             </div>
           </div>
         );
@@ -6356,245 +6487,4 @@
               </div>
             </div>
 
-            {filtered.length === 0 ? (
-              <EmptyState
-                title="No matches"
-                sub="Try a different search or race filter."
-              />
-            ) : (
-              <div className="space-y-4">
-                {Object.keys(grouped)
-                  .sort()
-                  .map((group) => (
-                    <div key={group}>
-                      <div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-2">
-                        {group}
-                      </div>
-                      <div className="space-y-1.5">
-                        {grouped[group].map((it) => (
-                          <div
-                            key={it.name}
-                            className="bg-base-800 rounded p-3 border border-base-700"
-                          >
-                            <div className="text-sm font-semibold text-neutral-100">
-                              {it.name}
-                            </div>
-                            <div className="text-xs text-neutral-400 mt-1">
-                              {it.description}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      const TABS = [
-        { id: "dashboard", label: "Dashboard" },
-        { id: "builds", label: "My Builds" },
-        { id: "strategies", label: "Opp Strategies" },
-        { id: "bvs", label: "Build vs Strategy" },
-        { id: "maps", label: "Maps" },
-        { id: "matchups", label: "Matchups" },
-        { id: "opponents", label: "Opponents" },
-        { id: "trends", label: "Trends" },
-        { id: "ml", label: "ML / Predict" },
-        { id: "mapintel", label: "Map Intel" },
-        // Definitions stays at the very end (mirrors the SC2ReplayAnalyzer.py
-        // tab order) so the build/strategy glossary is always one click away.
-        { id: "definitions", label: "Definitions" },
-      ];
-
-      function App() {
-        const [tab, setTab] = useState("dashboard");
-        const [filters, setFilters] = useState({});
-        const [dbRev, setDbRev] = useState(0);
-        const [openPulseId, setOpenPulseId] = useState(null);
-        const [openBuildName, setOpenBuildName] = useState(null);
-        const [openReplay, setOpenReplay] = useState(null);
-        const [conn, setConn] = useState({ status: "connecting" });
-
-        useEffect(() => {
-          try {
-            const sock = io({ transports: ["websocket", "polling"] });
-            sock.on("connect", () => setConn({ status: "live" }));
-            sock.on("disconnect", () => setConn({ status: "offline" }));
-            sock.on("analyzer_db_changed", (msg) => {
-              setDbRev((r) => r + 1);
-            });
-            return () => sock.disconnect();
-          } catch (err) {
-            console.warn("socket.io unavailable:", err);
-            setConn({ status: "offline" });
-          }
-        }, []);
-
-        const renderBody = () => {
-          if (openBuildName) {
-            return (
-              <BuildDeepDive
-                buildName={openBuildName}
-                filters={filters}
-                onBack={() => setOpenBuildName(null)}
-                dbRev={dbRev}
-              />
-            );
-          }
-          if (openReplay) {
-            return (
-              <MapIntelViewer
-                replayPath={openReplay.path}
-                playerName={openReplay.player}
-                onBack={() => setOpenReplay(null)}
-              />
-            );
-          }
-          if (openPulseId) {
-            return (
-              <OpponentProfile
-                pulseId={openPulseId}
-                onBack={() => setOpenPulseId(null)}
-                dbRev={dbRev}
-              />
-            );
-          }
-          switch (tab) {
-            case "dashboard":
-              return <DashboardTab filters={filters} dbRev={dbRev} />;
-            case "builds":
-              return (
-                <BuildsTab
-                  filters={filters}
-                  dbRev={dbRev}
-                  onOpen={setOpenBuildName}
-                />
-              );
-            case "strategies":
-              return <StrategiesTab filters={filters} dbRev={dbRev} />;
-            case "bvs":
-              return <BuildVsStrategyTab filters={filters} dbRev={dbRev} />;
-            case "maps":
-              return <MapsTab filters={filters} dbRev={dbRev} />;
-            case "matchups":
-              return <MatchupsTab filters={filters} dbRev={dbRev} />;
-            case "opponents":
-              return (
-                <OpponentsTab
-                  filters={filters}
-                  dbRev={dbRev}
-                  onOpen={setOpenPulseId}
-                />
-              );
-            case "trends":
-              return <TrendsTab filters={filters} dbRev={dbRev} />;
-            case "ml":
-              return <MlTab dbRev={dbRev} />;
-            case "mapintel":
-              return <MapIntelTab dbRev={dbRev} onOpenReplay={setOpenReplay} />;
-            case "definitions":
-              return <DefinitionsTab />;
-            default:
-              return <EmptyState title="Unknown tab" />;
-          }
-        };
-
-        return (
-          <div className="min-h-screen flex flex-col">
-            <header className="border-b border-base-700 bg-base-800/60 backdrop-blur sticky top-0 z-10">
-              <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
-                <div className="text-lg font-semibold text-neutral-100">
-                  SC2 Meta Analyzer
-                </div>
-                <span
-                  className={
-                    "text-[10px] uppercase tracking-wider px-2 py-0.5 rounded " +
-                    (conn.status === "live"
-                      ? "bg-win-500/20 text-win-500"
-                      : conn.status === "offline"
-                        ? "bg-loss-500/20 text-loss-500"
-                        : "bg-base-700 text-neutral-500")
-                  }
-                >
-                  {conn.status}
-                </span>
-                <span
-                  className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-base-700 text-neutral-500"
-                  title="Charts are rendered inline via SVG -- no external dependency"
-                >
-                  charts: built-in
-                </span>
-                <nav className="ml-auto flex flex-wrap gap-1">
-                  {TABS.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => {
-                        setOpenPulseId(null);
-                        setOpenBuildName(null);
-                        setTab(t.id);
-                      }}
-                      className={
-                        "px-3 py-1.5 text-sm rounded transition " +
-                        (tab === t.id && !openPulseId && !openBuildName
-                          ? "bg-accent-500 text-white"
-                          : "text-neutral-400 hover:bg-base-700 hover:text-neutral-200")
-                      }
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-            </header>
-
-            {!openPulseId && !openBuildName && (
-              <div className="max-w-7xl mx-auto w-full px-4 pt-4">
-                <FilterBar
-                  filters={filters}
-                  onChange={setFilters}
-                  onReset={() => setFilters({})}
-                />
-              </div>
-            )}
-
-            <main className="max-w-7xl mx-auto w-full px-4 py-4 flex-1">
-              <ErrorBoundary
-                label={
-                  openBuildName
-                    ? `Build "${openBuildName}"`
-                    : openPulseId
-                      ? "Opponent profile"
-                      : `Tab "${tab}"`
-                }
-              >
-                {renderBody()}
-              </ErrorBoundary>
-            </main>
-
-            <footer className="border-t border-base-700 text-[11px] text-neutral-600 py-3 px-4 text-center">
-              Data refreshes automatically when new replays land &middot;
-              backend `/api/analyzer`
-            </footer>
-          </div>
-        );
-      }
-
-      try {
-        ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-      } catch (err) {
-        const root = document.getElementById("root");
-        const pre = document.createElement("pre");
-        pre.style.padding = "24px";
-        pre.style.color = "#ef476f";
-        pre.style.fontFamily = "monospace";
-        pre.style.whiteSpace = "pre-wrap";
-        pre.textContent = String((err && err.stack) || err);
-        root.innerHTML = "";
-        root.appendChild(pre);
-      }
-    </script>
-  </body>
-</html>
+            {filtered.le
