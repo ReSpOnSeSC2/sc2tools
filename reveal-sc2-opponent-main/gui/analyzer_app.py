@@ -36,6 +36,7 @@ import threading
 import traceback
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
+from dataclasses import dataclass
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
@@ -947,6 +948,16 @@ class GameVisualizerWindow(ctk.CTkToplevel):
             canvas = FigureCanvasTkAgg(fig, master=self.content_frame)
             canvas.draw()
             canvas.get_tk_widget().pack(fill="x", pady=10, padx=10)
+
+
+@dataclass
+class TimingDrilldownContext:
+    """Context parameters for opening the timing drilldown modal."""
+    internal_name: str
+    tok: Optional[TimingToken]
+    info: Dict
+    opp_name: str
+    matchup_label_str: str
 
 
 # =====================================================================
@@ -3218,9 +3229,13 @@ class App(ctk.CTk):
         # ---- Click + keyboard to drill down ---------------------------
         if not empty:
             def _on_click(_event: object = None) -> str:
-                self._open_timing_drilldown(
-                    internal_name, tok, info, opp_name, matchup_label_str,
-                )
+                self._open_timing_drilldown(TimingDrilldownContext(
+                    internal_name=internal_name,
+                    tok=tok,
+                    info=info,
+                    opp_name=opp_name,
+                    matchup_label_str=matchup_label_str,
+                ))
                 return "break"
 
             def _on_focus_in(_event: object = None) -> None:
@@ -3265,21 +3280,17 @@ class App(ctk.CTk):
     # ------------------------------------------------------------------
     def _open_timing_drilldown(
         self,
-        internal_name: str,
-        tok: Optional[TimingToken],
-        info: Dict,
-        opp_name: str,
-        matchup_label_str: str,
+        context: TimingDrilldownContext,
     ) -> None:
-        sample_count = int(info.get("sample_count") or 0)
+        sample_count = int(context.info.get("sample_count") or 0)
         if sample_count == 0:
             return  # Defensive: empty cards already gate this on the binding.
 
-        display_name = tok.display_name if tok is not None else internal_name
+        display_name = context.tok.display_name if context.tok is not None else context.internal_name
 
         t = ctk.CTkToplevel(self)
         t.geometry("680x640")
-        t.title(f"{display_name} - timings vs {opp_name}")
+        t.title(f"{display_name} - timings vs {context.opp_name}")
         t.transient(self)
         t.lift()
         t.after(150, t.focus_force)
@@ -3294,8 +3305,8 @@ class App(ctk.CTk):
         head_top = ctk.CTkFrame(head, fg_color="transparent")
         head_top.pack(fill="x", padx=10, pady=(8, 2))
 
-        if tok is not None:
-            icon_img = self._get_timing_icon(internal_name, tok.icon_file)
+        if context.tok is not None:
+            icon_img = self._get_timing_icon(context.internal_name, context.tok.icon_file)
             if icon_img is not None:
                 ctk.CTkLabel(head_top, text="", image=icon_img).pack(
                     side="left", padx=(0, 10)
@@ -3306,17 +3317,17 @@ class App(ctk.CTk):
         ).pack(side="left")
 
         sub_bits: List[str] = []
-        if matchup_label_str:
-            sub_bits.append(matchup_label_str)
+        if context.matchup_label_str:
+            sub_bits.append(context.matchup_label_str)
         sub_bits.append(f"n={sample_count}")
-        sub_bits.append(f"median {info.get('median_display') or '-'}")
+        sub_bits.append(f"median {context.info.get('median_display') or '-'}")
         if sample_count >= 2:
-            p25 = info.get("p25_display") or "-"
-            p75 = info.get("p75_display") or "-"
+            p25 = context.info.get("p25_display") or "-"
+            p75 = context.info.get("p75_display") or "-"
             if p25 != "-" and p75 != "-":
                 sub_bits.append(f"({p25}-{p75})")
-            mn = info.get("min_display") or "-"
-            mx = info.get("max_display") or "-"
+            mn = context.info.get("min_display") or "-"
+            mx = context.info.get("max_display") or "-"
             if mn != "-" and mx != "-":
                 sub_bits.append(f"range {mn}-{mx}")
         ctk.CTkLabel(
@@ -3326,7 +3337,7 @@ class App(ctk.CTk):
 
         src_label = (
             "opponent's structures (sc2reader)"
-            if (info.get("source") or "") == "opp_build_log"
+            if (context.info.get("source") or "") == "opp_build_log"
             else "your build (proxy for matchup tendencies)"
         )
         ctk.CTkLabel(
@@ -3339,7 +3350,7 @@ class App(ctk.CTk):
         body = ctk.CTkScrollableFrame(t)
         body.pack(fill="both", expand=True, padx=12, pady=4)
 
-        rows = self._collect_timing_drilldown_rows(internal_name, opp_name)
+        rows = self._collect_timing_drilldown_rows(context.internal_name, context.opp_name)
         if not rows:
             ctk.CTkLabel(
                 body,
@@ -3400,7 +3411,7 @@ class App(ctk.CTk):
 
         def _copy_to_clipboard() -> None:
             md = self._format_drilldown_markdown(
-                display_name, info, rows, matchup_label_str,
+                display_name, context.info, rows, context.matchup_label_str,
             )
             try:
                 t.clipboard_clear()
