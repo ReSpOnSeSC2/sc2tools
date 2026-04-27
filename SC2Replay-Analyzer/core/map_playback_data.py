@@ -46,7 +46,69 @@ def load_map_bounds_table() -> Dict:
     return _BOUNDS_CACHE
 
 
-def bounds_for(map_name: Optional[str], events: List[Dict]) -> Dict:
+def _read_mapinfo_bounds(replay):
+    """Lift the playable rectangle from the replay's MPQ MapInfo file.
+
+    Battle.net ships every melee map with a MapInfo binary inside the
+    map MPQ archive. Its header carries both the FULL map dimensions
+    (the "small" rect, including non-playable border) and the PLAYABLE
+    rectangle (the "large" rect that actually matters for unit
+    positions). We return the playable rect when it looks valid,
+    otherwise the full rect, otherwise ``None`` so the caller can fall
+    back to event-derived bounds.
+
+    Returns ``(x_min, x_max, y_min, y_max)`` or ``None``.
+
+    Example:
+        bounds = _read_mapinfo_bounds(replay) or (0, 200, 0, 200)
+    """
+    import struct
+    map_obj = getattr(replay, "map", None)
+    if map_obj is None:
+        return None
+    archive = getattr(map_obj, "archive", None)
+    if archive is None:
+        return None
+    try:
+        raw = archive.read_file("MapInfo")
+    except Exception:
+        return None
+    if not raw or len(raw) < 48 or raw[:4] != b"MapI":
+        return None
+    try:
+        # Header: <4s magic, I version, I width, I height,
+        #          I sx0, I sy0, I sx1, I sy1,    # "small" rect
+        #          I lx0, I ly0, I lx1, I ly1>    # "large" / playable
+        head = raw[:48]
+        unpacked = struct.unpack_from("<4sIIIIIIIIIII", head, 0)
+        _magic, _ver, _w, _h = unpacked[0:4]
+        sx0, sy0, sx1, sy1 = unpacked[4:8]
+        lx0, ly0, lx1, ly1 = unpacked[8:12]
+        if lx1 > lx0 and ly1 > ly0:
+            return int(lx0), int(lx1), int(ly0), int(ly1)
+        if sx1 > sx0 and sy1 > sy0:
+            return int(sx0), int(sx1), int(sy0), int(sy1)
+    except struct.error:
+        return None
+    return None
+
+
+def _attr_bounds(replay):
+    """Sc2reader-attribute fallback when MapInfo is unreadable."""
+    map_obj = getattr(replay, "map", None)
+    if map_obj is None:
+        return None
+    size = getattr(map_obj, "map_size", None)
+    if size and len(size) == 2:
+        w, h = size
+        try:
+            return 0, int(w), 0, int(h)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def bounds_for(map_name, events, replay=None):
     """Resolve playable bounds for a map name with a graceful fallback chain.
 
     * Per-map JSON entry: trust as authoritative; only EXPAND for events
@@ -71,6 +133,28 @@ def bounds_for(map_name: Optional[str], events: List[Dict]) -> Dict:
             "y_min": float(entry.get("y_min", 0)),
             "y_max": float(entry.get("y_max", 200)),
             "starting_locations": list(entry.get("starting_locations", []) or []),
+        }
+        if have_events:
+            bounds["x_min"] = min(bounds["x_min"], min(xs) - 4)
+            bounds["x_max"] = max(bounds["x_max"], max(xs) + 4)
+            bounds["y_min"] = min(bounds["y_min"], min(ys) - 4)
+            bounds["y_max"] = max(bounds["y_max"], max(ys) + 4)
+        return bounds
+
+    # No explicit map_bounds.json entry. Try the replay's MPQ MapInfo
+    # block FIRST so bounds match the actual playable rectangle the map
+    # ships with -- this is how the spawn markers and the Liquipedia
+    # minimap image stay aligned for every map automatically, no manual
+    # curation in map_bounds.json required.
+    mb = _read_mapinfo_bounds(replay) if replay is not None else None
+    if mb is None and replay is not None:
+        mb = _attr_bounds(replay)
+    if mb is not None:
+        x0, x1, y0, y1 = mb
+        bounds = {
+            "x_min": float(x0), "x_max": float(x1),
+            "y_min": float(y0), "y_max": float(y1),
+            "starting_locations": [],
         }
         if have_events:
             bounds["x_min"] = min(bounds["x_min"], min(xs) - 4)
@@ -248,24 +332,36 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
                 + getattr(e, "vespene_used_active_forces",
                           getattr(e, "vespene_used_current_army", 0))
             )
+            # PlayerStatsEvent's killed/lost fields are CUMULATIVE
+            # resource values:
+            #   minerals_lost_army  + vespene_lost_army    -> resources of
+            #     my own army units the opponent has killed (what I LOST)
+            #   minerals_killed_army + vespene_killed_army -> resources of
+            #     enemy army units I have killed (what I KILLED)
+            # These let the viewer show army-efficiency live: a big
+            # killed-vs-lost gap tells you who traded better.
+            lost_min = int(getattr(e, "minerals_lost_army", 0) or 0)
+            lost_gas = int(getattr(e, "vespene_lost_army", 0) or 0)
+            killed_min = int(getattr(e, "minerals_killed_army", 0) or 0)
+            killed_gas = int(getattr(e, "vespene_killed_army", 0) or 0)
             stats_by_pid[pid].append({
                 "time": float(e.second),
                 "army_val": float(army_val),
+                "minerals": int(getattr(e, "minerals_current", 0) or 0),
+                "vespene": int(getattr(e, "vespene_current", 0) or 0),
+                "food_used": int(getattr(e, "food_used", 0) or 0),
+                "food_made": int(getattr(e, "food_made", 0) or 0),
+                "workers": int(getattr(e, "food_workers", 0) or 0),
+                "lost": lost_min + lost_gas,
+                "killed": killed_min + killed_gas,
             })
     except Exception:
         pass
     for arr in stats_by_pid.values():
         arr.sort(key=lambda s: s["time"])
 
-    gl = getattr(replay, "game_length", None)
-    game_length = float(gl.seconds) if gl else 0.0
-    if not game_length:
-        last_ts = []
-        for src in (my_events, opp_events,
-                    stats_by_pid[me.pid], stats_by_pid[opp.pid]):
-            if src:
-                last_ts.append(src[-1].get("time", 0))
-        game_length = max(last_ts) if last_ts else 600.0
+    # game_length is computed below, after tracks are extracted.
+
 
     sorted_my_events = sorted(my_events, key=lambda e: e.get("time", 0))
     sorted_opp_events = sorted(opp_events, key=lambda e: e.get("time", 0))
@@ -274,7 +370,8 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
     # playable area) for bounds derivation.
     building_events = [e for e in (sorted_my_events + sorted_opp_events) if e.get("type") == "building"]
     bounds_source = building_events or (sorted_my_events + sorted_opp_events)
-    bounds = bounds_for(getattr(replay, "map_name", None), bounds_source)
+    bounds = bounds_for(getattr(replay, "map_name", None),
+                        bounds_source, replay=replay)
 
     # Detect actual spawn locations from the very first town hall per player.
     # These are reliable in SC2 cell coords and double as visual reference
@@ -300,6 +397,33 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
     except Exception as exc:
         print(f"map_playback: extract_unit_tracks failed: {exc}")
         tracks = {"my_units": [], "opp_units": []}
+
+    # game_length: take the MAX of the reported length, the latest event
+    # timestamp, and the latest unit waypoint / death timestamp. This
+    # catches units born after the surrender (e.g. a Carrier warp-in
+    # finishing 30s after the GG click) so they're visible in the bar.
+    gl = getattr(replay, "game_length", None)
+    game_length = float(gl.seconds) if gl else 0.0
+    last_ts = []
+    for src in (my_events, opp_events,
+                stats_by_pid[me.pid], stats_by_pid[opp.pid]):
+        if src:
+            last_ts.append(src[-1].get("time", 0))
+    for unit_list in (tracks.get("my_units") or [], tracks.get("opp_units") or []):
+        for u in unit_list:
+            wp = u.get("waypoints") or []
+            if wp:
+                # Last entry's time is at index len-3 (waypoints are flat
+                # [t, x, y, t, x, y, ...]).
+                last_ts.append(wp[-3])
+            if u.get("died") is not None:
+                last_ts.append(u["died"])
+            if u.get("born") is not None:
+                last_ts.append(u["born"])
+    if last_ts:
+        game_length = max(game_length, max(last_ts))
+    if not game_length:
+        game_length = 600.0
 
     return {
         "map_name": getattr(replay, "map_name", None),

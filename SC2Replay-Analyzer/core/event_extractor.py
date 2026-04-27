@@ -718,8 +718,19 @@ _UNIT_NAME_ALIASES = {
 
 # Skip workers + transient fluff. Overlord, Overseer, Queen STAY -- the
 # user wants more units rendered, not fewer.
+# Workers (Drone/Probe/SCV/MULE) are intentionally NOT skipped --
+# they're tracked so the viewer can show them mining + shuttling
+# between mineral patches and townhalls. Worker waypoints are
+# downsampled to 1Hz in extract_unit_tracks below to keep the
+# payload tame.
 _SKIP_FOR_TRACKING = {
-    "MULE", "Larva", "Egg", "Drone", "Probe", "SCV",
+    "Larva", "Egg",
+    # Selection beacons (army/idle/scout/...) are sc2reader artifacts,
+    # not real units. Always filter them.
+    "BeaconArmy", "BeaconDefend", "BeaconAttack", "BeaconHarass",
+    "BeaconIdle", "BeaconAuto", "BeaconDetect", "BeaconScout",
+    "BeaconRally", "BeaconCustom1", "BeaconCustom2", "BeaconCustom3",
+    "BeaconCustom4",
     "Broodling", "BroodlingEscort",
     "Changeling", "ChangelingMarine", "ChangelingMarineShield",
     "ChangelingZergling", "ChangelingZealot",
@@ -731,6 +742,25 @@ _SKIP_FOR_TRACKING = {
     "Spray", "SprayProtoss", "SprayTerran", "SprayZerg",
     "BanelingNestCocoon", "GreaterSpireCocoon",
 }
+
+
+_WORKER_NAMES = {"Drone", "Probe", "SCV", "MULE"}
+
+
+def _downsample_waypoints_1hz(waypoints):
+    """Keep at most one waypoint per integer game-second (the latest one).
+
+    sc2reader's ``UnitPositionsEvent`` fires every game tick (~14Hz at
+    Faster speed) and we accumulate every position. For the viewer we
+    only need second-resolution snapshots; this reduces a 11-minute
+    game's worker waypoint count by ~14x without visible quality loss.
+    """
+    if not waypoints:
+        return waypoints
+    by_sec = {}
+    for (t, x, y) in waypoints:
+        by_sec[int(t)] = (float(t), float(x), float(y))
+    return [by_sec[k] for k in sorted(by_sec)]
 
 
 def _canonical_unit_name(raw):
@@ -879,18 +909,29 @@ def extract_unit_tracks(replay, my_pid):
         if not wps:
             continue
         wps.sort(key=lambda p: p[0])
-        compact = [wps[0]]
-        for (t, x, y) in wps[1:]:
-            (pt, px, py) = compact[-1]
-            if abs(x - px) < 0.5 and abs(y - py) < 0.5 and (t - pt) < 30:
-                continue
-            compact.append((t, x, y))
+        is_worker = rec["name"] in _WORKER_NAMES
+        # Workers shuttle mineral->base->mineral every ~6s and fire
+        # UnitPositionsEvent every game tick. Downsample to 1Hz so the
+        # per-tick noise compresses to one waypoint per game-second.
+        # Non-workers use the original "skip if barely moved" compaction
+        # so combat micro and unit pathing stay visible.
+        if is_worker:
+            wps = _downsample_waypoints_1hz(wps)
+            compact = wps
+        else:
+            compact = [wps[0]]
+            for (t, x, y) in wps[1:]:
+                (pt, px, py) = compact[-1]
+                if abs(x - px) < 0.5 and abs(y - py) < 0.5 and (t - pt) < 30:
+                    continue
+                compact.append((t, x, y))
         flat = []
         for (t, x, y) in compact:
             flat.extend([round(t, 2), round(x, 2), round(y, 2)])
         out = {
             "id": uid,
             "name": rec["name"],
+            "is_worker": is_worker,
             "born": round(rec["born"], 2),
             "died": (round(rec["died"], 2) if rec["died"] is not None else None),
             "waypoints": flat,

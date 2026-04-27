@@ -181,370 +181,28 @@ Engineering standards (non-negotiable; CI enforces these):
     [ ] Migrations tested forward AND backward on a copy of prod data.
     [ ] Rollback plan documented in PR.
 
+File-write protocol: Treat the Edit and Write tools as unreliable for any file with CRLF line endings or more than a few hundred lines. For any edit to an existing file in this repo: (1) make the change via the workspace bash sandbox using python3 with a read→modify→atomic-rename pattern, not the Edit/Write tools; (2) immediately after every write, verify the file is intact using wc -l, tail, and a parser check (python3 -m py_compile for .py, python3 -c "import json; json.load(...)" for .json, node --check for .js, or just tail -3 file | grep -q '<expected closing token>'). If any check fails, restore the file from git show HEAD:<path> before continuing. Do not trust what the Read tool shows you — it caches and can return phantom content that doesn't exist on disk. The workspace bash mount is the canonical view.
+
+Pre-edit checkpoint: Before modifying any file > 200 lines, confirm it's clean in git (no uncommitted changes you'd lose). After each modification, run git diff <path> and confirm the diff matches what you intended — both in content and in size. If the diff shows lines being removed that you didn't ask to be removed, the write got truncated.
+
+
+No-Edit zone: The Edit tool's old_string/new_string mode is forbidden for files > 1000 lines. Use bash + sed, or read the relevant section, do the transformation, and write back the whole file via bash heredoc.
+
 For the long-form rationale, audit prompt, and one-time enforcement
 scaffolding setup, see the "Engineering Standards & Refactoring Practices"
 section directly below this preamble in MASTER_ROADMAP.md.
 ```
-
 ---
-
-## Stage 0 — Critical fixes
-
-**Why first:** these block everything else. Two parser-side bugs and a hardcoded-path audit that drives Stage 2's wizard.
-
-**Duration:** half a day total.
-
-### Stage 0.1 — Fix `build_definitions.py` syntax error
-
-```
-Read [Master Architecture Preamble].
-
-GOAL: Restore reveal-sc2-opponent-main/core/build_definitions.py to a clean
-importable state. It currently has an orphan duplicate block (lines ~127-141)
-left over from a botched refactor. The desktop reveal-sc2-opponent-main
-analyzer GUI cannot import this module right now.
-
-FILES:
-- reveal-sc2-opponent-main/core/build_definitions.py
-
-WHAT'S WRONG (read the file first to confirm before editing):
-After the legitimate definitions of SKIP_BUILDINGS and KNOWN_BUILDS
-(~line 116-125), there is a stray block:
-    "PointDefenseDrone", "Interceptor", "AdeptPhaseShift", "Overlord",
-    "OverseerCocoon", "BanelingCocoon", "RavagerCocoon", "LurkerCocoon",
-    "TransportOverlordCocoon",
-}
-
-SKIP_BUILDINGS: Set[str] = {  # DUPLICATE
-    ...
-}
-
-KNOWN_BUILDS: List[str] = sorted(...)  # DUPLICATE
-
-This is dead code from a copy-paste merge.
-
-FIX:
-1. Read the full file.
-2. Remove only the orphan/duplicate block (everything from the stray
-   "PointDefenseDrone" line through the second KNOWN_BUILDS definition).
-3. Confirm SKIP_UNITS still includes PointDefenseDrone et al. earlier in the
-   file (it should). If not, the orphan content was lost during the previous
-   refactor and you'll need to merge those names back into SKIP_UNITS.
-
-VERIFY:
-1. cd reveal-sc2-opponent-main && python -c "from core.build_definitions import KNOWN_BUILDINGS, MORPH_BUILDINGS, SKIP_UNITS, SKIP_BUILDINGS, KNOWN_BUILDS; print(len(KNOWN_BUILDS))"
-   Should print a positive integer with no errors.
-2. cd reveal-sc2-opponent-main && python -c "from core.event_extractor import extract_events"
-   Should succeed (was failing before because of the syntax error).
-3. Compare the resulting SKIP_UNITS / SKIP_BUILDINGS sets to the equivalents
-   in SC2Replay-Analyzer/core/event_extractor.py — they should be roughly
-   equivalent (the two repos diverged but should agree on what's a building).
-
-REPORT BACK with: a 3-line summary of what was removed, plus the count of
-KNOWN_BUILDS and KNOWN_BUILDINGS after the fix.
-
-No mock data. No new symbols invented. Only delete the duplicates.
-```
-
-### Stage 0.2 — Strip the NUL byte in `analyzer.js`
-
-```
-Read [Master Architecture Preamble].
-
-GOAL: reveal-sc2-opponent-main/stream-overlay-backend/analyzer.js contains a
-literal \0 byte around offset 16014 (line ~389, inside a template literal
-expansion). It still parses by accident, but it triggers warnings in grep,
-some IDEs, and PowerShell's --% operator. Strip it cleanly.
-
-FILES:
-- reveal-sc2-opponent-main/stream-overlay-backend/analyzer.js
-
-PROCEDURE:
-1. Confirm the byte exists:
-     awk '/\x00/ {print NR}' reveal-sc2-opponent-main/stream-overlay-backend/analyzer.js
-2. Read 5 lines of context around that line. Identify whether the NUL is
-   inside a string literal or a comment.
-3. Remove the NUL byte AND the surrounding whitespace it creates, preserving
-   semantics. Do NOT replace it with a space if the surrounding characters
-   already form a complete string.
-4. If the file is on the production install at C:/SC2TOOLS/ as well (the
-   user copied earlier fixes there), apply the same fix to the prod copy:
-     diff /c/SC2TOOLS/reveal-sc2-opponent-main/stream-overlay-backend/analyzer.js \
-          /c/SC2TOOLS/.claude/worktrees/<name>/reveal-sc2-opponent-main/stream-overlay-backend/analyzer.js
-     # Should be no diff after both are fixed.
-
-VERIFY:
-1. node --check reveal-sc2-opponent-main/stream-overlay-backend/analyzer.js
-   Should print no error.
-2. awk '/\x00/ {print NR}' reveal-sc2-opponent-main/stream-overlay-backend/analyzer.js
-   Should print nothing.
-3. require() the module from a small Node script — no errors.
-
-REPORT BACK: the original line, the fixed line, and confirmation that the
-diff between worktree and prod copy is now zero.
-
-No mock data. Don't reformat the rest of the file.
-```
-
-### Stage 0.3 — Discover & catalog every hardcoded path / identity
-
-```
-Read [Master Architecture Preamble].
-
-GOAL: Produce a CSV of every place in the codebase that hardcodes a path,
-player name, character_id, MMR threshold, Battle.net region, replay folder,
-or other user-specific value. This catalog drives Stage 2 (the wizard).
-
-PROCEDURE:
-1. Run targeted greps across both project trees:
-   - String literals matching `C:\\SC2TOOLS` or `C:/SC2TOOLS` or
-     `\Documents\StarCraft II\Accounts\`
-   - String literals matching `ReSpOnSe`, `respo`, the user's character_id
-     `1-S2-1-267727`, account `50983875`
-   - Hardcoded MMR thresholds (e.g. `5000`, `4500`)
-   - Hardcoded race assumptions (e.g. searches that filter for
-     play_race == "Protoss")
-   - Twitch channel/auth in stream-overlay-backend
-   - OBS WebSocket connection strings/ports
-2. For each finding, capture:
-   - File:line
-   - The hardcoded value
-   - Context (what the value is used for)
-   - Suggested config key in profile.json or config.json (e.g.
-     profile.battlenet.character_id, config.replay.watched_folders)
-3. Write the catalog to a NEW file: docs/hardcoded-audit.csv with columns:
-   file, line, value, purpose, suggested_config_key, priority(P0/P1/P2)
-
-EXCLUDE:
-- Tests, fixtures, dev/example files (mark these but priority P2)
-- *.broken-* and *.backup-* files
-- The .claude/ directory
-
-VERIFY:
-1. The CSV exists, parses (no quote issues), has > 20 rows.
-2. Spot-check 5 random rows against the actual file content.
-3. The file is committed to docs/ (mkdir docs/ if it doesn't exist).
-
-REPORT BACK: total findings, counts by priority, top 5 most-cited config
-keys (these are the wizard's must-have settings).
-
-This task is read-only — it produces a CSV and creates docs/hardcoded-audit.csv,
-nothing else. No mock data, no synthetic findings.
-```
-
-### Stage 0 acceptance criteria
-
-- [ ] `python -c "from core.build_definitions import KNOWN_BUILDS"` succeeds.
-- [ ] `node --check reveal-sc2-opponent-main/stream-overlay-backend/analyzer.js` succeeds with zero NUL bytes.
-- [ ] `docs/hardcoded-audit.csv` has ≥ 20 rows; top 5 suggested config keys are documented.
-
----
-
-## Stage 1 — Design system
-
-**Why before any feature work:** every UI surface — analyzer SPA, Tkinter (until Stage 3 retires it), OBS overlays, future cloud dashboard, future React Native app — references the same vocabulary. Locking tokens first means no rewrites later.
-
-**Duration:** 1 day.
-
-### Stage 1.1 — Design tokens (CSS + JSON + Python)
-
-```
-Read [Master Architecture Preamble]. Stage 0 must be complete.
-
-You are setting up a unified design system for SC2 Tools, a StarCraft II
-analytics suite that ships a React SPA (analyzer), Tkinter desktop app,
-sixteen HTML browser-source overlays for OBS/Streamlabs, and (later) a
-web dashboard and React Native mobile app.
-
-Read these files first to understand the existing aesthetic:
-- reveal-sc2-opponent-main/SC2-Overlay/styles.css
-- reveal-sc2-opponent-main/SC2-Overlay/app.js
-- reveal-sc2-opponent-main/SC2-Overlay/widgets/opponent.html
-- reveal-sc2-opponent-main/SC2-Overlay/widgets/session.html
-- reveal-sc2-opponent-main/gui/analyzer_app.py
-- reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html
-  (Tailwind palette currently in use — bg-base-800, ring-soft, win-500, etc.)
-
-Produce a design token system with these constraints:
-
-1. Visual identity: dark space theme. Primary background #0A0E1A,
-   surface #111827, surface-elevated #1F2937. Race accents:
-   - Terran: #3B82F6 (blue)
-   - Zerg:   #A855F7 (purple)
-   - Protoss: #F59E0B (amber)
-   - Random: #94A3B8 (slate)
-   Semantic: success #10B981, danger #EF4444, warning #F59E0B,
-   info #3B82F6. Text: primary #F1F5F9, secondary #94A3B8, muted #64748B.
-
-2. Typography: "Inter" for UI, "JetBrains Mono" for stats and timings.
-   Scales: xs=11px, sm=13px, base=15px, lg=18px, xl=22px, 2xl=28px,
-   3xl=36px. Line heights: tight=1.2, normal=1.5, relaxed=1.75.
-
-3. Spacing: 4px base unit, scale 0/1/2/3/4/6/8/12/16/24
-   = 0/4/8/12/16/24/32/48/64/96.
-
-4. Radii: sm=4px, md=8px, lg=12px, xl=16px, full=9999px. Shadows: sm/md/lg/xl
-   defined as standard Tailwind-style elevations.
-
-5. Motion: ease-out 200ms for state, ease-in-out 400ms for entrance,
-   spring for celebrations. Define easing functions as CSS custom properties.
-
-Deliverables:
-
-A. reveal-sc2-opponent-main/SC2-Overlay/design-tokens.css — CSS custom
-   properties on :root. Group by category. Comments above each section.
-
-B. reveal-sc2-opponent-main/SC2-Overlay/design-tokens.json — same tokens
-   in a flat JSON map. Used by the Node backend and shared by future
-   surfaces. Match Style Dictionary v4 format.
-
-C. reveal-sc2-opponent-main/gui/design_tokens.py — Python module exporting
-   COLORS, FONT_FAMILIES, FONT_SIZES, SPACING, RADII as frozen dataclasses
-   so Tkinter / PyQt code can import them.
-
-D. docs/design-system.md — short reference: color usage rules (when to use
-   semantic vs race accent), typography rules (mono for numbers/timings only),
-   spacing rhythm, accessibility notes (WCAG AA contrast for all text/bg
-   pairs is required, document each pair's ratio).
-
-E. Update reveal-sc2-opponent-main/SC2-Overlay/styles.css to import
-   design-tokens.css and replace any hard-coded color/spacing values with
-   var() references. Do not change visible rendering — verify by diffing
-   a screenshot of opponent.html and session.html before/after.
-
-F. The analyzer SPA at public/analyzer/index.html ALSO consumes design
-   tokens — emit a small <style> block at the top that re-declares the
-   tokens (since the SPA is single-file, no external CSS link). Replace
-   any hardcoded race-color hex codes inside the SPA with var() refs.
-
-Definition of Done:
-- All five files created.
-- styles.css has zero hard-coded color hex codes (grep for '#' in
-  color/background context and confirm).
-- All color/background pairs in widgets pass WCAG AA (4.5:1 for body
-  text, 3:1 for large text).
-- Tkinter analyzer_app.py imports design_tokens.py and uses at least
-  COLORS.BG_PRIMARY, COLORS.TEXT_PRIMARY, COLORS.RACE_ZERG, etc. for
-  one panel as a proof of integration.
-- design-tokens.json validates as JSON.
-- analyzer SPA visual diff before/after is zero (or only intentional).
-```
 
 ---
 
 ## Stage 2 — Configuration and onboarding
 
-**Why now:** the wizard hides every hardcoded path/identity from the user. Once it lands, every later feature reads from `profile.json` / `config.json` instead of guessing.
-
-**Duration:** 3-4 days.
-
-### Stage 2.1 — Profile/config schema + Express endpoints
-
-```
-Read [Master Architecture Preamble]. Stages 0 and 1 must be complete.
-
-GOAL: Establish a single source of truth for user-configurable values. Two
-JSON files at the repo root:
-- data/profile.json (per-user identity)
-- data/config.json (per-installation settings)
-
-Plus the GET/PUT/PATCH endpoints to read & write them from the React SPA.
-
-FILES TO CREATE:
-- data/profile.schema.json (JSON Schema describing profile.json)
-- data/config.schema.json
-- reveal-sc2-opponent-main/stream-overlay-backend/routes/settings.js (new module)
-
-FILES TO MODIFY:
-- reveal-sc2-opponent-main/stream-overlay-backend/index.js (mount the router)
-
-SCHEMA — profile.json:
-{
-  "version": 1,
-  "battlenet": {
-    "battle_tag": "ReSpOnSe#1234",
-    "character_id": "1-S2-1-267727",
-    "account_id": "50983875",
-    "region": "us"
-  },
-  "race_preference": "Protoss",
-  "mmr_target": null,
-  "preferred_player_name_in_replays": "ReSpOnSe"
-}
-
-SCHEMA — config.json:
-{
-  "version": 1,
-  "paths": {
-    "sc2_install_dir": "C:\\Program Files (x86)\\StarCraft II",
-    "replay_folders": [
-      "C:\\Users\\jay19\\OneDrive\\Pictures\\Documents\\StarCraft II\\Accounts\\50983875\\1-S2-1-267727\\Replays\\Multiplayer"
-    ]
-  },
-  "macro_engine": {
-    "enabled_disciplines": ["chrono","inject","mule"],
-    "minimum_game_length_sec": 60,
-    "engine_version": "2026-04-chain-counted"
-  },
-  "build_classifier": {
-    "active_definition_ids": ["pvp-4-stalker-oracle-into-dt"],
-    "use_custom_builds": true,
-    "use_community_shared_builds": true   // Stage 7
-  },
-  "stream_overlay": {
-    "enabled": false,
-    "twitch_channel": null,
-    "obs_websocket": { "host": "127.0.0.1", "port": 4455, "password": null }
-  },
-  "telemetry": {
-    "opt_in": false
-  },
-  "ui": {
-    "theme": "dark",
-    "default_perspective": "me"
-  }
-}
-
-ENDPOINTS:
-- GET  /api/profile       → 200 { profile }
-- PUT  /api/profile       → 200 { profile }     replace whole profile
-- PATCH /api/profile      → 200 { profile }     merge update
-- GET  /api/config        → 200 { config }
-- PUT  /api/config        → 200 { config }
-- PATCH /api/config       → 200 { config }
-- POST /api/profile/validate → 200 { ok, errors: [] }
-- POST /api/config/validate  → 200 { ok, errors: [] }
-- GET  /api/profile/exists   → 200 { exists: bool }   used by wizard gate
-
-IMPLEMENTATION NOTES:
-- Use ajv (npm install ajv ajv-formats; add to package.json) for schema
-  validation.
-- Atomic writes: write to .tmp, fsync, rename. (See persistMetaDb in
-  analyzer.js for the pattern.)
-- If profile.json or config.json doesn't exist, GET returns 404 with body
-  { error: "not_initialized" }; the wizard handles that.
-- All endpoints CORS-allow same-origin only.
-- Add a smoke test under stream-overlay-backend/__tests__/settings.test.js
-  using supertest + a tmp dir override for the data path.
-
-VERIFY (REAL DATA):
-1. cd reveal-sc2-opponent-main/stream-overlay-backend
-   npm install ajv ajv-formats supertest --save-dev
-2. npm test (or npx jest settings.test.js) — your new test suite must pass.
-3. Manually:
-   curl http://localhost:3000/api/profile/exists  → { exists: false }
-   curl -X PUT http://localhost:3000/api/profile -d '{...real profile...}'
-   curl http://localhost:3000/api/profile  → returns the real profile
-4. Re-running the SPA after PUT must read the new profile.json on disk.
-
-NO MOCKS. The schemas and endpoints handle real values. Tests use temp
-files, not stubbed responses.
-```
 
 ### Stage 2.2 — First-run wizard (React SPA)
 
 ```
-Read [Master Architecture Preamble]. Stages 0, 1, and 2.1 must be complete.
+Read [Master Architecture Preamble]. 
 
 GOAL: A 6-step first-run wizard inside the React SPA at
 reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html.
@@ -711,6 +369,133 @@ VERIFY:
 
 NO MOCKS — every test button hits real services. Backup restore actually
 swaps real files (with a safety snapshot first).
+
+(AI BROKE THIS UP INTO 2.3 and 2.4)
+
+# Stage 2.4 — SettingsPage UI (paste this prompt in a fresh session)
+
+## Pre-flight
+
+Before doing anything else, confirm the working tree is clean and the Stage 2.3
+backend is in place:
+
+```bash
+cd C:\SC2TOOLS
+git log --oneline -3
+# Top of log should include:
+#   feat(stage-2.3): backups router for snapshot/restore lifecycle
+#   feat(stage-2.2): first-run wizard, onboarding API, identity CLI
+#   feat(stage-2.1): profile/config schemas + ajv-validated settings router
+git status
+# Should be clean (or only the long-standing CRLF-noise modifications
+# on files unrelated to Stage 2.4).
+```
+
+Confirm the four backups endpoints respond:
+
+```bash
+cd C:\SC2TOOLS\reveal-sc2-opponent-main\stream-overlay-backend
+node -e "fetch('http://127.0.0.1:3000/api/backups').then(r=>r.json()).then(b=>console.log(b.backups.length+' snapshots'))"
+```
+
+## Goal
+
+Persistent `/settings` route in the React SPA at
+`reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html`,
+laid out as a tabbed page. Same fields as the Stage 2.2 wizard but the user
+can return whenever they want. Wires up to the routers committed in Stage 2.1
+(`/api/profile`, `/api/config`), Stage 2.2 (`/api/onboarding/*`), and Stage
+2.3 (`/api/backups/*`).
+
+## File to modify
+
+- `reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html`
+
+This file is **8,820+ lines**. The roadmap preamble's "no-edit zone" rule
+forbids the Edit tool's old_string/new_string mode for files > 1000 lines.
+Use bash + python3 with read → modify → atomic-rename. Verify with
+`tail`, `wc -l`, and an HTML closing-token grep after every write.
+Confirm `git diff` only shows the inserted hunks before staging.
+
+## Layout (tabs along the left, content right)
+
+| Tab | Source | Maps to                                                          |
+|-----|--------|-------------------------------------------------------------------|
+| Profile           | `/api/profile`            | battle_tag, character_id, race preference, mmr_target |
+| Replay folders    | `/api/config` paths       | list with add/remove + per-row Test button            |
+| Macro engine      | `/api/config` macro_engine| enabled disciplines, min game length, engine_version (readonly) |
+| Build classifier  | `/api/config` build_classifier | active builds checkbox list (built-ins + custom only — Stage 7 community deferred), use_custom_builds toggle |
+| Stream overlay    | `/api/config` stream_overlay | Twitch/OBS sub-cards reusing the wizard's test buttons |
+| Backups           | `/api/backups`            | read-only list with create/restore/delete actions     |
+| Diagnostics       | (link to /diagnostics)    | placeholder; real page in Stage 4                     |
+| Privacy           | `/api/config` telemetry   | telemetry opt-in toggle, retention policy, cloud opt-in (Stage 14) |
+| About             | `/api/config` ui          | version, GitHub link, "check for updates" button      |
+
+## Field interactions
+
+Every field is **inline-editable with dirty-state tracking**:
+
+- Sticky save bar at the top: "X unsaved changes — Save | Discard"
+- Save calls `PATCH /api/profile` or `PATCH /api/config` (whichever the field belongs to)
+- Validation errors render inline next to the field
+- All form controls accessible via keyboard (focus-visible ring, aria-label on icon buttons)
+- Respect `prefers-reduced-motion` for transitions
+
+## Behavioral specifics
+
+- **Replay folders → Test button**: `POST /api/onboarding/scan-replay-folders`
+  with `{ single_path: "<path>" }`. Renders "✓ 1842 replays found" or
+  "✗ no replays detected". No mocks.
+
+- **Replay folders → Remove button**: confirm dialog with replay count.
+
+- **Build classifier → Active builds**: read from
+  `data/build_definitions.json` AND `data/custom_builds.json` (NOT
+  `data/community_builds.cache.json` — that's Stage 7 territory; render a
+  disabled "Community builds (Stage 7)" section with a tooltip). Saves
+  IDs to `config.build_classifier.active_definition_ids`.
+
+- **Backups tab**:
+  - On mount: `GET /api/backups` and render the table with name, base,
+    kind (chip color: `pre`=amber, `broken`=red, `backup`=blue,
+    `bak`=gray), size (humanized), modified date.
+  - "Create snapshot" button → `POST /api/backups/create`
+    body `{ base: "meta_database.json" }`, then refresh the list.
+  - Per-row "Restore" → confirm dialog → `POST /api/backups/restore`
+    body `{ snapshot: <name> }`. Show the response's `pre_restore_snapshot`
+    inline as "Safety snapshot: <name>".
+  - Per-row "Delete" → confirm dialog → `DELETE /api/backups/:name`,
+    then refresh.
+  - Refuse to render the Restore / Delete buttons if the row's
+    `kind === 'pre'` AND label starts with `restore-` (don't let the
+    user delete the safety snapshot they just created — at least not
+    until they've dismissed an "Are you sure?" with extra wording).
+
+## Not in scope (Stage 2.4)
+
+- Diagnostics tab body — Stage 4 owns that
+- Cloud sync opt-in — Stage 14
+- Community builds checkboxes — Stage 7
+- Schema migrations of profile/config — Stage 14
+
+## Definition of done
+
+- [ ] `/settings` reachable from the top nav alongside Overview / Builds / Opponents.
+- [ ] Every field round-trips: edit → Save → reload page → value persists.
+- [ ] Replay-folder Test button shows real count for the user's default replay folder.
+- [ ] Backups tab shows all 7+ existing snapshots from the install.
+- [ ] Create / Restore / Delete buttons work end-to-end on a freshly created
+      throw-away snapshot of `profile.json` (don't restore over the user's
+      live `meta_database.json` during the smoke test).
+- [ ] No console errors. Lighthouse a11y >= 90.
+- [ ] `git diff --stat` shows changes ONLY to `public/analyzer/index.html`.
+- [ ] PR template filled in (what / why / how-tested / screenshots).
+
+## Hand-off
+
+Stage 2.3 backend committed at `7ef14a1`. Stage 2.4 is the UI half.
+
+
 ```
 
 ### Stage 2 acceptance criteria
