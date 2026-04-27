@@ -1633,3 +1633,12 @@ function shutdown(reason) {
 }
 process.on('SIGINT',  () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+// EXPORT FOR TESTING
+if (process.env.NODE_ENV === 'test') {
+    module.exports = {
+        loadConfig,
+        DEFAULT_CONFIG,
+        deepMerge
+    };
+}
