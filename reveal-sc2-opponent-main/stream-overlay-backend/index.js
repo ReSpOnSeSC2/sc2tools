@@ -49,6 +49,10 @@ const { createSettingsRouter } = require('./routes/settings');
 // folders, and round-trips against Twitch / OBS / SC2Pulse to
 // validate the user's optional integrations.
 const { createOnboardingRouter } = require('./routes/onboarding');
+// Backups router (Stage 2.3): /api/backups/* snapshot/restore for
+// data/meta_database.json + sibling files. Used by the Settings
+// page's Backups tab, but also safe to call directly via curl.
+const { createBackupsRouter } = require('./routes/backups');
 // node-fetch v2 ships in node_modules; stick with that to keep CJS
 // require() compatibility on older node runtimes that don't have a
 // global fetch.
@@ -933,6 +937,11 @@ app.use(createOnboardingRouter({
     fetch,
     loopbackBase: (req) => `http://${req.headers.host}`,
 }));
+
+// Stage 2.3: backups endpoints. Snapshot / list / restore / delete the
+// allow-listed data files (meta_database.json, profile.json, etc.).
+// Restores always take a pre-restore safety snapshot first.
+app.use(createBackupsRouter({ dataDir: DATA_DIR }));
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
