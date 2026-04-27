@@ -1,14 +1,18 @@
-/* ===========================================================
+/* ============================================================================
    SC2 Stream Overlay — production styles
-   Transparent background for OBS Browser Source.
-   Segoe UI / system font stack to match Windows UI.
-   =========================================================== */
+   ----------------------------------------------------------------------------
+   Transparent background for OBS Browser Source. All color, font, spacing,
+   radius, shadow, and motion values now come from design-tokens.css — do NOT
+   reintroduce raw hex codes here. CI greps the file for '#' in color contexts.
+   ============================================================================ */
+
+@import url("./design-tokens.css");
 
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: var(--font-family-ui);
 }
 
 html, body {
@@ -23,17 +27,19 @@ html, body {
 .widget-container {
     position: absolute;
     display: flex;
-    background: linear-gradient(135deg, #11141c 0%, #1a1e29 100%);
-    border: 1px solid #2a3143;
+    background: linear-gradient(135deg,
+        var(--color-overlay-bg-from) 0%,
+        var(--color-overlay-bg-to) 100%);
+    border: 1px solid var(--color-overlay-border);
     border-radius: 10px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.75),
-                0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+    box-shadow: var(--shadow-overlay-card);
     width: 340px;
-    color: #ffffff;
+    color: var(--color-overlay-text);
     pointer-events: none;
     opacity: 0;
-    transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1),
-                opacity 0.45s ease;
+    transition:
+        transform var(--duration-celebrate) var(--ease-overshoot),
+        opacity var(--duration-entrance) var(--ease-out);
     z-index: 10;
 }
 
@@ -70,10 +76,22 @@ html, body {
     width: 6px;
     border-radius: 10px 0 0 10px;
 }
-.accent-gold   { background: #e5c100; box-shadow: 0 0 10px rgba(229, 193, 0, 0.55); }
-.accent-cyan   { background: #00ccff; box-shadow: 0 0 10px rgba(0, 204, 255, 0.55); }
-.accent-purple { background: #a06bff; box-shadow: 0 0 10px rgba(160, 107, 255, 0.55); }
-.accent-red    { background: #ff3366; box-shadow: 0 0 14px rgba(255, 51, 102, 0.7); }
+.accent-gold {
+    background: var(--color-overlay-accent-gold);
+    box-shadow: 0 0 10px rgba(229, 193, 0, 0.55);
+}
+.accent-cyan {
+    background: var(--color-overlay-accent-cyan);
+    box-shadow: 0 0 10px rgba(0, 204, 255, 0.55);
+}
+.accent-purple {
+    background: var(--color-overlay-accent-purple);
+    box-shadow: 0 0 10px rgba(160, 107, 255, 0.55);
+}
+.accent-red {
+    background: var(--color-overlay-accent-red);
+    box-shadow: 0 0 14px rgba(255, 51, 102, 0.7);
+}
 
 .content {
     padding: 16px 20px;
@@ -100,7 +118,7 @@ html, body {
     align-items: center;
     gap: 10px;
     font-size: 0.95rem;
-    color: #7b869e;
+    color: var(--color-overlay-text-dim);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     white-space: nowrap;
@@ -108,22 +126,22 @@ html, body {
     text-overflow: ellipsis;
 }
 
-.bright { color: #ffffff; }
-.dim    { color: #7b869e; font-weight: 500; }
+.bright { color: var(--color-overlay-text); }
+.dim    { color: var(--color-overlay-text-dim); font-weight: 500; }
 .big    { font-size: 1.8rem; line-height: 1; }
 
 /* Result colors */
 .victory {
-    color: #00ff88;
+    color: var(--color-overlay-victory);
     text-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
 }
 .defeat {
-    color: #ff3366;
+    color: var(--color-overlay-defeat);
     text-shadow: 0 0 10px rgba(255, 51, 102, 0.4);
 }
 
 /* Matchup text style */
-#mr-matchup { color: #a0aabf; }
+#mr-matchup { color: var(--color-overlay-text-matchup); }
 
 /* --------- SC2 icon system --------- */
 /* A single inline icon (race badge, league shield, etc.). */
@@ -171,23 +189,38 @@ html, body {
 
 /* --------- Rival alert (#6) --------- */
 .rival-widget {
-    background: linear-gradient(135deg, #2b1f0a 0%, #3a2810 100%);
-    border-color: #8a5a16;
+    background: linear-gradient(135deg,
+        var(--color-overlay-rival-bg-from) 0%,
+        var(--color-overlay-rival-bg-to) 100%);
+    border-color: var(--color-overlay-rival-border);
     width: 380px;
     animation: rival-pulse 2s ease-in-out infinite;
 }
-.rival-widget .header { color: #ffcc33; }
-.rival-widget .footer { color: #ffe7a0; }
-.accent-rival { background: #ffcc33; box-shadow: 0 0 14px rgba(255, 204, 51, 0.7); }
+.rival-widget .header { color: var(--color-overlay-rival-header); }
+.rival-widget .footer { color: var(--color-overlay-rival-footer); }
+.accent-rival {
+    background: var(--color-overlay-accent-rival);
+    box-shadow: 0 0 14px rgba(255, 204, 51, 0.7);
+}
 @keyframes rival-pulse {
-    0%, 100% { box-shadow: 0 12px 32px rgba(0,0,0,0.75), 0 0 18px rgba(255, 204, 51, 0.18); }
-    50%      { box-shadow: 0 12px 32px rgba(0,0,0,0.75), 0 0 32px rgba(255, 204, 51, 0.55); }
+    0%, 100% {
+        box-shadow:
+            0 12px 32px var(--color-shadow-overlay),
+            0 0 18px rgba(255, 204, 51, 0.18);
+    }
+    50% {
+        box-shadow:
+            0 12px 32px var(--color-shadow-overlay),
+            0 0 32px rgba(255, 204, 51, 0.55);
+    }
 }
 
 /* --------- Scouting report (#1) --------- */
 .scout-widget {
     width: 460px;
-    background: linear-gradient(135deg, #0d1320 0%, #131c2e 100%);
+    background: linear-gradient(135deg,
+        var(--color-overlay-scout-bg-from) 0%,
+        var(--color-overlay-scout-bg-to) 100%);
 }
 .scout-content {
     padding: 14px 18px;
@@ -202,7 +235,7 @@ html, body {
     gap: 10px;
     font-size: 1.25rem;
     font-weight: 800;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid var(--color-divider);
     padding-bottom: 8px;
 }
 .scout-race .sc2-icon { width: 32px; height: 32px; }
@@ -215,14 +248,14 @@ html, body {
 }
 .scout-label {
     font-size: 0.7rem;
-    color: #7b869e;
+    color: var(--color-overlay-text-dim);
     letter-spacing: 1.5px;
     font-weight: 700;
     min-width: 110px;
     text-transform: uppercase;
 }
-.scout-rival { color: #ffcc33; font-weight: 700; }
-.scout-cheese { color: #ff8899; font-weight: 700; }
+.scout-rival  { color: var(--color-overlay-scout-rival);  font-weight: 700; }
+.scout-cheese { color: var(--color-overlay-scout-cheese); font-weight: 700; }
 
 /* --------- #8 Top builds tile grid (bottom-right, persistent) --------- */
 .topbuilds-widget {
@@ -230,17 +263,21 @@ html, body {
     bottom: 40px;
     right: 40px;
     width: 280px;
-    background: linear-gradient(135deg, rgba(17, 20, 28, 0.88) 0%, rgba(26, 30, 41, 0.88) 100%);
-    border: 1px solid #2a3143;
+    background: linear-gradient(135deg,
+        var(--color-overlay-bg-from-glass) 0%,
+        var(--color-overlay-bg-to-glass) 100%);
+    border: 1px solid var(--color-overlay-border);
     border-radius: 10px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.7);
-    color: #ffffff;
+    box-shadow: var(--shadow-overlay-tile);
+    color: var(--color-overlay-text);
     backdrop-filter: blur(2px);
     z-index: 5;
     padding: 10px 12px;
     opacity: 0;
     transform: translateX(20px);
-    transition: opacity 0.5s ease, transform 0.5s ease;
+    transition:
+        opacity var(--duration-entrance) var(--ease-out),
+        transform var(--duration-entrance) var(--ease-out);
 }
 .topbuilds-widget.show { opacity: 1; transform: translateX(0); }
 
@@ -248,7 +285,7 @@ html, body {
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 2px;
-    color: #7b869e;
+    color: var(--color-overlay-text-dim);
     text-transform: uppercase;
 }
 .topbuilds-grid {
@@ -263,7 +300,7 @@ html, body {
     gap: 8px;
     padding: 4px 6px;
     border-radius: 4px;
-    background: rgba(255,255,255,0.04);
+    background: var(--color-overlay-tile-bg);
     font-size: 0.78rem;
 }
 .topbuild-tile .topbuild-icons {
@@ -281,7 +318,7 @@ html, body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: #c5cde0;
+    color: var(--color-overlay-text-medium);
 }
 .topbuild-tile .topbuild-record {
     font-variant-numeric: tabular-nums;
@@ -297,7 +334,7 @@ html, body {
     gap: 6px 10px;
     margin-top: 8px;
     padding-top: 8px;
-    border-top: 1px solid rgba(255,255,255,0.08);
+    border-top: 1px solid var(--color-divider);
 }
 .build-step {
     display: inline-flex;
@@ -305,34 +342,46 @@ html, body {
     gap: 4px;
     padding: 3px 6px 3px 4px;
     border-radius: 4px;
-    background: rgba(160, 107, 255, 0.12);
+    background: var(--color-overlay-build-step-bg);
     font-size: 0.78rem;
     font-weight: 600;
-    color: #e7defc;
+    color: var(--color-overlay-build-step-fg);
     opacity: 0;
     transform: translateY(8px);
-    transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.2, 1.4, 0.4, 1);
+    transition:
+        opacity 0.32s var(--ease-out),
+        transform 0.32s var(--ease-spring);
 }
 .build-step.show { opacity: 1; transform: translateY(0); }
 .build-step .sc2-icon { width: 18px; height: 18px; }
 .build-step .build-time {
     font-variant-numeric: tabular-nums;
-    color: #a06bff;
+    color: var(--color-overlay-accent-purple);
     margin-right: 2px;
 }
 
 /* --------- Cheese widget gets an extra pulse glow --------- */
 .cheese-widget {
-    background: linear-gradient(135deg, #1a0f15 0%, #28121a 100%);
-    border-color: #55192b;
+    background: linear-gradient(135deg,
+        var(--color-overlay-cheese-bg-from) 0%,
+        var(--color-overlay-cheese-bg-to) 100%);
+    border-color: var(--color-overlay-cheese-border);
     animation: cheese-pulse 2.2s ease-in-out infinite;
 }
-.cheese-widget .header { color: #ff3366; }
-.cheese-widget .footer { color: #ffb3c5; }
+.cheese-widget .header { color: var(--color-overlay-cheese); }
+.cheese-widget .footer { color: var(--color-overlay-cheese-soft); }
 
 @keyframes cheese-pulse {
-    0%, 100% { box-shadow: 0 12px 32px rgba(0,0,0,0.75), 0 0 20px rgba(255,51,102,0.15); }
-    50%      { box-shadow: 0 12px 32px rgba(0,0,0,0.75), 0 0 36px rgba(255,51,102,0.45); }
+    0%, 100% {
+        box-shadow:
+            0 12px 32px var(--color-shadow-overlay),
+            0 0 20px rgba(255, 51, 102, 0.15);
+    }
+    50% {
+        box-shadow:
+            0 12px 32px var(--color-shadow-overlay),
+            0 0 36px rgba(255, 51, 102, 0.45);
+    }
 }
 
 /* --------- Streak splash (big center) --------- */
@@ -343,8 +392,9 @@ html, body {
     transform: translate(-50%, -50%) scale(0.7);
     opacity: 0;
     pointer-events: none;
-    transition: transform 0.45s cubic-bezier(0.2, 1.4, 0.4, 1),
-                opacity 0.45s ease;
+    transition:
+        transform 0.45s var(--ease-spring),
+        opacity 0.45s var(--ease-out);
     z-index: 20;
 }
 .streak-widget.show {
@@ -355,9 +405,11 @@ html, body {
     padding: 24px 64px;
     border-radius: 14px;
     text-align: center;
-    background: linear-gradient(135deg, rgba(17, 20, 28, 0.92), rgba(26, 30, 41, 0.92));
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    background: linear-gradient(135deg,
+        var(--color-overlay-streak-bg-from),
+        var(--color-overlay-streak-bg-to));
+    border: 1px solid var(--color-border-default);
+    box-shadow: var(--shadow-overlay-streak);
 }
 .streak-text {
     font-size: 3.6rem;
@@ -370,15 +422,26 @@ html, body {
     margin-top: 10px;
     font-size: 1.1rem;
     letter-spacing: 2px;
-    color: #c5cde0;
+    color: var(--color-overlay-text-medium);
     text-transform: uppercase;
 }
 
 /* Tier flavor */
-.streak-widget.tier-heating-up  .streak-text { color: #ffcc33; text-shadow: 0 0 24px rgba(255, 204, 51, 0.7); }
-.streak-widget.tier-on-fire     .streak-text { color: #ff8800; text-shadow: 0 0 28px rgba(255, 136, 0, 0.85); }
-.streak-widget.tier-rampage     .streak-text {
-    background: linear-gradient(90deg, #ff3366, #ffcc33, #00ff88, #00ccff, #ff3366);
+.streak-widget.tier-heating-up .streak-text {
+    color: var(--color-overlay-accent-rival);
+    text-shadow: 0 0 24px rgba(255, 204, 51, 0.7);
+}
+.streak-widget.tier-on-fire .streak-text {
+    color: var(--color-overlay-streak-fire);
+    text-shadow: 0 0 28px rgba(255, 136, 0, 0.85);
+}
+.streak-widget.tier-rampage .streak-text {
+    background: linear-gradient(90deg,
+        var(--color-overlay-accent-red),
+        var(--color-overlay-accent-rival),
+        var(--color-overlay-victory),
+        var(--color-overlay-accent-cyan),
+        var(--color-overlay-accent-red));
     background-size: 300% 100%;
     -webkit-background-clip: text;
     background-clip: text;
@@ -386,8 +449,13 @@ html, body {
     animation: rainbow-shift 2.5s linear infinite;
     text-shadow: 0 0 30px rgba(255, 204, 51, 0.6);
 }
-.streak-widget.tier-gg-go-again .streak-text { color: #a0aabf; }
-.streak-widget.tier-tilt-warn   .streak-text { color: #66a8ff; text-shadow: 0 0 20px rgba(102, 168, 255, 0.5); }
+.streak-widget.tier-gg-go-again .streak-text {
+    color: var(--color-overlay-text-matchup);
+}
+.streak-widget.tier-tilt-warn .streak-text {
+    color: var(--color-overlay-streak-tilt);
+    text-shadow: 0 0 20px rgba(102, 168, 255, 0.5);
+}
 
 @keyframes rainbow-shift {
     0%   { background-position: 0% 50%; }
@@ -401,16 +469,20 @@ html, body {
     left: 40px;
     display: flex;
     min-width: 240px;
-    background: linear-gradient(135deg, rgba(17, 20, 28, 0.88) 0%, rgba(26, 30, 41, 0.88) 100%);
-    border: 1px solid #2a3143;
+    background: linear-gradient(135deg,
+        var(--color-overlay-bg-from-glass) 0%,
+        var(--color-overlay-bg-to-glass) 100%);
+    border: 1px solid var(--color-overlay-border);
     border-radius: 10px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.7);
-    color: #ffffff;
+    box-shadow: var(--shadow-overlay-tile);
+    color: var(--color-overlay-text);
     backdrop-filter: blur(2px);
     z-index: 5;
     opacity: 0;
     transform: translateX(-20px);
-    transition: opacity 0.5s ease, transform 0.5s ease;
+    transition:
+        opacity var(--duration-entrance) var(--ease-out),
+        transform var(--duration-entrance) var(--ease-out);
 }
 .session-widget.show { opacity: 1; transform: translateX(0); }
 
@@ -431,7 +503,7 @@ html, body {
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 2px;
-    color: #7b869e;
+    color: var(--color-overlay-text-dim);
     text-transform: uppercase;
 }
 .session-streak {
@@ -442,8 +514,14 @@ html, body {
     border-radius: 4px;
     text-transform: uppercase;
 }
-.session-streak.win-streak  { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
-.session-streak.loss-streak { background: rgba(255, 51, 102, 0.15); color: #ff3366; }
+.session-streak.win-streak {
+    background: var(--color-overlay-win-streak-bg);
+    color: var(--color-overlay-victory);
+}
+.session-streak.loss-streak {
+    background: var(--color-overlay-loss-streak-bg);
+    color: var(--color-overlay-defeat);
+}
 
 .session-main { margin-top: 2px; align-items: center; }
 .session-league .sc2-icon { width: 28px; height: 28px; margin-right: 6px; }
@@ -451,19 +529,19 @@ html, body {
     font-size: 1.6rem;
     font-weight: 800;
     letter-spacing: 1px;
-    color: #ffffff;
+    color: var(--color-overlay-text);
 }
 .session-mmr {
     font-size: 1rem;
     font-weight: 700;
     letter-spacing: 0.5px;
 }
-.session-mmr.up   { color: #00ff88; }
-.session-mmr.down { color: #ff3366; }
-.session-mmr.flat { color: #7b869e; }
+.session-mmr.up   { color: var(--color-overlay-victory); }
+.session-mmr.down { color: var(--color-overlay-defeat); }
+.session-mmr.flat { color: var(--color-overlay-text-dim); }
 
 .session-time {
     font-size: 0.85rem;
-    color: #7b869e;
+    color: var(--color-overlay-text-dim);
     letter-spacing: 1px;
 }

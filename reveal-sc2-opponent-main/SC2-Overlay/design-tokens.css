@@ -1,0 +1,258 @@
+/* ============================================================================
+   SC2 Tools — Unified Design Tokens (Stage 1)
+   ----------------------------------------------------------------------------
+   Single source of truth for color, typography, spacing, radii, shadows, and
+   motion across every SC2 Tools surface:
+
+       * React SPA analyzer  (stream-overlay-backend/public/analyzer/index.html)
+       * OBS / Streamlabs browser-source overlay widgets  (SC2-Overlay/*.html)
+       * Tkinter desktop GUI  (gui/analyzer_app.py via gui/design_tokens.py)
+       * Future web dashboard and React Native mobile app
+
+   IMPORTANT
+       * Tokens here are DESIGN PRIMITIVES. Do not author component CSS that
+         hard-codes a hex value, font family, or spacing pixel — always use
+         the var() reference. CI greps for raw '#' hex codes in .css under
+         color/background contexts.
+       * Twin file: SC2-Overlay/design-tokens.json (Style Dictionary v4
+         format) — keep in sync if you edit values here.
+       * Twin module: gui/design_tokens.py — frozen dataclasses for Python.
+       * Authority docs: docs/design-system.md.
+   ============================================================================ */
+
+:root {
+    /* ========================================================================
+       1. COLOR — SURFACES
+       Dark space theme. Three elevation levels for the analyzer SPA and
+       desktop GUI; the overlay widgets float on a transparent OBS source so
+       they pull their own glassy gradient via --color-overlay-* below.
+       ======================================================================== */
+    --color-bg-primary:        #0A0E1A;  /* page / app background */
+    --color-bg-surface:        #111827;  /* card / panel background */
+    --color-bg-elevated:       #1F2937;  /* hovered card, modal, tooltip */
+
+    /* ========================================================================
+       2. COLOR — RACE ACCENTS
+       Use ONLY for race-identifying chrome (badges, race chips, race-tinted
+       win-rate bars). Do not use for semantic state — see semantic block.
+       Random uses neutral slate so it doesn't compete with a player's race.
+       ======================================================================== */
+    --color-race-terran:       #3B82F6;  /* T — blue   */
+    --color-race-zerg:         #A855F7;  /* Z — purple */
+    --color-race-protoss:      #F59E0B;  /* P — amber  */
+    --color-race-random:       #94A3B8;  /* R — slate  */
+
+    /* ========================================================================
+       3. COLOR — SEMANTIC STATE
+       Win / loss / warning / informational. These OVERRIDE race accent when
+       both apply (a Zerg loss colors red, not purple).
+       ======================================================================== */
+    --color-success:           #10B981;  /* victory, healthy KPI    */
+    --color-danger:            #EF4444;  /* defeat, error, blocker  */
+    --color-warning:           #F59E0B;  /* caution, stale, n=1     */
+    --color-info:              #3B82F6;  /* tip, hint, neutral CTA  */
+
+    /* ========================================================================
+       4. COLOR — TEXT
+       Pair with bg-primary, bg-surface, or bg-elevated. Contrast ratios are
+       documented in docs/design-system.md. text-muted FAILS WCAG AA body
+       contrast on bg-elevated; never use it for body copy on that surface.
+       ======================================================================== */
+    --color-text-primary:      #F1F5F9;  /* body copy, headings           */
+    --color-text-secondary:    #94A3B8;  /* labels, helper text           */
+    --color-text-muted:        #64748B;  /* timestamps, large-text accents */
+    --color-text-on-accent:    #0A0E1A;  /* foreground on a race-accent fill */
+
+    /* ========================================================================
+       5. COLOR — BORDERS & DIVIDERS
+       Subtle ring-style borders for cards; stronger lines for separators.
+       ======================================================================== */
+    --color-border-subtle:     rgba(255, 255, 255, 0.05);
+    --color-border-default:    rgba(255, 255, 255, 0.10);
+    --color-border-strong:     rgba(255, 255, 255, 0.20);
+    --color-divider:           rgba(255, 255, 255, 0.08);
+
+    /* ========================================================================
+       6. COLOR — OVERLAY (LEGACY / DECORATIVE)
+       The OBS overlay widgets shipped with a deliberately more saturated,
+       neon palette so they read clearly on a livestream over busy SC2
+       footage. These tokens preserve that exact look while letting us drop
+       hard-coded hex out of styles.css. New surfaces should prefer the
+       semantic tokens above.
+       ======================================================================== */
+    --color-overlay-bg-from:        #11141C;
+    --color-overlay-bg-to:          #1A1E29;
+    --color-overlay-border:         #2A3143;
+    --color-overlay-text:           #FFFFFF;
+    --color-overlay-text-dim:       #7B869E;
+    --color-overlay-text-medium:    #C5CDE0;
+    --color-overlay-text-matchup:   #A0AABF;
+
+    --color-overlay-accent-gold:    #E5C100;
+    --color-overlay-accent-cyan:    #00CCFF;
+    --color-overlay-accent-purple:  #A06BFF;
+    --color-overlay-accent-red:     #FF3366;
+    --color-overlay-accent-rival:   #FFCC33;
+
+    --color-overlay-victory:        #00FF88;
+    --color-overlay-defeat:         #FF3366;
+    --color-overlay-cheese:         #FF3366;
+    --color-overlay-cheese-soft:    #FFB3C5;
+
+    --color-overlay-rival-bg-from:  #2B1F0A;
+    --color-overlay-rival-bg-to:    #3A2810;
+    --color-overlay-rival-border:   #8A5A16;
+    --color-overlay-rival-header:   #FFCC33;
+    --color-overlay-rival-footer:   #FFE7A0;
+
+    --color-overlay-cheese-bg-from: #1A0F15;
+    --color-overlay-cheese-bg-to:   #28121A;
+    --color-overlay-cheese-border:  #55192B;
+
+    --color-overlay-scout-bg-from:  #0D1320;
+    --color-overlay-scout-bg-to:    #131C2E;
+    --color-overlay-scout-rival:    #FFCC33;
+    --color-overlay-scout-cheese:   #FF8899;
+
+    --color-overlay-streak-tilt:    #66A8FF;
+    --color-overlay-streak-fire:    #FF8800;
+
+    --color-overlay-build-step-bg:  rgba(160, 107, 255, 0.12);
+    --color-overlay-build-step-fg:  #E7DEFC;
+    --color-overlay-tile-bg:        rgba(255, 255, 255, 0.04);
+
+    --color-overlay-win-streak-bg:  rgba(0, 255, 136, 0.15);
+    --color-overlay-loss-streak-bg: rgba(255, 51, 102, 0.15);
+
+    /* Translucent variants of bg-from / bg-to for the always-visible
+       session and topbuilds widgets that need a glass / blur look. */
+    --color-overlay-bg-from-glass:    rgba(17, 20, 28, 0.88);
+    --color-overlay-bg-to-glass:      rgba(26, 30, 41, 0.88);
+    --color-overlay-streak-bg-from:   rgba(17, 20, 28, 0.92);
+    --color-overlay-streak-bg-to:     rgba(26, 30, 41, 0.92);
+
+    /* ========================================================================
+       7. COLOR — ALPHA UTILITIES
+       Pre-mixed translucent fills for shadow inserts, gradient overlays.
+       ======================================================================== */
+    --color-shadow-overlay:    rgba(0, 0, 0, 0.75);
+    --color-shadow-medium:     rgba(0, 0, 0, 0.50);
+    --color-shadow-light:      rgba(0, 0, 0, 0.20);
+    --color-inner-highlight:   rgba(255, 255, 255, 0.02);
+
+    /* ========================================================================
+       8. TYPOGRAPHY — FONT FAMILIES
+       Inter for UI body and headings. JetBrains Mono ONLY for stats and
+       timings (timestamps, MMR deltas, win/loss counts, build-order times).
+       ======================================================================== */
+    --font-family-ui:    "Inter", system-ui, -apple-system, "Segoe UI",
+                         Roboto, Helvetica, Arial, sans-serif;
+    --font-family-mono:  "JetBrains Mono", "SF Mono", "Cascadia Code",
+                         Consolas, "Liberation Mono", monospace;
+
+    /* ========================================================================
+       9. TYPOGRAPHY — SCALE
+       Modular scale targeted at the analyzer SPA's information density.
+       Overlay widgets in single-widget mode override these with vw units —
+       see widget-mode.css.
+       ======================================================================== */
+    --font-size-xs:     11px;
+    --font-size-sm:     13px;
+    --font-size-base:   15px;
+    --font-size-lg:     18px;
+    --font-size-xl:     22px;
+    --font-size-2xl:    28px;
+    --font-size-3xl:    36px;
+
+    --font-weight-regular:  400;
+    --font-weight-medium:   500;
+    --font-weight-semibold: 600;
+    --font-weight-bold:     700;
+    --font-weight-extra:    800;
+    --font-weight-black:    900;
+
+    --line-height-tight:    1.2;
+    --line-height-normal:   1.5;
+    --line-height-relaxed:  1.75;
+
+    --letter-spacing-tight:   -0.01em;
+    --letter-spacing-normal:   0;
+    --letter-spacing-wide:     0.05em;
+    --letter-spacing-wider:    0.1em;
+
+    /* ========================================================================
+       10. SPACING
+       4px base unit. Use these for every margin / padding / gap value. The
+       scale is sparse on purpose — pick the closest, do not invent in-betweens.
+       ======================================================================== */
+    --space-0:    0;
+    --space-1:    4px;
+    --space-2:    8px;
+    --space-3:    12px;
+    --space-4:    16px;
+    --space-6:    24px;
+    --space-8:    32px;
+    --space-12:   48px;
+    --space-16:   64px;
+    --space-24:   96px;
+
+    /* ========================================================================
+       11. RADII
+       Match Tailwind defaults so the SPA's utility classes line up cleanly.
+       ======================================================================== */
+    --radius-sm:    4px;
+    --radius-md:    8px;
+    --radius-lg:    12px;
+    --radius-xl:    16px;
+    --radius-full:  9999px;
+
+    /* ========================================================================
+       12. SHADOWS
+       Tailwind-style elevation ladder. xl is reserved for full-screen modals
+       and the streak splash; everything else uses sm/md/lg.
+       ======================================================================== */
+    --shadow-sm:  0 1px 2px 0 rgba(0, 0, 0, 0.50);
+    --shadow-md:  0 4px 6px -1px rgba(0, 0, 0, 0.40),
+                  0 2px 4px -2px rgba(0, 0, 0, 0.40);
+    --shadow-lg:  0 10px 15px -3px rgba(0, 0, 0, 0.50),
+                  0 4px 6px -4px rgba(0, 0, 0, 0.50);
+    --shadow-xl:  0 20px 25px -5px rgba(0, 0, 0, 0.50),
+                  0 8px 10px -6px rgba(0, 0, 0, 0.50);
+
+    /* Overlay-specific composite shadows used by the OBS widgets — kept
+       byte-identical to the legacy values so the overlay does not visually
+       drift when styles.css adopts var() refs. */
+    --shadow-overlay-card:    0 12px 32px var(--color-shadow-overlay),
+                              0 0 0 1px var(--color-inner-highlight) inset;
+    --shadow-overlay-tile:    0 10px 28px rgba(0, 0, 0, 0.7);
+    --shadow-overlay-streak:  0 20px 60px rgba(0, 0, 0, 0.8);
+
+    /* ========================================================================
+       13. MOTION
+       Single source for every animated transition. Stage transitions use
+       state; entrance/exit transitions use entrance; celebration moments
+       (streak splash, victory pop) use the spring curve.
+       ======================================================================== */
+    --duration-state:      200ms;
+    --duration-entrance:   400ms;
+    --duration-celebrate:  600ms;
+
+    --ease-out:       cubic-bezier(0, 0, 0.2, 1);
+    --ease-in-out:    cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring:    cubic-bezier(0.2, 1.4, 0.4, 1);
+    --ease-overshoot: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* ============================================================================
+   ACCESSIBILITY — Reduced motion preference
+   Respects the OS-level "Reduce Motion" toggle. Components reading these
+   vars get effectively-instant transitions when the user opts out, without
+   needing per-component @media queries.
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --duration-state:     0ms;
+        --duration-entrance:  0ms;
+        --duration-celebrate: 0ms;
+    }
+}

@@ -109,6 +109,19 @@ from analytics.timing_catalog import (  # noqa: E402
     normalize_race,
 )
 
+# Unified design-system tokens (Stage 1). Single source of truth for color,
+# typography, spacing across the React SPA, OBS overlay, and this Tkinter
+# desktop app. New panel colors should pull from COLORS / FONT_FAMILIES /
+# FONT_SIZES / SPACING rather than hard-coding hex literals. The legacy
+# FONT_TITLE / COLOR_* constants below are pre-Stage-1 and will be migrated
+# in a follow-up; do not extend them.
+from gui.design_tokens import (  # noqa: E402
+    COLORS,
+    FONT_FAMILIES,
+    FONT_SIZES,
+    SPACING,
+)
+
 # =====================================================================
 # THEME / FONTS
 # =====================================================================
@@ -973,18 +986,37 @@ class App(ctk.CTk):
         self.geometry("1400x900")
         self.minsize(1000, 600)
 
+        # Stage 1 design-system integration: paint the App window and the
+        # sidebar panel with tokens so the desktop GUI matches the SPA's
+        # surface ladder (bg-primary -> bg-surface -> bg-elevated). See
+        # gui/design_tokens.py and docs/design-system.md.
+        self.configure(fg_color=COLORS.BG_PRIMARY)
+
         self.queued_files: List[str] = []
         self._queue_lock = threading.Lock()
         self._processing = False
         self._config_cache: Optional[Dict[str, Any]] = None
 
-        # ---- Sidebar ---------------------------------------------------
-        self.sidebar = ctk.CTkFrame(self, width=260, corner_radius=0)
+        # ---- Sidebar (one panel, fully token-driven for proof of integration) -
+        # fg_color  -> COLORS.BG_SURFACE       (panel surface, one ladder up)
+        # title     -> COLORS.TEXT_PRIMARY     (highest-contrast text token)
+        # accent    -> COLORS.RACE_ZERG        (standardized purple for the
+        #                                       Debug button — replaces the
+        #                                       legacy #4A148C literal)
+        self.sidebar = ctk.CTkFrame(
+            self, width=260, corner_radius=0,
+            fg_color=COLORS.BG_SURFACE,
+        )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        ctk.CTkLabel(self.sidebar, text="META ANALYZER", font=FONT_TITLE).pack(pady=30)
+        ctk.CTkLabel(
+            self.sidebar,
+            text="META ANALYZER",
+            font=FONT_TITLE,
+            text_color=COLORS.TEXT_PRIMARY,
+        ).pack(pady=SPACING.S8)
         ctk.CTkLabel(self.sidebar, text="1. Add Replays:", text_color="gray").pack(pady=(10, 5))
         ctk.CTkButton(self.sidebar, text="Add Files", command=self.select_files).pack(
             pady=3, padx=20, fill="x"
@@ -1070,7 +1102,7 @@ class App(ctk.CTk):
             self.sidebar,
             text="Debug Single Replay",
             command=self.debug_single_replay,
-            fg_color="#4A148C",
+            fg_color=COLORS.RACE_ZERG,
             hover_color="#6A1B9A",
         ).pack(pady=3, padx=20, fill="x")
         ctk.CTkButton(
