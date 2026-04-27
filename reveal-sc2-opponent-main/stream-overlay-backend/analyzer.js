@@ -1821,6 +1821,195 @@ router.get('/definitions', (_req, res) => {
 const _SPATIAL_CACHE = new Map();   // key: cli-args string -> { exp, value }
 const _SPATIAL_TTL_MS = 60_000;     // 1 minute is plenty - DB watcher busts on reload
 
+// --------------------------------------------------------------
+// MAP IMAGE FETCHER
+// --------------------------------------------------------------
+// Cache real SC2 map images on disk under data/map-images/. On a cache
+// miss we hit Liquipedia's MediaWiki parse API to find the page, then
+// pluck the first thumbnail src out of the rendered HTML and download it.
+// Frontend draws this as the canvas background so the playback viewer
+// matches the actual map terrain instead of an empty dark rectangle.
+const _https = require('https');
+const _http  = require('http');
+const MAP_IMAGE_CACHE_DIR = path.join(DATA_DIR, 'map-images');
+try { fs.mkdirSync(MAP_IMAGE_CACHE_DIR, { recursive: true }); } catch (_) {}
+
+function _slugMapName(name) {
+    return String(name || '')
+        .trim()
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase()
+        .slice(0, 96);
+}
+
+function _httpsGetBuffer(url, headers, redirectsLeft) {
+    // Liquipedia's API enforces gzip on api.* paths (HTTP 406 otherwise),
+    // so we always advertise gzip/deflate/br and decompress on the way in.
+    if (redirectsLeft === undefined) redirectsLeft = 5;
+    const _zlib = require('zlib');
+    return new Promise((resolve, reject) => {
+        let parsed;
+        try { parsed = new URL(url); } catch (e) { return reject(e); }
+        const lib = parsed.protocol === 'http:' ? _http : _https;
+        const req = lib.get({
+            hostname: parsed.hostname,
+            port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
+            path: parsed.pathname + parsed.search,
+            headers: Object.assign({
+                'User-Agent': 'sc2tools-analyzer/1.0 (+https://github.com/ReSpOnSeSC2/sc2tools)',
+                'Accept': '*/*',
+                'Accept-Encoding': 'gzip, deflate, br',
+            }, headers || {}),
+            timeout: 8000,
+        }, (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirectsLeft > 0) {
+                const next = new URL(res.headers.location, url).toString();
+                res.resume();
+                return resolve(_httpsGetBuffer(next, headers, redirectsLeft - 1));
+            }
+            if (res.statusCode !== 200) {
+                res.resume();
+                return reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+            }
+            const enc = String(res.headers['content-encoding'] || '').toLowerCase();
+            let stream = res;
+            if (enc === 'gzip') stream = res.pipe(_zlib.createGunzip());
+            else if (enc === 'deflate') stream = res.pipe(_zlib.createInflate());
+            else if (enc === 'br') stream = res.pipe(_zlib.createBrotliDecompress());
+            const chunks = [];
+            stream.on('data', c => chunks.push(c));
+            stream.on('end', () => resolve({
+                body: Buffer.concat(chunks),
+                contentType: res.headers['content-type'] || 'application/octet-stream',
+            }));
+            stream.on('error', reject);
+        });
+        req.on('timeout', () => { req.destroy(new Error('timeout')); });
+        req.on('error', reject);
+    });
+}
+
+const _MAP_IMAGE_INFLIGHT = new Map(); // slug -> Promise
+
+async function _fetchMapImageFromLiquipedia(name) {
+    // Liquipedia hosts SC2 map images on a shared MediaWiki commons CDN.
+    // The directory layout is the standard MediaWiki MD5-of-filename
+    // bucketing: for "Taito_Citadel.jpg",
+    //   md5 = "97e9..." -> /commons/images/9/97/Taito_Citadel.jpg
+    // We can compute the URL locally and skip the API entirely on the
+    // fast path. If that 404s for every variant, we fall back to the
+    // imageinfo API and finally to scraping the rendered map page.
+    const baseName = name.replace(/\s+LE$/i, '').trim();
+    const titleVariants = Array.from(new Set([
+        baseName.replace(/ /g, '_'),
+        baseName,
+        name.replace(/ /g, '_'),
+        name,
+    ].filter(Boolean)));
+    const exts = ['jpg', 'png', 'jpeg', 'webp'];
+
+    const tryDownload = async (url) => {
+        try {
+            const dl = await _httpsGetBuffer(url);
+            // Liquipedia returns small "no file" placeholders sometimes;
+            // require at least 1 KB for a real map image.
+            if (dl && dl.body && dl.body.length > 1024) {
+                return { body: dl.body, contentType: dl.contentType, sourceUrl: url };
+            }
+        } catch (_) { /* fall through */ }
+        return null;
+    };
+
+    // Fast path: direct CDN URL via MD5 bucketing.
+    for (const title of titleVariants) {
+        for (const ext of exts) {
+            const filename = `${title}.${ext}`;
+            const md5 = require('crypto').createHash('md5').update(filename).digest('hex');
+            const url = `https://liquipedia.net/commons/images/${md5[0]}/${md5.slice(0, 2)}/${filename}`;
+            const got = await tryDownload(url);
+            if (got) return got;
+        }
+    }
+
+    // Slow path #1: imageinfo API resolves File:Name.ext -> direct URL.
+    for (const title of titleVariants) {
+        for (const ext of exts) {
+            const fileTitle = `File:${title}.${ext}`;
+            try {
+                const apiUrl = `https://liquipedia.net/starcraft2/api.php?action=query&titles=${encodeURIComponent(fileTitle)}&prop=imageinfo&iiprop=url&format=json&redirects=1`;
+                const { body } = await _httpsGetBuffer(apiUrl, { 'Accept': 'application/json' });
+                const j = JSON.parse(body.toString('utf8'));
+                const pages = (j && j.query && j.query.pages) || {};
+                let imgUrl = null;
+                for (const k of Object.keys(pages)) {
+                    if (Number(k) < 0) continue;
+                    const ii = pages[k] && pages[k].imageinfo && pages[k].imageinfo[0];
+                    if (ii && ii.url) { imgUrl = ii.url; break; }
+                }
+                if (!imgUrl) continue;
+                const got = await tryDownload(imgUrl);
+                if (got) { got.sourcePage = fileTitle; return got; }
+            } catch (_) {}
+        }
+    }
+
+    // Slow path #2: scrape the map's regular page for the first thumbnail.
+    for (const title of titleVariants) {
+        try {
+            const apiUrl = `https://liquipedia.net/starcraft2/api.php?action=parse&page=${encodeURIComponent(title)}&format=json&prop=text&redirects=1`;
+            const { body } = await _httpsGetBuffer(apiUrl, { 'Accept': 'application/json' });
+            const j = JSON.parse(body.toString('utf8'));
+            const html = (j && j.parse && j.parse.text && j.parse.text['*']) || '';
+            if (!html) continue;
+            const mm = html.match(/<img[^>]+src="([^"]+\.(?:jpg|jpeg|png|webp))"/i);
+            if (!mm) continue;
+            let imgUrl = mm[1];
+            if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl;
+            else if (imgUrl.startsWith('/')) imgUrl = 'https://liquipedia.net' + imgUrl;
+            const got = await tryDownload(imgUrl);
+            if (got) { got.sourcePage = title; return got; }
+        } catch (_) {}
+    }
+    return null;
+}
+
+async function getMapImage(name) {
+    if (!name || typeof name !== 'string') return null;
+    const slug = _slugMapName(name);
+    if (!slug) return null;
+
+    // 1. On-disk cache (any of the common image extensions)
+    for (const ext of ['jpg', 'png', 'webp', 'jpeg']) {
+        const candidate = path.join(MAP_IMAGE_CACHE_DIR, `${slug}.${ext}`);
+        if (fs.existsSync(candidate)) {
+            return {
+                path: candidate,
+                contentType: ext === 'png' ? 'image/png'
+                            : ext === 'webp' ? 'image/webp'
+                            : 'image/jpeg',
+            };
+        }
+    }
+
+    // 2. Coalesce concurrent requests for the same slug.
+    if (_MAP_IMAGE_INFLIGHT.has(slug)) return _MAP_IMAGE_INFLIGHT.get(slug);
+    const promise = (async () => {
+        const fetched = await _fetchMapImageFromLiquipedia(name);
+        if (!fetched) return null;
+        const ext = (fetched.contentType.includes('png')) ? 'png'
+                   : (fetched.contentType.includes('webp')) ? 'webp'
+                   : 'jpg';
+        const out = path.join(MAP_IMAGE_CACHE_DIR, `${slug}.${ext}`);
+        try { fs.writeFileSync(out, fetched.body); } catch (_) { return null; }
+        return { path: out, contentType: fetched.contentType };
+    })();
+    _MAP_IMAGE_INFLIGHT.set(slug, promise);
+    promise.finally(() => _MAP_IMAGE_INFLIGHT.delete(slug));
+    return promise;
+}
+
+
 function runSpatialCli(subcmd, cliArgs = []) {
     const cacheKey = subcmd + '|' + cliArgs.join('|');
     const hit = _SPATIAL_CACHE.get(cacheKey);
@@ -2439,15 +2628,52 @@ router.get('/spatial/opponent-proxies', async (req, res) => {
     }
 });
 
+router.get('/map-image', async (req, res) => {
+    // GET /api/analyzer/map-image?name=Taito%20Citadel%20LE
+    // Streams a real SC2 map image (cached on disk under data/map-images/),
+    // fetched on first miss from Liquipedia. 404 if no image is available
+    // for the requested name; the frontend should fall back to its dark
+    // background in that case.
+    const name = String(req.query.name || '').trim();
+    if (!name) return res.status(400).json({ ok: false, error: 'missing ?name=' });
+    try {
+        const found = await getMapImage(name);
+        if (!found) return res.status(404).json({ ok: false, error: 'no image found' });
+        // Cache aggressively in the browser; the underlying file is content-
+        // addressed by slug so a name change implies a new URL.
+        res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        res.setHeader('Content-Type', found.contentType);
+        return fs.createReadStream(found.path).pipe(res);
+    } catch (err) {
+        return res.status(500).json({ ok: false, error: String(err && err.message || err) });
+    }
+});
+
 router.get('/playback', async (req, res) => {
+    // playback_cli.py emits a single NDJSON line of the shape
+    //   { ok: true, result: { map_name, game_length, bounds, me_name, opp_name,
+    //                         result, my_events, opp_events, my_stats, opp_stats,
+    //                         analysis } }
+    // ...or { ok: false, error: "..." } on failure.
+    //
+    // runSpatialCli already JSON.parses that single line and returns the
+    // resulting object directly. Earlier code here destructured `records`
+    // (which doesn't exist on that shape) and re-wrapped, producing
+    // `{ ok: true, result: undefined }` -- the frontend then crashed on
+    // `data.map_name`. Pass the parsed object through unchanged so the
+    // shape the frontend is built for is what arrives on the wire.
     try {
         if (!req.query.replay) {
             return res.status(400).json({ ok: false, error: 'missing ?replay= file path' });
         }
-        const { records } = await runSpatialCli('playback', ['--replay', req.query.replay]);
-        res.json({ ok: true, result: records });
+        const j = await runSpatialCli('playback', ['--replay', req.query.replay]);
+        // If the CLI itself reported failure, surface its error verbatim.
+        if (!j || j.ok === false) {
+            return res.status(500).json({ ok: false, error: (j && j.error) || 'playback CLI failed' });
+        }
+        res.json(j);
     } catch (err) {
-        res.status(500).json({ ok: false, error: String(err) });
+        res.status(500).json({ ok: false, error: String(err && err.message || err) });
     }
 });
 

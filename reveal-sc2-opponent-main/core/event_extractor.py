@@ -547,3 +547,190 @@ def build_log_lines(
         s = int(t % 60)
         lines.append(f"[{m}:{s:02d}] {e.get('name', '?')}")
     return lines
+
+
+# ---------------------------------------------------------------------------
+# Unit movement tracks (for the playback viewer)
+# ---------------------------------------------------------------------------
+# Combine three sources to get plausible per-unit movement:
+#   1. UnitBornEvent / UnitInitEvent  -> initial position waypoint
+#   2. UnitPositionsEvent             -> true-position waypoints (sparse,
+#                                        only damaged units, every 15s)
+#   3. TargetPointCommandEvent + the issuing player's current selection
+#      (tracked from SelectionEvent)  -> destination-point waypoints
+#   4. UnitDiedEvent                  -> died_t (unit disappears)
+# The browser linearly interpolates between consecutive waypoints to render
+# each unit at the current scrub time.
+
+try:
+    from sc2reader.events.game import (
+        TargetPointCommandEvent as _TargetPointCommandEvent,
+        SelectionEvent as _SelectionEvent,
+    )
+except Exception:  # pragma: no cover
+    _TargetPointCommandEvent = None
+    _SelectionEvent = None
+
+try:
+    from sc2reader.events.tracker import UnitPositionsEvent as _UnitPositionsEvent
+except Exception:  # pragma: no cover
+    _UnitPositionsEvent = None
+
+
+def _resolve_command_pid_simple(event):
+    pl = getattr(event, "player", None)
+    pid = getattr(pl, "pid", None) if pl is not None else None
+    if pid:
+        return pid
+    for attr in ("control_player_id", "upkeep_player_id"):
+        v = getattr(event, attr, None)
+        if v:
+            return v
+    return None
+
+
+def extract_unit_tracks(replay, my_pid):
+    """Walk the replay once and produce per-unit movement tracks.
+
+    Returns ``{"my_units": [...], "opp_units": [...]}``. Each entry::
+
+        {"id": int, "name": str, "born": float, "died": float|None,
+         "waypoints": [t0, x0, y0, t1, x1, y1, ...]}   # flat for compactness
+
+    Buildings and SKIP_UNITS are filtered out.
+    """
+    units = {}
+    selections = {}
+
+    tracker = getattr(replay, "tracker_events", None) or []
+    try:
+        for ev in tracker:
+            try:
+                if isinstance(ev, (UnitBornEvent, UnitInitEvent)):
+                    pid = _get_owner_pid(ev)
+                    raw = _get_unit_type_name(ev)
+                    if pid is None or raw is None:
+                        continue
+                    name = _clean_building_name(raw)
+                    if name in KNOWN_BUILDINGS:
+                        continue
+                    if name in SKIP_UNITS:
+                        continue
+                    uid = getattr(ev, "unit_id", None)
+                    if uid is None:
+                        u = getattr(ev, "unit", None)
+                        uid = getattr(u, "id", None) if u is not None else None
+                    if uid is None:
+                        continue
+                    t = float(getattr(ev, "second", 0.0))
+                    x = float(getattr(ev, "x", 0) or 0)
+                    y = float(getattr(ev, "y", 0) or 0)
+                    rec = units.get(uid)
+                    if rec is None:
+                        units[uid] = {
+                            "name": name, "owner_pid": pid, "born": t,
+                            "died": None,
+                            "waypoints": ([(t, x, y)] if (x or y) else []),
+                        }
+                    else:
+                        rec["name"] = name
+                        rec["owner_pid"] = pid
+                        rec["born"] = min(rec["born"], t)
+                        if x or y:
+                            rec["waypoints"].append((t, x, y))
+
+                elif _UnitPositionsEvent is not None and isinstance(ev, _UnitPositionsEvent):
+                    t = float(getattr(ev, "second", 0.0))
+                    for (uid, (x, y)) in (getattr(ev, "positions", []) or []):
+                        rec = units.get(uid)
+                        if rec is None:
+                            continue
+                        # sc2reader stores grid units / 4. Normalize to cells.
+                        rec["waypoints"].append((t, float(x) / 4.0, float(y) / 4.0))
+
+                elif UnitDiedEvent is not None and isinstance(ev, UnitDiedEvent):
+                    uid = getattr(ev, "unit_id", None)
+                    if uid is None:
+                        u = getattr(ev, "unit", None)
+                        uid = getattr(u, "id", None) if u is not None else None
+                    rec = units.get(uid)
+                    if rec is not None:
+                        rec["died"] = float(getattr(ev, "second", 0.0))
+
+                elif isinstance(ev, UnitTypeChangeEvent):
+                    uid = getattr(ev, "unit_id", None)
+                    if uid is None:
+                        u = getattr(ev, "unit", None)
+                        uid = getattr(u, "id", None) if u is not None else None
+                    rec = units.get(uid)
+                    raw = _get_unit_type_name(ev)
+                    if rec is not None and raw:
+                        c = _clean_building_name(raw)
+                        if c not in KNOWN_BUILDINGS and c not in SKIP_UNITS:
+                            rec["name"] = c
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    # Game-event pass: track selection + emit destination waypoints.
+    if _TargetPointCommandEvent is not None and _SelectionEvent is not None:
+        for ev in (getattr(replay, "events", None) or []):
+            try:
+                if isinstance(ev, _SelectionEvent):
+                    if getattr(ev, "control_group", -1) != 10:
+                        continue
+                    pid = _resolve_command_pid_simple(ev)
+                    if not pid:
+                        continue
+                    new_ids = list(getattr(ev, "new_unit_ids", []) or [])
+                    if new_ids:
+                        selections[pid] = set(new_ids)
+                    continue
+                if isinstance(ev, _TargetPointCommandEvent):
+                    pid = _resolve_command_pid_simple(ev)
+                    if not pid:
+                        continue
+                    sel = selections.get(pid)
+                    if not sel:
+                        continue
+                    t = float(getattr(ev, "second", 0.0))
+                    x = float(getattr(ev, "x", 0) or 0)
+                    y = float(getattr(ev, "y", 0) or 0)
+                    if not (x or y):
+                        continue
+                    for uid in sel:
+                        rec = units.get(uid)
+                        if rec is None or rec.get("owner_pid") != pid:
+                            continue
+                        if rec.get("died") is not None and t > rec["died"]:
+                            continue
+                        rec["waypoints"].append((t, x, y))
+            except Exception:
+                continue
+
+    my_units, opp_units = [], []
+    for uid, rec in units.items():
+        wps = rec["waypoints"]
+        if not wps:
+            continue
+        wps.sort(key=lambda p: p[0])
+        compact = [wps[0]]
+        for (t, x, y) in wps[1:]:
+            (pt, px, py) = compact[-1]
+            if abs(x - px) < 0.5 and abs(y - py) < 0.5 and (t - pt) < 30:
+                continue
+            compact.append((t, x, y))
+        flat = []
+        for (t, x, y) in compact:
+            flat.extend([round(t, 2), round(x, 2), round(y, 2)])
+        out = {
+            "id": uid,
+            "name": rec["name"],
+            "born": round(rec["born"], 2),
+            "died": (round(rec["died"], 2) if rec["died"] is not None else None),
+            "waypoints": flat,
+        }
+        (my_units if rec["owner_pid"] == my_pid else opp_units).append(out)
+
+    return {"my_units": my_units, "opp_units": opp_units}

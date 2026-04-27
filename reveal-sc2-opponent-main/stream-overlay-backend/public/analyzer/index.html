@@ -5640,6 +5640,29 @@
         const [pan, setPan] = useState({ x: 0, y: 0 });
         const dragRef = React.useRef(null);
 
+        // Bumper to force a redraw when an async icon finishes loading.
+        // The cache lives on `window` but is shared across the app; one
+        // setter is enough to nudge the drawing useEffect.
+        const [iconTick, setIconTick] = useState(0);
+        useEffect(() => {
+          window._iconBumper = () => setIconTick(t => t + 1);
+          return () => { if (window._iconBumper === setIconTick) window._iconBumper = null; };
+        }, []);
+
+        // Real map image (lazy-loaded from /api/analyzer/map-image, then drawn
+        // as the canvas background under the projected SC2 coords).
+        const [mapImage, setMapImage] = useState(null);
+        useEffect(() => {
+          if (!data || !data.map_name) { setMapImage(null); return; }
+          let cancelled = false;
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => { if (!cancelled) setMapImage(img); };
+          img.onerror = () => { if (!cancelled) setMapImage(null); };
+          img.src = `${API}/map-image?name=${encodeURIComponent(data.map_name)}`;
+          return () => { cancelled = true; };
+        }, [data && data.map_name]);
+
         // Fetch playback data
         useEffect(() => {
           let cancelled = false;
@@ -5750,6 +5773,20 @@
           // Draw bounds box
           const pMin = project(b.x_min, b.y_min);
           const pMax = project(b.x_max, b.y_max);
+
+          // Draw real map image inside the playable bounds rectangle,
+          // BEFORE the grid/events/icons so they paint on top of it.
+          if (mapImage && mapImage.complete && mapImage.naturalWidth > 0) {
+             const dx = pMin.x;
+             const dy = pMax.y;
+             const dw = pMax.x - pMin.x;
+             const dh = pMin.y - pMax.y;
+             ctx.save();
+             ctx.globalAlpha = 0.85;
+             try { ctx.drawImage(mapImage, dx, dy, dw, dh); } catch (_) {}
+             ctx.restore();
+          }
+
           ctx.strokeStyle = "#2b3445";
           ctx.lineWidth = 2;
           ctx.strokeRect(pMin.x, pMax.y, pMax.x - pMin.x, pMin.y - pMax.y);
@@ -5772,22 +5809,74 @@
           }
           ctx.stroke();
 
-          // Create cache for icons
-          const getIcon = (name) => {
+          // Create cache for icons. Buildings live under /static/icons/buildings/
+          // and units under /static/icons/units/. Unit names from sc2reader carry
+          // a few variants (SiegeTankSieged, WarpPrismPhasing, BanelingBurrowed,
+          // Hellion vs HellionTank, etc.) so we map known variants back to their
+          // canonical base name before the lookup.
+          const _UNIT_NAME_ALIASES = {
+            siegetanksieged: 'siegetank',
+            siegetank: 'siegetank',
+            warpprismphasing: 'warpprism',
+            warpprism: 'warpprism',
+            banelingburrowed: 'baneling',
+            roachburrowed: 'roach',
+            zerglingburrowed: 'zergling',
+            hydraliskburrowed: 'hydralisk',
+            infestorburrowed: 'infestor',
+            lurkerburrowed: 'lurker',
+            lurkermp: 'lurker',
+            lurkermpburrowed: 'lurker',
+            ravagerburrowed: 'ravager',
+            droneburrowed: 'drone',
+            queenburrowed: 'queen',
+            swarmhostmp: 'swarmhost',
+            swarmhostmpburrowed: 'swarmhost',
+            hellionhellion: 'hellion',
+            helliontank: 'hellbat',
+            vikingfighter: 'viking',
+            vikingassault: 'viking',
+            thoraap: 'thor',
+            ling: 'zergling',
+            zealotwarp: 'zealot',
+            stalkerwarp: 'stalker',
+            sentrywarp: 'sentry',
+          };
+          const getIcon = (name, category) => {
             if (!window._iconCache) window._iconCache = {};
-            const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (window._iconCache[cleanName]) return window._iconCache[cleanName];
+            const raw = String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const cleanName = (category === 'unit' && _UNIT_NAME_ALIASES[raw]) || raw;
+            const cacheKey = (category || 'auto') + '|' + cleanName;
+            if (window._iconCache[cacheKey]) return window._iconCache[cacheKey];
 
-            // Attempt to resolve via TimingCatalog if available, otherwise guess path
-            let iconPath = `/static/icons/buildings/${cleanName}.png`;
-            if (window.TimingCatalog && window.TimingCatalog.TOKENS) {
-               const tok = window.TimingCatalog.TOKENS.find(t => t.id.toLowerCase() === cleanName || t.name.toLowerCase() === cleanName);
-               if (tok) iconPath = `/static/icons/buildings/${tok.icon}`;
+            let iconPath;
+            if (category === 'unit') {
+              iconPath = `/static/icons/units/${cleanName}.png`;
+            } else {
+              iconPath = `/static/icons/buildings/${cleanName}.png`;
+              if (window.TimingCatalog && window.TimingCatalog.TOKENS) {
+                 const tok = window.TimingCatalog.TOKENS.find(t => t.id.toLowerCase() === cleanName || t.name.toLowerCase() === cleanName);
+                 if (tok) iconPath = `/static/icons/buildings/${tok.icon}`;
+              }
             }
 
             const img = new Image();
+            // Trigger a single re-render when this icon loads so the unit/
+            // building isn't stuck on its fallback dot. We don't want every
+            // icon to re-render individually, so we coalesce with rAF.
+            img.onload = () => {
+              if (!window._iconRedrawScheduled) {
+                window._iconRedrawScheduled = true;
+                requestAnimationFrame(() => {
+                  window._iconRedrawScheduled = false;
+                  // Bump the iconBumper so the drawing useEffect re-fires.
+                  if (window._iconBumper) window._iconBumper();
+                });
+              }
+            };
+            img.onerror = () => { /* leave as broken; fallback dot will draw */ };
             img.src = iconPath;
-            window._iconCache[cleanName] = img;
+            window._iconCache[cacheKey] = img;
             return img;
           };
 
@@ -5798,7 +5887,7 @@
             const p = project(ev.x, ev.y);
 
             if (ev.type === "building") {
-              const img = getIcon(ev.name);
+              const img = getIcon(ev.name, 'building');
               const sz = 16 * zoom;
 
               if (img.complete && img.naturalWidth > 0) {
@@ -5831,7 +5920,61 @@
           if (data.my_events) data.my_events.forEach(e => drawEvent(e, "#66BB6A", true));
           if (data.opp_events) data.opp_events.forEach(e => drawEvent(e, "#EF5350", false));
 
-        }, [data, time, zoom, pan]);
+          // ---- Moving units --------------------------------------------------
+          // Each unit carries a flat [t,x,y, t,x,y, ...] waypoint array. Find
+          // the segment surrounding the current `time` and linearly interpolate
+          // to get the unit's position. Only render units that have been born
+          // and are not yet dead. Each unit gets its own SC2-Overlay PNG icon
+          // (so 12 marines render as 12 little marine icons, not 12 dots).
+          const drawUnit = (u, ringStr) => {
+            if (!u || !u.waypoints || u.waypoints.length < 3) return;
+            if (typeof u.born === 'number' && time < u.born) return;
+            if (u.died != null && time > u.died + 0.5) return;
+            const wp = u.waypoints; // length is multiple of 3
+            const N = wp.length / 3;
+            // Binary search for the largest waypoint index whose t <= time.
+            let lo = 0, hi = N - 1, idx = 0;
+            while (lo <= hi) {
+              const mid = (lo + hi) >> 1;
+              if (wp[mid * 3] <= time) { idx = mid; lo = mid + 1; }
+              else                       { hi = mid - 1; }
+            }
+            let ux, uy;
+            if (idx >= N - 1) {
+              ux = wp[idx * 3 + 1];
+              uy = wp[idx * 3 + 2];
+            } else {
+              const t0 = wp[idx * 3],     x0 = wp[idx * 3 + 1],     y0 = wp[idx * 3 + 2];
+              const t1 = wp[(idx + 1) * 3], x1 = wp[(idx + 1) * 3 + 1], y1 = wp[(idx + 1) * 3 + 2];
+              const span = Math.max(1e-3, t1 - t0);
+              const f = Math.min(1, Math.max(0, (time - t0) / span));
+              ux = x0 + (x1 - x0) * f;
+              uy = y0 + (y1 - y0) * f;
+            }
+            const p = project(ux, uy);
+            const sz = Math.max(8, 12 * zoom);
+            const img = getIcon(u.name, 'unit');
+            if (img.complete && img.naturalWidth > 0) {
+              // Colored team ring behind the icon for friend/foe legibility.
+              ctx.strokeStyle = ringStr;
+              ctx.lineWidth = Math.max(1, 1.5 * Math.sqrt(zoom));
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, sz / 2 + 1, 0, 2 * Math.PI);
+              ctx.stroke();
+              ctx.drawImage(img, p.x - sz / 2, p.y - sz / 2, sz, sz);
+            } else {
+              // Icon not yet loaded (or missing PNG for this unit) -- fall
+              // back to a colored dot so the unit is still visible.
+              ctx.fillStyle = ringStr;
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, Math.max(2, 3 * zoom), 0, 2 * Math.PI);
+              ctx.fill();
+            }
+          };
+          if (data.my_units)  data.my_units.forEach(u  => drawUnit(u, "#1B5E20"));
+          if (data.opp_units) data.opp_units.forEach(u => drawUnit(u, "#B71C1C"));
+
+        }, [data, time, zoom, pan, mapImage, iconTick]);
 
         // Input Handlers
         const handleWheel = (e) => {

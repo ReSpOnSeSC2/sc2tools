@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Tuple
 
 from .paths import APP_DIR
 from .replay_loader import load_replay_with_fallback
-from .event_extractor import PlayerStatsEvent, extract_events
+from .event_extractor import PlayerStatsEvent, extract_events, extract_unit_tracks
 
 
 DEFAULT_BOUNDS = {
@@ -47,28 +47,52 @@ def load_map_bounds_table() -> Dict:
 
 
 def bounds_for(map_name: Optional[str], events: List[Dict]) -> Dict:
-    """Resolve playable bounds for a map name with a graceful fallback chain."""
+    """Resolve playable bounds for a map name with a graceful fallback chain.
+
+    * Per-map JSON entry: trust as authoritative; only EXPAND for events
+      that spilled past the configured rect.
+    * No entry: derive bounds tightly from event positions with a margin.
+      The (0..200) _default is much wider than any real LE map, so using
+      it caused unit positions to be projected into the wrong region of
+      the Liquipedia minimap (the playable image gets stretched to bounds,
+      so wide-bounds + tight-events => the spawn appears off-center).
+    """
     table = load_map_bounds_table() or {}
     entry = table.get(map_name) if map_name else None
-    if entry is None:
-        entry = table.get("_default", DEFAULT_BOUNDS)
-
-    bounds = {
-        "x_min": float(entry.get("x_min", 0)),
-        "x_max": float(entry.get("x_max", 200)),
-        "y_min": float(entry.get("y_min", 0)),
-        "y_max": float(entry.get("y_max", 200)),
-        "starting_locations": list(entry.get("starting_locations", []) or []),
-    }
 
     xs = [e["x"] for e in events if e.get("x")]
     ys = [e["y"] for e in events if e.get("y")]
-    if xs and ys:
-        bounds["x_min"] = min(bounds["x_min"], min(xs) - 4)
-        bounds["x_max"] = max(bounds["x_max"], max(xs) + 4)
-        bounds["y_min"] = min(bounds["y_min"], min(ys) - 4)
-        bounds["y_max"] = max(bounds["y_max"], max(ys) + 4)
-    return bounds
+    have_events = bool(xs and ys)
+
+    if entry is not None:
+        bounds = {
+            "x_min": float(entry.get("x_min", 0)),
+            "x_max": float(entry.get("x_max", 200)),
+            "y_min": float(entry.get("y_min", 0)),
+            "y_max": float(entry.get("y_max", 200)),
+            "starting_locations": list(entry.get("starting_locations", []) or []),
+        }
+        if have_events:
+            bounds["x_min"] = min(bounds["x_min"], min(xs) - 4)
+            bounds["x_max"] = max(bounds["x_max"], max(xs) + 4)
+            bounds["y_min"] = min(bounds["y_min"], min(ys) - 4)
+            bounds["y_max"] = max(bounds["y_max"], max(ys) + 4)
+        return bounds
+
+    if have_events:
+        margin = 8.0
+        return {
+            "x_min": min(xs) - margin,
+            "x_max": max(xs) + margin,
+            "y_min": min(ys) - margin,
+            "y_max": max(ys) + margin,
+            "starting_locations": [],
+        }
+
+    return {
+        "x_min": 0, "x_max": 200, "y_min": 0, "y_max": 200,
+        "starting_locations": [],
+    }
 
 
 def interp(stats: List[Dict], t: float, key: str) -> float:
@@ -213,6 +237,15 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
 
     bounds = bounds_for(getattr(replay, "map_name", None), sorted_my_events + sorted_opp_events)
 
+    # Walk again specifically for unit movement tracks. Wrapped so a
+    # corrupt replay doesn't kill the whole payload -- worst case we emit
+    # empty unit lists and the viewer just shows buildings.
+    try:
+        tracks = extract_unit_tracks(replay, me.pid)
+    except Exception as exc:
+        print(f"map_playback: extract_unit_tracks failed: {exc}")
+        tracks = {"my_units": [], "opp_units": []}
+
     return {
         "map_name": getattr(replay, "map_name", None),
         "game_length": game_length,
@@ -224,4 +257,6 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
         "opp_events": sorted_opp_events,
         "my_stats": stats_by_pid[me.pid],
         "opp_stats": stats_by_pid[opp.pid],
+        "my_units": tracks.get("my_units", []),
+        "opp_units": tracks.get("opp_units", []),
     }
