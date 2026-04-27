@@ -1,0 +1,14 @@
+{
+  "startedAt": 1777264208029,
+  "wins": 0,
+  "losses": 0,
+  "mmrStart": null,
+  "mmrCurrent": null,
+  "mmrDelta": 0,
+  "currentStreak": {
+    "type": null,
+    "count": 0
+  },
+  "lastResultTime": null,
+  "metaCounts": {}
+}
