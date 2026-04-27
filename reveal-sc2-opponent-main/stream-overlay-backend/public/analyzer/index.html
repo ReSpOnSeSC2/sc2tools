@@ -5332,8 +5332,8 @@
             .then(r => r.json())
             .then(j => {
               if (cancelled) return;
-              if (j && Array.isArray(j.recent)) {
-                setRecentGames(j.recent);
+              if (j && j.recent_games) {
+                setRecentGames(j.recent_games);
               } else {
                 setErr("Could not load recent games.");
               }
