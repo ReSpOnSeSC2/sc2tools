@@ -319,6 +319,41 @@ def _resolve_unit_id(event):
     return getattr(event, "unit_id", None)
 
 
+def _resolve_command_pid(event):
+    """Return the player slot id (1-indexed) that *issued* a game/command event.
+
+    sc2reader's game-event ``event.pid`` is the *user_id* (0-indexed user
+    position), which does NOT match ``replay.players[i].pid`` (1-indexed
+    player slot). Comparing the two directly silently mis-attributes every
+    cast — and on any replay where the user was player slot 2, every cast
+    gets dropped (e.pid is 0 or 1, never 2), producing the long-standing
+    "0 chronos / 0 injects / 0 MULEs" symptom.
+
+    Resolution order, most → least authoritative:
+
+      1. ``event.player.pid``   — sc2reader-resolved Player object slot.
+      2. ``event.control_player_id`` — the player owning the unit being
+         commanded; matches ``player.pid`` for normal play. Skip the
+         ``0`` value, which means "no/unknown owner" (e.g. neutral or
+         pre-game system events).
+      3. ``event.upkeep_player_id`` — same idea, supply payer.
+
+    Tracker events (``PlayerStatsEvent``, ``UnitBornEvent`` …) already
+    expose the canonical player slot via ``event.pid`` and are handled by
+    the existing ``_get_owner_pid`` helper — this function is specifically
+    for command/ability events on ``replay.events``.
+    """
+    player = getattr(event, "player", None)
+    pl_pid = getattr(player, "pid", None) if player is not None else None
+    if pl_pid:
+        return pl_pid
+    for attr in ("control_player_id", "upkeep_player_id"):
+        v = getattr(event, attr, None)
+        if v:
+            return v
+    return None
+
+
 def extract_macro_events(replay, my_pid: int) -> Dict:
     """Walk the replay once and pull every event the macro engine needs.
 
@@ -443,10 +478,7 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
     try:
         for event in game_events:
             try:
-                pid = getattr(event, "pid", None)
-                if pid is None:
-                    player = getattr(event, "player", None)
-                    pid = getattr(player, "pid", None) if player else None
+                pid = _resolve_command_pid(event)
                 if pid != my_pid:
                     continue
                 name = _normalize_ability_name(event)
