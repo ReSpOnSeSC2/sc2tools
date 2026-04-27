@@ -77,6 +77,7 @@ class ReplayAnalyzer:
         self.load_error: Optional[str] = None
         self.load_warning: Optional[str] = None
         data: Dict = {}
+        self._db_revision += 1
 
         if os.path.exists(DB_FILE):
             try:
