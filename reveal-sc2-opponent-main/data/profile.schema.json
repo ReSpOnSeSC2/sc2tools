@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://sc2tools.respondesc2.dev/schemas/profile.schema.json",
+  "title": "SC2Tools User Profile",
+  "description": "Per-user identity. One record per installation. Read by the React SPA at boot and by the wizard on first run.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "battlenet"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version. Bump only on breaking changes; migrations live in routes/settings.js."
+    },
+    "battlenet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "battle_tag",
+        "character_id",
+        "account_id",
+        "region"
+      ],
+      "properties": {
+        "battle_tag": {
+          "type": "string",
+          "pattern": "^[^#]+#[0-9]+$",
+          "minLength": 3,
+          "maxLength": 64,
+          "description": "BattleTag in 'Name#1234' form."
+        },
+        "character_id": {
+          "type": "string",
+          "pattern": "^[1-5]-S2-[0-9]+-[0-9]+$",
+          "description": "SC2Pulse character id, e.g. '1-S2-1-267727'."
+        },
+        "account_id": {
+          "type": "string",
+          "pattern": "^[0-9]+$",
+          "description": "Numeric Battle.net account id, e.g. '50983875'."
+        },
+        "region": {
+          "type": "string",
+          "enum": [
+            "us",
+            "eu",
+            "kr",
+            "cn",
+            "sea"
+          ],
+          "description": "Battle.net region. SC2Pulse regions: us=1, eu=2, kr=3, cn=5, sea=6."
+        }
+      }
+    },
+    "mmr_target": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 8000,
+      "description": "Optional MMR goal for progress widgets. Null when unset."
+    },
+    "preferred_player_name_in_replays": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "description": "In-game player name as it appears in replay player slots. Used to disambiguate when account hosts multiple alts."
+    },
+    "races": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "Protoss",
+          "Terran",
+          "Zerg",
+          "Random"
+        ]
+      },
+      "description": "Races the user regularly plays. Single-race users pick one; Random or off-race players check multiple. Drives default perspective filters and per-race breakdowns."
+    }
+  }
+}

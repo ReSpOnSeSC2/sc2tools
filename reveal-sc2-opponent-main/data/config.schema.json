@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://sc2tools.respondesc2.dev/schemas/config.schema.json",
+  "title": "SC2Tools Installation Config",
+  "description": "Per-installation settings. Created by the wizard on first run; editable from the SPA settings page. Authoritative source for paths, macro engine flags, build classifier choices, overlay settings, telemetry, and UI preferences.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "paths",
+    "macro_engine",
+    "build_classifier",
+    "stream_overlay",
+    "telemetry",
+    "ui"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version. Bump only on breaking changes."
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sc2_install_dir",
+        "replay_folders"
+      ],
+      "properties": {
+        "sc2_install_dir": {
+          "type": "string",
+          "description": "Filesystem path to the StarCraft II install directory. May be empty if not yet detected; recon_sc2_install.py fills it in."
+        },
+        "replay_folders": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Folders to watch for new .SC2Replay files. The first entry is the canonical 'My Replays' folder."
+        }
+      }
+    },
+    "macro_engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled_disciplines",
+        "minimum_game_length_sec",
+        "engine_version"
+      ],
+      "properties": {
+        "enabled_disciplines": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "chrono",
+              "inject",
+              "mule",
+              "supply",
+              "worker_production"
+            ]
+          },
+          "description": "Macro disciplines scored per game. 'chrono' uses ability_link 722/723 with chained-state counting (see commits c728ab0, 4107efd)."
+        },
+        "minimum_game_length_sec": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7200,
+          "description": "Games shorter than this are excluded from macro aggregations."
+        },
+        "engine_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Macro engine version tag, e.g. '2026-04-chain-counted'."
+        }
+      }
+    },
+    "build_classifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active_definition_ids",
+        "use_custom_builds",
+        "use_community_shared_builds"
+      ],
+      "properties": {
+        "active_definition_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Build IDs from build_definitions.json that the classifier currently scores against."
+        },
+        "use_custom_builds": {
+          "type": "boolean",
+          "description": "When true, custom_builds.json (user-authored) participates in classification."
+        },
+        "use_community_shared_builds": {
+          "type": "boolean",
+          "description": "When true, the shared community build database participates. Stage 7."
+        }
+      }
+    },
+    "stream_overlay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "twitch_channel",
+        "obs_websocket"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Master switch for the OBS / Streamlabs overlay event bus."
+        },
+        "twitch_channel": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64,
+          "description": "Twitch channel handle for the chat bot. Null disables chat integration."
+        },
+        "obs_websocket": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "port",
+            "password"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "description": "OBS WebSocket host. Defaults to 127.0.0.1."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "OBS WebSocket port. Defaults to 4455."
+            },
+            "password": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "OBS WebSocket password. Null when auth is disabled."
+            }
+          }
+        },
+        "pulse_character_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "SC2Pulse internal numeric character id."
+          },
+          "description": "All SC2Pulse character ids the user picked in the wizard. Used by the existing scanner (index.js pulseCharacterIds) for live MMR / session deltas. Multi-region users have one id per region."
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "opt_in"
+      ],
+      "properties": {
+        "opt_in": {
+          "type": "boolean",
+          "description": "User-controlled opt-in for anonymized usage telemetry."
+        }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "theme",
+        "default_perspective"
+      ],
+      "properties": {
+        "theme": {
+          "type": "string",
+          "enum": [
+            "dark",
+            "light"
+          ],
+          "description": "SPA theme. Stage 1 design tokens cover both."
+        },
+        "default_perspective": {
+          "type": "string",
+          "enum": [
+            "me",
+            "opponent",
+            "both"
+          ],
+          "description": "Default analyzer perspective on first load."
+        }
+      }
+    },
+    "identities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "character_id"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "character_id": {
+            "type": "string",
+            "pattern": "^[1-5]-S2-[0-9]+-[0-9]+$"
+          },
+          "account_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "region": {
+            "type": "string",
+            "enum": [
+              "us",
+              "eu",
+              "kr",
+              "cn",
+              "sea"
+            ]
+          }
+        }
+      },
+      "description": "All Battle.net identities the user owns. The single 'primary' identity also lives in profile.json.battlenet -- this list is the full set used for replay-perspective ('me' filtering) and multi-region SC2Pulse aggregation."
+    }
+  }
+}
