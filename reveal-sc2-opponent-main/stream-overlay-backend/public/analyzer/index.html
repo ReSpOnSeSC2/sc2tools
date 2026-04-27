@@ -119,6 +119,100 @@
       });
     </script>
 
+    <!-- ====================================================================
+         Design tokens — single source of truth for color, typography,
+         spacing, radii, shadow, motion. Mirrors:
+             SC2-Overlay/design-tokens.css   (web canonical)
+             SC2-Overlay/design-tokens.json  (Style Dictionary v4)
+             gui/design_tokens.py            (Python frozen dataclasses)
+         The SPA is single-file (no external CSS link), so the tokens are
+         inlined here. Keep these in sync with the CSS twin above when you
+         change a value. See docs/design-system.md.
+         ==================================================================== -->
+    <style id="sc2-design-tokens">
+      :root {
+        /* Surfaces */
+        --color-bg-primary:    #0A0E1A;
+        --color-bg-surface:    #111827;
+        --color-bg-elevated:   #1F2937;
+        /* Race accents */
+        --color-race-terran:   #3B82F6;
+        --color-race-zerg:     #A855F7;
+        --color-race-protoss:  #F59E0B;
+        --color-race-random:   #94A3B8;
+        /* Semantic state */
+        --color-success:       #10B981;
+        --color-danger:        #EF4444;
+        --color-warning:       #F59E0B;
+        --color-info:          #3B82F6;
+        /* Text */
+        --color-text-primary:    #F1F5F9;
+        --color-text-secondary:  #94A3B8;
+        --color-text-muted:      #64748B;
+        --color-text-on-accent:  #0A0E1A;
+        /* Borders */
+        --color-border-subtle:   rgba(255, 255, 255, 0.05);
+        --color-border-default:  rgba(255, 255, 255, 0.10);
+        --color-border-strong:   rgba(255, 255, 255, 0.20);
+        --color-divider:         rgba(255, 255, 255, 0.08);
+        /* Typography */
+        --font-family-ui:    "Inter", system-ui, -apple-system, "Segoe UI",
+                             Roboto, Helvetica, Arial, sans-serif;
+        --font-family-mono:  "JetBrains Mono", "SF Mono", "Cascadia Code",
+                             Consolas, "Liberation Mono", monospace;
+        --font-size-xs:    11px;
+        --font-size-sm:    13px;
+        --font-size-base:  15px;
+        --font-size-lg:    18px;
+        --font-size-xl:    22px;
+        --font-size-2xl:   28px;
+        --font-size-3xl:   36px;
+        --line-height-tight:    1.2;
+        --line-height-normal:   1.5;
+        --line-height-relaxed:  1.75;
+        /* Spacing — 4px base unit */
+        --space-0:  0;
+        --space-1:  4px;
+        --space-2:  8px;
+        --space-3:  12px;
+        --space-4:  16px;
+        --space-6:  24px;
+        --space-8:  32px;
+        --space-12: 48px;
+        --space-16: 64px;
+        --space-24: 96px;
+        /* Radii */
+        --radius-sm:   4px;
+        --radius-md:   8px;
+        --radius-lg:   12px;
+        --radius-xl:   16px;
+        --radius-full: 9999px;
+        /* Shadows */
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.50);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.40),
+                     0 2px 4px -2px rgba(0, 0, 0, 0.40);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.50),
+                     0 4px 6px -4px rgba(0, 0, 0, 0.50);
+        --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.50),
+                     0 8px 10px -6px rgba(0, 0, 0, 0.50);
+        /* Motion */
+        --duration-state:     200ms;
+        --duration-entrance:  400ms;
+        --duration-celebrate: 600ms;
+        --ease-out:       cubic-bezier(0, 0, 0.2, 1);
+        --ease-in-out:    cubic-bezier(0.4, 0, 0.2, 1);
+        --ease-spring:    cubic-bezier(0.2, 1.4, 0.4, 1);
+        --ease-overshoot: cubic-bezier(0.25, 1, 0.5, 1);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        :root {
+          --duration-state:     0ms;
+          --duration-entrance:  0ms;
+          --duration-celebrate: 0ms;
+        }
+      }
+    </style>
+
     <style>
       html,
       body {
@@ -174,17 +268,21 @@
           background-position: 0 50%;
         }
       }
+      /* Race accent text colors — pull from design tokens so the SPA,
+         the OBS overlay, and the Tkinter GUI all agree on what
+         "Zerg purple" means. See docs/design-system.md for the
+         WCAG AA pairs each accent passes. */
       .race-Z {
-        color: #c084fc;
+        color: var(--color-race-zerg);
       }
       .race-P {
-        color: #fbbf24;
+        color: var(--color-race-protoss);
       }
       .race-T {
-        color: #60a5fa;
+        color: var(--color-race-terran);
       }
       .race-R {
-        color: #94a3b8;
+        color: var(--color-race-random);
       }
     </style>
   </head>
@@ -5622,6 +5720,87 @@
         );
       }
 
+      function pickStatsAtTime(stats, t) {
+        if (!Array.isArray(stats) || stats.length === 0) return null;
+        let lo = 0, hi = stats.length - 1, idx = 0;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          if (stats[mid].time <= t) { idx = mid; lo = mid + 1; }
+          else { hi = mid - 1; }
+        }
+        return stats[idx];
+      }
+
+      function MapIntelResourceCell({ label, value, color }) {
+        return (
+          <div style={{
+            display: "flex", flexDirection: "column",
+            minWidth: "62px", padding: "2px 6px",
+          }}>
+            <span style={{
+              fontSize: "10px", textTransform: "uppercase",
+              letterSpacing: "0.05em", color: "#94a3b8",
+            }}>{label}</span>
+            <span style={{
+              fontFamily: "var(--font-family-mono)",
+              fontSize: "13px", color: color || "#e6e9ef",
+              fontWeight: 600,
+            }}>{value}</span>
+          </div>
+        );
+      }
+
+      function MapIntelResourceRow({ name, stats, accent }) {
+        const fmt = (n) => (typeof n === "number") ? n.toLocaleString("en-US") : "—";
+        const s = stats || {};
+        return (
+          <div style={{
+            display: "flex", alignItems: "center", gap: "8px",
+            padding: "4px 8px", background: "rgba(20,24,32,0.85)",
+            borderRadius: "6px",
+          }}>
+            <div style={{
+              minWidth: "100px", maxWidth: "140px",
+              color: accent, fontWeight: 700,
+              overflow: "hidden", textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}>{name}</div>
+            <MapIntelResourceCell label="Min"     value={fmt(s.minerals)}  color="#7dd3fc" />
+            <MapIntelResourceCell label="Gas"     value={fmt(s.vespene)}   color="#86efac" />
+            <MapIntelResourceCell label="Supply"
+              value={(s.food_used != null && s.food_made != null)
+                ? `${s.food_used}/${s.food_made}` : "—"} />
+            <MapIntelResourceCell label="Workers" value={fmt(s.workers)} />
+            <MapIntelResourceCell label="Army"
+              value={s.army_val != null ? Math.round(s.army_val) : "—"} />
+            <MapIntelResourceCell label="Lost"
+              value={fmt(s.lost)} color="#FCA5A5" />
+            <MapIntelResourceCell label="Killed"
+              value={fmt(s.killed)} color="#FDE68A" />
+          </div>
+        );
+      }
+
+      function MapIntelResourceBar({ data, time }) {
+        if (!data) return null;
+        const me = pickStatsAtTime(data.my_stats, time) || {};
+        const opp = pickStatsAtTime(data.opp_stats, time) || {};
+        const meName = data.me_name || "You";
+        const oppName = data.opp_name || "Opponent";
+        return (
+          <div style={{
+            display: "flex", justifyContent: "center", alignItems: "stretch",
+            gap: "12px", padding: "8px 16px",
+            background: "rgba(11,13,17,0.95)",
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            flexShrink: 0,
+          }}>
+            <MapIntelResourceRow name={meName}  stats={me}  accent="#66BB6A" />
+            <MapIntelResourceRow name={oppName} stats={opp} accent="#EF5350" />
+          </div>
+        );
+      }
+
       function MapIntelViewer({ replayPath, playerName, onBack }) {
         const [data, setData] = useState(null);
         const [err, setErr] = useState(null);
@@ -5815,6 +5994,24 @@
           // Hellion vs HellionTank, etc.) so we map known variants back to their
           // canonical base name before the lookup.
           const _UNIT_NAME_ALIASES = {
+            // Hallucinations are clones -- show the same icon as the
+            // real unit. The actual gameplay distinction (real vs hallu)
+            // doesn't matter for the playback viewer. sc2reader reports
+            // them as "HallucinatedX" raw types.
+            hallucinatedphoenix: 'phoenix',
+            hallucinatedstalker: 'stalker',
+            hallucinatedzealot: 'zealot',
+            hallucinatedhightemplar: 'hightemplar',
+            hallucinatedimmortal: 'immortal',
+            hallucinatedvoidray: 'voidray',
+            hallucinatedcolossus: 'colossus',
+            hallucinatedarchon: 'archon',
+            hallucinatedprobe: 'probe',
+            hallucinateddisruptor: 'disruptor',
+            hallucinatedoracle: 'oracle',
+            hallucinatedwarpprism: 'warpprism',
+            hallucinatedadept: 'adept',
+            hallucinatedsentry: 'sentry',
             siegetanksieged: 'siegetank',
             siegetank: 'siegetank',
             warpprismphasing: 'warpprism',
@@ -5888,7 +6085,7 @@
 
             if (ev.type === "building") {
               const img = getIcon(ev.name, 'building');
-              const sz = 16 * zoom;
+              const sz = Math.max(18, 22 * zoom);
 
               if (img.complete && img.naturalWidth > 0) {
                  // Draw backing for visibility
@@ -5903,7 +6100,7 @@
               } else {
                  ctx.fillStyle = colorStr;
                  ctx.beginPath();
-                 ctx.rect(p.x - 4*zoom, p.y - 4*zoom, 8*zoom, 8*zoom);
+                 ctx.rect(p.x - 6*zoom, p.y - 6*zoom, 12*zoom, 12*zoom);
                  ctx.fill();
                  ctx.strokeStyle = "#000";
                  ctx.lineWidth = 1;
@@ -5912,7 +6109,7 @@
             } else {
               ctx.fillStyle = colorStr;
               ctx.beginPath();
-              ctx.arc(p.x, p.y, 3*zoom, 0, 2*Math.PI);
+              ctx.arc(p.x, p.y, Math.max(3, 5*zoom), 0, 2*Math.PI);
               ctx.fill();
             }
           };
@@ -5930,8 +6127,8 @@
               const isMe = s.owner === 'me';
               const ring = isMe ? '#66BB6A' : '#EF5350';
               const label = isMe ? (data.me_name || 'You') : (data.opp_name || 'Opp');
-              const r1 = Math.max(14, 18 * zoom);
-              const r2 = r1 + Math.max(2, 3 * zoom);
+              const r1 = Math.max(22, 30 * zoom);
+              const r2 = r1 + Math.max(4, 5 * zoom);
               ctx.save();
               ctx.lineWidth = Math.max(2, 2.5 * Math.sqrt(zoom));
               ctx.strokeStyle = ring;
@@ -5940,7 +6137,7 @@
               ctx.globalAlpha = 0.45;
               ctx.beginPath(); ctx.arc(sp.x, sp.y, r2, 0, 2 * Math.PI); ctx.stroke();
               ctx.globalAlpha = 1;
-              ctx.font = Math.max(10, Math.floor(11 * zoom)) + 'px sans-serif';
+              ctx.font = Math.max(13, Math.floor(14 * zoom)) + 'px sans-serif';
               ctx.textAlign = 'center';
               ctx.textBaseline = 'top';
               const ty = sp.y + r2 + 4;
@@ -5962,10 +6159,45 @@
           // to get the unit's position. Only render units that have been born
           // and are not yet dead. Each unit gets its own SC2-Overlay PNG icon
           // (so 12 marines render as 12 little marine icons, not 12 dots).
+          // How long the death-spot X stays on the canvas after a unit
+          // dies, in game-seconds. 2s is long enough to spot which clump
+          // of icons died but short enough that a big fight doesn't leave
+          // a forest of permanent crosses.
+          const DEATH_MARKER_LINGER = 2.0;
+
           const drawUnit = (u, ringStr) => {
             if (!u || !u.waypoints || u.waypoints.length < 3) return;
             if (typeof u.born === 'number' && time < u.born) return;
-            if (u.died != null && time > u.died + 0.5) return;
+            // Death window: in (died, died + DEATH_MARKER_LINGER) we draw
+            // a fading X at the last known position. After that we drop
+            // the unit completely.
+            const isDead = (u.died != null && time > u.died);
+            if (isDead && time > u.died + DEATH_MARKER_LINGER) return;
+            if (isDead) {
+              const wpd = u.waypoints;
+              const N = wpd.length / 3;
+              const lx = wpd[(N - 1) * 3 + 1];
+              const ly = wpd[(N - 1) * 3 + 2];
+              if (typeof lx === 'number' && typeof ly === 'number') {
+                const pp = project(lx, ly);
+                const fade = Math.max(0, 1 - (time - u.died) / DEATH_MARKER_LINGER);
+                const r = (u.is_worker
+                    ? Math.max(4, 5 * zoom)
+                    : Math.max(6, 7 * zoom));
+                ctx.save();
+                ctx.globalAlpha = 0.35 + 0.55 * fade;
+                ctx.strokeStyle = ringStr;
+                ctx.lineWidth = Math.max(1.5, 2 * Math.sqrt(zoom));
+                ctx.beginPath();
+                ctx.moveTo(pp.x - r, pp.y - r);
+                ctx.lineTo(pp.x + r, pp.y + r);
+                ctx.moveTo(pp.x - r, pp.y + r);
+                ctx.lineTo(pp.x + r, pp.y - r);
+                ctx.stroke();
+                ctx.restore();
+              }
+              return;
+            }
             const wp = u.waypoints; // length is multiple of 3
             const N = wp.length / 3;
             // Binary search for the largest waypoint index whose t <= time.
@@ -5982,10 +6214,25 @@
             } else {
               const t0 = wp[idx * 3],     x0 = wp[idx * 3 + 1],     y0 = wp[idx * 3 + 2];
               const t1 = wp[(idx + 1) * 3], x1 = wp[(idx + 1) * 3 + 1], y1 = wp[(idx + 1) * 3 + 2];
-              const span = Math.max(1e-3, t1 - t0);
-              const f = Math.min(1, Math.max(0, (time - t0) / span));
-              ux = x0 + (x1 - x0) * f;
-              uy = y0 + (y1 - y0) * f;
+              // sc2reader emits UnitPositionsEvent sparsely for idle /
+              // mining units. If two consecutive waypoints are far apart
+              // in TIME (>10 game-seconds), the unit was likely doing a
+              // mining loop or sitting idle in between -- linear interp
+              // shows a fake straight-line drift across the map. Snap to
+              // the EARLIER waypoint instead so the unit stays put near
+              // its mining patch / idle position until the next real
+              // sample arrives.
+              const span = t1 - t0;
+              const SPARSE_GAP_SEC = 10;
+              if (span > SPARSE_GAP_SEC) {
+                ux = x0;
+                uy = y0;
+              } else {
+                const safeSpan = Math.max(1e-3, span);
+                const f = Math.min(1, Math.max(0, (time - t0) / safeSpan));
+                ux = x0 + (x1 - x0) * f;
+                uy = y0 + (y1 - y0) * f;
+              }
             }
             const p0 = project(ux, uy);
             // Per-unit deterministic offset so units sharing a position
@@ -5998,23 +6245,47 @@
             const radius = ((seed >>> 9) & 7) * (1.5 + zoom * 0.6);
             const p = { x: p0.x + Math.cos(angle) * radius, y: p0.y + Math.sin(angle) * radius };
 
-            const sz = Math.max(8, 12 * zoom);
+            // Workers (Drone/Probe/SCV/MULE) are rendered smaller and a
+            // touch transparent so they don't drown the canvas when 60+
+            // workers are alive mid-game. Combat units stay full-sized.
+            const isWorker = !!u.is_worker;
+            const sz = isWorker
+              ? Math.max(10, 14 * zoom)
+              : Math.max(16, 22 * zoom);
+            const alpha = isWorker ? 0.7 : 1.0;
             const img = getIcon(u.name, 'unit');
             if (img.complete && img.naturalWidth > 0) {
               // Colored team ring behind the icon for friend/foe legibility.
+              ctx.save();
+              ctx.globalAlpha = alpha;
               ctx.strokeStyle = ringStr;
               ctx.lineWidth = Math.max(1, 1.5 * Math.sqrt(zoom));
               ctx.beginPath();
               ctx.arc(p.x, p.y, sz / 2 + 1, 0, 2 * Math.PI);
               ctx.stroke();
               ctx.drawImage(img, p.x - sz / 2, p.y - sz / 2, sz, sz);
+              ctx.restore();
             } else {
-              // Icon not yet loaded (or missing PNG for this unit) -- fall
-              // back to a colored dot so the unit is still visible.
-              ctx.fillStyle = ringStr;
+              // Icon not yet loaded or missing PNG (e.g. probe/drone/scv
+              // don't ship icon files). Draw a bright dot with a high-
+              // contrast outline so the unit is unmistakable on the busy
+              // map texture. Workers get smaller dots than combat units.
+              const dotRadius = isWorker
+                ? Math.max(4, 5 * zoom)
+                : Math.max(6, 8 * zoom);
+              const fillColor = isWorker
+                ? (ringStr === "#1B5E20" ? "#7CFC76" : "#FF7B85")
+                : (ringStr === "#1B5E20" ? "#A6FF9A" : "#FFA8B0");
+              ctx.save();
+              ctx.globalAlpha = isWorker ? 0.9 : 1.0;
+              ctx.fillStyle = fillColor;
               ctx.beginPath();
-              ctx.arc(p.x, p.y, Math.max(2, 3 * zoom), 0, 2 * Math.PI);
+              ctx.arc(p.x, p.y, dotRadius, 0, 2 * Math.PI);
               ctx.fill();
+              ctx.lineWidth = Math.max(1, 1.5 * Math.sqrt(zoom));
+              ctx.strokeStyle = "#0A0E1A";
+              ctx.stroke();
+              ctx.restore();
             }
           };
           if (data.my_units)  data.my_units.forEach(u  => drawUnit(u, "#1B5E20"));
@@ -6023,24 +6294,19 @@
         }, [data, time, zoom, pan, mapImage, iconTick]);
 
         // Wheel zoom is attached as a NATIVE listener (with passive:false) inside
-        // a useEffect below -- React 17+ uses passive listeners for onWheel, so
-        // calling e.preventDefault() in a JSX onWheel handler is a no-op and the
-        // page scrolls under us. This stub stays only for type symmetry.
-        const handleWheel = (_e) => {};
+        // Wheel zoom. We use the JSX onWheel prop directly (React's
+        // synthetic event) instead of a native listener -- the native
+        // useEffect-based listener wasn't firing reliably across React
+        // 18 mount cycles. The page has nothing to scroll inside this
+        // fullscreen viewer, so we don't need preventDefault to keep the
+        // page anchored.
+        const handleWheel = (e) => {
+          if (e.deltaY < 0) setZoom((z) => Math.min(8.0, z * 1.2));
+          else              setZoom((z) => Math.max(0.25, z / 1.2));
+        };
 
-        // Native non-passive wheel listener so we can preventDefault and keep
-        // the page from scrolling while the user zooms the canvas.
-        useEffect(() => {
-          const el = containerRef.current;
-          if (!el) return;
-          const onWheel = (e) => {
-            e.preventDefault();
-            if (e.deltaY < 0) setZoom(z => Math.min(8.0, z * 1.25));
-            else              setZoom(z => Math.max(0.25, z / 1.25));
-          };
-          el.addEventListener('wheel', onWheel, { passive: false });
-          return () => el.removeEventListener('wheel', onWheel);
-        }, []);
+        // (Wheel zoom is now bound via the JSX `onWheel` prop on the
+        // canvas container. See `handleWheel` above.)
 
         // Auto-hide chrome (header + control bar). Show on mouse move/enter,
         // hide after 2.2s of idle.
@@ -6097,6 +6363,15 @@
         }, [data]);
 
         const handlePointerDown = (e) => {
+           // Don't start a pan-drag when the user clicks an interactive
+           // child (timeline scrubber, buttons, etc.) -- those events
+           // bubble up to the container and would otherwise trigger pan.
+           const tag = (e.target && e.target.tagName) || "";
+           if (tag === "INPUT" || tag === "BUTTON" || tag === "LABEL"
+               || tag === "SELECT" || tag === "TEXTAREA"
+               || (e.target && e.target.closest && e.target.closest('button,input,label,select'))) {
+             return;
+           }
            dragRef.current = { startX: e.clientX, startY: e.clientY, pX: pan.x, pY: pan.y };
         };
         const handlePointerMove = (e) => {
@@ -6148,6 +6423,9 @@
 
         return (
           <div className="fixed inset-0 z-30 bg-base-900 flex flex-col">
+            {/* Resource HUD sits ABOVE the canvas as a sibling (not an
+                overlay) so it never covers the playable map. */}
+            <MapIntelResourceBar data={data} time={time} />
             {/* Canvas Area -- fills the viewport. The header & controls are
                 overlaid on top with auto-hide so the map gets the full space. */}
             <div
@@ -6518,10 +6796,1794 @@
         { id: "trends", label: "Trends" },
         { id: "ml", label: "ML / Predict" },
         { id: "mapintel", label: "Map Intel" },
+        // Stream-overlay widget catalog. Same source list the wizard
+        // shows in Step 5 -- exposed here so users can grab a widget
+        // URL any time after onboarding.
+        { id: "widgets", label: "Widgets" },
         // Definitions stays at the very end (mirrors the SC2ReplayAnalyzer.py
         // tab order) so the build/strategy glossary is always one click away.
         { id: "definitions", label: "Definitions" },
       ];
+
+      // ============================================================
+      // FIRST-RUN WIZARD (Stage 2.2)
+      // ------------------------------------------------------------
+      // Shown when GET /api/profile/exists returns { exists: false }.
+      // Walks a non-technical user through 6 steps -- replay folder
+      // discovery, identity selection, race preference, optional
+      // Twitch / OBS / SC2Pulse connection tests, and a final "Apply
+      // & start" that PUTs /api/profile + /api/config and kicks off
+      // the initial macro backfill. All styling pulls from the design
+      // tokens inlined at the top of the file (no hard-coded hex).
+      // ============================================================
+
+      const WIZARD_STEPS = [
+        { id: 1, label: "Welcome" },
+        { id: 2, label: "Replays" },
+        { id: 3, label: "Identity" },
+        { id: 4, label: "Race" },
+        { id: 5, label: "Integrations" },
+        { id: 6, label: "Apply" },
+      ];
+      const WIZARD_RACES = ["Protoss", "Terran", "Zerg", "Random"];
+      // The Express server exposes the overlay surface at /overlay (added
+      // in Stage 2.2 as a static mount; see stream-overlay-backend/index.js).
+      const WIZARD_OVERLAY_URL = "http://localhost:3000/overlay/";
+
+      // Per-widget catalog. Each entry corresponds to a file in
+      // SC2-Overlay/widgets/ and the metadata mirrors the per-widget
+      // README so streamers can pick exactly the cards they want.
+      // ``recommended`` flags the four-widget starter set.
+      const WIZARD_OVERLAY_WIDGETS = [
+        { file: "session.html", title: "Session",
+          desc: "Live W-L, MMR delta, league badge, session duration. Always on.",
+          trigger: "Persistent", w: 300, h: 100, recommended: true },
+        { file: "scouting.html", title: "Scouting report",
+          desc: "Consolidated pre-game card: opponent + race + MMR + cheese flag + favorite opener + your best historical answer.",
+          trigger: "Pre-game ~22s", w: 500, h: 280, recommended: true },
+        { file: "post-game.html", title: "Post-game reveal",
+          desc: "What the opponent actually built, with an animated build-order timeline.",
+          trigger: "Post-game ~16s", w: 500, h: 220, recommended: true },
+        { file: "streak.html", title: "Streak splash",
+          desc: "Center-screen ON FIRE / RAMPAGE / TILT pop-up.",
+          trigger: "Post-game ~8s", w: 600, h: 200, recommended: true },
+        { file: "topbuilds.html", title: "Top builds",
+          desc: "Your six most-played builds with W-L. Always on.",
+          trigger: "Persistent", w: 320, h: 240 },
+        { file: "match-result.html", title: "Match result",
+          desc: "Race vs race + VICTORY / DEFEAT + map + duration.",
+          trigger: "Post-game ~15s", w: 400, h: 130 },
+        { file: "opponent.html", title: "Opponent detected",
+          desc: '"Opponent detected: <name>" pop-up at game start.',
+          trigger: "Pre-game ~20s", w: 400, h: 110 },
+        { file: "rematch.html", title: "Rematch",
+          desc: "Your all-time record vs this specific opponent.",
+          trigger: "Pre-game ~15s", w: 400, h: 130 },
+        { file: "cheese.html", title: "Cheese alert",
+          desc: "Warning if you've cheesed or been cheesed by this opponent before.",
+          trigger: "Pre-game ~18s", w: 400, h: 130 },
+        { file: "fav-opening.html", title: "Favorite opening",
+          desc: "Opponent's most-frequent opener.",
+          trigger: "Pre-game ~18s", w: 400, h: 130 },
+        { file: "best-answer.html", title: "Best answer",
+          desc: "Your best historical response to that opener.",
+          trigger: "Pre-game ~18s", w: 400, h: 130 },
+        { file: "rival.html", title: "Rival alert",
+          desc: "Special pop-up for opponents you've played 5+ times.",
+          trigger: "Pre-game ~16s", w: 420, h: 130 },
+        { file: "meta.html", title: "Session meta",
+          desc: "Most-faced opponent strategy this session.",
+          trigger: "Post-game ~12s", w: 300, h: 100 },
+        { file: "mmr-delta.html", title: "MMR delta",
+          desc: '"+25 MMR" or "-30 MMR" splash.',
+          trigger: "Post-game ~10s", w: 300, h: 100 },
+        { file: "rank.html", title: "Rank up / down",
+          desc: "League promotion / demotion notification.",
+          trigger: "Post-game ~12s", w: 400, h: 130 },
+        { file: "topbuilds-alt", file: "" }, // placeholder filtered out
+      ].filter((w) => w.file);
+      const WIZARD_DEFAULT_OBS_HOST = "127.0.0.1";
+      const WIZARD_DEFAULT_OBS_PORT = 4455;
+      const WIZARD_IDENTITY_SAMPLE = 100;
+
+      // ---- Reusable wizard primitives ----------------------------
+
+      function WizardCard({ children }) {
+        return (
+          <div role="dialog" aria-modal="true" aria-labelledby="wizard-title"
+            style={{
+              position: "fixed", inset: 0, zIndex: 1000,
+              background: "rgba(10, 14, 26, 0.85)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "var(--space-4)",
+            }}>
+            <div style={{
+              width: "100%", maxWidth: "720px",
+              background: "var(--color-bg-surface)",
+              color: "var(--color-text-primary)",
+              border: "1px solid var(--color-border-default)",
+              borderRadius: "var(--radius-lg)",
+              boxShadow: "var(--shadow-xl)",
+              fontFamily: "var(--font-family-ui)",
+              maxHeight: "92vh", overflowY: "auto",
+            }}>
+              {children}
+            </div>
+          </div>
+        );
+      }
+
+      function WizardProgressStrip({ step }) {
+        return (
+          <div style={{
+            display: "flex", gap: "var(--space-2)",
+            padding: "var(--space-4) var(--space-6) 0",
+            position: "sticky", top: 0,
+            background: "var(--color-bg-surface)",
+          }}>
+            {WIZARD_STEPS.map((s) => (
+              <WizardProgressPill key={s.id} step={s} active={s.id === step}
+                                  done={s.id < step} />
+            ))}
+          </div>
+        );
+      }
+
+      function WizardProgressPill({ step, active, done }) {
+        const bg = active
+          ? "var(--color-info)"
+          : done ? "var(--color-success)" : "var(--color-bg-elevated)";
+        const fg = active || done
+          ? "var(--color-text-on-accent)" : "var(--color-text-secondary)";
+        return (
+          <div aria-current={active ? "step" : undefined}
+            style={{
+              flex: 1, background: bg, color: fg,
+              padding: "var(--space-1) var(--space-2)",
+              borderRadius: "var(--radius-sm)",
+              fontSize: "var(--font-size-xs)", textAlign: "center",
+              fontWeight: active ? 600 : 500,
+            }}>
+            {step.id}. {step.label}
+          </div>
+        );
+      }
+
+      function WizardButton({ children, onClick, disabled, kind = "primary",
+                             type = "button" }) {
+        const palette = {
+          primary:   { bg: "var(--color-info)",        fg: "var(--color-text-on-accent)" },
+          secondary: { bg: "var(--color-bg-elevated)", fg: "var(--color-text-primary)"   },
+          danger:    { bg: "var(--color-danger)",      fg: "var(--color-text-on-accent)" },
+        }[kind] || {};
+        return (
+          <button type={type} onClick={onClick} disabled={!!disabled}
+            style={{
+              background: palette.bg, color: palette.fg,
+              padding: "var(--space-2) var(--space-4)",
+              border: "1px solid var(--color-border-default)",
+              borderRadius: "var(--radius-md)",
+              cursor: disabled ? "not-allowed" : "pointer",
+              opacity: disabled ? 0.55 : 1,
+              fontSize: "var(--font-size-sm)", fontWeight: 500,
+            }}>
+            {children}
+          </button>
+        );
+      }
+
+      function WizardField({ label, htmlFor, children, hint }) {
+        return (
+          <label htmlFor={htmlFor} style={{
+            display: "block", marginBottom: "var(--space-3)",
+            fontSize: "var(--font-size-sm)",
+            color: "var(--color-text-secondary)",
+          }}>
+            <div style={{ marginBottom: "var(--space-1)" }}>{label}</div>
+            {children}
+            {hint
+              ? <div style={{
+                  marginTop: "var(--space-1)",
+                  fontSize: "var(--font-size-xs)",
+                  color: "var(--color-text-muted)",
+                }}>{hint}</div>
+              : null}
+          </label>
+        );
+      }
+
+      function WizardInput(props) {
+        return (
+          <input {...props} style={{
+            width: "100%",
+            padding: "var(--space-2) var(--space-3)",
+            background: "var(--color-bg-primary)",
+            color: "var(--color-text-primary)",
+            border: "1px solid var(--color-border-default)",
+            borderRadius: "var(--radius-md)",
+            fontFamily: "var(--font-family-ui)",
+            fontSize: "var(--font-size-sm)",
+            ...(props.style || {}),
+          }} />
+        );
+      }
+
+      function WizardError({ children }) {
+        if (!children) return null;
+        return (
+          <div role="alert" aria-live="polite"
+               style={{ color: "var(--color-danger)",
+                        marginBottom: "var(--space-3)",
+                        fontSize: "var(--font-size-sm)" }}>
+            {children}
+          </div>
+        );
+      }
+
+      function WizardNavRow({ children }) {
+        return (
+          <div style={{ display: "flex", gap: "var(--space-2)",
+                        marginTop: "var(--space-6)" }}>
+            {children}
+          </div>
+        );
+      }
+
+      // ---- Step 1: Welcome --------------------------------------
+
+      function WizardStepWelcome({ onNext, onSkip }) {
+        return (
+          <div style={{ padding: "var(--space-6)" }}>
+            <h2 id="wizard-title"
+                style={{ fontSize: "var(--font-size-2xl)",
+                         marginBottom: "var(--space-4)" }}>
+              Welcome to your SC2 stats lab.
+            </h2>
+            <ul style={{
+              fontSize: "var(--font-size-base)",
+              lineHeight: "var(--line-height-relaxed)",
+              color: "var(--color-text-primary)",
+              marginLeft: "var(--space-6)", listStyle: "disc",
+            }}>
+              <li>Track every macro slip across your last 1,000 ladder games.</li>
+              <li>Recognize what your opponent is building before the first scout.</li>
+              <li>See your real progress without manually tagging anything.</li>
+            </ul>
+            <WizardNavRow>
+              <WizardButton onClick={onNext}>Get started</WizardButton>
+              <WizardButton kind="secondary" onClick={onSkip}>
+                Skip wizard (advanced)
+              </WizardButton>
+            </WizardNavRow>
+          </div>
+        );
+      }
+
+      // ---- Step 2: Replay folder --------------------------------
+
+      function WizardFolderRow({ folder, selected, onToggle }) {
+        const id = `wzr-folder-${folder.path}`;
+        const isSel = (selected || []).includes(folder.path);
+        return (
+          <label htmlFor={id} style={{
+            display: "flex", gap: "var(--space-2)",
+            padding: "var(--space-3)",
+            background: "var(--color-bg-elevated)",
+            borderRadius: "var(--radius-md)",
+            border: isSel
+              ? "1px solid var(--color-info)"
+              : "1px solid var(--color-border-subtle)",
+            cursor: "pointer",
+          }}>
+            <input id={id} type="checkbox"
+                   checked={isSel}
+                   onChange={() => onToggle(folder.path)} />
+            <div style={{ flex: 1, fontSize: "var(--font-size-sm)" }}>
+              <div style={{ color: "var(--color-text-primary)",
+                            wordBreak: "break-all" }}>{folder.path}</div>
+              <div style={{ color: "var(--color-text-muted)",
+                            fontSize: "var(--font-size-xs)" }}>
+                {folder.replay_count} replays · {folder.source}
+              </div>
+            </div>
+          </label>
+        );
+      }
+
+      function WizardStepReplays({ folders, scanning, scanError,
+                                   selected, onToggle,
+                                   customInput, onCustomInput, onAddCustom,
+                                   onRescan, onNext, onBack }) {
+        const canAddCustom = !!(customInput && customInput.trim()
+            && !(selected || []).includes(customInput.trim()));
+        return (
+          <div style={{ padding: "var(--space-6)" }}>
+            <h2 id="wizard-title" style={{ fontSize: "var(--font-size-xl)",
+                                            marginBottom: "var(--space-3)" }}>
+              Where are your replays?
+            </h2>
+            <p style={{ fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-secondary)",
+                        marginBottom: "var(--space-4)" }}>
+              We checked the usual places. Pick one or more &mdash; multi-account
+              and multi-region setups should select every folder that's yours.
+            </p>
+            {scanning ? <div style={{ color: "var(--color-text-muted)" }}>Scanning…</div> : null}
+            <WizardError>{scanError}</WizardError>
+            <div style={{ display: "flex", flexDirection: "column",
+                          gap: "var(--space-2)" }}>
+              {(folders || []).map((f) => (
+                <WizardFolderRow key={f.path} folder={f}
+                                 selected={selected} onToggle={onToggle} />
+              ))}
+            </div>
+            <WizardCustomFolderRow
+              customInput={customInput}
+              canAdd={canAddCustom}
+              onCustomInput={onCustomInput}
+              onAddCustom={onAddCustom} />
+            <WizardSelectedFolders selected={selected} onToggle={onToggle} />
+            <WizardNavRow>
+              <WizardButton kind="secondary" onClick={onBack}>Back</WizardButton>
+              <WizardButton kind="secondary" onClick={onRescan}>Rescan</WizardButton>
+              <WizardButton onClick={onNext}
+                            disabled={!(selected && selected.length > 0)}>
+                Next
+              </WizardButton>
+            </WizardNavRow>
+          </div>
+        );
+      }
+
+      function WizardCustomFolderRow({ customInput, canAdd,
+                                       onCustomInput, onAddCustom }) {
+        const onKey = (e) => {
+          if (e.key === "Enter" && canAdd) { e.preventDefault(); onAddCustom(); }
+        };
+        return (
+          <div style={{ marginTop: "var(--space-4)" }}>
+            <WizardField label="Add a custom folder path"
+                         htmlFor="wzr-custom-folder"
+                         hint="Press Enter or click Add to include it.">
+              <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                <WizardInput id="wzr-custom-folder"
+                             placeholder="C:\\Users\\you\\...\\Replays\\Multiplayer"
+                             value={customInput || ""}
+                             onKeyDown={onKey}
+                             onChange={(e) => onCustomInput(e.target.value)} />
+                <WizardButton kind="secondary" onClick={onAddCustom}
+                              disabled={!canAdd}>Add</WizardButton>
+              </div>
+            </WizardField>
+          </div>
+        );
+      }
+
+      function WizardSelectedFolders({ selected, onToggle }) {
+        const list = selected || [];
+        if (list.length === 0) return null;
+        return (
+          <div style={{
+            marginTop: "var(--space-3)",
+            padding: "var(--space-3)",
+            background: "var(--color-bg-primary)",
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--color-border-subtle)",
+          }}>
+            <div style={{ fontSize: "var(--font-size-xs)",
+                          color: "var(--color-text-secondary)",
+                          marginBottom: "var(--space-2)" }}>
+              Selected ({list.length}):
+            </div>
+            <div style={{ display: "flex", flexDirection: "column",
+                          gap: "var(--space-1)" }}>
+              {list.map((p) => (
+                <div key={p} style={{
+                  display: "flex", gap: "var(--space-2)",
+                  alignItems: "center",
+                  fontSize: "var(--font-size-xs)",
+                  fontFamily: "var(--font-family-mono)",
+                  color: "var(--color-text-primary)",
+                }}>
+                  <span style={{ flex: 1, wordBreak: "break-all" }}>{p}</span>
+                  <button type="button" onClick={() => onToggle(p)}
+                    aria-label={`Remove ${p}`}
+                    style={{
+                      background: "transparent",
+                      color: "var(--color-text-muted)",
+                      border: "1px solid var(--color-border-subtle)",
+                      borderRadius: "var(--radius-sm)",
+                      padding: "var(--space-1) var(--space-2)",
+                      cursor: "pointer",
+                    }}>×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      // ---- Step 3: Identity -------------------------------------
+
+      function WizardIdentityRow({ player, selectedIds, onToggle }) {
+        const id = `wzr-id-${player.character_id}`;
+        const isSel = (selectedIds || []).includes(player.character_id);
+        const races = player.races || {};
+        const total = (races.Protoss || 0) + (races.Terran || 0)
+                    + (races.Zerg || 0) + (races.Random || 0);
+        const breakdown = total > 0
+          ? WIZARD_RACES
+              .map((r) => ({ r, n: races[r] || 0 }))
+              .filter((x) => x.n > 0)
+              .map((x) => `${x.r[0]} ${Math.round(100 * x.n / total)}%`)
+              .join(" · ")
+          : "";
+        return (
+          <tr style={{ borderTop: "1px solid var(--color-divider)" }}>
+            <td style={{ padding: "var(--space-1)" }}>
+              <input id={id} type="checkbox"
+                     checked={isSel}
+                     onChange={() => onToggle(player)} />
+            </td>
+            <td style={{ padding: "var(--space-1)" }}>
+              <label htmlFor={id}>{player.name}</label>
+              {breakdown ? (
+                <div style={{ fontSize: "var(--font-size-xs)",
+                               color: "var(--color-text-muted)" }}>
+                  {breakdown}
+                </div>
+              ) : null}
+            </td>
+            <td style={{ padding: "var(--space-1)",
+                         fontFamily: "var(--font-family-mono)",
+                         color: "var(--color-text-muted)" }}>
+              {player.character_id}
+            </td>
+            <td style={{ padding: "var(--space-1)", textAlign: "right" }}>
+              {player.games_seen}
+            </td>
+          </tr>
+        );
+      }
+
+      function WizardIdentityTable({ identities, selectedIds, onToggle }) {
+        return (
+          <table style={{ width: "100%", borderCollapse: "collapse",
+                           fontSize: "var(--font-size-sm)" }}>
+            <thead>
+              <tr style={{ color: "var(--color-text-secondary)" }}>
+                <th style={{ textAlign: "left",  padding: "var(--space-1)" }}>Pick</th>
+                <th style={{ textAlign: "left",  padding: "var(--space-1)" }}>Name</th>
+                <th style={{ textAlign: "left",  padding: "var(--space-1)" }}>Character ID</th>
+                <th style={{ textAlign: "right", padding: "var(--space-1)" }}>Games</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(identities || []).map((p) => (
+                <WizardIdentityRow key={p.character_id} player={p}
+                                   selectedIds={selectedIds}
+                                   onToggle={onToggle} />
+              ))}
+            </tbody>
+          </table>
+        );
+      }
+
+      function WizardStepIdentity({ scanning, scanError, identities,
+                                    selectedIds, onToggle, onRescan,
+                                    onNext, onBack }) {
+        const count = (selectedIds || []).length;
+        return (
+          <div style={{ padding: "var(--space-6)" }}>
+            <h2 id="wizard-title" style={{ fontSize: "var(--font-size-xl)",
+                                            marginBottom: "var(--space-3)" }}>
+              Which of these are you?
+            </h2>
+            <p style={{ fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-secondary)",
+                        marginBottom: "var(--space-4)" }}>
+              Check every account that's yours &mdash; including alt regions
+              and other Battle.net accounts. The most-played one becomes
+              your primary identity; the others are tracked for stat
+              filtering and SC2Pulse aggregation.
+            </p>
+            {scanning ? <div style={{ color: "var(--color-text-muted)" }}>Scanning replays…</div> : null}
+            <WizardError>{scanError}</WizardError>
+            <WizardIdentityTable identities={identities}
+                                 selectedIds={selectedIds}
+                                 onToggle={onToggle} />
+            <WizardNavRow>
+              <WizardButton kind="secondary" onClick={onBack}>Back</WizardButton>
+              <WizardButton kind="secondary" onClick={onRescan}>Rescan</WizardButton>
+              <WizardButton onClick={onNext} disabled={count === 0}>
+                Next ({count})
+              </WizardButton>
+            </WizardNavRow>
+          </div>
+        );
+      }
+
+      // ---- Step 4: Race -----------------------------------------
+
+      function WizardRaceTile({ race, selectedRaces, onToggle }) {
+        const id = `wzr-race-${race}`;
+        const sel = (selectedRaces || []).includes(race);
+        return (
+          <label htmlFor={id} style={{
+            flex: "1 1 140px",
+            background: sel ? "var(--color-bg-elevated)" : "var(--color-bg-primary)",
+            border: sel
+              ? "1px solid var(--color-info)"
+              : "1px solid var(--color-border-default)",
+            borderRadius: "var(--radius-md)",
+            padding: "var(--space-3)", cursor: "pointer",
+            display: "flex", alignItems: "center", gap: "var(--space-2)",
+          }}>
+            <input id={id} type="checkbox"
+                   checked={sel} onChange={() => onToggle(race)} />
+            <span>{race}</span>
+          </label>
+        );
+      }
+
+      function WizardStepRace({ selectedRaces, onToggle, onNext, onBack }) {
+        const list = selectedRaces || [];
+        const hasRandom = list.includes("Random");
+        const hasMulti = list.length > 1;
+        return (
+          <div style={{ padding: "var(--space-6)" }}>
+            <h2 id="wizard-title" style={{ fontSize: "var(--font-size-xl)",
+                                            marginBottom: "var(--space-3)" }}>
+              Which races do you play?
+            </h2>
+            <fieldset style={{ border: "none", padding: 0 }}>
+              <legend style={{ fontSize: "var(--font-size-sm)",
+                               color: "var(--color-text-secondary)",
+                               marginBottom: "var(--space-3)" }}>
+                Pick every race you regularly play. Single-race players
+                check one; off-race or Random players check multiple.
+              </legend>
+              <div style={{ display: "flex", gap: "var(--space-2)",
+                            flexWrap: "wrap" }}>
+                {WIZARD_RACES.map((r) => (
+                  <WizardRaceTile key={r} race={r}
+                                  selectedRaces={list}
+                                  onToggle={onToggle} />
+                ))}
+              </div>
+            </fieldset>
+            {hasRandom ? (
+              <p style={{ fontSize: "var(--font-size-sm)",
+                          color: "var(--color-text-secondary)",
+                          marginTop: "var(--space-3)" }}>
+                With Random selected we'll track per-race stats whenever
+                the actual race is known.
+              </p>
+            ) : null}
+            {hasMulti && !hasRandom ? (
+              <p style={{ fontSize: "var(--font-size-sm)",
+                          color: "var(--color-text-secondary)",
+                          marginTop: "var(--space-3)" }}>
+                Multi-race players: stats default to a per-race breakdown.
+              </p>
+            ) : null}
+            <WizardNavRow>
+              <WizardButton kind="secondary" onClick={onBack}>Back</WizardButton>
+              <WizardButton onClick={onNext} disabled={list.length === 0}>
+                Next ({list.length})
+              </WizardButton>
+            </WizardNavRow>
+          </div>
+        );
+      }
+
+      // ---- Step 5: Integrations (3 collapsible cards) -----------
+
+      function WizardIntegrationCard({ title, expanded, onToggle, children }) {
+        return (
+          <div style={{
+            background: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border-subtle)",
+            borderRadius: "var(--radius-md)",
+            marginBottom: "var(--space-2)",
+          }}>
+            <button type="button" onClick={onToggle} aria-expanded={expanded}
+              style={{
+                width: "100%", textAlign: "left", padding: "var(--space-3)",
+                background: "transparent", color: "var(--color-text-primary)",
+                border: "none", cursor: "pointer", fontWeight: 500,
+                fontSize: "var(--font-size-sm)",
+              }}>
+              {expanded ? "▾ " : "▸ "}{title}
+            </button>
+            {expanded
+              ? <div style={{ padding: "0 var(--space-3) var(--space-3)" }}>
+                  {children}
+                </div>
+              : null}
+          </div>
+        );
+      }
+
+      function WizardTestStatus({ status }) {
+        if (!status) return null;
+        const colorMap = {
+          ok:      "var(--color-success)",
+          fail:    "var(--color-danger)",
+          testing: "var(--color-text-muted)",
+        };
+        return (
+          <div role="status" aria-live="polite"
+               style={{ marginTop: "var(--space-2)",
+                        fontSize: "var(--font-size-xs)",
+                        color: colorMap[status.kind] || "var(--color-text-muted)" }}>
+            {status.message}
+          </div>
+        );
+      }
+
+      function WizardHowTo({ title, steps }) {
+        return (
+          <details style={{
+            marginBottom: "var(--space-3)",
+            background: "var(--color-bg-primary)",
+            border: "1px solid var(--color-border-subtle)",
+            borderRadius: "var(--radius-md)",
+            padding: "var(--space-2) var(--space-3)",
+          }}>
+            <summary style={{
+              cursor: "pointer", fontSize: "var(--font-size-sm)",
+              color: "var(--color-text-secondary)",
+            }}>
+              {title}
+            </summary>
+            <ol style={{
+              margin: "var(--space-2) 0 0",
+              paddingLeft: "var(--space-6)",
+              fontSize: "var(--font-size-sm)",
+              lineHeight: "var(--line-height-relaxed)",
+              color: "var(--color-text-primary)",
+            }}>
+              {steps.map((step, i) => (
+                <li key={i} style={{ marginBottom: "var(--space-1)" }}>
+                  {step}
+                </li>
+              ))}
+            </ol>
+          </details>
+        );
+      }
+
+      function WizardCopyBox({ value }) {
+        const [copied, setCopied] = useState(false);
+        const onCopy = async () => {
+          try {
+            await navigator.clipboard.writeText(value);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          } catch (_e) { /* no-op */ }
+        };
+        return (
+          <div style={{ display: "flex", gap: "var(--space-2)",
+                        marginBottom: "var(--space-3)" }}>
+            <code style={{
+              flex: 1,
+              padding: "var(--space-2) var(--space-3)",
+              background: "var(--color-bg-primary)",
+              border: "1px solid var(--color-border-default)",
+              borderRadius: "var(--radius-md)",
+              fontFamily: "var(--font-family-mono)",
+              fontSize: "var(--font-size-sm)",
+              wordBreak: "break-all",
+            }}>{value}</code>
+            <WizardButton kind="secondary" onClick={onCopy}>
+              {copied ? "Copied!" : "Copy"}
+            </WizardButton>
+          </div>
+        );
+      }
+
+      const PULSE_LEAGUE_LABEL = {
+        0: "Bronze", 1: "Silver", 2: "Gold", 3: "Platinum",
+        4: "Diamond", 5: "Master", 6: "Grandmaster",
+      };
+
+      function WizardPulseMatchRow({ match, selectedIds, onPick }) {
+        const isSel = (selectedIds || []).includes(match.pulse_id);
+        const league = PULSE_LEAGUE_LABEL[match.league_max];
+        const meta = [
+          (match.region || "?").toUpperCase(),
+          league || null,
+          (match.rating_max != null) ? `MMR ${match.rating_max}` : null,
+          (match.games_played != null) ? `${match.games_played} games` : null,
+        ].filter(Boolean).join(" · ");
+        return (
+          <div style={{
+            display: "flex", gap: "var(--space-2)",
+            alignItems: "center", padding: "var(--space-2)",
+            background: isSel
+              ? "var(--color-bg-elevated)" : "var(--color-bg-primary)",
+            border: isSel
+              ? "1px solid var(--color-info)"
+              : "1px solid var(--color-border-subtle)",
+            borderRadius: "var(--radius-md)",
+            marginBottom: "var(--space-2)",
+          }}>
+            <div style={{ flex: 1, fontSize: "var(--font-size-sm)" }}>
+              <div style={{ color: "var(--color-text-primary)" }}>
+                {match.name || "(unnamed)"}
+              </div>
+              <div style={{
+                color: "var(--color-text-muted)",
+                fontSize: "var(--font-size-xs)",
+                fontFamily: "var(--font-family-mono)",
+              }}>
+                pulse_id={match.pulse_id} {meta ? "· " + meta : ""}
+              </div>
+            </div>
+            <WizardButton kind={isSel ? "primary" : "secondary"}
+                          onClick={() => onPick(match)}>
+              {isSel ? "Picked ✓" : "This one"}
+            </WizardButton>
+          </div>
+        );
+      }
+
+      function WizardPulseSearchResults({ pulse, onPick }) {
+        const matches = pulse.matches || [];
+        if (pulse.searchStatus?.kind === "fail") {
+          return <WizardError>{pulse.searchStatus.message}</WizardError>;
+        }
+        if (matches.length === 0 && pulse.searchStatus?.kind === "ok") {
+          return (
+            <p style={{ fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-secondary)" }}>
+              No SC2Pulse profile found for that name. Try a different
+              spelling or check the player exists on
+              sc2pulse.nephest.com.
+            </p>
+          );
+        }
+        if (matches.length === 0) return null;
+        return (
+          <div style={{ marginBottom: "var(--space-3)" }}>
+            <div style={{ fontSize: "var(--font-size-xs)",
+                          color: "var(--color-text-secondary)",
+                          marginBottom: "var(--space-2)" }}>
+              Multiple matches? Pick every row that's yours &mdash;
+              multi-region / alt accounts are normal here.
+            </div>
+            {matches.map((m) => (
+              <WizardPulseMatchRow key={m.pulse_id} match={m}
+                                   selectedIds={pulse.character_ids}
+                                   onPick={onPick} />
+            ))}
+          </div>
+        );
+      }
+
+      function WizardPulseCard({ pulse, onChange, onSearch, onPickMatch,
+                                  onTest, expanded, onToggle }) {
+        const busy = pulse.status?.kind === "testing";
+        const searching = pulse.searchStatus?.kind === "searching";
+        const term = pulse.search_term || "";
+        return (
+          <WizardIntegrationCard title="SC2Pulse (recommended) — live MMR"
+                                 expanded={expanded} onToggle={onToggle}>
+            <p style={{ fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-secondary)",
+                        marginBottom: "var(--space-3)" }}>
+              SC2Pulse is the community ladder API. Search by your in-game
+              name and pick your profile from the list &mdash; we save the
+              SC2Pulse ID for you, no manual ID hunting required.
+            </p>
+            <WizardField label="Search by name" htmlFor="wzr-pulse-name"
+                         hint="Default-filled from your Step 3 identity. Change if needed.">
+              <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                <WizardInput id="wzr-pulse-name"
+                             placeholder="e.g. ReSpOnSe"
+                             value={term}
+                             onChange={(e) => onChange({ search_term: e.target.value })} />
+                <WizardButton kind="secondary" onClick={onSearch}
+                              disabled={!term || searching}>
+                  {searching ? "Searching…" : "Search"}
+                </WizardButton>
+              </div>
+            </WizardField>
+            <WizardPulseSearchResults pulse={pulse} onPick={onPickMatch} />
+            {(pulse.character_ids || []).length > 0 ? (
+              <div style={{
+                fontSize: "var(--font-size-xs)",
+                color: "var(--color-text-muted)",
+                marginBottom: "var(--space-2)",
+              }}>
+                Picked {(pulse.character_ids || []).length}:
+                {" "}{(pulse.character_ids || []).join(", ")}
+              </div>
+            ) : null}
+            <WizardButton kind="secondary" onClick={onTest}
+                          disabled={(pulse.character_ids || []).length === 0 || busy}>
+              {busy ? "Testing…" : "Test connection"}
+            </WizardButton>
+            <WizardTestStatus status={pulse.status} />
+          </WizardIntegrationCard>
+        );
+      }
+
+      function WizardTwitchCard({ twitch, onChange, onTest, expanded, onToggle }) {
+        const busy = twitch.status?.kind === "testing";
+        return (
+          <WizardIntegrationCard title="Twitch — chat bot for !commands"
+                                 expanded={expanded} onToggle={onToggle}>
+            <p style={{ fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-secondary)",
+                        marginBottom: "var(--space-3)" }}>
+              The bot replies to <code>!session</code> / <code>!record</code>
+              in your chat. Skip this if you don't stream.
+            </p>
+            <WizardHowTo title="How do I generate an OAuth token?"
+              steps={[
+                <span key="s1">Open <a href="https://twitchtokengenerator.com"
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ color: "var(--color-info)" }}>
+                  twitchtokengenerator.com</a> in a new tab.</span>,
+                "Pick \"Bot Chat Token\" (the 2nd option).",
+                "Authorize with the Twitch account that should send the messages — usually your own.",
+                "Copy the \"ACCESS TOKEN\" value (starts with letters/numbers, NOT \"oauth:\" prefix).",
+                "Paste it below. Channel = your Twitch login (lowercase).",
+              ]} />
+            <WizardField label="Channel" htmlFor="wzr-twitch-ch"
+                         hint="Your Twitch login, lowercase (no #)">
+              <WizardInput id="wzr-twitch-ch"
+                           value={twitch.channel || ""}
+                           onChange={(e) => onChange({ channel: e.target.value })} />
+            </WizardField>
+            <WizardField label="OAuth token" htmlFor="wzr-twitch-tok"
+                         hint="The Access Token from twitchtokengenerator.com.">
+              <WizardInput id="wzr-twitch-tok" type="password"
+                           value={twitch.oauth_token || ""}
+                           onChange={(e) => onChange({ oauth_token: e.target.value })} />
+            </WizardField>
+            <WizardButton kind="secondary" onClick={onTest}
+                          disabled={!twitch.oauth_token || busy}>
+              {busy ? "Testing…" : "Test connection"}
+            </WizardButton>
+            <WizardTestStatus status={twitch.status} />
+          </WizardIntegrationCard>
+        );
+      }
+
+      function WizardObsCard({ obs, onChange, onTest, expanded, onToggle }) {
+        const busy = obs.status?.kind === "testing";
+        return (
+          <WizardIntegrationCard title="OBS Studio — control + overlay"
+                                 expanded={expanded} onToggle={onToggle}>
+            <p style={{ fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-secondary)",
+                        marginBottom: "var(--space-3)" }}>
+              Lets us flip scenes and read OBS state. Pair with the Browser
+              Source URL below to also display the live overlay in OBS.
+            </p>
+            <WizardHowTo title="How do I enable OBS WebSocket?"
+              steps={[
+                "In OBS Studio (must be 28.0 or newer), open the menu: Tools → WebSocket Server Settings.",
+                "Tick \"Enable WebSocket server\".",
+                "Leave the Server Port at 4455 unless something else is using it.",
+                "Tick \"Enable Authentication\" and click Generate Password.",
+                "Copy the generated password.",
+                "Click Apply / OK in OBS.",
+                "Paste host (127.0.0.1), port (4455), and the generated password below, then Test connection.",
+              ]} />
+            <WizardHowTo title="How do I add the live overlay as a Browser Source?"
+              steps={[
+                "In OBS, click the + under Sources and pick \"Browser\".",
+                "Name it (e.g. \"SC2 Overlay\") and click OK.",
+                "Paste the URL from the Streamlabs / Browser-source card below.",
+                "Set the Width to 1920 and Height to 1080.",
+                "Tick \"Refresh browser when scene becomes active\".",
+              ]} />
+            <WizardField label="Host" htmlFor="wzr-obs-host"
+                         hint="127.0.0.1 if OBS runs on this same PC.">
+              <WizardInput id="wzr-obs-host"
+                           value={obs.host || WIZARD_DEFAULT_OBS_HOST}
+                           onChange={(e) => onChange({ host: e.target.value })} />
+            </WizardField>
+            <WizardField label="Port" htmlFor="wzr-obs-port"
+                         hint="4455 unless you changed it.">
+              <WizardInput id="wzr-obs-port" type="number"
+                           value={obs.port || WIZARD_DEFAULT_OBS_PORT}
+                           onChange={(e) => onChange({ port: Number(e.target.value) })} />
+            </WizardField>
+            <WizardField label="Password" htmlFor="wzr-obs-pw"
+                         hint="The one OBS generated above.">
+              <WizardInput id="wzr-obs-pw" type="password"
+                           value={obs.password || ""}
+                           onChange={(e) => onChange({ password: e.target.value })} />
+            </WizardField>
+            <WizardButton kind="secondary" onClick={onTest}
+                          disabled={!obs.port || busy}>
+              {busy ? "Testing…" : "Test connection"}
+            </WizardButton>
+            <WizardTestStatus status={obs.status} />
+          </WizardIntegrationCard>
+        );
+      }
+
+      function WizardWidgetRowHeader({ widget }) {
+        return (
+          <div style={{ display: "flex", alignItems: "baseline",
+                        gap: "var(--space-2)",
+                        marginBottom: "var(--space-1)" }}>
+            <span style={{ fontWeight: 600,
+                           color: "var(--color-text-primary)",
+                           fontSize: "var(--font-size-sm)" }}>
+              {widget.title}
+            </span>
+            {widget.recommended ? (
+              <span style={{
+                fontSize: "var(--font-size-xs)",
+                color: "var(--color-success)",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}>recommended</span>
+            ) : null}
+            <span style={{ marginLeft: "auto",
+                           fontSize: "var(--font-size-xs)",
+                           color: "var(--color-text-muted)" }}>
+              {widget.trigger} &middot; {widget.w}&times;{widget.h}
+            </span>
+          </div>
+        );
+      }
+
+      function WizardCopyableUrl({ url }) {
+        const [copied, setCopied] = useState(false);
+        const onCopy = async () => {
+          try {
+            await navigator.clipboard.writeText(url);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          } catch (_e) { /* clipboard API may be blocked */ }
+        };
+        return (
+          <div style={{ display: "flex", gap: "var(--space-2)" }}>
+            <code style={{
+              flex: 1, fontFamily: "var(--font-family-mono)",
+              fontSize: "var(--font-size-xs)",
+              padding: "var(--space-1) var(--space-2)",
+              background: "var(--color-bg-elevated)",
+              color: "var(--color-text-primary)",
+              border: "1px solid var(--color-border-subtle)",
+              borderRadius: "var(--radius-sm)",
+              wordBreak: "break-all",
+            }}>{url}</code>
+            <WizardButton kind="secondary" onClick={onCopy}>
+              {copied ? "Copied!" : "Copy"}
+            </WizardButton>
+          </div>
+        );
+      }
+
+      function WizardWidgetRow({ widget, baseUrl }) {
+        const url = baseUrl + "widgets/" + widget.file;
+        return (
+          <div style={{
+            background: "var(--color-bg-primary)",
+            border: widget.recommended
+              ? "1px solid var(--color-success)"
+              : "1px solid var(--color-border-subtle)",
+            borderRadius: "var(--radius-md)",
+            padding: "var(--space-3)",
+            marginBottom: "var(--space-2)",
+          }}>
+            <WizardWidgetRowHeader widget={widget} />
+            <div style={{ fontSize: "var(--font-size-xs)",
+                          color: "var(--color-text-secondary)",
+                          marginBottom: "var(--space-2)",
+                          lineHeight: "var(--line-height-relaxed)" }}>
+              {widget.desc}
+            </div>
+            <WizardCopyableUrl url={url} />
+          </div>
+        );
+      }
+
+      function WizardStreamlabsToolbar({ showAll, onToggleShowAll,
+                                              visibleCount, totalCount,
+                                              onCopyAll, allCopied }) {
+        return (
+          <div style={{ display: "flex", gap: "var(--space-2)",
+                        marginBottom: "var(--space-3)",
+                        flexWrap: "wrap" }}>
+            <WizardButton kind="secondary" onClick={onToggleShowAll}>
+              {showAll ? "Show recommended only (4)"
+                       : `Show all (${totalCount})`}
+            </WizardButton>
+            <WizardButton kind="secondary" onClick={onCopyAll}>
+              {allCopied ? "Copied!" : `Copy all (${visibleCount})`}
+            </WizardButton>
+          </div>
+        );
+      }
+
+      function WizardStreamlabsAllInOne() {
+        return (
+          <details style={{
+            marginTop: "var(--space-3)",
+            fontSize: "var(--font-size-sm)",
+            color: "var(--color-text-secondary)",
+          }}>
+            <summary style={{ cursor: "pointer" }}>
+              Or paste the all-in-one URL (every widget pinned in one
+              fixed layout)
+            </summary>
+            <div style={{ marginTop: "var(--space-2)" }}>
+              <WizardCopyBox value={WIZARD_OVERLAY_URL} />
+              <p style={{ fontSize: "var(--font-size-xs)",
+                          color: "var(--color-text-muted)" }}>
+                Use this URL once at 1920&times;1080 if you don&apos;t
+                want to manage individual widget sources. Less flexible
+                but a one-click setup.
+              </p>
+            </div>
+          </details>
+        );
+      }
+
+      const WIZARD_STREAMLABS_HOWTO_STREAMLABS = [
+        "In Streamlabs Desktop, click the + under Sources.",
+        "Pick \"Browser Source\" (sometimes shown as \"Web Page\").",
+        "Name it after the widget (e.g. \"SC2 Session\") and click Add Source.",
+        "Paste that widget\u2019s URL into the URL field.",
+        "Set Width and Height to the suggested values shown above.",
+        "Tick \"Shutdown source when not visible\" to save resources.",
+        "Tick \"Refresh browser when scene becomes active\".",
+        "Click Done, then drag/resize the widget where you want it.",
+        "Repeat for each widget you want.",
+      ];
+      const WIZARD_STREAMLABS_HOWTO_OBS = [
+        "In OBS, click the + under Sources and pick \"Browser\".",
+        "Name it after the widget and click OK.",
+        "Paste that widget\u2019s URL into the URL field.",
+        "Set Width and Height to the suggested values shown above.",
+        "Tick \"Refresh browser when scene becomes active\".",
+        "Click OK, then drag the source to where you want it.",
+        "Repeat for each widget you want.",
+      ];
+
+      function useWizardStreamlabsState() {
+        const [showAll, setShowAll] = useState(false);
+        const [allCopied, setAllCopied] = useState(false);
+        const visible = showAll
+          ? WIZARD_OVERLAY_WIDGETS
+          : WIZARD_OVERLAY_WIDGETS.filter((w) => w.recommended);
+        const copyAllUrls = async () => {
+          const urls = visible
+            .map((w) => `${w.title}\t${WIZARD_OVERLAY_URL}widgets/${w.file}`)
+            .join("\n");
+          try {
+            await navigator.clipboard.writeText(urls);
+            setAllCopied(true);
+            setTimeout(() => setAllCopied(false), 1500);
+          } catch (_e) { /* clipboard API may be blocked */ }
+        };
+        return { showAll, setShowAll, visible, copyAllUrls, allCopied };
+      }
+
+      function WizardStreamlabsCard({ expanded, onToggle }) {
+        const s = useWizardStreamlabsState();
+        return (
+          <WizardIntegrationCard title="Streamlabs / OBS Browser Source"
+                                 expanded={expanded} onToggle={onToggle}>
+            <p style={{ fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-secondary)",
+                        marginBottom: "var(--space-3)" }}>
+              Each card below is its own Browser Source URL. Add only the
+              widgets you want and drag them around your scene independently.
+              The four <span style={{ color: "var(--color-success)" }}>
+              RECOMMENDED</span> widgets cover most stream needs.
+            </p>
+            <WizardStreamlabsToolbar
+              showAll={s.showAll}
+              onToggleShowAll={() => s.setShowAll(!s.showAll)}
+              visibleCount={s.visible.length}
+              totalCount={WIZARD_OVERLAY_WIDGETS.length}
+              onCopyAll={s.copyAllUrls}
+              allCopied={s.allCopied} />
+            {s.visible.map((w) => (
+              <WizardWidgetRow key={w.file} widget={w}
+                               baseUrl={WIZARD_OVERLAY_URL} />
+            ))}
+            <WizardStreamlabsAllInOne />
+            <WizardHowTo title="How do I add a widget in Streamlabs Desktop?"
+              steps={WIZARD_STREAMLABS_HOWTO_STREAMLABS} />
+            <WizardHowTo title="How do I add a widget in OBS Studio?"
+              steps={WIZARD_STREAMLABS_HOWTO_OBS} />
+            <p style={{ fontSize: "var(--font-size-xs)",
+                        color: "var(--color-text-muted)" }}>
+              Tip: keep this app&apos;s server running while you stream.
+              Widgets connect to it for live data and update whenever a
+              new replay lands.
+            </p>
+          </WizardIntegrationCard>
+        );
+      }
+
+      function WizardStepIntegrations({ twitch, obs, pulse,
+                                        onChangeTwitch, onChangeObs, onChangePulse,
+                                        onTest, onSkipAll, onNext, onBack }) {
+        const [open, setOpen] = useState({
+          pulse: true, streamlabs: false, twitch: false, obs: false });
+        const toggle = (k) => setOpen({ ...open, [k]: !open[k] });
+        return (
+          <div style={{ padding: "var(--space-6)" }}>
+            <h2 id="wizard-title" style={{ fontSize: "var(--font-size-xl)",
+                                            marginBottom: "var(--space-3)" }}>
+              Optional: connect your stack
+            </h2>
+            <p style={{ fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-secondary)",
+                        marginBottom: "var(--space-4)" }}>
+              Each card has a "How do I…" expander with step-by-step
+              instructions. None of these are required &mdash; skip any
+              you don't use.
+            </p>
+            <WizardPulseCard pulse={pulse} onChange={onChangePulse}
+                             onSearch={() => onTest("pulse-search")}
+                             onPickMatch={(m) => onTest("pulse-pick", m)}
+                             onTest={() => onTest("pulse")}
+                             expanded={open.pulse}
+                             onToggle={() => toggle("pulse")} />
+            <WizardStreamlabsCard expanded={open.streamlabs}
+                                  onToggle={() => toggle("streamlabs")} />
+            <WizardTwitchCard twitch={twitch} onChange={onChangeTwitch}
+                              onTest={() => onTest("twitch")}
+                              expanded={open.twitch}
+                              onToggle={() => toggle("twitch")} />
+            <WizardObsCard obs={obs} onChange={onChangeObs}
+                           onTest={() => onTest("obs")}
+                           expanded={open.obs}
+                           onToggle={() => toggle("obs")} />
+            <WizardNavRow>
+              <WizardButton kind="secondary" onClick={onBack}>Back</WizardButton>
+              <WizardButton kind="secondary" onClick={onSkipAll}>Skip all</WizardButton>
+              <WizardButton onClick={onNext}>Next</WizardButton>
+            </WizardNavRow>
+          </div>
+        );
+      }
+
+      // ---- Step 6: Apply ----------------------------------------
+
+      function WizardSummaryRow({ label, value }) {
+        return (
+          <div style={{ display: "flex", gap: "var(--space-3)",
+                        padding: "var(--space-2) 0",
+                        borderBottom: "1px solid var(--color-divider)" }}>
+            <dt style={{ width: "180px",
+                         color: "var(--color-text-secondary)" }}>{label}</dt>
+            <dd style={{ flex: 1, color: "var(--color-text-primary)",
+                         wordBreak: "break-all" }}>{value || "—"}</dd>
+          </div>
+        );
+      }
+
+      function WizardStepApply({ summary, applying, applyError, onApply, onBack }) {
+        return (
+          <div style={{ padding: "var(--space-6)" }}>
+            <h2 id="wizard-title" style={{ fontSize: "var(--font-size-xl)",
+                                            marginBottom: "var(--space-3)" }}>
+              Ready to save
+            </h2>
+            <dl style={{ fontSize: "var(--font-size-sm)" }}>
+              {summary.map((row) => (
+                <WizardSummaryRow key={row.label}
+                                  label={row.label} value={row.value} />
+              ))}
+            </dl>
+            <WizardError>{applyError}</WizardError>
+            <WizardNavRow>
+              <WizardButton kind="secondary" onClick={onBack} disabled={applying}>
+                Back
+              </WizardButton>
+              <WizardButton onClick={onApply} disabled={applying}>
+                {applying ? "Applying…" : "Apply & start"}
+              </WizardButton>
+            </WizardNavRow>
+          </div>
+        );
+      }
+
+      // ---- Async helpers -----------------------------------------
+
+      async function wizardFetchJson(url, init) {
+        const res = await fetch(url, init || {});
+        let body = null;
+        try { body = await res.json(); } catch (_e) { /* may be empty */ }
+        return { ok: res.ok, status: res.status, body: body || {} };
+      }
+
+      function wizardEmptyTwitch() { return { channel: "", oauth_token: "", status: null }; }
+      function wizardEmptyObs() {
+        return { host: WIZARD_DEFAULT_OBS_HOST, port: WIZARD_DEFAULT_OBS_PORT,
+                 password: "", status: null };
+      }
+      function wizardEmptyPulse() {
+        return {
+          character_ids: [], status: null,
+          search_term: "", matches: [], searchStatus: null,
+        };
+      }
+
+      function wizardJsonInit(body) {
+        return {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        };
+      }
+
+      async function wizardTestTwitch(twitch, setTwitch) {
+        setTwitch({ ...twitch, status: { kind: "testing", message: "Testing…" } });
+        const r = await wizardFetchJson("/api/onboarding/test/twitch",
+            wizardJsonInit({ channel: twitch.channel,
+                             oauth_token: twitch.oauth_token }));
+        const ok = r.ok && r.body.ok;
+        setTwitch({ ...twitch, status: {
+          kind: ok ? "ok" : "fail",
+          message: ok ? `Connected as ${r.body.login}.`
+                      : (r.body.error || "Connection failed."),
+        } });
+      }
+
+      async function wizardTestObs(obs, setObs) {
+        setObs({ ...obs, status: { kind: "testing", message: "Testing…" } });
+        const r = await wizardFetchJson("/api/onboarding/test/obs",
+            wizardJsonInit({ host: obs.host, port: obs.port,
+                             password: obs.password || "" }));
+        const ok = r.ok && r.body.ok;
+        setObs({ ...obs, status: {
+          kind: ok ? "ok" : "fail",
+          message: ok ? "Connected to obs-websocket."
+                      : (r.body.error || "Connection failed."),
+        } });
+      }
+
+      async function wizardSearchPulse(pulse, setPulse) {
+        const term = (pulse.search_term || "").trim();
+        if (!term) return;
+        setPulse({ ...pulse,
+          searchStatus: { kind: "searching", message: "Searching…" } });
+        const r = await wizardFetchJson("/api/onboarding/search-pulse",
+            wizardJsonInit({ name: term }));
+        const matches = (r.body && r.body.matches) || [];
+        const ok = r.ok && r.body.ok;
+        setPulse({ ...pulse,
+          matches,
+          searchStatus: ok
+            ? { kind: "ok", message: "" }
+            : { kind: "fail",
+                message: (r.body && r.body.error) || "Search failed." } });
+      }
+
+      function wizardPickPulseMatch(pulse, setPulse, match) {
+        const cur = pulse.character_ids || [];
+        const next = cur.includes(match.pulse_id)
+          ? cur.filter((id) => id !== match.pulse_id)
+          : [...cur, match.pulse_id];
+        setPulse({ ...pulse, character_ids: next, status: null });
+      }
+
+      async function wizardTestPulse(pulse, setPulse) {
+        const ids = pulse.character_ids || [];
+        if (ids.length === 0) return;
+        setPulse({ ...pulse, status: { kind: "testing", message: "Testing…" } });
+        const r = await wizardFetchJson("/api/onboarding/test/pulse",
+            wizardJsonInit({ character_ids: ids }));
+        const ok = r.ok && r.body.ok;
+        const results = (r.body && r.body.results) || [];
+        const summary = ok
+          ? results.map((x) => `${x.name || "?"} (${x.region || "?"})`).join(", ")
+          : "";
+        setPulse({ ...pulse,
+          status: {
+            kind: ok ? "ok" : "fail",
+            message: ok
+              ? `Verified ${results.length} profile(s): ${summary}`
+              : (r.body.error || "Pulse lookup failed."),
+          },
+        });
+      }
+
+      function wizardPickPrimary(identities) {
+        if (!Array.isArray(identities) || identities.length === 0) return null;
+        let best = identities[0];
+        for (const p of identities) {
+          if ((p.games_seen || 0) > (best.games_seen || 0)) best = p;
+        }
+        return best;
+      }
+
+      function wizardRegionFromCharacterId(cid) {
+        const lead = (cid || "").split("-")[0];
+        return ({ "1": "us", "2": "eu", "3": "kr",
+                  "5": "cn", "6": "sea" })[lead] || "us";
+      }
+
+      // Account_id resolution: identity_cli.py lifts the real Battle.net
+      // account_id from the replay folder path (Accounts/<id>/<toon>/...).
+      // When a custom path doesn't match that layout, fall back to the
+      // toon_handle's last numeric segment so the schema regex still
+      // validates.
+      function wizardAccountIdFor(player) {
+        if (!player) return "0";
+        if (player.account_id) return String(player.account_id);
+        const cid = player.character_id || "";
+        const tail = cid.split("-")[3] || "0";
+        return tail;
+      }
+
+      function wizardBuildProfile(state) {
+        const primary = wizardPickPrimary(state.identities);
+        if (!primary) return null;
+        const battle_tag = `${primary.name}#0`;
+        const region = state.pulse.region
+            || wizardRegionFromCharacterId(primary.character_id);
+        const account_id = wizardAccountIdFor(primary);
+        return {
+          version: 1,
+          battlenet: { battle_tag,
+                       character_id: primary.character_id,
+                       account_id, region },
+          races: Array.isArray(state.races) && state.races.length
+            ? state.races : ["Protoss"],
+          mmr_target: null,
+          preferred_player_name_in_replays: primary.name,
+        };
+      }
+
+      function wizardBuildConfig(state) {
+        const identities = (Array.isArray(state.identities) ? state.identities : [])
+          .map((p) => ({
+            name: p.name,
+            character_id: p.character_id,
+            account_id: wizardAccountIdFor(p),
+            region: wizardRegionFromCharacterId(p.character_id),
+          }));
+        return {
+          version: 1,
+          paths: {
+            sc2_install_dir: "",
+            replay_folders: Array.isArray(state.folders) ? state.folders : [],
+          },
+          identities,
+          macro_engine: {
+            enabled_disciplines: ["chrono", "inject", "mule"],
+            minimum_game_length_sec: 60,
+            engine_version: "2026-04-chain-counted",
+          },
+          build_classifier: {
+            active_definition_ids: [],
+            use_custom_builds: true,
+            use_community_shared_builds: true,
+          },
+          stream_overlay: {
+            enabled: !!(state.twitch.oauth_token || state.obs.password),
+            twitch_channel: state.twitch.channel || null,
+            obs_websocket: {
+              host: state.obs.host || WIZARD_DEFAULT_OBS_HOST,
+              port: state.obs.port || WIZARD_DEFAULT_OBS_PORT,
+              password: state.obs.password || null,
+            },
+            pulse_character_ids: Array.isArray(state.pulse.character_ids)
+              ? state.pulse.character_ids.slice() : [],
+          },
+          telemetry: { opt_in: false },
+          ui: { theme: "dark", default_perspective: "me" },
+        };
+      }
+
+      function wizardAggregateRaces(identities) {
+        const sums = { Protoss: 0, Terran: 0, Zerg: 0, Random: 0 };
+        for (const p of identities || []) {
+          const r = (p && p.races) || {};
+          sums.Protoss += r.Protoss || 0;
+          sums.Terran  += r.Terran  || 0;
+          sums.Zerg    += r.Zerg    || 0;
+          sums.Random  += r.Random  || 0;
+        }
+        return sums;
+      }
+
+      // Threshold: a race must have at least 5% of games OR 5 raw games
+      // to auto-check. Below that, the user can still tick it manually.
+      const WIZARD_RACE_AUTO_PCT = 0.05;
+      const WIZARD_RACE_AUTO_FLOOR = 5;
+
+      function wizardPickAutoRaces(identities) {
+        const sums = wizardAggregateRaces(identities);
+        const total = sums.Protoss + sums.Terran + sums.Zerg + sums.Random;
+        if (total === 0) return [];
+        const out = [];
+        for (const r of WIZARD_RACES) {
+          const n = sums[r] || 0;
+          if (n >= WIZARD_RACE_AUTO_FLOOR
+              || n / total >= WIZARD_RACE_AUTO_PCT) {
+            out.push(r);
+          }
+        }
+        return out;
+      }
+
+      function wizardSummary(state) {
+        const folderLabel = Array.isArray(state.folders) && state.folders.length
+          ? `${state.folders.length} folder(s):\n${state.folders.join("\n")}`
+          : null;
+        const ids = Array.isArray(state.identities) ? state.identities : [];
+        const primary = wizardPickPrimary(ids);
+        const idLabel = ids.length
+          ? `${ids.length} identity(ies):\n` + ids
+              .map((p) => `${p.name} (${p.character_id})`).join("\n")
+          : null;
+        const raceLabel = Array.isArray(state.races) && state.races.length
+          ? state.races.join(", ") : null;
+        return [
+          { label: "Replay folders",      value: folderLabel },
+          { label: "Identities",          value: idLabel },
+          { label: "Primary",
+            value: primary ? `${primary.name} (${primary.character_id})` : null },
+          { label: "Races",               value: raceLabel },
+          { label: "Twitch channel",      value: state.twitch.channel },
+          { label: "OBS host:port",
+            value: state.obs.password ? `${state.obs.host}:${state.obs.port}` : null },
+          { label: "SC2Pulse profile(s)",
+            value: (state.pulse.character_ids || []).length
+              ? `${state.pulse.character_ids.length}: `
+                + state.pulse.character_ids.join(", ")
+              : null },
+        ];
+      }
+
+      async function wizardApply(state, setApplying, setApplyError, onComplete) {
+        setApplying(true); setApplyError("");
+        const profile = wizardBuildProfile(state);
+        if (!profile) {
+          setApplying(false);
+          setApplyError("Pick at least one identity in step 3.");
+          return;
+        }
+        const r1 = await wizardFetchJson("/api/profile",
+            { ...wizardJsonInit(profile), method: "PUT" });
+        if (!r1.ok) {
+          setApplying(false);
+          setApplyError("Profile save failed: "
+              + JSON.stringify(r1.body.errors || r1.body.error));
+          return;
+        }
+        const r2 = await wizardFetchJson("/api/config",
+            { ...wizardJsonInit(wizardBuildConfig(state)), method: "PUT" });
+        if (!r2.ok) {
+          setApplying(false);
+          setApplyError("Config save failed: "
+              + JSON.stringify(r2.body.errors || r2.body.error));
+          return;
+        }
+        // Best-effort: never blocks completion if backfill kickoff fails.
+        await wizardFetchJson("/api/onboarding/start-initial-backfill",
+            { method: "POST" });
+        setApplying(false);
+        if (typeof onComplete === "function") onComplete();
+      }
+
+      // ---- Wizard step dispatcher --------------------------------
+
+      function WizardBody({ step, ctx }) {
+        if (step === 1) return <WizardStepWelcome onNext={() => ctx.setStep(2)}
+                                                  onSkip={ctx.onSkipWizard} />;
+        if (step === 2) return <WizardStepReplays
+            folders={ctx.folders} scanning={ctx.foldersLoading}
+            scanError={ctx.foldersError}
+            selected={ctx.selectedFolders}
+            onToggle={ctx.onToggleFolder}
+            customInput={ctx.customInput}
+            onCustomInput={ctx.setCustomInput}
+            onAddCustom={ctx.onAddCustomFolder}
+            onRescan={ctx.scanFolders}
+            onNext={ctx.goNextFromReplays}
+            onBack={() => ctx.setStep(1)} />;
+        if (step === 3) return <WizardStepIdentity
+            scanning={ctx.identitiesLoading} scanError={ctx.identitiesError}
+            identities={ctx.identities}
+            selectedIds={(ctx.selectedIdentities || []).map((p) => p.character_id)}
+            onToggle={ctx.onToggleIdentity}
+            onRescan={() => ctx.scanIdentities(ctx.selectedFolders || [])}
+            onNext={() => ctx.setStep(4)} onBack={() => ctx.setStep(2)} />;
+        if (step === 4) return <WizardStepRace
+            selectedRaces={ctx.selectedRaces}
+            onToggle={ctx.onToggleRace}
+            onNext={() => ctx.setStep(5)} onBack={() => ctx.setStep(3)} />;
+        if (step === 5) return <WizardStepIntegrations
+            twitch={ctx.twitch} obs={ctx.obs} pulse={ctx.pulse}
+            onChangeTwitch={(p) => ctx.setTwitch({ ...ctx.twitch, ...p, status: null })}
+            onChangeObs={(p) => ctx.setObs({ ...ctx.obs, ...p, status: null })}
+            onChangePulse={(p) => ctx.setPulse({ ...ctx.pulse, ...p, status: null })}
+            onTest={ctx.onTest} onSkipAll={() => ctx.setStep(6)}
+            onNext={() => ctx.setStep(6)} onBack={() => ctx.setStep(4)} />;
+        if (step === 6) return <WizardStepApply
+            summary={wizardSummary({
+              folders: ctx.selectedFolders,
+              identities: ctx.selectedIdentities,
+              races: ctx.selectedRaces,
+              twitch: ctx.twitch, obs: ctx.obs, pulse: ctx.pulse,
+            })}
+            applying={ctx.applying}
+            applyError={ctx.applyError}
+            onApply={ctx.onApply} onBack={() => ctx.setStep(5)} />;
+        return null;
+      }
+
+      // ---- Wizard hooks ------------------------------------------
+
+      function useWizardState() {
+        const [step, setStep] = useState(1);
+        const [folders, setFolders] = useState([]);
+        const [selectedFolders, setSelectedFolders] = useState([]);
+        const [customInput, setCustomInput] = useState("");
+        const [foldersLoading, setFoldersLoading] = useState(false);
+        const [foldersError, setFoldersError] = useState("");
+        const [identities, setIdentities] = useState([]);
+        const [selectedIdentities, setSelectedIdentities] = useState([]);
+        const [identitiesLoading, setIdentitiesLoading] = useState(false);
+        const [identitiesError, setIdentitiesError] = useState("");
+        const [selectedRaces, setSelectedRaces] = useState([]);
+        const [twitch, setTwitch] = useState(wizardEmptyTwitch());
+        const [obs, setObs] = useState(wizardEmptyObs());
+        const [pulse, setPulse] = useState(wizardEmptyPulse());
+        const [applying, setApplying] = useState(false);
+        const [applyError, setApplyError] = useState("");
+        return {
+          step, setStep,
+          folders, setFolders,
+          selectedFolders, setSelectedFolders,
+          customInput, setCustomInput,
+          foldersLoading, setFoldersLoading,
+          foldersError, setFoldersError,
+          identities, setIdentities,
+          selectedIdentities, setSelectedIdentities,
+          identitiesLoading, setIdentitiesLoading,
+          identitiesError, setIdentitiesError,
+          selectedRaces, setSelectedRaces,
+          twitch, setTwitch, obs, setObs, pulse, setPulse,
+          applying, setApplying, applyError, setApplyError,
+        };
+      }
+
+      // ---- Scan-orchestration hook -------------------------------
+
+      function useWizardScans(s) {
+        const scanFolders = useCallback(async () => {
+          s.setFoldersLoading(true); s.setFoldersError("");
+          const r = await wizardFetchJson(
+              "/api/onboarding/scan-replay-folders", { method: "POST" });
+          s.setFoldersLoading(false);
+          if (!r.ok) { s.setFoldersError("Folder scan failed."); return; }
+          const list = r.body.folders || [];
+          s.setFolders(list);
+          if (list.length && (s.selectedFolders || []).length === 0) {
+            s.setSelectedFolders([list[0].path]);
+          }
+        }, [s.selectedFolders]);
+
+        const scanIdentities = useCallback(async (paths) => {
+          s.setIdentitiesLoading(true); s.setIdentitiesError("");
+          const r = await wizardFetchJson("/api/onboarding/scan-identities",
+              wizardJsonInit({ folders: paths,
+                               sample_size: WIZARD_IDENTITY_SAMPLE }));
+          s.setIdentitiesLoading(false);
+          if (!r.ok || r.body.ok === false) {
+            s.setIdentitiesError(r.body.error || "Identity scan failed.");
+            return;
+          }
+          const list = r.body.players || [];
+          s.setIdentities(list);
+          if (list.length && (s.selectedIdentities || []).length === 0) {
+            s.setSelectedIdentities([list[0]]);
+          }
+        }, [s.selectedIdentities]);
+
+        return { scanFolders, scanIdentities };
+      }
+
+      function useWizardHandlers(s) {
+        const onToggleFolder = (p) => {
+          const cur = s.selectedFolders || [];
+          if (cur.includes(p)) {
+            s.setSelectedFolders(cur.filter((x) => x !== p));
+          } else {
+            s.setSelectedFolders([...cur, p]);
+          }
+        };
+
+        const onAddCustomFolder = () => {
+          const path = (s.customInput || "").trim();
+          if (!path) return;
+          const cur = s.selectedFolders || [];
+          if (!cur.includes(path)) s.setSelectedFolders([...cur, path]);
+          s.setCustomInput("");
+        };
+
+        const onToggleIdentity = (player) => {
+          const cur = s.selectedIdentities || [];
+          const i = cur.findIndex((p) => p.character_id === player.character_id);
+          if (i >= 0) {
+            s.setSelectedIdentities(cur.filter((_, j) => j !== i));
+          } else {
+            s.setSelectedIdentities([...cur, player]);
+          }
+        };
+
+        const onToggleRace = (race) => {
+          const cur = s.selectedRaces || [];
+          if (cur.includes(race)) {
+            s.setSelectedRaces(cur.filter((r) => r !== race));
+          } else {
+            s.setSelectedRaces([...cur, race]);
+          }
+        };
+
+        return { onToggleFolder, onAddCustomFolder,
+                 onToggleIdentity, onToggleRace };
+      }
+
+      function wizardOnTest(s, which, payload) {
+        if (which === "twitch")       return wizardTestTwitch(s.twitch, s.setTwitch);
+        if (which === "obs")          return wizardTestObs(s.obs, s.setObs);
+        if (which === "pulse")        return wizardTestPulse(s.pulse, s.setPulse);
+        if (which === "pulse-search") return wizardSearchPulse(s.pulse, s.setPulse);
+        if (which === "pulse-pick") {
+          wizardPickPulseMatch(s.pulse, s.setPulse, payload);
+          return null;
+        }
+        return null;
+      }
+
+      function useWizardEffects(s, scanFolders) {
+        // Trigger the folder scan as soon as the user lands on Step 2
+        // unless we already have results.
+        useEffect(() => {
+          if (s.step === 2 && s.folders.length === 0) scanFolders();
+        }, [s.step, s.folders.length, scanFolders]);
+
+        // Auto-prefill races from the aggregate race breakdown across
+        // the selected identities. Only runs when the user hasn't yet
+        // touched the race tiles -- manual edits aren't clobbered if
+        // they go back and tweak.
+        useEffect(() => {
+          const ids = s.selectedIdentities || [];
+          if (ids.length === 0) return;
+          if ((s.selectedRaces || []).length > 0) return;
+          const auto = wizardPickAutoRaces(ids);
+          if (auto.length > 0) s.setSelectedRaces(auto);
+        }, [s.selectedIdentities]);
+
+        // Pre-fill the SC2Pulse search term from the primary identity
+        // name once one is picked. Skip if user already typed something.
+        useEffect(() => {
+          const primary = wizardPickPrimary(s.selectedIdentities || []);
+          if (!primary || !primary.name) return;
+          if (s.pulse.search_term) return;
+          if ((s.pulse.character_ids || []).length > 0) return;
+          s.setPulse({ ...s.pulse, search_term: primary.name });
+        }, [s.selectedIdentities]);
+      }
+
+      // ---- The wizard component itself ---------------------------
+
+
+      function Wizard({ onComplete }) {
+        const s = useWizardState();
+        const { scanFolders, scanIdentities } = useWizardScans(s);
+
+        useWizardEffects(s, scanFolders);
+
+        const h = useWizardHandlers(s);
+
+        const goNextFromReplays = () => {
+          s.setSelectedIdentities([]);
+          s.setIdentities([]); s.setIdentitiesError("");
+          s.setStep(3);
+          scanIdentities(s.selectedFolders || []);
+        };
+
+        const onTest = (which, payload) => wizardOnTest(s, which, payload);
+
+        const onApply = () => wizardApply(
+          { folders: s.selectedFolders,
+            identities: s.selectedIdentities,
+            races: s.selectedRaces,
+            twitch: s.twitch, obs: s.obs, pulse: s.pulse },
+          s.setApplying, s.setApplyError, onComplete);
+
+        const onSkipWizard = () => {
+          if (typeof onComplete === "function") onComplete();
+        };
+
+        const ctx = { ...s, ...h,
+                      scanFolders, scanIdentities, goNextFromReplays,
+                      onTest, onApply, onSkipWizard };
+
+        return (
+          <WizardCard>
+            <WizardProgressStrip step={s.step} />
+            <WizardBody step={s.step} ctx={ctx} />
+          </WizardCard>
+        );
+      }
+
+      // ============================================================
+      // WIDGETS TAB
+      // ------------------------------------------------------------
+      // Standalone catalog of every overlay widget URL. Renders the
+      // same per-widget cards the wizard shows in Step 5 (search-and-
+      // pick UX) but without the wizard chrome -- so users can come
+      // back here after onboarding and grab whichever widget URL they
+      // want for OBS / Streamlabs.
+      // ============================================================
+
+      function WidgetsTab() {
+        const s = useWizardStreamlabsState();
+        return (
+          <div style={{
+            background: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border-subtle)",
+            borderRadius: "var(--radius-lg)",
+            padding: "var(--space-6)",
+            color: "var(--color-text-primary)",
+            fontFamily: "var(--font-family-ui)",
+          }}>
+            <h2 style={{ fontSize: "var(--font-size-2xl)",
+                         marginBottom: "var(--space-3)" }}>
+              Overlay widgets
+            </h2>
+            <p style={{ fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-secondary)",
+                        marginBottom: "var(--space-4)",
+                        lineHeight: "var(--line-height-relaxed)" }}>
+              Each card below is its own Browser Source URL. Add only
+              the widgets you want and drag them around your scene
+              independently. Works in both Streamlabs Desktop and OBS
+              Studio &mdash; same URL, both apps. The four
+              {" "}<span style={{ color: "var(--color-success)" }}>
+              RECOMMENDED</span> widgets cover the highest-impact
+              moments: live session, pre-game scouting, post-game
+              reveal, and streak splashes.
+            </p>
+            <WizardStreamlabsToolbar
+              showAll={s.showAll}
+              onToggleShowAll={() => s.setShowAll(!s.showAll)}
+              visibleCount={s.visible.length}
+              totalCount={WIZARD_OVERLAY_WIDGETS.length}
+              onCopyAll={s.copyAllUrls}
+              allCopied={s.allCopied} />
+            {s.visible.map((w) => (
+              <WizardWidgetRow key={w.file} widget={w}
+                               baseUrl={WIZARD_OVERLAY_URL} />
+            ))}
+            <WizardStreamlabsAllInOne />
+            <WizardHowTo title="How do I add a widget in Streamlabs Desktop?"
+              steps={WIZARD_STREAMLABS_HOWTO_STREAMLABS} />
+            <WizardHowTo title="How do I add a widget in OBS Studio?"
+              steps={WIZARD_STREAMLABS_HOWTO_OBS} />
+            <p style={{ fontSize: "var(--font-size-xs)",
+                        color: "var(--color-text-muted)",
+                        marginTop: "var(--space-4)" }}>
+              Tip: keep this app&apos;s server running while you stream.
+              Widgets connect to it for live data and update whenever a
+              new replay lands.
+            </p>
+          </div>
+        );
+      }
 
       function App() {
         const [tab, setTab] = useState("dashboard");
@@ -6531,6 +8593,10 @@
         const [openBuildName, setOpenBuildName] = useState(null);
         const [openReplay, setOpenReplay] = useState(null);
         const [conn, setConn] = useState({ status: "connecting" });
+        // Stage 2.2 first-run wizard. profileExists tri-state:
+        // null = unknown, false = wizard needed, true = main app.
+        const [profileExists, setProfileExists] = useState(null);
+        const [showWizard, setShowWizard] = useState(false);
 
         useEffect(() => {
           try {
@@ -6545,6 +8611,32 @@
             console.warn("socket.io unavailable:", err);
             setConn({ status: "offline" });
           }
+        }, []);
+
+        // Probe whether the user has run the wizard before. 200 -> exists,
+        // 404/error -> show wizard. We default to "show" on net failure so
+        // a non-running backend never silently traps the user in the SPA.
+        useEffect(() => {
+          let cancelled = false;
+          (async () => {
+            try {
+              const res = await fetch("/api/profile/exists");
+              if (cancelled) return;
+              if (!res.ok) {
+                setProfileExists(false); setShowWizard(true);
+                return;
+              }
+              const j = await res.json();
+              const exists = !!(j && j.exists);
+              setProfileExists(exists);
+              setShowWizard(!exists);
+            } catch (_e) {
+              if (!cancelled) {
+                setProfileExists(false); setShowWizard(true);
+              }
+            }
+          })();
+          return () => { cancelled = true; };
         }, []);
 
         const renderBody = () => {
@@ -6609,12 +8701,26 @@
               return <MlTab dbRev={dbRev} />;
             case "mapintel":
               return <MapIntelTab dbRev={dbRev} onOpenReplay={setOpenReplay} />;
+            case "widgets":
+              return <WidgetsTab />;
             case "definitions":
               return <DefinitionsTab />;
             default:
               return <EmptyState title="Unknown tab" />;
           }
         };
+
+        // First-run wizard short-circuit. While profileExists is
+        // unknown we render nothing to prevent a flash of empty UI.
+        if (profileExists === null) return null;
+        if (showWizard) {
+          return (
+            <Wizard onComplete={() => {
+              setShowWizard(false);
+              setProfileExists(true);
+            }} />
+          );
+        }
 
         return (
           <div className="min-h-screen flex flex-col">

@@ -41,6 +41,14 @@ const { mmrToLeague } = require('./utils');
 // Analyzer module (meta_database.json + MyOpponentHistory.json
 // aggregations served as JSON to the new web SPA at /analyzer).
 const analyzer = require('./analyzer');
+// Settings router (per-user profile.json + per-installation config.json).
+// Mounted before legacy /api/config so the new schema-validated routes win.
+const { createSettingsRouter } = require('./routes/settings');
+// Onboarding router (Stage 2.2): /api/onboarding/* helpers used by
+// the first-run wizard. Spawns identity_cli.py, scans replay
+// folders, and round-trips against Twitch / OBS / SC2Pulse to
+// validate the user's optional integrations.
+const { createOnboardingRouter } = require('./routes/onboarding');
 // node-fetch v2 ships in node_modules; stick with that to keep CJS
 // require() compatibility on older node runtimes that don't have a
 // global fetch.
@@ -857,6 +865,18 @@ if (fs.existsSync(SC2_OVERLAY_ICONS_DIR)) {
         fallthrough: true,
         maxAge: '7d',
     }));
+
+// Stage 2.2: serve the SC2-Overlay surface at /overlay/ so the
+// first-run wizard's Streamlabs / OBS Browser-Source card can
+// advertise a real URL (http://localhost:3000/overlay/) for the
+// user to paste into their stream software.
+const SC2_OVERLAY_DIR = path.join(ROOT, 'SC2-Overlay');
+if (fs.existsSync(SC2_OVERLAY_DIR)) {
+    app.use('/overlay', express.static(SC2_OVERLAY_DIR, {
+        fallthrough: true,
+        maxAge: '1h',
+    }));
+}
 }
 
 // ------------------------------------------------------------------
@@ -895,6 +915,24 @@ function _atomicWriteJsonSync(target, data, indent = 2) {
 app.use('/api/analyzer', analyzer.router);
 app.get('/analyzer', (_req, res) =>
     res.sendFile(path.join(PUBLIC_DIR, 'analyzer', 'index.html')));
+
+// Stage 2: settings endpoints. Reads/writes data/profile.json and
+// data/config.json with ajv schema validation + atomic write→fsync→
+// rename. Registered here (before the legacy overlay /api/config
+// handler further down) so /api/config resolves to the new router.
+app.use(createSettingsRouter({ dataDir: DATA_DIR }));
+// Stage 2.2: onboarding endpoints. Drives the first-run wizard.
+// repoRoot = the merged-toolkit repo root (one level above this
+// stream-overlay-backend dir); scriptsDir holds identity_cli.py
+// alongside recon_sc2_install.py.
+app.use(createOnboardingRouter({
+    scriptsDir: path.join(ROOT, 'scripts'),
+    repoRoot: ROOT,
+    pythonExe: process.env.PYTHON
+        || (process.platform === 'win32' ? 'py' : 'python3'),
+    fetch,
+    loopbackBase: (req) => `http://${req.headers.host}`,
+}));
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });

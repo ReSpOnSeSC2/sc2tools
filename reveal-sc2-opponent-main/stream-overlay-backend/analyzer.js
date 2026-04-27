@@ -148,8 +148,21 @@ function persistMetaDb() {
 }
 
 // Resolve the player name for macro/ML calls: explicit param wins, then
-// data/config.json's last_player, then SC2_PLAYER env var, else ''.
+// Prefer Stage 2.1+ profile.json (preferred_player_name_in_replays),
+// fall back to the legacy config.json.last_player (the pre-Stage-2.2
+// shape), then to the SC2_PLAYER env var, else ''.
 function getDefaultPlayerName() {
+    try {
+        const profilePath = path.join(DATA_DIR, 'profile.json');
+        if (fs.existsSync(profilePath)) {
+            const raw = fs.readFileSync(profilePath, 'utf8') || '{}';
+            // Strip BOM if present (Windows tools sometimes add one).
+            const noBom = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
+            const profile = JSON.parse(noBom);
+            const name = profile && profile.preferred_player_name_in_replays;
+            if (typeof name === 'string' && name.length > 0) return name;
+        }
+    } catch (_) { /* fall through to legacy */ }
     try {
         const cfgPath = path.join(DATA_DIR, 'config.json');
         if (fs.existsSync(cfgPath)) {
@@ -1199,6 +1212,45 @@ function buildDetail(buildName, filters) {
     };
 }
 
+/**
+ * Resolve a game's map name across the two storage shapes the codebase
+ * carries simultaneously:
+ *
+ *   * meta-DB enriched (preferred): ``g.map`` -- the canonical name
+ *     pulled from the SC2 replay header at scan time, e.g. "10000 feet".
+ *   * legacy MyOpponentHistory.json: ``g.Map`` -- often stores the
+ *     literal string "Unknown Map" because the early scanner couldn't
+ *     parse the map header.
+ *
+ * Earlier code read ``g.Map || g.map``, which let the legacy literal
+ * "Unknown Map" win even when the meta-DB enrichment had a real name.
+ * This helper prefers the meta-DB field and treats the literal "Unknown"
+ * placeholders as missing.
+ *
+ * Example:
+ *   resolveGameMapName({ Map: 'Unknown Map', map: '10000 feet' })
+ *     -> '10000 feet'
+ *   resolveGameMapName({}) -> 'Unknown'
+ *
+ * @param {object} g Game record from the meta-DB or MyOpponentHistory.
+ * @param {string} [fallback] Returned when neither field has a real name.
+ * @returns {string}
+ */
+function resolveGameMapName(g, fallback) {
+    const fb = (typeof fallback === 'string' && fallback.length > 0)
+        ? fallback : 'Unknown';
+    const isPlaceholder = (s) => {
+        if (typeof s !== 'string') return true;
+        const t = s.trim();
+        if (t.length === 0) return true;
+        const lc = t.toLowerCase();
+        return lc === 'unknown' || lc === 'unknown map';
+    };
+    if (!isPlaceholder(g && g.map)) return g.map.trim();
+    if (!isPlaceholder(g && g.Map)) return g.Map.trim();
+    return fb;
+}
+
 function opponentDetail(pulseId) {
     const rec = dbCache.opp.data[pulseId];
     if (!rec) return null;
@@ -1217,8 +1269,11 @@ function opponentDetail(pulseId) {
         const l = isLoss(g);
         if (w) countedW++;
         if (l) countedL++;
-        // Both casings show up: `Map` (Black-Book) and `map` (meta-DB).
-        const m = g.Map || g.map || 'Unknown';
+        // Prefer the meta-DB-enriched ``g.map`` over legacy ``g.Map``
+        // because MyOpponentHistory.json sometimes stores the literal
+        // "Unknown Map" string in g.Map even when the real name lives
+        // in g.map.
+        const m = resolveGameMapName(g);
         byMap[m] = byMap[m] || { wins: 0, losses: 0 };
         if (w) byMap[m].wins++; else if (l) byMap[m].losses++;
         const s = g.opp_strategy || 'Unknown';
