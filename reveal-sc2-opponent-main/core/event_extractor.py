@@ -21,6 +21,10 @@ from sc2reader.events.tracker import (
     UnitTypeChangeEvent,
     PlayerStatsEvent,
 )
+# CommandEvent is the parent of TargetUnit/TargetPoint/BasicCommandEvent
+# — used by the macro extractor to filter ``replay.events`` to actual
+# ability casts before checking for chained CommandManagerStateEvents.
+from sc2reader.events.game import CommandEvent  # type: ignore
 # UnitDiedEvent is the canonical "building/unit was destroyed" tracker event.
 # Some sc2reader builds spell it differently or omit it entirely; fall back
 # gracefully so the macro extractor can still run.
@@ -255,6 +259,55 @@ _INJECT_TOKENS = ("inject", "spawnlarva")
 _CHRONO_TOKENS = ("chronoboost", "chrono",)
 _MULE_TOKENS = ("calldownmule", "mule",)
 
+
+# ---------------------------------------------------------------------------
+# Build-aware ability-link resolution.
+# ---------------------------------------------------------------------------
+# Starcraft II ships a fresh ability table with every game-data patch, and
+# the link-id of an ability can shift when Blizzard inserts/removes entries.
+# Public sc2reader 1.8.0 only ships ability data up to LotV 80949 (and the
+# upstream branch only to 89720), so any replay produced by patch 5.0.14+
+# has chrono boost firing at a link that the bundled datapack labels as
+# something else entirely — which is why ``ability_name`` returns
+# "NexusMassRecall" / unknown / a Terran ability instead of
+# "ChronoBoostEnergyCost" for the user's recent replays.
+#
+# We work around that by classifying the macro abilities directly on the
+# numeric ``ability_link`` (which is a stable integer that Blizzard does
+# expose), with a per-build mapping so we pick the right link for the
+# replay's protocol generation.
+#
+# Cutoff `93272` was empirically derived from a real replay library:
+# every replay with build 92440 or earlier has chrono at link 722, every
+# replay with build 93272 or later has chrono at link 723. (That's the
+# 5.0.13 → 5.0.14 patch boundary.) Inject (link 113) and MULE (link 92)
+# appear unchanged across the same boundary.
+_LINK_SHIFT_BUILD = 93272
+
+_MACRO_LINKS_OLD = {
+    722: "chrono",
+    113: "inject",
+    92:  "mule",
+}
+_MACRO_LINKS_NEW = {
+    723: "chrono",
+    113: "inject",
+    92:  "mule",
+}
+
+
+def _macro_link_table(build):
+    return _MACRO_LINKS_NEW if build >= _LINK_SHIFT_BUILD else _MACRO_LINKS_OLD
+
+
+def _ability_link(event):
+    link = getattr(event, "ability_link", None)
+    if link is None:
+        ability = getattr(event, "ability", None)
+        if ability is not None:
+            link = getattr(ability, "id", None)
+    return link if isinstance(link, int) and link > 0 else None
+
 def _normalize_ability_name(event):
     """Best-effort extraction of the canonical ability name.
 
@@ -472,23 +525,61 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
     #
     # We also categorize each match so the breakdown popup can show
     # per-discipline counts without re-walking the events.
+    # Game-event pass for ability uses (inject / chrono / MULE).
+    #
+    # Two layers of robustness, in order:
+    #
+    #   1. Classify by numeric ability_link via a build-aware lookup table.
+    #      ``_macro_link_table(build)`` returns {722→chrono, 113→inject,
+    #      92→mule} for builds ≤ 92440, or {723→chrono, 113→inject,
+    #      92→mule} for builds ≥ 93272 (the 5.0.14+ shift).
+    #
+    #   2. Fall back to ability-name classification for ancient builds and
+    #      for replays where the numeric link is missing.
+    #
+    # We also fold in ``CommandManagerStateEvent`` re-executions: when a
+    # player queues N chronos / injects / MULEs in succession the FIRST is
+    # a fresh CommandEvent and the next N-1 surface as
+    # CommandManagerStateEvent(state=1). Counting only the head event
+    # under-reports macro casts by 70-80% in modern replays.
+    build = int(getattr(replay, "build", 0) or 0)
+    link_table = _macro_link_table(build)
     game_events = getattr(replay, "events", None) or []
     out.setdefault("ability_counts",
                    {"inject": 0, "chrono": 0, "mule": 0, "other": 0})
+    last_bucket_per_pid = {}
     try:
         for event in game_events:
             try:
                 pid = _resolve_command_pid(event)
                 if pid != my_pid:
                     continue
-                name = _normalize_ability_name(event)
-                if not name:
+                cls_name = type(event).__name__
+                if cls_name == "CommandManagerStateEvent":
+                    if (getattr(event, "state", None) == 1
+                            and last_bucket_per_pid.get(pid)):
+                        bucket = last_bucket_per_pid[pid]
+                        out["ability_events"].append({
+                            "ability_name": bucket,
+                            "category": bucket,
+                            "time": int(getattr(event, "second", 0)),
+                            "via": "state_event",
+                        })
+                        out["ability_counts"][bucket] += 1
                     continue
-                bucket = _classify_macro_ability(name)
+                if not isinstance(event, CommandEvent):
+                    continue
+                link = _ability_link(event)
+                bucket = link_table.get(link) if link else None
                 if bucket is None:
+                    name = _normalize_ability_name(event)
+                    bucket = _classify_macro_ability(name) if name else None
+                if bucket is None:
+                    last_bucket_per_pid[pid] = None
                     continue
+                last_bucket_per_pid[pid] = bucket
                 out["ability_events"].append({
-                    "ability_name": name,
+                    "ability_name": _normalize_ability_name(event) or bucket,
                     "category": bucket,
                     "time": int(getattr(event, "second", 0)),
                 })
