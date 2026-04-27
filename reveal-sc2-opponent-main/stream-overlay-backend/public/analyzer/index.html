@@ -5644,13 +5644,34 @@
         useEffect(() => {
           let cancelled = false;
           setLoading(true);
+          setErr(null);
+          setData(null);
           fetch(`${API}/playback?replay=${encodeURIComponent(replayPath)}`)
             .then(r => r.json())
             .then(j => {
               if (cancelled) return;
               if (j && j.ok) {
-                setData(j.result);
-                setTime(0);
+                // The /playback endpoint wraps the spatial-CLI output as
+                // `{ ok, result: records }`. The CLI emits one NDJSON record
+                // per frame plus a header record that carries map_name,
+                // me_name, opp_name, game_length, bounds, etc. Older CLI
+                // builds returned the playback object directly. Be tolerant
+                // of both shapes and only treat the result as usable when
+                // it has the required header fields.
+                const raw = j.result;
+                let payload = null;
+                if (Array.isArray(raw)) {
+                  // Prefer a record that looks like the playback header.
+                  payload = raw.find(r => r && (r.map_name || r.bounds || r.game_length)) || raw[0] || null;
+                } else if (raw && typeof raw === 'object') {
+                  payload = raw;
+                }
+                if (payload && (payload.map_name || payload.bounds || payload.game_length)) {
+                  setData(payload);
+                  setTime(0);
+                } else {
+                  setErr("Replay parsed but did not return playback data. The CLI may have emitted an unexpected format.");
+                }
               } else {
                 setErr(j?.error || "Failed to parse replay.");
               }
@@ -5854,6 +5875,24 @@
           );
         }
 
+        // Belt-and-suspenders: if the fetch resolved without an error but
+        // `data` is still null (race condition during re-fetch, unexpected
+        // CLI shape, etc.), bail out cleanly instead of crashing on
+        // `data.map_name`.
+        if (!data) {
+          return (
+            <div className="p-4">
+              <button onClick={onBack} className="mb-4 text-accent-500 hover:text-accent-400">← Back</button>
+              <div className="text-neutral-400 text-sm">No playback data available for this replay.</div>
+            </div>
+          );
+        }
+
+        const mapName = data.map_name || data.map || "Unknown map";
+        const meName  = data.me_name  || data.player_name || "You";
+        const oppName = data.opp_name || data.opponent || "Opponent";
+        const gameLen = Number.isFinite(data.game_length) ? data.game_length : 0;
+
         return (
           <div className="flex flex-col h-[calc(100vh-60px)]">
             {/* Header */}
@@ -5862,14 +5901,14 @@
                 ← Exit
               </button>
               <div className="flex flex-col">
-                <span className="font-semibold">{data.map_name}</span>
+                <span className="font-semibold">{mapName}</span>
                 <span className="text-xs text-neutral-400">
-                  <span className="text-win-500">{data.me_name}</span> vs <span className="text-loss-500">{data.opp_name}</span>
+                  <span className="text-win-500">{meName}</span> vs <span className="text-loss-500">{oppName}</span>
                 </span>
               </div>
               <div className="flex-1" />
               <div className="tabular-nums font-mono text-xl">
-                {formatTime(time)} / {formatTime(data.game_length)}
+                {formatTime(time)} / {formatTime(gameLen)}
               </div>
             </div>
 

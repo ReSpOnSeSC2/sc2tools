@@ -123,19 +123,3 @@ KNOWN_BUILDS: List[str] = sorted(list(set([
     k for k in BUILD_DEFINITIONS.keys()
     if not k.endswith("Unknown") and not k.endswith("Unclassified")
 ])))
-
-    "PointDefenseDrone", "Interceptor", "AdeptPhaseShift", "Overlord",
-    "OverseerCocoon", "BanelingCocoon", "RavagerCocoon", "LurkerCocoon",
-    "TransportOverlordCocoon",
-}
-
-SKIP_BUILDINGS: Set[str] = {
-    "SupplyDepot", "SupplyDepotLowered", "CreepTumor",
-    "CreepTumorBurrowed", "CreepTumorQueen", "ShieldBattery",
-}
-
-# Sorted list of named builds (excluding catch-alls), suitable for seeding the DB.
-KNOWN_BUILDS: List[str] = sorted(list(set([
-    k for k in BUILD_DEFINITIONS.keys()
-    if not k.endswith("Unknown") and not k.endswith("Unclassified")
-])))
