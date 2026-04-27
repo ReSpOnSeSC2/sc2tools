@@ -1,0 +1,67 @@
+file,line,value,purpose,suggested_config_key,priority
+reveal-sc2-opponent-main/replay_watcher.py,45,"C:\Users\jay19\OneDrive\Pictures\Documents\StarCraft II\Accounts","WATCH_DIR — root replay folder for the legacy live watcher","config.replay.watched_folders",P0
+reveal-sc2-opponent-main/UpdateHistory.py,14,"C:\Users\jay19\OneDrive\Pictures\Documents\StarCraft II\Accounts\50983875\1-S2-1-267727","REPLAYS_DIR — drilled into Jonathan's account+character folder for history backfill","config.replay.watched_folders",P0
+reveal-sc2-opponent-main/watchers/replay_watcher.py,64,"C:\Users\jay19\OneDrive\Pictures\Documents\StarCraft II\Accounts","DEFAULT_WATCH_DIR — fallback when no --watch-dir CLI arg is passed","config.replay.watched_folders",P0
+reveal-sc2-opponent-main/watchers/replay_watcher.py,65,"ReSpOnSe","DEFAULT_PLAYER — used to identify which side of the replay is the user","profile.player.aliases",P0
+reveal-sc2-opponent-main/UpdateHistory.py,20,"ReSpOnSe","is_streamer() substring match — decides which player record is the user","profile.player.aliases",P0
+reveal-sc2-opponent-main/Reveal-Sc2Opponent.ps1,244,"(?i)ReSpOnSe","Get-Me regex match against player names (live launcher path)","profile.player.aliases",P0
+reveal-sc2-opponent-main/Reveal-Sc2Opponent.ps1,502,"(?i)ReSpOnSe","CurrentGame.Players self-identification regex","profile.player.aliases",P0
+reveal-sc2-opponent-main/Reveal-Sc2Opponent.ps1,503,"(?i)ReSpOnSe","CurrentGame opponent identification (notmatch on user alias)","profile.player.aliases",P0
+reveal-sc2-opponent-main/data/config.json,1,"ReSpOnSe","last_player persisted in legacy desktop config — opens the GUI to this name","profile.player.display_name",P0
+SC2Replay-Analyzer/config.json,1,"ReSpOnSe","last_player persisted in SC2Replay-Analyzer config — same purpose, second copy","profile.player.display_name",P0
+reveal-sc2-opponent-main/core/strategy_detector.py,379,"Protoss","UserBuildDetector.detect_my_build default my_race — silently assumes Protoss when caller omits race","profile.player.preferred_race",P0
+SC2Replay-Analyzer/detectors/user.py,15,"Protoss","UserBuildDetector.detect_my_build default my_race — duplicated in second tree, same assumption","profile.player.preferred_race",P0
+reveal-sc2-opponent-main/scripts/check_shared_modules.py,63,"C:/SC2TOOLS/{name}","Hardcoded install root used to verify the two project trees are synced","config.install.root_path",P0
+SC2Replay-Analyzer/scripts/check_shared_modules.py,63,"C:/SC2TOOLS/{name}","Hardcoded install root — duplicate of the above in second tree","config.install.root_path",P0
+reveal-sc2-opponent-main/START_SC2_TOOLS.bat,11,"C:\SC2TOOLS\reveal-sc2-opponent-main","ROOT env var that the launcher cd's into — breaks if user installs anywhere else","config.install.root_path",P0
+reveal-sc2-opponent-main/replay_watcher.py,48,"http://localhost:3000/api/replay","SERVER_URL — POST target for replay events (legacy watcher)","config.server.base_url",P1
+reveal-sc2-opponent-main/watchers/replay_watcher.py,66,"http://localhost:3000/api/replay","SERVER_URL_LIVE — POST target for live replay events","config.server.base_url",P1
+reveal-sc2-opponent-main/watchers/replay_watcher.py,67,"http://localhost:3000/api/replay/deep","SERVER_URL_DEEP — POST target for deep-parse replay events","config.server.base_url",P1
+reveal-sc2-opponent-main/watchers/replay_watcher.py,69,"3","POST_TIMEOUT_SEC — HTTP timeout for live POSTs (project standard is 5s connect/30s read)","config.network.post_timeout_sec",P1
+reveal-sc2-opponent-main/watchers/replay_watcher.py,70,"6","DEEP_POST_TIMEOUT_SEC — HTTP timeout for deep-parse POSTs","config.network.deep_post_timeout_sec",P1
+reveal-sc2-opponent-main/SC2-Overlay/app.js,43,"http://localhost:3000","SERVER_URL — Socket.io and fetch base URL for the master overlay","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/index.html,9,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL on the overlay master page","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/best-answer.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — best-answer widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/cheese.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — cheese widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/fav-opening.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — fav-opening widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/match-result.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — match-result widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/meta.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — meta widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/mmr-delta.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — mmr-delta widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/opponent.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — opponent widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/post-game.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — post-game widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/rank.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — rank widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/rematch.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — rematch widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/rival.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — rival widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/scouting.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — scouting widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/session.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — session widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/streak.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — streak widget","config.server.base_url",P1
+reveal-sc2-opponent-main/SC2-Overlay/widgets/topbuilds.html,8,"http://localhost:3000/socket.io/socket.io.js","Hardcoded socket.io client script URL — topbuilds widget","config.server.base_url",P1
+reveal-sc2-opponent-main/stream-overlay-backend/index.js,840,"3000","PORT constant for Express server","config.server.port",P1
+reveal-sc2-opponent-main/stream-overlay-backend/index.js,1528,"http://localhost:3000/static/last-build.html","Twitch !build chat link returned to viewers","config.server.base_url",P1
+reveal-sc2-opponent-main/stream-overlay-backend/public/debug.html,93,"http://localhost:3000","Server URL displayed on the debug event-fire page","config.server.base_url",P1
+reveal-sc2-opponent-main/START_SC2_TOOLS.bat,59,"http://localhost:3000/analyzer","Launcher opens this URL after starting the server","config.server.base_url",P1
+reveal-sc2-opponent-main/Reveal-Sc2Opponent.ps1,92,"http://127.0.0.1:6119","Sc2ClientApiRoot — local SC2 client API for live game state","config.sc2_client.api_root",P1
+reveal-sc2-opponent-main/Reveal-Sc2Opponent.ps1,91,"https://sc2pulse.nephest.com/sc2/api","Sc2PulseApiRoot — public ladder API for MMR / opponent lookups","config.sc2pulse.api_root",P1
+reveal-sc2-opponent-main/stream-overlay-backend/index.js,116,"https://sc2pulse.nephest.com/sc2/api","sc2pulse.apiRoot in the Express config object","config.sc2pulse.api_root",P1
+reveal-sc2-opponent-main/sc2_mmr_scanner.py,56,"{""top"": 466, ""left"": 470, ""width"": 46, ""height"": 15}","Z1 OCR capture zone — assumes 1920x1080 left-side MMR readout","config.ocr.mmr_zones.left",P1
+reveal-sc2-opponent-main/sc2_mmr_scanner.py,58,"{""top"": 468, ""left"": 1401, ""width"": 51, ""height"": 11}","Z2 OCR capture zone — assumes 1920x1080 right-side MMR readout","config.ocr.mmr_zones.right",P1
+reveal-sc2-opponent-main/watchers/sc2_mmr_scanner.py,60,"{""top"": 466, ""left"": 470, ""width"": 46, ""height"": 15}","Z1 OCR capture zone — duplicate in watchers tree","config.ocr.mmr_zones.left",P1
+reveal-sc2-opponent-main/watchers/sc2_mmr_scanner.py,62,"{""top"": 468, ""left"": 1401, ""width"": 51, ""height"": 11}","Z2 OCR capture zone — duplicate in watchers tree","config.ocr.mmr_zones.right",P1
+reveal-sc2-opponent-main/stream-overlay-backend/utils.js,4,"5000","Grandmaster MMR threshold in mmrToLeague","config.league.thresholds.grandmaster",P1
+reveal-sc2-opponent-main/stream-overlay-backend/utils.js,5,"4400","Master MMR threshold in mmrToLeague","config.league.thresholds.master",P1
+reveal-sc2-opponent-main/stream-overlay-backend/utils.js,6,"3500","Diamond MMR threshold in mmrToLeague","config.league.thresholds.diamond",P1
+reveal-sc2-opponent-main/stream-overlay-backend/utils.js,7,"2800","Platinum MMR threshold in mmrToLeague","config.league.thresholds.platinum",P1
+reveal-sc2-opponent-main/stream-overlay-backend/utils.js,8,"2200","Gold MMR threshold in mmrToLeague","config.league.thresholds.gold",P1
+reveal-sc2-opponent-main/stream-overlay-backend/utils.js,9,"1700","Silver MMR threshold in mmrToLeague","config.league.thresholds.silver",P1
+reveal-sc2-opponent-main/scripts/generate_session_recap.py,87,"5000","Grandmaster MMR threshold in mmr_to_league (Python duplicate)","config.league.thresholds.grandmaster",P1
+reveal-sc2-opponent-main/scripts/generate_session_recap.py,89,"3500","Diamond MMR threshold in mmr_to_league (Python duplicate)","config.league.thresholds.diamond",P1
+reveal-sc2-opponent-main/check_setup.py,49,"C:\Program Files\Tesseract-OCR\tesseract.exe","Tesseract install candidate — already a discovery list, but config could short-circuit","config.ocr.tesseract_path",P2
+reveal-sc2-opponent-main/check_setup.py,53,"C:\Users\{username}\AppData\Local\Tesseract-OCR\tesseract.exe","Tesseract per-user install candidate","config.ocr.tesseract_path",P2
+reveal-sc2-opponent-main/sc2_mmr_scanner.py,25,"C:\Users\{username}\AppData\Local\Tesseract-OCR\tesseract.exe","Tesseract per-user install candidate (legacy scanner)","config.ocr.tesseract_path",P2
+reveal-sc2-opponent-main/watchers/sc2_mmr_scanner.py,46,"C:\Users\{username}\AppData\Local\Tesseract-OCR\tesseract.exe","Tesseract per-user install candidate (watcher scanner)","config.ocr.tesseract_path",P2
+reveal-sc2-opponent-main/stream-overlay-backend/analyzer.js,1860,"sc2tools-analyzer/1.0 (+https://github.com/ReSpOnSeSC2/sc2tools)","User-Agent for outbound HTTP — contains GitHub org name (project identity, not user PII)","config.network.user_agent",P2
+reveal-sc2-opponent-main/SC2-Overlay/widgets/README.md,16,"file:///C:/SC2TOOLS/reveal-sc2-opponent-main/SC2-Overlay/widgets/session.html","Doc example URL using the install-root path","docs only — replace with {INSTALL_ROOT} placeholder",P2
+SC2Replay-Analyzer/ROADMAP.md,30,"C:\SC2TOOLS\SC2Replay-Analyzer\SC2ReplayAnalyzer.py","Roadmap doc references absolute install path","docs only — replace with {INSTALL_ROOT} placeholder",P2
+reveal-sc2-opponent-main/stream-overlay-backend/utils.test.js,5,"5500","Test fixture: Grandmaster threshold (intentional, dev/test file)","tests-only (informational)",P2
+reveal-sc2-opponent-main/stream-overlay-backend/utils.test.js,6,"5000","Test fixture: Grandmaster threshold (intentional, dev/test file)","tests-only (informational)",P2
+reveal-sc2-opponent-main/stream-overlay-backend/utils.test.js,10,"3500","Test fixture: Diamond threshold (intentional, dev/test file)","tests-only (informational)",P2
