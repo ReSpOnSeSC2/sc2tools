@@ -53,6 +53,11 @@ const { createOnboardingRouter } = require('./routes/onboarding');
 // data/meta_database.json + sibling files. Used by the Settings
 // page's Backups tab, but also safe to call directly via curl.
 const { createBackupsRouter } = require('./routes/backups');
+// Stage 4: diagnostics endpoints. /api/diagnostics returns a parallel
+// health check across python, sc2reader, replay folders, meta_database,
+// schema validation, SC2Pulse, Twitch, OBS, disk, logs, and the macro
+// engine version pin. /api/diagnostics/bundle streams a redacted .zip.
+const { createDiagnosticsRouter } = require('./routes/diagnostics');
 // node-fetch v2 ships in node_modules; stick with that to keep CJS
 // require() compatibility on older node runtimes that don't have a
 // global fetch.
@@ -945,6 +950,12 @@ app.use(createOnboardingRouter({
 // allow-listed data files (meta_database.json, profile.json, etc.).
 // Restores always take a pre-restore safety snapshot first.
 app.use(createBackupsRouter({ dataDir: DATA_DIR }));
+
+// Stage 4: diagnostics endpoints (see routes/diagnostics.js).
+app.use(createDiagnosticsRouter({
+    dataDir: DATA_DIR,
+    analyzerScriptsDir: path.resolve(ROOT, '..', 'SC2Replay-Analyzer'),
+}));
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });

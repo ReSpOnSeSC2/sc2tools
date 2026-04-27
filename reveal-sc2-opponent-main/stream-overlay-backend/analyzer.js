@@ -1202,13 +1202,20 @@ function buildDetail(buildName, filters) {
         if (Number.isFinite(t) && t > lastPlayed) lastPlayed = t;
     }
     const total = games.length;
+    // Stamp the parent build name on each game record before returning so the
+    // SPA's GamesTableWithBuildOrder can render g.my_build in the "My Build"
+    // column. Records under meta.data[buildName].games[] don't carry my_build
+    // themselves -- the build is implicit in the parent key. We do not mutate
+    // the cached objects (meta DB persists to disk; cross-mutation across
+    // requests would be a data hazard) -- shallow-copy each game.
+    const gamesWithBuild = games.map(g => ({ ...g, my_build: buildName }));
     return {
         name: buildName,
         totals: { wins, losses, total, winRate: total ? wins / total : 0, lastPlayed: lastPlayed || null },
         byOppStrategy,
         byMap,
         byOpponent,
-        games,  // newest-first
+        games: gamesWithBuild,  // newest-first; my_build stamped from parent key
     };
 }
 

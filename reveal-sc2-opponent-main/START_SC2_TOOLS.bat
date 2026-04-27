@@ -23,7 +23,7 @@ REM      - polls /api/health until the server is ready,
 REM      - opens http://127.0.0.1:3000/analyzer/ in the default browser.
 REM    Closing this window stops the backend cleanly.
 echo [1/4] Starting SC2 Tools Launcher (backend + Web Analyzer)...
-start "SC2 -- Launcher" cmd /k "py \"%TOOLS_ROOT%\SC2Replay-Analyzer\SC2ReplayAnalyzer.py\""
+start "SC2 -- Launcher" /D "%TOOLS_ROOT%\SC2Replay-Analyzer" cmd /k py SC2ReplayAnalyzer.py
 
 REM    Give the backend a moment to bind before dependents (watchers,
 REM    pollers) start posting to /api/replay etc.

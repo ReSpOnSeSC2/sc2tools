@@ -63,6 +63,16 @@ from typing import Any, Dict, List, Optional
 
 
 # -----------------------------------------------------------------------------
+# Engine version tag.
+# -----------------------------------------------------------------------------
+# Read by the diagnostics router (Stage 4) and compared to the value persisted
+# in data/config.json under macro_engine.engine_version. When they differ, the
+# diagnostics page suggests a re-backfill so historical games get rescored with
+# the current model. Bump this string any time the scoring math changes.
+MACRO_ENGINE_VERSION: str = "2026-04-chain-counted"
+
+
+# -----------------------------------------------------------------------------
 # Tunable constants.
 # -----------------------------------------------------------------------------
 # Adjustment caps (max number of points each discipline can shave off the SQ
