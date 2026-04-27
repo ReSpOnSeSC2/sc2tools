@@ -22,6 +22,26 @@ remaining fields incrementally as consumers come online.
 """
 
 from dataclasses import dataclass, field
+from core.event_extractor import (
+    _get_owner_pid,
+    _get_unit_type_name,
+    _clean_building_name,
+    KNOWN_BUILDINGS,
+    _BASE_TYPES
+)
+try:
+    from sc2reader.events.tracker import (
+        PlayerStatsEvent,
+        UnitBornEvent,
+        UnitInitEvent,
+        UnitDoneEvent
+    )
+except ImportError:
+    PlayerStatsEvent = None
+    UnitBornEvent = None
+    UnitInitEvent = None
+    UnitDoneEvent = None
+
 from typing import Dict, Optional
 
 
@@ -112,7 +132,111 @@ def extract_features(replay, my_pid: int) -> GameFeatures:
     feats.matchup = f"vs {opp.play_race}" if opp.play_race else ''
     feats.result = me.result or 'Unknown'
 
-    # TODO: populate workers_at_4min, supply_blocked_seconds, peak_army_value,
-    # etc. when downstream consumers (macro_score / win_probability /
-    # clustering) need them.
+    if not PlayerStatsEvent:
+        return feats
+
+    tracker_events = getattr(replay, 'tracker_events', [])
+
+    stats_events = []
+    bases_built = []
+    first_gas_time = 0
+
+    for event in tracker_events:
+        try:
+            if isinstance(event, PlayerStatsEvent):
+                pid = getattr(event, "pid", None)
+                if pid is None:
+                    p = getattr(event, "player", None)
+                    pid = getattr(p, "pid", None) if p else None
+                if pid == my_pid:
+                    stats_events.append(event)
+
+            elif isinstance(event, (UnitBornEvent, UnitInitEvent, UnitDoneEvent)):
+                pid = _get_owner_pid(event)
+                if pid == my_pid:
+                    raw = _get_unit_type_name(event)
+                    if raw:
+                        clean = _clean_building_name(raw)
+
+                        if clean in _BASE_TYPES:
+                            is_completion = (
+                                isinstance(event, UnitDoneEvent)
+                                or (isinstance(event, UnitBornEvent)
+                                    and clean in _BASE_TYPES)
+                            )
+                            if is_completion:
+                                bases_built.append(getattr(event, "second", 0))
+
+                        elif clean in ["Assimilator", "Extractor", "Refinery"] and first_gas_time == 0:
+                            first_gas_time = getattr(event, "second", 0)
+        except Exception:
+            continue
+
+    if stats_events:
+        workers_4min = 0
+        workers_8min = 0
+        minerals_rates = []
+        gas_rates = []
+        supply_used_list = []
+        peak_army = 0
+        blocked_sec = 0.0
+
+        for i, s in enumerate(stats_events):
+            t = getattr(s, "second", 0)
+            food_workers = getattr(s, "food_workers", 0)
+            if t <= 240:
+                workers_4min = max(workers_4min, food_workers)
+            if t <= 480:
+                workers_8min = max(workers_8min, food_workers)
+
+            min_rate = getattr(s, "minerals_collection_rate", 0)
+            gas_rate = getattr(s, "vespene_collection_rate", 0)
+            minerals_rates.append(min_rate)
+            gas_rates.append(gas_rate)
+
+            food_used = getattr(s, "food_used", 0)
+            food_made = getattr(s, "food_made", 0)
+            supply_used_list.append(food_used)
+
+            army_val = (
+                getattr(s, "minerals_used_active_forces",
+                        getattr(s, "minerals_used_current_army", 0))
+                + getattr(s, "vespene_used_active_forces",
+                          getattr(s, "vespene_used_current_army", 0))
+            )
+            peak_army = max(peak_army, army_val)
+
+            if food_used >= food_made - 1 and food_used < 200:
+                gap = 10
+                if i + 1 < len(stats_events):
+                    next_t = getattr(stats_events[i+1], "second", 0)
+                    gap = next_t - t
+                blocked_sec += min(gap, 4)
+
+        feats.workers_at_4min = int(workers_4min)
+        feats.workers_at_8min = int(workers_8min)
+        feats.avg_minerals_collection_rate = sum(minerals_rates) / len(minerals_rates) if minerals_rates else 0.0
+        feats.avg_gas_collection_rate = sum(gas_rates) / len(gas_rates) if gas_rates else 0.0
+        feats.avg_supply_used = sum(supply_used_list) / len(supply_used_list) if supply_used_list else 0.0
+        feats.peak_army_value = int(peak_army)
+        feats.supply_blocked_seconds = int(blocked_sec)
+
+    feats.first_gas_time_sec = first_gas_time
+
+    # Bases counting
+    bases_built.sort()
+    bases_5min = 1 # Initial base
+    bases_10min = 1
+    for b_time in bases_built:
+        if b_time > 0 and b_time <= 300:
+            bases_5min += 1
+        if b_time > 0 and b_time <= 600:
+            bases_10min += 1
+
+    if len(bases_built) > 0 and bases_built[0] > 0:
+        feats.first_expansion_time_sec = bases_built[0]
+
+    feats.bases_at_5min = bases_5min
+    feats.bases_at_10min = bases_10min
+
     return feats
