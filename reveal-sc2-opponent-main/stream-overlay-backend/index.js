@@ -1577,26 +1577,27 @@ app.get('/health', (_req, res) => res.json({
 
 // ------------------------------------------------------------------
 // START
-// ------------------------------------------------------------------
-// Watch character_ids.txt for changes (e.g. user edited
-// SC2_CHARACTER_IDS in reveal-sc2-opponent.bat and relaunched).
-// Re-init Pulse so the new ID takes effect without a backend restart.
-fs.watchFile(CHARACTER_IDS_PATH, { interval: 2000 }, () => {
-    const fresh = readPublishedCharacterIds();
-    if (fresh.length === 0) return;
-    const sameSet =
-        fresh.length === pulseCharacterIds.length &&
-        fresh.every(id => pulseCharacterIds.includes(id));
-    if (sameSet) return;
-    console.log(`[Pulse] character_ids.txt changed -> re-initializing (${fresh.join(',')})`);
-    pulseInitPromise = null;
-    pulseSeasonId = null;
-    pulseCharacterIds = [];
-    if (pulseConfig().enabled) {
-        ensurePulseInitialized().catch(err =>
-            console.warn('[Pulse] re-init failed:', err.message));
-    }
-});
+if (require.main === module) {
+    // ------------------------------------------------------------------
+    // Watch character_ids.txt for changes (e.g. user edited
+    // SC2_CHARACTER_IDS in reveal-sc2-opponent.bat and relaunched).
+    // Re-init Pulse so the new ID takes effect without a backend restart.
+    fs.watchFile(CHARACTER_IDS_PATH, { interval: 2000 }, () => {
+        const fresh = readPublishedCharacterIds();
+        if (fresh.length === 0) return;
+        const sameSet =
+            fresh.length === pulseCharacterIds.length &&
+            fresh.every(id => pulseCharacterIds.includes(id));
+        if (sameSet) return;
+        console.log(`[Pulse] character_ids.txt changed -> re-initializing (${fresh.join(',')})`);
+        pulseInitPromise = null;
+        pulseSeasonId = null;
+        pulseCharacterIds = [];
+        if (pulseConfig().enabled) {
+            ensurePulseInitialized().catch(err =>
+                console.warn('[Pulse] re-init failed:', err.message));
+        }
+    });
 
 if (require.main === module) {
     server.listen(PORT, async () => {
