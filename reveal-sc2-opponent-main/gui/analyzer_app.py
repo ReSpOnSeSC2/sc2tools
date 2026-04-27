@@ -965,6 +965,7 @@ class App(ctk.CTk):
         self.queued_files: List[str] = []
         self._queue_lock = threading.Lock()
         self._processing = False
+        self._config_cache: Optional[Dict[str, Any]] = None
 
         # ---- Sidebar ---------------------------------------------------
         self.sidebar = ctk.CTkFrame(self, width=260, corner_radius=0)
@@ -1286,6 +1287,19 @@ class App(ctk.CTk):
             return games
         return [g for g in games if (g.get("date") or "") >= cutoff]
 
+    def _get_config(self) -> Dict[str, Any]:
+        """Lazy-load the configuration and cache it."""
+        if self._config_cache is None:
+            if os.path.exists(CONFIG_FILE):
+                try:
+                    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                        self._config_cache = json.load(f) or {}
+                except Exception:
+                    self._config_cache = {}
+            else:
+                self._config_cache = {}
+        return self._config_cache
+
     def _on_season_filter_change(self) -> None:
         try:
             cutoff = self._season_cutoff_iso()
@@ -1300,10 +1314,7 @@ class App(ctk.CTk):
             # new filter; force-render the visible tab right now.
             self.refresh_all_tabs()
             try:
-                conf = {}
-                if os.path.exists(CONFIG_FILE):
-                    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                        conf = json.load(f) or {}
+                conf = self._get_config()
                 conf["season_filter"] = self.season_filter_var.get()
                 from core.atomic_io import atomic_write_json
                 atomic_write_json(CONFIG_FILE, conf, indent=None)
@@ -1313,33 +1324,31 @@ class App(ctk.CTk):
             print(f"[Analyzer] Season filter change failed: {e}")
 
     def _load_config(self) -> None:
-        if os.path.exists(CONFIG_FILE):
-            try:
-                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                    conf = json.load(f)
-                last_player = conf.get("last_player")
-                if last_player:
-                    self.analyzer.selected_player_name = last_player
-                    self.profile_combo.configure(values=[last_player])
-                    self.profile_combo.set(last_player)
-                    self.btn_run.configure(state="normal", fg_color="#1f538d")
-                # Restore last season-filter choice (defaults to All time).
-                saved_season = conf.get("season_filter")
-                if saved_season and saved_season in self._SEASON_DAYS:
-                    try:
-                        self.season_filter_var.set(saved_season)
-                        cutoff = self._season_cutoff_iso()
-                        if cutoff is None:
-                            self._season_lbl.configure(text="(scoring on all games)")
-                        else:
-                            d = datetime.fromisoformat(cutoff)
-                            self._season_lbl.configure(
-                                text=f"(scoring games since {d.strftime('%Y-%m-%d')})",
-                            )
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+        try:
+            conf = self._get_config()
+            last_player = conf.get("last_player")
+            if last_player:
+                self.analyzer.selected_player_name = last_player
+                self.profile_combo.configure(values=[last_player])
+                self.profile_combo.set(last_player)
+                self.btn_run.configure(state="normal", fg_color="#1f538d")
+            # Restore last season-filter choice (defaults to All time).
+            saved_season = conf.get("season_filter")
+            if saved_season and saved_season in self._SEASON_DAYS:
+                try:
+                    self.season_filter_var.set(saved_season)
+                    cutoff = self._season_cutoff_iso()
+                    if cutoff is None:
+                        self._season_lbl.configure(text="(scoring on all games)")
+                    else:
+                        d = datetime.fromisoformat(cutoff)
+                        self._season_lbl.configure(
+                            text=f"(scoring games since {d.strftime('%Y-%m-%d')})",
+                        )
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def set_profile(self, choice) -> None:
         if choice and choice != "Upload First...":
@@ -1347,13 +1356,7 @@ class App(ctk.CTk):
             try:
                 os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
                 # Don't clobber other config keys (like season_filter).
-                conf = {}
-                if os.path.exists(CONFIG_FILE):
-                    try:
-                        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                            conf = json.load(f) or {}
-                    except Exception:
-                        conf = {}
+                conf = self._get_config()
                 conf["last_player"] = choice
                 from core.atomic_io import atomic_write_json
                 atomic_write_json(CONFIG_FILE, conf, indent=None)
