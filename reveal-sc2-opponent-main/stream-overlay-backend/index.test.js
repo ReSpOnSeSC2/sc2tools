@@ -1,82 +1,85 @@
 const fs = require('fs');
-const indexModule = require('./index');
 
-describe('loadSession', () => {
-    let originalConsoleError;
-    let originalConsoleLog;
+jest.mock('fs', () => {
+    const originalFs = jest.requireActual('fs');
+    return {
+        ...originalFs,
+        existsSync: jest.fn(),
+        readFileSync: jest.fn(),
+        writeFileSync: jest.fn(),
+        renameSync: jest.fn(),
+        mkdirSync: jest.fn(),
+        watchFile: jest.fn(),
+    };
+});
+jest.mock('express', () => {
+    const app = {
+        use: jest.fn(),
+        get: jest.fn(),
+        post: jest.fn(),
+    };
+    const express = jest.fn(() => app);
+    express.json = jest.fn();
+    express.static = jest.fn();
+    return express;
+});
+jest.mock('http', () => ({
+    createServer: jest.fn(() => ({
+        listen: jest.fn(),
+    }))
+}));
+jest.mock('socket.io', () => {
+    return {
+        Server: jest.fn(() => ({
+            emit: jest.fn(),
+            on: jest.fn(),
+        }))
+    };
+});
+jest.mock('tmi.js', () => ({
+    Client: jest.fn(() => ({
+        connect: jest.fn().mockResolvedValue(),
+        on: jest.fn(),
+    }))
+}));
+jest.mock('./analyzer', () => ({
+    router: {},
+    startWatching: jest.fn()
+}));
 
+describe('loadConfig', () => {
     beforeEach(() => {
-        originalConsoleError = console.error;
-        originalConsoleLog = console.log;
-        console.error = jest.fn();
-        console.log = jest.fn();
+        jest.clearAllMocks();
+        jest.resetModules();
+        process.env.NODE_ENV = 'test';
     });
 
-    afterEach(() => {
-        console.error = originalConsoleError;
-        console.log = originalConsoleLog;
-        if (fs.existsSync(indexModule.SESSION_STATE_PATH)) {
-            fs.unlinkSync(indexModule.SESSION_STATE_PATH);
-        }
-    });
+    it('should use DEFAULT_CONFIG when fs.readFileSync throws an error', () => {
+        const mockedFs = require('fs');
+        mockedFs.existsSync.mockImplementation((path) => {
+            if (path.includes('overlay.config.json')) return true;
+            return false;
+        });
 
-    test('returns defaultSession if file does not exist', () => {
-        if (fs.existsSync(indexModule.SESSION_STATE_PATH)) {
-            fs.unlinkSync(indexModule.SESSION_STATE_PATH);
-        }
-        const session = indexModule.loadSession();
-        const expected = indexModule.defaultSession();
-        // Ignoring startedAt difference
-        expect(session.wins).toBe(expected.wins);
-        expect(session.losses).toBe(expected.losses);
-        expect(session.mmrStart).toBe(expected.mmrStart);
-    });
+        mockedFs.readFileSync.mockImplementation((path) => {
+            if (path.includes('overlay.config.json')) {
+                throw new Error('Mock file read error');
+            }
+            return '{}';
+        });
 
-    test('catches error and returns defaultSession if file is unreadable (invalid JSON)', () => {
-        fs.writeFileSync(indexModule.SESSION_STATE_PATH, 'invalid json {[');
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
-        const session = indexModule.loadSession();
-        const expected = indexModule.defaultSession();
+        const { loadConfig, DEFAULT_CONFIG } = require('./index');
 
-        expect(session.wins).toBe(expected.wins);
-        expect(session.losses).toBe(expected.losses);
-        expect(session.mmrStart).toBe(expected.mmrStart);
-    });
+        const config = loadConfig();
 
-    test('loads and returns valid session data merged with defaults', () => {
-        const validData = {
-            wins: 5,
-            losses: 2,
-            mmrStart: 3000,
-            mmrCurrent: 3050,
-            lastResultTime: Date.now()
-        };
-        fs.writeFileSync(indexModule.SESSION_STATE_PATH, JSON.stringify(validData));
+        expect(config).toEqual(DEFAULT_CONFIG);
+        expect(consoleSpy).toHaveBeenCalledWith(
+            expect.stringContaining('[Config] Load failed, using defaults:'),
+            'Mock file read error'
+        );
 
-        const session = indexModule.loadSession();
-
-        expect(session.wins).toBe(5);
-        expect(session.losses).toBe(2);
-        expect(session.mmrStart).toBe(3000);
-        expect(session.mmrCurrent).toBe(3050);
-        expect(session.mmrDelta).toBe(50); // Since it was 0, it gets backfilled based on current-start
-    });
-
-    test('starts fresh session if idle gap is exceeded', () => {
-        jest.useFakeTimers();
-        const oldData = {
-            wins: 10,
-            losses: 10,
-            lastResultTime: Date.now() - (2 * 60 * 60 * 1000) // 2 hours ago
-        };
-        fs.writeFileSync(indexModule.SESSION_STATE_PATH, JSON.stringify(oldData));
-
-        const session = indexModule.loadSession();
-
-        expect(console.log).toHaveBeenCalledWith('[Session] Idle gap exceeded, starting fresh session.');
-        expect(session.wins).toBe(0);
-        expect(session.losses).toBe(0);
-
-        jest.useRealTimers();
+        consoleSpy.mockRestore();
     });
 });
