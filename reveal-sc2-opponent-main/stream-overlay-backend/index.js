@@ -1605,26 +1605,28 @@ fs.watchFile(CHARACTER_IDS_PATH, { interval: 2000 }, () => {
     }
 });
 
-server.listen(PORT, async () => {
-    console.log(`[Server] Listening on http://localhost:${PORT}`);
-    console.log(`[Server] Dev panel: http://localhost:${PORT}/static/debug.html`);
-    console.log(`[Server] !build:    http://localhost:${PORT}/static/last-build.html`);
-    console.log(`[Server] History:   ${HISTORY_FILE_PATH}`);
-    console.log(`[Server] Meta DB:   ${META_DB_PATH}`);
-    // Per the SC2Pulse integration: kick off pulse season + character
-    // resolution so the first game is ranked-aware. Don't await --
-    // server should accept connections immediately even if Pulse is slow.
-    if (typeof ensurePulseInitialized === 'function') {
-        ensurePulseInitialized().catch(err =>
-            console.warn('[Pulse] ensurePulseInitialized failed:', err.message));
-    }
-    // Watch meta_database.json + MyOpponentHistory.json for live SPA
-    // updates. Broadcasts 'analyzer_db_changed' over Socket.io when
-    // either DB moves so connected analyzer clients refresh in real time.
-    try { analyzer.startWatching(io); }
-    catch (err) { console.warn('[Analyzer] startWatching failed:', err.message); }
-    console.log(`[Server] Analyzer:  http://localhost:${PORT}/analyzer`);
-});
+if (process.env.NODE_ENV !== 'test') {
+    server.listen(PORT, async () => {
+        console.log(`[Server] Listening on http://localhost:${PORT}`);
+        console.log(`[Server] Dev panel: http://localhost:${PORT}/static/debug.html`);
+        console.log(`[Server] !build:    http://localhost:${PORT}/static/last-build.html`);
+        console.log(`[Server] History:   ${HISTORY_FILE_PATH}`);
+        console.log(`[Server] Meta DB:   ${META_DB_PATH}`);
+        // Per the SC2Pulse integration: kick off pulse season + character
+        // resolution so the first game is ranked-aware. Don't await --
+        // server should accept connections immediately even if Pulse is slow.
+        if (typeof ensurePulseInitialized === 'function') {
+            ensurePulseInitialized().catch(err =>
+                console.warn('[Pulse] ensurePulseInitialized failed:', err.message));
+        }
+        // Watch meta_database.json + MyOpponentHistory.json for live SPA
+        // updates. Broadcasts 'analyzer_db_changed' over Socket.io when
+        // either DB moves so connected analyzer clients refresh in real time.
+        try { analyzer.startWatching(io); }
+        catch (err) { console.warn('[Analyzer] startWatching failed:', err.message); }
+        console.log(`[Server] Analyzer:  http://localhost:${PORT}/analyzer`);
+    });
+}
 
 function shutdown(reason) {
     console.log(`[Server] Shutting down: ${reason}`);
@@ -1633,3 +1635,9 @@ function shutdown(reason) {
 }
 process.on('SIGINT',  () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+// For testing purposes
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports.describePulseTeam = describePulseTeam;
+    module.exports.PULSE_REGION_LABEL = PULSE_REGION_LABEL;
+}
