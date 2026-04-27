@@ -483,7 +483,10 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
                         "food_made": getattr(event, "food_made", 0),
                         "minerals_current": getattr(event, "minerals_current", 0),
                         "vespene_current": getattr(event, "vespene_current", 0),
-                        "food_workers": getattr(event, "food_workers", 0),
+                        # sc2reader names this workers_active_count (food_workers does not
+                        # exist on PlayerStatsEvent in 1.8.x). Keep the JSON
+                        # key "food_workers" so the whole pipeline stays stable.
+                        "food_workers": getattr(event, "workers_active_count", 0),
                         "minerals_collection_rate":
                             getattr(event, "minerals_collection_rate", 0),
                         "vespene_collection_rate":

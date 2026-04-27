@@ -1735,6 +1735,12 @@ router.post('/games/:gameId/macro-breakdown', (req, res) => {
                 raw: r.raw || {},
                 all_leaks: Array.isArray(r.all_leaks) ? r.all_leaks : [],
                 top_3_leaks: Array.isArray(r.top_3_leaks) ? r.top_3_leaks : [],
+                // PlayerStatsEvent samples (time, food_workers, food_used,
+                // food_made, *_collection_rate). Surfaced for the
+                // MacroBreakdownPanel army/workers chart. Empty array means
+                // the replay's tracker stream had no PlayerStatsEvent rows
+                // (some older replays); the UI falls back to a notice.
+                stats_events: Array.isArray(r.stats_events) ? r.stats_events : [],
             };
             // Mutate in-memory game record + persist back to meta_database.json.
             game.macro_score = r.macro_score;

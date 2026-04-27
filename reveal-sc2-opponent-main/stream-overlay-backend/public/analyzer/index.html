@@ -2178,6 +2178,408 @@
         );
       }
 
+      // =====================================================================
+      // Active Army & Workers chart used by MacroBreakdownPanel.
+      //
+      // Pure-SVG, no chart library. Plots two lines on a shared time axis:
+      //   - Army supply value  = food_used * ARMY_SUPPLY_PER_FOOD  (left axis)
+      //   - Worker count       = food_workers                       (right axis)
+      // Vertical bands are shaded during supply-blocked windows
+      // (food_used >= food_made - SUPPLY_BLOCK_TOLERANCE), driven by the same
+      // PlayerStatsEvent samples the macro engine already consumes.
+      //
+      // Colors come from design tokens (Stage 1) — no hardcoded palette.
+      // When stats_events is empty (older replays whose tracker stream is
+      // missing PlayerStatsEvent rows), renders a plain notice instead of
+      // synthesizing data. No mock samples ever.
+      // =====================================================================
+      const RACE_ACCENT_VAR = {
+        Protoss: "var(--color-race-protoss)",
+        Terran: "var(--color-race-terran)",
+        Zerg: "var(--color-race-zerg)",
+      };
+      const CHART_INFO_COLOR = "var(--color-info)";
+      const CHART_WARNING_COLOR = "var(--color-warning)";
+      const CHART_GRID_COLOR = "var(--color-border-subtle)";
+      const CHART_AXIS_TEXT = "var(--color-text-secondary)";
+      const CHART_VIEW_W = 800;
+      const CHART_VIEW_H = 220;
+      const CHART_PAD_LEFT = 44;
+      const CHART_PAD_RIGHT = 44;
+      const CHART_PAD_TOP = 12;
+      const CHART_PAD_BOTTOM = 26;
+      const ARMY_SUPPLY_PER_FOOD = 8;
+      const SUPPLY_BLOCK_TOLERANCE = 1;
+      const SUPPLY_BAND_OPACITY = 0.3;
+      const Y_TICK_FRACTIONS = [0, 0.25, 0.5, 0.75, 1];
+      const X_TICK_STEP_LONG_GAME = 120;
+      const X_TICK_STEP_SHORT_GAME = 60;
+      const X_TICK_LONG_GAME_THRESHOLD = 360;
+      const ARMY_AXIS_FLOOR = 8 * ARMY_SUPPLY_PER_FOOD;
+      const WORKER_AXIS_FLOOR = 12;
+
+      function _formatGameClock(totalSeconds) {
+        const s = Math.max(0, Math.floor(totalSeconds || 0));
+        const m = Math.floor(s / 60);
+        const ss = (s % 60).toString().padStart(2, "0");
+        return `${m}:${ss}`;
+      }
+
+      // Walk samples once, collapsing consecutive supply-blocked rows into
+      // [start, end] bands. Returns an array of {start, end} game-second pairs.
+      function _supplyBlockBands(samples) {
+        const bands = [];
+        let openStart = null;
+        let lastTime = 0;
+        for (const s of samples) {
+          const t = Number(s.time) || 0;
+          const used = Number(s.food_used) || 0;
+          const made = Number(s.food_made) || 0;
+          const blocked = made > 0 && used >= made - SUPPLY_BLOCK_TOLERANCE;
+          if (blocked && openStart === null) openStart = t;
+          else if (!blocked && openStart !== null) {
+            bands.push({ start: openStart, end: t });
+            openStart = null;
+          }
+          lastTime = t;
+        }
+        if (openStart !== null) bands.push({ start: openStart, end: lastTime });
+        return bands;
+      }
+
+      function _buildLinePath(points) {
+        if (!points.length) return "";
+        return points
+          .map(
+            (p, i) =>
+              `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`,
+          )
+          .join(" ");
+      }
+
+      // Compute scales, point arrays, and tick positions in one pass so the
+      // render function stays declarative and within the function-size cap.
+      function _buildChartLayout(samples, gameLengthSec) {
+        const innerW = CHART_VIEW_W - CHART_PAD_LEFT - CHART_PAD_RIGHT;
+        const innerH = CHART_VIEW_H - CHART_PAD_TOP - CHART_PAD_BOTTOM;
+        const lastT = Number(samples[samples.length - 1].time) || 0;
+        const maxT = Math.max(lastT, Number(gameLengthSec) || 0, 60);
+        const armyVals = samples.map(
+          (s) => (Number(s.food_used) || 0) * ARMY_SUPPLY_PER_FOOD,
+        );
+        const workerVals = samples.map((s) => Number(s.food_workers) || 0);
+        const armyMax = Math.max(...armyVals, ARMY_AXIS_FLOOR);
+        const workerMax = Math.max(...workerVals, WORKER_AXIS_FLOOR);
+        const xOf = (t) => CHART_PAD_LEFT + (t / maxT) * innerW;
+        const yArmy = (a) => CHART_PAD_TOP + (1 - a / armyMax) * innerH;
+        const yWorker = (w) => CHART_PAD_TOP + (1 - w / workerMax) * innerH;
+        const armyPts = samples.map((s) => [
+          xOf(Number(s.time) || 0),
+          yArmy((Number(s.food_used) || 0) * ARMY_SUPPLY_PER_FOOD),
+        ]);
+        const workerPts = samples.map((s) => [
+          xOf(Number(s.time) || 0),
+          yWorker(Number(s.food_workers) || 0),
+        ]);
+        const tickStep =
+          maxT >= X_TICK_LONG_GAME_THRESHOLD
+            ? X_TICK_STEP_LONG_GAME
+            : X_TICK_STEP_SHORT_GAME;
+        const xTicks = [];
+        for (let t = 0; t <= maxT; t += tickStep) xTicks.push(t);
+        return {
+          innerW,
+          innerH,
+          maxT,
+          armyMax,
+          workerMax,
+          xOf,
+          yArmy,
+          yWorker,
+          armyPts,
+          workerPts,
+          xTicks,
+        };
+      }
+
+      // Render the supply-block shaded bands as a list of <rect> elements.
+      function _renderSupplyBands(bands, layout) {
+        return bands.map((b, i) => (
+          <rect
+            key={`band-${i}`}
+            x={layout.xOf(b.start)}
+            y={CHART_PAD_TOP}
+            width={Math.max(1, layout.xOf(b.end) - layout.xOf(b.start))}
+            height={layout.innerH}
+            fill={CHART_WARNING_COLOR}
+            opacity={SUPPLY_BAND_OPACITY}
+          />
+        ));
+      }
+
+      // Render dual y-axis grid lines + tick labels. Left = army, right = workers.
+      function _renderYAxes(layout) {
+        return Y_TICK_FRACTIONS.map((f, i) => {
+          const y = CHART_PAD_TOP + (1 - f) * layout.innerH;
+          return (
+            <g key={`y-${i}`}>
+              <line
+                x1={CHART_PAD_LEFT}
+                y1={y}
+                x2={CHART_VIEW_W - CHART_PAD_RIGHT}
+                y2={y}
+                stroke={CHART_GRID_COLOR}
+                strokeDasharray="2 4"
+              />
+              <text
+                x={CHART_PAD_LEFT - 6}
+                y={y + 3}
+                fontSize="10"
+                textAnchor="end"
+                fill={CHART_AXIS_TEXT}
+              >
+                {Math.round(f * layout.armyMax)}
+              </text>
+              <text
+                x={CHART_VIEW_W - CHART_PAD_RIGHT + 6}
+                y={y + 3}
+                fontSize="10"
+                textAnchor="start"
+                fill={CHART_AXIS_TEXT}
+              >
+                {Math.round(f * layout.workerMax)}
+              </text>
+            </g>
+          );
+        });
+      }
+
+      // Render x-axis tick labels (game-clock formatted).
+      function _renderXAxisTicks(layout) {
+        return layout.xTicks.map((t, i) => (
+          <text
+            key={`x-${i}`}
+            x={layout.xOf(t)}
+            y={CHART_VIEW_H - 8}
+            fontSize="10"
+            textAnchor="middle"
+            fill={CHART_AXIS_TEXT}
+          >
+            {_formatGameClock(t)}
+          </text>
+        ));
+      }
+
+      // Render the inline legend row above the SVG.
+      function _renderChartLegend(armyAccent) {
+        return (
+          <div className="flex items-center gap-3 text-[11px] text-neutral-400">
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="inline-block w-3 h-0.5"
+                style={{ background: armyAccent }}
+              />
+              Army (supply value)
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="inline-block w-3 h-0.5"
+                style={{ background: CHART_INFO_COLOR }}
+              />
+              Workers
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="inline-block w-3 h-2"
+                style={{
+                  background: CHART_WARNING_COLOR,
+                  opacity: SUPPLY_BAND_OPACITY,
+                }}
+              />
+              Supply blocked
+            </span>
+          </div>
+        );
+      }
+
+      // Find the sample index whose game-time is closest to the cursor.
+      // mapping: clientX → SVG-local-X (preserveAspectRatio="none" makes this
+      // a linear scale) → game-time → nearest sample.
+      function _hoverIndexFromMouseEvent(e, svgEl, samples, layout) {
+        if (!svgEl || !samples.length) return null;
+        const rect = svgEl.getBoundingClientRect();
+        if (rect.width <= 0) return null;
+        const localX = (e.clientX - rect.left) / rect.width * CHART_VIEW_W;
+        if (localX < CHART_PAD_LEFT || localX > CHART_VIEW_W - CHART_PAD_RIGHT) {
+          return null;
+        }
+        const t = (localX - CHART_PAD_LEFT) / layout.innerW * layout.maxT;
+        // Linear scan is fine — stats_events typically has < 200 samples.
+        let bestIdx = 0;
+        let bestDist = Infinity;
+        for (let i = 0; i < samples.length; i++) {
+          const d = Math.abs((Number(samples[i].time) || 0) - t);
+          if (d < bestDist) { bestDist = d; bestIdx = i; }
+        }
+        return bestIdx;
+      }
+
+      // Render the in-SVG crosshair + dots for the hovered sample.
+      function _renderHoverCrosshair(sample, layout, armyAccent) {
+        const t = Number(sample.time) || 0;
+        const xCursor = layout.xOf(t);
+        const armyY = layout.yArmy((Number(sample.food_used) || 0) * ARMY_SUPPLY_PER_FOOD);
+        const workerY = layout.yWorker(Number(sample.food_workers) || 0);
+        return (
+          <g pointerEvents="none">
+            <line
+              x1={xCursor}
+              y1={CHART_PAD_TOP}
+              x2={xCursor}
+              y2={CHART_PAD_TOP + layout.innerH}
+              stroke={CHART_AXIS_TEXT}
+              strokeDasharray="2 2"
+              opacity="0.6"
+            />
+            <circle cx={xCursor} cy={workerY} r="3" fill={CHART_INFO_COLOR} />
+            <circle cx={xCursor} cy={armyY} r="3.5" fill={armyAccent} />
+          </g>
+        );
+      }
+
+      // Render the SVG body once layout is computed. Kept in its own
+      // helper to keep MacroResourceChart under the function-size cap.
+      function _renderChartSvg(layout, armyAccent, bands, hoverSample, svgRef, onMove, onLeave) {
+        const baselineY = CHART_PAD_TOP + layout.innerH;
+        return (
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${CHART_VIEW_W} ${CHART_VIEW_H}`}
+            role="img"
+            aria-label="Active army supply value and worker count over game time"
+            className="w-full h-auto cursor-crosshair"
+            preserveAspectRatio="none"
+            onMouseMove={onMove}
+            onMouseLeave={onLeave}
+          >
+            {_renderSupplyBands(bands, layout)}
+            <line
+              x1={CHART_PAD_LEFT}
+              y1={baselineY}
+              x2={CHART_VIEW_W - CHART_PAD_RIGHT}
+              y2={baselineY}
+              stroke={CHART_GRID_COLOR}
+            />
+            {_renderYAxes(layout)}
+            {_renderXAxisTicks(layout)}
+            <path
+              d={_buildLinePath(layout.workerPts)}
+              fill="none"
+              stroke={CHART_INFO_COLOR}
+              strokeWidth="1.5"
+            />
+            <path
+              d={_buildLinePath(layout.armyPts)}
+              fill="none"
+              stroke={armyAccent}
+              strokeWidth="1.75"
+            />
+            {hoverSample && _renderHoverCrosshair(hoverSample, layout, armyAccent)}
+            <text
+              x={CHART_PAD_LEFT - 6}
+              y={CHART_PAD_TOP - 2}
+              fontSize="9"
+              textAnchor="end"
+              fill={CHART_AXIS_TEXT}
+            >
+              army
+            </text>
+            <text
+              x={CHART_VIEW_W - CHART_PAD_RIGHT + 6}
+              y={CHART_PAD_TOP - 2}
+              fontSize="9"
+              textAnchor="start"
+              fill={CHART_AXIS_TEXT}
+            >
+              wkrs
+            </text>
+          </svg>
+        );
+      }
+
+      // Returns true if the sample is inside any of the supply-block bands.
+      function _sampleInBlockedBand(sample, bands) {
+        const t = Number(sample.time) || 0;
+        for (const b of bands) if (t >= b.start && t <= b.end) return true;
+        return false;
+      }
+
+      // Render the HTML tooltip overlaid above the SVG at the hover position.
+      function _renderChartTooltip(sample, layout, bands) {
+        const t = Number(sample.time) || 0;
+        const army = (Number(sample.food_used) || 0) * ARMY_SUPPLY_PER_FOOD;
+        const workers = Number(sample.food_workers) || 0;
+        const blocked = _sampleInBlockedBand(sample, bands);
+        const leftPct = (layout.xOf(t) / CHART_VIEW_W) * 100;
+        const onRight = leftPct > 60;
+        return (
+          <div
+            className="pointer-events-none absolute z-10 bg-base-900 ring-soft rounded px-2 py-1 text-[11px] text-neutral-100 shadow-soft"
+            style={{
+              left: onRight ? "auto" : `calc(${leftPct}% + 8px)`,
+              right: onRight ? `calc(${100 - leftPct}% + 8px)` : "auto",
+              top: 4,
+            }}
+          >
+            <div className="text-neutral-400 tabular-nums">{_formatGameClock(t)}</div>
+            <div className="tabular-nums">army <span className="font-semibold">{army}</span></div>
+            <div className="tabular-nums">workers <span className="font-semibold">{workers}</span></div>
+            {blocked && (
+              <div className="text-[10px]" style={{ color: CHART_WARNING_COLOR }}>
+                supply blocked
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      function MacroResourceChart({ statsEvents, race, gameLengthSec }) {
+        const samples = Array.isArray(statsEvents) ? statsEvents : [];
+        const [hoverIdx, setHoverIdx] = useState(null);
+        const svgRef = useRef(null);
+        if (samples.length === 0) {
+          return (
+            <div className="bg-base-800 ring-soft rounded p-3 text-xs text-neutral-400">
+              Resource samples unavailable for this replay.
+            </div>
+          );
+        }
+        const armyAccent =
+          RACE_ACCENT_VAR[race] || "var(--color-race-random)";
+        const layout = _buildChartLayout(samples, gameLengthSec);
+        const bands = _supplyBlockBands(samples);
+        const onMove = (e) => {
+          const idx = _hoverIndexFromMouseEvent(e, svgRef.current, samples, layout);
+          if (idx !== hoverIdx) setHoverIdx(idx);
+        };
+        const onLeave = () => setHoverIdx(null);
+        const hoverSample = hoverIdx != null ? samples[hoverIdx] : null;
+        return (
+          <div className="bg-base-800 ring-soft rounded p-3">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <div className="text-[11px] uppercase tracking-wider text-neutral-200">
+                Active Army &amp; Workers
+              </div>
+              {_renderChartLegend(armyAccent)}
+            </div>
+            <div className="relative">
+              {_renderChartSvg(layout, armyAccent, bands, hoverSample, svgRef, onMove, onLeave)}
+              {hoverSample && _renderChartTooltip(hoverSample, layout, bands)}
+            </div>
+          </div>
+        );
+      }
+
       // Renders a click-to-expand macro breakdown panel for one game. Reuses
       // the /games/:id/build-order payload (which now includes top_3_leaks and
       // macro_breakdown). For games without a stored breakdown, offers a
@@ -2238,6 +2640,8 @@
                     raw: j.raw || {},
                     all_leaks: j.all_leaks || [],
                     top_3_leaks: j.top_3_leaks || [],
+                    // PlayerStatsEvent samples for the army/workers chart.
+                    stats_events: Array.isArray(j.stats_events) ? j.stats_events : [],
                   },
                 }),
               );
@@ -2421,6 +2825,17 @@
                       </tr>
                     </tbody>
                   </table>
+
+                  {/* Active Army & Workers chart (Stage 3 — design-token
+                      colored, no mock data; renders a fallback notice when
+                      stats_events is empty for an older replay). */}
+                  <div className="mt-3">
+                    <MacroResourceChart
+                      statsEvents={breakdown && breakdown.stats_events}
+                      race={race}
+                      gameLengthSec={breakdown && breakdown.game_length_sec}
+                    />
+                  </div>
 
                   {/* Discipline metrics */}
                   {(raw.injects_actual != null ||
@@ -2645,8 +3060,21 @@
                 const id = realId || `_idx_${i}`;
                 const expandable = !!realId;
                 const isOpen = expandable && expandedId === id;
-                const macro =
-                  typeof g.macro_score === "number" ? g.macro_score : null;
+                // Read macro score with defensive fallback — top-level
+                // macro_score is the canonical field, but macro_breakdown.score
+                // (live recompute payload) and macro_breakdown.macro_score
+                // (Python CLI backfill payload) carry the same value. Fall
+                // through so a row that lost macro_score in transit still
+                // renders the score from whatever shape survived.
+                const macro = (() => {
+                  if (typeof g.macro_score === "number") return g.macro_score;
+                  const bd = g && g.macro_breakdown;
+                  if (bd && typeof bd === "object") {
+                    if (typeof bd.score === "number") return bd.score;
+                    if (typeof bd.macro_score === "number") return bd.macro_score;
+                  }
+                  return null;
+                })();
                 const macroColor =
                   macro == null
                     ? "text-neutral-500"

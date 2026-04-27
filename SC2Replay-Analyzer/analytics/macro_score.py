@@ -451,6 +451,12 @@ def compute_macro_score(
 
     return {
         "macro_score": score,
+        # Raw resource samples (PlayerStatsEvent rows) for the user's pid.
+        # Surfaced here so downstream consumers (CLI, Express endpoint,
+        # MacroBreakdownPanel chart) can plot army/worker/supply curves
+        # without re-parsing the replay. Empty list when the tracker
+        # stream had no usable PlayerStatsEvent rows (older replays).
+        "stats_events": stats,
         "top_3_leaks": [l.to_dict() for l in top_3],
         "all_leaks": [l.to_dict() for l in leaks],
         "raw": raw,

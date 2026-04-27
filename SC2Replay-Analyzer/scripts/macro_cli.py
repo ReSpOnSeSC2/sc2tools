@@ -103,6 +103,10 @@ def _compute_for_replay(file_path: str, player_name: str) -> Dict[str, Any]:
         "raw": result.get("raw", {}) or {},
         "all_leaks": result.get("all_leaks", []) or [],
         "top_3_leaks": result.get("top_3_leaks", []) or [],
+        # PlayerStatsEvent samples for army/worker/supply chart in the
+        # MacroBreakdownPanel. Empty list for older replays whose tracker
+        # stream is missing PlayerStatsEvent rows.
+        "stats_events": result.get("stats_events", []) or [],
     }
 
 
