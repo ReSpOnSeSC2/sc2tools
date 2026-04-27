@@ -5315,6 +5315,479 @@
       // other consumer adopts them.
       // ============================================================
 
+      // ============================================================
+      // MAP INTEL COMPONENTS
+      // ============================================================
+
+      function MapIntelTab({ dbRev, onOpenReplay }) {
+        // A simple launcher tab that prompts the user to select a replay
+        // from a recent history list to open in the Map Viewer.
+        const [recentGames, setRecentGames] = useState(null);
+        const [err, setErr] = useState(null);
+
+        useEffect(() => {
+          let cancelled = false;
+          // We can fetch recent games from the ML summary or pulse history
+          fetch(`${API}/summary`)
+            .then(r => r.json())
+            .then(j => {
+              if (cancelled) return;
+              if (j && Array.isArray(j.recent)) {
+                setRecentGames(j.recent);
+              } else {
+                setErr("Could not load recent games.");
+              }
+            })
+            .catch(e => {
+              if (!cancelled) setErr(String(e));
+            });
+          return () => { cancelled = true; };
+        }, [dbRev]);
+
+        return (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold">Map Intel / Replay Viewer</h2>
+            <div className="text-sm text-neutral-400 max-w-2xl">
+              Watch interactive playback of any recent game directly from the browser.
+              Features full timeline, building and unit placement using high-res icons,
+              and post-game stats analysis.
+            </div>
+
+            {err && <div className="text-loss-500">{err}</div>}
+
+            {!recentGames && !err && <div className="animate-pulse">Loading games...</div>}
+
+            {recentGames && (
+              <div className="bg-base-800 rounded border border-base-700 overflow-hidden">
+                <table className="w-full text-sm table-striped">
+                  <thead>
+                    <tr className="bg-base-900 text-left border-b border-base-700">
+                      <th className="py-2 px-3 font-semibold w-24">Date</th>
+                      <th className="py-2 px-3 font-semibold">Map</th>
+                      <th className="py-2 px-3 font-semibold">Opponent</th>
+                      <th className="py-2 px-3 font-semibold">Result</th>
+                      <th className="py-2 px-3 font-semibold text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentGames.slice(0, 50).map((g, i) => (
+                      <tr key={i} className="border-b border-base-700/50 hover:bg-base-700/50 transition-colors">
+                        <td className="py-2 px-3 text-neutral-400 whitespace-nowrap">
+                          {g.date ? new Date(g.date).toLocaleDateString() : 'Unknown'}
+                        </td>
+                        <td className="py-2 px-3 text-gold-400">{g.map}</td>
+                        <td className="py-2 px-3 font-medium">{g.opponent}</td>
+                        <td className="py-2 px-3">
+                          <span className={g.result === 'Victory' ? "text-win-500" : "text-loss-500"}>
+                            {g.result}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <button
+                            className="bg-accent-600 hover:bg-accent-500 text-white px-3 py-1 rounded text-xs transition-colors shadow-sm"
+                            onClick={() => onOpenReplay({ path: g.file_path, player: g.me_name || "" })}
+                          >
+                            Watch
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {recentGames.length === 0 && (
+                      <tr><td colSpan={5} className="py-4 text-center text-neutral-500">No recent games found.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      function MapIntelViewer({ replayPath, playerName, onBack }) {
+        const [data, setData] = useState(null);
+        const [err, setErr] = useState(null);
+        const [loading, setLoading] = useState(true);
+
+        const [time, setTime] = useState(0);
+        const [playing, setPlaying] = useState(false);
+        const [speed, setSpeed] = useState(1.0);
+
+        const canvasRef = React.useRef(null);
+        const containerRef = React.useRef(null);
+        const animRef = React.useRef(null);
+
+        // Pan/Zoom state
+        const [zoom, setZoom] = useState(1.0);
+        const [pan, setPan] = useState({ x: 0, y: 0 });
+        const dragRef = React.useRef(null);
+
+        // Fetch playback data
+        useEffect(() => {
+          let cancelled = false;
+          setLoading(true);
+          fetch(`${API}/playback?replay=${encodeURIComponent(replayPath)}`)
+            .then(r => r.json())
+            .then(j => {
+              if (cancelled) return;
+              if (j && j.ok) {
+                setData(j.result);
+                setTime(0);
+              } else {
+                setErr(j?.error || "Failed to parse replay.");
+              }
+              setLoading(false);
+            })
+            .catch(e => {
+              if (!cancelled) {
+                setErr(String(e));
+                setLoading(false);
+              }
+            });
+          return () => { cancelled = true; };
+        }, [replayPath]);
+
+        // Animation Loop
+        useEffect(() => {
+          if (!playing || !data) return;
+          let lastTick = performance.now();
+          const tick = (now) => {
+            const dt = (now - lastTick) / 1000.0;
+            lastTick = now;
+            setTime(prev => {
+              const next = prev + dt * speed;
+              if (next >= data.game_length) {
+                setPlaying(false);
+                return data.game_length;
+              }
+              return next;
+            });
+            animRef.current = requestAnimationFrame(tick);
+          };
+          animRef.current = requestAnimationFrame(tick);
+          return () => cancelAnimationFrame(animRef.current);
+        }, [playing, speed, data]);
+
+        // Drawing
+        useEffect(() => {
+          if (!data || !canvasRef.current || !containerRef.current) return;
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext('2d');
+
+          const CW = canvas.width;
+          const CH = canvas.height;
+
+          ctx.clearRect(0, 0, CW, CH);
+
+          // Render background
+          ctx.fillStyle = "#1a1f29";
+          ctx.fillRect(0, 0, CW, CH);
+
+          const b = data.bounds;
+          if (!b) return;
+
+          const PAD = 20;
+          const mapW = b.x_max - b.x_min || 1;
+          const mapH = b.y_max - b.y_min || 1;
+
+          // Compute scale
+          const scaleX = (CW - 2 * PAD) / mapW;
+          const scaleY = (CH - 2 * PAD) / mapH;
+          const baseScale = Math.min(scaleX, scaleY);
+
+          // Project SC2 coordinates to Canvas
+          const project = (sc2_x, sc2_y) => {
+             // In SC2, y grows upwards. In canvas, y grows downwards.
+             let px = PAD + (sc2_x - b.x_min) * baseScale;
+             let py = CH - PAD - (sc2_y - b.y_min) * baseScale;
+
+             // Apply pan/zoom relative to center
+             px = (px - CW/2) * zoom + pan.x + CW/2;
+             py = (py - CH/2) * zoom + pan.y + CH/2;
+
+             return { x: px, y: py };
+          };
+
+          // Draw bounds box
+          const pMin = project(b.x_min, b.y_min);
+          const pMax = project(b.x_max, b.y_max);
+          ctx.strokeStyle = "#2b3445";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(pMin.x, pMax.y, pMax.x - pMin.x, pMin.y - pMax.y);
+
+          // Draw grid
+          ctx.strokeStyle = "#242c3b";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          for (let x = Math.ceil(b.x_min); x <= b.x_max; x += 16) {
+             const p0 = project(x, b.y_min);
+             const p1 = project(x, b.y_max);
+             ctx.moveTo(p0.x, p0.y);
+             ctx.lineTo(p1.x, p1.y);
+          }
+          for (let y = Math.ceil(b.y_min); y <= b.y_max; y += 16) {
+             const p0 = project(b.x_min, y);
+             const p1 = project(b.x_max, y);
+             ctx.moveTo(p0.x, p0.y);
+             ctx.lineTo(p1.x, p1.y);
+          }
+          ctx.stroke();
+
+          // Create cache for icons
+          const getIcon = (name) => {
+            if (!window._iconCache) window._iconCache = {};
+            const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (window._iconCache[cleanName]) return window._iconCache[cleanName];
+
+            // Attempt to resolve via TimingCatalog if available, otherwise guess path
+            let iconPath = `/static/icons/buildings/${cleanName}.png`;
+            if (window.TimingCatalog && window.TimingCatalog.TOKENS) {
+               const tok = window.TimingCatalog.TOKENS.find(t => t.id.toLowerCase() === cleanName || t.name.toLowerCase() === cleanName);
+               if (tok) iconPath = `/static/icons/buildings/${tok.icon}`;
+            }
+
+            const img = new Image();
+            img.src = iconPath;
+            window._iconCache[cleanName] = img;
+            return img;
+          };
+
+          // Draw Events
+          const drawEvent = (ev, colorStr, isMe) => {
+            if (ev.time > time) return;
+            if (!ev.x || !ev.y) return;
+            const p = project(ev.x, ev.y);
+
+            if (ev.type === "building") {
+              const img = getIcon(ev.name);
+              const sz = 16 * zoom;
+
+              if (img.complete && img.naturalWidth > 0) {
+                 // Draw backing for visibility
+                 ctx.fillStyle = colorStr;
+                 ctx.globalAlpha = 0.6;
+                 ctx.beginPath();
+                 ctx.arc(p.x, p.y, sz/2 + 2, 0, 2*Math.PI);
+                 ctx.fill();
+                 ctx.globalAlpha = 1.0;
+
+                 ctx.drawImage(img, p.x - sz/2, p.y - sz/2, sz, sz);
+              } else {
+                 ctx.fillStyle = colorStr;
+                 ctx.beginPath();
+                 ctx.rect(p.x - 4*zoom, p.y - 4*zoom, 8*zoom, 8*zoom);
+                 ctx.fill();
+                 ctx.strokeStyle = "#000";
+                 ctx.lineWidth = 1;
+                 ctx.stroke();
+              }
+            } else {
+              ctx.fillStyle = colorStr;
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, 3*zoom, 0, 2*Math.PI);
+              ctx.fill();
+            }
+          };
+
+          if (data.my_events) data.my_events.forEach(e => drawEvent(e, "#66BB6A", true));
+          if (data.opp_events) data.opp_events.forEach(e => drawEvent(e, "#EF5350", false));
+
+        }, [data, time, zoom, pan]);
+
+        // Input Handlers
+        const handleWheel = (e) => {
+          e.preventDefault();
+          if (e.deltaY < 0) {
+            setZoom(z => Math.min(8.0, z * 1.25));
+          } else {
+            setZoom(z => Math.max(0.25, z / 1.25));
+          }
+        };
+
+        const handlePointerDown = (e) => {
+           dragRef.current = { startX: e.clientX, startY: e.clientY, pX: pan.x, pY: pan.y };
+        };
+        const handlePointerMove = (e) => {
+           if (!dragRef.current) return;
+           const dx = e.clientX - dragRef.current.startX;
+           const dy = e.clientY - dragRef.current.startY;
+           setPan({ x: dragRef.current.pX + dx, y: dragRef.current.pY + dy });
+        };
+        const handlePointerUp = () => {
+           dragRef.current = null;
+        };
+
+        const formatTime = (secs) => {
+          const m = Math.floor(secs / 60);
+          const s = Math.floor(secs % 60);
+          return `${m}:${s.toString().padStart(2, '0')}`;
+        };
+
+        if (loading) {
+          return <div className="flex h-full items-center justify-center"><div className="animate-pulse">Loading Replay...</div></div>;
+        }
+
+        if (err) {
+          return (
+            <div className="p-4">
+              <button onClick={onBack} className="mb-4 text-accent-500 hover:text-accent-400">← Back</button>
+              <div className="text-loss-500">{err}</div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex flex-col h-[calc(100vh-60px)]">
+            {/* Header */}
+            <div className="flex items-center gap-4 bg-base-800 p-2 border-b border-base-700">
+              <button onClick={onBack} className="text-neutral-400 hover:text-white px-2 py-1 bg-base-700 rounded transition-colors text-sm">
+                ← Exit
+              </button>
+              <div className="flex flex-col">
+                <span className="font-semibold">{data.map_name}</span>
+                <span className="text-xs text-neutral-400">
+                  <span className="text-win-500">{data.me_name}</span> vs <span className="text-loss-500">{data.opp_name}</span>
+                </span>
+              </div>
+              <div className="flex-1" />
+              <div className="tabular-nums font-mono text-xl">
+                {formatTime(time)} / {formatTime(data.game_length)}
+              </div>
+            </div>
+
+            {/* Canvas Area */}
+            <div
+              ref={containerRef}
+              className="flex-1 bg-base-900 relative overflow-hidden flex justify-center items-center cursor-move"
+              onWheel={handleWheel}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+            >
+              <canvas
+                ref={canvasRef}
+                width={800}
+                height={800}
+                className="max-w-full max-h-full"
+                style={{ touchAction: 'none' }}
+              />
+
+              {/* Game Over Screen */}
+              {time >= data.game_length && (
+                <div className="absolute inset-0 bg-base-900/80 backdrop-blur-sm flex items-center justify-center p-8 z-10">
+                  <div className="bg-base-800 border border-base-600 rounded-lg shadow-2xl p-6 w-full max-w-2xl transform scale-100 animate-in zoom-in-95 duration-200">
+                    <h2 className="text-3xl font-bold mb-2 text-center">
+                      {data.result === 'Victory' ? (
+                        <span className="text-win-500">VICTORY</span>
+                      ) : data.result === 'Defeat' ? (
+                        <span className="text-loss-500">DEFEAT</span>
+                      ) : (
+                        <span className="text-neutral-300">GAME OVER</span>
+                      )}
+                    </h2>
+                    <p className="text-center text-neutral-400 mb-6">Game finished at {formatTime(data.game_length)}</p>
+
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                      <div className="bg-base-900 p-4 rounded border border-base-700">
+                        <h3 className="text-win-400 font-semibold mb-2">{data.me_name} (You)</h3>
+                        <ul className="text-sm space-y-1 text-neutral-300 list-disc list-inside">
+                           <li>Max Army Val: {Math.max(...data.my_stats.map(s => s.army_val), 0).toLocaleString()}</li>
+                           <li>Events Captured: {data.my_events.length}</li>
+                        </ul>
+                      </div>
+                      <div className="bg-base-900 p-4 rounded border border-base-700">
+                        <h3 className="text-loss-400 font-semibold mb-2">{data.opp_name} (Opponent)</h3>
+                        <ul className="text-sm space-y-1 text-neutral-300 list-disc list-inside">
+                           <li>Max Army Val: {Math.max(...data.opp_stats.map(s => s.army_val), 0).toLocaleString()}</li>
+                           <li>Events Captured: {data.opp_events.length}</li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    {data.analysis && (
+                      <div className="bg-base-900 p-4 rounded border border-base-700 mb-6">
+                        <h3 className="font-semibold mb-2 text-neutral-200">Post-Game Analysis</h3>
+                        <div className="space-y-3 text-sm">
+                          <div>
+                            <span className="text-win-400 font-semibold">Good: </span>
+                            <span className="text-neutral-300">{data.analysis.good.join(" ")}</span>
+                          </div>
+                          <div>
+                            <span className="text-loss-400 font-semibold">To Improve: </span>
+                            <span className="text-neutral-300">{data.analysis.bad.join(" ")}</span>
+                          </div>
+                          <div>
+                            <span className="text-gold-400 font-semibold">Tip: </span>
+                            <span className="text-neutral-300">{data.analysis.tips.join(" ")}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-center gap-4">
+                       <button
+                         className="bg-base-700 hover:bg-base-600 px-4 py-2 rounded font-medium transition-colors"
+                         onClick={() => { setTime(0); setPlaying(true); }}
+                       >
+                         Watch Again
+                       </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Playback Controls */}
+            <div className="bg-base-800 border-t border-base-700 p-3 flex items-center gap-4">
+              <button
+                onClick={() => setPlaying(!playing)}
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors shadow-lg ${
+                  playing ? 'bg-amber-600 hover:bg-amber-500' : 'bg-win-600 hover:bg-win-500'
+                }`}
+              >
+                {playing ? '⏸' : '▶'}
+              </button>
+
+              <div className="flex-1 flex flex-col px-2">
+                <input
+                  type="range"
+                  min="0"
+                  max={data.game_length}
+                  value={time}
+                  step="0.5"
+                  onChange={e => {
+                    setTime(parseFloat(e.target.value));
+                  }}
+                  className="w-full accent-accent-500"
+                />
+              </div>
+
+              <div className="flex bg-base-900 rounded overflow-hidden border border-base-700">
+                {[0.5, 1, 2, 4, 8].map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setSpeed(s)}
+                    className={`px-3 py-1.5 text-xs font-mono border-r border-base-700 last:border-0 ${
+                      speed === s ? 'bg-accent-600 text-white' : 'text-neutral-400 hover:bg-base-700'
+                    }`}
+                  >
+                    {s}x
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => { setZoom(1); setPan({x:0, y:0}); }}
+                className="px-3 py-1.5 text-xs bg-base-700 hover:bg-base-600 text-neutral-300 rounded transition-colors"
+              >
+                Reset View
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+
       // Sidebar widget shown on the opponent-profile page. Lists this opponent's
       // proxy locations across all games against the user, with a tiny scatter
       // visualization grouped by map. Uses /api/analyzer/spatial/opponent-proxies.
@@ -5529,6 +6002,7 @@
         { id: "opponents", label: "Opponents" },
         { id: "trends", label: "Trends" },
         { id: "ml", label: "ML / Predict" },
+        { id: "mapintel", label: "Map Intel" },
         // Definitions stays at the very end (mirrors the SC2ReplayAnalyzer.py
         // tab order) so the build/strategy glossary is always one click away.
         { id: "definitions", label: "Definitions" },
@@ -5540,6 +6014,7 @@
         const [dbRev, setDbRev] = useState(0);
         const [openPulseId, setOpenPulseId] = useState(null);
         const [openBuildName, setOpenBuildName] = useState(null);
+        const [openReplay, setOpenReplay] = useState(null);
         const [conn, setConn] = useState({ status: "connecting" });
 
         useEffect(() => {
@@ -5565,6 +6040,15 @@
                 filters={filters}
                 onBack={() => setOpenBuildName(null)}
                 dbRev={dbRev}
+              />
+            );
+          }
+          if (openReplay) {
+            return (
+              <MapIntelViewer
+                replayPath={openReplay.path}
+                playerName={openReplay.player}
+                onBack={() => setOpenReplay(null)}
               />
             );
           }
@@ -5608,6 +6092,8 @@
               return <TrendsTab filters={filters} dbRev={dbRev} />;
             case "ml":
               return <MlTab dbRev={dbRev} />;
+            case "mapintel":
+              return <MapIntelTab dbRev={dbRev} onOpenReplay={setOpenReplay} />;
             case "definitions":
               return <DefinitionsTab />;
             default:

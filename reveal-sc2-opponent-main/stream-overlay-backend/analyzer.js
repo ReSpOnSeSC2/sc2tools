@@ -1746,10 +1746,20 @@ function runSpatialCli(subcmd, cliArgs = []) {
         const projDir = pythonProjectDirOrErr();
         if (projDir.error) return reject(new Error(projDir.error));
         const py = pickPythonExe();
-        const pyArgs = ['scripts/spatial_cli.py', subcmd,
-                        '--db', META_DB_PATH,
-                        '--player', getDefaultPlayerName(),
-                        ...cliArgs];
+        // We override this slightly for playback, as it uses playback_cli instead of spatial_cli
+        const isPlayback = subcmd === 'playback';
+
+        let pyArgs;
+        if (isPlayback) {
+            pyArgs = ['scripts/playback_cli.py', 'extract',
+                      '--player', getDefaultPlayerName(),
+                      ...cliArgs];
+        } else {
+            pyArgs = ['scripts/spatial_cli.py', subcmd,
+                      '--db', META_DB_PATH,
+                      '--player', getDefaultPlayerName(),
+                      ...cliArgs];
+        }
         const proc = spawn(py, pyArgs, {
             cwd: projDir.dir, env: mlEnv(), windowsHide: true,
         });
@@ -2344,5 +2354,18 @@ router.get('/spatial/opponent-proxies', async (req, res) => {
         res.status(500).json({ ok: false, message: err.message });
     }
 });
+
+router.get('/playback', async (req, res) => {
+    try {
+        if (!req.query.replay) {
+            return res.status(400).json({ ok: false, error: 'missing ?replay= file path' });
+        }
+        const { records } = await runSpatialCli('playback', ['--replay', req.query.replay]);
+        res.json({ ok: true, result: records });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
 
 module.exports = { router, startWatching };
