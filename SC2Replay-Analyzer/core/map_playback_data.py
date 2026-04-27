@@ -211,9 +211,12 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
     sorted_my_events = sorted(my_events, key=lambda e: e.get("time", 0))
     sorted_opp_events = sorted(opp_events, key=lambda e: e.get("time", 0))
 
+    bounds = bounds_for(getattr(replay, "map_name", None), sorted_my_events + sorted_opp_events)
+
     return {
         "map_name": getattr(replay, "map_name", None),
         "game_length": game_length,
+        "bounds": bounds,
         "me_name": me.name,
         "opp_name": opp.name,
         "result": me.result,

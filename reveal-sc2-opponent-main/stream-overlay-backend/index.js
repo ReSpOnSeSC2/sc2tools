@@ -1598,6 +1598,7 @@ if (require.main === module) {
                 console.warn('[Pulse] re-init failed:', err.message));
         }
     });
+}
 
 if (require.main === module) {
     server.listen(PORT, async () => {
@@ -1629,14 +1630,13 @@ if (require.main === module) {
     process.on('SIGINT',  () => shutdown('SIGINT'));
     process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
-process.on('SIGINT',  () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 // EXPORT FOR TESTING
 if (process.env.NODE_ENV === 'test') {
     module.exports = {
         loadConfig,
         DEFAULT_CONFIG,
-        deepMerge
+        deepMerge,
+        describePulseTeam
     };
 }
