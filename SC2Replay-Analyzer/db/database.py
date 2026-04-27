@@ -80,6 +80,9 @@ class ReplayAnalyzer:
         data: Dict = {}
         self._db_revision += 1
 
+        with self._lock:
+            self._invalidate_cache()
+
         if os.path.exists(DB_FILE):
             try:
                 with open(DB_FILE, 'r', encoding='utf-8') as f:
@@ -261,6 +264,8 @@ class ReplayAnalyzer:
                 os.replace(tmp, DB_FILE)
             except Exception as e:
                 print(f"Save failed: {e}")
+
+            self._invalidate_cache()
         # Cache invalidation lives outside the lock so a long-running profiler
         # rebuild can't deadlock against the writer.
         try:
@@ -320,6 +325,7 @@ class ReplayAnalyzer:
             return
         self.db[build_name]['wins'] = sum(1 for g in self.db[build_name]['games'] if g['result'] == "Win")
         self.db[build_name]['losses'] = sum(1 for g in self.db[build_name]['games'] if g['result'] == "Loss")
+        self._invalidate_cache()
 
     def move_game(self, game_id: str, old_build: str, new_build: str):
         with self._lock:
@@ -331,6 +337,7 @@ class ReplayAnalyzer:
                 self.db[new_build]['games'].append(game_data)
                 self.recalc_stats(old_build)
                 self.recalc_stats(new_build)
+            self._invalidate_cache()
         self.save_database()
 
     def rename_user_build(self, old_name: str, new_name: str):
@@ -343,6 +350,7 @@ class ReplayAnalyzer:
                 del self.db[old_name]
             else:
                 self.db[new_name] = self.db.pop(old_name)
+            self._invalidate_cache()
         self.save_database()
 
     def update_game_opponent_strategy(self, game_id: str, new_strat: str):
@@ -351,6 +359,7 @@ class ReplayAnalyzer:
                 for game in bd['games']:
                     if game['id'] == game_id:
                         game['opp_strategy'] = new_strat
+                        self._invalidate_cache()
                         self.save_database()
                         return
 
@@ -360,6 +369,7 @@ class ReplayAnalyzer:
                 self.db[build_name]['games'] = [g for g in self.db[build_name]['games'] if g['id'] != game_id]
                 self._known_game_ids.discard(game_id)
                 self.recalc_stats(build_name)
+            self._invalidate_cache()
         self.save_database()
 
     def get_all_build_names(self) -> List[str]:
