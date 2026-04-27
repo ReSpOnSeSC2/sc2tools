@@ -342,6 +342,39 @@ function summarize(filters) {
     });
 }
 
+// --------------------------------------------------------------
+// FULL REPLAY LIST -- powers the Map Intel selector dropdown.
+// Returns every game across every build that has a `file_path`
+// (i.e. is actually openable in the playback viewer). The
+// aggregation is cached by global filters; the cheap post-cache
+// pass below applies search / sort / limit so we don't blow up
+// the cache key with arbitrary search strings.
+// --------------------------------------------------------------
+function gamesList(filters) {
+    return cachedAgg('games-list', filters, () => {
+        const out = [];
+        for (const { build, game } of iterFilteredGames(filters)) {
+            if (!game || !game.file_path) continue;
+            out.push({
+                id: game.id || game.game_id || null,
+                date: game.date || null,
+                map: game.map || '',
+                opponent: game.opponent || '',
+                opp_race: game.opp_race || '',
+                opp_strategy: game.opp_strategy || null,
+                result: game.result || '',
+                build,
+                file_path: game.file_path,
+                game_length: game.game_length || 0,
+                macro_score: (typeof game.macro_score === 'number') ? game.macro_score : null,
+            });
+        }
+        // Pre-sorted newest-first; the route handler may re-sort.
+        out.sort((a, b) => parseGameDate(b.date) - parseGameDate(a.date));
+        return out;
+    });
+}
+
 function builds(filters) {
     return cachedAgg('builds', filters, () => {
         const out = {};
@@ -386,7 +419,7 @@ function buildVsStrategy(filters) {
     return cachedAgg('build_vs_strategy', filters, () => {
         const out = new Map();
         for (const { build, game } of iterFilteredGames(filters)) {
-            const k = `${build} ${game.opp_strategy || 'Unknown'}`;
+            const k = `${build}${game.opp_strategy || 'Unknown'}`;
             const cur = out.get(k) || { my_build: build, opp_strat: game.opp_strategy || 'Unknown', wins: 0, losses: 0, total: 0 };
             cur.total++;
             if (isWin(game))  cur.wins++;
@@ -1330,6 +1363,57 @@ router.get('/health', (_req, res) => res.json({
 }));
 
 router.get('/summary',           (req, res) => res.json(summarize(parseFilters(req.query))));
+router.get('/games',             (req, res) => {
+    // Full list of openable replays for the Map Intel selector.
+    // Query params (all optional):
+    //   ?search=string  - case-insensitive match against opponent/map/build/strategy
+    //   ?sort=date_desc|date_asc|opponent_asc|opponent_desc|map_asc|map_desc|length_desc|length_asc
+    //   ?race=Z|P|T|R   - global filter (my race; respected by parseFilters)
+    //   ?opp_race=Z|P|T|R
+    //   ?map=MapName    - global filter
+    //   ?result=win|loss
+    //   ?limit=N        - cap response size (default 2000, max 10000)
+    //   ?offset=N       - pagination offset (default 0)
+    let rows = gamesList(parseFilters(req.query));
+
+    const result = String(req.query.result || '').toLowerCase();
+    if (result === 'win' || result === 'loss') {
+        rows = rows.filter(g => _resultBucket(g) === result);
+    }
+
+    const search = String(req.query.search || '').trim().toLowerCase();
+    if (search) {
+        rows = rows.filter(g =>
+            String(g.opponent || '').toLowerCase().includes(search) ||
+            String(g.map || '').toLowerCase().includes(search) ||
+            String(g.build || '').toLowerCase().includes(search) ||
+            String(g.opp_strategy || '').toLowerCase().includes(search)
+        );
+    }
+
+    const sort = String(req.query.sort || 'date_desc').toLowerCase();
+    const cmps = {
+        date_desc:    (a, b) => parseGameDate(b.date) - parseGameDate(a.date),
+        date_asc:     (a, b) => parseGameDate(a.date) - parseGameDate(b.date),
+        opponent_asc: (a, b) => String(a.opponent || '').localeCompare(String(b.opponent || '')),
+        opponent_desc:(a, b) => String(b.opponent || '').localeCompare(String(a.opponent || '')),
+        map_asc:      (a, b) => String(a.map || '').localeCompare(String(b.map || '')),
+        map_desc:     (a, b) => String(b.map || '').localeCompare(String(a.map || '')),
+        length_desc:  (a, b) => (b.game_length || 0) - (a.game_length || 0),
+        length_asc:   (a, b) => (a.game_length || 0) - (b.game_length || 0),
+    };
+    if (cmps[sort] && sort !== 'date_desc') {
+        // Default already sorted date_desc inside gamesList; only re-sort if asked.
+        rows = rows.slice().sort(cmps[sort]);
+    }
+
+    const total = rows.length;
+    const limit  = Math.max(0, Math.min(10000, parseInt(req.query.limit, 10) || 2000));
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    const paged  = rows.slice(offset, offset + limit);
+
+    res.json({ ok: true, total, offset, limit, count: paged.length, games: paged });
+});
 router.get('/builds',            (req, res) => res.json(builds(parseFilters(req.query))));
 router.get('/builds/:name',      (req, res) => {
     const r = buildDetail(req.params.name, parseFilters(req.query));
