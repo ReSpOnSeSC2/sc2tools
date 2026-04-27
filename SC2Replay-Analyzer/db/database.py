@@ -30,11 +30,13 @@ from .migrations import (
 class ReplayAnalyzer:
     def __init__(self):
         self._schema_version: int = CURRENT_SCHEMA_VERSION
+        self._lock = threading.Lock()
+        self._db_revision = 0
+        self._stats_cache = {}
         self.db: Dict = self.load_database()
         self.potential_player_names: Set[str] = set()
         self.selected_player_name: Optional[str] = None
         self.error_logger = ErrorLogger()
-        self._lock = threading.Lock()
         self._known_game_ids: Set[str] = self._build_game_id_index()
         # Opponent DNA profiler. Holds a reference to `self.db` so in-place
         # mutations (adding games, deleting games) are visible. The cache is
@@ -47,6 +49,11 @@ class ReplayAnalyzer:
 
     def _build_game_id_index(self) -> Set[str]:
         return {g.get('id') for bd in self.db.values() for g in bd.get('games', []) if g.get('id')}
+
+    def _invalidate_cache(self):
+        self._db_revision += 1
+        self._stats_cache.clear()
+
 
     def load_database(self) -> Dict:
         """Load the persisted DB, recovering as much as possible if it's truncated.
@@ -61,6 +68,9 @@ class ReplayAnalyzer:
         self.load_error: Optional[str] = None
         self.load_warning: Optional[str] = None
         data: Dict = {}
+
+        with self._lock:
+            self._invalidate_cache()
 
         if os.path.exists(DB_FILE):
             try:
@@ -239,6 +249,8 @@ class ReplayAnalyzer:
                 os.replace(tmp, DB_FILE)
             except Exception as e:
                 print(f"Save failed: {e}")
+
+            self._invalidate_cache()
         # Cache invalidation lives outside the lock so a long-running profiler
         # rebuild can't deadlock against the writer.
         try:
@@ -289,6 +301,7 @@ class ReplayAnalyzer:
             return
         self.db[build_name]['wins'] = sum(1 for g in self.db[build_name]['games'] if g['result'] == "Win")
         self.db[build_name]['losses'] = sum(1 for g in self.db[build_name]['games'] if g['result'] == "Loss")
+        self._invalidate_cache()
 
     def move_game(self, game_id: str, old_build: str, new_build: str):
         with self._lock:
@@ -300,6 +313,7 @@ class ReplayAnalyzer:
                 self.db[new_build]['games'].append(game_data)
                 self.recalc_stats(old_build)
                 self.recalc_stats(new_build)
+            self._invalidate_cache()
         self.save_database()
 
     def rename_user_build(self, old_name: str, new_name: str):
@@ -312,6 +326,7 @@ class ReplayAnalyzer:
                 del self.db[old_name]
             else:
                 self.db[new_name] = self.db.pop(old_name)
+            self._invalidate_cache()
         self.save_database()
 
     def update_game_opponent_strategy(self, game_id: str, new_strat: str):
@@ -320,6 +335,7 @@ class ReplayAnalyzer:
                 for game in bd['games']:
                     if game['id'] == game_id:
                         game['opp_strategy'] = new_strat
+                        self._invalidate_cache()
                         self.save_database()
                         return
 
@@ -329,6 +345,7 @@ class ReplayAnalyzer:
                 self.db[build_name]['games'] = [g for g in self.db[build_name]['games'] if g['id'] != game_id]
                 self._known_game_ids.discard(game_id)
                 self.recalc_stats(build_name)
+            self._invalidate_cache()
         self.save_database()
 
     def get_all_build_names(self) -> List[str]:
@@ -358,6 +375,10 @@ class ReplayAnalyzer:
                 writer.writerows(rows)
 
     def get_map_stats(self) -> Dict[str, Dict]:
+        with self._lock:
+            cache_key = f"get_map_stats_{self._db_revision}"
+            if cache_key in self._stats_cache:
+                return self._stats_cache[cache_key]
         mstats: Dict[str, Dict] = {}
         with self._lock:
             for bd in self.db.values():
@@ -371,9 +392,15 @@ class ReplayAnalyzer:
                         mstats[m]['losses'] += 1
                     else:
                         mstats[m]['other'] += 1
+        with self._lock:
+            self._stats_cache[cache_key] = mstats
         return mstats
 
     def get_opponent_stats(self) -> Dict[str, Dict]:
+        with self._lock:
+            cache_key = f"get_opponent_stats_{self._db_revision}"
+            if cache_key in self._stats_cache:
+                return self._stats_cache[cache_key]
         ostats: Dict[str, Dict] = {}
         with self._lock:
             for bd in self.db.values():
@@ -385,9 +412,15 @@ class ReplayAnalyzer:
                         ostats[strat]['wins'] += 1
                     elif g['result'] == 'Loss':
                         ostats[strat]['losses'] += 1
+        with self._lock:
+            self._stats_cache[cache_key] = ostats
         return ostats
 
     def get_matchup_stats(self) -> Dict[str, Dict]:
+        with self._lock:
+            cache_key = f"get_matchup_stats_{self._db_revision}"
+            if cache_key in self._stats_cache:
+                return self._stats_cache[cache_key]
         mustats: Dict[str, Dict] = {}
         with self._lock:
             for bd in self.db.values():
@@ -399,9 +432,15 @@ class ReplayAnalyzer:
                         mustats[mu]['wins'] += 1
                     elif g['result'] == 'Loss':
                         mustats[mu]['losses'] += 1
+        with self._lock:
+            self._stats_cache[cache_key] = mustats
         return mustats
 
     def get_build_vs_strategy_stats(self) -> List[Dict]:
+        with self._lock:
+            cache_key = f"get_build_vs_strategy_stats_{self._db_revision}"
+            if cache_key in self._stats_cache:
+                return self._stats_cache[cache_key]
         stats: Dict = {}
         with self._lock:
             for bname, bd in self.db.items():
@@ -413,7 +452,7 @@ class ReplayAnalyzer:
                         stats[key]['wins'] += 1
                     elif g['result'] == 'Loss':
                         stats[key]['losses'] += 1
-        return sorted(
+        result = sorted(
             [
                 {'my_build': k[0], 'opp_strat': k[1], 'wins': v['wins'], 'losses': v['losses'],
                  'total': v['wins'] + v['losses']}
@@ -422,3 +461,37 @@ class ReplayAnalyzer:
             key=lambda x: x['total'],
             reverse=True,
         )
+        with self._lock:
+            self._stats_cache[cache_key] = result
+        return result
+
+    def get_length_stats(self) -> Dict[str, Dict]:
+        with self._lock:
+            cache_key = f"get_length_stats_{self._db_revision}"
+            if cache_key in self._stats_cache:
+                return self._stats_cache[cache_key]
+        lstats: Dict[str, Dict] = {}
+        with self._lock:
+            for bd in self.db.values():
+                for g in bd['games']:
+                    dur = g.get('game_length_sec') or g.get('length')
+                    if not isinstance(dur, (int, float)):
+                        continue
+                    if dur < 300:
+                        cat = '0-5 min'
+                    elif dur < 600:
+                        cat = '5-10 min'
+                    elif dur < 900:
+                        cat = '10-15 min'
+                    else:
+                        cat = '15+ min'
+
+                    if cat not in lstats:
+                        lstats[cat] = {'wins': 0, 'losses': 0}
+                    if g['result'] == 'Win':
+                        lstats[cat]['wins'] += 1
+                    elif g['result'] == 'Loss':
+                        lstats[cat]['losses'] += 1
+        with self._lock:
+            self._stats_cache[cache_key] = lstats
+        return lstats
