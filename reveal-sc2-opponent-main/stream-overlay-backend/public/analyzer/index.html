@@ -3158,6 +3158,57 @@
               : [];
         const race = (breakdown && breakdown.race) || "";
 
+        // Effective race: prefer the explicit race the backend tagged
+        // (analytics/macro_score.py reads my_race from the parser). For
+        // older breakdowns or when the user is Random, fall back to the
+        // exclusive discipline field that was populated — macro_score
+        // only writes ONE of injects/chronos/mules per game so the
+        // non-null field is the authoritative race signal.
+        const effectiveRace =
+          race === "Zerg" || race === "Protoss" || race === "Terran"
+            ? race
+            : raw.injects_actual != null
+              ? "Zerg"
+              : raw.chronos_actual != null
+                ? "Protoss"
+                : raw.mules_actual != null
+                  ? "Terran"
+                  : "";
+
+        // Per-race section descriptor used by the discipline panel and
+        // the "What you did well" copy. The glyph string drives the
+        // .race-Z / .race-P / .race-T CSS class (defined at the top of
+        // this file) so the small letter next to each heading paints
+        // in the right accent. unitPlural is rendered alongside the
+        // actual/expected count in the discipline panel.
+        const RACE_SECTIONS = {
+          Zerg: {
+            glyph: "Z",
+            title: "Inject Efficiency",
+            actualKey: "injects_actual",
+            expectedKey: "injects_expected",
+            unitPlural: "injects",
+            winCopy: "Inject cadence kept up with hatchery uptime.",
+          },
+          Protoss: {
+            glyph: "P",
+            title: "Chrono Efficiency",
+            actualKey: "chronos_actual",
+            expectedKey: "chronos_expected",
+            unitPlural: "chronos",
+            winCopy: "Chrono usage matched nexus uptime.",
+          },
+          Terran: {
+            glyph: "T",
+            title: "MULE Efficiency",
+            actualKey: "mules_actual",
+            expectedKey: "mules_expected",
+            unitPlural: "MULEs",
+            winCopy: "MULE drops kept pace with orbital energy.",
+          },
+        };
+        const raceSection = RACE_SECTIONS[effectiveRace] || null;
+
         const headlineColor =
           typeof score !== "number"
             ? "text-neutral-500"
@@ -3170,14 +3221,8 @@
         const wins = [];
         if (raw && (raw.supply_block_penalty || 0) <= 0)
           wins.push("No meaningful supply block - production never stalled.");
-        if (raw && (raw.race_penalty || 0) <= 0) {
-          if (race === "Zerg")
-            wins.push("Inject cadence kept up with hatchery uptime.");
-          else if (race === "Protoss")
-            wins.push("Chrono usage matched nexus uptime.");
-          else if (race === "Terran")
-            wins.push("MULE drops kept pace with orbital energy.");
-        }
+        if (raw && (raw.race_penalty || 0) <= 0 && raceSection)
+          wins.push(raceSection.winCopy);
         if (raw && (raw.float_penalty || 0) <= 0)
           wins.push("Bank stayed under control - no sustained float.");
         if (typeof raw.sq === "number" && raw.sq >= 80)
@@ -3190,11 +3235,11 @@
           );
 
         const racePenaltyLabel =
-          race === "Zerg"
+          effectiveRace === "Zerg"
             ? "Inject penalty"
-            : race === "Protoss"
+            : effectiveRace === "Protoss"
               ? "Chrono penalty"
-              : race === "Terran"
+              : effectiveRace === "Terran"
                 ? "MULE penalty"
                 : "Race-mechanic penalty";
 
@@ -3302,52 +3347,48 @@
                     </tbody>
                   </table>
 
-                  {/* Discipline metrics */}
-                  {(raw.injects_actual != null ||
-                    raw.chronos_actual != null ||
-                    raw.mules_actual != null ||
-                    raw.supply_blocked_seconds != null ||
+                  {/* Race-specific discipline panel. Backend writes
+                      exactly one of injects/chronos/mules per game
+                      (driven by my_race in analytics/macro_score.py),
+                      so we render the section for the effective race
+                      and leave the others off the DOM entirely. The
+                      glyph next to the heading uses the .race-Z /
+                      .race-P / .race-T accent classes already declared
+                      in the stylesheet. */}
+                  {raceSection &&
+                    raw[raceSection.actualKey] != null &&
+                    raw[raceSection.expectedKey] != null && (
+                      <div className="mt-3 bg-base-900 rounded p-2">
+                        <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1 flex items-center gap-1.5">
+                          <span
+                            className={`race-${raceSection.glyph} font-bold`}
+                            aria-hidden="true"
+                          >
+                            {raceSection.glyph}
+                          </span>
+                          <span>{raceSection.title}</span>
+                        </div>
+                        <div className="text-xs text-accent-400">
+                          {raw[raceSection.actualKey]} of ~
+                          {raw[raceSection.expectedKey]} expected (
+                          {Math.round(
+                            (100 * raw[raceSection.actualKey]) /
+                              Math.max(1, raw[raceSection.expectedKey]),
+                          )}
+                          % {raceSection.unitPlural})
+                        </div>
+                      </div>
+                    )}
+
+                  {/* Race-agnostic discipline metrics (apply to every
+                      race). Rendered separately from the race section
+                      so the per-race heading stays clean. */}
+                  {(raw.supply_blocked_seconds != null ||
                     raw.mineral_float_spikes != null) && (
-                    <div className="mt-3 text-xs text-accent-400">
+                    <div className="mt-2 text-xs text-accent-400">
                       <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
                         Discipline metrics
                       </div>
-                      {raw.injects_actual != null &&
-                        raw.injects_expected != null && (
-                          <div>
-                            Injects: {raw.injects_actual} of ~
-                            {raw.injects_expected} expected (
-                            {Math.round(
-                              (100 * raw.injects_actual) /
-                                Math.max(1, raw.injects_expected),
-                            )}
-                            %)
-                          </div>
-                        )}
-                      {raw.chronos_actual != null &&
-                        raw.chronos_expected != null && (
-                          <div>
-                            Chronos: {raw.chronos_actual} of ~
-                            {raw.chronos_expected} expected (
-                            {Math.round(
-                              (100 * raw.chronos_actual) /
-                                Math.max(1, raw.chronos_expected),
-                            )}
-                            %)
-                          </div>
-                        )}
-                      {raw.mules_actual != null &&
-                        raw.mules_expected != null && (
-                          <div>
-                            MULEs: {raw.mules_actual} of ~{raw.mules_expected}{" "}
-                            expected (
-                            {Math.round(
-                              (100 * raw.mules_actual) /
-                                Math.max(1, raw.mules_expected),
-                            )}
-                            %)
-                          </div>
-                        )}
                       {raw.supply_blocked_seconds != null && (
                         <div>
                           Supply-blocked:{" "}
