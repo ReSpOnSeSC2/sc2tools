@@ -9,6 +9,33 @@ appropriate branch here.
 from typing import Dict, List
 
 from .base import BaseStrategyDetector
+from .definitions import candidate_signatures_for
+
+
+# Map a 'vs <Race>' matchup string to the bare race name. Used by the
+# race-aware classifier in UserBuildDetector.detect_my_build to look up
+# the BUILD_SIGNATURES candidate set keyed by (my_race, vs_race).
+_MATCHUP_TO_VS_RACE = {
+    "vs Zerg": "Zerg",
+    "vs Protoss": "Protoss",
+    "vs Terran": "Terran",
+}
+
+
+def _matchup_to_vs_race(matchup: str) -> str:
+    """Return the opponent's race name for a "vs X" matchup string.
+
+    Falls back to "Unknown" so callers can still iterate the (empty)
+    candidate set without raising.
+
+    Example:
+        >>> _matchup_to_vs_race("vs Terran")
+        'Terran'
+    """
+    for key, race in _MATCHUP_TO_VS_RACE.items():
+        if key in matchup:
+            return race
+    return "Unknown"
 
 
 class UserBuildDetector(BaseStrategyDetector):
@@ -25,6 +52,25 @@ class UserBuildDetector(BaseStrategyDetector):
                 if cb_matchup == "vs Any" or cb_matchup == matchup:
                     if self.check_custom_rules(cb.get("rules", []), buildings, units, upgrades, main_loc):
                         return cb["name"]
+
+        # 2. Race-aware structured signature scan (Zerg / Terran).
+        # Stage 8 will populate BUILD_SIGNATURES with real opening rules;
+        # for now any non-Protoss replay flows through here and ends up
+        # tagged 'Unclassified - <Race>' so the UI can show a 'we don't
+        # have definitions for this matchup yet' hint instead of a
+        # misleading Protoss-tree label.
+        if my_race in ("Zerg", "Terran"):
+            vs_race = _matchup_to_vs_race(matchup)
+            for name, meta in candidate_signatures_for(my_race, vs_race).items():
+                signature = meta.get("signature") or []
+                if not signature:
+                    # TODO(stage-8): skip stubs until real signatures land.
+                    continue
+                if self.check_custom_rules(
+                    signature, buildings, units, upgrades, main_loc,
+                ):
+                    return name
+            return f"Unclassified - {my_race}"
 
         def has_building(name, time_limit=9999):
             return any(b['name'] == name and b['time'] <= time_limit for b in buildings)
@@ -195,4 +241,4 @@ class UserBuildDetector(BaseStrategyDetector):
                     return "PvT - Robo First"
             return "PvT - Macro Transition (Unclassified)"
 
-        return f"Standard / Unknown ({matchup})"
+        return f"Unclassified - {my_race}"

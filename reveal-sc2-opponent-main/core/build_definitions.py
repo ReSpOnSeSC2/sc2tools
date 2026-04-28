@@ -10,7 +10,7 @@ This module is data-only -- it has no logic. It exposes:
     KNOWN_BUILDS       -- sorted list of named builds suitable for DB seeding
 """
 
-from typing import Set, List
+from typing import Dict, List, Set
 
 # =========================================================
 # BUILD DEFINITIONS  (50+ named strategies)
@@ -117,7 +117,93 @@ BUILD_DEFINITIONS = {
     "Terran - Widow Mine Drop into Thor Rush": "Detected if a Medivac and 2+ Widow Mines are built AFTER the second Command Center (within ~6:30), and a Thor has been produced before ~8:10 -- a Mine drop transitioning into Thor pressure.",
     "Terran - Widow Upgraded Mine Cheese": "Detected if a Medivac and 2+ Widow Mines are built BEFORE the second Command Center -- a 1-base Widow Mine drop cheese.",
     "Terran - Standard Play (Unclassified)": "Catch-all for unclassified Terran games.",
+
+    # ----- Matchup-prefixed Zerg & Terran stubs -----
+    # TODO(stage-8): replace placeholder signatures in BUILD_SIGNATURES below
+    # with real opening detectors and remove the 'Stub - TODO Stage 8' suffix.
+    "ZvP - Stub - TODO Stage 8": "Placeholder ZvP entry - real opening signatures land in Stage 8.",
+    "ZvT - Stub - TODO Stage 8": "Placeholder ZvT entry - real opening signatures land in Stage 8.",
+    "ZvZ - Stub - TODO Stage 8": "Placeholder ZvZ entry - real opening signatures land in Stage 8.",
+    "TvP - Stub - TODO Stage 8": "Placeholder TvP entry - real opening signatures land in Stage 8.",
+    "TvT - Stub - TODO Stage 8": "Placeholder TvT entry - real opening signatures land in Stage 8.",
+    "TvZ - Stub - TODO Stage 8": "Placeholder TvZ entry - real opening signatures land in Stage 8.",
 }
+
+# =========================================================
+# BUILD SIGNATURES  (structured catalog -- Stage 8 fills these in)
+# =========================================================
+# Structured per-build metadata used by the race-aware classifier in
+# core.strategy_detector. Keyed by the same name as BUILD_DEFINITIONS so
+# the description and the rule data stay aligned. Each entry carries:
+#
+#     race      : the player's race ("Zerg" / "Protoss" / "Terran")
+#     vs_race   : the opponent's race
+#     signature : list of dicts in the same shape as custom_builds.json
+#                 rules ({"type": "building"|"unit"|...}). Empty list means
+#                 the entry is a stub the classifier should skip.
+#     tier      : "?" until benchmarked against real games in Stage 8.
+#
+# TODO(stage-8): fill in real `signature` rules for each ZvX / TvX entry
+# below and replace the "?" tier with one of "S" / "A" / "B" / "C".
+BUILD_SIGNATURES: Dict[str, Dict[str, object]] = {
+    "ZvP - Stub - TODO Stage 8": {
+        "race": "Zerg", "vs_race": "Protoss",
+        "signature": [],  # TODO(stage-8): real rules land here.
+        "tier": "?",
+        "description": BUILD_DEFINITIONS["ZvP - Stub - TODO Stage 8"],
+    },
+    "ZvT - Stub - TODO Stage 8": {
+        "race": "Zerg", "vs_race": "Terran",
+        "signature": [],  # TODO(stage-8): real rules land here.
+        "tier": "?",
+        "description": BUILD_DEFINITIONS["ZvT - Stub - TODO Stage 8"],
+    },
+    "ZvZ - Stub - TODO Stage 8": {
+        "race": "Zerg", "vs_race": "Zerg",
+        "signature": [],  # TODO(stage-8): real rules land here.
+        "tier": "?",
+        "description": BUILD_DEFINITIONS["ZvZ - Stub - TODO Stage 8"],
+    },
+    "TvP - Stub - TODO Stage 8": {
+        "race": "Terran", "vs_race": "Protoss",
+        "signature": [],  # TODO(stage-8): real rules land here.
+        "tier": "?",
+        "description": BUILD_DEFINITIONS["TvP - Stub - TODO Stage 8"],
+    },
+    "TvT - Stub - TODO Stage 8": {
+        "race": "Terran", "vs_race": "Terran",
+        "signature": [],  # TODO(stage-8): real rules land here.
+        "tier": "?",
+        "description": BUILD_DEFINITIONS["TvT - Stub - TODO Stage 8"],
+    },
+    "TvZ - Stub - TODO Stage 8": {
+        "race": "Terran", "vs_race": "Zerg",
+        "signature": [],  # TODO(stage-8): real rules land here.
+        "tier": "?",
+        "description": BUILD_DEFINITIONS["TvZ - Stub - TODO Stage 8"],
+    },
+}
+
+
+def candidate_signatures_for(
+    race: str, vs_race: str
+) -> Dict[str, Dict[str, object]]:
+    """Return BUILD_SIGNATURES entries matching (race, vs_race).
+
+    The classifier in `core.strategy_detector.UserBuildDetector` calls
+    this to narrow the candidate set before evaluating signatures, so a
+    TvZ replay never gets compared against a ZvP rule.
+
+    Example:
+        >>> list(candidate_signatures_for("Zerg", "Protoss"))
+        ['ZvP - Stub - TODO Stage 8']
+    """
+    return {
+        name: meta
+        for name, meta in BUILD_SIGNATURES.items()
+        if meta.get("race") == race and meta.get("vs_race") == vs_race
+    }
+
 
 # =========================================================
 # UNIT / BUILDING WHITELISTS

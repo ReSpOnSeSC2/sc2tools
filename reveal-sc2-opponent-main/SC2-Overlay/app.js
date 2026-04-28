@@ -360,10 +360,8 @@
         session: {
             root:        document.getElementById('session-widget'),
             wl:          document.getElementById('session-wl'),
-            mmr:         document.getElementById('session-mmr'),
             time:        document.getElementById('session-time'),
-            streak:      document.getElementById('session-streak'),
-            leagueIcon:  document.getElementById('session-league-icon')
+            streak:      document.getElementById('session-streak')
         }
     };
 
@@ -722,21 +720,15 @@
     function renderSession(state) {
         const e = els.session;
         if (!state) return;
-        setIconSlot(e.leagueIcon, Icons.leagueIcon(state.league), state.league);
+        // MMR (per-game delta + league icon) is intentionally not
+        // rendered: the OCR seed is unreliable on the loading screen
+        // and Pulse anchors don't always land in time. The widget
+        // shows W-L, streak, and elapsed time -- numbers we can
+        // ground in the watcher's real /api/replay events. Backend
+        // still tracks mmrStart/mmrCurrent/mmrDelta in
+        // sessionSnapshot() for the analyzer; we simply ignore them
+        // here.
         safeText(e.wl, `${state.wins}W - ${state.losses}L`);
-        // No mock/fake data: when the backend can't determine the real
-        // MMR change (mmrDelta === null), surface that honestly with
-        // "xD" instead of pretending it's 0.
-        if (state.mmrDelta === null || state.mmrDelta === undefined ||
-            !Number.isFinite(Number(state.mmrDelta))) {
-            safeText(e.mmr, 'xD');
-            e.mmr.className = 'session-mmr flat';
-        } else {
-            const delta = Number(state.mmrDelta);
-            const sign  = delta === 0 ? '' : (delta > 0 ? '+' : '');
-            safeText(e.mmr, `${sign}${delta} MMR`);
-            e.mmr.className = 'session-mmr ' + (delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat');
-        }
         safeText(e.time, state.durationText || '0m');
         const s = state.currentStreak || {};
         if (s.type === 'win' && s.count >= 2) {

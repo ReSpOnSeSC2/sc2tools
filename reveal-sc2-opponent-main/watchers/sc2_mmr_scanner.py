@@ -67,7 +67,19 @@ DUAL_ZONE_PATIENCE_SECONDS = 8
 # the same loading screen.
 POST_HIT_COOLDOWN_SECONDS = 20
 
-DEBUG = os.environ.get("MMR_DEBUG") == "1"
+def _resolve_debug() -> bool:
+    """Return True if --debug / -d is on argv or MMR_DEBUG=1 in env.
+
+    Example:
+        >>> # argv=['sc2_mmr_scanner', '--debug']
+        >>> # _resolve_debug()  -> True
+    """
+    if "--debug" in sys.argv or "-d" in sys.argv:
+        return True
+    return os.environ.get("MMR_DEBUG") == "1"
+
+
+DEBUG = _resolve_debug()
 
 
 # =========================================================
@@ -257,7 +269,15 @@ def _init_runtime():
     print(f"[MMR] Tesseract found at: {tesseract_path}")
     print(f"[MMR] Output file:        {SCANNED_MMR_TXT}")
     if DEBUG:
-        print(f"[MMR] DEBUG=1: dumping zone crops next to {_PROJECT_ROOT}")
+        bar = "*" * 60
+        print(bar)
+        print("[MMR] DEBUG MODE: ON")
+        print(f"[MMR] Dumping zone crops to: {_PROJECT_ROOT}")
+        print(f"[MMR] Look for: {os.path.join(_PROJECT_ROOT, 'mmr_debug_left_<ts>.png')}")
+        print(f"[MMR]           {os.path.join(_PROJECT_ROOT, 'mmr_debug_right_<ts>.png')}")
+        print(bar)
+    else:
+        print("[MMR] DEBUG MODE: off  (re-run with --debug to enable image dump)")
     print("[MMR] Dual-zone scanner running. Watching both sides...")
     return cv2, mss, np, pytesseract
 

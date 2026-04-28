@@ -223,48 +223,127 @@ function recomputeSessionMmrDelta() {
     }
 }
 
-function loadSession() {
-    try {
-        if (!fs.existsSync(SESSION_STATE_PATH)) return defaultSession();
-        const raw = fs.readFileSync(SESSION_STATE_PATH, 'utf8');
-        const data = JSON.parse(raw);
-        const idleGap = Date.now() - (data.lastResultTime || data.startedAt || 0);
-        if (idleGap > (config.session?.idleResetMs ?? (1 * 60 * 60 * 1000))) {
-            console.log('[Session] Idle gap exceeded, starting fresh session.');
-            // #5 Render the recap BEFORE wiping. We can't call
-            // generateRecapPng() yet because that helper uses the live
-            // `session` -- but the python script reads
-            // session.state.json directly off disk, so it sees the
-            // PRIOR session's stats correctly. Schedule it after
-            // express is up.
-            setTimeout(() => {
-                try { generateRecapPng(); } catch (_) {}
-            }, 500);
-            return defaultSession();
+// Parse a session JSON file at `pth` and merge it onto defaults. Throws
+// on read or JSON.parse failure so the caller can decide whether to fall
+// back to a backup or to a fresh session. Pulled out of loadSession()
+// so the same merge applies to backup recovery.
+function _parseSessionFile(pth) {
+    const raw = fs.readFileSync(pth, 'utf8');
+    const data = JSON.parse(raw);
+    const merged = { ...defaultSession(), ...data, metaCounts: data.metaCounts || {} };
+    // Backfill mmrDelta for sessions saved by the older code path that
+    // didn't track it as a first-class field. ONLY trust the real
+    // absolute anchors (mmrStart/mmrCurrent set by SC2Pulse or a real
+    // replay reading). We deliberately do NOT synthesize a delta from
+    // W-L counts here -- the user wants real numbers, not a fabricated
+    // +25 per win.
+    if (!Number.isFinite(merged.mmrDelta) || merged.mmrDelta === 0) {
+        if (Number.isFinite(merged.mmrStart) &&
+            Number.isFinite(merged.mmrCurrent) &&
+            merged.mmrStart !== merged.mmrCurrent) {
+            merged.mmrDelta = Math.round(merged.mmrCurrent - merged.mmrStart);
         }
-        const merged = { ...defaultSession(), ...data, metaCounts: data.metaCounts || {} };
+    }
+    return merged;
+}
 
-        // Backfill mmrDelta for sessions saved by the older code path
-        // that didn't track it as a first-class field. ONLY trust the
-        // real absolute anchors (mmrStart/mmrCurrent set by SC2Pulse or
-        // a real replay reading). We deliberately do NOT synthesize a
-        // delta from W-L counts here -- the user wants real numbers or
-        // an honest "xD" in the widget, not a fabricated +25 per win.
-        if (!Number.isFinite(merged.mmrDelta) || merged.mmrDelta === 0) {
-            if (Number.isFinite(merged.mmrStart) &&
-                Number.isFinite(merged.mmrCurrent) &&
-                merged.mmrStart !== merged.mmrCurrent) {
-                merged.mmrDelta = Math.round(merged.mmrCurrent - merged.mmrStart);
-            }
-        }
-        return merged;
+// Quarantine a broken session file by renaming it aside so saveSession()
+// doesn't keep trying to read the same corruption next boot. Best-effort:
+// we swallow rename errors because the recovery path must still proceed.
+function _quarantineBrokenSession(pth, reason) {
+    try {
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        const dest = `${pth}.broken-${ts}`;
+        fs.renameSync(pth, dest);
+        console.warn(`[Session] Quarantined broken file -> ${path.basename(dest)} (${reason})`);
     } catch (err) {
-        console.error('[Session] Load failed:', err.message);
-        return defaultSession();
+        console.warn(`[Session] Could not quarantine broken file: ${err.message}`);
     }
 }
 
-let session = loadSession();
+// Look for sibling backups of `pth` that the engineering preamble's
+// rolling-backup convention writes (e.g. session.state.json.bak.<ts>,
+// session.state.json.pre-<label>-<ts>). Returns absolute paths sorted
+// newest first by mtime. Excludes .broken-* (those are quarantined
+// failures, not known-good backups) and our atomic-write .tmp_* files.
+function _listSessionBackups(pth) {
+    try {
+        const dir = path.dirname(pth);
+        const base = path.basename(pth);
+        const entries = fs.readdirSync(dir);
+        const candidates = entries
+            .filter(name => name.startsWith(base + '.'))
+            .filter(name => !name.includes('.broken-'))
+            .filter(name => !name.startsWith('.tmp_'))
+            .map(name => path.join(dir, name));
+        const stats = candidates.map(p => {
+            try { return { p, m: fs.statSync(p).mtimeMs }; }
+            catch (_) { return null; }
+        }).filter(Boolean);
+        stats.sort((a, b) => b.m - a.m);
+        return stats.map(s => s.p);
+    } catch (_) {
+        return [];
+    }
+}
+
+function loadSession() {
+    if (!fs.existsSync(SESSION_STATE_PATH)) return defaultSession();
+
+    // 1. Try the canonical file. On any read / parse failure, quarantine
+    //    it and try sibling backups in newest-first order.
+    let merged;
+    let parseFailed = false;
+    try {
+        merged = _parseSessionFile(SESSION_STATE_PATH);
+    } catch (err) {
+        parseFailed = true;
+        console.error('[Session] Load failed:', err.message);
+        _quarantineBrokenSession(SESSION_STATE_PATH, err.message);
+        for (const bak of _listSessionBackups(SESSION_STATE_PATH)) {
+            try {
+                merged = _parseSessionFile(bak);
+                console.warn(`[Session] Recovered from backup: ${path.basename(bak)}`);
+                break;
+            } catch (bakErr) {
+                console.warn(`[Session] Backup unusable (${path.basename(bak)}): ${bakErr.message}`);
+            }
+        }
+        if (!merged) {
+            console.warn('[Session] No usable backup found, starting fresh session.');
+            return defaultSession();
+        }
+    }
+
+    // 2. Idle-reset check applies to whichever source we ended up using.
+    const idleGap = Date.now() - (merged.lastResultTime || merged.startedAt || 0);
+    if (idleGap > (config.session?.idleResetMs ?? (1 * 60 * 60 * 1000))) {
+        console.log('[Session] Idle gap exceeded, starting fresh session.');
+        // Render the recap BEFORE wiping. We can't call
+        // generateRecapPng() yet because that helper uses the live
+        // `session` -- but the python script reads session.state.json
+        // directly off disk, so it sees the PRIOR session's stats
+        // correctly. Schedule it after express is up. Skip when the
+        // canonical file was quarantined: the recap script would only
+        // see the broken (now-renamed) file, not the recovered backup.
+        if (!parseFailed) {
+            setTimeout(() => {
+                try { generateRecapPng(); } catch (_) {}
+            }, 500);
+        }
+        return defaultSession();
+    }
+
+    return merged;
+}
+
+// Skip the bootstrap loadSession() under jest. Tests require this
+// module to access exported helpers, but loadSession() runs file
+// I/O against the production session.state.json, which can race
+// with the live backend's saveSession() and trigger a spurious
+// quarantine. Tests that need session-state behavior import the
+// helpers directly and drive them against tmp dirs.
+let session = (process.env.NODE_ENV === 'test') ? defaultSession() : loadSession();
 
 function saveSession() {
     try {
@@ -1002,11 +1081,27 @@ function _atomicWriteJsonSync(target, data, indent = 2) {
         dir,
         '.tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10) + '.json'
     );
+    // Open + write + fsync + close + rename. The fsync is the key
+    // step the previous writeFileSync version was missing: on Windows,
+    // writeFileSync returns as soon as the write hits the OS cache,
+    // so a subsequent power loss / hard kill / OS crash could leave
+    // the renamed-into-place file with only the bytes that the OS
+    // happened to have flushed. fsyncSync forces the data to durable
+    // storage before the rename, matching the Python side's
+    // write -> fsync -> rename contract.
+    let fd = -1;
     try {
         const body = JSON.stringify(data, null, indent);
-        fs.writeFileSync(tmp, body);
+        fd = fs.openSync(tmp, 'w');
+        fs.writeSync(fd, body);
+        fs.fsyncSync(fd);
+        fs.closeSync(fd);
+        fd = -1;
         fs.renameSync(tmp, target);
     } catch (err) {
+        if (fd !== -1) {
+            try { fs.closeSync(fd); } catch (_) { /* ignore */ }
+        }
         try { fs.unlinkSync(tmp); } catch (_) { /* ignore */ }
         throw err;
     }
@@ -1845,6 +1940,14 @@ if (process.env.NODE_ENV === 'test') {
         loadConfig,
         DEFAULT_CONFIG,
         deepMerge,
-        describePulseTeam
+        describePulseTeam,
+        // Session-state recovery + atomic-write helpers, exported so
+        // __tests__/session.test.js can drive them against tmp dirs
+        // without spinning up the express server.
+        _atomicWriteJsonSync,
+        _parseSessionFile,
+        _quarantineBrokenSession,
+        _listSessionBackups,
+        defaultSession
     };
 }
