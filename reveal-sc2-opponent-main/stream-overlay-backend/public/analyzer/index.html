@@ -342,6 +342,34 @@
         return r.json();
       }
 
+      // ---------- Stage 6.2: Random race per-race split --------
+      const RACES_SPLIT = [
+        { key: 'Protoss', letter: 'P' },
+        { key: 'Terran',  letter: 'T' },
+        { key: 'Zerg',    letter: 'Z' },
+      ];
+
+      // RaceSplitView -- renders the SAME tab content three times,
+      // each with `filters.race` locked to P/T/Z. Used for Random
+      // users so every aggregated widget produces a per-race column.
+      // When `isRandom` is false this is just a passthrough wrapper
+      // so we can keep the call site uniform across modes.
+      function RaceSplitView({ filters, isRandom, render }) {
+        if (!isRandom) return render(filters || {});
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {RACES_SPLIT.map(({ key, letter }) => (
+              <section key={key} aria-label={`${key} per-race split`}
+                       className="min-w-0">
+                <h3 className="text-xs uppercase tracking-wider
+                               text-neutral-500 mb-2">{key}</h3>
+                {render({ ...(filters || {}), race: letter })}
+              </section>
+            ))}
+          </div>
+        );
+      }
+
       // ---------- Formatting ---------------------------------------
       const pct = (n) => `${Math.round((n || 0) * 100)}%`;
       const pct1 = (n) => `${((n || 0) * 100).toFixed(1)}%`;
@@ -1473,8 +1501,71 @@
         return state;
       }
 
+      // ---------- Stage 6.2: Random luck + performance card ----
+      // Renders ONLY for Random users on the Dashboard tab. Calls
+      // /random-summary which is computed from the real meta DB --
+      // never fabricates counts. Empty/loading states are handled
+      // explicitly: total === 0 means the user has no Random games
+      // yet and we tell them so instead of faking data into the UI.
+      function RandomLuckCard({ filters, dbRev }) {
+        const { data, loading } = useApi('random-summary', filters, [
+          JSON.stringify(filters), dbRev,
+        ]);
+        if (loading) return <Skeleton rows={2} />;
+        if (!data) return null;
+        if ((data.total || 0) === 0) {
+          return (
+            <Card title="Random luck + performance">
+              <p className="text-sm text-neutral-400">
+                You haven't played any Random games yet.
+              </p>
+            </Card>
+          );
+        }
+        return (
+          <Card title="Random luck + performance">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {RACES_SPLIT.map(({ key }) => {
+                const r = (data.perRace || {})[key] || {};
+                return (
+                  <div key={key}>
+                    <div className="text-xs uppercase
+                                    text-neutral-500">{key}</div>
+                    <div className="mt-1 text-2xl font-semibold
+                                    tabular-nums"
+                         style={{ color: wrColor(r.winRate, r.games) }}>
+                      {pct1(r.winRate || 0)}
+                    </div>
+                    <div className="text-xs text-neutral-500
+                                    tabular-nums">
+                      {(r.games || 0)} game{(r.games||0)===1?'':'s'}
+                      {' · '}
+                      {pct(r.share || 0)} of Random rolls
+                    </div>
+                    <div className="mt-2">
+                      <WrBar wins={r.wins || 0}
+                             losses={r.losses || 0} height={8} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-xs text-neutral-500">
+              Best: <span className="text-neutral-300">
+                {data.best || '—'}</span>
+              {' · '}
+              Worst: <span className="text-neutral-300">
+                {data.worst || '—'}</span>
+              {' · '}
+              min {data.minDecidedForBest || 5} decided games
+              for best/worst eligibility
+            </p>
+          </Card>
+        );
+      }
+
       // ---------- Tabs ---------------------------------------------
-      function DashboardTab({ filters, dbRev }) {
+      function DashboardTab({ filters, dbRev, isRandom }) {
         const { data, loading } = useApi("summary", filters, [
           JSON.stringify(filters),
           dbRev,
@@ -1487,6 +1578,9 @@
           .sort((a, b) => b.total - a.total);
         return (
           <div className="space-y-5">
+            {isRandom ? (
+              <RandomLuckCard filters={filters} dbRev={dbRev} />
+            ) : null}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Stat label="Total games" value={t.total || 0} />
               <Stat label="Wins" value={t.wins || 0} color="#3ddc97" />
@@ -13241,6 +13335,9 @@
         // null = unknown, false = wizard needed, true = main app.
         const [profileExists, setProfileExists] = useState(null);
         const [showWizard, setShowWizard] = useState(false);
+        // Stage 6.2: full profile body so we can read profile.races
+        // and gate per-race rendering for Random users.
+        const [profile, setProfile] = useState(null);
 
         useEffect(() => {
           try {
@@ -13283,6 +13380,29 @@
           return () => { cancelled = true; };
         }, []);
 
+        // Stage 6.2: once the wizard has run, pull the profile body
+        // so we can read profile.races and gate per-race rendering.
+        // We deliberately don't block render on this -- isRandom
+        // defaults to false until the body arrives.
+        useEffect(() => {
+          if (profileExists !== true) return;
+          let cancelled = false;
+          (async () => {
+            try {
+              const res = await fetch('/api/profile');
+              if (cancelled || !res.ok) return;
+              const j = await res.json();
+              if (!cancelled) setProfile(j || null);
+            } catch (_e) { /* non-fatal */ }
+          })();
+          return () => { cancelled = true; };
+        }, [profileExists]);
+
+        const isRandom = !!(
+          profile && Array.isArray(profile.races)
+            && profile.races.includes('Random')
+        );
+
         const renderBody = () => {
           if (openBuildName) {
             return (
@@ -13314,30 +13434,51 @@
           }
           switch (tab) {
             case "dashboard":
-              return <DashboardTab filters={filters} dbRev={dbRev} />;
+              return <DashboardTab filters={filters} dbRev={dbRev}
+                                   isRandom={isRandom} />;
             case "builds":
               return (
-                <BuildsTab
-                  filters={filters}
-                  dbRev={dbRev}
-                  onOpen={setOpenBuildName}
-                />
+                <RaceSplitView filters={filters} isRandom={isRandom}
+                  render={(f) => (
+                    <BuildsTab filters={f} dbRev={dbRev}
+                               onOpen={setOpenBuildName} />
+                  )} />
               );
             case "strategies":
-              return <StrategiesTab filters={filters} dbRev={dbRev} />;
+              return (
+                <RaceSplitView filters={filters} isRandom={isRandom}
+                  render={(f) => (
+                    <StrategiesTab filters={f} dbRev={dbRev} />
+                  )} />
+              );
             case "bvs":
-              return <BuildVsStrategyTab filters={filters} dbRev={dbRev} />;
+              return (
+                <RaceSplitView filters={filters} isRandom={isRandom}
+                  render={(f) => (
+                    <BuildVsStrategyTab filters={f} dbRev={dbRev} />
+                  )} />
+              );
             case "maps":
-              return <MapsTab filters={filters} dbRev={dbRev} />;
+              return (
+                <RaceSplitView filters={filters} isRandom={isRandom}
+                  render={(f) => (
+                    <MapsTab filters={f} dbRev={dbRev} />
+                  )} />
+              );
             case "matchups":
-              return <MatchupsTab filters={filters} dbRev={dbRev} />;
+              return (
+                <RaceSplitView filters={filters} isRandom={isRandom}
+                  render={(f) => (
+                    <MatchupsTab filters={f} dbRev={dbRev} />
+                  )} />
+              );
             case "opponents":
               return (
-                <OpponentsTab
-                  filters={filters}
-                  dbRev={dbRev}
-                  onOpen={setOpenPulseId}
-                />
+                <RaceSplitView filters={filters} isRandom={isRandom}
+                  render={(f) => (
+                    <OpponentsTab filters={f} dbRev={dbRev}
+                                  onOpen={setOpenPulseId} />
+                  )} />
               );
             case "trends":
               return <TrendsTab filters={filters} dbRev={dbRev} />;

@@ -235,6 +235,14 @@ function parseFilters(q) {
     if (q.mmr_max)  f.mmrMax   = Number(q.mmr_max);
     if (q.build)    f.build    = String(q.build);
     if (q.opp_strategy) f.oppStrategy = String(q.opp_strategy);
+    // Stage 6.2: Random users opt into per-race grouping by passing
+    // ?group_by_race_played=1. Routes that support it wrap their
+    // aggregation in `applyRaceGrouping` (see below).
+    if (q.group_by_race_played === '1'
+        || q.group_by_race_played === 'true'
+        || q.group_by_race_played === true) {
+        f.groupByRacePlayed = true;
+    }
     return f;
 }
 
@@ -265,6 +273,51 @@ function gameMatches(game, build, filters) {
     if (filters.mmrMin && Number.isFinite(game.opp_mmr) && game.opp_mmr < filters.mmrMin) return false;
     if (filters.mmrMax && Number.isFinite(game.opp_mmr) && game.opp_mmr > filters.mmrMax) return false;
     return true;
+}
+
+// --------------------------------------------------------------
+// RACE-PLAYED RESOLUTION  (Stage 6.2)
+//
+// Random users have games where the race actually played varies
+// per game. The current data corpus does NOT carry a per-game
+// `my_race` field; race-played is encoded in the build name prefix
+// (e.g. "PvP", "PvT", "Protoss - 4 Gate Rush"). This helper
+// normalises both forms into a full race name.
+//
+// Returns: 'Protoss' | 'Terran' | 'Zerg' | 'Unknown'.
+// --------------------------------------------------------------
+const RACES_PLAYED = ['Protoss', 'Terran', 'Zerg'];
+const RACE_LETTER_TO_NAME = { P: 'Protoss', T: 'Terran', Z: 'Zerg' };
+const RACE_NAME_TO_LETTER = { Protoss: 'P', Terran: 'T', Zerg: 'Z' };
+
+function resolveRacePlayed(game, build) {
+    const direct = game && game.my_race;
+    if (direct) {
+        const letter = String(direct).charAt(0).toUpperCase();
+        if (RACE_LETTER_TO_NAME[letter]) return RACE_LETTER_TO_NAME[letter];
+    }
+    const prefix = String(build || '').split(' ')[0];
+    const letterFromBuild = prefix.charAt(0).toUpperCase();
+    if (RACE_LETTER_TO_NAME[letterFromBuild]) {
+        return RACE_LETTER_TO_NAME[letterFromBuild];
+    }
+    return 'Unknown';
+}
+
+// Wrap any aggregation function so it returns the standard payload
+// when `filters.groupByRacePlayed` is falsy, or a {Protoss, Terran,
+// Zerg} object when truthy. Each per-race call locks `filters.race`
+// to that race's letter; the existing race filter in `gameMatches`
+// already handles the build-prefix fallback for un-tagged games.
+function applyRaceGrouping(filters, runOnce) {
+    const f = filters || {};
+    if (!f.groupByRacePlayed) return runOnce(f);
+    const { groupByRacePlayed, race: _ignored, ...base } = f;
+    const out = {};
+    for (const race of RACES_PLAYED) {
+        out[race] = runOnce({ ...base, race: RACE_NAME_TO_LETTER[race] });
+    }
+    return out;
 }
 
 function parseGameDate(s) {
@@ -475,6 +528,70 @@ function matchups(filters) {
         return Object.entries(out)
             .map(([name, s]) => ({ name, ...s, winRate: s.total ? s.wins / s.total : 0 }))
             .sort((a, b) => b.total - a.total);
+    });
+}
+
+// --------------------------------------------------------------
+// RANDOM LUCK + PERFORMANCE  (Stage 6.2)
+//
+// Powers the home/Overview widget for users whose profile.races
+// includes "Random". Returns:
+//   - per-race counts, wins, losses, win rate, share of total
+//   - best/worst race by win rate (only when at least
+//     MIN_DECIDED_FOR_BEST decided games exist for that race;
+//     otherwise null so the SPA can render an empty/explanatory state)
+//
+// `filters.race` is intentionally ignored here -- this widget
+// always shows the cross-race breakdown. Other filters (date, map,
+// opp_race) still apply.
+// --------------------------------------------------------------
+const RANDOM_SUMMARY_MIN_DECIDED = 5;
+
+function randomSummary(filters) {
+    return cachedAgg('random_summary', filters, () => {
+        const f = filters || {};
+        const { race: _r, groupByRacePlayed: _g, ...base } = f;
+        const counts = { Protoss: 0, Terran: 0, Zerg: 0 };
+        const wins   = { Protoss: 0, Terran: 0, Zerg: 0 };
+        const losses = { Protoss: 0, Terran: 0, Zerg: 0 };
+        let total = 0;
+        for (const { build, game } of iterFilteredGames(base)) {
+            const race = resolveRacePlayed(game, build);
+            if (!RACES_PLAYED.includes(race)) continue;
+            counts[race]++; total++;
+            if (isWin(game))  wins[race]++;
+            else if (isLoss(game)) losses[race]++;
+        }
+        const perRace = {};
+        for (const r of RACES_PLAYED) {
+            const decided = wins[r] + losses[r];
+            perRace[r] = {
+                games:   counts[r],
+                wins:    wins[r],
+                losses:  losses[r],
+                winRate: decided ? wins[r] / decided : 0,
+                share:   total ? counts[r] / total : 0,
+            };
+        }
+        const eligible = RACES_PLAYED.filter(
+            r => (wins[r] + losses[r]) >= RANDOM_SUMMARY_MIN_DECIDED
+        );
+        let best = null, worst = null;
+        if (eligible.length) {
+            best = eligible.reduce(
+                (a, b) => perRace[a].winRate >= perRace[b].winRate ? a : b
+            );
+            worst = eligible.reduce(
+                (a, b) => perRace[a].winRate <= perRace[b].winRate ? a : b
+            );
+        }
+        return {
+            total,
+            perRace,
+            best,
+            worst,
+            minDecidedForBest: RANDOM_SUMMARY_MIN_DECIDED,
+        };
     });
 }
 
@@ -1424,7 +1541,8 @@ router.get('/health', (_req, res) => res.json({
     cachedAggregations: dbCache.aggCache.size,
 }));
 
-router.get('/summary',           (req, res) => res.json(summarize(parseFilters(req.query))));
+router.get('/summary',           (req, res) =>
+    res.json(applyRaceGrouping(parseFilters(req.query), summarize)));
 router.get('/games',             (req, res) => {
     // Full list of openable replays for the Map Intel selector.
     // Query params (all optional):
@@ -1476,16 +1594,26 @@ router.get('/games',             (req, res) => {
 
     res.json({ ok: true, total, offset, limit, count: paged.length, games: paged });
 });
-router.get('/builds',            (req, res) => res.json(builds(parseFilters(req.query))));
+router.get('/builds',            (req, res) =>
+    res.json(applyRaceGrouping(parseFilters(req.query), builds)));
 router.get('/builds/:name',      (req, res) => {
     const r = buildDetail(req.params.name, parseFilters(req.query));
     if (!r) return res.status(404).json({ ok: false, error: 'build not found' });
     res.json(r);
 });
-router.get('/opp-strategies',    (req, res) => res.json(oppStrategies(parseFilters(req.query))));
-router.get('/build-vs-strategy', (req, res) => res.json(buildVsStrategy(parseFilters(req.query))));
-router.get('/maps',              (req, res) => res.json(maps(parseFilters(req.query))));
-router.get('/matchups',          (req, res) => res.json(matchups(parseFilters(req.query))));
+router.get('/opp-strategies',    (req, res) =>
+    res.json(applyRaceGrouping(parseFilters(req.query), oppStrategies)));
+router.get('/build-vs-strategy', (req, res) =>
+    res.json(applyRaceGrouping(parseFilters(req.query), buildVsStrategy)));
+router.get('/maps',              (req, res) =>
+    res.json(applyRaceGrouping(parseFilters(req.query), maps)));
+router.get('/matchups',          (req, res) =>
+    res.json(applyRaceGrouping(parseFilters(req.query), matchups)));
+// Stage 6.2: powers the home/Overview "Random luck + performance"
+// widget. Always returns a single payload (cross-race breakdown);
+// `?group_by_race_played=1` is intentionally NOT honoured here.
+router.get('/random-summary',    (req, res) =>
+    res.json(randomSummary(parseFilters(req.query))));
 router.get('/opponents',         (req, res) => res.json(opponents(req.query)));
 router.get('/opponents/:pulseId', (req, res) => {
     const r = opponentDetail(req.params.pulseId);
