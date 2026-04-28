@@ -361,7 +361,10 @@
             root:        document.getElementById('session-widget'),
             wl:          document.getElementById('session-wl'),
             time:        document.getElementById('session-time'),
-            streak:      document.getElementById('session-streak')
+            streak:      document.getElementById('session-streak'),
+            mmrRow:      document.querySelector('#session-widget .session-mmr-row'),
+            mmrDelta:    document.getElementById('session-mmr-delta'),
+            mmrCurrent:  document.getElementById('session-mmr-current')
         }
     };
 
@@ -720,16 +723,14 @@
     function renderSession(state) {
         const e = els.session;
         if (!state) return;
-        // MMR (per-game delta + league icon) is intentionally not
-        // rendered: the OCR seed is unreliable on the loading screen
-        // and Pulse anchors don't always land in time. The widget
-        // shows W-L, streak, and elapsed time -- numbers we can
-        // ground in the watcher's real /api/replay events. Backend
-        // still tracks mmrStart/mmrCurrent/mmrDelta in
-        // sessionSnapshot() for the analyzer; we simply ignore them
-        // here.
+        // W-L and elapsed time render on the same row (see session.html).
+        // MMR delta + current MMR render on a separate row underneath.
+        // All three values are anchored in real SC2Pulse readings the
+        // backend pulls in refreshMmrFromPulseAfterMatch(); we render
+        // an em-dash placeholder until both anchors land.
         safeText(e.wl, `${state.wins}W - ${state.losses}L`);
         safeText(e.time, state.durationText || '0m');
+        renderSessionMmr(state);
         const s = state.currentStreak || {};
         if (s.type === 'win' && s.count >= 2) {
             safeText(e.streak, `W${s.count}`);
@@ -746,13 +747,37 @@
         show(e.root);
     }
 
+    function renderSessionMmr(state) {
+        const e = els.session;
+        if (!e || !e.mmrDelta || !e.mmrCurrent) return;
+        const delta = Number(state.mmrDelta);
+        const current = Number(state.mmrCurrent);
+        const hasDelta = Number.isFinite(delta);
+        const hasCurrent = Number.isFinite(current);
+        if (hasDelta) {
+            const sign = delta > 0 ? '+' : (delta < 0 ? '' : '±');
+            safeText(e.mmrDelta, `${sign}${delta}`);
+            e.mmrDelta.classList.remove('delta-up', 'delta-down', 'delta-zero');
+            if (delta > 0) e.mmrDelta.classList.add('delta-up');
+            else if (delta < 0) e.mmrDelta.classList.add('delta-down');
+            else e.mmrDelta.classList.add('delta-zero');
+        } else {
+            safeText(e.mmrDelta, '—');
+            e.mmrDelta.classList.remove('delta-up', 'delta-down', 'delta-zero');
+        }
+        safeText(e.mmrCurrent, hasCurrent ? String(current) : '—');
+        if (e.mmrRow) {
+            e.mmrRow.dataset.state = (hasDelta || hasCurrent) ? 'ready' : 'empty';
+        }
+    }
+
     socket.on('session_state', renderSession);
     renderSession({ wins: 0, losses: 0, mmrDelta: 0, durationText: '0m', currentStreak: {} });
 
-    // Stage 6.2: live update of #opp-mmr when the OCR scanner gets
-    // a fresh opponent MMR from the loading screen AFTER the
-    // opponent widget is already on screen. Avoids overwriting an
-    // explicit Pulse-fed value with an empty payload.
+    // Live update of #opp-mmr when the backend resolves the
+    // opponent's SC2Pulse rating AFTER the opponent widget is
+    // already on screen. Avoids overwriting a known value with an
+    // empty payload.
     socket.on('opponentMmrUpdate', (payload) => {
         if (!payload || !Number.isFinite(payload.mmr)) return;
         const mmrEl = els.opponent && els.opponent.mmr;

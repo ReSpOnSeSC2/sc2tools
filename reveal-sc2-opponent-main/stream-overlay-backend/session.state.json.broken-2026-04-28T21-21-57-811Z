@@ -1,0 +1,23 @@
+{
+  "startedAt": 1777404278187,
+  "wins": 2,
+  "losses": 2,
+  "mmrStart": 7,
+  "mmrCurrent": 7,
+  "mmrOpponent": null,
+  "mmrDelta": 0,
+  "currentStreak": {
+    "type": "win",
+    "count": 2
+  },
+  "lastResultTime": 1777409424104,
+  "metaCounts": {
+    "Protoss - Proxy Robo Opener": 2,
+    "Terran - Bio Comp": 2,
+    "Protoss - Proxy Stargate Opener": 2,
+    "Protoss - Standard Expand": 2,
+    "Terran - Cyclone Rush": 6,
+    "Terran - Widow Mine Drop": 3,
+    "Protoss - Cannon Rush": 1
+  }
+}

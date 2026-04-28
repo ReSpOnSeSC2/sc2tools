@@ -83,7 +83,6 @@ function pickHistoryPath() {
 
 const HISTORY_FILE_PATH  = pickHistoryPath();
 const OPPONENT_FILE_PATH = path.join(ROOT, 'opponent.txt');
-const SCANNED_MMR_PATH   = path.join(ROOT, 'scanned_mmr.txt');
 // Reveal-Sc2Opponent.ps1 writes the resolved Pulse Character ID(s)
 // here so the backend doesn't have to re-implement the auto-detect.
 // Single source of truth: configure CharacterId in reveal-sc2-opponent.bat.
@@ -186,14 +185,15 @@ function defaultSession() {
         losses: 0,
         mmrStart: null,
         mmrCurrent: null,
-        // Stage 6.2: most-recent OPPONENT MMR seen by the dual-zone
-        // OCR scanner. Reset to null at session start; overwritten
-        // each loading-screen OCR. Frontend decides when to render.
+        // Most-recent OPPONENT MMR resolved via the SC2Pulse
+        // opponent-search flow (PowerShell -> opponent.txt). Reset
+        // to null at session start; refreshed when opponent.txt
+        // changes. Frontend decides when to render.
         mmrOpponent: null,
         // Cumulative MMR change for the session. Tracked as a
         // first-class field so we can keep accruing per-game estimates
         // even when the replay file doesn't carry a usable MMR. Real
-        // OCR / replay readings recompute this from mmrCurrent-mmrStart.
+        // Pulse / replay readings recompute this from mmrCurrent-mmrStart.
         mmrDelta: 0,
         currentStreak: { type: null, count: 0 },
         lastResultTime: null,
@@ -215,7 +215,7 @@ function mmrEstimateDeltas() {
 }
 
 // Recompute mmrDelta from the absolute mmrStart/mmrCurrent anchors when
-// both are known. Real OCR or replay readings should be authoritative
+// both are known. Real Pulse or replay readings should be authoritative
 // over any prior estimates that were accumulated into mmrDelta.
 function recomputeSessionMmrDelta() {
     if (Number.isFinite(session.mmrStart) && Number.isFinite(session.mmrCurrent)) {
@@ -440,30 +440,25 @@ function readPublishedCharacterIds() {
     }
 }
 
-function autoDetectCharacterIds() {
-    // Last-resort fallback if character_ids.txt isn't there yet
-    // (PowerShell scanner hasn't run). Mirrors the .ps1 auto-detect
-    // logic so the backend can still bootstrap on its own.
-    const docs = path.join(os.homedir(), 'Documents', 'StarCraft II', 'Accounts');
-    if (!fs.existsSync(docs)) return [];
-    const found = new Set();
-    function walk(dir, depth) {
-        if (depth > 2) return;
-        let entries = [];
-        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
-        for (const e of entries) {
-            if (!e.isDirectory()) continue;
-            const m = e.name.match(/^\d+-S2-\d+-(\d+)$/);
-            if (m) {
-                const id = parseInt(m[1], 10);
-                if (Number.isFinite(id)) found.add(id);
-            } else {
-                walk(path.join(dir, e.name), depth + 1);
-            }
-        }
+function readWizardPulseIds() {
+    // Read data/config.json's stream_overlay.pulse_character_ids -- the
+    // canonical wizard-saved value. This is the user's REAL Pulse character
+    // IDs (not the Blizzard character_ids that live in their SC2 folder
+    // names; those are a different number space).
+    try {
+        const cfgPath = path.join(DATA_DIR, 'config.json');
+        if (!fs.existsSync(cfgPath)) return [];
+        let raw = fs.readFileSync(cfgPath, 'utf8');
+        if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
+        const cfg = JSON.parse(raw);
+        const ov = (cfg && cfg.stream_overlay) || {};
+        const ids = Array.isArray(ov.pulse_character_ids) ? ov.pulse_character_ids : [];
+        return ids
+            .map((x) => parseInt(String(x).trim(), 10))
+            .filter(Number.isFinite);
+    } catch (_) {
+        return [];
     }
-    walk(docs, 0);
-    return [...found];
 }
 
 async function fetchPulseSeason() {
@@ -635,10 +630,10 @@ async function ensurePulseInitialized() {
         if (!pc.enabled) return;
         // Resolve characterIds in priority order:
         //   1. overlay.config.json -> pulse.characterIds (explicit override)
-        //   2. character_ids.txt    (published by Reveal-Sc2Opponent.ps1
-        //                           -- this is the single source of truth)
-        //   3. local SC2 Documents folder (last-resort auto-detect, in
-        //      case the PowerShell scanner hasn't run yet)
+        //   2. character_ids.txt    (mirrored from the wizard on save and
+        //                           also written by Reveal-Sc2Opponent.ps1)
+        //   3. data/config.json -> stream_overlay.pulse_character_ids
+        //                           (the wizard's canonical store)
         let source = 'config';
         if (Array.isArray(pc.characterIds) && pc.characterIds.length) {
             pulseCharacterIds = pc.characterIds.map(Number).filter(Number.isFinite);
@@ -648,12 +643,12 @@ async function ensurePulseInitialized() {
                 pulseCharacterIds = published;
                 source = 'character_ids.txt';
             } else {
-                pulseCharacterIds = autoDetectCharacterIds();
-                source = 'auto-detect';
+                pulseCharacterIds = readWizardPulseIds();
+                source = 'wizard config.json';
             }
         }
         if (pulseCharacterIds.length === 0) {
-            console.log('[Pulse] no characterIds found. Run reveal-sc2-opponent.bat first (it publishes character_ids.txt), or set SC2_CHARACTER_IDS in the .bat, or set pulse.characterIds in overlay.config.json.');
+            console.log('[Pulse] no characterIds found. Complete the SC2Pulse step in the wizard (Settings -> Integrations) -- it auto-resolves and saves your Pulse IDs.');
             return;
         }
         console.log(`[Pulse] characterIds (${source}): ${pulseCharacterIds.join(', ')}`);
@@ -1232,7 +1227,7 @@ app.post('/api/replay', (req, res) => {
         if (Number.isFinite(session.mmrCurrent)) {
             session.mmrCurrent = session.mmrCurrent + delta;
         }
-        // mmrStart stays at whatever Pulse/OCR seeded it as. If we
+        // mmrStart stays at whatever Pulse seeded it as. If we
         // never had a baseline at all, the absolute anchors stay null
         // and only the cumulative mmrDelta moves -- league icon will
         // simply not render until a real reading lands.
@@ -1610,10 +1605,19 @@ fs.watchFile(OPPONENT_FILE_PATH, { interval: 1000 }, () => {
         // widget can show "Z 2840 MMR | 5W-3L (62%)" in one line.
         const rematch = oppName ? buildRematchSummary(oppName) : null;
 
-        // Stage 6.2: when the opponent text file doesn't carry an
-        // MMR (SC2Pulse miss / unranked opponent), fall back to the
-        // OCR'd loading-screen MMR captured by the dual-zone scanner
-        // and stored on session.mmrOpponent.
+        // Persist the parsed opponent MMR (from the PowerShell
+        // SC2Pulse search) onto the session so #opp-mmr refreshes
+        // and downstream events see a consistent value. When the
+        // current line carries no MMR (e.g. unranked fallback) we
+        // keep whatever Pulse last gave us rather than blanking it.
+        if (Number.isFinite(oppMmr)) {
+            const oppChanged = oppMmr !== session.mmrOpponent;
+            session.mmrOpponent = oppMmr;
+            if (oppChanged) {
+                saveSession();
+                io.emit('opponentMmrUpdate', { mmr: oppMmr });
+            }
+        }
         const opponentMmrForEmit = Number.isFinite(oppMmr)
             ? oppMmr
             : (Number.isFinite(session.mmrOpponent) ? session.mmrOpponent : null);
@@ -1704,68 +1708,15 @@ fs.watchFile(OPPONENT_FILE_PATH, { interval: 1000 }, () => {
 });
 
 // ------------------------------------------------------------------
-// MMR SCANNER WATCHER (updates current MMR + opp MMR from OCR)
+// MMR SCANNER WATCHER -- removed in v0.9.0
 // ------------------------------------------------------------------
-// Stage 6.2: keeps BOTH numbers. The closest to last-known mmrCurrent
-// is treated as `mine`; whatever's left is the opponent's MMR. With
-// only one number (single-zone OCR hit) we update `mine` and leave
-// mmrOpponent untouched so a stale-but-known opponent doesn't get
-// stomped by a new game's half-read loading screen.
-const SCANNED_MMR_POLL_INTERVAL_MS = 1500;
-const MMR_SCAN_MIN = 1000;
-const MMR_SCAN_MAX = 8000;
-
-function pickMineAndOpp(numbers, prevMine) {
-    if (numbers.length === 0) return { mine: null, opp: null };
-    if (numbers.length === 1) return { mine: numbers[0], opp: null };
-    const reference = Number.isFinite(prevMine) ? prevMine : numbers[0];
-    let mineIdx = 0;
-    let bestDist = Math.abs(numbers[0] - reference);
-    for (let i = 1; i < numbers.length; i++) {
-        const d = Math.abs(numbers[i] - reference);
-        if (d < bestDist) { bestDist = d; mineIdx = i; }
-    }
-    const mine = numbers[mineIdx];
-    const others = numbers.filter((_, i) => i !== mineIdx);
-    return { mine, opp: others[0] };
-}
-
-let lastScannedMmr = '';
-fs.watchFile(SCANNED_MMR_PATH, { interval: SCANNED_MMR_POLL_INTERVAL_MS }, () => {
-    try {
-        if (!fs.existsSync(SCANNED_MMR_PATH)) return;
-        const raw = fs.readFileSync(SCANNED_MMR_PATH, 'utf8').trim();
-        if (!raw || raw === lastScannedMmr) return;
-        lastScannedMmr = raw;
-
-        const numbers = raw.split(',')
-            .map(s => parseInt(s.trim(), 10))
-            .filter(n => Number.isFinite(n) && n >= MMR_SCAN_MIN && n <= MMR_SCAN_MAX);
-        if (numbers.length === 0) return;
-
-        const { mine, opp } = pickMineAndOpp(numbers, session.mmrCurrent);
-        if (mine == null) return;
-
-        if (session.mmrStart == null) session.mmrStart = mine;
-        session.mmrCurrent = mine;
-        const oppChanged = (opp != null && opp !== session.mmrOpponent);
-        if (opp != null) session.mmrOpponent = opp;
-        saveSession();
-        broadcastSession();
-        if (oppChanged) {
-            // Lets an already-visible opponent widget refresh
-            // #opp-mmr without waiting for the opponent file watcher.
-            io.emit('opponentMmrUpdate', { mmr: opp });
-        }
-        console.log(
-            `[Scanner] MMR updated from OCR: mine=${mine}` +
-            (opp != null ? ` opp=${opp}` : ' opp=<single-zone>') +
-            ` (raw=${raw})`,
-        );
-    } catch (err) {
-        console.error('[Scanner] MMR watcher error:', err.message);
-    }
-});
+// The dual-zone OCR scanner that wrote scanned_mmr.txt has been
+// retired. Player MMR is anchored from SC2Pulse (see refresh chain
+// above) and opponent MMR is parsed from opponent.txt (which the
+// PowerShell scanner now writes via the Pulse-anchored search). The
+// opponent-file watcher keeps session.mmrOpponent in sync and emits
+// opponentMmrUpdate, so the overlay widget refreshes #opp-mmr the
+// same way it did before -- minus the unreliable screen capture.
 
 // ------------------------------------------------------------------
 // TWITCH BOT

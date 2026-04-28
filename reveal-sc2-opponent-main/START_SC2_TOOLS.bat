@@ -22,7 +22,7 @@ REM      - spawns `npm start` for the Express backend,
 REM      - polls /api/health until the server is ready,
 REM      - opens http://127.0.0.1:3000/analyzer/ in the default browser.
 REM    Closing this window stops the backend cleanly.
-echo [1/4] Starting SC2 Tools Launcher (backend + Web Analyzer)...
+echo [1/3] Starting SC2 Tools Launcher (backend + Web Analyzer)...
 start "SC2 -- Launcher" /D "%TOOLS_ROOT%\SC2Replay-Analyzer" cmd /k py SC2ReplayAnalyzer.py
 
 REM    Give the backend a moment to bind before dependents (watchers,
@@ -33,18 +33,13 @@ timeout /t 3 /nobreak >nul
 REM -- 2. Replay Watcher (Python, watchers/replay_watcher.py) ------
 REM    Live + threaded deep parse, posts to /api/replay and /api/replay/deep,
 REM    cross-writes data/MyOpponentHistory.json and data/meta_database.json.
-echo [2/4] Starting Replay Watcher (live + deep)...
+echo [2/3] Starting Replay Watcher (live + deep)...
 start "SC2 -- Replay Watcher" cmd /k "cd /d %ROOT% && python -m watchers.replay_watcher"
 
-REM -- 3. MMR Scanner (Python + Tesseract) -------------------------
-REM    Dual-zone OCR of the loading screen, writes scanned_mmr.txt.
-echo [3/4] Starting MMR Scanner (OCR)...
-start "SC2 -- MMR Scanner" cmd /k "cd /d %ROOT% && python -m watchers.sc2_mmr_scanner"
-
-REM -- 4. API Poller (PowerShell) ----------------------------------
+REM -- 3. API Poller (PowerShell) ----------------------------------
 REM    Polls SC2's web API and writes opponent.txt, which the overlay
 REM    backend watches for the "opponent detected" pop-up.
-echo [4/4] Starting API Poller...
+echo [3/3] Starting API Poller...
 start "SC2 -- API Poller" powershell ^
  -NoExit ^
  -ExecutionPolicy bypass ^

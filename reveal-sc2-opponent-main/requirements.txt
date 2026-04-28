@@ -9,13 +9,8 @@ sc2reader
 watchdog
 requests
 
-# ---- MMR OCR scanner ----------------------------------------------
-# NOTE: pytesseract requires the Tesseract binary on disk.
-# Download Tesseract from: https://github.com/UB-Mannheim/tesseract/wiki
-mss
-opencv-python
+# ---- Numerics (replay analytics) ----------------------------------
 numpy
-pytesseract
 
 # ---- Analyzer GUI -------------------------------------------------
 # Customtkinter is the desktop UI, matplotlib drives the in-app graphs.

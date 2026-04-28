@@ -10,14 +10,6 @@ module.exports = {
       }
     },
     {
-      name: "sc2-mmr-scanner",
-      script: "python",
-      args: "sc2_mmr_scanner.py",
-      cwd: "C:\\SC2TOOLS\\reveal-sc2-opponent-main\\",
-      watch: false,
-      autorestart: true
-    },
-    {
       name: "sc2-api-poller",
       script: "powershell.exe",
       args: "-ExecutionPolicy bypass -NoProfile -File ./Reveal-Sc2Opponent.ps1",

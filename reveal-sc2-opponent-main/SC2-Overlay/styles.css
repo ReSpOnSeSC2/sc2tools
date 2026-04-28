@@ -630,3 +630,47 @@ html, body {
     color: var(--color-overlay-text-dim);
     letter-spacing: 1px;
 }
+
+
+/* ----------------------------------------------------------------------
+   Session widget (v0.9.0) — same-row W-L + elapsed time, new MMR row.
+   No raw hex; all colors come from design-tokens.css.
+   ---------------------------------------------------------------------- */
+.session-row.session-main {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.session-row.session-mmr-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    margin-top: 1px;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--color-overlay-text-dim);
+}
+
+.session-row.session-mmr-row[data-state="empty"] .session-mmr-delta,
+.session-row.session-mmr-row[data-state="empty"] .session-mmr-current {
+    color: var(--color-overlay-text-dim);
+}
+
+.session-mmr-delta.delta-up   { color: var(--color-overlay-victory); }
+.session-mmr-delta.delta-down { color: var(--color-overlay-defeat);  }
+.session-mmr-delta.delta-zero { color: var(--color-overlay-text-dim); }
+
+.session-mmr-current {
+    color: var(--color-overlay-text);
+}
+
+.session-sep {
+    color: var(--color-overlay-text-dim);
+    opacity: 0.7;
+}
+.session-sep-mmr {
+    /* same color/opacity as the W-L separator; explicit selector is here so
+       a downstream theme can re-target it without affecting the W-L row. */
+}

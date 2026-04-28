@@ -1,13 +1,14 @@
 ﻿<#PSScriptInfo
-.VERSION 0.8.5
+.VERSION 0.9.2
 .GUID db8ffc68-4388-4119-b437-1f56c999611e
 .AUTHOR nephestdev@gmail.com (Modified by Gemini)
 .DESCRIPTION 
  Reveals ranked 1v1 opponent names for StarCraft2 and tracks Head-to-Head history.
- v0.8.5 - Removed RatingDeltaMax entirely. Relies solely on OCR strict match or Recency fallback.
+ v0.9.2 - Resolve Pulse character IDs from -PlayerName (not local SC2 folder IDs which are different number space). Widened opponent rating delta cap to 400 MMR to absorb Pulse-vs-live drift. v0.9.1 anchored on main team. v0.9.0 removed OCR.
 #> 
 param(
     [int64[]]$CharacterId,
+    [string]$PlayerName,
     [ValidateSet("terran", "protoss", "zerg", "random")]
     [string]$Race,
     [ValidateRange(1, 10)]
@@ -34,25 +35,54 @@ $IdlePollInterval    = 0.5
 $InGamePollInterval  = 0.5   
 # ---------------------------------
 
+# Sc2PulseApiRoot is needed before the Pulse name-search block. It is
+# defined again later (kept there as the canonical declaration); declaring
+# it twice is harmless because it is the same constant.
+$Sc2PulseApiRoot_Bootstrap = "https://sc2pulse.nephest.com/sc2/api"
+
 if ($null -eq $CharacterId -or $CharacterId.Length -eq 0) {
-    Write-Host "No CharacterId provided. Scanning local SC2 Documents folder to auto-detect..." -ForegroundColor Cyan
-    $DocumentsPath = [Environment]::GetFolderPath("MyDocuments")
-    $Sc2Path = Join-Path $DocumentsPath "StarCraft II\Accounts"
-    
-    $DetectedIds = @()
-    if (Test-Path $Sc2Path) {
-        $Profiles = Get-ChildItem -Path $Sc2Path -Depth 2 | Where-Object { $_.PSIsContainer -and $_.Name -match '^\d+-S2-\d+-\d+$' }
-        foreach ($Profile in $Profiles) {
-            $Id = $Profile.Name.Split('-')[-1]
-            if ($Id -as [int64]) { $DetectedIds += [int64]$Id }
+    if (-not [string]::IsNullOrWhiteSpace($PlayerName)) {
+        Write-Host "Resolving Pulse character IDs for player name: $PlayerName ..." -ForegroundColor Cyan
+        $ResolvedIds = New-Object System.Collections.Generic.HashSet[int64]
+        # Hit the latest season per region -- Pulse needs a season for the
+        # advanced character search. If the player is on multiple regions
+        # (NA + EU, etc.) we collect IDs from each.
+        try {
+            $Seasons = (Invoke-RestMethod -Uri "${Sc2PulseApiRoot_Bootstrap}/season/list/all") |
+                Group-Object -Property Region -AsHashTable
+            $LatestPerRegion = $Seasons.Values |
+                ForEach-Object { $_ | Select-Object -First 1 } |
+                Where-Object { @("US","EU","KR","CN") -contains $_.Region }
+        } catch {
+            Write-Host "Pulse season lookup failed: $_" -ForegroundColor Red
+            $LatestPerRegion = @()
         }
-    }
-    
-    if ($DetectedIds.Length -gt 0) {
-        $CharacterId = @($DetectedIds | Select-Object -Unique)
-        Write-Host "Auto-detected $($CharacterId.Length) profile IDs from local files." -ForegroundColor Green
+        foreach ($Season in $LatestPerRegion) {
+            $EncodedName = [uri]::EscapeDataString($PlayerName)
+            $Region = $Season.Region.ToUpper()
+            $Uri = "${Sc2PulseApiRoot_Bootstrap}/character/search/advanced?season=$($Season.BattlenetId)&region=${Region}&queue=LOTV_1V1&name=${EncodedName}&caseSensitive=true"
+            try {
+                $Found = Invoke-RestMethod -Uri $Uri
+                foreach ($id in $Found) {
+                    if ($id -as [int64]) { $null = $ResolvedIds.Add([int64]$id) }
+                }
+            } catch {
+                # Per-region miss is normal -- player may not exist on every region.
+            }
+        }
+        if ($ResolvedIds.Count -gt 0) {
+            $CharacterId = @($ResolvedIds)
+            Write-Host "Resolved $($CharacterId.Length) Pulse character IDs for ${PlayerName}: $($CharacterId -join ', ')" -ForegroundColor Green
+        } else {
+            Write-Host "Pulse name search returned no matches for ${PlayerName}." -ForegroundColor Red
+            Write-Host "Find your ID at https://sc2pulse.nephest.com/sc2/?#search and set -CharacterId or SC2_CHARACTER_IDS." -ForegroundColor Red
+            exit
+        }
     } else {
-        Write-Host "Could not auto-detect Character IDs. Please provide -CharacterId." -ForegroundColor Red
+        Write-Host "ERROR: No -CharacterId or -PlayerName provided." -ForegroundColor Red
+        Write-Host "Set SC2_CHARACTER_IDS (Pulse IDs) or SC2_PLAYER_NAME in reveal-sc2-opponent.bat." -ForegroundColor Red
+        Write-Host "Find your Pulse ID at https://sc2pulse.nephest.com/sc2/?#search" -ForegroundColor Red
+        Write-Host "(NOTE: Local SC2 folder IDs like "1-S2-1-267727" are NOT Pulse IDs.)" -ForegroundColor Yellow
         exit
     }
 }
@@ -381,6 +411,11 @@ function Get-Team {
 }
 
 function Get-OpponentTeams {
+    # v0.9.1 -- OCR removed. Opponent matching anchors RatingDelta
+    # against the player's MAIN SC2Pulse team (selected by most games
+    # played this season; see Find-PlayerProfile) with a tight cap
+    # (RATING_DELTA_CAP_MMR). When no team falls inside the band we
+    # fall back to the most-recently-played team that name-matches.
     param(
         [Object] $GameOpponent,
         [int32] $Season,
@@ -389,44 +424,59 @@ function Get-OpponentTeams {
         [int32] $LastPlayedAgoMax,
         [int32] $Limit,
         [string] $Region,
-        [int32] $ScannedMMR = 0
+        [int32] $PlayerRating = 0
     )
-    
+
+    $RATING_DELTA_CAP_MMR = 400
+
     $SafeRegion = $Region.ToUpper()
     $EncodedName = [uri]::EscapeDataString($GameOpponent.Name)
     $OpponentIds = $(Invoke-EnhancedRestMethod -Uri ("${Sc2PulseApiRoot}/character/search/advanced?season=${Season}&region=${SafeRegion}&queue=${Queue}&name=${EncodedName}&caseSensitive=true"))
-    
+
     if($OpponentIds.Length -eq 0) { return }
-    
+
     $OpponentTeams = Get-Team -Season $Season -Queue $Queue -Race $Race -CharacterId $OpponentIds
     $Now = [DateTimeOffset]::Now
-    
+
     foreach($Team in $OpponentTeams) {
         $LastPlayedParsed = [DateTimeOffset]::Parse($Team.LastPlayed, $null, [System.Globalization.DateTimeStyles]::RoundtripKind)
         $LastPlayedAgo = $Now.Subtract($LastPlayedParsed).TotalSeconds
         Add-Member -InputObject $Team -Name LastPlayedAgo -Value $LastPlayedAgo -MemberType NoteProperty -Force
 
-        # Only check RatingDelta if the OCR successfully gave us a target MMR
-        if ($ScannedMMR -gt 0) {
-            $RatingDelta = [Math]::Abs($Team.Rating - $ScannedMMR)
+        if ($PlayerRating -gt 0) {
+            $RatingDelta = [Math]::Abs($Team.Rating - $PlayerRating)
             Add-Member -InputObject $Team -Name RatingDelta -Value $RatingDelta -MemberType NoteProperty -Force
         }
     }
 
-    # If OCR succeeded, enforce a tight MMR match (150 Delta) and sort by closest match
-    if ($ScannedMMR -gt 0) {
-        $ValidTeams = $OpponentTeams | Where-Object { $_.RatingDelta -le 150 }
+    # Diagnostic: show every candidate the SC2Pulse name-search returned
+    # so you can spot when an alt account with the same name is winning.
+    if ($PlayerRating -gt 0) {
+        Write-Host (" [Pulse] Opponent search anchored at {0} MMR (band +/-{1}):" -f `
+            $PlayerRating, $RATING_DELTA_CAP_MMR) -ForegroundColor DarkCyan
+        foreach ($Team in $OpponentTeams) {
+            $InBand = if ($Team.RatingDelta -le $RATING_DELTA_CAP_MMR) { "IN-BAND " } else { "out-band" }
+            $Name = if ($Team.Members -and $Team.Members[0].Character) { $Team.Members[0].Character.Name } else { "?" }
+            Write-Host ("   {0} {1,-30} {2,4} MMR  delta={3,4}  lastPlayed={4,5}s" -f `
+                $InBand, $Name, $Team.Rating, $Team.RatingDelta, [int32]$Team.LastPlayedAgo) -ForegroundColor DarkCyan
+        }
+    }
+
+    # Tight Pulse-anchored band first. If we have a player rating to anchor
+    # against, prefer teams within +/- RATING_DELTA_CAP_MMR sorted by closest.
+    if ($PlayerRating -gt 0) {
+        $ValidTeams = $OpponentTeams | Where-Object { $_.RatingDelta -le $RATING_DELTA_CAP_MMR }
         if ($ValidTeams.Length -gt 0) {
             return ($ValidTeams | Sort-Object -Property RatingDelta | Select-Object -First $Limit)
         }
     }
 
-    # Pure Recency fallback if OCR failed or opponent is unranked (ignores MMR entirely)
+    # Recency fallback: opponent is unranked, smurfing, or way off-rated.
     $ActiveOpponentTeams = $OpponentTeams | Where-Object { $_.LastPlayedAgo -le $LastPlayedAgoMax }
     if ($ActiveOpponentTeams.Length -gt 0) {
         return ($ActiveOpponentTeams | Sort-Object -Property LastPlayedAgo | Select-Object -First $Limit)
     }
-    
+
     return ($OpponentTeams | Sort-Object -Property LastPlayedAgo | Select-Object -First $Limit)
 }
 
@@ -468,15 +518,37 @@ function Create-PlayerProfile {
 }
 
 function Find-PlayerProfile {
+    # v0.9.1 -- pick the user's MAIN team (most games played this season)
+    # rather than most-recently-played. Fixes the case where a smurf or
+    # alt account has more recent activity than the main, which previously
+    # caused the RatingDelta anchor to land on the alt's MMR.
+    # Tiebreak by highest rating (the main is usually the highest-rated
+    # of the user's accounts in a given season).
     param([Object[]] $PlayerTeam)
     if($PlayerTeam -eq $null -or $PlayerTeam.Length -eq 0) { return $null }
     $Now = [DateTimeOffset]::Now
     foreach($Team in $PlayerTeam) {
         $LastPlayedParsed = [DateTimeOffset]::Parse($Team.LastPlayed, $null, [System.Globalization.DateTimeStyles]::RoundtripKind)
         $LastPlayedAgo = $Now.Subtract($LastPlayedParsed).TotalSeconds
+        $W = if ($null -ne $Team.Wins)   { [int32]$Team.Wins   } else { 0 }
+        $L = if ($null -ne $Team.Losses) { [int32]$Team.Losses } else { 0 }
+        $T = if ($null -ne $Team.Ties)   { [int32]$Team.Ties   } else { 0 }
+        $GamesPlayed = $W + $L + $T
         Add-Member -InputObject $Team -Name LastPlayedAgo -Value $LastPlayedAgo -MemberType NoteProperty -Force
+        Add-Member -InputObject $Team -Name GamesPlayed   -Value $GamesPlayed   -MemberType NoteProperty -Force
     }
-    return Create-PlayerProfile -RecentTeam ($PlayerTeam | Sort-Object -Property LastPlayedAgo | Select-Object -First 1)
+    Write-Host " [Pulse] Candidate teams (race-filtered, all regions):" -ForegroundColor DarkCyan
+    foreach($Team in $PlayerTeam) {
+        $RegionLabel = if ($null -ne $Team.Region) { $Team.Region } else { "?" }
+        $RaceLabel = Get-TeamRace $Team
+        $NameLabel = if ($Team.Members -and $Team.Members[0].Character) { $Team.Members[0].Character.Name } else { "?" }
+        Write-Host ("   - {0,-30} {1,-3} {2,-2} MMR={3,4} games={4,3} lastPlayed={5,4}s ago" -f `
+            $NameLabel, $RegionLabel, $RaceLabel, $Team.Rating, $Team.GamesPlayed, [int32]$Team.LastPlayedAgo) -ForegroundColor DarkCyan
+    }
+    $Picked = $PlayerTeam | Sort-Object -Property @{Expression='GamesPlayed';Descending=$true}, @{Expression='Rating';Descending=$true} | Select-Object -First 1
+    Write-Host (" [Pulse] Anchor: {0} MMR={1} games={2} (most-played)" -f `
+        $Picked.Members[0].Character.Name, $Picked.Rating, $Picked.GamesPlayed) -ForegroundColor Green
+    return Create-PlayerProfile -RecentTeam $Picked
 }
 
 $Seasons = (Invoke-EnhancedRestMethod -Uri "${Sc2PulseApiRoot}/season/list/all") | Group-Object -Property Region -AsHashTable
@@ -518,15 +590,6 @@ while($true) {
             continue
         }
 
-        # --- READ OCR SCANNER DATA ---
-        $ScannedMMR = 0
-        if (Test-Path "scanned_mmr.txt") {
-            $ScannedText = Get-Content "scanned_mmr.txt" -Raw
-            if ([int32]::TryParse($ScannedText.Trim(), [ref]$ScannedMMR)) {
-                Write-Host " [OCR] Successfully loaded scanned MMR: $ScannedMMR" -ForegroundColor Green
-            }
-            Remove-Item "scanned_mmr.txt" -ErrorAction SilentlyContinue
-        }
 
         $CurrentMyRace = switch -Regex ($Me.Race) { "prot" {"PROTOSS"}; "terr" {"TERRAN"}; "zerg" {"ZERG"}; "rand" {"RANDOM"}; default {"UNKNOWN"} }
         $CurrentOpponentRace = switch -Regex ($Opponent.Race) { "prot" {"PROTOSS"}; "terr" {"TERRAN"}; "zerg" {"ZERG"}; "rand" {"RANDOM"}; default {"UNKNOWN"} }
@@ -538,7 +601,7 @@ while($true) {
         $SearchRegion = if ($PlayerProfile) { $PlayerProfile.Region.ToUpper() } else { $Script:ActiveRegion[0].ToUpper() }
 
         # Pass to the cleaned up Search Function
-        $OpponentTeamObjects = Get-OpponentTeams -GameOpponent $Opponent -Season $SearchSeason -Race $CurrentOpponentRace -Queue $Script:Queue1v1 -LastPlayedAgoMax $Script:LastPlayedAgoMax -Limit $Script:Limit -Region $SearchRegion -ScannedMMR $ScannedMMR
+        $OpponentTeamObjects = Get-OpponentTeams -GameOpponent $Opponent -Season $SearchSeason -Race $CurrentOpponentRace -Queue $Script:Queue1v1 -LastPlayedAgoMax $Script:LastPlayedAgoMax -Limit $Script:Limit -Region $SearchRegion -PlayerRating ([int32]$PlayerProfile.Team.Rating)
 
         if ($OpponentTeamObjects) {
              $DisplayResults = @()

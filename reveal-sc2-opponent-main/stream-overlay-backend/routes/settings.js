@@ -103,6 +103,43 @@ function atomicWriteJson(filePath, obj) {
 }
 
 /**
+ * Mirror config.stream_overlay.pulse_character_ids onto the project-root
+ * character_ids.txt that the PowerShell poller and the Pulse-init code in
+ * index.js both consume. This is the single bridge between the wizard's
+ * saved IDs and the runtime that uses them. Best-effort: a write failure
+ * here must not block the config save itself.
+ *
+ * @param {object} cfg Validated config.json value being persisted.
+ * @param {string} configFilePath Absolute path of data/config.json so we
+ *   can derive the project root reliably even under test harnesses.
+ * @returns {void}
+ */
+function syncCharacterIdsFile(cfg, configFilePath) {
+  try {
+    const ov = (cfg && cfg.stream_overlay) || {};
+    const ids = Array.isArray(ov.pulse_character_ids) ? ov.pulse_character_ids : [];
+    const cleaned = ids
+      .map((x) => String(x).trim())
+      .filter((s) => /^[0-9]+$/.test(s));
+    // data/config.json -> project root is one directory up from data/.
+    const projectRoot = path.resolve(path.dirname(configFilePath), '..');
+    const target = path.join(projectRoot, 'character_ids.txt');
+    const tmp = `${target}.tmp`;
+    const fd = fs.openSync(tmp, 'w');
+    try {
+      fs.writeSync(fd, cleaned.join(','), 0, 'utf8');
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(tmp, target);
+    console.log(`[settings] synced character_ids.txt: ${cleaned.join(',') || '(empty)'}`);
+  } catch (err) {
+    console.warn(`[settings] could not sync character_ids.txt: ${err.message}`);
+  }
+}
+
+/**
  * Recursive merge for PATCH. Plain objects merge; arrays and
  * primitives in `src` replace those in `target`. Null in `src`
  * sets the key to null. Never mutates inputs.
@@ -273,6 +310,9 @@ function writeAndRespond(spec, value, res) {
     return res.status(HTTP_INTERNAL).json({ error: 'write_failed' });
   }
   console.log(`[settings] ${spec.name} written`);
+  if (spec.name === 'config') {
+    syncCharacterIdsFile(value, spec.filePath);
+  }
   return res.status(HTTP_OK).json({ [spec.name]: value });
 }
 

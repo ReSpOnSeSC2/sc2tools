@@ -44,11 +44,10 @@ CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
 ERROR_LOG_FILE = os.path.join(DATA_DIR, "replay_errors.log")
 SESSION_STATE_FILE = os.path.join(DATA_DIR, "session.state.json")
 
-# --- OVERLAY-FACING FILES ---
-# These live at the project root because the Node.js backend and OCR scanner
-# expect them at fixed locations the overlay was originally built against.
+# --- OVERLAY-FACING FILE ---
+# Lives at the project root because the Node.js backend expects it
+# at a fixed location the overlay was originally built against.
 OPPONENT_TXT = os.path.join(PROJECT_ROOT, "opponent.txt")
-SCANNED_MMR_TXT = os.path.join(PROJECT_ROOT, "scanned_mmr.txt")
 
 # --- SHIM: legacy MyOpponentHistory.json at project root ---
 # If the user's existing setup keeps the Black Book at the project root,
