@@ -263,3 +263,76 @@ def test_extract_macro_events_chrono_targets_end_to_end():
     assert all("building_name" in r for r in targets)
     total_in_targets = sum(r["count"] for r in targets)
     assert total_in_targets == out["ability_counts"]["chrono"]
+
+
+# -----------------------------------------------------------------------------
+# Period & grace_cycles calibration (regression-pin against the chrono bug)
+# -----------------------------------------------------------------------------
+from analytics.macro_score import (  # noqa: E402, isort:skip
+    CHRONO_PERIOD_SEC,
+    _expected,
+)
+
+
+def test_chrono_period_is_cooldown_not_buff_duration():
+    """Pin the corrected period.
+
+    Pre-fix this was 20 (the chrono buff duration) instead of ~89
+    (the energy-regen cooldown: 50 energy / 0.5625 regen). The bug
+    made every Protoss replay show ~4x too many expected chronos.
+    See docs/adr/0001-chrono-period-fix.md for the diagnosis.
+    """
+    assert CHRONO_PERIOD_SEC == 89
+
+
+def test_expected_chronos_for_single_nexus_full_game():
+    """600s of Nexus uptime should yield ~6 expected chronos, not 30."""
+    assert _expected(600, CHRONO_PERIOD_SEC) == 6
+
+
+def test_expected_chronos_for_three_base_late_game():
+    """Three Nexuses averaging ~500s alive each = 1500s -> 16 expected."""
+    assert _expected(1500, CHRONO_PERIOD_SEC) == 16
+
+
+def test_protoss_macro_no_penalty_for_on_pace_chronos():
+    """Player with chronos == expected - grace gets zero race_penalty.
+
+    Single Nexus alive 600s -> expected=6, grace=2 -> target=4.
+    Five chronos clears the bar; race_penalty must be 0.
+    """
+    macro_events = {
+        "stats_events": [],
+        "ability_events": [_chrono(target_unit_id=10) for _ in range(5)],
+        "bases": [{"unit_id": 1, "name": "Nexus",
+                   "born_time": 0, "died_time": 600}],
+        "chrono_targets": [{"building_name": "Nexus", "count": 5}],
+        "game_length_sec": 600,
+    }
+    result = compute_macro_score(macro_events, my_race="Protoss",
+                                 game_length_sec=600)
+    assert result["raw"]["chronos_actual"] == 5
+    assert result["raw"]["chronos_expected"] == 6
+    assert result["raw"]["race_penalty"] == 0.0
+
+
+def test_protoss_macro_penalises_severe_chrono_neglect():
+    """Three-base 1200s game with only 2 chronos triggers full penalty."""
+    macro_events = {
+        "stats_events": [],
+        "ability_events": [_chrono(target_unit_id=10) for _ in range(2)],
+        "bases": [
+            {"unit_id": 1, "name": "Nexus", "born_time": 0,   "died_time": 1200},
+            {"unit_id": 2, "name": "Nexus", "born_time": 200, "died_time": 1200},
+            {"unit_id": 3, "name": "Nexus", "born_time": 400, "died_time": 1200},
+        ],
+        "chrono_targets": [{"building_name": "Nexus", "count": 2}],
+        "game_length_sec": 1200,
+    }
+    result = compute_macro_score(macro_events, my_race="Protoss",
+                                 game_length_sec=1200)
+    assert result["raw"]["chronos_actual"] == 2
+    # 1200 + 1000 + 800 = 3000s alive, /89 -> 33 expected.
+    assert result["raw"]["chronos_expected"] == 33
+    # 2 / (33 - 2) = 6.5% efficiency -> capped at CHRONO_MAX_PENALTY
+    assert result["raw"]["race_penalty"] > 0.0

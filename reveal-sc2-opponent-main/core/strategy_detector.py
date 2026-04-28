@@ -516,10 +516,24 @@ class UserBuildDetector(BaseStrategyDetector):
                 )
 
                 # 2 Gate Expand: 2 (or more) gateways finished before the
-                # natural goes down. This is the "safe" PvP opener that
-                # protects against proxy 2-gate / early aggression while
-                # still taking the natural early.
-                if gates_before_expand >= 2:
+                # natural goes down AND no tech building (Stargate, Robo,
+                # or Twilight Council) is started before the natural Nexus.
+                # If tech is dropped before the natural, it is a tech-first
+                # opener (Stargate / Robo / Twilight expand), not a pure
+                # 2-gate expand. This is the "safe" PvP opener that protects
+                # against proxy 2-gate / early aggression while still taking
+                # the natural early.
+                _PURE_2GATE_TECH_DISQUALIFIERS = (
+                    "Stargate",
+                    "RoboticsFacility",
+                    "TwilightCouncil",
+                )
+                tech_before_expand = any(
+                    b["name"] in _PURE_2GATE_TECH_DISQUALIFIERS
+                    and b["time"] < second_nexus
+                    for b in buildings
+                )
+                if gates_before_expand >= 2 and not tech_before_expand:
                     return "PvP - 2 Gate Expand"
 
                 # Strange's 1 Gate Expand: exactly 1 gateway before the

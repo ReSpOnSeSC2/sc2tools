@@ -100,11 +100,25 @@ BASE_TYPES_ZERG = {"Hatchery", "Lair", "Hive"}
 BASE_TYPES_PROTOSS = {"Nexus"}
 BASE_TYPES_TERRAN = {"OrbitalCommand"}
 
-# Inject / chrono / MULE pacing — pro-grade benchmark cycles. Realistic
-# expectations include travel / energy regen, so we use the textbook spec
-# values plus a small padding before counting "missed".
+# Inject / chrono / MULE pacing — energy-regen cooldowns per caster.
+#
+# These are the seconds between back-to-back casts that one caster
+# (Queen / Nexus / Orbital Command) can physically sustain — NOT the
+# buff duration. Multiply alive-time across all casters by 1/period to
+# get the expected number of cycles for a game.
+#
+# Math (LotV+ values, all standard):
+#   * Inject Larva: 25 energy / 0.7875 regen ≈ 31.7s (29 = light pad)
+#   * Chrono Boost: 50 energy / 0.5625 regen ≈ 88.9s
+#   * Calldown MULE: 50 energy / 0.7875 regen ≈ 63.5s
+#
+# Historical bug: CHRONO_PERIOD_SEC used to be 20 because the
+# original author conflated buff-duration (20s) with cast-cooldown
+# (~89s). That made every Protoss replay show ~4× too many expected
+# chronos and tanked the macro score for any non-pro player. Fixed
+# in <chrono-period-fix commit>; see docs/adr/0001-chrono-period-fix.md.
 INJECT_PERIOD_SEC: int = 29
-CHRONO_PERIOD_SEC: int = 20
+CHRONO_PERIOD_SEC: int = 89
 MULE_PERIOD_SEC: int = 64
 
 # Supply-block detection.
@@ -392,7 +406,11 @@ def compute_macro_score(
             actual = _count_ability(
                 abilities, {"ChronoBoostEnergyCost", "ChronoBoost"},
             )
-        race_penalty = _efficiency_penalty(actual, expected, CHRONO_MAX_PENALTY, grace_cycles=5)
+        # grace_cycles=2 matches MULE's calibration: with the corrected
+        # 89s period, expected chronos run ~10-20 for a typical 10-15min
+        # game, so 2 cycles is ~10-20% slack. Was 5 (paired with the
+        # buggy 20s period that made expected ~50; 5/50 = 10% slack).
+        race_penalty = _efficiency_penalty(actual, expected, CHRONO_MAX_PENALTY, grace_cycles=2)
         raw["chronos_actual"] = actual
         raw["chronos_expected"] = expected
         # Chrono target distribution. extract_macro_events emits
