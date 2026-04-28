@@ -693,6 +693,95 @@ function formatMatchDuration(totalSeconds) {
     return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+// ------------------------------------------------------------------
+// SCOUTING — recent games (last 5)
+// ------------------------------------------------------------------
+// Skip noise that the SC2 client emits at game start (reward dances,
+// beacon pings, sprays). Real build events have a non-zero timestamp
+// and a structural unit/building name.
+const SCOUT_OPENER_NOISE_PREFIXES = [
+    'RewardDance', 'Beacon', 'Spray', 'StimpackUpgrade',
+];
+const SCOUT_RECENT_LIMIT = 5;
+const SCOUT_OPENER_LIMIT = 4;
+
+// Filter a build_log array down to the first N "real" milestone lines.
+// build_log lines look like "[m:ss] UnitOrBuildingName". We drop the
+// [0:00] start-of-game UI noise and any line whose name starts with a
+// known UI-only prefix.
+function _scoutFilterOpener(buildLog) {
+    if (!Array.isArray(buildLog)) return [];
+    const out = [];
+    for (const line of buildLog) {
+        if (typeof line !== 'string') continue;
+        // line shape: "[mm:ss] Name"
+        const m = line.match(/^\[(\d+):(\d+)\]\s*(.+)$/);
+        if (!m) continue;
+        const mins = Number(m[1]);
+        const secs = Number(m[2]);
+        const name = (m[3] || '').trim();
+        if (!name) continue;
+        if (mins === 0 && secs === 0) continue; // start-of-game noise
+        if (SCOUT_OPENER_NOISE_PREFIXES.some(pref => name.startsWith(pref))) {
+            continue;
+        }
+        out.push({
+            time: `${mins}:${String(secs).padStart(2, '0')}`,
+            name,
+        });
+        if (out.length >= SCOUT_OPENER_LIMIT) break;
+    }
+    return out;
+}
+
+// Cross-reference meta_database.json for the most recent games against
+// `oppName`. Each build's games[] is filtered by g.opponent (case-
+// insensitive) — we ignore the legacy MyOpponentHistory.json here
+// because it doesn't carry build_log / game_length, and the scouting
+// card needs both.
+function buildRecentGamesForOpponent(oppName, limit) {
+    const cap = Number.isFinite(limit) && limit > 0 ? limit : SCOUT_RECENT_LIMIT;
+    if (!oppName) return [];
+    const db = readMetaDb();
+    if (!db || typeof db !== 'object') return [];
+    const target = String(oppName).trim().toLowerCase();
+    if (!target) return [];
+    const flat = [];
+    for (const [buildName, bd] of Object.entries(db)) {
+        if (!bd || !Array.isArray(bd.games)) continue;
+        for (const g of bd.games) {
+            const opp = String(g && g.opponent || '').trim().toLowerCase();
+            if (opp !== target) continue;
+            flat.push({ buildName, g });
+        }
+    }
+    if (flat.length === 0) return [];
+    // Newest first by date string (ISO sorts lexicographically).
+    flat.sort((a, b) => String(b.g.date || '').localeCompare(String(a.g.date || '')));
+    const taken = flat.slice(0, cap);
+    return taken.map(({ buildName, g }) => {
+        const lengthSec = Number(g.game_length) || 0;
+        return {
+            id: g.id || null,
+            date: g.date || null,
+            map: g.map || null,
+            result: g.result || null, // "Win" | "Loss" | other
+            lengthSec,
+            lengthText: formatMatchDuration(lengthSec) || '—',
+            myBuild: buildName || g.my_build || null,
+            oppBuild: g.opp_strategy || null,
+            oppRace: g.opp_race || null,
+            myOpener:  _scoutFilterOpener(g.build_log),
+            oppOpener: _scoutFilterOpener(
+                g.opp_build_log && g.opp_build_log.length > 0
+                    ? g.opp_build_log
+                    : g.opp_early_build_log
+            ),
+        };
+    });
+}
+
+
 function detectCheeseHistory(oppName) {
     const cheeseMax = config.events.cheeseHistory?.cheeseMaxSeconds ?? 300;
     const history = readHistory();
@@ -1492,7 +1581,13 @@ fs.watchFile(OPPONENT_FILE_PATH, { interval: 1000 }, () => {
                     result: cheese.result,
                     map: cheese.map,
                     durationText: cheese.durationText
-                } : null
+                } : null,
+                // Last N games against this opponent — pulled live from
+                // meta_database.json. Each entry: { lengthText, result,
+                // myBuild, oppBuild, myOpener[], oppOpener[], date, map }.
+                // The widget renders these instead of the now-deprecated
+                // favoriteOpening row.
+                recentGames: buildRecentGamesForOpponent(oppName, SCOUT_RECENT_LIMIT)
             });
         }
     } catch (err) {

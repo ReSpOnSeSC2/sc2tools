@@ -457,6 +457,16 @@ def compute_macro_score(
         # without re-parsing the replay. Empty list when the tracker
         # stream had no usable PlayerStatsEvent rows (older replays).
         "stats_events": stats,
+        # Opponent's stats samples — same shape as stats_events but for
+        # the opp_pid passed to extract_macro_events. Empty when opp_pid
+        # was not provided (older breakdowns parsed before dual-player
+        # support landed).
+        "opp_stats_events": macro_events.get("opp_stats_events", []) or [],
+        # Per-sample alive-unit counts for both players. List of
+        # { time, my: {Name: int}, opp: {Name: int} } sampled at the same
+        # times as stats_events. Drives the Unit roster panel under the
+        # Active Army & Workers chart.
+        "unit_timeline": macro_events.get("unit_timeline", []) or [],
         "top_3_leaks": [l.to_dict() for l in top_3],
         "all_leaks": [l.to_dict() for l in leaks],
         "raw": raw,

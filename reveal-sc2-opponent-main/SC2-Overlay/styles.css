@@ -257,6 +257,91 @@ html, body {
 .scout-rival  { color: var(--color-overlay-scout-rival);  font-weight: 700; }
 .scout-cheese { color: var(--color-overlay-scout-cheese); font-weight: 700; }
 
+/* --------- Scouting recent games (#1, replaces favorite-opener row) ---- */
+.scout-recent {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.92rem;
+}
+.scout-recent-heading {
+    /* Inherits .scout-label sizing; this rule is here in case future
+       changes diverge the heading from the inline labels. */
+    font-size: 0.7rem;
+    color: var(--color-overlay-text-dim);
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.scout-recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.scout-recent-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 0 0 1px var(--color-divider);
+}
+.scout-recent-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+}
+.scout-recent-result {
+    display: inline-block;
+    min-width: 18px;
+    text-align: center;
+    font-weight: 800;
+    border-radius: 4px;
+    padding: 0 4px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-overlay-text);
+}
+.scout-recent-result-win  { background: var(--color-success); color: #06241B; }
+.scout-recent-result-loss { background: var(--color-danger);  color: #2A0708; }
+.scout-recent-length {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-overlay-text);
+    font-weight: 700;
+}
+.scout-recent-meta {
+    margin-left: auto;
+    color: var(--color-overlay-text-dim);
+    font-size: 0.82rem;
+}
+.scout-recent-line {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 0.84rem;
+    line-height: 1.35;
+}
+.scout-recent-side {
+    flex: 0 0 28px;
+    font-size: 0.65rem;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    color: var(--color-overlay-text-dim);
+    text-transform: uppercase;
+}
+.scout-recent-line-mine .scout-recent-side { color: var(--color-success); }
+.scout-recent-line-opp  .scout-recent-side { color: var(--color-overlay-text-matchup); }
+.scout-recent-build {
+    color: var(--color-overlay-text);
+    font-weight: 600;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
 /* --------- #8 Top builds tile grid (bottom-right, persistent) --------- */
 .topbuilds-widget {
     position: absolute;

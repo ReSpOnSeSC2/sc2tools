@@ -418,7 +418,89 @@ def _resolve_command_pid(event) -> Optional[int]:
     return None
 
 
-def extract_macro_events(replay, my_pid: int) -> Dict:
+def _skip_for_unit_timeline(clean: str) -> bool:
+    """Return True for unit names that should NOT appear in the chart's
+    army-composition roster.
+
+    Beacon* names (BeaconArmy, BeaconDefend, BeaconAttack, ...) are
+    click-action UI markers the SC2 client emits as UnitBornEvents at
+    t=0 — they're not real army units. WidowMineBurrowed is the burrowed
+    state of WidowMine; including it would double-count widow mines as
+    a separate roster entry whenever the player burrows them.
+
+    Example:
+        >>> _skip_for_unit_timeline("BeaconArmy")
+        True
+        >>> _skip_for_unit_timeline("WidowMineBurrowed")
+        True
+        >>> _skip_for_unit_timeline("Stalker")
+        False
+    """
+    if not clean:
+        return True
+    if clean.startswith("Beacon"):
+        return True
+    if clean == "WidowMineBurrowed":
+        return True
+    return False
+
+
+def _build_unit_timeline(
+    unit_lifetimes: Dict[int, Dict],
+    sample_times: List[int],
+    my_pid: int,
+    opp_pid: Optional[int],
+    game_end_sec: int,
+) -> List[Dict]:
+    """Sample alive-unit counts per pid at each ``sample_times`` entry.
+
+    A unit is considered alive at time ``t`` when ``born <= t`` and either
+    it has no recorded death or ``t < died``. Counts are aggregated per
+    canonical unit name (UnitTypeChangeEvent rewrites are already applied
+    to ``unit_lifetimes`` upstream so morphs roll into the new name).
+
+    Returns a list of dicts, one per sample time:
+        { "time": int, "my": {Name: int, ...}, "opp": {Name: int, ...} }
+
+    Empty list when ``sample_times`` is empty. ``opp_pid`` may be ``None``
+    in which case the ``opp`` map will always be empty.
+
+    Example:
+        >>> lifetimes = {1: {"pid": 1, "name": "Stalker", "born": 60, "died": 120}}
+        >>> _build_unit_timeline(lifetimes, [60, 90, 120], my_pid=1,
+        ...                       opp_pid=None, game_end_sec=300)
+        [{'time': 60, 'my': {'Stalker': 1}, 'opp': {}},
+         {'time': 90, 'my': {'Stalker': 1}, 'opp': {}},
+         {'time': 120, 'my': {}, 'opp': {}}]
+    """
+    if not sample_times:
+        return []
+    timeline: List[Dict] = []
+    for t in sample_times:
+        my_counts: Dict[str, int] = {}
+        opp_counts: Dict[str, int] = {}
+        for info in unit_lifetimes.values():
+            born = int(info.get("born") or 0)
+            if born > t:
+                continue
+            died = info.get("died")
+            if died is not None and int(died) <= t:
+                continue
+            pid = info.get("pid")
+            target = (
+                my_counts if pid == my_pid
+                else opp_counts if (opp_pid is not None and pid == opp_pid)
+                else None
+            )
+            if target is None:
+                continue
+            name = info.get("name") or "?"
+            target[name] = target.get(name, 0) + 1
+        timeline.append({"time": int(t), "my": my_counts, "opp": opp_counts})
+    return timeline
+
+
+def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> Dict:
     """Walk the replay once and pull every event the macro engine needs.
 
     Returns a dict with the following keys:
@@ -455,10 +537,22 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
     out: Dict[str, list] = {
         "ability_events": [],
         "stats_events": [],
+        # opp_stats_events mirrors stats_events but for opp_pid. Empty list
+        # when no opp_pid was provided. Used by the SPA's Active Army &
+        # Workers chart to render both players simultaneously.
+        "opp_stats_events": [],
         "production_buildings": [],
         "bases": [],
         "unit_births": [],
+        # unit_timeline is populated after the tracker walk below. Each
+        # entry: { time, my: {UnitName: count, ...}, opp: {...} }. Only
+        # non-building, non-SKIP_UNITS army units are counted.
+        "unit_timeline": [],
     }
+    # Track non-building unit lifetimes for my_pid AND opp_pid by unit_id.
+    # Distinct from the buildings ``lifetimes`` dict above so nothing
+    # cross-contaminates the macro engine's bases/production_buildings.
+    unit_lifetimes: Dict[int, Dict] = {}
     gl = getattr(replay, "game_length", None)
     game_end = gl.seconds if gl is not None and hasattr(gl, "seconds") else 0
     out["game_length_sec"] = game_end
@@ -475,29 +569,32 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
                     if pid is None:
                         player = getattr(event, "player", None)
                         pid = getattr(player, "pid", None) if player else None
-                    if pid != my_pid:
+                    if pid not in (my_pid, opp_pid):
                         continue
-                    out["stats_events"].append({
+                    sample = {
                         "time": getattr(event, "second", 0),
                         "food_used": getattr(event, "food_used", 0),
                         "food_made": getattr(event, "food_made", 0),
                         "minerals_current": getattr(event, "minerals_current", 0),
                         "vespene_current": getattr(event, "vespene_current", 0),
-                        # sc2reader names this workers_active_count (food_workers does not
-                        # exist on PlayerStatsEvent in 1.8.x). Keep the JSON
-                        # key "food_workers" so the whole pipeline stays stable.
+                        # sc2reader names this workers_active_count (food_workers
+                        # does not exist on PlayerStatsEvent in 1.8.x). Keep the
+                        # JSON key "food_workers" so the whole pipeline stays
+                        # stable.
                         "food_workers": getattr(event, "workers_active_count", 0),
                         "minerals_collection_rate":
                             getattr(event, "minerals_collection_rate", 0),
                         "vespene_collection_rate":
                             getattr(event, "vespene_collection_rate", 0),
-                    })
+                    }
+                    if pid == my_pid:
+                        out["stats_events"].append(sample)
+                    elif pid == opp_pid:
+                        out["opp_stats_events"].append(sample)
                     continue
 
                 if isinstance(event, (UnitBornEvent, UnitInitEvent, UnitDoneEvent)):
                     pid = _get_owner_pid(event)
-                    if pid != my_pid:
-                        continue
                     raw = _get_unit_type_name(event)
                     if not raw:
                         continue
@@ -505,6 +602,25 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
                     t = int(getattr(event, "second", 0))
                     uid = _resolve_unit_id(event)
 
+                    # Track non-building, non-skip units for BOTH pids so
+                    # the unit_timeline can render both armies. Only
+                    # UnitBornEvent counts for non-building units (Init/Done
+                    # don't repeat for unit production). Beacons and the
+                    # burrowed widow-mine variant are filtered out — see
+                    # _skip_for_unit_timeline() for the rationale.
+                    if (pid in (my_pid, opp_pid)
+                            and pid is not None
+                            and clean not in KNOWN_BUILDINGS
+                            and clean not in SKIP_UNITS
+                            and not _skip_for_unit_timeline(clean)
+                            and isinstance(event, UnitBornEvent)
+                            and uid is not None):
+                        unit_lifetimes[uid] = {
+                            "pid": pid, "name": clean, "born": t, "died": None,
+                        }
+
+                    if pid != my_pid:
+                        continue
                     if clean in KNOWN_BUILDINGS:
                         # For Zerg, UnitBornEvent IS completion (drone morph).
                         # For Protoss/Terran, UnitDoneEvent is completion.
@@ -534,21 +650,36 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
 
                 if isinstance(event, UnitTypeChangeEvent):
                     pid = _get_owner_pid(event)
-                    if pid != my_pid:
-                        continue
                     raw = _get_unit_type_name(event)
                     if not raw:
                         continue
                     clean = _clean_building_name(raw)
                     uid = _resolve_unit_id(event)
-                    if uid in lifetimes and clean in KNOWN_BUILDINGS:
+                    # Buildings: only follow morphs for my_pid (existing
+                    # behavior — the macro engine only cares about my
+                    # bases / production buildings).
+                    if (pid == my_pid and uid in lifetimes
+                            and clean in KNOWN_BUILDINGS):
                         lifetimes[uid]["name"] = clean
+                    # Units: morphs (Hellion->Hellbat, Roach->Ravager, etc.)
+                    # need to follow for either side so the timeline shows
+                    # the correct unit type post-morph. Beacons and
+                    # WidowMineBurrowed are filtered the same way as in the
+                    # birth branch — see _skip_for_unit_timeline().
+                    if (uid in unit_lifetimes
+                            and clean not in KNOWN_BUILDINGS
+                            and clean not in SKIP_UNITS
+                            and not _skip_for_unit_timeline(clean)):
+                        unit_lifetimes[uid]["name"] = clean
                     continue
 
                 if UnitDiedEvent is not None and isinstance(event, UnitDiedEvent):
                     uid = _resolve_unit_id(event)
                     if uid in lifetimes:
                         lifetimes[uid]["died"] = int(getattr(event, "second", 0))
+                    if uid in unit_lifetimes:
+                        unit_lifetimes[uid]["died"] = int(
+                            getattr(event, "second", 0))
                     continue
             except Exception:
                 # Swallow per-event errors and keep walking.
@@ -655,6 +786,13 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
         out["production_buildings"].append(record)
         if record["name"] in _BASE_TYPES:
             out["bases"].append(record)
+
+    # Sample the unit timeline at each my-stats sample time so the chart
+    # x-axis aligns 1:1 with the resource curves. Each entry counts alive
+    # non-building, non-SKIP_UNITS units per pid by canonical name.
+    sample_times = [int(s.get("time", 0)) for s in out["stats_events"]]
+    out["unit_timeline"] = _build_unit_timeline(
+        unit_lifetimes, sample_times, my_pid, opp_pid, int(game_end or 0))
 
     return out
 

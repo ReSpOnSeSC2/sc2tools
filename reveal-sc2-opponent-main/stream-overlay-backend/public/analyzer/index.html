@@ -2181,42 +2181,78 @@
       // =====================================================================
       // Active Army & Workers chart used by MacroBreakdownPanel.
       //
-      // Pure-SVG, no chart library. Plots two lines on a shared time axis:
+      // Pure-SVG, no chart library. Two players overlaid on the same axes:
       //   - Army supply value  = food_used * ARMY_SUPPLY_PER_FOOD  (left axis)
       //   - Worker count       = food_workers                       (right axis)
-      // Vertical bands are shaded during supply-blocked windows
-      // (food_used >= food_made - SUPPLY_BLOCK_TOLERANCE), driven by the same
-      // PlayerStatsEvent samples the macro engine already consumes.
+      // Lines are drawn solid for army / dashed for workers, with each
+      // player getting their own color (green/red defaults; user-adjustable
+      // via the two color pickers above the chart).
       //
-      // Colors come from design tokens (Stage 1) — no hardcoded palette.
-      // When stats_events is empty (older replays whose tracker stream is
-      // missing PlayerStatsEvent rows), renders a plain notice instead of
-      // synthesizing data. No mock samples ever.
+      // Two thin supply-block lanes sit at the bottom of the plot area —
+      // one per player — so neither side's bands overlap the other.
+      //
+      // Hover anywhere in the chart to scrub through samples: a vertical
+      // crosshair locks to the nearest sample, dots highlight all four
+      // line values, a tooltip shows raw numbers, and a Unit Roster panel
+      // below the chart updates with both players' alive non-worker units
+      // (icons + counts).
       // =====================================================================
       const RACE_ACCENT_VAR = {
         Protoss: "var(--color-race-protoss)",
         Terran: "var(--color-race-terran)",
         Zerg: "var(--color-race-zerg)",
       };
-      const CHART_INFO_COLOR = "var(--color-info)";
       const CHART_WARNING_COLOR = "var(--color-warning)";
       const CHART_GRID_COLOR = "var(--color-border-subtle)";
       const CHART_AXIS_TEXT = "var(--color-text-secondary)";
       const CHART_VIEW_W = 800;
-      const CHART_VIEW_H = 220;
+      const CHART_VIEW_H = 240;
       const CHART_PAD_LEFT = 44;
       const CHART_PAD_RIGHT = 44;
       const CHART_PAD_TOP = 12;
-      const CHART_PAD_BOTTOM = 26;
+      const CHART_PAD_BOTTOM = 36;
+      const SUPPLY_LANE_HEIGHT = 4;
+      const SUPPLY_LANE_GAP = 2;
       const ARMY_SUPPLY_PER_FOOD = 8;
       const SUPPLY_BLOCK_TOLERANCE = 1;
-      const SUPPLY_BAND_OPACITY = 0.3;
+      const SUPPLY_BAND_OPACITY = 0.55;
       const Y_TICK_FRACTIONS = [0, 0.25, 0.5, 0.75, 1];
       const X_TICK_STEP_LONG_GAME = 120;
       const X_TICK_STEP_SHORT_GAME = 60;
       const X_TICK_LONG_GAME_THRESHOLD = 360;
       const ARMY_AXIS_FLOOR = 8 * ARMY_SUPPLY_PER_FOOD;
       const WORKER_AXIS_FLOOR = 12;
+      const DEFAULT_MY_COLOR = "#22c55e";
+      const DEFAULT_OPP_COLOR = "#ef4444";
+
+      const UNIT_ICON_BASE = "/static/icons/units/";
+      const _CHART_UNIT_NAME_ALIASES = {
+        siegetanksieged: "siegetank",
+        warpprismphasing: "warpprism",
+        banelingburrowed: "baneling",
+        roachburrowed: "roach",
+        zerglingburrowed: "zergling",
+        hydraliskburrowed: "hydralisk",
+        infestorburrowed: "infestor",
+        lurkerburrowed: "lurker",
+        lurkermp: "lurker",
+        lurkermpburrowed: "lurker",
+        ravagerburrowed: "ravager",
+        queenburrowed: "queen",
+        swarmhostmp: "swarmhost",
+        swarmhostmpburrowed: "swarmhost",
+        hellionhellion: "hellion",
+        helliontank: "hellbat",
+        vikingfighter: "viking",
+        vikingassault: "viking",
+        thoraap: "thor",
+        ling: "zergling",
+      };
+      function _resolveUnitIcon(rawName) {
+        const lc = String(rawName || "").toLowerCase().replace(/\s+/g, "");
+        const canon = _CHART_UNIT_NAME_ALIASES[lc] || lc;
+        return UNIT_ICON_BASE + canon + ".png";
+      }
 
       function _formatGameClock(totalSeconds) {
         const s = Math.max(0, Math.floor(totalSeconds || 0));
@@ -2225,9 +2261,8 @@
         return `${m}:${ss}`;
       }
 
-      // Walk samples once, collapsing consecutive supply-blocked rows into
-      // [start, end] bands. Returns an array of {start, end} game-second pairs.
       function _supplyBlockBands(samples) {
+        if (!Array.isArray(samples) || samples.length === 0) return [];
         const bands = [];
         let openStart = null;
         let lastTime = 0;
@@ -2250,103 +2285,79 @@
       function _buildLinePath(points) {
         if (!points.length) return "";
         return points
-          .map(
-            (p, i) =>
-              `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`,
-          )
+          .map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`)
           .join(" ");
       }
 
-      // Compute scales, point arrays, and tick positions in one pass so the
-      // render function stays declarative and within the function-size cap.
-      function _buildChartLayout(samples, gameLengthSec) {
+      function _projectSidePoints(samples, xOf, yArmy, yWorker) {
+        const armyPts = [];
+        const workerPts = [];
+        for (const s of samples) {
+          const t = Number(s.time) || 0;
+          const armyVal = (Number(s.food_used) || 0) * ARMY_SUPPLY_PER_FOOD;
+          armyPts.push([xOf(t), yArmy(armyVal)]);
+          workerPts.push([xOf(t), yWorker(Number(s.food_workers) || 0)]);
+        }
+        return { armyPts, workerPts };
+      }
+
+      function _buildChartLayout(mySamples, oppSamples, gameLengthSec) {
         const innerW = CHART_VIEW_W - CHART_PAD_LEFT - CHART_PAD_RIGHT;
-        const innerH = CHART_VIEW_H - CHART_PAD_TOP - CHART_PAD_BOTTOM;
-        const lastT = Number(samples[samples.length - 1].time) || 0;
+        const supplyLanesH = SUPPLY_LANE_HEIGHT * 2 + SUPPLY_LANE_GAP * 2;
+        const innerH =
+          CHART_VIEW_H - CHART_PAD_TOP - CHART_PAD_BOTTOM - supplyLanesH;
+        const all = mySamples.concat(oppSamples);
+        const lastT = all.length
+          ? Math.max(...all.map((s) => Number(s.time) || 0)) : 0;
         const maxT = Math.max(lastT, Number(gameLengthSec) || 0, 60);
-        const armyVals = samples.map(
-          (s) => (Number(s.food_used) || 0) * ARMY_SUPPLY_PER_FOOD,
-        );
-        const workerVals = samples.map((s) => Number(s.food_workers) || 0);
-        const armyMax = Math.max(...armyVals, ARMY_AXIS_FLOOR);
-        const workerMax = Math.max(...workerVals, WORKER_AXIS_FLOOR);
+        const armyVals = all.map(
+          (s) => (Number(s.food_used) || 0) * ARMY_SUPPLY_PER_FOOD);
+        const workerVals = all.map((s) => Number(s.food_workers) || 0);
+        const armyMax = Math.max(
+          armyVals.length ? Math.max(...armyVals) : 0, ARMY_AXIS_FLOOR);
+        const workerMax = Math.max(
+          workerVals.length ? Math.max(...workerVals) : 0, WORKER_AXIS_FLOOR);
         const xOf = (t) => CHART_PAD_LEFT + (t / maxT) * innerW;
         const yArmy = (a) => CHART_PAD_TOP + (1 - a / armyMax) * innerH;
         const yWorker = (w) => CHART_PAD_TOP + (1 - w / workerMax) * innerH;
-        const armyPts = samples.map((s) => [
-          xOf(Number(s.time) || 0),
-          yArmy((Number(s.food_used) || 0) * ARMY_SUPPLY_PER_FOOD),
-        ]);
-        const workerPts = samples.map((s) => [
-          xOf(Number(s.time) || 0),
-          yWorker(Number(s.food_workers) || 0),
-        ]);
+        const my = _projectSidePoints(mySamples, xOf, yArmy, yWorker);
+        const opp = _projectSidePoints(oppSamples, xOf, yArmy, yWorker);
         const tickStep =
           maxT >= X_TICK_LONG_GAME_THRESHOLD
-            ? X_TICK_STEP_LONG_GAME
-            : X_TICK_STEP_SHORT_GAME;
+            ? X_TICK_STEP_LONG_GAME : X_TICK_STEP_SHORT_GAME;
         const xTicks = [];
         for (let t = 0; t <= maxT; t += tickStep) xTicks.push(t);
-        return {
-          innerW,
-          innerH,
-          maxT,
-          armyMax,
-          workerMax,
-          xOf,
-          yArmy,
-          yWorker,
-          armyPts,
-          workerPts,
-          xTicks,
-        };
+        const supplyLanesTop = CHART_PAD_TOP + innerH + SUPPLY_LANE_GAP;
+        return { innerW, innerH, maxT, armyMax, workerMax,
+                 xOf, yArmy, yWorker, my, opp, xTicks, supplyLanesTop };
       }
 
-      // Render the supply-block shaded bands as a list of <rect> elements.
-      function _renderSupplyBands(bands, layout) {
+      function _renderSupplyBands(bands, layout, color, laneIndex) {
+        const y = layout.supplyLanesTop +
+          (SUPPLY_LANE_HEIGHT + SUPPLY_LANE_GAP) * laneIndex;
         return bands.map((b, i) => (
-          <rect
-            key={`band-${i}`}
-            x={layout.xOf(b.start)}
-            y={CHART_PAD_TOP}
+          <rect key={`band-${laneIndex}-${i}`}
+            x={layout.xOf(b.start)} y={y}
             width={Math.max(1, layout.xOf(b.end) - layout.xOf(b.start))}
-            height={layout.innerH}
-            fill={CHART_WARNING_COLOR}
-            opacity={SUPPLY_BAND_OPACITY}
-          />
+            height={SUPPLY_LANE_HEIGHT} fill={color}
+            opacity={SUPPLY_BAND_OPACITY} />
         ));
       }
 
-      // Render dual y-axis grid lines + tick labels. Left = army, right = workers.
       function _renderYAxes(layout) {
         return Y_TICK_FRACTIONS.map((f, i) => {
           const y = CHART_PAD_TOP + (1 - f) * layout.innerH;
           return (
             <g key={`y-${i}`}>
-              <line
-                x1={CHART_PAD_LEFT}
-                y1={y}
-                x2={CHART_VIEW_W - CHART_PAD_RIGHT}
-                y2={y}
-                stroke={CHART_GRID_COLOR}
-                strokeDasharray="2 4"
-              />
-              <text
-                x={CHART_PAD_LEFT - 6}
-                y={y + 3}
-                fontSize="10"
-                textAnchor="end"
-                fill={CHART_AXIS_TEXT}
-              >
+              <line x1={CHART_PAD_LEFT} y1={y}
+                x2={CHART_VIEW_W - CHART_PAD_RIGHT} y2={y}
+                stroke={CHART_GRID_COLOR} strokeDasharray="2 4" />
+              <text x={CHART_PAD_LEFT - 6} y={y + 3} fontSize="10"
+                textAnchor="end" fill={CHART_AXIS_TEXT}>
                 {Math.round(f * layout.armyMax)}
               </text>
-              <text
-                x={CHART_VIEW_W - CHART_PAD_RIGHT + 6}
-                y={y + 3}
-                fontSize="10"
-                textAnchor="start"
-                fill={CHART_AXIS_TEXT}
-              >
+              <text x={CHART_VIEW_W - CHART_PAD_RIGHT + 6} y={y + 3}
+                fontSize="10" textAnchor="start" fill={CHART_AXIS_TEXT}>
                 {Math.round(f * layout.workerMax)}
               </text>
             </g>
@@ -2354,57 +2365,70 @@
         });
       }
 
-      // Render x-axis tick labels (game-clock formatted).
       function _renderXAxisTicks(layout) {
         return layout.xTicks.map((t, i) => (
-          <text
-            key={`x-${i}`}
-            x={layout.xOf(t)}
-            y={CHART_VIEW_H - 8}
-            fontSize="10"
-            textAnchor="middle"
-            fill={CHART_AXIS_TEXT}
-          >
+          <text key={`x-${i}`} x={layout.xOf(t)} y={CHART_VIEW_H - 18}
+            fontSize="10" textAnchor="middle" fill={CHART_AXIS_TEXT}>
             {_formatGameClock(t)}
           </text>
         ));
       }
 
-      // Render the inline legend row above the SVG.
-      function _renderChartLegend(armyAccent) {
+      function _renderLegendSwatch(color, dashed) {
         return (
-          <div className="flex items-center gap-3 text-[11px] text-neutral-400">
+          <svg width="14" height="6" aria-hidden="true">
+            <line x1="1" y1="3" x2="13" y2="3" stroke={color}
+              strokeWidth="2" strokeDasharray={dashed ? "2 2" : ""} />
+          </svg>
+        );
+      }
+
+      function _renderChartLegend(myColor, oppColor) {
+        return (
+          <div className="flex items-center gap-3 text-[11px] text-neutral-300 flex-wrap">
             <span className="inline-flex items-center gap-1">
-              <span
-                className="inline-block w-3 h-0.5"
-                style={{ background: armyAccent }}
-              />
-              Army (supply value)
+              {_renderLegendSwatch(myColor, false)} you army
             </span>
             <span className="inline-flex items-center gap-1">
-              <span
-                className="inline-block w-3 h-0.5"
-                style={{ background: CHART_INFO_COLOR }}
-              />
-              Workers
+              {_renderLegendSwatch(myColor, true)} you wkrs
             </span>
             <span className="inline-flex items-center gap-1">
-              <span
-                className="inline-block w-3 h-2"
-                style={{
-                  background: CHART_WARNING_COLOR,
-                  opacity: SUPPLY_BAND_OPACITY,
-                }}
-              />
-              Supply blocked
+              {_renderLegendSwatch(oppColor, false)} opp army
+            </span>
+            <span className="inline-flex items-center gap-1">
+              {_renderLegendSwatch(oppColor, true)} opp wkrs
+            </span>
+            <span className="inline-flex items-center gap-1 text-neutral-400">
+              <span className="inline-block w-3 h-1"
+                style={{ background: CHART_WARNING_COLOR,
+                         opacity: SUPPLY_BAND_OPACITY }} />
+              supply blocked (per side)
             </span>
           </div>
         );
       }
 
-      // Find the sample index whose game-time is closest to the cursor.
-      // mapping: clientX → SVG-local-X (preserveAspectRatio="none" makes this
-      // a linear scale) → game-time → nearest sample.
+      function _renderColorControls(myColor, setMyColor, oppColor, setOppColor) {
+        return (
+          <div className="flex items-center gap-3 text-[11px] text-neutral-400">
+            <label className="inline-flex items-center gap-1 cursor-pointer">
+              <span>YOU</span>
+              <input type="color" value={myColor}
+                onChange={(e) => setMyColor(e.target.value)}
+                aria-label="Pick the color for your lines"
+                className="w-5 h-5 rounded border-0 cursor-pointer bg-transparent" />
+            </label>
+            <label className="inline-flex items-center gap-1 cursor-pointer">
+              <span>OPP</span>
+              <input type="color" value={oppColor}
+                onChange={(e) => setOppColor(e.target.value)}
+                aria-label="Pick the color for opponent lines"
+                className="w-5 h-5 rounded border-0 cursor-pointer bg-transparent" />
+            </label>
+          </div>
+        );
+      }
+
       function _hoverIndexFromMouseEvent(e, svgEl, samples, layout) {
         if (!svgEl || !samples.length) return null;
         const rect = svgEl.getBoundingClientRect();
@@ -2414,7 +2438,6 @@
           return null;
         }
         const t = (localX - CHART_PAD_LEFT) / layout.innerW * layout.maxT;
-        // Linear scan is fine — stats_events typically has < 200 samples.
         let bestIdx = 0;
         let bestDist = Infinity;
         for (let i = 0; i < samples.length; i++) {
@@ -2424,102 +2447,113 @@
         return bestIdx;
       }
 
-      // Render the in-SVG crosshair + dots for the hovered sample.
-      function _renderHoverCrosshair(sample, layout, armyAccent) {
+      function _renderHoverCrosshair(layout, mySample, oppSample, myColor, oppColor) {
+        const sample = mySample || oppSample;
+        if (!sample) return null;
         const t = Number(sample.time) || 0;
         const xCursor = layout.xOf(t);
-        const armyY = layout.yArmy((Number(sample.food_used) || 0) * ARMY_SUPPLY_PER_FOOD);
-        const workerY = layout.yWorker(Number(sample.food_workers) || 0);
+        const dot = (s, color, r) => {
+          if (!s) return null;
+          const army = (Number(s.food_used) || 0) * ARMY_SUPPLY_PER_FOOD;
+          return (
+            <g pointerEvents="none">
+              <circle cx={xCursor}
+                cy={layout.yWorker(Number(s.food_workers) || 0)}
+                r={r} fill={color} stroke="#000" strokeOpacity="0.4" />
+              <circle cx={xCursor} cy={layout.yArmy(army)}
+                r={r} fill={color} stroke="#000" strokeOpacity="0.4" />
+            </g>
+          );
+        };
         return (
           <g pointerEvents="none">
-            <line
-              x1={xCursor}
-              y1={CHART_PAD_TOP}
-              x2={xCursor}
+            <line x1={xCursor} y1={CHART_PAD_TOP} x2={xCursor}
               y2={CHART_PAD_TOP + layout.innerH}
-              stroke={CHART_AXIS_TEXT}
-              strokeDasharray="2 2"
-              opacity="0.6"
-            />
-            <circle cx={xCursor} cy={workerY} r="3" fill={CHART_INFO_COLOR} />
-            <circle cx={xCursor} cy={armyY} r="3.5" fill={armyAccent} />
+              stroke={CHART_AXIS_TEXT} strokeDasharray="2 2" opacity="0.6" />
+            {dot(mySample, myColor, 3.5)}
+            {dot(oppSample, oppColor, 3)}
           </g>
         );
       }
 
-      // Render the SVG body once layout is computed. Kept in its own
-      // helper to keep MacroResourceChart under the function-size cap.
-      function _renderChartSvg(layout, armyAccent, bands, hoverSample, svgRef, onMove, onLeave) {
+      function _renderChartLines(layout, myColor, oppColor) {
+        return (
+          <g>
+            <path d={_buildLinePath(layout.opp.workerPts)} fill="none"
+              stroke={oppColor} strokeWidth="1.5" strokeDasharray="3 3" />
+            <path d={_buildLinePath(layout.my.workerPts)} fill="none"
+              stroke={myColor} strokeWidth="1.5" strokeDasharray="3 3" />
+            <path d={_buildLinePath(layout.opp.armyPts)} fill="none"
+              stroke={oppColor} strokeWidth="1.75" />
+            <path d={_buildLinePath(layout.my.armyPts)} fill="none"
+              stroke={myColor} strokeWidth="1.75" />
+          </g>
+        );
+      }
+
+      function _renderChartSvg(args) {
+        const { layout, myColor, oppColor, myBands, oppBands,
+                mySample, oppSample, svgRef, onMove, onLeave } = args;
         const baselineY = CHART_PAD_TOP + layout.innerH;
         return (
-          <svg
-            ref={svgRef}
+          <svg ref={svgRef}
             viewBox={`0 0 ${CHART_VIEW_W} ${CHART_VIEW_H}`}
             role="img"
-            aria-label="Active army supply value and worker count over game time"
+            aria-label="Active army supply value and worker count over game time, both players overlaid"
             className="w-full h-auto cursor-crosshair"
             preserveAspectRatio="none"
-            onMouseMove={onMove}
-            onMouseLeave={onLeave}
-          >
-            {_renderSupplyBands(bands, layout)}
-            <line
-              x1={CHART_PAD_LEFT}
-              y1={baselineY}
-              x2={CHART_VIEW_W - CHART_PAD_RIGHT}
-              y2={baselineY}
-              stroke={CHART_GRID_COLOR}
-            />
+            onMouseMove={onMove} onMouseLeave={onLeave}>
+            {_renderSupplyBands(myBands, layout, myColor, 0)}
+            {_renderSupplyBands(oppBands, layout, oppColor, 1)}
+            <line x1={CHART_PAD_LEFT} y1={baselineY}
+              x2={CHART_VIEW_W - CHART_PAD_RIGHT} y2={baselineY}
+              stroke={CHART_GRID_COLOR} />
             {_renderYAxes(layout)}
             {_renderXAxisTicks(layout)}
-            <path
-              d={_buildLinePath(layout.workerPts)}
-              fill="none"
-              stroke={CHART_INFO_COLOR}
-              strokeWidth="1.5"
-            />
-            <path
-              d={_buildLinePath(layout.armyPts)}
-              fill="none"
-              stroke={armyAccent}
-              strokeWidth="1.75"
-            />
-            {hoverSample && _renderHoverCrosshair(hoverSample, layout, armyAccent)}
-            <text
-              x={CHART_PAD_LEFT - 6}
-              y={CHART_PAD_TOP - 2}
-              fontSize="9"
-              textAnchor="end"
-              fill={CHART_AXIS_TEXT}
-            >
-              army
-            </text>
-            <text
-              x={CHART_VIEW_W - CHART_PAD_RIGHT + 6}
-              y={CHART_PAD_TOP - 2}
-              fontSize="9"
-              textAnchor="start"
-              fill={CHART_AXIS_TEXT}
-            >
-              wkrs
-            </text>
+            {_renderChartLines(layout, myColor, oppColor)}
+            {_renderHoverCrosshair(layout, mySample, oppSample, myColor, oppColor)}
+            <text x={CHART_PAD_LEFT - 6} y={CHART_PAD_TOP - 2} fontSize="9"
+              textAnchor="end" fill={CHART_AXIS_TEXT}>army</text>
+            <text x={CHART_VIEW_W - CHART_PAD_RIGHT + 6} y={CHART_PAD_TOP - 2}
+              fontSize="9" textAnchor="start" fill={CHART_AXIS_TEXT}>wkrs</text>
           </svg>
         );
       }
 
-      // Returns true if the sample is inside any of the supply-block bands.
       function _sampleInBlockedBand(sample, bands) {
+        if (!sample) return false;
         const t = Number(sample.time) || 0;
         for (const b of bands) if (t >= b.start && t <= b.end) return true;
         return false;
       }
 
-      // Render the HTML tooltip overlaid above the SVG at the hover position.
-      function _renderChartTooltip(sample, layout, bands) {
-        const t = Number(sample.time) || 0;
+      function _renderTooltipLine(label, color, sample, blocked) {
+        if (!sample) return null;
         const army = (Number(sample.food_used) || 0) * ARMY_SUPPLY_PER_FOOD;
         const workers = Number(sample.food_workers) || 0;
-        const blocked = _sampleInBlockedBand(sample, bands);
+        return (
+          <div className="flex items-center gap-2 tabular-nums">
+            <span className="inline-block w-2 h-2 rounded-full"
+              style={{ background: color }} />
+            <span className="text-neutral-400 text-[10px] uppercase tracking-wider">
+              {label}
+            </span>
+            <span>army <span className="font-semibold">{army}</span></span>
+            <span>wkrs <span className="font-semibold">{workers}</span></span>
+            {blocked && (
+              <span className="text-[10px]"
+                style={{ color: CHART_WARNING_COLOR }}>blocked</span>
+            )}
+          </div>
+        );
+      }
+
+      function _renderChartTooltip(args) {
+        const { mySample, oppSample, myBands, oppBands, layout,
+                myColor, oppColor } = args;
+        const sample = mySample || oppSample;
+        if (!sample) return null;
+        const t = Number(sample.time) || 0;
         const leftPct = (layout.xOf(t) / CHART_VIEW_W) * 100;
         const onRight = leftPct > 60;
         return (
@@ -2531,51 +2565,124 @@
               top: 4,
             }}
           >
-            <div className="text-neutral-400 tabular-nums">{_formatGameClock(t)}</div>
-            <div className="tabular-nums">army <span className="font-semibold">{army}</span></div>
-            <div className="tabular-nums">workers <span className="font-semibold">{workers}</span></div>
-            {blocked && (
-              <div className="text-[10px]" style={{ color: CHART_WARNING_COLOR }}>
-                supply blocked
-              </div>
+            <div className="text-neutral-400 tabular-nums mb-0.5">
+              {_formatGameClock(t)}
+            </div>
+            {_renderTooltipLine("YOU", myColor, mySample,
+              _sampleInBlockedBand(mySample, myBands))}
+            {_renderTooltipLine("OPP", oppColor, oppSample,
+              _sampleInBlockedBand(oppSample, oppBands))}
+          </div>
+        );
+      }
+
+      function _renderUnitChip(name, count, color) {
+        return (
+          <span key={name}
+            className="inline-flex items-center gap-1 bg-base-900 ring-soft rounded px-1.5 py-0.5 text-[11px]"
+            title={`${name} x${count}`}>
+            <img src={_resolveUnitIcon(name)} alt="" width="16" height="16"
+              loading="lazy"
+              onError={(e) => { e.currentTarget.style.display = "none"; }} />
+            <span className="text-neutral-200">{name}</span>
+            <span className="font-semibold tabular-nums" style={{ color }}>
+              ×{count}
+            </span>
+          </span>
+        );
+      }
+
+      // Names that should NEVER appear in the army-composition roster.
+      // Beacon* are click-action markers the SC2 client emits at t=0;
+      // WidowMineBurrowed is just the burrowed state of WidowMine and
+      // would double-count widow mines as a separate row. Mirrors
+      // _skip_for_unit_timeline() in core/event_extractor.py.
+      function _isRosterNoise(name) {
+        if (!name) return true;
+        if (typeof name !== "string") return true;
+        if (name.startsWith("Beacon")) return true;
+        if (name === "WidowMineBurrowed") return true;
+        return false;
+      }
+
+      function _renderUnitRosterRow(label, color, units) {
+        const entries = Object.entries(units || {})
+          .filter(([n]) => !_isRosterNoise(n))
+          .sort((a, b) => b[1] - a[1]);
+        return (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] uppercase tracking-wider"
+              style={{ color, minWidth: 28 }}>{label}</span>
+            {entries.length === 0 ? (
+              <span className="text-[11px] text-neutral-500">—</span>
+            ) : (
+              entries.map(([n, c]) => _renderUnitChip(n, c, color))
             )}
           </div>
         );
       }
 
-      function MacroResourceChart({ statsEvents, race, gameLengthSec }) {
-        const samples = Array.isArray(statsEvents) ? statsEvents : [];
+      function _renderUnitRoster(timelineEntry, myColor, oppColor) {
+        if (!timelineEntry) {
+          return (
+            <div className="text-[11px] text-neutral-500 mt-2">
+              Hover the chart to see each side's army composition over time.
+            </div>
+          );
+        }
+        return (
+          <div className="mt-2 space-y-1">
+            <div className="text-[10px] uppercase tracking-wider text-neutral-500">
+              Unit roster at {_formatGameClock(timelineEntry.time)}
+            </div>
+            {_renderUnitRosterRow("YOU", myColor, timelineEntry.my)}
+            {_renderUnitRosterRow("OPP", oppColor, timelineEntry.opp)}
+          </div>
+        );
+      }
+
+      function MacroResourceChart(props) {
+        const samples = Array.isArray(props.statsEvents) ? props.statsEvents : [];
+        const oppSamples = Array.isArray(props.oppStatsEvents) ? props.oppStatsEvents : [];
+        const timeline = Array.isArray(props.unitTimeline) ? props.unitTimeline : [];
         const [hoverIdx, setHoverIdx] = useState(null);
+        const [myColor, setMyColor] = useState(DEFAULT_MY_COLOR);
+        const [oppColor, setOppColor] = useState(DEFAULT_OPP_COLOR);
         const svgRef = useRef(null);
-        if (samples.length === 0) {
+        if (samples.length === 0 && oppSamples.length === 0) {
           return (
             <div className="bg-base-800 ring-soft rounded p-3 text-xs text-neutral-400">
               Resource samples unavailable for this replay.
             </div>
           );
         }
-        const armyAccent =
-          RACE_ACCENT_VAR[race] || "var(--color-race-random)";
-        const layout = _buildChartLayout(samples, gameLengthSec);
-        const bands = _supplyBlockBands(samples);
+        const layout = _buildChartLayout(samples, oppSamples, props.gameLengthSec);
+        const myBands = _supplyBlockBands(samples);
+        const oppBands = _supplyBlockBands(oppSamples);
         const onMove = (e) => {
           const idx = _hoverIndexFromMouseEvent(e, svgRef.current, samples, layout);
           if (idx !== hoverIdx) setHoverIdx(idx);
         };
         const onLeave = () => setHoverIdx(null);
-        const hoverSample = hoverIdx != null ? samples[hoverIdx] : null;
+        const mySample = hoverIdx != null ? samples[hoverIdx] : null;
+        const oppSample = hoverIdx != null ? oppSamples[hoverIdx] : null;
+        const timelineEntry = hoverIdx != null ? timeline[hoverIdx] : null;
         return (
           <div className="bg-base-800 ring-soft rounded p-3">
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <div className="text-[11px] uppercase tracking-wider text-neutral-200">
                 Active Army &amp; Workers
               </div>
-              {_renderChartLegend(armyAccent)}
+              {_renderColorControls(myColor, setMyColor, oppColor, setOppColor)}
             </div>
+            <div className="mb-2">{_renderChartLegend(myColor, oppColor)}</div>
             <div className="relative">
-              {_renderChartSvg(layout, armyAccent, bands, hoverSample, svgRef, onMove, onLeave)}
-              {hoverSample && _renderChartTooltip(hoverSample, layout, bands)}
+              {_renderChartSvg({ layout, myColor, oppColor, myBands, oppBands,
+                                  mySample, oppSample, svgRef, onMove, onLeave })}
+              {(mySample || oppSample) && _renderChartTooltip({
+                mySample, oppSample, myBands, oppBands, layout, myColor, oppColor })}
             </div>
+            {_renderUnitRoster(timelineEntry, myColor, oppColor)}
           </div>
         );
       }
@@ -2642,6 +2749,10 @@
                     top_3_leaks: j.top_3_leaks || [],
                     // PlayerStatsEvent samples for the army/workers chart.
                     stats_events: Array.isArray(j.stats_events) ? j.stats_events : [],
+                    // Opponent samples + alive-unit timeline for the dual-
+                    // player chart and the unit roster panel.
+                    opp_stats_events: Array.isArray(j.opp_stats_events) ? j.opp_stats_events : [],
+                    unit_timeline: Array.isArray(j.unit_timeline) ? j.unit_timeline : [],
                   },
                 }),
               );
@@ -2832,6 +2943,8 @@
                   <div className="mt-3">
                     <MacroResourceChart
                       statsEvents={breakdown && breakdown.stats_events}
+                      oppStatsEvents={breakdown && breakdown.opp_stats_events}
+                      unitTimeline={breakdown && breakdown.unit_timeline}
                       race={race}
                       gameLengthSec={breakdown && breakdown.game_length_sec}
                     />

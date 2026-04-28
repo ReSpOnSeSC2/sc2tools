@@ -144,6 +144,84 @@
         el.textContent = (value == null || value === '') ? '' : String(value);
     }
 
+
+    // --------------------------------------------------------
+    // SCOUTING — last-N games row helpers
+    // --------------------------------------------------------
+    // recentGames[i] shape (from buildRecentGamesForOpponent in
+    // stream-overlay-backend/index.js):
+    //   { lengthText, result, myBuild, oppBuild, myOpener[],
+    //     oppOpener[], map, oppRace, date }
+    // openers are arrays of { time:"m:ss", name:"BuildingName" }
+    // capped at 4 entries each on the backend so the widget never
+    // overflows.
+    const SCOUT_RESULT_CLASS = {
+        Win: 'scout-recent-result-win',
+        Victory: 'scout-recent-result-win',
+        Loss: 'scout-recent-result-loss',
+        Defeat: 'scout-recent-result-loss',
+    };
+    const SCOUT_RESULT_LETTER = {
+        Win: 'W', Victory: 'W',
+        Loss: 'L', Defeat: 'L',
+    };
+
+    // Build the YOU/OPP line for one game in the scouting "Last games"
+    // list. We render only the classification name (e.g. "Protoss - 4
+    // Gate Rush" or "(unclassified)") — never the raw build_log
+    // milestones with timings. The backend still computes openers and
+    // ships them in the payload; the widget intentionally ignores them.
+    function _appendScoutLine(parent, sideLabel, sideClass, build, _opener) {
+        const line = document.createElement('div');
+        line.className = 'scout-recent-line ' + sideClass;
+        const lab = document.createElement('span');
+        lab.className = 'scout-recent-side';
+        lab.textContent = sideLabel;
+        const b = document.createElement('span');
+        b.className = 'scout-recent-build';
+        b.textContent = build || '(unclassified)';
+        line.appendChild(lab);
+        line.appendChild(b);
+        parent.appendChild(line);
+    }
+
+    function _buildScoutRecentRow(game) {
+        const row = document.createElement('div');
+        row.className = 'scout-recent-row';
+        const head = document.createElement('div');
+        head.className = 'scout-recent-head';
+        const result = document.createElement('span');
+        const resultKey = game.result || '';
+        result.className = 'scout-recent-result ' +
+            (SCOUT_RESULT_CLASS[resultKey] || '');
+        result.textContent = SCOUT_RESULT_LETTER[resultKey] || '\u00b7';
+        const length = document.createElement('span');
+        length.className = 'scout-recent-length';
+        length.textContent = game.lengthText || '\u2014';
+        head.appendChild(result);
+        head.appendChild(length);
+        if (game.map) {
+            const meta = document.createElement('span');
+            meta.className = 'scout-recent-meta';
+            meta.textContent = game.map;
+            head.appendChild(meta);
+        }
+        row.appendChild(head);
+        _appendScoutLine(row, 'YOU', 'scout-recent-line-mine',
+            game.myBuild, game.myOpener);
+        _appendScoutLine(row, 'OPP', 'scout-recent-line-opp',
+            game.oppBuild, game.oppOpener);
+        return row;
+    }
+
+    function renderScoutRecentGames(listEl, games) {
+        if (!listEl) return;
+        // The list is small (<= 5) so a fresh rebuild is fine on
+        // each scoutingReport event.
+        listEl.replaceChildren();
+        for (const g of games) listEl.appendChild(_buildScoutRecentRow(g));
+    }
+
     // --------------------------------------------------------
     // SC2 ICON HELPERS
     // --------------------------------------------------------
@@ -254,9 +332,8 @@
             record:     document.getElementById('scout-record'),
             rivalRow:   document.getElementById('scout-rival'),
             rivalText:  document.getElementById('scout-rival-text'),
-            favRow:     document.getElementById('scout-fav'),
-            favIcons:   document.getElementById('scout-fav-icons'),
-            favText:    document.getElementById('scout-fav-text'),
+            recentRow:  document.getElementById('scout-recent'),
+            recentList: document.getElementById('scout-recent-list'),
             ansRow:     document.getElementById('scout-ans'),
             ansIcons:   document.getElementById('scout-ans-icons'),
             ansText:    document.getElementById('scout-ans-text'),
@@ -581,15 +658,11 @@
                 } else {
                     e.rivalRow.style.display = 'none';
                 }
-                if (p.favoriteOpening) {
-                    Icons.fillIconRow(e.favIcons,
-                        Icons.strategyIcons(p.favoriteOpening.strategy, 2),
-                        p.favoriteOpening.strategy);
-                    safeText(e.favText,
-                        `${p.favoriteOpening.strategy}  (${p.favoriteOpening.sharePct}%)`);
-                    e.favRow.style.display = '';
+                if (Array.isArray(p.recentGames) && p.recentGames.length > 0) {
+                    renderScoutRecentGames(e.recentList, p.recentGames);
+                    e.recentRow.style.display = '';
                 } else {
-                    e.favRow.style.display = 'none';
+                    e.recentRow.style.display = 'none';
                 }
                 if (p.bestAnswer) {
                     Icons.fillIconRow(e.ansIcons,

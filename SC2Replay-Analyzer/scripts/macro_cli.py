@@ -94,7 +94,20 @@ def _compute_for_replay(file_path: str, player_name: str) -> Dict[str, Any]:
         raise RuntimeError(f"Player '{player_name}' not found in replay.")
     length = getattr(replay, "game_length", None)
     length_sec = length.seconds if length else 0
-    macro_events = extract_macro_events(replay, me.pid)
+    # Auto-detect opp_pid: the OTHER human player in the replay (skip
+    # observers, computers, and the user). Falls back to None when the
+    # replay only has one human, in which case extract_macro_events
+    # returns empty opp data and the chart silently degrades to one-side.
+    opp_pid = None
+    for player in (getattr(replay, "players", None) or []):
+        if not getattr(player, "is_human", False):
+            continue
+        ppid = getattr(player, "pid", None)
+        if ppid is None or ppid == me.pid:
+            continue
+        opp_pid = ppid
+        break
+    macro_events = extract_macro_events(replay, me.pid, opp_pid)
     result = compute_macro_score(macro_events, me.play_race, length_sec)
     return {
         "macro_score": result.get("macro_score"),
@@ -107,6 +120,13 @@ def _compute_for_replay(file_path: str, player_name: str) -> Dict[str, Any]:
         # MacroBreakdownPanel. Empty list for older replays whose tracker
         # stream is missing PlayerStatsEvent rows.
         "stats_events": result.get("stats_events", []) or [],
+        # Same shape, but for the opponent. Empty when no human opp_pid
+        # was found (e.g. vs AI).
+        "opp_stats_events": result.get("opp_stats_events", []) or [],
+        # Sampled alive-unit counts for both players keyed by canonical
+        # name. Drives the Unit Roster panel that appears below the
+        # chart on hover.
+        "unit_timeline": result.get("unit_timeline", []) or [],
     }
 
 

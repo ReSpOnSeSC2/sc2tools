@@ -1741,6 +1741,12 @@ router.post('/games/:gameId/macro-breakdown', (req, res) => {
                 // the replay's tracker stream had no PlayerStatsEvent rows
                 // (some older replays); the UI falls back to a notice.
                 stats_events: Array.isArray(r.stats_events) ? r.stats_events : [],
+                // Mirror of stats_events for the opponent. Empty when the
+                // replay was solo/vs-AI (no human opp_pid was detectable).
+                opp_stats_events: Array.isArray(r.opp_stats_events) ? r.opp_stats_events : [],
+                // Per-sample alive-unit counts for both players. Empty
+                // when stats_events is empty.
+                unit_timeline: Array.isArray(r.unit_timeline) ? r.unit_timeline : [],
             };
             // Mutate in-memory game record + persist back to meta_database.json.
             game.macro_score = r.macro_score;
