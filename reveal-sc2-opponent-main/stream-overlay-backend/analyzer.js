@@ -100,6 +100,42 @@ const dbCache = {
     aggCache: new Map(), // key: `${kind}:${revisionMeta}:${revisionOpp}:${filterHash}` -> result
 };
 
+// Last-resort recovery for top-level-dict JSON files corrupted by an
+// incomplete write (the same failure mode that has historically truncated
+// meta_database.json and MyOpponentHistory.json -- see core/atomic_io.py).
+//
+// Strategy: walk back from the file end looking for a `},\n` record
+// boundary, chop everything after it, append `}\n` to close the outer
+// dict, and re-parse. Try up to N most-recent boundaries before giving up.
+// Only used as a fallback when the strict JSON.parse throws.
+function salvageJsonObject(raw) {
+    if (typeof raw !== 'string' || raw.length === 0) return null;
+    let trimmed = raw.replace(/[\s\u0000]+$/, '');
+    if (trimmed.endsWith(',')) trimmed = trimmed.slice(0, -1);
+    const closingCandidates = [trimmed + '\n}\n'];
+    // Find the last 50 record boundaries (`},\n`) and try each in turn,
+    // dropping one trailing record per attempt.
+    const BOUND_RE = /},\s*\n/g;
+    const bounds = [];
+    let m;
+    while ((m = BOUND_RE.exec(raw)) !== null && bounds.length < 50) {
+        bounds.push(m.index);  // index of the `}` itself
+    }
+    for (let i = bounds.length - 1; i >= 0; i--) {
+        const cut = bounds[i];
+        closingCandidates.push(raw.slice(0, cut + 1) + '\n}\n');
+    }
+    for (const candidate of closingCandidates) {
+        try {
+            const parsed = JSON.parse(candidate);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                return parsed;
+            }
+        } catch (_) { /* try next candidate */ }
+    }
+    return null;
+}
+
 function readJsonStripBom(p) {
     let raw = fs.readFileSync(p, 'utf8');
     if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
@@ -122,6 +158,29 @@ function reloadIfChanged(which) {
         console.log(`[Analyzer] reloaded ${which}: rev=${cfg.slot.revision}`);
         return true;
     } catch (err) {
+        // Resilience: a write that didn't fsync+rename atomically can leave
+        // the file with trailing garbage. Try to salvage the valid prefix.
+        try {
+            let raw = fs.readFileSync(cfg.path, 'utf8');
+            if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
+            const salvaged = salvageJsonObject(raw);
+            if (salvaged) {
+                cfg.slot.data = salvaged;
+                cfg.slot.signature = sig;
+                cfg.slot.revision += 1;
+                cfg.slot.loadedAt = Date.now();
+                dbCache.aggCache.clear();
+                console.warn(
+                    `[Analyzer] ${which}: parse failed (${err.message}); ` +
+                    `salvaged ${Object.keys(salvaged).length} entries from ` +
+                    `valid prefix. File on disk is corrupt and should be ` +
+                    `repaired.`,
+                );
+                return true;
+            }
+        } catch (e2) {
+            console.error(`[Analyzer] salvage of ${which} failed:`, e2.message);
+        }
         console.error(`[Analyzer] failed to reload ${which}:`, err.message);
         return false;
     }

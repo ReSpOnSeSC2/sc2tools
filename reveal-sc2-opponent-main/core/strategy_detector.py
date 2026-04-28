@@ -493,7 +493,19 @@ class UserBuildDetector(BaseStrategyDetector):
 
         # --- PvP ---
         elif "vs Protoss" in matchup:
-            if has_proxy("Gateway", 270, 50):
+            # Tightened: a real proxy 2-Gate is committed -- no early
+            # natural. Without this guard, ANY gateway that registers
+            # near the opponent's main before 4:30 (forward gate during
+            # a 4-Gate timing, mis-tagged distance, etc.) was being
+            # mis-classified as "Proxy 2 Gate" even on FE-into-X games.
+            _pvp_nexus_times_proxy = sorted(
+                b["time"] for b in buildings if b["name"] == "Nexus"
+            )
+            _pvp_has_early_natural = (
+                len(_pvp_nexus_times_proxy) >= 2
+                and _pvp_nexus_times_proxy[1] < 270
+            )
+            if has_proxy("Gateway", 270, 50) and not _pvp_has_early_natural:
                 return "PvP - Proxy 2 Gate"
 
             nexus_times = sorted([b["time"] for b in buildings if b["name"] == "Nexus"])
@@ -541,6 +553,40 @@ class UserBuildDetector(BaseStrategyDetector):
                 # signature of the build).
                 if gates_before_expand == 1 and first_unit == "Sentry":
                     return "PvP - Strange's 1 Gate Expand"
+
+                # 1 Gate Nexus into 4 Gate: standard 1-gate FE that
+                # transitions into a 4-Gate Stalker timing. Must be
+                # checked BEFORE the generic "1 Gate Expand" so the
+                # 4-Gate signal upgrades the classification.
+                _gate_times_pvp = sorted(
+                    b["time"] for b in buildings if b["name"] == "Gateway"
+                )
+                _gate_count_6min = sum(
+                    1 for t in _gate_times_pvp if t < 360
+                )
+                _fourth_gate_time = (
+                    _gate_times_pvp[3] if len(_gate_times_pvp) >= 4 else 9999
+                )
+                _PVP_4G_TECH = (
+                    "Stargate", "RoboticsFacility",
+                    "TwilightCouncil", "TemplarArchive", "DarkShrine",
+                )
+                _tech_before_4th_gate = any(
+                    b["name"] in _PVP_4G_TECH and b["time"] < _fourth_gate_time
+                    for b in buildings
+                )
+                _warpgate_research_time = next(
+                    (u["time"] for u in upgrades if "WarpGate" in u["name"]),
+                    9999,
+                )
+                if (
+                    gates_before_expand == 1
+                    and first_unit in ("Stalker", "Adept", "Zealot")
+                    and _gate_count_6min >= 4
+                    and not _tech_before_4th_gate
+                    and _warpgate_research_time <= 330
+                ):
+                    return "PvP - 1 Gate Nexus into 4 Gate"
 
                 # Standard 1 Gate Expand: exactly 1 gateway before the
                 # natural, first unit is something other than a Sentry.

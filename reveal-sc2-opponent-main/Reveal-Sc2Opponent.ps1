@@ -191,7 +191,18 @@ function Save-History {
 
 function Update-OpponentHistory {
     param([string]$OpponentId, [string]$OpponentName, [string]$MyResult, [string]$MapName, [string]$MyRace, [string]$OpponentRace)
-    if ([string]::IsNullOrEmpty($OpponentId)) { return }
+    # Random-race opponents and offline games come through with no
+    # SC2Pulse Character ID. Fall back to a synthetic "unknown:<Name>"
+    # key so we still record the game under the SAME key the Python
+    # deep-parse watcher uses (watchers/replay_watcher.py:375). The
+    # identity-aware upsert in core/data_store.py prevents the two
+    # writers from double-counting when both fire.
+    if ([string]::IsNullOrEmpty($OpponentId)) {
+        if ([string]::IsNullOrEmpty($OpponentName)) { return }
+        $CleanName = $OpponentName
+        if ($CleanName.Contains("]")) { $CleanName = ($CleanName.Split("]")[-1]).Trim() }
+        $OpponentId = "unknown:" + $CleanName
+    }
 
     $History = Get-History
     if (-not $History.ContainsKey($OpponentId)) { $History[$OpponentId] = @{ "Name" = $OpponentName; "Matchups" = @{} } }

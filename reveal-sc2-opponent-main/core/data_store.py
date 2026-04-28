@@ -281,6 +281,23 @@ class BlackBookStore:
             mu["Games"].append(game)
             self.save(data)
 
+    # ------------------------------------------------------------------
+    # Game identity helpers
+    # ------------------------------------------------------------------
+    # A Black Book game record is uniquely identified by the tuple
+    # (Date prefix, Map, Result). Date is stored as "YYYY-MM-DD HH:MM"
+    # so the minute-precision is enough to distinguish back-to-back
+    # replays unless they started in the same minute on the same map
+    # with the same result -- which would be impossible in practice
+    # because the user can't finish two games inside one minute.
+    @staticmethod
+    def _game_identity(game: Dict[str, Any]) -> tuple:
+        return (
+            (game.get("Date") or "")[:16],
+            (game.get("Map") or ""),
+            (game.get("Result") or ""),
+        )
+
     def update_latest_game(
         self,
         pulse_id: str,
@@ -288,9 +305,16 @@ class BlackBookStore:
         patch: Dict[str, Any],
     ) -> bool:
         """
-        Patch the most recent game for `pulse_id`/`matchup` with the
-        provided fields. Used when the deep-parse completes after the
-        live entry was already written. Returns True on success.
+        DEPRECATED. Patch the most recent game record for the matchup.
+
+        This blindly patches ``Games[-1]`` and was the source of the
+        2026-04-28 Mirtillo bug: when two replays in the same matchup
+        deep-parsed in sequence with no PowerShell stub on disk, the
+        second deep-parse overwrote the first record's deep fields.
+
+        Use :meth:`upsert_game` instead, which finds-or-appends by
+        stable identity (Date, Map, Result). Will be removed one
+        minor version after callers migrate.
         """
         with self._lock:
             data = self.load()
@@ -301,6 +325,83 @@ class BlackBookStore:
             if not mu or not mu.get("Games"):
                 return False
             mu["Games"][-1].update(patch)
+            self.save(data)
+            return True
+
+    def upsert_game(
+        self,
+        pulse_id: str,
+        opp_name: str,
+        opp_race_initial: str,
+        matchup: str,
+        game: Dict[str, Any],
+        result: str,
+    ) -> bool:
+        """
+        Find-or-append a single game record by (Date, Map, Result).
+
+        If an existing record in the matchup matches this identity,
+        merge ``game``'s fields into it (preserving existing keys not
+        overwritten by ``game``) and DO NOT increment the W/L counter
+        -- the prior write already counted it.
+
+        Otherwise append a fresh record and increment W or L.
+
+        Returns ``True`` if a new record was appended, ``False`` if an
+        existing record was patched in place.
+
+        Args:
+            pulse_id: SC2Pulse character id, or ``"unknown:<Name>"``
+                when Pulse can't resolve one (Random opponents).
+            opp_name: Display name for the opponent (clan-tag
+                stripped by the caller).
+            opp_race_initial: ``"P" | "T" | "Z" | "R"``.
+            matchup: e.g. ``"PvZ"``.
+            game: Black Book game record. Must include ``Date``,
+                ``Map``, ``Result``; may include deep-parse fields.
+            result: ``"Victory"`` or ``"Defeat"``. Anything else is
+                treated as a non-decided game and does not bump
+                counters.
+
+        Example:
+            >>> bb.upsert_game(
+            ...     pulse_id="unknown:Mirtillo",
+            ...     opp_name="Mirtillo",
+            ...     opp_race_initial="P",
+            ...     matchup="PvP",
+            ...     game={"Date": "2026-04-28 17:11",
+            ...           "Result": "Defeat",
+            ...           "Map": "10000 Feet LE",
+            ...           "Duration": 534},
+            ...     result="Defeat",
+            ... )
+            True
+        """
+        target_id = self._game_identity(game)
+        with self._lock:
+            data = self.load()
+            entry = data.setdefault(
+                pulse_id,
+                {"Name": opp_name, "Race": opp_race_initial, "Notes": "", "Matchups": {}},
+            )
+            entry.setdefault("Name", opp_name)
+            entry.setdefault("Race", opp_race_initial)
+            entry.setdefault("Notes", "")
+            matchups = entry.setdefault("Matchups", {})
+            mu = matchups.setdefault(matchup, {"Wins": 0, "Losses": 0, "Games": []})
+            mu.setdefault("Games", [])
+
+            for existing in mu["Games"]:
+                if self._game_identity(existing) == target_id:
+                    existing.update(game)
+                    self.save(data)
+                    return False
+
+            if result == "Victory":
+                mu["Wins"] = int(mu.get("Wins", 0)) + 1
+            elif result == "Defeat":
+                mu["Losses"] = int(mu.get("Losses", 0)) + 1
+            mu["Games"].append(game)
             self.save(data)
             return True
 
@@ -436,23 +537,17 @@ class DataStore:
         analyzer_game.setdefault("opp_pulse_id", pulse_id)
         self.analyzer.add_game(my_build, analyzer_game)
 
-        if not self.black_book.update_latest_game(
-            pulse_id, matchup,
-            patch={
-                "opp_strategy": opp_strategy,
-                "my_build": my_build,
-                "build_log": black_book_game.get("build_log", []),
-                "Duration": black_book_game.get("Duration"),
-            },
-        ):
-            self.black_book.append_game(
-                pulse_id=pulse_id,
-                opp_name=opp_name,
-                opp_race_initial=opp_race_initial,
-                matchup=matchup,
-                game=black_book_game,
-                result=result,
-            )
+        # Identity-aware upsert: find-or-append by (Date, Map, Result).
+        # Replaces the legacy patch-Games[-1] flow that lost rematch
+        # records for opponents without a Pulse-resolved character id.
+        self.black_book.upsert_game(
+            pulse_id=pulse_id,
+            opp_name=opp_name,
+            opp_race_initial=opp_race_initial,
+            matchup=matchup,
+            game=black_book_game,
+            result=result,
+        )
 
 
 # =========================================================

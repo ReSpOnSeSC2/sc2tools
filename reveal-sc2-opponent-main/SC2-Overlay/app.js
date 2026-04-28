@@ -757,6 +757,18 @@
     socket.on('session_state', renderSession);
     renderSession({ wins: 0, losses: 0, mmrDelta: 0, durationText: '0m', currentStreak: {} });
 
+    // Stage 6.2: live update of #opp-mmr when the OCR scanner gets
+    // a fresh opponent MMR from the loading screen AFTER the
+    // opponent widget is already on screen. Avoids overwriting an
+    // explicit Pulse-fed value with an empty payload.
+    socket.on('opponentMmrUpdate', (payload) => {
+        if (!payload || !Number.isFinite(payload.mmr)) return;
+        const mmrEl = els.opponent && els.opponent.mmr;
+        if (!mmrEl) return;
+        safeText(mmrEl, `${payload.mmr} MMR`);
+    });
+
+
     setInterval(() => {
         fetch(`${SERVER_URL}/api/session`).then(r => r.ok ? r.json() : null)
             .then(s => s && renderSession(s))

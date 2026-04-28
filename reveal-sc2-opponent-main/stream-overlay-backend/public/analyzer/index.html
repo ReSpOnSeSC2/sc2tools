@@ -3720,7 +3720,12 @@
               const bd = j && j.macro_breakdown;
               const hasSamples = bd && Array.isArray(bd.stats_events)
                 && bd.stats_events.length > 0;
-              if (bd && !hasSamples) {
+              // Stage 6.2.1: also auto-recompute when there's no stored
+              // macro_score yet -- the modal was likely opened from a
+              // table dash cell to do exactly this.
+              const hasScore = typeof j.macro_score === "number";
+              const needsRecompute = !hasScore || (bd && !hasSamples);
+              if (needsRecompute) {
                 setRecomputing(true);
                 fetch(`${API}/games/${encodeURIComponent(gameId)}/macro-breakdown`, {
                   method: "POST",
@@ -4840,8 +4845,32 @@
                         {g.my_build || "—"}
                       </td>
                       <td className="py-1 px-2 text-right">
-                        {macro == null ? (
-                          <span className="font-semibold tabular-nums text-neutral-500">
+                        {macro == null && expandable ? (
+                          // Stage 6.2.1: a missing macro score is still
+                          // actionable for real-id rows -- clicking opens
+                          // the detail modal which auto-recomputes from
+                          // the replay file. We pass macroValue=null so
+                          // MacroBreakdownPanel can detect the no-score
+                          // state and kick the recompute itself.
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setModalGame({
+                                game: g,
+                                gameId: id,
+                                macroValue: null,
+                              });
+                            }}
+                            className="font-semibold tabular-nums text-neutral-500 underline decoration-dotted underline-offset-2 hover:text-neutral-300"
+                            title="No macro score yet -- click to recompute from the replay file."
+                          >
+                            —
+                          </button>
+                        ) : macro == null ? (
+                          <span
+                            className="font-semibold tabular-nums text-neutral-500"
+                            title="Replay metadata missing - run the analyzer on this replay to enable click-through."
+                          >
                             —
                           </span>
                         ) : expandable ? (

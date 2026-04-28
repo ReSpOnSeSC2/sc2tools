@@ -186,6 +186,10 @@ function defaultSession() {
         losses: 0,
         mmrStart: null,
         mmrCurrent: null,
+        // Stage 6.2: most-recent OPPONENT MMR seen by the dual-zone
+        // OCR scanner. Reset to null at session start; overwritten
+        // each loading-screen OCR. Frontend decides when to render.
+        mmrOpponent: null,
         // Cumulative MMR change for the session. Tracked as a
         // first-class field so we can keep accruing per-game estimates
         // even when the replay file doesn't carry a usable MMR. Real
@@ -315,6 +319,7 @@ function sessionSnapshot() {
         // (Pulse/replay anchors) or only a configured estimate.
         mmrDeltaReal: hasRealAnchors,
         mmrCurrent: session.mmrCurrent,
+        mmrOpponent: session.mmrOpponent,
         league: mmrToLeague(session.mmrCurrent),
         durationText: h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`,
         currentStreak: { ...session.currentStreak },
@@ -1510,10 +1515,17 @@ fs.watchFile(OPPONENT_FILE_PATH, { interval: 1000 }, () => {
         // widget can show "Z 2840 MMR | 5W-3L (62%)" in one line.
         const rematch = oppName ? buildRematchSummary(oppName) : null;
 
+        // Stage 6.2: when the opponent text file doesn't carry an
+        // MMR (SC2Pulse miss / unranked opponent), fall back to the
+        // OCR'd loading-screen MMR captured by the dual-zone scanner
+        // and stored on session.mmrOpponent.
+        const opponentMmrForEmit = Number.isFinite(oppMmr)
+            ? oppMmr
+            : (Number.isFinite(session.mmrOpponent) ? session.mmrOpponent : null);
         emitEvent('opponentDetected', {
             text: raw,
             opponent: oppName,
-            mmr: oppMmr,
+            mmr: opponentMmrForEmit,
             race: oppRace || (rematch && rematch.race) || null,
             record: rematch ? {
                 wins: rematch.wins,
@@ -1549,11 +1561,12 @@ fs.watchFile(OPPONENT_FILE_PATH, { interval: 1000 }, () => {
         // into one big card. The individual events above still fire for
         // back-compat with old overlay clients, but the new overlay can
         // ignore them in favor of this single coherent payload.
-        if (rematch || fav || cheese || rival || oppRace || Number.isFinite(oppMmr)) {
+        if (rematch || fav || cheese || rival || oppRace
+            || Number.isFinite(opponentMmrForEmit)) {
             emitEvent('scoutingReport', {
                 opponent: rematch?.opponent || fav?.opponent || rival?.opponent || oppName,
                 race: oppRace || rematch?.race || rival?.race || null,
-                mmr: Number.isFinite(oppMmr) ? oppMmr : null,
+                mmr: opponentMmrForEmit,
                 record: rematch ? {
                     wins: rematch.wins,
                     losses: rematch.losses,
@@ -1596,10 +1609,34 @@ fs.watchFile(OPPONENT_FILE_PATH, { interval: 1000 }, () => {
 });
 
 // ------------------------------------------------------------------
-// MMR SCANNER WATCHER (updates current MMR from OCR)
+// MMR SCANNER WATCHER (updates current MMR + opp MMR from OCR)
 // ------------------------------------------------------------------
+// Stage 6.2: keeps BOTH numbers. The closest to last-known mmrCurrent
+// is treated as `mine`; whatever's left is the opponent's MMR. With
+// only one number (single-zone OCR hit) we update `mine` and leave
+// mmrOpponent untouched so a stale-but-known opponent doesn't get
+// stomped by a new game's half-read loading screen.
+const SCANNED_MMR_POLL_INTERVAL_MS = 1500;
+const MMR_SCAN_MIN = 1000;
+const MMR_SCAN_MAX = 8000;
+
+function pickMineAndOpp(numbers, prevMine) {
+    if (numbers.length === 0) return { mine: null, opp: null };
+    if (numbers.length === 1) return { mine: numbers[0], opp: null };
+    const reference = Number.isFinite(prevMine) ? prevMine : numbers[0];
+    let mineIdx = 0;
+    let bestDist = Math.abs(numbers[0] - reference);
+    for (let i = 1; i < numbers.length; i++) {
+        const d = Math.abs(numbers[i] - reference);
+        if (d < bestDist) { bestDist = d; mineIdx = i; }
+    }
+    const mine = numbers[mineIdx];
+    const others = numbers.filter((_, i) => i !== mineIdx);
+    return { mine, opp: others[0] };
+}
+
 let lastScannedMmr = '';
-fs.watchFile(SCANNED_MMR_PATH, { interval: 1500 }, () => {
+fs.watchFile(SCANNED_MMR_PATH, { interval: SCANNED_MMR_POLL_INTERVAL_MS }, () => {
     try {
         if (!fs.existsSync(SCANNED_MMR_PATH)) return;
         const raw = fs.readFileSync(SCANNED_MMR_PATH, 'utf8').trim();
@@ -1608,23 +1645,28 @@ fs.watchFile(SCANNED_MMR_PATH, { interval: 1500 }, () => {
 
         const numbers = raw.split(',')
             .map(s => parseInt(s.trim(), 10))
-            .filter(n => Number.isFinite(n) && n >= 1000 && n <= 8000);
+            .filter(n => Number.isFinite(n) && n >= MMR_SCAN_MIN && n <= MMR_SCAN_MAX);
         if (numbers.length === 0) return;
 
-        let mine;
-        if (Number.isFinite(session.mmrCurrent)) {
-            mine = numbers.reduce((best, n) =>
-                Math.abs(n - session.mmrCurrent) < Math.abs(best - session.mmrCurrent) ? n : best,
-                numbers[0]);
-        } else {
-            mine = numbers[0];
-        }
+        const { mine, opp } = pickMineAndOpp(numbers, session.mmrCurrent);
+        if (mine == null) return;
 
         if (session.mmrStart == null) session.mmrStart = mine;
         session.mmrCurrent = mine;
+        const oppChanged = (opp != null && opp !== session.mmrOpponent);
+        if (opp != null) session.mmrOpponent = opp;
         saveSession();
         broadcastSession();
-        console.log(`[Scanner] MMR updated from OCR: ${mine} (all=${raw})`);
+        if (oppChanged) {
+            // Lets an already-visible opponent widget refresh
+            // #opp-mmr without waiting for the opponent file watcher.
+            io.emit('opponentMmrUpdate', { mmr: opp });
+        }
+        console.log(
+            `[Scanner] MMR updated from OCR: mine=${mine}` +
+            (opp != null ? ` opp=${opp}` : ' opp=<single-zone>') +
+            ` (raw=${raw})`,
+        );
     } catch (err) {
         console.error('[Scanner] MMR watcher error:', err.message);
     }
