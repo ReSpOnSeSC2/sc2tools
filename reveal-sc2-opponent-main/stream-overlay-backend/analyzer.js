@@ -1956,6 +1956,396 @@ router.get('/macro/backfill/status', (_req, res) => {
     res.json({ ok: true, ...MACRO_STATE, proc: undefined });
 });
 
+// --------------------------------------------------------------
+// BULK HISTORICAL IMPORT
+// --------------------------------------------------------------
+// Imports historical .SC2Replay files in parallel via
+// scripts/bulk_import_cli.py. Streams per-replay progress over
+// Socket.io. Resumable via on-disk import_state.json.
+//
+// Endpoints (mounted under /api/analyzer):
+//   POST /import/scan    -> count candidates without parsing
+//   POST /import/start   -> kick off import, returns immediately
+//   GET  /import/status  -> current job state
+//   POST /import/cancel  -> SIGTERM the worker (state is checkpointed)
+const IMPORT_STATE_PATH = path.join(DATA_DIR, 'import_state.json');
+const IMPORT_DEFAULT_WORKER_CAP = 8;
+const IMPORT_VALID_DATE_RE = /^\d{4}-\d{2}-\d{2}(T[\d:.\-+Z]+)?$/;
+
+const IMPORT_STATE = {
+    running: false,
+    phase: 'idle',
+    folder: '',
+    total: 0,
+    completed: 0,
+    errors: 0,
+    workers: 0,
+    startedAt: null,
+    finishedAt: null,
+    lastMessage: '',
+    // Set by the CLI's final {result:...} record so the SPA can
+    // explain WHY replays failed (player_not_found, no_opponent,
+    // parse_failed, worker_crash, ...). Reset on every start.
+    errorBreakdown: null,
+    errorSamples: null,
+    proc: null,
+};
+
+function _importSafePathBaseName(p) {
+    if (!p) return '';
+    return path.basename(String(p));
+}
+
+function _importValidateDate(s) {
+    if (!s) return true;
+    return typeof s === 'string' && IMPORT_VALID_DATE_RE.test(s);
+}
+
+function _importValidateBody(body) {
+    if (!body || typeof body !== 'object') {
+        return 'invalid body';
+    }
+    if (!body.folder || typeof body.folder !== 'string') {
+        return 'folder is required';
+    }
+    if (!fs.existsSync(body.folder)) {
+        return 'folder not found on disk';
+    }
+    if (!_importValidateDate(body.since_iso)) {
+        return 'since_iso must be YYYY-MM-DD';
+    }
+    if (!_importValidateDate(body.until_iso)) {
+        return 'until_iso must be YYYY-MM-DD';
+    }
+    if (body.workers != null && (
+        typeof body.workers !== 'number'
+        || !Number.isInteger(body.workers)
+        || body.workers < 0)) {
+        return 'workers must be a non-negative integer';
+    }
+    return null;
+}
+
+function _importBuildArgs(subcmd, body) {
+    const args = ['scripts/bulk_import_cli.py', subcmd,
+                  '--folder', body.folder];
+    if (subcmd === 'scan') {
+        // Give scan access to the meta DB so it can split the count
+        // into new vs already-imported.
+        args.push('--db', META_DB_PATH);
+    }
+    if (subcmd === 'import') {
+        // Resolve player names: prefer body.players (array, multi-name),
+        // fall back to body.player (legacy single string), fall back to
+        // the configured default. Empty list = error.
+        let playerNames = [];
+        if (Array.isArray(body.players)) {
+            playerNames = body.players
+                .filter((n) => typeof n === 'string')
+                .map((n) => n.trim())
+                .filter(Boolean);
+        } else if (body.player && typeof body.player === 'string') {
+            playerNames = [body.player.trim()].filter(Boolean);
+        }
+        if (playerNames.length === 0) {
+            const fallback = getDefaultPlayerName();
+            if (fallback) playerNames = [fallback];
+        }
+        if (playerNames.length === 0) {
+            return { error: 'no player names; configure profile.json '
+                            + 'or pick at least one identity in the panel' };
+        }
+        // Optional character_ids (parallel array) for unambiguous
+        // matching by toon_handle. Empty strings = name-only match.
+        const characterIds = Array.isArray(body.character_ids)
+            ? body.character_ids.map((c) => typeof c === 'string'
+                ? c.trim() : '')
+            : [];
+        for (let idx = 0; idx < playerNames.length; idx += 1) {
+            args.push('--players', playerNames[idx]);
+            args.push('--character-ids',
+                idx < characterIds.length ? characterIds[idx] : '');
+        }
+        args.push('--state-path', IMPORT_STATE_PATH);
+        args.push('--db', META_DB_PATH);
+        if (body.workers != null) {
+            args.push('--workers', String(body.workers));
+        }
+        if (body.resume) args.push('--resume');
+        if (body.limit && Number.isInteger(body.limit) && body.limit > 0) {
+            args.push('--limit', String(body.limit));
+        }
+    }
+    if (body.since_iso) args.push('--since-iso', body.since_iso);
+    if (body.until_iso) args.push('--until-iso', body.until_iso);
+    return { args };
+}
+
+router.post('/import/scan', (req, res) => {
+    const validation = _importValidateBody(req.body || {});
+    if (validation) return res.status(400).json({ ok: false, error: validation });
+    const projDir = pythonProjectDirOrErr();
+    if (projDir.error) return res.status(500).json({ ok: false, error: projDir.error });
+    const built = _importBuildArgs('scan', req.body);
+    if (built.error) return res.status(400).json({ ok: false, error: built.error });
+    const py = pickPythonExe();
+    const proc = spawn(py, built.args, {
+        cwd: projDir.dir, env: mlEnv(), windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (b) => { stdout += b.toString('utf8'); });
+    proc.stderr.on('data', (b) => { stderr += b.toString('utf8'); });
+    proc.on('error', (err) => {
+        res.status(500).json({ ok: false, error: String(err.message || err) });
+    });
+    proc.on('close', (code) => {
+        const records = stdout.split('\n').map(l => l.trim()).filter(Boolean)
+            .map(l => { try { return JSON.parse(l); } catch (_) { return null; } })
+            .filter(Boolean);
+        const r = records.find(x => x && x.ok != null);
+        if (!r) {
+            return res.status(500).json({
+                ok: false, error: stderr.trim() || `scan exit ${code}`,
+            });
+        }
+        res.json(r);
+    });
+});
+
+router.post('/import/start', (req, res) => {
+    if (IMPORT_STATE.running) {
+        return res.status(409).json({ ok: false, error: 'import already running' });
+    }
+    const validation = _importValidateBody(req.body || {});
+    if (validation) return res.status(400).json({ ok: false, error: validation });
+    const projDir = pythonProjectDirOrErr();
+    if (projDir.error) return res.status(500).json({ ok: false, error: projDir.error });
+    const built = _importBuildArgs('import', req.body);
+    if (built.error) return res.status(400).json({ ok: false, error: built.error });
+    const py = pickPythonExe();
+    IMPORT_STATE.running = true;
+    IMPORT_STATE.phase = 'starting';
+    IMPORT_STATE.folder = req.body.folder;
+    IMPORT_STATE.total = 0;
+    IMPORT_STATE.completed = 0;
+    IMPORT_STATE.errors = 0;
+    IMPORT_STATE.workers = req.body.workers || 0;
+    IMPORT_STATE.lastMessage = '';
+    IMPORT_STATE.errorBreakdown = null;
+    IMPORT_STATE.errorSamples = null;
+    IMPORT_STATE.startedAt = new Date().toISOString();
+    IMPORT_STATE.finishedAt = null;
+
+    const proc = spawn(py, built.args, {
+        cwd: projDir.dir, env: mlEnv(), windowsHide: true,
+    });
+    IMPORT_STATE.proc = proc;
+    let buf = '';
+    proc.stdout.on('data', (b) => {
+        buf += b.toString('utf8');
+        let nl;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (!line) continue;
+            let rec;
+            try { rec = JSON.parse(line); } catch (_) { continue; }
+            _importHandleRecord(rec);
+        }
+    });
+    proc.stderr.on('data', (_b) => { /* swallow; CLI writes JSON to stdout */ });
+    proc.on('close', (code) => {
+        IMPORT_STATE.running = false;
+        IMPORT_STATE.phase = code === 0 ? 'complete'
+            : code === 130 ? 'cancelled' : 'error';
+        IMPORT_STATE.finishedAt = new Date().toISOString();
+        IMPORT_STATE.proc = null;
+        try { _busterMetaCache(); } catch (_) { /* best-effort */ }
+        if (_ioRef) {
+            _ioRef.emit('analyzer_db_changed', { source: 'bulk_import' });
+        }
+    });
+    res.json({ ok: true, started: true });
+});
+
+function _importHandleRecord(rec) {
+    if (!rec || typeof rec !== 'object') return;
+    if (rec.start) {
+        IMPORT_STATE.phase = 'running';
+        IMPORT_STATE.total = Number(rec.start.total) || 0;
+        IMPORT_STATE.workers = Number(rec.start.workers) || IMPORT_STATE.workers;
+        return;
+    }
+    if (rec.progress) {
+        const p = rec.progress;
+        IMPORT_STATE.completed = Math.max(IMPORT_STATE.completed,
+            Number(p.i) || 0);
+        if (p.ok === false) IMPORT_STATE.errors += 1;
+        // Sanitize last message: keep only base filename, drop full path.
+        IMPORT_STATE.lastMessage = `${p.i}/${p.total} ${
+            _importSafePathBaseName(p.file)} ${p.ok ? 'ok' : 'error'}`;
+        if (_ioRef) {
+            _ioRef.emit('import_progress', {
+                i: p.i, total: p.total, ok: !!p.ok,
+                build: p.build || '', message: p.message || '',
+            });
+        }
+        return;
+    }
+    if (rec.result) {
+        IMPORT_STATE.phase = rec.result.cancelled ? 'cancelled' : 'complete';
+        if (rec.result.error_breakdown) {
+            IMPORT_STATE.errorBreakdown = rec.result.error_breakdown;
+        }
+        if (rec.result.error_samples) {
+            IMPORT_STATE.errorSamples = rec.result.error_samples;
+        }
+        return;
+    }
+}
+
+function _busterMetaCache() {
+    if (typeof bustCache === 'function') {
+        try { bustCache('meta'); } catch (_) { /* best-effort */ }
+    }
+}
+
+router.get('/import/status', (_req, res) => {
+    const persisted = (function () {
+        try {
+            if (!fs.existsSync(IMPORT_STATE_PATH)) return null;
+            return JSON.parse(fs.readFileSync(IMPORT_STATE_PATH, 'utf8'));
+        } catch (_) { return null; }
+    })();
+    res.json({
+        ok: true,
+        running: IMPORT_STATE.running,
+        phase: IMPORT_STATE.phase,
+        folder: IMPORT_STATE.folder,
+        total: IMPORT_STATE.total,
+        completed: IMPORT_STATE.completed,
+        errors: IMPORT_STATE.errors,
+        workers: IMPORT_STATE.workers,
+        startedAt: IMPORT_STATE.startedAt,
+        finishedAt: IMPORT_STATE.finishedAt,
+        lastMessage: IMPORT_STATE.lastMessage,
+        error_breakdown: IMPORT_STATE.errorBreakdown,
+        error_samples: IMPORT_STATE.errorSamples,
+        // Disk-checkpointed state lets the SPA detect interrupted jobs
+        // (e.g., server killed mid-import). UI can offer "Resume".
+        persisted,
+    });
+});
+
+router.post('/import/cancel', (_req, res) => {
+    if (!IMPORT_STATE.running || !IMPORT_STATE.proc) {
+        return res.status(409).json({ ok: false, error: 'no import running' });
+    }
+    try {
+        IMPORT_STATE.proc.kill('SIGTERM');
+        IMPORT_STATE.phase = 'cancelling';
+        return res.json({ ok: true, cancelling: true });
+    } catch (err) {
+        return res.status(500).json({
+            ok: false, error: String(err.message || err),
+        });
+    }
+});
+
+
+router.post('/import/extract-identities', (req, res) => {
+    // Walks a folder of replays at minimum sc2reader load level and
+    // returns every unique (name, character_id, region) tuple seen.
+    // Used by the SPA's "Discover identities from this folder" flow.
+    const validation = _importValidateBody(req.body || {});
+    if (validation) return res.status(400).json({ ok: false, error: validation });
+    const projDir = pythonProjectDirOrErr();
+    if (projDir.error) return res.status(500).json({ ok: false, error: projDir.error });
+    const py = pickPythonExe();
+    const args = ['scripts/bulk_import_cli.py', 'extract-identities',
+                  '--folder', req.body.folder];
+    if (req.body.since_iso) args.push('--since-iso', req.body.since_iso);
+    if (req.body.until_iso) args.push('--until-iso', req.body.until_iso);
+    if (req.body.workers != null) args.push('--workers', String(req.body.workers));
+    if (req.body.limit && Number.isInteger(req.body.limit) && req.body.limit > 0) {
+        args.push('--limit', String(req.body.limit));
+    }
+    const proc = spawn(py, args, {
+        cwd: projDir.dir, env: mlEnv(), windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (b) => { stdout += b.toString('utf8'); });
+    proc.stderr.on('data', (b) => { stderr += b.toString('utf8'); });
+    proc.on('error', (err) => {
+        res.status(500).json({ ok: false, error: String(err.message || err) });
+    });
+    proc.on('close', (code) => {
+        const records = stdout.split('\n').map(l => l.trim()).filter(Boolean)
+            .map(l => { try { return JSON.parse(l); } catch (_) { return null; } })
+            .filter(Boolean);
+        const r = records.find(x => x && x.ok != null);
+        if (!r) {
+            return res.status(500).json({
+                ok: false,
+                error: stderr.trim() || `extract-identities exit ${code}`,
+            });
+        }
+        res.json(r);
+    });
+});
+
+router.get('/import/cores', (_req, res) => {
+    const cores = require('os').cpus().length || 1;
+    res.json({
+        ok: true,
+        cores,
+        recommended: Math.min(IMPORT_DEFAULT_WORKER_CAP, cores),
+    });
+});
+
+router.post('/import/pick-folder', (req, res) => {
+    // Spawns scripts/folder_picker_cli.py which opens a native Tk
+    // folder dialog on the user's actual screen (server is localhost,
+    // so the dialog appears in front of the user). Returns the chosen
+    // absolute path, or {cancelled:true} if dismissed.
+    const projDir = pythonProjectDirOrErr();
+    if (projDir.error) return res.status(500).json({ ok: false, error: projDir.error });
+    const initial = (req.body && typeof req.body.initial_dir === 'string')
+        ? req.body.initial_dir : '';
+    const title = (req.body && typeof req.body.title === 'string')
+        ? req.body.title : 'Select folder to import from';
+    const py = pickPythonExe();
+    const args = ['scripts/folder_picker_cli.py'];
+    if (initial) { args.push('--initial-dir', initial); }
+    if (title) { args.push('--title', title); }
+    const proc = spawn(py, args, {
+        cwd: projDir.dir, env: mlEnv(), windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (b) => { stdout += b.toString('utf8'); });
+    proc.stderr.on('data', (b) => { stderr += b.toString('utf8'); });
+    proc.on('error', (err) => {
+        res.status(500).json({ ok: false, error: String(err.message || err) });
+    });
+    proc.on('close', (code) => {
+        const records = stdout.split('\n').map(l => l.trim()).filter(Boolean)
+            .map(l => { try { return JSON.parse(l); } catch (_) { return null; } })
+            .filter(Boolean);
+        const r = records.find(x => x && x.ok != null);
+        if (!r) {
+            return res.status(500).json({
+                ok: false, error: stderr.trim() || `picker exit ${code}`,
+            });
+        }
+        res.json(r);
+    });
+});
+
+
+
 // ----- Build/strategy DEFINITIONS (read-only catalog used by the SPA's
 // Definitions tab). Source of truth lives in the Python project at
 // detectors/definitions.py; we mirror it as data/build_definitions.json

@@ -49,27 +49,59 @@ def load_replay_with_fallback(file_path: str):
         return sc2reader.load_replay(file_path, load_level=3)
 
 
+def _bulk_is_me(player_name_in_replay: str, my_handle: str) -> bool:
+    """Substring match (case-insensitive). Tolerates clan tags like
+    "[CLAN] ReSpOnSe" and minor display-name variants. Mirrors the
+    same is_me() helper used by core.sc2_replay_parser, so the bulk
+    importer matches whatever the live watcher already accepts.
+    """
+    if not player_name_in_replay or not my_handle:
+        return False
+    return my_handle.lower() in player_name_in_replay.lower()
+
+
 def process_replay_task(file_path: str, player_name: str) -> dict:
     """Worker entry point - parses one replay end-to-end.
 
     Returns a status dict the parent process unpacks into the database.
     Must remain pickleable: keep module-level callable, no closures.
+
+    Player matching uses substring (case-insensitive) so clan-tagged
+    names like "[CLAN] ReSpOnSe" still resolve. Older replays where
+    the user had a different display name will still fail; the
+    returned error gives a hint of all observed names so the user
+    can update profile.json or skip the file.
     """
     try:
         try:
             replay = load_replay_with_fallback(file_path)
         except Exception as e2:
-            return {'status': 'error', 'file_path': file_path, 'error': f"Parse error: {e2}"}
+            return {'status': 'error', 'reason': 'parse_failed',
+                    'file_path': file_path,
+                    'error': f"Parse error: {e2}"}
 
-        me, opponent = None, None
-        for p in replay.players:
-            if p.name == player_name:
-                me = p
-            else:
-                opponent = p
-
-        if not me or not opponent:
-            return {'status': 'error', 'file_path': file_path, 'error': f"Player '{player_name}' not found."}
+        # Drop observers/referees so they never get picked as opponent.
+        humans = [p for p in replay.players
+                  if not getattr(p, "is_observer", False)
+                  and not getattr(p, "is_referee", False)]
+        me = next(
+            (p for p in humans
+             if _bulk_is_me(getattr(p, "name", "") or "", player_name)),
+            None,
+        )
+        if me is None:
+            seen_names = ", ".join(sorted({
+                (getattr(p, "name", "") or "?") for p in humans})) or "?"
+            return {'status': 'error', 'reason': 'player_not_found',
+                    'file_path': file_path,
+                    'error': f"Player '{player_name}' not in replay "
+                             f"(saw: {seen_names}).",
+                    'observed_names': seen_names}
+        opponent = next((p for p in humans if p is not me), None)
+        if opponent is None:
+            return {'status': 'error', 'reason': 'no_opponent',
+                    'file_path': file_path,
+                    'error': "Replay has no opponent (vs AI / solo)."}
 
         date_str = replay.date.isoformat() if replay.date else 'unknown'
         length_sec = getattr(replay, 'game_length', None).seconds if getattr(replay, 'game_length', None) else 0
