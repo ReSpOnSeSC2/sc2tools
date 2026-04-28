@@ -9,7 +9,7 @@ downstream feature extraction.
 """
 
 import sys
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
     from sc2reader.events.tracker import (
@@ -383,6 +383,73 @@ def _resolve_unit_id(event) -> Optional[int]:
     return getattr(event, "unit_id", None)
 
 
+def _resolve_target_unit_id(event) -> int:
+    """Return the target unit id for a TargetUnitCommandEvent, else 0.
+
+    Chrono Boost CommandEvents target a specific Protoss building.
+    sc2reader exposes this as ``target_unit_id`` on
+    TargetUnitCommandEvent. Returns 0 when the field is missing or
+    the event type does not carry a target (TargetPointCommandEvent,
+    BasicCommandEvent), so callers can use truthiness to detect
+    "no attribution available".
+
+    Example:
+        >>> e = type("E", (), {"target_unit_id": 1234})()
+        >>> _resolve_target_unit_id(e)
+        1234
+    """
+    raw = getattr(event, "target_unit_id", None)
+    if raw is None:
+        return 0
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _build_chrono_targets(
+    ability_events: List[Dict[str, Any]],
+    name_by_uid: Dict[int, str],
+) -> List[Dict[str, Any]]:
+    """Aggregate chrono casts into a [{building_name, count}] list.
+
+    Walks every ability_event tagged ``category == "chrono"``, looks
+    up its ``target_unit_id`` in ``name_by_uid`` (which maps every
+    building seen for my_pid to its canonical name, including
+    in-progress and morphed forms), and bins the count under that
+    name. Targets that cannot be resolved bucket as ``"Unknown"`` —
+    we never invent a name. The returned list is sorted by count
+    desc, then name asc, so the SPA renders in a stable order.
+
+    Example:
+        >>> events = [
+        ...     {"category": "chrono", "target_unit_id": 10},
+        ...     {"category": "chrono", "target_unit_id": 10},
+        ...     {"category": "chrono", "target_unit_id": 0},
+        ...     {"category": "inject", "target_unit_id": 99},
+        ... ]
+        >>> _build_chrono_targets(events, {10: "Nexus"})
+        [{'building_name': 'Nexus', 'count': 2}, {'building_name': 'Unknown', 'count': 1}]
+    """
+    counts: Dict[str, int] = {}
+    for ev in ability_events:
+        if ev.get("category") != "chrono":
+            continue
+        uid_raw = ev.get("target_unit_id")
+        try:
+            uid = int(uid_raw) if uid_raw is not None else 0
+        except (TypeError, ValueError):
+            uid = 0
+        name = name_by_uid.get(uid) if uid else None
+        if not name:
+            name = "Unknown"
+        counts[name] = counts.get(name, 0) + 1
+    return [
+        {"building_name": n, "count": c}
+        for n, c in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
+
+
 def _resolve_command_pid(event) -> Optional[int]:
     """Return the player slot id (1-indexed) that *issued* a game/command event.
 
@@ -559,6 +626,13 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
 
     # Track building lifetimes by unit_id so morphs are followed naturally.
     lifetimes: Dict[int, Dict] = {}
+    # building_name_by_uid mirrors lifetimes for chrono target
+    # naming: it captures the canonical name of EVERY building seen
+    # for my_pid (including in-progress targets that have not fired
+    # UnitDoneEvent yet, since chrono on a partially-built tech
+    # structure is a common opener). Morphs (Lair, Hive, etc.) are
+    # followed by overwriting on UnitTypeChangeEvent.
+    building_name_by_uid: Dict[int, str] = {}
 
     tracker = getattr(replay, "tracker_events", None) or []
     try:
@@ -630,6 +704,11 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     if pid != my_pid:
                         continue
                     if clean in KNOWN_BUILDINGS:
+                        # Always remember the name → unit_id mapping,
+                        # even on Init/Born events that precede
+                        # completion. Powers chrono target lookup.
+                        if uid is not None:
+                            building_name_by_uid[uid] = clean
                         # For Zerg, UnitBornEvent IS completion (drone morph).
                         # For Protoss/Terran, UnitDoneEvent is completion.
                         # We accept whichever fires first as the operational
@@ -669,6 +748,12 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     if (pid == my_pid and uid in lifetimes
                             and clean in KNOWN_BUILDINGS):
                         lifetimes[uid]["name"] = clean
+                    # Mirror name into the chrono lookup so a
+                    # chrono on (e.g.) a Hatchery-becoming-Lair
+                    # records under "Lair" once the morph fires.
+                    if (pid == my_pid and clean in KNOWN_BUILDINGS
+                            and uid is not None):
+                        building_name_by_uid[uid] = clean
                     # Units: morphs (Hellion->Hellbat, Roach->Ravager, etc.)
                     # need to follow for either side so the timeline shows
                     # the correct unit type post-morph. Beacons and
@@ -729,6 +814,14 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     # CommandEvent that player issued. Reset to None whenever they issue a
     # non-macro command so a chained state event doesn't get misattributed.
     last_bucket_per_pid: Dict[int, Optional[str]] = {}
+    # last_chrono_target_per_pid runs in lock-step with
+    # last_bucket_per_pid, exactly as the inject-target tracking
+    # works in the missed-injects pattern: when the head
+    # CommandEvent of a chrono chain has target_unit_id N, every
+    # subsequent CommandManagerStateEvent re-execution attaches
+    # to the same target. Cleared whenever the player issues a
+    # non-chrono macro cast or any non-macro CommandEvent.
+    last_chrono_target_per_pid: Dict[int, int] = {}
     try:
         for event in game_events:
             try:
@@ -743,12 +836,16 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     if (getattr(event, "state", None) == 1
                             and last_bucket_per_pid.get(pid)):
                         bucket = last_bucket_per_pid[pid]
-                        out["ability_events"].append({
+                        record = {
                             "ability_name": bucket,
                             "category": bucket,
                             "time": int(getattr(event, "second", 0)),
                             "via": "state_event",
-                        })
+                        }
+                        if bucket == "chrono":
+                            record["target_unit_id"] = (
+                                last_chrono_target_per_pid.get(pid, 0))
+                        out["ability_events"].append(record)
                         out["ability_counts"][bucket] += 1
                     continue
                 # Anything that isn't a CommandEvent shouldn't reset the
@@ -767,18 +864,35 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     # Non-macro CommandEvent: forget the previous macro
                     # chain so subsequent state events don't attach to it.
                     last_bucket_per_pid[pid] = None
+                    last_chrono_target_per_pid.pop(pid, None)
                     continue
                 last_bucket_per_pid[pid] = bucket
-                out["ability_events"].append({
+                record = {
                     "ability_name": _normalize_ability_name(event) or bucket,
                     "category": bucket,
                     "time": int(getattr(event, "second", 0)),
-                })
+                }
+                if bucket == "chrono":
+                    target = _resolve_target_unit_id(event)
+                    record["target_unit_id"] = target
+                    if target:
+                        last_chrono_target_per_pid[pid] = target
+                    else:
+                        last_chrono_target_per_pid.pop(pid, None)
+                else:
+                    last_chrono_target_per_pid.pop(pid, None)
+                out["ability_events"].append(record)
                 out["ability_counts"][bucket] += 1
             except Exception:
                 continue
     except Exception:
         pass
+
+    # Aggregate chrono casts by target building. Empty list on
+    # non-Protoss replays (no chrono casts → nothing to bucket);
+    # the SPA gates the donut on race + non-empty list.
+    out["chrono_targets"] = _build_chrono_targets(
+        out["ability_events"], building_name_by_uid)
 
     # Materialize lifetime records.
     for uid, info in lifetimes.items():

@@ -395,6 +395,14 @@ def compute_macro_score(
         race_penalty = _efficiency_penalty(actual, expected, CHRONO_MAX_PENALTY, grace_cycles=5)
         raw["chronos_actual"] = actual
         raw["chronos_expected"] = expected
+        # Chrono target distribution. extract_macro_events emits
+        # ``chrono_targets`` as [{building_name, count}] sorted by
+        # count desc; we forward it untouched into raw so the SPA
+        # can render the donut + table. Empty list when no chronos
+        # were cast or all targets are unresolved.
+        chrono_targets = macro_events.get("chrono_targets", [])
+        if isinstance(chrono_targets, list):
+            raw["chrono_targets"] = chrono_targets
         if race_penalty > 0:
             missed = max(0, expected - actual - 5)
             leaks.append(Leak(
