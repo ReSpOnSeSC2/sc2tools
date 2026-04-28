@@ -586,6 +586,14 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                             getattr(event, "minerals_collection_rate", 0),
                         "vespene_collection_rate":
                             getattr(event, "vespene_collection_rate", 0),
+                        # Pre-summed by sc2reader from
+                        # minerals_used_in_progress_{army,economy,technology}.
+                        # Drives the "Used in progress" line on the Resources
+                        # over time chart in the analyzer SPA.
+                        "minerals_used_in_progress":
+                            getattr(event, "minerals_used_in_progress", 0),
+                        "vespene_used_in_progress":
+                            getattr(event, "vespene_used_in_progress", 0),
                     }
                     if pid == my_pid:
                         out["stats_events"].append(sample)

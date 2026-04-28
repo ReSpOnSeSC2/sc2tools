@@ -1887,6 +1887,297 @@
         unknown: "bg-neutral-700/40 text-neutral-500",
       };
 
+      // =====================================================================
+      // Activity-over-time chart used inside BuildOrderTimeline.
+      //
+      // Two stacked area charts (APM above, SPM below), x-axis = game
+      // seconds, sourced from /games/:id/apm-curve. Both players are
+      // overlaid at 0.5 opacity, colored by race using the design-token
+      // accents (Protoss=amber, Zerg=purple, Terran=blue, fallback grey).
+      //
+      // Pure-SVG, no chart library. If the endpoint reports has_data=false
+      // (corrupt replay, no command/selection events) we render the
+      // "Activity data unavailable" notice instead of empty axes.
+      // =====================================================================
+      const ACTIVITY_RACE_COLOR = {
+        Protoss: "var(--color-race-protoss)",
+        Terran: "var(--color-race-terran)",
+        Zerg: "var(--color-race-zerg)",
+      };
+      const ACTIVITY_FALLBACK_COLOR = "var(--color-race-random)";
+      const ACTIVITY_VIEW_W = 800;
+      const ACTIVITY_VIEW_H = 140;
+      const ACTIVITY_PAD_LEFT = 36;
+      const ACTIVITY_PAD_RIGHT = 12;
+      const ACTIVITY_PAD_TOP = 8;
+      const ACTIVITY_PAD_BOTTOM = 22;
+      const ACTIVITY_AREA_OPACITY = 0.5;
+      const ACTIVITY_LINE_OPACITY = 0.9;
+      const ACTIVITY_X_TICK_SEC = 60;
+      const ACTIVITY_Y_TICK_FRACTIONS = [0, 0.5, 1];
+
+      function _activityFmtClock(totalSeconds) {
+        const s = Math.max(0, Math.floor(totalSeconds || 0));
+        const m = Math.floor(s / 60);
+        const ss = (s % 60).toString().padStart(2, "0");
+        return `${m}:${ss}`;
+      }
+
+      function _activityRaceColor(race) {
+        return ACTIVITY_RACE_COLOR[race] || ACTIVITY_FALLBACK_COLOR;
+      }
+
+      function _activityBuildAreaPath(values, plotW, plotH, padLeft, padTop, yMax) {
+        if (!values || values.length === 0 || yMax <= 0) return "";
+        const last = values.length - 1;
+        if (last === 0) return "";
+        const xAt = (i) => padLeft + (i / last) * plotW;
+        const yAt = (v) => padTop + plotH - (Math.min(v, yMax) / yMax) * plotH;
+        let d = `M ${xAt(0).toFixed(2)} ${(padTop + plotH).toFixed(2)}`;
+        for (let i = 0; i < values.length; i += 1) {
+          d += ` L ${xAt(i).toFixed(2)} ${yAt(values[i]).toFixed(2)}`;
+        }
+        d += ` L ${xAt(last).toFixed(2)} ${(padTop + plotH).toFixed(2)} Z`;
+        return d;
+      }
+
+      function _activityBuildLinePath(values, plotW, plotH, padLeft, padTop, yMax) {
+        if (!values || values.length === 0 || yMax <= 0) return "";
+        const last = values.length - 1;
+        if (last === 0) return "";
+        const xAt = (i) => padLeft + (i / last) * plotW;
+        const yAt = (v) => padTop + plotH - (Math.min(v, yMax) / yMax) * plotH;
+        let d = `M ${xAt(0).toFixed(2)} ${yAt(values[0]).toFixed(2)}`;
+        for (let i = 1; i < values.length; i += 1) {
+          d += ` L ${xAt(i).toFixed(2)} ${yAt(values[i]).toFixed(2)}`;
+        }
+        return d;
+      }
+
+      function _activityYAxisMax(playerSeries) {
+        let m = 0;
+        for (const series of playerSeries) {
+          for (const v of series || []) if (v > m) m = v;
+        }
+        if (m <= 0) return 100;
+        // Round up to a friendly tick (50, 100, 150, 200, 250, 300, 400, 600...).
+        const steps = [50, 100, 150, 200, 250, 300, 400, 500, 600, 800, 1000];
+        for (const s of steps) if (m <= s) return s;
+        return Math.ceil(m / 100) * 100;
+      }
+
+      function ActivityChartPanel({ title, players, valueKey, gameLengthSec }) {
+        const plotW = ACTIVITY_VIEW_W - ACTIVITY_PAD_LEFT - ACTIVITY_PAD_RIGHT;
+        const plotH = ACTIVITY_VIEW_H - ACTIVITY_PAD_TOP - ACTIVITY_PAD_BOTTOM;
+        const series = players.map((p) => p[valueKey] || []);
+        const yMax = _activityYAxisMax(series);
+        const xTicks = [];
+        const totalSec = gameLengthSec || 0;
+        for (let t = 0; t <= totalSec; t += ACTIVITY_X_TICK_SEC) xTicks.push(t);
+        return (
+          <div className="bg-base-900/40 rounded p-2">
+            <div className="flex items-center justify-between mb-1 px-1">
+              <div className="text-[11px] uppercase tracking-wide text-neutral-400">
+                {title}
+              </div>
+              <div className="flex items-center gap-3">
+                {players.map((p, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <span
+                      className="inline-block w-3 h-2 rounded-sm"
+                      style={{
+                        background: _activityRaceColor(p.race),
+                        opacity: ACTIVITY_AREA_OPACITY,
+                      }}
+                    />
+                    <span className="text-[10px] text-neutral-300">
+                      {p.name || `P${p.pid}`}
+                      {p.race ? ` (${p.race[0]})` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <svg
+              viewBox={`0 0 ${ACTIVITY_VIEW_W} ${ACTIVITY_VIEW_H}`}
+              preserveAspectRatio="none"
+              className="w-full h-[140px]"
+              role="img"
+              aria-label={`${title} chart`}
+            >
+              {ACTIVITY_Y_TICK_FRACTIONS.map((frac, i) => {
+                const y = ACTIVITY_PAD_TOP + plotH - frac * plotH;
+                const v = Math.round(yMax * frac);
+                return (
+                  <g key={`y${i}`}>
+                    <line
+                      x1={ACTIVITY_PAD_LEFT}
+                      y1={y}
+                      x2={ACTIVITY_VIEW_W - ACTIVITY_PAD_RIGHT}
+                      y2={y}
+                      stroke="var(--color-border-subtle)"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={ACTIVITY_PAD_LEFT - 4}
+                      y={y + 3}
+                      textAnchor="end"
+                      fontSize="9"
+                      fill="var(--color-text-secondary)"
+                    >
+                      {v}
+                    </text>
+                  </g>
+                );
+              })}
+              {xTicks.map((t, i) => {
+                const x = ACTIVITY_PAD_LEFT + (totalSec > 0 ? (t / totalSec) * plotW : 0);
+                return (
+                  <g key={`x${i}`}>
+                    <line
+                      x1={x}
+                      y1={ACTIVITY_PAD_TOP + plotH}
+                      x2={x}
+                      y2={ACTIVITY_PAD_TOP + plotH + 3}
+                      stroke="var(--color-text-secondary)"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={x}
+                      y={ACTIVITY_PAD_TOP + plotH + 14}
+                      textAnchor="middle"
+                      fontSize="9"
+                      fill="var(--color-text-secondary)"
+                    >
+                      {_activityFmtClock(t)}
+                    </text>
+                  </g>
+                );
+              })}
+              {players.map((p, i) => {
+                const color = _activityRaceColor(p.race);
+                const values = p[valueKey] || [];
+                const areaD = _activityBuildAreaPath(
+                  values, plotW, plotH,
+                  ACTIVITY_PAD_LEFT, ACTIVITY_PAD_TOP, yMax,
+                );
+                const lineD = _activityBuildLinePath(
+                  values, plotW, plotH,
+                  ACTIVITY_PAD_LEFT, ACTIVITY_PAD_TOP, yMax,
+                );
+                return (
+                  <g key={`p${i}`}>
+                    {areaD && (
+                      <path
+                        d={areaD}
+                        fill={color}
+                        opacity={ACTIVITY_AREA_OPACITY}
+                      />
+                    )}
+                    {lineD && (
+                      <path
+                        d={lineD}
+                        fill="none"
+                        stroke={color}
+                        strokeWidth="1.25"
+                        opacity={ACTIVITY_LINE_OPACITY}
+                      />
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        );
+      }
+
+      function ActivityOverTimeChart({ gameId, myRaceHint, oppRaceHint }) {
+        const [data, setData] = useState(null);
+        const [loading, setLoading] = useState(true);
+        const [error, setError] = useState(null);
+
+        useEffect(() => {
+          let cancelled = false;
+          setLoading(true);
+          setError(null);
+          fetch(`${API}/games/${encodeURIComponent(gameId)}/apm-curve`)
+            .then((r) =>
+              r.ok ? r.json() : r.json().then((j) => Promise.reject(j)),
+            )
+            .then((j) => {
+              if (!cancelled) {
+                setData(j);
+                setLoading(false);
+              }
+            })
+            .catch((e) => {
+              if (!cancelled) {
+                setError((e && e.error) || "fetch failed");
+                setLoading(false);
+              }
+            });
+          return () => {
+            cancelled = true;
+          };
+        }, [gameId]);
+
+        if (loading) {
+          return (
+            <div className="text-xs text-neutral-500 px-3 py-2">
+              loading activity…
+            </div>
+          );
+        }
+        if (error) {
+          return (
+            <div className="text-xs text-loss-500 px-3 py-2">
+              activity unavailable: {error}
+            </div>
+          );
+        }
+        if (!data || !data.has_data || !Array.isArray(data.players)
+            || data.players.length === 0) {
+          return (
+            <div className="text-xs text-neutral-500 px-3 py-3 italic">
+              Activity data unavailable
+            </div>
+          );
+        }
+        // Hint races onto players that came back without one (older
+        // replays where sc2reader couldn't resolve play_race for the
+        // observer slot). Best-effort; defaults to the neutral fallback
+        // color downstream.
+        const players = data.players.map((p, i) => {
+          if (p.race) return p;
+          if (i === 0 && myRaceHint) return Object.assign({}, p, { race: myRaceHint });
+          if (i === 1 && oppRaceHint) return Object.assign({}, p, { race: oppRaceHint });
+          return p;
+        });
+        return (
+          <div className="mt-3 border-t border-base-700 pt-3">
+            <div className="text-[11px] text-neutral-500 mb-2 px-1">
+              Activity over time — {data.window_sec || 30}s sliding window.
+              Both players overlaid; color = race.
+            </div>
+            <div className="space-y-2">
+              <ActivityChartPanel
+                title="APM (actions per minute)"
+                players={players}
+                valueKey="apm"
+                gameLengthSec={data.game_length_sec || 0}
+              />
+              <ActivityChartPanel
+                title="SPM (selections per minute)"
+                players={players}
+                valueKey="spm"
+                gameLengthSec={data.game_length_sec || 0}
+              />
+            </div>
+          </div>
+        );
+      }
+
+
       function BuildOrderTimeline({ gameId, perspective: perspectiveProp }) {
         const [data, setData] = useState(null);
         const [loading, setLoading] = useState(true);
@@ -2217,9 +2508,9 @@
       const SUPPLY_BLOCK_TOLERANCE = 1;
       const SUPPLY_BAND_OPACITY = 0.55;
       const Y_TICK_FRACTIONS = [0, 0.25, 0.5, 0.75, 1];
-      const X_TICK_STEP_LONG_GAME = 120;
-      const X_TICK_STEP_SHORT_GAME = 60;
-      const X_TICK_LONG_GAME_THRESHOLD = 360;
+      // Static x-axis: a labeled tick every 15 seconds. Hover state gives
+      // sub-tick precision (down to the second) — see _hoverInfoFromMouseEvent.
+      const X_TICK_STEP = 15;
       const ARMY_AXIS_FLOOR = 8 * ARMY_SUPPLY_PER_FOOD;
       const WORKER_AXIS_FLOOR = 12;
       const DEFAULT_MY_COLOR = "#22c55e";
@@ -2322,11 +2613,8 @@
         const yWorker = (w) => CHART_PAD_TOP + (1 - w / workerMax) * innerH;
         const my = _projectSidePoints(mySamples, xOf, yArmy, yWorker);
         const opp = _projectSidePoints(oppSamples, xOf, yArmy, yWorker);
-        const tickStep =
-          maxT >= X_TICK_LONG_GAME_THRESHOLD
-            ? X_TICK_STEP_LONG_GAME : X_TICK_STEP_SHORT_GAME;
         const xTicks = [];
-        for (let t = 0; t <= maxT; t += tickStep) xTicks.push(t);
+        for (let t = 0; t <= maxT; t += X_TICK_STEP) xTicks.push(t);
         const supplyLanesTop = CHART_PAD_TOP + innerH + SUPPLY_LANE_GAP;
         return { innerW, innerH, maxT, armyMax, workerMax,
                  xOf, yArmy, yWorker, my, opp, xTicks, supplyLanesTop };
@@ -2366,11 +2654,19 @@
       }
 
       function _renderXAxisTicks(layout) {
+        // 15-second labeled ticks. The hover state provides per-second
+        // precision so the static axis stays uncluttered.
+        const baseY = CHART_PAD_TOP + layout.innerH;
         return layout.xTicks.map((t, i) => (
-          <text key={`x-${i}`} x={layout.xOf(t)} y={CHART_VIEW_H - 18}
-            fontSize="10" textAnchor="middle" fill={CHART_AXIS_TEXT}>
-            {_formatGameClock(t)}
-          </text>
+          <g key={`x-${i}`}>
+            <line x1={layout.xOf(t)} y1={baseY}
+              x2={layout.xOf(t)} y2={baseY + 4}
+              stroke={CHART_AXIS_TEXT} strokeOpacity="0.6" />
+            <text x={layout.xOf(t)} y={CHART_VIEW_H - 18}
+              fontSize="10" textAnchor="middle" fill={CHART_AXIS_TEXT}>
+              {_formatGameClock(t)}
+            </text>
+          </g>
         ));
       }
 
@@ -2429,7 +2725,17 @@
         );
       }
 
-      function _hoverIndexFromMouseEvent(e, svgEl, samples, layout) {
+      // Resolve a mouse event to {cursorSec, sampleIdx}:
+      //   - cursorSec: the cursor's game-time rounded to the nearest second
+      //     (this drives the crosshair x and the tooltip label, so the chart
+      //     reads as second-precise even though sample data is coarser).
+      //   - sampleIdx: index into ``samples`` whose time is nearest to
+      //     cursorSec (drives the tooltip values + unit roster — the
+      //     PlayerStatsEvent stream samples at ~10s cadence so this is the
+      //     most-recent observed state for the cursor's second).
+      // Returns null when the cursor is outside the plot area or no
+      // ``samples`` exist to anchor the data lookup.
+      function _hoverInfoFromMouseEvent(e, svgEl, samples, layout) {
         if (!svgEl || !samples.length) return null;
         const rect = svgEl.getBoundingClientRect();
         if (rect.width <= 0) return null;
@@ -2437,21 +2743,20 @@
         if (localX < CHART_PAD_LEFT || localX > CHART_VIEW_W - CHART_PAD_RIGHT) {
           return null;
         }
-        const t = (localX - CHART_PAD_LEFT) / layout.innerW * layout.maxT;
+        const tFloat = (localX - CHART_PAD_LEFT) / layout.innerW * layout.maxT;
+        const cursorSec = Math.max(0, Math.min(layout.maxT, Math.round(tFloat)));
         let bestIdx = 0;
         let bestDist = Infinity;
         for (let i = 0; i < samples.length; i++) {
-          const d = Math.abs((Number(samples[i].time) || 0) - t);
+          const d = Math.abs((Number(samples[i].time) || 0) - cursorSec);
           if (d < bestDist) { bestDist = d; bestIdx = i; }
         }
-        return bestIdx;
+        return { cursorSec, sampleIdx: bestIdx };
       }
 
-      function _renderHoverCrosshair(layout, mySample, oppSample, myColor, oppColor) {
-        const sample = mySample || oppSample;
-        if (!sample) return null;
-        const t = Number(sample.time) || 0;
-        const xCursor = layout.xOf(t);
+      function _renderHoverCrosshair(layout, cursorSec, mySample, oppSample, myColor, oppColor) {
+        if (cursorSec == null) return null;
+        const xCursor = layout.xOf(cursorSec);
         const dot = (s, color, r) => {
           if (!s) return null;
           const army = (Number(s.food_used) || 0) * ARMY_SUPPLY_PER_FOOD;
@@ -2493,7 +2798,8 @@
 
       function _renderChartSvg(args) {
         const { layout, myColor, oppColor, myBands, oppBands,
-                mySample, oppSample, svgRef, onMove, onLeave } = args;
+                mySample, oppSample, cursorSec,
+                svgRef, onMove, onLeave } = args;
         const baselineY = CHART_PAD_TOP + layout.innerH;
         return (
           <svg ref={svgRef}
@@ -2511,7 +2817,7 @@
             {_renderYAxes(layout)}
             {_renderXAxisTicks(layout)}
             {_renderChartLines(layout, myColor, oppColor)}
-            {_renderHoverCrosshair(layout, mySample, oppSample, myColor, oppColor)}
+            {_renderHoverCrosshair(layout, cursorSec, mySample, oppSample, myColor, oppColor)}
             <text x={CHART_PAD_LEFT - 6} y={CHART_PAD_TOP - 2} fontSize="9"
               textAnchor="end" fill={CHART_AXIS_TEXT}>army</text>
             <text x={CHART_VIEW_W - CHART_PAD_RIGHT + 6} y={CHART_PAD_TOP - 2}
@@ -2550,10 +2856,9 @@
 
       function _renderChartTooltip(args) {
         const { mySample, oppSample, myBands, oppBands, layout,
-                myColor, oppColor } = args;
-        const sample = mySample || oppSample;
-        if (!sample) return null;
-        const t = Number(sample.time) || 0;
+                myColor, oppColor, cursorSec } = args;
+        if (cursorSec == null) return null;
+        const t = cursorSec;
         const leftPct = (layout.xOf(t) / CHART_VIEW_W) * 100;
         const onRight = leftPct > 60;
         return (
@@ -2645,7 +2950,7 @@
         const samples = Array.isArray(props.statsEvents) ? props.statsEvents : [];
         const oppSamples = Array.isArray(props.oppStatsEvents) ? props.oppStatsEvents : [];
         const timeline = Array.isArray(props.unitTimeline) ? props.unitTimeline : [];
-        const [hoverIdx, setHoverIdx] = useState(null);
+        const [hoverInfo, setHoverInfo] = useState(null);
         const [myColor, setMyColor] = useState(DEFAULT_MY_COLOR);
         const [oppColor, setOppColor] = useState(DEFAULT_OPP_COLOR);
         const svgRef = useRef(null);
@@ -2660,13 +2965,23 @@
         const myBands = _supplyBlockBands(samples);
         const oppBands = _supplyBlockBands(oppSamples);
         const onMove = (e) => {
-          const idx = _hoverIndexFromMouseEvent(e, svgRef.current, samples, layout);
-          if (idx !== hoverIdx) setHoverIdx(idx);
+          const info = _hoverInfoFromMouseEvent(e, svgRef.current, samples, layout);
+          // Compare via cursorSec so we don't re-render on every pixel —
+          // only when the second changes.
+          if (info == null) {
+            if (hoverInfo != null) setHoverInfo(null);
+            return;
+          }
+          if (!hoverInfo || hoverInfo.cursorSec !== info.cursorSec) {
+            setHoverInfo(info);
+          }
         };
-        const onLeave = () => setHoverIdx(null);
-        const mySample = hoverIdx != null ? samples[hoverIdx] : null;
-        const oppSample = hoverIdx != null ? oppSamples[hoverIdx] : null;
-        const timelineEntry = hoverIdx != null ? timeline[hoverIdx] : null;
+        const onLeave = () => setHoverInfo(null);
+        const cursorSec = hoverInfo ? hoverInfo.cursorSec : null;
+        const sIdx = hoverInfo ? hoverInfo.sampleIdx : null;
+        const mySample = sIdx != null ? samples[sIdx] : null;
+        const oppSample = sIdx != null ? oppSamples[sIdx] : null;
+        const timelineEntry = sIdx != null ? timeline[sIdx] : null;
         return (
           <div className="bg-base-800 ring-soft rounded p-3">
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
@@ -2678,9 +2993,11 @@
             <div className="mb-2">{_renderChartLegend(myColor, oppColor)}</div>
             <div className="relative">
               {_renderChartSvg({ layout, myColor, oppColor, myBands, oppBands,
-                                  mySample, oppSample, svgRef, onMove, onLeave })}
-              {(mySample || oppSample) && _renderChartTooltip({
-                mySample, oppSample, myBands, oppBands, layout, myColor, oppColor })}
+                                  mySample, oppSample, cursorSec,
+                                  svgRef, onMove, onLeave })}
+              {cursorSec != null && _renderChartTooltip({
+                mySample, oppSample, myBands, oppBands, layout,
+                myColor, oppColor, cursorSec })}
             </div>
             {_renderUnitRoster(timelineEntry, myColor, oppColor)}
           </div>
@@ -2707,9 +3024,56 @@
               r.ok ? r.json() : r.json().then((j) => Promise.reject(j)),
             )
             .then((j) => {
-              if (!cancelled) {
-                setData(j);
-                setLoading(false);
+              if (cancelled) return;
+              setData(j);
+              setLoading(false);
+              // Auto-recompute when the stored macro_breakdown is the
+              // SLIM shape (post-migration: no stats_events / opp_stats_
+              // events / unit_timeline persisted to disk). The existing
+              // Active Army & Workers chart needs those arrays, so we
+              // hit /macro-breakdown POST in the background. The chart
+              // shows a brief "computing samples..." indicator.
+              const bd = j && j.macro_breakdown;
+              const hasSamples = bd && Array.isArray(bd.stats_events)
+                && bd.stats_events.length > 0;
+              if (bd && !hasSamples) {
+                setRecomputing(true);
+                fetch(`${API}/games/${encodeURIComponent(gameId)}/macro-breakdown`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({}),
+                })
+                  .then((r) =>
+                    r.ok ? r.json() : r.json().then((jj) => Promise.reject(jj)),
+                  )
+                  .then((fresh) => {
+                    if (cancelled) return;
+                    setData((d) =>
+                      Object.assign({}, d, {
+                        macro_score: fresh.macro_score,
+                        top_3_leaks: fresh.top_3_leaks || [],
+                        macro_breakdown: {
+                          score: fresh.score,
+                          race: fresh.race,
+                          game_length_sec: fresh.game_length_sec,
+                          raw: fresh.raw || {},
+                          all_leaks: fresh.all_leaks || [],
+                          top_3_leaks: fresh.top_3_leaks || [],
+                          stats_events: Array.isArray(fresh.stats_events)
+                            ? fresh.stats_events : [],
+                          opp_stats_events: Array.isArray(fresh.opp_stats_events)
+                            ? fresh.opp_stats_events : [],
+                          unit_timeline: Array.isArray(fresh.unit_timeline)
+                            ? fresh.unit_timeline : [],
+                        },
+                      }),
+                    );
+                    setRecomputing(false);
+                  })
+                  .catch(() => {
+                    // Best-effort. Manual "Recompute" button still works.
+                    if (!cancelled) setRecomputing(false);
+                  });
               }
             })
             .catch((e) => {
@@ -2862,6 +3226,7 @@
             </div>
 
             {breakdown ? (
+              <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* How it was calculated */}
                 <div className="bg-base-800 rounded p-3">
@@ -2936,19 +3301,6 @@
                       </tr>
                     </tbody>
                   </table>
-
-                  {/* Active Army & Workers chart (Stage 3 — design-token
-                      colored, no mock data; renders a fallback notice when
-                      stats_events is empty for an older replay). */}
-                  <div className="mt-3">
-                    <MacroResourceChart
-                      statsEvents={breakdown && breakdown.stats_events}
-                      oppStatsEvents={breakdown && breakdown.opp_stats_events}
-                      unitTimeline={breakdown && breakdown.unit_timeline}
-                      race={race}
-                      gameLengthSec={breakdown && breakdown.game_length_sec}
-                    />
-                  </div>
 
                   {/* Discipline metrics */}
                   {(raw.injects_actual != null ||
@@ -3065,6 +3417,20 @@
                   </div>
                 </div>
               </div>
+              {/* Active Army & Workers — full-width below the macro grid
+                  so it lines up with the APM and Resources charts that
+                  follow. Renders a fallback notice when stats_events is
+                  empty (older replay with no PlayerStatsEvent rows). */}
+              <div className="mt-4">
+                <MacroResourceChart
+                  statsEvents={breakdown && breakdown.stats_events}
+                  oppStatsEvents={breakdown && breakdown.opp_stats_events}
+                  unitTimeline={breakdown && breakdown.unit_timeline}
+                  race={race}
+                  gameLengthSec={breakdown && breakdown.game_length_sec}
+                />
+              </div>
+              </>
             ) : leaks.length > 0 ? (
               /* Older games without macro_breakdown but with top_3_leaks: show summary only. */
               <div className="bg-base-800 rounded p-3">
@@ -3111,6 +3477,483 @@
         );
       }
 
+
+      // =====================================================================
+      // Resources-over-time chart (sibling to MacroBreakdownPanel inside the
+      // GameDetailModal).
+      //
+      // Three lines per player on a shared time axis:
+      //   - Income rate     = minerals_collection_rate + vespene_collection_rate
+      //   - Unspent         = minerals_current + vespene_current
+      //   - Used in progress = minerals_used_in_progress + vespene_used_in_progress
+      //
+      // Line style encodes ownership: dotted = me, solid = opp. Color encodes
+      // which series. X-axis ticks every 60s. Right-side y-axis shows the
+      // "good band" — income target = 60-80 minerals per worker per minute —
+      // overlaid as a translucent green polygon at [60*workers, 80*workers]
+      // on the user's worker count over time.
+      //
+      // Empty stats_events (older replays whose tracker stream had no
+      // PlayerStatsEvent rows) → renders the "too old" placeholder. Never
+      // synthesizes values.
+      // =====================================================================
+      const RES_VIEW_W = 800;
+      const RES_VIEW_H = 260;
+      const RES_PAD_LEFT = 56;
+      const RES_PAD_RIGHT = 60;
+      const RES_PAD_TOP = 12;
+      const RES_PAD_BOTTOM = 30;
+      const RES_X_TICK_SEC = 60;
+      const RES_LINE_OPACITY = 0.95;
+      const RES_BAND_OPACITY = 0.18;
+      const RES_INCOME_PER_WORKER_LOW = 60;
+      const RES_INCOME_PER_WORKER_HIGH = 80;
+      // Three independent series colors; we keep them race-neutral because
+      // both players already share one chart and we differentiate ownership
+      // via dash style.
+      const RES_SERIES_COLOR = {
+        income: "var(--color-success)",
+        unspent: "var(--color-warning)",
+        in_progress: "var(--color-info)",
+      };
+      const RES_SERIES_LABEL = {
+        income: "Income",
+        unspent: "Unspent",
+        in_progress: "In progress",
+      };
+      const RES_BAND_COLOR = "var(--color-success)";
+
+      function _resSampleIncome(s) {
+        return (Number(s.minerals_collection_rate) || 0)
+             + (Number(s.vespene_collection_rate) || 0);
+      }
+      function _resSampleUnspent(s) {
+        return (Number(s.minerals_current) || 0)
+             + (Number(s.vespene_current) || 0);
+      }
+      function _resSampleInProgress(s) {
+        return (Number(s.minerals_used_in_progress) || 0)
+             + (Number(s.vespene_used_in_progress) || 0);
+      }
+
+      function _resSeries(samples) {
+        if (!Array.isArray(samples) || samples.length === 0) return null;
+        const t = samples.map((s) => Number(s.time) || 0);
+        return {
+          time: t,
+          income: samples.map(_resSampleIncome),
+          unspent: samples.map(_resSampleUnspent),
+          in_progress: samples.map(_resSampleInProgress),
+          workers: samples.map((s) => Number(s.food_workers) || 0),
+        };
+      }
+
+      function _resYAxisMax(seriesList) {
+        let m = 0;
+        for (const s of seriesList) {
+          if (!s) continue;
+          for (const arr of [s.income, s.unspent, s.in_progress]) {
+            for (const v of arr) if (v > m) m = v;
+          }
+          // Account for the band ceiling (80 * max workers) so the band
+          // never extends past the visible plot.
+          for (const w of s.workers) {
+            const ceiling = w * RES_INCOME_PER_WORKER_HIGH;
+            if (ceiling > m) m = ceiling;
+          }
+        }
+        if (m <= 0) return 1000;
+        const steps = [500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000];
+        for (const s of steps) if (m <= s) return s;
+        return Math.ceil(m / 1000) * 1000;
+      }
+
+      function _resXMax(seriesList) {
+        let m = 0;
+        for (const s of seriesList) {
+          if (!s || !s.time.length) continue;
+          const last = s.time[s.time.length - 1];
+          if (last > m) m = last;
+        }
+        return m;
+      }
+
+      function _resPathFor(times, values, plotW, plotH, padLeft, padTop, xMax, yMax) {
+        if (!values || values.length === 0 || yMax <= 0 || xMax <= 0) return "";
+        const xAt = (t) => padLeft + (t / xMax) * plotW;
+        const yAt = (v) => padTop + plotH - (Math.min(v, yMax) / yMax) * plotH;
+        let d = "";
+        for (let i = 0; i < values.length; i += 1) {
+          d += (i === 0 ? "M " : " L ")
+            + xAt(times[i]).toFixed(2) + " "
+            + yAt(values[i]).toFixed(2);
+        }
+        return d;
+      }
+
+      function _resBandPolygonPath(times, workers, plotW, plotH,
+                                   padLeft, padTop, xMax, yMax,
+                                   perWorkerLow, perWorkerHigh) {
+        if (!workers || workers.length === 0) return "";
+        const xAt = (t) => padLeft + (t / xMax) * plotW;
+        const yAt = (v) => padTop + plotH - (Math.min(v, yMax) / yMax) * plotH;
+        let upper = "";
+        for (let i = 0; i < workers.length; i += 1) {
+          upper += (i === 0 ? "M " : " L ")
+            + xAt(times[i]).toFixed(2) + " "
+            + yAt(workers[i] * perWorkerHigh).toFixed(2);
+        }
+        let lower = "";
+        for (let i = workers.length - 1; i >= 0; i -= 1) {
+          lower += " L " + xAt(times[i]).toFixed(2) + " "
+            + yAt(workers[i] * perWorkerLow).toFixed(2);
+        }
+        return upper + lower + " Z";
+      }
+
+      function ResourcesChartSvg({ mySeries, oppSeries, xMax, yMax }) {
+        const plotW = RES_VIEW_W - RES_PAD_LEFT - RES_PAD_RIGHT;
+        const plotH = RES_VIEW_H - RES_PAD_TOP - RES_PAD_BOTTOM;
+        const xTicks = [];
+        for (let t = 0; t <= xMax; t += RES_X_TICK_SEC) xTicks.push(t);
+        const yTickFracs = [0, 0.25, 0.5, 0.75, 1];
+        const SERIES_KEYS = ["income", "unspent", "in_progress"];
+        const renderPaths = (series, dasharray) => {
+          if (!series) return null;
+          return SERIES_KEYS.map((k) => {
+            const d = _resPathFor(
+              series.time, series[k],
+              plotW, plotH, RES_PAD_LEFT, RES_PAD_TOP, xMax, yMax,
+            );
+            if (!d) return null;
+            return (
+              <path
+                key={k}
+                d={d}
+                fill="none"
+                stroke={RES_SERIES_COLOR[k]}
+                strokeWidth="1.5"
+                strokeDasharray={dasharray}
+                opacity={RES_LINE_OPACITY}
+              />
+            );
+          });
+        };
+        const bandSource = mySeries || oppSeries;
+        const bandPath = bandSource
+          ? _resBandPolygonPath(
+              bandSource.time, bandSource.workers,
+              plotW, plotH, RES_PAD_LEFT, RES_PAD_TOP, xMax, yMax,
+              RES_INCOME_PER_WORKER_LOW, RES_INCOME_PER_WORKER_HIGH,
+            )
+          : "";
+        return (
+          <svg
+            viewBox={`0 0 ${RES_VIEW_W} ${RES_VIEW_H}`}
+            preserveAspectRatio="none"
+            className="w-full h-[260px]"
+            role="img"
+            aria-label="Resources over time chart"
+          >
+            {bandPath && (
+              <path
+                d={bandPath}
+                fill={RES_BAND_COLOR}
+                opacity={RES_BAND_OPACITY}
+              />
+            )}
+            {yTickFracs.map((frac, i) => {
+              const y = RES_PAD_TOP + plotH - frac * plotH;
+              const v = Math.round(yMax * frac);
+              return (
+                <g key={`y${i}`}>
+                  <line
+                    x1={RES_PAD_LEFT}
+                    y1={y}
+                    x2={RES_VIEW_W - RES_PAD_RIGHT}
+                    y2={y}
+                    stroke="var(--color-border-subtle)"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={RES_PAD_LEFT - 4}
+                    y={y + 3}
+                    textAnchor="end"
+                    fontSize="9"
+                    fill="var(--color-text-secondary)"
+                  >
+                    {v}
+                  </text>
+                </g>
+              );
+            })}
+            {xTicks.map((t, i) => {
+              const x = RES_PAD_LEFT + (xMax > 0 ? (t / xMax) * plotW : 0);
+              return (
+                <g key={`x${i}`}>
+                  <line
+                    x1={x}
+                    y1={RES_PAD_TOP + plotH}
+                    x2={x}
+                    y2={RES_PAD_TOP + plotH + 3}
+                    stroke="var(--color-text-secondary)"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={x}
+                    y={RES_PAD_TOP + plotH + 14}
+                    textAnchor="middle"
+                    fontSize="9"
+                    fill="var(--color-text-secondary)"
+                  >
+                    {Math.floor(t / 60)}:{String(t % 60).padStart(2, "0")}
+                  </text>
+                </g>
+              );
+            })}
+            <text
+              x={RES_VIEW_W - RES_PAD_RIGHT + 6}
+              y={RES_PAD_TOP + 10}
+              fontSize="9"
+              fill={RES_BAND_COLOR}
+              opacity="0.85"
+            >
+              good band
+            </text>
+            <text
+              x={RES_VIEW_W - RES_PAD_RIGHT + 6}
+              y={RES_PAD_TOP + 22}
+              fontSize="8"
+              fill="var(--color-text-secondary)"
+            >
+              {RES_INCOME_PER_WORKER_LOW}-{RES_INCOME_PER_WORKER_HIGH}
+            </text>
+            <text
+              x={RES_VIEW_W - RES_PAD_RIGHT + 6}
+              y={RES_PAD_TOP + 32}
+              fontSize="8"
+              fill="var(--color-text-secondary)"
+            >
+              min/wkr/min
+            </text>
+            {renderPaths(mySeries, "3 3")}
+            {renderPaths(oppSeries, "0")}
+          </svg>
+        );
+      }
+
+      function _resLegend(label, dasharray) {
+        return (
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] uppercase tracking-wide text-neutral-500">
+              {label}:
+            </span>
+            {Object.keys(RES_SERIES_COLOR).map((k) => (
+              <span key={k} className="flex items-center gap-1">
+                <svg width="22" height="6">
+                  <line
+                    x1="0"
+                    y1="3"
+                    x2="22"
+                    y2="3"
+                    stroke={RES_SERIES_COLOR[k]}
+                    strokeWidth="2"
+                    strokeDasharray={dasharray}
+                  />
+                </svg>
+                <span className="text-[10px] text-neutral-300">
+                  {RES_SERIES_LABEL[k]}
+                </span>
+              </span>
+            ))}
+          </div>
+        );
+      }
+
+      function ResourcesOverTimeChart({ gameId }) {
+        const [data, setData] = useState(null);
+        const [loading, setLoading] = useState(true);
+        const [error, setError] = useState(null);
+
+        useEffect(() => {
+          let cancelled = false;
+          setLoading(true);
+          setError(null);
+          // Reuse /macro-breakdown — stats_events comes back in the same
+          // payload, so we don't double-spawn macro_cli for the modal.
+          fetch(`${API}/games/${encodeURIComponent(gameId)}/macro-breakdown`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          })
+            .then((r) =>
+              r.ok ? r.json() : r.json().then((j) => Promise.reject(j)),
+            )
+            .then((j) => {
+              if (!cancelled) {
+                setData(j);
+                setLoading(false);
+              }
+            })
+            .catch((e) => {
+              if (!cancelled) {
+                setError((e && e.error) || "fetch failed");
+                setLoading(false);
+              }
+            });
+          return () => {
+            cancelled = true;
+          };
+        }, [gameId]);
+
+        if (loading) {
+          return (
+            <div className="text-xs text-neutral-500 px-3 py-3">
+              loading resources…
+            </div>
+          );
+        }
+        if (error) {
+          return (
+            <div className="text-xs text-loss-500 px-3 py-3">
+              resources unavailable: {error}
+            </div>
+          );
+        }
+        const myRaw = (data && data.stats_events) || [];
+        const oppRaw = (data && data.opp_stats_events) || [];
+        if (myRaw.length === 0 && oppRaw.length === 0) {
+          return (
+            <div className="bg-base-900/40 rounded p-4 text-center">
+              <div className="text-xs text-neutral-400 italic">
+                Replay too old to have resource samples (no PlayerStatsEvent
+                rows in the tracker stream).
+              </div>
+            </div>
+          );
+        }
+        const mySeries = _resSeries(myRaw);
+        const oppSeries = _resSeries(oppRaw);
+        const xMax = _resXMax([mySeries, oppSeries]);
+        const yMax = _resYAxisMax([mySeries, oppSeries]);
+        return (
+          <div className="bg-base-900/40 rounded p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs uppercase tracking-wide text-neutral-300">
+                Resources over time
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                {_resLegend("me (dotted)", "3 3")}
+                {_resLegend("opp (solid)", "0")}
+              </div>
+            </div>
+            <ResourcesChartSvg
+              mySeries={mySeries}
+              oppSeries={oppSeries}
+              xMax={xMax}
+              yMax={yMax}
+            />
+            <div className="text-[10px] text-neutral-500 mt-1 px-1">
+              Income = minerals + vespene per minute. Unspent = current bank.
+              In progress = mineral+gas cost of units/buildings/upgrades still
+              being built. Green band = income range you should be in given
+              your worker count (60-80 minerals per worker per minute).
+            </div>
+          </div>
+        );
+      }
+
+
+      // =====================================================================
+      // GameDetailModal — full-screen view triggered by clicking a game's
+      // macro score in GamesTableWithBuildOrder.
+      //
+      // Hosts the macro breakdown panel + activity (APM/SPM) charts + the
+      // resources-over-time chart side-by-side, all sharing the same gameId.
+      // The modal is a fixed-position overlay (z-50) with a dim backdrop;
+      // ESC and a backdrop click both close it.
+      // =====================================================================
+      function _gameModalTitle(game) {
+        if (!game) return "Game detail";
+        const date = fmtDate(game.date);
+        const opp = game.opponent || "—";
+        const map = game.map || "—";
+        const result = game.result || "";
+        return `${date} · vs ${opp} · ${map}${result ? ` · ${result}` : ""}`;
+      }
+
+      function GameDetailModal({ game, gameId, macroValue, onClose }) {
+        // ESC-to-close. We bind once at mount and explicitly let the
+        // dependency list drive re-bind so a new game id doesn't leak the
+        // previous handler.
+        useEffect(() => {
+          const onKey = (e) => {
+            if (e.key === "Escape") onClose();
+          };
+          window.addEventListener("keydown", onKey);
+          return () => window.removeEventListener("keydown", onKey);
+        }, [onClose]);
+        const stop = (e) => e.stopPropagation();
+        const myRace = game && (game.my_race || "");
+        const oppRace = game && (game.opp_race || "");
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/70 flex items-stretch justify-center p-4 sm:p-8 overflow-y-auto"
+            onClick={onClose}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Game detail"
+          >
+            <div
+              className="bg-base-800 border border-base-700 rounded-lg shadow-xl w-full max-w-6xl my-auto"
+              onClick={stop}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-base-700 sticky top-0 bg-base-800 rounded-t-lg z-10">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] uppercase tracking-wide text-neutral-500">
+                    Game detail
+                  </div>
+                  <div className="text-sm text-neutral-200 truncate">
+                    {_gameModalTitle(game)}
+                  </div>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="ml-3 px-3 py-1 text-xs rounded bg-base-700 hover:bg-base-600 text-neutral-200"
+                  aria-label="Close game detail"
+                >
+                  Close ✕
+                </button>
+              </div>
+              <div className="p-4 space-y-5">
+                <section>
+                  <div className="text-[11px] uppercase tracking-wide text-neutral-400 mb-2">
+                    Macro breakdown
+                  </div>
+                  <MacroBreakdownPanel
+                    gameId={gameId}
+                    initialMacro={macroValue}
+                  />
+                </section>
+                <section>
+                  <div className="text-[11px] uppercase tracking-wide text-neutral-400 mb-2">
+                    Activity (APM / SPM)
+                  </div>
+                  <ActivityOverTimeChart
+                    gameId={gameId}
+                    myRaceHint={myRace}
+                    oppRaceHint={oppRace}
+                  />
+                </section>
+                <section>
+                  <ResourcesOverTimeChart gameId={gameId} />
+                </section>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       function GamesTableWithBuildOrder({
         games,
         perspective,
@@ -3130,6 +3973,9 @@
         // game twice still re-fires the effect.
         const [expandedId, setExpandedId] = useState(null);
         const [expandedMode, setExpandedMode] = useState("build");
+        // Open game appears in a full-screen modal (macro breakdown +
+        // activity + resources). Set to {game, gameId, macroValue} to open.
+        const [modalGame, setModalGame] = useState(null);
         const tableRef = useRef(null);
         useEffect(() => {
           if (!targetGameId || !tableRef.current) return;
@@ -3147,6 +3993,7 @@
           }
         }, [targetGameId, targetGameSeq]);
         return (
+          <>
           <table ref={tableRef} className="w-full text-sm">
             <thead className="text-neutral-500 text-[11px] uppercase sticky top-0 bg-base-800">
               <tr>
@@ -3251,12 +4098,11 @@
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (macroOpen) {
-                                setExpandedId(null);
-                              } else {
-                                setExpandedId(id);
-                                setExpandedMode("macro");
-                              }
+                              setModalGame({
+                                game: g,
+                                gameId: id,
+                                macroValue: macro,
+                              });
                             }}
                             className={`font-semibold tabular-nums underline decoration-dotted underline-offset-2 hover:opacity-80 ${macroColor}`}
                             title="Click to see how this score was calculated"
@@ -3281,17 +4127,10 @@
                     {isOpen && (
                       <tr className="bg-base-800/40">
                         <td colSpan={9} className="px-2 pb-3">
-                          {expandedMode === "macro" ? (
-                            <MacroBreakdownPanel
-                              gameId={id}
-                              initialMacro={macro}
-                            />
-                          ) : (
-                            <BuildOrderTimeline
-                              gameId={id}
-                              perspective={perspective}
-                            />
-                          )}
+                          <BuildOrderTimeline
+                            gameId={id}
+                            perspective={perspective}
+                          />
                         </td>
                       </tr>
                     )}
@@ -3300,6 +4139,15 @@
               })}
             </tbody>
           </table>
+          {modalGame && (
+            <GameDetailModal
+              game={modalGame.game}
+              gameId={modalGame.gameId}
+              macroValue={modalGame.macroValue}
+              onClose={() => setModalGame(null)}
+            />
+          )}
+          </>
         );
       }
 

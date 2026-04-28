@@ -1728,37 +1728,136 @@ router.post('/games/:gameId/macro-breakdown', (req, res) => {
                 const err = (records.find(x => x && x.error) || {}).error || 'no result';
                 return res.status(500).json({ ok: false, error: err });
             }
-            const breakdown = {
+            // Slim breakdown — what we PERSIST to meta_database.json.
+            // stats_events / opp_stats_events / unit_timeline are
+            // intentionally excluded: they balloon the file past Node's
+            // 0x1fffffe8 (~536MB) max-string-length on large libraries.
+            // The chart can recompute them via this same endpoint.
+            const slimBreakdown = {
                 score: r.macro_score,
                 race: r.race || null,
                 game_length_sec: r.game_length_sec || 0,
                 raw: r.raw || {},
                 all_leaks: Array.isArray(r.all_leaks) ? r.all_leaks : [],
                 top_3_leaks: Array.isArray(r.top_3_leaks) ? r.top_3_leaks : [],
-                // PlayerStatsEvent samples (time, food_workers, food_used,
-                // food_made, *_collection_rate). Surfaced for the
-                // MacroBreakdownPanel army/workers chart. Empty array means
-                // the replay's tracker stream had no PlayerStatsEvent rows
-                // (some older replays); the UI falls back to a notice.
-                stats_events: Array.isArray(r.stats_events) ? r.stats_events : [],
-                // Mirror of stats_events for the opponent. Empty when the
-                // replay was solo/vs-AI (no human opp_pid was detectable).
-                opp_stats_events: Array.isArray(r.opp_stats_events) ? r.opp_stats_events : [],
-                // Per-sample alive-unit counts for both players. Empty
-                // when stats_events is empty.
-                unit_timeline: Array.isArray(r.unit_timeline) ? r.unit_timeline : [],
             };
+            // Full breakdown — what we RETURN to the caller. Includes
+            // the bulk per-sample arrays the modal chart needs. These
+            // never touch disk.
+            const fullBreakdown = Object.assign({}, slimBreakdown, {
+                stats_events: Array.isArray(r.stats_events) ? r.stats_events : [],
+                opp_stats_events: Array.isArray(r.opp_stats_events) ? r.opp_stats_events : [],
+                unit_timeline: Array.isArray(r.unit_timeline) ? r.unit_timeline : [],
+            });
             // Mutate in-memory game record + persist back to meta_database.json.
             game.macro_score = r.macro_score;
-            game.top_3_leaks = breakdown.top_3_leaks;
-            game.macro_breakdown = breakdown;
+            game.top_3_leaks = slimBreakdown.top_3_leaks;
+            game.macro_breakdown = slimBreakdown;
             try { persistMetaDb(); } catch (e) { /* best-effort */ }
-            res.json({ ok: true, build, macro_score: r.macro_score, ...breakdown });
+            res.json({ ok: true, build, macro_score: r.macro_score, ...fullBreakdown });
         })
         .catch((err) => {
             res.status(500).json({ ok: false, error: String(err && err.message || err) });
         });
 });
+
+// --------------------------------------------------------------
+// ACTIVITY CURVE (APM / SPM)
+// --------------------------------------------------------------
+// Spawns scripts/apm_cli.py to walk replay.events once and return a
+// per-second sliding-window APM (CommandEvents) and SPM (Selection +
+// ControlGroup events) curve for both players. Read-only -- the result
+// is cached in memory (5min TTL, capped) so re-opening the same drawer
+// doesn't re-spawn Python.
+function runApmCli(args = []) {
+    return new Promise((resolve, reject) => {
+        const projDir = pythonProjectDirOrErr();
+        if (projDir.error) return reject(new Error(projDir.error));
+        const py = pickPythonExe();
+        const pyArgs = ['scripts/apm_cli.py', 'compute', ...args];
+        const proc = spawn(py, pyArgs, {
+            cwd: projDir.dir, env: mlEnv(), windowsHide: true,
+        });
+        let stdout = '', stderr = '';
+        proc.stdout.on('data', (b) => { stdout += b.toString('utf8'); });
+        proc.stderr.on('data', (b) => { stderr += b.toString('utf8'); });
+        proc.on('error', (err) => reject(err));
+        proc.on('close', (code) => {
+            const records = stdout.split('\n')
+                .map(l => l.trim()).filter(Boolean)
+                .map(l => { try { return JSON.parse(l); } catch (_) { return null; } })
+                .filter(Boolean);
+            if (code !== 0 && records.length === 0) {
+                return reject(new Error(stderr.trim() || `apm_cli exit ${code}`));
+            }
+            resolve(records);
+        });
+    });
+}
+
+// In-memory cache for /games/:id/apm-curve responses. Keyed by gameId,
+// invalidated on TTL OR when the replay file's mtime changes.
+const APM_CURVE_TTL_MS = 5 * 60 * 1000;
+const APM_CURVE_CACHE_MAX = 64;
+const _apmCurveCache = new Map();
+
+function _apmCacheGet(gameId, mtimeMs) {
+    const hit = _apmCurveCache.get(gameId);
+    if (!hit) return null;
+    if ((Date.now() - hit.cachedAt) > APM_CURVE_TTL_MS) return null;
+    if (hit.mtimeMs !== mtimeMs) return null;
+    return hit.payload;
+}
+
+function _apmCacheSet(gameId, mtimeMs, payload) {
+    _apmCurveCache.set(gameId, { cachedAt: Date.now(), mtimeMs, payload });
+    if (_apmCurveCache.size > APM_CURVE_CACHE_MAX) {
+        const oldest = _apmCurveCache.keys().next().value;
+        _apmCurveCache.delete(oldest);
+    }
+}
+
+router.get('/games/:gameId/apm-curve', (req, res) => {
+    const found = findGameById(req.params.gameId);
+    if (!found) return res.status(404).json({ ok: false, error: 'game not found' });
+    const { game } = found;
+    const fp = game.file_path;
+    if (!fp) return res.status(400).json({ ok: false, error: 'no file_path on this game' });
+    let stat;
+    try { stat = fs.statSync(fp); } catch (_) { stat = null; }
+    if (!stat) {
+        return res.status(404).json({
+            ok: false, error: `replay file not found on disk`,
+        });
+    }
+    const cached = _apmCacheGet(req.params.gameId, stat.mtimeMs);
+    if (cached) return res.json(cached);
+    runApmCli(['--replay', fp])
+        .then((records) => {
+            const r = records.find(x => x && x.ok);
+            if (!r) {
+                const errMsg = (records.find(x => x && x.error) || {}).error
+                    || 'no result from apm_cli';
+                return res.status(500).json({ ok: false, error: errMsg });
+            }
+            const payload = {
+                ok: true,
+                game_id: game.id || game.game_id,
+                game_length_sec: r.game_length_sec || 0,
+                window_sec: r.window_sec || 30,
+                has_data: !!r.has_data,
+                players: Array.isArray(r.players) ? r.players : [],
+            };
+            _apmCacheSet(req.params.gameId, stat.mtimeMs, payload);
+            res.json(payload);
+        })
+        .catch((err) => {
+            res.status(500).json({
+                ok: false, error: String((err && err.message) || err),
+            });
+        });
+});
+
 
 // Bulk macro backfill -- streams progress events over Socket.io and tracks
 // state on the server so the UI can poll status. Mirrors the ML training

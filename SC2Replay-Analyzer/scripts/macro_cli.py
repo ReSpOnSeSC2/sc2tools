@@ -214,9 +214,21 @@ def cmd_backfill(args) -> int:
         fp = g.get("file_path")
         try:
             br = _compute_for_replay(fp, args.player or "")
+            # Persist a SLIM macro_breakdown — exclude the bulk per-sample
+            # arrays (stats_events, opp_stats_events, unit_timeline) so
+            # the meta DB does not balloon past Node's 0x1fffffe8 max
+            # string length on large libraries. The /macro-breakdown
+            # endpoint recomputes them fresh on demand.
             g["macro_score"] = br["macro_score"]
             g["top_3_leaks"] = br.get("top_3_leaks") or []
-            g["macro_breakdown"] = br
+            g["macro_breakdown"] = {
+                "score": br.get("macro_score"),
+                "race": br.get("race"),
+                "game_length_sec": br.get("game_length_sec", 0),
+                "raw": br.get("raw", {}) or {},
+                "all_leaks": br.get("all_leaks", []) or [],
+                "top_3_leaks": br.get("top_3_leaks", []) or [],
+            }
             updated += 1
         except Exception as exc:
             errors += 1
