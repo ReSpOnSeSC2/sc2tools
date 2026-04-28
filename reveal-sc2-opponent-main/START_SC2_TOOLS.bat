@@ -39,11 +39,10 @@ start "SC2 -- Replay Watcher" cmd /k "cd /d %ROOT% && python -m watchers.replay_
 REM -- 3. API Poller (PowerShell) ----------------------------------
 REM    Polls SC2's web API and writes opponent.txt, which the overlay
 REM    backend watches for the "opponent detected" pop-up.
+REM    Delegates to reveal-sc2-opponent.bat which is the single source
+REM    of truth for SC2_CHARACTER_IDS / SC2_PLAYER_NAME / ACTIVE_REGIONS.
 echo [3/3] Starting API Poller...
-start "SC2 -- API Poller" powershell ^
- -NoExit ^
- -ExecutionPolicy bypass ^
- -Command "cd '%ROOT%'; .\Reveal-Sc2Opponent.ps1 -DisableQuickEdit -FilePath opponent.txt -RatingFormat long -RaceFormat short -Separator \`r\`n -Limit 1"
+start "SC2 -- API Poller" cmd /k "cd /d %ROOT% && reveal-sc2-opponent.bat"
 
 echo.
 echo  All components launched. This window will close in 3 seconds.
