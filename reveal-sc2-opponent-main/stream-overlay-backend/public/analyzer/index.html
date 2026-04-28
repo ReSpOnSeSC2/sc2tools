@@ -2210,6 +2210,14 @@
         // writes opp_build_log + opp_early_build_log back to meta_database.
         const [extracting, setExtracting] = useState(false);
         const [extractError, setExtractError] = useState(null);
+        // Stage 6.5: leak-window focus state. When the spending efficiency
+        // chart fires sc2:focus-build-order with a {start, end} window, we
+        // store it here so the events list highlights everything inside
+        // [start, end] and scrolls the first matching event into view.
+        // Auto-clears after BUILD_ORDER_FOCUS_HOLD_MS so the highlight is
+        // transient and doesn't persist across game switches.
+        const [focusRange, setFocusRange] = useState(null);
+        const eventsContainerRef = useRef(null);
 
         useEffect(() => {
           let cancelled = false;
@@ -2233,6 +2241,46 @@
             });
           return () => {
             cancelled = true;
+          };
+        }, [gameId]);
+
+        // Stage 6.5: subscribe to the leak-band click event from the
+        // SpendingEfficiencyChart. Filter by gameId so multiple
+        // BuildOrderTimeline instances (e.g. user vs opponent drawers)
+        // don't all react to the same click.
+        useEffect(() => {
+          const BUILD_ORDER_FOCUS_HOLD_MS = 4000;
+          const SCROLL_AFTER_PAINT_MS = 60;
+          let clearTimer = null;
+          const handler = (ev) => {
+            const detail = ev && ev.detail;
+            if (!detail || detail.gameId !== gameId) return;
+            const startSec = Number(detail.start) || 0;
+            const endSec = Number(detail.end) || 0;
+            if (endSec <= startSec) return;
+            setFocusRange({ start: startSec, end: endSec });
+            // Defer the scroll to next paint so React has flushed the
+            // data-leak-focused attribute onto the matching rows.
+            setTimeout(() => {
+              const container = eventsContainerRef.current;
+              if (!container) return;
+              const target = container.querySelector(
+                '[data-leak-focused="true"]',
+              );
+              if (target && target.scrollIntoView) {
+                target.scrollIntoView({ behavior: "smooth", block: "center" });
+              }
+            }, SCROLL_AFTER_PAINT_MS);
+            if (clearTimer) clearTimeout(clearTimer);
+            clearTimer = setTimeout(
+              () => setFocusRange(null),
+              BUILD_ORDER_FOCUS_HOLD_MS,
+            );
+          };
+          window.addEventListener("sc2:focus-build-order", handler);
+          return () => {
+            window.removeEventListener("sc2:focus-build-order", handler);
+            if (clearTimer) clearTimeout(clearTimer);
           };
         }, [gameId]);
 
@@ -2449,11 +2497,25 @@
                 Detected strategy: "{data.opp_strategy || "—"}".
               </div>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-[420px] overflow-y-auto">
-              {filtered.map((e, i) => (
+            <div
+              ref={eventsContainerRef}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-[420px] overflow-y-auto"
+            >
+              {filtered.map((e, i) => {
+                const t = Number(e && e.time) || 0;
+                const inFocus =
+                  focusRange &&
+                  t >= focusRange.start &&
+                  t <= focusRange.end;
+                const rowClass = inFocus
+                  ? "flex items-center gap-2 rounded px-2 py-1 ring-1 ring-loss-500 bg-loss-500/15 transition-colors"
+                  : "flex items-center gap-2 bg-base-800 rounded px-2 py-1";
+                return (
                 <div
                   key={i}
-                  className="flex items-center gap-2 bg-base-800 rounded px-2 py-1"
+                  className={rowClass}
+                  data-leak-focused={inFocus ? "true" : undefined}
+                  data-build-event-time={t}
                 >
                   <span className="font-mono text-[11px] text-neutral-400 w-10 tabular-nums">
                     {e.time_display}
@@ -2473,7 +2535,8 @@
                     {e.category}
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
             {filtered.length === 0 && (
               <div className="text-xs text-neutral-500 px-2 py-3">
@@ -3109,7 +3172,7 @@
 
         return (
           <div
-            className="bg-base-800 rounded p-3 mt-3"
+            className="bg-base-800 rounded p-3"
             role="region"
             aria-label="Chrono Boost allocation by target building"
           >
@@ -3200,6 +3263,336 @@
                 </table>
               </div>
             </div>
+          </div>
+        );
+      }
+
+      // =====================================================================
+      // Spending Efficiency over time (Stage 6.5).
+      //
+      // Pure SVG line chart of the player's smoothed Spending Quotient (SQ)
+      // sampled per PlayerStatsEvent and centered-mean-smoothed by the macro
+      // engine. Red bands overlay every "leak window" — contiguous 30s
+      // stretches where smoothed_sq < 50 AND avg_unspent > 600. Clicking a
+      // band fires window event 'sc2:focus-build-order' (consumed by
+      // BuildOrderTimeline) so the matching build-order events scroll into
+      // view and highlight.
+      //
+      // Real data only: when stats_events is empty (older replay or
+      // PlayerStatsEvent stream missing), the chart renders an em-dash
+      // placeholder with a tooltip explaining why.
+      // =====================================================================
+      const SQ_CHART_VIEW_W = 800;
+      const SQ_CHART_VIEW_H = 200;
+      const SQ_CHART_PAD_LEFT = 40;
+      const SQ_CHART_PAD_RIGHT = 16;
+      const SQ_CHART_PAD_TOP = 12;
+      const SQ_CHART_PAD_BOTTOM = 28;
+      // SQ axis bounds. Real-world SQ is ~30..115 but we hard-clamp the
+      // visible range so a single warmup spike doesn't crush the curve.
+      const SQ_AXIS_MIN = 0;
+      const SQ_AXIS_MAX = 120;
+      const SQ_LEAK_THRESHOLD = 50;
+      const SQ_TICK_VALUES = [0, 25, 50, 75, 100];
+
+      function _sqYProject(value, plotTop, plotBottom) {
+        const v = Math.max(SQ_AXIS_MIN, Math.min(SQ_AXIS_MAX, Number(value) || 0));
+        const range = SQ_AXIS_MAX - SQ_AXIS_MIN;
+        const pct = range > 0 ? (v - SQ_AXIS_MIN) / range : 0;
+        return plotBottom - pct * (plotBottom - plotTop);
+      }
+
+      function _sqXProject(timeSec, gameLengthSec, plotLeft, plotRight) {
+        const denom = Math.max(1, Number(gameLengthSec) || 1);
+        const t = Math.max(0, Math.min(denom, Number(timeSec) || 0));
+        return plotLeft + (t / denom) * (plotRight - plotLeft);
+      }
+
+      function _sqLinePoints(samples, gameLengthSec, plotLeft, plotRight, plotTop, plotBottom) {
+        if (!Array.isArray(samples) || samples.length === 0) return [];
+        const out = [];
+        for (const s of samples) {
+          const sm = s && (s.smoothed_sq != null ? s.smoothed_sq : s.instantaneous_sq);
+          if (sm == null) continue;
+          out.push([
+            _sqXProject(s.time, gameLengthSec, plotLeft, plotRight),
+            _sqYProject(sm, plotTop, plotBottom),
+          ]);
+        }
+        return out;
+      }
+
+      function _sqPathD(points) {
+        if (!points.length) return "";
+        return points
+          .map(
+            (p, i) =>
+              `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`,
+          )
+          .join(" ");
+      }
+
+      function SpendingEfficiencyChart({
+        gameId,
+        statsEvents,
+        oppStatsEvents,
+        leakWindows,
+        oppLeakWindows,
+        gameLengthSec,
+        myColor,
+        oppColor,
+      }) {
+        const mySamples = Array.isArray(statsEvents) ? statsEvents : [];
+        const oppSamples = Array.isArray(oppStatsEvents) ? oppStatsEvents : [];
+        const myLeaks = Array.isArray(leakWindows) ? leakWindows : [];
+        const oppLeaks = Array.isArray(oppLeakWindows) ? oppLeakWindows : [];
+
+        // Empty state — real data only, never synthesize.
+        const haveMine = mySamples.some((s) => s && s.smoothed_sq != null);
+        const haveOpp = oppSamples.some((s) => s && s.smoothed_sq != null);
+        if (!haveMine && !haveOpp) {
+          return (
+            <div
+              className="bg-base-900 ring-soft rounded-lg p-3 my-2 border border-base-700 text-xs text-neutral-500"
+              title="PlayerStatsEvent samples not available for this replay — instantaneous SQ cannot be computed."
+            >
+              <span className="text-[11px] uppercase tracking-wider text-neutral-500 mr-2">
+                Spending efficiency over time
+              </span>
+              <span className="font-mono text-neutral-400">—</span>
+            </div>
+          );
+        }
+
+        // Game length: prefer the prop, fall back to the latest sample time.
+        const inferredEnd = Math.max(
+          ...mySamples.map((s) => Number(s.time) || 0),
+          ...oppSamples.map((s) => Number(s.time) || 0),
+          1,
+        );
+        const gl = Number(gameLengthSec) > 0 ? Number(gameLengthSec) : inferredEnd;
+
+        const plotLeft = SQ_CHART_PAD_LEFT;
+        const plotRight = SQ_CHART_VIEW_W - SQ_CHART_PAD_RIGHT;
+        const plotTop = SQ_CHART_PAD_TOP;
+        const plotBottom = SQ_CHART_VIEW_H - SQ_CHART_PAD_BOTTOM;
+
+        const myPoints = _sqLinePoints(mySamples, gl, plotLeft, plotRight, plotTop, plotBottom);
+        const oppPoints = _sqLinePoints(oppSamples, gl, plotLeft, plotRight, plotTop, plotBottom);
+
+        const myStroke = myColor || "var(--color-success)";
+        const oppStroke = oppColor || "var(--color-text-muted)";
+        const leakFill = "var(--color-danger)";
+
+        const handleLeakClick = (window_, isMine) => {
+          if (!isMine) return; // only my leaks deep-link to my build order
+          try {
+            window.dispatchEvent(
+              new CustomEvent("sc2:focus-build-order", {
+                detail: {
+                  gameId,
+                  start: Number(window_.start) || 0,
+                  end: Number(window_.end) || 0,
+                },
+              }),
+            );
+          } catch (_e) {
+            // Older browsers / sandboxed iframes that disallow CustomEvent
+            // construction silently no-op rather than throwing into the
+            // React tree and crashing the whole panel.
+          }
+        };
+
+        const formatClock = (sec) => {
+          const s = Math.max(0, Math.floor(Number(sec) || 0));
+          return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+        };
+
+        return (
+          <div className="bg-base-900 ring-soft rounded-lg p-3 my-2 border border-base-700">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="text-[11px] uppercase tracking-wider text-neutral-500">
+                Spending efficiency over time
+              </span>
+              <span className="text-[11px] text-neutral-500">
+                Smoothed SQ • red bands = leak windows
+              </span>
+              {myLeaks.length > 0 && (
+                <span className="ml-auto text-[11px] text-loss-500 tabular-nums">
+                  {myLeaks.length} leak{myLeaks.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+            <svg
+              viewBox={`0 0 ${SQ_CHART_VIEW_W} ${SQ_CHART_VIEW_H}`}
+              className="w-full"
+              style={{ maxHeight: SQ_CHART_VIEW_H }}
+              role="img"
+              aria-label="Spending efficiency over time"
+            >
+              {/* Leak threshold reference line at SQ=50. */}
+              <line
+                x1={plotLeft}
+                x2={plotRight}
+                y1={_sqYProject(SQ_LEAK_THRESHOLD, plotTop, plotBottom)}
+                y2={_sqYProject(SQ_LEAK_THRESHOLD, plotTop, plotBottom)}
+                stroke="var(--color-border-subtle)"
+                strokeWidth="1"
+                strokeDasharray="4 3"
+              />
+              {/* Y-axis ticks. */}
+              {SQ_TICK_VALUES.map((tv) => (
+                <g key={`ytick-${tv}`}>
+                  <line
+                    x1={plotLeft - 3}
+                    x2={plotLeft}
+                    y1={_sqYProject(tv, plotTop, plotBottom)}
+                    y2={_sqYProject(tv, plotTop, plotBottom)}
+                    stroke="var(--color-text-muted)"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={plotLeft - 6}
+                    y={_sqYProject(tv, plotTop, plotBottom) + 3}
+                    textAnchor="end"
+                    fontSize="10"
+                    fill="var(--color-text-secondary)"
+                  >
+                    {tv}
+                  </text>
+                </g>
+              ))}
+              {/* Opponent leak bands: dimmed, non-interactive. */}
+              {oppLeaks.map((lk, i) => {
+                const x1 = _sqXProject(lk.start, gl, plotLeft, plotRight);
+                const x2 = _sqXProject(lk.end, gl, plotLeft, plotRight);
+                return (
+                  <rect
+                    key={`opp-leak-${i}`}
+                    x={x1}
+                    y={plotTop}
+                    width={Math.max(1, x2 - x1)}
+                    height={plotBottom - plotTop}
+                    fill={leakFill}
+                    fillOpacity="0.10"
+                  />
+                );
+              })}
+              {/* My leak bands: clickable, brighter. */}
+              {myLeaks.map((lk, i) => {
+                const x1 = _sqXProject(lk.start, gl, plotLeft, plotRight);
+                const x2 = _sqXProject(lk.end, gl, plotLeft, plotRight);
+                const w = Math.max(2, x2 - x1);
+                return (
+                  <g
+                    key={`my-leak-${i}`}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => handleLeakClick(lk, true)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleLeakClick(lk, true);
+                      }
+                    }}
+                    aria-label={`Leak window from ${formatClock(lk.start)} to ${formatClock(lk.end)}, click to focus build order`}
+                  >
+                    <title>{`Leak ${formatClock(lk.start)}-${formatClock(lk.end)} • avg unspent ${Math.round(lk.avg_unspent || 0)} • avg income ${Math.round(lk.avg_income || 0)}/min — click to focus build order`}</title>
+                    <rect
+                      x={x1}
+                      y={plotTop}
+                      width={w}
+                      height={plotBottom - plotTop}
+                      fill={leakFill}
+                      fillOpacity="0.22"
+                    />
+                    <rect
+                      x={x1}
+                      y={plotBottom - 3}
+                      width={w}
+                      height={3}
+                      fill={leakFill}
+                      fillOpacity="0.95"
+                    />
+                  </g>
+                );
+              })}
+              {/* Opponent line (dimmed) under my line. */}
+              {oppPoints.length > 1 && (
+                <path
+                  d={_sqPathD(oppPoints)}
+                  fill="none"
+                  stroke={oppStroke}
+                  strokeWidth="1.5"
+                  strokeOpacity="0.55"
+                />
+              )}
+              {/* My line. */}
+              {myPoints.length > 1 && (
+                <path
+                  d={_sqPathD(myPoints)}
+                  fill="none"
+                  stroke={myStroke}
+                  strokeWidth="2"
+                />
+              )}
+              {/* X axis baseline. */}
+              <line
+                x1={plotLeft}
+                x2={plotRight}
+                y1={plotBottom}
+                y2={plotBottom}
+                stroke="var(--color-border-default)"
+                strokeWidth="1"
+              />
+              {/* X axis: minute ticks. */}
+              {(() => {
+                const ticks = [];
+                const stepSec = 60;
+                for (let t = 0; t <= gl; t += stepSec) {
+                  const x = _sqXProject(t, gl, plotLeft, plotRight);
+                  ticks.push(
+                    <g key={`xtick-${t}`}>
+                      <line
+                        x1={x}
+                        x2={x}
+                        y1={plotBottom}
+                        y2={plotBottom + 3}
+                        stroke="var(--color-text-muted)"
+                        strokeWidth="1"
+                      />
+                      <text
+                        x={x}
+                        y={plotBottom + 14}
+                        textAnchor="middle"
+                        fontSize="10"
+                        fill="var(--color-text-secondary)"
+                      >
+                        {formatClock(t)}
+                      </text>
+                    </g>,
+                  );
+                }
+                return ticks;
+              })()}
+              {/* Y axis title. */}
+              <text
+                x={plotLeft - 30}
+                y={plotTop + (plotBottom - plotTop) / 2}
+                fontSize="9"
+                fill="var(--color-text-muted)"
+                transform={`rotate(-90 ${plotLeft - 30} ${plotTop + (plotBottom - plotTop) / 2})`}
+                textAnchor="middle"
+              >
+                SQ
+              </text>
+            </svg>
+            {myLeaks.length === 0 && haveMine && (
+              <div className="text-[10px] text-neutral-500 mt-1">
+                No leak windows detected — sustained spending efficiency throughout.
+              </div>
+            )}
           </div>
         );
       }
@@ -3655,27 +4048,41 @@
                   </div>
                 </div>
               </div>
-              {/* Chrono allocation — Protoss-only donut + table.
-                  Renders only when the backend emitted a non-empty
-                  raw.chrono_targets list (Protoss replays with at
-                  least one resolvable chrono cast). Sits between the
-                  How-calculated / leaks 2-col grid above and the
-                  Active Army & Workers chart below. */}
-              {effectiveRace === "Protoss" &&
-                Array.isArray(raw.chrono_targets) &&
-                raw.chrono_targets.length > 0 && (
-                <ChronoAllocationPanel targets={raw.chrono_targets} />
-              )}
-              {/* Active Army & Workers — full-width below the macro grid
-                  so it lines up with the APM and Resources charts that
-                  follow. Renders a fallback notice when stats_events is
-                  empty (older replay with no PlayerStatsEvent rows). */}
+              {/* Macro detail flow (top -> bottom):
+                    1. Active Army & Workers   — headline economy/army snapshot,
+                                                  always rendered when stats_events present.
+                    2. Chrono allocation       — Protoss-only deep-dive on where
+                                                  chronos landed; renders below the
+                                                  headline so race-specific detail
+                                                  reads as a refinement, not a header.
+                    3. Spending efficiency     — over-time SQ curve with leak windows;
+                                                  ties back to BuildOrderTimeline via
+                                                  the sc2:focus-build-order event.
+                  Each section uses an mt-4 wrapper for a consistent vertical
+                  rhythm; each chart owns its own card chrome and header. */}
               <div className="mt-4">
                 <MacroResourceChart
                   statsEvents={breakdown && breakdown.stats_events}
                   oppStatsEvents={breakdown && breakdown.opp_stats_events}
                   unitTimeline={breakdown && breakdown.unit_timeline}
                   race={race}
+                  gameLengthSec={breakdown && breakdown.game_length_sec}
+                />
+              </div>
+              {effectiveRace === "Protoss" &&
+                Array.isArray(raw.chrono_targets) &&
+                raw.chrono_targets.length > 0 && (
+                <div className="mt-4">
+                  <ChronoAllocationPanel targets={raw.chrono_targets} />
+                </div>
+              )}
+              <div className="mt-4">
+                <SpendingEfficiencyChart
+                  gameId={gameId}
+                  statsEvents={breakdown && breakdown.stats_events}
+                  oppStatsEvents={breakdown && breakdown.opp_stats_events}
+                  leakWindows={raw.leak_windows}
+                  oppLeakWindows={raw.opp_leak_windows}
                   gameLengthSec={breakdown && breakdown.game_length_sec}
                 />
               </div>
