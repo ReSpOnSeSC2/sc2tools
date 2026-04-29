@@ -363,8 +363,7 @@
             time:        document.getElementById('session-time'),
             streak:      document.getElementById('session-streak'),
             mmrRow:      document.querySelector('#session-widget .session-mmr-row'),
-            mmrDelta:    document.getElementById('session-mmr-delta'),
-            mmrCurrent:  document.getElementById('session-mmr-current')
+            serverMmr:   document.getElementById('session-server-mmr')
         }
     };
 
@@ -748,31 +747,38 @@
     }
 
     function renderSessionMmr(state) {
+        // Single large 'SERVER MMR' line (e.g., 'NA 4280'). Replaces
+        // the older delta + current pair. The +/-1 session-delta UI
+        // was removed because the player's current rating is the
+        // stat that matters at a glance; session swing is implicit
+        // in the W-L row above.
         const e = els.session;
-        if (!e || !e.mmrDelta || !e.mmrCurrent) return;
-        const delta = Number(state.mmrDelta);
+        if (!e || !e.serverMmr) return;
         const current = Number(state.mmrCurrent);
-        const hasDelta = Number.isFinite(delta);
         const hasCurrent = Number.isFinite(current);
-        if (hasDelta) {
-            const sign = delta > 0 ? '+' : (delta < 0 ? '' : '±');
-            safeText(e.mmrDelta, `${sign}${delta}`);
-            e.mmrDelta.classList.remove('delta-up', 'delta-down', 'delta-zero');
-            if (delta > 0) e.mmrDelta.classList.add('delta-up');
-            else if (delta < 0) e.mmrDelta.classList.add('delta-down');
-            else e.mmrDelta.classList.add('delta-zero');
-        } else {
-            safeText(e.mmrDelta, '—');
-            e.mmrDelta.classList.remove('delta-up', 'delta-down', 'delta-zero');
-        }
-        safeText(e.mmrCurrent, hasCurrent ? String(current) : '—');
+        const region = (state.region || '').toString().trim();
+        const hasRegion = region.length > 0;
+        let label;
+        if (hasRegion && hasCurrent) label = `${region} ${current}`;
+        else if (hasCurrent)         label = String(current);
+        else if (hasRegion)          label = `${region} —`;
+        else                         label = '—';
+        safeText(e.serverMmr, label);
         if (e.mmrRow) {
-            e.mmrRow.dataset.state = (hasDelta || hasCurrent) ? 'ready' : 'empty';
+            e.mmrRow.dataset.state = (hasCurrent || hasRegion) ? 'ready' : 'empty';
         }
     }
 
     socket.on('session_state', renderSession);
     renderSession({ wins: 0, losses: 0, mmrDelta: 0, durationText: '0m', currentStreak: {} });
+    // Immediate /api/session pull so the SERVER + MMR line populates
+    // on first paint instead of waiting for the next 60s poll. The
+    // backend also emits session_state on socket connect, but a stale
+    // socket (e.g., overlay opened before the server is ready) would
+    // otherwise leave the widget on '—' until the next tick.
+    fetch(`${SERVER_URL}/api/session`).then(r => r.ok ? r.json() : null)
+        .then(s => s && renderSession(s))
+        .catch(() => {});
 
     // Live update of #opp-mmr when the backend resolves the
     // opponent's SC2Pulse rating AFTER the opponent widget is

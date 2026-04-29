@@ -96,6 +96,12 @@ def _atomic_write_json(path: str, data: Any, indent: int = 4) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=indent, ensure_ascii=False)
+            # flush+fsync BEFORE rename so a process kill / system sleep /
+            # AV lock can't leave the renamed-into-place file with only
+            # the bytes the Windows NTFS lazy writer happened to flush.
+            # See core/atomic_io.py for the full failure-mode write-up.
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_path, path)
     except Exception:
         try:

@@ -197,8 +197,26 @@ function ensureLoaded() {
 function persistMetaDb() {
     if (!dbCache.meta || !dbCache.meta.data) return;
     const tmp = META_DB_PATH + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(dbCache.meta.data, null, 2), 'utf8');
-    fs.renameSync(tmp, META_DB_PATH);
+    // Open + write + fsync + close + rename. fs.writeFileSync skips
+    // fsync, so on Windows NTFS the lazy writer could defer the data
+    // flush past the rename -- the same mechanism that has been
+    // silently truncating meta_database.json. fsyncSync forces the
+    // bytes to durable storage before we publish the rename, matching
+    // the contract used by index.js _atomicWriteJsonSync.
+    const body = JSON.stringify(dbCache.meta.data, null, 2);
+    let fd = -1;
+    try {
+        fd = fs.openSync(tmp, 'w');
+        fs.writeSync(fd, body);
+        fs.fsyncSync(fd);
+        fs.closeSync(fd);
+        fd = -1;
+        fs.renameSync(tmp, META_DB_PATH);
+    } catch (err) {
+        if (fd !== -1) { try { fs.closeSync(fd); } catch (_) {} }
+        try { fs.unlinkSync(tmp); } catch (_) {}
+        throw err;
+    }
     // Refresh signature so the watcher doesn't think the file changed
     // out from under us and trigger a redundant analyzer_db_changed event.
     dbCache.meta.signature = fileSignature(META_DB_PATH);

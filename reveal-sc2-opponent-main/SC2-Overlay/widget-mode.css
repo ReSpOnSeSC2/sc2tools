@@ -161,6 +161,15 @@ body.single-widget.widget-session .session-mmr {
     font-size: 9vw;
     line-height: 1;
 }
+/* New 'SERVER MMR' line (e.g., 'EU 5264'). Sized to read as a hero
+   stat alongside the W-L number rather than the small subtitle the
+   old delta+current pair rendered as. */
+body.single-widget.widget-session .session-server-mmr {
+    font-size: 13vw;
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: 0.3vw;
+}
 body.single-widget.widget-session .session-time {
     font-size: 7vw;
     letter-spacing: 0.4vw;

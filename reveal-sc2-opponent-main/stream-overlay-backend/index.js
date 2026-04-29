@@ -188,6 +188,11 @@ function defaultSession() {
         losses: 0,
         mmrStart: null,
         mmrCurrent: null,
+        // SC2Pulse region label (e.g., 'NA', 'EU', 'KR', 'CN') for the
+        // active team picked by pickActiveTeam(). Captured at Pulse init
+        // and refreshed on every applyPulseRating() so the session widget
+        // can render the player's current server immediately.
+        region: null,
         // Most-recent OPPONENT MMR resolved via the SC2Pulse
         // opponent-search flow (PowerShell -> opponent.txt). Reset
         // to null at session start; refreshed when opponent.txt
@@ -403,6 +408,10 @@ function sessionSnapshot() {
         mmrCurrent: session.mmrCurrent,
         mmrOpponent: session.mmrOpponent,
         league: mmrToLeague(session.mmrCurrent),
+        // Active SC2Pulse region ('NA' / 'EU' / 'KR' / 'CN'); null until the
+        // first Pulse fetch resolves. The session widget renders this next
+        // to the player's current MMR so the server is visible at a glance.
+        region: session.region || null,
         durationText: h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`,
         currentStreak: { ...session.currentStreak },
         metaCounts: { ...session.metaCounts }
@@ -551,11 +560,37 @@ async function pulseGetActiveRating() {
 // team object (when available) so we can log which region/race got
 // picked -- useful for multi-region users to verify the right account
 // is being tracked.
+// Pull a region label ('NA' | 'EU' | 'KR' | 'CN') off a raw SC2Pulse
+// team object's first member's character. Returns null when the team
+// or character isn't usable (so the caller can preserve a previously-
+// known region instead of clobbering it with null).
+//
+// SC2Pulse returns ch.region as EITHER a numeric code (1/2/3/5) or a
+// string enum ('US' | 'EU' | 'KR' | 'CN'). We normalize both into the
+// short label the session widget renders. Note that Pulse uses 'US'
+// for the Americas region; we surface it as 'NA' in the UI to match
+// the convention SC2 players actually use ('NA server').
+const PULSE_STRING_REGION_LABEL = {
+    US: 'NA', NA: 'NA', EU: 'EU', KR: 'KR', CN: 'CN',
+};
+function extractTeamRegionLabel(team) {
+    if (!team) return null;
+    const m = (team.members && team.members[0]) || {};
+    const ch = m.character || {};
+    const r = ch.region;
+    if (r == null) return null;
+    if (typeof r === 'number') return PULSE_REGION_LABEL[r] || null;
+    const key = String(r).toUpperCase();
+    return PULSE_STRING_REGION_LABEL[key] || null;
+}
+
 function applyPulseRating(rating, sourceTag, team) {
     if (!Number.isFinite(rating)) return false;
     if (session.mmrStart == null) session.mmrStart = rating;
     const prev = Number.isFinite(session.mmrCurrent) ? session.mmrCurrent : null;
     session.mmrCurrent = rating;
+    const regionLabel = extractTeamRegionLabel(team);
+    if (regionLabel) session.region = regionLabel;
     recomputeSessionMmrDelta();
     saveSession();
     broadcastSession();
@@ -678,12 +713,58 @@ async function ensurePulseInitialized() {
 // ------------------------------------------------------------------
 // HISTORY HELPERS
 // ------------------------------------------------------------------
+// Recover a JSON object from a string truncated mid-write. Walks back
+// from EOF looking for the last well-formed top-level entry close
+// ("    }," at indent 4 -- json.dump(indent=4) format from the Python
+// watcher), trims after that line, and appends the missing top-level
+// brace. Returns null when no anchor is found so the caller can fall
+// back to {} rather than ship garbage.
+function _attemptHistoryRepair(text) {
+    if (!text || typeof text !== 'string') return null;
+    const lines = text.split(/\r?\n/);
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const trimmed = lines[i].replace(/\s+$/, '');
+        if (trimmed === '    }' || trimmed === '    },') {
+            // Drop trailing comma so the JSON closes cleanly
+            const head = lines.slice(0, i + 1);
+            head[head.length - 1] = '    }';
+            const candidate = head.join('\n') + '\n}\n';
+            try {
+                const parsed = JSON.parse(candidate);
+                if (parsed && typeof parsed === 'object') return parsed;
+            } catch (_) { /* keep retreating */ }
+        }
+    }
+    return null;
+}
+
 function readHistory() {
     try {
         if (!fs.existsSync(HISTORY_FILE_PATH)) return {};
         let raw = fs.readFileSync(HISTORY_FILE_PATH, 'utf8');
         if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
-        return JSON.parse(raw);
+        try {
+            return JSON.parse(raw);
+        } catch (parseErr) {
+            // The Black Book has been hit by mid-write truncation a
+            // few times (the watcher writing while the network FS
+            // syncs partially across the Windows mount). Rather than
+            // surface 'first meeting' for every opponent until the
+            // user notices, attempt a tail-trim recovery that drops
+            // the partial entry and rebuilds a parseable object.
+            const recovered = _attemptHistoryRepair(raw);
+            if (recovered) {
+                const n = Object.keys(recovered).length;
+                console.warn(
+                    `[History] On-disk file is truncated (${parseErr.message}); ` +
+                    `recovered ${n} entries via tail-trim repair. ` +
+                    `Restart the replay watcher to rewrite the file cleanly.`
+                );
+                return recovered;
+            }
+            console.error('[History] Read failed and recovery declined to anchor:', parseErr.message);
+            return {};
+        }
     } catch (err) {
         console.error('[History] Read failed:', err.message);
         return {};
@@ -826,17 +907,34 @@ function buildRecentGamesForOpponent(oppName, limit) {
     if (!oppName) return [];
     const db = readMetaDb();
     if (!db || typeof db !== 'object') return [];
-    const target = String(oppName).trim().toLowerCase();
-    if (!target) return [];
+    // Compare by the SAME normalized name-forms that findOpponentByName
+    // uses against MyOpponentHistory.json. The PowerShell scanner writes
+    // SC2Pulse Character.Name to opponent.txt, which carries the BattleTag
+    // discriminator ('Player#1234'); the meta DB stores the bare in-game
+    // name from sc2reader ('Player'). A strict toLowerCase() compare
+    // missed every match in that case, leaving the scouting card empty.
+    const targetForms = nameForms(oppName);
+    if (targetForms.size === 0) return [];
     const flat = [];
+    let scanned = 0;
     for (const [buildName, bd] of Object.entries(db)) {
         if (!bd || !Array.isArray(bd.games)) continue;
         for (const g of bd.games) {
-            const opp = String(g && g.opponent || '').trim().toLowerCase();
-            if (opp !== target) continue;
+            scanned++;
+            const oppForms = nameForms(g && g.opponent);
+            if (oppForms.size === 0) continue;
+            let matched = false;
+            for (const f of oppForms) {
+                if (targetForms.has(f)) { matched = true; break; }
+            }
+            if (!matched) continue;
             flat.push({ buildName, g });
         }
     }
+    console.log(
+        `[Scout] recent-games lookup: opp="${oppName}" forms=${targetForms.size} ` +
+        `scanned=${scanned} matched=${flat.length} cap=${cap}`
+    );
     if (flat.length === 0) return [];
     // Newest first by date string (ISO sorts lexicographically).
     flat.sort((a, b) => String(b.g.date || '').localeCompare(String(a.g.date || '')));
@@ -1562,14 +1660,49 @@ app.post('/api/test/event', (req, res) => {
 // ------------------------------------------------------------------
 // OPPONENT FILE WATCHER (pre-game hooks)
 // ------------------------------------------------------------------
+// Parse the opponent's display name out of opponent.txt. The PowerShell
+// scanner (Reveal-Sc2Opponent.ps1) writes lines in several shapes
+// depending on its rating/race format flags:
+//   '[CLAN]Player(2840) P'
+//   '[CLAN] Player [2840] Zerg'
+//   '[CLAN]Player 2840MMR P (5-3)'         <- new long-format default
+//   'Player#1234 5018MMR T (12-8), MyRace=Protoss'
+// We strip the clan-tag prefix, take only the first comma-delimited
+// chunk (so 'MyRace=...' tails are dropped), then peel known suffixes
+// off the right edge until only the player name remains:
+//   1. trailing '(W-L)' record like '(5-3)' or '(0-0)'
+//   2. trailing race token: 'Z'/'P'/'T'/'R' or full name
+//   3. trailing MMR token: '<digits>MMR' or bracketed '(2840)'/'[2840]'
+//   4. trailing bare numeric MMR like '5018' (short-format scanner)
+// Pre-2026 the scanner only ever emitted parens-wrapped MMR which the
+// old strip-all-parens pass caught -- the new long format leaves the
+// digits unwrapped, which jammed '<rating>MMR <race>' onto the name
+// and broke every recent-games / Black Book lookup.
+const _OPP_SUFFIX_PATTERNS = [
+    /\s*\(\s*\d+\s*-\s*\d+\s*\)\s*$/,                        // (W-L)
+    /\s+(?:Zerg|Protoss|Terran|Random|[ZPTR])\s*$/i,               // race
+    /\s*[\(\[]\s*\d{3,5}\s*[\)\]]\s*$/,                       // (2840)/[2840]
+    /\s+\d{3,5}\s*MMR\s*$/i,                                      // 2840MMR
+    /\s+\d{3,5}\s*$/,                                              // bare digits
+];
+
 function parseFirstOpponentName(line) {
     if (!line) return null;
-    const firstChunk = line.split(',')[0] || line;
-    const cleaned = firstChunk
-        .replace(/\(.*?\)/g, '')
-        .replace(/\[.*?\]/g, '')
-        .trim();
-    return cleaned || null;
+    let s = String(line).split(',')[0] || line;
+    // Strip leading clan tag '[CLAN]' (with or without trailing space)
+    s = s.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    // Iteratively peel known suffixes (race/MMR/W-L). Each pass strips
+    // at most one match; loop until nothing changes so the order of
+    // suffix tokens doesn't matter.
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (const re of _OPP_SUFFIX_PATTERNS) {
+            const next = s.replace(re, '').trim();
+            if (next !== s) { s = next; changed = true; }
+        }
+    }
+    return s || null;
 }
 
 function parseMyRaceFromOpponentLine(line) {

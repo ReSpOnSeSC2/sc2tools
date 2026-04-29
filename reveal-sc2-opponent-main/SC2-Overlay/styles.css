@@ -645,32 +645,26 @@ html, body {
 .session-row.session-mmr-row {
     display: flex;
     align-items: baseline;
-    gap: 0.4rem;
-    margin-top: 1px;
-    font-size: 1rem;
+    gap: 0.5rem;
+    margin-top: 4px;
+}
+
+.session-row.session-mmr-row[data-state="empty"] .session-server-mmr {
+    color: var(--color-overlay-text-dim);
     font-weight: 700;
-    letter-spacing: 0.5px;
-    color: var(--color-overlay-text-dim);
 }
 
-.session-row.session-mmr-row[data-state="empty"] .session-mmr-delta,
-.session-row.session-mmr-row[data-state="empty"] .session-mmr-current {
-    color: var(--color-overlay-text-dim);
-}
-
-.session-mmr-delta.delta-up   { color: var(--color-overlay-victory); }
-.session-mmr-delta.delta-down { color: var(--color-overlay-defeat);  }
-.session-mmr-delta.delta-zero { color: var(--color-overlay-text-dim); }
-
-.session-mmr-current {
+/* Large, prominent 'SERVER MMR' line (e.g., 'NA 4280'). Matches the
+   W-L row's font size so the player's current rating reads as a
+   primary stat instead of the previous small dim subtitle. */
+.session-server-mmr {
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: 1px;
     color: var(--color-overlay-text);
 }
 
 .session-sep {
     color: var(--color-overlay-text-dim);
     opacity: 0.7;
-}
-.session-sep-mmr {
-    /* same color/opacity as the W-L separator; explicit selector is here so
-       a downstream theme can re-target it without affecting the W-L row. */
 }

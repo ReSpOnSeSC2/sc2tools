@@ -10,7 +10,14 @@ import concurrent.futures
 from core.atomic_io import atomic_write_json
 
 # --- CONFIGURATION ---
-HISTORY_FILE = "MyOpponentHistory.json"
+# Canonical Black Book path. Was a bare relative string
+# ('MyOpponentHistory.json') that resolved against the watcher's CWD
+# -- which left writes landing at the project root while the Express
+# backend kept reading data/MyOpponentHistory.json. The two files
+# drifted, so freshly-played opponents never showed up in the
+# scouting card's head-to-head record. Always import from core.paths
+# now so writer and reader stay aligned.
+from core.paths import HISTORY_FILE  # noqa: E402
 REPLAYS_DIR = r"C:\Users\jay19\OneDrive\Pictures\Documents\StarCraft II\Accounts\50983875\1-S2-1-267727"
 
 def is_me(player_name):

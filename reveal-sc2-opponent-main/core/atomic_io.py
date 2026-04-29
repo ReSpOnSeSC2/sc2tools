@@ -56,6 +56,17 @@ def atomic_write_json(
     try:
         with os.fdopen(fd, "w", encoding=encoding) as f:
             json.dump(data, f, indent=indent, ensure_ascii=ensure_ascii)
+            # Force the data to physical disk BEFORE the rename.
+            # Without this, on Windows NTFS the rename only updates the
+            # directory entry; the lazy writer flushes the actual data
+            # blocks up to several seconds later, so a kill/sleep/AV-
+            # lock between the rename and the flush leaves the renamed-
+            # into-place file with only the bytes the OS happened to
+            # flush. That's the mechanism that has been silently
+            # truncating MyOpponentHistory.json and meta_database.json
+            # every few days.
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_path, path)
     except Exception:
         # On any failure, scrub the temp file so we don't leak it.
@@ -83,6 +94,10 @@ def atomic_write_text(
     try:
         with os.fdopen(fd, "w", encoding=encoding) as f:
             f.write(text)
+            # See atomic_write_json above: flush+fsync before rename to
+            # close the Windows NTFS lazy-writer truncation window.
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_path, path)
     except Exception:
         try:
