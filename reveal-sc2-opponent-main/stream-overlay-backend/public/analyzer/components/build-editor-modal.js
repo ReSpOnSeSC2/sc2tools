@@ -691,23 +691,28 @@
   }
 
   function renderCountField(rule, idx, s) {
-    var editing = s.editingCountIdx === idx;
-    if (editing) {
-      return c('input', {
-        type: 'number', min: rule.type === 'count_min' ? 1 : 0, max: H.COUNT_MAX,
-        defaultValue: rule.count, className: 'w-12 bg-base-800 border border-accent-500 rounded px-1 text-neutral-100 text-[11px] tabular-nums',
-        autoFocus: true,
-        onBlur: function (e) { s.commitCountEdit(idx, e.target.value); },
-        onKeyDown: function (e) {
-          if (e.key === 'Enter') { e.preventDefault(); s.commitCountEdit(idx, e.target.value); }
-          else if (e.key === 'Escape') { s.setEditingCountIdx(-1); }
-        },
-      });
-    }
-    return c('button', {
-      className: 'font-mono text-[11px] tabular-nums hover:underline',
-      title: 'Click to edit count', onClick: function () { s.setEditingCountIdx(idx); },
-    }, rule.count);
+    // Stage 7.5b: always render as <input> — earlier the count was a
+    // button-that-becomes-input-on-click, which felt like a double-click
+    // (click 1 swapped the element, click 2 placed cursor). Now: one
+    // click focuses + selects, type to overwrite, scroll wheel adjusts.
+    var lo = rule.type === 'count_min' ? 1 : 0;
+    return c('input', {
+      type: 'number', min: lo, max: H.COUNT_MAX, value: rule.count, step: 1,
+      className: 'w-12 bg-base-900/60 border border-accent-500/60 rounded px-1 text-accent-300 text-[11px] tabular-nums font-mono text-center focus:border-accent-500 focus:outline-none cursor-text hover:bg-base-900',
+      title: 'Type or scroll-wheel to change count (' + lo + '–' + H.COUNT_MAX + ')',
+      'aria-label': 'Count for ' + rule.name,
+      onClick: function (e) { e.stopPropagation(); e.target.select(); },
+      onChange: function (e) {
+        var n = parseInt(e.target.value, 10);
+        if (!isNaN(n)) s.updateRule(idx, { count: Math.max(lo, H.clampCount(n)) });
+      },
+      onWheel: function (e) {
+        e.preventDefault();
+        var delta = e.deltaY < 0 ? 1 : -1;
+        var next = Math.max(lo, H.clampCount((rule.count || 0) + delta));
+        s.updateRule(idx, { count: next });
+      },
+    });
   }
 
   // =====================================================================
