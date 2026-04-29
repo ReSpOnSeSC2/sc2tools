@@ -60,6 +60,17 @@
        are matchup-relevant and what their icons / display names are. -->
     <script src="/static/analyzer/timing_catalog.js"></script>
 
+    <!-- Stage 7.5: Build editor modal split out of this file. The
+         helpers file is plain JS (UMD-lite) and exposes
+         `window.BuildEditorHelpers`. The modal file uses
+         React.createElement directly (no JSX, so no babel-standalone
+         compile step) and exposes `window.BuildEditorModal`. Both
+         must load AFTER React UMD (loaded earlier) and BEFORE the
+         <script type="text/babel"> block below that mounts the
+         <BuildEditorModal /> JSX into the timeline drawer. -->
+    <script src="/static/analyzer/components/build-editor-helpers.js"></script>
+    <script src="/static/analyzer/components/build-editor-modal.js"></script>
+
     <!-- Charts are now hand-rolled SVG inside the JSX block below --
        no Recharts/Chart.js CDN required. This makes the analyzer
        work even on locked-down networks where third-party CDNs are
@@ -2304,6 +2315,15 @@
         // writes opp_build_log + opp_early_build_log back to meta_database.
         const [extracting, setExtracting] = useState(false);
         const [extractError, setExtractError] = useState(null);
+        // Stage 7.5: build-editor modal state. The editor is opened
+        // lazily via POST /api/custom-builds/from-game; we keep its
+        // state local to this component so each opened drawer has
+        // its own independent editor instance.
+        const [editorOpen, setEditorOpen] = useState(false);
+        const [editorDraft, setEditorDraft] = useState(null);
+        const [editorLoading, setEditorLoading] = useState(false);
+        const [editorProfileReady, setEditorProfileReady] = useState(true);
+        const [editorError, setEditorError] = useState(null);
         // Stage 6.5: leak-window focus state. When the spending efficiency
         // chart fires sc2:focus-build-order with a {start, end} window, we
         // store it here so the events list highlights everything inside
@@ -2455,6 +2475,49 @@
             });
         };
 
+        // Stage 7.5: open the build editor with a server-derived
+        // draft. Probes /api/profile/exists first so the editor knows
+        // whether to disable the Save button (profile.json is required
+        // for community attribution). Errors are surfaced inline rather
+        // than thrown so the timeline stays responsive.
+        const openBuildEditor = () => {
+          setEditorLoading(true);
+          setEditorError(null);
+          const sourceEvents = wantOpp ? oppAllEvents : myAllEvents;
+          const draftBody = {
+            // Pass events directly so the backend skips a meta DB
+            // lookup. Each event maps {time,name,...} -> {t,what} on
+            // the server side via parseLogLine.
+            events: (sourceEvents || []).map((e) => ({
+              t: Number(e && e.time) || 0,
+              what: (window.BuildEditorHelpers ? window.BuildEditorHelpers.spaEventToWhat(e) : null) || (e && e.name) || "",
+            })).filter((ev) => ev.what && /^[A-Za-z][A-Za-z0-9]*$/.test(ev.what)),
+            name: window.BuildEditorHelpers ? window.BuildEditorHelpers.deriveDefaultName(data) : "Custom build",
+            race: wantOpp ? (data && data.opp_race) || "Protoss" : (data && data.my_race) || "Protoss",
+            vs_race: wantOpp ? (data && data.my_race) || "Random" : (data && data.opp_race) || "Random",
+            source_replay_id: gameId,
+            game_id: gameId,
+          };
+          const probeProfile = fetch(`${API}/api/profile/exists`)
+            .then((r) => (r.ok ? r.json() : { exists: false }))
+            .then((j) => setEditorProfileReady(!!(j && (j.exists || j.profile_exists))))
+            .catch(() => setEditorProfileReady(false));
+          const fromGame = fetch(`${API}/api/custom-builds/from-game`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(draftBody),
+          })
+            .then((r) => (r.ok ? r.json() : r.json().then((j) => Promise.reject(j))))
+            .then((j) => {
+              setEditorDraft(j.draft || null);
+              setEditorOpen(true);
+            })
+            .catch((e) => {
+              setEditorError((e && e.error) || "Could not derive a draft from this game.");
+            });
+          Promise.all([probeProfile, fromGame]).finally(() => setEditorLoading(false));
+        };
+
         // Empty-state branches.
         if (wantOpp && !oppAvailable) {
           return (
@@ -2544,6 +2607,32 @@
                 </button>
               </div>
               <div className="ml-auto flex items-center gap-1 text-xs">
+                {/* Stage 7.5: Save as new build CTA. Hidden when the
+                    build-editor module failed to load; disabled while a
+                    /from-game request is in flight or when the timeline
+                    has zero mappable events. */}
+                {window.BuildEditorModal && (
+                  <button
+                    className="px-2 py-0.5 rounded bg-accent-500 text-white hover:opacity-90 disabled:opacity-50 mr-1"
+                    onClick={openBuildEditor}
+                    disabled={editorLoading || allEvents.length === 0}
+                    title={
+                      allEvents.length === 0
+                        ? "No events on this game to save."
+                        : "Open the editor to save these events as a custom build matchable across your library."
+                    }
+                  >
+                    {editorLoading ? "Loading…" : "Save as new build"}
+                  </button>
+                )}
+                {editorError && (
+                  <span
+                    className="text-[10px] text-loss-500 mr-1"
+                    aria-live="polite"
+                  >
+                    {editorError}
+                  </span>
+                )}
                 <button
                   className={`px-2 py-0.5 rounded ${filter === "all" ? "bg-accent-500 text-white" : "bg-base-700 text-neutral-300"}`}
                   onClick={() => setFilter("all")}
@@ -2637,6 +2726,21 @@
                 No events match this filter.
               </div>
             )}
+            {/* Stage 7.5: BuildEditorModal lives in
+                /static/analyzer/components/build-editor-modal.js and
+                attaches to window.BuildEditorModal. Mounted inside the
+                timeline so closing/restoring focus stays correct. */}
+            {editorOpen && window.BuildEditorModal &&
+              React.createElement(window.BuildEditorModal, {
+                open: editorOpen,
+                game: data,
+                gameId: gameId,
+                draft: editorDraft,
+                profileReady: editorProfileReady,
+                onClose: () => setEditorOpen(false),
+                onSaved: () => {},
+                socket: typeof window !== "undefined" ? window.__sc2_socket : null,
+              })}
           </div>
         );
       }
