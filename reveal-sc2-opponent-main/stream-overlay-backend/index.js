@@ -1654,7 +1654,20 @@ app.post('/api/test/event', (req, res) => {
     const { type, payload, durationMs, priority } = req.body || {};
     if (!type) return res.status(400).json({ error: 'type required' });
     const env = emitEvent(type, payload, { durationMs, priority });
-    res.json({ ok: true, event: env });
+    // Tell the caller how many overlay clients (OBS browser sources)
+    // were actually listening when this event went out. The debug panel
+    // surfaces this so the user can tell 'event fired but nothing on
+    // stream' apart from 'no client was listening to begin with'.
+    res.json({ ok: true, event: env, clientsConnected: io.engine.clientsCount });
+});
+
+// Live count of connected overlay clients (any Socket.io connection,
+// which in this codebase is exclusively SC2-Overlay browser sources).
+// Polled by the dev panel to show 'OBS clients: N' so the user can
+// confirm at a glance that their browser sources are listening before
+// firing test events.
+app.get('/api/overlay/clients', (_req, res) => {
+    res.json({ count: io.engine.clientsCount });
 });
 
 // ------------------------------------------------------------------

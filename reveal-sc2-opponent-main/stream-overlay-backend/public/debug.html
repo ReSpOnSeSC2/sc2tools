@@ -83,6 +83,24 @@
             margin-bottom: 16px;
         }
         code { color: var(--accent); }
+        /* Server URL bar (Dev Panel header). Editable so the user can
+           point the panel at a non-default backend, plus a tiny status
+           pill that turns green/red after the connection probe runs. */
+        .server-bar { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+        .server-bar__label { font-size: 0.78rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+        .server-bar__input {
+            background: #0b0e15; color: var(--accent);
+            border: 1px solid var(--border); border-radius: 6px;
+            padding: 4px 8px; font-family: 'Consolas', monospace; font-size: 0.85rem;
+            min-width: 240px; width: auto; flex: 0 1 auto;
+        }
+        .server-bar__pill {
+            font-size: 0.75rem; padding: 3px 10px; border-radius: 999px;
+            border: 1px solid var(--border); letter-spacing: 0.5px; text-transform: uppercase;
+        }
+        .server-bar__pill--ok      { color: var(--good); border-color: #2e6946; background: #142c20; }
+        .server-bar__pill--down    { color: var(--bad);  border-color: #692e3a; background: #2c1620; }
+        .server-bar__pill--unknown { color: var(--muted); }
     </style>
 </head>
 <body>
@@ -90,7 +108,14 @@
     <div class="bar">
         <div>
             <h1>SC2 Overlay — Dev Panel</h1>
-            <p class="lead">Fire any event type without launching a game. Server: <code id="server-url">http://localhost:3000</code></p>
+            <p class="lead">Fire any event type without launching a game.</p>
+            <div class="server-bar">
+                <span class="server-bar__label">Server</span>
+                <input id="server-url" class="server-bar__input" value="http://localhost:3000" />
+                <button id="btn-test-connection">Test connection</button>
+                <span id="server-status" class="server-bar__pill server-bar__pill--unknown">checking…</span>
+                <span id="clients-pill" class="server-bar__pill server-bar__pill--unknown" title="Number of OBS browser sources currently connected to the overlay backend. If this is 0, fired events have no listener and nothing will appear on stream.">OBS: ?</span>
+            </div>
         </div>
         <div>
             <button id="btn-refresh-session">Refresh session</button>
@@ -215,15 +240,103 @@
 
 <script>
 (function () {
-    const API = location.origin;
     const statusEl = document.getElementById('status');
-    document.getElementById('server-url').textContent = API;
+    const urlInput = document.getElementById('server-url');
+    const pill     = document.getElementById('server-status');
+
+    // Resolve the API base. If the page is served over http(s) we trust
+    // location.origin (the default deployment via /static/debug.html).
+    // If it's opened via file:// or any other non-http scheme,
+    // location.origin is 'null' or 'file://' and fetch() to that base
+    // produces the 'Failed to fetch' the user reported. In that case
+    // we fall back to http://localhost:3000 (the documented default).
+    function defaultApiBase() {
+        const proto = location.protocol;
+        if (proto === 'http:' || proto === 'https:') return location.origin;
+        return 'http://localhost:3000';
+    }
+    urlInput.value = defaultApiBase();
+
+    // Strip a trailing slash so we can always concat '/api/...' cleanly.
+    function apiBase() {
+        return (urlInput.value || '').trim().replace(/\/+$/, '');
+    }
+
+    function setStatus(state, text) {
+        pill.className = 'server-bar__pill server-bar__pill--' + state;
+        pill.textContent = text;
+    }
 
     function log(msg, obj) {
         const ts = new Date().toLocaleTimeString();
         const line = obj ? `[${ts}] ${msg} ${JSON.stringify(obj)}` : `[${ts}] ${msg}`;
         statusEl.textContent = line + '\n' + statusEl.textContent;
     }
+
+    // Centralised fetch: builds the URL from apiBase(), surfaces a clean
+    // error message in the status log instead of letting the bare
+    // 'Failed to fetch' bubble up with no context.
+    async function apiFetch(path, options) {
+        const url = apiBase() + path;
+        try {
+            const resp = await fetch(url, options);
+            if (!resp.ok) {
+                const body = await resp.text().catch(() => '');
+                throw new Error('HTTP ' + resp.status + (body ? ' ' + body.slice(0, 120) : ''));
+            }
+            const ct = resp.headers.get('content-type') || '';
+            return ct.includes('application/json') ? resp.json() : resp.text();
+        } catch (err) {
+            const hint = err.message === 'Failed to fetch'
+                ? `Cannot reach ${url}. Is the backend running? Open via ${apiBase()}/static/debug.html instead of double-clicking the file.`
+                : err.message;
+            throw new Error(hint);
+        }
+    }
+
+    // Connection probe: hit GET /api/session and flip the pill.
+    const clientsPill = document.getElementById('clients-pill');
+    function setClientsPill(state, text) {
+        clientsPill.className = 'server-bar__pill server-bar__pill--' + state;
+        clientsPill.textContent = text;
+    }
+
+    async function refreshClientCount() {
+        try {
+            const r = await apiFetch('/api/overlay/clients');
+            const n = Number(r && r.count);
+            // 0 connected clients = no OBS source is listening = the
+            // 'fired but nothing on stream' failure mode. Make it loud.
+            if (!Number.isFinite(n) || n === 0) {
+                setClientsPill('down', 'OBS: 0 listening');
+            } else {
+                setClientsPill('ok', 'OBS: ' + n + ' connected');
+            }
+            return n;
+        } catch (_) {
+            setClientsPill('unknown', 'OBS: ?');
+            return null;
+        }
+    }
+    // Poll continuously so toggling a source in OBS reflects immediately.
+    setInterval(refreshClientCount, 5000);
+
+    async function checkConnection() {
+        setStatus('unknown', 'checking…');
+        try {
+            const s = await apiFetch('/api/session');
+            setStatus('ok', `connected · ${s.wins ?? 0}W-${s.losses ?? 0}L`);
+            await refreshClientCount();
+            return true;
+        } catch (err) {
+            setStatus('down', 'unreachable');
+            setClientsPill('unknown', 'OBS: ?');
+            log('Connection check failed: ' + err.message);
+            return false;
+        }
+    }
+    document.getElementById('btn-test-connection').addEventListener('click', checkConnection);
+    urlInput.addEventListener('change', checkConnection);
 
     const builders = {
         opponent: () => ({ text: document.getElementById('opp-text').value }),
@@ -271,13 +384,21 @@
             const builder = btn.getAttribute('data-build');
             const payload = builders[builder] ? builders[builder]() : {};
             try {
-                const resp = await fetch(`${API}/api/test/event`, {
+                const data = await apiFetch('/api/test/event', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ type, payload })
                 });
-                const data = await resp.json();
                 log(`Fired ${type}`, data);
+                // The backend always returns ok:true if the emit ran --
+                // but if no OBS source is listening the event lands in
+                // silence. Refresh the clients pill and warn explicitly.
+                const n = await refreshClientCount();
+                if (n === 0) {
+                    log(`WARNING: ${type} was emitted but 0 overlay clients are connected. ` +
+                        `Open the matching widget in OBS as a Browser Source pointing to ` +
+                        `the SC2-Overlay/widgets/<name>.html file (or http://localhost:3000/static/...).`);
+                }
             } catch (err) {
                 log('Error: ' + err.message);
             }
@@ -297,12 +418,11 @@
         if (Number.isFinite(mmr)) payload.myMmr = mmr;
 
         try {
-            const resp = await fetch(`${API}/api/replay`, {
+            const data = await apiFetch('/api/replay', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            const data = await resp.json();
             log('Fired /api/replay', data);
         } catch (err) {
             log('Error: ' + err.message);
@@ -311,8 +431,7 @@
 
     document.getElementById('btn-refresh-session').addEventListener('click', async () => {
         try {
-            const r = await fetch(`${API}/api/session`);
-            const s = await r.json();
+            const s = await apiFetch('/api/session');
             log('Session', s);
         } catch (err) {
             log('Error: ' + err.message);
@@ -322,8 +441,7 @@
     document.getElementById('btn-reset-session').addEventListener('click', async () => {
         if (!confirm('Reset session (wins, losses, MMR, timer)?')) return;
         try {
-            const r = await fetch(`${API}/api/session/reset`, { method: 'POST' });
-            const s = await r.json();
+            const s = await apiFetch('/api/session/reset', { method: 'POST' });
             log('Session reset', s);
         } catch (err) {
             log('Error: ' + err.message);
@@ -331,6 +449,9 @@
     });
 
     log('Panel ready. Fire away.');
+    // Auto-probe so the user immediately sees whether the backend is
+    // reachable, instead of finding out one button-click at a time.
+    checkConnection();
 })();
 </script>
 </body>
