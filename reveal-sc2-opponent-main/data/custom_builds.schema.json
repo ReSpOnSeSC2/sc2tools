@@ -177,6 +177,9 @@
         },
         {
           "$ref": "#/definitions/countMinRule"
+        },
+        {
+          "$ref": "#/definitions/countExactRule"
         }
       ]
     },
@@ -294,6 +297,38 @@
           "minimum": 1,
           "maximum": 200,
           "description": "Pass if count(name occurrences with t < time_lt) >= count."
+        },
+        "time_lt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1800
+        }
+      }
+    },
+    "countExactRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "name",
+        "count",
+        "time_lt"
+      ],
+      "properties": {
+        "type": {
+          "const": "count_exact"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200,
+          "description": "Pass if count(name occurrences with t < time_lt) == count exactly."
         },
         "time_lt": {
           "type": "integer",

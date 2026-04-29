@@ -556,8 +556,9 @@
         c('span', null, 'Add custom rule:'),
         renderAddCustomBtn('✓ built by',  'before',     s.addCustomRule, 'win'),
         renderAddCustomBtn('✗ NOT by',    'not_before', s.addCustomRule, 'loss'),
-        renderAddCustomBtn('≤ count',      'count_max',  s.addCustomRule, 'neutral'),
-        renderAddCustomBtn('≥ count',      'count_min',  s.addCustomRule, 'neutral')
+        renderAddCustomBtn('≤ count',      'count_max',   s.addCustomRule, 'neutral'),
+        renderAddCustomBtn('= count',      'count_exact', s.addCustomRule, 'neutral'),
+        renderAddCustomBtn('≥ count',      'count_min',   s.addCustomRule, 'neutral')
       )
     );
   }
@@ -618,7 +619,7 @@
   }
 
   function renderRuleChip(rule, idx, s) {
-    var isCount = rule.type === 'count_max' || rule.type === 'count_min';
+    var isCount = rule.type === 'count_max' || rule.type === 'count_exact' || rule.type === 'count_min';
     return c('li', { key: idx, className: 'flex items-center gap-2 px-3 py-1.5 text-xs' },
       // Cycle badge — shows icon + label/count, color-coded by type.
       // Click to rotate type. Tooltip explains the cycle.

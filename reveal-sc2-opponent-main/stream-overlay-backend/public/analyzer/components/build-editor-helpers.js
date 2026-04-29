@@ -54,7 +54,7 @@
   ];
   var SKILL_LEVEL_IDS = SKILL_LEVELS.map(function (l) { return l.id; });
 
-  var RULE_TYPES = ['before', 'not_before', 'count_max', 'count_min'];
+  var RULE_TYPES = ['before', 'not_before', 'count_max', 'count_exact', 'count_min'];
   // Icons + labels are designed to render INSIDE the cycle button so the
   // user always sees what the rule means. Math/check symbols carry their
   // own semantics (✓ exists, ✗ doesn't exist, ≤/≥ count thresholds).
@@ -62,18 +62,21 @@
     before: '✓',
     not_before: '✗',
     count_max: '≤',
+    count_exact: '=',
     count_min: '≥',
   };
   var RULE_TYPE_LABEL = {
     before: 'built by',
     not_before: 'NOT by',
     count_max: '',     // the badge itself reads "≤ N" — no extra label
+    count_exact: '',
     count_min: '',
   };
   var RULE_TYPE_VERB = {
     before: 'by',
     not_before: 'by',
     count_max: 'by',
+    count_exact: 'by',
     count_min: 'by',
   };
   // Tailwind colour classes per type. Used by the modal to color-code
@@ -82,6 +85,7 @@
     before: 'bg-win-500/20 text-win-500 border-win-500/40',
     not_before: 'bg-loss-500/20 text-loss-500 border-loss-500/40',
     count_max: 'bg-base-700 text-neutral-200 border-base-600',
+    count_exact: 'bg-base-700 text-neutral-200 border-base-600',
     count_min: 'bg-base-700 text-neutral-200 border-base-600',
   };
 
@@ -142,6 +146,7 @@
     var t = clampRuleTime(time_lt || 1);
     var c = clampCount(prevCount == null ? 1 : prevCount);
     if (type === 'count_max') return { type: 'count_max', name: name, count: c, time_lt: t };
+    if (type === 'count_exact') return { type: 'count_exact', name: name, count: c, time_lt: t };
     if (type === 'count_min') return { type: 'count_min', name: name, count: c < 1 ? 1 : c, time_lt: t };
     if (type === 'not_before') return { type: 'not_before', name: name, time_lt: t };
     return { type: 'before', name: name, time_lt: t };
@@ -320,6 +325,7 @@
     if (typeof r.name !== 'string' || !SIG_TOKEN_REGEX.test(r.name)) return null;
     var time_lt = clampRuleTime(r.time_lt);
     if (r.type === 'count_max') return { type: 'count_max', name: r.name, count: clampCount(r.count), time_lt: time_lt };
+    if (r.type === 'count_exact') return { type: 'count_exact', name: r.name, count: clampCount(r.count), time_lt: time_lt };
     if (r.type === 'count_min') return { type: 'count_min', name: r.name, count: Math.max(1, clampCount(r.count || 1)), time_lt: time_lt };
     if (r.type === 'not_before') return { type: 'not_before', name: r.name, time_lt: time_lt };
     return { type: 'before', name: r.name, time_lt: time_lt };

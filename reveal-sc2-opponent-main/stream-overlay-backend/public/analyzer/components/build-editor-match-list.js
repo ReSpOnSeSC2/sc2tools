@@ -111,7 +111,7 @@
               events.map(function (e, j) {
                 // Highlight events that match any of the user's current rule names — makes it
                 // immediately visible WHICH events triggered the match (e.g. BuildHighTemplar
-                // appears in green if there's a rule for it).
+                // appears in accent if there's a rule for it).
                 var matched = s && s.rules && s.rules.some(function (r) {
                   return r && r.name && (e.name === r.name || ('Build' + (e.name || '')) === r.name || e.what === r.name);
                 });
