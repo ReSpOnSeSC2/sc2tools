@@ -339,16 +339,20 @@ function previewMatchesV3(metaDb, candidate) {
       if (matches.length >= PREVIEW_LIMIT && almostMatches.length >= PREVIEW_LIMIT) break;
       const events = extractGameEvents(g);
       const r = evaluateRules(events, rules);
+      // Stage 7.5b: meta_database games store the identifier as `id`,
+      // not `game_id`. Mirror analyzer.js's normalization so the SPA's
+      // inspect/hide UI gets a non-null game_id.
+      const gid = g.id || g.game_id || null;
       if (r.failedIndices.length === 0) {
         if (matches.length < PREVIEW_LIMIT) {
-          matches.push({ build_name: buildName, game_id: g.game_id || null });
+          matches.push({ build_name: buildName, game_id: gid });
         }
       } else if (r.failedIndices.length === 1) {
         if (almostMatches.length < PREVIEW_LIMIT) {
           const idx = r.failedIndices[0];
           almostMatches.push({
             build_name: buildName,
-            game_id: g.game_id || null,
+            game_id: gid,
             failed_index: idx,
             failed_reason: r.reasons[idx] || 'rule failed',
           });

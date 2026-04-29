@@ -218,15 +218,18 @@
 
   function deriveDefaultName(data) {
     if (!data || typeof data !== 'object') return 'Custom build';
+    // Stage 7.5b: prefer my_build (the user's build bucket — the name
+    // they actually want to refine) over opp_strategy (which is the
+    // OPPONENT'S detected build and was mis-suggesting names like
+    // 'Terran - Cyclone Rush' when saving a Protoss build).
+    var myBuild = String(data.my_build || '').trim();
+    if (myBuild) return myBuild;
     var my = String(data.my_race || data.myRace || '').trim();
     var opp = String(data.opp_race || '').trim();
-    var strat = String(data.opp_strategy || '').trim();
     if (my && opp) {
-      var matchup = my.charAt(0).toUpperCase() + 'v' + opp.charAt(0).toUpperCase();
-      if (strat) return matchup + ' — ' + strat;
-      return matchup + ' — Custom';
+      return my.charAt(0).toUpperCase() + 'v' + opp.charAt(0).toUpperCase() + ' — Custom';
     }
-    return strat || 'Custom build';
+    return 'Custom build';
   }
 
   function slugify(name) {
