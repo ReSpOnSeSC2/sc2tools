@@ -326,6 +326,36 @@ function scoreSignature() {
 // candidate's rules against each game's event list, and bucketed into
 // matches (all rules pass) and almostMatches (failed exactly 1 — used by
 // the SPA's 'almost matches' band so users see what's close and why).
+// Stage 7.5b: matchup gate — skip games where the opponent race doesn't
+// match the candidate's vs_race. Without this, a PvZ build will match
+// PvT games whose Protoss-side events happen to satisfy the rules
+// (since rule names are race-specific by design, this rarely hits in
+// practice — but it's still semantically wrong, and counts can inflate
+// when an event token happens to be cross-race like 'BuildAssimilator'
+// which is Protoss-only but a Terran 'Refinery' parses similarly).
+//
+// vs_race values:
+//   'Protoss' / 'Terran' / 'Zerg' — strict opponent-race match
+//   'Random'                       — opponent picked Random race
+//   'Any' / null                   — no filter (match everything)
+function gameMatchesMatchup(buildName, game, candidate) {
+  const vs = candidate && candidate.vs_race;
+  if (!vs || vs === 'Any') return true;
+  const oppRace = game && game.opp_race;
+  if (vs === 'Random') {
+    if (!oppRace) return true;
+    if (oppRace === 'Random' || oppRace === '?') return true;
+    return false;
+  }
+  if (oppRace && oppRace === vs) return true;
+  // Fallback: bucket-name prefix (e.g. 'PvZ - ...' indicates vs Zerg).
+  if (typeof buildName === 'string') {
+    const letter = vs.charAt(0).toUpperCase();
+    if (/^[PTZ]v/.test(buildName) && buildName.charAt(2) === letter) return true;
+  }
+  return false;
+}
+
 function previewMatchesV3(metaDb, candidate) {
   const matches = [];
   const almostMatches = [];
@@ -337,6 +367,7 @@ function previewMatchesV3(metaDb, candidate) {
     for (const g of games) {
       scanned += 1;
       if (matches.length >= PREVIEW_LIMIT && almostMatches.length >= PREVIEW_LIMIT) break;
+      if (!gameMatchesMatchup(buildName, g, candidate)) continue;
       const events = extractGameEvents(g);
       const r = evaluateRules(events, rules);
       // Stage 7.5b: meta_database games store the identifier as `id`,
@@ -381,10 +412,14 @@ function previewMatchesV3(metaDb, candidate) {
 // passes against the events. Tiebreak by name (alphabetical) for
 // deterministic reclassify. Score is always 1.0 for compatibility with
 // callers that read .score (rule-eval is boolean).
-function bestMatchV3(events, builds) {
+function bestMatchV3(events, builds, game, buildName) {
   let best = null;
   for (const b of builds) {
     if (!Array.isArray(b.rules) || b.rules.length === 0) continue;
+    // Stage 7.5b: matchup gate — only consider builds whose vs_race matches
+    // the game's opp_race (or 'Any'). Prevents a PvZ build from absorbing a
+    // PvT game during reclassify.
+    if (game && !gameMatchesMatchup(buildName, game, b)) continue;
     const r = evaluateRules(events, b.rules);
     if (r.failedIndices.length === 0) {
       if (!best || (b.name || '') < (best.name || '')) best = { name: b.name, score: 1.0 };
@@ -589,7 +624,7 @@ const SKILL_LEVELS = new Set([
   'bronze', 'silver', 'gold', 'platinum',
   'diamond', 'master', 'grandmaster',
 ]);
-const RULE_TYPES = new Set(['before', 'not_before', 'count_max', 'count_min']);
+const RULE_TYPES = new Set(['before', 'not_before', 'count_max', 'count_exact', 'count_min']);
 const AUTO_PICK_RULES_CAP = 5;
 const AUTO_PICK_TIME_BUFFER_SEC = 30;
 const TIME_LT_MIN = 1;
@@ -652,6 +687,13 @@ function evaluateRule(events, rule) {
       return cnt <= rule.count ? { ok: true } : {
         ok: false,
         reason: name + ' count ' + cnt + ' exceeds max ' + rule.count + ' by ' + formatTime(cutoff),
+      };
+    }
+    case 'count_exact': {
+      const cnt = evts.filter((e) => e.what === name && e.t < cutoff).length;
+      return cnt === rule.count ? { ok: true } : {
+        ok: false,
+        reason: name + ' count ' + cnt + ' is not exactly ' + rule.count + ' by ' + formatTime(cutoff),
       };
     }
     case 'count_min': {

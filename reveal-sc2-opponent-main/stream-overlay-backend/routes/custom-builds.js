@@ -220,7 +220,7 @@ async function reclassifyAllGames(ctx, meta) {
     const games = (meta[buildName] && meta[buildName].games) || [];
     for (let i = games.length - 1; i >= 0; i--) {
       const events = H.extractGameEvents(games[i]);
-      const best = H.bestMatchV3(events, builds);
+      const best = H.bestMatchV3(events, builds, games[i], buildName);
       processed += 1;
       if (best && best.name && best.name !== buildName) {
         H.moveGame(meta, buildName, best.name, i);
