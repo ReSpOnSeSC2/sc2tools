@@ -38,12 +38,18 @@
   var SIG_VERB_REGEX = /^(Build|Train|Research|Morph)\s+([A-Za-z][A-Za-z0-9]*)$/;
   var SIG_PREFIXED_REGEX = /^(Build|Train|Research|Morph)[A-Z][A-Za-z0-9]*$/;
   var ZERG_UNIT_MORPHS = /^(Baneling|Ravager|Lurker|LurkerMP|BroodLord|Overseer)$/;
+  // Stage 7.5: defense-in-depth filter for cosmetic events (beacons,
+  // sprays, dance commands). Matches the analyzer.js _BUILD_LOG_NOISE_RE
+  // — keep both in sync. spaEventToWhat returns null for these so they
+  // never appear in /from-game payloads even if the server-side filter is
+  // bypassed (e.g. caller posts events[] directly).
+  var NOISE_RE = /^(Beacon|Reward|Spray)/;
   var AUTO_PICK_CAP = 12;
   var AUTO_PICK_WEIGHT = 1.0;
   var USER_ADD_WEIGHT = 0.5;
-  var DEFAULT_TOLERANCE_SEC = 15;
-  var DEFAULT_MIN_MATCH_SCORE = 0.6;
-  var TIME_NUDGE_MAX_SEC = 15;
+  var DEFAULT_TOLERANCE_SEC = 30;  // mirror routes/custom_builds_helpers.js
+  var DEFAULT_MIN_MATCH_SCORE = 0.55;  // mirror routes/custom_builds_helpers.js
+  var TIME_NUDGE_MAX_SEC = 60;  // Stage 7.5: was 15 — let users shift target up to a minute.
   var ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$/;
   var DESC_MAX_CHARS = 500;
   var NAME_MIN_CHARS = 3;
@@ -72,6 +78,7 @@
     if (!ev) return null;
     var raw = String(ev.name == null ? '' : ev.name).trim();
     if (!raw) return null;
+    if (NOISE_RE.test(raw)) return null;
     var m = SIG_VERB_REGEX.exec(raw);
     if (m) return m[1] + m[2];
     if (SIG_PREFIXED_REGEX.test(raw)) return raw;
@@ -131,11 +138,80 @@
 
   // ---- Auto-pick (mirrors pickSignatureFromEvents server-side) ------------
 
+  // Stage 7.5: tiered auto-pick. Same sets as the server-side
+  // pickSignatureFromEvents in routes/custom_builds_helpers.js — keep in
+  // sync. Skip townhalls/workers/supply, prioritize tech buildings + key
+  // units, fall back to production buildings.
+  var SKIP_TOKENS = new Set([
+    'BuildNexus', 'BuildCommandCenter', 'BuildHatchery',
+    'TrainProbe', 'TrainSCV', 'TrainDrone', 'TrainMULE',
+    'BuildPylon', 'BuildSupplyDepot', 'TrainOverlord',
+    'MorphSupplyDepotLowered', 'MorphSupplyDepotRaised',
+    'BuildOverlordTransport',
+  ]);
+  var TIER3_TOKENS = new Set([
+    // Protoss units
+    'TrainStalker','TrainSentry','TrainAdept','TrainPhoenix','TrainOracle',
+    'TrainVoidRay','TrainTempest','TrainCarrier','TrainMothership',
+    'TrainImmortal','TrainColossus','TrainDisruptor','TrainObserver',
+    'TrainWarpPrism','TrainHighTemplar','TrainDarkTemplar','MorphArchon',
+    // Terran units
+    'TrainMarauder','TrainReaper','TrainHellion','TrainHellbat',
+    'TrainSiegeTank','TrainCyclone','TrainThor','TrainWidowMine',
+    'TrainBanshee','TrainVikingFighter','TrainMedivac','TrainLiberator',
+    'TrainRaven','TrainBattlecruiser','TrainGhost',
+    // Zerg units
+    'TrainQueen','TrainRoach','MorphBaneling','TrainHydralisk',
+    'MorphLurker','MorphRavager','TrainMutalisk','TrainCorruptor',
+    'MorphBroodLord','MorphOverseer','TrainInfestor','TrainViper',
+    'TrainSwarmHost','TrainUltralisk',
+    // Key Protoss upgrades
+    'ResearchBlink','ResearchCharge','ResearchWarpGate',
+    'ResearchPsionicStorm','ResearchExtendedThermalLance',
+    'ResearchShadowStride','ResearchVoidRaySpeedUpgrade',
+    'ResearchAnionPulseCrystals','ResearchGraviticDrive',
+    'ResearchGraviticBoosters',
+    // Key Terran upgrades
+    'ResearchStimpack','ResearchCombatShield','ResearchConcussiveShells',
+    'ResearchSiegeTech','ResearchInfernalPreigniter',
+    'ResearchHisecAutoTracking','ResearchPersonalCloaking',
+    'ResearchAdvancedBallistics','ResearchBansheeCloak','ResearchBansheeSpeed',
+    // Key Zerg upgrades
+    'ResearchMetabolicBoost','ResearchAdrenalGlands','ResearchGroovedSpines',
+    'ResearchMuscularAugments','ResearchTunnelingClaws',
+    'ResearchGlialReconstitution','ResearchBurrow','ResearchPneumatizedCarapace',
+    'ResearchCentrifugalHooks','ResearchNeuralParasite',
+  ]);
+  var TIER2_TOKENS = new Set([
+    'BuildCyberneticsCore','BuildTwilightCouncil','BuildRoboticsFacility',
+    'BuildRoboticsBay','BuildStargate','BuildFleetBeacon',
+    'BuildTemplarArchives','BuildDarkShrine','BuildForge',
+    'BuildPhotonCannon','BuildShieldBattery',
+    'BuildFactory','BuildStarport','BuildArmory','BuildFusionCore',
+    'BuildEngineeringBay','BuildGhostAcademy','BuildBunker',
+    'BuildMissileTurret','BuildSensorTower',
+    'BuildOrbitalCommand','BuildPlanetaryFortress',
+    'BuildBarracksTechLab','BuildBarracksReactor',
+    'BuildFactoryTechLab','BuildFactoryReactor',
+    'BuildStarportTechLab','BuildStarportReactor',
+    'BuildSpawningPool','BuildEvolutionChamber','BuildRoachWarren',
+    'BuildBanelingNest','BuildHydraliskDen','BuildSpire',
+    'BuildInfestationPit','BuildUltraliskCavern','BuildNydusNetwork',
+    'BuildNydusWorm','BuildSporeCrawler','BuildSpineCrawler',
+    'MorphLair','MorphHive','MorphGreaterSpire','MorphLurkerDen',
+  ]);
+
+  function pickTier(what) {
+    if (TIER3_TOKENS.has(what)) return 3;
+    if (TIER2_TOKENS.has(what)) return 2;
+    return 1;
+  }
+
   /**
    * Compute the set of row keys that should be default-checked. Mirrors
-   * pickSignatureFromEvents in routes/custom_builds_helpers.js: filter to
-   * tokens matching /^(Build|Research|Morph|Train)[A-Z]/, dedupe by token,
-   * cap at 12.
+   * pickSignatureFromEvents in routes/custom_builds_helpers.js — same
+   * tier ordering, same skip set, same cap. Sort: higher tier first,
+   * then earlier-in-time within tier.
    *
    * @param {Array<object>} rows From spaEventsToRows
    * @returns {Set<string>} keys of rows that should start checked
@@ -143,15 +219,23 @@
   function autoPickRowKeys(rows) {
     var keys = new Set();
     if (!Array.isArray(rows) || !rows.length) return keys;
-    var seen = new Set();
-    var picked = 0;
-    for (var i = 0; i < rows.length && picked < AUTO_PICK_CAP; i += 1) {
+    var candidates = [];
+    for (var i = 0; i < rows.length; i += 1) {
       var r = rows[i];
       if (!AUTO_PICK_REGEX.test(r.what)) continue;
-      if (seen.has(r.what)) continue;
-      seen.add(r.what);
-      keys.add(r.key);
-      picked += 1;
+      if (SKIP_TOKENS.has(r.what)) continue;
+      candidates.push({ row: r, tier: pickTier(r.what) });
+    }
+    candidates.sort(function (a, b) {
+      if (a.tier !== b.tier) return b.tier - a.tier;
+      return a.row.t - b.row.t;
+    });
+    var seen = new Set();
+    for (var j = 0; j < candidates.length && keys.size < AUTO_PICK_CAP; j += 1) {
+      var w = candidates[j].row.what;
+      if (seen.has(w)) continue;
+      seen.add(w);
+      keys.add(candidates[j].row.key);
     }
     return keys;
   }

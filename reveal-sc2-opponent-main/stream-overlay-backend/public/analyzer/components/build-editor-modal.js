@@ -107,6 +107,13 @@
     var [checkedKeys, setCheckedKeys] = useState(initialCheckedKeys);
     var [weightByKey, setWeightByKey] = useState(initialWeights);
     var [timeNudgeByKey, setTimeNudgeByKey] = useState({});
+    // Stage 7.5: which signature rows have their advanced (weight +
+    // time-nudge) sliders revealed. Default: all collapsed.
+    var [expandedRows, setExpandedRows] = useState(function () { return new Set(); });
+    // Stage 7.5: pagination index for the match-preview list (page size 5).
+    // Reset to 0 whenever the previewResult identity changes so the user
+    // never lands on a non-existent page after editing the signature.
+    var [previewPage, setPreviewPage] = useState(0);
     var [previewResult, setPreviewResult] = useState(null);
     var [previewLoading, setPreviewLoading] = useState(false);
     var [previewError, setPreviewError] = useState(null);
@@ -209,6 +216,12 @@
       return function () { if (fn.cancel) fn.cancel(); };
     }, [open, signature, tolerance, minMatchScore, race, vsRace]);
 
+    // Stage 7.5: reset pagination whenever the preview returns a new
+    // result set so the user isn't stranded on an out-of-range page.
+    useEffect(function () {
+      setPreviewPage(0);
+    }, [previewResult]);
+
     // Socket.io reclassify_progress.
     useEffect(function () {
       if (!open || !socket || typeof socket.on !== 'function') return undefined;
@@ -268,6 +281,15 @@
       setTimeNudgeByKey(function (prev) {
         var next = Object.assign({}, prev);
         next[key] = H.clampTimeNudge(n);
+        return next;
+      });
+    }
+
+    function toggleExpand(key) {
+      setExpandedRows(function (prev) {
+        var next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
         return next;
       });
     }
@@ -372,8 +394,10 @@
           rows: rows, checkedKeys: checkedKeys, weightByKey: weightByKey,
           timeNudgeByKey: timeNudgeByKey, signature: signature,
           toggleRow: toggleRow, setRowWeight: setRowWeight, setRowNudge: setRowNudge,
+          expandedRows: expandedRows, toggleExpand: toggleExpand,
           // preview
           previewResult: previewResult, previewLoading: previewLoading, previewError: previewError,
+          previewPage: previewPage, setPreviewPage: setPreviewPage,
           // errors / state
           errors: errors, profileReady: profileReady,
           // reclassify
@@ -447,19 +471,29 @@
           React.createElement('select', { className: fieldClass, value: s.vsRace, onChange: function (e) { s.setVsRace(e.target.value); } },
             VS_RACE_OPTIONS.map(function (r) { return React.createElement('option', { key: r, value: r }, r); }))
         ),
-        renderField('Tolerance: ' + s.tolerance + 's', null,
-          React.createElement('input', {
-            className: 'w-full', type: 'range', min: 5, max: 60, value: s.tolerance,
-            title: 'How far in seconds an event can drift from the target time and still match.',
-            onChange: function (e) { s.setTolerance(H.clampTolerance(e.target.value)); },
-          })
+        renderField('Tolerance: \u00b1' + s.tolerance + 's', null,
+          React.createElement('div', null,
+            React.createElement('input', {
+              className: 'w-full', type: 'range', min: 5, max: 60, value: s.tolerance,
+              title: 'Per-event match window. A signature event matches a game-event if their times are within \u00b1tolerance seconds. Larger = more games match.',
+              onChange: function (e) { s.setTolerance(H.clampTolerance(e.target.value)); },
+            }),
+            React.createElement('div', { className: 'text-[10px] text-neutral-500 leading-tight' },
+              'How loose timing has to be. \u00b1' + s.tolerance + 's means each event matches if its time is within ' + s.tolerance + ' seconds of yours.'
+            )
+          )
         ),
-        renderField('Min match score: ' + s.minMatchScore.toFixed(2), null,
-          React.createElement('input', {
-            className: 'w-full', type: 'range', min: 0.3, max: 1.0, step: 0.05, value: s.minMatchScore,
-            title: 'A game matches only if its weighted score reaches this fraction. Higher = stricter.',
-            onChange: function (e) { s.setMinMatchScore(H.clampMinMatchScore(e.target.value)); },
-          })
+        renderField('Match strictness: ' + Math.round(s.minMatchScore * 100) + '%', null,
+          React.createElement('div', null,
+            React.createElement('input', {
+              className: 'w-full', type: 'range', min: 0.3, max: 1.0, step: 0.05, value: s.minMatchScore,
+              title: 'A game qualifies as a match when its weighted score reaches this fraction of the signature\u2019s total weight. 100% = every event must match; 50% = half is enough.',
+              onChange: function (e) { s.setMinMatchScore(H.clampMinMatchScore(e.target.value)); },
+            }),
+            React.createElement('div', { className: 'text-[10px] text-neutral-500 leading-tight' },
+              'How strict the match has to be. ' + Math.round(s.minMatchScore * 100) + '% of the signature\u2019s weight must land within tolerance.'
+            )
+          )
         )
       ),
       React.createElement('div', { className: 'mt-3' },
@@ -471,39 +505,32 @@
           })
         )
       ),
-      renderShareToggle(s),
-      renderStrategyNotes(s)
-    );
-  }
-
-  function renderShareToggle(s) {
-    return React.createElement('label', { className: 'flex items-start gap-2 mt-3 cursor-pointer' },
-      React.createElement('input', {
-        type: 'checkbox', className: 'mt-1', checked: s.shareWithCommunity,
-        onChange: function (e) { s.setShareWithCommunity(e.target.checked); },
-      }),
-      React.createElement('span', { className: 'text-sm text-neutral-300' },
-        React.createElement('span', null, 'Share with community'),
-        React.createElement('span', { className: 'block text-[10px] text-neutral-500' },
-          'Visible to all players. ',
-          React.createElement('a', { href: '/settings#privacy', className: 'underline hover:text-neutral-300' }, 'Privacy details')
+      // Inlined: Share toggle + Strategy notes (single call site each)
+      React.createElement('label', { className: 'flex items-start gap-2 mt-3 cursor-pointer' },
+        React.createElement('input', {
+          type: 'checkbox', className: 'mt-1', checked: s.shareWithCommunity,
+          onChange: function (e) { s.setShareWithCommunity(e.target.checked); },
+        }),
+        React.createElement('span', { className: 'text-sm text-neutral-300' },
+          React.createElement('span', null, 'Share with community'),
+          React.createElement('span', { className: 'block text-[10px] text-neutral-500' },
+            'Visible to all players. ',
+            React.createElement('a', { href: '/settings#privacy', className: 'underline hover:text-neutral-300' }, 'Privacy details')
+          )
         )
+      ),
+      React.createElement('div', { className: 'mt-3' },
+        React.createElement('button', {
+          type: 'button', className: 'text-xs text-neutral-400 hover:text-neutral-200',
+          'aria-expanded': s.showStrategyNotes,
+          onClick: function () { s.setShowStrategyNotes(!s.showStrategyNotes); },
+        }, (s.showStrategyNotes ? '▾' : '▸') + ' Strategy notes (optional)'),
+        s.showStrategyNotes ? React.createElement('div', { className: 'mt-2 grid grid-cols-1 md:grid-cols-3 gap-3' },
+          renderChipsField('Win conditions', s.winConditions, s.setWinConditions),
+          renderChipsField('Loses to', s.losesTo, s.setLosesTo),
+          renderChipsField('Transitions into', s.transitionsInto, s.setTransitionsInto)
+        ) : null
       )
-    );
-  }
-
-  function renderStrategyNotes(s) {
-    return React.createElement('div', { className: 'mt-3' },
-      React.createElement('button', {
-        type: 'button', className: 'text-xs text-neutral-400 hover:text-neutral-200',
-        'aria-expanded': s.showStrategyNotes,
-        onClick: function () { s.setShowStrategyNotes(!s.showStrategyNotes); },
-      }, (s.showStrategyNotes ? '▾' : '▸') + ' Strategy notes (optional)'),
-      s.showStrategyNotes ? React.createElement('div', { className: 'mt-2 grid grid-cols-1 md:grid-cols-3 gap-3' },
-        renderChipsField('Win conditions', s.winConditions, s.setWinConditions),
-        renderChipsField('Loses to', s.losesTo, s.setLosesTo),
-        renderChipsField('Transitions into', s.transitionsInto, s.setTransitionsInto)
-      ) : null
     );
   }
 
@@ -601,77 +628,123 @@
       className: 'bg-base-800/40 rounded border border-base-700 max-h-[360px] overflow-y-auto',
     },
       React.createElement('div', { className: 'sticky top-0 bg-base-800/90 px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500 border-b border-base-700' },
-        'Signature (' + s.signature.length + ')'),
+        'Signature (' + s.signature.length + ') · click ⚙ to tweak weight/time'),
       s.signature.length === 0 ? React.createElement('div', { className: 'p-3 text-xs text-neutral-500' },
         'Tick events on the left to add them here.') :
       React.createElement('ul', { className: 'divide-y divide-base-700' },
-        s.signature.map(function (sig, i) {
-          var keyForToken = null;
-          // Find the row whose what+t equals this entry.
-          for (var j = 0; j < s.rows.length; j += 1) {
-            if (s.rows[j].what === sig.what && s.checkedKeys.has(s.rows[j].key)) {
-              keyForToken = s.rows[j].key; break;
-            }
-          }
-          var w = s.weightByKey[keyForToken];
-          if (w == null) w = H.AUTO_PICK_WEIGHT;
-          var nudge = s.timeNudgeByKey[keyForToken] || 0;
-          return React.createElement('li', { key: i, className: 'px-3 py-2 text-xs space-y-1' },
-            React.createElement('div', { className: 'flex items-center gap-2' },
-              React.createElement('span', { className: 'font-mono text-[11px] text-neutral-400 w-10 tabular-nums' }, H.formatTime(sig.t)),
-              React.createElement('span', { className: 'flex-1 truncate text-neutral-100' }, sig.what),
-              React.createElement('button', {
-                className: 'text-neutral-500 hover:text-loss-500',
-                'aria-label': 'Remove ' + sig.what,
-                onClick: function () { if (keyForToken) s.toggleRow(keyForToken); },
-              }, '×')
-            ),
-            keyForToken ? React.createElement('div', { className: 'flex items-center gap-2' },
-              React.createElement('span', { className: 'text-[10px] text-neutral-500 w-12' }, 'weight'),
-              React.createElement('input', {
-                type: 'range', min: 0, max: 1, step: 0.05, value: w, className: 'flex-1',
-                onChange: function (e) { s.setRowWeight(keyForToken, Number(e.target.value)); },
-              }),
-              React.createElement('span', { className: 'text-[10px] text-neutral-400 w-10 tabular-nums' }, w.toFixed(2))
-            ) : null,
-            keyForToken ? React.createElement('div', { className: 'flex items-center gap-2' },
-              React.createElement('span', { className: 'text-[10px] text-neutral-500 w-12' }, 'time ±'),
-              React.createElement('input', {
-                type: 'range', min: -H.TIME_NUDGE_MAX_SEC, max: H.TIME_NUDGE_MAX_SEC, step: 1, value: nudge, className: 'flex-1',
-                onChange: function (e) { s.setRowNudge(keyForToken, Number(e.target.value)); },
-              }),
-              React.createElement('span', { className: 'text-[10px] text-neutral-400 w-10 tabular-nums' }, (nudge >= 0 ? '+' : '') + nudge + 's')
-            ) : null
-          );
-        })
+        s.signature.map(function (sig, i) { return renderSignatureRow(sig, i, s); })
       )
     );
   }
 
+  function renderSignatureRow(sig, i, s) {
+    var keyForToken = null;
+    for (var j = 0; j < s.rows.length; j += 1) {
+      if (s.rows[j].what === sig.what && s.checkedKeys.has(s.rows[j].key)) {
+        keyForToken = s.rows[j].key; break;
+      }
+    }
+    var isExpanded = keyForToken && s.expandedRows && s.expandedRows.has(keyForToken);
+    var w = s.weightByKey[keyForToken];
+    if (w == null) w = H.AUTO_PICK_WEIGHT;
+    var nudge = s.timeNudgeByKey[keyForToken] || 0;
+    var displayT = H.formatTime(sig.t);
+    return React.createElement('li', { key: i, className: 'px-3 py-1.5 text-xs space-y-1' },
+      React.createElement('div', { className: 'flex items-center gap-2' },
+        React.createElement('span', { className: 'font-mono text-[11px] text-neutral-400 w-10 tabular-nums' }, displayT),
+        React.createElement('span', { className: 'flex-1 truncate text-neutral-100' }, sig.what),
+        keyForToken ? React.createElement('button', {
+          className: 'text-neutral-500 hover:text-neutral-200 px-1',
+          'aria-label': (isExpanded ? 'Hide' : 'Show') + ' advanced for ' + sig.what,
+          'aria-expanded': isExpanded ? 'true' : 'false',
+          title: isExpanded ? 'Hide weight + time tweaks' : 'Tweak weight or time offset',
+          onClick: function () { s.toggleExpand(keyForToken); },
+        }, '⚙') : null,
+        React.createElement('button', {
+          className: 'text-neutral-500 hover:text-loss-500 px-1',
+          'aria-label': 'Remove ' + sig.what,
+          onClick: function () { if (keyForToken) s.toggleRow(keyForToken); },
+        }, '×')
+      ),
+      isExpanded ? React.createElement('div', { className: 'pl-12 pr-1 space-y-1' },
+        React.createElement('div', { className: 'flex items-center gap-2' },
+          React.createElement('span', { className: 'text-[10px] text-neutral-500 w-14' }, 'weight'),
+          React.createElement('input', {
+            type: 'range', min: 0, max: 1, step: 0.05, value: w, className: 'flex-1',
+            title: 'How much this event contributes to the match score. 1.0 = full weight, 0 = ignored. Most users leave at 1.0.',
+            onChange: function (e) { s.setRowWeight(keyForToken, Number(e.target.value)); },
+          }),
+          React.createElement('span', { className: 'text-[10px] text-neutral-400 w-10 tabular-nums' }, w.toFixed(2))
+        ),
+        React.createElement('div', { className: 'flex items-center gap-2' },
+          React.createElement('span', { className: 'text-[10px] text-neutral-500 w-14' }, 'time offset'),
+          React.createElement('input', {
+            type: 'range', min: -H.TIME_NUDGE_MAX_SEC, max: H.TIME_NUDGE_MAX_SEC, step: 1, value: nudge, className: 'flex-1',
+            title: 'Shift this event\'s target time. Use only if your replay was atypical (e.g. delayed Stargate); otherwise leave at 0 and let global Tolerance handle drift.',
+            onChange: function (e) { s.setRowNudge(keyForToken, Number(e.target.value)); },
+          }),
+          React.createElement('span', { className: 'text-[10px] text-neutral-400 w-10 tabular-nums' }, (nudge >= 0 ? '+' : '') + nudge + 's')
+        )
+      ) : null
+    );
+  }
+
+  var PREVIEW_PAGE_SIZE = 5;
+
   function renderSection3Preview(s) {
     var pr = s.previewResult || { matches: [], scanned_games: 0, truncated: false };
-    var top5 = (pr.matches || []).slice(0, 5);
+    var matches = pr.matches || [];
+    var totalPages = Math.max(1, Math.ceil(matches.length / PREVIEW_PAGE_SIZE));
+    // Clamp page in case state hasn't caught up to a smaller result yet.
+    var page = Math.min(Math.max(0, s.previewPage || 0), totalPages - 1);
+    var pageStart = page * PREVIEW_PAGE_SIZE;
+    var pageItems = matches.slice(pageStart, pageStart + PREVIEW_PAGE_SIZE);
     var msg;
     if (s.previewLoading) msg = 'Scoring against your games…';
     else if (s.previewError) msg = 'Preview error: ' + s.previewError;
-    else msg = 'Matches ' + pr.matches.length + (pr.truncated ? '+' : '') + ' of your ' + pr.scanned_games + ' games.';
-    var hint = (pr.matches.length === 0 && pr.scanned_games > 0 && !s.previewLoading)
-      ? 'Try lowering min match score or increasing tolerance.' : null;
+    else msg = 'Matches ' + matches.length + (pr.truncated ? '+' : '') + ' of your ' + pr.scanned_games + ' games.';
+    var hint = (matches.length === 0 && pr.scanned_games > 0 && !s.previewLoading)
+      ? 'Try lowering match strictness or increasing tolerance.' : null;
     return React.createElement('section', { 'aria-label': 'Match preview' },
       React.createElement('h3', { className: 'text-xs uppercase text-neutral-500 mb-2' }, '3 · Match preview'),
       React.createElement('div', { className: 'text-sm text-neutral-200', 'aria-live': 'polite' }, msg),
       hint ? React.createElement('div', { className: 'text-[11px] text-neutral-500 mt-1' }, hint) : null,
-      top5.length > 0 ? React.createElement('ul', {
+      pageItems.length > 0 ? React.createElement('ul', {
         className: 'mt-2 divide-y divide-base-700 bg-base-800/40 rounded border border-base-700',
       },
-        top5.map(function (m, i) {
-          return React.createElement('li', { key: i, className: 'flex items-center gap-3 px-3 py-1.5 text-xs' },
+        pageItems.map(function (m, i) {
+          return React.createElement('li', { key: pageStart + i, className: 'flex items-center gap-3 px-3 py-1.5 text-xs' },
+            React.createElement('span', { className: 'text-neutral-500 font-mono tabular-nums w-8 text-right' }, '#' + (pageStart + i + 1)),
             React.createElement('span', { className: 'text-neutral-100 flex-1 truncate' }, m.build_name),
-            React.createElement('span', { className: 'text-neutral-500 font-mono tabular-nums' }, m.game_id || '—'),
-            React.createElement('span', { className: 'text-accent-500 font-mono tabular-nums' }, (m.score * 100).toFixed(0) + '%')
+            React.createElement('span', { className: 'text-neutral-500 font-mono tabular-nums truncate max-w-[180px]' }, m.game_id || '—'),
+            React.createElement('span', { className: 'text-accent-500 font-mono tabular-nums w-12 text-right' }, (m.score * 100).toFixed(0) + '%')
           );
         })
-      ) : null
+      ) : null,
+      matches.length > PREVIEW_PAGE_SIZE ? renderPreviewPager(s, page, totalPages, matches.length, pr.truncated) : null
+    );
+  }
+
+  function renderPreviewPager(s, page, totalPages, matchCount, truncated) {
+    var atFirst = page <= 0;
+    var atLast = page >= totalPages - 1;
+    var btnBase = 'px-2 py-0.5 rounded text-xs ';
+    var btnEnabled = 'bg-base-700 text-neutral-200 hover:bg-base-600';
+    var btnDisabled = 'bg-base-800 text-neutral-600 cursor-not-allowed';
+    var totalLabel = truncated ? (totalPages + '+') : totalPages;
+    return React.createElement('div', { className: 'mt-2 flex items-center justify-center gap-3 text-xs text-neutral-400' },
+      React.createElement('button', {
+        className: btnBase + (atFirst ? btnDisabled : btnEnabled),
+        disabled: atFirst, 'aria-label': 'Previous page',
+        onClick: function () { s.setPreviewPage(Math.max(0, page - 1)); },
+      }, '← prev'),
+      React.createElement('span', { className: 'tabular-nums select-none' },
+        'page ' + (page + 1) + ' / ' + totalLabel + ' · ' + matchCount + (truncated ? '+' : '') + ' total'),
+      React.createElement('button', {
+        className: btnBase + (atLast ? btnDisabled : btnEnabled),
+        disabled: atLast, 'aria-label': 'Next page',
+        onClick: function () { s.setPreviewPage(Math.min(totalPages - 1, page + 1)); },
+      }, 'next →')
     );
   }
 

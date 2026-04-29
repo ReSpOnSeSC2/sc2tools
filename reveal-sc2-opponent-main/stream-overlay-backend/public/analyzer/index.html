@@ -2498,11 +2498,11 @@
             source_replay_id: gameId,
             game_id: gameId,
           };
-          const probeProfile = fetch(`${API}/api/profile/exists`)
+          const probeProfile = fetch("/api/profile/exists")
             .then((r) => (r.ok ? r.json() : { exists: false }))
             .then((j) => setEditorProfileReady(!!(j && (j.exists || j.profile_exists))))
             .catch(() => setEditorProfileReady(false));
-          const fromGame = fetch(`${API}/api/custom-builds/from-game`, {
+          const fromGame = fetch("/api/custom-builds/from-game", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(draftBody),

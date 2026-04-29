@@ -18,8 +18,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const DEFAULT_TOLERANCE_SEC = 15;
-const DEFAULT_MIN_MATCH_SCORE = 0.6;
+const DEFAULT_TOLERANCE_SEC = 30;  // Stage 7.5: was 15 — build-order timings drift 15-25s naturally between same-opening games.
+const DEFAULT_MIN_MATCH_SCORE = 0.55;  // Stage 7.5: was 0.6 — slight majority of weighted events is enough.
 const PREVIEW_LIMIT = 200;
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$/;
 
@@ -225,13 +225,30 @@ function findById(builds, id) {
  * @param {string} line
  * @returns {{t: number, what: string}|null}
  */
+// Stage 7.5: parser for build_log entries stored in meta_database.json.
+// The on-disk format from analyzer.js parseBuildLogLines is "[M:SS] Token"
+// where Token is already in concatenated form like "BuildNexus" or
+// "RewardDanceStalker". The previous regex required UNBRACKETED time
+// prefix and assumed verb+space+noun, which made it return null on every
+// real entry — silently breaking the entire match engine. Fix: accept
+// both formats and recognise already-concatenated tokens.
 function parseLogLine(line) {
   if (typeof line !== 'string') return null;
-  const m = line.match(/^(\d+):(\d+)\s+(?:(Build|Train|Research|Morph)\s+)?([A-Za-z][A-Za-z0-9]*)/);
+  const m = line.match(/^\[?(\d+):(\d+)\]?\s+(.+?)\s*$/);
   if (!m) return null;
   const t = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-  const verb = m[3] || 'Build';
-  return { t, what: verb + m[4] };
+  const rest = m[3].trim();
+  // "Verb Noun" with space (legacy / unit test format)
+  const verbed = rest.match(/^(Build|Train|Research|Morph)\s+([A-Za-z][A-Za-z0-9]*)$/);
+  if (verbed) return { t, what: verbed[1] + verbed[2] };
+  // Single-token rest (the on-disk format)
+  if (/^[A-Za-z][A-Za-z0-9]*$/.test(rest)) {
+    // Already prefixed (BuildNexus, TrainStalker, ResearchBlink, MorphLair)?
+    if (/^(Build|Train|Research|Morph)[A-Z]/.test(rest)) return { t, what: rest };
+    // Bare noun (Stalker, Pylon, Blink) — prepend Build as the catch-all verb
+    return { t, what: 'Build' + rest };
+  }
+  return null;
 }
 
 /**
@@ -240,14 +257,26 @@ function parseLogLine(line) {
  * @param {object} game
  * @returns {Array<{t: number, what: string}>}
  */
+// Stage 7.5: order swapped so the matcher scores against MY build_log
+// when matching MY signature events. Previous order
+// (opp_early_build_log first) meant a Protoss signature was being scored
+// against Terran/Zerg opponent events — guaranteed 0 matches. The
+// EVENT_NOISE_RE drop mirrors the analyzer.js cosmetic filter so the
+// Reward/Beacon/Spray noise that pre-7.5 replays still have on disk
+// doesn't pollute scoring (they all sit at t=0 and would otherwise
+// inflate match scores spuriously).
+const EVENT_NOISE_RE = /^(?:Build|Train|Research|Morph)?(?:Beacon|Reward|Spray)/;
+
 function extractGameEvents(game) {
   if (Array.isArray(game.events)) return game.events;
   const out = [];
-  const log = game.opp_early_build_log || game.my_early_build_log;
+  const log = game.early_build_log || game.my_early_build_log
+    || game.opp_early_build_log || game.build_log || game.my_build_log
+    || game.opp_build_log;
   if (Array.isArray(log)) {
     for (const line of log) {
       const ev = parseLogLine(line);
-      if (ev) out.push(ev);
+      if (ev && !EVENT_NOISE_RE.test(ev.what)) out.push(ev);
     }
   }
   return out;
@@ -362,23 +391,129 @@ function moveGame(meta, from, to, idx) {
 }
 
 /**
- * Pick a small spread of "interesting" events to seed a draft
- * signature -- prefer Build/Research/Morph/Train tokens.
+ * Pick a small spread of strategy-defining events to seed a draft
+ * signature. Stage 7.5: tiered selection — skip generic econ events
+ * (townhall, workers, basic supply) and prioritize tech buildings + key
+ * units before falling back to production buildings. The previous
+ * implementation took the first 12 Build/Train/Research/Morph events,
+ * which on a fresh game meant Nexus -> Pylon -> Probe -> Probe ... and
+ * the actual tech-defining moments (Stargate, Phoenix, Twilight, Blink)
+ * fell off the cap. With the tiered ordering a typical Protoss opening
+ * picks Cyber Core -> Stargate -> Phoenix -> Oracle -> Twilight -> Blink
+ * -> Robo -> Immortal etc., which is what users actually care about.
  *
- * @param {Array<object>} events
- * @returns {Array<object>}
+ * Mirrored client-side in public/analyzer/components/build-editor-helpers.js
+ * (autoPickRowKeys) so the SPA pre-checks the same rows the server would
+ * have picked. Keep the two in sync.
+ *
+ * @param {Array<{t:number, what:string}>} events
+ * @returns {Array<{t:number, what:string, weight:number}>}
  */
 function pickSignatureFromEvents(events) {
-  const candidates = events.filter((ev) => /^(Build|Research|Morph|Train)[A-Z]/.test(ev.what || ''));
+  const candidates = (events || []).filter((ev) =>
+    ev && typeof ev.what === 'string' &&
+    CANDIDATE_RE.test(ev.what) &&
+    !SKIP_TOKENS.has(ev.what)
+  );
+  const ranked = candidates.map((ev) => ({ ev, tier: pickTier(ev.what) }));
+  ranked.sort((a, b) => {
+    if (a.tier !== b.tier) return b.tier - a.tier;  // higher tier first
+    return a.ev.t - b.ev.t;                          // earlier within tier
+  });
   const picked = [];
   const seen = new Set();
-  for (const ev of candidates) {
-    if (seen.has(ev.what)) continue;
-    seen.add(ev.what);
-    picked.push({ t: ev.t, what: ev.what, weight: 1.0 });
-    if (picked.length >= 12) break;
+  for (const r of ranked) {
+    if (seen.has(r.ev.what)) continue;
+    seen.add(r.ev.what);
+    picked.push({ t: r.ev.t, what: r.ev.what, weight: 1.0 });
+    if (picked.length >= AUTO_PICK_CAP) break;
   }
+  picked.sort((a, b) => a.t - b.t);  // natural reading order in the editor
   return picked;
+}
+
+const CANDIDATE_RE = /^(Build|Research|Morph|Train)[A-Z]/;
+const AUTO_PICK_CAP = 12;
+
+// Tier 0 — never auto-picked. Townhalls, workers, basic supply. These
+// appear in EVERY game and don't carry strategy signal.
+const SKIP_TOKENS = new Set([
+  // Townhalls (initial only — morphed Lair/Hive/OC are tech moves)
+  'BuildNexus', 'BuildCommandCenter', 'BuildHatchery',
+  // Workers
+  'TrainProbe', 'TrainSCV', 'TrainDrone', 'TrainMULE',
+  // Basic supply (Overseer is a tech morph, NOT skipped)
+  'BuildPylon', 'BuildSupplyDepot', 'TrainOverlord',
+  'MorphSupplyDepotLowered', 'MorphSupplyDepotRaised',
+  // Worker rallies / cosmetic (defense in depth on top of the build_log filter)
+  'BuildOverlordTransport',
+]);
+
+// Tier 3 — highest priority. Key combat units + key tech upgrades.
+// These are the strategy commitments most users care about reading.
+const TIER3_TOKENS = new Set([
+  // Protoss units
+  'TrainStalker', 'TrainSentry', 'TrainAdept', 'TrainPhoenix', 'TrainOracle',
+  'TrainVoidRay', 'TrainTempest', 'TrainCarrier', 'TrainMothership',
+  'TrainImmortal', 'TrainColossus', 'TrainDisruptor', 'TrainObserver',
+  'TrainWarpPrism', 'TrainHighTemplar', 'TrainDarkTemplar', 'MorphArchon',
+  // Terran units
+  'TrainMarauder', 'TrainReaper', 'TrainHellion', 'TrainHellbat',
+  'TrainSiegeTank', 'TrainCyclone', 'TrainThor', 'TrainWidowMine',
+  'TrainBanshee', 'TrainVikingFighter', 'TrainMedivac', 'TrainLiberator',
+  'TrainRaven', 'TrainBattlecruiser', 'TrainGhost',
+  // Zerg units (Train + Morph variants)
+  'TrainQueen', 'TrainRoach', 'MorphBaneling', 'TrainHydralisk',
+  'MorphLurker', 'MorphRavager', 'TrainMutalisk', 'TrainCorruptor',
+  'MorphBroodLord', 'MorphOverseer', 'TrainInfestor', 'TrainViper',
+  'TrainSwarmHost', 'TrainUltralisk',
+  // Key Protoss upgrades
+  'ResearchBlink', 'ResearchCharge', 'ResearchWarpGate',
+  'ResearchPsionicStorm', 'ResearchExtendedThermalLance',
+  'ResearchShadowStride', 'ResearchVoidRaySpeedUpgrade',
+  'ResearchAnionPulseCrystals', 'ResearchGraviticDrive',
+  'ResearchGraviticBoosters',
+  // Key Terran upgrades
+  'ResearchStimpack', 'ResearchCombatShield', 'ResearchConcussiveShells',
+  'ResearchSiegeTech', 'ResearchInfernalPreigniter',
+  'ResearchHisecAutoTracking', 'ResearchPersonalCloaking',
+  'ResearchAdvancedBallistics', 'ResearchBansheeCloak',
+  'ResearchBansheeSpeed',
+  // Key Zerg upgrades
+  'ResearchMetabolicBoost', 'ResearchAdrenalGlands', 'ResearchGroovedSpines',
+  'ResearchMuscularAugments', 'ResearchTunnelingClaws',
+  'ResearchGlialReconstitution', 'ResearchBurrow', 'ResearchPneumatizedCarapace',
+  'ResearchCentrifugalHooks', 'ResearchNeuralParasite',
+]);
+
+// Tier 2 — tech buildings + key tech morphs. The "what tech tree did
+// they open" layer. Also mid-priority defensive structures.
+const TIER2_TOKENS = new Set([
+  // Protoss tech buildings
+  'BuildCyberneticsCore', 'BuildTwilightCouncil', 'BuildRoboticsFacility',
+  'BuildRoboticsBay', 'BuildStargate', 'BuildFleetBeacon',
+  'BuildTemplarArchives', 'BuildDarkShrine', 'BuildForge',
+  'BuildPhotonCannon', 'BuildShieldBattery',
+  // Terran tech buildings + upgrades
+  'BuildFactory', 'BuildStarport', 'BuildArmory', 'BuildFusionCore',
+  'BuildEngineeringBay', 'BuildGhostAcademy', 'BuildBunker',
+  'BuildMissileTurret', 'BuildSensorTower',
+  'BuildOrbitalCommand', 'BuildPlanetaryFortress',
+  'BuildBarracksTechLab', 'BuildBarracksReactor',
+  'BuildFactoryTechLab', 'BuildFactoryReactor',
+  'BuildStarportTechLab', 'BuildStarportReactor',
+  // Zerg tech buildings + key morphs
+  'BuildSpawningPool', 'BuildEvolutionChamber', 'BuildRoachWarren',
+  'BuildBanelingNest', 'BuildHydraliskDen', 'BuildSpire',
+  'BuildInfestationPit', 'BuildUltraliskCavern', 'BuildNydusNetwork',
+  'BuildNydusWorm', 'BuildSporeCrawler', 'BuildSpineCrawler',
+  'MorphLair', 'MorphHive', 'MorphGreaterSpire', 'MorphLurkerDen',
+]);
+
+function pickTier(what) {
+  if (TIER3_TOKENS.has(what)) return 3;
+  if (TIER2_TOKENS.has(what)) return 2;
+  return 1;  // default: production buildings, basic units (Gateway, Barracks, Marine, Zealot)
 }
 
 module.exports = {

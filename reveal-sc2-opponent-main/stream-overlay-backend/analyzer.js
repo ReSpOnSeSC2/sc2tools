@@ -1708,6 +1708,14 @@ function findGameById(gameId) {
 
 const _BUILD_LOG_LINE_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
 
+// Stage 7.5: Cosmetic in-game events (sprays, dance commands, hotkey
+// beacons) appear at t=0 in every replay's build_log because sc2reader
+// records them as ability events. They are NOT part of any real build
+// order and pollute both the BuildOrderTimeline display and the auto-pick
+// signature for custom builds. Strip them at the parser so neither the
+// SPA nor the custom-builds matcher ever sees them.
+const _BUILD_LOG_NOISE_RE = /^(Beacon|Reward|Spray)/;
+
 function parseBuildLogLines(lines) {
     const events = [];
     for (const line of lines || []) {
@@ -1716,6 +1724,7 @@ function parseBuildLogLines(lines) {
         const minutes = parseInt(m[1], 10);
         const seconds = parseInt(m[2], 10);
         const rawName = m[3].trim();
+        if (_BUILD_LOG_NOISE_RE.test(rawName)) continue;
         let entry = null;
         if (SC2_CATALOG && typeof SC2_CATALOG.lookup === 'function') {
             entry = SC2_CATALOG.lookup(rawName);
