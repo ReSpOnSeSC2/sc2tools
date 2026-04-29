@@ -55,23 +55,34 @@
   var SKILL_LEVEL_IDS = SKILL_LEVELS.map(function (l) { return l.id; });
 
   var RULE_TYPES = ['before', 'not_before', 'count_max', 'count_min'];
+  // Icons + labels are designed to render INSIDE the cycle button so the
+  // user always sees what the rule means. Math/check symbols carry their
+  // own semantics (✓ exists, ✗ doesn't exist, ≤/≥ count thresholds).
   var RULE_TYPE_ICON = {
-    before: '🏛',       // 🏛 (built before)
-    not_before: '🚫',   // 🚫 (NOT built before)
-    count_max: '🔢',    // 🔢 (count ≤)
-    count_min: '📈',    // 📈 (count ≥)
+    before: '✓',
+    not_before: '✗',
+    count_max: '≤',
+    count_min: '≥',
   };
   var RULE_TYPE_LABEL = {
     before: 'built by',
-    not_before: 'NOT built by',
-    count_max: 'count ≤',
-    count_min: 'count ≥',
+    not_before: 'NOT by',
+    count_max: '',     // the badge itself reads "≤ N" — no extra label
+    count_min: '',
   };
   var RULE_TYPE_VERB = {
-    before: 'before',
-    not_before: 'before',
+    before: 'by',
+    not_before: 'by',
     count_max: 'by',
     count_min: 'by',
+  };
+  // Tailwind colour classes per type. Used by the modal to color-code
+  // the cycle button (green = must happen, red = must NOT, neutral = count).
+  var RULE_TYPE_COLOR = {
+    before: 'bg-win-500/20 text-win-500 border-win-500/40',
+    not_before: 'bg-loss-500/20 text-loss-500 border-loss-500/40',
+    count_max: 'bg-base-700 text-neutral-200 border-base-600',
+    count_min: 'bg-base-700 text-neutral-200 border-base-600',
   };
 
   // ---- Event -> signature token mapping --------------------------------
@@ -322,6 +333,52 @@
     return out;
   }
 
+  // Stage 7.5b: tokens worth highlighting in the source-replay column.
+  // The modal visually emphasizes these rows so users know which events
+  // to click [+] on. Mirrors (a subset of) routes/custom_builds_helpers.js
+  // TIER2/TIER3 sets — kept compact to avoid bloat. NOTE: real on-disk
+  // data uses Build* prefix for everything (parseLogLine defaults verb to
+  // Build when missing), so all entries below are Build*-prefixed.
+  var TECH_TOKENS = new Set([
+    // Protoss tech buildings
+    'BuildCyberneticsCore','BuildTwilightCouncil','BuildRoboticsFacility',
+    'BuildRoboticsBay','BuildStargate','BuildFleetBeacon',
+    'BuildTemplarArchives','BuildTemplarArchive','BuildDarkShrine',
+    // Protoss key units
+    'BuildStalker','BuildSentry','BuildAdept','BuildPhoenix','BuildOracle',
+    'BuildVoidRay','BuildTempest','BuildCarrier','BuildImmortal',
+    'BuildColossus','BuildDisruptor','BuildHighTemplar','BuildDarkTemplar',
+    'BuildArchon','BuildMothership',
+    // Terran tech buildings
+    'BuildFactory','BuildStarport','BuildArmory','BuildFusionCore',
+    'BuildEngineeringBay','BuildGhostAcademy','BuildOrbitalCommand',
+    'BuildPlanetaryFortress',
+    // Terran key units
+    'BuildMarauder','BuildReaper','BuildHellion','BuildHellbat',
+    'BuildSiegeTank','BuildCyclone','BuildThor','BuildBanshee',
+    'BuildVikingFighter','BuildLiberator','BuildRaven',
+    'BuildBattlecruiser','BuildGhost','BuildWidowMine',
+    // Zerg tech buildings + morphs
+    'BuildSpawningPool','BuildRoachWarren','BuildBanelingNest',
+    'BuildHydraliskDen','BuildSpire','BuildInfestationPit',
+    'BuildUltraliskCavern','BuildNydusNetwork',
+    'MorphLair','MorphHive','MorphGreaterSpire','MorphLurkerDen',
+    // Zerg key units (Build* on disk; Morph* for the explicit morphs)
+    'BuildRoach','BuildHydralisk','BuildMutalisk','BuildCorruptor',
+    'BuildInfestor','BuildViper','BuildSwarmHost','BuildUltralisk',
+    'MorphBaneling','MorphLurker','MorphRavager','MorphBroodLord',
+    'MorphOverseer',
+    // Cross-race key upgrades (any Research* token is interesting)
+  ]);
+
+  function isTechToken(token) {
+    if (!token) return false;
+    if (TECH_TOKENS.has(token)) return true;
+    // All Research* tokens are upgrades — worth highlighting
+    if (/^Research[A-Z]/.test(token)) return true;
+    return false;
+  }
+
   // ---- Public API -------------------------------------------------------
   return {
     // event mapping
@@ -339,6 +396,8 @@
     parseTimeInput: parseTimeInput,
     // misc
     formatTime: formatTime,
+    isTechToken: isTechToken,
+    TECH_TOKENS: TECH_TOKENS,
     deriveDefaultName: deriveDefaultName,
     slugify: slugify,
     debounce: debounce,
@@ -352,6 +411,7 @@
     RULE_TYPE_ICON: RULE_TYPE_ICON,
     RULE_TYPE_LABEL: RULE_TYPE_LABEL,
     RULE_TYPE_VERB: RULE_TYPE_VERB,
+    RULE_TYPE_COLOR: RULE_TYPE_COLOR,
     DESC_MAX_CHARS: DESC_MAX_CHARS,
     NAME_MIN_CHARS: NAME_MIN_CHARS,
     NAME_MAX_CHARS: NAME_MAX_CHARS,

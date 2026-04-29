@@ -387,10 +387,8 @@ function handleFromGame(ctx) {
       return;
     }
     const draft = buildDraftFromEvents(events, body);
-    if (draft.rules.length === 0) {
-      badRequest(res, 'no_rules');
-      return;
-    }
+    // Stage 7.5b: rules array is intentionally empty by default —
+    // user adds rules manually via the editor's [+] click-to-add UI.
     res.status(HTTP_OK).json({ draft, event_count: events.length });
   });
 }

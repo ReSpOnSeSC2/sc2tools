@@ -442,28 +442,22 @@ function moveGame(meta, from, to, idx) {
 // 'before' rule with time_lt = event.t + AUTO_PICK_TIME_BUFFER_SEC. Cap
 // at AUTO_PICK_RULES_CAP because rule-eval is strict (boolean per rule);
 // fewer-but-precise rules give better recall to start.
-function pickRulesFromEvents(events) {
-  const candidates = (events || []).filter((ev) =>
-    ev && typeof ev.what === 'string' &&
-    CANDIDATE_RE.test(ev.what) &&
-    !SKIP_TOKENS.has(ev.what)
-  );
-  const ranked = candidates.map((ev) => ({ ev, tier: pickTier(ev.what) }));
-  ranked.sort((a, b) => {
-    if (a.tier !== b.tier) return b.tier - a.tier;
-    return a.ev.t - b.ev.t;
-  });
-  const rules = [];
-  const seen = new Set();
-  for (const r of ranked) {
-    if (seen.has(r.ev.what)) continue;
-    seen.add(r.ev.what);
-    const t = clampRuleTime(r.ev.t + AUTO_PICK_TIME_BUFFER_SEC);
-    rules.push({ type: 'before', name: r.ev.what, time_lt: t });
-    if (rules.length >= AUTO_PICK_RULES_CAP) break;
-  }
-  rules.sort((a, b) => a.time_lt - b.time_lt);
-  return rules;
+// Stage 7.5b update: removed auto-pick. The previous implementation
+// (top 5 tier-defined events from the source replay) produced suggestions
+// that weren't actually good — time_lt anchored to one specific replay's
+// timing, no consideration of what's discriminative across the user's
+// library. User feedback: 'really bad, dont recommend any rules'.
+//
+// The modal now opens with 0 rules. The source-replay column visually
+// highlights tech-worthy events (TIER2/TIER3 sets) so the user knows
+// what's worth clicking [+] on.
+//
+// Future enhancement: a 'Suggest rules' button that does a discriminative
+// analysis against the meta DB — find events that distinguish this game
+// from games in OTHER buckets. That would produce actually-useful
+// suggestions but needs a new endpoint.
+function pickRulesFromEvents(_events) {
+  return [];
 }
 
 const CANDIDATE_RE = /^(Build|Research|Morph|Train)[A-Z]/;

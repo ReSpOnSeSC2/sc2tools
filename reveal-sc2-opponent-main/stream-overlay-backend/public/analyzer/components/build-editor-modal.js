@@ -81,6 +81,11 @@
     var [previewError, setPreviewError] = useState(null);
     var [previewPage, setPreviewPage] = useState(0);
     var [almostPage, setAlmostPage] = useState(0);
+    // Stage 7.5b: inspect (expand) + hide (X) per match row.
+    var [expandedMatch, setExpandedMatch] = useState(null);  // game_id of currently-expanded row
+    var [hiddenMatches, setHiddenMatches] = useState(function () { return new Set(); });
+    var [inspectCache, setInspectCache] = useState({});       // game_id -> events[]
+    var [inspectLoading, setInspectLoading] = useState({});   // game_id -> bool
     var [saving, setSaving] = useState(false);
     var [saveError, setSaveError] = useState(null);
     var [errors, setErrors] = useState({});
@@ -248,6 +253,31 @@
       setEditingCountIdx(-1);
     }
 
+    function toggleInspect(gameId) {
+      if (!gameId) return;
+      if (expandedMatch === gameId) { setExpandedMatch(null); return; }
+      setExpandedMatch(gameId);
+      if (inspectCache[gameId] || inspectLoading[gameId]) return;
+      setInspectLoading(function (p) { var n = Object.assign({}, p); n[gameId] = true; return n; });
+      fetch('/api/analyzer/games/' + encodeURIComponent(gameId) + '/build-order')
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+        .then(function (j) {
+          setInspectCache(function (p) { var n = Object.assign({}, p); n[gameId] = j.events || []; return n; });
+        })
+        .catch(function () { /* ignore */ })
+        .finally(function () {
+          setInspectLoading(function (p) { var n = Object.assign({}, p); delete n[gameId]; return n; });
+        });
+    }
+
+    function hideMatch(gameId) {
+      if (!gameId) return;
+      setHiddenMatches(function (prev) { var n = new Set(prev); n.add(gameId); return n; });
+      if (expandedMatch === gameId) setExpandedMatch(null);
+    }
+
+    function unhideAll() { setHiddenMatches(new Set()); }
+
     function buildPayload() {
       return H.sanitiseDraft({
         name: name, description: description, race: race, vs_race: vsRace,
@@ -349,12 +379,15 @@
             commitCountEdit: commitCountEdit,
             addCustomRule: addCustomRule, errors: errors,
           }),
-          renderSection3Preview({
+          (window.BuildEditorMatchList && window.BuildEditorMatchList.render({
             previewResult: previewResult, previewLoading: previewLoading, previewError: previewError,
             previewPage: previewPage, setPreviewPage: setPreviewPage,
             almostPage: almostPage, setAlmostPage: setAlmostPage,
             rules: rules,
-          })
+            expandedMatch: expandedMatch, toggleInspect: toggleInspect,
+            hiddenMatches: hiddenMatches, hideMatch: hideMatch, unhideAll: unhideAll,
+            inspectCache: inspectCache, inspectLoading: inspectLoading,
+          }))
         ),
         renderSaveBar({
           attemptClose: attemptClose, postSave: postSave, saving: saving,
@@ -521,33 +554,46 @@
       ),
       c('div', { className: 'mt-2 flex items-center gap-2 text-xs text-neutral-500 flex-wrap' },
         c('span', null, 'Add custom rule:'),
-        renderAddCustomBtn('🏛 built by',     'before',     s.addCustomRule),
-        renderAddCustomBtn('🚫 NOT built by', 'not_before', s.addCustomRule),
-        renderAddCustomBtn('🔢 count ≤',       'count_max',  s.addCustomRule),
-        renderAddCustomBtn('📈 count ≥',       'count_min',  s.addCustomRule)
+        renderAddCustomBtn('✓ built by',  'before',     s.addCustomRule, 'win'),
+        renderAddCustomBtn('✗ NOT by',    'not_before', s.addCustomRule, 'loss'),
+        renderAddCustomBtn('≤ count',      'count_max',  s.addCustomRule, 'neutral'),
+        renderAddCustomBtn('≥ count',      'count_min',  s.addCustomRule, 'neutral')
       )
     );
   }
 
-  function renderAddCustomBtn(label, type, addCustomRule) {
+  function renderAddCustomBtn(label, type, addCustomRule, tone) {
+    var cls = tone === 'win' ? 'bg-win-500/20 text-win-500 hover:bg-win-500/30 border border-win-500/40'
+            : tone === 'loss' ? 'bg-loss-500/20 text-loss-500 hover:bg-loss-500/30 border border-loss-500/40'
+            : 'bg-base-700 text-neutral-300 hover:bg-base-600 border border-base-600';
     return c('button', {
       key: type, type: 'button',
-      className: 'px-2 py-0.5 rounded bg-base-700 text-neutral-300 hover:bg-base-600',
+      className: 'px-2 py-0.5 rounded text-xs font-medium ' + cls,
       onClick: function () { addCustomRule(type); },
     }, label);
   }
 
   function renderSourceTimeline(s) {
     return c('div', { className: 'bg-base-800/40 rounded border border-base-700 max-h-[360px] overflow-y-auto' },
-      c('div', { className: 'sticky top-0 bg-base-800/90 px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500 border-b border-base-700' },
-        'Source replay timeline (' + s.sourceRows.length + ')'),
+      c('div', { className: 'sticky top-0 bg-base-800/90 px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500 border-b border-base-700 flex items-center gap-2' },
+        c('span', null, 'Source replay timeline (' + s.sourceRows.length + ')'),
+        c('span', { className: 'normal-case text-[9px] text-neutral-600' },
+          '· ★ = tech-defining (good to add)')),
       s.sourceRows.length === 0 ? c('div', { className: 'p-3 text-xs text-neutral-500' }, 'No mappable events on this game.')
       : c('ul', { className: 'divide-y divide-base-700' },
           s.sourceRows.map(function (r) {
             var inRules = !!s.rulesByName[r.what];
-            return c('li', { key: r.key, className: 'flex items-center gap-2 px-3 py-1.5 text-xs' },
+            // Stage 7.5b: tech-worthy events (tech buildings, key units,
+            // upgrades) get a subtle accent background so users know which
+            // rows are worth promoting to a rule. Cosmetic / common events
+            // (Pylon, Gateway, Probe) render in muted color.
+            var tech = H.isTechToken && H.isTechToken(r.what);
+            var rowClass = 'flex items-center gap-2 px-3 py-1.5 text-xs ' +
+              (tech ? 'bg-accent-500/5 hover:bg-accent-500/10' : 'opacity-70 hover:opacity-100');
+            return c('li', { key: r.key, className: rowClass },
               c('span', { className: 'font-mono text-[11px] text-neutral-400 w-10 tabular-nums' }, r.time_display),
-              c('span', { className: 'flex-1 truncate text-neutral-200' }, r.display),
+              tech ? c('span', { className: 'text-[10px] text-accent-500', title: 'Tech-defining event' }, '★') : c('span', { className: 'w-3' }),
+              c('span', { className: 'flex-1 truncate ' + (tech ? 'text-neutral-100 font-medium' : 'text-neutral-300') }, r.display),
               c('span', { className: 'text-[10px] text-neutral-500 tabular-nums' }, r.what),
               inRules
                 ? c('span', { className: 'text-[10px] text-accent-500 ml-1' }, '✓ in rules')
@@ -565,7 +611,7 @@
       c('div', { className: 'sticky top-0 bg-base-800/90 px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500 border-b border-base-700' },
         'Your rules (' + s.rules.length + ') · click ⚙ to cycle type · click time to edit'),
       s.rules.length === 0 ? c('div', { className: 'p-3 text-xs text-neutral-500' },
-        'Click + on a source-replay row to add a rule.')
+        'No rules yet. Click + on a ★ tech-defining event in the left column, or use the ✓ / ✗ / ≤ / ≥ buttons below to add a custom rule.')
       : c('ul', { className: 'divide-y divide-base-700' },
           s.rules.map(function (rule, i) { return renderRuleChip(rule, i, s); }))
     );
@@ -573,26 +619,47 @@
 
   function renderRuleChip(rule, idx, s) {
     var isCount = rule.type === 'count_max' || rule.type === 'count_min';
-    var icon = H.RULE_TYPE_ICON[rule.type] || '?';
     return c('li', { key: idx, className: 'flex items-center gap-2 px-3 py-1.5 text-xs' },
-      c('button', {
-        className: 'text-base hover:scale-110 transition-transform',
-        title: 'Cycle rule type (currently ' + H.RULE_TYPE_LABEL[rule.type] + ')',
-        'aria-label': 'Cycle type', onClick: function () { s.cycleRule(idx); },
-      }, icon),
-      isCount ? renderCountField(rule, idx, s) : null,
+      // Cycle badge — shows icon + label/count, color-coded by type.
+      // Click to rotate type. Tooltip explains the cycle.
+      renderCycleBadge(rule, idx, s, isCount),
+      // Event-name input (the token like BuildStargate)
       c('input', {
         className: 'flex-1 min-w-0 bg-transparent border border-transparent focus:border-base-600 rounded px-1 text-neutral-100 text-[11px]',
         type: 'text', value: rule.name, placeholder: 'BuildStargate',
         title: 'Event token (e.g. BuildStargate, ResearchBlink). Must match data exactly.',
         onChange: function (e) { s.updateRule(idx, { name: e.target.value.trim() }); },
       }),
-      c('span', { className: 'text-[10px] text-neutral-500' }, isCount ? 'by' : 'before'),
+      c('span', { className: 'text-[10px] text-neutral-500' }, 'by'),
       renderTimeField(rule, idx, s),
       c('button', {
         className: 'text-neutral-500 hover:text-loss-500 px-1', 'aria-label': 'Remove ' + rule.name,
         onClick: function () { s.removeRule(idx); },
       }, '×')
+    );
+  }
+
+  function renderCycleBadge(rule, idx, s, isCount) {
+    var icon = H.RULE_TYPE_ICON[rule.type] || '?';
+    var label = H.RULE_TYPE_LABEL[rule.type] || '';
+    var color = H.RULE_TYPE_COLOR[rule.type] || 'bg-base-700 text-neutral-200 border-base-600';
+    var tooltip = 'Click to cycle rule type (currently: ' + rule.type.replace('_', ' ') + ')';
+    if (isCount) {
+      // Single combined badge: e.g. "≤ 16" — count is editable inline.
+      return c('span', { className: 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ' + color, title: tooltip },
+        c('button', { className: 'font-semibold leading-none', 'aria-label': 'Cycle type',
+          onClick: function () { s.cycleRule(idx); }
+        }, icon),
+        renderCountField(rule, idx, s)
+      );
+    }
+    // Single button: "✓ built by" / "✗ NOT by"
+    return c('button', {
+      className: 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-medium ' + color,
+      title: tooltip, 'aria-label': 'Cycle type',
+      onClick: function () { s.cycleRule(idx); }
+    }, c('span', { className: 'font-semibold leading-none' }, icon),
+       c('span', { className: 'text-[10px]' }, label)
     );
   }
 
@@ -637,85 +704,9 @@
       });
     }
     return c('button', {
-      className: 'font-mono text-[11px] text-accent-400 hover:text-accent-500 underline decoration-dotted underline-offset-2 tabular-nums w-8',
+      className: 'font-mono text-[11px] tabular-nums hover:underline',
       title: 'Click to edit count', onClick: function () { s.setEditingCountIdx(idx); },
     }, rule.count);
-  }
-
-  // =====================================================================
-  // Section 3 — Match preview + Almost matches
-  // =====================================================================
-  function renderSection3Preview(s) {
-    var pr = s.previewResult || { matches: [], almost_matches: [], scanned_games: 0, truncated: false };
-    var matches = pr.matches || [];
-    var almost = pr.almost_matches || [];
-    var msg;
-    if (s.previewLoading) msg = 'Scoring against your games…';
-    else if (s.previewError) msg = 'Preview error: ' + s.previewError;
-    else if (s.rules.length === 0) msg = 'Add a rule to see matches.';
-    else {
-      var pct = pr.scanned_games > 0 ? ((matches.length / pr.scanned_games) * 100).toFixed(1) : '0.0';
-      msg = '✓ ' + matches.length + (pr.truncated ? '+' : '') + ' of your ' + pr.scanned_games + ' games match all ' + s.rules.length + ' rules (' + pct + '%).';
-    }
-    return c('section', { 'aria-label': 'Match preview' },
-      c('h3', { className: 'text-xs uppercase text-neutral-500 mb-2' }, '3 · Match preview'),
-      c('div', { className: 'text-sm text-neutral-200', 'aria-live': 'polite' }, msg),
-      matches.length > 0 ? renderMatchList('Matches', matches, s.previewPage, s.setPreviewPage, s.rules.length, false) : null,
-      almost.length > 0 ? renderAlmostList(almost, s.almostPage, s.setAlmostPage) : null
-    );
-  }
-
-  function renderMatchList(label, items, page, setPage, ruleCount, isAlmost) {
-    var totalPages = Math.max(1, Math.ceil(items.length / PREVIEW_PAGE_SIZE));
-    var p = Math.min(Math.max(0, page), totalPages - 1);
-    var start = p * PREVIEW_PAGE_SIZE;
-    var pageItems = items.slice(start, start + PREVIEW_PAGE_SIZE);
-    return c('div', { className: 'mt-2' },
-      c('div', { className: 'text-[10px] uppercase tracking-wider text-neutral-500 mb-1' }, label),
-      c('ul', { className: 'divide-y divide-base-700 bg-base-800/40 rounded border border-base-700' },
-        pageItems.map(function (m, i) {
-          return c('li', { key: start + i, className: 'flex items-center gap-3 px-3 py-1.5 text-xs' },
-            c('span', { className: 'text-neutral-500 font-mono tabular-nums w-8 text-right' }, '#' + (start + i + 1)),
-            c('span', { className: 'text-neutral-100 flex-1 truncate' }, m.build_name),
-            c('span', { className: 'text-neutral-500 font-mono tabular-nums truncate max-w-[180px]' }, m.game_id || '—'),
-            isAlmost ? null : c('span', { className: 'text-accent-500 font-mono tabular-nums' }, '✓ ' + ruleCount + '/' + ruleCount));
-        })),
-      items.length > PREVIEW_PAGE_SIZE ? renderPager(p, totalPages, items.length, setPage) : null
-    );
-  }
-
-  function renderAlmostList(items, page, setPage) {
-    var totalPages = Math.max(1, Math.ceil(items.length / PREVIEW_PAGE_SIZE));
-    var p = Math.min(Math.max(0, page), totalPages - 1);
-    var start = p * PREVIEW_PAGE_SIZE;
-    var pageItems = items.slice(start, start + PREVIEW_PAGE_SIZE);
-    return c('div', { className: 'mt-3' },
-      c('div', { className: 'text-[10px] uppercase tracking-wider text-neutral-500 mb-1' },
-        'Almost matches — failed exactly 1 rule (try refining):'),
-      c('ul', { className: 'divide-y divide-base-700 bg-base-800/40 rounded border border-base-700' },
-        pageItems.map(function (m, i) {
-          return c('li', { key: start + i, className: 'flex items-center gap-3 px-3 py-1.5 text-xs' },
-            c('span', { className: 'text-neutral-500 font-mono tabular-nums w-8 text-right' }, '#' + (start + i + 1)),
-            c('span', { className: 'text-neutral-100 truncate max-w-[140px]' }, m.build_name),
-            c('span', { className: 'text-loss-500 flex-1 truncate' }, '✗ ' + (m.failed_reason || '?')));
-        })),
-      items.length > PREVIEW_PAGE_SIZE ? renderPager(p, totalPages, items.length, setPage) : null
-    );
-  }
-
-  function renderPager(page, totalPages, total, setPage) {
-    var atFirst = page <= 0; var atLast = page >= totalPages - 1;
-    var bb = 'px-2 py-0.5 rounded text-xs ';
-    var on = 'bg-base-700 text-neutral-200 hover:bg-base-600';
-    var off = 'bg-base-800 text-neutral-600 cursor-not-allowed';
-    return c('div', { className: 'mt-2 flex items-center justify-center gap-3 text-xs text-neutral-400' },
-      c('button', { className: bb + (atFirst ? off : on), disabled: atFirst,
-        'aria-label': 'Previous page', onClick: function () { setPage(Math.max(0, page - 1)); } }, '← prev'),
-      c('span', { className: 'tabular-nums select-none' },
-        'page ' + (page + 1) + ' / ' + totalPages + ' · ' + total + ' total'),
-      c('button', { className: bb + (atLast ? off : on), disabled: atLast,
-        'aria-label': 'Next page', onClick: function () { setPage(Math.min(totalPages - 1, page + 1)); } }, 'next →')
-    );
   }
 
   // =====================================================================
