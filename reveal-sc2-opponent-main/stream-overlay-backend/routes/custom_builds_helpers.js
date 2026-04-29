@@ -69,10 +69,16 @@ function readJsonOrNull(filePath) {
  */
 function readCustomFile(customPath) {
   const data = readJsonOrNull(customPath);
-  if (!data || data.version !== 2 || !Array.isArray(data.builds)) {
-    return { version: 2, builds: [] };
+  if (!data || !Array.isArray(data.builds)) {
+    return { version: SCHEMA_VERSION, builds: [] };
   }
-  return data;
+  if (data.version === SCHEMA_VERSION) return data;
+  if (data.version === 2) {
+    // Stage 7.5b: in-memory migrate. Caller may persist via the next save.
+    const migrated = data.builds.map(migrateBuildV2ToV3).filter(Boolean);
+    return { version: SCHEMA_VERSION, builds: migrated };
+  }
+  return { version: SCHEMA_VERSION, builds: [] };
 }
 
 /**
@@ -165,14 +171,12 @@ function normalizeBuild(body, defaults) {
     name: body.name,
     race: body.race,
     vs_race: body.vs_race,
-    tier: body.tier === undefined ? null : body.tier,
+    skill_level: SKILL_LEVELS.has(body.skill_level) ? body.skill_level : null,
     description: body.description || '',
     win_conditions: body.win_conditions || [],
     loses_to: body.loses_to || [],
     transitions_into: body.transitions_into || [],
-    signature: body.signature,
-    tolerance_sec: body.tolerance_sec,
-    min_match_score: body.min_match_score,
+    rules: Array.isArray(body.rules) ? body.rules : [],
     source_replay_id: body.source_replay_id || null,
     created_at: defaults.created_at,
     updated_at: defaults.updated_at,
@@ -190,9 +194,8 @@ function normalizeBuild(body, defaults) {
  */
 function applyPatch(prev, patch) {
   const allow = [
-    'name', 'race', 'vs_race', 'tier', 'description',
-    'win_conditions', 'loses_to', 'transitions_into',
-    'signature', 'tolerance_sec', 'min_match_score',
+    'name', 'race', 'vs_race', 'skill_level', 'description',
+    'win_conditions', 'loses_to', 'transitions_into', 'rules',
   ];
   const next = { ...prev };
   for (const key of allow) {
@@ -267,20 +270,33 @@ function parseLogLine(line) {
 // inflate match scores spuriously).
 const EVENT_NOISE_RE = /^(?:Build|Train|Research|Morph)?(?:Beacon|Reward|Spray)/;
 
+// Stage 7.5b: extract the USER's events from a meta_database game.
+// Reads only `build_log` (the canonical user-side field for this data
+// layout — my_*_build_log is empty for every game in the corpus, and
+// opp_*_build_log is by definition the opponent's events which would
+// corrupt matches). Drops cosmetic Beacon/Reward/Spray entries via
+// EVENT_NOISE_RE. Race filtering is intentionally NOT applied — earlier
+// experiments showed (a) the user's build_log is reliably their own
+// events for >99% of games (11214/11266 contain BuildNexus), so no race
+// filter is needed for correctness, and (b) the rare cross-race noise
+// is harmless because rule.name is itself race-specific (e.g. a rule
+// for BuildSpawningPool only matches games where someone built one,
+// which is what the user wants to find).
 function extractGameEvents(game) {
+  if (!game) return [];
   if (Array.isArray(game.events)) return game.events;
   const out = [];
-  const log = game.early_build_log || game.my_early_build_log
-    || game.opp_early_build_log || game.build_log || game.my_build_log
-    || game.opp_build_log;
-  if (Array.isArray(log)) {
-    for (const line of log) {
-      const ev = parseLogLine(line);
-      if (ev && !EVENT_NOISE_RE.test(ev.what)) out.push(ev);
-    }
+  const log = Array.isArray(game.build_log) ? game.build_log : [];
+  for (const line of log) {
+    const ev = parseLogLine(line);
+    if (!ev) continue;
+    if (EVENT_NOISE_RE.test(ev.what)) continue;
+    out.push(ev);
   }
   return out;
 }
+
+
 
 /**
  * Compute the unnormalised match weight of a candidate against
@@ -292,18 +308,10 @@ function extractGameEvents(game) {
  * @param {number} tol
  * @returns {number}
  */
-function scoreSignature(events, candidate, tol) {
-  let matched = 0;
-  for (const sig of candidate.signature || []) {
-    for (const ev of events) {
-      if (ev.what !== sig.what) continue;
-      if (Math.abs((ev.t || 0) - sig.t) <= tol) {
-        matched += sig.weight || 0;
-        break;
-      }
-    }
-  }
-  return matched;
+// Stage 7.5b: v2 scoreSignature retired. v3 uses evaluateRule (boolean
+// per rule, all-must-pass) instead of weighted-sum scoring.
+function scoreSignature() {
+  throw new Error('scoreSignature is removed in v3 — use evaluateRule / evaluateRules');
 }
 
 /**
@@ -314,28 +322,47 @@ function scoreSignature(events, candidate, tol) {
  * @param {object} candidate
  * @returns {{matches: Array<object>, scanned: number}}
  */
-function previewMatchesAgainst(metaDb, candidate) {
+// Stage 7.5b: rule-based preview. Walks every game in metaDb, runs the
+// candidate's rules against each game's event list, and bucketed into
+// matches (all rules pass) and almostMatches (failed exactly 1 — used by
+// the SPA's 'almost matches' band so users see what's close and why).
+function previewMatchesV3(metaDb, candidate) {
   const matches = [];
+  const almostMatches = [];
   let scanned = 0;
-  const tol = candidate.tolerance_sec || DEFAULT_TOLERANCE_SEC;
-  const threshold = candidate.min_match_score || DEFAULT_MIN_MATCH_SCORE;
-  const totalWeight = (candidate.signature || []).reduce((acc, s) => acc + (s.weight || 0), 0);
-  if (totalWeight <= 0) return { matches, scanned };
+  const rules = (candidate && Array.isArray(candidate.rules)) ? candidate.rules : [];
+  if (!rules.length) return { matches, almostMatches, scanned, truncated: false };
   for (const buildName of Object.keys(metaDb)) {
     const games = (metaDb[buildName] && metaDb[buildName].games) || [];
     for (const g of games) {
       scanned += 1;
-      if (matches.length >= PREVIEW_LIMIT) break;
+      if (matches.length >= PREVIEW_LIMIT && almostMatches.length >= PREVIEW_LIMIT) break;
       const events = extractGameEvents(g);
-      if (!events.length) continue;
-      const score = scoreSignature(events, candidate, tol) / totalWeight;
-      if (score >= threshold) {
-        matches.push({ build_name: buildName, game_id: g.game_id || null, score });
+      const r = evaluateRules(events, rules);
+      if (r.failedIndices.length === 0) {
+        if (matches.length < PREVIEW_LIMIT) {
+          matches.push({ build_name: buildName, game_id: g.game_id || null });
+        }
+      } else if (r.failedIndices.length === 1) {
+        if (almostMatches.length < PREVIEW_LIMIT) {
+          const idx = r.failedIndices[0];
+          almostMatches.push({
+            build_name: buildName,
+            game_id: g.game_id || null,
+            failed_index: idx,
+            failed_reason: r.reasons[idx] || 'rule failed',
+          });
+        }
       }
     }
-    if (matches.length >= PREVIEW_LIMIT) break;
+    if (matches.length >= PREVIEW_LIMIT && almostMatches.length >= PREVIEW_LIMIT) break;
   }
-  return { matches, scanned };
+  return {
+    matches,
+    almostMatches,
+    scanned,
+    truncated: matches.length >= PREVIEW_LIMIT || almostMatches.length >= PREVIEW_LIMIT,
+  };
 }
 
 /**
@@ -346,16 +373,17 @@ function previewMatchesAgainst(metaDb, candidate) {
  * @param {Array<object>} builds
  * @returns {{name: string, score: number}|null}
  */
-function bestMatch(events, builds) {
+// Stage 7.5b: v3 best match. Returns the FIRST build whose every rule
+// passes against the events. Tiebreak by name (alphabetical) for
+// deterministic reclassify. Score is always 1.0 for compatibility with
+// callers that read .score (rule-eval is boolean).
+function bestMatchV3(events, builds) {
   let best = null;
   for (const b of builds) {
-    if (!Array.isArray(b.signature) || b.signature.length === 0) continue;
-    const tol = b.tolerance_sec || DEFAULT_TOLERANCE_SEC;
-    const totalWeight = b.signature.reduce((acc, s) => acc + (s.weight || 0), 0);
-    if (totalWeight <= 0) continue;
-    const score = scoreSignature(events, b, tol) / totalWeight;
-    if (score >= (b.min_match_score || DEFAULT_MIN_MATCH_SCORE)) {
-      if (!best || score > best.score) best = { name: b.name, score };
+    if (!Array.isArray(b.rules) || b.rules.length === 0) continue;
+    const r = evaluateRules(events, b.rules);
+    if (r.failedIndices.length === 0) {
+      if (!best || (b.name || '') < (best.name || '')) best = { name: b.name, score: 1.0 };
     }
   }
   return best;
@@ -409,7 +437,12 @@ function moveGame(meta, from, to, idx) {
  * @param {Array<{t:number, what:string}>} events
  * @returns {Array<{t:number, what:string, weight:number}>}
  */
-function pickSignatureFromEvents(events) {
+// Stage 7.5b: v3 auto-pick — emit RULES not signature events. Same tiered
+// ordering as the v2 pickSignature but each picked event becomes a
+// 'before' rule with time_lt = event.t + AUTO_PICK_TIME_BUFFER_SEC. Cap
+// at AUTO_PICK_RULES_CAP because rule-eval is strict (boolean per rule);
+// fewer-but-precise rules give better recall to start.
+function pickRulesFromEvents(events) {
   const candidates = (events || []).filter((ev) =>
     ev && typeof ev.what === 'string' &&
     CANDIDATE_RE.test(ev.what) &&
@@ -417,19 +450,20 @@ function pickSignatureFromEvents(events) {
   );
   const ranked = candidates.map((ev) => ({ ev, tier: pickTier(ev.what) }));
   ranked.sort((a, b) => {
-    if (a.tier !== b.tier) return b.tier - a.tier;  // higher tier first
-    return a.ev.t - b.ev.t;                          // earlier within tier
+    if (a.tier !== b.tier) return b.tier - a.tier;
+    return a.ev.t - b.ev.t;
   });
-  const picked = [];
+  const rules = [];
   const seen = new Set();
   for (const r of ranked) {
     if (seen.has(r.ev.what)) continue;
     seen.add(r.ev.what);
-    picked.push({ t: r.ev.t, what: r.ev.what, weight: 1.0 });
-    if (picked.length >= AUTO_PICK_CAP) break;
+    const t = clampRuleTime(r.ev.t + AUTO_PICK_TIME_BUFFER_SEC);
+    rules.push({ type: 'before', name: r.ev.what, time_lt: t });
+    if (rules.length >= AUTO_PICK_RULES_CAP) break;
   }
-  picked.sort((a, b) => a.t - b.t);  // natural reading order in the editor
-  return picked;
+  rules.sort((a, b) => a.time_lt - b.time_lt);
+  return rules;
 }
 
 const CANDIDATE_RE = /^(Build|Research|Morph|Train)[A-Z]/;
@@ -437,22 +471,35 @@ const AUTO_PICK_CAP = 12;
 
 // Tier 0 — never auto-picked. Townhalls, workers, basic supply. These
 // appear in EVERY game and don't carry strategy signal.
+// Stage 7.5b note: the user's build_log uses 'Build' verb prefix for
+// EVERYTHING (units, morphs, upgrades) because parseLogLine defaults
+// verb to 'Build' when the on-disk line has no verb. So 'BuildProbe' /
+// 'BuildOverlord' are how workers + supply appear, NOT 'TrainProbe'.
+// Both variants listed below for defense in depth (synthetic test data
+// uses Train*).
 const SKIP_TOKENS = new Set([
-  // Townhalls (initial only — morphed Lair/Hive/OC are tech moves)
+  // Townhalls
   'BuildNexus', 'BuildCommandCenter', 'BuildHatchery',
-  // Workers
+  // Workers (Build* in real data; Train* in tests)
+  'BuildProbe', 'BuildSCV', 'BuildDrone', 'BuildMULE',
   'TrainProbe', 'TrainSCV', 'TrainDrone', 'TrainMULE',
-  // Basic supply (Overseer is a tech morph, NOT skipped)
-  'BuildPylon', 'BuildSupplyDepot', 'TrainOverlord',
+  // Basic supply
+  'BuildPylon', 'BuildSupplyDepot', 'BuildOverlord',
+  'TrainOverlord',
   'MorphSupplyDepotLowered', 'MorphSupplyDepotRaised',
-  // Worker rallies / cosmetic (defense in depth on top of the build_log filter)
   'BuildOverlordTransport',
 ]);
 
 // Tier 3 — highest priority. Key combat units + key tech upgrades.
 // These are the strategy commitments most users care about reading.
 const TIER3_TOKENS = new Set([
-  // Protoss units
+  // Real data uses Build* prefix for units; both listed for compat.
+  // Protoss units (Build* + Train*)
+  'BuildStalker','BuildSentry','BuildAdept','BuildPhoenix','BuildOracle',
+  'BuildVoidRay','BuildTempest','BuildCarrier','BuildMothership',
+  'BuildImmortal','BuildColossus','BuildDisruptor','BuildObserver',
+  'BuildWarpPrism','BuildHighTemplar','BuildDarkTemplar','BuildArchon',
+  'BuildZealot',
   'TrainStalker', 'TrainSentry', 'TrainAdept', 'TrainPhoenix', 'TrainOracle',
   'TrainVoidRay', 'TrainTempest', 'TrainCarrier', 'TrainMothership',
   'TrainImmortal', 'TrainColossus', 'TrainDisruptor', 'TrainObserver',
@@ -462,11 +509,21 @@ const TIER3_TOKENS = new Set([
   'TrainSiegeTank', 'TrainCyclone', 'TrainThor', 'TrainWidowMine',
   'TrainBanshee', 'TrainVikingFighter', 'TrainMedivac', 'TrainLiberator',
   'TrainRaven', 'TrainBattlecruiser', 'TrainGhost',
-  // Zerg units (Train + Morph variants)
+  // Terran Build*
+  'BuildMarauder','BuildReaper','BuildHellion','BuildHellbat',
+  'BuildSiegeTank','BuildCyclone','BuildThor','BuildWidowMine',
+  'BuildBanshee','BuildViking','BuildVikingFighter','BuildVikingAssault',
+  'BuildMedivac','BuildLiberator','BuildRaven','BuildBattlecruiser',
+  'BuildGhost','BuildMarine',
+  // Zerg (Train + Morph + Build variants)
   'TrainQueen', 'TrainRoach', 'MorphBaneling', 'TrainHydralisk',
   'MorphLurker', 'MorphRavager', 'TrainMutalisk', 'TrainCorruptor',
   'MorphBroodLord', 'MorphOverseer', 'TrainInfestor', 'TrainViper',
   'TrainSwarmHost', 'TrainUltralisk',
+  'BuildQueen','BuildRoach','BuildBaneling','BuildHydralisk',
+  'BuildLurker','BuildRavager','BuildMutalisk','BuildCorruptor',
+  'BuildBroodLord','BuildOverseer','BuildInfestor','BuildViper',
+  'BuildSwarmHost','BuildUltralisk','BuildZergling',
   // Key Protoss upgrades
   'ResearchBlink', 'ResearchCharge', 'ResearchWarpGate',
   'ResearchPsionicStorm', 'ResearchExtendedThermalLance',
@@ -516,15 +573,187 @@ function pickTier(what) {
   return 1;  // default: production buildings, basic units (Gateway, Barracks, Marine, Zealot)
 }
 
+// ===================================================================
+// Stage 7.5b — v3 rule engine
+// ===================================================================
+// Boolean per-rule, all-must-pass. The router calls evaluateRules per
+// game to compute matches + almost-matches for the build editor preview.
+//
+// Rule types (matches data/custom_builds.schema.json):
+//   - before     : event 'name' must occur with t < time_lt
+//                  (or |t - time_lt| <= tol if tol present)
+//   - not_before : event 'name' must NOT occur with t < time_lt
+//   - count_max  : count(name occurrences with t < time_lt) <= count
+//   - count_min  : count(name occurrences with t < time_lt) >= count
+
+const SCHEMA_VERSION = 3;
+const SKILL_LEVELS = new Set([
+  'bronze', 'silver', 'gold', 'platinum',
+  'diamond', 'master', 'grandmaster',
+]);
+const RULE_TYPES = new Set(['before', 'not_before', 'count_max', 'count_min']);
+const AUTO_PICK_RULES_CAP = 5;
+const AUTO_PICK_TIME_BUFFER_SEC = 30;
+const TIME_LT_MIN = 1;
+const TIME_LT_MAX = 1800;
+
+function clampRuleTime(t) {
+  const v = Math.round(Number(t) || 0);
+  if (v < TIME_LT_MIN) return TIME_LT_MIN;
+  if (v > TIME_LT_MAX) return TIME_LT_MAX;
+  return v;
+}
+
+function formatTime(t) {
+  const sec = Math.max(0, Math.round(Number(t) || 0));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m + ':' + (s < 10 ? '0' + s : '' + s);
+}
+
+/**
+ * Evaluate one rule. Returns {ok: bool, reason?: string}.
+ * `reason` is human-readable for failed rules (used in the SPA almost-matches band).
+ *
+ * @param {Array<{t:number, what:string}>} events
+ * @param {object} rule
+ * @returns {{ok: boolean, reason?: string}}
+ */
+function evaluateRule(events, rule) {
+  if (!rule || typeof rule !== 'object' || !RULE_TYPES.has(rule.type)) {
+    return { ok: false, reason: 'malformed rule' };
+  }
+  const evts = Array.isArray(events) ? events : [];
+  const name = rule.name;
+  const cutoff = rule.time_lt;
+  switch (rule.type) {
+    case 'before': {
+      const tol = (typeof rule.tol === 'number' && rule.tol > 0) ? rule.tol : null;
+      if (tol !== null) {
+        const hit = evts.find((e) => e.what === name && Math.abs(e.t - cutoff) <= tol);
+        return hit ? { ok: true } : {
+          ok: false,
+          reason: name + ' not within ±' + tol + 's of ' + formatTime(cutoff),
+        };
+      }
+      const hit = evts.find((e) => e.what === name && e.t < cutoff);
+      return hit ? { ok: true } : {
+        ok: false,
+        reason: name + ' never built before ' + formatTime(cutoff),
+      };
+    }
+    case 'not_before': {
+      const hit = evts.find((e) => e.what === name && e.t < cutoff);
+      return hit ? {
+        ok: false,
+        reason: name + ' built at ' + formatTime(hit.t) + ' (rule says NOT before ' + formatTime(cutoff) + ')',
+      } : { ok: true };
+    }
+    case 'count_max': {
+      const cnt = evts.filter((e) => e.what === name && e.t < cutoff).length;
+      return cnt <= rule.count ? { ok: true } : {
+        ok: false,
+        reason: name + ' count ' + cnt + ' exceeds max ' + rule.count + ' by ' + formatTime(cutoff),
+      };
+    }
+    case 'count_min': {
+      const cnt = evts.filter((e) => e.what === name && e.t < cutoff).length;
+      return cnt >= rule.count ? { ok: true } : {
+        ok: false,
+        reason: name + ' count ' + cnt + ' below min ' + rule.count + ' by ' + formatTime(cutoff),
+      };
+    }
+    default:
+      return { ok: false, reason: 'unknown rule type: ' + rule.type };
+  }
+}
+
+/**
+ * Evaluate ALL rules. Returns parallel arrays.
+ *
+ * @param {Array<{t:number, what:string}>} events
+ * @param {Array<object>} rules
+ * @returns {{passes: boolean[], reasons: (string|null)[], failedIndices: number[]}}
+ */
+function evaluateRules(events, rules) {
+  const passes = [];
+  const reasons = [];
+  const failedIndices = [];
+  for (let i = 0; i < rules.length; i++) {
+    const r = evaluateRule(events, rules[i]);
+    passes.push(r.ok);
+    reasons.push(r.ok ? null : (r.reason || 'rule failed'));
+    if (!r.ok) failedIndices.push(i);
+  }
+  return { passes, reasons, failedIndices };
+}
+
+/**
+ * Convert a v2-shape build (signature/tier/tolerance_sec/min_match_score)
+ * to v3 (rules/skill_level). Each signature event becomes a 'before' rule
+ * with time_lt = sig.t + AUTO_PICK_TIME_BUFFER_SEC. Cap at the same
+ * AUTO_PICK_RULES_CAP. Tier (S/A/B/C) maps to null skill_level — user
+ * sets it explicitly in v3 since the semantics changed.
+ *
+ * @param {object} b
+ * @returns {object|null}
+ */
+function migrateBuildV2ToV3(b) {
+  if (!b || typeof b !== 'object') return null;
+  if (Array.isArray(b.rules)) return b;  // already v3
+  const sig = Array.isArray(b.signature) ? b.signature : [];
+  const rules = [];
+  for (const s of sig) {
+    if (!s || typeof s.what !== 'string' || typeof s.t !== 'number') continue;
+    rules.push({
+      type: 'before',
+      name: s.what,
+      time_lt: clampRuleTime(s.t + AUTO_PICK_TIME_BUFFER_SEC),
+    });
+    if (rules.length >= AUTO_PICK_RULES_CAP) break;
+  }
+  if (rules.length === 0) {
+    rules.push({ type: 'before', name: 'BuildNexus', time_lt: 30 });  // placeholder
+  }
+  const out = {
+    id: b.id || 'migrated-' + Date.now().toString(36),
+    name: b.name || 'Migrated build',
+    race: b.race || 'Protoss',
+    vs_race: b.vs_race || 'Any',
+    skill_level: null,
+    description: b.description || '',
+    win_conditions: Array.isArray(b.win_conditions) ? b.win_conditions : [],
+    loses_to: Array.isArray(b.loses_to) ? b.loses_to : [],
+    transitions_into: Array.isArray(b.transitions_into) ? b.transitions_into : [],
+    rules,
+    source_replay_id: b.source_replay_id || null,
+    created_at: b.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    author: b.author || 'unknown',
+    sync_state: 'pending',
+  };
+  if (typeof b.remote_version === 'number') out.remote_version = b.remote_version;
+  if (typeof b.upvotes === 'number') out.upvotes = b.upvotes;
+  if (typeof b.downvotes === 'number') out.downvotes = b.downvotes;
+  return out;
+}
+
 module.exports = {
   // I/O
   atomicWriteJson, readJsonOrNull, readCustomFile, readMergedList,
   // Identity / shape
   getAuthorDisplay, slugify, uniqueIdFor, normalizeBuild, applyPatch, findById,
   // Events
-  parseLogLine, extractGameEvents, scoreSignature,
-  // Matching
-  previewMatchesAgainst, bestMatch, countGames, moveGame, pickSignatureFromEvents,
-  // Constants (re-exported for the router and tests)
-  DEFAULT_TOLERANCE_SEC, DEFAULT_MIN_MATCH_SCORE, PREVIEW_LIMIT, ID_PATTERN,
+  parseLogLine, extractGameEvents,
+  // v3 rule engine
+  evaluateRule, evaluateRules, previewMatchesV3, bestMatchV3,
+  pickRulesFromEvents, migrateBuildV2ToV3, formatTime,
+  // Generic helpers
+  countGames, moveGame,
+  // Constants
+  PREVIEW_LIMIT, ID_PATTERN, SKILL_LEVELS, SCHEMA_VERSION,
+  AUTO_PICK_RULES_CAP, AUTO_PICK_TIME_BUFFER_SEC,
+  // Deprecated v2 exports (throw if called) — kept so require() of stale
+  // callers fails loudly in dev rather than silently
+  scoreSignature,
 };

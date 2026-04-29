@@ -179,14 +179,12 @@ function buildDraftFromEvents(events, body) {
     name: body.name || 'Derived from game',
     race: body.race || 'Protoss',
     vs_race: body.vs_race || 'Zerg',
-    tier: null,
+    skill_level: null,
     description: body.description || 'Auto-derived from a real game.',
     win_conditions: [],
     loses_to: [],
     transitions_into: [],
-    signature: H.pickSignatureFromEvents(events),
-    tolerance_sec: H.DEFAULT_TOLERANCE_SEC,
-    min_match_score: H.DEFAULT_MIN_MATCH_SCORE,
+    rules: H.pickRulesFromEvents(events),
     source_replay_id: body.source_replay_id || (body.game_id || null),
   };
 }
@@ -222,7 +220,7 @@ async function reclassifyAllGames(ctx, meta) {
     const games = (meta[buildName] && meta[buildName].games) || [];
     for (let i = games.length - 1; i >= 0; i--) {
       const events = H.extractGameEvents(games[i]);
-      const best = H.bestMatch(events, builds);
+      const best = H.bestMatchV3(events, builds);
       processed += 1;
       if (best && best.name && best.name !== buildName) {
         H.moveGame(meta, buildName, best.name, i);
@@ -389,8 +387,8 @@ function handleFromGame(ctx) {
       return;
     }
     const draft = buildDraftFromEvents(events, body);
-    if (draft.signature.length === 0) {
-      badRequest(res, 'no_signature_events');
+    if (draft.rules.length === 0) {
+      badRequest(res, 'no_rules');
       return;
     }
     res.status(HTTP_OK).json({ draft, event_count: events.length });
@@ -406,16 +404,17 @@ function handleFromGame(ctx) {
 function handlePreviewMatches(ctx) {
   return wrap((req, res) => {
     const candidate = req.body || {};
-    if (!Array.isArray(candidate.signature) || candidate.signature.length === 0) {
-      badRequest(res, 'missing_signature');
+    if (!Array.isArray(candidate.rules) || candidate.rules.length === 0) {
+      badRequest(res, 'missing_rules');
       return;
     }
     const meta = H.readJsonOrNull(path.join(ctx.dataDir, META_DB_FILE)) || {};
-    const result = H.previewMatchesAgainst(meta, candidate);
+    const result = H.previewMatchesV3(meta, candidate);
     res.status(HTTP_OK).json({
       matches: result.matches,
+      almost_matches: result.almostMatches,
       scanned_games: result.scanned,
-      truncated: result.matches.length >= H.PREVIEW_LIMIT,
+      truncated: result.truncated,
     });
   });
 }

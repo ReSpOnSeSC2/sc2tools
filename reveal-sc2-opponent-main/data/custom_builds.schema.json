@@ -1,19 +1,24 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://sc2tools.local/schemas/custom_builds.schema.json",
-  "title": "Custom Builds File (v2)",
-  "description": "Local cache of user-authored SC2 build definitions. Version 2 shape introduced in Stage 7.4. The matching v1-shape file (rules-based, target/matchup) is auto-migrated on first load with a .pre-v2-bak.<ts> backup.",
+  "title": "Custom Builds File (v3)",
+  "description": "Local cache of user-authored SC2 build definitions. Version 3 shape introduced in Stage 7.5b: rule-based matching (boolean per-rule, all-must-pass) replaces the v2 signature scoring model. tier replaced by skill_level (SC2 ladder leagues). v2 files auto-migrate on first load with a .pre-v3-bak.<ts> backup. The 4 rule types are eval-honest: 'before' / 'not_before' work on any event name (buildings, units, upgrades, morphs); the UI picks an icon based on the name prefix. 'count_max' / 'count_min' count occurrences of a single name.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "builds"],
+  "required": [
+    "version",
+    "builds"
+  ],
   "properties": {
     "version": {
       "type": "integer",
-      "const": 2
+      "const": 3
     },
     "builds": {
       "type": "array",
-      "items": { "$ref": "#/definitions/build" }
+      "items": {
+        "$ref": "#/definitions/build"
+      }
     }
   },
   "definitions": {
@@ -25,9 +30,7 @@
         "name",
         "race",
         "vs_race",
-        "signature",
-        "tolerance_sec",
-        "min_match_score",
+        "rules",
         "created_at",
         "updated_at",
         "sync_state"
@@ -37,8 +40,7 @@
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$",
           "minLength": 3,
-          "maxLength": 80,
-          "description": "kebab-case stable identifier. Used as the dedup key against the community cache."
+          "maxLength": 80
         },
         "name": {
           "type": "string",
@@ -47,17 +49,41 @@
         },
         "race": {
           "type": "string",
-          "enum": ["Protoss", "Terran", "Zerg"]
+          "enum": [
+            "Protoss",
+            "Terran",
+            "Zerg"
+          ]
         },
         "vs_race": {
           "type": "string",
-          "enum": ["Protoss", "Terran", "Zerg", "Random", "Any"]
-        },
-        "tier": {
-          "anyOf": [
-            { "type": "string", "enum": ["S", "A", "B", "C"] },
-            { "type": "null" }
+          "enum": [
+            "Protoss",
+            "Terran",
+            "Zerg",
+            "Random",
+            "Any"
           ]
+        },
+        "skill_level": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "bronze",
+                "silver",
+                "gold",
+                "platinum",
+                "diamond",
+                "master",
+                "grandmaster"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Recommended SC2 ladder league. null = unspecified."
         },
         "description": {
           "type": "string",
@@ -65,37 +91,42 @@
         },
         "win_conditions": {
           "type": "array",
-          "items": { "type": "string", "maxLength": 280 },
-          "maxItems": 20
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 280
+          }
         },
         "loses_to": {
           "type": "array",
-          "items": { "type": "string", "maxLength": 280 },
-          "maxItems": 20
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 280
+          }
         },
         "transitions_into": {
           "type": "array",
-          "items": { "type": "string", "maxLength": 280 },
-          "maxItems": 20
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 280
+          }
         },
-        "signature": {
+        "rules": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 60,
-          "items": { "$ref": "#/definitions/signatureEvent" }
-        },
-        "tolerance_sec": {
-          "type": "integer",
-          "minimum": 5,
-          "maximum": 60
-        },
-        "min_match_score": {
-          "type": "number",
-          "minimum": 0.3,
-          "maximum": 1.0
+          "maxItems": 30,
+          "items": {
+            "$ref": "#/definitions/rule"
+          },
+          "description": "All rules must pass for a game to match the build."
         },
         "source_replay_id": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "maxLength": 240
         },
         "created_at": {
@@ -112,12 +143,16 @@
         },
         "sync_state": {
           "type": "string",
-          "enum": ["pending", "synced", "conflict", "deleted"]
+          "enum": [
+            "pending",
+            "synced",
+            "conflict",
+            "deleted"
+          ]
         },
         "remote_version": {
           "type": "integer",
-          "minimum": 1,
-          "description": "Server-side version counter from the community service. Absent until the build has been synced at least once."
+          "minimum": 1
         },
         "upvotes": {
           "type": "integer",
@@ -129,28 +164,141 @@
         }
       }
     },
-    "signatureEvent": {
+    "rule": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/beforeRule"
+        },
+        {
+          "$ref": "#/definitions/notBeforeRule"
+        },
+        {
+          "$ref": "#/definitions/countMaxRule"
+        },
+        {
+          "$ref": "#/definitions/countMinRule"
+        }
+      ]
+    },
+    "beforeRule": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["t", "what", "weight"],
+      "required": [
+        "type",
+        "name",
+        "time_lt"
+      ],
       "properties": {
-        "t": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 1800,
-          "description": "Game-time seconds (not real time)."
+        "type": {
+          "const": "before"
         },
-        "what": {
+        "name": {
           "type": "string",
           "minLength": 1,
           "maxLength": 80,
-          "pattern": "^[A-Za-z][A-Za-z0-9]*$",
-          "description": "Event token, e.g. BuildStargate, ResearchBlink, MorphLair."
+          "pattern": "^[A-Za-z][A-Za-z0-9]*$"
         },
-        "weight": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "maximum": 5
+        "time_lt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1800,
+          "description": "Event must occur before this time (seconds)."
+        },
+        "tol": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 60,
+          "description": "Optional. If present, |t - time_lt| <= tol (window match). If absent, t <= time_lt (strict before)."
+        }
+      }
+    },
+    "notBeforeRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "name",
+        "time_lt"
+      ],
+      "properties": {
+        "type": {
+          "const": "not_before"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+        },
+        "time_lt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1800,
+          "description": "Event must NOT occur before this time."
+        }
+      }
+    },
+    "countMaxRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "name",
+        "count",
+        "time_lt"
+      ],
+      "properties": {
+        "type": {
+          "const": "count_max"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200,
+          "description": "Pass if count(name occurrences with t < time_lt) <= count."
+        },
+        "time_lt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1800
+        }
+      }
+    },
+    "countMinRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "name",
+        "count",
+        "time_lt"
+      ],
+      "properties": {
+        "type": {
+          "const": "count_min"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Pass if count(name occurrences with t < time_lt) >= count."
+        },
+        "time_lt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1800
         }
       }
     }

@@ -1,29 +1,33 @@
 {
-  "version": 2,
+  "version": 3,
   "builds": [
     {
       "id": "opp-zerg-12-pool-custom-engine-example",
       "name": "Zerg - 12 Pool (Custom Engine Example)",
       "race": "Zerg",
       "vs_race": "Any",
-      "tier": null,
-      "description": "Custom JSON definition of a 12 pool.",
+      "skill_level": null,
+      "description": "Strict 12 Pool: Spawning Pool down before 0:55 with no extra Drones built before then.",
       "win_conditions": [],
       "loses_to": [],
       "transitions_into": [],
-      "signature": [
+      "rules": [
         {
-          "t": 55,
-          "what": "BuildSpawningPool",
-          "weight": 1.0
+          "type": "before",
+          "name": "BuildSpawningPool",
+          "time_lt": 55
+        },
+        {
+          "type": "count_max",
+          "name": "TrainDrone",
+          "count": 13,
+          "time_lt": 60
         }
       ],
-      "tolerance_sec": 15,
-      "min_match_score": 0.6,
       "source_replay_id": null,
       "created_at": "2026-04-29T04:10:17Z",
-      "updated_at": "2026-04-29T04:10:17Z",
-      "author": "migrated-from-v1",
+      "updated_at": "2026-04-29T15:00:00Z",
+      "author": "migrated-from-v2",
       "sync_state": "pending"
     }
   ]
