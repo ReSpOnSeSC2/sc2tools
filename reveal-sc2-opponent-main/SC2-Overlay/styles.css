@@ -112,6 +112,19 @@ html, body {
     line-height: 1.15;
 }
 
+/* Opponent widget header: keep the MMR badge on one line and give the
+   row a real gap. Older code let '4758 MMR' wrap mid-token (digits on
+   one line, 'MMR' beneath), which crowded against the name in a
+   narrow OBS source. The original `.header` rule's `space-between`
+   already distributes the children correctly -- we just need to stop
+   the MMR span from breaking and add explicit breathing room. */
+#opponent-widget .header {
+    gap: 1rem;
+}
+#opponent-widget #opp-mmr {
+    white-space: nowrap;
+}
+
 .footer {
     display: flex;
     justify-content: space-between;

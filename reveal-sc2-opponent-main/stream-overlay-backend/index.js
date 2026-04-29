@@ -1711,20 +1711,50 @@ function parseMyRaceFromOpponentLine(line) {
     return m ? m[1] : null;
 }
 
-// Pull the opponent's MMR (a 3-or-4-digit number, typically wrapped
-// in parentheses or brackets) out of the opponent.txt line. Examples
-// the PowerShell scanner produces:
-//   "ScrubBoss42(2840) Z"
-//   "ScrubBoss42 [2840] Zerg"
-//   "ScrubBoss42 (2840) Zerg, MyRace=Protoss"
+// Pull the opponent's MMR out of the opponent.txt line. The PowerShell
+// scanner produces several shapes depending on its rating-format flag:
+//   'ScrubBoss42(2840) Z'                     <- short, paren-wrapped
+//   'ScrubBoss42 [2840] Zerg'                 <- short, bracket-wrapped
+//   '[Shopify]Harstem 5175MMR T (0-0)'        <- long format (default)
+//   'Player#1234 5018MMR T (12-8), MyRace=P'  <- BattleTag discriminator
+//
+// Resolution order, most-specific first:
+//   1. Bracketed MMR token like '(2840)' or '[2840]' on its own.
+//   2. '<digits>MMR' literal -- the new long format. The old fallback
+//      regex \b(\d{3,5})\b couldn't catch this because '5175' is glued
+//      to 'M' with no word boundary, so it returned null and the
+//      backend fell back to session.mmrOpponent (= previous opponent's
+//      MMR), painting a stale '888 MMR' on the overlay.
+//   3. Bare 3-5 digit number with word boundaries -- legacy fallback.
+//      Skipped if it would land on a BattleTag discriminator like
+//      '#1234' (those would otherwise win over the real rating).
 function parseOpponentMmr(line) {
     if (!line) return null;
-    // Prefer a number inside () or [] (race-format short keeps these).
-    let m = String(line).match(/[\(\[]\s*(\d{3,5})\s*[\)\]]/);
+    const s = String(line);
+    // 1. Bracketed MMR -- only a wrapper around digits and nothing else,
+    //    so '(0-0)' and '[Shopify]' don't qualify.
+    let m = s.match(/[\(\[]\s*(\d{3,5})\s*[\)\]]/);
     if (m) return parseInt(m[1], 10);
-    // Fallback: any standalone 3-5 digit number.
-    m = String(line).match(/\b(\d{3,5})\b/);
-    return m ? parseInt(m[1], 10) : null;
+    // 2. <digits>MMR token (case-insensitive). Anchored on a left word
+    //    boundary so 'Player1234MMR' (digits glued to a name) doesn't
+    //    match -- only standalone numeric runs followed by 'MMR' do.
+    m = s.match(/(?:^|[^\w#])(\d{3,5})\s*MMR\b/i);
+    if (m) return parseInt(m[1], 10);
+    // 3. Bare 3-5 digit number with word boundaries on BOTH sides AND
+    //    not preceded by '#' (BattleTag discriminator). 'Player#1234'
+    //    has '\b1234\b' true but '#' precedes -- skip.
+    const re = /(^|[^\w#])(\d{3,5})\b/g;
+    let match;
+    while ((match = re.exec(s)) !== null) {
+        // The character right before the digits is captured in group 1
+        // (or empty if at start). If it's '#' we already filtered, but
+        // also reject when the lead char is a digit (avoid mid-number
+        // partial matches like grabbing '123' out of '12345').
+        const lead = match[1];
+        if (lead === '#') continue;
+        return parseInt(match[2], 10);
+    }
+    return null;
 }
 
 // Pull the opponent's race. Looks for Z/P/T or full Zerg/Protoss/Terran
