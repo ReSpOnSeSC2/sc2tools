@@ -249,3 +249,113 @@ KNOWN_BUILDS: List[str] = sorted(list(set([
     k for k in BUILD_DEFINITIONS.keys()
     if not k.endswith("Unknown") and not k.endswith("Unclassified")
 ])))
+# =========================================================
+# STAGE 7.4: MERGED BUILD DEFINITIONS
+# =========================================================
+# `BUILD_SIGNATURES` above is the *built-in* table. Stage 7.4 adds
+# user-authored builds (from data/custom_builds.json) and the
+# community-mirror cache (data/community_builds.cache.json) on top.
+# The classifier in `scripts/build_classify_cli.py` calls
+# `get_active_build_definitions()` to get the merged set.
+#
+# Collision rules:
+#   * Built-in keys (exact id match) always win.
+#   * Among customs and community entries, the most recent
+#     ``updated_at`` wins -- mirrors the precedence the community
+#     service uses for its own ``version`` counter.
+
+from typing import Iterable
+
+
+def _v2_to_signature_entry(build: Dict[str, object]) -> Dict[str, object]:
+    """Convert a v2 build dict into the BUILD_SIGNATURES entry shape.
+
+    Example:
+        >>> b = {"race": "Protoss", "vs_race": "Zerg",
+        ...      "signature": [], "tier": "A", "description": "x"}
+        >>> _v2_to_signature_entry(b)["tier"]
+        'A'
+    """
+    return {
+        "race": build.get("race"),
+        "vs_race": build.get("vs_race"),
+        "signature": build.get("signature", []),
+        "tier": build.get("tier") or "?",
+        "description": build.get("description", ""),
+        "tolerance_sec": build.get("tolerance_sec"),
+        "min_match_score": build.get("min_match_score"),
+        "source": build.get("source", "user"),
+        "id": build.get("id"),
+        "updated_at": build.get("updated_at"),
+    }
+
+
+def _pick_most_recent(
+    candidates: Iterable[Dict[str, object]],
+) -> Dict[str, object]:
+    """Return the candidate with the lexicographically-largest
+    ``updated_at`` -- ISO 8601 strings sort the same as time.
+
+    Example:
+        >>> _pick_most_recent([
+        ...     {"id": "x", "updated_at": "2026-01-01T00:00:00Z"},
+        ...     {"id": "x", "updated_at": "2026-04-01T00:00:00Z"},
+        ... ])["updated_at"]
+        '2026-04-01T00:00:00Z'
+    """
+    best = None
+    for cand in candidates:
+        if best is None or (
+            cand.get("updated_at", "") > best.get("updated_at", "")
+        ):
+            best = cand
+    return best or {}
+
+
+def get_active_build_definitions() -> Dict[str, Dict[str, object]]:
+    """Return the merged classifier table (built-ins + customs + community).
+
+    Keys of the returned dict are stable display ids:
+      * Built-ins keep their original BUILD_SIGNATURES key.
+      * Customs / community use their slug ``id``.
+
+    Returns:
+        Mapping ``{display_id: signature_entry}`` ready for the
+        scoring algorithm in :mod:`scripts.build_classify_cli`.
+
+    Example:
+        >>> defs = get_active_build_definitions()
+        >>> isinstance(defs, dict)
+        True
+    """
+    # Lazy import: at module-load time `core.custom_builds` triggers
+    # the v1->v2 migration which writes to disk; we want that to
+    # happen only when classification is actually requested.
+    from .custom_builds import load_custom_builds_v2, load_community_cache
+
+    merged: Dict[str, Dict[str, object]] = {}
+    # Layer 1: built-ins.
+    for key, meta in BUILD_SIGNATURES.items():
+        entry = dict(meta)
+        entry["source"] = "builtin"
+        entry["id"] = key
+        merged[key] = entry
+    # Layer 2: customs + community-cache, picking the most recent
+    # updated_at on collision.
+    user_builds: Dict[str, list] = {}
+    for build in load_custom_builds_v2().get("builds", []):
+        user_builds.setdefault(build.get("id"), []).append(
+            {**build, "source": "custom"}
+        )
+    for build in load_community_cache().get("builds", []):
+        user_builds.setdefault(build.get("id"), []).append(
+            {**build, "source": "community"}
+        )
+    for build_id, candidates in user_builds.items():
+        if build_id in merged:
+            continue
+        winner = _pick_most_recent(candidates)
+        if not winner:
+            continue
+        merged[build_id] = _v2_to_signature_entry(winner)
+    return merged

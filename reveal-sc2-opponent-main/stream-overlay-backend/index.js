@@ -58,6 +58,9 @@ const { createBackupsRouter } = require('./routes/backups');
 // schema validation, SC2Pulse, Twitch, OBS, disk, logs, and the macro
 // engine version pin. /api/diagnostics/bundle streams a redacted .zip.
 const { createDiagnosticsRouter } = require('./routes/diagnostics');
+// Stage 7.4: custom-builds router + community sync service.
+const { createCustomBuildsRouter } = require('./routes/custom-builds');
+const { createCommunitySyncService } = require('./services/community_sync');
 // node-fetch v2 ships in node_modules; stick with that to keep CJS
 // require() compatibility on older node runtimes that don't have a
 // global fetch.
@@ -1141,6 +1144,29 @@ app.use(createDiagnosticsRouter({
     analyzerScriptsDir: path.resolve(ROOT, '..', 'SC2Replay-Analyzer'),
 }));
 
+// Stage 7.4: community sync service + custom-builds router. The
+// service is constructed before the Socket.io server is wired so we
+// can pass a lazy io getter into the router (io is declared a few
+// lines below). The interval worker is started in the listen
+// callback so unit tests that import index.js without listening
+// don't kick off real network calls.
+const communitySync = createCommunitySyncService({
+    dataDir: DATA_DIR,
+    baseUrl: process.env.COMMUNITY_BUILDS_URL,
+    fetchImpl: typeof fetch === 'function' ? fetch : undefined,
+    logger: {
+        info: (obj, msg) => console.log('[community_sync]', msg, obj || {}),
+        warn: (obj, msg) => console.warn('[community_sync]', msg, obj || {}),
+        error: (obj, msg) => console.error('[community_sync]', msg, obj || {}),
+        debug: () => undefined,
+    },
+});
+app.use('/api/custom-builds', createCustomBuildsRouter({
+    dataDir: DATA_DIR,
+    sync: communitySync,
+    getIo: () => io,
+}));
+
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 
@@ -1873,6 +1899,9 @@ if (require.main === module) {
         // either DB moves so connected analyzer clients refresh in real time.
         try { analyzer.startWatching(io); }
         catch (err) { console.warn('[Analyzer] startWatching failed:', err.message); }
+        // Stage 7.4: start the 15-minute community sync worker.
+        try { communitySync.start(); }
+        catch (err) { console.warn('[community_sync] start failed:', err.message); }
         console.log(`[Server] Analyzer:  http://localhost:${PORT}/analyzer`);
     });
 

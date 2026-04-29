@@ -1,0 +1,25 @@
+{
+    "instructions": "Add custom Spawning Tool build orders here. 'target' can be 'Opponent' or 'Self'. 'race' is Zerg, Protoss, or Terran. 'matchup' can be 'vs Zerg', 'vs Protoss', 'vs Terran', or 'vs Any'. Rules types: 'building', 'unit', 'unit_max', 'upgrade', 'proxy'.",
+    "builds": [
+        {
+            "name": "Zerg - 12 Pool (Custom Engine Example)",
+            "target": "Opponent",
+            "race": "Zerg",
+            "matchup": "vs Any",
+            "description": "Custom JSON definition of a 12 pool.",
+            "rules": [
+                {
+                    "type": "building",
+                    "name": "SpawningPool",
+                    "time_lt": 55
+                },
+                {
+                    "type": "unit_max",
+                    "name": "Drone",
+                    "count": 13,
+                    "time_lt": 60
+                }
+            ]
+        }
+    ]
+}

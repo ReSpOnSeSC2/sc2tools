@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-04-29T04:10:17Z",
+  "backup_path": "/sessions/sweet-exciting-fermat/mnt/SC2TOOLS/.claude/worktrees/stage-7.4-custom-builds/reveal-sc2-opponent-main/data/custom_builds.json.pre-v2-bak.20260429T041017Z",
+  "summary": {
+    "converted": 0,
+    "partial": 1,
+    "skipped": 0
+  },
+  "details": {
+    "converted": [],
+    "partial": [
+      {
+        "name": "Zerg - 12 Pool (Custom Engine Example)",
+        "dropped_rules": [
+          {
+            "type": "unit_max",
+            "name": "Drone",
+            "count": 13,
+            "time_lt": 60
+          }
+        ]
+      }
+    ],
+    "skipped": []
+  },
+  "notes": [
+    "unit_max and proxy rule types have no v2 equivalent and are dropped.",
+    "Substring-matched upgrade names are translated as exact tokens; review the partial list."
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://sc2tools.local/schemas/custom_builds.schema.json",
+  "title": "Custom Builds File (v2)",
+  "description": "Local cache of user-authored SC2 build definitions. Version 2 shape introduced in Stage 7.4. The matching v1-shape file (rules-based, target/matchup) is auto-migrated on first load with a .pre-v2-bak.<ts> backup.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "builds"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 2
+    },
+    "builds": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/build" }
+    }
+  },
+  "definitions": {
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "race",
+        "vs_race",
+        "signature",
+        "tolerance_sec",
+        "min_match_score",
+        "created_at",
+        "updated_at",
+        "sync_state"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$",
+          "minLength": 3,
+          "maxLength": 80,
+          "description": "kebab-case stable identifier. Used as the dedup key against the community cache."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "race": {
+          "type": "string",
+          "enum": ["Protoss", "Terran", "Zerg"]
+        },
+        "vs_race": {
+          "type": "string",
+          "enum": ["Protoss", "Terran", "Zerg", "Random", "Any"]
+        },
+        "tier": {
+          "anyOf": [
+            { "type": "string", "enum": ["S", "A", "B", "C"] },
+            { "type": "null" }
+          ]
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "win_conditions": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 280 },
+          "maxItems": 20
+        },
+        "loses_to": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 280 },
+          "maxItems": 20
+        },
+        "transitions_into": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 280 },
+          "maxItems": 20
+        },
+        "signature": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 60,
+          "items": { "$ref": "#/definitions/signatureEvent" }
+        },
+        "tolerance_sec": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 60
+        },
+        "min_match_score": {
+          "type": "number",
+          "minimum": 0.3,
+          "maximum": 1.0
+        },
+        "source_replay_id": {
+          "type": ["string", "null"],
+          "maxLength": 240
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "author": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "sync_state": {
+          "type": "string",
+          "enum": ["pending", "synced", "conflict", "deleted"]
+        },
+        "remote_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Server-side version counter from the community service. Absent until the build has been synced at least once."
+        },
+        "upvotes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "downvotes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "signatureEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["t", "what", "weight"],
+      "properties": {
+        "t": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1800,
+          "description": "Game-time seconds (not real time)."
+        },
+        "what": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[A-Za-z][A-Za-z0-9]*$",
+          "description": "Event token, e.g. BuildStargate, ResearchBlink, MorphLair."
+        },
+        "weight": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 5
+        }
+      }
+    }
+  }
+}

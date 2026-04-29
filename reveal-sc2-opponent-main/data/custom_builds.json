@@ -1,25 +1,30 @@
 {
-    "instructions": "Add custom Spawning Tool build orders here. 'target' can be 'Opponent' or 'Self'. 'race' is Zerg, Protoss, or Terran. 'matchup' can be 'vs Zerg', 'vs Protoss', 'vs Terran', or 'vs Any'. Rules types: 'building', 'unit', 'unit_max', 'upgrade', 'proxy'.",
-    "builds": [
+  "version": 2,
+  "builds": [
+    {
+      "id": "opp-zerg-12-pool-custom-engine-example",
+      "name": "Zerg - 12 Pool (Custom Engine Example)",
+      "race": "Zerg",
+      "vs_race": "Any",
+      "tier": null,
+      "description": "Custom JSON definition of a 12 pool.",
+      "win_conditions": [],
+      "loses_to": [],
+      "transitions_into": [],
+      "signature": [
         {
-            "name": "Zerg - 12 Pool (Custom Engine Example)",
-            "target": "Opponent",
-            "race": "Zerg",
-            "matchup": "vs Any",
-            "description": "Custom JSON definition of a 12 pool.",
-            "rules": [
-                {
-                    "type": "building",
-                    "name": "SpawningPool",
-                    "time_lt": 55
-                },
-                {
-                    "type": "unit_max",
-                    "name": "Drone",
-                    "count": 13,
-                    "time_lt": 60
-                }
-            ]
+          "t": 55,
+          "what": "BuildSpawningPool",
+          "weight": 1.0
         }
-    ]
+      ],
+      "tolerance_sec": 15,
+      "min_match_score": 0.6,
+      "source_replay_id": null,
+      "created_at": "2026-04-29T04:10:17Z",
+      "updated_at": "2026-04-29T04:10:17Z",
+      "author": "migrated-from-v1",
+      "sync_state": "pending"
+    }
+  ]
 }
