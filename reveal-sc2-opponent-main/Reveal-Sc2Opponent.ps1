@@ -1,10 +1,10 @@
 ﻿<#PSScriptInfo
-.VERSION 0.9.2
+.VERSION 0.9.5
 .GUID db8ffc68-4388-4119-b437-1f56c999611e
 .AUTHOR nephestdev@gmail.com (Modified by Gemini)
 .DESCRIPTION 
  Reveals ranked 1v1 opponent names for StarCraft2 and tracks Head-to-Head history.
- v0.9.2 - Resolve Pulse character IDs from -PlayerName (not local SC2 folder IDs which are different number space). Widened opponent rating delta cap to 400 MMR to absorb Pulse-vs-live drift. v0.9.1 anchored on main team. v0.9.0 removed OCR.
+ v0.9.5 - Auto-detect active server by probing Pulse for opponent name in each user-team region (matchmaking is single-region, so where the opponent is found = the server we're on). Works instantly when user switches regions, beats Pulse ingestion lag. v0.9.4 fixed unwrap bug. v0.9.3 added recently-active anchor. v0.9.0 removed OCR.
 #> 
 param(
     [int64[]]$CharacterId,
@@ -462,18 +462,52 @@ function Get-OpponentTeams {
         }
     }
 
+    # Barcode opponents (e.g., "IIIIIIIIIIII#33636") all share the same
+    # literal in-game name across many accounts. MMR distance picks the
+    # closest, but with identical names that frequently selects the wrong
+    # account when a band has multiple candidates. Strategy:
+    #   1. Filter to candidates inside the +/- RATING_DELTA_CAP_MMR band.
+    #   2. Among those, prefer the most-recently-played (Pulse may still
+    #      be a few hours stale, but recency *within the band* is a much
+    #      better disambiguator than MMR-distance among same-name accounts).
+    #   3. If nothing is in band, fall back to recently-active overall
+    #      (last 1h), then to the broader recency search.
+    $BARCODE_RECENCY_SECONDS = 3600
+    $IsBarcodeOpp = (Is-Barcode -PlayerName $GameOpponent.Name)
+    if ($IsBarcodeOpp) {
+        if ($PlayerRating -gt 0) {
+            $InBand = @($OpponentTeams | Where-Object { $_.RatingDelta -le $RATING_DELTA_CAP_MMR })
+            if ($InBand.Count -gt 0) {
+                Write-Host (" [Pulse] Barcode opponent -> in-band ({0}) sorted by recency" -f `
+                    $InBand.Count) -ForegroundColor DarkCyan
+                return ($InBand | Sort-Object -Property LastPlayedAgo | Select-Object -First $Limit)
+            }
+        }
+        $RecentBarcodes = @($OpponentTeams | Where-Object { $_.LastPlayedAgo -le $BARCODE_RECENCY_SECONDS })
+        if ($RecentBarcodes.Count -gt 0) {
+            Write-Host (" [Pulse] Barcode opponent -> no in-band match; recency wins ({0} within {1}s)" -f `
+                $RecentBarcodes.Count, $BARCODE_RECENCY_SECONDS) -ForegroundColor DarkCyan
+            return ($RecentBarcodes | Sort-Object -Property LastPlayedAgo | Select-Object -First $Limit)
+        }
+        $WiderBarcodes = @($OpponentTeams | Where-Object { $_.LastPlayedAgo -le $LastPlayedAgoMax })
+        if ($WiderBarcodes.Count -gt 0) {
+            return ($WiderBarcodes | Sort-Object -Property LastPlayedAgo | Select-Object -First $Limit)
+        }
+    }
+
     # Tight Pulse-anchored band first. If we have a player rating to anchor
     # against, prefer teams within +/- RATING_DELTA_CAP_MMR sorted by closest.
+    # @(...) forces array context to defeat PowerShell's single-item unwrap.
     if ($PlayerRating -gt 0) {
-        $ValidTeams = $OpponentTeams | Where-Object { $_.RatingDelta -le $RATING_DELTA_CAP_MMR }
-        if ($ValidTeams.Length -gt 0) {
+        $ValidTeams = @($OpponentTeams | Where-Object { $_.RatingDelta -le $RATING_DELTA_CAP_MMR })
+        if ($ValidTeams.Count -gt 0) {
             return ($ValidTeams | Sort-Object -Property RatingDelta | Select-Object -First $Limit)
         }
     }
 
     # Recency fallback: opponent is unranked, smurfing, or way off-rated.
-    $ActiveOpponentTeams = $OpponentTeams | Where-Object { $_.LastPlayedAgo -le $LastPlayedAgoMax }
-    if ($ActiveOpponentTeams.Length -gt 0) {
+    $ActiveOpponentTeams = @($OpponentTeams | Where-Object { $_.LastPlayedAgo -le $LastPlayedAgoMax })
+    if ($ActiveOpponentTeams.Count -gt 0) {
         return ($ActiveOpponentTeams | Sort-Object -Property LastPlayedAgo | Select-Object -First $Limit)
     }
 
@@ -545,9 +579,25 @@ function Find-PlayerProfile {
         Write-Host ("   - {0,-30} {1,-3} {2,-2} MMR={3,4} games={4,3} lastPlayed={5,4}s ago" -f `
             $NameLabel, $RegionLabel, $RaceLabel, $Team.Rating, $Team.GamesPlayed, [int32]$Team.LastPlayedAgo) -ForegroundColor DarkCyan
     }
-    $Picked = $PlayerTeam | Sort-Object -Property @{Expression='GamesPlayed';Descending=$true}, @{Expression='Rating';Descending=$true} | Select-Object -First 1
-    Write-Host (" [Pulse] Anchor: {0} MMR={1} games={2} (most-played)" -f `
-        $Picked.Members[0].Character.Name, $Picked.Rating, $Picked.GamesPlayed) -ForegroundColor Green
+    # Prefer the team that was played recently (within RECENT_ACTIVE_SECONDS).
+    # Window is wide (24h) because Pulse's lastPlayed only updates AFTER a
+    # match ends and ingests, and we want the anchor to follow you the
+    # moment you switch regions, not 24 hours later. Falls back to
+    # most-games when no team is in the recent window.
+    $RECENT_ACTIVE_SECONDS = 86400
+    # @(...) forces array context: when Where-Object returns ONE item,
+    # PowerShell unwraps it to a single object whose .Length is $null,
+    # which made the old `$Recent.Length -gt 0` check silently false.
+    $Recent = @($PlayerTeam | Where-Object { $_.LastPlayedAgo -le $RECENT_ACTIVE_SECONDS })
+    if ($Recent.Count -gt 0) {
+        $Picked = $Recent | Sort-Object -Property @{Expression='LastPlayedAgo';Descending=$false}, @{Expression='Rating';Descending=$true} | Select-Object -First 1
+        $Reason = "recently-active"
+    } else {
+        $Picked = $PlayerTeam | Sort-Object -Property @{Expression='GamesPlayed';Descending=$true}, @{Expression='Rating';Descending=$true} | Select-Object -First 1
+        $Reason = "most-played"
+    }
+    Write-Host (" [Pulse] Anchor: {0} MMR={1} games={2} lastPlayed={3}s ago ({4})" -f `
+        $Picked.Members[0].Character.Name, $Picked.Rating, $Picked.GamesPlayed, [int32]$Picked.LastPlayedAgo, $Reason) -ForegroundColor Green
     return Create-PlayerProfile -RecentTeam $Picked
 }
 
@@ -595,7 +645,46 @@ while($true) {
         $CurrentOpponentRace = switch -Regex ($Opponent.Race) { "prot" {"PROTOSS"}; "terr" {"TERRAN"}; "zerg" {"ZERG"}; "rand" {"RANDOM"}; default {"UNKNOWN"} }
 
         $PlayerTeams = Get-PlayerTeams -Season $Script:SeasonIds -Queue $Script:Queue1v1 -Race $CurrentMyRace -TeamId $Script:OverrideTeam -CharacterId $Script:CharacterId
-        $PlayerProfile = Find-PlayerProfile -PlayerTeam $PlayerTeams
+
+        # v0.9.5 -- Auto-detect the active server BEFORE picking an anchor.
+        # Matchmaking is single-region, so wherever Pulse finds the opponent's
+        # name = the server we are on right now. This beats Pulse's ingestion
+        # lag (lastPlayed for the user's team won't update until AFTER the
+        # game ends), so it works the instant the user switches regions.
+        # We probe each user-team region in order of most-recently-played
+        # so the common case (user did NOT switch) hits on the first probe.
+        $EncodedOppName = [uri]::EscapeDataString($Opponent.Name)
+        $TeamsByRecency = $PlayerTeams | ForEach-Object {
+            $Lp = [DateTimeOffset]::Parse($_.LastPlayed, $null, [System.Globalization.DateTimeStyles]::RoundtripKind)
+            $LpAgo = [DateTimeOffset]::Now.Subtract($Lp).TotalSeconds
+            Add-Member -InputObject $_ -Name LastPlayedAgo -Value $LpAgo -MemberType NoteProperty -Force
+            $_
+        } | Sort-Object -Property LastPlayedAgo
+
+        $ActiveProfile = $null
+        foreach ($UserTeam in $TeamsByRecency) {
+            $ProbeRegion = $UserTeam.Region.ToUpper()
+            $ProbeSeason = $UserTeam.Season
+            $ProbeUri = "${Sc2PulseApiRoot}/character/search/advanced?season=${ProbeSeason}&region=${ProbeRegion}&queue=$($Script:Queue1v1)&name=${EncodedOppName}&caseSensitive=true"
+            try {
+                $Hits = @(Invoke-EnhancedRestMethod -Uri $ProbeUri)
+                if ($Hits.Count -gt 0) {
+                    $ActiveProfile = Create-PlayerProfile -RecentTeam $UserTeam
+                    Write-Host (" [Pulse] Active region detected: {0} (opponent {1} found there, {2} candidate(s))" -f `
+                        $ProbeRegion, $Opponent.Name, $Hits.Count) -ForegroundColor Green
+                    break
+                }
+            } catch {
+                # Per-region miss is normal; keep probing.
+            }
+        }
+
+        if ($ActiveProfile) {
+            $PlayerProfile = $ActiveProfile
+        } else {
+            Write-Host " [Pulse] Opponent name not found in any user region -- falling back to recently-active anchor" -ForegroundColor Yellow
+            $PlayerProfile = Find-PlayerProfile -PlayerTeam $PlayerTeams
+        }
 
         $SearchSeason = if ($PlayerProfile) { $PlayerProfile.Season } else { $Script:SeasonIds[0] }
         $SearchRegion = if ($PlayerProfile) { $PlayerProfile.Region.ToUpper() } else { $Script:ActiveRegion[0].ToUpper() }
