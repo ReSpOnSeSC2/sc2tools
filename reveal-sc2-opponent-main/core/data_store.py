@@ -62,6 +62,8 @@ from __future__ import annotations
 
 import json
 import os
+
+from .atomic_io import atomic_write_text
 import shutil
 import tempfile
 import threading
@@ -610,8 +612,10 @@ def migrate_legacy_files() -> Dict[str, str]:
                 stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
                 dst = f"{META_DB_FILE}.backup-{stamp}"
                 shutil.copy2(META_DB_FILE, dst)
-                with open(backup_marker, "w", encoding="utf-8") as f:
-                    f.write(stamp)
+                # Atomic marker write -- a torn write of the timestamp
+                # could trick the next migration into re-running the
+                # one-time backup.
+                atomic_write_text(backup_marker, stamp)
                 actions[META_DB_FILE] = f"backup -> {dst}"
             except Exception as exc:
                 actions[META_DB_FILE] = f"backup failed: {exc}"

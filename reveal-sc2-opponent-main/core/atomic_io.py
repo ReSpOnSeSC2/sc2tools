@@ -105,3 +105,37 @@ def atomic_write_text(
         except OSError:
             pass
         raise
+
+
+def atomic_write_bytes(
+    path: str,
+    payload: bytes,
+) -> None:
+    """Atomic-write a binary payload.
+
+    Same pattern as :func:`atomic_write_json` and :func:`atomic_write_text`
+    but for arbitrary bytes (used by callers that need to copy or
+    re-emit binary blobs with the same crash-safety guarantee).
+
+    Example:
+        atomic_write_bytes("data/custom_builds.json.bak", existing_bytes)
+    """
+    if not isinstance(payload, (bytes, bytearray)):
+        raise TypeError("atomic_write_bytes: payload must be bytes")
+    parent = os.path.dirname(path) or "."
+    os.makedirs(parent, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix=".tmp_", suffix=".bin", dir=parent)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(payload)
+            # See atomic_write_json above: flush+fsync before rename to
+            # close the Windows NTFS lazy-writer truncation window.
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise

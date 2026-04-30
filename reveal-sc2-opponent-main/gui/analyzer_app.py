@@ -26,6 +26,8 @@ be pickled by ProcessPoolExecutor.
 from __future__ import annotations
 
 import csv
+import io
+from core.atomic_io import atomic_write_text
 import concurrent.futures
 import glob
 import hashlib
@@ -664,10 +666,15 @@ class ReplayAnalyzer:
             ]
         if not rows:
             return
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=rows[0].keys())
-            writer.writeheader()
-            writer.writerows(rows)
+        # Buffer the CSV in memory so we can route the final write
+        # through atomic_write_text. A crash mid-export leaves either
+        # the pre-export file or the post-export file in place,
+        # never a half-written CSV that pandas/Excel chokes on.
+        buf = io.StringIO(newline="")
+        writer = csv.DictWriter(buf, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+        atomic_write_text(path, buf.getvalue())
 
     def get_map_stats(self) -> Dict[str, Dict]:
         def _compute() -> Dict[str, Dict]:
@@ -1787,8 +1794,9 @@ class App(ctk.CTk):
                 initialfile=f"debug_{os.path.basename(file_path)}.txt",
             )
             if save_path:
-                with open(save_path, "w", encoding="utf-8") as f:
-                    f.write(report)
+                # Atomic write so a partially-written debug report
+                # never lands on the user's disk.
+                atomic_write_text(save_path, report)
 
         ctk.CTkButton(
             btn_frame, text="Save Report to File", command=save_report, fg_color="#1565C0"

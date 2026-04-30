@@ -51,7 +51,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from .atomic_io import atomic_write_json
+from .atomic_io import atomic_write_bytes, atomic_write_json
 from .paths import CUSTOM_BUILDS_FILE, DATA_DIR
 
 LOGGER = logging.getLogger(__name__)
@@ -248,10 +248,12 @@ def _migrate_v1_to_v2(v1_data: Dict[str, Any]) -> Dict[str, Any]:
     timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup_path = "%s.pre-v2-bak.%s" % (CUSTOM_BUILDS_FILE, timestamp)
     if os.path.exists(CUSTOM_BUILDS_FILE):
+        # Atomic backup so an interrupted v1->v2 migration leaves
+        # either no backup or a complete one -- never a half-copy
+        # that the rollback path would treat as authoritative.
         with open(CUSTOM_BUILDS_FILE, "rb") as src:
             payload = src.read()
-        with open(backup_path, "wb") as dst:
-            dst.write(payload)
+        atomic_write_bytes(backup_path, payload)
     converted, report = _translate_v1_builds(v1_data.get("builds", []))
     new_file: Dict[str, Any] = {"version": SCHEMA_VERSION, "builds": converted}
     atomic_write_json(CUSTOM_BUILDS_FILE, new_file, indent=2)
