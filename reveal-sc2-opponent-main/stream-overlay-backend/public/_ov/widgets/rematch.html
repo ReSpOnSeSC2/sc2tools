@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SC2 Overlay - Rematch Summary</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../widget-mode.css">
+<script src="http://localhost:3000/socket.io/socket.io.js"></script>
+<script src="../icon-registry.js" defer></script>
+<script>
+  // Force the URL into single-widget mode even if the user opened
+  // this file directly (file://...) without the ?w= query string.
+  if (!new URLSearchParams(window.location.search).get('w')) {
+    history.replaceState(null, '', window.location.pathname + '?w=rematch');
+  }
+</script>
+</head>
+<body>
+
+<div id="rematch-widget" class="widget-container">
+    <div class="accent-bar accent-purple"></div>
+    <div class="content">
+        <div class="header">
+            <span id="rematch-icon" class="sc2-icon-slot"></span>
+            <span>Rematch</span>
+            <span id="rematch-name" class="bright"></span>
+        </div>
+        <div class="footer">
+            <span id="rematch-record"></span>
+            <span id="rematch-wr" class="dim"></span>
+        </div>
+    </div>
+</div>
+<script src="../app.js"></script>
+</body>
+</html>

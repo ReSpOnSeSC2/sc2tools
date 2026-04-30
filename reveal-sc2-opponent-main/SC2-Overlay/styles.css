@@ -125,6 +125,23 @@ html, body {
     white-space: nowrap;
 }
 
+/* MMR cutoff fix: when the OBS source is narrow, the name span (variable
+   width, can be long like "Darkbackpls#238") was pushing the MMR span
+   past the container's right edge where body.single-widget's
+   overflow:hidden clipped it. Pin MMR as non-shrinking and let the name
+   truncate to "..." instead — MMR is the at-a-glance number, the name
+   is informational. */
+#opponent-widget #opp-details {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1 1 auto;
+}
+#opponent-widget .header > #opp-mmr {
+    flex: 0 0 auto;
+}
+
 .footer {
     display: flex;
     justify-content: space-between;

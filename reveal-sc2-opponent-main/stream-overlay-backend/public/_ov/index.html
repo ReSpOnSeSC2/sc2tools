@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SC2 Match Overlay</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="widget-mode.css">
+    <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+    <script src="icon-registry.js" defer></script>
+</head>
+<body>
+
+    <!-- =========================================================
+         TRANSIENT WIDGETS (slide in, auto-dismiss)
+         One DOM node per type. The queue in app.js makes sure two
+         events don't stomp each other — they stack & play in order.
+    ========================================================== -->
+
+    <!-- Post-game result -->
+    <div id="match-result-widget" class="widget-container slot-top-center">
+        <div class="accent-bar accent-gold"></div>
+        <div class="content">
+            <div class="header">
+                <span class="matchup-block">
+                    <span id="mr-icon-me" class="sc2-icon-slot"></span>
+                    <span id="mr-matchup">PvT</span>
+                    <span id="mr-icon-opp" class="sc2-icon-slot"></span>
+                </span>
+                <span id="mr-result" class="victory">VICTORY</span>
+            </div>
+            <div class="footer">
+                <span id="mr-map">Site Delta LE</span>
+                <span id="mr-duration" class="dim"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pre-game opponent detection (merged with rematch -- shows
+         name, race, MMR, and head-to-head record in one card) -->
+    <div id="opponent-widget" class="widget-container slot-top-center offset-1">
+        <div class="accent-bar accent-cyan"></div>
+        <div class="content">
+            <div class="header">
+                <span id="opp-icon" class="sc2-icon-slot"></span>
+                <span id="opp-details" class="bright">Loading...</span>
+                <span id="opp-mmr" class="bright"></span>
+            </div>
+            <div class="footer">
+                <span id="opp-race" class="dim"></span>
+                <span id="opp-record"></span>
+                <span id="opp-winrate" class="dim"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rematch summary -->
+    <div id="rematch-widget" class="widget-container slot-top-center offset-2">
+        <div class="accent-bar accent-purple"></div>
+        <div class="content">
+            <div class="header">
+                <span id="rematch-icon" class="sc2-icon-slot"></span>
+                <span>Rematch</span>
+                <span id="rematch-name" class="bright"></span>
+            </div>
+            <div class="footer">
+                <span id="rematch-record"></span>
+                <span id="rematch-wr" class="dim"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cheese history warning -->
+    <div id="cheese-widget" class="widget-container cheese-widget slot-top-center offset-3">
+        <div class="accent-bar accent-red"></div>
+        <div class="content">
+            <div class="header">
+                <span id="cheese-icon-img" class="sc2-icon-slot"></span>
+                <span id="cheese-icon">!</span>
+                <span id="cheese-title">CHEESE HISTORY</span>
+            </div>
+            <div class="footer">
+                <span id="cheese-msg"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- F1: Opponent's favorite opening -->
+    <div id="favopen-widget" class="widget-container slot-top-center offset-4">
+        <div class="accent-bar accent-cyan"></div>
+        <div class="content">
+            <div class="header">
+                <span>FAVORITE OPENING</span>
+                <span id="favopen-share" class="bright"></span>
+            </div>
+            <div class="footer">
+                <span id="favopen-icons" class="icon-row"></span>
+                <span id="favopen-strategy"></span>
+                <span id="favopen-name" class="dim"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- F2: Best answer -->
+    <div id="bestans-widget" class="widget-container slot-top-center offset-5">
+        <div class="accent-bar accent-gold"></div>
+        <div class="content">
+            <div class="header">
+                <span>BEST ANSWER</span>
+                <span id="bestans-wr" class="bright"></span>
+            </div>
+            <div class="footer">
+                <span id="bestans-icons" class="icon-row"></span>
+                <span id="bestans-build"></span>
+                <span id="bestans-record" class="dim"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- F3: Post-game strategy reveal (with #3 animated timeline) -->
+    <div id="reveal-widget" class="widget-container reveal-widget slot-top-center">
+        <div class="accent-bar accent-purple"></div>
+        <div class="content">
+            <div class="header">
+                <span>OPP STRATEGY</span>
+                <span id="reveal-strategy" class="bright"></span>
+            </div>
+            <div class="footer">
+                <span id="reveal-icons" class="icon-row"></span>
+                <span id="reveal-build"></span>
+                <span id="reveal-result" class="dim"></span>
+            </div>
+            <!-- #3 Build-order timeline: icons slide in one by one -->
+            <div id="reveal-timeline" class="build-timeline"></div>
+        </div>
+    </div>
+
+    <!-- #6 Rival alert (high priority pre-game pop-up) -->
+    <div id="rival-widget" class="widget-container rival-widget slot-top-center">
+        <div class="accent-bar accent-rival"></div>
+        <div class="content">
+            <div class="header">
+                <span id="rival-icon" class="sc2-icon-slot"></span>
+                <span id="rival-tier-label">RIVAL</span>
+                <span id="rival-name" class="bright"></span>
+            </div>
+            <div class="footer">
+                <span id="rival-record"></span>
+                <span id="rival-last" class="dim"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- #1 Consolidated scouting report (replaces 4 stacked pop-ups) -->
+    <div id="scout-widget" class="widget-container scout-widget slot-top-center">
+        <div class="accent-bar accent-cyan"></div>
+        <div class="scout-content">
+            <div class="scout-header">
+                <span id="scout-race-icon" class="sc2-icon-slot scout-race"></span>
+                <span id="scout-name" class="bright"></span>
+                <span id="scout-record" class="scout-record dim"></span>
+            </div>
+            <div id="scout-rival" class="scout-row scout-rival" style="display:none">
+                <span id="scout-rival-text"></span>
+            </div>
+            <div id="scout-fav" class="scout-row" style="display:none">
+                <span class="scout-label">FAVORITE OPENER</span>
+                <span id="scout-fav-icons" class="icon-row"></span>
+                <span id="scout-fav-text"></span>
+            </div>
+            <div id="scout-ans" class="scout-row" style="display:none">
+                <span class="scout-label">YOUR BEST ANSWER</span>
+                <span id="scout-ans-icons" class="icon-row"></span>
+                <span id="scout-ans-text"></span>
+            </div>
+            <div id="scout-cheese" class="scout-row scout-cheese" style="display:none">
+                <span class="scout-label">CHEESE</span>
+                <span id="scout-cheese-text"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- F5: Meta check -->
+    <div id="meta-widget" class="widget-container slot-top-right offset-mmr">
+        <div class="accent-bar accent-cyan"></div>
+        <div class="content content-tight">
+            <div class="header">
+                <span class="dim">META</span>
+                <span id="meta-strategy" class="bright"></span>
+            </div>
+            <div class="footer">
+                <span id="meta-icons" class="icon-row"></span>
+                <span id="meta-count"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MMR delta -->
+    <div id="mmr-delta-widget" class="widget-container slot-top-right">
+        <div class="accent-bar accent-gold"></div>
+        <div class="content content-tight">
+            <div class="header">
+                <span class="dim">MMR</span>
+                <span id="mmr-delta-value" class="big">+0</span>
+            </div>
+            <div class="footer">
+                <span id="mmr-delta-current"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rank up / down -->
+    <div id="rank-widget" class="widget-container slot-top-center">
+        <div class="accent-bar accent-gold"></div>
+        <div class="content">
+            <div class="header">
+                <span id="rank-league-icon" class="sc2-icon-slot league"></span>
+                <span id="rank-title">RANK UP</span>
+                <span id="rank-league" class="bright"></span>
+            </div>
+            <div class="footer"><span id="rank-sub"></span></div>
+        </div>
+    </div>
+
+    <!-- Streak splash (big center) -->
+    <div id="streak-widget" class="streak-widget">
+        <div class="streak-inner">
+            <div id="streak-text" class="streak-text">HEATING UP</div>
+            <div id="streak-sub" class="streak-sub">3 wins in a row</div>
+        </div>
+    </div>
+
+
+    <!-- =========================================================
+         PERSISTENT WIDGETS (always visible)
+    ========================================================== -->
+
+    <!-- #8 Build vs Strategy tile grid (persistent, bottom-right) -->
+    <div id="topbuilds-widget" class="topbuilds-widget">
+        <div class="topbuilds-header">
+            <span class="topbuilds-title">YOUR TOP BUILDS</span>
+        </div>
+        <div id="topbuilds-grid" class="topbuilds-grid"></div>
+    </div>
+
+    <!-- Session tracker (bottom-left) -->
+    <div id="session-widget" class="session-widget">
+        <div class="accent-bar accent-gold"></div>
+        <div class="session-content">
+            <div class="session-row">
+                <span class="session-label">SESSION</span>
+                <span id="session-streak" class="session-streak"></span>
+            </div>
+            <div class="session-row session-main">
+                <span id="session-league-icon" class="sc2-icon-slot league session-league"></span>
+                <span id="session-wl" class="session-wl">0W – 0L</span>
+                <span id="session-mmr" class="session-mmr">+0 MMR</span>
+            </div>
+            <div class="session-row">
+                <span id="session-time" class="session-time">0m</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden audio tags (mp3s optional in /static/sounds/*) -->
+    <audio id="snd-matchResult"             preload="auto"></audio>
+    <audio id="snd-opponentDetected"        preload="auto"></audio>
+    <audio id="snd-rematch"                 preload="auto"></audio>
+    <audio id="snd-cheeseHistory"           preload="auto"></audio>
+    <audio id="snd-streak"                  preload="auto"></audio>
+    <audio id="snd-rankChange"              preload="auto"></audio>
+    <audio id="snd-mmrDelta"                preload="auto"></audio>
+    <audio id="snd-favoriteOpening"         preload="auto"></audio>
+    <audio id="snd-bestAnswer"              preload="auto"></audio>
+    <audio id="snd-postGameStrategyReveal"  preload="auto"></audio>
+    <audio id="snd-metaCheck"               preload="auto"></audio>
+    <audio id="snd-rivalAlert"              preload="auto"></audio>
+    <audio id="snd-scoutingReport"          preload="auto"></audio>
+
+    <script src="app.js"></script>
+</body>
+</html>

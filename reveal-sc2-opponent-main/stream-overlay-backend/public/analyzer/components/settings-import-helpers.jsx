@@ -201,6 +201,135 @@
         return status;
       }
 
+      // ============================================================
+      // FOLDER IMPORT DRIVER
+      //
+      // Both the fresh-start path and the resume-from-checkpoint
+      // path drive identical UI: a per-folder progress slot in
+      // queue.folders[]. These helpers share that loop so resume
+      // shows real-time progress (it used to fire-and-forget).
+      //
+      // The functions take setQueue + stopRef as args so they can
+      // remain pure-async (no React hooks), live in helpers, and
+      // be unit-testable.
+      // ============================================================
+      async function _drainImportRunning(apiBase, pollMs, timeoutS) {
+        for (let w = 0; w < timeoutS; w++) {
+          const s = await fetch(`${apiBase}/import/status`)
+            .then((r) => r.json());
+          if (!s.running) return;
+          await new Promise((r) => setTimeout(r, pollMs));
+        }
+      }
+
+      function _markFolderError(setQueue, folderIndex, errorMsg) {
+        setQueue((q) => q ? { ...q,
+          folders: q.folders.map((f, j) => j === folderIndex ? {
+            ...f, status: "error", errorMsg,
+          } : f),
+        } : q);
+      }
+
+      function _markFolderProgress(setQueue, folderIndex, s) {
+        setQueue((q) => q ? { ...q,
+          folders: q.folders.map((f, j) => j === folderIndex ? {
+            ...f, completed: s.completed || 0,
+            total: s.total || 0, errors: s.errors || 0,
+          } : f),
+        } : q);
+      }
+
+      function _markFolderDone(setQueue, folderIndex, s, finalStatus) {
+        setQueue((q) => q ? { ...q,
+          folders: q.folders.map((f, j) => j === folderIndex ? {
+            ...f, status: finalStatus,
+            completed: s.completed || 0,
+            total: s.total || 0,
+            errors: s.errors || 0,
+            errorBreakdown: s.error_breakdown || null,
+            errorSamples: s.error_samples || null,
+          } : f),
+        } : q);
+      }
+
+      function _resolveFinalStatus(stopRefCurrent, phase) {
+        if (stopRefCurrent || phase === "cancelled") return "cancelled";
+        if (phase === "error") return "error";
+        return "done";
+      }
+
+      async function _pollFolderImportUntilDone({
+        setQueue, stopRef, folderIndex, apiBase, pollMs,
+      }) {
+        while (true) {
+          await new Promise((r) => setTimeout(r, pollMs));
+          const s = await fetch(`${apiBase}/import/status`)
+            .then((r) => r.json());
+          _markFolderProgress(setQueue, folderIndex, s);
+          const isDone = !s.running && (
+            s.phase === "complete"
+            || s.phase === "cancelled"
+            || s.phase === "error");
+          if (isDone) {
+            const finalStatus = _resolveFinalStatus(
+              stopRef.current, s.phase);
+            _markFolderDone(setQueue, folderIndex, s, finalStatus);
+            if (finalStatus === "cancelled") stopRef.current = true;
+            return finalStatus;
+          }
+          if (stopRef.current) {
+            setQueue((q) => q ? { ...q,
+              folders: q.folders.map((f, j) => j === folderIndex ? {
+                ...f, status: "cancelled",
+              } : f),
+            } : q);
+            return "cancelled";
+          }
+        }
+      }
+
+      /**
+       * Drive a single folder import end-to-end.
+       *
+       * Drains any prior IMPORT_STATE.running, POSTs /import/start,
+       * then polls /import/status updating queue.folders[folderIndex]
+       * until the run completes, errors, or the user pressed Stop
+       * (signalled via stopRef.current).
+       *
+       * Used for BOTH fresh start and resume — the body just gets
+       * resume:true for the latter. Caller owns queue state and
+       * decides which folders to process.
+       *
+       * Returns the final folder status: "done" | "error" | "cancelled".
+       *
+       * Example:
+       *   await _runFolderImport({
+       *     folder: "C:/Replays", body: { resume: true, workers: 4 },
+       *     setQueue, stopRef, folderIndex: 0,
+       *     apiBase: API, pollMs: 1000, betweenFolderTimeoutS: 10,
+       *   });
+       */
+      async function _runFolderImport({
+        folder, body, setQueue, stopRef, folderIndex,
+        apiBase, pollMs, betweenFolderTimeoutS,
+      }) {
+        await _drainImportRunning(apiBase, pollMs, betweenFolderTimeoutS);
+        const sr = await fetch(`${apiBase}/import/start`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ folder, ...body }),
+        });
+        if (!sr.ok) {
+          const j = await sr.json().catch(() => ({}));
+          _markFolderError(setQueue, folderIndex,
+            j.error || `start failed (${sr.status})`);
+          return "error";
+        }
+        return await _pollFolderImportUntilDone({
+          setQueue, stopRef, folderIndex, apiBase, pollMs,
+        });
+      }
+
       const IMPORT_REASON_LABEL = {
         player_not_found:
           "Couldn't find your handle in the replay. The replay's player "
@@ -347,6 +476,13 @@
     _identityKey,
     _isAlreadyConfigured,
     ImportDiscoveredIdentitiesList,
-    ImportErrorBreakdown
+    ImportErrorBreakdown,
+    _drainImportRunning,
+    _markFolderError,
+    _markFolderProgress,
+    _markFolderDone,
+    _resolveFinalStatus,
+    _pollFolderImportUntilDone,
+    _runFolderImport
   });
 })();

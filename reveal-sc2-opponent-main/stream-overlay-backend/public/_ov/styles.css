@@ -1,0 +1,683 @@
+/* ============================================================================
+   SC2 Stream Overlay — production styles
+   ----------------------------------------------------------------------------
+   Transparent background for OBS Browser Source. All color, font, spacing,
+   radius, shadow, and motion values now come from design-tokens.css — do NOT
+   reintroduce raw hex codes here. CI greps the file for '#' in color contexts.
+   ============================================================================ */
+
+@import url("./design-tokens.css");
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: var(--font-family-ui);
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    background-color: transparent;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* --------- Shared transient widget shell --------- */
+.widget-container {
+    position: absolute;
+    display: flex;
+    background: linear-gradient(135deg,
+        var(--color-overlay-bg-from) 0%,
+        var(--color-overlay-bg-to) 100%);
+    border: 1px solid var(--color-overlay-border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-overlay-card);
+    width: 340px;
+    color: var(--color-overlay-text);
+    pointer-events: none;
+    opacity: 0;
+    transition:
+        transform var(--duration-celebrate) var(--ease-overshoot),
+        opacity var(--duration-entrance) var(--ease-out);
+    z-index: 10;
+}
+
+/* Slot layouts — where in the frame each widget lives */
+.slot-top-center {
+    top: 40px;
+    left: 50%;
+    transform: translate(-50%, -160%);
+}
+.slot-top-center.show {
+    transform: translate(-50%, 0);
+    opacity: 1;
+}
+.slot-top-center.offset-1 { top: 118px; }
+.slot-top-center.offset-2 { top: 196px; }
+.slot-top-center.offset-3 { top: 274px; }
+.slot-top-center.offset-4 { top: 352px; }
+.slot-top-center.offset-5 { top: 430px; }
+
+.slot-top-right {
+    top: 40px;
+    right: 40px;
+    transform: translateX(160%);
+    width: 240px;
+}
+.slot-top-right.show {
+    transform: translateX(0);
+    opacity: 1;
+}
+.slot-top-right.offset-mmr { top: 130px; }
+
+/* Accent bars */
+.accent-bar {
+    width: 6px;
+    border-radius: 10px 0 0 10px;
+}
+.accent-gold {
+    background: var(--color-overlay-accent-gold);
+    box-shadow: 0 0 10px rgba(229, 193, 0, 0.55);
+}
+.accent-cyan {
+    background: var(--color-overlay-accent-cyan);
+    box-shadow: 0 0 10px rgba(0, 204, 255, 0.55);
+}
+.accent-purple {
+    background: var(--color-overlay-accent-purple);
+    box-shadow: 0 0 10px rgba(160, 107, 255, 0.55);
+}
+.accent-red {
+    background: var(--color-overlay-accent-red);
+    box-shadow: 0 0 14px rgba(255, 51, 102, 0.7);
+}
+
+.content {
+    padding: 16px 20px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.content-tight { padding: 12px 16px; gap: 4px; }
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 800;
+    font-size: 1.35rem;
+    letter-spacing: 1px;
+    line-height: 1.15;
+}
+
+/* Opponent widget header: keep the MMR badge on one line and give the
+   row a real gap. Older code let '4758 MMR' wrap mid-token (digits on
+   one line, 'MMR' beneath), which crowded against the name in a
+   narrow OBS source. The original `.header` rule's `space-between`
+   already distributes the children correctly -- we just need to stop
+   the MMR span from breaking and add explicit breathing room. */
+#opponent-widget .header {
+    gap: 1rem;
+}
+#opponent-widget #opp-mmr {
+    white-space: nowrap;
+}
+
+.footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.95rem;
+    color: var(--color-overlay-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bright { color: var(--color-overlay-text); }
+.dim    { color: var(--color-overlay-text-dim); font-weight: 500; }
+.big    { font-size: 1.8rem; line-height: 1; }
+
+/* Result colors */
+.victory {
+    color: var(--color-overlay-victory);
+    text-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
+}
+.defeat {
+    color: var(--color-overlay-defeat);
+    text-shadow: 0 0 10px rgba(255, 51, 102, 0.4);
+}
+
+/* Matchup text style */
+#mr-matchup { color: var(--color-overlay-text-matchup); }
+
+/* --------- SC2 icon system --------- */
+/* A single inline icon (race badge, league shield, etc.). */
+.sc2-icon {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    vertical-align: middle;
+    image-rendering: -webkit-optimize-contrast; /* keep crisp at 28px */
+    object-fit: contain;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+}
+
+/* A slot for one inline icon. We use spans (not imgs) so the icon
+   can be omitted gracefully -- the slot just collapses to width:0. */
+.sc2-icon-slot {
+    display: inline-flex;
+    align-items: center;
+    margin: 0 6px;
+    line-height: 0;
+}
+.sc2-icon-slot:empty { display: none; }
+
+.sc2-icon-slot.league .sc2-icon { width: 36px; height: 36px; }
+
+/* Matchup container groups: [me race] PvT [opp race] */
+.matchup-block {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Horizontal row of strategy icons inside a footer line. */
+.icon-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+}
+.icon-row:empty { display: none; }
+.icon-row .sc2-icon {
+    width: 26px;
+    height: 26px;
+}
+
+/* --------- Rival alert (#6) --------- */
+.rival-widget {
+    background: linear-gradient(135deg,
+        var(--color-overlay-rival-bg-from) 0%,
+        var(--color-overlay-rival-bg-to) 100%);
+    border-color: var(--color-overlay-rival-border);
+    width: 380px;
+    animation: rival-pulse 2s ease-in-out infinite;
+}
+.rival-widget .header { color: var(--color-overlay-rival-header); }
+.rival-widget .footer { color: var(--color-overlay-rival-footer); }
+.accent-rival {
+    background: var(--color-overlay-accent-rival);
+    box-shadow: 0 0 14px rgba(255, 204, 51, 0.7);
+}
+@keyframes rival-pulse {
+    0%, 100% {
+        box-shadow:
+            0 12px 32px var(--color-shadow-overlay),
+            0 0 18px rgba(255, 204, 51, 0.18);
+    }
+    50% {
+        box-shadow:
+            0 12px 32px var(--color-shadow-overlay),
+            0 0 32px rgba(255, 204, 51, 0.55);
+    }
+}
+
+/* --------- Scouting report (#1) --------- */
+.scout-widget {
+    width: 460px;
+    background: linear-gradient(135deg,
+        var(--color-overlay-scout-bg-from) 0%,
+        var(--color-overlay-scout-bg-to) 100%);
+}
+.scout-content {
+    padding: 14px 18px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.scout-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.25rem;
+    font-weight: 800;
+    border-bottom: 1px solid var(--color-divider);
+    padding-bottom: 8px;
+}
+.scout-race .sc2-icon { width: 32px; height: 32px; }
+.scout-record { margin-left: auto; font-size: 0.95rem; }
+.scout-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.95rem;
+}
+.scout-label {
+    font-size: 0.7rem;
+    color: var(--color-overlay-text-dim);
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    min-width: 110px;
+    text-transform: uppercase;
+}
+.scout-rival  { color: var(--color-overlay-scout-rival);  font-weight: 700; }
+.scout-cheese { color: var(--color-overlay-scout-cheese); font-weight: 700; }
+
+/* --------- Scouting recent games (#1, replaces favorite-opener row) ---- */
+.scout-recent {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.92rem;
+}
+.scout-recent-heading {
+    /* Inherits .scout-label sizing; this rule is here in case future
+       changes diverge the heading from the inline labels. */
+    font-size: 0.7rem;
+    color: var(--color-overlay-text-dim);
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.scout-recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.scout-recent-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 0 0 1px var(--color-divider);
+}
+.scout-recent-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+}
+.scout-recent-result {
+    display: inline-block;
+    min-width: 18px;
+    text-align: center;
+    font-weight: 800;
+    border-radius: 4px;
+    padding: 0 4px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-overlay-text);
+}
+.scout-recent-result-win  { background: var(--color-success); color: #06241B; }
+.scout-recent-result-loss { background: var(--color-danger);  color: #2A0708; }
+.scout-recent-length {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-overlay-text);
+    font-weight: 700;
+}
+.scout-recent-meta {
+    margin-left: auto;
+    color: var(--color-overlay-text-dim);
+    font-size: 0.82rem;
+}
+.scout-recent-line {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 0.84rem;
+    line-height: 1.35;
+}
+.scout-recent-side {
+    flex: 0 0 28px;
+    font-size: 0.65rem;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    color: var(--color-overlay-text-dim);
+    text-transform: uppercase;
+}
+.scout-recent-line-mine .scout-recent-side { color: var(--color-success); }
+.scout-recent-line-opp  .scout-recent-side { color: var(--color-overlay-text-matchup); }
+.scout-recent-build {
+    color: var(--color-overlay-text);
+    font-weight: 600;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* --------- #8 Top builds tile grid (bottom-right, persistent) --------- */
+.topbuilds-widget {
+    position: absolute;
+    bottom: 40px;
+    right: 40px;
+    width: 280px;
+    background: linear-gradient(135deg,
+        var(--color-overlay-bg-from-glass) 0%,
+        var(--color-overlay-bg-to-glass) 100%);
+    border: 1px solid var(--color-overlay-border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-overlay-tile);
+    color: var(--color-overlay-text);
+    backdrop-filter: blur(2px);
+    z-index: 5;
+    padding: 10px 12px;
+    opacity: 0;
+    transform: translateX(20px);
+    transition:
+        opacity var(--duration-entrance) var(--ease-out),
+        transform var(--duration-entrance) var(--ease-out);
+}
+.topbuilds-widget.show { opacity: 1; transform: translateX(0); }
+
+.topbuilds-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--color-overlay-text-dim);
+    text-transform: uppercase;
+}
+.topbuilds-grid {
+    margin-top: 8px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+}
+.topbuild-tile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: var(--color-overlay-tile-bg);
+    font-size: 0.78rem;
+}
+.topbuild-tile .topbuild-icons {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+.topbuild-tile .topbuild-icons .sc2-icon {
+    width: 18px;
+    height: 18px;
+}
+.topbuild-tile .topbuild-name {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-overlay-text-medium);
+}
+.topbuild-tile .topbuild-record {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+/* --------- #3 Build-order timeline (animated reveal) --------- */
+.reveal-widget { width: 460px; }
+.build-timeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--color-divider);
+}
+.build-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px 3px 4px;
+    border-radius: 4px;
+    background: var(--color-overlay-build-step-bg);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-overlay-build-step-fg);
+    opacity: 0;
+    transform: translateY(8px);
+    transition:
+        opacity 0.32s var(--ease-out),
+        transform 0.32s var(--ease-spring);
+}
+.build-step.show { opacity: 1; transform: translateY(0); }
+.build-step .sc2-icon { width: 18px; height: 18px; }
+.build-step .build-time {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-overlay-accent-purple);
+    margin-right: 2px;
+}
+
+/* --------- Cheese widget gets an extra pulse glow --------- */
+.cheese-widget {
+    background: linear-gradient(135deg,
+        var(--color-overlay-cheese-bg-from) 0%,
+        var(--color-overlay-cheese-bg-to) 100%);
+    border-color: var(--color-overlay-cheese-border);
+    animation: cheese-pulse 2.2s ease-in-out infinite;
+}
+.cheese-widget .header { color: var(--color-overlay-cheese); }
+.cheese-widget .footer { color: var(--color-overlay-cheese-soft); }
+
+@keyframes cheese-pulse {
+    0%, 100% {
+        box-shadow:
+            0 12px 32px var(--color-shadow-overlay),
+            0 0 20px rgba(255, 51, 102, 0.15);
+    }
+    50% {
+        box-shadow:
+            0 12px 32px var(--color-shadow-overlay),
+            0 0 36px rgba(255, 51, 102, 0.45);
+    }
+}
+
+/* --------- Streak splash (big center) --------- */
+.streak-widget {
+    position: absolute;
+    top: 30%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.7);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        transform 0.45s var(--ease-spring),
+        opacity 0.45s var(--ease-out);
+    z-index: 20;
+}
+.streak-widget.show {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+}
+.streak-inner {
+    padding: 24px 64px;
+    border-radius: 14px;
+    text-align: center;
+    background: linear-gradient(135deg,
+        var(--color-overlay-streak-bg-from),
+        var(--color-overlay-streak-bg-to));
+    border: 1px solid var(--color-border-default);
+    box-shadow: var(--shadow-overlay-streak);
+}
+.streak-text {
+    font-size: 3.6rem;
+    font-weight: 900;
+    letter-spacing: 4px;
+    line-height: 1;
+    text-transform: uppercase;
+}
+.streak-sub {
+    margin-top: 10px;
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    color: var(--color-overlay-text-medium);
+    text-transform: uppercase;
+}
+
+/* Tier flavor */
+.streak-widget.tier-heating-up .streak-text {
+    color: var(--color-overlay-accent-rival);
+    text-shadow: 0 0 24px rgba(255, 204, 51, 0.7);
+}
+.streak-widget.tier-on-fire .streak-text {
+    color: var(--color-overlay-streak-fire);
+    text-shadow: 0 0 28px rgba(255, 136, 0, 0.85);
+}
+.streak-widget.tier-rampage .streak-text {
+    background: linear-gradient(90deg,
+        var(--color-overlay-accent-red),
+        var(--color-overlay-accent-rival),
+        var(--color-overlay-victory),
+        var(--color-overlay-accent-cyan),
+        var(--color-overlay-accent-red));
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: rainbow-shift 2.5s linear infinite;
+    text-shadow: 0 0 30px rgba(255, 204, 51, 0.6);
+}
+.streak-widget.tier-gg-go-again .streak-text {
+    color: var(--color-overlay-text-matchup);
+}
+.streak-widget.tier-tilt-warn .streak-text {
+    color: var(--color-overlay-streak-tilt);
+    text-shadow: 0 0 20px rgba(102, 168, 255, 0.5);
+}
+
+@keyframes rainbow-shift {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 300% 50%; }
+}
+
+/* --------- Persistent session widget (bottom-left) --------- */
+.session-widget {
+    position: absolute;
+    bottom: 40px;
+    left: 40px;
+    display: flex;
+    min-width: 240px;
+    background: linear-gradient(135deg,
+        var(--color-overlay-bg-from-glass) 0%,
+        var(--color-overlay-bg-to-glass) 100%);
+    border: 1px solid var(--color-overlay-border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-overlay-tile);
+    color: var(--color-overlay-text);
+    backdrop-filter: blur(2px);
+    z-index: 5;
+    opacity: 0;
+    transform: translateX(-20px);
+    transition:
+        opacity var(--duration-entrance) var(--ease-out),
+        transform var(--duration-entrance) var(--ease-out);
+}
+.session-widget.show { opacity: 1; transform: translateX(0); }
+
+.session-content {
+    padding: 12px 18px 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+}
+.session-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+.session-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--color-overlay-text-dim);
+    text-transform: uppercase;
+}
+.session-streak {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+.session-streak.win-streak {
+    background: var(--color-overlay-win-streak-bg);
+    color: var(--color-overlay-victory);
+}
+.session-streak.loss-streak {
+    background: var(--color-overlay-loss-streak-bg);
+    color: var(--color-overlay-defeat);
+}
+
+.session-main { margin-top: 2px; align-items: center; }
+.session-league .sc2-icon { width: 28px; height: 28px; margin-right: 6px; }
+.session-wl {
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--color-overlay-text);
+}
+.session-mmr {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+.session-mmr.up   { color: var(--color-overlay-victory); }
+.session-mmr.down { color: var(--color-overlay-defeat); }
+.session-mmr.flat { color: var(--color-overlay-text-dim); }
+
+.session-time {
+    font-size: 0.85rem;
+    color: var(--color-overlay-text-dim);
+    letter-spacing: 1px;
+}
+
+
+/* ----------------------------------------------------------------------
+   Session widget (v0.9.0) — same-row W-L + elapsed time, new MMR row.
+   No raw hex; all colors come from design-tokens.css.
+   ---------------------------------------------------------------------- */
+.session-row.session-main {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.session-row.session-mmr-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-top: 4px;
+}
+
+.session-row.session-mmr-row[data-state="empty"] .session-server-mmr {
+    color: var(--color-overlay-text-dim);
+    font-weight: 700;
+}
+
+/* Large, prominent 'SERVER MMR' line (e.g., 'NA 4280'). Matches the
+   W-L row's font size so the player's current rating reads as a
+   primary stat instead of the previous small dim subtitle. */
+.session-server-mmr {
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--color-overlay-text);
+}
+
+.session-sep {
+    color: var(--color-overlay-text-dim);
+    opacity: 0.7;
+}

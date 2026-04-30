@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SC2 Overlay - Session (W-L / MMR / League)</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../widget-mode.css">
+<script src="http://localhost:3000/socket.io/socket.io.js"></script>
+<script src="../icon-registry.js" defer></script>
+<script>
+  // Force the URL into single-widget mode even if the user opened
+  // this file directly (file://...) without the ?w= query string.
+  if (!new URLSearchParams(window.location.search).get('w')) {
+    history.replaceState(null, '', window.location.pathname + '?w=session');
+  }
+</script>
+</head>
+<body>
+
+<div id="session-widget" class="session-widget">
+    <div class="accent-bar accent-gold"></div>
+    <div class="session-content">
+        <div class="session-row">
+            <span class="session-label">SESSION</span>
+            <span id="session-streak" class="session-streak"></span>
+        </div>
+        <div class="session-row session-main">
+            <span id="session-wl" class="session-wl">0W - 0L</span>
+            <span class="session-sep" aria-hidden="true">&middot;</span>
+            <span id="session-time" class="session-time">0m</span>
+        </div>
+        <div class="session-row session-mmr-row" data-state="empty">
+            <span id="session-server-mmr" class="session-server-mmr" title="Active server &amp; current MMR (SC2Pulse)">&mdash;</span>
+        </div>
+    </div>
+</div>
+<script src="../app.js"></script>
+</body>
+</html>

@@ -266,34 +266,31 @@
         .catch(() => { /* best-effort */ });
     };
 
-    const onStart = async (resume) => {
-      // Resume targets only the persisted single folder in IMPORT_STATE.
+    // Build the list of folders to drive given resume vs fresh:
+    // resume mode targets the persisted single folder, fresh mode
+    // walks every checkbox-selected folder.
+    const _foldersForRun = (resume) => {
       if (resume) {
-        try {
-          await fetch(`${API}/import/start`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              folder: (status && status.persisted
-                && status.persisted.folder) || selectedFolders[0],
-              since_iso: sinceIso || undefined,
-              until_iso: untilIso || undefined,
-              workers, resume: true, ...buildIdentityArrays(),
-            }),
-          });
-        } catch (_) { /* non-fatal */ }
-        return;
+        const persisted = (status && status.persisted
+          && status.persisted.folder) || selectedFolders[0];
+        return persisted ? [persisted] : [];
       }
-      if (selectedFolders.length === 0) return;
+      return selectedFolders;
+    };
+
+    const onStart = async (resume) => {
+      const foldersToProcess = _foldersForRun(!!resume);
+      if (foldersToProcess.length === 0) return;
       stopRef.current = false;
       const initial = {
-        folders: selectedFolders.map((p) => ({
+        folders: foldersToProcess.map((p) => ({
           path: p, status: "pending",
           completed: 0, total: 0, errors: 0,
-          errorMsg: null, errorBreakdown: null,
+          errorMsg: null, errorBreakdown: null, errorSamples: null,
         })),
         currentIndex: 0, stopped: false,
         startedAt: new Date().toISOString(),
+        isResume: !!resume,
       };
       setQueue(initial);
       const ids = buildIdentityArrays();
@@ -309,66 +306,19 @@
           folders: q.folders.map((f, j) =>
             j === i ? { ...f, status: "running" } : f),
         } : q);
-
         try {
-          // Drain any prior IMPORT_STATE.running before starting next folder.
-          for (let w = 0; w < DRIVER_BETWEEN_FOLDER_TIMEOUT_S; w++) {
-            const s = await fetch(`${API}/import/status`).then((r) => r.json());
-            if (!s.running) break;
-            await new Promise((r) => setTimeout(r, DRIVER_POLL_MS));
-          }
-          const sr = await fetch(`${API}/import/start`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              folder, since_iso: sinceIso || undefined,
+          await _runFolderImport({
+            folder,
+            body: {
+              since_iso: sinceIso || undefined,
               until_iso: untilIso || undefined,
-              workers, resume: false, ...ids,
-            }),
+              workers, resume: !!resume, ...ids,
+            },
+            setQueue, stopRef, folderIndex: i,
+            apiBase: API,
+            pollMs: DRIVER_POLL_MS,
+            betweenFolderTimeoutS: DRIVER_BETWEEN_FOLDER_TIMEOUT_S,
           });
-          if (!sr.ok) {
-            const j = await sr.json().catch(() => ({}));
-            setQueue((q) => q ? { ...q,
-              folders: q.folders.map((f, j2) => j2 === i ? {
-                ...f, status: "error",
-                errorMsg: j.error || `start failed (${sr.status})`,
-              } : f),
-            } : q);
-            continue;
-          }
-          // Poll until this folder finishes (or is cancelled)
-          while (true) {
-            await new Promise((r) => setTimeout(r, DRIVER_POLL_MS));
-            const s = await fetch(`${API}/import/status`)
-              .then((r) => r.json());
-            // Live progress update
-            setQueue((q) => q ? {
-              ...q, folders: q.folders.map((f, j2) => j2 === i ? {
-                ...f, completed: s.completed || 0,
-                total: s.total || 0, errors: s.errors || 0,
-              } : f),
-            } : q);
-            const isDone = !s.running && (
-              s.phase === "complete"
-              || s.phase === "cancelled"
-              || s.phase === "error");
-            if (isDone) {
-              setQueue((q) => q ? {
-                ...q, folders: q.folders.map((f, j2) => j2 === i ? {
-                  ...f,
-                  status: s.phase === "cancelled" ? "cancelled"
-                    : s.phase === "error" ? "error" : "done",
-                  completed: s.completed || 0,
-                  total: s.total || 0,
-                  errors: s.errors || 0,
-                  errorBreakdown: s.error_breakdown || null,
-                } : f),
-              } : q);
-              if (s.phase === "cancelled") stopRef.current = true;
-              break;
-            }
-            if (stopRef.current) break;
-          }
         } catch (e) {
           setQueue((q) => q ? { ...q,
             folders: q.folders.map((f, j2) => j2 === i ? {
@@ -378,7 +328,6 @@
           } : q);
         }
       }
-      // Mark complete
       setQueue((q) => q ? { ...q, currentIndex: q.folders.length } : q);
     };
 
@@ -651,6 +600,18 @@
                   + `${queue.folders.length}…`
                 : "Start import"}
             </button>
+            {/* Inline resume CTA: visible right next to Start whenever the
+                server has a persisted-but-not-running checkpoint. The top
+                banner can be off-screen if the user has scrolled. */}
+            {interrupted && !queueRunning && (
+              <button type="button" onClick={() => onStart(true)}
+                disabled={selectedNames.length === 0}
+                className="px-3 py-1.5 text-xs rounded
+                           bg-gold-500 text-base-900 hover:bg-gold-400
+                           disabled:opacity-50">
+                Resume {status.persisted.completed || 0}/{status.persisted.total || 0}
+              </button>
+            )}
             {queueRunning && (
               <button type="button" onClick={onCancel}
                 className="px-3 py-1.5 text-xs rounded
@@ -781,7 +742,8 @@
                       <div className="text-[11px] font-mono
                                       text-neutral-500">{f.path}</div>
                       <ImportErrorBreakdown
-                        breakdown={f.errorBreakdown} samples={null} />
+                        breakdown={f.errorBreakdown}
+                        samples={f.errorSamples} />
                     </div>
                   ))}
               </details>
