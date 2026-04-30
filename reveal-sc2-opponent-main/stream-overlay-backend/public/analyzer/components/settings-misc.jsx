@@ -68,9 +68,30 @@
       function SettingsAboutPanel({ ui, errors, onPatch }) {
         const u = ui || {};
         const [updateMsg, setUpdateMsg] = useState(null);
-        const checkUpdate = () => {
-          setUpdateMsg("Update channel not wired yet — Stage 14 owns this. "
-            + "Visit GitHub to see the latest release.");
+        const [checking, setChecking] = useState(false);
+        // Stage 12.1: live check against /api/version. The route caches
+        // GitHub responses for an hour so a button-mash does not fan out.
+        const checkUpdate = async () => {
+          if (checking) return;
+          setChecking(true);
+          setUpdateMsg("Checking…");
+          try {
+            const r = await fetch("/api/version");
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const j = await r.json();
+            if (j.updateAvailable) {
+              setUpdateMsg("Version " + j.latest
+                + " is available. The blue banner at the top of every page "
+                + "has the Update button.");
+            } else {
+              setUpdateMsg("You're on the latest version (" + j.current + ").");
+            }
+          } catch (_e) {
+            setUpdateMsg("Could not reach the update service. "
+              + "Visit GitHub to see the latest release.");
+          } finally {
+            setChecking(false);
+          }
         };
         return (
           <div className="space-y-4 max-w-xl">
@@ -113,8 +134,9 @@
                   View source on GitHub
                 </a>
               </div>
-              <SettingsButton kind="secondary" onClick={checkUpdate}>
-                Check for updates
+              <SettingsButton kind="secondary" onClick={checkUpdate}
+                              disabled={checking}>
+                {checking ? "Checking…" : "Check for updates"}
               </SettingsButton>
               {updateMsg ? (
                 <p className="text-xs text-neutral-500">{updateMsg}</p>

@@ -1,0 +1,85 @@
+# Verifies that the suite version is consistent across the three places
+# it's referenced:
+#
+#   1. stream-overlay-backend/package.json     "version" field (canonical)
+#   2. SC2Replay-Analyzer/__init__.py          __version__ (reads #1 at runtime)
+#   3. public/analyzer/components/settings-foundation.jsx
+#                                              SETTINGS_VERSION literal
+#                                              (offline fallback for the SPA)
+#
+# A drift here means the Settings → About page lies, or the auto-updater
+# compares the wrong version against the GitHub release tag, so we hard-
+# fail PRs the moment the three values diverge.
+
+name: version-check
+
+on:
+  pull_request:
+    paths:
+      - 'reveal-sc2-opponent-main/stream-overlay-backend/package.json'
+      - 'SC2Replay-Analyzer/__init__.py'
+      - 'reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/components/settings-foundation.jsx'
+      - '.github/workflows/version-check.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: version-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Versions agree
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compare version strings
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json, re, sys
+          from pathlib import Path
+
+          pkg_path  = Path('reveal-sc2-opponent-main/stream-overlay-backend/package.json')
+          init_path = Path('SC2Replay-Analyzer/__init__.py')
+          jsx_path  = Path('reveal-sc2-opponent-main/stream-overlay-backend'
+                           '/public/analyzer/components/settings-foundation.jsx')
+
+          pkg_version = json.loads(pkg_path.read_text(encoding='utf-8'))['version']
+
+          # __init__.py reads package.json at import time, so we exec it.
+          ns = {'__file__': str(init_path)}
+          exec(init_path.read_text(encoding='utf-8'), ns)
+          py_version = ns.get('__version__', 'MISSING')
+
+          jsx_text = jsx_path.read_text(encoding='utf-8')
+          m = re.search(r'SETTINGS_VERSION\s*=\s*"([^"]+)"', jsx_text)
+          jsx_version = m.group(1) if m else 'MISSING'
+
+          print(f'package.json     : {pkg_version}')
+          print(f'__init__.py      : {py_version}')
+          print(f'SETTINGS_VERSION : {jsx_version}')
+
+          versions = {pkg_version, py_version, jsx_version}
+          if len(versions) != 1:
+              sys.exit(f'ERROR: version drift -- {sorted(versions)}')
+          if pkg_version == '0.0.0+unknown':
+              sys.exit('ERROR: __version__ fell back to UNKNOWN sentinel '
+                       '(package.json could not be read)')
+          print('OK -- all three sources agree on', pkg_version)
+          PY

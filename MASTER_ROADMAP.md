@@ -196,1452 +196,10 @@ section directly below this preamble in MASTER_ROADMAP.md.
 
 ---
 
-## Stage 2 — Configuration and onboarding
-
-
-### Stage 2.2 — First-run wizard (React SPA)
-
-```
-Read [Master Architecture Preamble]. 
-
-GOAL: A 6-step first-run wizard inside the React SPA at
-reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html.
-Triggered when GET /api/profile/exists returns { exists: false }; otherwise
-the app loads normally. Non-technical user must complete it without
-documentation.
-
-UX FLOW:
-
-Step 1 — Welcome
-  - Heading: "Welcome to your SC2 stats lab."
-  - 3 bullet points (what it does)
-  - "Get started" button
-
-Step 2 — Replay folder
-  - Auto-detect candidate folders by scanning typical locations:
-      %USERPROFILE%\Documents\StarCraft II\Accounts\*\*\Replays\Multiplayer
-      %USERPROFILE%\OneDrive\Pictures\Documents\StarCraft II\... (current layout)
-      C:\StarCraft II\Replays
-  - Backend helper: NEW endpoint POST /api/onboarding/scan-replay-folders
-    spawns SC2Replay-Analyzer/scripts/recon_sc2_install.py and returns
-    its findings. Implement the endpoint if not present.
-  - Show found folders with replay counts. User clicks one OR pastes a custom
-    path. Folder picker via webkitdirectory <input> for native UX.
-  - Validate: folder must exist AND contain at least one .SC2Replay file.
-
-Step 3 — Player identity
-  - Backend helper: NEW endpoint POST /api/onboarding/scan-identities
-    body: { folder, sample_size: 100 }
-    Spawns SC2Replay-Analyzer/scripts/identity_cli.py (you'll create this)
-    that walks N replays and returns a frequency-sorted list of distinct
-    human player names plus their character_ids.
-  - Show table: Name | Character ID | Games seen | "This is me" radio.
-    Default-select the most frequent.
-
-Step 4 — Race preference
-  - Four radio buttons: Protoss / Terran / Zerg / Random.
-  - For Random, show a hint: "We'll track all three race-played stats and
-    show your Random performance per race."
-
-Step 5 — Optional integrations
-  - Three collapsible cards: Twitch, OBS, SC2Pulse. Each has its own form
-    fields and a "Test connection" button that round-trips against the real
-    service:
-      Twitch:   POST /api/onboarding/test/twitch  { channel, oauth_token }
-      OBS:      POST /api/onboarding/test/obs     { host, port, password }
-      SC2Pulse: POST /api/onboarding/test/pulse   { character_id }
-    Each test endpoint actually attempts the connection (use the existing
-    twitch helpers in stream-overlay-backend/index.js, obs-websocket-js for
-    OBS, and the existing pulse fetch in scanner / analyzer.js for Pulse).
-  - "Skip all" button for users who don't stream.
-
-Step 6 — Apply
-  - Show summary of what's about to be saved.
-  - "Apply & start" button:
-      PUT /api/profile, PUT /api/config (atomic; if either fails, show error)
-      POST /api/onboarding/start-initial-backfill (kicks off macro backfill
-        + initial replay scan in the background; reuses existing
-        /macro/backfill/start endpoint).
-  - On success, navigate to the main app.
-
-FILES TO MODIFY:
-- reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html
-  (add a <Wizard> component, conditionally render at the very top of <App>)
-- reveal-sc2-opponent-main/stream-overlay-backend/index.js (mount the new
-  /api/onboarding/* router)
-
-FILES TO CREATE:
-- reveal-sc2-opponent-main/stream-overlay-backend/routes/onboarding.js
-- SC2Replay-Analyzer/scripts/identity_cli.py
-- (Optional) reveal-sc2-opponent-main/stream-overlay-backend/__tests__/onboarding.test.js
-
-STYLING:
-- Use the design tokens from Stage 1 (var(--color-...)) — no hard-coded hex.
-- Modal-style centered card for the wizard (max-width 720px), translucent
-  backdrop, can't dismiss until step 6 succeeds OR user clicks "Skip wizard
-  (advanced)" at the bottom.
-- Sticky progress strip showing 1-2-3-4-5-6 with the active one highlighted.
-
-ACCESSIBILITY:
-- All form inputs have <label htmlFor>.
-- Tab order matches visual order.
-- Errors announced via aria-live="polite".
-- "Test connection" buttons disable while testing and show a spinner.
-
-VERIFY:
-1. Delete data/profile.json and data/config.json (back them up first).
-2. Reload the SPA — wizard appears, walks through all 6 steps with real data
-   from your replay folder.
-3. After step 6, files exist on disk and contain real values (not placeholders).
-4. Reload SPA — wizard does NOT appear; main app loads.
-5. Restore the user's actual profile.json/config.json after testing.
-
-NO MOCKS. The folder-scan and identity-scan endpoints actually run the
-Python helpers. The "Test connection" buttons actually hit Twitch/OBS/Pulse.
-If a service is unreachable, the test fails honestly.
-```
-
-### Stage 2.3 — Settings page (post-onboarding)
-
-```
-Read [Master Architecture Preamble]. Stages 2.1 and 2.2 must be complete.
-
-GOAL: A persistent /settings route in the React SPA that lets the user edit
-every value in profile.json and config.json. Same fields as the wizard but
-laid out as a tabbed page; users return here whenever they want.
-
-FILES TO MODIFY:
-- reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html
-  Add: <SettingsPage>, plumbed into the existing tab/route system. Add a
-  "Settings" item to the top nav (the same nav that has Overview, Builds,
-  Opponents, etc.).
-
-LAYOUT (tabs along the left, content right):
-- Profile             (battle tag, character id, race preference, mmr target)
-- Replay folders      (list with add/remove, "test" button per folder)
-- Macro engine        (enabled disciplines, min game length, engine version readonly)
-- Build classifier    (active build definitions checkbox list, custom builds toggle,
-                       community shared builds toggle — Stage 7)
-- Stream overlay      (Twitch / OBS sub-cards with the same test buttons as wizard)
-- Backups             (read-only list of *.backup-* files in data/, restore button)
-- Diagnostics         (link to /diagnostics — Stage 4)
-- Privacy             (telemetry opt-in toggle, retention policy, cloud opt-in (Stage 14))
-- About               (version, link to GitHub, "check for updates" button)
-
-EACH FIELD:
-- Inline-editable with dirty-state tracking
-- Save bar at the top (sticky) shows "X unsaved changes — Save | Discard"
-- Save calls PATCH /api/profile or PATCH /api/config (whichever applies)
-- Validation errors render inline next to the field
-- All form controls accessible via keyboard
-
-INTERACTIONS:
-- Replay folders → "Test" button: POST /api/onboarding/scan-replay-folders
-  with { single_path: "<the path>" } returns replay count. Show "✓ 1842 replays
-  found" or "✗ no replays detected".
-- Replay folders → "Remove": confirm dialog with replay count.
-- Build classifier → "Active builds" checkbox list reads
-  data/build_definitions.json AND data/custom_builds.json AND
-  (after Stage 7) data/community_builds.cache.json, lets user toggle.
-  Saves the IDs into config.build_classifier.active_definition_ids.
-- Backups → "Restore" button: confirm dialog → POST /api/backups/restore
-  with { snapshot } (you'll need to add this endpoint; it copies the snapshot
-  back over the live file).
-
-FILES TO CREATE:
-- reveal-sc2-opponent-main/stream-overlay-backend/routes/backups.js
-  endpoints:
-    GET  /api/backups            → list of *.backup-* and *.broken-* files in data/
-    POST /api/backups/create     → snapshot meta_database.json with timestamp
-    POST /api/backups/restore    → body { snapshot } restores it (creates a
-                                   new pre-restore backup first, then renames)
-    DELETE /api/backups/:name    → delete a snapshot
-
-VERIFY:
-1. Open /settings, navigate every tab. No console errors.
-2. Change race_preference, save, refresh. Persisted on disk.
-3. Click "Test" on the replay folder. Real count shows up.
-4. Add a fake folder, save. Reload. The fake folder is in config.json.
-   Remove it. Save. It's gone.
-5. Backups tab shows the existing pre-chrono-fix-* file (and any others).
-   "Restore" creates a new pre-restore-* snapshot before restoring,
-   then swaps.
-
-NO MOCKS — every test button hits real services. Backup restore actually
-swaps real files (with a safety snapshot first).
-
-(AI BROKE THIS UP INTO 2.3 and 2.4)
-
-# Stage 2.4 — SettingsPage UI (paste this prompt in a fresh session)
-
-## Pre-flight
-
-Before doing anything else, confirm the working tree is clean and the Stage 2.3
-backend is in place:
-
-```bash
-cd C:\SC2TOOLS
-git log --oneline -3
-# Top of log should include:
-#   feat(stage-2.3): backups router for snapshot/restore lifecycle
-#   feat(stage-2.2): first-run wizard, onboarding API, identity CLI
-#   feat(stage-2.1): profile/config schemas + ajv-validated settings router
-git status
-# Should be clean (or only the long-standing CRLF-noise modifications
-# on files unrelated to Stage 2.4).
-```
-
-Confirm the four backups endpoints respond:
-
-```bash
-cd C:\SC2TOOLS\reveal-sc2-opponent-main\stream-overlay-backend
-node -e "fetch('http://127.0.0.1:3000/api/backups').then(r=>r.json()).then(b=>console.log(b.backups.length+' snapshots'))"
-```
-
-## Goal
-
-Persistent `/settings` route in the React SPA at
-`reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html`,
-laid out as a tabbed page. Same fields as the Stage 2.2 wizard but the user
-can return whenever they want. Wires up to the routers committed in Stage 2.1
-(`/api/profile`, `/api/config`), Stage 2.2 (`/api/onboarding/*`), and Stage
-2.3 (`/api/backups/*`).
-
-## File to modify
-
-- `reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html`
-
-This file is **8,820+ lines**. The roadmap preamble's "no-edit zone" rule
-forbids the Edit tool's old_string/new_string mode for files > 1000 lines.
-Use bash + python3 with read → modify → atomic-rename. Verify with
-`tail`, `wc -l`, and an HTML closing-token grep after every write.
-Confirm `git diff` only shows the inserted hunks before staging.
-
-## Layout (tabs along the left, content right)
-
-| Tab | Source | Maps to                                                          |
-|-----|--------|-------------------------------------------------------------------|
-| Profile           | `/api/profile`            | battle_tag, character_id, race preference, mmr_target |
-| Replay folders    | `/api/config` paths       | list with add/remove + per-row Test button            |
-| Macro engine      | `/api/config` macro_engine| enabled disciplines, min game length, engine_version (readonly) |
-| Build classifier  | `/api/config` build_classifier | active builds checkbox list (built-ins + custom only — Stage 7 community deferred), use_custom_builds toggle |
-| Stream overlay    | `/api/config` stream_overlay | Twitch/OBS sub-cards reusing the wizard's test buttons |
-| Backups           | `/api/backups`            | read-only list with create/restore/delete actions     |
-| Diagnostics       | (link to /diagnostics)    | placeholder; real page in Stage 4                     |
-| Privacy           | `/api/config` telemetry   | telemetry opt-in toggle, retention policy, cloud opt-in (Stage 14) |
-| About             | `/api/config` ui          | version, GitHub link, "check for updates" button      |
-
-## Field interactions
-
-Every field is **inline-editable with dirty-state tracking**:
-
-- Sticky save bar at the top: "X unsaved changes — Save | Discard"
-- Save calls `PATCH /api/profile` or `PATCH /api/config` (whichever the field belongs to)
-- Validation errors render inline next to the field
-- All form controls accessible via keyboard (focus-visible ring, aria-label on icon buttons)
-- Respect `prefers-reduced-motion` for transitions
-
-## Behavioral specifics
-
-- **Replay folders → Test button**: `POST /api/onboarding/scan-replay-folders`
-  with `{ single_path: "<path>" }`. Renders "✓ 1842 replays found" or
-  "✗ no replays detected". No mocks.
-
-- **Replay folders → Remove button**: confirm dialog with replay count.
-
-- **Build classifier → Active builds**: read from
-  `data/build_definitions.json` AND `data/custom_builds.json` (NOT
-  `data/community_builds.cache.json` — that's Stage 7 territory; render a
-  disabled "Community builds (Stage 7)" section with a tooltip). Saves
-  IDs to `config.build_classifier.active_definition_ids`.
-
-- **Backups tab**:
-  - On mount: `GET /api/backups` and render the table with name, base,
-    kind (chip color: `pre`=amber, `broken`=red, `backup`=blue,
-    `bak`=gray), size (humanized), modified date.
-  - "Create snapshot" button → `POST /api/backups/create`
-    body `{ base: "meta_database.json" }`, then refresh the list.
-  - Per-row "Restore" → confirm dialog → `POST /api/backups/restore`
-    body `{ snapshot: <name> }`. Show the response's `pre_restore_snapshot`
-    inline as "Safety snapshot: <name>".
-  - Per-row "Delete" → confirm dialog → `DELETE /api/backups/:name`,
-    then refresh.
-  - Refuse to render the Restore / Delete buttons if the row's
-    `kind === 'pre'` AND label starts with `restore-` (don't let the
-    user delete the safety snapshot they just created — at least not
-    until they've dismissed an "Are you sure?" with extra wording).
-
-## Not in scope (Stage 2.4)
-
-- Diagnostics tab body — Stage 4 owns that
-- Cloud sync opt-in — Stage 14
-- Community builds checkboxes — Stage 7
-- Schema migrations of profile/config — Stage 14
-
-## Definition of done
-
-- [ ] `/settings` reachable from the top nav alongside Overview / Builds / Opponents.
-- [ ] Every field round-trips: edit → Save → reload page → value persists.
-- [ ] Replay-folder Test button shows real count for the user's default replay folder.
-- [ ] Backups tab shows all 7+ existing snapshots from the install.
-- [ ] Create / Restore / Delete buttons work end-to-end on a freshly created
-      throw-away snapshot of `profile.json` (don't restore over the user's
-      live `meta_database.json` during the smoke test).
-- [ ] No console errors. Lighthouse a11y >= 90.
-- [ ] `git diff --stat` shows changes ONLY to `public/analyzer/index.html`.
-- [ ] PR template filled in (what / why / how-tested / screenshots).
-
-## Hand-off
-
-Stage 2.3 backend committed at `7ef14a1`. Stage 2.4 is the UI half.
-
-
-```
-
-### Stage 2 acceptance criteria
-
-- [ ] Fresh user with no `profile.json` sees the wizard automatically.
-- [ ] Wizard's 6 steps complete with real folder/identity scans.
-- [ ] `/settings` lets the user edit every field after the wizard finishes.
-- [ ] Replay-folder "Test" returns a real replay count.
-- [ ] Backup tab snapshots and restores real `data/meta_database.json`.
-
----
-
-## Stage 3 — Architecture cleanup
-
-**Why now:** before adding any more UI, retire the slow Tkinter app. The browser-based analyzer is faster, prettier, and easier to extend.
-
-**Duration:** 1-2 days.
-
-### Stage 3.1 — Replace `SC2ReplayAnalyzer.py` with a tiny launcher
-
-```
-Read [Master Architecture Preamble]. Stages 0-2 must be complete.
-
-GOAL: Stop maintaining the slow Tkinter desktop app. Replace it with a small
-launcher script that starts the Express backend and opens the React SPA in
-the user's default browser. The desktop user gets the same UX as before but
-faster, prettier, and with more features.
-
-FILES TO MODIFY:
-- SC2Replay-Analyzer/SC2ReplayAnalyzer.py (replace contents)
-- reveal-sc2-opponent-main/Reveal-Sc2Opponent.ps1 (audit; may already do this)
-- reveal-sc2-opponent-main/START_SC2_TOOLS.bat (audit)
-
-FILES TO ARCHIVE (don't delete; rename):
-- SC2Replay-Analyzer/ui/app.py            → SC2Replay-Analyzer/ui/app.py.deprecated
-- SC2Replay-Analyzer/ui/visualizer.py     → ...similarly
-- (anything else under SC2Replay-Analyzer/ui/ that's GUI-specific)
-
-NEW SC2ReplayAnalyzer.py:
-import os, subprocess, sys, time, webbrowser, atexit, signal
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parent.parent
-BACKEND = ROOT / "reveal-sc2-opponent-main" / "stream-overlay-backend"
-PORT = int(os.environ.get("SC2_TOOLS_PORT", "3000"))
-
-def main():
-    if not BACKEND.exists():
-        print(f"FATAL: stream-overlay-backend not found at {BACKEND}",
-              file=sys.stderr)
-        sys.exit(1)
-
-    npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
-    proc = subprocess.Popen(
-        [npm_cmd, "start"],
-        cwd=str(BACKEND),
-        env={**os.environ, "PORT": str(PORT)},
-        creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0),
-    )
-
-    def shutdown(*_):
-        try:
-            if os.name == "nt":
-                proc.send_signal(signal.CTRL_BREAK_EVENT)
-            else:
-                proc.terminate()
-            proc.wait(timeout=5)
-        except Exception:
-            proc.kill()
-    atexit.register(shutdown)
-
-    import urllib.request, urllib.error
-    url = f"http://127.0.0.1:{PORT}/api/health"
-    for _ in range(30):
-        try:
-            urllib.request.urlopen(url, timeout=1).read()
-            break
-        except (urllib.error.URLError, ConnectionRefusedError):
-            time.sleep(1)
-    else:
-        print(f"FATAL: backend did not become ready at {url}",
-              file=sys.stderr)
-        sys.exit(2)
-
-    webbrowser.open_new_tab(f"http://127.0.0.1:{PORT}/analyzer/")
-    proc.wait()
-
-if __name__ == "__main__":
-    main()
-
-ALSO ADD:
-- A /api/health endpoint in reveal-sc2-opponent-main/stream-overlay-backend/index.js
-  that returns 200 { ok: true, version, uptime_sec }. Use this for the
-  readiness poll above and for the /diagnostics page (Stage 4).
-
-UPDATE THE BAT:
-START_SC2_TOOLS.bat should call the new SC2ReplayAnalyzer.py via `py`.
-
-VERIFY:
-1. python SC2ReplayAnalyzer.py
-2. Backend starts; /api/health responds 200.
-3. Default browser opens to http://127.0.0.1:3000/analyzer/.
-4. Closing the terminal kills the backend.
-5. On Windows, double-clicking START_SC2_TOOLS.bat does the same thing.
-6. The Tkinter app no longer launches (and doesn't need to — it's now archived).
-
-REPORT BACK: paths archived, new launcher line count, /api/health response
-shape.
-
-No mock data. Real readiness poll, real browser launch.
-```
-
-### Stage 3 acceptance criteria
-
-- [ ] Double-click `START_SC2_TOOLS.bat` → backend boots, browser opens, analyzer SPA loads.
-- [ ] Closing the terminal kills the backend cleanly.
-- [ ] Tkinter modules archived as `.deprecated`, no longer imported.
-- [ ] `/api/health` returns 200 with version + uptime.
-
----
-
-## Stage 4 — Diagnostics and reliability
-
-**Why now:** before adding 30+ feature prompts, the user (and you) need a glance-level health check. Any later issue diagnoses itself.
-
-**Duration:** 2 days.
-
-### Stage 4.1 — `/diagnostics` page
-
-```
-Read [Master Architecture Preamble]. Stages 0-3 must be complete.
-
-GOAL: A health dashboard that lets a non-technical user (and you) tell at a
-glance whether the suite is set up correctly.
-
-FILES TO CREATE:
-- reveal-sc2-opponent-main/stream-overlay-backend/routes/diagnostics.js
-- A <DiagnosticsPage> component in the SPA index.html.
-
-CHECKS (each renders one card with status, message, and an actionable fix link):
-
-1. Python interpreter: `py --version` runs, returns >= 3.10. OK / WARN / ERR.
-   Fix link: install Python.
-2. sc2reader: `python -c "import sc2reader; print(sc2reader.__version__)"`.
-   Note datapack max LotV build (read os.listdir of sc2reader/data/LotV/
-   and find the highest NNNNN_abilities.csv). If max < 89720, WARN.
-3. Replay folder: each entry in config.replay_folders — exists? readable?
-   has N replays? newest replay age (last_modified).
-4. meta_database.json: present, valid JSON, size, count of build keys,
-   count of total games, last write time.
-5. profile.json + config.json: present and validate against the schemas.
-6. Battle.net character_id: resolve via /api/pulse/character/<id> (existing
-   endpoint? add if missing) — returns 200 with a real character record.
-7. Twitch (if enabled): GET https://api.twitch.tv/helix/users?login=<channel>
-   with the configured token. 200 = OK, 401 = bad token, 403/404 = bad channel.
-8. OBS (if enabled): try to connect to the configured WebSocket URL with the
-   password. Quick handshake test.
-9. Disk space: free bytes on the data drive. WARN below 1 GB.
-10. Recent errors: tail of data/replay_errors.log + data/analyzer.log,
-    showing the last 5 ERROR-level lines.
-11. Macro engine version: read from config.json, compare to the value
-    embedded in analytics/macro_score.py (a constant). If they differ,
-    suggest a re-backfill.
-12. (After Stage 7) Community-builds API reachable: GET /v1/community-builds/health.
-13. (After Stage 14) Cloud opt-in queue depth: number of unflushed observations.
-
-EACH CHECK has:
-- title
-- status: 'ok' | 'warn' | 'err'
-- summary (one line)
-- detail (optional, expandable)
-- fix_action (optional): { label, kind: 'link'|'cmd'|'modal', target }
-
-ENDPOINT:
-- GET /api/diagnostics → 200 { checks: [<above>], generated_at }
-- The endpoint runs the checks IN PARALLEL (Promise.all) so the page doesn't
-  take 10 seconds.
-- Caches for 30 seconds; "Refresh" button bypasses cache.
-
-UI:
-- Grid of status cards (3 columns on desktop, 1 on mobile).
-- Each card has a status dot (green/yellow/red), title, one-line summary,
-  expandable details, and a fix button if applicable.
-- "Re-run all checks" button at the top.
-- "Copy diagnostic bundle" button — generates a zip with profile.json
-  (redacted), config.json (redacted), recent log tails, sc2reader version,
-  Python version. For support tickets / GH issues.
-
-VERIFY:
-1. Open /diagnostics on a clean install → most checks fail with clear
-   messages.
-2. Run the wizard, then re-open /diagnostics → most checks turn green.
-3. Break something on purpose (rename a replay folder) — that one card
-   turns red with the right error.
-4. The "Copy diagnostic bundle" actually produces a .zip with the right
-   contents.
-
-REAL DATA: every check actually runs. The "Twitch" check actually hits
-Twitch's API. Don't mock any of them.
-```
-
-### Stage 4 acceptance criteria
-
-- [ ] `/diagnostics` shows all 11+ checks, color-coded.
-- [ ] Breaking a real config field flips the relevant card to red.
-- [ ] "Copy diagnostic bundle" produces a real zip with redacted secrets.
-
----
-
-## Stage 5 — Quick-win analyzer charts
-
-**Why now:** the analyzer SPA is the user's daily driver. Four chart upgrades, each one day, transform every replay drawer into something dense with insight. They share the same data path (the macro breakdown endpoint) so they can ship in two PRs.
-
-**Duration:** 1 day each, ~4 days total.
-
-### Stage 5.1 — Active Army & Workers chart on the macro breakdown panel
-
-```
-Read [Master Architecture Preamble]. Stages 0-2 must be complete.
-
-Add an "Active Army & Workers" chart to the existing MacroBreakdownPanel
-React component in
-reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html.
-
-Source data: GET /games/:id/build-order already returns macro_breakdown.raw
-with stats_events under the hood — extend the backend to also pass through
-the full stats_events array (time, food_workers, food_used,
-minerals_collection_rate, vespene_collection_rate). The Python side is in
-SC2Replay-Analyzer/core/event_extractor.py extract_macro_events; pass
-stats_events through compute_macro_score in analytics/macro_score.py so it
-survives into the breakdown dict, then expose it in scripts/macro_cli.py
-and read it in stream-overlay-backend/analyzer.js at the
-/games/:id/macro-breakdown endpoint.
-
-Chart: SVG line chart, two y-axes (left = army supply value via food_used*8;
-right = food_workers count), x-axis = game seconds. Shade vertical bands
-during supply-blocked periods (compute from food_used >= food_made - 1).
-Use design tokens (Stage 1) — bg-base-800, ring-soft, text-neutral-200;
-race-accent for army, info color for workers, warning at 30% opacity for
-supply-block bands.
-
-No mock data — if stats_events is empty (older replay), render the panel
-with "Resource samples unavailable for this replay" instead of fake numbers.
-
-Test: open a recent replay, click the macro score, expand the panel —
-chart should appear above the discipline-metrics grid.
-```
-
-### Stage 5.2 — Full abilities-used table per player
-
-```
-Read [Master Architecture Preamble]. Stages 0-2 must be complete.
-
-Add a per-player "Abilities Used" tab to the GamesTableWithBuildOrder drawer
-in the React SPA at
-reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html.
-The drawer already has 'build' and 'macro' modes — add an 'abilities' mode.
-
-Backend: extend SC2Replay-Analyzer/core/event_extractor.py extract_macro_events
-to optionally return ALL ability_link → count tuples for each player (not
-just the macro buckets), with chained CommandManagerStateEvent counting
-like the existing chrono fix uses. Add a new /games/:id/abilities-used
-endpoint in reveal-sc2-opponent-main/stream-overlay-backend/analyzer.js that
-re-parses on demand and returns {me: [{name, count}], opp: [{name, count}]}
-sorted by count.
-
-Use sc2reader's bundled datapack for ability NAMES (replay.datapack.abilities),
-falling back to "AbilityLink_<id>" for unknowns. Group rare abilities
-(count ≤ 2) under "Other" with a tooltip listing them.
-
-UI: two-column table (Name | Count), striped rows, hover highlight,
-scrollable to ~400px. Match the existing macro-panel styling using Stage 1
-design tokens.
-
-Real data only. If sc2reader fails to parse the replay, return 500 with the
-error and let the panel show "Could not parse replay: <error>". Don't paper
-over failures.
-```
-
-### Stage 5.3 — APM/SPM curves over time (not just totals)
-
-```
-Read [Master Architecture Preamble]. Stages 0-2 must be complete.
-
-Add an "Activity over time" chart to the same /games/:id/build-order drawer
-in the analyzer SPA (same file as Stage 5.1).
-
-Compute server-side in SC2Replay-Analyzer: walk replay.events, count
-CommandEvent + SelectionEvent + ControlGroupEvent timestamps per second
-per player, then compute a 30-second sliding-window APM and SPM. Add this
-as a /games/:id/apm-curve endpoint in stream-overlay-backend/analyzer.js,
-following the existing macro-cli spawn pattern. Add SC2Replay-Analyzer/
-scripts/apm_cli.py.
-
-Chart: two stacked area charts (APM and SPM, one above the other), x-axis
-= game seconds. Color = race (Protoss=accent-amber, Zerg=accent-purple,
-Terran=accent-blue from Stage 1 design tokens). Show both players overlaid
-with 0.5 opacity. Match dark-theme.
-
-Real data only — if the replay has no command events (corrupt), show
-"Activity data unavailable" instead of empty axes.
-```
-
-### Stage 5.4 — Resource collection / unspent / spending efficiency over time
-
-```
-Read [Master Architecture Preamble]. Stages 0-2 must be complete.
-
-Add a "Resources over time" chart, sibling to the macro breakdown panel,
-in public/analyzer/index.html. Three lines per player on one chart:
- - Income rate (minerals + vespene per minute)
- - Unspent (current minerals + vespene)
- - Used in progress (mineralsUsedInProgress fields summed)
-
-Source: stats_events already returned by extract_macro_events (per existing
-fix). Plumb it through from compute_macro_score → macro_cli.py →
-/games/:id/build-order.
-
-Chart styling: 3 lines per player on a shared time axis, dotted = me, solid
-= opp. X-axis time labels at 1-min intervals. Y-axis on the right shows the
-"good band" (income rate target = 60-80 minerals per worker per minute).
-Use design tokens.
-
-If stats_events is empty (older format), show a placeholder explaining the
-replay is too old to have resource samples; do NOT synthesize values.
-```
-
-### Stage 5 acceptance criteria
-
-- [ ] Open any recent replay → all four charts render with real data.
-- [ ] Older replays without stats_events show clear "data unavailable" messages.
-- [ ] No new hard-coded color hex codes — every chart uses design tokens.
-
----
-
-## Stage 6 — Race-aware macro intelligence
-
-**Why now:** with the foundational charts in place, race-specific deep-dives become the next layer. Also makes the macro panel correct for non-Protoss replays (which it isn't currently).
-
-**Duration:** 3-4 days each.
-
-### Stage 6.1 — Race-aware MacroBreakdownPanel in the SPA
-
-```
-Read [Master Architecture Preamble]. Stages 0-5 must be complete.
-
-GOAL: The macro breakdown panel currently labels everything as if the user
-is Protoss. Make it switch dynamically on race:
-- Zerg: shows "Inject Efficiency" + (optional) Missed Injects timeline (6.2)
-- Terran: shows "MULE Efficiency" + (optional) MULE drops timeline (6.4)
-- Protoss: shows "Chrono Efficiency" (current) + Chrono allocation (6.3)
-- Random: render Inject + MULE + Chrono sections, but only show the section
-  whose data is non-zero (i.e., the race that game actually used)
-
-FILES TO MODIFY:
-- reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html
-  Look for: function MacroBreakdownPanel({ gameId, initialMacro })
-  And the racePenaltyLabel logic around line 2215.
-
-CHANGES:
-1. Read race from breakdown.race (already populated by the backend).
-2. Replace the single "racePenaltyLabel" with a per-race panel section.
-   When the user is Random, decide which race-specific panel to render based
-   on which discipline_metrics field is non-null:
-     raw.injects_actual !== null  → Zerg section
-     raw.mules_actual !== null    → Terran section
-     raw.chronos_actual !== null  → Protoss section
-3. The "What you did well" / "Where you lost economy" sections need their
-   matching messages — Zerg gets "Inject cadence", Terran gets "MULE drops",
-   Protoss gets "Chrono usage". The strings already exist in the file —
-   make sure they're picked correctly per race.
-4. The discipline metrics block should NEVER show all three when only one
-   applies. Right now it might because the conditions are loose.
-5. Visual: each race section gets a small race icon next to its heading,
-   pulled from the existing icon registry.
-
-ALSO: The leaks panel ("Where you lost economy") shows a hardcoded
-race-mechanic leak per game. Make sure when a Random user has a Zerg game
-and a Protoss game side-by-side in their table, each shows the correct
-discipline.
-
-VERIFY:
-1. Find a Zerg game in the meta DB. The user is currently Protoss-only,
-   so test by temporarily changing profile.race_preference to "Random"
-   via PATCH.
-2. Open the macro breakdown for a Protoss game — chrono section, "Chrono
-   usage matched nexus uptime" message.
-3. Take a pro replay (TY vs Maru) where the user-perspective is Terran,
-   and manually run macro_cli compute on it to verify the JSON shape your
-   panel expects to receive.
-
-REAL DATA ONLY: the panel renders whatever the breakdown JSON says. No
-fake "switch to Zerg view" toggle that synthesizes data.
-```
-
-### Stage 6.2 — Missed-injects timeline per Hatchery (Zerg)
-
-```
-Read [Master Architecture Preamble]. Stage 6.1 must be complete.
-
-Build a "Missed Injects" chart for Zerg replays in the analyzer SPA's
-MacroBreakdownPanel (public/analyzer/index.html), only rendered when
-race === 'Zerg'.
-
-Backend computation in SC2Replay-Analyzer: for each Hatchery/Lair/Hive
-lifetime (we already track these as 'bases' in extract_macro_events),
-build a timeline of expected inject windows (every 29s while the building
-is alive) and mark each as hit (an inject CommandEvent for that target
-unit_id within ±3s of the expected window) or missed.
-
-Surface as macro_breakdown.raw.inject_timeline = [
-  {hatch_id, hatch_label: "Hatch 1"|"Hatch 2"|...,
-   expected: [t0, t1, ...], hit: [t0, t1, ...], missed: [t0, ...]}
-].
-
-UI: horizontal scatter plot, one row per hatchery, x = time, dot per inject
-window. Green dot = hit, red dot = missed, gray = before-spawn / after-death.
-Show the overall efficiency % above the chart (already have it as
-raw.injects_actual / raw.injects_expected). Use design tokens.
-
-Use the actual hatch unit_id from sc2reader to attribute injects to the
-right hatch (not just "first inject = first hatch"). The macro engine
-already has the data — extend it, don't recompute.
-
-No mock data. If a replay has no inject CommandEvents, render the chart
-empty with "No injects detected" — do not interpolate.
-```
-
-### Stage 6.3 — Chrono allocation by target building (Protoss)
-
-```
-Read [Master Architecture Preamble]. Stage 6.1 must be complete.
-
-Add a "Chrono allocation" donut + table to the MacroBreakdownPanel for
-Protoss replays only.
-
-Backend: extend extract_macro_events in
-SC2Replay-Analyzer/core/event_extractor.py so each chrono ability_event
-records its target building name (resolved from the target_unit_id via
-sc2reader's unit lookup). Plumb through to
-macro_breakdown.raw.chrono_targets = [{building_name, count}, ...].
-
-The chain-counting logic must apply: when a chrono is chained via
-CommandManagerStateEvent, the target stays the same as the head SCmdEvent.
-Track that with a "last_chrono_target_per_pid" map, exactly parallel to the
-existing last_bucket_per_pid map.
-
-UI: SVG donut with the top 5 targets colored by SC2 race-tech-tier
-conventions (probe=blue, gateway=green, robotics=purple, etc. — pick from
-a tokenized palette), table next to it with %share and absolute counts.
-Place this between the "How calculated" panel and the "What you did well" /
-"Where you lost economy" panels.
-
-Real targets only. If a chrono target is unknown (sc2reader couldn't
-resolve the unit), bucket it as "Unknown" — do not invent.
-```
-
-### Stage 6.4 — MULE drop timeline (Terran)
-
-```
-Read [Master Architecture Preamble]. Stage 6.1 must be complete.
-
-Build a "MULE drops" chart for Terran replays in the analyzer SPA. Same
-shape as the Missed Injects chart in Stage 6.2: horizontal timeline, one
-row per OrbitalCommand/PlanetaryFortress, dot per MULE drop.
-
-Backend: in extract_macro_events, track per-OC MULE casts (CalldownMULE,
-link 92). Compute a "wasted energy" timeline per OC: for each 64s window
-after OC creation, mark it green if a MULE was dropped, red if no drop
-occurred AND the OC had ≥50 energy at the start of the window. Compute
-energy by integrating regen since last cast (energy_max=200,
-energy_per_sec=0.7875 = 200/254s typical).
-
-Surface as macro_breakdown.raw.mule_timeline = [
-  {oc_id, oc_label, drops: [t0, ...], wasted_windows: [t0, ...]}
-].
-
-UI: same scatter pattern as Stage 6.2 but with the wasted-window red dots.
-Show total wasted energy seconds above the chart (sum of wasted_windows ×
-80, since 80 seconds is what a MULE costs in regen).
-
-Don't mock energy state — if OC tracking fails for a replay, render "MULE
-data unavailable" rather than synthesizing drop times.
-```
-
-### Stage 6.5 — Spending efficiency curve with "leak" annotations
-
-```
-Read [Master Architecture Preamble]. Stage 6.1 must be complete.
-
-Add a "Spending efficiency over time" chart to the macro breakdown panel.
-
-Compute: for each stats_event sample, compute the instantaneous SQ (same
-formula as analytics/macro_score.py _compute_sq, but per-sample instead
-of game-average). Smooth over a 30-second window. Plumb through
-extract_macro_events as stats_events[i].instantaneous_sq.
-
-Detect leak windows: any 30-second stretch where instantaneous_sq drops
-below 50 AND avg_unspent > 600. Output annotations =
-[{start, end, avg_unspent, avg_income}] in macro_breakdown.raw.
-
-UI: SVG line chart of SQ over time with "leak" red bars overlaid on the
-detected windows; clicking a leak band scrolls the build-order timeline
-to that timestamp and highlights the contemporaneous events. Tie this in
-with the existing BuildOrderTimeline component. Use design tokens.
-
-Real data only.
-```
-
-### Stage 6.6 — Random-race profile support
-
-```
-Read [Master Architecture Preamble]. Stage 6.1 must be complete.
-
-GOAL: When a user picks "Random" in their profile, every UI panel that
-aggregates by race needs to split metrics by race-played-that-game, not by
-preferred race.
-
-FILES TO MODIFY:
-- reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html
-  Components: <Overview>, <BuildsTab>, <OpponentProfile>, anywhere that
-  shows aggregated metrics.
-- reveal-sc2-opponent-main/stream-overlay-backend/analyzer.js
-  Aggregation queries: anything that buckets games by race.
-
-CHANGES:
-1. Add a new API parameter `?group_by_race_played=1` on the existing
-   /api/aggregations/* endpoints. When set, the response groups results
-   into { Protoss: {...}, Terran: {...}, Zerg: {...} }.
-2. The SPA reads profile.race_preference; if "Random", every aggregated
-   widget (build win rates, opponent stats, macro averages) renders three
-   side-by-side panels — one per race-played.
-3. New widget on the home/Overview tab for Random users: "Random luck +
-   performance over time" — shows
-     - Race assignment frequency (P/T/Z counts)
-     - Win rate per race (when assigned that race)
-     - Best/worst race for them
-4. When NOT Random, hide the per-race split — current layout unchanged.
-
-VERIFY:
-1. PATCH profile.race_preference to "Random" for testing.
-2. Reload SPA. Overview tab shows the new Random widget. Builds and
-   Opponents tabs split into P/T/Z columns.
-3. PATCH back to "Protoss". UI returns to single-race view.
-4. The aggregations are computed from the real meta_database.json — no
-   placeholder counts.
-
-If no Random data exists, the widget renders explanatory text: "You haven't
-played any Random games yet." Don't fake data into the DB.
-```
-
-### Stage 6 acceptance criteria
-
-- [ ] Protoss / Terran / Zerg / Random replays each render the correct discipline panel.
-- [ ] Inject, Chrono, MULE timelines render real per-building data.
-- [ ] Spending efficiency curve highlights real leak windows; clicking jumps to build-order timestamp.
-- [ ] Random users see per-race-played splits across every aggregation widget.
-
----
-
-## Stage 7 — Build classifier and custom build editor
-
-**Why now:** the analyzer is feature-complete. Now we open the door for users to author and **share** their own builds. This stage converts custom builds from local-only (legacy Tkinter) to a **shared community database** so when one player adds a build, all players see it on next sync.
-
-**Duration:** ~1 week.
-
-### Stage 7.1 — Build classifier branches for Z and T
-
-```
-Read [Master Architecture Preamble]. Stage 0.1 must be complete (the build
-definitions module imports cleanly).
-
-GOAL: The build classifier currently only matches Protoss openings. Extend
-it to handle Zerg and Terran builds with the same tolerance/scoring logic.
-
-FILES:
-- reveal-sc2-opponent-main/core/build_definitions.py
-- SC2Replay-Analyzer/core/build_definitions.py (matching copy)
-- The classifier itself — find it via:
-    grep -rn "classify_build\|match_build\|BUILD_DEFINITIONS" \
-      reveal-sc2-opponent-main/core/ \
-      SC2Replay-Analyzer/core/ \
-      SC2Replay-Analyzer/detectors/
-
-CHANGES:
-1. Audit BUILD_DEFINITIONS for race coverage. Likely it's mostly Protoss.
-2. Stub Zerg and Terran sections with the structure required (don't fill
-   in actual builds yet — that's Stage 8). Use 1 placeholder per matchup
-   so the data shape is testable:
-     "ZvT - Roach Ravager Allin": {
-        "race": "Zerg", "vs_race": "Terran",
-        "signature": [...],  // single placeholder; real ones in Stage 8
-        "tier": "?", ...
-     }
-3. The classifier function should switch on the player's race in the replay
-   (replay.players[me_index].play_race), then iterate only the candidate
-   definitions for that race x vs_race combination.
-4. If no match is found, return "Unclassified - <Race>" rather than the
-   default catch-all (so the UI can show a meaningful "we don't have
-   definitions for this matchup yet" hint).
-
-VERIFY:
-1. python -c "from core.build_definitions import BUILD_DEFINITIONS; print({k.split(' ')[0] for k in BUILD_DEFINITIONS})"
-   Should print {'PvP', 'PvZ', 'PvT', 'ZvP', 'ZvT', 'ZvZ', 'TvP', 'TvT', 'TvZ', ...}.
-2. Run the classifier on one PvP game (existing): still classified correctly.
-3. Run it on a Z replay (find a friend's or use a pro replay) — at minimum
-   doesn't crash and returns something coherent.
-
-REAL DATA: don't ship the placeholder build signatures. Mark them clearly
-with a TODO comment so Stage 8 finds them.
-```
-
-### Stage 7.2 — Audit existing custom-build implementation
-
-```
-Read [Master Architecture Preamble]. Stages 0-6 must be complete.
-
-GOAL: Before building the new shared editor, document EXACTLY how the
-existing custom-build feature works in the legacy Tkinter desktop app.
-Read-only task — no code changes.
-
-PROCEDURE:
-1. Find every reference to custom builds in the Python codebase:
-     grep -rn "custom_build\|customBuild\|CustomBuild\|create_build\|new_build" \
-       SC2Replay-Analyzer/ reveal-sc2-opponent-main/core/ reveal-sc2-opponent-main/gui/
-   Also look at:
-     SC2Replay-Analyzer/custom_builds.json
-     SC2Replay-Analyzer/data/custom_builds.json (if exists)
-     reveal-sc2-opponent-main/data/custom_builds.json
-     reveal-sc2-opponent-main/core/custom_builds.py (if exists)
-     SC2Replay-Analyzer/core/custom_builds.py (if exists)
-2. Trace the user flow end-to-end:
-   a. How does the user pick a game?
-   b. How is the build-order shown?
-   c. How does the user mark a subset of events as "the signature"?
-   d. What metadata can they enter?
-   e. How is it saved?
-   f. How is it picked up by the classifier?
-3. Document the data shape of custom_builds.json TODAY (paste a real entry).
-4. Document the existing classifier algorithm (read the function, not just
-   call sites). Specifically:
-   - How are events matched? (exact vs substring, time tolerance)
-   - How is a "score" computed when multiple builds could match?
-   - What's the minimum match confidence to assign a build name?
-5. Identify gaps where the Tkinter UX is awkward and we can do better in
-   the SPA. Examples to consider:
-   - Editing an existing custom build
-   - Renaming
-   - Auto-suggesting tier from win rate
-   - Showing "matches N of your past games" preview before saving
-   - Bulk re-classification of historical games
-   - Sharing with the community (Stage 7.3 introduces this)
-
-OUTPUT:
-Write docs/custom-builds-spec.md with sections:
-  ## Current Tkinter Implementation
-  ## Classifier algorithm
-  ## Gaps and SPA-specific improvements
-  ## Proposed data model for the SPA port
-  ## API surface needed (local + community)
-  ## Migration plan from existing custom_builds.json
-  ## Open questions
-
-VERIFY:
-1. The doc exists and is committed.
-2. Every claim about current behavior has a file:line citation.
-3. Run one of the existing custom builds through the classifier on a real
-   replay and document the actual matching behavior.
-
-NO MOCKS, NO ASSUMPTIONS. If the Tkinter feature isn't actually present
-(which the user thinks may be the case in some forms), document THAT
-clearly. The spec writes whatever's true on disk.
-```
-
-### Stage 7.3 — Community-shared backend (canonical store + sync)
-
-```
-Read [Master Architecture Preamble]. Stage 7.2 must be complete (spec exists).
-
-GOAL: Establish a SHARED COMMUNITY DATABASE for custom build definitions.
-When one player saves a build, every other player sees it on next sync.
-
-This is a small, dedicated cloud service. Simpler than Stage 14's full
-opponent-data cloud — just a CRUD API for build definitions.
-
-ARCHITECTURE:
-- Cloud service: cloud/community-builds/  (Node + Express OR FastAPI; pick
-  whichever is faster to ship — recommend Node since the rest of the
-  backend is Node).
-- Storage: SQLite on a small VM, OR Postgres if you're already
-  provisioning one for Stage 14. Start with SQLite for simplicity; migrate
-  later. File: cloud/community-builds/data/builds.db.
-- Hosting: Fly.io or Railway tiny instance, ~$5/month.
-- Auth: each desktop client has a salted client_id (HMAC of install_uuid).
-  Authors are tracked by client_id — no real accounts needed for v1. The
-  battle_tag from profile.json is sent as a display name only; the
-  client_id is the authoritative author key.
-
-DATA MODEL (SQLite):
-
-  CREATE TABLE community_builds (
-    id              TEXT PRIMARY KEY,             -- kebab-case
-    name            TEXT NOT NULL,
-    race            TEXT NOT NULL,
-    vs_race         TEXT NOT NULL,
-    tier            TEXT,                         -- S/A/B/C/null
-    description     TEXT NOT NULL DEFAULT '',
-    win_conditions  TEXT NOT NULL DEFAULT '[]',   -- JSON
-    loses_to        TEXT NOT NULL DEFAULT '[]',
-    transitions_into TEXT NOT NULL DEFAULT '[]',
-    signature       TEXT NOT NULL,                -- JSON array of events
-    tolerance_sec   INTEGER NOT NULL DEFAULT 15,
-    min_match_score REAL NOT NULL DEFAULT 0.6,
-    author_client_id TEXT NOT NULL,
-    author_display  TEXT NOT NULL,                -- battle_tag or "anon"
-    created_at      INTEGER NOT NULL,             -- epoch ms
-    updated_at      INTEGER NOT NULL,
-    deleted_at      INTEGER,                      -- soft delete
-    upvotes         INTEGER NOT NULL DEFAULT 0,
-    downvotes       INTEGER NOT NULL DEFAULT 0,
-    flagged         INTEGER NOT NULL DEFAULT 0,   -- spam moderation
-    version         INTEGER NOT NULL DEFAULT 1
-  );
-
-  CREATE TABLE build_votes (
-    client_id   TEXT NOT NULL,
-    build_id    TEXT NOT NULL,
-    vote        INTEGER NOT NULL,                 -- +1 or -1
-    voted_at    INTEGER NOT NULL,
-    PRIMARY KEY (client_id, build_id)
-  );
-
-  CREATE INDEX idx_builds_race ON community_builds(race, vs_race);
-  CREATE INDEX idx_builds_updated ON community_builds(updated_at);
-
-ENDPOINTS (mounted at /v1/community-builds):
-
-  GET  /v1/community-builds/health              → 200 {ok, version}
-  GET  /v1/community-builds                     → list (paginated, filterable)
-       query: race, vs_race, since (epoch ms), q (search), sort (votes|recent)
-       returns: { builds: [...], next_cursor: str|null }
-  GET  /v1/community-builds/:id                 → single build
-  POST /v1/community-builds                     → create (auth: client signature)
-  PUT  /v1/community-builds/:id                 → replace (must be author)
-  DELETE /v1/community-builds/:id               → soft-delete (must be author)
-  POST /v1/community-builds/:id/vote            → +1 or -1 (one per client)
-  POST /v1/community-builds/:id/flag            → spam report
-  GET  /v1/community-builds/sync?since=<epoch>  → diff for incremental sync
-       returns: { upserts: [...], deletes: [id, ...], server_now: epoch }
-
-SECURITY:
-- Every write request includes:
-    X-Client-Id: hex client_id
-    X-Client-Signature: HMAC-SHA256(server_pepper, body)
-- Server pepper handshake: GET /v1/community-builds/handshake on first run.
-- Rate limit: 30 writes/hour per client_id, 1000 reads/hour per IP.
-- Author check: PUT/DELETE require author_client_id == X-Client-Id.
-- Spam: builds with flagged > 5 are hidden from list responses until
-  reviewed.
-
-VALIDATION (server-side, identical to client-side schema):
-- id matches /^[a-z0-9-]{3,80}$/
-- name length 3..120
-- race in {Protoss, Terran, Zerg}
-- vs_race in {Protoss, Terran, Zerg, Random}
-- tier in {S, A, B, C, null}
-- signature is an array of 4..30 items
-  each: t in [0, 3600], what is non-empty, weight in [0,1]
-- tolerance_sec in [5, 60]
-- min_match_score in [0.3, 1.0]
-
-FILES TO CREATE:
-- cloud/community-builds/package.json
-- cloud/community-builds/index.js
-- cloud/community-builds/migrations/001_init.sql
-- cloud/community-builds/Dockerfile
-- cloud/community-builds/fly.toml
-- cloud/community-builds/__tests__/*.test.js  (jest + supertest)
-- docs/community-builds-api.md
-
-DEPLOYMENT:
-- One-line `fly launch` from cloud/community-builds/.
-- Persistent volume for SQLite at /data.
-- Daily SQLite snapshot to S3-compatible (R2 or B2 free tier).
-
-VERIFY:
-1. cd cloud/community-builds && npm test → all pass
-2. fly deploy → service is reachable at https://sc2-community-builds.fly.dev
-3. curl https://sc2-community-builds.fly.dev/v1/community-builds/health → 200
-4. POST a real build → 201 Created with the new id.
-5. GET /sync?since=0 → returns the build you just created.
-
-NO MOCKS. The service runs against a real SQLite DB, real HMAC signatures,
-real Fly deployment.
-```
-
-### Stage 7.4 — Local custom-builds API + classifier integration
-
-```
-Read [Master Architecture Preamble]. Stages 7.2 and 7.3 must be complete.
-
-GOAL: Implement the local persistence layer, REST API, and classifier
-integration for user-authored build definitions. The local API is a thin
-caching wrapper around the Stage 7.3 community service.
-
-DATA SHAPE — local cache only:
-
-data/custom_builds.json  (user's own authored builds, pending sync):
-{
-  "version": 2,
-  "builds": [
-    {
-      "id": "user-pvz-stargate-into-blink",
-      "name": "PvZ Stargate into Blink",
-      "race": "Protoss",
-      "vs_race": "Zerg",
-      "tier": "A",
-      "description": "...",
-      "win_conditions": [...],
-      "loses_to": [],
-      "transitions_into": [],
-      "signature": [
-        { "t": 18,  "what": "BuildPylon",          "weight": 0.4 },
-        { "t": 95,  "what": "BuildStargate",       "weight": 1.0 },
-        ...
-      ],
-      "tolerance_sec": 15,
-      "min_match_score": 0.6,
-      "source_replay_id": "2026-04-22T18:30:00|opponent|map|600",
-      "created_at": "2026-04-27T12:00:00Z",
-      "updated_at": "2026-04-27T12:00:00Z",
-      "author": "ReSpOnSe",
-      "sync_state": "pending" | "synced" | "conflict"
-    }
-  ]
-}
-
-data/community_builds.cache.json  (local mirror of community DB):
-{
-  "version": 2,
-  "last_sync_at": "2026-04-27T12:00:00Z",
-  "server_now": 1234567890,
-  "builds": [ ... same shape, plus upvotes/downvotes/author_display ]
-}
-
-LOCAL ENDPOINTS (mounted at /api/custom-builds/*):
-
-  GET    /api/custom-builds                       → list ALL (custom + community
-                                                     cache, deduped by id)
-  GET    /api/custom-builds/:id                   → single build
-  POST   /api/custom-builds                       → create from body
-                                                     (writes locally + queues
-                                                     a community POST)
-  PUT    /api/custom-builds/:id                   → replace (must be author;
-                                                     queues community PUT)
-  PATCH  /api/custom-builds/:id                   → partial update
-  DELETE /api/custom-builds/:id                   → remove (queues community
-                                                     DELETE if author)
-
-  POST   /api/custom-builds/from-game             → derive a draft from a
-                                                     replay's events
-  POST   /api/custom-builds/preview-matches       → for an unsaved candidate,
-                                                     return matching games
-  POST   /api/custom-builds/reclassify            → re-run classifier on all
-                                                     historical games
-
-  POST   /api/custom-builds/sync                  → pull latest from community
-                                                     service, push pending
-                                                     uploads
-  GET    /api/custom-builds/sync/status           → last sync, pending count,
-                                                     errors
-
-  POST   /api/custom-builds/:id/vote              → +1 / -1 forwarded to
-                                                     community service
-
-FILES TO CREATE:
-- reveal-sc2-opponent-main/stream-overlay-backend/routes/custom-builds.js
-- reveal-sc2-opponent-main/stream-overlay-backend/services/community_sync.js
-- data/custom_builds.schema.json
-- SC2Replay-Analyzer/scripts/build_classify_cli.py  (if not present)
-- reveal-sc2-opponent-main/stream-overlay-backend/__tests__/custom-builds.test.js
-
-FILES TO MODIFY:
-- reveal-sc2-opponent-main/stream-overlay-backend/index.js
-  (mount the new router; wire Socket.io progress for /reclassify)
-- reveal-sc2-opponent-main/core/build_definitions.py
-  AND SC2Replay-Analyzer/core/build_definitions.py
-  (load custom_builds.json AND community_builds.cache.json on import,
-   merge into BUILD_DEFINITIONS with collision rule:
-   built-in id wins on exact match; among customs, most recent updated_at.)
-- The classifier function (location identified in 7.2's spec). Update so
-  it iterates BUILD_DEFINITIONS (built-ins) AND custom builds AND community
-  cache.
-
-CLASSIFIER ALGORITHM:
-For a game's event list E (sorted by t) and a build B with signature S:
-  matched = 0
-  for each (sig_t, sig_what, sig_weight) in S:
-    candidates = [e in E where e.what == sig_what
-                              and |e.t - sig_t| <= B.tolerance_sec]
-    if candidates not empty:
-      matched += sig_weight
-  total_weight = sum(s.weight for s in S)
-  match_score = matched / total_weight
-  if match_score >= B.min_match_score: B is a candidate
-Return the candidate with highest match_score.
-
-SYNC WORKER:
-- On startup, run a sync against the community service.
-- Repeat every 15 minutes while the backend is up.
-- Pending uploads are retried with exponential backoff.
-- Sync conflicts (server has newer version of a build the user authored
-  on two devices) get marked sync_state="conflict" and surfaced in the UI.
-
-VERIFY:
-1. cd reveal-sc2-opponent-main/stream-overlay-backend && npx jest custom-builds.test.js
-2. POST /api/custom-builds with a real custom build → data/custom_builds.json
-   updated atomically; sync queue has one entry.
-3. POST /api/custom-builds/sync → entry uploaded; sync_state flips to
-   "synced".
-4. From a SECOND machine (or simulate via DELETE local cache + GET
-   /api/custom-builds/sync), the build appears in the list.
-5. POST /api/custom-builds/reclassify — actually runs the classifier on
-   all meta_database games, streams progress, uses both built-in and
-   community builds.
-
-REAL DATA, NO MOCKS:
-- Tests use real fixture replays (Stage 11 Task 11.1) if available;
-  otherwise commit a single fixture for these tests.
-- The reclassify endpoint actually mutates the real meta_database.json
-  (with backup taken first).
-```
-
-### Stage 7.5 — SPA: "Save this build" flow + editor modal
-
-```
-Read [Master Architecture Preamble]. Stage 7.4 must be complete.
-
-GOAL: From any game in the React SPA, the user can click "Save as build"
-on the build-order timeline, opens a polished editor modal, picks a subset
-of events as the signature, fills in metadata, previews how many of their
-historical games match, and saves. After save, the editor offers to
-"Reclassify all my games now" AND "Share with community" (default ON).
-
-WHERE THE CTA APPEARS (every game-row drawer):
-- reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/index.html
-- Find <BuildOrderTimeline> component.
-- Add a primary button at the top-right of the timeline header:
-  "Save as new build"
-- Disabled if profile.json is missing (with tooltip linking to /settings).
-
-EDITOR MODAL:
-Component: <BuildEditorModal game, onClose, initialDraft?>
-
-Sections:
-
-  Section 1 — Basics
-    - Name (required, 3-120 chars)
-    - Description (optional, multi-line, 0-500 chars)
-    - Race (auto-filled from game; user can change)
-    - Vs race (auto-filled; user can change to "Random")
-    - Tier (S/A/B/C dropdown, optional)
-    - Tolerance (slider 5-60s, default 15)
-    - Min match score (slider 0.3-1.0, default 0.6)
-    - Share with community: toggle (default ON, with "Visible to all
-      players" caption + privacy link)
-
-  Section 2 — Signature events
-    Two-column layout:
-    Left:  the FULL build-order timeline of the source game. Each row has
-           a checkbox. Default-check the "tech-defining" events (use the
-           existing event_priority logic — likely buildings + key
-           upgrades + first-of-each-unit).
-    Right: a live preview of the SIGNATURE that will be saved.
-    For each checked event:
-      * Adjust weight (slider 0..1; default 1.0 for auto-chosen, 0.5 for
-        user-additions)
-      * Adjust target time (slider ±15s)
-      * Remove from signature
-    "Add custom event" lets user pick any event from the source game's
-    timeline.
-
-  Section 3 — Match preview
-    - Live count: "Matches X of your Y games" (POST
-      /api/custom-builds/preview-matches with the current draft).
-    - Show top 5 matching games as compact rows.
-    - Updates debounced (300ms).
-    - If 0 matches: hint "Try lowering min_match_score or increasing
-      tolerance".
-
-  Section 4 — Save bar (sticky bottom)
-    - "Cancel" (closes without saving)
-    - "Save build" (POST /api/custom-builds; on 200 toast "Saved 'X'.
-      Reclassify your games to apply now?" with a "Reclassify" button)
-    - "Save & Reclassify" (saves then triggers
-      /api/custom-builds/reclassify)
-    - If "Share with community" was ON, the same Save also queues an
-      upload; toast confirms "Shared with community."
-
-DATA FLOW:
-1. User clicks "Save as new build"
-2. SPA POSTs /api/custom-builds/from-game with { game_id }
-3. Backend returns a draft with auto-selected events
-4. Modal opens with the draft
-5. As user toggles events / changes thresholds, SPA POSTs to
-   /api/custom-builds/preview-matches
-6. On Save, SPA POSTs the full draft to /api/custom-builds
-7. Backend writes locally AND queues a POST to the community service
-8. Optional reclassify streams progress via Socket.io
-
-UX POLISH:
-- Esc closes; confirms unsaved changes.
-- Form errors render inline.
-- Tooltips on threshold sliders explain the tradeoff.
-- Disable Save while a /preview-matches request is in flight.
-- On successful save, toast offers "View this build" → /builds/<id>.
-
-ACCESSIBILITY:
-- Full keyboard nav (Tab, Esc, Enter to save).
-- aria-labels on icon-only buttons.
-- Focus trap in the modal.
-- Errors announced via aria-live.
-
-VERIFY:
-1. Open a real game in the OpponentProfile games table.
-2. Click "Save as new build" → modal opens with draft from real game data.
-3. Toggle a few events. Match preview updates with real counts.
-4. Save with "Share with community" ON → data/custom_builds.json updated
-   AND a POST to community service shows up in community DB.
-5. Click "Reclassify" — meta DB updates.
-6. Close and re-open the SPA. The build persists.
-7. From a SECOND user (or simulating via clearing community cache and
-   re-syncing), the build appears in /builds → My builds → "Shared by
-   <author>".
-
-NO MOCKS:
-- Match preview uses real meta DB games.
-- Reclassify mutates real DB (with backup).
-- Community share goes to the real Stage 7.3 service.
-```
-
-### Stage 7.6 — SPA: Custom Builds management page (with community browse)
-
-```
-Read [Master Architecture Preamble]. Stage 7.5 must be complete.
-
-GOAL: A dedicated /builds page in the SPA where the user manages all build
-definitions — built-ins, their own customs, and the community library.
-
-NAV:
-Add a sub-tab inside the existing /builds page:
-  /builds → tabs: "Built-in" | "My builds" | "Community" | "Editor"
-
-LAYOUT (My builds tab):
-- Left: filterable/searchable table of the user's custom builds:
-    Name | Race | vs Race | Tier | Created | Match count | Win rate |
-    Sync | Actions
-- Right (when a row is selected): detail panel:
-    - Full signature (read-only timeline)
-    - Description
-    - Top 5 matching games
-    - Edit / Duplicate / Delete buttons
-    - Win rate breakdown by map and by opponent race
-    - Sync status: "Shared (12 upvotes)" or "Pending sync" or "Local only"
-
-LAYOUT (Community tab):
-- Top: filter chips (race, vs_race, tier, sort: top|recent|trending)
-- Search box
-- Card grid: each card shows
-    - Author display name + race icons
-    - Build name + tier badge
-    - Description (truncated to 2 lines)
-    - Upvote/downvote arrows with count (+1 / -1 buttons)
-    - "Use this build" button (clones into My builds, marked
-      "from <author>")
-    - "View" button → opens a read-only detail modal showing signature,
-      match preview against the user's own games, top win rates from the
-      author's games (if shared in their profile)
-- Pagination via /v1/community-builds?cursor=...
-
-ACTIONS (My builds):
-- Edit         → opens <BuildEditorModal> in edit mode. PUT on save.
-- Duplicate    → opens the editor with the build copied, name suffixed
-                 " (copy)".
-- Delete       → confirm dialog → DELETE /api/custom-builds/:id; if there
-                 are games classified under this build, warn the user.
-                 If shared, also queues community DELETE.
-- Export       → download the user's full custom_builds.json.
-- Import       → file picker; parses, validates, shows a diff preview,
-                 commits on confirm.
-- Sync now     → POST /api/custom-builds/sync, shows progress.
-
-ACTIONS (Community):
-- Use this    → copies the community build into custom_builds.json and
-                marks it active.
-- Vote        → POST /api/custom-builds/:id/vote with +1 / -1.
-- Flag        → POST /api/custom-builds/:id/flag with a reason.
-
-WIN-RATE COMPUTATION:
-- New endpoint GET /api/custom-builds/:id/stats →
-  { total, wins, losses, win_rate, by_map, by_opp_race, recent_games }
-
-UX POLISH:
-- Empty states (My builds: "Open a game and click 'Save as new build'";
-  Community: "No builds match your filters. Try changing race or vs_race.").
-- Sortable columns.
-- Bulk actions: select multiple → delete or export.
-- When a community build is one the user already imported, show a "Already
-  in your library" badge instead of "Use this build".
-- When clicking a "matching game" in My builds detail panel, navigate
-  to that game in the games table.
-
-VERIFY (with REAL data):
-1. Create 3 custom builds via Stage 7.5's editor with "Share with community"
-   ON.
-2. Open /builds → "My builds" tab. All 3 listed with real counts and "Shared"
-   sync state.
-3. Open the Community tab. The 3 builds appear (alongside any other users').
-4. Vote +1 on a community build. The count updates.
-5. Click "Use this build" on a community build authored by someone else.
-   It appears in My builds with "from <author>" tag and is now classifying
-   the user's games.
-6. Edit your own community-shared build. Saving uploads the new version
-   (community service shows version: 2).
-7. Export / Import works round-trip.
-
-NO MOCKS:
-- Win rates computed from real meta_database.json.
-- Match counts from real classifier runs.
-- Community votes hit the real Stage 7.3 service.
-```
-
-### Stage 7 acceptance criteria
-
-- [ ] User authors a custom build → saved locally + uploaded to community service.
-- [ ] Second user (or test client) sees the build in their Community tab on next sync.
-- [ ] "Use this build" copies the build to local custom_builds.json and reclassifies.
-- [ ] Voting and flagging round-trip to the community service.
-- [ ] Sync status visible in /settings → Build classifier and in My builds table.
-- [ ] Built-in / custom / community precedence rules behave as documented.
-
----
 
 ## Stage 8 — Build order library
 
-**Why now:** the classifier branches and editor ship, but content is sparse. This stage seeds 8-12 strong meta builds per matchup so the classifier returns useful results out of the box.
+**Why now:** the classifier branches and editor ship, but content is sparse. This stage seeds 15-20 strong meta builds per matchup so the classifier returns useful results out of the box.
 
 **Duration:** 1 matchup per week, ongoing.
 
@@ -1650,15 +208,15 @@ NO MOCKS:
 Repeat 9 times for: TvT, TvZ, TvP, ZvT, ZvZ, ZvP, PvT, PvZ, PvP.
 
 ```
-Read [Master Architecture Preamble]. Stage 7.1 must be complete.
+Read [Master Architecture Preamble]. 
 
-GOAL: Add 8-12 strong, current-meta build definitions for the <MATCHUP>
-matchup to data/build_definitions.json. Each definition is a real build
+GOAL: Add 15-20 strong, current-meta build definitions for the TvT, TvZ and ZvZ
+matchups to data/build_definitions.json. Each definition is a real build
 played by pros in 2026, with verifiable signatures.
 
 SOURCES (use real ones; don't invent):
 - Spawning Tool: https://lotv.spawningtool.com/build/<MATCHUP_LOWER>/
-  Filter by "professional" / "ranked diamond+".
+  Filter by "professional" / "ranked Grandmaster".
 - Liquipedia: liquipedia.net/starcraft2/<RACE>_vs_<RACE> (current meta).
 - Recent tournaments: GSL Code S 2026 Season 1, IEM Katowice 2026,
   ESL EWC 2026.
@@ -1672,16 +230,10 @@ WHAT EACH DEFINITION NEEDS (data/build_definitions.json):
   "name": "Reaper Expand → 3 Rax Bio",
   "race": "Terran",
   "vs_race": "Zerg",
-  "tier": "S",
+  "rank" GM
   "added": "2026-04-XX",
   "added_from": "spawningtool.com/build/...",
-  "signature": [
-    { "t": 18,  "what": "BuildBarracks",       "weight": 1.0 },
-    { "t": 22,  "what": "BuildRefinery",       "weight": 0.8 },
-    { "t": 30,  "what": "TrainReaper",         "weight": 1.0 },
-    { "t": 60,  "what": "BuildOrbitalCommand", "weight": 1.0 },
-    { "t": 90,  "what": "BuildCommandCenter",  "weight": 0.6 },
-    { "t": 130, "what": "BuildBarracksReactor","weight": 0.7 },
+  "signature": [use the same signature logic we have already implemented in the save my build order, in fact thats a good template for how to create the build orders.
     ...
   ],
   "description": "Standard 2026 TvZ reaper expand. Reaper at ~1:30 scouts
@@ -1711,8 +263,7 @@ FILES:
 - A new section in docs/build-library.md with the full list, sources, notes.
 
 CONSTRAINTS:
-- Tier S means top-3 win rate at GM in the current Aligulac ladder; B is
-  meta-but-not-optimal; below B, don't add it.
+
 - ALL timing values must come from actual replays, not estimated. If you
   can't find a real reference replay, omit the build.
 - ID kebab-case must be unique across the whole file.
@@ -2069,7 +620,7 @@ Definition of Done:
 #### Stage 9.2.1 — Build the tilt scoring engine
 
 ```
-Read [Master Architecture Preamble]. Stage 9.1 features must be complete.
+Read [Master Architecture Preamble]. 
 
 Build a tilt detector that combines several behavioral signals into a
 single 0-100 tilt score and decides when to nudge the user.
@@ -2810,7 +1361,7 @@ and are labeled as such.
 ### Stage 11.3 — Express endpoint integration tests
 
 ```
-Read [Master Architecture Preamble]. Stages 2.1, 4.1, 7.4 must be complete.
+Read [Master Architecture Preamble]. 
 
 Jest + supertest suite for every /api/* and /games/:id/* endpoint.
 
@@ -2868,8 +1419,7 @@ VERIFY:
 ### Stage 12.1 — Single-installer build (NSIS)
 
 ```
-Read [Master Architecture Preamble]. Stage 11 must be complete.
-
+Read [Master Architecture Preamble]. 
 GOAL: Produce a Windows .exe installer that drops the entire suite onto a
 fresh machine. Non-technical user double-clicks it, hits Next a few times,
 gets a desktop shortcut, launches the app.
@@ -3390,7 +1940,7 @@ Definition of Done:
 
 > Anonymous pooled opponent data. "Your opponent has been seen 240 times by other users — here's the consensus build profile."
 
-**Prerequisites:** Stages 0-13 done. A hosting account on Fly.io or Railway. A domain name. Postgres-as-a-service or self-hosted PG.
+**Prerequisites:** Stages 0-13 done. A [Render](https://render.com) account (web service + background worker + Render Key Value addon for the rate-limit cache). A [MongoDB Atlas](https://www.mongodb.com/atlas) cluster (free M0 tier is enough for early traffic). A [Vercel](https://vercel.com) account for the Next.js dashboard. A domain name pointing at the Vercel apex / API at the Render subdomain.
 
 **Duration:** 4-6 weeks. The heaviest stage.
 
@@ -3412,20 +1962,21 @@ This stage has a fundamentally different shape — it's a real backend project. 
 
 ```
 cloud/
-├── api/                           FastAPI service
+├── api/                           FastAPI service (Render web)
 │   ├── pyproject.toml
 │   ├── app/{main.py,settings.py,deps.py,routes/,models/,services/,schemas/,db/,workers/}
-│   ├── alembic/versions/
+│   ├── migrations/                MongoDB index management + data backfills
 │   ├── tests/
 │   └── Dockerfile
 ├── community-builds/              from Stage 7.3 (folded in here)
-├── web/                           Next.js dashboard
+├── web/                           Next.js dashboard (Vercel deploy)
 │   ├── app/{layout.tsx,page.tsx,opponent/[name]/page.tsx,meta/page.tsx,privacy/page.tsx}
 │   ├── components/, lib/, public/
+│   └── vercel.json                project + framework + env-var refs
 ├── client_sdk/                    Python desktop client
 │   ├── sc2tools_cloud/{client.py,opt_in.py,batched_uploader.py}
 │   └── tests/
-├── infra/{fly.toml,railway.toml,docker-compose.dev.yml,monitoring/}
+├── infra/{render.yaml,docker-compose.dev.yml,monitoring/}
 └── docs/{architecture.md,privacy.md,api-reference.md,runbook.md}
 ```
 
@@ -3437,11 +1988,16 @@ Read [Master Architecture Preamble]. Stage 13 must be complete.
 Stand up the SC2 Tools Cloud backend skeleton.
 
 Stack:
-- Python 3.12, FastAPI 0.111+, SQLAlchemy 2.x async with asyncpg
-- Pydantic v2, PostgreSQL 16, Redis 7, Alembic
-- pytest + httpx + pytest-asyncio, ruff, mypy --strict
+- Python 3.12, FastAPI 0.111+
+- MongoDB 7 (Atlas) via Motor (async driver) + Beanie (Pydantic ODM)
+- Pydantic v2 for request/response schemas
+- Render Key Value (Redis-compatible) for rate limits + cache
+- pytest + httpx + pytest-asyncio + mongomock (or testcontainers-mongo)
+- ruff, mypy --strict
 - OpenTelemetry (OTLP), Sentry
-- Fly.io (also produce Railway config)
+- Hosting: Render web service (API) + Render background worker (aggregator)
+  + Render Key Value addon. MongoDB Atlas external. Vercel hosts the
+  Next.js dashboard from Stage 14.4.
 
 Read first (context only — don't import; this is a separate codebase):
 - reveal-sc2-opponent-main/core/data_store.py (game record shape)
@@ -3450,37 +2006,78 @@ Read first (context only — don't import; this is a separate codebase):
 
 Create cloud/api/ with structure given above. In this prompt:
 
-1. cloud/api/pyproject.toml with all deps; lock via uv.
+1. cloud/api/pyproject.toml with all deps; lock via uv. Required:
+   `fastapi`, `motor`, `beanie`, `pydantic`, `pydantic-settings`,
+   `redis[hiredis]` (talks to Render Key Value), `httpx`,
+   `python-json-logger`, `sentry-sdk`, `opentelemetry-instrumentation-fastapi`,
+   `opentelemetry-exporter-otlp`. Dev: `pytest`, `pytest-asyncio`,
+   `mongomock-motor` (or `testcontainers[mongodb]`), `ruff`, `mypy`.
 2. app/main.py — FastAPI, Sentry init, OTel auto-instrumentation, CORS for
    web subdomain, rate-limit middleware (slowapi or hand-rolled with Redis).
 3. app/settings.py via pydantic-settings v2. Required env vars:
-   DATABASE_URL, REDIS_URL, SENTRY_DSN, SERVER_PEPPER (32+ random bytes),
+   MONGODB_URL (mongodb+srv://... from Atlas), MONGODB_DB_NAME,
+   REDIS_URL (from Render Key Value addon, injected as
+   RENDER_REDIS_URL by the platform — alias it to REDIS_URL),
+   SENTRY_DSN, SERVER_PEPPER (32+ random bytes),
    ALLOWED_CLIENT_VERSIONS (csv), ENVIRONMENT, OTLP_ENDPOINT.
-4. app/db/ with SQLAlchemy 2.x async pattern. Models:
-   - Client(id, salted_id_hash, first_seen_at, last_seen_at,
-            client_version, total_observations, opt_in_consent_version,
-            banned_at, created_at)
-   - Observation(id, client_id_fk, opponent_name_normalized,
-                 opponent_race, observer_race, matchup, map_name,
-                 strategy_id, observed_at_day, game_duration_bucket,
-                 won_by_observer, region, created_at)
-   - OpponentProfile(opponent_name_normalized, total_observations,
-                     distinct_clients, race_distribution_jsonb,
-                     strategy_distribution_jsonb, map_distribution_jsonb,
-                     last_aggregated_at)
-   - AggregationRun(id, started_at, finished_at, observations_processed,
-                    profiles_updated, errors_jsonb)
-   Indexes: Observation(opponent_name_normalized, observed_at_day);
-            Observation(client_id_fk, created_at);
-            OpponentProfile(total_observations DESC).
+   On Render, every env var is configured per-service in the
+   dashboard or `render.yaml`. Use `sync: false` in render.yaml for
+   secrets so they are not committed.
+4. app/db/ with Motor + Beanie. Each collection is a Beanie
+   `Document` subclass; `init_beanie(database, document_models=[...])`
+   runs at FastAPI startup. Documents:
+   - Client: { _id ObjectId, salted_id_hash, first_seen_at, last_seen_at,
+              client_version, total_observations, opt_in_consent_version,
+              banned_at, created_at }
+   - Observation: { _id ObjectId, client_id (ref Client),
+                    opponent_name_normalized, opponent_race,
+                    observer_race, matchup, map_name, strategy_id,
+                    observed_at_day (ISODate), game_duration_bucket,
+                    won_by_observer, region, created_at }
+   - OpponentProfile: { _id opponent_name_normalized,
+                        total_observations, distinct_clients,
+                        race_distribution (subdoc), strategy_distribution
+                        (subdoc), map_distribution (subdoc),
+                        last_aggregated_at, visible }
+   - AggregationRun: { _id ObjectId, started_at, finished_at,
+                       observations_processed, profiles_updated,
+                       errors (array) }
+   Indexes (declared via Beanie `Settings.indexes`):
+     - Observation: compound (opponent_name_normalized, observed_at_day);
+       compound (client_id, created_at)
+     - OpponentProfile: descending (total_observations); ascending (visible)
+     - Client: unique (salted_id_hash)
+   Run `python -m app.migrations.sync_indexes` to ensure indexes match
+   the source declarations on each deploy.
 
-5. Alembic init + first migration.
+5. cloud/api/app/migrations/ — index sync + data backfill scripts.
+   MongoDB is schemaless so we do not run schema migrations, but we DO
+   need: (a) `sync_indexes.py` that builds every Beanie-declared index
+   and drops any not-in-source indexes (idempotent, safe to re-run on
+   every deploy); (b) one numbered `0001_*.py` style script per data
+   backfill, each writing to a `_migrations` collection so re-runs are
+   skipped. The Render deploy hook calls `python -m app.migrations.run`
+   before promoting the new web service revision.
 6. app/routes/health.py — GET /health, GET /ready (db + redis ping).
    Returns build version + git SHA from env.
 7. cloud/api/Dockerfile — multi-stage, non-root, healthcheck.
-8. cloud/infra/fly.toml AND cloud/infra/railway.toml — production-ready
-   with autoscale, persistent volumes, env var refs.
-9. cloud/infra/docker-compose.dev.yml — PG + Redis + API.
+8. cloud/infra/render.yaml — Render Blueprint with:
+     - `services[].type=web` for the FastAPI API. Dockerfile build;
+       healthCheckPath=/health; envVars referencing Atlas + KV + Sentry;
+       autoDeploy=true on main; preDeployCommand runs migrations.
+     - `services[].type=worker` for the Stage 14.3 aggregator
+       (`python -m app.workers.aggregate_profiles loop`). Same image,
+       different start command.
+     - `services[].type=keyvalue` (Render Key Value addon, Redis-compatible).
+     - The MongoDB cluster is external (Atlas), referenced via the
+       MONGODB_URL secret env var.
+   cloud/web/vercel.json — Next.js project config: framework=nextjs,
+   env vars NEXT_PUBLIC_API_URL pointing at the Render web service URL
+   plus production/preview/development scoping.
+9. cloud/infra/docker-compose.dev.yml — `mongo:7` + `redis:7` + API.
+   Mongo with `--replSet rs0` so dev parity with Atlas (Atlas is always
+   a replica set; some Beanie/Motor features require it). Init script
+   runs `rs.initiate()` on first boot.
 10. cloud/api/tests/ — fixtures, health-check tests, factories.
 11. cloud/api/Makefile (or justfile): dev, test, lint, type, migrate, seed,
     deploy.
@@ -3490,9 +2087,11 @@ Create cloud/api/ with structure given above. In this prompt:
 Quality gates:
 - ruff check passes
 - mypy --strict passes
-- pytest passes
-- docker compose up brings the stack up clean
-- fly launch --no-deploy succeeds
+- pytest passes (unit + integration with mongomock-motor)
+- `docker compose -f cloud/infra/docker-compose.dev.yml up` brings the
+  stack up clean and the API health endpoint returns 200
+- `render blueprint launch --dry-run cloud/infra/render.yaml` validates
+  the blueprint without deploying
 
 Definition of Done:
 - All files present.
@@ -3596,17 +2195,40 @@ Build:
 1. cloud/api/app/workers/aggregate_profiles.py
    async def run_aggregation(db, redis, since=None) -> RunReport:
      - Load AggregationRun.last_finished_at if since is None.
-     - SELECT distinct opponent_name_normalized FROM Observation
-       WHERE created_at > last_finished_at
-     - For each opponent: compute total_observations, distinct_clients,
-       race_distribution, strategy_distribution, map_distribution.
-       SQL aggregates (COUNT, COUNT DISTINCT, jsonb_agg).
-     - UPSERT OpponentProfile.
-     - Mark profiles below K/M as visible=false.
-     - Write AggregationRun row.
+     - One MongoDB aggregation pipeline does the heavy lifting:
+       ```
+       Observation.aggregate([
+         {"$match": {"created_at": {"$gt": since}}},
+         {"$group": {
+             "_id": "$opponent_name_normalized",
+             "total_observations": {"$sum": 1},
+             "distinct_clients": {"$addToSet": "$client_id"},
+             "races": {"$push": "$opponent_race"},
+             "strategies": {"$push": "$strategy_id"},
+             "maps": {"$push": "$map_name"},
+         }},
+         {"$project": {
+             "total_observations": 1,
+             "distinct_clients": {"$size": "$distinct_clients"},
+             "race_distribution": <bucket transform via $reduce>,
+             "strategy_distribution": <bucket transform>,
+             "map_distribution": <bucket transform>,
+         }},
+         {"$merge": {"into": "opponent_profiles", "whenMatched": "replace",
+                     "whenNotMatched": "insert"}},
+       ])
+       ```
+       `$merge` handles the upsert atomically server-side.
+     - Second pass updates `visible` via a single `update_many` that
+       matches `{ total_observations: { $gte: K }, distinct_clients:
+       { $gte: M } }`.
+     - Write AggregationRun document.
 
-2. Schedule: separate Fly machine running
-   `python -m app.workers.aggregate_profiles loop`. Document tradeoffs.
+2. Schedule: a Render Background Worker service running
+   `python -m app.workers.aggregate_profiles loop`. The worker shares
+   the API's image so MongoDB + Redis credentials come from the same
+   env var bundle. Document the tradeoff vs. a Render Cron Job
+   (cron is cheaper but loses warm Mongo connection pool between runs).
 
 3. cloud/api/app/routes/profiles.py:
    GET /v1/profiles/{opponent_name}?matchup=PvZ&map=Goldenaura&region=NA

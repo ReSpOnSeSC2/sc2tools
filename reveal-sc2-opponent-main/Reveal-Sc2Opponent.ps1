@@ -30,7 +30,25 @@ param(
 )
 
 # --- CONFIGURATION FOR HISTORY ---
-$HistoryFilePath = Join-Path $PSScriptRoot "MyOpponentHistory.json"
+# Canonical Black Book path. The Python data layer (core.paths.HISTORY_FILE)
+# and the Node backend (pickHistoryPath -> data/) both anchor to data/.
+# Earlier versions of this script wrote to the project root, which let the
+# Black Book drift (PS-side updates never reached the data/ copy that the
+# overlay actually reads). We now write to the same data/ location. We
+# still fall back to the project-root path if data/ doesn't exist yet --
+# that supports clean checkouts where the data/ folder hasn't been
+# materialised by the migration code.
+$DataDirHistoryPath = Join-Path $PSScriptRoot "data\MyOpponentHistory.json"
+$LegacyHistoryPath  = Join-Path $PSScriptRoot "MyOpponentHistory.json"
+$DataDir = Join-Path $PSScriptRoot "data"
+if (-not (Test-Path -LiteralPath $DataDir)) {
+    try { New-Item -ItemType Directory -Path $DataDir -Force | Out-Null } catch {}
+}
+$HistoryFilePath = if (Test-Path -LiteralPath (Split-Path -Parent $DataDirHistoryPath)) {
+    $DataDirHistoryPath
+} else {
+    $LegacyHistoryPath
+}
 $IdlePollInterval    = 0.5   
 $InGamePollInterval  = 0.5   
 # When the SC2 client API on port 6119 is unreachable (game not
@@ -202,12 +220,47 @@ function Write-FileAtomic {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
     $tmp = Join-Path $dir (".tmp_" + [Guid]::NewGuid().ToString("N") + ".json")
+    $fs = $null
     try {
-        [System.IO.File]::WriteAllText($tmp, $Content, $Encoding)
-        # On Windows, `Move-Item -Force` calls MoveFileEx with REPLACE_EXISTING,
-        # which is atomic on NTFS. Equivalent to os.replace() on POSIX.
+        # `WriteAllText` returns as soon as the bytes hit the OS write cache,
+        # NOT when they are durable on disk. On Windows NTFS the lazy writer
+        # can defer the actual data flush by several seconds. If the process
+        # is killed (Ctrl-C, machine sleep, SC2 quit tearing down the tree,
+        # AV scan, OneDrive sync collision, etc.) between the rename and the
+        # lazy flush, the destination file is left with only the bytes the
+        # OS happened to have written -- a half-written JSON whose final
+        # closing brace is missing. That's the truncation mode that's been
+        # corrupting MyOpponentHistory.json roughly weekly.
+        #
+        # FileStream + Flush(true) calls FlushFileBuffers under the hood,
+        # which is the Win32 equivalent of POSIX fsync(). This forces every
+        # cached byte to durable storage BEFORE we publish the rename, so a
+        # kill at any point either leaves the original file untouched or
+        # the destination file fully-written. Mirrors what the Python
+        # (core/atomic_io.py) and Node (analyzer.js persistMetaDb) writers
+        # already do.
+        $bytes = $Encoding.GetBytes($Content)
+        $fs = [System.IO.FileStream]::new(
+            $tmp,
+            [System.IO.FileMode]::CreateNew,
+            [System.IO.FileAccess]::Write,
+            [System.IO.FileShare]::None
+        )
+        $fs.Write($bytes, 0, $bytes.Length)
+        # `Flush($true)` -> calls FlushFileBuffers. Without the boolean arg
+        # the .NET Flush only nudges the runtime buffer to the OS cache,
+        # which is exactly the behaviour we are trying to escape.
+        $fs.Flush($true)
+        $fs.Close()
+        $fs = $null
+        # Move-Item -Force calls MoveFileEx with REPLACE_EXISTING, which is
+        # atomic on NTFS. The earlier fsync guarantees the temp file's data
+        # blocks are durable before this rename publishes them.
         Move-Item -LiteralPath $tmp -Destination $TargetPath -Force
     } catch {
+        if ($null -ne $fs) {
+            try { $fs.Close() } catch {}
+        }
         if (Test-Path -LiteralPath $tmp) {
             try { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue } catch {}
         }

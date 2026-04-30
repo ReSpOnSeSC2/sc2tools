@@ -60,6 +60,8 @@ const { createBackupsRouter } = require('./routes/backups');
 const { createDiagnosticsRouter } = require('./routes/diagnostics');
 // Stage 7.4: custom-builds router + community sync service.
 const { createCustomBuildsRouter } = require('./routes/custom-builds');
+// Stage 12.1: auto-update endpoints (see routes/version.js).
+const { createVersionRouter } = require('./routes/version');
 const { createCommunitySyncService } = require('./services/community_sync');
 // node-fetch v2 ships in node_modules; stick with that to keep CJS
 // require() compatibility on older node runtimes that don't have a
@@ -720,20 +722,39 @@ async function ensurePulseInitialized() {
 // brace. Returns null when no anchor is found so the caller can fall
 // back to {} rather than ship garbage.
 function _attemptHistoryRepair(text) {
-    if (!text || typeof text !== 'string') return null;
-    const lines = text.split(/\r?\n/);
-    for (let i = lines.length - 1; i >= 0; i--) {
-        const trimmed = lines[i].replace(/\s+$/, '');
-        if (trimmed === '    }' || trimmed === '    },') {
-            // Drop trailing comma so the JSON closes cleanly
-            const head = lines.slice(0, i + 1);
-            head[head.length - 1] = '    }';
-            const candidate = head.join('\n') + '\n}\n';
-            try {
-                const parsed = JSON.parse(candidate);
-                if (parsed && typeof parsed === 'object') return parsed;
-            } catch (_) { /* keep retreating */ }
-        }
+    return _salvageJsonObject(text);
+}
+
+// Walk back through `},\n` record boundaries (any indent style — works for both
+// the modern 4-space data/MyOpponentHistory.json and the legacy 15-space-indent
+// project-root MyOpponentHistory.json that PowerShell ConvertTo-Json produces).
+// Drops the trailing partial entry, appends the missing closing brace, retries
+// the parse. Tries up to N most-recent boundaries before giving up.
+//
+// Returns null when nothing parseable can be reconstructed so the caller can
+// fall back to {} rather than ship garbage.
+function _salvageJsonObject(text) {
+    if (typeof text !== 'string' || text.length === 0) return null;
+    let trimmed = text.replace(/[\s\u0000]+$/, '');
+    if (trimmed.endsWith(',')) trimmed = trimmed.slice(0, -1);
+    const candidates = [trimmed + '\n}\n'];
+    const BOUND_RE = /},\s*\n/g;
+    const bounds = [];
+    let m;
+    while ((m = BOUND_RE.exec(text)) !== null && bounds.length < 200) {
+        bounds.push(m.index);
+    }
+    for (let i = bounds.length - 1; i >= 0; i--) {
+        const cut = bounds[i];
+        candidates.push(text.slice(0, cut + 1) + '\n}\n');
+    }
+    for (const candidate of candidates) {
+        try {
+            const parsed = JSON.parse(candidate);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                return parsed;
+            }
+        } catch (_) { /* try next candidate */ }
     }
     return null;
 }
@@ -989,17 +1010,34 @@ function detectCheeseHistory(oppName) {
 function buildRematchSummary(oppName) {
     const history = readHistory();
     const found = findOpponentByName(history, oppName);
-    if (!found) return null;
-    const rec = computeRecord(found.data);
-    if (rec.total === 0) return null;
-    return {
-        opponent: found.cleanName,
-        wins: rec.wins,
-        losses: rec.losses,
-        total: rec.total,
-        winRate: rec.winRate,
-        race: found.data.Race || null
-    };
+    if (found) {
+        const rec = computeRecord(found.data);
+        if (rec.total > 0) {
+            return {
+                opponent: found.cleanName,
+                wins: rec.wins,
+                losses: rec.losses,
+                total: rec.total,
+                winRate: rec.winRate,
+                race: found.data.Race || null
+            };
+        }
+    }
+    // Black Book miss (truncation / never-migrated / name mismatch). Fall back
+    // to meta_database.json which is the authoritative post-game record. This
+    // is what makes the opponent widget agree with the scouting widget when
+    // the user has played this opponent but MyOpponentHistory doesn't reflect
+    // it -- the symptom that surfaced as 'first meeting' on the merged
+    // opponent card while the scouting card showed real recent games.
+    const metaRec = _recordFromMetaDb(oppName);
+    if (metaRec) {
+        console.log(
+            `[Rematch] Black Book miss for "${oppName}"; using meta DB fallback ` +
+            `(${metaRec.wins}W-${metaRec.losses}L over ${metaRec.total} games).`
+        );
+        return metaRec;
+    }
+    return null;
 }
 
 // Detect a "rival" -- an opponent we've played at least minGames
@@ -1072,11 +1110,74 @@ function readMetaDb() {
         if (!fs.existsSync(META_DB_PATH)) return null;
         let raw = fs.readFileSync(META_DB_PATH, 'utf8');
         if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
-        return JSON.parse(raw);
+        try {
+            return JSON.parse(raw);
+        } catch (parseErr) {
+            // meta_database.json has historically been hit by mid-write
+            // truncation -- the same failure mode that hits MyOpponentHistory.
+            // Salvage the valid prefix so the live overlay path (recentGames,
+            // bestAnswer, record fallback) keeps producing real numbers
+            // instead of silently zeroing out.
+            const recovered = _salvageJsonObject(raw);
+            if (recovered) {
+                console.warn(
+                    `[MetaDB] On-disk file is truncated (${parseErr.message}); ` +
+                    `recovered ${Object.keys(recovered).length} builds via salvage.`
+                );
+                return recovered;
+            }
+            console.error('[MetaDB] Read failed and salvage declined to anchor:', parseErr.message);
+            return null;
+        }
     } catch (err) {
         console.error('[MetaDB] Read failed:', err.message);
         return null;
     }
+}
+
+// Count W/L for `oppName` by walking meta_database.json games. Used as the
+// authoritative fallback when MyOpponentHistory.json doesn't carry the
+// opponent (truncation, name mismatch, or first-game-this-build state where
+// the analyzer DB has the game but the Black Book hasn't been rewritten yet).
+//
+// Returns { wins, losses, total, winRate, race } or null if no games match.
+function _recordFromMetaDb(oppName) {
+    if (!oppName) return null;
+    const db = readMetaDb();
+    if (!db || typeof db !== 'object') return null;
+    const targetForms = nameForms(oppName);
+    if (targetForms.size === 0) return null;
+    let wins = 0;
+    let losses = 0;
+    let race = null;
+    let cleanName = null;
+    for (const bd of Object.values(db)) {
+        if (!bd || !Array.isArray(bd.games)) continue;
+        for (const g of bd.games) {
+            const oppForms = nameForms(g && g.opponent);
+            if (oppForms.size === 0) continue;
+            let matched = false;
+            for (const f of oppForms) {
+                if (targetForms.has(f)) { matched = true; break; }
+            }
+            if (!matched) continue;
+            const result = String(g.result || '').toLowerCase();
+            if (result === 'win' || result === 'victory') wins += 1;
+            else if (result === 'loss' || result === 'defeat') losses += 1;
+            if (!race && g.opp_race) race = g.opp_race;
+            if (!cleanName && g.opponent) cleanName = stripClanTag(String(g.opponent));
+        }
+    }
+    const total = wins + losses;
+    if (total === 0) return null;
+    return {
+        opponent: cleanName || oppName,
+        wins,
+        losses,
+        total,
+        winRate: Math.round((wins / total) * 100),
+        race
+    };
 }
 
 function detectBestAnswer(oppStrategy, myRace) {
@@ -1264,6 +1365,10 @@ app.use('/api/custom-builds', createCustomBuildsRouter({
     sync: communitySync,
     getIo: () => io,
 }));
+
+// Stage 12.1: /api/version + /api/update/start. The router decides
+// when to auto-exit so the silent installer can replace files.
+app.use(createVersionRouter());
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
@@ -1794,7 +1899,17 @@ fs.watchFile(OPPONENT_FILE_PATH, { interval: 1000 }, () => {
     try {
         if (!fs.existsSync(OPPONENT_FILE_PATH)) return;
         const raw = fs.readFileSync(OPPONENT_FILE_PATH, 'utf8').trim();
-        if (!raw || raw === lastOpponentText) return;
+        // PowerShell clears opponent.txt when a game ends. Reset the dedup
+        // anchor so the NEXT pre-game write -- even if its content happens
+        // to match the previous game's line -- still triggers a fresh emit.
+        if (!raw) {
+            if (lastOpponentText) {
+                lastOpponentText = '';
+                console.log('[Scanner] Opponent file cleared (game ended); dedup reset.');
+            }
+            return;
+        }
+        if (raw === lastOpponentText) return;
         lastOpponentText = raw;
         console.log(`[Scanner] Opponent file changed: ${raw}`);
 

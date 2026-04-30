@@ -89,7 +89,7 @@
       ];
 
       const SETTINGS_GITHUB_URL = "https://github.com/ReSpOnSeSC2/sc2tools";
-      const SETTINGS_VERSION = "0.2.4";
+      const SETTINGS_VERSION = "1.0.0";
 
       // --- helpers -----------------------------------------------
 

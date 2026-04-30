@@ -2019,6 +2019,71 @@
 
 
 
+      function UpdateBanner() {
+        const [info, setInfo] = useState(null);
+        const [dismissed, setDismissed] = useState(false);
+        const [phase, setPhase] = useState("idle");
+
+        useEffect(() => {
+          let cancelled = false;
+          fetch("/api/version").then(r => r.json()).then(j => {
+            if (!cancelled) setInfo(j);
+          }).catch(() => { /* offline: stay quiet */ });
+          return () => { cancelled = true; };
+        }, []);
+
+        if (!info || !info.updateAvailable || dismissed) return null;
+
+        const triggerUpdate = async () => {
+          if (phase !== "idle") return;
+          setPhase("starting");
+          try {
+            const r = await fetch("/api/update/start", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ nonce: info.updateNonce }),
+            });
+            if (!r.ok) throw new Error("update_start_failed: " + r.status);
+            setPhase("running");
+          } catch (e) {
+            setPhase("idle");
+            alert("Could not start update: " + e.message);
+          }
+        };
+
+        return (
+          <div className="bg-accent-500/15 border-b border-accent-500/40
+                          px-4 py-2 text-sm flex items-center gap-3
+                          flex-wrap" role="status" aria-live="polite">
+            <span className="text-accent-300 font-medium">
+              Version {info.latest} is available
+            </span>
+            <a href={info.releaseUrl} target="_blank"
+               rel="noopener noreferrer"
+               className="text-accent-300 hover:underline
+                          focus-visible:underline">
+              view release notes
+            </a>
+            <button onClick={triggerUpdate} disabled={phase !== "idle"}
+                    className="ml-2 px-3 py-1 rounded bg-accent-500 text-white
+                               text-xs disabled:opacity-50
+                               focus-visible:ring-2 focus-visible:ring-white">
+              {phase === "running"
+                ? "Updating…"
+                : phase === "starting"
+                  ? "Starting…"
+                  : "Update now"}
+            </button>
+            <button onClick={() => setDismissed(true)}
+                    aria-label="Dismiss update notice"
+                    className="ml-auto text-neutral-500 hover:text-neutral-300
+                               focus-visible:text-neutral-200">
+              ✕
+            </button>
+          </div>
+        );
+      }
+
       function App() {
         const [tab, setTab] = useState("dashboard");
         const [filters, setFilters] = useState({});
@@ -2216,6 +2281,7 @@
 
         return (
           <div className="min-h-screen flex flex-col">
+            <UpdateBanner />
             <header className="border-b border-base-700 bg-base-800/60 backdrop-blur sticky top-0 z-10">
               <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
                 <div className="text-lg font-semibold text-neutral-100">

@@ -1,0 +1,96 @@
+# Builds the SC2 Tools Windows installer on every tag push v*.*.* and on
+# manual dispatch, then attaches the .exe and .sha256 sidecar to the
+# GitHub Release. Tags also drive the version baked into the installer
+# (see packaging/build-installer.ps1: Resolve-Version).
+#
+# Pin policy: third-party actions are pinned to major version refs. A
+# follow-up PR will tighten these to commit SHAs once Dependabot is wired
+# up (see docs/adr/0001-installer-nsis-bundled-python.md).
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (defaults to git describe).'
+        required: false
+        type: string
+
+permissions:
+  contents: write  # required for softprops/action-gh-release
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-installer:
+    name: Build Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0           # need full history for `git describe`
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = '${{ inputs.version }}'
+          if (-not $v) {
+            if ($env:GITHUB_REF -like 'refs/tags/v*') {
+              $v = $env:GITHUB_REF -replace '^refs/tags/v', ''
+            } else {
+              $v = (git describe --tags --always).Trim() -replace '^v',''
+            }
+          }
+          "version=$v" | Out-File -Append $env:GITHUB_OUTPUT
+          Write-Host "version=$v"
+
+      - name: Set up Node.js (for npm ci pre-bake)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+          cache-dependency-path: |
+            reveal-sc2-opponent-main/stream-overlay-backend/package-lock.json
+
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis -y --no-progress --version 3.10
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          .\packaging\build-installer.ps1 `
+            -Version '${{ steps.ver.outputs.version }}' `
+            -Test
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SC2Tools-Setup-${{ steps.ver.outputs.version }}
+          path: |
+            dist/SC2Tools-Setup-${{ steps.ver.outputs.version }}.exe
+            dist/SC2Tools-Setup-${{ steps.ver.outputs.version }}.exe.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/SC2Tools-Setup-${{ steps.ver.outputs.version }}.exe
+            dist/SC2Tools-Setup-${{ steps.ver.outputs.version }}.exe.sha256
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.ver.outputs.version, '-') }}

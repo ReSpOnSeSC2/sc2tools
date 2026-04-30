@@ -1,23 +1,39 @@
-# Core UI + replay parsing
-customtkinter
-sc2reader
+# SC2Replay-Analyzer -- Python dependencies (pinned).
+#
+# Pin policy: every dependency uses == exact versions for reproducible
+# installs. The Windows .exe installer (packaging/installer.nsi) ships
+# bundled Python 3.12 and runs `pip install --no-deps-by-default-no
+# -r SC2Replay-Analyzer/requirements.txt` on first install; floating
+# versions would make every machine slightly different.
+#
+# To regenerate after a deliberate bump:
+#   1. Edit the version number on the line below.
+#   2. Run packaging/build-installer.ps1 -Test to install into a clean
+#      virtualenv on Windows and run the smoke suite.
+#   3. Update CHANGELOG.md under [Unreleased] -> Changed.
+#
+# Versions current as of 2026-04 against Python 3.12.
 
-# Optional graphing (the app launches without matplotlib but graphs disable)
-matplotlib
+# ---- Core UI + replay parsing -------------------------------------
+customtkinter==5.2.2
+sc2reader==1.8.0
 
-# Analytics layer (used by analytics/feature_extractor.py and downstream
-# macro-score / win-probability / clustering modules to be added)
-numpy
-pandas
-scikit-learn
-# Spatial heatmaps (analytics/spatial.py) use scipy.stats.gaussian_kde for
-# the building/proxy/battle density grids. The module degrades to a 5-cell
-# stamp fallback if scipy can't be imported, so this is technically
-# optional, but install it to get the real KDE.
-scipy
+# ---- Optional graphing (app launches without matplotlib; graphs disable)
+matplotlib==3.9.2
 
-# Image support (used by customtkinter for icons / future asset loading)
-Pillow
+# ---- Analytics layer (analytics/feature_extractor.py + downstream
+#      macro-score / win-probability / clustering modules)
+numpy==2.1.3
+pandas==2.2.3
+scikit-learn==1.5.2
 
-# Browser-based analyzer (web_analyzer.py)
-flask
+# Spatial heatmaps (analytics/spatial.py) use scipy.stats.gaussian_kde
+# for building / proxy / battle density grids. Falls back to a 5-cell
+# stamp without scipy, so technically optional, but install for real KDE.
+scipy==1.14.1
+
+# ---- Image support (customtkinter icons + future asset loading) ---
+Pillow==11.0.0
+
+# ---- Browser-based analyzer (web_analyzer.py) ---------------------
+flask==3.0.3

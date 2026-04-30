@@ -66,3 +66,43 @@ reveal-sc2-opponent-main/stream-overlay-backend/overlay.config.json.broken-*
 # Editor/IDE
 .idea/
 .vscode/
+
+# Stage 12: installer build artifacts (NEVER commit these). The
+# installer build script (packaging/build-installer.ps1) stages a
+# full duplicate of the source tree under build/stage/, downloads
+# the embeddable Python interpreter, and pre-installs every Python
+# and Node.js dependency. That can be 350+ MB. Outputs go to dist/.
+/build/
+/dist/
+
+# Bootstrap downloads that build-installer.ps1 fetches into the
+# repo root if BUILD_DIR resolves there for any reason.
+/get-pip.py
+/python-*-embed-amd64.zip
+
+# Python test / lint cache dirs (created by pytest, mypy, ruff).
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# NSIS scratch (rare but possible if makensis crashes mid-build).
+nsa*.tmp
+
+# Additional backup patterns discovered during v0.1.0 rewrite.
+# *.pre-repair-* are full snapshots of MyOpponentHistory before the
+# one-shot data-repair pass. *.pre-*-bak are transient WIP backups
+# from in-flight refactors. None of these belong in source control.
+**/*.bak
+**/*.bak.*
+**/*.bak-*
+**/*.pre-repair-*
+**/*.pre-fsync-bak
+**/*.pre-record-fallback-bak
+**/*.pre-restore-*
+**/*.pre-chrono-fix-*
+**/*.pre-chain-counting-*
+**/*.pre-stage*
+**/*.salvaged.*
+**/*.broken-*
+**/session.state.json
+**/session.state.json.broken-*
