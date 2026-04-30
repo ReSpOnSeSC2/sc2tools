@@ -16,6 +16,11 @@
 
 const fs = require('fs');
 const path = require('path');
+// settings-pr1o: schema version is the schema file's job, not ours.
+// Reading from properties.version.const guarantees Python and JS can
+// never disagree on what version a fresh file should have.
+const { getSchemaVersion } = require('../lib/schema-version');
+const atomicFs = require('../lib/atomic-fs');
 const crypto = require('crypto');
 
 const DEFAULT_TOLERANCE_SEC = 30;  // Stage 7.5: was 15 — build-order timings drift 15-25s naturally between same-opening games.
@@ -32,16 +37,10 @@ const ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$/;
  * @param {string} filePath
  * @param {object} data
  */
+// settings-pr1n: thin wrapper that delegates to the central helper so
+// every call site keeps working with no behaviour change.
 function atomicWriteJson(filePath, data) {
-  const tmp = filePath + '.tmp';
-  const fd = fs.openSync(tmp, 'w');
-  try {
-    fs.writeFileSync(fd, JSON.stringify(data, null, 2), 'utf8');
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-  fs.renameSync(tmp, filePath);
+  atomicFs.atomicWriteJson(filePath, data);
 }
 
 /**
@@ -619,7 +618,11 @@ function pickTier(what) {
 //   - count_max  : count(name occurrences with t < time_lt) <= count
 //   - count_min  : count(name occurrences with t < time_lt) >= count
 
-const SCHEMA_VERSION = 3;
+// Derived from data/custom_builds.schema.json#properties.version.const.
+// Resolved at module load; throws loudly if the schema is missing the
+// const clause (which would itself be a bug in the schema).
+const _DATA_DIR = path.resolve(__dirname, '..', '..', 'data');
+const SCHEMA_VERSION = getSchemaVersion(_DATA_DIR, 'custom_builds');
 const SKILL_LEVELS = new Set([
   'bronze', 'silver', 'gold', 'platinum',
   'diamond', 'master', 'grandmaster',

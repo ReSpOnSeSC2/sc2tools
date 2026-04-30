@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "jest"
+    "test": "jest",
+    "typecheck": "tsc --noEmit",
+    "typecheck:strict": "tsc --noEmit --strict"
   },
   "keywords": [],
   "author": "",
@@ -22,7 +24,10 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.7.4",
     "jest": "^30.3.0",
-    "supertest": "^7.0.0"
+    "supertest": "^7.0.0",
+    "typescript": "^5.6.2"
   }
 }

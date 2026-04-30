@@ -57,7 +57,48 @@ from .paths import CUSTOM_BUILDS_FILE, DATA_DIR
 LOGGER = logging.getLogger(__name__)
 
 #: File version we own going forward.
-SCHEMA_VERSION = 2
+# Stage settings-pr1o: schema version is the schema file's job, not ours.
+# Reading from properties.version.const guarantees Python and JS can never
+# disagree -- both languages now derive from the same on-disk file, killing
+# the bug class that wiped custom_builds.json on every replay parse during
+# the engineering pass that landed the Settings UI rework.
+def _read_schema_version(schema_filename: str) -> int:
+    """Read properties.version.const from a JSON Schema file under data/.
+
+    Resolves data/ relative to this module's location so the lookup
+    survives wherever the Python project gets installed.
+
+    Args:
+        schema_filename: bare filename like "custom_builds.schema.json".
+
+    Returns:
+        The integer schema version pinned by the schema's const clause.
+
+    Raises:
+        FileNotFoundError: if the schema is missing.
+        ValueError: if the schema lacks an integer
+            ``properties.version.const`` clause -- a bug in the schema
+            itself; failing loudly is correct.
+
+    Example:
+        >>> _read_schema_version("custom_builds.schema.json")
+        3
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    schema_path = os.path.join(here, "..", "data", schema_filename)
+    with open(schema_path, "r", encoding="utf-8") as src:
+        schema = json.load(src)
+    version_prop = schema.get("properties", {}).get("version", {})
+    const_val = version_prop.get("const")
+    if not isinstance(const_val, int):
+        raise ValueError(
+            f"{schema_filename} lacks integer properties.version.const "
+            f"(got {const_val!r})"
+        )
+    return const_val
+
+
+SCHEMA_VERSION = _read_schema_version("custom_builds.schema.json")
 
 #: Sibling cache file mirroring the community-builds service.
 COMMUNITY_CACHE_FILE = os.path.join(DATA_DIR, "community_builds.cache.json")

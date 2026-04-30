@@ -36,6 +36,8 @@ const express = require('express');
 // macro CLI helpers, so hoist it to the top requires block to avoid
 // temporal-dead-zone issues for endpoints declared earlier in the file.
 const { spawn } = require('child_process');
+// settings-pr1n: atomic file writes (Hard Rule #4).
+const atomicFs = require('./lib/atomic-fs');
 
 // SC2 catalog (mirrors core/sc2_catalog.py). Used by the build-order
 // endpoint so the browser can render canonical display names + race +
@@ -2783,7 +2785,7 @@ async function getMapImage(name) {
                    : (fetched.contentType.includes('webp')) ? 'webp'
                    : 'jpg';
         const out = path.join(MAP_IMAGE_CACHE_DIR, `${slug}.${ext}`);
-        try { fs.writeFileSync(out, fetched.body); } catch (_) { return null; }
+        try { atomicFs.atomicWriteBuffer(out, Buffer.isBuffer(fetched.body) ? fetched.body : Buffer.from(fetched.body)); } catch (_) { return null; }
         return { path: out, contentType: fetched.contentType };
     })();
     _MAP_IMAGE_INFLIGHT.set(slug, promise);

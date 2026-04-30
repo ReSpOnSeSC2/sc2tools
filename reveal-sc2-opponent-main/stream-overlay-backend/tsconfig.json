@@ -1,0 +1,43 @@
+{
+  "_comment": "Stage settings-pr1p \u2014 TypeScript checkJs setup. We do NOT compile TS files (this is a pure JS codebase); we use tsc --noEmit to type-check JS files that opt in via // @ts-check at the top. This delivers most of the type-safety benefit without forcing a TS migration. New files in lib/ and any file with completed JSDoc should add // @ts-check; the long tail can be migrated incrementally per the Boy Scout Rule (see CONTRIBUTING.md). | checkJs is FALSE so files without // @ts-check are silently allowed -- we don't want to drown the typecheck output by failing on every long-tail file. Files that opt in via // @ts-check at line 1 get full strict checking because their JSDoc covers every public function. Migrate other files incrementally per the Boy Scout Rule.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": [
+      "ES2022"
+    ],
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": true,
+    "noImplicitAny": false,
+    "strictNullChecks": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "types": [
+      "node",
+      "jest"
+    ],
+    "baseUrl": "."
+  },
+  "include": [
+    "lib/**/*.js",
+    "routes/**/*.js",
+    "services/**/*.js",
+    "tools/**/*.js",
+    "index.js",
+    "analyzer.js",
+    "utils.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "coverage",
+    "__tests__",
+    "tests",
+    "public",
+    "**/*.test.js",
+    "**/*.bak"
+  ]
+}

@@ -39,6 +39,9 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+// settings-pr1n: centralised atomic writes (Hard Rule #4). Replaces the
+// duplicated atomicWriteJson + the bare fs.writeFileSync calls below.
+const atomicFs = require('../lib/atomic-fs');
 
 const DEFAULT_BASE_URL = 'https://sc2-community-builds.onrender.com';
 const ROUTE_PREFIX = '/v1/community-builds';
@@ -77,16 +80,10 @@ function hashForLog(value) {
  * @param {string} filePath Absolute path.
  * @param {object} data
  */
+// settings-pr1n: thin wrapper that delegates to the central helper so
+// every existing call site inside this module keeps working unchanged.
 function atomicWriteJson(filePath, data) {
-  const tmp = filePath + '.tmp';
-  const fd = fs.openSync(tmp, 'w');
-  try {
-    fs.writeFileSync(fd, JSON.stringify(data, null, 2), 'utf8');
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-  fs.renameSync(tmp, filePath);
+  atomicFs.atomicWriteJson(filePath, data);
 }
 
 /**
@@ -199,7 +196,7 @@ function ensureClientId(dataDir) {
     if (/^[0-9a-f]{32,128}$/.test(raw)) return raw;
   }
   const id = crypto.randomBytes(CLIENT_ID_BYTES).toString('hex');
-  fs.writeFileSync(filePath, id, { encoding: 'utf8', mode: 0o600 });
+  atomicFs.atomicWriteString(filePath, id, { encoding: 'utf8', mode: 0o600 });
   return id;
 }
 
@@ -227,10 +224,7 @@ function readCachedPepper(dataDir) {
  * @param {string} pepperHex
  */
 function writeCachedPepper(dataDir, pepperHex) {
-  fs.writeFileSync(path.join(dataDir, PEPPER_CACHE_FILE), pepperHex, {
-    encoding: 'utf8',
-    mode: 0o600,
-  });
+  atomicFs.atomicWriteString(path.join(dataDir, PEPPER_CACHE_FILE), pepperHex, { encoding: 'utf8', mode: 0o600 });
 }
 
 /**
