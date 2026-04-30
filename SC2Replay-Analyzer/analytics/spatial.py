@@ -626,6 +626,10 @@ class SpatialAggregator:
             tmp = SPATIAL_CACHE_FILE + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(disk, f)
+                f.flush()
+                # Force data blocks to disk before the rename so an
+                # NTFS lazy-writer crash doesn't truncate the cache.
+                os.fsync(f.fileno())
             os.replace(tmp, SPATIAL_CACHE_FILE)
             # Keep our in-memory copy in sync so the next save has the new
             # entry without needing to read again.

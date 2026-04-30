@@ -519,11 +519,18 @@ class WinProbabilityModel:
         return cls()
 
     def save(self, path: str = WP_MODEL_FILE) -> None:
-        """Pickle to disk — atomic write (tmp + rename)."""
+        """Pickle to disk -- atomic write (tmp + flush + fsync + rename).
+
+        flush+fsync closes the NTFS lazy-writer window where rename
+        could publish the new file before its data blocks reached the
+        platter. See docs/adr/0001-atomic-file-writes.md.
+        """
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         tmp = path + ".tmp"
         with open(tmp, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, path)
 
     # ----------------------------- Training -------------------------------
