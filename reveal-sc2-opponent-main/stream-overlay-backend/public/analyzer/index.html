@@ -9110,13 +9110,6 @@
         { id: "trends", label: "Trends" },
         { id: "ml", label: "ML / Predict" },
         { id: "mapintel", label: "Map Intel" },
-        // Stream-overlay widget catalog. Same source list the wizard
-        // shows in Step 5 -- exposed here so users can grab a widget
-        // URL any time after onboarding.
-        { id: "widgets", label: "Widgets" },
-        // Diagnostics is the system-health surface added in Stage 4.
-        // It calls /api/diagnostics and renders one card per check.
-        { id: "diagnostics", label: "Diagnostics" },
         // Definitions stays at the very end (mirrors the SC2ReplayAnalyzer.py
         // tab order) so the build/strategy glossary is always one click away.
         { id: "definitions", label: "Definitions" },
@@ -12456,24 +12449,96 @@
       // dead master toggle ('Enable stream overlay event bus') is gone
       // too -- the event bus runs unconditionally as part of Socket.io.
       // OBS card retained because some users actually use scene control.
+      // settings-pr1l: top-level Widgets tab folded in here as the
+      // canonical place to set up streaming. Three layers:
+      //   1. Plain-English "what this is" header.
+      //   2. Widget catalog -- grab Browser Source URLs for each.
+      //   3. <details> Advanced -- OBS WebSocket for the small power-
+      //      user audience that wants the analyzer to drive scenes.
       function SettingsOverlayPanel({ overlay, errors, onPatch }) {
         const o = overlay || {};
+        const w = useWizardStreamlabsState();
         return (
-          <div className="space-y-4 max-w-xl">
+          <div className="space-y-4 max-w-3xl">
             <div className="px-4 py-3 bg-base-900 border border-base-700 rounded">
               <h3 className="text-sm font-semibold text-neutral-100 mb-1">
-                Overlay event bus
+                Stream overlay
               </h3>
               <p className="text-xs text-neutral-400 leading-relaxed">
-                The widget event bus (Socket.io) runs as part of the
-                backend &mdash; no setup needed. Drop any widget HTML
-                from <code className="text-neutral-300">/widgets/</code>
-                into Streamlabs / OBS as a Browser Source and it will
-                receive events automatically.
+                The widget event bus runs automatically as part of the
+                backend &mdash; no setup needed. Pick a widget below,
+                copy its URL, and add it as a Browser Source in your
+                streaming app. Same URL works in both Streamlabs
+                Desktop and OBS Studio.
               </p>
             </div>
-            <SettingsOverlayObsCard overlay={o} errors={errors}
-              onPatch={onPatch} />
+
+            <div className="px-4 py-3 bg-base-900 border border-base-700
+                            rounded space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-neutral-100">
+                  Widgets
+                </h3>
+                <span className="text-xs text-neutral-500">
+                  {w.visible.length} of {WIZARD_OVERLAY_WIDGETS.length}
+                  {" "}shown
+                </span>
+              </div>
+              <p className="text-xs text-neutral-400">
+                The four <span className="text-win-500 font-semibold">
+                RECOMMENDED</span> widgets cover the highest-impact
+                moments: live session, pre-game scouting, post-game
+                reveal, and streak splashes.
+              </p>
+              <WizardStreamlabsToolbar
+                showAll={w.showAll}
+                onToggleShowAll={() => w.setShowAll(!w.showAll)}
+                visibleCount={w.visible.length}
+                totalCount={WIZARD_OVERLAY_WIDGETS.length}
+                onCopyAll={w.copyAllUrls}
+                allCopied={w.allCopied} />
+              <div className="space-y-2">
+                {w.visible.map((widget) => (
+                  <WizardWidgetRow key={widget.file} widget={widget}
+                                   baseUrl={WIZARD_OVERLAY_URL} />
+                ))}
+              </div>
+              <WizardStreamlabsAllInOne />
+            </div>
+
+            <details className="group">
+              <summary className="cursor-pointer text-sm text-neutral-300
+                                  hover:text-neutral-100 select-none px-1">
+                How do I add a widget? (Streamlabs / OBS step-by-step)
+              </summary>
+              <div className="mt-2 space-y-3">
+                <WizardHowTo
+                  title="How do I add a widget in Streamlabs Desktop?"
+                  steps={WIZARD_STREAMLABS_HOWTO_STREAMLABS} />
+                <WizardHowTo
+                  title="How do I add a widget in OBS Studio?"
+                  steps={WIZARD_STREAMLABS_HOWTO_OBS} />
+              </div>
+            </details>
+
+            <details className="group">
+              <summary className="cursor-pointer text-sm text-neutral-300
+                                  hover:text-neutral-100 select-none px-1">
+                Advanced &mdash; OBS Studio scene control (most users skip this)
+              </summary>
+              <div className="mt-2 space-y-2">
+                <p className="text-xs text-neutral-500 px-1 leading-relaxed">
+                  Optional. Only needed if you want the analyzer to
+                  drive OBS Studio (auto-switch scenes on game events,
+                  start/stop recording, etc.). Browser Source widgets
+                  above do <em>not</em> need this. Streamlabs Desktop
+                  doesn't expose the same WebSocket protocol, so this
+                  applies to OBS Studio (28+) only.
+                </p>
+                <SettingsOverlayObsCard overlay={o} errors={errors}
+                  onPatch={onPatch} />
+              </div>
+            </details>
           </div>
         );
       }
@@ -12702,29 +12767,13 @@
         );
       }
 
+      // settings-pr1m: the top-level Diagnostics tab was folded in here.
+      // The Settings sub-tab now hosts the full <DiagnosticsView /> --
+      // every check, the bundle download, the refresh button -- with
+      // zero behavioural change. DiagnosticsView is a self-contained
+      // component (state + fetch + render) so we just delegate.
       function SettingsDiagnosticsPanel() {
-        // Stage 4 ships a full Diagnostics tab; the Settings tab keeps a
-        // pointer for users who land here looking for the health view.
-        return (
-          <div className="space-y-3 max-w-xl">
-            <p className="text-sm text-neutral-300">
-              Health checks now live in the top-level{" "}
-              <strong className="text-neutral-100">Diagnostics</strong>{" "}
-              tab. It runs every check in parallel and offers a
-              "Copy diagnostic bundle" button for support tickets.
-            </p>
-            <p className="text-xs text-neutral-500">
-              Endpoint:{" "}
-              <code className="text-xs bg-base-900 px-1.5 py-0.5 rounded">
-                /api/diagnostics
-              </code>
-              {" "}· bundle:{" "}
-              <code className="text-xs bg-base-900 px-1.5 py-0.5 rounded">
-                /api/diagnostics/bundle
-              </code>
-            </p>
-          </div>
-        );
+        return <DiagnosticsView />;
       }
 
       function SettingsPrivacyPanel({ telemetry, errors, onPatch }) {
@@ -14352,12 +14401,8 @@
               return <MlTab dbRev={dbRev} />;
             case "mapintel":
               return <MapIntelTab dbRev={dbRev} onOpenReplay={setOpenReplay} />;
-            case "widgets":
-              return <WidgetsTab />;
             case "definitions":
               return <DefinitionsTab />;
-            case "diagnostics":
-              return <DiagnosticsView />;
             case "settings":
               return <SettingsView dbRev={dbRev} />;
             default:
