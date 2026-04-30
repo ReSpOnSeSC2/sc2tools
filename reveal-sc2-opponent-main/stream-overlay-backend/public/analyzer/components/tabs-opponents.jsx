@@ -73,8 +73,8 @@
               </span>
               <CsvButton kind="opponents" filters={params} />
             </div>
-            <div className="bg-base-800 ring-soft rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="bg-base-800 ring-soft rounded-xl overflow-x-auto">
+              <table className="w-full text-sm table-fixed">
                 <thead className="bg-base-700 text-[11px] uppercase text-neutral-400">
                   <tr>
                     <SortableTh
@@ -144,14 +144,14 @@
                         onClick={() => onOpen(o.pulseId)}
                         className="border-t border-base-700 hover:bg-accent-500/10 cursor-pointer group"
                       >
-                        <td className="py-1.5 px-3 text-neutral-200 group-hover:text-accent-400">
+                        <td className="py-1.5 px-3 text-neutral-200 group-hover:text-accent-400 truncate" title={o.name || ""}>
                           {o.name || (
                             <span className="text-neutral-500 italic">
                               unnamed
                             </span>
                           )}
                         </td>
-                        <td className="py-1.5 px-3 text-xs text-neutral-500 font-mono">
+                        <td className="py-1.5 px-3 text-xs text-neutral-500 font-mono truncate" title={o.pulseId}>
                           {o.pulseId}
                         </td>
                         <td className="py-1.5 px-3 text-right tabular-nums text-win-500">

@@ -49,8 +49,8 @@
       },
       "id": "pvz-dt-into-3-stargate-void-ray",
       "enqueued_at": "2026-04-30T05:20:07.489Z",
-      "attempts": 10,
-      "next_attempt_at": 1777572674744
+      "attempts": 12,
+      "next_attempt_at": 1777579896072
     }
   ],
   "last_error": null

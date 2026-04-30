@@ -298,6 +298,40 @@ body.single-widget.widget-post-game .build-step .sc2-icon {
     height: 5vw;
 }
 
+/* Opponent widget — narrow-source compact header.
+   At 7vw the default header font is too large for typical OBS
+   browser sources (~500px wide). Name + MMR overflow horizontally
+   and the rightmost text (usually the MMR) gets clipped. These
+   overrides use a smaller font, cap font-size with a px floor/ceiling,
+   and lock in flex truncation priorities so MMR is always preserved
+   while the name truncates with an ellipsis when space is tight. */
+body.single-widget.widget-opponent .widget-container .header {
+    font-size: clamp(14px, 5vw, 32px);
+    letter-spacing: 0.15vw;
+    gap: 1.2vw;
+    align-items: baseline;
+}
+body.single-widget.widget-opponent .widget-container .footer {
+    font-size: clamp(10px, 3.6vw, 22px);
+    letter-spacing: 0.12vw;
+    gap: 1.5vw;
+}
+body.single-widget.widget-opponent #opp-details {
+    min-width: 0;
+    flex: 1 1 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+body.single-widget.widget-opponent #opp-mmr {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+body.single-widget.widget-opponent .widget-container .content {
+    padding: 2.5vw 3.2vw;
+    gap: 1vw;
+}
+
 /* Streak splash text fills the source */
 body.single-widget.widget-streak .streak-text {
     font-size: 22vw;
