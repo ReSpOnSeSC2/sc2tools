@@ -12,6 +12,40 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Eliminate the file-truncation incident root cause.** Production
+  data files (`meta_database.json`, `MyOpponentHistory.json`,
+  `config.json`, `custom_builds.json`, `community_sync_queue.json`,
+  `import_state.json`, `session.state.json`,
+  `stream-overlay-backend/public/_ov/design-tokens.json`,
+  `package.json`) and their tracked siblings were being silently
+  truncated by writers that did `tempfile + os.replace` /
+  `tempfile + fs.renameSync` without an intervening `flush + fsync`.
+  Three NTFS-specific failure modes (lazy-writer truncation,
+  indent-line truncation, null-byte padding) were observed in
+  `data/*.broken-*` over a 96-hour window. Fixed in five phases:
+  (1) `flush + fsync` added to `scripts/macro_cli.py` and
+  `scripts/buildorder_cli.py` `_save_db`; (2) Python long-tail
+  writers (`core/error_logger.py`, `gui/analyzer_app.py` CSV +
+  debug report, `core/custom_builds.py` binary backup,
+  `core/data_store.py` backup marker) routed through
+  `core.atomic_io.atomic_write_{json,text,bytes}`;
+  (3) the three duplicated Node atomic-write impls
+  (`_atomicWriteJsonSync` in `index.js`, `persistMetaDb`'s inline
+  writer in `analyzer.js`, local `atomicWriteJson` in
+  `routes/settings.js`) collapsed to thin delegators against
+  `lib/atomic-fs.js`; (4) `analytics/spatial.py` cache and
+  `analytics/win_probability.py` model save paths picked up
+  `flush + fsync`; (5) `scripts/check_atomic_writes.py` added as a
+  pre-commit / CI guard so a future regression fails the build.
+  Three live data files (96 MB, 2.4 MB, 1.4 KB) recovered from
+  the cleanest snapshot (`MyOpponentHistory.json` regained
+  ~2,000 opponent records that the truncation had eaten); five
+  secondary tracked JSONs restored from HEAD. See
+  `docs/adr/0016-atomic-file-writes.md` for the rule and
+  `docs/TRUNCATION_AUDIT.md` for the byte-level evidence.
+
+### Fixed
+
 - **Opponent widget shows real W-L when Black Book misses.** The merged
   opponent card was rendering 'first meeting' for opponents the user had
   played before whenever `MyOpponentHistory.json` was truncated mid-write,
@@ -103,5 +137,4 @@ workflow builds the Windows installer on each tag push and attaches the
 - Users on existing manual installs at `C:\SC2TOOLS\` are not migrated
   by the installer; they can either continue running from there or
   reinstall via the `data\` across by hand.
-- Auto-update is opt-in: the banner only appears when GitHub has a
-  release with a strictly higher version than the installed one.
+- Auto-update is opt-in: th
