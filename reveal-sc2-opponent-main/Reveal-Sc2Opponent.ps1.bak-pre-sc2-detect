@@ -33,10 +33,6 @@ param(
 $HistoryFilePath = Join-Path $PSScriptRoot "MyOpponentHistory.json"
 $IdlePollInterval    = 0.5   
 $InGamePollInterval  = 0.5   
-# When the SC2 client API on port 6119 is unreachable (game not
-# launched yet) we slow the poll to once every 2s. Avoids hammering
-# localhost and stops the console from spamming connection errors.
-$IdlePollIntervalNoSc2 = 2.0
 # ---------------------------------
 
 # Sc2PulseApiRoot is needed before the Pulse name-search block. It is
@@ -298,12 +294,7 @@ function Invoke-EnhancedRestMethod {
         [string]$Uri,
         [Object]$Body,
         [System.Text.Encoding]$Encoding = [system.Text.Encoding]::UTF8,
-        [System.Net.HttpStatusCode[]]$ValidResponseCodes = @([System.Net.HttpStatusCode]::OK, [System.Net.HttpStatusCode]::NotFound),
-        # Suppress the per-request [API Details] body print. Used by the
-        # SC2 client poll, which routinely returns 404 / connection-refused
-        # when SC2 is at the menu or not launched yet -- spamming those
-        # to the console every 500ms drowns out real status messages.
-        [switch]$Quiet
+        [System.Net.HttpStatusCode[]]$ValidResponseCodes = @([System.Net.HttpStatusCode]::OK, [System.Net.HttpStatusCode]::NotFound)
     )
     $ProgressPreference = 'SilentlyContinue';
     $Response = try { (Invoke-WebRequest -UseBasicParsing -Method $Method -Uri $Uri -Body $Body) }  catch [System.Net.WebException] {
@@ -312,7 +303,7 @@ function Invoke-EnhancedRestMethod {
                 $Stream = $_.Exception.Response.GetResponseStream()
                 $Reader = New-Object System.IO.StreamReader($Stream)
                 $ErrBody = $Reader.ReadToEnd()
-                if (-not [string]::IsNullOrWhiteSpace($ErrBody) -and -not $Quiet) {
+                if (-not [string]::IsNullOrWhiteSpace($ErrBody)) {
                     Write-Host " [API Details] $ErrBody" -ForegroundColor Yellow
                 }
             } catch {}
@@ -386,51 +377,7 @@ function Unmask-GameOpponent {
 
 function Get-Game {
     param([Object] $CurrentGame, [int32] $ValidPlayerCount)
-    # SC2 client API at 127.0.0.1:6119 is only available while SC2.exe
-    # is running. When the user launches this script before SC2, every
-    # poll either gets connection-refused (no listener) or a 404 from
-    # whatever owns the port. Both used to spam the console; now we
-    # treat them as "SC2 not running", print a one-shot waiting
-    # message, and silently retry until SC2 comes up. The instant SC2
-    # starts answering we flip the flag, log a single "detected"
-    # line, and the rest of the loop proceeds as before -- so no
-    # restart is needed when SC2 is launched mid-run.
-    $Game = $null
-    try {
-        $Game = Invoke-EnhancedRestMethod -Uri "${Sc2ClientApiRoot}/game" -Quiet
-    } catch [System.Net.WebException] {
-        # Connect-refused / no listener -- SC2.exe is not running.
-        if ($Script:Sc2ClientReachable) {
-            $Script:Sc2ClientReachable = $false
-            Write-Host " [SC2] Client API unreachable -- waiting for StarCraft II to launch..." -ForegroundColor DarkYellow
-            $Script:Sc2ClientLastWarn = [DateTime]::Now
-        } elseif (([DateTime]::Now - $Script:Sc2ClientLastWarn).TotalSeconds -ge 30) {
-            $Script:Sc2ClientLastWarn = [DateTime]::Now
-            Write-Host " [SC2] Still waiting for StarCraft II..." -ForegroundColor DarkGray
-        }
-        return
-    }
-    # A response shaped like the SC2 client payload (has a Players
-    # property, even when empty) means SC2 is reachable. A bare $null
-    # from a quiet 404 means *something* is on port 6119 but it isn't
-    # SC2's UI server -- treat that as not reachable too.
-    $LooksLikeSc2 = $null -ne $Game -and $null -ne $Game.PSObject.Properties['Players']
-    if ($LooksLikeSc2) {
-        if (-not $Script:Sc2ClientReachable) {
-            $Script:Sc2ClientReachable = $true
-            Write-Host " [SC2] Client API reachable -- ready for games" -ForegroundColor Green
-        }
-    } else {
-        if ($Script:Sc2ClientReachable) {
-            $Script:Sc2ClientReachable = $false
-            Write-Host " [SC2] Client API stopped responding -- waiting for StarCraft II..." -ForegroundColor DarkYellow
-            $Script:Sc2ClientLastWarn = [DateTime]::Now
-        } elseif (([DateTime]::Now - $Script:Sc2ClientLastWarn).TotalSeconds -ge 30) {
-            $Script:Sc2ClientLastWarn = [DateTime]::Now
-            Write-Host " [SC2] Still waiting for StarCraft II..." -ForegroundColor DarkGray
-        }
-        return
-    }
+    try { $Game = Invoke-EnhancedRestMethod -Uri "${Sc2ClientApiRoot}/game" } catch [System.Net.WebException] { return }
     if($Game -eq $null) { return }
     
     $ActivePlayerCount = ($Game.Players | Where {$_.result -eq "undecided"} | Measure-Object).Count
@@ -659,13 +606,6 @@ $SeasonIds = $Seasons.Values | ForEach-Object { $_ | Select-Object -First 1 } | 
 
 Write-Host "Script loaded, waiting for games..." -ForegroundColor Cyan
 
-# SC2 client API reachability tracking. Initialised to $false so the
-# first successful poll prints a one-shot "reachable" message. The
-# warn-throttle timestamp lets the main loop nudge the user every
-# 30s while waiting, without flooding the console.
-$Script:Sc2ClientReachable = $false
-$Script:Sc2ClientLastWarn  = [DateTime]::MinValue
-
 $InGame = $false
 $CurrentOpponentId = $null
 $CurrentOpponentName = $null
@@ -805,16 +745,6 @@ while($true) {
         $InGame = $false
     }
 
-    $SleepSeconds = if ($InGame) {
-        $InGamePollInterval
-    } elseif (-not $Script:Sc2ClientReachable) {
-        # SC2 not running -- relax the poll. 2s is a good balance:
-        # fast enough that the user sees "reachable" within a
-        # couple seconds of launching SC2, slow enough that we are
-        # not pounding localhost or filling the console.
-        $IdlePollIntervalNoSc2
-    } else {
-        $IdlePollInterval
-    }
+    $SleepSeconds = if ($InGame) { $InGamePollInterval } else { $IdlePollInterval }
     Start-Sleep -Seconds $SleepSeconds
 }
