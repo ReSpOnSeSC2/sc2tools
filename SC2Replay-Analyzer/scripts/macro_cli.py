@@ -155,6 +155,8 @@ def _save_db(db_path: str, db: Dict[str, Any]) -> None:
     tmp = db_path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(db, f, indent=2, default=str)
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp, db_path)
 
 
