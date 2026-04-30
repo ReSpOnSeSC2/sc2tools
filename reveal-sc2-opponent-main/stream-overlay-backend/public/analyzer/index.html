@@ -2325,6 +2325,12 @@
         const [editorLoading, setEditorLoading] = useState(false);
         const [editorProfileReady, setEditorProfileReady] = useState(true);
         const [editorError, setEditorError] = useState(null);
+        // editorGame is a perspective-locked snapshot of the build-order
+        // payload taken at openBuildEditor() time. The modal’s source-event
+        // timeline + default-name helper read game.events and game.my_build,
+        // so when wantOpp is true we feed a swapped copy (opp_events,
+        // opp_strategy, etc.) without mutating the live `data` object.
+        const [editorGame, setEditorGame] = useState(null);
         // Stage 6.5: leak-window focus state. When the spending efficiency
         // chart fires sc2:focus-build-order with a {start, end} window, we
         // store it here so the events list highlights everything inside
@@ -2484,6 +2490,21 @@
         const openBuildEditor = () => {
           setEditorLoading(true);
           setEditorError(null);
+          // Perspective-locked snapshot fed to BuildEditorModal so its
+          // source-event timeline and default-name helper reflect whose
+          // build is being saved (opponent vs. me) at the moment the
+          // editor was opened. We swap fields rather than mutating data.
+          const editorGameSnapshot = wantOpp
+            ? Object.assign({}, data, {
+                events: oppAllEvents,
+                early_events: oppEarlyEvents,
+                my_race: (data && data.opp_race) || "",
+                opp_race: (data && data.my_race) || "",
+                my_build: (data && data.opp_strategy) || "",
+                opp_strategy: (data && data.my_build) || "",
+              })
+            : data;
+          setEditorGame(editorGameSnapshot);
           const sourceEvents = wantOpp ? oppAllEvents : myAllEvents;
           const draftBody = {
             // Pass events directly so the backend skips a meta DB
@@ -2493,7 +2514,7 @@
               t: Number(e && e.time) || 0,
               what: (window.BuildEditorHelpers ? window.BuildEditorHelpers.spaEventToWhat(e) : null) || (e && e.name) || "",
             })).filter((ev) => ev.what && /^[A-Za-z][A-Za-z0-9]*$/.test(ev.what)),
-            name: window.BuildEditorHelpers ? window.BuildEditorHelpers.deriveDefaultName(data) : "Custom build",
+            name: window.BuildEditorHelpers ? window.BuildEditorHelpers.deriveDefaultName(editorGameSnapshot) : "Custom build",
             race: wantOpp ? (data && data.opp_race) || "Protoss" : (data && data.my_race) || "Protoss",
             vs_race: wantOpp ? (data && data.my_race) || "Random" : (data && data.opp_race) || "Random",
             source_replay_id: gameId,
@@ -2734,11 +2755,11 @@
             {editorOpen && window.BuildEditorModal &&
               React.createElement(window.BuildEditorModal, {
                 open: editorOpen,
-                game: data,
+                game: editorGame || data,
                 gameId: gameId,
                 draft: editorDraft,
                 profileReady: editorProfileReady,
-                onClose: () => setEditorOpen(false),
+                onClose: () => { setEditorOpen(false); setEditorGame(null); },
                 onSaved: () => {},
                 socket: typeof window !== "undefined" ? window.__sc2_socket : null,
               })}
@@ -3798,7 +3819,7 @@
 
       // "Recompute" button that POSTs to /games/:id/macro-breakdown to re-parse
       // the replay file.
-      function MacroBreakdownPanel({ gameId, initialMacro }) {
+      function MacroBreakdownPanel({ gameId, initialMacro, onScoreChange }) {
         const [data, setData] = useState(null);
         const [loading, setLoading] = useState(true);
         const [error, setError] = useState(null);
@@ -3863,6 +3884,7 @@
                       }),
                     );
                     setRecomputing(false);
+                    if (typeof onScoreChange === "function") onScoreChange(fresh.macro_score);
                   })
                   .catch(() => {
                     // Best-effort. Manual "Recompute" button still works.
@@ -3915,6 +3937,7 @@
                 }),
               );
               setRecomputing(false);
+              if (typeof onScoreChange === "function") onScoreChange(j.macro_score);
             })
             .catch((e) => {
               setError(e.error || "recompute failed");
@@ -4742,7 +4765,7 @@
         return `${date} · vs ${opp} · ${map}${result ? ` · ${result}` : ""}`;
       }
 
-      function GameDetailModal({ game, gameId, macroValue, onClose }) {
+      function GameDetailModal({ game, gameId, macroValue, onClose, onScoreChange }) {
         // ESC-to-close. We bind once at mount and explicitly let the
         // dependency list drive re-bind so a new game id doesn't leak the
         // previous handler.
@@ -4793,6 +4816,7 @@
                   <MacroBreakdownPanel
                     gameId={gameId}
                     initialMacro={macroValue}
+                    onScoreChange={onScoreChange}
                   />
                 </section>
                 <section>
@@ -4836,6 +4860,12 @@
         // Open game appears in a full-screen modal (macro breakdown +
         // activity + resources). Set to {game, gameId, macroValue} to open.
         const [modalGame, setModalGame] = useState(null);
+        // Live macro_score overrides keyed by gameId. Populated when
+        // MacroBreakdownPanel finishes a (re)compute via its
+        // onScoreChange prop, then preferred by the macro-column
+        // reader so the selection button shows the fresh number even
+        // when settings changes invalidated the persisted score.
+        const [scoreOverrides, setScoreOverrides] = useState({});
         const tableRef = useRef(null);
         useEffect(() => {
           if (!targetGameId || !tableRef.current) return;
@@ -4887,6 +4917,10 @@
                 // through so a row that lost macro_score in transit still
                 // renders the score from whatever shape survived.
                 const macro = (() => {
+                  // Live overrides win — once the breakdown panel fires
+                  // onScoreChange we render the fresh number, even if
+                  // g.macro_score on the row predates the recompute.
+                  if (typeof scoreOverrides[id] === "number") return scoreOverrides[id];
                   if (typeof g.macro_score === "number") return g.macro_score;
                   const bd = g && g.macro_breakdown;
                   if (bd && typeof bd === "object") {
@@ -5029,6 +5063,13 @@
               gameId={modalGame.gameId}
               macroValue={modalGame.macroValue}
               onClose={() => setModalGame(null)}
+              onScoreChange={(score) => {
+                if (typeof score !== "number") return;
+                const targetId = modalGame.gameId;
+                setScoreOverrides((prev) =>
+                  Object.assign({}, prev, { [targetId]: score }),
+                );
+              }}
             />
           )}
           </>
