@@ -236,6 +236,27 @@ function countReplays(dir) {
   }
 }
 
+// Stage settings-pr1f: walk subdirs (depth-capped) so the Test button on
+// the Replay-folders Settings panel works whether the user pasted the
+// canonical Replays\\Multiplayer leaf or a parent like Replays\\.
+function countReplaysRecursive(dir, depthCap) {
+  const cap = typeof depthCap === 'number' ? depthCap : 4;
+  let n = 0;
+  function walk(d, depth) {
+    if (depth > cap) return;
+    let entries;
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); }
+    catch (_err) { return; }
+    for (const ent of entries) {
+      const full = path.join(d, ent.name);
+      if (ent.isFile() && ent.name.endsWith(REPLAY_EXT)) n += 1;
+      else if (ent.isDirectory()) walk(full, depth + 1);
+    }
+  }
+  walk(dir, 0);
+  return n;
+}
+
 function resolveBase(baseKey) {
   if (baseKey === 'home') return os.homedir();
   return baseKey;
@@ -264,7 +285,34 @@ function scanReplayFolders() {
 }
 
 function handleScanReplayFolders() {
-  return (_req, res) => {
+  return (req, res) => {
+    // Stage settings-pr1f: if the caller supplies single_path, count
+    // replays in that one folder (depth-capped recursive walk) and
+    // return { ok, replay_count, path }. Otherwise behave as before:
+    // auto-detect canonical folders from common locations.
+    const single = req && req.body && typeof req.body.single_path === 'string'
+      ? req.body.single_path.trim() : '';
+    if (single) {
+      try {
+        if (!safeIsDir(single)) {
+          return res.status(HTTP_OK).json({
+            ok: false, error: 'not_a_directory', replay_count: 0,
+            path: single,
+          });
+        }
+        const replay_count = countReplaysRecursive(single);
+        console.log(`[onboarding] scan-replay-folders single ok n=${replay_count}`);
+        return res.status(HTTP_OK).json({
+          ok: true, replay_count, path: single,
+        });
+      } catch (err) {
+        console.error('[onboarding] scan-replay-folders single failed:',
+                      err && err.message);
+        return res.status(HTTP_INTERNAL).json({
+          ok: false, error: 'scan_failed', replay_count: 0,
+        });
+      }
+    }
     try {
       const folders = scanReplayFolders();
       console.log(`[onboarding] scan-replay-folders ok n=${folders.length}`);

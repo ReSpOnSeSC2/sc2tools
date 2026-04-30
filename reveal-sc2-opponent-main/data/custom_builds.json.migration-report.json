@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-04-29T16:54:59Z",
-  "backup_path": "C:\\SC2TOOLS\\reveal-sc2-opponent-main\\data\\custom_builds.json.pre-v2-bak.20260429T165459Z",
+  "generated_at": "2026-04-30T05:08:26Z",
+  "backup_path": "C:\\SC2TOOLS\\reveal-sc2-opponent-main\\data\\custom_builds.json.pre-v2-bak.20260430T050826Z",
   "summary": {
     "converted": 0,
     "partial": 0,
@@ -12,18 +12,33 @@
     "partial": [],
     "skipped": [
       {
-        "name": "Zerg - 12 Pool (Custom Engine Example)",
+        "name": "PvZ - DT into 3 Stargate Void Ray",
         "dropped_rules": [
           {
             "type": "before",
-            "name": "BuildSpawningPool",
-            "time_lt": 55
+            "name": "BuildTwilightCouncil",
+            "time_lt": 246
           },
           {
-            "type": "count_max",
-            "name": "TrainDrone",
-            "count": 13,
-            "time_lt": 60
+            "type": "before",
+            "name": "BuildDarkShrine",
+            "time_lt": 312
+          },
+          {
+            "type": "count_exact",
+            "name": "BuildStargate",
+            "count": 3,
+            "time_lt": 367
+          },
+          {
+            "type": "before",
+            "name": "BuildDarkTemplar",
+            "time_lt": 435
+          },
+          {
+            "type": "before",
+            "name": "BuildVoidRay",
+            "time_lt": 519
           }
         ]
       }

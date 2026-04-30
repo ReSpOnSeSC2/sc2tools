@@ -259,5 +259,3 @@ describe('settings router', () => {
     });
   });
 });
-});
-});

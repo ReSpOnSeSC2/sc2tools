@@ -51,6 +51,11 @@
     var onClose = props.onClose || function () {};
     var onSaved = props.onSaved || function () {};
     var socket = props.socket || (typeof window !== 'undefined' ? window.__sc2_socket : null);
+    // settings-pr1h: when editId is set, the modal opens in EDIT mode
+    // for an existing custom build. Save sends PUT /api/custom-builds/:id
+    // and the header reflects 'Edit custom build' instead of 'Save as new'.
+    var editId = props.editId || (initialDraft && initialDraft.id) || '';
+    var isEditMode = !!editId;
 
     var sourceRows = useMemo(function () {
       return H.spaEventsToRows(game.events || []);
@@ -295,14 +300,18 @@
         return;
       }
       setErrors({}); setSaving(true); setSaveError(null);
-      fetch('/api/custom-builds/', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      var url = isEditMode
+        ? ('/api/custom-builds/' + encodeURIComponent(editId))
+        : '/api/custom-builds/';
+      var method = isEditMode ? 'PUT' : 'POST';
+      fetch(url, {
+        method: method, headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sanitised.payload),
       }).then(function (r) { return r.ok ? r.json() : r.json().then(function (j) { return Promise.reject(j); }); })
       .then(function (saved) {
         setSaving(false);
         pristineRef.current = JSON.stringify(stateForPristine());
-        pushToast('success', 'Saved “' + saved.name + '”.', { label: 'View build', href: '/builds/' + saved.id });
+        pushToast('success', (isEditMode ? 'Updated “' : 'Saved “') + saved.name + '”.', { label: 'View build', href: '/builds/' + saved.id });
         if (shareWithCommunity) {
           fetch('/api/custom-builds/sync', { method: 'POST' })
             .then(function () { pushToast('success', 'Shared with community.'); })
@@ -332,7 +341,22 @@
         .then(function (summary) {
           setReclassifyProgress(null);
           pushToast('success', 'Reclassified ' + (summary.scanned || 0) + ' games (' + (summary.changed || 0) + ' moved).');
-          onClose();
+          // Force the analyzer's server-side cache to reload from disk
+          // so the next /api/analyzer/games call returns the freshly
+          // re-bucketed games. The watcher's 4s polling interval
+          // otherwise leaves dbCache.meta stale, which means the
+          // 'My Build' column on the games table keeps showing the
+          // old (or blank) build name. Then dispatch a window event
+          // so the App component bumps dbRev and every dbRev-keyed
+          // view refetches immediately.
+          fetch('/api/analyzer/reload', { method: 'POST' })
+            .catch(function () { /* best-effort */ })
+            .then(function () {
+              try {
+                window.dispatchEvent(new CustomEvent('sc2:analyzer-db-changed'));
+              } catch (_) { /* best-effort */ }
+              onClose();
+            });
         }).catch(function (e) {
           setReclassifyProgress(null);
           pushToast('error', 'Reclassify failed: ' + ((e && e.error) || 'unknown'));
@@ -356,7 +380,7 @@
         ref: containerRef,
         className: 'w-full max-w-5xl max-h-[92vh] flex flex-col bg-base-900 ring-soft rounded-lg border border-base-700 shadow-xl',
       },
-        renderHeader(name, attemptClose, !profileReady),
+        renderHeader(name, attemptClose, !profileReady, isEditMode),
         c('div', { className: 'flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-6' },
           renderSection1Basics({
             name: name, setName: setName, description: description, setDescription: setDescription,
@@ -402,9 +426,10 @@
   // =====================================================================
   // Section renderers
   // =====================================================================
-  function renderHeader(name, onCloseClick, showProfileWarn) {
+  function renderHeader(name, onCloseClick, showProfileWarn, isEditMode) {
     return c('div', { className: 'flex items-center gap-3 px-5 py-3 border-b border-base-700' },
-      c('span', { className: 'text-[11px] uppercase tracking-wider text-neutral-500' }, 'Save as new build'),
+      c('span', { className: 'text-[11px] uppercase tracking-wider text-neutral-500' },
+        isEditMode ? 'Edit custom build' : 'Save as new build'),
       c('span', { className: 'text-sm text-neutral-200 truncate' }, name || 'Untitled'),
       showProfileWarn ? c('span', {
         className: 'text-[10px] text-amber-400 ml-2',

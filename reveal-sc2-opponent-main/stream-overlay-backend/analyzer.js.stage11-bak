@@ -57,13 +57,8 @@ const TimingCatalog = require('./public/analyzer/timing_catalog');
 // --------------------------------------------------------------
 const ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'data');
-// Stage 11.3: tests inject SC2_META_DB_PATH / SC2_OPP_HISTORY_PATH
-// to redirect file reads at a tmp fixture. Must be set BEFORE
-// require('./analyzer'). Production leaves the env vars unset and
-// resolves the canonical data/ files exactly as before.
-const META_DB_PATH = process.env.SC2_META_DB_PATH
-    || path.join(DATA_DIR, 'meta_database.json');
-const OPP_HISTORY_PATH = process.env.SC2_OPP_HISTORY_PATH || (() => {
+const META_DB_PATH = path.join(DATA_DIR, 'meta_database.json');
+const OPP_HISTORY_PATH = (() => {
     const inData = path.join(DATA_DIR, 'MyOpponentHistory.json');
     const legacy = path.join(ROOT, 'MyOpponentHistory.json');
     return fs.existsSync(inData) ? inData : legacy;

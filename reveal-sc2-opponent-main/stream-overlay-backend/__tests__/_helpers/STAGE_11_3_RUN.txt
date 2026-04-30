@@ -1,0 +1,104 @@
+==========================================================
+STAGE 11.3: Express test suite — jest run summary
+Date: 2026-04-30T04:12:25Z
+Repo: reveal-sc2-opponent-main/stream-overlay-backend
+==========================================================
+
+## NEW TEST FILES (Stage 11.3 deliverables)
+
+PASS __tests__/health.test.js
+PASS __tests__/diagnostics.test.js
+PASS __tests__/profile.test.js
+PASS __tests__/config.test.js
+PASS __tests__/version.test.js
+PASS __tests__/games.test.js
+PASS __tests__/community-sync.test.js
+Test Suites: 7 passed, 7 total
+Tests:       72 passed, 72 total
+
+==========================================================
+## FULL SUITE WITH COVERAGE (gates: lines 60, branches 40,
+## functions 65, statements 60 — see jest.config.js for the
+## rationale for the floor and when to tighten)
+==========================================================
+
+      [Analyzer] reloaded opp: rev=1
+
+
+PASS __tests__/community-sync.test.js
+PASS __tests__/analyzer_salvage.test.js
+PASS ./utils.test.js
+
+  ●  Cannot log after tests are done. Did you forget to wait for something async in your test?
+    Attempted to log "[Twitch] Connected to #responsesc2".
+
+      1947 |
+      1948 |     twitchClient.connect()
+           |                             ^
+      1951 |
+      1952 |     twitchClient.on('message', (channel, tags, message, self) => {
+
+
+
+  ●  Cannot log after tests are done. Did you forget to wait for something async in your test?
+    Attempted to log "[Twitch] Connected to #responsesc2".
+
+      1947 |
+      1948 |     twitchClient.connect()
+           |                             ^
+      1951 |
+      1952 |     twitchClient.on('message', (channel, tags, message, self) => {
+
+
+
+  ●  Cannot log after tests are done. Did you forget to wait for something async in your test?
+    Attempted to log "[Twitch] Connected to #responsesc2".
+
+      1947 |
+      1948 |     twitchClient.connect()
+           |                             ^
+      1951 |
+      1952 |     twitchClient.on('message', (channel, tags, message, self) => {
+
+
+
+  ●  Cannot log after tests are done. Did you forget to wait for something async in your test?
+    Attempted to log "[Twitch] Connected to #responsesc2".
+
+      1947 |
+      1948 |     twitchClient.connect()
+           |                             ^
+      1951 |
+      1952 |     twitchClient.on('message', (channel, tags, message, self) => {
+
+
+PASS tests/sc2_catalog.test.js
+File                             | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s                                                                                                                           
+All files                        |   61.44 |    42.65 |   70.15 |   65.85 |                                                                                                                                             
+ stream-overlay-backend          |     100 |      100 |     100 |     100 |                                                                                                                                             
+  utils.js                       |     100 |      100 |     100 |     100 |                                                                                                                                             
+ stream-overlay-backend/routes   |   61.03 |    40.46 |   70.54 |   65.64 |                                                                                                                                             
+  backups.js                     |   90.14 |    78.94 |   95.45 |   92.53 | 261-262,289,306-309,336,367-370,409-412                                                                                                     
+  custom-builds.js               |   57.28 |    40.47 |   80.48 |   61.37 | 89-91,160-164,201-233,271,285-293,312-325,344-349,368-371,409-411,428-438,450-455,483-484,512                                               
+  custom_builds_helpers.js       |    27.2 |    14.65 |   35.48 |   30.76 | 36-44,75-81,98-100,126,158,196-208,220,254,286-296,342-457,604-606,634-778                                                                  
+  diagnostics.js                 |   94.91 |       75 |     100 |   94.54 | 171,190-191                                                                                                                                 
+  diagnostics_bundle.js          |    82.6 |     62.5 |   85.71 |   86.04 | 53-57,126,144-146                                                                                                                           
+  diagnostics_checks.js          |   49.59 |    21.31 |   62.96 |   52.86 | 92-115,157-160,191-250,272-286,311,342-355,377-391,445-497,521-533,560,565,601,628-643                                                      
+  diagnostics_helpers.js         |   47.58 |    39.28 |      40 |   52.52 | 89-101,115-125,171-173,192-193,198-199,222-272                                                                                              
+  onboarding.js                  |   69.65 |    53.97 |   71.64 |   75.15 | 201-203,213-218,227-235,251-255,273-275,312-313,318-319,325,426-427,457,466,480,546-556,566-598,603-614,630,677-693,719-720,761-762,778,814 
+  settings.js                    |   90.08 |    80.35 |   92.59 |   92.17 | 122-123,138,171,288,309-310,323,371                                                                                                         
+ stream-overlay-backend/services |    61.6 |    51.46 |   67.85 |   65.77 |                                                                                                                                             
+  community_sync.js              |    61.6 |    51.46 |   67.85 |   65.77 | 183,219,278-279,374-375,412-433,477-479,498,514-643,703-704                                                                                 
+
+=============================== Coverage summary ===============================
+Statements   : 61.44% ( 1152/1875 )
+Branches     : 42.65% ( 552/1294 )
+Functions    : 70.15% ( 221/315 )
+Lines        : 65.85% ( 1076/1634 )
+================================================================================
+
+Test Suites: 3 failed, 15 passed, 18 total
+Tests:       22 failed, 194 passed, 216 total
+Snapshots:   0 total
+Time:        13.954 s
+Ran all test suites.

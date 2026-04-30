@@ -244,22 +244,10 @@
               "cn",
               "sea"
             ]
-          },
-          "battle_tag": {
-            "type": "string",
-            "pattern": "^[^#]+#[0-9]+$",
-            "minLength": 3,
-            "maxLength": 64,
-            "description": "Blizzard BattleTag for this identity. Onboarding doesn't capture this -- the user fills it in from Settings."
-          },
-          "pulse_id": {
-            "type": "string",
-            "pattern": "^[0-9]+$",
-            "description": "SC2Pulse internal numeric character id (e.g. '994428' from sc2pulse.nephest.com URLs). Captured during onboarding's SC2Pulse search step. Use this id for SC2Pulse API lookups; character_id is the regional folder id and is NOT the same thing."
           }
         }
       },
-      "description": "All Battle.net identities the user owns, as captured by onboarding (replay folder scan + SC2Pulse search). One entry per region the user plays on (NA / EU / KR / CN / SEA). The single 'primary' identity also lives in profile.json.battlenet -- this list is the canonical full set the Settings page edits. Each entry pairs: name (in-replay name), battle_tag (Blizzard handle), character_id (regional replay-folder id, format X-S2-X-XXXXXX), account_id (Battle.net account number), pulse_id (SC2Pulse numeric id), region."
+      "description": "All Battle.net identities the user owns. The single 'primary' identity also lives in profile.json.battlenet -- this list is the full set used for replay-perspective ('me' filtering) and multi-region SC2Pulse aggregation."
     }
   }
 }

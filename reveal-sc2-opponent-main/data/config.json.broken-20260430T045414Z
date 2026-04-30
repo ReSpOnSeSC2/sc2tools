@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "paths": {
+    "sc2_install_dir": "",
+    "replay_folders": [
+      "C:\\Users\\jay19\\OneDrive\\Pictures\\Documents\\StarCraft II\\Accounts\\50983875\\1-S2-1-267727\\Replays\\Multiplayer",
+      "C:\\Users\\jay19\\OneDrive\\Pictures\\Documents\\StarCraft II\\Accounts\\50983875\\2-S2-1-8780508\\Replays\\Multiplayer"
+    ]
+  },
+  "identities": [
+    {
+      "name": "ReSpOnSe",
+      "character_id": "1-S2-1-267727",
+      "account_id": "50983875",
+      "region": "us",
+      "battle_tag": "ReSpOnSe#1872",
+      "pulse_id": "994428"
+    },
+    {
+      "name": "ReSpOnSe",
+      "character_id": "2-S2-1-8780508",
+      "account_id": "50983875",
+      "region": "eu",
+      "battle_tag": "ReSpOnSe#1872",
+      "pulse_id": "8970877"
+    }
+  ],
+  "macro_engine": {
+    "enabled_disciplines": [
+      "chrono",
+      "inject",
+      "mule"
+    ],
+    "minimum_game_length_sec": 60,
+    "engine_version": "2026-04-chain-counted"
+  },
+  "build_classifier": {
+    "active_definition_ids": [],
+    "use_custom_builds": true,
+    "use_community_shared_builds": true
+  },
+  "stream_overlay": {
+    "enabled": false,
+    "twitch_channel": null,
+    "obs_websocket": {
+      "host": "127.0.0.1",
+      "port": 4455,
+      "password": null
+    },
+    "pulse_character_ids": [
+      "994428",
+      

@@ -111,18 +111,13 @@ def _read_json(path: str) -> Optional[Dict[str, Any]]:
 def _is_v1(data: Dict[str, Any]) -> bool:
     """Return True when ``data`` looks like the legacy v1 shape.
 
-    Stage settings-pr1i: tightened so that ANY numeric ``version`` key
-    disqualifies a file from being treated as v1, even if its builds
-    have a ``rules`` field. The Express side bumped to v3 (which also
-    uses per-build ``rules``) and the old heuristic was destructively
-    "migrating" v3 files back to an empty v2 every time this loader
-    ran. The legitimate v1 file (Spawning-Tool-style) has NO version
-    key at all -- only ``target``/``rules`` distinguishes it -- so we
-    keep matching that case while leaving v2/v3 alone.
+    A v1 file lacks ``version: 2`` and has at least one entry with
+    ``target`` or ``rules``. An empty file with neither is treated
+    as v2-blank for migration purposes.
     """
     if not isinstance(data, dict):
         return False
-    if "version" in data:
+    if data.get("version") == SCHEMA_VERSION:
         return False
     builds = data.get("builds")
     if not isinstance(builds, list):
@@ -160,28 +155,23 @@ def load_custom_builds() -> Dict[str, List[Dict]]:
 
 
 def load_custom_builds_v2() -> Dict[str, Any]:
-    """Load the v2+-shaped local custom-builds cache.
+    """Load the v2-shaped local custom-builds cache.
 
-    Stage settings-pr1i: accept v2 OR newer (v3+) without rewriting.
-    The Express backend (``routes/custom_builds_helpers.js``) is the
-    canonical writer and is currently at v3; this Python module is
-    read-only for v2+ files and only ever WRITES on a v1->v2 migration
-    of a legitimate Spawning-Tool-format file (no ``version`` key).
+    Triggers the v1->v2 migration on the first call after the
+    Stage 7.4 release. Returns the empty v2 shape if the file
+    does not exist or could not be parsed.
     """
     raw = _read_json(CUSTOM_BUILDS_FILE)
     if raw is None:
         return _empty_v2_file()
     if _is_v1(raw):
         return _migrate_v1_to_v2(raw)
-    version = raw.get("version")
-    if isinstance(version, int) and version >= SCHEMA_VERSION:
-        # v2 or newer (v3 from Express, future schemas) -- pass through
-        # unchanged so we never destructively downgrade.
-        return raw
-    LOGGER.warning(
-        "custom_builds.unexpected_version version=%s", version
-    )
-    return _empty_v2_file()
+    if raw.get("version") != SCHEMA_VERSION:
+        LOGGER.warning(
+            "custom_builds.unexpected_version version=%s", raw.get("version")
+        )
+        return _empty_v2_file()
+    return raw
 
 
 def load_community_cache() -> Dict[str, Any]:

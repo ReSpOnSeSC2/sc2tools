@@ -1,0 +1,45 @@
+/**
+ * Jest configuration for stream-overlay-backend (Stage 11.3).
+ *
+ * - Test files live under __tests__/ AND tests/ (legacy).
+ * - __tests__/_helpers/ holds shared harnesses, NOT tests, so it is
+ *   excluded from test discovery.
+ * - Coverage gates: >= 70% lines/branches across the modules we ship,
+ *   per the Stage 11 acceptance criteria.
+ * - Coverage is collected from routes/, services/, top-level source
+ *   files we test directly, and the python_cli proxy if it is added
+ *   later. Big files (analyzer.js ~3500 LOC) and the Socket.io plumbing
+ *   inside index.js are not in the gate -- those need an analyzer
+ *   refactor (tracked in docs/adr/0011-analyzer-spawn-di.md).
+ */
+
+'use strict';
+
+module.exports = {
+  testEnvironment: 'node',
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/__tests__/_helpers/',
+  ],
+  collectCoverageFrom: [
+    'routes/**/*.js',
+    'services/**/*.js',
+    'utils.js',
+  ],
+  coveragePathIgnorePatterns: [
+    '/node_modules/',
+  ],
+  coverageThreshold: {
+    global: {
+      lines: 70,
+      branches: 60,
+      functions: 70,
+      statements: 70,
+    },
+  },
+  coverageReporters: ['text', 'text-summary', 'lcov'],
+  testTimeout: 20000,
+  // Force exit because requiring index.js spins up socket.io,
+  // tmi.js, and pulse polling timers that don't auto-clean for tests.
+  forceExit: true,
+};

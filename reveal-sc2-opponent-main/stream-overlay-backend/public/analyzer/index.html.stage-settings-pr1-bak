@@ -9524,8 +9524,7 @@
 
       // ---- Step 3: Identity -------------------------------------
 
-      function WizardIdentityRow({ player, selectedIds, battleTag,
-                                   onSetBattleTag, onToggle }) {
+      function WizardIdentityRow({ player, selectedIds, onToggle }) {
         const id = `wzr-id-${player.character_id}`;
         const isSel = (selectedIds || []).includes(player.character_id);
         const races = player.races || {};
@@ -9554,19 +9553,6 @@
                 </div>
               ) : null}
             </td>
-            <td style={{ padding: "var(--space-1)" }}>
-              <input type="text" value={battleTag || ""}
-                     onChange={(e) => onSetBattleTag(
-                       player.character_id, e.target.value)}
-                     placeholder="Name#1234"
-                     style={{ width: "100%", padding: "2px 6px",
-                              fontSize: "var(--font-size-sm)",
-                              fontFamily: "var(--font-family-mono)",
-                              background: "var(--color-bg-input)",
-                              border: "1px solid var(--color-border)",
-                              borderRadius: "var(--radius-sm)",
-                              color: "var(--color-text-primary)" }} />
-            </td>
             <td style={{ padding: "var(--space-1)",
                          fontFamily: "var(--font-family-mono)",
                          color: "var(--color-text-muted)" }}>
@@ -9579,8 +9565,7 @@
         );
       }
 
-      function WizardIdentityTable({ identities, selectedIds, battleTags,
-                                     onSetBattleTag, onToggle }) {
+      function WizardIdentityTable({ identities, selectedIds, onToggle }) {
         return (
           <table style={{ width: "100%", borderCollapse: "collapse",
                            fontSize: "var(--font-size-sm)" }}>
@@ -9588,8 +9573,7 @@
               <tr style={{ color: "var(--color-text-secondary)" }}>
                 <th style={{ textAlign: "left",  padding: "var(--space-1)" }}>Pick</th>
                 <th style={{ textAlign: "left",  padding: "var(--space-1)" }}>Name</th>
-                <th style={{ textAlign: "left",  padding: "var(--space-1)" }}>BattleTag</th>
-                <th style={{ textAlign: "left",  padding: "var(--space-1)" }}>Regional folder ID</th>
+                <th style={{ textAlign: "left",  padding: "var(--space-1)" }}>Character ID</th>
                 <th style={{ textAlign: "right", padding: "var(--space-1)" }}>Games</th>
               </tr>
             </thead>
@@ -9597,8 +9581,6 @@
               {(identities || []).map((p) => (
                 <WizardIdentityRow key={p.character_id} player={p}
                                    selectedIds={selectedIds}
-                                   battleTag={(battleTags || {})[p.character_id] || ""}
-                                   onSetBattleTag={onSetBattleTag}
                                    onToggle={onToggle} />
               ))}
             </tbody>
@@ -9607,8 +9589,7 @@
       }
 
       function WizardStepIdentity({ scanning, scanError, identities,
-                                    selectedIds, battleTags, onSetBattleTag,
-                                    onToggle, onRescan,
+                                    selectedIds, onToggle, onRescan,
                                     onNext, onBack }) {
         const count = (selectedIds || []).length;
         return (
@@ -9629,8 +9610,6 @@
             <WizardError>{scanError}</WizardError>
             <WizardIdentityTable identities={identities}
                                  selectedIds={selectedIds}
-                                 battleTags={battleTags}
-                                 onSetBattleTag={onSetBattleTag}
                                  onToggle={onToggle} />
             <WizardNavRow>
               <WizardButton kind="secondary" onClick={onBack}>Back</WizardButton>
@@ -10463,27 +10442,10 @@
         return tail;
       }
 
-      function wizardPulseIdsByRegion(pulse) {
-        const out = {};
-        if (!pulse || !Array.isArray(pulse.character_ids)) return out;
-        const byId = {};
-        for (const m of (pulse.matches || [])) byId[String(m.pulse_id)] = m;
-        for (const cid of pulse.character_ids) {
-          const m = byId[String(cid)];
-          const region = m && m.region ? String(m.region).toLowerCase() : "";
-          if (region && !out[region]) out[region] = String(cid);
-        }
-        return out;
-      }
-
       function wizardBuildProfile(state) {
         const primary = wizardPickPrimary(state.identities);
         if (!primary) return null;
-        // Stage settings-pr1c: prefer the BattleTag the user typed in the
-        // wizard's identity step. Stub-fallback only if blank, so legacy
-        // installs that didn't see this field still validate.
-        const typedBt = ((state.battleTags || {})[primary.character_id] || "").trim();
-        const battle_tag = typedBt || `${primary.name}#0`;
+        const battle_tag = `${primary.name}#0`;
         const region = state.pulse.region
             || wizardRegionFromCharacterId(primary.character_id);
         const account_id = wizardAccountIdFor(primary);
@@ -10500,23 +10462,13 @@
       }
 
       function wizardBuildConfig(state) {
-        const battleTagsMap = state.battleTags || {};
-        const pulseIdsByRegion = wizardPulseIdsByRegion(state.pulse);
         const identities = (Array.isArray(state.identities) ? state.identities : [])
-          .map((p) => {
-            const region = wizardRegionFromCharacterId(p.character_id);
-            const entry = {
-              name: p.name,
-              character_id: p.character_id,
-              account_id: wizardAccountIdFor(p),
-              region,
-            };
-            const bt = (battleTagsMap[p.character_id] || "").trim();
-            if (bt) entry.battle_tag = bt;
-            const pid = pulseIdsByRegion[region];
-            if (pid) entry.pulse_id = String(pid);
-            return entry;
-          });
+          .map((p) => ({
+            name: p.name,
+            character_id: p.character_id,
+            account_id: wizardAccountIdFor(p),
+            region: wizardRegionFromCharacterId(p.character_id),
+          }));
         return {
           version: 1,
           paths: {
@@ -10705,9 +10657,6 @@
             scanning={ctx.identitiesLoading} scanError={ctx.identitiesError}
             identities={ctx.identities}
             selectedIds={(ctx.selectedIdentities || []).map((p) => p.character_id)}
-            battleTags={ctx.battleTags}
-            onSetBattleTag={(cid, value) => ctx.setBattleTags(
-              (prev) => ({ ...prev, [cid]: value }))}
             onToggle={ctx.onToggleIdentity}
             onRescan={() => ctx.scanIdentities(ctx.selectedFolders || [])}
             onNext={() => ctx.setStep(4)} onBack={() => ctx.setStep(2)} />;
@@ -10753,10 +10702,6 @@
         const [selectedIdentities, setSelectedIdentities] = useState([]);
         const [identitiesLoading, setIdentitiesLoading] = useState(false);
         const [identitiesError, setIdentitiesError] = useState("");
-        // Stage settings-pr1c: BattleTag per identity, keyed by
-        // character_id (the regional folder id). Onboarding now asks
-        // for this so Settings doesn't have to.
-        const [battleTags, setBattleTags] = useState({});
         const [selectedRaces, setSelectedRaces] = useState([]);
         const [twitch, setTwitch] = useState(wizardEmptyTwitch());
         const [obs, setObs] = useState(wizardEmptyObs());
@@ -10774,7 +10719,6 @@
           selectedIdentities, setSelectedIdentities,
           identitiesLoading, setIdentitiesLoading,
           identitiesError, setIdentitiesError,
-          battleTags, setBattleTags,
           selectedRaces, setSelectedRaces,
           twitch, setTwitch, obs, setObs, pulse, setPulse,
           applying, setApplying, applyError, setApplyError,
@@ -11037,12 +10981,21 @@
         { id: "profile",     label: "Profile" },
         { id: "folders",     label: "Replay folders" },
         { id: "import",      label: "Import replays" },
+        { id: "macro",       label: "Macro engine" },
         { id: "builds",      label: "Build classifier" },
         { id: "overlay",     label: "Stream overlay" },
         { id: "backups",     label: "Backups" },
         { id: "diagnostics", label: "Diagnostics" },
         { id: "privacy",     label: "Privacy" },
         { id: "about",       label: "About" },
+      ];
+
+      const SETTINGS_DISCIPLINES = [
+        { id: "chrono",            label: "Chrono boost (Protoss)" },
+        { id: "inject",            label: "Larva inject (Zerg)" },
+        { id: "mule",              label: "MULE drop (Terran)" },
+        { id: "supply",            label: "Supply blocks" },
+        { id: "worker_production", label: "Continuous worker production" },
       ];
 
       const SETTINGS_RACES = ["Protoss", "Terran", "Zerg", "Random"];
@@ -11139,24 +11092,17 @@
         return out;
       }
 
-      // The server (routes/settings.js#formatErrors) sends ajv errors as
-      // { path: "/battlenet/battle_tag", message: "..." } — note "path"
-      // (not instancePath) and a leading "/". Convert to dotted keys to
-      // match the inline error wiring (errors["battlenet.battle_tag"]).
       function settingsCollectErrors(profileErrors, configErrors) {
         const out = {};
         const push = (key, msg) => {
-          if (!key) key = "_root";
+          if (!key) return;
           out[key] = out[key] || [];
           out[key].push(msg);
         };
         const collect = (errs) => {
           if (!Array.isArray(errs)) return;
           errs.forEach(e => {
-            // Server shape: { path, message }. Legacy ajv shape:
-            // { instancePath, dataPath, params }. Accept both.
-            const raw = String(e.path || e.instancePath
-              || e.dataPath || "");
+            const raw = String(e.instancePath || e.dataPath || "");
             const cleaned = raw.replace(/^\//, "").replace(/\//g, ".");
             const key = cleaned
               || (e.params && e.params.missingProperty)
@@ -11166,19 +11112,6 @@
         };
         collect(profileErrors); collect(configErrors);
         return out;
-      }
-
-      // Flat list of every error for the save-bar surface, so the user
-      // sees what actually rejected even when the broken field lives on
-      // a tab they aren't looking at.
-      function settingsErrorsToList(errorsByKey) {
-        const list = [];
-        for (const key of Object.keys(errorsByKey || {})) {
-          for (const msg of errorsByKey[key]) {
-            list.push({ key, msg });
-          }
-        }
-        return list;
       }
 
       // --- shared atoms ------------------------------------------
@@ -11308,28 +11241,6 @@
         );
       }
 
-      function SettingsSaveErrorList({ errors }) {
-        const items = settingsErrorsToList(errors);
-        if (items.length === 0) return null;
-        return (
-          <div className="px-3 py-2 bg-loss-900/30 border border-loss-700
-                          rounded space-y-1" role="alert">
-            <div className="text-xs font-semibold text-loss-300">
-              The server rejected these fields:
-            </div>
-            <ul className="text-xs text-loss-200 font-mono space-y-0.5">
-              {items.map((it, i) => (
-                <li key={i}>
-                  <span className="text-loss-400">{it.key || "(root)"}</span>
-                  <span className="mx-1 text-neutral-500">&mdash;</span>
-                  <span>{it.msg}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      }
-
       function SettingsTabRail({ tab, onChange }) {
         return (
           <nav aria-label="Settings sections"
@@ -11362,8 +11273,9 @@
         return (
           <>
             <div>
-              <SettingsLabel htmlFor="settings-battle-tag"
-                hint="Blizzard handle, e.g. ReSpOnSe#1872">BattleTag</SettingsLabel>
+              <SettingsLabel htmlFor="settings-battle-tag">
+                Battle tag
+              </SettingsLabel>
               <SettingsInput id="settings-battle-tag"
                 value={bn.battle_tag || ""}
                 onChange={(e) => onPatch(
@@ -11375,8 +11287,7 @@
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <SettingsLabel htmlFor="settings-character-id"
-                  hint="e.g. 1-S2-1-267727 — the folder under Documents\StarCraft II\Accounts\<acct>\">
-                  Regional profile / replay-folder ID</SettingsLabel>
+                  hint="from SC2Pulse">Character id</SettingsLabel>
                 <SettingsInput id="settings-character-id"
                   value={bn.character_id || ""}
                   onChange={(e) => onPatch(
@@ -11386,9 +11297,9 @@
                 <SettingsErrorList errors={errors["battlenet.character_id"]} />
               </div>
               <div>
-                <SettingsLabel htmlFor="settings-account-id"
-                  hint="e.g. 50983875 — the parent folder under Documents\StarCraft II\Accounts\">
-                  Battle.net account number</SettingsLabel>
+                <SettingsLabel htmlFor="settings-account-id">
+                  Account id
+                </SettingsLabel>
                 <SettingsInput id="settings-account-id"
                   value={bn.account_id || ""}
                   onChange={(e) => onPatch(
@@ -11472,279 +11383,16 @@
         );
       }
 
-      function SettingsProfilePanel({ profile, config,
-                                      errors, onPatch, onPatchConfig }) {
-        const identities = (config && config.identities) || [];
-        const pulseIds = settingsPulseIdsFromConfig(config);
-        // Backfill: existing onboarding only stored a flat global
-        // pulse_character_ids[]. If any identity row is missing pulse_id
-        // and we have IDs in the global array, copy them in by index.
-        // Runs once per dataset shape change; the user just clicks Save
-        // to persist the migration.
-        useEffect(() => {
-          if (identities.length === 0 || pulseIds.length === 0) return;
-          const needsBackfill = identities.some((row, i) =>
-            !row.pulse_id && !!pulseIds[i]);
-          if (!needsBackfill) return;
-          const next = identities.map((row, i) => row.pulse_id
-            ? row : { ...row, pulse_id: String(pulseIds[i] || "") });
-          // Drop empty-string pulse_id keys so the schema (pattern
-          // ^[0-9]+$) doesn't reject the row.
-          const cleaned = next.map((row) => {
-            if (row.pulse_id) return row;
-            const { pulse_id: _drop, ...rest } = row;
-            return rest;
-          });
-          onPatchConfig(["identities"], cleaned);
-          // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [identities.length, pulseIds.join(",")]);
-        // Keep profile.battlenet in sync with the primary identity row
-        // (most-played, falling back to the first). Schema requires
-        // battlenet on profile.json; we derive it instead of asking the
-        // user to maintain two copies.
-        useEffect(() => {
-          const primary = settingsPickPrimaryIdentity(identities);
-          if (!primary) return;
-          const next = settingsBattlenetFromIdentity(primary,
-            (profile && profile.battlenet) || {});
-          if (next && !settingsShallowEqual(next, profile.battlenet)) {
-            onPatch(["battlenet"], next);
-          }
-          // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [JSON.stringify(identities)]);
+      function SettingsProfilePanel({ profile, errors, onPatch }) {
         return (
-          <div className="space-y-4 max-w-3xl">
-            <SettingsProfileIdentitiesGroup
-              identities={identities}
-              pulseIds={pulseIds}
-              errors={errors} onPatchConfig={onPatchConfig} />
+          <div className="space-y-4 max-w-xl">
+            <SettingsProfileBattleNetGroup bn={profile.battlenet || {}}
+              errors={errors} onPatch={onPatch} />
             <SettingsProfileRacesGroup races={profile.races}
               errors={errors} onPatch={onPatch} />
             <SettingsProfileTuningGroup profile={profile}
               errors={errors} onPatch={onPatch} />
           </div>
-        );
-      }
-
-      // --- Identities (multi-region) -----------------------------
-      // Sourced from the data onboarding already saved:
-      //   config.identities[]                  (one per Bnet account/region)
-      //   config.stream_overlay.pulse_character_ids[]  (SC2Pulse numeric ids)
-      // BattleTag isn't captured at onboarding (it stubs as Name#0), so the
-      // user fills it per-row here. The schema (Stage settings-pr1b) carries
-      // optional battle_tag + pulse_id per identity for round-tripping.
-
-      function settingsPulseIdsFromConfig(config) {
-        const so = (config && config.stream_overlay) || {};
-        const ids = Array.isArray(so.pulse_character_ids)
-          ? so.pulse_character_ids.slice() : [];
-        return ids;
-      }
-
-      function settingsRegionFromCharacterId(cid) {
-        if (typeof cid !== "string") return "";
-        const m = cid.match(/^([1-5])-S2-/);
-        if (!m) return "";
-        return ({ "1": "us", "2": "eu", "3": "kr", "5": "cn", "6": "sea" })[m[1]] || "";
-      }
-
-      function settingsBlankIdentity() {
-        return { name: "", battle_tag: "", character_id: "",
-                 account_id: "", region: "us" };
-      }
-
-      function settingsPickPrimaryIdentity(identities) {
-        if (!Array.isArray(identities) || identities.length === 0) return null;
-        // Pick the first row that has a battle_tag + character_id; fall back
-        // to the first row overall. (We don't have games_seen at this point;
-        // the user can re-order rows in a future PR.)
-        for (const row of identities) {
-          if (row && row.battle_tag && row.character_id) return row;
-        }
-        return identities[0];
-      }
-
-      function settingsBattlenetFromIdentity(row, current) {
-        // Only emit a battlenet object once we have all four required
-        // fields; otherwise leave the existing one alone so the schema
-        // doesn't reject mid-edit states.
-        if (!row || !row.battle_tag || !row.character_id
-            || !row.account_id || !row.region) {
-          return null;
-        }
-        return {
-          battle_tag: row.battle_tag,
-          character_id: row.character_id,
-          account_id: row.account_id,
-          region: row.region,
-        };
-      }
-
-      function settingsShallowEqual(a, b) {
-        if (a === b) return true;
-        if (!a || !b) return false;
-        const ka = Object.keys(a), kb = Object.keys(b);
-        if (ka.length !== kb.length) return false;
-        for (const k of ka) if (a[k] !== b[k]) return false;
-        return true;
-      }
-
-
-      function SettingsProfileIdentitiesGroup({ identities, pulseIds,
-                                                errors, onPatchConfig }) {
-        const rows = identities.length > 0 ? identities : [];
-        const setRow = (idx, key, value) => {
-          const next = rows.map((r, i) => {
-            if (i !== idx) return r;
-            const merged = { ...r, [key]: value };
-            // Optional fields with regex patterns (battle_tag, pulse_id,
-            // account_id) can't be empty strings -- ajv pattern check
-            // rejects "". Drop the key when the user clears it.
-            if ((key === "battle_tag" || key === "pulse_id"
-                 || key === "account_id") && value === "") {
-              delete merged[key];
-            }
-            return merged;
-          });
-          if (key === "character_id") {
-            const region = settingsRegionFromCharacterId(value);
-            if (region) next[idx].region = region;
-          }
-          onPatchConfig(["identities"], next);
-        };
-        const addRow = () => onPatchConfig(["identities"],
-          [...rows, settingsBlankIdentity()]);
-        const removeRow = (idx) => onPatchConfig(["identities"],
-          rows.filter((_, i) => i !== idx));
-        return (
-          <fieldset className="border border-base-700 rounded p-4">
-            <legend className="px-2 text-sm font-semibold text-neutral-100">
-              Connected Battle.net accounts
-            </legend>
-            <p className="text-xs text-neutral-400 mb-3 leading-relaxed">
-              One row per region you play on. Onboarding pre-filled the
-              in-replay name, regional folder ID, account number, and the
-              SC2Pulse numeric ID for each identity it found. BattleTag
-              isn't captured automatically &mdash; type yours in. Stored as
-              <code className="text-neutral-300 mx-1">config.identities[]</code>
-              + <code className="text-neutral-300 ml-1">
-              stream_overlay.pulse_character_ids[]</code>.
-            </p>
-            {pulseIds.length > 0 && rows.length > 0 ? (
-              <p className="text-xs text-neutral-500 mb-3">
-                SC2Pulse IDs captured globally:
-                <span className="text-neutral-300 ml-1 font-mono">
-                  {pulseIds.join(", ")}
-                </span>
-              </p>
-            ) : null}
-            {rows.length === 0 ? (
-              <p className="text-xs text-neutral-500 mb-3">
-                No identities saved yet. Run the onboarding wizard or add
-                one manually below.
-              </p>
-            ) : null}
-            <ul className="space-y-3">
-              {rows.map((row, i) => (
-                <SettingsIdentityRow key={i} row={row} index={i}
-                  errors={errors} onChange={setRow} onRemove={removeRow} />
-              ))}
-            </ul>
-            <div className="mt-3">
-              <SettingsButton kind="secondary" onClick={addRow}>
-                + Add identity
-              </SettingsButton>
-            </div>
-          </fieldset>
-        );
-      }
-
-      function SettingsIdentityRow({ row, index, errors, onChange, onRemove }) {
-        const errBase = "identities[" + index + "].";
-        return (
-          <li className="bg-base-900 border border-base-700 rounded p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-neutral-400">
-                Identity #{index + 1}
-                {row.region ? (
-                  <span className="ml-2 px-1.5 py-0.5 bg-base-800 rounded
-                                  text-neutral-300 uppercase">
-                    {row.region}
-                  </span>
-                ) : null}
-              </span>
-              <SettingsButton kind="danger"
-                onClick={() => onRemove(index)}
-                ariaLabel={"Remove identity " + (index + 1)}>
-                Remove
-              </SettingsButton>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <SettingsLabel htmlFor={"settings-id-name-" + index}
-                  hint="from replay player slot">In-replay name</SettingsLabel>
-                <SettingsInput id={"settings-id-name-" + index}
-                  value={row.name || ""}
-                  onChange={(e) => onChange(index, "name", e.target.value)}
-                  placeholder="ReSpOnSe"
-                  invalid={!!errors[errBase + "name"]} />
-                <SettingsErrorList errors={errors[errBase + "name"]} />
-              </div>
-              <div>
-                <SettingsLabel htmlFor={"settings-id-bt-" + index}
-                  hint="Blizzard handle, e.g. ReSpOnSe#1872">BattleTag</SettingsLabel>
-                <SettingsInput id={"settings-id-bt-" + index}
-                  value={row.battle_tag || ""}
-                  onChange={(e) => onChange(index, "battle_tag", e.target.value)}
-                  placeholder="Name#1234"
-                  invalid={!!errors[errBase + "battle_tag"]} />
-                <SettingsErrorList errors={errors[errBase + "battle_tag"]} />
-              </div>
-              <div>
-                <SettingsLabel htmlFor={"settings-id-cid-" + index}
-                  hint="folder name under Documents\StarCraft II\Accounts\<acct>\">
-                  Regional profile / replay-folder ID</SettingsLabel>
-                <SettingsInput id={"settings-id-cid-" + index}
-                  value={row.character_id || ""}
-                  onChange={(e) => onChange(index, "character_id", e.target.value)}
-                  placeholder="1-S2-1-267727"
-                  invalid={!!errors[errBase + "character_id"]} />
-                <SettingsErrorList errors={errors[errBase + "character_id"]} />
-              </div>
-              <div>
-                <SettingsLabel htmlFor={"settings-id-acct-" + index}
-                  hint="parent folder under Documents\StarCraft II\Accounts\">
-                  Battle.net account number</SettingsLabel>
-                <SettingsInput id={"settings-id-acct-" + index}
-                  value={row.account_id || ""}
-                  onChange={(e) => onChange(index, "account_id", e.target.value)}
-                  placeholder="50983875"
-                  invalid={!!errors[errBase + "account_id"]} />
-                <SettingsErrorList errors={errors[errBase + "account_id"]} />
-              </div>
-              <div>
-                <SettingsLabel htmlFor={"settings-id-pulse-" + index}
-                  hint="from sc2pulse.nephest.com URL, e.g. ?id=994428">
-                  SC2Pulse character ID</SettingsLabel>
-                <SettingsInput id={"settings-id-pulse-" + index}
-                  value={row.pulse_id || ""}
-                  onChange={(e) => onChange(index, "pulse_id", e.target.value)}
-                  placeholder="994428"
-                  invalid={!!errors[errBase + "pulse_id"]} />
-                <SettingsErrorList errors={errors[errBase + "pulse_id"]} />
-              </div>
-              <div>
-                <SettingsLabel htmlFor={"settings-id-region-" + index}>
-                  Region</SettingsLabel>
-                <SettingsSelect id={"settings-id-region-" + index}
-                  value={row.region || "us"}
-                  onChange={(e) => onChange(index, "region", e.target.value)}
-                  options={SETTINGS_REGIONS}
-                  invalid={!!errors[errBase + "region"]} />
-                <SettingsErrorList errors={errors[errBase + "region"]} />
-              </div>
-            </div>
-          </li>
         );
       }
 
@@ -11805,138 +11453,25 @@
         return { statuses, test };
       }
 
-      // Stage settings-pr1f: replaced minimal AddRow with a wizard-mirroring
-      // surface: Browse opens a native folder picker via /api/analyzer/import/
-      // pick-folder; Add accepts a manually pasted path; an Auto-detect block
-      // (rendered above by the parent panel) lists every onboarding-detected
-      // folder with a one-click Add.
       function SettingsFolderAddRow({ onAdd }) {
         const [draft, setDraft] = useState("");
-        const [browsing, setBrowsing] = useState(false);
-        const [browseError, setBrowseError] = useState("");
         const submit = () => {
-          const trimmed = draft.trim();
-          if (!trimmed) return;
-          onAdd(trimmed);
+          if (!draft.trim()) return;
+          onAdd(draft.trim());
           setDraft("");
         };
-        const onKey = (e) => { if (e.key === "Enter") submit(); };
-        const onBrowse = async () => {
-          setBrowsing(true); setBrowseError("");
-          const r = await settingsFetchJson(
-            "/api/analyzer/import/pick-folder",
-            { method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ initial_dir: "",
-                title: "Pick a folder containing .SC2Replay files" }) });
-          setBrowsing(false);
-          if (!r.ok || !r.body) {
-            setBrowseError("couldn't open the folder picker");
-            return;
-          }
-          if (r.body.cancelled) return;
-          if (r.body.path) {
-            onAdd(String(r.body.path).trim());
-          }
-        };
-        const trimmed = draft.trim();
         return (
-          <div className="space-y-1">
-            <SettingsLabel htmlFor="settings-add-folder">
-              Add another folder
-            </SettingsLabel>
-            <div className="flex gap-2 items-stretch">
-              <SettingsInput id="settings-add-folder" value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={onKey}
-                placeholder={"Paste a path like C:\\Users\\you\\Documents"
-                  + "\\StarCraft II\\Accounts\\..."} />
-              <SettingsButton kind="secondary" onClick={onBrowse}
-                              disabled={browsing}>
-                {browsing ? "Opening…" : "Browse…"}
-              </SettingsButton>
-              <SettingsButton kind="primary" onClick={submit}
-                              disabled={!trimmed}>Add</SettingsButton>
-            </div>
-            {browseError ? (
-              <p className="text-xs text-loss-400">{browseError}</p>
-            ) : null}
-            {!trimmed ? (
-              <p className="text-xs text-neutral-500">
-                Type or paste a path, or click Browse to open a
-                folder picker.
-              </p>
-            ) : null}
+          <div className="flex gap-2">
+            <SettingsInput value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={"C:\\Users\\you\\Documents\\StarCraft II"
+                + "\\Accounts\\..."} />
+            <SettingsButton onClick={submit} disabled={!draft.trim()}>
+              Add
+            </SettingsButton>
           </div>
         );
       }
-
-      // Auto-detect card. Hits /api/onboarding/scan-replay-folders with no
-      // body, which returns every folder onboarding would have suggested,
-      // along with replay_count for each. One-click Add per row.
-      function SettingsFolderAutoDetect({ existing, onAdd }) {
-        const [loading, setLoading] = useState(false);
-        const [err, setErr] = useState("");
-        const [hits, setHits] = useState(null);
-        const run = async () => {
-          setLoading(true); setErr(""); setHits(null);
-          const r = await settingsFetchJson(
-            "/api/onboarding/scan-replay-folders",
-            { method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({}) });
-          setLoading(false);
-          if (!r.ok || !r.body || !Array.isArray(r.body.folders)) {
-            setErr("Auto-detect failed");
-            return;
-          }
-          setHits(r.body.folders);
-        };
-        const isAdded = (p) => existing.includes(p);
-        return (
-          <div className="px-3 py-2 bg-base-900 border border-base-700 rounded
-                          space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-neutral-200">Auto-detect</span>
-              <span className="text-xs text-neutral-500 flex-1">
-                Scans the same locations the onboarding wizard does.
-              </span>
-              <SettingsButton kind="secondary" onClick={run}
-                              disabled={loading}>
-                {loading ? "Scanning…" : "Scan now"}
-              </SettingsButton>
-            </div>
-            {err ? <p className="text-xs text-loss-400">{err}</p> : null}
-            {hits && hits.length === 0 ? (
-              <p className="text-xs text-neutral-500">
-                No replay folders found in the standard SC2 install
-                locations. Use Browse or paste a path below.
-              </p>
-            ) : null}
-            {hits && hits.length > 0 ? (
-              <ul className="space-y-1">
-                {hits.map((h) => (
-                  <li key={h.path}
-                      className="flex items-center gap-2 text-xs">
-                    <span className="font-mono text-neutral-200 truncate flex-1"
-                          title={h.path}>{h.path}</span>
-                    <span className="text-neutral-400">
-                      {h.replay_count != null ? h.replay_count + " replays" : ""}
-                    </span>
-                    {isAdded(h.path) ? (
-                      <span className="text-xs text-neutral-500">added</span>
-                    ) : (
-                      <SettingsButton kind="primary"
-                        onClick={() => onAdd(h.path)}>Add</SettingsButton>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        );
-      }
-
 
       function SettingsFoldersPanel({ paths, errors, onPatch }) {
         const folders = (paths && paths.replay_folders) || [];
@@ -11963,14 +11498,6 @@
               Folders the watcher monitors for new .SC2Replay files. The
               first entry is the canonical "My Replays" folder.
             </p>
-            {folders.length === 0 ? (
-              <div className="px-3 py-3 bg-amber-900/20 border border-amber-700
-                              rounded text-xs text-amber-200">
-                No folders connected yet. Click Scan now below to auto-detect
-                your SC2 replay folders, or use Browse to pick one manually.
-              </div>
-            ) : null}
-            <SettingsFolderAutoDetect existing={folders} onAdd={addFolder} />
             <ul className="space-y-2">
               {folders.map(f => (
                 <SettingsFolderRow key={f} folder={f}
@@ -11984,163 +11511,114 @@
         );
       }
 
-      // settings-pr1g: the legacy active_definition_ids list is read by
-      // ZERO code paths (verified via grep across routes/, analyzer.js,
-      // index.js, and the Python project). The classifier uses every
-      // definition + custom + (when enabled) community build regardless.
-      // This panel now exposes only the toggles that actually take effect:
-      //   - use_custom_builds        (data/custom_builds.json participates)
-      //   - use_community_shared_builds (community cache participates)
-      // plus a live sync card backed by /api/custom-builds/sync/*.
-
-      function settingsFmtSyncTime(iso) {
-        if (!iso) return "never";
-        try {
-          const d = new Date(iso);
-          if (isNaN(d.getTime())) return "never";
-          return d.toLocaleString();
-        } catch (_e) { return "never"; }
-      }
-
-      function useSettingsBuildCounts() {
-        const [counts, setCounts] = useState({ custom: 0, community_cache: 0, total: 0 });
-        const [err, setErr] = useState("");
-        const reload = useCallback(async () => {
-          const r = await settingsFetchJson("/api/custom-builds");
-          if (!r.ok || !r.body) { setErr("couldn't load custom builds"); return; }
-          setErr("");
-          setCounts(r.body.counts || { custom: 0, community_cache: 0, total: 0 });
-        }, []);
-        useEffect(() => { reload(); }, [reload]);
-        return { counts, err, reload };
-      }
-
-      function useSettingsCommunitySync() {
-        const [status, setStatus] = useState(null);
-        const [err, setErr] = useState("");
-        const reload = useCallback(async () => {
-          const r = await settingsFetchJson(
-            "/api/custom-builds/sync/status");
-          if (!r.ok || !r.body) { setErr("couldn't load sync status"); return; }
-          setErr(""); setStatus(r.body);
-        }, []);
-        useEffect(() => { reload(); }, [reload]);
-        return { status, err, reload };
-      }
-
-      function SettingsBuildsCounts({ builtInCount, counts }) {
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <SettingsCountCard label="Built-in patterns"
-              value={builtInCount}
-              hint="ships with the analyzer; always active" />
-            <SettingsCountCard label="Your custom builds"
-              value={counts.custom}
-              hint="data/custom_builds.json" />
-            <SettingsCountCard label="Community builds"
-              value={counts.community_cache}
-              hint="cached from the shared community DB" />
-          </div>
-        );
-      }
-
-      function SettingsCountCard({ label, value, hint }) {
-        return (
-          <div className="px-3 py-3 bg-base-900 border border-base-700 rounded">
-            <div className="text-xs text-neutral-500">{label}</div>
-            <div className="text-2xl font-semibold text-neutral-100
-                            tabular-nums">{value}</div>
-            <div className="text-xs text-neutral-500 mt-1">{hint}</div>
-          </div>
-        );
-      }
-
-      function SettingsBuildsCommunitySyncCard({ classifier, errors,
-                                                 onPatch, onCountsRefresh }) {
-        const c = classifier || {};
-        const sync = useSettingsCommunitySync();
-        const [syncing, setSyncing] = useState(false);
-        const [syncMsg, setSyncMsg] = useState("");
-        const enabled = !!c.use_community_shared_builds;
-        const onSync = async () => {
-          setSyncing(true); setSyncMsg("");
-          const r = await settingsFetchJson("/api/custom-builds/sync",
-            { method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({}) });
-          setSyncing(false);
-          if (!r.ok || !r.body) {
-            setSyncMsg("Sync failed");
-            return;
-          }
-          if (r.body.sync_disabled) {
-            setSyncMsg("Community sync is disabled on this server.");
-            return;
-          }
-          if (r.body.error) {
-            setSyncMsg("Sync error: " + r.body.error);
-          } else {
-            setSyncMsg("Sync complete.");
-          }
-          sync.reload();
-          onCountsRefresh && onCountsRefresh();
+      function SettingsMacroPanel({ macroEngine, errors, onPatch }) {
+        const me = macroEngine || {};
+        const enabled = me.enabled_disciplines || [];
+        const toggle = (id) => {
+          const next = enabled.includes(id)
+            ? enabled.filter(d => d !== id)
+            : [...enabled, id];
+          onPatch(["macro_engine", "enabled_disciplines"], next);
         };
         return (
-          <div className="px-4 py-3 bg-base-900 border border-base-700 rounded
-                          space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="text-sm font-semibold text-neutral-100">
-                  Community builds
-                </div>
-                <p className="text-xs text-neutral-400 mt-0.5">
-                  Builds shared by other players. Cached locally and
-                  refreshed on a 15-minute schedule. New builds you save
-                  push back automatically.
-                </p>
+          <div className="space-y-4 max-w-xl">
+            <div>
+              <SettingsLabel>Enabled disciplines</SettingsLabel>
+              <div className="space-y-1">
+                {SETTINGS_DISCIPLINES.map(d => (
+                  <SettingsCheckbox key={d.id} id={"settings-disc-" + d.id}
+                    checked={enabled.includes(d.id)}
+                    onChange={() => toggle(d.id)}
+                    label={d.label} />
+                ))}
               </div>
-              <SettingsButton kind="secondary" onClick={onSync}
-                              disabled={syncing}>
-                {syncing ? "Syncing…" : "Sync now"}
-              </SettingsButton>
+              <SettingsErrorList
+                errors={errors["macro_engine.enabled_disciplines"]} />
             </div>
-            <SettingsCheckbox id="settings-use-community"
-              checked={enabled}
-              onChange={(v) => onPatch(
-                ["build_classifier", "use_community_shared_builds"], v)}
-              label="Use community-shared builds for classification"
-              hint="When off, the cache is still synced but ignored when labelling games." />
-            <SettingsErrorList errors={
-              errors["build_classifier.use_community_shared_builds"]} />
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-              <dt className="text-neutral-500">Last sync</dt>
-              <dd className="text-neutral-200">
-                {settingsFmtSyncTime(sync.status && sync.status.last_sync_at)}
-              </dd>
-              <dt className="text-neutral-500">Pending uploads</dt>
-              <dd className="text-neutral-200">
-                {sync.status ? (sync.status.pending_count || 0) : "—"}
-              </dd>
-              <dt className="text-neutral-500">Cached community builds</dt>
-              <dd className="text-neutral-200">
-                {sync.status ? (sync.status.cache_count || 0) : "—"}
-              </dd>
-              {sync.status && sync.status.last_error ? (
-                <>
-                  <dt className="text-neutral-500">Last error</dt>
-                  <dd className="text-loss-400 truncate"
-                      title={sync.status.last_error}>
-                    {sync.status.last_error}
-                  </dd>
-                </>
-              ) : null}
-            </dl>
-            {syncMsg ? (
-              <p className="text-xs text-neutral-300">{syncMsg}</p>
+            <div>
+              <SettingsLabel htmlFor="settings-min-game"
+                hint="games shorter than this are excluded">
+                Minimum game length (seconds)
+              </SettingsLabel>
+              <SettingsInput id="settings-min-game" type="number"
+                min="0" max="7200"
+                value={me.minimum_game_length_sec == null
+                  ? "" : String(me.minimum_game_length_sec)}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  onPatch(["macro_engine", "minimum_game_length_sec"],
+                    Number.isFinite(v) ? v : 0);
+                }}
+                invalid={!!errors["macro_engine.minimum_game_length_sec"]} />
+              <SettingsErrorList
+                errors={errors["macro_engine.minimum_game_length_sec"]} />
+            </div>
+            <div>
+              <SettingsLabel
+                hint="read-only — bumped when the engine ships a new version">
+                Engine version
+              </SettingsLabel>
+              <div className="px-3 py-2 text-sm rounded bg-base-900
+                              border border-base-700 text-neutral-400 font-mono">
+                {me.engine_version || "—"}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function SettingsBuildsActiveList({ definitions, defLoading,
+                                              defError, active, onToggle,
+                                              errors }) {
+        return (
+          <div>
+            <SettingsLabel
+              hint="select which builds the classifier scores against">
+              Active builds (built-in)
+            </SettingsLabel>
+            {defLoading
+              ? <p className="text-xs text-neutral-500">Loading…</p>
+              : null}
+            {defError ? (
+              <p className="text-xs text-loss-500">
+                Couldn't load build_definitions.json: {defError}
+              </p>
             ) : null}
-            {sync.err ? (
-              <p className="text-xs text-loss-400">{sync.err}</p>
+            {!defLoading && !defError && definitions.length === 0 ? (
+              <p className="text-xs text-neutral-500">
+                No definitions found.
+              </p>
             ) : null}
+            <ul className="grid grid-cols-1 md:grid-cols-2 gap-1
+                            max-h-96 overflow-auto pr-2">
+              {definitions.map(d => (
+                <li key={d.name}>
+                  <SettingsCheckbox id={"settings-bld-" + d.name}
+                    checked={active.includes(d.name)}
+                    onChange={() => onToggle(d.name)}
+                    label={d.name}
+                    hint={d.description} />
+                </li>
+              ))}
+            </ul>
+            <SettingsErrorList
+              errors={errors["build_classifier.active_definition_ids"]} />
+          </div>
+        );
+      }
+
+      function SettingsBuildsCommunityCard() {
+        return (
+          <div className="px-3 py-3 bg-base-900 border border-base-700
+                          rounded opacity-70"
+               title="Community-shared build database arrives in Stage 7.">
+            <div className="text-sm font-medium text-neutral-300">
+              Community builds (Stage 7)
+            </div>
+            <div className="text-xs text-neutral-500 mt-1">
+              Shared community build database. Disabled until Stage 7 ships
+              the server side. Your saved builds are still kept locally.
+            </div>
           </div>
         );
       }
@@ -12148,164 +11626,28 @@
       function SettingsBuildsPanel({ classifier, errors, onPatch,
                                      definitions, defLoading, defError }) {
         const c = classifier || {};
-        const builtInCount = Array.isArray(definitions) ? definitions.length : 0;
-        const buildCounts = useSettingsBuildCounts();
+        const active = c.active_definition_ids || [];
+        const toggleId = (id) => {
+          const next = active.includes(id)
+            ? active.filter(x => x !== id) : [...active, id];
+          onPatch(["build_classifier", "active_definition_ids"], next);
+        };
         return (
           <div className="space-y-4 max-w-3xl">
-            <div className="px-4 py-3 bg-base-900 border border-base-700 rounded">
-              <h3 className="text-sm font-semibold text-neutral-100 mb-1">
-                What the build classifier does
-              </h3>
-              <p className="text-xs text-neutral-400 leading-relaxed">
-                After every replay is parsed, the classifier compares your
-                opening (the first ~5 minutes) against build patterns and
-                labels the game with the closest match (e.g.
-                "PvT &mdash; Cannon Rush"). The toggles below control which
-                pattern sources participate. Built-in patterns are always
-                on; you opt your own custom builds and community builds in
-                or out.
-              </p>
-            </div>
-            {defError ? (
-              <p className="text-xs text-loss-400">
-                Couldn't load build_definitions.json: {defError}
-              </p>
-            ) : null}
-            <SettingsBuildsCounts builtInCount={builtInCount}
-                                  counts={buildCounts.counts} />
-            {buildCounts.err ? (
-              <p className="text-xs text-loss-400">{buildCounts.err}</p>
-            ) : null}
-            <div className="px-4 py-3 bg-base-900 border border-base-700
-                            rounded space-y-2">
+            <SettingsBuildsActiveList definitions={definitions}
+              defLoading={defLoading} defError={defError}
+              active={active} onToggle={toggleId} errors={errors} />
+            <div>
               <SettingsCheckbox id="settings-use-custom"
                 checked={!!c.use_custom_builds}
                 onChange={(v) => onPatch(
                   ["build_classifier", "use_custom_builds"], v)}
                 label="Use my custom builds (data/custom_builds.json)"
-                hint="Off keeps your builds saved but excludes them from auto-classification." />
+                hint="Custom-build IDs in your active list are still saved." />
               <SettingsErrorList
                 errors={errors["build_classifier.use_custom_builds"]} />
             </div>
-            <SettingsCustomBuildsList onChanged={buildCounts.reload} />
-            <SettingsBuildsCommunitySyncCard classifier={c}
-              errors={errors} onPatch={onPatch}
-              onCountsRefresh={buildCounts.reload} />
-          </div>
-        );
-      }
-
-      // settings-pr1h: list custom builds (source==="custom") with an Edit
-      // button that opens BuildEditorModal in edit mode (PUT /:id). Hidden
-      // when the modal module hasn't loaded so we don't show a dead button.
-      function SettingsCustomBuildsList({ onChanged }) {
-        const [list, setList] = useState(null);
-        const [err, setErr] = useState("");
-        const [editing, setEditing] = useState(null); // { id, draft }
-        const [busyId, setBusyId] = useState("");
-        const reload = useCallback(async () => {
-          const r = await settingsFetchJson("/api/custom-builds");
-          if (!r.ok || !r.body) { setErr("couldn't load builds"); return; }
-          setErr("");
-          const builds = (r.body.builds || []).filter((b) => b.source === "custom");
-          setList(builds);
-        }, []);
-        useEffect(() => { reload(); }, [reload]);
-        const onEdit = async (id) => {
-          setBusyId(id); setErr("");
-          const r = await settingsFetchJson(
-            "/api/custom-builds/" + encodeURIComponent(id));
-          setBusyId("");
-          if (!r.ok || !r.body) {
-            setErr("couldn't load that build for editing");
-            return;
-          }
-          setEditing({ id, draft: r.body });
-        };
-        const onDelete = async (id, name) => {
-          if (!window.confirm("Delete custom build \"" + name + "\"?")) return;
-          setBusyId(id);
-          const r = await settingsFetchJson(
-            "/api/custom-builds/" + encodeURIComponent(id),
-            { method: "DELETE" });
-          setBusyId("");
-          if (!r.ok && r.status !== 204) {
-            setErr("delete failed");
-            return;
-          }
-          await reload();
-          onChanged && onChanged();
-        };
-        const onSaved = () => {
-          setEditing(null); reload();
-          onChanged && onChanged();
-        };
-        return (
-          <div className="px-4 py-3 bg-base-900 border border-base-700
-                          rounded space-y-2">
-            <div className="text-sm font-semibold text-neutral-100">
-              Your custom builds
-            </div>
-            {!window.BuildEditorModal ? (
-              <p className="text-xs text-amber-400">
-                Build editor module didn't load (network error?). Reload
-                the page to try again.
-              </p>
-            ) : null}
-            {err ? (
-              <p className="text-xs text-loss-400">{err}</p>
-            ) : null}
-            {list && list.length === 0 ? (
-              <p className="text-xs text-neutral-500">
-                No custom builds saved yet. Open a game in My Builds and
-                click "Save as new build" on the timeline to create one.
-              </p>
-            ) : null}
-            {list && list.length > 0 ? (
-              <ul className="space-y-1">
-                {list.map((b) => (
-                  <li key={b.id}
-                      className="flex items-center gap-2 text-xs">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-neutral-200 truncate"
-                           title={b.name}>{b.name}</div>
-                      <div className="text-neutral-500">
-                        {(b.race || "?") + " vs " + (b.vs_race || "?")}
-                        {b.skill_level ? " · " + b.skill_level : ""}
-                        {b.updated_at
-                          ? " · updated " + settingsFmtSyncTime(b.updated_at)
-                          : ""}
-                      </div>
-                    </div>
-                    <SettingsButton kind="secondary"
-                      onClick={() => onEdit(b.id)}
-                      disabled={!window.BuildEditorModal || busyId === b.id}>
-                      {busyId === b.id ? "Loading…" : "Edit"}
-                    </SettingsButton>
-                    <SettingsButton kind="danger"
-                      onClick={() => onDelete(b.id, b.name)}
-                      disabled={busyId === b.id}>
-                      Delete
-                    </SettingsButton>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            {editing && window.BuildEditorModal ?
-              React.createElement(window.BuildEditorModal, {
-                open: true,
-                game: { events: [], my_race: editing.draft.race,
-                        opp_race: editing.draft.vs_race },
-                gameId: editing.draft.source_replay_id || "",
-                draft: editing.draft,
-                editId: editing.id,
-                profileReady: true,
-                onClose: () => setEditing(null),
-                onSaved: onSaved,
-                socket: typeof window !== "undefined"
-                  ? window.__sc2_socket : null,
-              })
-            : null}
+            <SettingsBuildsCommunityCard />
           </div>
         );
       }
@@ -12826,15 +12168,8 @@
               + "Open the wizard or check the backend is running.");
             return;
           }
-          // Stage-2.4 / settings-pr1: GET /api/profile and GET /api/config
-          // return envelopes ({ profile: {...} } and { config: {...} }), not the
-          // bare document. Unwrap before stashing in state -- otherwise every
-          // patch carries the stray top-level key and ajv rejects the PUT with
-          // additionalProperties:false ("Some changes were rejected.").
-          const profileDoc = (p.body && p.body.profile) ? p.body.profile : p.body;
-          const configDoc  = (c.body && c.body.config)  ? c.body.config  : c.body;
-          setProfile(profileDoc); setPendingProfile(profileDoc);
-          setConfig(configDoc);   setPendingConfig(configDoc);
+          setProfile(p.body); setPendingProfile(p.body);
+          setConfig(c.body); setPendingConfig(c.body);
           setLoading(false);
         };
         useEffect(() => { loadAll(); }, []);
@@ -13789,14 +13124,17 @@
         switch (tab) {
           case "profile":
             return <SettingsProfilePanel profile={pendingProfile}
-              config={pendingConfig} errors={errors}
-              onPatch={patchProfile} onPatchConfig={patchConfig} />;
+              errors={errors} onPatch={patchProfile} />;
           case "folders":
             return <SettingsFoldersPanel paths={pendingConfig.paths}
               errors={errors} onPatch={patchConfig} />;
           case "import":
             return <SettingsImportPanel
               pendingConfig={pendingConfig} onPatch={patchConfig} />;
+          case "macro":
+            return <SettingsMacroPanel
+              macroEngine={pendingConfig.macro_engine}
+              errors={errors} onPatch={patchConfig} />;
           case "builds":
             return <SettingsBuildsPanel
               classifier={pendingConfig.build_classifier}
@@ -14142,7 +13480,6 @@
           <div className="space-y-4">
             <SettingsSaveBar dirtyCount={dirty.dirtyCount} saving={saving}
               error={saveError} onSave={onSave} onDiscard={onDiscard} />
-            <SettingsSaveErrorList errors={errors} />
             <div className="flex flex-col md:flex-row gap-6">
               <SettingsTabRail tab={tab} onChange={setTab} />
               <section className="flex-1 min-w-0"

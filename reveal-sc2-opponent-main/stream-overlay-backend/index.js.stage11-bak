@@ -2104,11 +2104,6 @@ if (process.env.NODE_ENV === 'test') {
         _parseSessionFile,
         _quarantineBrokenSession,
         _listSessionBackups,
-        defaultSession,
-        // Stage 11.3: expose the constructed Express app + http
-        // server so health/version/games tests can drive routes
-        // via supertest without needing to spin up server.listen.
-        app,
-        server
+        defaultSession
     };
 }

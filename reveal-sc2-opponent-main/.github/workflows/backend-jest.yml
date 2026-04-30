@@ -1,0 +1,64 @@
+# Stage 11.3: Jest + supertest suite for stream-overlay-backend.
+#
+# Runs on every PR that touches the backend code or the test suite.
+# Coverage report is uploaded as a workflow artifact so reviewers can
+# see exactly which routes are exercised at what depth without
+# digging through CI logs.
+#
+# Coverage thresholds live in stream-overlay-backend/jest.config.js;
+# a regression below the floor fails the job.
+
+name: backend-jest
+
+on:
+  pull_request:
+    paths:
+      - 'reveal-sc2-opponent-main/stream-overlay-backend/**'
+      - 'reveal-sc2-opponent-main/data/*.schema.json'
+      - 'reveal-sc2-opponent-main/.github/workflows/backend-jest.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'reveal-sc2-opponent-main/stream-overlay-backend/**'
+      - 'reveal-sc2-opponent-main/data/*.schema.json'
+
+permissions:
+  contents: read
+
+jobs:
+  jest:
+    name: jest (node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['22.x']
+    defaults:
+      run:
+        working-directory: reveal-sc2-opponent-main/stream-overlay-backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: reveal-sc2-opponent-main/stream-overlay-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run jest with coverage
+        run: npx jest --coverage --forceExit --ci
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-coverage-${{ matrix.node-version }}
+          path: reveal-sc2-opponent-main/stream-overlay-backend/coverage/
+          if-no-files-found: warn
+          retention-days: 14
