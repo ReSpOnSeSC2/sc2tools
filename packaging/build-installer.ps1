@@ -204,6 +204,16 @@ function Install-EmbeddablePython {
     Get-RemoteFile -Url 'https://bootstrap.pypa.io/get-pip.py' -DestPath $getPip
     & (Join-Path $pyDir 'python.exe') $getPip --no-warn-script-location
     if ($LASTEXITCODE -ne 0) { throw "get-pip.py failed (exit $LASTEXITCODE)" }
+
+    # Some pinned deps ship sdist-only (notably mpyq, a sc2reader
+    # transitive). Building from source needs setuptools.build_meta,
+    # which the embeddable Python distribution does NOT bundle. Install
+    # setuptools + wheel before pip install -r requirements.txt so the
+    # source build has a backend.
+    & (Join-Path $pyDir 'python.exe') -m pip install --no-warn-script-location setuptools wheel
+    if ($LASTEXITCODE -ne 0) {
+        throw "setuptools/wheel install failed (exit $LASTEXITCODE)"
+    }
 }
 
 function Install-PythonRequirements {
