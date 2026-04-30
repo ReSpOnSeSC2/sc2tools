@@ -10276,10 +10276,6 @@
                              onToggle={() => toggle("pulse")} />
             <WizardStreamlabsCard expanded={open.streamlabs}
                                   onToggle={() => toggle("streamlabs")} />
-            <WizardTwitchCard twitch={twitch} onChange={onChangeTwitch}
-                              onTest={() => onTest("twitch")}
-                              expanded={open.twitch}
-                              onToggle={() => toggle("twitch")} />
             <WizardObsCard obs={obs} onChange={onChangeObs}
                            onTest={() => onTest("obs")}
                            expanded={open.obs}
@@ -10535,8 +10531,13 @@
             use_community_shared_builds: true,
           },
           stream_overlay: {
-            enabled: !!(state.twitch.oauth_token || state.obs.password),
-            twitch_channel: state.twitch.channel || null,
+            // settings-pr1k: enabled is no longer user-toggled in the
+            // SPA (event bus is always on); default true so old code
+            // paths that read this field still see the expected value.
+            enabled: true,
+            // twitch_channel left null on fresh installs; the owner
+            // sets TWITCH_CHANNEL via .env directly, not via the wizard.
+            twitch_channel: null,
             obs_websocket: {
               host: state.obs.host || WIZARD_DEFAULT_OBS_HOST,
               port: state.obs.port || WIZARD_DEFAULT_OBS_PORT,
@@ -12322,11 +12323,17 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        return {
-          ok: r.ok && r.body && r.body.ok !== false,
-          message: r.body && r.body.message
-            ? r.body.message : (r.ok ? "OK" : "failed"),
-        };
+        const ok = r.ok && r.body && r.body.ok !== false;
+        // settings-pr1j: when the server falls back to .env (because
+        // the SPA didn't paste an oauth token), surface that to the
+        // user so they understand WHICH credentials got tested.
+        const usedEnv = !!(r.body && r.body.token_source === "env");
+        const baseMsg = r.body && r.body.message
+          ? r.body.message : (r.ok ? "OK" : "failed");
+        const message = usedEnv && ok
+          ? baseMsg + " (using saved .env credentials)"
+          : baseMsg;
+        return { ok, message };
       }
 
       function SettingsOverlayTwitchCard({ overlay, errors, onPatch }) {
@@ -12444,17 +12451,27 @@
         );
       }
 
+      // settings-pr1k: Twitch card removed (only the owner uses it via
+      // .env-loaded creds; nothing for other users to configure). The
+      // dead master toggle ('Enable stream overlay event bus') is gone
+      // too -- the event bus runs unconditionally as part of Socket.io.
+      // OBS card retained because some users actually use scene control.
       function SettingsOverlayPanel({ overlay, errors, onPatch }) {
         const o = overlay || {};
         return (
           <div className="space-y-4 max-w-xl">
-            <SettingsCheckbox id="settings-overlay-enabled"
-              checked={!!o.enabled}
-              onChange={(v) => onPatch(["stream_overlay", "enabled"], v)}
-              label="Enable stream overlay event bus" />
-            <SettingsErrorList errors={errors["stream_overlay.enabled"]} />
-            <SettingsOverlayTwitchCard overlay={o} errors={errors}
-              onPatch={onPatch} />
+            <div className="px-4 py-3 bg-base-900 border border-base-700 rounded">
+              <h3 className="text-sm font-semibold text-neutral-100 mb-1">
+                Overlay event bus
+              </h3>
+              <p className="text-xs text-neutral-400 leading-relaxed">
+                The widget event bus (Socket.io) runs as part of the
+                backend &mdash; no setup needed. Drop any widget HTML
+                from <code className="text-neutral-300">/widgets/</code>
+                into Streamlabs / OBS as a Browser Source and it will
+                receive events automatically.
+              </p>
+            </div>
             <SettingsOverlayObsCard overlay={o} errors={errors}
               onPatch={onPatch} />
           </div>

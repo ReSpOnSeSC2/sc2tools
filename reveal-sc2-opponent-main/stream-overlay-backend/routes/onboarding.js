@@ -462,14 +462,25 @@ function stripOAuthPrefix(token) {
 function handleTestTwitch(ctx) {
   return async (req, res) => {
     if (!isPlainObject(req.body)) return badBody(res, 'invalid_body');
-    const token = asNonEmptyString(req.body.oauth_token);
+    // Stage settings-pr1j: when the caller doesn't provide oauth_token
+    // (e.g. the Settings tab Test button, which doesn't expose the
+    // token to the UI for security), fall back to the saved .env
+    // credentials. The wizard still posts oauth_token explicitly.
+    const env = (ctx && ctx.env) || process.env;
+    const token = asNonEmptyString(req.body.oauth_token)
+      || asNonEmptyString(env.TWITCH_OAUTH_TOKEN);
     if (!token) return badBody(res, 'oauth_token_required');
-    const channel = asNonEmptyString(req.body.channel);
+    const channel = asNonEmptyString(req.body.channel)
+      || asNonEmptyString(env.TWITCH_CHANNEL);
+    const usedEnv = !asNonEmptyString(req.body.oauth_token);
     try {
       const out = await validateTwitchToken(token, channel, ctx.fetch);
       const status = out.ok ? HTTP_OK : HTTP_UPSTREAM;
-      console.log(`[onboarding] test/twitch ${out.ok ? 'ok' : 'fail'}`);
-      res.status(status).json(out);
+      console.log(`[onboarding] test/twitch ${out.ok ? 'ok' : 'fail'}`
+                  + ` source=${usedEnv ? 'env' : 'body'}`);
+      // Echo the token source so the SPA can render "using saved
+      // .env credentials" instead of pretending the user typed it.
+      res.status(status).json({ ...out, token_source: usedEnv ? 'env' : 'body' });
     } catch (err) {
       console.error('[onboarding] test/twitch threw:', err.message);
       res.status(HTTP_UPSTREAM)
