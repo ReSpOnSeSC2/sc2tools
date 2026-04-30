@@ -32,6 +32,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const atomicFs = require('../lib/atomic-fs');
 const express = require('express');
 const Ajv = require('ajv');
 const addFormats = require('ajv-formats');
@@ -90,16 +91,10 @@ function readJsonOrNull(filePath) {
  * @returns {void}
  */
 function atomicWriteJson(filePath, obj) {
-  const tmp = `${filePath}.tmp`;
-  const json = JSON.stringify(obj, null, 2);
-  const fd = fs.openSync(tmp, 'w');
-  try {
-    fs.writeSync(fd, json, 0, 'utf8');
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-  fs.renameSync(tmp, filePath);
+  // Back-compat shim. Canonical impl in lib/atomic-fs.js. Stays
+  // exported so any external caller of the settings module is
+  // unaffected by the consolidation.
+  return atomicFs.atomicWriteJson(filePath, obj, { indent: 2 });
 }
 
 /**
@@ -124,15 +119,8 @@ function syncCharacterIdsFile(cfg, configFilePath) {
     // data/config.json -> project root is one directory up from data/.
     const projectRoot = path.resolve(path.dirname(configFilePath), '..');
     const target = path.join(projectRoot, 'character_ids.txt');
-    const tmp = `${target}.tmp`;
-    const fd = fs.openSync(tmp, 'w');
-    try {
-      fs.writeSync(fd, cleaned.join(','), 0, 'utf8');
-      fs.fsyncSync(fd);
-    } finally {
-      fs.closeSync(fd);
-    }
-    fs.renameSync(tmp, target);
+    // Delegate to the canonical atomic-string writer.
+    atomicFs.atomicWriteString(target, cleaned.join(','), { encoding: 'utf8' });
     console.log(`[settings] synced character_ids.txt: ${cleaned.join(',') || '(empty)'}`);
   } catch (err) {
     console.warn(`[settings] could not sync character_ids.txt: ${err.message}`);

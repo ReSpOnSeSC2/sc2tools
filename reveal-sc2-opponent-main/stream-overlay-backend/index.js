@@ -32,6 +32,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const atomicFs = require('./lib/atomic-fs');
 const fs = require('fs');
 const os = require('os');
 const cors = require('cors');
@@ -1269,39 +1270,12 @@ if (fs.existsSync(SC2_OVERLAY_DIR)) {
 // (the bug that left meta_database.json / MyOpponentHistory.json /
 // overlay.config.json truncated in 04/2026). Mirrors the semantics of
 // `core.atomic_io.atomic_write_json` on the Python side.
+// Back-compat shim. The canonical write+fsync+rename lives in
+// lib/atomic-fs.js (see Phase 3 of the truncation audit).
+// All in-file callers and the module.exports re-export keep working.
 function _atomicWriteJsonSync(target, data, indent = 2) {
-    const dir = path.dirname(target);
-    fs.mkdirSync(dir, { recursive: true });
-    // Pick a unique sibling temp filename. We avoid os.tmpdir so the
-    // os.rename below can be atomic (same-filesystem requirement).
-    const tmp = path.join(
-        dir,
-        '.tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10) + '.json'
-    );
-    // Open + write + fsync + close + rename. The fsync is the key
-    // step the previous writeFileSync version was missing: on Windows,
-    // writeFileSync returns as soon as the write hits the OS cache,
-    // so a subsequent power loss / hard kill / OS crash could leave
-    // the renamed-into-place file with only the bytes that the OS
-    // happened to have flushed. fsyncSync forces the data to durable
-    // storage before the rename, matching the Python side's
-    // write -> fsync -> rename contract.
-    let fd = -1;
-    try {
-        const body = JSON.stringify(data, null, indent);
-        fd = fs.openSync(tmp, 'w');
-        fs.writeSync(fd, body);
-        fs.fsyncSync(fd);
-        fs.closeSync(fd);
-        fd = -1;
-        fs.renameSync(tmp, target);
-    } catch (err) {
-        if (fd !== -1) {
-            try { fs.closeSync(fd); } catch (_) { /* ignore */ }
-        }
-        try { fs.unlinkSync(tmp); } catch (_) { /* ignore */ }
-        throw err;
-    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    return atomicFs.atomicWriteJson(target, data, { indent });
 }
 
 // ------------------------------------------------------------------
