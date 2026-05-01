@@ -8,7 +8,7 @@ Releases are tagged `vMAJOR.MINOR.PATCH`; the GitHub Actions release
 workflow builds the Windows installer on each tag push and attaches the
 `.exe` and `.sha256` to the corresponding GitHub Release.
 
-## [Unreleased]
+## [1.1.0] - 2026-05-01
 
 ### Fixed
 
