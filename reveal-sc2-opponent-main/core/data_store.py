@@ -245,17 +245,77 @@ class BlackBookStore:
     def _strip_clan(name: str) -> str:
         return name.split("]")[-1].strip() if "]" in name else name.strip()
 
+    @staticmethod
+    def _strip_discriminator(name: str) -> str:
+        """
+        Strip the BattleTag discriminator (``#1234``) off the end of a
+        name. SC2Pulse stores ``Character.Name`` with the discriminator
+        (``"Yamada#622"``); ``sc2reader`` returns the bare in-game name
+        (``"Yamada"``). Stripping both forms lets the name lookup match
+        across the two paths.
+        """
+        if not name:
+            return name
+        i = name.rfind("#")
+        return name[:i] if i >= 0 else name
+
+    @classmethod
+    def _name_forms(cls, name: str) -> Set[str]:
+        """
+        Comparable lowercased forms of a name: original, clan-stripped,
+        discriminator-stripped, and both stripped. Two records are
+        considered the same person when any pair of forms matches.
+
+        Mirrors ``nameForms()`` in stream-overlay-backend/index.js so the
+        Python watcher and the Node overlay backend agree on identity.
+        """
+        forms: Set[str] = set()
+        if not name:
+            return forms
+
+        def _add(s: str) -> None:
+            if s:
+                forms.add(s.strip().lower())
+
+        _add(name)
+        no_clan = cls._strip_clan(name)
+        _add(no_clan)
+        _add(cls._strip_discriminator(name))
+        _add(cls._strip_discriminator(no_clan))
+        return forms
+
     def find_by_name(self, name: str) -> Optional[str]:
-        """Pulse_id of the entry whose Name matches after clan-tag stripping."""
+        """
+        Pulse_id of the entry whose Name matches the given name.
+
+        A match is any overlap between the comparable name forms (clan
+        tag and BattleTag discriminator stripped, case-insensitive) of
+        the needle and any stored ``Name`` field.
+
+        When more than one record matches, a numeric Pulse ID is
+        preferred over a synthetic ``unknown:<Name>`` key so a replay
+        whose opponent now has a resolved Pulse character ID attaches
+        to the canonical record instead of a legacy unknown bucket.
+        """
         if not name:
             return None
-        clean = self._strip_clan(name)
+        needle = self._name_forms(name)
+        if not needle:
+            return None
+
         history = self.load()
+        unknown_match: Optional[str] = None
         for pulse_id, data in history.items():
-            opp = data.get("Name", "")
-            if self._strip_clan(opp) == clean:
+            opp = (data or {}).get("Name", "")
+            if not self._name_forms(opp).isdisjoint(needle):
+                if str(pulse_id).startswith("unknown:"):
+                    # Defer unknown:<Name> matches until we've confirmed
+                    # there's no numeric twin for the same player.
+                    if unknown_match is None:
+                        unknown_match = pulse_id
+                    continue
                 return pulse_id
-        return None
+        return unknown_match
 
     def append_game(
         self,

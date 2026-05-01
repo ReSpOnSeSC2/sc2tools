@@ -1932,10 +1932,8 @@
       const TABS = [
         { id: "dashboard", label: "Dashboard" },
         { id: "builds", label: "My Builds" },
-        { id: "strategies", label: "Opp Strategies" },
-        { id: "bvs", label: "Build vs Strategy" },
-        { id: "maps", label: "Maps" },
-        { id: "matchups", label: "Matchups" },
+        { id: "strategies", label: "Strategies" },
+        { id: "battlefield", label: "Maps" },
         { id: "opponents", label: "Opponents" },
         { id: "trends", label: "Trends" },
         { id: "ml", label: "ML / Predict" },
@@ -2224,25 +2222,11 @@
                     <StrategiesTab filters={f} dbRev={dbRev} />
                   )} />
               );
-            case "bvs":
+            case "battlefield":
               return (
                 <RaceSplitView filters={filters} isRandom={isRandom}
                   render={(f) => (
-                    <BuildVsStrategyTab filters={f} dbRev={dbRev} />
-                  )} />
-              );
-            case "maps":
-              return (
-                <RaceSplitView filters={filters} isRandom={isRandom}
-                  render={(f) => (
-                    <MapsTab filters={f} dbRev={dbRev} />
-                  )} />
-              );
-            case "matchups":
-              return (
-                <RaceSplitView filters={filters} isRandom={isRandom}
-                  render={(f) => (
-                    <MatchupsTab filters={f} dbRev={dbRev} />
+                    <BattlefieldTab filters={f} dbRev={dbRev} />
                   )} />
               );
             case "opponents":
