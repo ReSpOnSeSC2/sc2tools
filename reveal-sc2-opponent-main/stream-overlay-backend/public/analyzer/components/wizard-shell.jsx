@@ -50,6 +50,8 @@
             onNext={() => ctx.setStep(5)} onBack={() => ctx.setStep(3)} />;
         if (step === 5) return <WizardStepImport
             folders={ctx.selectedFolders}
+            identities={ctx.selectedIdentities}
+            battleTags={ctx.battleTags}
             onNext={() => ctx.setStep(6)}
             onBack={() => ctx.setStep(4)}
             onSkip={() => ctx.setStep(6)} />;

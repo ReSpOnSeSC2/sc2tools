@@ -8,6 +8,62 @@ Releases are tagged `vMAJOR.MINOR.PATCH`; the GitHub Actions release
 workflow builds the Windows installer on each tag push and attaches the
 `.exe` and `.sha256` to the corresponding GitHub Release.
 
+## [1.2.0] - 2026-05-01
+
+### Added
+
+- **Launcher orchestrates all three runtime components.** ``SC2Replay-
+  Analyzer/SC2ReplayAnalyzer.py`` now spawns the Express backend, the
+  live ``watchers.replay_watcher``, and the SC2Pulse PowerShell poller
+  (``Reveal-Sc2Opponent.ps1``) under one process tree, registers each
+  child with ``atexit`` for clean shutdown, and waits for
+  ``/api/health`` before opening ``/analyzer/`` in the browser. Closes
+  the gap where ``packaging/installer.nsi``''s desktop and Start Menu
+  shortcuts ran the launcher — which only spawned the backend — while
+  ``START_SC2_TOOLS.bat`` was the only path that booted all three
+  windows. New installs and existing shortcuts now pick up watcher +
+  poller automatically. ``data/config.json`` gains an optional
+  ``runtime`` section (``spawn_watcher`` / ``spawn_poller``, default
+  ``true``) so power users can disable individual children; the
+  poller auto-disables when the config has neither character IDs nor
+  a player name.
+
+- **Pure-function config reader.** New
+  ``SC2Replay-Analyzer/launcher_config.py`` exposes ``load_config``,
+  ``read_pulse_args``, ``read_runtime_flags``, and ``build_poller_argv``.
+  All four are pure (no IO once the file is read) and covered by 21
+  unit tests under ``SC2Replay-Analyzer/tests/test_launcher_config.py``.
+  The launcher and the standalone helper share ``build_poller_argv``
+  so the PowerShell argv shape can never drift between callers.
+
+### Changed
+
+- **``reveal-sc2-opponent.bat`` no longer hardcodes identity.** The
+  former ``SC2_CHARACTER_IDS=994428,8970877`` /
+  ``SC2_PLAYER_NAME=ReSpOnSe`` / ``ACTIVE_REGIONS=us,eu,kr`` lines are
+  gone; the .bat now delegates to a new Python helper
+  ``reveal-sc2-opponent-main/scripts/poller_launch.py`` that reads
+  ``data/config.json`` (whatever the wizard wrote) and spawns
+  PowerShell with the right ``-CharacterId`` / ``-ActiveRegion`` /
+  ``-PlayerName`` arguments. Fixes the long-standing problem where a
+  fresh install pinged the maintainer''s Pulse IDs until the user
+  manually edited the .bat.
+
+### Fixed
+
+- **Wizard Step 5 (Import past replays) actually imports.**
+  ``WizardStepImport`` was passing only ``folders`` into the embedded
+  ``SettingsImportPanel``; identities never reached
+  ``pendingConfig.identities``, so ``selectedNames`` stayed empty and
+  the panel''s Start button was permanently disabled. Users could
+  click Continue past Step 5 with no historical import ever firing —
+  the apply step''s ``start-initial-backfill`` only triggers macro
+  recompute on already-imported games, not a folder walk. ``wizard-
+  shell.jsx`` now passes ``selectedIdentities`` and ``battleTags``;
+  ``wizard-apply-import.jsx`` threads them into ``fakePendingConfig``.
+  Smoke-tested against the real first-run wizard flow with
+  ``data/config.json``''s two identities.
+
 ## [1.1.0] - 2026-05-01
 
 ### Fixed
@@ -137,4 +193,4 @@ workflow builds the Windows installer on each tag push and attaches the
 - Users on existing manual installs at `C:\SC2TOOLS\` are not migrated
   by the installer; they can either continue running from there or
   reinstall via the `data\` across by hand.
-- Auto-update is opt-in: th
+- Auto-update is op

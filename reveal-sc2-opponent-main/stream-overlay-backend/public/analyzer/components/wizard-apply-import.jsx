@@ -415,13 +415,24 @@
       }
 
 
-      function WizardStepImport({ folders, onNext, onBack, onSkip }) {
+      function WizardStepImport({ folders, identities, battleTags,
+                                  onNext, onBack, onSkip }) {
         // Reuses SettingsImportPanel by faking the pendingConfig shape it
         // expects. Lets a brand-new user kick off a historical replay
         // import as part of onboarding -- the import then runs in the
         // background while they finish the rest of the wizard.
+        //
+        // Identities are plumbed through so SettingsImportPanel can
+        // populate selectedNames; without them, its Start button stays
+        // disabled and a wizard user can sail past Step 5 with no
+        // import ever running. battleTags is included for parity with
+        // the persisted config shape but is not used by the panel today.
+        const idList = Array.isArray(identities) ? identities : [];
         const fakePendingConfig = {
           paths: { replay_folders: Array.isArray(folders) ? folders : [] },
+          identities: idList,
+          battle_tags: (battleTags && typeof battleTags === "object")
+            ? battleTags : {},
         };
         return (
           <WizardCard>

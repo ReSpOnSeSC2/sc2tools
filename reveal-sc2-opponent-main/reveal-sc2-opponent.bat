@@ -1,52 +1,34 @@
 @echo off
 REM ============================================================
-REM  reveal-sc2-opponent launcher
+REM  reveal-sc2-opponent launcher (config-driven)
 REM ------------------------------------------------------------
-REM  TWO ways to identify your SC2Pulse account, in priority order:
+REM  Identity (Pulse character IDs, player name, active regions)
+REM  is read from data\config.json -- the file the first-run
+REM  wizard writes. To change it, re-run the wizard at
+REM  http://127.0.0.1:3000/analyzer/ or edit data\config.json
+REM  by hand. There are no hardcoded credentials here.
 REM
-REM    1. SC2_CHARACTER_IDS  -- comma-separated PULSE character IDs.
-REM       These are NOT the same numbers as your local SC2 folder
-REM       names (e.g., "1-S2-1-267727"). Find your real Pulse IDs
-REM       at https://sc2pulse.nephest.com/sc2/?#search
-REM       Example: ReSpOnSe is 994428 (NA) and 8970877 (EU).
-REM
-REM    2. SC2_PLAYER_NAME -- if SC2_CHARACTER_IDS is empty, the
-REM       script does a Pulse name search across all configured
-REM       regions and resolves the IDs for you.
-REM
-REM  ACTIVE_REGIONS controls priority order during the name search
-REM  AND limits which regions are searched. List your most-played
-REM  region first.
+REM  Most users do not need to invoke this .bat directly. The
+REM  desktop launcher (SC2ReplayAnalyzer.py) spawns the same
+REM  PowerShell poller automatically using the same Python
+REM  helper. This script exists for power users who want to run
+REM  the poller standalone (e.g., debugging without the backend).
 REM ============================================================
 
-set SC2_CHARACTER_IDS=994428,8970877
-set SC2_PLAYER_NAME=ReSpOnSe
-set ACTIVE_REGIONS=us,eu,kr
+setlocal
+set "ROOT=%~dp0"
+set "HELPER=%ROOT%scripts\poller_launch.py"
 
-if not "%SC2_CHARACTER_IDS%"=="" (
-    start powershell ^
-    -NoExit ^
-    -ExecutionPolicy bypass ^
-    -Command "./Reveal-Sc2Opponent.ps1" ^
-    -CharacterId %SC2_CHARACTER_IDS% ^
-    -ActiveRegion %ACTIVE_REGIONS% ^
-    -DisableQuickEdit ^
-    -FilePath opponent.txt ^
-    -RatingFormat long ^
-    -RaceFormat short ^
-    -Separator `r`n ^
-    -Limit 1
-) else (
-    start powershell ^
-    -NoExit ^
-    -ExecutionPolicy bypass ^
-    -Command "./Reveal-Sc2Opponent.ps1" ^
-    -PlayerName %SC2_PLAYER_NAME% ^
-    -ActiveRegion %ACTIVE_REGIONS% ^
-    -DisableQuickEdit ^
-    -FilePath opponent.txt ^
-    -RatingFormat long ^
-    -RaceFormat short ^
-    -Separator `r`n ^
-    -Limit 1
+REM Use whichever Python is on PATH. The installed copy registers
+REM ``python`` system-wide; if you use ``py`` instead, change this.
+where python >nul 2>nul
+if errorlevel 1 (
+    echo ERROR: python not found on PATH.
+    echo Install Python 3.12 or run via the desktop launcher.
+    endlocal
+    exit /b 1
 )
+
+python "%HELPER%"
+set "RC=%ERRORLEVEL%"
+endlocal & exit /b %RC%
