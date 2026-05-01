@@ -329,6 +329,7 @@
             root:       document.getElementById('scout-widget'),
             raceIcon:   document.getElementById('scout-race-icon'),
             name:       document.getElementById('scout-name'),
+            matchup:    document.getElementById('scout-matchup'),
             record:     document.getElementById('scout-record'),
             rivalRow:   document.getElementById('scout-rival'),
             rivalText:  document.getElementById('scout-rival-text'),
@@ -645,11 +646,28 @@
                 const e = els.scout;
                 setIconSlot(e.raceIcon, Icons.raceIcon(p.race), p.race);
                 safeText(e.name, p.opponent || 'Unknown');
+                // Render the live matchup tag ("· PvZ") when we know
+                // it. The record shown below is now matchup-scoped, so
+                // surfacing the matchup keeps the W-L number readable
+                // ("first PvZ meeting" beats a confusing "first meeting"
+                // when the user has played this opponent in PvT before).
+                const muLabel = p.matchup && p.matchup.label
+                    ? p.matchup.label
+                    : (p.matchup && p.matchup.key) || null;
+                if (e.matchup) {
+                    if (muLabel) {
+                        safeText(e.matchup, `· ${muLabel}`);
+                        e.matchup.style.display = '';
+                    } else {
+                        e.matchup.style.display = 'none';
+                    }
+                }
                 if (p.record && p.record.total > 0) {
                     safeText(e.record,
                         `${p.record.wins}W-${p.record.losses}L  ${p.record.winRate}%`);
                 } else {
-                    safeText(e.record, 'first meeting');
+                    safeText(e.record,
+                        muLabel ? `first ${muLabel} meeting` : 'first meeting');
                 }
                 if (p.rival) {
                     safeText(e.rivalText,

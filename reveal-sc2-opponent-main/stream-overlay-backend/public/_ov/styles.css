@@ -252,6 +252,12 @@ html, body {
     padding-bottom: 8px;
 }
 .scout-race .sc2-icon { width: 32px; height: 32px; }
+.scout-matchup {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+}
 .scout-record { margin-left: auto; font-size: 0.95rem; }
 .scout-row {
     display: flex;

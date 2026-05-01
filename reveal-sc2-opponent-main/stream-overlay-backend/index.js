@@ -857,6 +857,77 @@ function flattenGames(oppRecord) {
     return games;
 }
 
+// ------------------------------------------------------------------
+// MATCHUP FILTERING
+// ------------------------------------------------------------------
+// The scouting widget needs to scope every stat (record, favorite
+// opening, best answer, rival tier, cheese flag, recent games) to the
+// matchup actually being played right now -- a 7-1 lifetime record
+// against an opponent is misleading if 6 of those wins were PvT and
+// you're now staring at their Zerg.
+//
+// `myRace` / `oppRace` arrive at the call site as full English names
+// ("Protoss"/"Terran"/"Zerg") parsed from `opponent.txt`. We accept
+// either case or the bare letter, fold to the canonical letter, and
+// build the standard analyzer-style key ("PvZ", "TvP", "ZvP", etc.).
+//
+// Returning null means "matchup unknown -- don't filter" so the
+// detection functions degrade gracefully when one of the races is
+// missing (rare, but happens on unranked games and on the very first
+// frame of opponent.txt before the SC2Pulse search resolves).
+const RACE_LETTER = { protoss: 'P', p: 'P', terran: 'T', t: 'T', zerg: 'Z', z: 'Z' };
+function _raceLetter(r) {
+    if (!r) return null;
+    return RACE_LETTER[String(r).trim().toLowerCase()] || null;
+}
+function _matchupKey(myRace, oppRace) {
+    const m = _raceLetter(myRace);
+    const o = _raceLetter(oppRace);
+    if (!m || !o) return null;
+    return `${m}v${o}`;
+}
+
+// True when a flattenGames-produced row belongs to the requested
+// matchup. We trust the `Matchup` field that flattenGames stamps on
+// records pulled from oppRecord.Matchups; for legacy rows in the flat
+// `Games` array we fall back to Race fields if present.
+function _gameMatchesMatchupHistory(g, matchupKey) {
+    if (!matchupKey) return true;
+    if (typeof g.Matchup === 'string' && g.Matchup) {
+        return g.Matchup.toUpperCase() === matchupKey.toUpperCase();
+    }
+    // Best-effort fallback when an old flat Games[] entry has no
+    // Matchup tag. Use OppRace + MyRace if either is present.
+    const my = _raceLetter(g.MyRace || g.my_race);
+    const op = _raceLetter(g.OppRace || g.opp_race);
+    if (my && op) return `${my}v${op}` === matchupKey;
+    // Unknown -> conservatively include it rather than drop a
+    // potentially valid row.
+    return true;
+}
+
+// True when a meta_database.json game belongs to the requested
+// matchup. Build name encodes my_race ("PvZ - Phoenix into Robo");
+// game record carries opp_race verbatim. We require BOTH to agree.
+function _buildAndGameMatchMatchup(buildName, g, matchupKey) {
+    if (!matchupKey) return true;
+    const want = matchupKey.toUpperCase();
+    const oppLetter = _raceLetter(g && g.opp_race);
+    if (!oppLetter || oppLetter !== want.charAt(2)) return false;
+    // Pull the my_race letter out of the build-name prefix. Accept
+    // both modern dash separators ("PvZ - Phoenix into Robo") and
+    // legacy variants ("PvZ – Phoenix into Robo", "PvZ Phoenix").
+    const m = String(buildName || '').match(/^([PTZR])v([PTZR])\b/i);
+    if (!m) {
+        // No matchup prefix on this build (e.g., a generic
+        // race-agnostic build). Allow it through if opp_race agrees
+        // -- losing the my_race half of the filter is better than
+        // dropping a legitimate game.
+        return true;
+    }
+    return `${m[1].toUpperCase()}V${m[2].toUpperCase()}` === want;
+}
+
 function computeRecord(oppRecord) {
     let w = oppRecord.Wins || 0;
     let l = oppRecord.Losses || 0;
@@ -924,11 +995,12 @@ function _scoutFilterOpener(buildLog) {
 // insensitive) — we ignore the legacy MyOpponentHistory.json here
 // because it doesn't carry build_log / game_length, and the scouting
 // card needs both.
-function buildRecentGamesForOpponent(oppName, limit) {
+function buildRecentGamesForOpponent(oppName, limit, myRace, oppRace) {
     const cap = Number.isFinite(limit) && limit > 0 ? limit : SCOUT_RECENT_LIMIT;
     if (!oppName) return [];
     const db = readMetaDb();
     if (!db || typeof db !== 'object') return [];
+    const matchupKey = _matchupKey(myRace, oppRace);
     // Compare by the SAME normalized name-forms that findOpponentByName
     // uses against MyOpponentHistory.json. The PowerShell scanner writes
     // SC2Pulse Character.Name to opponent.txt, which carries the BattleTag
@@ -950,12 +1022,17 @@ function buildRecentGamesForOpponent(oppName, limit) {
                 if (targetForms.has(f)) { matched = true; break; }
             }
             if (!matched) continue;
+            // Drop games from a different matchup so the scouting
+            // card only ever shows what matters for the game we're
+            // about to play. Kept loose -- if either race is unknown
+            // we fall through and include the game.
+            if (!_buildAndGameMatchMatchup(buildName, g, matchupKey)) continue;
             flat.push({ buildName, g });
         }
     }
     console.log(
         `[Scout] recent-games lookup: opp="${oppName}" forms=${targetForms.size} ` +
-        `scanned=${scanned} matched=${flat.length} cap=${cap}`
+        `matchup=${matchupKey || 'any'} scanned=${scanned} matched=${flat.length} cap=${cap}`
     );
     if (flat.length === 0) return [];
     // Newest first by date string (ISO sorts lexicographically).
@@ -984,13 +1061,15 @@ function buildRecentGamesForOpponent(oppName, limit) {
 }
 
 
-function detectCheeseHistory(oppName) {
+function detectCheeseHistory(oppName, myRace, oppRace) {
     const cheeseMax = config.events.cheeseHistory?.cheeseMaxSeconds ?? 300;
     const history = readHistory();
     const found = findOpponentByName(history, oppName);
     if (!found) return null;
 
+    const matchupKey = _matchupKey(myRace, oppRace);
     const games = flattenGames(found.data)
+        .filter(g => _gameMatchesMatchupHistory(g, matchupKey))
         .filter(g => Number.isFinite(g.Duration) && g.Duration > 0)
         .sort((a, b) => (b.Date || '').localeCompare(a.Date || ''));
 
@@ -1008,11 +1087,30 @@ function detectCheeseHistory(oppName) {
     };
 }
 
-function buildRematchSummary(oppName) {
+function buildRematchSummary(oppName, myRace, oppRace) {
     const history = readHistory();
     const found = findOpponentByName(history, oppName);
+    const matchupKey = _matchupKey(myRace, oppRace);
     if (found) {
-        const rec = computeRecord(found.data);
+        // When we know the matchup, score only the matchup-scoped
+        // games so "5W-3L (62%)" actually reflects the matchup we're
+        // about to play. Falls through to lifetime when matchup is
+        // unknown.
+        let rec;
+        if (matchupKey) {
+            const games = flattenGames(found.data)
+                .filter(g => _gameMatchesMatchupHistory(g, matchupKey));
+            let w = 0, l = 0;
+            for (const g of games) {
+                const r = String(g.Result || '').toLowerCase();
+                if (r === 'win' || r === 'victory') w += 1;
+                else if (r === 'loss' || r === 'defeat') l += 1;
+            }
+            const total = w + l;
+            rec = { wins: w, losses: l, total, winRate: total > 0 ? Math.round((w / total) * 100) : 0 };
+        } else {
+            rec = computeRecord(found.data);
+        }
         if (rec.total > 0) {
             return {
                 opponent: found.cleanName,
@@ -1020,7 +1118,8 @@ function buildRematchSummary(oppName) {
                 losses: rec.losses,
                 total: rec.total,
                 winRate: rec.winRate,
-                race: found.data.Race || null
+                race: found.data.Race || null,
+                matchup: matchupKey
             };
         }
     }
@@ -1030,11 +1129,12 @@ function buildRematchSummary(oppName) {
     // the user has played this opponent but MyOpponentHistory doesn't reflect
     // it -- the symptom that surfaced as 'first meeting' on the merged
     // opponent card while the scouting card showed real recent games.
-    const metaRec = _recordFromMetaDb(oppName);
+    const metaRec = _recordFromMetaDb(oppName, myRace, oppRace);
     if (metaRec) {
         console.log(
             `[Rematch] Black Book miss for "${oppName}"; using meta DB fallback ` +
-            `(${metaRec.wins}W-${metaRec.losses}L over ${metaRec.total} games).`
+            `(${metaRec.wins}W-${metaRec.losses}L over ${metaRec.total} games, ` +
+            `matchup=${matchupKey || 'any'}).`
         );
         return metaRec;
     }
@@ -1043,27 +1143,42 @@ function buildRematchSummary(oppName) {
 
 // Detect a "rival" -- an opponent we've played at least minGames
 // times. Returns null if not a rival yet.
-function detectRival(oppName) {
+function detectRival(oppName, myRace, oppRace) {
     const minGames = config.events.rivalAlert?.minGames ?? 5;
     const history = readHistory();
     const found = findOpponentByName(history, oppName);
     if (!found) return null;
-    const rec = computeRecord(found.data);
-    if (rec.total < minGames) return null;
-    // Find the most recent meeting, if any, for the "tagline".
-    const games = flattenGames(found.data)
-        .sort((a, b) => (b.Date || '').localeCompare(a.Date || ''));
-    const lastResult = games[0]?.Result || null;
+    const matchupKey = _matchupKey(myRace, oppRace);
+    // Score per-matchup when we know it -- a "nemesis" reading is
+    // a 20-game thing, and 18 of those games being TvP doesn't make
+    // them your TvZ nemesis.
+    const allGames = flattenGames(found.data);
+    const games = matchupKey
+        ? allGames.filter(g => _gameMatchesMatchupHistory(g, matchupKey))
+        : allGames;
+    let w = 0, l = 0;
+    for (const g of games) {
+        const r = String(g.Result || '').toLowerCase();
+        if (r === 'win' || r === 'victory') w += 1;
+        else if (r === 'loss' || r === 'defeat') l += 1;
+    }
+    const total = w + l;
+    if (total < minGames) return null;
+    const winRate = total > 0 ? Math.round((w / total) * 100) : 0;
+    // Most recent meeting in this matchup for the "tagline".
+    const sorted = [...games].sort((a, b) => (b.Date || '').localeCompare(a.Date || ''));
+    const lastResult = sorted[0]?.Result || null;
     return {
         opponent: found.cleanName,
-        wins: rec.wins,
-        losses: rec.losses,
-        total: rec.total,
-        winRate: rec.winRate,
+        wins: w,
+        losses: l,
+        total,
+        winRate,
         race: found.data.Race || null,
         lastResult,
-        tier: rec.total >= 20 ? 'nemesis'
-            : rec.total >= 10 ? 'rival'
+        matchup: matchupKey,
+        tier: total >= 20 ? 'nemesis'
+            : total >= 10 ? 'rival'
             : 'familiar'
     };
 }
@@ -1071,13 +1186,19 @@ function detectRival(oppName) {
 // ------------------------------------------------------------------
 // F1: FAVORITE OPENING (most-frequent opp_strategy from history)
 // ------------------------------------------------------------------
-function detectFavoriteOpening(oppName) {
+function detectFavoriteOpening(oppName, myRace, oppRace) {
     const minGames = config.events.favoriteOpening?.minGames ?? 2;
     const history = readHistory();
     const found = findOpponentByName(history, oppName);
     if (!found) return null;
 
-    const games = flattenGames(found.data).filter(g => g.opp_strategy);
+    const matchupKey = _matchupKey(myRace, oppRace);
+    // Limit the favorite-opening tally to games in this matchup.
+    // A Zerg whose "favorite" looks like a hatch-first opener vs T
+    // is meaningless when they're now pulling a Pool-First vs P.
+    const games = flattenGames(found.data)
+        .filter(g => _gameMatchesMatchupHistory(g, matchupKey))
+        .filter(g => g.opp_strategy);
     if (games.length < minGames) return null;
 
     const tally = {};
@@ -1095,7 +1216,8 @@ function detectFavoriteOpening(oppName) {
         strategy: topStrat,
         count: topCount,
         totalSeen: total,
-        sharePct: Math.round((topCount / total) * 100)
+        sharePct: Math.round((topCount / total) * 100),
+        matchup: matchupKey
     };
 }
 
@@ -1142,17 +1264,18 @@ function readMetaDb() {
 // the analyzer DB has the game but the Black Book hasn't been rewritten yet).
 //
 // Returns { wins, losses, total, winRate, race } or null if no games match.
-function _recordFromMetaDb(oppName) {
+function _recordFromMetaDb(oppName, myRace, oppRace) {
     if (!oppName) return null;
     const db = readMetaDb();
     if (!db || typeof db !== 'object') return null;
     const targetForms = nameForms(oppName);
     if (targetForms.size === 0) return null;
+    const matchupKey = _matchupKey(myRace, oppRace);
     let wins = 0;
     let losses = 0;
     let race = null;
     let cleanName = null;
-    for (const bd of Object.values(db)) {
+    for (const [buildName, bd] of Object.entries(db)) {
         if (!bd || !Array.isArray(bd.games)) continue;
         for (const g of bd.games) {
             const oppForms = nameForms(g && g.opponent);
@@ -1162,6 +1285,10 @@ function _recordFromMetaDb(oppName) {
                 if (targetForms.has(f)) { matched = true; break; }
             }
             if (!matched) continue;
+            // Restrict to current matchup so the rematch summary
+            // never says "5W-3L" off games from a different race
+            // pairing.
+            if (!_buildAndGameMatchMatchup(buildName, g, matchupKey)) continue;
             const result = String(g.result || '').toLowerCase();
             if (result === 'win' || result === 'victory') wins += 1;
             else if (result === 'loss' || result === 'defeat') losses += 1;
@@ -1177,7 +1304,8 @@ function _recordFromMetaDb(oppName) {
         losses,
         total,
         winRate: Math.round((wins / total) * 100),
-        race
+        race,
+        matchup: matchupKey
     };
 }
 
@@ -1982,7 +2110,9 @@ fs.watchFile(OPPONENT_FILE_PATH, { interval: 1000 }, () => {
 
         // Look up our head-to-head record so the merged opponent
         // widget can show "Z 2840 MMR | 5W-3L (62%)" in one line.
-        const rematch = oppName ? buildRematchSummary(oppName) : null;
+        // Scope to the current matchup so the W-L reflects what the
+        // user is actually about to play, not their lifetime mix.
+        const rematch = oppName ? buildRematchSummary(oppName, myRace, oppRace) : null;
 
         // Persist the parsed opponent MMR (from the PowerShell
         // SC2Pulse search) onto the session so #opp-mmr refreshes
@@ -2019,11 +2149,11 @@ fs.watchFile(OPPONENT_FILE_PATH, { interval: 1000 }, () => {
 
         if (!oppName) return;
 
-        const cheese = detectCheeseHistory(oppName);
+        const cheese = detectCheeseHistory(oppName, myRace, oppRace);
         if (cheese) emitEvent('cheeseHistory', cheese);
 
-        // F1 favorite opening
-        const fav = detectFavoriteOpening(oppName);
+        // F1 favorite opening (matchup-scoped)
+        const fav = detectFavoriteOpening(oppName, myRace, oppRace);
         let bestAns = null;
         if (fav) {
             emitEvent('favoriteOpening', fav);
@@ -2031,8 +2161,8 @@ fs.watchFile(OPPONENT_FILE_PATH, { interval: 1000 }, () => {
             if (bestAns) emitEvent('bestAnswer', { ...bestAns, opponent: fav.opponent });
         }
 
-        // #6 rival alert (priority 9, fires for opponents played >= minGames times)
-        const rival = detectRival(oppName);
+        // #6 rival alert (priority 9, fires for opponents played >= minGames times in this matchup)
+        const rival = detectRival(oppName, myRace, oppRace);
         if (rival) emitEvent('rivalAlert', rival);
 
         // #1 unified scouting report -- consolidates everything we know
@@ -2041,25 +2171,42 @@ fs.watchFile(OPPONENT_FILE_PATH, { interval: 1000 }, () => {
         // ignore them in favor of this single coherent payload.
         if (rematch || fav || cheese || rival || oppRace
             || Number.isFinite(opponentMmrForEmit)) {
+            // Stamp the live matchup on the payload so the widget
+            // can render a "vs Z (PvZ)" tag and so any downstream
+            // consumer (voice readout, post-game reveal) knows which
+            // race-pairing the numbers below were scoped to.
+            const _muKey = _matchupKey(myRace, oppRace);
+            const _muLabel = _muKey
+                ? `${_raceLetter(myRace)}v${_raceLetter(oppRace)}`
+                : null;
             emitEvent('scoutingReport', {
                 opponent: rematch?.opponent || fav?.opponent || rival?.opponent || oppName,
                 race: oppRace || rematch?.race || rival?.race || null,
                 mmr: opponentMmrForEmit,
+                matchup: _muKey ? {
+                    my: myRace || null,
+                    opp: oppRace || null,
+                    key: _muKey,
+                    label: _muLabel
+                } : null,
                 record: rematch ? {
                     wins: rematch.wins,
                     losses: rematch.losses,
                     total: rematch.total,
-                    winRate: rematch.winRate
+                    winRate: rematch.winRate,
+                    matchup: rematch.matchup || _muKey || null
                 } : null,
                 rival: rival ? {
                     tier: rival.tier,
-                    lastResult: rival.lastResult
+                    lastResult: rival.lastResult,
+                    matchup: rival.matchup || _muKey || null
                 } : null,
                 favoriteOpening: fav ? {
                     strategy: fav.strategy,
                     sharePct: fav.sharePct,
                     count: fav.count,
-                    totalSeen: fav.totalSeen
+                    totalSeen: fav.totalSeen,
+                    matchup: fav.matchup || _muKey || null
                 } : null,
                 bestAnswer: bestAns ? {
                     build: bestAns.build,
@@ -2073,12 +2220,12 @@ fs.watchFile(OPPONENT_FILE_PATH, { interval: 1000 }, () => {
                     map: cheese.map,
                     durationText: cheese.durationText
                 } : null,
-                // Last N games against this opponent — pulled live from
-                // meta_database.json. Each entry: { lengthText, result,
-                // myBuild, oppBuild, myOpener[], oppOpener[], date, map }.
-                // The widget renders these instead of the now-deprecated
-                // favoriteOpening row.
-                recentGames: buildRecentGamesForOpponent(oppName, SCOUT_RECENT_LIMIT)
+                // Last N games against this opponent in THIS matchup —
+                // pulled live from meta_database.json. Each entry:
+                // { lengthText, result, myBuild, oppBuild, myOpener[],
+                // oppOpener[], date, map }. The widget renders these
+                // instead of the now-deprecated favoriteOpening row.
+                recentGames: buildRecentGamesForOpponent(oppName, SCOUT_RECENT_LIMIT, myRace, oppRace)
             });
         }
     } catch (err) {
