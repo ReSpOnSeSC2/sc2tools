@@ -34,9 +34,8 @@ import requests
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-# Atomic JSON writer -- prevents partial writes when SC2 quits and our
-# process tree is torn down mid-write.
-from core.atomic_io import atomic_write_json
+# Shared atomic-write, safe-read, and startup validation helpers.
+from core.atomic_io import atomic_write_json, validate_critical_files
 
 # Existing per-replay logic.
 from UpdateHistory import process_replay, HISTORY_FILE, is_duplicate
@@ -440,6 +439,12 @@ def main() -> int:
     if not os.path.exists(WATCH_DIR):
         print(f"Directory not found: {WATCH_DIR}")
         return 1
+
+    # 0) Startup validation: check every critical JSON file is readable and
+    #    auto-recover from .bak where possible.  Problems are logged as
+    #    warnings so the watcher still starts even if a file is corrupt.
+    from core.paths import HISTORY_FILE as _HF, META_DB_FILE as _MDB, CONFIG_FILE as _CF
+    validate_critical_files([_HF, _MDB, _CF])
 
     # 1) Catch up first so a freshly-launched watcher absorbs anything
     #    played while it was off, BEFORE we attach the live observer.

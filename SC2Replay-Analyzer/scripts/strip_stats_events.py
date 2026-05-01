@@ -85,7 +85,7 @@ def _atomic_write(db_path: str, db: Dict[str, Any]) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         # default separators keep file slightly smaller than indent=2 but
         # we keep indent for human inspection. Net win is still huge.
-        json.dump(db, f, indent=2, default=str)
+        json.dump(db, f, indent=2, default=str, ensure_ascii=False)
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, db_path)

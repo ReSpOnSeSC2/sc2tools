@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SC2 Overlay — Voice Settings</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0b0d11;
+    color: #c8cdd8;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+
+  .card {
+    background: #11141a;
+    border: 1px solid #222732;
+    border-radius: 10px;
+    width: 100%;
+    max-width: 540px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    background: #181c24;
+    border-bottom: 1px solid #222732;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .card-header .icon { font-size: 22px; }
+  .card-header h1 { font-size: 17px; font-weight: 600; color: #e8eaf0; }
+  .card-header .sub { font-size: 12px; color: #6b7588; margin-top: 2px; }
+
+  .card-body { padding: 24px; display: flex; flex-direction: column; gap: 22px; }
+
+  /* Toggle row */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: #181c24;
+    border: 1px solid #222732;
+    border-radius: 8px;
+  }
+  .toggle-label { font-weight: 600; color: #e8eaf0; }
+  .toggle-sub   { font-size: 12px; color: #6b7588; margin-top: 2px; }
+
+  /* Toggle switch */
+  .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider-track {
+    position: absolute; inset: 0;
+    background: #2a2f3d;
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .slider-track::before {
+    content: '';
+    position: absolute;
+    width: 18px; height: 18px;
+    left: 3px; top: 3px;
+    background: #6b7588;
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .switch input:checked + .slider-track { background: #1e3a5f; }
+  .switch input:checked + .slider-track::before {
+    transform: translateX(20px);
+    background: #5b8def;
+  }
+
+  /* Field group */
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .field label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #9aa3b2;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .field label .val {
+    font-family: "Consolas", monospace;
+    font-size: 13px;
+    color: #7aa2ff;
+    background: #181c24;
+    padding: 2px 8px;
+    border-radius: 4px;
+    min-width: 44px;
+    text-align: center;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 5px;
+    background: #2a2f3d;
+    border-radius: 5px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: #5b8def;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { background: #7aa2ff; }
+
+  /* Voice selector */
+  select {
+    width: 100%;
+    padding: 9px 12px;
+    background: #181c24;
+    border: 1px solid #2a2f3d;
+    border-radius: 6px;
+    color: #c8cdd8;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7588' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+  select:focus { border-color: #5b8def; }
+
+  .field-note { font-size: 11px; color: #4a5268; margin-top: 2px; }
+
+  /* Divider */
+  .divider { border: none; border-top: 1px solid #1e222e; }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 10px; }
+  .btn {
+    flex: 1;
+    padding: 10px 0;
+    border: none;
+    border-radius: 7px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, filter 0.15s;
+  }
+  .btn:hover { filter: brightness(1.12); }
+  .btn:active { filter: brightness(0.9); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+
+  .btn-test {
+    background: #1e2d4a;
+    color: #7aa2ff;
+    border: 1px solid #2a3f6a;
+  }
+  .btn-save {
+    background: #5b8def;
+    color: #fff;
+  }
+
+  /* Status bar */
+  .status {
+    font-size: 12px;
+    text-align: center;
+    padding: 8px 0 0;
+    min-height: 20px;
+    transition: color 0.2s;
+  }
+  .status.ok    { color: #3ddc97; }
+  .status.error { color: #ef476f; }
+  .status.info  { color: #7aa2ff; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <span class="icon">🎙️</span>
+    <div>
+      <h1>Scouting Voice Settings</h1>
+      <div class="sub">Web Speech API · Free · No API key required</div>
+    </div>
+  </div>
+
+  <div class="card-body">
+
+    <!-- Enable / Disable -->
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Enable Voice Readout</div>
+        <div class="toggle-sub">Reads opponent info aloud when a new game loads</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="enabled" checked>
+        <span class="slider-track"></span>
+      </label>
+    </div>
+
+    <!-- Volume -->
+    <div class="field">
+      <label>
+        Volume
+        <span class="val" id="volume-val">100%</span>
+      </label>
+      <input type="range" id="volume" min="0" max="1" step="0.05" value="1">
+    </div>
+
+    <!-- Speed -->
+    <div class="field">
+      <label>
+        Speed
+        <span class="val" id="rate-val">0.95×</span>
+      </label>
+      <input type="range" id="rate" min="0.5" max="2" step="0.05" value="0.95">
+      <div class="field-note">0.85 = deliberate · 1.0 = normal · 1.2 = fast</div>
+    </div>
+
+    <!-- Pitch -->
+    <div class="field">
+      <label>
+        Pitch
+        <span class="val" id="pitch-val">1.0</span>
+      </label>
+      <input type="range" id="pitch" min="0" max="2" step="0.1" value="1.0">
+      <div class="field-note">Lower = deeper voice · 1.0 = neutral · Higher = brighter</div>
+    </div>
+
+    <!-- Delay -->
+    <div class="field">
+      <label>
+        Delay after game start
+        <span class="val" id="delay-val">0.6s</span>
+      </label>
+      <input type="range" id="delay_ms" min="0" max="3000" step="100" value="600">
+      <div class="field-note">Waits this long after the scouting card appears before speaking</div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Voice selector -->
+    <div class="field">
+      <label>Voice</label>
+      <select id="preferred_voice">
+        <option value="">Auto (best available English voice)</option>
+      </select>
+      <div class="field-note">List shows voices installed on this machine</div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Buttons -->
+    <div class="btn-row">
+      <button class="btn btn-test" id="btn-test">▶ Test Voice</button>
+      <button class="btn btn-save" id="btn-save">Save Settings</button>
+    </div>
+
+    <div class="status" id="status"></div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ------------------------------------------------------------------
+  // HELPERS
+  // ------------------------------------------------------------------
+  var $ = function (id) { return document.getElementById(id); };
+
+  function setStatus(msg, cls) {
+    var el = $('status');
+    el.textContent = msg;
+    el.className = 'status ' + (cls || '');
+    if (cls === 'ok') setTimeout(function () {
+      if (el.textContent === msg) { el.textContent = ''; el.className = 'status'; }
+    }, 3000);
+  }
+
+  // ------------------------------------------------------------------
+  // SLIDER LIVE READOUTS
+  // ------------------------------------------------------------------
+  $('volume').addEventListener('input', function () {
+    $('volume-val').textContent = Math.round(this.value * 100) + '%';
+  });
+  $('rate').addEventListener('input', function () {
+    $('rate-val').textContent = parseFloat(this.value).toFixed(2) + '×';
+  });
+  $('pitch').addEventListener('input', function () {
+    $('pitch-val').textContent = parseFloat(this.value).toFixed(1);
+  });
+  $('delay_ms').addEventListener('input', function () {
+    $('delay-val').textContent = (this.value / 1000).toFixed(1) + 's';
+  });
+
+  // ------------------------------------------------------------------
+  // POPULATE VOICE LIST
+  // ------------------------------------------------------------------
+  function populateVoices(savedPreferred) {
+    var sel = $('preferred_voice');
+    var voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    // Remove all options except the first (Auto)
+    while (sel.options.length > 1) sel.remove(1);
+    voices.forEach(function (v) {
+      var opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = v.name + ' (' + v.lang + ')';
+      if (v.name === savedPreferred) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  if (window.speechSynthesis) {
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = function () {
+        populateVoices($('preferred_voice').value);
+      };
+    }
+    // Initial populate (synchronous in some browsers)
+    populateVoices('');
+  }
+
+  // ------------------------------------------------------------------
+  // LOAD CURRENT CONFIG FROM SERVER
+  // ------------------------------------------------------------------
+  fetch('/api/config')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (data) {
+      var cfg = data && data.config && data.config.voice;
+      if (!cfg) return;
+      $('enabled').checked   = cfg.enabled !== false;
+      $('volume').value      = cfg.volume  != null ? cfg.volume  : 1.0;
+      $('rate').value        = cfg.rate    != null ? cfg.rate    : 0.95;
+      $('pitch').value       = cfg.pitch   != null ? cfg.pitch   : 1.0;
+      $('delay_ms').value    = cfg.delay_ms != null ? cfg.delay_ms : 600;
+
+      // Trigger live readout updates
+      $('volume').dispatchEvent(new Event('input'));
+      $('rate').dispatchEvent(new Event('input'));
+      $('pitch').dispatchEvent(new Event('input'));
+      $('delay_ms').dispatchEvent(new Event('input'));
+
+      // Repopulate voice list with saved selection
+      populateVoices(cfg.preferred_voice || '');
+      if (cfg.preferred_voice) $('preferred_voice').value = cfg.preferred_voice;
+    })
+    .catch(function (err) {
+      setStatus('Could not load config: ' + err.message, 'error');
+    });
+
+  // ------------------------------------------------------------------
+  // TEST VOICE
+  // ------------------------------------------------------------------
+  $('btn-test').addEventListener('click', function () {
+    if (!window.speechSynthesis) {
+      setStatus('Web Speech API not available in this browser.', 'error');
+      return;
+    }
+    window.speechSynthesis.cancel();
+
+    var utter = new SpeechSynthesisUtterance(
+      'Facing LetaleX, Zerg. You\'re 3 and 1 against them, 75 percent win rate. ' +
+      'They are your nemesis. Cheese warning — they got you at 4 minutes. ' +
+      'Your best answer is Ling Bane Muta — 80 percent win rate. Good luck.'
+    );
+    utter.volume = parseFloat($('volume').value);
+    utter.rate   = parseFloat($('rate').value);
+    utter.pitch  = parseFloat($('pitch').value);
+
+    var selVoice = $('preferred_voice').value;
+    if (selVoice) {
+      var match = window.speechSynthesis.getVoices().find(function (v) {
+        return v.name === selVoice;
+      });
+      if (match) utter.voice = match;
+    }
+
+    setStatus('Playing test…', 'info');
+    utter.onend = function () { setStatus(''); };
+    utter.onerror = function (e) { setStatus('Speech error: ' + e.error, 'error'); };
+
+    setTimeout(function () {
+      window.speechSynthesis.speak(utter);
+    }, 50);
+  });
+
+  // ------------------------------------------------------------------
+  // SAVE SETTINGS
+  // ------------------------------------------------------------------
+  $('btn-save').addEventListener('click', function () {
+    var btn = $('btn-save');
+    btn.disabled = true;
+
+    var patch = {
+      voice: {
+        enabled:         $('enabled').checked,
+        volume:          parseFloat($('volume').value),
+        rate:            parseFloat($('rate').value),
+        pitch:           parseFloat($('pitch').value),
+        delay_ms:        parseInt($('delay_ms').value, 10),
+        preferred_voice: $('preferred_voice').value
+      }
+    };
+
+    fetch('/api/config', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    })
+      .then(function (r) {
+        return r.json().then(function (body) {
+          return { ok: r.ok, body: body };
+        });
+      })
+      .then(function (res) {
+        if (res.ok) {
+          setStatus('✓ Settings saved — takes effect on the next game.', 'ok');
+        } else {
+          var msg = (res.body && res.body.errors)
+            ? res.body.errors.map(function (e) { return e.path + ': ' + e.message; }).join(', ')
+            : JSON.stringify(res.body);
+          setStatus('Save failed: ' + msg, 'error');
+        }
+      })
+      .catch(function (err) {
+        setStatus('Network error: ' + err.message, 'error');
+      })
+      .finally(function () {
+        btn.disabled = false;
+      });
+  });
+
+})();
+</script>
+</body>
+</html>

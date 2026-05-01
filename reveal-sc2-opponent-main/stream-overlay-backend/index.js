@@ -2146,6 +2146,23 @@ if (require.main === module) {
 }
 
 if (require.main === module) {
+    // Startup validation: check that every critical JSON data file is readable
+    // before accepting any requests. safeReadJson will recover from .bak where
+    // possible, and validateCriticalFiles logs clear warnings for anything that
+    // needs manual attention. Problems here never abort startup -- the server
+    // still comes up and serves requests.
+    atomicFs.validateCriticalFiles(
+        [
+            HISTORY_FILE_PATH,
+            META_DB_PATH,
+            path.join(DATA_DIR, 'config.json'),
+            path.join(DATA_DIR, 'profile.json'),
+            path.join(DATA_DIR, 'custom_builds.json'),
+            path.join(DATA_DIR, 'community_sync_queue.json'),
+        ],
+        console
+    );
+
     server.listen(PORT, async () => {
         console.log(`[Server] Listening on http://localhost:${PORT}`);
         console.log(`[Server] Dev panel: http://localhost:${PORT}/static/debug.html`);

@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "running": false,
+  "started_at": "2026-04-30T17:56:48.581334Z",
+  "finished_at": "2026-04-30T17:56:50.879041Z",
+  "folder": "C:\\Users\\jay19\\OneDrive\\Pictures\\Documents\\StarCraft II\\Accounts\\50983875\\2-S2-1-8780508\\Replays\\Multiplayer",
+  "since": "2026-01-30",
+  "until": "",
+  "workers": 8,
+  "total": 3,
+  "completed": 3,
+  "errors": 0,
+  "processed_paths": [
+    "C:\\Users\\jay19\\OneDrive\\Pictures\\Documents\\StarCraft II\\Accounts\\50983875\\2-S2-1-8780508\\Replays\\Multiplayer\\Mothership LE (7).SC2Replay",
+    "C:\\Users\\jay19\\OneDrive\\Pictures\\Documents\\StarCraft II\\Accounts\\50983875\\2-S2-1-8780508\\Replays\\Multiplayer\\White Rabbit LE (21).SC2Replay",
+    "C:\\Users\\jay19\\OneDrive\\Pictures\\Documents\\StarCraft II\\Accounts\\50983875\\2-S2-1-8780508\\Replays\\Multiplayer\\10000 Feet LE (14).SC2Replay"
+  ],
+  "error_breakdown": {},
+  "error_samples": {}
+}

@@ -51,6 +51,7 @@
         { id: "import",      label: "Import replays" },
         { id: "builds",      label: "Build classifier" },
         { id: "overlay",     label: "Stream overlay" },
+        { id: "voice",       label: "Voice readout" },
         { id: "backups",     label: "Backups" },
         { id: "diagnostics", label: "Diagnostics" },
         { id: "privacy",     label: "Privacy" },

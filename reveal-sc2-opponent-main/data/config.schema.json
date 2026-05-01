@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://sc2tools.respondesc2.dev/schemas/config.schema.json",
   "title": "SC2Tools Installation Config",
-  "description": "Per-installation settings. Created by the wizard on first run; editable from the SPA settings page. Authoritative source for paths, macro engine flags, build classifier choices, overlay settings, telemetry, and UI preferences.",
+  "description": "Per-installation settings. Created by the wizard on first run; editable from the SPA settings page.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -10,9 +10,7 @@
     "paths",
     "macro_engine",
     "build_classifier",
-    "stream_overlay",
-    "telemetry",
-    "ui"
+    "stream_overlay"
   ],
   "properties": {
     "version": {
@@ -23,50 +21,34 @@
     "paths": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "sc2_install_dir",
-        "replay_folders"
-      ],
+      "required": ["sc2_install_dir", "replay_folders"],
       "properties": {
         "sc2_install_dir": {
           "type": "string",
-          "description": "Filesystem path to the StarCraft II install directory. May be empty if not yet detected; recon_sc2_install.py fills it in."
+          "description": "Filesystem path to the StarCraft II install directory."
         },
         "replay_folders": {
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": "Folders to watch for new .SC2Replay files. The first entry is the canonical 'My Replays' folder."
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Folders to watch for new .SC2Replay files."
         }
       }
     },
     "macro_engine": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "enabled_disciplines",
-        "minimum_game_length_sec",
-        "engine_version"
-      ],
+      "required": ["enabled_disciplines", "minimum_game_length_sec", "engine_version"],
       "properties": {
         "enabled_disciplines": {
           "type": "array",
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": [
-              "chrono",
-              "inject",
-              "mule",
-              "supply",
-              "worker_production"
-            ]
+            "enum": ["chrono", "inject", "mule", "supply", "worker_production"]
           },
-          "description": "Macro disciplines scored per game. 'chrono' uses ability_link 722/723 with chained-state counting (see commits c728ab0, 4107efd)."
+          "description": "Macro disciplines scored per game."
         },
         "minimum_game_length_sec": {
           "type": "integer",
@@ -77,137 +59,125 @@
         "engine_version": {
           "type": "string",
           "minLength": 1,
-          "description": "Macro engine version tag, e.g. '2026-04-chain-counted'."
+          "description": "Macro engine version tag."
         }
       }
     },
     "build_classifier": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "active_definition_ids",
-        "use_custom_builds",
-        "use_community_shared_builds"
-      ],
+      "required": ["active_definition_ids", "use_custom_builds", "use_community_shared_builds"],
       "properties": {
         "active_definition_ids": {
           "type": "array",
           "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": "Build IDs from build_definitions.json that the classifier currently scores against."
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Build IDs from build_definitions.json that the classifier scores against."
         },
         "use_custom_builds": {
           "type": "boolean",
-          "description": "When true, custom_builds.json (user-authored) participates in classification."
+          "description": "When true, custom_builds.json participates in classification."
         },
         "use_community_shared_builds": {
           "type": "boolean",
-          "description": "When true, the shared community build database participates. Stage 7."
+          "description": "When true, the shared community build database participates."
         }
       }
     },
     "stream_overlay": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "enabled",
-        "twitch_channel",
-        "obs_websocket"
-      ],
+      "required": ["enabled", "twitch_channel", "obs_websocket"],
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Master switch for the OBS / Streamlabs overlay event bus."
+          "description": "Master switch for the OBS overlay event bus."
         },
         "twitch_channel": {
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "maxLength": 64,
-          "description": "Twitch channel handle for the chat bot. Null disables chat integration."
+          "description": "Twitch channel handle. Null disables chat integration."
         },
         "obs_websocket": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "host",
-            "port",
-            "password"
-          ],
+          "required": ["host", "port", "password"],
           "properties": {
-            "host": {
-              "type": "string",
-              "minLength": 1,
-              "description": "OBS WebSocket host. Defaults to 127.0.0.1."
-            },
-            "port": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 65535,
-              "description": "OBS WebSocket port. Defaults to 4455."
-            },
-            "password": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "description": "OBS WebSocket password. Null when auth is disabled."
-            }
+            "host": { "type": "string", "minLength": 1 },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "password": { "type": ["string", "null"] }
           }
         },
         "pulse_character_ids": {
           "type": "array",
           "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "pattern": "^[0-9]+$",
-            "description": "SC2Pulse internal numeric character id."
-          },
-          "description": "All SC2Pulse character ids the user picked in the wizard. Used by the existing scanner (index.js pulseCharacterIds) for live MMR / session deltas. Multi-region users have one id per region."
+          "items": { "type": "string", "pattern": "^[0-9]+$" },
+          "description": "SC2Pulse character ids for live MMR lookups."
+        }
+      }
+    },
+    "voice": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Web Speech API settings for the scouting voice readout.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Master switch. When false, no speech is produced."
+        },
+        "volume": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Speech volume 0-1."
+        },
+        "rate": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 2,
+          "description": "Speech rate. 1.0 = normal. 0.85 = deliberate. 1.2 = fast."
+        },
+        "pitch": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Speech pitch. 1.0 = neutral."
+        },
+        "delay_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000,
+          "description": "Milliseconds to wait before speaking after scoutingReport fires."
+        },
+        "preferred_voice": {
+          "type": "string",
+          "description": "Exact browser voice name. Empty = auto-select best English voice."
         }
       }
     },
     "telemetry": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "opt_in"
-      ],
+      "required": ["opt_in"],
       "properties": {
         "opt_in": {
           "type": "boolean",
-          "description": "User-controlled opt-in for anonymized usage telemetry."
+          "description": "Opt-in for anonymized usage telemetry."
         }
       }
     },
     "ui": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "theme",
-        "default_perspective"
-      ],
+      "required": ["theme", "default_perspective"],
       "properties": {
         "theme": {
           "type": "string",
-          "enum": [
-            "dark",
-            "light"
-          ],
-          "description": "SPA theme. Stage 1 design tokens cover both."
+          "enum": ["dark", "light"]
         },
         "default_perspective": {
           "type": "string",
-          "enum": [
-            "me",
-            "opponent",
-            "both"
-          ],
-          "description": "Default analyzer perspective on first load."
+          "enum": ["me", "opponent", "both"]
         }
       }
     },
@@ -217,49 +187,17 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "name",
-          "character_id"
-        ],
+        "required": ["name", "character_id"],
         "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 32
-          },
-          "character_id": {
-            "type": "string",
-            "pattern": "^[1-5]-S2-[0-9]+-[0-9]+$"
-          },
-          "account_id": {
-            "type": "string",
-            "pattern": "^[0-9]+$"
-          },
-          "region": {
-            "type": "string",
-            "enum": [
-              "us",
-              "eu",
-              "kr",
-              "cn",
-              "sea"
-            ]
-          },
-          "battle_tag": {
-            "type": "string",
-            "pattern": "^[^#]+#[0-9]+$",
-            "minLength": 3,
-            "maxLength": 64,
-            "description": "Blizzard BattleTag for this identity. Onboarding doesn't capture this -- the user fills it in from Settings."
-          },
-          "pulse_id": {
-            "type": "string",
-            "pattern": "^[0-9]+$",
-            "description": "SC2Pulse internal numeric character id (e.g. '994428' from sc2pulse.nephest.com URLs). Captured during onboarding's SC2Pulse search step. Use this id for SC2Pulse API lookups; character_id is the regional folder id and is NOT the same thing."
-          }
+          "name": { "type": "string", "minLength": 1, "maxLength": 32 },
+          "character_id": { "type": "string", "pattern": "^[1-5]-S2-[0-9]+-[0-9]+$" },
+          "account_id": { "type": "string", "pattern": "^[0-9]+$" },
+          "region": { "type": "string", "enum": ["us", "eu", "kr", "cn", "sea"] },
+          "battle_tag": { "type": "string", "pattern": "^[^#]+#[0-9]+$", "minLength": 3, "maxLength": 64 },
+          "pulse_id": { "type": "string", "pattern": "^[0-9]+$" }
         }
       },
-      "description": "All Battle.net identities the user owns, as captured by onboarding (replay folder scan + SC2Pulse search). One entry per region the user plays on (NA / EU / KR / CN / SEA). The single 'primary' identity also lives in profile.json.battlenet -- this list is the canonical full set the Settings page edits. Each entry pairs: name (in-replay name), battle_tag (Blizzard handle), character_id (regional replay-folder id, format X-S2-X-XXXXXX), account_id (Battle.net account number), pulse_id (SC2Pulse numeric id), region."
+      "description": "All Battle.net identities the user owns. One entry per region."
     }
   }
 }

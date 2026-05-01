@@ -45,6 +45,10 @@
             return <SettingsOverlayPanel
               overlay={pendingConfig.stream_overlay}
               errors={errors} onPatch={patchConfig} />;
+          case "voice":
+            return <SettingsVoicePanel
+              voice={pendingConfig.voice}
+              errors={errors} onPatch={patchConfig} />;
           case "backups": return <SettingsBackupsPanel />;
           case "diagnostics": return <SettingsDiagnosticsPanel />;
           case "privacy":

@@ -154,7 +154,7 @@ def _save_db(db_path: str, db: Dict[str, Any]) -> None:
     """Atomic write so a crash mid-flush doesn't truncate the DB."""
     tmp = db_path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(db, f, indent=2, default=str)
+        json.dump(db, f, indent=2, default=str, ensure_ascii=False)
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, db_path)

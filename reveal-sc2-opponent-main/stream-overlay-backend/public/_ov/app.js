@@ -683,6 +683,10 @@
                     e.cheeseRow.style.display = 'none';
                 }
                 show(e.root);
+                if (window.VoiceReadout) {
+                    try { window.VoiceReadout.speakScoutingReport(p); }
+                    catch (_) { /* never break the renderer */ }
+                }
             },
             hide() { hide(els.scout.root); }
         },

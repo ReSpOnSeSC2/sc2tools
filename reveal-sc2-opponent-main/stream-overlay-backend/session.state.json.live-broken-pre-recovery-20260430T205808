@@ -1,0 +1,23 @@
+{
+  "startedAt": 1777569074654,
+  "wins": 3,
+  "losses": 6,
+  "mmrStart": 5244,
+  "mmrCurrent": 5197,
+  "region": "EU",
+  "mmrOpponent": 5031,
+  "mmrDelta": -47,
+  "currentStreak": {
+    "type": "win",
+    "count": 1
+  },
+  "lastResultTime": 1777582015852,
+  "metaCounts": {
+    "Protoss - Proxy Robo Opener": 2,
+    "Protoss - Robo Opener": 3,
+    "Zerg - 3 Base Macro (Hatch First)": 2,
+    "Protoss - Standard Expand": 5,
+    "Zerg - Proxy Hatch": 1,
+    "Protoss - Cannon Rush": 2
+  }
+}

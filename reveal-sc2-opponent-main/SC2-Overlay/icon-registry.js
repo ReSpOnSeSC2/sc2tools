@@ -390,10 +390,3 @@
         BASE
     };
 })();
-
-    window.SC2Icons = {
-        raceIcon, leagueIcon, resultIcon, miscIcon,
-        strategyIcons, makeIconImg, fillIconRow,
-        BASE
-    };
-})();

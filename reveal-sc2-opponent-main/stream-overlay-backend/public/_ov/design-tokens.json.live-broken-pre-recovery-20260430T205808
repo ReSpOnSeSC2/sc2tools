@@ -1,0 +1,156 @@
+{
+    "$schema": "https://schemas.amazon.com/style-dictionary/4.0/tokens.json",
+    "color": {
+        "bg": {
+            "primary":   { "$value": "#0A0E1A", "$type": "color", "$description": "Page background. Darkest surface in the system." },
+            "surface":   { "$value": "#111827", "$type": "color", "$description": "Card / panel background." },
+            "elevated":  { "$value": "#1F2937", "$type": "color", "$description": "Hovered card, modal, tooltip surface." }
+        },
+        "race": {
+            "terran":    { "$value": "#3B82F6", "$type": "color", "$description": "Terran race accent. Use for race chips and badges only." },
+            "zerg":      { "$value": "#A855F7", "$type": "color", "$description": "Zerg race accent." },
+            "protoss":   { "$value": "#F59E0B", "$type": "color", "$description": "Protoss race accent." },
+            "random":    { "$value": "#94A3B8", "$type": "color", "$description": "Random race accent. Slate so it doesn't overpower a known-race opponent." }
+        },
+        "semantic": {
+            "success":   { "$value": "#10B981", "$type": "color", "$description": "Wins, healthy KPIs, completed states." },
+            "danger":    { "$value": "#EF4444", "$type": "color", "$description": "Losses, errors, blockers." },
+            "warning":   { "$value": "#F59E0B", "$type": "color", "$description": "Caution, stale data, low-confidence." },
+            "info":      { "$value": "#3B82F6", "$type": "color", "$description": "Tip, neutral CTA, hint." }
+        },
+        "text": {
+            "primary":     { "$value": "#F1F5F9", "$type": "color", "$description": "Body copy and headings. WCAG AA on every bg surface." },
+            "secondary":   { "$value": "#94A3B8", "$type": "color", "$description": "Labels and helper text. WCAG AA on every bg surface." },
+            "muted":       { "$value": "#64748B", "$type": "color", "$description": "Timestamps and large-text accents. NOT WCAG AA for body on bg-elevated." },
+            "on-accent":   { "$value": "#0A0E1A", "$type": "color", "$description": "Foreground when sitting on a race-accent or semantic fill." }
+        },
+        "border": {
+            "subtle":   { "$value": "rgba(255,255,255,0.05)", "$type": "color" },
+            "default":  { "$value": "rgba(255,255,255,0.10)", "$type": "color" },
+            "strong":   { "$value": "rgba(255,255,255,0.20)", "$type": "color" },
+            "divider":  { "$value": "rgba(255,255,255,0.08)", "$type": "color" }
+        },
+        "shadow-fill": {
+            "overlay":           { "$value": "rgba(0,0,0,0.75)", "$type": "color" },
+            "medium":            { "$value": "rgba(0,0,0,0.50)", "$type": "color" },
+            "light":             { "$value": "rgba(0,0,0,0.20)", "$type": "color" },
+            "inner-highlight":   { "$value": "rgba(255,255,255,0.02)", "$type": "color" }
+        },
+        "overlay": {
+            "bg-from":         { "$value": "#11141C", "$type": "color" },
+            "bg-to":           { "$value": "#1A1E29", "$type": "color" },
+            "border":          { "$value": "#2A3143", "$type": "color" },
+            "text":            { "$value": "#FFFFFF", "$type": "color" },
+            "text-dim":        { "$value": "#7B869E", "$type": "color" },
+            "text-medium":     { "$value": "#C5CDE0", "$type": "color" },
+            "text-matchup":    { "$value": "#A0AABF", "$type": "color" },
+            "accent-gold":     { "$value": "#E5C100", "$type": "color" },
+            "accent-cyan":     { "$value": "#00CCFF", "$type": "color" },
+            "accent-purple":   { "$value": "#A06BFF", "$type": "color" },
+            "accent-red":      { "$value": "#FF3366", "$type": "color" },
+            "accent-rival":    { "$value": "#FFCC33", "$type": "color" },
+            "victory":         { "$value": "#00FF88", "$type": "color" },
+            "defeat":          { "$value": "#FF3366", "$type": "color" },
+            "cheese":          { "$value": "#FF3366", "$type": "color" },
+            "cheese-soft":     { "$value": "#FFB3C5", "$type": "color" },
+            "rival-bg-from":   { "$value": "#2B1F0A", "$type": "color" },
+            "rival-bg-to":     { "$value": "#3A2810", "$type": "color" },
+            "rival-border":    { "$value": "#8A5A16", "$type": "color" },
+            "rival-header":    { "$value": "#FFCC33", "$type": "color" },
+            "rival-footer":    { "$value": "#FFE7A0", "$type": "color" },
+            "cheese-bg-from":  { "$value": "#1A0F15", "$type": "color" },
+            "cheese-bg-to":    { "$value": "#28121A", "$type": "color" },
+            "cheese-border":   { "$value": "#55192B", "$type": "color" },
+            "scout-bg-from":   { "$value": "#0D1320", "$type": "color" },
+            "scout-bg-to":     { "$value": "#131C2E", "$type": "color" },
+            "scout-rival":     { "$value": "#FFCC33", "$type": "color" },
+            "scout-cheese":    { "$value": "#FF8899", "$type": "color" },
+            "streak-tilt":     { "$value": "#66A8FF", "$type": "color" },
+            "streak-fire":     { "$value": "#FF8800", "$type": "color" },
+            "build-step-bg":   { "$value": "rgba(160,107,255,0.12)", "$type": "color" },
+            "build-step-fg":   { "$value": "#E7DEFC", "$type": "color" },
+            "tile-bg":         { "$value": "rgba(255,255,255,0.04)", "$type": "color" },
+            "win-streak-bg":   { "$value": "rgba(0,255,136,0.15)", "$type": "color" },
+            "loss-streak-bg":  { "$value": "rgba(255,51,102,0.15)", "$type": "color" },
+            "bg-from-glass":   { "$value": "rgba(17,20,28,0.88)", "$type": "color" },
+            "bg-to-glass":     { "$value": "rgba(26,30,41,0.88)", "$type": "color" },
+            "streak-bg-from":  { "$value": "rgba(17,20,28,0.92)", "$type": "color" },
+            "streak-bg-to":    { "$value": "rgba(26,30,41,0.92)", "$type": "color" }
+        }
+    },
+    "font": {
+        "family": {
+            "ui":   { "$value": "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", "$type": "fontFamily" },
+            "mono": { "$value": "'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, 'Liberation Mono', monospace", "$type": "fontFamily" }
+        },
+        "size": {
+            "xs":    { "$value": "11px", "$type": "dimension" },
+            "sm":    { "$value": "13px", "$type": "dimension" },
+            "base":  { "$value": "15px", "$type": "dimension" },
+            "lg":    { "$value": "18px", "$type": "dimension" },
+            "xl":    { "$value": "22px", "$type": "dimension" },
+            "2xl":   { "$value": "28px", "$type": "dimension" },
+            "3xl":   { "$value": "36px", "$type": "dimension" }
+        },
+        "weight": {
+            "regular":  { "$value": 400, "$type": "fontWeight" },
+            "medium":   { "$value": 500, "$type": "fontWeight" },
+            "semibold": { "$value": 600, "$type": "fontWeight" },
+            "bold":     { "$value": 700, "$type": "fontWeight" },
+            "extra":    { "$value": 800, "$type": "fontWeight" },
+            "black":    { "$value": 900, "$type": "fontWeight" }
+        },
+        "line-height": {
+            "tight":   { "$value": 1.2,  "$type": "number" },
+            "normal":  { "$value": 1.5,  "$type": "number" },
+            "relaxed": { "$value": 1.75, "$type": "number" }
+        },
+        "letter-spacing": {
+            "tight":  { "$value": "-0.01em", "$type": "dimension" },
+            "normal": { "$value": "0",       "$type": "dimension" },
+            "wide":   { "$value": "0.05em",  "$type": "dimension" },
+            "wider":  { "$value": "0.1em",   "$type": "dimension" }
+        }
+    },
+    "space": {
+        "0":   { "$value": "0",    "$type": "dimension" },
+        "1":   { "$value": "4px",  "$type": "dimension" },
+        "2":   { "$value": "8px",  "$type": "dimension" },
+        "3":   { "$value": "12px", "$type": "dimension" },
+        "4":   { "$value": "16px", "$type": "dimension" },
+        "6":   { "$value": "24px", "$type": "dimension" },
+        "8":   { "$value": "32px", "$type": "dimension" },
+        "12":  { "$value": "48px", "$type": "dimension" },
+        "16":  { "$value": "64px", "$type": "dimension" },
+        "24":  { "$value": "96px", "$type": "dimension" }
+    },
+    "radius": {
+        "sm":   { "$value": "4px",    "$type": "dimension" },
+        "md":   { "$value": "8px",    "$type": "dimension" },
+        "lg":   { "$value": "12px",   "$type": "dimension" },
+        "xl":   { "$value": "16px",   "$type": "dimension" },
+        "full": { "$value": "9999px", "$type": "dimension" }
+    },
+    "shadow": {
+        "sm": { "$value": "0 1px 2px 0 rgba(0,0,0,0.50)", "$type": "shadow" },
+        "md": { "$value": "0 4px 6px -1px rgba(0,0,0,0.40), 0 2px 4px -2px rgba(0,0,0,0.40)", "$type": "shadow" },
+        "lg": { "$value": "0 10px 15px -3px rgba(0,0,0,0.50), 0 4px 6px -4px rgba(0,0,0,0.50)", "$type": "shadow" },
+        "xl": { "$value": "0 20px 25px -5px rgba(0,0,0,0.50), 0 8px 10px -6px rgba(0,0,0,0.50)", "$type": "shadow" },
+        "overlay-card":   { "$value": "0 12px 32px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.02) inset", "$type": "shadow" },
+        "overlay-tile":   { "$value": "0 10px 28px rgba(0,0,0,0.7)", "$type": "shadow" },
+        "overlay-streak": { "$value": "0 20px 60px rgba(0,0,0,0.8)", "$type": "shadow" }
+    },
+    "motion": {
+        "duration": {
+            "state":     { "$value": "200ms", "$type": "duration" },
+            "entrance":  { "$value": "400ms", "$type": "duration" },
+            "celebrate": { "$value": "600ms", "$type": "duration" }
+        },
+        "easing": {
+            "out":       { "$value": "cubic-bezier(0,0,0.2,1)",       "$type": "cubicBezier" },
+            "in-out":    { "$value": "cubic-bezier(0.4,0,0.2,1)",     "$type": "cubicBezier" },
+            "spring":    { "$value": "cubic-bezier(0.2,1.4,0.4,1)",   "$type": "cubicBezier" },
+            "overshoot": { "$value": "cubic-bezier(0.25,1,0.5,1)",    "$type": "cubicBezier" }
+        }
+    }
+}

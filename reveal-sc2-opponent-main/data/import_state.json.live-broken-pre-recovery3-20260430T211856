@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "running": false,
+  "started_at": "2026-04-30T21:06:23.797190Z",
+  "finished_at": "2026-04-30T21:06:24.208240Z",
+  "folder": "C:\\Users\\jay19\\OneDrive\\Pictures\\Documents\\StarCraft II\\Accounts\\50983875\\2-S2-1-8780508\\Replays\\Multiplayer",
+  "since": "2026-03-31",
+  "until": "",
+  "workers": 8,
+  "total": 0,
+  "completed": 0,
+  "errors": 0,
+  "processed_paths": []
+}
