@@ -2,7 +2,7 @@
 
 # SC2 Meta Analyzer
 
-### Your personal StarCraft II stats lab — local, automatic, brutally honest.
+### Welcome to Your SC2 Meta Analyzer — local, automatic, brutally honest.
 
 `LIVE` &nbsp;•&nbsp; `Built-in Charts` &nbsp;•&nbsp; `Local-First` &nbsp;•&nbsp; `Stream-Ready`
 
@@ -123,7 +123,7 @@ The wizard has seven tabs across the top. The current step is highlighted **blue
   <img src="docs/images/01-welcome.png" alt="Onboarding — Welcome step" width="820"/>
 </p>
 
-The opening card states the three promises of the tool:
+The opening card reads **"Welcome to Your SC2 Meta Analyzer"** and states the three promises of the tool:
 
 - Track every macro slip across your last 1,000 ladder games.
 - Recognize what your opponent is building before the first scout.
@@ -614,7 +614,7 @@ The README references seven images under `docs/images/`. Save your screenshots w
 
 | Filename | Source screenshot |
 | --- | --- |
-| `docs/images/01-welcome.png` | Onboarding wizard — *Welcome to your SC2 stats lab* |
+| `docs/images/01-welcome.png` | Onboarding wizard — *Welcome to Your SC2 Meta Analyzer* |
 | `docs/images/02-replays.png` | Onboarding wizard — *Where are your replays?* |
 | `docs/images/03-dashboard.png` | Dashboard — KPI cards, By Matchup, Recent Games |
 | `docs/images/04-my-builds.png` | My Builds — per-opener W/L table |
