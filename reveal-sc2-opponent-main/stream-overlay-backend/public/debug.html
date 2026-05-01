@@ -234,6 +234,48 @@
             <div style="margin-top:12px;"><button class="go" data-type="rankChange" data-build="rank">Fire rankChange</button></div>
         </div>
 
+        <div class="card">
+            <h2>Scouting report (unified)</h2>
+            <p style="font-size:11px;color:#888;margin:0 0 8px;">Drives the voice readout. Open the scouting widget in a tab/OBS, then Fire.</p>
+            <div class="row">
+                <div><label>Opponent</label><input id="sc-name" value="Serral" /></div>
+                <div>
+                    <label>Race</label>
+                    <select id="sc-race">
+                        <option>Zerg</option><option>Protoss</option><option>Terran</option><option>Random</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div><label>Wins</label>  <input id="sc-wins"   type="number" value="3" /></div>
+                <div><label>Losses</label><input id="sc-losses" type="number" value="1" /></div>
+            </div>
+            <div class="row">
+                <div>
+                    <label>Rival tier</label>
+                    <select id="sc-rival">
+                        <option value="">(none)</option>
+                        <option value="nemesis">nemesis</option>
+                        <option value="rival">rival</option>
+                        <option value="comfort">comfort</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Cheese</label>
+                    <select id="sc-cheese">
+                        <option value="">(none)</option>
+                        <option value="Defeat">Defeat (they cheesed us)</option>
+                        <option value="Victory">Victory (we cheesed them)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div><label>Best-answer build</label><input id="sc-ans-build" value="Ling Bane Muta" /></div>
+                <div><label>Best-answer win %</label><input id="sc-ans-pct" type="number" value="80" /></div>
+            </div>
+            <div style="margin-top:12px;"><button class="go" data-type="scoutingReport" data-build="scout">Fire scoutingReport</button></div>
+        </div>
+
     </div>
 
     <div id="status" class="status">Ready.</div>
@@ -375,7 +417,36 @@
             direction: document.getElementById('rk-dir').value,
             league: document.getElementById('rk-league').value,
             subtext: document.getElementById('rk-sub').value
-        })
+        }),
+        scout: () => {
+            const wins = parseInt(document.getElementById('sc-wins').value, 10) || 0;
+            const losses = parseInt(document.getElementById('sc-losses').value, 10) || 0;
+            const total = wins + losses;
+            const rivalTier = document.getElementById('sc-rival').value;
+            const cheeseRes = document.getElementById('sc-cheese').value;
+            const ansBuild = document.getElementById('sc-ans-build').value;
+            const ansPct = parseInt(document.getElementById('sc-ans-pct').value, 10);
+            return {
+                opponent: document.getElementById('sc-name').value,
+                race: document.getElementById('sc-race').value,
+                record: total > 0 ? {
+                    wins: wins,
+                    losses: losses,
+                    total: total,
+                    winRate: Math.round((wins / total) * 100)
+                } : null,
+                rival: rivalTier ? { tier: rivalTier, lastResult: '' } : null,
+                cheese: cheeseRes ? {
+                    result: cheeseRes,
+                    durationText: '4:12',
+                    map: 'Oceanborn LE'
+                } : null,
+                bestAnswer: ansBuild ? {
+                    build: ansBuild,
+                    winRatePct: Number.isFinite(ansPct) ? ansPct : 0
+                } : null
+            };
+        }
     };
 
     document.querySelectorAll('button[data-type]').forEach(btn => {

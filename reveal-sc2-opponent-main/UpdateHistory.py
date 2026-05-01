@@ -33,10 +33,19 @@ def get_race_initial(race_string):
     return race_string[0].upper()
 
 def _safe_mmr(player):
-    """Best-effort MMR read from an sc2reader player. Returns int or None."""
-    for attr in ("scaled_rating", "mmr", "highest_league"):
+    """
+    Best-effort MMR read from an sc2reader player. Returns int or None.
+
+    Only ``scaled_rating`` and ``mmr`` carry real ratings. ``highest_league``
+    is a small enum (0..7) and was previously used as a fallback - that
+    leaked values like 7 into MyOpponentHistory and the live payload. We
+    now return None when no real rating is present so the SC2Pulse post-
+    match fetch can fill in the canonical value.
+    """
+    MIN_PLAUSIBLE_MMR = 500  # MMRs in modern SC2 are 4-digit ratings
+    for attr in ("scaled_rating", "mmr"):
         val = getattr(player, attr, None)
-        if isinstance(val, (int, float)) and val > 0:
+        if isinstance(val, (int, float)) and val >= MIN_PLAUSIBLE_MMR:
             return int(val)
     return None
 

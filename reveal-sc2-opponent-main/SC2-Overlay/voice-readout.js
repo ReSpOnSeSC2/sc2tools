@@ -4,19 +4,19 @@
  * Speaks the scouting report aloud via the browser's Web Speech API
  * when a scoutingReport event fires. Reads its settings from
  * /api/config -> config.voice (managed by the analyzer's
- * Settings -> Voice readout tab). No API key, no audio downloads --
- * pure browser TTS so it works in OBS Browser Source and Streamlabs
- * Browser Source identically.
+ * Settings -> Voice readout tab).
+ *
+ * Every important step logs to console under "[VoiceReadout]" so DevTools
+ * can show why nothing spoke, instead of silently swallowing failures.
+ * Set window.VoiceReadout.verbose = false to mute.
  *
  * Public surface (window.VoiceReadout):
  *   refreshConfig()                  -> re-fetch /api/config
  *   speakScoutingReport(payload)     -> speak this scouting card now
  *   onConfigChanged(cb)              -> register a config-update hook
  *   getConfig()                      -> current cached voice cfg
- *
- * The module is defensive: it never throws into the renderer, never
- * spams duplicate utterances for the same opponent, and silently
- * no-ops when the Web Speech API is unavailable.
+ *   diag()                           -> dump diagnostic state to console
+ *   verbose                          -> set false to mute info logs
  * ============================================================ */
 
 (function () {
@@ -24,6 +24,7 @@
 
     var VOICE_CONFIG_URL = '/api/config';
     var VOICE_REFRESH_INTERVAL_MS = 60000;
+    var LOG_PREFIX = '[VoiceReadout]';
 
     var DEFAULTS = {
         enabled: true,
@@ -39,6 +40,21 @@
     var lastSpokenKey = null;
     var configListeners = [];
     var pendingTimer = null;
+    var primed = false;
+    var verbose = true;
+
+    function info() {
+        if (!verbose) return;
+        var args = Array.prototype.slice.call(arguments);
+        args.unshift(LOG_PREFIX);
+        try { console.info.apply(console, args); } catch (_) {}
+    }
+
+    function warn() {
+        var args = Array.prototype.slice.call(arguments);
+        args.unshift(LOG_PREFIX);
+        try { console.warn.apply(console, args); } catch (_) {}
+    }
 
     function clamp(n, lo, hi) {
         if (typeof n !== 'number' || !isFinite(n)) return lo;
@@ -48,9 +64,15 @@
     }
 
     function applyConfigPatch(raw) {
-        if (!raw || typeof raw !== 'object') return;
+        if (!raw || typeof raw !== 'object') {
+            warn('config fetch returned non-object; using defaults');
+            return;
+        }
         var v = raw.config && raw.config.voice;
-        if (!v) return;
+        if (!v) {
+            warn('config.voice missing from /api/config response; using defaults', raw);
+            return;
+        }
         cachedConfig = {
             enabled: v.enabled !== false,
             volume:  clamp(typeof v.volume   === 'number' ? v.volume   : DEFAULTS.volume,   0, 1),
@@ -60,17 +82,27 @@
             preferred_voice: typeof v.preferred_voice === 'string' ? v.preferred_voice : ''
         };
         configReady = true;
+        info('config loaded', cachedConfig);
         configListeners.forEach(function (cb) {
-            try { cb(cachedConfig); } catch (_) { /* never let a hook break the overlay */ }
+            try { cb(cachedConfig); } catch (e) { warn('config listener threw', e); }
         });
     }
 
     function refreshConfig() {
-        if (typeof fetch !== 'function') return Promise.resolve();
+        if (typeof fetch !== 'function') {
+            warn('fetch() not available; cannot load config');
+            return Promise.resolve();
+        }
         return fetch(VOICE_CONFIG_URL)
-            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (r) {
+                if (!r.ok) {
+                    warn('GET ' + VOICE_CONFIG_URL + ' returned ' + r.status);
+                    return null;
+                }
+                return r.json();
+            })
             .then(applyConfigPatch)
-            .catch(function () { /* keep cached defaults */ });
+            .catch(function (err) { warn('config fetch failed', err); });
     }
 
     function selectVoice(name) {
@@ -138,7 +170,15 @@
         utter.rate = cfg.rate;
         utter.pitch = cfg.pitch;
         var v = selectVoice(cfg.preferred_voice);
-        if (v) utter.voice = v;
+        if (v) {
+            utter.voice = v;
+            // Chromium ignores .voice if .lang doesn't match the voice's lang;
+            // setting both ensures the user's selection actually plays.
+            utter.lang = v.lang || 'en-US';
+            info('using voice: ' + v.name + ' (' + v.lang + ')');
+        } else if (cfg.preferred_voice) {
+            warn('preferred voice "' + cfg.preferred_voice + '" not found; falling back to default');
+        }
     }
 
     function fingerprintPayload(p) {
@@ -150,27 +190,133 @@
         ].join('|');
     }
 
-    function speakScoutingReport(payload) {
+    var gestureGranted = false;
+    var pendingPayload = null;
+
+    var BANNER_ID = 'voice-readout-gesture-banner';
+    var BANNER_CSS = 'position:fixed;bottom:16px;right:16px;'
+        + 'background:rgba(20,30,50,0.92);color:#fff;'
+        + 'padding:10px 16px;border-radius:8px;'
+        + 'border:1px solid #5b8def;'
+        + 'font-family:system-ui,-apple-system,sans-serif;'
+        + 'font-size:13px;cursor:pointer;z-index:99999;'
+        + 'box-shadow:0 4px 12px rgba(0,0,0,0.4);'
+        + 'pointer-events:auto;user-select:none;'
+        + 'transition:opacity 0.2s;';
+
+    function showGestureBanner() {
+        if (typeof document === 'undefined' || !document.body) return;
+        if (document.getElementById(BANNER_ID)) return;
+        var el = document.createElement('div');
+        el.id = BANNER_ID;
+        el.setAttribute('role', 'button');
+        el.setAttribute('tabindex', '0');
+        el.style.cssText = BANNER_CSS;
+        el.textContent = String.fromCharCode(0x1F50A)
+            + ' Click anywhere to enable voice readout';
+        document.body.appendChild(el);
+    }
+
+    function hideGestureBanner() {
+        if (typeof document === 'undefined') return;
+        var el = document.getElementById(BANNER_ID);
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+    }
+
+    function onFirstGesture() {
+        if (gestureGranted) return;
+        gestureGranted = true;
+        info('user gesture detected; speech unblocked');
+        document.removeEventListener('click', onFirstGesture, true);
+        document.removeEventListener('keydown', onFirstGesture, true);
+        document.removeEventListener('touchstart', onFirstGesture, true);
+        hideGestureBanner();
+        if (pendingPayload) {
+            var p = pendingPayload;
+            pendingPayload = null;
+            speakScoutingReport(p);
+        }
+    }
+
+    function attachGestureListeners() {
+        if (typeof document === 'undefined') return;
+        document.addEventListener('click', onFirstGesture, true);
+        document.addEventListener('keydown', onFirstGesture, true);
+        document.addEventListener('touchstart', onFirstGesture, true);
+    }
+
+    function primeOnce() {
+        if (primed) return;
         if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+        try {
+            var u = new window.SpeechSynthesisUtterance('');
+            u.volume = 0;
+            window.speechSynthesis.speak(u);
+            primed = true;
+            info('primed speech engine');
+        } catch (e) {
+            warn('priming speak failed', e);
+        }
+    }
+
+    function speakScoutingReport(payload) {
+        info('speakScoutingReport called with', payload);
+        if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+            warn('Web Speech API not available in this browser context');
+            return;
+        }
         var cfg = cachedConfig;
-        if (!cfg.enabled) return;
+        if (!cfg.enabled) {
+            info('voice readout disabled in config; skipping');
+            return;
+        }
+        if (!gestureGranted) {
+            info('gesture not granted yet; queueing payload and showing banner');
+            pendingPayload = payload;
+            showGestureBanner();
+            return;
+        }
         var key = fingerprintPayload(payload);
-        if (key && key === lastSpokenKey) return;
-        lastSpokenKey = key;
+        if (key && key === lastSpokenKey) {
+            info('payload fingerprint matches last spoken; suppressing duplicate');
+            return;
+        }
         var text = buildScoutingReadoutText(payload);
-        if (!text) return;
+        if (!text) {
+            warn('readout text was empty; nothing to speak');
+            return;
+        }
+        info('readout text: "' + text + '"');
         if (pendingTimer) {
             clearTimeout(pendingTimer);
             pendingTimer = null;
         }
         try { window.speechSynthesis.cancel(); } catch (_) {}
+        primeOnce();
         pendingTimer = setTimeout(function () {
             pendingTimer = null;
             try {
                 var utter = new window.SpeechSynthesisUtterance(text);
                 applyVoiceSettings(utter, cfg);
+                utter.onstart = function () {
+                    info('utterance started speaking');
+                    lastSpokenKey = key;
+                };
+                utter.onend = function () { info('utterance finished'); };
+                utter.onerror = function (ev) {
+                    var code = ev && ev.error ? ev.error : 'unknown';
+                    warn('utterance error: ' + code);
+                    lastSpokenKey = null;
+                    if (code === 'not-allowed') {
+                        gestureGranted = false;
+                        attachGestureListeners();
+                        pendingPayload = payload;
+                        showGestureBanner();
+                    }
+                };
                 window.speechSynthesis.speak(utter);
-            } catch (_) { /* never break the renderer */ }
+                info('speak() called');
+            } catch (e) { warn('speak() threw', e); }
         }, cfg.delay_ms);
     }
 
@@ -182,20 +328,56 @@
         return Object.assign({}, cachedConfig);
     }
 
-    // Initial fetch + lightweight refresh so saved config edits get
-    // picked up without a full overlay reload. Web Speech voices may
-    // load asynchronously; touch them once to prime the list.
+    function diag() {
+        var voices = (window.speechSynthesis && window.speechSynthesis.getVoices)
+            ? window.speechSynthesis.getVoices() : [];
+        var summary = {
+            speechSynthesisAvailable: !!window.speechSynthesis,
+            speechSynthesisUtteranceAvailable: !!window.SpeechSynthesisUtterance,
+            speechSynthesisSpeaking: window.speechSynthesis ? window.speechSynthesis.speaking : null,
+            speechSynthesisPaused: window.speechSynthesis ? window.speechSynthesis.paused : null,
+            voicesLoaded: voices.length,
+            voicesSample: voices.slice(0, 5).map(function (v) { return v.name + ' (' + v.lang + ')'; }),
+            preferredVoiceMatch: !!selectVoice(cachedConfig.preferred_voice),
+            configReady: configReady,
+            cachedConfig: cachedConfig,
+            lastSpokenKey: lastSpokenKey,
+            primed: primed
+        };
+        info('diag', summary);
+        return summary;
+    }
+
+    info('voice-readout.js loaded');
+
+    attachGestureListeners();
+    showGestureBanner();
     refreshConfig();
     setInterval(refreshConfig, VOICE_REFRESH_INTERVAL_MS);
     if (window.speechSynthesis && typeof window.speechSynthesis.getVoices === 'function') {
         try { window.speechSynthesis.getVoices(); } catch (_) {}
     }
+    if (window.speechSynthesis && typeof window.speechSynthesis.addEventListener === 'function') {
+        try {
+            window.speechSynthesis.addEventListener('voiceschanged', function () {
+                var n = (window.speechSynthesis.getVoices() || []).length;
+                info('voiceschanged: ' + n + ' voices now available');
+            });
+        } catch (_) {}
+    }
 
-    window.VoiceReadout = {
-        refreshConfig: refreshConfig,
-        speakScoutingReport: speakScoutingReport,
-        onConfigChanged: onConfigChanged,
-        getConfig: getConfig
-    };
+    Object.defineProperty(window, 'VoiceReadout', {
+        configurable: true,
+        value: {
+            refreshConfig: refreshConfig,
+            speakScoutingReport: speakScoutingReport,
+            clearLastSpoken: function () { lastSpokenKey = null; info('lastSpokenKey cleared'); },
+            onConfigChanged: onConfigChanged,
+            getConfig: getConfig,
+            diag: diag,
+            get verbose() { return verbose; },
+            set verbose(v) { verbose = !!v; }
+        }
+    });
 
 })();

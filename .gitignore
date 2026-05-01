@@ -106,3 +106,12 @@ nsa*.tmp
 **/*.broken-*
 **/session.state.json
 **/session.state.json.broken-*
+
+# Snapshots from atomic_io's recovery path. These are full copies of
+# data files saved BEFORE a recovery (pre-recovery snapshot) or as a
+# corruption record (broken). They're large, only useful at the
+# moment of the incident, and not meaningful for source control.
+**/*.live-broken*
+**/*.pre-stripstrays-*
+**/*.tmp.promoted-*
+**/*.tmp.promoted-from*

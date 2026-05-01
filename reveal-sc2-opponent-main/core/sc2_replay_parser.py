@@ -106,9 +106,28 @@ def _safe_int(value, default: int = 0) -> int:
 
 
 def _get_player_mmr(p) -> Optional[int]:
-    for attr in ("scaled_rating", "mmr", "highest_league"):
+    """
+    Return real MMR if sc2reader exposes it on the player, else None.
+
+    SC2 replays do not reliably carry MMR for modern Battle.net. We
+    only trust ``scaled_rating`` and ``mmr`` (both real ratings on the
+    1000-7000 range when present). ``highest_league`` is a small enum
+    (Bronze..Grandmaster, plus a sentinel for Unranked) and was
+    previously used as a fallback - that produced bogus values like
+    7 in the live payload. When sc2reader has no rating, return None
+    and let the SC2Pulse post-match fetch be the source of truth.
+
+    Example:
+        >>> class P: scaled_rating = 5187
+        >>> _get_player_mmr(P())
+        5187
+    """
+    # MMRs in modern SC2 are 4-digit ratings; reject anything below
+    # this floor as a misread enum/league value.
+    MIN_PLAUSIBLE_MMR = 500
+    for attr in ("scaled_rating", "mmr"):
         val = getattr(p, attr, None)
-        if isinstance(val, (int, float)) and val > 0:
+        if isinstance(val, (int, float)) and val >= MIN_PLAUSIBLE_MMR:
             return int(val)
     return None
 
