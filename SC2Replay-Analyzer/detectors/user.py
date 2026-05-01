@@ -46,12 +46,26 @@ class UserBuildDetector(BaseStrategyDetector):
         main_loc = self._get_main_base_loc(buildings)
 
         # 1. Custom JSON Build Evaluation
+        # Custom builds win over the built-in tree so a user-authored
+        # signature (e.g. "PvZ - DT into 3 Stargate Void Ray") tags a game
+        # before any broader catch-all (like the 2 Stargate Void Ray rule
+        # below) gets a chance. Two on-disk schemas are accepted:
+        #   Legacy (Stage 7.4-): {race, matchup: "vs Zerg" | "vs Any"}
+        #   v3     (Stage 7.5+): {race, vs_race: "Zerg" | "Any"}
         for cb in self.custom_builds:
-            if cb.get("race") == my_race or cb.get("race") == "Any":
-                cb_matchup = cb.get("matchup", "vs Any")
-                if cb_matchup == "vs Any" or cb_matchup == matchup:
-                    if self.check_custom_rules(cb.get("rules", []), buildings, units, upgrades, main_loc):
-                        return cb["name"]
+            cb_race = cb.get("race", "Any")
+            if cb_race != "Any" and cb_race != my_race:
+                continue
+            cb_matchup = cb.get("matchup")
+            cb_vs_race = cb.get("vs_race")
+            if cb_matchup is not None:
+                if cb_matchup != "vs Any" and cb_matchup != matchup:
+                    continue
+            elif cb_vs_race not in (None, "Any"):
+                if f"vs {cb_vs_race}" != matchup:
+                    continue
+            if self.check_custom_rules(cb.get("rules", []), buildings, units, upgrades, main_loc):
+                return cb["name"]
 
         # 2. Race-aware structured signature scan (Zerg / Terran).
         # Stage 8 will populate BUILD_SIGNATURES with real opening rules;
@@ -93,14 +107,26 @@ class UserBuildDetector(BaseStrategyDetector):
 
         # --- PvZ ---
         if "vs Zerg" in matchup:
-            sg_count_10min = sum(1 for b in buildings if b['name'] == "Stargate" and b['time'] < 600)
-            nexus_count_10min = sum(1 for b in buildings if b['name'] == "Nexus" and b['time'] < 600)
+            sg_count_10min     = sum(1 for b in buildings if b['name'] == "Stargate" and b['time'] < 600)
+            nexus_count_10min  = sum(1 for b in buildings if b['name'] == "Nexus"    and b['time'] < 600)
+            # DT-path discriminators for the 2SG VR rule. A pure 2-Stargate
+            # Void Ray opener never builds a Dark Shrine, never produces a
+            # Dark Templar, and never adds a 3rd Stargate inside the 10:00
+            # window. Any one of those signals means the game belongs in a
+            # different bucket (typically the user's "DT into 3 Stargate
+            # Void Ray" custom, which the loop above tries first).
+            has_dark_shrine_10min = has_building("DarkShrine", 600)
+            dt_count_10min        = count_units("DarkTemplar", 600)
 
             if count_units("Carrier", 600) >= 1:
                 return "PvZ - Carrier Rush"
             if count_units("Tempest", 600) >= 1:
                 return "PvZ - Tempest Rush"
-            if sg_count_10min >= 2 and nexus_count_10min >= 2 and count_units("VoidRay", 600) >= 4:
+            if (sg_count_10min == 2
+                    and nexus_count_10min >= 2
+                    and count_units("VoidRay", 600) >= 4
+                    and not has_dark_shrine_10min
+                    and dt_count_10min == 0):
                 return "PvZ - 2 Stargate Void Ray"
             if sg_count_10min >= 3 and nexus_count_10min >= 2 and count_units("Phoenix", 600) >= 4:
                 return "PvZ - 3 Stargate Phoenix"

@@ -203,15 +203,42 @@ def initialize_custom_builds():
 
 
 def load_custom_builds() -> Dict[str, List[Dict]]:
-    """Load user-authored custom builds from disk, bucketed by target side."""
-    builds = {"Opponent": [], "Self": []}
-    if os.path.exists(CUSTOM_BUILDS_FILE):
-        try:
-            with open(CUSTOM_BUILDS_FILE, 'r') as f:
-                data = json.load(f)
-                for b in data.get("builds", []):
-                    if b.get("target") in builds:
-                        builds[b["target"]].append(b)
-        except Exception as e:
-            print(f"Failed to load custom builds: {e}")
+    """Load user-authored custom builds from disk, bucketed by target side.
+
+    Two on-disk schemas are supported, side-by-side, so a single
+    `custom_builds.json` can mix legacy hand-edited entries with anything
+    the SPA build-editor wrote:
+
+      Legacy (Stage 7.4 and earlier): entries declare
+          ``target: "Self" | "Opponent"`` explicitly. Routed into the
+          matching bucket.
+      v3 (Stage 7.5+, SPA build-editor output): entries omit ``target``
+          and instead carry ``vs_race`` plus v3-style rules
+          (``before / count_min`` etc.). The SPA only authors user-side
+          builds today, so v3 entries default into the ``Self`` bucket.
+          The race-aware matcher in
+          ``detectors.user.UserBuildDetector.detect_my_build`` honours
+          ``vs_race`` at evaluation time.
+
+    Anything with an unrecognised ``target`` is dropped silently to keep
+    a single typo from crashing the detector at startup.
+    """
+    builds: Dict[str, List[Dict]] = {"Opponent": [], "Self": []}
+    if not os.path.exists(CUSTOM_BUILDS_FILE):
+        return builds
+    try:
+        with open(CUSTOM_BUILDS_FILE, 'r') as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"Failed to load custom builds: {e}")
+        return builds
+    for b in data.get("builds", []):
+        target = b.get("target")
+        if target in builds:
+            builds[target].append(b)
+        elif target is None:
+            # v3 SPA-authored entries are user-side by default. The Stage 7.5
+            # editor never sets `target`, so this is the documented path.
+            builds["Self"].append(b)
+        # else: unrecognised target — silently drop.
     return builds

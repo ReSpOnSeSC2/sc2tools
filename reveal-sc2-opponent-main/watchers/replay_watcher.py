@@ -477,6 +477,37 @@ class ReplayHandler(FileSystemEventHandler):
             my_race=me.race,
         )
 
+        # If we resolved a numeric SC2Pulse ID via toon_handle and a
+        # legacy ``unknown:<Name>`` twin still exists for the same
+        # display name, fold the twin into the numeric record now.
+        # This is the missing piece that left duplicate rows in the
+        # Opponents table after the live phase saved a game under
+        # ``unknown:XVec`` and a later replay resolved ``197079``.
+        # No-op when toon resolution failed (offline) -- the
+        # standalone merge_unknown_pulse_ids.py tool still cleans
+        # those up after the fact.
+        if toon_pulse_id and not str(toon_pulse_id).startswith("unknown:"):
+            try:
+                merged = self.store.merge_unknown_into_numeric(
+                    numeric_pulse_id=str(toon_pulse_id),
+                    opp_name=opp_clean,
+                )
+                if merged:
+                    pairs = merged.get("plan", {})
+                    rewritten = merged.get("meta_rewritten", 0)
+                    print(
+                        "[Watcher] auto-merged unknown twin(s) into "
+                        f"{toon_pulse_id}: pairs={list(pairs.keys())} "
+                        f"opp_pulse_id_rewritten={rewritten}"
+                    )
+            except Exception as exc:  # noqa: BLE001
+                # Best-effort: never let a merge failure block the
+                # primary persist path. Surface to the error log
+                # for the diagnostics page.
+                self.errors.log(ctx.file_path, f"auto-merge failed: {exc}")
+                self.errors.append(ERROR_LOG_FILE)
+                print(f"[Watcher] auto-merge failed: {exc}")
+
 
 # =========================================================
 # Startup catch-up scan

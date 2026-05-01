@@ -617,6 +617,97 @@ class DataStore:
             result=result,
         )
 
+    def merge_unknown_into_numeric(
+        self,
+        *,
+        numeric_pulse_id: str,
+        opp_name: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Fold legacy ``unknown:<Name>`` twin records into the numeric ID.
+
+        Called inline from the watcher's ``_persist_deep`` whenever
+        the SC2Pulse toon resolver returns a numeric character ID and
+        the Black Book still carries a synthetic ``unknown:<Name>``
+        record for the same player (typically created during an
+        earlier session before SC2Pulse was reachable). The merge:
+
+          * Walks every ``unknown:<Name>`` record whose name forms
+            (clan-tag and discriminator stripped, case-insensitive)
+            overlap ``opp_name``.
+          * Folds their Matchups / Games into ``numeric_pulse_id``
+            with identity-based dedupe (Date+Map+Result). Wins and
+            losses are bumped only for newly-appended games.
+          * Drops the unknown keys from history.
+          * Rewrites every ``opp_pulse_id`` reference in the analyzer
+            DB from the unknown key to the numeric ID.
+
+        Atomic: each store is loaded, mutated under its own lock,
+        and saved through ``_atomic_write_json``.
+
+        Returns ``None`` when there is nothing to merge, otherwise a
+        ``{plan, stats, meta_rewritten}`` dict suitable for logging.
+
+        Args:
+            numeric_pulse_id: SC2Pulse character ID resolved via the
+                replay's ``toon_handle``. Must NOT be an
+                ``unknown:<Name>`` key -- a no-op is returned in
+                that case.
+            opp_name: Display name of the opponent (clan tag
+                already stripped by the caller).
+
+        Example:
+            >>> ds = DataStore()  # doctest: +SKIP
+            >>> ds.merge_unknown_into_numeric(  # doctest: +SKIP
+            ...     numeric_pulse_id="197079",
+            ...     opp_name="XVec",
+            ... )
+        """
+        if not numeric_pulse_id or numeric_pulse_id.startswith("unknown:"):
+            return None
+        # Lazy import: scripts/ depends on core/, so a top-level
+        # import would create a circular dependency.
+        from scripts.merge_unknown_pulse_ids import (
+            UNKNOWN_PREFIX,
+            merge_records_in_place,
+            rewrite_analyzer_pulse_ids,
+        )
+
+        target_forms = BlackBookStore._name_forms(opp_name)
+        if not target_forms:
+            return None
+
+        with self.black_book._lock:
+            history = self.black_book.load()
+            if numeric_pulse_id not in history:
+                # The numeric record was just created by upsert_game
+                # via link_game above, but the load() call here
+                # could race a concurrent rewrite. Bail out cleanly.
+                return None
+            plan: Dict[str, str] = {}
+            for key, rec in history.items():
+                if not str(key).startswith(UNKNOWN_PREFIX):
+                    continue
+                rec_name = (rec or {}).get("Name", "") \
+                    or key[len(UNKNOWN_PREFIX):]
+                rec_forms = BlackBookStore._name_forms(rec_name)
+                if rec_forms and not rec_forms.isdisjoint(target_forms):
+                    plan[key] = numeric_pulse_id
+            if not plan:
+                return None
+            stats = merge_records_in_place(history, plan)
+            self.black_book.save(history)
+
+        # Rewrite analyzer DB cross-links so /games/<id>/* lookups
+        # resolve to the canonical record.
+        rewritten = 0
+        with self.analyzer._lock:
+            meta = self.analyzer.load()
+            rewritten = rewrite_analyzer_pulse_ids(meta, plan)
+            if rewritten:
+                self.analyzer.save(meta)
+
+        return {"plan": plan, "stats": stats, "meta_rewritten": rewritten}
+
 
 # =========================================================
 # Migration helper
