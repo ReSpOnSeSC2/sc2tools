@@ -1349,6 +1349,45 @@ const io = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } 
 
 const EVENT_CHANNEL = 'overlay_event';
 
+// Replay buffer: keeps the last N overlay events so a browser source
+// that reconnects mid-fire (or attaches a few seconds late) still sees
+// any pop-up whose display window hasn't elapsed yet. Without this, an
+// event emitted before the OBS source connected was silently dropped
+// (root cause of the "match result widget didn't fire" debug session).
+const RECENT_EVENTS_MAX = 16;
+const RECENT_EVENTS_MAX_AGE_MS = 30000;
+const recentEvents = [];
+
+function rememberEvent(envelope) {
+    recentEvents.push(envelope);
+    if (recentEvents.length > RECENT_EVENTS_MAX) {
+        recentEvents.splice(0, recentEvents.length - RECENT_EVENTS_MAX);
+    }
+}
+
+function replayRecentEventsTo(socket) {
+    const now = Date.now();
+    // Drop anything that's older than the cap OR whose display window
+    // already elapsed -- replaying a 15s pop-up that fired 20s ago
+    // would just look like a stale ghost on the new client.
+    for (let i = recentEvents.length - 1; i >= 0; i--) {
+        const env = recentEvents[i];
+        const age = now - (env.timestamp || 0);
+        const window = Math.max(env.durationMs || 0, 1000);
+        if (age > RECENT_EVENTS_MAX_AGE_MS || age > window) {
+            recentEvents.splice(i, 1);
+        }
+    }
+    if (recentEvents.length === 0) return;
+    console.log(`[Socket.io] replaying ${recentEvents.length} recent event(s) to ${socket.id}`);
+    for (const env of recentEvents) {
+        socket.emit(EVENT_CHANNEL, env);
+        // Mirror the back-compat shims so legacy listeners get them too.
+        if (env.type === 'matchResult')      socket.emit('new_match_result', env.payload);
+        if (env.type === 'opponentDetected') socket.emit('opponent_update', env.payload?.text || '');
+    }
+}
+
 function emitEvent(type, payload, opts = {}) {
     const cfg = (config.events && config.events[type]) || {};
     if (cfg.enabled === false) {
@@ -1364,6 +1403,7 @@ function emitEvent(type, payload, opts = {}) {
         timestamp: Date.now()
     };
     io.emit(EVENT_CHANNEL, envelope);
+    rememberEvent(envelope);
     console.log(`[Event] -> ${type}  (id=${envelope.id}, prio=${envelope.priority})`);
 
     // Back-compat shims for the original single-purpose channels:
@@ -1380,6 +1420,7 @@ io.on('connection', (socket) => {
     console.log(`[Socket.io] Client connected: ${socket.id}`);
     socket.emit('session_state', sessionSnapshot());
     socket.emit('config_snapshot', config);
+    replayRecentEventsTo(socket);
 });
 
 // ------------------------------------------------------------------
