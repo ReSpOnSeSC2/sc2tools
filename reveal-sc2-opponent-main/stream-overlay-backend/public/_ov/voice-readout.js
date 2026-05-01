@@ -351,7 +351,6 @@
     info('voice-readout.js loaded');
 
     attachGestureListeners();
-    showGestureBanner();
     refreshConfig();
     setInterval(refreshConfig, VOICE_REFRESH_INTERVAL_MS);
     if (window.speechSynthesis && typeof window.speechSynthesis.getVoices === 'function') {
