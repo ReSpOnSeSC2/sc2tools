@@ -33,7 +33,8 @@
             onAddCustom={ctx.onAddCustomFolder}
             onRescan={ctx.scanFolders}
             onNext={ctx.goNextFromReplays}
-            onBack={() => ctx.setStep(1)} />;
+            onBack={() => ctx.setStep(1)}
+            onSkip={() => ctx.setStep(3)} />;
         if (step === 3) return <WizardStepIdentity
             scanning={ctx.identitiesLoading} scanError={ctx.identitiesError}
             identities={ctx.identities}
@@ -43,11 +44,13 @@
               (prev) => ({ ...prev, [cid]: value }))}
             onToggle={ctx.onToggleIdentity}
             onRescan={() => ctx.scanIdentities(ctx.selectedFolders || [])}
-            onNext={() => ctx.setStep(4)} onBack={() => ctx.setStep(2)} />;
+            onNext={() => ctx.setStep(4)} onBack={() => ctx.setStep(2)}
+            onSkip={() => ctx.setStep(4)} />;
         if (step === 4) return <WizardStepRace
             selectedRaces={ctx.selectedRaces}
             onToggle={ctx.onToggleRace}
-            onNext={() => ctx.setStep(5)} onBack={() => ctx.setStep(3)} />;
+            onNext={() => ctx.setStep(5)} onBack={() => ctx.setStep(3)}
+            onSkip={() => ctx.setStep(5)} />;
         if (step === 5) return <WizardStepImport
             folders={ctx.selectedFolders}
             identities={ctx.selectedIdentities}

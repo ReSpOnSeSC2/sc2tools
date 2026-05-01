@@ -8,6 +8,42 @@ Releases are tagged `vMAJOR.MINOR.PATCH`; the GitHub Actions release
 workflow builds the Windows installer on each tag push and attaches the
 `.exe` and `.sha256` to the corresponding GitHub Release.
 
+## [1.3.0] - 2026-05-01
+
+### Added
+
+- **Standalone onboarding diagnostic tool.** New
+  ``tools/diagnose-onboarding.bat`` and ``tools/diagnose-onboarding.py``
+  let a non-developer user diagnose the opaque
+  ``no_human_players_found`` Step 3 failure on their own machine. The
+  .bat double-clicks; the script auto-discovers replay folders across
+  OneDrive variants (including corporate ``OneDrive - Company``),
+  classic Documents, Dropbox, Google Drive, iCloud, Box, public
+  Documents, plus a bounded recursive walk of every drive letter for
+  ``StarCraft II/Accounts`` (skipping ``Windows``, ``$Recycle.Bin``,
+  ``System Volume Information``, ``node_modules``, etc.). Drag-drop a
+  Multiplayer folder onto the .bat to override auto-discovery. Probes
+  ``sc2reader``, parses the newest five replays, and writes
+  ``diagnose.txt`` with a one-line VERDICT and per-replay parse
+  outcome — the user emails the file back instead of reading the
+  wizard''s opaque error code. Reads only; never modifies state.
+
+### Fixed
+
+- **Skip buttons unblock dead-end wizard steps.** Step 3 (Identity)
+  could trap a user whose replays sc2reader could not parse: the Next
+  button stayed disabled at ``Next (0)`` with no escape. Steps 2
+  (Replays) and 4 (Race) had the same dead-end shape when nothing was
+  selected. Each step now renders a ghost-styled ``Skip`` button next
+  to the disabled Next when no choice has been made; the happy path
+  UI is unchanged when a selection exists. Schema-wise, the Apply
+  step already tolerates ``identities: []`` (no ``minItems``), and
+  ``preferred_races`` is not schema-validated, so Skip on Steps 3 and
+  4 produces a valid config the user can fill in later from
+  Settings → Profile. Step 2 Skip remains available for symmetry but
+  Apply still fails on empty ``replay_folders`` (schema requires
+  ``minItems: 1``); documented as a known follow-up.
+
 ## [1.2.0] - 2026-05-01
 
 ### Added

@@ -84,7 +84,7 @@
       function WizardStepReplays({ folders, scanning, scanError,
                                    selected, onToggle,
                                    customInput, onCustomInput, onAddCustom,
-                                   onRescan, onNext, onBack }) {
+                                   onRescan, onNext, onBack, onSkip }) {
         const canAddCustom = !!(customInput && customInput.trim()
             && !(selected || []).includes(customInput.trim()));
         return (
@@ -117,6 +117,11 @@
             <WizardNavRow>
               <WizardButton kind="secondary" onClick={onBack}>Back</WizardButton>
               <WizardButton kind="secondary" onClick={onRescan}>Rescan</WizardButton>
+              {(!(selected && selected.length > 0) && onSkip) ? (
+                <WizardButton kind="ghost" onClick={onSkip}>
+                  Skip (set up later)
+                </WizardButton>
+              ) : null}
               <WizardButton onClick={onNext}
                             disabled={!(selected && selected.length > 0)}>
                 Next
@@ -281,8 +286,13 @@
       function WizardStepIdentity({ scanning, scanError, identities,
                                     selectedIds, battleTags, onSetBattleTag,
                                     onToggle, onRescan,
-                                    onNext, onBack }) {
+                                    onNext, onBack, onSkip }) {
         const count = (selectedIds || []).length;
+        // Skip is offered when no identity is picked. Unblocks users
+        // whose replays sc2reader can't currently parse (vs-AI only,
+        // library mismatch, etc.); they can add identity later from
+        // Settings -> Profile.
+        const canSkip = count === 0 && typeof onSkip === "function";
         return (
           <div style={{ padding: "var(--space-6)" }}>
             <h2 id="wizard-title" style={{ fontSize: "var(--font-size-xl)",
@@ -307,6 +317,11 @@
             <WizardNavRow>
               <WizardButton kind="secondary" onClick={onBack}>Back</WizardButton>
               <WizardButton kind="secondary" onClick={onRescan}>Rescan</WizardButton>
+              {canSkip ? (
+                <WizardButton kind="ghost" onClick={onSkip}>
+                  Skip (add identity later)
+                </WizardButton>
+              ) : null}
               <WizardButton onClick={onNext} disabled={count === 0}>
                 Next ({count})
               </WizardButton>
@@ -338,7 +353,7 @@
         );
       }
 
-      function WizardStepRace({ selectedRaces, onToggle, onNext, onBack }) {
+      function WizardStepRace({ selectedRaces, onToggle, onNext, onBack, onSkip }) {
         const list = selectedRaces || [];
         const hasRandom = list.includes("Random");
         const hasMulti = list.length > 1;
@@ -381,6 +396,11 @@
             ) : null}
             <WizardNavRow>
               <WizardButton kind="secondary" onClick={onBack}>Back</WizardButton>
+              {(list.length === 0 && onSkip) ? (
+                <WizardButton kind="ghost" onClick={onSkip}>
+                  Skip (default to Random)
+                </WizardButton>
+              ) : null}
               <WizardButton onClick={onNext} disabled={list.length === 0}>
                 Next ({list.length})
               </WizardButton>
