@@ -62,6 +62,7 @@
 'use strict';
 
 const fs = require('fs');
+const { withFileLockSync } = require('./file-lock');
 
 const TMP_SUFFIX = '.tmp';
 const BAK_SUFFIX = '.bak';
@@ -89,41 +90,46 @@ function atomicWriteJson(filePath, data, options) {
   if (typeof filePath !== 'string' || !filePath) {
     throw new TypeError('atomicWriteJson: filePath must be a non-empty string');
   }
-  const indent = options && typeof options.indent === 'number'
-    ? options.indent : DEFAULT_JSON_INDENT;
-  const json = JSON.stringify(data, null, indent);
-  const tmp = filePath + TMP_SUFFIX;
-  const bak = filePath + BAK_SUFFIX;
+  // Cross-process lock: serialize against any other writer hitting
+  // the same logical file (Python watcher, PowerShell scanner) so
+  // we never race a .bak snapshot against another writer's rename.
+  withFileLockSync(filePath, () => {
+    const indent = options && typeof options.indent === 'number'
+      ? options.indent : DEFAULT_JSON_INDENT;
+    const json = JSON.stringify(data, null, indent);
+    const tmp = filePath + TMP_SUFFIX;
+    const bak = filePath + BAK_SUFFIX;
 
-  // Step 1-3: write + fsync to .tmp (never touches the live file).
-  const buf = Buffer.from(json, DEFAULT_ENCODING);
-  const fd = fs.openSync(tmp, 'w', 0o644);
-  try {
-    fs.writeSync(fd, buf, 0, buf.length, 0);
-    fs.fsyncSync(fd); // flush page-cache to platter before rename
-  } finally {
-    fs.closeSync(fd);
-  }
-
-  // Step 4: snapshot the current live file to .bak so reads can fall back.
-  // Best-effort -- a missing or unreadable live file is not an error here.
-  try {
-    if (fs.existsSync(filePath)) {
-      fs.copyFileSync(filePath, bak);
+    // Step 1-3: write + fsync to .tmp (never touches the live file).
+    const buf = Buffer.from(json, DEFAULT_ENCODING);
+    const fd = fs.openSync(tmp, 'w', 0o644);
+    try {
+      fs.writeSync(fd, buf, 0, buf.length, 0);
+      fs.fsyncSync(fd); // flush page-cache to platter before rename
+    } finally {
+      fs.closeSync(fd);
     }
-  } catch (bakErr) {
-    // Log but don't abort; the atomic rename below is what matters.
-    console.warn(`[atomic-fs] could not write .bak for ${filePath}: ${bakErr.message}`);
-  }
 
-  // Step 5: atomic rename: .tmp becomes the live file.
-  try {
-    fs.renameSync(tmp, filePath);
-  } catch (err) {
-    // Best-effort cleanup so a failed rename doesn't leave .tmp junk.
-    try { fs.unlinkSync(tmp); } catch (_e) { /* tmp may be gone */ }
-    throw err;
-  }
+    // Step 4: snapshot the current live file to .bak so reads can fall back.
+    // Best-effort -- a missing or unreadable live file is not an error here.
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.copyFileSync(filePath, bak);
+      }
+    } catch (bakErr) {
+      // Log but don't abort; the atomic rename below is what matters.
+      console.warn(`[atomic-fs] could not write .bak for ${filePath}: ${bakErr.message}`);
+    }
+
+    // Step 5: atomic rename: .tmp becomes the live file.
+    try {
+      fs.renameSync(tmp, filePath);
+    } catch (err) {
+      // Best-effort cleanup so a failed rename doesn't leave .tmp junk.
+      try { fs.unlinkSync(tmp); } catch (_e) { /* tmp may be gone */ }
+      throw err;
+    }
+  });
 }
 
 /**
@@ -167,23 +173,25 @@ function atomicWriteBuffer(filePath, buffer, options) {
   if (!Buffer.isBuffer(buffer)) {
     throw new TypeError('atomicWriteBuffer: buffer must be a Buffer');
   }
-  const tmp = filePath + TMP_SUFFIX;
-  // 'w' truncates; never use 'r+' -- that's how the partial-write
-  // null-padding bug from this engineering pass happened.
-  const fd = fs.openSync(tmp, 'w', (options && options.mode) || 0o644);
-  try {
-    fs.writeSync(fd, buffer, 0, buffer.length, 0);
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-  try {
-    fs.renameSync(tmp, filePath);
-  } catch (err) {
-    // Best-effort cleanup so a failed rename doesn't leave junk.
-    try { fs.unlinkSync(tmp); } catch (_e) { /* tmp may be gone */ }
-    throw err;
-  }
+  withFileLockSync(filePath, () => {
+    const tmp = filePath + TMP_SUFFIX;
+    // 'w' truncates; never use 'r+' -- that's how the partial-write
+    // null-padding bug from this engineering pass happened.
+    const fd = fs.openSync(tmp, 'w', (options && options.mode) || 0o644);
+    try {
+      fs.writeSync(fd, buffer, 0, buffer.length, 0);
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    try {
+      fs.renameSync(tmp, filePath);
+    } catch (err) {
+      // Best-effort cleanup so a failed rename doesn't leave junk.
+      try { fs.unlinkSync(tmp); } catch (_e) { /* tmp may be gone */ }
+      throw err;
+    }
+  });
 }
 
 /**

@@ -4,103 +4,6 @@
     {
       "kind": "upsert",
       "build": {
-        "id": "pvz-dt-into-3-stargate-void-ray",
-        "name": "PvZ - DT into 3 Stargate Void Ray",
-        "race": "Protoss",
-        "vs_race": "Zerg",
-        "skill_level": "grandmaster",
-        "description": "PvZ DT play into 3 Stargate Voidray",
-        "win_conditions": [],
-        "loses_to": [],
-        "transitions_into": [],
-        "rules": [
-          {
-            "type": "before",
-            "name": "BuildTwilightCouncil",
-            "time_lt": 246
-          },
-          {
-            "type": "before",
-            "name": "BuildDarkShrine",
-            "time_lt": 312
-          },
-          {
-            "type": "count_exact",
-            "name": "BuildStargate",
-            "count": 3,
-            "time_lt": 420
-          },
-          {
-            "type": "before",
-            "name": "BuildDarkTemplar",
-            "time_lt": 435
-          },
-          {
-            "type": "before",
-            "name": "BuildVoidRay",
-            "time_lt": 519
-          }
-        ],
-        "source_replay_id": "2026-04-29T19:41:49|Yamada|White Rabbit LE|688",
-        "created_at": "2026-04-30T04:40:48.134Z",
-        "updated_at": "2026-04-30T05:20:07.480Z",
-        "author": "ReSpOnSe",
-        "sync_state": "pending"
-      },
-      "id": "pvz-dt-into-3-stargate-void-ray",
-      "enqueued_at": "2026-04-30T05:20:07.489Z",
-      "attempts": 22,
-      "next_attempt_at": 1777660148206
-    },
-    {
-      "kind": "upsert",
-      "build": {
-        "id": "pvz-dt-into-3-stargate-void-ray-2",
-        "name": "PvZ - DT into 3 Stargate Void Ray",
-        "race": "Protoss",
-        "vs_race": "Zerg",
-        "skill_level": "grandmaster",
-        "description": "Auto-derived from a real game. ",
-        "win_conditions": [],
-        "loses_to": [],
-        "transitions_into": [],
-        "rules": [
-          {
-            "type": "before",
-            "name": "BuildTwilightCouncil",
-            "time_lt": 244
-          },
-          {
-            "type": "before",
-            "name": "BuildDarkShrine",
-            "time_lt": 318
-          },
-          {
-            "type": "count_exact",
-            "name": "BuildStargate",
-            "count": 3,
-            "time_lt": 420
-          },
-          {
-            "type": "before",
-            "name": "BuildVoidRay",
-            "time_lt": 600
-          }
-        ],
-        "source_replay_id": "2026-04-28T23:18:21|LaVa|Ruby Rock LE|1111",
-        "created_at": "2026-05-01T15:54:59.182Z",
-        "updated_at": "2026-05-01T17:46:00.220Z",
-        "author": "ReSpOnSe",
-        "sync_state": "pending"
-      },
-      "id": "pvz-dt-into-3-stargate-void-ray-2",
-      "enqueued_at": "2026-05-01T17:46:00.226Z",
-      "attempts": 5,
-      "next_attempt_at": 1777660574757
-    },
-    {
-      "kind": "upsert",
-      "build": {
         "id": "pvz-dt-into-3-stargate-void-ray-2",
         "name": "PvZ - DT into 3 Stargate Void Ray",
         "race": "Protoss",
@@ -135,14 +38,14 @@
         ],
         "source_replay_id": "2026-04-28T23:18:21|LaVa|Ruby Rock LE|1111",
         "created_at": "2026-05-01T15:54:59.182Z",
-        "updated_at": "2026-05-01T17:46:47.965Z",
+        "updated_at": "2026-05-01T19:02:21.841Z",
         "author": "ReSpOnSe",
         "sync_state": "pending"
       },
       "id": "pvz-dt-into-3-stargate-void-ray-2",
-      "enqueued_at": "2026-05-01T17:46:47.968Z",
-      "attempts": 4,
-      "next_attempt_at": 1777660334757
+      "enqueued_at": "2026-05-01T19:02:21.850Z",
+      "attempts": 1,
+      "next_attempt_at": 1777662171857
     }
   ],
   "last_error": null

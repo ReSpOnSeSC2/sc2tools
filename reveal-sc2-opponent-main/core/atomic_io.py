@@ -60,6 +60,8 @@ import shutil
 import tempfile
 from typing import Any
 
+from core.file_lock import file_lock  # noqa: E402  (sibling module)
+
 logger = logging.getLogger(__name__)
 
 BAK_SUFFIX = ".bak"
@@ -87,30 +89,37 @@ def atomic_write_json(
       player names verbatim instead of escaping them as \\uXXXX.
     - On any exception the temp file is unlinked so no junk accumulates.
     """
-    parent = os.path.dirname(path) or "."
-    os.makedirs(parent, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(prefix=".tmp_", suffix=".json", dir=parent)
-    try:
-        with os.fdopen(fd, "w", encoding=encoding) as f:
-            json.dump(data, f, indent=indent, ensure_ascii=ensure_ascii)
-            # Force data to physical disk BEFORE the rename.  Without this
-            # the NTFS lazy writer may flush blocks *after* rename, so a
-            # kill/sleep/AV-lock between rename and flush leaves the live
-            # file with only the bytes already in the page cache.
-            f.flush()
-            os.fsync(f.fileno())
-        # Snapshot the current live file to .bak *after* the temp is safely
-        # written but *before* the rename.  This means .bak always holds the
-        # last intact commit so safe_read_json can recover from corruption.
-        _backup_if_exists(path)
-        os.replace(tmp_path, path)
-    except Exception:
-        # On any failure, scrub the temp file so we don't leak it.
+    # Cross-process lock: serialize writes against any other writer
+    # (Node backend, PowerShell scanner) targeting the same logical
+    # file so concurrent renames cannot clobber each other's .bak
+    # snapshot. Opt-out via SC2TOOLS_DATA_LOCK_ENABLED=0.
+    with file_lock(path):
+        parent = os.path.dirname(path) or "."
+        os.makedirs(parent, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(prefix=".tmp_", suffix=".json", dir=parent)
         try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+            with os.fdopen(fd, "w", encoding=encoding) as f:
+                json.dump(data, f, indent=indent, ensure_ascii=ensure_ascii)
+                # Force data to physical disk BEFORE the rename.  Without
+                # this the NTFS lazy writer may flush blocks *after*
+                # rename, so a kill/sleep/AV-lock between rename and flush
+                # leaves the live file with only the bytes already in the
+                # page cache.
+                f.flush()
+                os.fsync(f.fileno())
+            # Snapshot the current live file to .bak *after* the temp is
+            # safely written but *before* the rename. This means .bak
+            # always holds the last intact commit so safe_read_json can
+            # recover from corruption.
+            _backup_if_exists(path)
+            os.replace(tmp_path, path)
+        except Exception:
+            # On any failure, scrub the temp file so we don't leak it.
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
 
 def atomic_write_text(
@@ -124,23 +133,24 @@ def atomic_write_text(
     by callers that build their own JSON string or write non-JSON data
     that needs the same crash-safety guarantee).
     """
-    parent = os.path.dirname(path) or "."
-    os.makedirs(parent, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(prefix=".tmp_", suffix=".tmp", dir=parent)
-    try:
-        with os.fdopen(fd, "w", encoding=encoding) as f:
-            f.write(text)
-            # See atomic_write_json above: flush+fsync before rename to
-            # close the Windows NTFS lazy-writer truncation window.
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, path)
-    except Exception:
+    with file_lock(path):
+        parent = os.path.dirname(path) or "."
+        os.makedirs(parent, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(prefix=".tmp_", suffix=".tmp", dir=parent)
         try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+            with os.fdopen(fd, "w", encoding=encoding) as f:
+                f.write(text)
+                # See atomic_write_json above: flush+fsync before rename
+                # to close the Windows NTFS lazy-writer truncation window.
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
 
 def atomic_write_bytes(
@@ -158,23 +168,24 @@ def atomic_write_bytes(
     """
     if not isinstance(payload, (bytes, bytearray)):
         raise TypeError("atomic_write_bytes: payload must be bytes")
-    parent = os.path.dirname(path) or "."
-    os.makedirs(parent, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(prefix=".tmp_", suffix=".bin", dir=parent)
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(payload)
-            # See atomic_write_json above: flush+fsync before rename to
-            # close the Windows NTFS lazy-writer truncation window.
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, path)
-    except Exception:
+    with file_lock(path):
+        parent = os.path.dirname(path) or "."
+        os.makedirs(parent, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(prefix=".tmp_", suffix=".bin", dir=parent)
         try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+            with os.fdopen(fd, "wb") as f:
+                f.write(payload)
+                # See atomic_write_json above: flush+fsync before rename
+                # to close the Windows NTFS lazy-writer truncation window.
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
 
 def safe_read_json(path: str, default: Any = None) -> Any:

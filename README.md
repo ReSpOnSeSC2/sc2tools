@@ -1,406 +1,637 @@
-# SC2 Tools
+<div align="center">
 
-A suite of advanced StarCraft II tools for serious ladder players: deep replay analysis, real-time opponent intelligence, and a complete browser-source overlay system for streamers. Two complementary applications shipped together — one for understanding your past games, one for winning your next one.
+# SC2 Meta Analyzer
 
----
+### Your personal StarCraft II stats lab — local, automatic, brutally honest.
 
-## Overview
+`LIVE` &nbsp;•&nbsp; `Built-in Charts` &nbsp;•&nbsp; `Local-First` &nbsp;•&nbsp; `Stream-Ready`
 
-SC2 Tools bundles two applications:
+*Track every macro slip across your last 1,000 ladder games.*
+*Recognize what your opponent is building before the first scout.*
+*See your real progress without manually tagging anything.*
 
-**SC2Replay-Analyzer** — Statistical and machine-learning–driven replay analysis. Macro scoring, spatial engagement clustering, opponent profiling, and a trained win-probability model that estimates win likelihood at any timestamp in the game.
+<img src="docs/images/03-dashboard.png" alt="SC2 Meta Analyzer Dashboard" width="900"/>
 
-**Reveal SC2 Opponent** — Real-time opponent intelligence powered by SC2Pulse, with a Tkinter dashboard, automatic replay watcher, MMR scanner, strategy detector, and a full streamer overlay system with sixteen-plus ready-made HTML widgets for OBS.
-
-Both ship as a single Windows installer with a guided first-run wizard, a browser-based analyzer SPA, automatic background updates, and a community-shared custom-build database.
-
----
-
-## Features
-
-### Replay analysis
-- Frame-accurate event extraction from `.SC2Replay` files (game events, tracker events, attribute events, message events).
-- Macro score that quantifies economic and production efficiency against optimal benchmarks.
-- Spatial analytics — engagement-zone clustering, army-movement heatmaps, map-aware feature extraction.
-- Trained win-probability classifier (`wp_model.pkl`) callable from CLI or GUI.
-- Persistent SQLite metadata layer with migrations for tracking thousands of replays over time.
-- Long-running opponent profiler that builds behavioral fingerprints across every game you have played against a given player.
-- Browser-based analyzer SPA at `/analyzer` with dashboards, build-order timelines, opponent-profile drill-downs, and chrono / macro charts rendered inline (no external chart dependency).
-- PyQt desktop GUI for offline analysis.
-
-### Live opponent intelligence
-- Continuous MMR scanner backed by the SC2Pulse API.
-- Auto-watcher that detects new replays the moment Blizzard writes them and triggers analysis.
-- Strategy detector recognizing signature builds and cheese patterns (cannon rush, proxy barracks, twelve-pool, dark-templar all-ins, etc.).
-- Editable custom-build library in JSON — define your own patterns and the detector picks them up.
-- **Community-shared build database** — when one player adds a custom build, every player on the next sync sees it. The local copy is a cache; the server is canonical.
-- Build-order classifier driven by `data/build_definitions.json`.
-- Tkinter dashboard for at-a-glance opponent context before queue pop.
-
-### Streamer overlays
-Sixteen-plus browser-source widgets (`SC2-Overlay/widgets/`) drop straight into OBS, Streamlabs, or any browser-source-capable broadcasting tool. Communicate with the bundled Node.js websocket backend for live updates between games.
-
-| Widget | Purpose |
-|---|---|
-| `opponent.html` | Opponent profile card with race, MMR, recent record |
-| `mmr-delta.html` | Live MMR change indicator |
-| `streak.html` | Current win/loss streak |
-| `session.html` | Session-aggregate stats |
-| `rank.html` | League and tier display |
-| `cheese.html` | Cheese alert banner |
-| `topbuilds.html` | Most-used builds against this opponent |
-| `meta.html` | Race-vs-race meta context |
-| `match-result.html` | Post-game result card |
-| `post-game.html` | Detailed post-game summary |
-| `rematch.html` | Rematch indicator |
-| `rival.html` | Recurring-opponent rival flag |
-| `scouting.html` | Scouting intel feed |
-| `fav-opening.html` | Opponent's favorite opening |
-| `best-answer.html` | Suggested counter-build |
-| `mmr-delta.html` | Live MMR delta tracker |
-
-### First-run wizard
-
-The first time you launch SC2 Tools, a multi-step wizard fills in `data/config.json` for you: detects your StarCraft II install, locates your replay folder, looks up your SC2Pulse character ID, asks for your race preference, and offers to import existing build definitions. No JSON editing required.
-
-### Settings, diagnostics, and backups
-
-The analyzer SPA includes a full Settings page with sub-tabs for Profile, Folders, Overlay, Builds, Integrations, About, and more. A Diagnostics page surfaces health checks, recent error counts, the loaded sc2reader version, and a one-click "Bundle logs" button for support tickets. Backups under Settings → Backups snapshot `data/` to a timestamped zip and let you restore from any snapshot in one click.
-
-### Auto-updates
-
-When a newer release lands on GitHub, a banner appears at the top of every page in the analyzer:
-
-> Version 1.0.1 is available — view release notes | Update now ✕
-
-Clicking "Update now" downloads the new installer, verifies its SHA256 against the published value, runs it silently, and relaunches the app. There is also a manual "Check for updates" button under Settings → About. The banner only appears when GitHub has a release with a strictly higher version than the installed one, and dismissing it keeps it dismissed for the session. See `docs/adr/0015-auto-update-architecture.md` for the security model behind the update endpoint.
+</div>
 
 ---
 
-## Repository structure
+## Table of Contents
+
+1. [What It Does](#what-it-does)
+2. [System Architecture](#system-architecture)
+3. [Quick Start](#quick-start)
+4. [Onboarding Wizard — Step by Step](#onboarding-wizard--step-by-step)
+   - [Step 1 — Welcome](#step-1--welcome)
+   - [Step 2 — Replays](#step-2--replays)
+   - [Step 3 — Identity](#step-3--identity)
+   - [Step 4 — Race](#step-4--race)
+   - [Step 5 — Import](#step-5--import)
+   - [Step 6 — Integrations](#step-6--integrations)
+   - [Step 7 — Apply](#step-7--apply)
+5. [The Dashboard](#the-dashboard)
+6. [My Builds — Macro Breakdown](#my-builds--macro-breakdown)
+7. [Opponents — Scouting Database](#opponents--scouting-database)
+8. [Strategies, Maps, Trends, ML / Predict](#strategies-maps-trends-ml--predict)
+9. [Settings](#settings)
+   - [Profile — Connected Battle.net Accounts](#profile--connected-battlenet-accounts)
+   - [Replay Folders](#replay-folders)
+   - [Import Replays](#import-replays)
+   - [Build Classifier](#build-classifier)
+   - [Stream Overlay](#stream-overlay)
+   - [Voice Readout, Backups, Diagnostics, Privacy, About](#voice-readout-backups-diagnostics-privacy-about)
+10. [Stream Overlay Widget Reference](#stream-overlay-widget-reference)
+11. [Filter Bar — The Universal Lens](#filter-bar--the-universal-lens)
+12. [Data Flow & File Layout](#data-flow--file-layout)
+13. [Troubleshooting](#troubleshooting)
+14. [Privacy](#privacy)
+15. [FAQ](#faq)
+16. [License](#license)
+
+---
+
+## What It Does
+
+SC2 Meta Analyzer ingests your StarCraft II replay folder, classifies every game by build, race, map, and outcome, and turns the result into a coaching tool. It runs entirely on your machine at `localhost:3000/analyzer/` — no account, no upload, no cloud.
+
+| Capability | What you get |
+| --- | --- |
+| **Macro tracking** | Total games, W/L, win-rate by matchup, MMR delta, recent games feed. |
+| **Build recognition** | Auto-classified openers (PvZ Carrier Rush, PvT Phoenix into Robo, etc.) with per-build win rates. |
+| **Opponent intel** | Permanent record of every player you've faced — keyed to their SC2Pulse ID, not their name change. |
+| **Map intel** | Win rates and build performance per map. |
+| **Predictions** | ML / Predict tab that calls likely opponent builds and your best counter. |
+| **Stream overlays** | 15 ready-to-paste OBS / Streamlabs browser sources, four pinned as Recommended. |
+| **Voice readout** | Optional in-ear scouting report when a game starts. |
+
+---
+
+## System Architecture
+
+```mermaid
+flowchart LR
+    A[StarCraft II<br/>Replay Folder] -->|file watcher| B[Replay Parser]
+    B --> C[(Local SQLite<br/>+ JSON cache)]
+    C --> D[Build Classifier]
+    C --> E[SC2Pulse Lookup<br/>opponent identity]
+    D --> F[Analyzer UI<br/>localhost:3000/analyzer]
+    E --> F
+    C --> G[Overlay Server<br/>localhost:3000/overlay]
+    G --> H[OBS / Streamlabs<br/>Browser Sources]
+    F -.config.-> I[(config.json)]
+    I -.identities.-> E
+```
+
+Two surfaces are served from the same backend:
+
+- **`/analyzer/`** — the dashboard you read between games.
+- **`/overlay/widgets/*.html`** — the live HUD your stream sees.
+
+Both pull from the same local store, so what your viewers see and what you analyze can never drift apart.
+
+---
+
+## Quick Start
+
+```text
+1. Launch the app  ──►  open http://localhost:3000/analyzer/
+2. Click "Get started" on the Welcome screen
+3. Confirm your replay folder
+4. Verify your Battle.net identity (auto-detected)
+5. Pick your race
+6. Wait for the import bar to finish
+7. Done — Dashboard goes LIVE
+```
+
+The whole onboarding flow takes about 60 seconds for a 1,000-game library.
+
+---
+
+## Onboarding Wizard — Step by Step
+
+The wizard has seven tabs across the top. The current step is highlighted **blue**, completed steps turn **green**, and you can jump backward at any time.
 
 ```
-sc2tools/
-├── SC2Replay-Analyzer/              Deep replay analysis suite
-│   ├── analytics/                   Statistical + ML modules
-│   │   ├── clustering.py            Engagement-zone clustering
-│   │   ├── feature_extractor.py     ML feature pipeline
-│   │   ├── macro_score.py           Macro efficiency scoring
-│   │   ├── opponent_profiler.py     Long-term opponent profiles
-│   │   ├── spatial.py               Map-aware spatial analytics
-│   │   └── win_probability.py       Trained classifier inference
-│   ├── core/                        Replay loading + event extraction
-│   ├── detectors/                   Pattern detectors
-│   ├── db/                          SQLite persistence + migrations
-│   ├── ui/                          PyQt GUI
-│   ├── scripts/                     CLI entry points
-│   ├── data/                        Map bounds + cached spatial data
-│   ├── __init__.py                  Package metadata; reads __version__
-│   ├── SC2ReplayAnalyzer.py         Stage 3 launcher (entry point)
-│   ├── web_analyzer.py              Browser-based analyzer
-│   └── requirements.txt             Pinned Python dependencies
-│
-├── reveal-sc2-opponent-main/        Live opponent intel + overlays
-│   ├── core/                        Replay parser + build detection
-│   ├── analytics/                   Opponent profiling + macro scoring
-│   ├── gui/                         Tkinter analyzer dashboard
-│   ├── watchers/                    Replay + MMR watchers
-│   ├── scripts/                     Asset extraction utilities
-│   ├── data/                        Build definitions + opponent history
-│   ├── SC2-Overlay/                 OBS browser-source widgets
-│   │   ├── widgets/                 Sixteen-plus widget HTML files
-│   │   ├── icons/                   Race / league / unit / building icons
-│   │   ├── app.js, styles.css       Shared overlay logic + theming
-│   │   └── icon-registry.js         Icon-name lookup table
-│   └── stream-overlay-backend/      Node.js Express + websocket server
-│       ├── index.js                 Server entry point + route mounting
-│       ├── analyzer.js              Live analysis bridge
-│       ├── routes/                  Express route factories
-│       │   ├── settings.js          /api/settings (Stage 2)
-│       │   ├── onboarding.js        /api/onboarding (wizard backend)
-│       │   ├── backups.js           /api/backups
-│       │   ├── diagnostics.js       /api/diagnostics
-│       │   ├── custom-builds.js     /api/custom-builds (cloud sync)
-│       │   └── version.js           /api/version + /api/update/start
-│       ├── public/analyzer/         The browser SPA (index.html + components/)
-│       ├── package.json             Pinned Node dependencies (canonical version)
-│       └── overlay.config.json      Server-side overlay defaults
-│
-├── packaging/                       Windows installer build pipeline
-│   ├── installer.nsi                NSIS Modern UI 2 script
-│   ├── build-installer.ps1          Stage + bundle Python + npm ci + makensis
-│   ├── silent-update.ps1            Auto-update helper (Stage 12.1)
-│   └── installer-assets/icon.ico
-│
-├── cloud/community-builds/          Server-side custom-build database
-├── docs/adr/                        Architecture Decision Records
-├── .github/workflows/               release.yml + version-check.yml
-├── CHANGELOG.md                     Keep-a-Changelog format, semver tags
-└── README.md                        This file
+┌──────────┬──────────┬───────────┬─────────┬──────────┬────────────────┬─────────┐
+│ 1.Welcome│ 2.Replays│ 3.Identity│ 4. Race │ 5. Import│ 6. Integrations│ 7. Apply│
+└──────────┴──────────┴───────────┴─────────┴──────────┴────────────────┴─────────┘
+```
+
+### Step 1 — Welcome
+
+<p align="center">
+  <img src="docs/images/01-welcome.png" alt="Onboarding — Welcome step" width="820"/>
+</p>
+
+The opening card states the three promises of the tool:
+
+- Track every macro slip across your last 1,000 ladder games.
+- Recognize what your opponent is building before the first scout.
+- See your real progress without manually tagging anything.
+
+**Two buttons:**
+
+| Button | When to use it |
+| --- | --- |
+| **Get started** | First-time setup. Walks you through every step. Recommended. |
+| **Skip wizard (advanced)** | You've used the tool before, your `config.json` is already populated, and you just want the dashboard. |
+
+> **Tip** — Even if you skip the wizard, you can re-run any step from **Settings** later. Nothing is one-shot.
+
+### Step 2 — Replays
+
+<p align="center">
+  <img src="docs/images/02-replays.png" alt="Onboarding — Replays step" width="820"/>
+</p>
+
+> *"Where are your replays?"*
+
+The app auto-scans the standard StarCraft II install paths on your OS. While it scans, you'll see a `Scanning…` indicator. Multi-account and multi-region players should add **every** folder that contains their replays.
+
+**Default paths checked automatically:**
+
+| OS | Path |
+| --- | --- |
+| Windows | `C:\Users\<you>\Documents\StarCraft II\Accounts\<acct>\<region>\Replays\Multiplayer` |
+| macOS | `~/Library/Application Support/Blizzard/StarCraft II/Accounts/<acct>/<region>/Replays/Multiplayer` |
+| Linux (Wine/Lutris) | `~/.wine/drive_c/users/<you>/Documents/StarCraft II/...` |
+
+**Add a custom folder path** — paste any extra directory (a backup drive, a teammate's archive, an external SSD) into the input and press **Enter** or click **Add**. The placeholder shows the expected shape: `C:\Users\you\...\Replays\Multiplayer`.
+
+**Buttons on this screen:**
+
+- **Back** — return to Welcome.
+- **Rescan** — re-run the auto-detector after plugging in a drive.
+- **Next** — proceed once at least one folder is selected.
+
+### Step 3 — Identity
+
+The wizard inspects the most recent replay and pre-fills your **in-replay name**, **regional profile / replay-folder ID**, **Battle.net account number**, and **SC2Pulse character ID**. You confirm or edit each one. BattleTag (`Name#1234`) is the one field it cannot detect — type it in once.
+
+You can add a second, third, or fourth identity here (one per region you ladder on). Each identity is stored as an entry in `config.identities[]`.
+
+### Step 4 — Race
+
+Pick **Protoss / Terran / Zerg / Random**. This is used as the default `MY RACE` filter on every page — you can still flip it per-view from the filter bar.
+
+### Step 5 — Import
+
+The classifier runs through every replay it found, pulls out:
+
+- Map, duration, MMR before/after, race matchup, win/loss
+- The first ~3 minutes of build order → matched against the build library
+- Opponent's in-replay name and SC2Pulse ID (looked up via `sc2pulse.nephest.com`)
+
+A progress bar shows X of Y replays processed. A 1,000-game library imports in roughly 30–90 seconds depending on disk speed.
+
+### Step 6 — Integrations
+
+Optional plug-ins:
+
+| Integration | Purpose |
+| --- | --- |
+| **SC2Pulse** | Already wired — supplies the persistent opponent IDs. |
+| **OBS / Streamlabs** | Provides the browser-source URLs for the overlay widgets. |
+| **Voice readout** | Pipes the scouting report through your default audio device. |
+
+### Step 7 — Apply
+
+Final review screen. Click **Apply** to write `config.json`, kick off the watcher service, and route you to the live Dashboard. The header now shows the green **LIVE** pill — meaning the file watcher is active and any new replay you finish will appear within seconds.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as You
+    participant W as Wizard
+    participant FS as Replay Folder
+    participant P as Parser
+    participant DB as Local DB
+    U->>W: Click Get started
+    W->>FS: Scan default paths
+    FS-->>W: Found N folders
+    U->>W: Confirm/add folders
+    W->>P: Read replays
+    P->>DB: Persist games + builds
+    W->>U: Identity prefilled
+    U->>W: Confirm BattleTag + race
+    W->>DB: Write config.json
+    W-->>U: Dashboard goes LIVE
 ```
 
 ---
 
-## Installation
+## The Dashboard
 
-### Windows installer (recommended for most users)
+<p align="center">
+  <img src="docs/images/03-dashboard.png" alt="Dashboard — KPI cards, By Matchup, Recent Games" width="900"/>
+</p>
 
-Download the latest `SC2Tools-Setup-<version>.exe` from the [Releases page](https://github.com/ReSpOnSeSC2/sc2tools/releases/latest), double-click, hit Next a few times. The installer:
+The Dashboard is the room you live in between matches.
 
-- Installs to `%LOCALAPPDATA%\Programs\SC2Tools` by default (no admin prompt). You can pick a different folder on the Directory page.
-- Bundles its own Python 3.12 interpreter, so nothing PATH-related can go wrong on the user side.
-- Pre-installs every Python and Node.js dependency at build time, so the install itself does not need PyPI / npm registry access.
-- Detects Node.js 18+ on PATH (required for the streaming overlay backend). If Node is missing the installer offers to open the official download page; the rest of the install completes either way.
-- Drops a Start Menu entry and a Desktop shortcut pointing at the launcher.
-- Registers a clean uninstaller under Add/Remove Programs.
+**Header (always visible):**
 
-The installer SHA256 is published alongside the `.exe` on the Releases page so you can verify the download:
-
-```powershell
-Get-FileHash .\SC2Tools-Setup-1.0.0.exe -Algorithm SHA256
-# Compare against the .sha256 sidecar on GitHub Releases.
+```
+SC2 Meta Analyzer  [LIVE]  CHARTS: BUILT-IN
+─────────────────────────────────────────────────────
+Dashboard │ My Builds │ Strategies │ Maps │ Opponents │ Trends │ ML / Predict │ Map Intel │ Definitions │ Settings
 ```
 
-### Manual install (developers, contributors, non-Windows)
+**Filter bar** sits directly under the header on every page — see [Filter Bar](#filter-bar--the-universal-lens).
 
-For development on the codebase, or to run on macOS / Linux where the Windows installer does not apply:
+**The four KPI cards:**
 
-#### Prerequisites
-- Windows 10 / 11, macOS, or Linux (the launchers and PowerShell scripts are Windows-specific; the Python and Node code is otherwise platform-independent)
-- Python 3.10 or newer (Python 3.12 recommended; CI tests against 3.12)
-- Node.js 18 or newer
-- PowerShell 5.1 or newer (Windows-only paths)
-- A Battle.net account with at least one ranked SC2 ladder game on record (for SC2Pulse lookups)
+| Card | Reads |
+| --- | --- |
+| **Total Games** | All games matching the current filter. |
+| **Wins** | Green count. |
+| **Losses** | Red count. |
+| **Win Rate** | Percentage. Color-graded — green ≥ 55%, yellow 45–54%, red < 45%. |
 
-#### Setup
+**By Matchup panel** — horizontal bars for `vs Terran`, `vs Protoss`, `vs Zerg`, plus rare matchups (`vs BW Protoss`, `vs BW Zerg`) when present. Each bar shows record and percent. Bar color tracks win rate.
 
-```powershell
-git clone https://github.com/ReSpOnSeSC2/sc2tools.git
-cd sc2tools
+**Recent Games panel** — the last ~25 games. Columns:
 
-# SC2Replay-Analyzer
-cd SC2Replay-Analyzer
-pip install -r requirements.txt
-cd ..
+| Column | Meaning |
+| --- | --- |
+| **Date** | YYYY-MM-DD of the game. |
+| **OPP** | Opponent's in-replay name, prefixed with a race letter ( **P** Protoss, **T** Terran, **Z** Zerg ). Players who haven't typed a name show as `IIIIIIIII`. |
+| **Map** | Ladder map name. |
+| **Result** | Green **Win** / red **Loss**. |
 
-# Reveal SC2 Opponent
-cd reveal-sc2-opponent-main
-pip install -r requirements.txt
-
-# Stream overlay backend
-cd stream-overlay-backend
-npm ci
-cd ..\..
-```
-
-`npm ci` is preferred over `npm install` because the repository commits an exact `package-lock.json`. All Python and Node dependencies are pinned to specific versions; the CI matrix verifies this on every PR.
-
-### Building the installer locally
-
-If you want to produce a `SC2Tools-Setup-<version>.exe` from a clean checkout (for example, to test a release candidate before tagging):
-
-```powershell
-choco install nsis -y                    # one-time, if you do not have NSIS
-.\packaging\build-installer.ps1 -Test
-```
-
-Output lands at `dist\SC2Tools-Setup-<version>.exe` plus a matching `.sha256`. The `-Test` flag runs a silent install + uninstall smoke test before the script returns. See `docs/adr/0014-installer-nsis-bundled-python.md` for the design rationale (NSIS over WiX, bundled Python over detect-and-prompt, per-user install over Program Files).
-
-### First run
-
-On first launch — whether from the installer's Desktop shortcut or `python SC2Replay-Analyzer\SC2ReplayAnalyzer.py` — the app runs a multi-step setup wizard that:
-
-1. Detects your StarCraft II install and locates your replay folder.
-2. Asks for your SC2Pulse character ID (or looks it up from your Battle.net handle).
-3. Records your race preference for race-specific UI accents.
-4. Offers to import existing build definitions.
-5. Writes everything to `data/config.json` and `data/profile.json`.
-
-You can re-run the wizard at any time from Settings → Profile → "Re-run wizard".
+Click any row to drill into the full replay deep-dive (timeline, build order, MMR delta, opponent profile).
 
 ---
 
-## Usage
+## My Builds — Macro Breakdown
 
-### One-click launcher
+<p align="center">
+  <img src="docs/images/04-my-builds.png" alt="My Builds — per-opener W/L, totals, win rate, last played" width="900"/>
+</p>
 
-The installer's Desktop shortcut runs `SC2Replay-Analyzer\SC2ReplayAnalyzer.py` via the bundled `pythonw.exe`. From a manual install:
+This is where you find out *what is actually working*. The classifier groups every game by the opener you played and reports the empirical W / L / total / win-rate for each one.
 
-```powershell
-.\reveal-sc2-opponent-main\START_SC2_TOOLS.bat
+**Header controls on the page:**
+
+- `search builds…` — type-ahead filter (matches build name).
+- ☑ **Hide empty** — collapse builds with zero games in the current filter window.
+- **Export CSV** — dump the visible table to disk.
+- *Click any column to sort. Click a row to open the deep dive.*
+
+**Columns:**
+
+| Column | Meaning |
+| --- | --- |
+| **BUILD** | Matchup prefix + opener name (e.g. `PvP – Standard Stargate Opener`). |
+| **WINS** | Green count. |
+| **LOSSES** | Red count. |
+| **TOTAL** | Sample size — sort by this to filter out noise. |
+| **WIN RATE** | Percentage. The bar to the right is color-graded for at-a-glance scanning. |
+| **LAST** | Time since you last played this build (`just now`, `2d ago`, `74d ago`, …). |
+
+### How to read it
+
+```mermaid
+flowchart TD
+    A[Open My Builds] --> B{Sort by TOTAL desc}
+    B --> C[Find your top-3 most-played openers]
+    C --> D{Win rate >= 55%?}
+    D -- yes --> E[Keep — refine timing]
+    D -- no  --> F[Drill in:<br/>where do losses cluster?]
+    F --> G{Loss-cluster by map?}
+    G -- yes --> H[Avoid build on those maps<br/>or veto the maps]
+    G -- no  --> I{Loss-cluster vs one race?}
+    I -- yes --> J[Build a counter-prep<br/>for that matchup]
+    I -- no  --> K[Likely execution gap —<br/>review timing in deep dive]
 ```
 
-Brings up the GUI, MMR scanner, replay watcher, and overlay backend together.
+### Reading the row colors
 
-### Browser-based analyzer (SPA)
+The win-rate bar tells you the verdict in one glance:
 
-Once the stream-overlay-backend is running, open the analyzer in any browser:
+| Bar color | Win rate | Verdict |
+| --- | --- | --- |
+| Bright green | >= 65% | Smashing it. Don't change a thing. |
+| Green | 55–64% | Solid. Keep playing. |
+| Yellow | 45–54% | Coin flip. Either refine or drop it. |
+| Orange / red | < 45% | Bleeding MMR. Stop or fix the timing. |
 
-```
-http://localhost:5050/analyzer
-```
+### Drill-down
 
-(The exact port comes from `overlay.config.json` — `5050` is the default.) Tabs include Dashboard, Builds, Strategies, Settings, and Diagnostics. The Update banner sits at the top of every tab.
+Clicking a row opens the build deep-dive:
 
-### SC2Replay-Analyzer
-
-Desktop GUI:
-```powershell
-cd SC2Replay-Analyzer
-python SC2ReplayAnalyzer.py
-```
-
-Web interface:
-```powershell
-python web_analyzer.py
-```
-
-CLI utilities:
-```powershell
-python scripts/macro_cli.py      --replay "path\to\replay.SC2Replay"
-python scripts/buildorder_cli.py --replay "path\to\replay.SC2Replay"
-python scripts/spatial_cli.py    --replay "path\to\replay.SC2Replay"
-python scripts/ml_cli.py         --replay "path\to\replay.SC2Replay"
-```
-
-### Reveal SC2 Opponent
-
-Standard launcher:
-```powershell
-cd reveal-sc2-opponent-main
-.\reveal-sc2-opponent.bat
-```
-
-GUI only:
-```powershell
-python gui\run_gui.py
-```
-
-PowerShell mode (no GUI):
-```powershell
-.\Reveal-Sc2Opponent.ps1
-```
-
-Stream overlay backend (for OBS browser sources):
-```powershell
-cd stream-overlay-backend
-node index.js
-```
-Then add OBS browser sources pointing at the widget URLs printed by the server (for example, `http://localhost:5050/overlay/widgets/opponent.html`).
+- **Per-map** breakdown of the same build.
+- **Per-opponent-race** breakdown.
+- **MMR-bucket** breakdown (does it work below 4k but die at 5k?).
+- **Sample game list** — every replay in that bucket, click-through to timeline.
+- **Suggested follow-ups** — what the classifier thinks you transition into and how those branches perform.
 
 ---
 
-## Configuration
+## Opponents — Scouting Database
 
-Most users never edit JSON by hand: the wizard handles `config.json` on first run, and Settings → Profile / Folders / Overlay / Builds covers the day-to-day knobs. For reference, the data files live under `data/`:
+<p align="center">
+  <img src="docs/images/05-opponents.png" alt="Opponents — searchable list keyed to SC2Pulse IDs" width="900"/>
+</p>
 
-- **`data/config.json`** — schema-validated runtime config. Edit via Settings, not by hand. The wizard creates this on first launch.
-- **`data/profile.json`** — your personal profile (character ID, races, display names).
-- **`data/build_definitions.json`** — built-in build patterns that ship with the codebase. Tracked in git.
-- **`data/custom_builds.json`** — your local custom-build cache. The community-shared database is canonical (see Stage 7 in the roadmap); this file is a local mirror that updates on next sync.
-- **`data/meta_database.json`** — your replay history index. Populated as you play. Not tracked in git.
-- **`data/MyOpponentHistory.json`** — opponent W-L history. Populated as you play. Not tracked in git.
-- **`stream-overlay-backend/overlay.config.json`** — server-side overlay defaults (websocket port, widget refresh rate, theming).
+Every player you have ever faced, keyed to their SC2Pulse numeric ID so name changes don't break your history.
 
----
+**Page controls:**
 
-## Notes on data files
+- `search opponent name or ID…`
+- **MIN GAMES** — hide opponents you've only played once (default 1).
+- **Export CSV**.
 
-The repository deliberately does not include the following — they are generated, regenerable, or personal:
+**Columns:**
 
-- `meta_database.json` and its `.backup-*` / `.broken-*` / `.pre-*` snapshots — built up over time as you play.
-- `wp_model.pkl` — the trained win-probability model. A pretrained build will be released separately; in the meantime the analyzer falls back gracefully when the model is missing.
-- `MyOpponentHistory.json`, `opponent.txt`, `character_ids.txt` — personal data populated as you play.
-- `custom_builds.json` — your local mirror of the community-shared build database. Regenerated on next sync from the cloud canonical store.
-- `analyzer.log` — runtime log file. Rotated automatically.
+| Column | Meaning |
+| --- | --- |
+| **OPPONENT** | In-replay name `#discriminator`. |
+| **PULSE ID** | Numeric SC2Pulse character ID. The stable identifier. |
+| **W** | Wins against them. |
+| **L** | Losses. |
+| **GAMES** | Total games. |
+| **WIN RATE** | Lifetime W% against this player. |
+| **LAST** | Time since the last meeting. |
 
-These are listed in `.gitignore`. Your local copies are untouched. The Windows installer also excludes them from its staging tree, so a fresh install never overwrites your replay history.
+Clicking a row opens an **opponent dossier**: every game you've played against them, their typical build choices versus you, their preferred maps, and whether they cheese on first encounters. Use this 20 seconds before a rematch.
 
----
-
-## Releases
-
-Tags follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html): `vMAJOR.MINOR.PATCH`. Pushing a tag matching `v*.*.*` triggers `.github/workflows/release.yml` on a clean Windows GitHub Actions runner, which:
-
-1. Builds the installer with `packaging/build-installer.ps1`.
-2. Runs the silent-install smoke test.
-3. Computes and publishes the `.sha256` sidecar.
-4. Attaches both files to the GitHub Release for that tag.
-
-The version string is canonical in `reveal-sc2-opponent-main/stream-overlay-backend/package.json`. `SC2Replay-Analyzer/__init__.py` reads the same file at import time, and `.github/workflows/version-check.yml` asserts both — plus the SPA's `SETTINGS_VERSION` literal — agree on every PR. See the changelog at [`CHANGELOG.md`](CHANGELOG.md) for per-release notes.
+> **Why the Pulse ID matters** — players rename constantly. The Pulse ID never changes. Two players sharing the same blank in-replay name are easy to tell apart — the IDs are different.
 
 ---
 
-## Acknowledgements
+## Strategies, Maps, Trends, ML / Predict
 
-This project stands on the shoulders of giants. The work below is what makes any of this possible:
+These tabs reuse the same data lens but slice it differently:
 
-### SC2Pulse and Nephest
-
-Enormous thanks to **Nephest** and the **[SC2Pulse](https://www.nephest.com/sc2/)** project. SC2Pulse is the foundation of our live MMR tracking, ladder lookups, opponent resolution, and historical match data. Without Nephest's painstakingly maintained API and the years of work keeping the SC2Pulse ladder dataset clean, current, and freely accessible, the entire real-time opponent-intelligence layer of this project would not exist.
-
-Nephest has built and operated SC2Pulse as a community service — open, reliable, and free — and that kind of contribution is what makes community projects like this one viable. If you use SC2 Tools and find it useful, please consider supporting SC2Pulse directly through the donation links on [nephest.com](https://www.nephest.com/sc2/).
-
-### sc2reader and s2protocol
-
-Replay parsing leans on the work of two foundational open-source projects: **[sc2reader](https://github.com/ggtracker/sc2reader)** and Blizzard's **[s2protocol](https://github.com/Blizzard/s2protocol)**. Decoding `.SC2Replay` files is genuinely hard — the format is a nested MPQ archive containing serialized event streams whose protocol definitions change with every SC2 patch since 2010. The maintainers of these libraries have been quietly absorbing all of that complexity for over a decade so the rest of us can do interesting things with replay data. Massive respect.
-
-### Icons and game assets
-
-- League, race, unit, building, and upgrade iconography is sourced from community-maintained sets. See `reveal-sc2-opponent-main/SC2-Overlay/icons/CREDITS.md` and `MANIFEST.md` for full per-icon attribution, plus `LICENSE-burnysc2.txt` and `LICENSE-sc2-icons.txt` for the originating licenses.
-
-### Open-source dependencies
-
-A long list of Python and JavaScript packages — see the respective `requirements.txt` and `package.json` files. Special mention to the maintainers of NumPy, scikit-learn, pandas, PyQt, and Tkinter on the Python side, and Express plus the websocket ecosystem on the Node side.
-
-### Packaging
-
-The Windows installer is built with **[NSIS](https://nsis.sourceforge.io/)** (Nullsoft Scriptable Install System) and bundles the official **[python.org embeddable distribution](https://www.python.org/downloads/windows/)**. Both are freely redistributable; SHA256 verification is enforced at build time to keep supply-chain risk low.
+| Tab | Question it answers |
+| --- | --- |
+| **Strategies** | Which transitions / mid-game compositions follow each opener, and how do they perform? |
+| **Maps** | Per-map W-L, plus which builds work best on which map. Use it to plan vetoes. |
+| **Trends** | Time-series of MMR, win rate, build mix. Catch a decline before it costs you a league. |
+| **ML / Predict** | Given the opening cues from the live game, predict the opponent's likely build path and propose your best historical counter. |
+| **Map Intel** | Static map-pool reference — main / nat / third positions, key timings, scouting routes. |
+| **Definitions** | Glossary of every classifier label — what counts as `PvZ – Carrier Rush` vs `PvZ – 2 Stargate Void Ray`. |
 
 ---
 
-## Roadmap
+## Settings
 
-A working development roadmap lives at `MASTER_ROADMAP.md`. High-level direction (most of the install / update / wizard plumbing has shipped; remaining items are below):
+The Settings page hosts ten sub-pages on the left rail. Every change saves to `config.json` on click.
 
-- Cross-replay trend analysis and regression
-- Improved cheese-detection precision
-- Mobile-friendly overlay theme
-- Optional Twitch chat integration for the overlay
-- Pretrained win-probability model release
-- macOS and Linux support for the launchers (manual install path works today)
-- Authenticode-signed installer (the SHA256 channel works today; signing adds a second layer)
+```
+Settings
+├── Profile               ← Battle.net identities
+├── Replay folders        ← add/remove watched directories
+├── Import replays        ← manual / bulk reimport
+├── Build classifier      ← tune build-rule thresholds
+├── Stream overlay        ← OBS / Streamlabs widget URLs
+├── Voice readout         ← TTS scouting report
+├── Backups               ← snapshot / restore the local DB
+├── Diagnostics           ← logs, parser version, health checks
+├── Privacy               ← what leaves the machine (almost nothing)
+└── About                 ← version, changelog, credits
+```
 
-Issues and feature requests welcome.
+### Profile — Connected Battle.net Accounts
+
+<p align="center">
+  <img src="docs/images/06-settings-profile.png" alt="Settings — Connected Battle.net accounts (US + EU identities)" width="900"/>
+</p>
+
+One identity card per region you play on. The wizard pre-fills almost everything; this is where you adjust later.
+
+**Fields per identity:**
+
+| Field | Source |
+| --- | --- |
+| **In-replay name** | Auto-detected from the most recent replay's player slot. |
+| **BattleTag** *(e.g. `ReSpOnSe#1872`)* | Manual — the only field not auto-captured. |
+| **Regional profile / replay-folder ID** | Folder name under `Documents\StarCraft II\Accounts\<acct>\` (e.g. `1-S2-1-267727`). |
+| **Battle.net account number** | Parent folder under `Documents\StarCraft II\Accounts\` (e.g. `50983875`). |
+| **SC2Pulse character ID** | From `sc2pulse.nephest.com` URL (e.g. `?id=994428`). |
+| **Region** | `Americas (us)`, `Europe (eu)`, `Korea (kr)`, `China (cn)`. |
+
+Settings stores these as `config.identities[]` and mirrors them into `stream_overlay.pulse_character_ids[]`, so your overlays follow you across regions.
+
+The Settings page header reports a global counter — `SC2Pulse IDs captured globally: 994428` — confirming the lookup service is reachable.
+
+**Add another region** — click the green button at the top of the list (visible after the last identity).
+**Remove a region** — red **Remove** button on each card.
+
+> **Tip** — If your replay names show as a row of vertical bars, that's because your Battle.net display name was empty at the time. Fixing it in-game and replaying one ladder match will repopulate the identity card.
+
+### Replay Folders
+
+Add, remove, or temporarily disable any folder. Each row shows the path, file count, and last-scanned timestamp. Click **Rescan** to force a re-walk after moving files.
+
+### Import Replays
+
+Manual control of the parser:
+
+- **Import a single file** — drag-drop or browse.
+- **Reimport all** — wipes the parsed cache and rebuilds. Use after a classifier update.
+- **Reimport range** — by date, MMR, or matchup. Useful for testing a new build rule.
+
+### Build Classifier
+
+Per-rule thresholds (e.g. *"call it Phoenix Style if 2+ Phoenix produced before 5:00"*). Comes pre-loaded with sensible defaults; advanced users can tune.
+
+### Stream Overlay
+
+See the dedicated [Stream Overlay Widget Reference](#stream-overlay-widget-reference) below — this is its own section because there's a lot of it.
+
+### Voice Readout, Backups, Diagnostics, Privacy, About
+
+| Page | What's there |
+| --- | --- |
+| **Voice readout** | Toggle TTS, pick voice, set volume, choose which moments speak (game start / win / loss / streak). |
+| **Backups** | One-click snapshot of `analyzer.db` and `config.json`. Auto-rotation. Restore any snapshot. |
+| **Diagnostics** | Watcher status, parser version, classifier version, last error log, "Copy diagnostic bundle" button for support. |
+| **Privacy** | Confirms what is local-only and lists the exactly-two outbound calls (SC2Pulse opponent lookup, optional update check). Both can be disabled. |
+| **About** | Version number, changelog link, credits, license. |
 
 ---
 
-## Contributing
+## Stream Overlay Widget Reference
 
-Pull requests are welcome. Please:
+<p align="center">
+  <img src="docs/images/07-settings-stream-overlay.png" alt="Settings — Stream overlay widgets (Session, Scouting, Post-game, Streak)" width="900"/>
+</p>
 
-1. Open an issue first for substantial changes so we can align on direction.
-2. Test against actual `.SC2Replay` files before submitting — replays in the wild have edge cases that synthetic tests miss.
-3. Do not commit large binaries, trained models, replays, or personal data. The repository's `.gitignore` is already configured to keep these out; please respect it.
-4. Match the code style of the surrounding files. The engineering standards (file size caps, function complexity, line length, dependency pinning) are documented in `MASTER_ROADMAP.md` and enforced by CI.
-5. When bumping the version, edit `stream-overlay-backend/package.json` only — `SC2Replay-Analyzer/__init__.py` reads from there at runtime, and the SPA's `SETTINGS_VERSION` literal is verified against it by `.github/workflows/version-check.yml` on every PR.
+> **The widget event bus runs automatically as part of the backend — no setup needed.** Pick a widget, copy its URL, and add it as a Browser Source in your streaming app. The same URL works in **Streamlabs Desktop** and **OBS Studio**.
+
+The overlay panel shows **4 of 15** widgets by default — the four marked **RECOMMENDED** because they cover the highest-impact moments: live session, pre-game scouting, post-game reveal, and streak splashes. Use **Show all (15)** to expand, or **Copy all (4)** to grab the recommended set in one click.
+
+### The four recommended widgets
+
+| Widget | Purpose | Trigger | Default size | URL |
+| --- | --- | --- | --- | --- |
+| **Session** `RECOMMENDED` | Live W-L, MMR delta, league badge, session duration. **Always on.** | Persistent | 300×100 | `http://localhost:3000/overlay/widgets/session.html` |
+| **Scouting report** `RECOMMENDED` | Consolidated pre-game card: opponent + race + MMR + cheese flag + favorite opener + your best historical answer. | Pre-game ~22 s | 500×280 | `http://localhost:3000/overlay/widgets/scouting.html` |
+| **Post-game reveal** `RECOMMENDED` | What the opponent actually built, with an animated build-order timeline. | Post-game ~16 s | 500×220 | `http://localhost:3000/overlay/widgets/post-game.html` |
+| **Streak splash** `RECOMMENDED` | Center-screen ON FIRE / RAMPAGE / TILT pop-up. | Post-game ~8 s | 600×200 | `http://localhost:3000/overlay/widgets/streak.html` |
+
+Each row in the panel has a **Copy** button that puts the URL on your clipboard.
+
+### Adding a widget to OBS / Streamlabs
+
+```mermaid
+flowchart LR
+    A[Click Copy in Settings] --> B[Open OBS or Streamlabs]
+    B --> C[Sources -> Add -> Browser]
+    C --> D[Paste URL]
+    D --> E[Set Width x Height<br/>from the size column]
+    E --> F[OK -> source goes live]
+    F --> G{Also want<br/>more widgets?}
+    G -- yes --> A
+    G -- no  --> H[Position on canvas]
+```
+
+**Step-by-step in OBS Studio:**
+
+1. In Settings → Stream overlay, click **Copy** next to the widget you want.
+2. In OBS, in the **Sources** panel, click **+** → **Browser**.
+3. Name it (e.g. `SC2 Session`) → **OK**.
+4. Paste the URL into the **URL** field.
+5. Set **Width** and **Height** to the values listed in the Settings card (e.g. `300 × 100` for Session).
+6. Leave **Custom CSS** blank — the widget already styles itself with a transparent background.
+7. Tick **"Shutdown source when not visible"** if you want zero CPU when the scene is hidden.
+8. Click **OK** and position the source on your canvas.
+
+**Streamlabs Desktop** is identical except the source is called **"Browser Source"** under **Add Source**.
+
+### The all-in-one URL
+
+If you'd rather paste a single URL that contains every widget pinned in one fixed layout (good for dual-monitor setups where the overlay lives on a secondary display), expand **"Or paste the all-in-one URL (every widget pinned in one fixed layout)"** at the bottom of the Stream overlay page.
+
+### The full 15
+
+Click **Show all (15)** to reveal the additional eleven widgets — things like *Race scoreboard*, *Map veto card*, *Build classifier ribbon*, *MMR sparkline*, *PR badge*. Each follows the same Copy-paste pattern.
+
+---
+
+## Filter Bar — The Universal Lens
+
+The filter strip directly under the header is the same on every page. Set it once and the entire UI re-renders against that slice of your data.
+
+| Filter | Notes |
+| --- | --- |
+| **SEASON** | `All time` or any past ladder season. |
+| **SINCE / UNTIL** | Free date range (`mm/dd/yyyy`). |
+| **MY RACE** | `all`, `Protoss`, `Terran`, `Zerg`, `Random`. |
+| **OPP RACE** | Same options. |
+| **MAP** | `contains…` substring search. |
+| **MMR MIN / MMR MAX** | Inclusive bounds. Use to study how a build performs against your peer bracket. |
+| **reset** | Wipes every filter back to defaults. |
+
+Filters persist while you navigate between tabs. When you Export CSV, only filtered rows are exported.
+
+---
+
+## Data Flow & File Layout
+
+```mermaid
+flowchart TB
+    subgraph Disk["Your machine"]
+        R[StarCraft II Replay folders]
+        C[config.json]
+        DB[(analyzer.db)]
+    end
+    subgraph App["Analyzer process"]
+        W[File watcher]
+        P[Replay parser]
+        BC[Build classifier]
+        API[Local HTTP server :3000]
+    end
+    subgraph Cloud["Optional outbound"]
+        SC[SC2Pulse lookup]
+    end
+    R --> W --> P --> BC --> DB
+    DB --> API
+    C --> API
+    P -.identity probe.-> SC
+    SC -.character IDs.-> P
+    API -->|/analyzer/| UI[Browser UI]
+    API -->|/overlay/widgets/*| OBS[OBS / Streamlabs]
+```
+
+**Key files** (paths shown for Windows; equivalents on macOS/Linux):
+
+| File | Role |
+| --- | --- |
+| `%APPDATA%\sc2-meta-analyzer\config.json` | Identities, folders, classifier thresholds, overlay choices. |
+| `%APPDATA%\sc2-meta-analyzer\analyzer.db` | Parsed games, builds, opponent index. |
+| `%APPDATA%\sc2-meta-analyzer\backups\*.zip` | Auto-rotated snapshots. |
+| `%APPDATA%\sc2-meta-analyzer\logs\*.log` | Parser + watcher logs (rolled daily). |
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| `LIVE` pill is grey | File watcher stopped. | Settings → Diagnostics → **Restart watcher**. |
+| New games not appearing | Replay folder not in the watch list. | Settings → **Replay folders** → Add folder → Rescan. |
+| Opponent shows as a row of bars | Player had an empty in-replay display name. Pulse ID is still recorded. | Nothing to fix — sort by Pulse ID instead of name. |
+| Overlay widget is blank in OBS | Browser source URL typo, or OBS cached old version. | Right-click source → **Refresh cache of current page**. |
+| Build classifier mislabeled a game | Classifier thresholds disagree with that game. | Settings → **Build classifier** → adjust the rule, then Reimport. |
+| `SC2Pulse IDs captured globally` shows `0` | No internet, or SC2Pulse down. | Try later; offline analysis still works, opponent IDs simply won't be enriched. |
+| MMR delta wrong on the last game | Bnet hadn't reported the post-game MMR yet when parsed. | Reimport that single replay from Settings → **Import replays**. |
+
+---
+
+## Privacy
+
+- **Replays are read locally.** Nothing is uploaded.
+- **Your config never leaves your machine.**
+- **The only outbound calls** are (a) SC2Pulse opponent identity lookups, and (b) an optional update check. Both can be disabled in Settings → **Privacy**.
+- **Stream overlays** are served from `localhost` — your viewers see *rendered HTML*, never your underlying data files.
+
+---
+
+## FAQ
+
+**Can I run this on a server / VPS so my whole team can use it?**
+The intended deployment is local-only. You can technically point OBS on another machine at your overlay URL over LAN, but the analyzer UI is single-user.
+
+**Does the classifier work for Brood War replays?**
+The schema includes `vs BW Protoss` / `vs BW Zerg` matchup buckets for completeness, but the production classifier is tuned for SC2: WoL/HotS/LotV/co-op-disabled ladder.
+
+**Why is my win rate different from the in-game ladder client?**
+The in-game client only counts the current season. Set the SEASON filter to the current season to match it; `All time` shows your career.
+
+**Will renaming break my history?**
+No. History is keyed to your SC2Pulse character ID, not your in-replay name.
+
+**Where do I get my SC2Pulse character ID?**
+Open your profile on `sc2pulse.nephest.com` — the URL ends in `?id=NNNNNN`. The wizard usually fills this for you.
+
+---
+
+## Screenshot Asset Checklist
+
+The README references seven images under `docs/images/`. Save your screenshots with these exact filenames so the markdown picks them up automatically:
+
+| Filename | Source screenshot |
+| --- | --- |
+| `docs/images/01-welcome.png` | Onboarding wizard — *Welcome to your SC2 stats lab* |
+| `docs/images/02-replays.png` | Onboarding wizard — *Where are your replays?* |
+| `docs/images/03-dashboard.png` | Dashboard — KPI cards, By Matchup, Recent Games |
+| `docs/images/04-my-builds.png` | My Builds — per-opener W/L table |
+| `docs/images/05-opponents.png` | Opponents — searchable scouting database |
+| `docs/images/06-settings-profile.png` | Settings — Connected Battle.net accounts |
+| `docs/images/07-settings-stream-overlay.png` | Settings — Stream overlay widgets |
+
+The `docs/images/` folder has already been created. Drop the seven PNGs in and the README renders end-to-end.
 
 ---
 
 ## License
 
-See `reveal-sc2-opponent-main/LICENSE.txt` for the project license. Individual icon and asset packs retain their original licenses; see the corresponding `LICENSE-*.txt` files in `reveal-sc2-opponent-main/SC2-Overlay/icons/`.
+SC2 Meta Analyzer is distributed under the terms in `LICENSE`. Replay parsing leverages publicly documented Blizzard `.SC2Replay` formats; opponent enrichment uses the SC2Pulse public API under their fair-use policy.
 
----
+<div align="center">
 
-## Disclaimer
+— *Stop guessing what works. Start knowing.* —
 
-StarCraft and StarCraft II are trademarks of Blizzard Entertainment, Inc. This project is not affiliated with, endorsed by, or sponsored by Blizzard Entertainment. All game assets, unit names, building names, and trademarks are the property of their respective owners. SC2 Tools is an independent community project provided as-is, with no warranty.
-
----
-
-## Contact
-
-GitHub: [@ReSpOnSeSC2](https://github.com/ReSpOnSeSC2)
-
-Built by an SC2 player, for SC2 players. GLHF.
+</div>
