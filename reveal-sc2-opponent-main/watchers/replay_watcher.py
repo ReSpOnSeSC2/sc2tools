@@ -56,6 +56,9 @@ from core.sc2_replay_parser import (  # noqa: E402
     parse_deep,
     parse_live,
 )
+from core.pulse_resolver import (  # noqa: E402
+    resolve_pulse_id_by_toon,
+)
 
 
 # =========================================================
@@ -183,6 +186,22 @@ def _deep_payload(ctx: ReplayContext) -> Optional[Dict[str, Any]]:
         ctx.opp_events, cutoff_seconds=300, dedupe_units=True
     )
 
+    # Resolve the opponent's authoritative SC2Pulse character ID via
+    # toon_handle when possible. Carrying both the raw toon and the
+    # resolved pulse_id in the deep payload lets the Node backend
+    # emit a reconcile event so the SPA / overlay can correct any
+    # mis-attribution that happened during the live phase (barcode
+    # collisions, name-only lookups, etc.). Best-effort: returns
+    # None if SC2Pulse is offline, no candidate matches the bnid,
+    # or the toon couldn't be parsed.
+    opp_clean_for_lookup = (
+        ctx.opponent.name.split("]")[-1].strip()
+        if "]" in ctx.opponent.name
+        else ctx.opponent.name
+    )
+    opp_toon = ctx.opponent.handle
+    opp_pulse_id = resolve_pulse_id_by_toon(opp_toon, opp_clean_for_lookup)
+
     payload: Dict[str, Any] = {
         "gameId": ctx.game_id,
         "oppName": ctx.opponent.name,
@@ -196,6 +215,11 @@ def _deep_payload(ctx: ReplayContext) -> Optional[Dict[str, Any]]:
         "earlyBuildLog": ctx.early_build_log,       # YOUR build (used by !build)
         "oppEarlyBuildLog": opp_early_clean,        # OPPONENT'S clean timeline
         "duration": ctx.length_seconds,
+        # Post-game opponent identity (Stage: barcode reconciliation).
+        # `oppToon` is the raw sc2reader toon_handle; `oppPulseId` is
+        # the resolved SC2Pulse character ID or None when offline.
+        "oppToon": opp_toon,
+        "oppPulseId": opp_pulse_id,
     }
     return payload
 
@@ -370,9 +394,34 @@ class ReplayHandler(FileSystemEventHandler):
         matchup_overlay = f"{my_init}v{opp_init}"
         matchup_analyzer = f"vs {opp.race}"
 
-        # Resolve the opponent's pulse_id by name match in the Black Book.
+        # Resolve the opponent's pulse_id. Priority order:
+        #   1. SC2Pulse lookup by toon_handle (authoritative) --
+        #      survives barcode collisions because the bnid is unique.
+        #   2. Name match in the existing Black Book (legacy path,
+        #      kept as a fallback for offline / Pulse-down cases).
+        #   3. Synthetic ``unknown:<Name>`` key when both fail.
+        # The merge_unknown_pulse_ids.py offline tool folds (3) into
+        # (1) once Pulse becomes reachable again, so the worst-case
+        # offline outcome is still self-healing.
         opp_clean = opp.name.split("]")[-1].strip() if "]" in opp.name else opp.name
-        pulse_id = self.store.black_book.find_by_name(opp_clean) or f"unknown:{opp_clean}"
+        toon_pulse_id = resolve_pulse_id_by_toon(opp.handle, opp_clean)
+        name_pulse_id = self.store.black_book.find_by_name(opp_clean)
+        pulse_id = toon_pulse_id or name_pulse_id or f"unknown:{opp_clean}"
+        if (
+            toon_pulse_id
+            and name_pulse_id
+            and toon_pulse_id != name_pulse_id
+        ):
+            # Name-based lookup would have routed this game to a
+            # different person -- classic barcode collision. We log
+            # at WARN-equivalent so the diagnostics page can surface
+            # it; PII is hashed.
+            from core.pulse_resolver import _hash_name
+            print(
+                "[Watcher] reconcile: name lookup pointed to "
+                f"{name_pulse_id} but toon resolves to {toon_pulse_id} "
+                f"for {_hash_name(opp_clean)}; using toon."
+            )
 
         # OPPONENT build-log lines, deduped so the timeline shows real
         # milestones (buildings, upgrades, first-of-each-unit) rather

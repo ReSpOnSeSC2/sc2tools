@@ -1533,10 +1533,33 @@ const lastDeepByOpponent = new Map();    // oppName.lower() -> deep payload
 let lastOwnEarlyBuildLog = [];           // most-recent first-5-min build log
 let lastOwnDeep = null;                  // metadata for !meta
 
+// Post-game reconciliation cache (Stage: barcode reconciliation).
+// The replay's toon_handle is authoritative; the live phase only
+// has the on-screen display name which collides for barcodes. The
+// service holds oppName.lower() -> resolved pulse_id so subsequent
+// live opponentDetected events on the same name can attach to the
+// correct stats card. See services/opponent_reconcile.js.
+const { createReconcileService } = require('./services/opponent_reconcile');
+const opponentReconcile = createReconcileService({ stripClanTag });
+
+/**
+ * Lookup the authoritative SC2Pulse character_id for a display name
+ * learned from a previous deep parse. Returns null when no replay
+ * has resolved this name yet. Thin wrapper -- exported for tests
+ * and any future inline callers.
+ *
+ * @param {string} oppName Display name (clan tag tolerated).
+ * @returns {string|null}
+ */
+function getReconciledPulseId(oppName) {
+    return opponentReconcile.getReconciledPulseId(oppName);
+}
+
 app.post('/api/replay/deep', (req, res) => {
     const d = req.body || {};
     console.log('[API] /api/replay/deep received:',
         { gameId: d.gameId, myBuild: d.myBuild, oppStrategy: d.oppStrategy,
+          oppPulseId: d.oppPulseId || null,
           earlyLog: Array.isArray(d.earlyBuildLog) ? d.earlyBuildLog.length : 0 });
 
     if (Array.isArray(d.earlyBuildLog) && d.earlyBuildLog.length > 0) {
@@ -1555,6 +1578,26 @@ app.post('/api/replay/deep', (req, res) => {
         lastDeepByOpponent.set(stripClanTag(d.oppName).toLowerCase(), d);
     }
 
+    // Post-game opponent reconciliation. The replay's `oppPulseId`
+    // (resolved via toon_handle by the Python watcher) is the
+    // authoritative SC2Pulse character_id. If the live phase
+    // attached this game to a different identity (barcode
+    // collision, name-only lookup), this is the moment we can
+    // correct the SPA / overlay caches.
+    const reconcileDiff = opponentReconcile.recordFromDeepPayload(d);
+    if (reconcileDiff) {
+        emitEvent('opponentReconciled', {
+            opponent: reconcileDiff.oppName,
+            oppRace: reconcileDiff.entry.oppRace,
+            oppPulseId: reconcileDiff.oppPulseId,
+            oppToon: reconcileDiff.entry.oppToon,
+            previousPulseId: reconcileDiff.previousPulseId,
+            gameId: d.gameId || null,
+            map: d.map || null,
+            result: d.result || null
+        });
+    }
+
     // F3 post-game reveal -- always emit so the streamer/chat sees what
     // the opp was actually doing. Includes the first-5-min build log
     // (already trimmed to early game by the watcher) so the front-end
@@ -1567,6 +1610,10 @@ app.post('/api/replay/deep', (req, res) => {
             myBuild: d.myBuild,
             map: d.map,
             result: d.result,
+            // Authoritative SC2Pulse identity from the replay file.
+            // Null when SC2Pulse was unreachable during the deep parse;
+            // SPA falls back to the name-keyed view in that case.
+            oppPulseId: d.oppPulseId ? String(d.oppPulseId) : null,
             // OPPONENT's deduped first-5-min build (real milestones).
             // The frontend timeline animates these icons.
             oppEarlyBuildLog: Array.isArray(d.oppEarlyBuildLog) ? d.oppEarlyBuildLog : [],

@@ -2,51 +2,6 @@
   "version": 3,
   "builds": [
     {
-      "id": "pvz-dt-into-3-stargate-void-ray",
-      "name": "PvZ - DT into 3 Stargate Void Ray",
-      "race": "Protoss",
-      "vs_race": "Zerg",
-      "skill_level": "grandmaster",
-      "description": "PvZ DT play into 3 Stargate Voidray",
-      "win_conditions": [],
-      "loses_to": [],
-      "transitions_into": [],
-      "rules": [
-        {
-          "type": "before",
-          "name": "BuildTwilightCouncil",
-          "time_lt": 270
-        },
-        {
-          "type": "before",
-          "name": "BuildDarkShrine",
-          "time_lt": 360
-        },
-        {
-          "type": "before",
-          "name": "BuildDarkTemplar",
-          "time_lt": 480
-        },
-        {
-          "type": "count_min",
-          "name": "BuildStargate",
-          "count": 3,
-          "time_lt": 540
-        },
-        {
-          "type": "count_min",
-          "name": "BuildVoidRay",
-          "count": 1,
-          "time_lt": 600
-        }
-      ],
-      "source_replay_id": "2026-04-29T19:41:49|Yamada|White Rabbit LE|688",
-      "created_at": "2026-04-30T04:40:48.134Z",
-      "updated_at": "2026-05-01T15:45:48.398822Z",
-      "author": "ReSpOnSe",
-      "sync_state": "pending"
-    },
-    {
       "id": "pvz-dt-into-3-stargate-void-ray-2",
       "name": "PvZ - DT into 3 Stargate Void Ray",
       "race": "Protoss",
@@ -71,17 +26,17 @@
           "type": "count_exact",
           "name": "BuildStargate",
           "count": 3,
-          "time_lt": 420
+          "time_lt": 600
         },
         {
           "type": "before",
           "name": "BuildVoidRay",
-          "time_lt": 505
+          "time_lt": 600
         }
       ],
       "source_replay_id": "2026-04-28T23:18:21|LaVa|Ruby Rock LE|1111",
       "created_at": "2026-05-01T15:54:59.182Z",
-      "updated_at": "2026-05-01T15:54:59.182Z",
+      "updated_at": "2026-05-01T17:46:47.965Z",
       "author": "ReSpOnSe",
       "sync_state": "pending"
     }

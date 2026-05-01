@@ -270,7 +270,57 @@ function Write-FileAtomic {
 
 function Save-History {
     param($HistoryData)
-    $Json = $HistoryData | ConvertTo-Json -Depth 10
+    # Windows PowerShell 5.1's ConvertTo-Json is notoriously memory-hungry
+    # on large nested object graphs -- it builds an intermediate parse
+    # tree that grows roughly quadratically with input size and OOMs
+    # ('System.OutOfMemoryException') once MyOpponentHistory grows past a
+    # few MB. Serialising the top-level dictionary entry-by-entry keeps
+    # every ConvertTo-Json call scoped to a single small opponent record
+    # (a few KB at most), which fits comfortably in memory regardless of
+    # how many opponents the file accumulates.
+    #
+    # Output shape is unchanged at the JSON level: a top-level object
+    # mapping the same keys to the same values. The only cosmetic
+    # difference is that each opponent record is written on a single
+    # compact line instead of pretty-printed across many. Entry
+    # boundaries still end in '},\n' so the salvage path in
+    # stream-overlay-backend/index.js (_salvageJsonObject) can still
+    # recover the file if a write is ever interrupted.
+    if ($null -eq $HistoryData) { $HistoryData = @{} }
+    if (-not ($HistoryData -is [System.Collections.IDictionary])) {
+        throw "Save-History: expected hashtable, got $($HistoryData.GetType().FullName)"
+    }
+    $sb = [System.Text.StringBuilder]::new(8192)
+    [void]$sb.Append('{')
+    [void]$sb.Append([Environment]::NewLine)
+    $first = $true
+    foreach ($key in $HistoryData.Keys) {
+        if (-not $first) {
+            [void]$sb.Append(',')
+            [void]$sb.Append([Environment]::NewLine)
+        }
+        $first = $false
+        # Compact-serialise each opponent record on its own. -Depth 100
+        # is a generous ceiling -- real records are 4-5 levels deep
+        # (oppId -> Matchups -> matchup -> Games -> game.field) plus
+        # build_log arrays of strings, so 100 is far above any realistic
+        # depth while still bounding runaway recursion if the dictionary
+        # is somehow self-referential.
+        $entry = $HistoryData[$key]
+        $entryJson = $entry | ConvertTo-Json -Depth 100 -Compress
+        # ConvertTo-Json on a bare string emits a properly quoted +
+        # escaped JSON string (e.g. handles backslashes, control chars,
+        # unicode). Safer than rolling our own quote-escaper here.
+        $keyJson = ConvertTo-Json -InputObject ([string]$key) -Compress
+        [void]$sb.Append('    ')
+        [void]$sb.Append($keyJson)
+        [void]$sb.Append(': ')
+        [void]$sb.Append($entryJson)
+    }
+    [void]$sb.Append([Environment]::NewLine)
+    [void]$sb.Append('}')
+    [void]$sb.Append([Environment]::NewLine)
+    $Json = $sb.ToString()
     # Atomic write: tmp + rename. Survives a mid-write kill without
     # leaving a half-written file on disk.
     Write-FileAtomic -TargetPath $HistoryFilePath -Content $Json -Encoding ([System.Text.Encoding]::UTF8)

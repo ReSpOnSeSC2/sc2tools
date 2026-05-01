@@ -55,6 +55,7 @@ const HTTP_INTERNAL = 500;
 const CUSTOM_FILE = 'custom_builds.json';
 const CACHE_FILE = 'community_builds.cache.json';
 const META_DB_FILE = 'meta_database.json';
+const HISTORY_FILE = 'MyOpponentHistory.json';
 const SCHEMA_FILE = 'custom_builds.schema.json';
 const RECLASSIFY_PROGRESS_EVERY = 10;
 
@@ -232,6 +233,143 @@ async function reclassifyAllGames(ctx, meta) {
   emitProgress(ctx, total, total, changed);
   return { scanned: total, changed, builds: builds.length };
 }
+
+/**
+ * Resolve the active MyOpponentHistory.json path. Mirrors the same
+ * preference order index.js uses (pickHistoryPath): data/ first, then
+ * the legacy project-root file. Returns null if neither exists.
+ *
+ * @param {string} dataDir
+ * @returns {string|null}
+ */
+function resolveHistoryPath(dataDir) {
+  const dataPath = path.join(dataDir, HISTORY_FILE);
+  if (fs.existsSync(dataPath)) return dataPath;
+  const legacyPath = path.join(path.dirname(dataDir), HISTORY_FILE);
+  if (fs.existsSync(legacyPath)) return legacyPath;
+  return null;
+}
+
+/**
+ * Build a `(date-prefix|map|duration)` -> bucketName index over the
+ * reclassified meta. The date prefix is "YYYY-MM-DD HH:MM" so it
+ * matches the truncated `Date` field MyOpponentHistory.json stores
+ * for newer entries (older entries also start with the same 16
+ * characters). Entries with malformed ids are skipped.
+ *
+ * @param {object} meta
+ * @returns {Map<string,string>}
+ */
+function buildMetaIndexByHistoryKey(meta) {
+  const idx = new Map();
+  for (const bucketName of Object.keys(meta)) {
+    const games = (meta[bucketName] && meta[bucketName].games) || [];
+    for (const g of games) {
+      const key = historyKeyFromMetaGame(g);
+      if (key && !idx.has(key)) idx.set(key, bucketName);
+    }
+  }
+  return idx;
+}
+
+/**
+ * Derive the lookup key for a meta game record from its id field.
+ * Meta ids look like "<isoDate>|<opp>|<map>|<duration>", e.g.
+ * "2026-05-01T17:32:28|XVec|White Rabbit LE|1018". We compress the
+ * iso date down to "YYYY-MM-DD HH:MM" so it matches the format used
+ * by Reveal-Sc2Opponent.ps1's history writer.
+ *
+ * @param {object} game
+ * @returns {string|null}
+ */
+function historyKeyFromMetaGame(game) {
+  if (!game || typeof game.id !== 'string') return null;
+  const parts = game.id.split('|');
+  if (parts.length !== 4) return null;
+  const iso = parts[0];
+  const map = parts[2];
+  const dur = parts[3];
+  const m = iso.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+  if (!m) return null;
+  return `${m[1]} ${m[2]}|${map}|${dur}`;
+}
+
+/**
+ * Same key shape, derived from a MyOpponentHistory game entry. The
+ * Date field can be either "YYYY-MM-DD HH:MM" (newer writes) or
+ * "YYYY-MM-DD HH:MM:SS" (older writes); slicing to 16 chars yields
+ * the minute-precision prefix in both cases. Returns null when any
+ * of the three components are missing.
+ *
+ * @param {object} g
+ * @returns {string|null}
+ */
+function historyKeyFromHistoryGame(g) {
+  if (!g || typeof g !== 'object') return null;
+  const date = g.Date;
+  const map = g.Map;
+  const dur = g.Duration;
+  if (typeof date !== 'string' || typeof map !== 'string' || dur == null) return null;
+  return `${String(date).slice(0, 16)}|${map}|${dur}`;
+}
+
+/**
+ * After reclassify mutates the meta DB, walk MyOpponentHistory.json
+ * and overwrite stale `my_build` strings so the opponent-detail
+ * pages reflect the new classification. Only entries that already
+ * carry a `my_build` field are touched -- we never add the field to
+ * legacy entries, never modify any other field, and skip games that
+ * have no matching meta record. A timestamped backup is taken
+ * before the atomic write, mirroring the meta DB backup the route
+ * already creates.
+ *
+ * @param {string|null} historyPath
+ * @param {object} meta
+ * @param {string} stamp
+ * @returns {{path: string|null, scanned: number, changed: number, skipped: boolean}}
+ */
+function syncOpponentHistoryMyBuild(historyPath, meta, stamp) {
+  if (!historyPath) return { path: null, scanned: 0, changed: 0, skipped: true };
+  const history = H.readJsonOrNull(historyPath);
+  if (!history || typeof history !== 'object') {
+    return { path: historyPath, scanned: 0, changed: 0, skipped: true };
+  }
+  const idx = buildMetaIndexByHistoryKey(meta);
+  let scanned = 0;
+  let changed = 0;
+  const visit = (gamesArray) => {
+    if (!Array.isArray(gamesArray)) return;
+    for (const g of gamesArray) {
+      scanned += 1;
+      if (!g || typeof g !== 'object') continue;
+      if (!Object.prototype.hasOwnProperty.call(g, 'my_build')) continue;
+      const key = historyKeyFromHistoryGame(g);
+      if (!key) continue;
+      const newName = idx.get(key);
+      if (!newName || newName === g.my_build) continue;
+      g.my_build = newName;
+      changed += 1;
+    }
+  };
+  for (const oppKey of Object.keys(history)) {
+    const rec = history[oppKey];
+    if (!rec || typeof rec !== 'object') continue;
+    visit(rec.Games);
+    const matchups = rec.Matchups;
+    if (matchups && typeof matchups === 'object') {
+      for (const mu of Object.keys(matchups)) {
+        const bucket = matchups[mu];
+        if (bucket && typeof bucket === 'object') visit(bucket.Games);
+      }
+    }
+  }
+  if (changed > 0) {
+    fs.copyFileSync(historyPath, historyPath + '.pre-reclassify-' + stamp);
+    H.atomicWriteJson(historyPath, history);
+  }
+  return { path: historyPath, scanned, changed, skipped: false };
+}
+
 
 /**
  * GET /
@@ -435,7 +573,22 @@ function handleReclassify(ctx) {
     fs.copyFileSync(metaPath, metaPath + '.pre-reclassify-' + stamp);
     const summary = await reclassifyAllGames(ctx, meta);
     H.atomicWriteJson(metaPath, meta);
-    res.status(HTTP_OK).json(summary);
+    // After meta is on disk, propagate the new bucket names into
+    // MyOpponentHistory.json so opponent-detail pages stop showing
+    // pre-reclassify `my_build` strings. Failures here must not
+    // fail the whole route -- meta has already been reclassified
+    // and saved successfully -- so we report the error in the
+    // response payload instead.
+    let history = { path: null, scanned: 0, changed: 0, skipped: true };
+    try {
+      const historyPath = resolveHistoryPath(ctx.dataDir);
+      history = syncOpponentHistoryMyBuild(historyPath, meta, stamp);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[custom-builds] history sync failed:', err && err.message ? err.message : err);
+      history = { path: null, scanned: 0, changed: 0, skipped: true, error: 'history_sync_failed' };
+    }
+    res.status(HTTP_OK).json({ ...summary, history });
   });
 }
 
@@ -529,5 +682,14 @@ function createCustomBuildsRouter(opts) {
 
 module.exports = {
   createCustomBuildsRouter,
-  __test__: { compileBuildValidator, prepareDraftForCreate, reclassifyAllGames },
+  __test__: {
+    compileBuildValidator,
+    prepareDraftForCreate,
+    reclassifyAllGames,
+    resolveHistoryPath,
+    buildMetaIndexByHistoryKey,
+    historyKeyFromMetaGame,
+    historyKeyFromHistoryGame,
+    syncOpponentHistoryMyBuild,
+  },
 };
