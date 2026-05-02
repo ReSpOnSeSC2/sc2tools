@@ -83,27 +83,113 @@ from .paths import (
 # =========================================================
 # Atomic write
 # =========================================================
-def _atomic_write_json(path: str, data: Any, indent: int = 4) -> None:
+class DataIntegrityError(RuntimeError):
+    """Raised when an existing data file cannot be safely read or written.
+
+    Callers that catch this MUST NOT proceed with a save() that would
+    overwrite the file with default-fallback content -- that is exactly
+    how the 27MB MyOpponentHistory.json was reduced to 15KB on
+    2026-05-02 (read returned {} on a transient parse error, the watcher
+    appended today's 2 opponents, and atomic-replace blew away 3,175
+    historical records). The right response is to log loudly, abort the
+    write, and require operator review.
     """
-    Write JSON to `path` atomically: dump to a sibling temp file then
-    os.replace into place. Survives mid-write crashes without leaving
-    a half-written DB on disk.
+
+
+# Catastrophic-shrinkage threshold. Used by save() callers to refuse
+# writes that would drop > 50% of top-level keys on a previously-large
+# file. Floor of 100 keeps small files (e.g. fresh installs) from
+# being over-protected.
+_SHRINKAGE_FLOOR_RATIO = 0.5
+_SHRINKAGE_FLOOR_MIN_KEYS = 100
+
+
+def _existing_top_level_key_count(path: str) -> int:
+    """Return the number of top-level dict keys currently on disk, or 0.
+
+    Best-effort: a parse failure returns 0 (no shrinkage guard fires
+    against an unreadable file -- the read-side guard handles that).
     """
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        if not os.path.exists(path):
+            return 0
+        with open(path, "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+        return len(data) if isinstance(data, dict) else 0
+    except Exception:
+        return 0
+
+
+def _atomic_write_json(
+    path: str,
+    data: Any,
+    indent: int = 4,
+    *,
+    min_keep_keys: Optional[int] = None,
+) -> None:
+    """Atomic JSON write with .bak preservation and shrinkage guard.
+
+    Sequence:
+        1. Serialize to a temp file (mkstemp, same dir = same fs = atomic rename).
+        2. flush + fsync the temp so bytes hit the platter before rename.
+        3. Snapshot the current live file to ``<path>.bak`` (best-effort).
+        4. ``os.replace`` swap.
+
+    The .bak step closes the gap that caused 2026-05-02's data loss:
+    the previous version of this function did NOT keep a .bak, so once
+    the live file got truncated by a faulty save() there was no
+    same-directory rollback -- only timestamped quarantine copies that
+    drifted out of date. Now every save preserves the prior commit.
+
+    Args:
+        path: Destination JSON file.
+        data: JSON-serialisable value.
+        indent: Pretty-print indent (4 to match historical format).
+        min_keep_keys: When set and the file already has at least this
+            many top-level keys, refuse to write ``data`` if it would
+            drop the key count below ``min_keep_keys``. Raises
+            ``DataIntegrityError`` so callers can log loudly and abort.
+
+    Raises:
+        DataIntegrityError: when the shrinkage guard trips. The temp
+            file is cleaned up; the live file is unchanged.
+    """
+    if min_keep_keys is not None and isinstance(data, dict):
+        on_disk = _existing_top_level_key_count(path)
+        if on_disk >= min_keep_keys and len(data) < min_keep_keys:
+            raise DataIntegrityError(
+                f"refusing to write {path}: would shrink top-level keys "
+                f"from {on_disk} to {len(data)} (floor={min_keep_keys}). "
+                f"This is the read-modify-write wipe pattern. "
+                f"Inspect the caller and the on-disk file; do not retry "
+                f"blindly."
+            )
+
+    parent = os.path.dirname(path) or "."
+    os.makedirs(parent, exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(
         prefix=".tmp_",
         suffix=".json",
-        dir=os.path.dirname(path),
+        dir=parent,
     )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=indent, ensure_ascii=False)
-            # flush+fsync BEFORE rename so a process kill / system sleep /
-            # AV lock can't leave the renamed-into-place file with only
-            # the bytes the Windows NTFS lazy writer happened to flush.
-            # See core/atomic_io.py for the full failure-mode write-up.
+            # flush + fsync before rename so the NTFS lazy writer cannot
+            # leave the renamed-into-place file with only the bytes
+            # already in the page cache (the April-2026 truncation
+            # mechanism). See core/atomic_io.py for the full write-up.
             f.flush()
             os.fsync(f.fileno())
+        # Snapshot the current live file to .bak BEFORE the rename so
+        # safe_read_json (and tooling that reads <path>.bak directly)
+        # always has the last intact commit available for recovery.
+        # Best-effort: a copy failure must not abort the rename.
+        try:
+            if os.path.exists(path):
+                shutil.copy2(path, path + ".bak")
+        except Exception:
+            pass  # keep the rename moving; .bak is a defense, not a gate
         os.replace(tmp_path, path)
     except Exception:
         try:
@@ -112,36 +198,81 @@ def _atomic_write_json(path: str, data: Any, indent: int = 4) -> None:
             pass
         raise
 
-
 def _read_json(path: str, default: Any) -> Any:
+    """Read JSON with crash-safety + corruption-aware return semantics.
+
+    Three-tier resolution:
+      1. Parse the primary file.
+      2. On parse failure, try ``<path>.bak`` (written by every
+         atomic_write_json before its rename).
+      3. On .bak failure, attempt the tolerant partial-recovery walk
+         (``_recover_partial_db_json``) on the primary contents.
+
+    Critical: when the primary FILE EXISTS but cannot be parsed AND
+    every fallback also fails, this raises ``DataIntegrityError``
+    instead of silently returning ``default``. Returning ``{}`` to
+    a watcher that then runs ``data[pulse_id] = ...; save(data)`` is
+    exactly how 27MB became 15KB on 2026-05-02. The default branch is
+    reserved for the "no file" case.
+    """
     if not os.path.exists(path):
         return default
-    try:
-        with open(path, "r", encoding="utf-8-sig") as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        # Try the tolerant recovery path for the analyzer DB which can be
-        # truncated mid-save. Other JSON files (settings, etc.) just fall
-        # through to default if they can't be parsed.
+
+    # Tier 1: primary
+    parsed = _try_parse_json(path)
+    if parsed is not None:
+        return parsed
+
+    # Tier 2: .bak
+    bak_path = path + ".bak"
+    parsed = _try_parse_json(bak_path)
+    if parsed is not None:
+        # Best-effort: copy the .bak forward so the next call can use
+        # the primary path again. Failures here just mean we keep
+        # falling through to .bak each call -- not catastrophic.
         try:
-            with open(path, "r", encoding="utf-8-sig") as f:
-                raw = f.read()
-            recovered, n = _recover_partial_db_json(raw)
-            if recovered:
-                # Save a corrupt-snapshot for forensics so the original file
-                # can be inspected later.
-                try:
-                    with open(path + ".corrupt", "w", encoding="utf-8") as cf:
-                        cf.write(raw)
-                except Exception:
-                    pass
-                return recovered
+            shutil.copy2(bak_path, path)
         except Exception:
             pass
-        return default
-    except Exception:
-        return default
+        return parsed
 
+    # Tier 3: tolerant partial-recovery on primary
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            raw = f.read()
+        recovered, _n = _recover_partial_db_json(raw)
+        if recovered:
+            try:
+                with open(path + ".corrupt", "w", encoding="utf-8") as cf:
+                    cf.write(raw)
+            except Exception:
+                pass
+            return recovered
+    except Exception:
+        pass
+
+    # All recovery paths exhausted. Raise so the caller can NOT
+    # silently treat this as an empty database and overwrite real data.
+    raise DataIntegrityError(
+        f"unreadable JSON at {path} (and .bak fallback failed). "
+        f"This is a corruption signal, not 'fresh-start'. Quarantine "
+        f"the file, restore from a known-good backup, then retry."
+    )
+
+
+def _try_parse_json(path: str) -> Any:
+    """Internal: parse one file, return None on any error (missing/corrupt/etc.)."""
+    try:
+        if not os.path.exists(path):
+            return None
+        with open(path, "r", encoding="utf-8-sig") as f:
+            raw = f.read()
+        raw = raw.strip(" \t\r\n\x00")
+        if not raw:
+            return None
+        return json.loads(raw)
+    except Exception:
+        return None
 
 def _recover_partial_db_json(raw: str):
     """Best-effort recovery of a truncated analyzer DB JSON.
@@ -238,7 +369,13 @@ class BlackBookStore:
 
     def save(self, data: Dict[str, Any]) -> None:
         with self._lock:
-            _atomic_write_json(self.path, data)
+            on_disk = _existing_top_level_key_count(self.path)
+            floor = (
+                max(_SHRINKAGE_FLOOR_MIN_KEYS, int(on_disk * _SHRINKAGE_FLOOR_RATIO))
+                if on_disk >= _SHRINKAGE_FLOOR_MIN_KEYS
+                else None
+            )
+            _atomic_write_json(self.path, data, min_keep_keys=floor)
 
     # --- helpers --------------------------------------------------------
     @staticmethod
@@ -512,7 +649,13 @@ class AnalyzerDBStore:
 
     def save(self, data: Dict[str, Any]) -> None:
         with self._lock:
-            _atomic_write_json(self.path, data)
+            on_disk = _existing_top_level_key_count(self.path)
+            floor = (
+                max(_SHRINKAGE_FLOOR_MIN_KEYS, int(on_disk * _SHRINKAGE_FLOOR_RATIO))
+                if on_disk >= _SHRINKAGE_FLOOR_MIN_KEYS
+                else None
+            )
+            _atomic_write_json(self.path, data, min_keep_keys=floor)
 
     def backup(self) -> Optional[str]:
         """Snapshot the current DB to meta_database.json.backup-<date>."""

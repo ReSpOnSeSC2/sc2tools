@@ -109,6 +109,36 @@ class BaseStrategyDetector:
         return dist > threshold
 
     # ---------- custom rules ----------
+    # Module-level: v3 rule.name format prepends the source verb to the
+    # bare unit/building/upgrade name (e.g. 'BuildStargate', 'TrainPhoenix',
+    # 'ResearchBlink', 'MorphLair'). Live event_extractor emits the bare
+    # name ('Stargate', 'Phoenix', 'Blink', 'Lair'). To match v3 rules
+    # against live events we strip a recognised verb prefix when the
+    # following character is uppercase (so 'Build' inside 'Builder' is
+    # NOT stripped -- the name must look like 'Build<Capital>...').
+    _V3_NAME_PREFIXES = ("Build", "Train", "Research", "Morph")
+
+    @staticmethod
+    def _normalize_rule_name(name):
+        """Strip the verb prefix from a v3 rule name; pass-through for v1.
+
+        Example:
+            >>> BaseStrategyDetector._normalize_rule_name('BuildStargate')
+            'Stargate'
+            >>> BaseStrategyDetector._normalize_rule_name('Stargate')
+            'Stargate'
+        """
+        if not isinstance(name, str):
+            return name
+        for prefix in BaseStrategyDetector._V3_NAME_PREFIXES:
+            if (
+                name.startswith(prefix)
+                and len(name) > len(prefix)
+                and name[len(prefix)].isupper()
+            ):
+                return name[len(prefix):]
+        return name
+
     def check_custom_rules(
         self,
         rules: List[Dict],
@@ -117,34 +147,111 @@ class BaseStrategyDetector:
         upgrades: List[Dict],
         main_loc: Tuple[float, float],
     ) -> bool:
-        """Return True if every rule passes."""
+        """Return True if every rule passes.
+
+        Supports both schemas:
+          v1: ``building`` / ``unit`` / ``unit_max`` / ``upgrade`` / ``proxy``
+              (legacy Spawning-Tool style). Names are bare ('Stargate'),
+              cutoff is inclusive (``time <= time_lt``).
+          v3: ``before`` / ``not_before`` / ``count_max`` / ``count_exact``
+              / ``count_min`` (rule-engine schema written by the SPA).
+              Names are prefixed ('BuildStargate'); we strip the verb so
+              the live ``event_extractor`` events match. Cutoff is strict
+              (``time < time_lt``) per the v3 contract in
+              ``stream-overlay-backend/routes/custom_builds_helpers.js``.
+
+        Unknown rule types are treated as failures (NOT silently passed).
+        Previously, an unknown type caused the for-loop to no-op and the
+        function to return True, which let v3 rules slip through and made
+        every PvZ build claim every PvZ game in the live pipeline.
+        """
         for rule in rules:
             rtype = rule.get("type")
-            name = rule.get("name")
+            raw_name = rule.get("name")
             time_lt = rule.get("time_lt", 9999)
 
+            # ---- v1 (inclusive cutoff, named on bare event names) ----
             if rtype == "building":
-                count = sum(1 for b in buildings if b["name"] == name and b["time"] <= time_lt)
+                count = sum(
+                    1 for b in buildings
+                    if b["name"] == raw_name and b["time"] <= time_lt
+                )
                 if count < rule.get("count", 1):
                     return False
             elif rtype == "unit":
-                count = sum(1 for u in units if u["name"] == name and u["time"] <= time_lt)
+                count = sum(
+                    1 for u in units
+                    if u["name"] == raw_name and u["time"] <= time_lt
+                )
                 if count < rule.get("count", 1):
                     return False
             elif rtype == "unit_max":
-                count = sum(1 for u in units if u["name"] == name and u["time"] <= time_lt)
+                count = sum(
+                    1 for u in units
+                    if u["name"] == raw_name and u["time"] <= time_lt
+                )
                 if count > rule.get("count", 999):
                     return False
             elif rtype == "upgrade":
-                if not any(name in u["name"] and u["time"] <= time_lt for u in upgrades):
+                if not any(
+                    raw_name in u["name"] and u["time"] <= time_lt
+                    for u in upgrades
+                ):
                     return False
             elif rtype == "proxy":
                 dist = rule.get("dist", 50)
                 if not any(
-                    b["name"] == name and b["time"] <= time_lt and self._is_proxy(b, main_loc, dist)
+                    b["name"] == raw_name
+                    and b["time"] <= time_lt
+                    and self._is_proxy(b, main_loc, dist)
                     for b in buildings
                 ):
                     return False
+
+            # ---- v3 (strict cutoff, names use verb prefix) ----
+            elif rtype in (
+                "before",
+                "not_before",
+                "count_max",
+                "count_exact",
+                "count_min",
+            ):
+                norm_name = self._normalize_rule_name(raw_name)
+                count = sum(
+                    1 for ev in (buildings + units + upgrades)
+                    if ev.get("name") == norm_name and ev.get("time", 9999) < time_lt
+                )
+                target = rule.get("count", 1)
+                if rtype == "before":
+                    # tolerance band centred on time_lt (v3 spec)
+                    tol = rule.get("tol")
+                    if isinstance(tol, (int, float)) and tol > 0:
+                        if not any(
+                            ev.get("name") == norm_name
+                            and abs(ev.get("time", 9999) - time_lt) <= tol
+                            for ev in (buildings + units + upgrades)
+                        ):
+                            return False
+                    else:
+                        if count < 1:
+                            return False
+                elif rtype == "not_before":
+                    if count >= 1:
+                        return False
+                elif rtype == "count_max":
+                    if count > target:
+                        return False
+                elif rtype == "count_exact":
+                    if count != target:
+                        return False
+                elif rtype == "count_min":
+                    if count < target:
+                        return False
+
+            else:
+                # Unknown rule type: refuse to claim a match. Better to
+                # mis-classify as Unknown than to claim every game.
+                return False
         return True
 
 
@@ -410,13 +517,31 @@ class UserBuildDetector(BaseStrategyDetector):
         upgrades = [e for e in my_events if e["type"] == "upgrade"]
         main_loc = self._get_main_base_loc(buildings)
 
-        # 1. Custom JSON evaluation
+        # 1. Custom JSON evaluation -- supports both v1 'matchup'/'race'
+        # legacy schema and v3 'vs_race'/'race' rules-engine schema. The
+        # SPA writes v3, so this path is what classifies user-authored
+        # builds against live replays.
+        opp_race_word = matchup[3:].strip() if matchup.startswith("vs ") else matchup
         for cb in self.custom_builds:
-            if cb.get("race") == my_race or cb.get("race") == "Any":
+            cb_race = cb.get("race")
+            if cb_race not in (my_race, "Any", None):
+                continue
+            cb_vs_race = cb.get("vs_race")
+            if cb_vs_race is not None:
+                # v3 schema: vs_race in {Protoss, Terran, Zerg, Random, Any}
+                if cb_vs_race not in ("Any", opp_race_word):
+                    if not (cb_vs_race == "Random" and opp_race_word in ("Random", "")):
+                        continue
+            else:
+                # v1 schema: matchup string "vs Zerg" / "vs Any"
                 cb_matchup = cb.get("matchup", "vs Any")
-                if cb_matchup == "vs Any" or cb_matchup == matchup:
-                    if self.check_custom_rules(cb.get("rules", []), buildings, units, upgrades, main_loc):
-                        return cb["name"]
+                if cb_matchup not in ("vs Any", matchup):
+                    continue
+            rules = cb.get("rules", [])
+            if not rules:
+                continue  # an empty rule list cannot deterministically match
+            if self.check_custom_rules(rules, buildings, units, upgrades, main_loc):
+                return cb["name"]
 
         # 2. Race-aware structured signature scan (Zerg / Terran).
         # Stage 8 will populate BUILD_SIGNATURES with real opening rules;
