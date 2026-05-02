@@ -385,19 +385,23 @@
 
       async function wizardApply(state, setApplying, setApplyError, onComplete) {
         setApplying(true); setApplyError("");
+        // Step 3 has a "Skip (add identity later)" affordance for
+        // users whose replays sc2reader can't currently parse. When
+        // they skip, wizardBuildProfile returns null because there's
+        // no identity to anchor the profile to -- but Apply must
+        // still succeed so they can finish onboarding and configure
+        // identity later in Settings -> Profile. We persist config
+        // (with identities: []) and skip the profile PUT entirely.
         const profile = wizardBuildProfile(state);
-        if (!profile) {
-          setApplying(false);
-          setApplyError("Pick at least one identity in step 3.");
-          return;
-        }
-        const r1 = await wizardFetchJson("/api/profile",
-            { ...wizardJsonInit(profile), method: "PUT" });
-        if (!r1.ok) {
-          setApplying(false);
-          setApplyError("Profile save failed: "
-              + JSON.stringify(r1.body.errors || r1.body.error));
-          return;
+        if (profile) {
+          const r1 = await wizardFetchJson("/api/profile",
+              { ...wizardJsonInit(profile), method: "PUT" });
+          if (!r1.ok) {
+            setApplying(false);
+            setApplyError("Profile save failed: "
+                + JSON.stringify(r1.body.errors || r1.body.error));
+            return;
+          }
         }
         const r2 = await wizardFetchJson("/api/config",
             { ...wizardJsonInit(wizardBuildConfig(state)), method: "PUT" });
@@ -407,9 +411,14 @@
               + JSON.stringify(r2.body.errors || r2.body.error));
           return;
         }
-        // Best-effort: never blocks completion if backfill kickoff fails.
-        await wizardFetchJson("/api/onboarding/start-initial-backfill",
-            { method: "POST" });
+        // Initial backfill only makes sense when we know who the user
+        // is -- skip it on the no-identity path so we don't churn the
+        // meta DB with rows that can't be attributed.
+        if (profile) {
+          // Best-effort: never blocks completion if backfill kickoff fails.
+          await wizardFetchJson("/api/onboarding/start-initial-backfill",
+              { method: "POST" });
+        }
         setApplying(false);
         if (typeof onComplete === "function") onComplete();
       }

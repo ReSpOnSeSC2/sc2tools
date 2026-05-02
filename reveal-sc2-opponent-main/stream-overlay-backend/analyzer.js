@@ -2272,6 +2272,11 @@ function _importBuildArgs(subcmd, body) {
         }
         args.push('--state-path', IMPORT_STATE_PATH);
         args.push('--db', META_DB_PATH);
+        // Cross-write the Black Book so the SPA's Opponents tab is
+        // populated alongside the per-build view. Without this, bulk
+        // imports show up in My Builds but Opponents stays empty
+        // until the live watcher revisits each replay.
+        args.push('--opp-db', OPP_HISTORY_PATH);
         if (body.workers != null) {
             args.push('--workers', String(body.workers));
         }
