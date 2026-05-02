@@ -36,13 +36,19 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Make ``launcher_config`` importable. It lives next to the launcher
-# in ``SC2Replay-Analyzer/`` -- two dirs up from this script
-# (``reveal-sc2-opponent-main/scripts/`` -> repo root -> sibling).
+# Make ``launcher_config`` importable. The merged repo ships its own
+# copy at ``core/launcher_config.py`` so this script no longer depends
+# on the legacy sibling ``SC2Replay-Analyzer/`` directory existing on
+# disk. We still fall back to the sibling location for un-migrated
+# dev boxes that haven't pulled the merged copy yet.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_LAUNCHER_DIR = _REPO_ROOT.parent / "SC2Replay-Analyzer"
-sys.path.insert(0, str(_LAUNCHER_DIR))
-import launcher_config  # noqa: E402  -- needs sys.path tweak above.
+sys.path.insert(0, str(_REPO_ROOT))
+try:
+    from core import launcher_config  # noqa: E402
+except ImportError:  # pragma: no cover -- legacy fallback
+    _LEGACY_LAUNCHER_DIR = _REPO_ROOT.parent / "SC2Replay-Analyzer"
+    sys.path.insert(0, str(_LEGACY_LAUNCHER_DIR))
+    import launcher_config  # noqa: E402  -- legacy sibling layout.
 
 POLLER_SCRIPT: Path = _REPO_ROOT / "Reveal-Sc2Opponent.ps1"
 CONFIG_PATH: Path = _REPO_ROOT / "data" / launcher_config.CONFIG_FILENAME

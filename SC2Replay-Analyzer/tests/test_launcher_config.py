@@ -162,7 +162,19 @@ def test_build_poller_argv_uses_character_id_when_present() -> None:
     assert argv is not None
     assert "-CharacterId" in argv
     assert argv[argv.index("-CharacterId") + 1] == "1,2"
-    # PlayerName must NOT also be passed (PS1 prefers the explicit IDs).
+    # PlayerName is now passed alongside -CharacterId so the PS1 can
+    # build its "who's me?" identity regex from the configured handle
+    # (previously the regex was hardcoded to "ReSpOnSe").
+    assert "-PlayerName" in argv
+    assert argv[argv.index("-PlayerName") + 1] == "Foo"
+
+
+def test_build_poller_argv_skips_player_name_when_absent() -> None:
+    pulse = {"character_ids": ["1", "2"], "player_name": None,
+             "regions": ["us"]}
+    argv = lc.build_poller_argv(_PS, pulse, _SCRIPT)
+    assert argv is not None
+    assert "-CharacterId" in argv
     assert "-PlayerName" not in argv
 
 

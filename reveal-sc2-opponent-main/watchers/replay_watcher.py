@@ -98,9 +98,54 @@ def _read_player_handle() -> str:
                 handle = cfg.get("last_player") or cfg.get("player_name")
                 if handle:
                     return handle
+                # The wizard writes identities[].name; fall through to
+                # the first one when neither legacy key is present.
+                idents = cfg.get("identities")
+                if isinstance(idents, list):
+                    for ident in idents:
+                        if isinstance(ident, dict):
+                            name = (ident.get("name") or "").strip()
+                            if name:
+                                return name
         except Exception:
             pass
     return DEFAULT_PLAYER
+
+
+def _read_replay_folders() -> List[str]:
+    """Return ``paths.replay_folders`` from data/config.json, deduped.
+
+    The wizard writes the user's chosen Multiplayer / Accounts folders
+    here; we honour every entry so users with multiple SC2 installs
+    (Battle.net + PTR, OneDrive + Documents) get all of them watched.
+    Returns ``[]`` when the config is missing or has no entries -- the
+    caller falls back to ``DEFAULT_WATCH_DIR`` in that case.
+    """
+    if not os.path.exists(CONFIG_FILE):
+        return []
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8-sig") as f:
+            cfg = json.load(f) or {}
+    except Exception:
+        return []
+    paths = cfg.get("paths")
+    folders = paths.get("replay_folders") if isinstance(paths, dict) else None
+    if not folders:
+        # Tolerate the legacy top-level shape some hand-edited configs
+        # still use ("replay_folders" at the root).
+        folders = cfg.get("replay_folders")
+    if not isinstance(folders, list):
+        return []
+    seen, out = set(), []
+    for raw in folders:
+        if not isinstance(raw, str):
+            continue
+        s = raw.strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+    return out
 
 
 # =========================================================
@@ -653,15 +698,37 @@ def _catch_up_at_startup(handler, watch_dir):
 # CLI entry
 # =========================================================
 def main(watch_dir: Optional[str] = None) -> int:
-    target = watch_dir or DEFAULT_WATCH_DIR
-    if not os.path.exists(target):
-        print(f"[Watcher] Directory not found: {target}")
+    # Resolution priority for which folders to watch:
+    #   1. explicit ``watch_dir`` arg (test / CLI override)
+    #   2. ``paths.replay_folders`` from data/config.json (wizard output)
+    #   3. ``DEFAULT_WATCH_DIR`` (legacy fallback for installs that
+    #      pre-date the wizard)
+    if watch_dir:
+        targets = [watch_dir]
+    else:
+        targets = _read_replay_folders() or [DEFAULT_WATCH_DIR]
+
+    existing = [t for t in targets if os.path.exists(t)]
+    if not existing:
+        print(
+            "[Watcher] None of the configured replay folders exist:\n  "
+            + "\n  ".join(targets)
+        )
+        print(
+            "[Watcher] Run the onboarding wizard to set "
+            "paths.replay_folders in data/config.json."
+        )
         return 1
+    if len(existing) != len(targets):
+        missing = [t for t in targets if t not in existing]
+        for t in missing:
+            print(f"[Watcher] Skipping missing folder: {t}")
 
     handle = _read_player_handle()
 
     print(f"[Watcher] Player handle: {handle!r} (substring match)")
-    print(f"[Watcher] Watching:       {target}")
+    for t in existing:
+        print(f"[Watcher] Watching:       {t}")
 
     handler = ReplayHandler(player_handle=handle, enable_deep=True)
 
@@ -669,23 +736,25 @@ def main(watch_dir: Optional[str] = None) -> int:
     # played while it was off, BEFORE we attach the live observer.
     # Doing it in this order avoids a tiny window where a brand-new
     # replay could land mid-scan and get processed twice.
-    try:
-        _catch_up_at_startup(handler, target)
-    except Exception as exc:
-        # A failed catch-up shouldn't stop the live watcher from
-        # running. Log via the error logger and fall through.
-        import traceback as _tb
-        print("[catch-up] Aborted with an error:")
-        _tb.print_exc()
+    for t in existing:
         try:
-            handler.errors.log("catch-up", f"startup catch-up failed: {exc}")
-            handler.errors.append(ERROR_LOG_FILE)
-        except Exception:
-            pass
+            _catch_up_at_startup(handler, t)
+        except Exception as exc:
+            # A failed catch-up shouldn't stop the live watcher from
+            # running. Log via the error logger and fall through.
+            import traceback as _tb
+            print(f"[catch-up] Aborted with an error in {t}:")
+            _tb.print_exc()
+            try:
+                handler.errors.log("catch-up", f"startup catch-up failed: {exc}")
+                handler.errors.append(ERROR_LOG_FILE)
+            except Exception:
+                pass
 
     print("\n[Watcher] Live observer starting...")
     observer = Observer()
-    observer.schedule(handler, target, recursive=True)
+    for t in existing:
+        observer.schedule(handler, t, recursive=True)
     observer.start()
     try:
         while True:
