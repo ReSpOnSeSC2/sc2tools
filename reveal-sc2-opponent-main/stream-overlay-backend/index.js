@@ -2510,6 +2510,12 @@ if (process.env.NODE_ENV === 'test') {
         _quarantineBrokenSession,
         _listSessionBackups,
         defaultSession,
+        // v1.4.5 region-resolution helpers. Exposed so
+        // __tests__/session-region.test.js can verify both numeric
+        // (Pulse 1/2/3/5) and string ('US'/'EU'/'KR'/'CN') region
+        // shapes resolve to the labels the session widget renders.
+        extractTeamRegionLabel,
+        pickActiveTeam,
         // Stage 11.3: expose the constructed Express app + http
         // server so health/version/games tests can drive routes
         // via supertest without needing to spin up server.listen.
