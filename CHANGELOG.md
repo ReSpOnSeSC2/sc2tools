@@ -8,6 +8,103 @@ Releases are tagged `vMAJOR.MINOR.PATCH`; the GitHub Actions release
 workflow builds the Windows installer on each tag push and attaches the
 `.exe` and `.sha256` to the corresponding GitHub Release.
 
+## [1.4.5] - 2026-05-02
+
+### Fixed (critical)
+
+- **Session double-counting wins/losses.** ``/api/replay`` had no
+  idempotency check, so any duplicate POST for the same replay
+  (real-world causes: OneDrive sync emitting 2-3 ``on_created`` events
+  for one ``.SC2Replay`` file as it's uploaded; watcher restart picking
+  up a replay that landed mid-restart in both the live event and the
+  catch-up sweep) would increment ``session.wins`` / ``session.losses``
+  / streak / MMR delta twice. Symptom: session widget showed 0-2 when
+  only one game was actually lost. Adds a bounded LRU cache (200 entries)
+  keyed on ``gameId`` at the top of the handler; duplicates respond
+  ``{ ok: true, duplicate: true }`` and bypass all state mutations.
+  Payloads missing ``gameId`` (legacy callers, manual POSTs from
+  ``/static/debug.html``) fall through unchanged.
+
+### Added
+
+- **Browser auto-open in unified launcher.** Both ``START_SC2_TOOLS.bat``
+  copies (repo-root and ``reveal-sc2-opponent-main/``) now have a
+  ``[5/5]`` step that polls ``http://localhost:3000/api/health`` for up
+  to 30 seconds and then opens ``http://localhost:3000/analyzer/`` in
+  the user's default browser via ``Start-Process``. The legacy
+  ``SC2ReplayAnalyzer.py`` shim used to do this with
+  ``webbrowser.open()``; now that the unified launcher is the only
+  supported entry point, the SPA-launch step lives there too. If the
+  health probe times out the launcher prints a yellow warning and
+  opens the browser anyway -- worst case the user gets a refreshable
+  "site can't be reached" page instead of nothing happening.
+
+### Fixed
+
+- **Multi-region opponent matching with MMR-band disambiguation.**
+  Replaces the v0.9.5 "first user region with a name hit wins" loop in
+  ``Reveal-Sc2Opponent.ps1``. The old logic had two failure modes that
+  showed up the moment a player had identities on more than one region
+  (e.g. ``us`` + ``eu``):
+
+  1. Opponent name collisions across regions made the script lock onto
+     whichever region Pulse's lagged ``lastPlayed`` happened to point
+     at -- typically NOT the region the user was actually on after
+     switching servers. Symptom: ``[Pulse] Active region detected: EU``
+     followed by an MMR for the wrong "John#1234".
+  2. When the strict ``caseSensitive=true`` probe missed in every user
+     region, the script logged ``"Opponent name not found in any user
+     region"`` and then silently fell back to ``Find-PlayerProfile`` +
+     ``Get-OpponentTeams`` -- which often DID find a match using the
+     same query shape, in a region the user was never told about.
+     Symptom: log says "not found" but the next line shows a real MMR
+     and head-to-head record (potentially for the wrong player).
+
+  The new logic probes EVERY user region (strict pass, then a
+  case-insensitive retry across every region if strict misses
+  everywhere), fetches each Pulse hit's team data (rating + last
+  played), and scores each candidate by MMR delta against the user's
+  rating ON THAT REGION. A 400-MMR band rejects out-of-band collisions.
+  The region containing the best in-band candidate wins; tiebreak on
+  recency. If no region has an in-band match the fallback prefers the
+  user's highest-MMR team for the current race instead of stale
+  Pulse-recency. Every decision prints a transparent diagnostic line
+  (``[Pulse] Active region: us (in-band MMR match (delta=72,
+  case-sensitive))``) so the user can see exactly which signal won.
+
+  Also bumps the embedded ``Reveal-Sc2Opponent.ps1`` ``PSScriptInfo``
+  ``.VERSION`` from ``0.9.5`` to ``0.9.6``.
+
+- **``-ActiveRegion`` rejected multi-region configs from subprocess
+  launchers.** ``Reveal-Sc2Opponent.ps1``'s parameter declared
+  ``[ValidateSet("us", "eu", "kr", "cn")] [string[]]$ActiveRegion``,
+  which validates each array element against the set. When the Python
+  launcher (``scripts/poller_launch.py`` -> ``core/launcher_config.
+  build_poller_argv``) passed ``-ActiveRegion us,eu`` via
+  ``subprocess.Popen``'s argv list, ``powershell.exe -File`` bound it
+  as a single string ``"us,eu"`` and ValidateSet rejected it before
+  the script body ran. Removes the ``ValidateSet`` attribute and
+  validates manually after splitting on comma -- both shapes
+  (``@("us","eu")`` and ``"us,eu"``) now work, bad codes still
+  produce a clean error and ``exit 1`` instead of a noisy parameter
+  binding error.
+
+### Removed (Stubbed)
+
+- **``SC2Replay-Analyzer/SC2ReplayAnalyzer.py`` retired.** The legacy
+  standalone launcher used to spawn its own ``npm start`` /
+  ``replay_watcher`` / ``Reveal-Sc2Opponent.ps1`` stack and open the
+  SPA in a browser. It is no longer referenced by anything in the
+  active launch chain, but Windows shortcuts and Start-menu pins
+  pointing at it still fired and double-launched everything against
+  the unified ``START_SC2_TOOLS.bat`` already running. Replaced with a
+  50-line stub that pops a Tk ``messagebox`` (with a ``print + input``
+  fallback for headless / pythonw-without-Tk) telling the user to use
+  ``START_SC2_TOOLS.bat`` instead, then ``sys.exit(0)``. Original
+  contents preserved in git history (``git log -p
+  SC2Replay-Analyzer/SC2ReplayAnalyzer.py``) if revival is ever
+  needed.
+
 ## [1.4.0] - 2026-05-02
 
 ### Added

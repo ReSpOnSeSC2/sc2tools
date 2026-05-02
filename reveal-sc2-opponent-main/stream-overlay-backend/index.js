@@ -1564,9 +1564,63 @@ io.on('connection', (socket) => {
 // ------------------------------------------------------------------
 // LIVE REPLAY WEBHOOK (from replay_watcher.py, fast path)
 // ------------------------------------------------------------------
+
+// v1.4.5 -- gameId-based idempotency cache for /api/replay.
+// Background: replay_watcher.py uses watchdog's `on_created` to fire a
+// POST per new .SC2Replay file. Two real-world failure modes deliver
+// the SAME replay to /api/replay multiple times:
+//   1. OneDrive sync. Replay folders living under OneDrive emit
+//      additional FS events as the file is uploaded -- on_created can
+//      fire 2-3x for the same path within a few seconds.
+//   2. Watcher restart + catch-up scan. The catch-up scan suppresses
+//      do_live_post for old replays it finds, but if a replay landed
+//      mid-restart it can be picked up by both the live event and the
+//      catch-up sweep.
+// Without idempotency the session widget showed 0-2 when only one game
+// was actually lost; the rest of the session state (wins/losses/streak/
+// MMR delta) was equally wrong.
+//
+// Cache strategy: bounded LRU keyed on gameId, size 200 (covers a full
+// streamer session + buffer). Map preserves insertion order so we can
+// evict the oldest entry on overflow without scanning. Only payloads
+// with a non-empty gameId participate in dedup; payloads missing it
+// (legacy callers, manual /api/replay POSTs from /static/debug.html,
+// etc.) fall through unchanged so we don't silently drop data.
+const REPLAY_DEDUP_MAX = 200;
+const _seenReplayGameIds = new Map();
+function _markReplayGameIdSeen(gameId) {
+    if (!gameId) return;
+    const key = String(gameId);
+    // Touch: if it already existed, refresh its position so the LRU
+    // ordering tracks recent activity. Otherwise insert.
+    if (_seenReplayGameIds.has(key)) _seenReplayGameIds.delete(key);
+    _seenReplayGameIds.set(key, Date.now());
+    // Evict oldest if over capacity.
+    while (_seenReplayGameIds.size > REPLAY_DEDUP_MAX) {
+        const oldestKey = _seenReplayGameIds.keys().next().value;
+        if (oldestKey === undefined) break;
+        _seenReplayGameIds.delete(oldestKey);
+    }
+}
+function _isReplayGameIdSeen(gameId) {
+    if (!gameId) return false;
+    return _seenReplayGameIds.has(String(gameId));
+}
+
 app.post('/api/replay', (req, res) => {
     const r = req.body || {};
     console.log('[API] /api/replay received:', r);
+
+    // Idempotency: skip duplicate posts for the same replay. We respond
+    // 200 OK with `duplicate: true` so the watcher's HTTP path sees a
+    // success (it does, no retry storm) while the session counters /
+    // streak / MMR delta / saveSession() / broadcastSession() / event
+    // emission are all bypassed for the duplicate.
+    if (_isReplayGameIdSeen(r.gameId)) {
+        console.log(`[API] /api/replay duplicate gameId=${r.gameId} -- skipping (session counters NOT incremented)`);
+        return res.json({ ok: true, duplicate: true, gameId: r.gameId });
+    }
+    _markReplayGameIdSeen(r.gameId);
 
     const result = r.result;
     const isWin  = result === 'Victory';

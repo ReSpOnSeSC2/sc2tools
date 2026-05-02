@@ -1,11 +1,11 @@
 ﻿<#PSScriptInfo
-.VERSION 0.9.5
+.VERSION 0.9.6
 .GUID db8ffc68-4388-4119-b437-1f56c999611e
 .AUTHOR nephestdev@gmail.com (Modified by Gemini)
-.DESCRIPTION 
+.DESCRIPTION
  Reveals ranked 1v1 opponent names for StarCraft2 and tracks Head-to-Head history.
- v0.9.5 - Auto-detect active server by probing Pulse for opponent name in each user-team region (matchmaking is single-region, so where the opponent is found = the server we're on). Works instantly when user switches regions, beats Pulse ingestion lag. v0.9.4 fixed unwrap bug. v0.9.3 added recently-active anchor. v0.9.0 removed OCR.
-#> 
+ v0.9.6 (sc2tools 1.4.5) - Multi-region auto-detect with MMR-band disambiguation. Probes EVERY user region (strict + case-insensitive retry), scores each Pulse hit by MMR delta vs your rating on that region, picks the region containing the best in-band candidate. Eliminates the "wrong region after switching" failure mode and the misleading "name not found" log when a fallback search succeeded silently. Fall-through prefers your highest-MMR team for the current race instead of stale Pulse-recency. Also: -ActiveRegion now accepts comma-joined strings from subprocess callers (was rejected by ValidateSet). v0.9.5 - Auto-detect active server by probing Pulse for opponent name. v0.9.4 fixed unwrap bug. v0.9.3 added recently-active anchor. v0.9.0 removed OCR.
+#>
 param(
     [int64[]]$CharacterId,
     [string]$PlayerName,
@@ -15,7 +15,6 @@ param(
     [int32]$Limit = 3,
     [ValidateRange(1, 10000)]
     [int32]$LastPlayedAgoMax = 2400,
-    [ValidateSet("us", "eu", "kr", "cn")]
     [string[]]$ActiveRegion = @("us", "eu", "kr"),
     [string]$FilePath,
     [switch]$Notification,
@@ -28,6 +27,30 @@ param(
     [switch]$SelectProfile,
     [switch]$Test
 )
+
+# Normalise -ActiveRegion. Callers may pass either an actual array
+# (@("us","eu")) or a single comma-joined string ("us,eu"). The latter
+# is what powershell.exe -File receives when subprocess.Popen passes
+# the arg list (Python launcher path: scripts/poller_launch.py ->
+# core/launcher_config.build_poller_argv -> ",".join(regions)). The
+# old [ValidateSet] attribute fired *before* this body and rejected
+# multi-region configs because the literal element "us,eu" wasn't in
+# the set. We drop the attribute and validate manually here, after
+# splitting, so both shapes work and bad codes still produce a clean
+# error.
+$ActiveRegion = @($ActiveRegion |
+    ForEach-Object { $_ -split ',' } |
+    ForEach-Object { $_.Trim().ToLower() } |
+    Where-Object { $_ })
+if ($ActiveRegion.Count -eq 0) {
+    $ActiveRegion = @("us", "eu", "kr")
+}
+$AllowedRegions = @('us','eu','kr','cn')
+$BadRegions = @($ActiveRegion | Where-Object { $AllowedRegions -notcontains $_ })
+if ($BadRegions.Count -gt 0) {
+    Write-Host ("ERROR: invalid -ActiveRegion value(s): {0}. Allowed: us, eu, kr, cn." -f ($BadRegions -join ', ')) -ForegroundColor Red
+    exit 1
+}
 
 # --- CONFIGURATION FOR HISTORY ---
 # Canonical Black Book path. The Python data layer (core.paths.HISTORY_FILE)
@@ -854,13 +877,37 @@ while($true) {
 
         $PlayerTeams = Get-PlayerTeams -Season $Script:SeasonIds -Queue $Script:Queue1v1 -Race $CurrentMyRace -TeamId $Script:OverrideTeam -CharacterId $Script:CharacterId
 
-        # v0.9.5 -- Auto-detect the active server BEFORE picking an anchor.
-        # Matchmaking is single-region, so wherever Pulse finds the opponent's
-        # name = the server we are on right now. This beats Pulse's ingestion
-        # lag (lastPlayed for the user's team won't update until AFTER the
-        # game ends), so it works the instant the user switches regions.
-        # We probe each user-team region in order of most-recently-played
-        # so the common case (user did NOT switch) hits on the first probe.
+        # v1.4.5 -- Multi-region MMR-band auto-detect.
+        # Background: v0.9.5's "first region with a name hit wins" loop was
+        # fragile when opponent names collided across regions (common with
+        # short names, barcodes, or smurfs). It also produced a misleading
+        # "Opponent name not found in any user region" log when the strict
+        # case-sensitive probe missed but the downstream Get-OpponentTeams
+        # query (same shape, different region) found something -- the
+        # script ended up showing MMR for a player on the wrong region
+        # without telling the user.
+        #
+        # v1.4.5 strategy:
+        #   1. Probe EVERY user region (strict case-sensitive name search).
+        #   2. If strict pass returns zero hits across all regions, retry
+        #      every region with caseSensitive=false to defeat name-case
+        #      drift between SC2's display name and Pulse's stored name.
+        #   3. For each region that returned hits, fetch opponent teams
+        #      (Rating + LastPlayed) and compute the MMR delta against the
+        #      user's rating ON THAT REGION. Matchmaking is rating-banded,
+        #      so the real opponent must be within ~+/-400 MMR of you on
+        #      the active region; collisions on other regions almost never
+        #      pass that band.
+        #   4. Pick the region containing the best in-band candidate
+        #      (smallest delta, recency tiebreak). That region is the
+        #      authoritative active region.
+        #   5. If no region has an in-band candidate, prefer the region
+        #      with the user's highest-MMR team for the current race
+        #      (your main account is almost always on the region you're
+        #      actually playing). Fall back to Find-PlayerProfile only as
+        #      the absolute last resort.
+        #   6. Print a transparent diagnostic line every time so the user
+        #      can see WHY a region was picked.
         $EncodedOppName = [uri]::EscapeDataString($Opponent.Name)
         $TeamsByRecency = $PlayerTeams | ForEach-Object {
             $Lp = [DateTimeOffset]::Parse($_.LastPlayed, $null, [System.Globalization.DateTimeStyles]::RoundtripKind)
@@ -869,35 +916,122 @@ while($true) {
             $_
         } | Sort-Object -Property LastPlayedAgo
 
-        $ActiveProfile = $null
-        foreach ($UserTeam in $TeamsByRecency) {
-            $ProbeRegion = $UserTeam.Region.ToUpper()
-            $ProbeSeason = $UserTeam.Season
-            $ProbeUri = "${Sc2PulseApiRoot}/character/search/advanced?season=${ProbeSeason}&region=${ProbeRegion}&queue=$($Script:Queue1v1)&name=${EncodedOppName}&caseSensitive=true"
-            try {
-                $Hits = @(Invoke-EnhancedRestMethod -Uri $ProbeUri)
-                if ($Hits.Count -gt 0) {
-                    $ActiveProfile = Create-PlayerProfile -RecentTeam $UserTeam
-                    Write-Host (" [Pulse] Active region detected: {0} (opponent {1} found there, {2} candidate(s))" -f `
-                        $ProbeRegion, $Opponent.Name, $Hits.Count) -ForegroundColor Green
-                    break
+        # MMR band cap -- matchmaking pairs you within roughly this delta.
+        # Mirrors RATING_DELTA_CAP_MMR inside Get-OpponentTeams.
+        $REGION_MMR_BAND = 400
+
+        # Phase 1: probe each user region. Collect (region, userTeam, hits)
+        # without breaking on first hit. caseSensitive=true first, then a
+        # caseSensitive=false retry across all regions if strict misses.
+        function _Probe-RegionsForOpponent {
+            param([Object[]]$Teams, [string]$EncodedName, [bool]$CaseSensitive)
+            $Out = @()
+            foreach ($UT in $Teams) {
+                $Reg = $UT.Region.ToUpper()
+                $Sea = $UT.Season
+                $Cs  = if ($CaseSensitive) { 'true' } else { 'false' }
+                $Uri = "${Sc2PulseApiRoot}/character/search/advanced?season=${Sea}&region=${Reg}&queue=$($Script:Queue1v1)&name=${EncodedName}&caseSensitive=${Cs}"
+                try {
+                    $H = @(Invoke-EnhancedRestMethod -Uri $Uri)
+                    if ($H.Count -gt 0) {
+                        $Out += [PSCustomObject]@{
+                            Region   = $Reg
+                            UserTeam = $UT
+                            Hits     = $H
+                        }
+                    }
+                } catch {
+                    # Per-region miss is normal; keep probing.
                 }
+            }
+            return $Out
+        }
+
+        $StrictProbe = _Probe-RegionsForOpponent -Teams $TeamsByRecency -EncodedName $EncodedOppName -CaseSensitive $true
+        $UsedSensitivity = "case-sensitive"
+        if ($StrictProbe.Count -eq 0) {
+            Write-Host " [Pulse] Strict name probe returned no hits in any region; retrying case-insensitive..." -ForegroundColor DarkYellow
+            $StrictProbe = _Probe-RegionsForOpponent -Teams $TeamsByRecency -EncodedName $EncodedOppName -CaseSensitive $false
+            $UsedSensitivity = "case-insensitive"
+        }
+
+        # Phase 3: for each region with hits, fetch opponent teams
+        # (rating + lastPlayed) and score against user's MMR on that region.
+        $Candidates = @()
+        foreach ($Probe in $StrictProbe) {
+            $UserMmr = [int32]$Probe.UserTeam.Rating
+            try {
+                $OppTeams = @(Get-Team -Season $Probe.UserTeam.Season -Queue $Script:Queue1v1 -Race $CurrentOpponentRace -CharacterId $Probe.Hits)
             } catch {
-                # Per-region miss is normal; keep probing.
+                $OppTeams = @()
+            }
+            foreach ($OT in $OppTeams) {
+                $OppRating = [int32]$OT.Rating
+                $Delta = [Math]::Abs($OppRating - $UserMmr)
+                $Lp = try { [DateTimeOffset]::Parse($OT.LastPlayed, $null, [System.Globalization.DateTimeStyles]::RoundtripKind) } catch { $null }
+                $LpAgo = if ($null -ne $Lp) { [DateTimeOffset]::Now.Subtract($Lp).TotalSeconds } else { [double]::PositiveInfinity }
+                $InBand = $Delta -le $REGION_MMR_BAND
+                $Candidates += [PSCustomObject]@{
+                    Region       = $Probe.Region
+                    UserTeam     = $Probe.UserTeam
+                    UserMmr      = $UserMmr
+                    OppTeam      = $OT
+                    OppMmr       = $OppRating
+                    Delta        = $Delta
+                    LastPlayedAgo= $LpAgo
+                    InBand       = $InBand
+                }
+            }
+        }
+
+        # Diagnostic dump: what we considered and how it scored.
+        if ($Candidates.Count -gt 0) {
+            Write-Host (" [Pulse] Cross-region scan ({0}): {1} candidate(s) across {2} region(s)" -f `
+                $UsedSensitivity, $Candidates.Count, ($Candidates | Group-Object Region).Count) -ForegroundColor DarkCyan
+            foreach ($C in $Candidates) {
+                $Mark = if ($C.InBand) { "IN-BAND " } else { "out-band" }
+                Write-Host ("   {0} {1,-3} userMMR={2,4} oppMMR={3,4} delta={4,4} lastPlayed={5,5}s" -f `
+                    $Mark, $C.Region, $C.UserMmr, $C.OppMmr, $C.Delta, [int32]$C.LastPlayedAgo) -ForegroundColor DarkCyan
+            }
+        }
+
+        # Phase 4: pick the best in-band candidate.
+        $ActiveProfile = $null
+        $RegionPickReason = $null
+        $InBand = @($Candidates | Where-Object { $_.InBand })
+        if ($InBand.Count -gt 0) {
+            $Best = $InBand | Sort-Object -Property @{Expression='Delta';Descending=$false}, @{Expression='LastPlayedAgo';Descending=$false} | Select-Object -First 1
+            $ActiveProfile = Create-PlayerProfile -RecentTeam $Best.UserTeam
+            $RegionPickReason = "in-band MMR match (delta=$($Best.Delta), $($UsedSensitivity))"
+        }
+
+        # Phase 5: no in-band match. Prefer the user's highest-MMR team for
+        # the race they're playing -- main accounts almost always sit on the
+        # region you actively play. Falls through to Find-PlayerProfile only
+        # if even that returns nothing.
+        if (-not $ActiveProfile) {
+            $HighestMmrTeam = $TeamsByRecency | Sort-Object -Property @{Expression='Rating';Descending=$true} | Select-Object -First 1
+            if ($null -ne $HighestMmrTeam) {
+                $ActiveProfile = Create-PlayerProfile -RecentTeam $HighestMmrTeam
+                $RegionPickReason = "no in-band match; using highest-MMR user team (rating=$($HighestMmrTeam.Rating))"
             }
         }
 
         if ($ActiveProfile) {
             $PlayerProfile = $ActiveProfile
+            Write-Host (" [Pulse] Active region: {0} ({1})" -f `
+                $PlayerProfile.Region.ToUpper(), $RegionPickReason) -ForegroundColor Green
         } else {
-            Write-Host " [Pulse] Opponent name not found in any user region -- falling back to recently-active anchor" -ForegroundColor Yellow
+            Write-Host " [Pulse] Opponent name not found in any user region and no user teams available -- falling back to recently-active anchor" -ForegroundColor Yellow
             $PlayerProfile = Find-PlayerProfile -PlayerTeam $PlayerTeams
         }
 
         $SearchSeason = if ($PlayerProfile) { $PlayerProfile.Season } else { $Script:SeasonIds[0] }
         $SearchRegion = if ($PlayerProfile) { $PlayerProfile.Region.ToUpper() } else { $Script:ActiveRegion[0].ToUpper() }
 
-        # Pass to the cleaned up Search Function
+        # Pass to the cleaned up Search Function. (Get-OpponentTeams keeps
+        # its own per-team RatingDelta band check; the above already picked
+        # the best region, so any teams returned here are scored within it.)
         $OpponentTeamObjects = Get-OpponentTeams -GameOpponent $Opponent -Season $SearchSeason -Race $CurrentOpponentRace -Queue $Script:Queue1v1 -LastPlayedAgoMax $Script:LastPlayedAgoMax -Limit $Script:Limit -Region $SearchRegion -PlayerRating ([int32]$PlayerProfile.Team.Rating)
 
         if ($OpponentTeamObjects) {
