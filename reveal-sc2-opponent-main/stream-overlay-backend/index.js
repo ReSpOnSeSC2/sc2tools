@@ -540,7 +540,16 @@ async function fetchPulseTeams() {
         const res = await fetch(url);
         if (!res.ok) return null;
         const teams = await res.json();
-        return Array.isArray(teams) ? teams : null;
+        if (Array.isArray(teams)) {
+            // Diagnostic: log every team Pulse returned with region/race/lastPlayed
+            // so multi-region debugging doesn't require hitting /api/pulse/diagnose.
+            const summary = teams.map((t) => describePulseTeam(t)
+                + ` lp=${t.lastPlayed ? Math.round((Date.now() - Date.parse(t.lastPlayed)) / 1000) + 's' : '?'}`
+                + ` r=${t.rating ?? '?'}`).join(' | ');
+            console.log(`[Pulse] teams returned (${teams.length}): ${summary || '(none)'}`);
+            return teams;
+        }
+        return null;
     } catch (err) {
         console.error('[Pulse] team fetch failed:', err.message);
         return null;
@@ -571,12 +580,22 @@ function describePulseTeam(team) {
 // rating. This is what makes multi-region "just work" -- if you switch
 // regions, the next match's lastPlayed timestamp moves to that region's
 // team and the session widget follows.
-function pickActiveTeam(teams) {
+function pickActiveTeam(teams, preferredRegion) {
+    // When preferredRegion is set (e.g. session.region after a deep parse
+    // resolved the just-played game's region from oppPulseId), only consider
+    // teams matching that region. This is the fix for the multi-region case
+    // where a stale Pulse lastPlayed on the OLD region beats the just-finished
+    // game on the NEW region (Pulse hasn't ingested it yet). Within the
+    // matching region, still pick most-recently-played, then highest rating.
     let best = null;
     let bestTime = -1;
     for (const t of teams || []) {
         const r = Number(t.rating);
         if (!Number.isFinite(r)) continue;
+        if (preferredRegion) {
+            const teamRegion = extractTeamRegionLabel(t);
+            if (teamRegion !== preferredRegion) continue;
+        }
         const lp = t.lastPlayed ? Date.parse(t.lastPlayed) : 0;
         if (lp > bestTime || (lp === bestTime && (!best || r > best.rating))) {
             bestTime = lp;
@@ -589,6 +608,14 @@ function pickActiveTeam(teams) {
 async function pulseGetActiveRating() {
     const teams = await fetchPulseTeams();
     if (!teams) return null;
+    // Prefer the team matching the user's current region (set authoritatively
+    // by the deep parse via opp pulse_id -> region lookup). Falls back to the
+    // region-agnostic 'most recently played' pick when session.region is null
+    // (first launch, before any deep parse) or when no team matches.
+    if (session.region) {
+        const preferred = pickActiveTeam(teams, session.region);
+        if (preferred) return preferred;
+    }
     return pickActiveTeam(teams);
 }
 
@@ -1920,23 +1947,39 @@ app.post('/api/replay/deep', (req, res) => {
         broadcastSession();
     }
 
-    // Fix B (region fallback via opponent pulse ID): if Fix A's
-    // post-match team-payload capture didn't resolve a region (e.g.
-    // the user's character_ids file is missing/wrong on a fresh
-    // install, so fetchPulseTeams returns null), use the opponent's
-    // SC2Pulse character_id as a one-shot fallback. 1v1 ranked
-    // matchmaking puts both players on the same region.
-    if (!session.region && d.oppPulseId) {
+    // Fix C (game-driven region): the replay file's opponent pulse_id
+    // resolves to a SC2Pulse region. In 1v1 ranked, both players are on
+    // the same region, so the just-played game's region is the
+    // authoritative signal for which of the user's teams is currently
+    // active. We update session.region from this on every game (not just
+    // when null) because pickActiveTeam can otherwise stay locked to the
+    // user's OLD region after a region switch, until Pulse ingests the
+    // new region's match (which is what causes the 'NA 5382' display while
+    // actually playing on EU). When the region changes, also trigger an
+    // immediate Pulse refresh so the displayed MMR snaps to the matching
+    // team (the new region's account).
+    if (d.oppPulseId) {
         fetchPulseCharacterRegion(d.oppPulseId)
-            .then((region) => {
+            .then(async (region) => {
                 if (!region) return;
-                if (session.region) return; // raced with Fix A
+                const previous = session.region;
+                if (previous === region) return;
                 session.region = region;
                 saveSession();
                 broadcastSession();
                 console.log(
-                    `[Pulse] region inferred from opp pulseId=${d.oppPulseId}: ${region}`
+                    `[Pulse] region updated from opp pulseId=${d.oppPulseId}: ${previous || 'null'} -> ${region}`
                 );
+                // pulseGetActiveRating now uses session.region as a
+                // preference, so this picks the team for the new region.
+                try {
+                    const team = await pulseGetActiveRating();
+                    if (team) {
+                        applyPulseRating(team.rating, 'pulse:region-switch', team.raw);
+                    }
+                } catch (err) {
+                    console.error('[Pulse] post-region-switch refresh failed:', err.message);
+                }
             })
             .catch((err) => console.error(
                 '[Pulse] opp-pulseId region lookup failed:', err.message));

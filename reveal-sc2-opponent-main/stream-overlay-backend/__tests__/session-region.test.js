@@ -138,3 +138,62 @@ describe('pickActiveTeam (multi-region recency selection)', () => {
         expect(pickActiveTeam([team]).rating).toBe(4281);
     });
 });
+
+describe('pickActiveTeam (v1.4.7 preferredRegion override)', () => {
+    // v1.4.7 fix: when the user has multiple teams across regions and
+    // Pulse hasn't ingested the just-played game yet, the OLD region's
+    // team can have a more-recent lastPlayed than the NEW region's team,
+    // causing pickActiveTeam to keep selecting the wrong account after a
+    // region switch. The deep parse's opp-pulse-id-to-region lookup gives
+    // us a reliable hint: in 1v1 ranked the user is on the same region as
+    // the opponent. pickActiveTeam now accepts a preferredRegion arg that
+    // filters the candidate set before the recency tie-break.
+    const naTeamFresh = {
+        rating: 5382,
+        lastPlayed: '2026-05-02T06:00:00Z',
+        members: [{ character: { region: 'US', name: 'NaAlt' } }]
+    };
+    const euTeamStale = {
+        rating: 4100,
+        lastPlayed: '2026-05-01T12:00:00Z',
+        members: [{ character: { region: 'EU', name: 'EuMain' } }]
+    };
+
+    test('without preference, picks most-recently-played (legacy behavior)', () => {
+        const picked = pickActiveTeam([naTeamFresh, euTeamStale]);
+        expect(picked.rating).toBe(5382);
+    });
+
+    test('with EU preference, picks the EU team even though it is staler', () => {
+        const picked = pickActiveTeam([naTeamFresh, euTeamStale], 'EU');
+        expect(picked).not.toBeNull();
+        expect(picked.rating).toBe(4100);
+        expect(picked.raw).toBe(euTeamStale);
+    });
+
+    test('with NA preference, picks the NA team', () => {
+        const picked = pickActiveTeam([naTeamFresh, euTeamStale], 'NA');
+        expect(picked.rating).toBe(5382);
+        expect(picked.raw).toBe(naTeamFresh);
+    });
+
+    test('with preference matching no team, returns null (caller falls back)', () => {
+        const picked = pickActiveTeam([naTeamFresh, euTeamStale], 'KR');
+        expect(picked).toBeNull();
+    });
+
+    test('numeric region codes filter the same way as string codes', () => {
+        const numericNa = {
+            rating: 5000,
+            lastPlayed: '2026-05-02T10:00:00Z',
+            members: [{ character: { region: 1 } }]
+        };
+        const numericEu = {
+            rating: 4500,
+            lastPlayed: '2026-05-02T09:00:00Z',
+            members: [{ character: { region: 2 } }]
+        };
+        expect(pickActiveTeam([numericNa, numericEu], 'EU').rating).toBe(4500);
+        expect(pickActiveTeam([numericNa, numericEu], 'NA').rating).toBe(5000);
+    });
+});
