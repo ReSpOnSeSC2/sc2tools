@@ -10,6 +10,36 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [1.4.0] - 2026-05-02
 
+### Added
+
+- **Watcher hot-reloads ``data/config.json``.** ``watchers/replay_watcher.py``
+  now polls ``data/config.json``'s mtime every ~5 s and reconciles the
+  running watchdog observer with the latest ``paths.replay_folders`` /
+  player handle. Folders the user removes in Settings -> Folders are
+  unscheduled in place; folders they add are scheduled and run through
+  the catch-up scan so games played before the folder was registered
+  still land in the DB. Saving from the SPA no longer requires
+  restarting the watcher window.
+
+- **``Settings -> Profile`` runtime helpers.** New
+  ``SettingsRuntimeControlsGroup`` renders below the identities group
+  and exposes a "Restart Poller" button + helper text explaining the
+  watcher hot-reload behaviour. The button POSTs to a new
+  ``/api/runtime/restart-poller`` endpoint that spawns a fresh
+  ``scripts/poller_launch.py`` (which kicks off a new
+  ``Reveal-Sc2Opponent.ps1`` window) so the poller picks up the
+  saved identity. The old PowerShell window keeps running until the
+  user closes it (different console owner; we can't kill it from
+  here), so the success toast tells them so explicitly.
+
+- **``/api/runtime/*`` router.** New ``stream-overlay-backend/routes/
+  runtime.js`` owns helper-process restart endpoints:
+  ``GET /api/runtime/status`` returns ``{ watcher_hot_reload_sec,
+  can_restart_poller }`` so the SPA can decide which controls to render;
+  ``POST /api/runtime/restart-poller`` spawns the poller via
+  ``poller_launch.py`` (detached, ``stdio: 'ignore'``) and returns the
+  child PID.
+
 ### Fixed
 
 - **Replay watcher honoured a hardcoded ``WATCH_DIR``.**

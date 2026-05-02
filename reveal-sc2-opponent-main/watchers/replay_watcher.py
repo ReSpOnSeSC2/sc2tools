@@ -88,6 +88,11 @@ import glob  # noqa: E402
 CATCH_UP_BUFFER = timedelta(hours=6)
 CATCH_UP_FALLBACK = timedelta(days=14)
 
+# How often we re-stat config.json for the hot-reload check. 5 s is fast
+# enough that "save in Settings, see watcher pick it up" feels live, and
+# slow enough that the OS getmtime call is essentially free.
+CONFIG_POLL_SEC = 5.0
+
 
 def _read_player_handle() -> str:
     """Read the configured player handle from data/config.json."""
@@ -695,6 +700,100 @@ def _catch_up_at_startup(handler, watch_dir):
 
 
 # =========================================================
+# Hot-reload (config.json -> live observer/handler updates)
+# =========================================================
+def _config_mtime() -> float:
+    """Return ``os.path.getmtime(CONFIG_FILE)`` or ``0.0`` if missing.
+
+    Used as the cheap change-detector for the hot-reload polling loop.
+    """
+    try:
+        return os.path.getmtime(CONFIG_FILE)
+    except OSError:
+        return 0.0
+
+
+def _apply_config_reload(
+    handler: "ReplayHandler",
+    observer: Any,
+    watches: Dict[str, Any],
+    watch_dir_override: Optional[str],
+) -> None:
+    """Reconcile the running observer with the latest data/config.json.
+
+    Triggered whenever ``CONFIG_FILE``'s mtime advances. Reads the
+    current player handle and replay-folder list, then:
+
+      * updates ``handler.player_handle`` if the wizard / Settings page
+        changed it,
+      * unschedules watches whose folder is no longer in config,
+      * schedules watches for newly-added folders (running the catch-up
+        scan against each new folder so we don't miss games),
+      * leaves unchanged folders alone -- watchdog observers are stable
+        across config edits, so we minimise churn.
+
+    Mutates ``watches`` in place. Errors are logged and swallowed so a
+    bad config edit can't kill the live watcher.
+    """
+    print("\n[Watcher] Detected config.json change; reloading...")
+
+    # Player handle update is cheap -- just swap the attribute on the
+    # handler. Future replays use the new handle on the very next event.
+    new_handle = _read_player_handle()
+    if new_handle != handler.player_handle:
+        print(f"[Watcher] Player handle: "
+              f"{handler.player_handle!r} -> {new_handle!r}")
+        handler.player_handle = new_handle
+
+    # If the original `main()` call hardcoded a watch_dir override
+    # (test harness, CLI flag), respect that and don't reconcile from
+    # config. Production calls pass watch_dir=None and reconcile.
+    if watch_dir_override:
+        return
+
+    desired = _read_replay_folders() or [DEFAULT_WATCH_DIR]
+    desired_existing = [t for t in desired if os.path.exists(t)]
+    missing = [t for t in desired if t not in desired_existing]
+    for t in missing:
+        print(f"[Watcher] Configured folder not found, skipping: {t}")
+
+    current = set(watches.keys())
+    target = set(desired_existing)
+
+    # Drop folders the user removed.
+    for path in current - target:
+        try:
+            observer.unschedule(watches[path])
+            del watches[path]
+            print(f"[Watcher] Stopped watching: {path}")
+        except Exception as exc:
+            print(f"[Watcher] Could not unschedule {path}: {exc}")
+
+    # Pick up newly-added folders.
+    for path in target - current:
+        try:
+            watches[path] = observer.schedule(handler, path, recursive=True)
+            print(f"[Watcher] Now watching:     {path}")
+        except Exception as exc:
+            print(f"[Watcher] Could not schedule {path}: {exc}")
+            continue
+        # Catch-up so games played while this folder was unconfigured
+        # still land in the DB.
+        try:
+            _catch_up_at_startup(handler, path)
+        except Exception as exc:
+            import traceback as _tb
+            print(f"[catch-up] Aborted with an error in {path}:")
+            _tb.print_exc()
+            try:
+                handler.errors.log(
+                    "catch-up", f"reload catch-up failed: {exc}")
+                handler.errors.append(ERROR_LOG_FILE)
+            except Exception:
+                pass
+
+
+# =========================================================
 # CLI entry
 # =========================================================
 def main(watch_dir: Optional[str] = None) -> int:
@@ -753,12 +852,26 @@ def main(watch_dir: Optional[str] = None) -> int:
 
     print("\n[Watcher] Live observer starting...")
     observer = Observer()
+    # Keep the watch handles keyed by path so we can selectively
+    # unschedule folders the user removes via Settings without tearing
+    # the whole observer down.
+    watches: Dict[str, Any] = {}
     for t in existing:
-        observer.schedule(handler, t, recursive=True)
+        watches[t] = observer.schedule(handler, t, recursive=True)
     observer.start()
+
+    # Hot-reload: poll config.json every CONFIG_POLL_SEC and react when
+    # the user edits paths.replay_folders or the player handle from the
+    # SPA Settings page. No restart of the watcher window is needed.
+    last_mtime = _config_mtime()
     try:
         while True:
-            time.sleep(1)
+            time.sleep(CONFIG_POLL_SEC)
+            cur_mtime = _config_mtime()
+            if cur_mtime == last_mtime:
+                continue
+            last_mtime = cur_mtime
+            _apply_config_reload(handler, observer, watches, watch_dir)
     except KeyboardInterrupt:
         print("\n[Watcher] Stopped.")
     finally:
