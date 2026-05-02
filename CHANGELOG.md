@@ -8,6 +8,52 @@ Releases are tagged `vMAJOR.MINOR.PATCH`; the GitHub Actions release
 workflow builds the Windows installer on each tag push and attaches the
 `.exe` and `.sha256` to the corresponding GitHub Release.
 
+## [1.4.6] - 2026-05-02
+
+### Fixed (critical)
+
+- **Opponents page silently lost full game history (data corruption).**
+  Production user reported the Opponents tab only showed today's matches
+  while Builds correctly showed full history. Investigation revealed
+  ``data/MyOpponentHistory.json`` was a 27.7 MB file whose first 45,184
+  bytes were a complete top-level JSON dict (6 opponents only) followed
+  by ~27 MB of pure trailing whitespace -- the corruption signature of
+  an in-place re-write that produced a shorter payload but did NOT
+  truncate the destination file before writing the new content. The
+  backend's existing ``salvageJsonObject`` always APPENDED ``\n}\n`` to
+  the trimmed content, producing ``{...}\n}\n`` (extra closing brace,
+  parse fails). With every salvage strategy missing, ``dbCache.opp.data``
+  fell back to ``{}`` and the Opponents tab silently showed nothing
+  beyond what the live PowerShell scanner had written that session.
+
+  Two-part fix:
+
+  1. **Recovery of the live file.** Performed an offline merge of the
+     6 surviving opponents (sliced to the first balanced top-level
+     brace pair) with the most recent large parseable backup
+     (``MyOpponentHistory.json.pre-merge-unknown-20260501T143757Z``,
+     3,178 opponents / 11,020 game records). Per-opponent merge took
+     the union of games (deduped on ``(Date, Map, Result)``) and
+     ``max(Wins, Losses)`` per matchup. Result: 3,183 opponents /
+     11,033 game records, atomically written via tmp + ``os.replace``,
+     verified to parse cleanly. Corrupt original + backup-of-record
+     quarantined under ``data/.recovery-<UTC-timestamp>/`` with a
+     README explaining root cause + restoration approach.
+  2. **Backend salvage hardening.** ``stream-overlay-backend/
+     analyzer.js`` ``salvageJsonObject`` rewritten with three ordered
+     strategies (cheapest -> most aggressive): trim-trailing-whitespace
+     (catches the exact production corruption above), slice-to-first-
+     balanced-brace-pair (string- and escape-aware so quoted braces
+     don't fool the depth counter -- catches the "well-formed dict
+     followed by non-whitespace garbage" case e.g. a half-written
+     second copy appended after the first object), then the original
+     append-close-brace + drop-trailing-records strategies (catches
+     "write was interrupted mid-record"). Returned dict carries a
+     non-enumerable ``__salvageStrategy`` hint so the reload path can
+     log which strategy hit. This means a future occurrence of the
+     same corruption mode is recovered transparently on backend boot
+     instead of returning empty data.
+
 ## [1.4.5] - 2026-05-02
 
 ### Fixed (critical)

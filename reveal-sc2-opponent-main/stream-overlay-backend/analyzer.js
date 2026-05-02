@@ -119,9 +119,56 @@ function salvageJsonObject(raw) {
     if (typeof raw !== 'string' || raw.length === 0) return null;
     let trimmed = raw.replace(/[\s\u0000]+$/, '');
     if (trimmed.endsWith(',')) trimmed = trimmed.slice(0, -1);
-    const closingCandidates = [trimmed + '\n}\n'];
-    // Find the last 50 record boundaries (`},\n`) and try each in turn,
-    // dropping one trailing record per attempt.
+
+    // v1.4.6 -- broadened salvage strategy after a real-world MyOpponent-
+    // History.json corruption: file had a complete top-level dict
+    // (45,184 bytes, 6 opponents) followed by ~27 MB of trailing
+    // whitespace -- consistent with an in-place re-write that produced
+    // a shorter payload but didn't truncate the destination. The
+    // pre-1.4.6 salvage always APPENDED `\n}\n` to the trimmed content,
+    // producing `{...}\n}\n` (extra closing brace, parse fails). The
+    // ordered strategy list below tries the cheapest non-mutating
+    // recovery first.
+    const closingCandidates = [];
+
+    // Strategy 1: trimmed content as-is. Catches the "padded after a
+    // clean shorter write" case above. Critical: this is what would
+    // have salvaged the production corruption that motivated v1.4.6.
+    closingCandidates.push({ label: 'trim-trailing-whitespace', text: trimmed });
+
+    // Strategy 2: slice to the first balanced top-level brace pair.
+    // String- and escape-aware so braces inside quoted strings (e.g.
+    // build_log entries) don't throw the depth counter. Catches
+    // "well-formed dict followed by non-whitespace garbage" e.g. a
+    // half-written second copy appended after the first object.
+    const balancedEnd = (() => {
+        let depth = 0, inStr = false, escape = false;
+        for (let i = 0; i < raw.length; i++) {
+            const c = raw[i];
+            if (escape) { escape = false; continue; }
+            if (c === '\\') { escape = true; continue; }
+            if (c === '"') { inStr = !inStr; continue; }
+            if (inStr) continue;
+            if (c === '{') depth++;
+            else if (c === '}') {
+                depth--;
+                if (depth === 0) return i + 1; // exclusive end
+            }
+        }
+        return -1;
+    })();
+    if (balancedEnd > 0 && balancedEnd < raw.length) {
+        closingCandidates.push({
+            label: 'slice-to-first-balanced-brace(' + balancedEnd + 'B)',
+            text: raw.slice(0, balancedEnd),
+        });
+    }
+
+    // Strategy 3 (original behaviour): append `\n}\n` to trimmed
+    // content, then walk back through `},\n` record boundaries
+    // dropping one trailing record per attempt. Catches "write was
+    // interrupted mid-record".
+    closingCandidates.push({ label: 'append-close-brace', text: trimmed + '\n}\n' });
     const BOUND_RE = /},\s*\n/g;
     const bounds = [];
     let m;
@@ -130,12 +177,21 @@ function salvageJsonObject(raw) {
     }
     for (let i = bounds.length - 1; i >= 0; i--) {
         const cut = bounds[i];
-        closingCandidates.push(raw.slice(0, cut + 1) + '\n}\n');
+        closingCandidates.push({
+            label: 'drop-trailing-records(cut@' + cut + ')',
+            text: raw.slice(0, cut + 1) + '\n}\n',
+        });
     }
+
     for (const candidate of closingCandidates) {
         try {
-            const parsed = JSON.parse(candidate);
+            const parsed = JSON.parse(candidate.text);
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                // Annotate with which strategy hit so the caller (reload
+                // path) can log it for diagnostics.
+                Object.defineProperty(parsed, '__salvageStrategy', {
+                    value: candidate.label, enumerable: false, writable: false,
+                });
                 return parsed;
             }
         } catch (_) { /* try next candidate */ }
