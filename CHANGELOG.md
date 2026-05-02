@@ -42,6 +42,21 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **``START_SC2_TOOLS.bat`` hardcoded ``C:\SC2TOOLS``.** The launcher set
+  ``TOOLS_ROOT=C:\SC2TOOLS`` and then ``cd /d %TOOLS_ROOT%\reveal-sc2-opponent-main``,
+  so any user who unpacked the toolkit on a different drive
+  (e.g. ``E:\response\sc2tools``) saw every panel die immediately with
+  ``The system cannot find the path specified.`` -- the Replay Watcher
+  window in particular flashed the error before exiting because
+  ``cd /d`` failed before ``py -m watchers.replay_watcher`` could run.
+  Both copies of ``START_SC2_TOOLS.bat`` (repo root and
+  ``reveal-sc2-opponent-main\``) now derive ``TOOLS_ROOT`` / ``ROOT``
+  from ``%~dp0`` (matching the existing pattern in
+  ``reveal-sc2-opponent.bat``) so the launcher works regardless of
+  install drive, and they bail out with an explicit "expected path"
+  message when the layout is wrong instead of silently spawning broken
+  child windows. Honours hard rule #6 (UX must work without docs).
+
 - **Replay watcher honoured a hardcoded ``WATCH_DIR``.**
   ``watchers/replay_watcher.py`` had a hardcoded
   ``DEFAULT_WATCH_DIR = r"C:\Users\jay19\OneDrive\..."`` and ``main()``

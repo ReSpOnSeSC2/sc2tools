@@ -17,8 +17,19 @@ echo.
 REM Project layout:
 REM   TOOLS_ROOT  = repo root on the user's box (Stage 0 hard rule).
 REM   ROOT        = reveal-sc2-opponent-main (overlay backend + watchers).
-set "TOOLS_ROOT=C:\SC2TOOLS"
-set "ROOT=%TOOLS_ROOT%\reveal-sc2-opponent-main"
+REM This copy of the launcher lives INSIDE reveal-sc2-opponent-main, so
+REM ROOT is the script's own directory (%~dp0) and TOOLS_ROOT is one
+REM level up. Stripping trailing backslashes keeps path joins clean.
+set "ROOT=%~dp0"
+if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
+for %%I in ("%ROOT%\..") do set "TOOLS_ROOT=%%~fI"
+if not exist "%ROOT%\stream-overlay-backend" (
+    echo ERROR: stream-overlay-backend not found under "%ROOT%".
+    echo This launcher must live inside reveal-sc2-opponent-main.
+    pause
+    endlocal
+    exit /b 1
+)
 cd /d "%ROOT%"
 
 REM -- 1. Express overlay backend (Node) ----------------------------
