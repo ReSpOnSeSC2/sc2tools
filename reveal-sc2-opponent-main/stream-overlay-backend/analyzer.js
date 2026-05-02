@@ -3021,10 +3021,21 @@ function startWatching(io) {
 // siblings.
 
 function pickPythonProjectDir() {
+    // Stage 1.4 merge: the Python analyzer now lives inside this same
+    // repo (reveal-sc2-opponent-main) -- ``ROOT`` itself owns ``core/``,
+    // ``scripts/``, ``watchers/``. We confirm it's actually the merged
+    // tree by checking for ``core/`` so we don't accidentally hand back
+    // a stub directory that lacks the Python entry points.
     if (process.env.SC2REPLAY_ANALYZER_DIR
         && fs.existsSync(process.env.SC2REPLAY_ANALYZER_DIR)) {
         return process.env.SC2REPLAY_ANALYZER_DIR;
     }
+    if (fs.existsSync(path.join(ROOT, 'core'))) {
+        return ROOT;
+    }
+    // Fallbacks for unmerged installs that still keep SC2Replay-Analyzer
+    // as a sibling project. Kept so existing dev boxes don't break the
+    // moment they pull this change without running the migration.
     const sibling = path.resolve(ROOT, '..', 'SC2Replay-Analyzer');
     if (fs.existsSync(sibling)) return sibling;
     const winDefault = 'C:\\SC2TOOLS\\SC2Replay-Analyzer';

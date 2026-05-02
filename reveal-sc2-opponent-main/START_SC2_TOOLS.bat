@@ -2,6 +2,12 @@
 title SC2 Tools Launcher
 setlocal
 
+REM Use the Windows ``py`` launcher consistently across every panel so
+REM whichever Python is registered on PATH (or pinned via py.ini) wins.
+REM Earlier versions mixed ``py`` and ``python``; whichever variant
+REM wasn't on PATH made the corresponding window error out immediately.
+set "PYTHON=py"
+
 echo.
 echo  ====================================================
 echo   SC2 Tools (Merged Toolkit) -- starting components...
@@ -15,34 +21,39 @@ set "TOOLS_ROOT=C:\SC2TOOLS"
 set "ROOT=%TOOLS_ROOT%\reveal-sc2-opponent-main"
 cd /d "%ROOT%"
 
-REM -- 1. SC2 Tools Launcher (Python) -----------------------------
-REM    Stage 3 replaced the legacy Tkinter analyzer GUI with a thin
-REM    launcher that:
-REM      - spawns `npm start` for the Express backend,
-REM      - polls /api/health until the server is ready,
-REM      - opens http://127.0.0.1:3000/analyzer/ in the default browser.
-REM    Closing this window stops the backend cleanly.
-echo [1/3] Starting SC2 Tools Launcher (backend + Web Analyzer)...
-start "SC2 -- Launcher" /D "%TOOLS_ROOT%\SC2Replay-Analyzer" cmd /k py SC2ReplayAnalyzer.py
+REM -- 1. Express overlay backend (Node) ----------------------------
+REM    The merged backend serves /api/* and the SPA at /analyzer/.
+REM    We launch ``npm start`` directly from stream-overlay-backend
+REM    (no more dependency on the legacy SC2Replay-Analyzer Python
+REM    launcher project, which doesn't exist on most installs).
+echo [1/4] Starting Express overlay backend (stream-overlay-backend)...
+start "SC2 -- Backend" /D "%ROOT%\stream-overlay-backend" cmd /k npm start
 
 REM    Give the backend a moment to bind before dependents (watchers,
-REM    pollers) start posting to /api/replay etc.
+REM    pollers, GUI) start posting to /api/replay etc.
 echo       Waiting 3 seconds for backend to initialize...
 timeout /t 3 /nobreak >nul
 
-REM -- 2. Replay Watcher (Python, watchers/replay_watcher.py) ------
+REM -- 2. Analyzer GUI (Python, silent) -----------------------------
+REM    Launches the customtkinter analyzer via ``pythonw`` so no extra
+REM    console pops next to the watcher windows. All diagnostic output
+REM    is redirected to data\analyzer.log by gui.run_gui itself.
+echo [2/4] Starting Analyzer GUI (silent; logs to data\analyzer.log)...
+start "" /D "%ROOT%" pythonw -m gui.run_gui
+
+REM -- 3. Replay Watcher (Python, watchers/replay_watcher.py) ------
 REM    Live + threaded deep parse, posts to /api/replay and /api/replay/deep,
 REM    cross-writes data/MyOpponentHistory.json and data/meta_database.json.
-echo [2/3] Starting Replay Watcher (live + deep)...
-start "SC2 -- Replay Watcher" cmd /k "cd /d %ROOT% && python -m watchers.replay_watcher"
+echo [3/4] Starting Replay Watcher (live + deep)...
+start "SC2 -- Replay Watcher" cmd /k "cd /d %ROOT% && %PYTHON% -m watchers.replay_watcher"
 
-REM -- 3. API Poller (PowerShell) ----------------------------------
-REM    Polls SC2's web API and writes opponent.txt, which the overlay
-REM    backend watches for the "opponent detected" pop-up.
-REM    Delegates to reveal-sc2-opponent.bat which is the single source
-REM    of truth for SC2_CHARACTER_IDS / SC2_PLAYER_NAME / ACTIVE_REGIONS.
-echo [3/3] Starting API Poller...
-start "SC2 -- API Poller" cmd /k "cd /d %ROOT% && reveal-sc2-opponent.bat"
+REM -- 4. API Poller (Python helper) -------------------------------
+REM    Reads identity (Pulse character IDs, player name, regions) from
+REM    data\config.json and runs the SC2Pulse poller. Calls
+REM    poller_launch.py directly so we don't double-shell through
+REM    reveal-sc2-opponent.bat.
+echo [4/4] Starting API Poller...
+start "SC2 -- API Poller" cmd /k "cd /d %ROOT% && %PYTHON% scripts\poller_launch.py"
 
 echo.
 echo  All components launched. This window will close in 3 seconds.
