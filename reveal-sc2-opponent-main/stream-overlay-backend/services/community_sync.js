@@ -102,8 +102,9 @@ function readJsonOrNull(filePath) {
 }
 
 /**
- * Convert a local snake_case build (the v2 shape on disk) into
- * the camelCase shape the community service expects.
+ * Convert a local snake_case build (Stage 7.5b v3 shape on disk:
+ * rules + skill_level) into the camelCase wire shape the community
+ * service expects.
  *
  * @param {object} local
  * @param {string} authorClientId
@@ -115,25 +116,19 @@ function toRemote(local, authorClientId) {
     name: local.name,
     race: local.race,
     vsRace: local.vs_race,
-    tier: local.tier == null ? null : local.tier,
+    skillLevel: local.skill_level == null ? null : local.skill_level,
     description: local.description || '',
     winConditions: local.win_conditions || [],
     losesTo: local.loses_to || [],
     transitionsInto: local.transitions_into || [],
-    signature: local.signature.map((sig) => ({
-      t: sig.t,
-      what: sig.what,
-      weight: sig.weight,
-    })),
-    toleranceSec: local.tolerance_sec,
-    minMatchScore: local.min_match_score,
+    rules: Array.isArray(local.rules) ? local.rules.map((rule) => ({ ...rule })) : [],
     authorClientId,
     authorDisplay: local.author || 'local',
   };
 }
 
 /**
- * Convert a remote camelCase build back into the local v2 shape.
+ * Convert a remote camelCase build back into the local v3 shape.
  *
  * @param {object} remote
  * @returns {object}
@@ -146,18 +141,12 @@ function fromRemote(remote) {
     name: remote.name,
     race: remote.race,
     vs_race: remote.vsRace,
-    tier: remote.tier == null ? null : remote.tier,
+    skill_level: remote.skillLevel == null ? null : remote.skillLevel,
     description: remote.description || '',
     win_conditions: remote.winConditions || [],
     loses_to: remote.losesTo || [],
     transitions_into: remote.transitionsInto || [],
-    signature: (remote.signature || []).map((sig) => ({
-      t: sig.t,
-      what: sig.what,
-      weight: sig.weight,
-    })),
-    tolerance_sec: remote.toleranceSec,
-    min_match_score: remote.minMatchScore,
+    rules: Array.isArray(remote.rules) ? remote.rules.map((rule) => ({ ...rule })) : [],
     source_replay_id: null,
     created_at: createdIso,
     updated_at: updatedIso,

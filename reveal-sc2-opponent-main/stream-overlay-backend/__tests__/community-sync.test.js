@@ -49,14 +49,12 @@ function sampleLocalBuild() {
     name: 'Cannon Rush',
     race: 'P',
     vs_race: 'Z',
-    tier: 'A',
+    skill_level: 'gold',
     description: 'opener',
     win_conditions: ['fast cannons'],
     loses_to: ['drone scout'],
     transitions_into: ['blink stalker'],
-    signature: [{ t: 60, what: 'forge', weight: 1 }],
-    tolerance_sec: 30,
-    min_match_score: 0.6,
+    rules: [{ type: 'before', name: 'BuildForge', time_lt: 90 }],
     author: 'TesterBT',
   };
 }
@@ -157,7 +155,8 @@ describe('toRemote / fromRemote round-trip', () => {
     const remote = __test__.toRemote(local, 'client-id-abc');
     expect(remote.vsRace).toBe('Z');
     expect(remote.authorClientId).toBe('client-id-abc');
-    expect(remote.signature[0].weight).toBe(1);
+    expect(remote.skillLevel).toBe('gold');
+    expect(remote.rules[0].name).toBe('BuildForge');
 
     // Remote shape mirrors what the API would echo back, plus a few
     // extra server-controlled fields.
@@ -171,9 +170,11 @@ describe('toRemote / fromRemote round-trip', () => {
     const back = __test__.fromRemote(echoed);
     expect(back.id).toBe(local.id);
     expect(back.vs_race).toBe('Z');
+    expect(back.skill_level).toBe('gold');
     expect(back.upvotes).toBe(7);
     expect(back.sync_state).toBe('synced');
-    expect(back.signature[0].what).toBe('forge');
+    expect(back.rules[0].name).toBe('BuildForge');
+    expect(back.rules[0].type).toBe('before');
   });
 });
 

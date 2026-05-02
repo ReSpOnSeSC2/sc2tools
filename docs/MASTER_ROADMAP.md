@@ -210,8 +210,8 @@ Repeat 9 times for: TvT, TvZ, TvP, ZvT, ZvZ, ZvP, PvT, PvZ, PvP.
 ```
 Read [Master Architecture Preamble]. 
 
-GOAL: Add 15-20 strong, current-meta build definitions for the TvT, TvZ and ZvZ
-matchups to data/build_definitions.json. Each definition is a real build
+GOAL: Add 15-20 strong, current-meta build definitions for the <MATCHUP>
+matchup to data/build_definitions.json. Each definition is a real build
 played by pros in 2026, with verifiable signatures.
 
 SOURCES (use real ones; don't invent):
@@ -230,10 +230,13 @@ WHAT EACH DEFINITION NEEDS (data/build_definitions.json):
   "name": "Reaper Expand → 3 Rax Bio",
   "race": "Terran",
   "vs_race": "Zerg",
-  "rank" GM
+  "rank": "GM",
   "added": "2026-04-XX",
   "added_from": "spawningtool.com/build/...",
-  "signature": [use the same signature logic we have already implemented in the save my build order, in fact thats a good template for how to create the build orders.
+  // Use the same signature logic already implemented in the
+  // "save my build order" flow — that's the canonical template for
+  // generating signatures here.
+  "signature": [
     ...
   ],
   "description": "Standard 2026 TvZ reaper expand. Reaper at ~1:30 scouts
@@ -1946,7 +1949,7 @@ Definition of Done:
 
 This stage has a fundamentally different shape — it's a real backend project. Treat it as a separate codebase with its own deployment, monitoring, and SLOs.
 
-> Note: the small Stage 7.3 community-builds service can be folded into this larger cloud at this stage, OR continue running standalone. Recommend folding it in to share infra (Postgres, Redis, OAuth, observability).
+> Note: the small Stage 7.3 community-builds service can be folded into this larger cloud at this stage, OR continue running standalone. Recommend folding it in to share infra (MongoDB Atlas, Render Key Value, OAuth, observability).
 
 ### Privacy model (read first, treat as constitutional)
 
@@ -2618,11 +2621,12 @@ Definition of Done:
 | Stage | Item | Monthly cost |
 |---|---|---|
 | 0-12 | None — local only | $0 |
-| 7.3 | Community-builds Fly.io tiny | ~$5 |
+| 7.3 | Community-builds Render starter | ~$7 |
 | 13 | Twitch app — free | $0 |
-| 14 | Fly.io 2x shared-cpu-1x + 1GB RAM | ~$10 |
-| 14 | Postgres 1GB | ~$15 |
-| 14 | Redis 256MB | ~$5 |
+| 14 | Render web service (starter) | ~$7 |
+| 14 | Render background worker (starter) | ~$7 |
+| 14 | Render Key Value (Redis-compatible) | ~$10 |
+| 14 | MongoDB Atlas M0 → M10 as traffic grows | $0–$57 |
 | 14 | Sentry (developer plan) | $0 |
 | 14 | Cloudflare (free tier) | $0 |
 | 14 | Domain | ~$15/year |
@@ -2631,7 +2635,7 @@ Definition of Done:
 | 15 | APNs | $99/yr Apple Dev |
 | 15 | EAS Build (free tier) | $0 |
 
-Floor: ~$35/month + $114/year. Scales with cloud usage; budget for a 5x burst the first month after launch.
+Floor: ~$31/month + $114/year (free Atlas tier). Scales with cloud usage; budget for a 5x burst the first month after launch (Atlas tier upgrade is the dominant variable cost).
 
 ---
 

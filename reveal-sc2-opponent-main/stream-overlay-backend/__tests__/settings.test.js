@@ -43,7 +43,7 @@ function validProfile() {
       account_id: '50983875',
       region: 'us',
     },
-    race_preference: 'Protoss',
+    races: ['Protoss'],
     mmr_target: null,
     preferred_player_name_in_replays: 'ReSpOnSe',
   };
@@ -252,7 +252,7 @@ describe('settings router', () => {
 
     it('leaves no .tmp behind after a rejected PUT', async () => {
       const bad = validProfile();
-      bad.race_preference = 'Toss';
+      bad.races = ['Toss'];
       await request(app).put('/api/profile').send(bad).expect(400);
       const entries = fs.readdirSync(dataDir);
       expect(entries.filter((e) => e.endsWith('.tmp'))).toEqual([]);
