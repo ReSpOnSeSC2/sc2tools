@@ -669,6 +669,17 @@ function Get-OpponentTeams {
     # played this season; see Find-PlayerProfile) with a tight cap
     # (RATING_DELTA_CAP_MMR). When no team falls inside the band we
     # fall back to the most-recently-played team that name-matches.
+    #
+    # v0.9.7 -- Refined barcode picker (sc2tools 1.4.8+). When the
+    # opponent name is a barcode (visually colliding name shared by
+    # many accounts), prefer:
+    #   (a) if OpponentRating > 0: candidates within +/- BARCODE_OPP_BAND_MMR
+    #       of the opponent's known MMR, sorted most-recently-played first.
+    #   (b) else if PlayerRating > 0: candidates within +/- BARCODE_PLAYER_BAND_MMR
+    #       of the player's MMR, sorted most-recently-played first.
+    # Falls through to the existing recency-based logic if no in-band
+    # match is found. Non-barcode (named) opponents continue to use the
+    # original RATING_DELTA_CAP_MMR sorted by closest MMR.
     param(
         [Object] $GameOpponent,
         [int32] $Season,
@@ -677,10 +688,17 @@ function Get-OpponentTeams {
         [int32] $LastPlayedAgoMax,
         [int32] $Limit,
         [string] $Region,
-        [int32] $PlayerRating = 0
+        [int32] $PlayerRating = 0,
+        [int32] $OpponentRating = 0
     )
 
+    # Non-barcode (named) opponents still use the original wider
+    # +/-400 anchor against the player's MMR, then closest-MMR sort.
     $RATING_DELTA_CAP_MMR = 400
+    # Barcode-specific tighter bands (v0.9.7). Barcodes share a
+    # display name across many accounts, so MMR is the disambiguator.
+    $BARCODE_OPP_BAND_MMR    = 50    # used when opp MMR is known
+    $BARCODE_PLAYER_BAND_MMR = 300   # used when only the player MMR is known
 
     $SafeRegion = $Region.ToUpper()
     $EncodedName = [uri]::EscapeDataString($GameOpponent.Name)
@@ -700,6 +718,12 @@ function Get-OpponentTeams {
             $RatingDelta = [Math]::Abs($Team.Rating - $PlayerRating)
             Add-Member -InputObject $Team -Name RatingDelta -Value $RatingDelta -MemberType NoteProperty -Force
         }
+        # v0.9.7: also compute distance from the opponent's MMR when known,
+        # so the barcode picker can prefer the +/-50 band around opp MMR.
+        if ($OpponentRating -gt 0) {
+            $OppRatingDelta = [Math]::Abs($Team.Rating - $OpponentRating)
+            Add-Member -InputObject $Team -Name OppRatingDelta -Value $OppRatingDelta -MemberType NoteProperty -Force
+        }
     }
 
     # Diagnostic: show every candidate the SC2Pulse name-search returned
@@ -718,21 +742,38 @@ function Get-OpponentTeams {
     # Barcode opponents (e.g., "IIIIIIIIIIII#33636") all share the same
     # literal in-game name across many accounts. MMR distance picks the
     # closest, but with identical names that frequently selects the wrong
-    # account when a band has multiple candidates. Strategy:
-    #   1. Filter to candidates inside the +/- RATING_DELTA_CAP_MMR band.
-    #   2. Among those, prefer the most-recently-played (Pulse may still
-    #      be a few hours stale, but recency *within the band* is a much
-    #      better disambiguator than MMR-distance among same-name accounts).
+    # account when a band has multiple candidates. Strategy (v0.9.7):
+    #   1a. If the OPPONENT's MMR is known, filter to candidates inside
+    #       the +/- BARCODE_OPP_BAND_MMR (50) band around opp MMR.
+    #   1b. Else if the PLAYER's MMR is known, filter to candidates inside
+    #       the +/- BARCODE_PLAYER_BAND_MMR (300) band around player MMR.
+    #   2. Among the in-band candidates, prefer the most-recently-played
+    #      per SC2Pulse (recency within the band is a much better
+    #      disambiguator than MMR-distance among same-name accounts).
     #   3. If nothing is in band, fall back to recently-active overall
     #      (last 1h), then to the broader recency search.
+    # Post-game reconciliation by toon-handle pulse_id is handled
+    # elsewhere (Node /api/replay/deep + services/opponent_reconcile.js),
+    # so a wrong pre-game pick is corrected automatically once the
+    # replay file is parsed.
     $BARCODE_RECENCY_SECONDS = 3600
     $IsBarcodeOpp = (Is-Barcode -PlayerName $GameOpponent.Name)
     if ($IsBarcodeOpp) {
+        # 1a. Tightest band: +/-50 around the opponent's known MMR
+        if ($OpponentRating -gt 0) {
+            $InBandOpp = @($OpponentTeams | Where-Object { $_.OppRatingDelta -le $BARCODE_OPP_BAND_MMR })
+            if ($InBandOpp.Count -gt 0) {
+                Write-Host (" [Pulse] Barcode opp -> opp-anchored band {0}+/-{1} ({2} hits) sorted by recency" -f `
+                    $OpponentRating, $BARCODE_OPP_BAND_MMR, $InBandOpp.Count) -ForegroundColor DarkCyan
+                return ($InBandOpp | Sort-Object -Property LastPlayedAgo | Select-Object -First $Limit)
+            }
+        }
+        # 1b. Wider band: +/-300 around the player's MMR (no opp MMR available)
         if ($PlayerRating -gt 0) {
-            $InBand = @($OpponentTeams | Where-Object { $_.RatingDelta -le $RATING_DELTA_CAP_MMR })
+            $InBand = @($OpponentTeams | Where-Object { $_.RatingDelta -le $BARCODE_PLAYER_BAND_MMR })
             if ($InBand.Count -gt 0) {
-                Write-Host (" [Pulse] Barcode opponent -> in-band ({0}) sorted by recency" -f `
-                    $InBand.Count) -ForegroundColor DarkCyan
+                Write-Host (" [Pulse] Barcode opp -> player-anchored band {0}+/-{1} ({2} hits) sorted by recency" -f `
+                    $PlayerRating, $BARCODE_PLAYER_BAND_MMR, $InBand.Count) -ForegroundColor DarkCyan
                 return ($InBand | Sort-Object -Property LastPlayedAgo | Select-Object -First $Limit)
             }
         }
@@ -1027,11 +1068,20 @@ while($true) {
         # Phase 4: pick the best in-band candidate.
         $ActiveProfile = $null
         $RegionPickReason = $null
+        # v0.9.7: $DetectedOppMmr captures the MMR of the candidate that the
+        # multi-region scan picked as the most likely opponent. This is the
+        # SAME number the session widget would display after Get-OpponentTeams
+        # writes opponent.txt -- treating it as the 'visible opp MMR' for the
+        # barcode picker so it can apply a tighter +/-50 band when the opp
+        # is a barcode. Stays 0 when no in-band match exists (Phase 5),
+        # which makes Get-OpponentTeams fall back to the +/-300 player-MMR band.
+        $DetectedOppMmr = 0
         $InBand = @($Candidates | Where-Object { $_.InBand })
         if ($InBand.Count -gt 0) {
             $Best = $InBand | Sort-Object -Property @{Expression='Delta';Descending=$false}, @{Expression='LastPlayedAgo';Descending=$false} | Select-Object -First 1
             $ActiveProfile = Create-PlayerProfile -RecentTeam $Best.UserTeam
-            $RegionPickReason = "in-band MMR match (delta=$($Best.Delta), $($UsedSensitivity))"
+            $DetectedOppMmr = [int32]$Best.OppMmr
+            $RegionPickReason = "in-band MMR match (delta=$($Best.Delta), $($UsedSensitivity), oppMMR=$($DetectedOppMmr))"
         }
 
         # Phase 5: no in-band match. Prefer the user's highest-MMR team for
@@ -1061,7 +1111,15 @@ while($true) {
         # Pass to the cleaned up Search Function. (Get-OpponentTeams keeps
         # its own per-team RatingDelta band check; the above already picked
         # the best region, so any teams returned here are scored within it.)
-        $OpponentTeamObjects = Get-OpponentTeams -GameOpponent $Opponent -Season $SearchSeason -Race $CurrentOpponentRace -Queue $Script:Queue1v1 -LastPlayedAgoMax $Script:LastPlayedAgoMax -Limit $Script:Limit -Region $SearchRegion -PlayerRating ([int32]$PlayerProfile.Team.Rating)
+        # v0.9.7: when the multi-region scan above resolved an in-band
+        # candidate, $DetectedOppMmr carries that candidate's MMR -- the same
+        # number the session widget will end up displaying as 'opponent MMR'.
+        # Passing it as -OpponentRating lets Get-OpponentTeams' barcode
+        # branch tighten to +/-50 around it for barcodes (which share names
+        # across many accounts and need MMR to disambiguate). Stays 0 for
+        # unranked opponents and for the Phase 5 fallback, which makes the
+        # barcode branch use the wider +/-300 player-MMR band.
+        $OpponentTeamObjects = Get-OpponentTeams -GameOpponent $Opponent -Season $SearchSeason -Race $CurrentOpponentRace -Queue $Script:Queue1v1 -LastPlayedAgoMax $Script:LastPlayedAgoMax -Limit $Script:Limit -Region $SearchRegion -PlayerRating ([int32]$PlayerProfile.Team.Rating) -OpponentRating $DetectedOppMmr
 
         if ($OpponentTeamObjects) {
              $DisplayResults = @()
