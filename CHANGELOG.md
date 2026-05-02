@@ -8,6 +8,49 @@ Releases are tagged `vMAJOR.MINOR.PATCH`; the GitHub Actions release
 workflow builds the Windows installer on each tag push and attaches the
 `.exe` and `.sha256` to the corresponding GitHub Release.
 
+## [1.4.7] - 2026-05-02
+
+### Fixed (critical)
+
+- **``meta_database.json`` mid-write truncation (139 MB) lost ~14 game
+  records and silently failed strict parse.** Same corruption family as
+  the v1.4.6 ``MyOpponentHistory.json`` issue, different mode: the file
+  ended abruptly inside a half-written game record (3 unclosed opening
+  braces at EOF, ~100 KB of trailing partial data), failing strict
+  ``JSON.parse`` at byte 136,981,034 of 136,981,633. Builds tab still
+  worked because the SPA tolerates an empty ``dbCache.meta.data`` for
+  some queries, but per-build / per-game drilldowns degraded silently.
+
+  Two-part fix:
+
+  1. **Recovery script**: ``data/recover_meta_database.py`` salvages the
+     current file by walking backward through ``},\n`` record boundaries
+     until parse succeeds (recovers ~99.92%, 11,501 game records),
+     loads the latest cleanly-parseable backup
+     (``meta_database.json.pre-reclassify-2026-05-01T19-02-22-861Z``,
+     11,515 records) as the base, and merges per-build with games
+     deduped on the ``id`` field (``date|opponent|map|game_length``).
+     When the same id appears in both, the SALVAGED-CURRENT version
+     wins (carries post-reclassify enrichment + same-day updates).
+     Quarantines the corrupt original + backup-of-record under
+     ``data/.recovery-meta-<UTC>/`` with a README.
+  2. **Backend salvage hardening**: fixes a bug in
+     ``stream-overlay-backend/analyzer.js`` ``salvageJsonObject`` where
+     the ``bounds.length < 50`` cap inside the boundary-collection loop
+     kept only the FIRST 50 ``},\n`` boundaries (from the *start* of
+     the file). For any file with more than 50 record boundaries (e.g.
+     ``meta_database.json`` at ~72,000) the truncated tail was never
+     reached and salvage silently failed. v1.4.7 collects ALL
+     boundaries then attempts the LAST 500 (walking backward from end
+     of file). In practice salvage of a single mid-record truncation
+     succeeds in fewer than 100 attempts; the 500-cap is a fast-path
+     safeguard so we don't try tens of thousands of attempts on a
+     totally garbage file.
+
+  Net effect: any future ``meta_database.json`` mid-write truncation
+  is recovered transparently on backend boot instead of returning
+  empty data.
+
 ## [1.4.6] - 2026-05-02
 
 ### Fixed (critical)
