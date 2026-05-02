@@ -49,7 +49,7 @@ if _PROJECT_ROOT not in sys.path:
 
 from core.paths import CONFIG_FILE, META_DB_FILE  # noqa: E402
 from core.data_store import AnalyzerDBStore  # noqa: E402
-from core.sc2_replay_parser import parse_live  # noqa: E402
+from core.sc2_replay_parser import parse_deep, parse_live  # noqa: E402
 
 
 def _emit(obj: Dict[str, Any]) -> None:
@@ -281,6 +281,90 @@ def _cmd_backfill(args: argparse.Namespace) -> int:
     return 0 if errors == 0 else 1
 
 
+def _cmd_compute(args: argparse.Namespace) -> int:
+    """On-demand macro recompute for a single replay.
+
+    Spawned by the analyzer's `/games/:id/macro-breakdown` endpoint when
+    the user opens a game-detail drawer that has no persisted breakdown.
+    Emits exactly one ndjson record on stdout matching the shape
+    consumed by analyzer.js -> chart-macro-breakdown.jsx.
+    """
+    if not args.replay or not os.path.exists(args.replay):
+        _emit({"ok": False, "error": f"replay file not found: {args.replay}"})
+        return 1
+
+    cfg = _read_config()
+    player = _resolve_player(cfg, args.player)
+    if not player:
+        _emit({"ok": False, "error": "no player handle configured"})
+        return 2
+
+    try:
+        ctx = parse_deep(args.replay, player)
+    except Exception as exc:
+        _emit({"ok": False, "error": f"deep parse failed: {exc}"})
+        return 1
+
+    if not ctx or not ctx.me:
+        _emit({"ok": False,
+               "error": "could not identify player in replay (check --player)"})
+        return 1
+
+    replay = ctx.raw
+    if replay is None:
+        _emit({"ok": False, "error": "parse_deep returned no raw replay"})
+        return 1
+
+    try:
+        from core.event_extractor import extract_macro_events  # noqa: E402
+        from analytics.macro_score import compute_macro_score  # noqa: E402
+    except Exception as exc:
+        _emit({"ok": False, "error": f"analytics import failed: {exc}"})
+        return 1
+
+    try:
+        my_macro = extract_macro_events(replay, ctx.me.pid)
+    except Exception as exc:
+        _emit({"ok": False, "error": f"my macro extract failed: {exc}"})
+        return 1
+
+    opp_stats: List[Dict[str, Any]] = []
+    if ctx.opponent:
+        try:
+            opp_macro = extract_macro_events(replay, ctx.opponent.pid)
+            opp_stats = list(opp_macro.get("stats_events") or [])
+        except Exception:
+            opp_stats = []
+
+    game_length = (
+        int(my_macro.get("game_length_sec") or 0)
+        or int(getattr(ctx, "length_seconds", 0) or 0)
+    )
+
+    try:
+        score = compute_macro_score(my_macro, ctx.me.race, game_length)
+    except Exception as exc:
+        _emit({"ok": False, "error": f"compute_macro_score failed: {exc}"})
+        return 1
+
+    _emit({
+        "ok": True,
+        "macro_score": score.get("macro_score", 0),
+        "race": ctx.me.race or "",
+        "game_length_sec": game_length,
+        "raw": score.get("raw", {}) or {},
+        "all_leaks": score.get("all_leaks", []) or [],
+        "top_3_leaks": score.get("top_3_leaks", []) or [],
+        "stats_events": list(my_macro.get("stats_events") or []),
+        "opp_stats_events": opp_stats,
+        "unit_timeline": [],
+        "opp_name": ctx.opponent.name if ctx.opponent else None,
+        "opp_race": ctx.opponent.race if ctx.opponent else None,
+        "my_race": ctx.me.race,
+    })
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(prog="macro_cli")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -294,9 +378,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     bf.add_argument("--force", action="store_true",
                     help="Re-import games already present in the DB.")
 
+    cp = sub.add_parser("compute",
+                        help="Recompute macro breakdown for one replay.")
+    cp.add_argument("--replay", required=True, help="Path to .SC2Replay.")
+    cp.add_argument("--player", default=None, help="Player handle.")
+
     args = p.parse_args(argv)
     if args.cmd == "backfill":
         return _cmd_backfill(args)
+    if args.cmd == "compute":
+        return _cmd_compute(args)
     p.error(f"unknown subcommand: {args.cmd}")
     return 2
 
