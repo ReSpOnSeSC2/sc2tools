@@ -438,6 +438,43 @@ function pulseConfig() {
     return (config && config.pulse) || {};
 }
 
+// Pulse character IDs are 6-8 digits in practice (~12M characters in
+// the SC2Pulse database). Anything >= this cutoff is the unmistakable
+// signature of the pre-v1.4.6 PS coercion bug where comma-joined IDs
+// were silently concatenated into a single bogus int64 (e.g. 994428
+// + 8970877 -> 9944288970877). When we see a corrupt entry we reject
+// the whole file so init falls through to the wizard config.
+const PULSE_ID_MAX = 1_000_000_000; // 10 digits; real IDs are <= 8.
+
+// Pure parser for character_ids.txt content, extracted so unit tests can
+// drive the corrupt-entry rejection logic without having to write to the
+// live file path. Strips an optional UTF-8 BOM, trims, splits on commas,
+// parses each piece as an int. If any parsed value looks corrupt (see
+// PULSE_ID_MAX) we drop the WHOLE file -- mixing one bad ID with one good
+// ID is still wrong because the launcher always emits a coherent set, so
+// the safest action is to ignore the file and let the wizard config drive
+// Pulse init. Logs a one-shot warn so the user can see why it was rejected.
+function parsePublishedCharacterIdsText(text) {
+    if (text == null) return [];
+    let raw = String(text);
+    if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
+    raw = raw.trim();
+    if (!raw) return [];
+    const ids = raw.split(',')
+        .map(s => parseInt(s.trim(), 10))
+        .filter(Number.isFinite);
+    const corrupt = ids.filter(id => id >= PULSE_ID_MAX);
+    if (corrupt.length > 0) {
+        console.warn(
+            `[Pulse] character_ids.txt has corrupt entries (${corrupt.join(', ')}); ` +
+            `ignoring file and falling through to wizard config. ` +
+            `Re-run the poller (or START_SC2_TOOLS.bat) to regenerate it.`
+        );
+        return [];
+    }
+    return ids;
+}
+
 function readPublishedCharacterIds() {
     // Reveal-Sc2Opponent.ps1 writes the resolved IDs (either passed
     // via -CharacterId or auto-detected) to character_ids.txt at the
@@ -445,12 +482,8 @@ function readPublishedCharacterIds() {
     // it in reveal-sc2-opponent.bat by setting SC2_CHARACTER_IDS.
     try {
         if (!fs.existsSync(CHARACTER_IDS_PATH)) return [];
-        let raw = fs.readFileSync(CHARACTER_IDS_PATH, 'utf8').trim();
-        if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
-        if (!raw) return [];
-        return raw.split(',')
-            .map(s => parseInt(s.trim(), 10))
-            .filter(Number.isFinite);
+        return parsePublishedCharacterIdsText(
+            fs.readFileSync(CHARACTER_IDS_PATH, 'utf8'));
     } catch (_) {
         return [];
     }
@@ -2516,6 +2549,11 @@ if (process.env.NODE_ENV === 'test') {
         // shapes resolve to the labels the session widget renders.
         extractTeamRegionLabel,
         pickActiveTeam,
+        // v1.4.6 character_ids.txt parser, exposed so
+        // __tests__/character-ids.test.js can pin the corrupt-entry
+        // rejection that defends against pre-fix PS-coerced files.
+        parsePublishedCharacterIdsText,
+        PULSE_ID_MAX,
         // Stage 11.3: expose the constructed Express app + http
         // server so health/version/games tests can drive routes
         // via supertest without needing to spin up server.listen.

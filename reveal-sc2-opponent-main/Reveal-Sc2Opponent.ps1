@@ -7,7 +7,7 @@
  v0.9.6 (sc2tools 1.4.5) - Multi-region auto-detect with MMR-band disambiguation. Probes EVERY user region (strict + case-insensitive retry), scores each Pulse hit by MMR delta vs your rating on that region, picks the region containing the best in-band candidate. Eliminates the "wrong region after switching" failure mode and the misleading "name not found" log when a fallback search succeeded silently. Fall-through prefers your highest-MMR team for the current race instead of stale Pulse-recency. Also: -ActiveRegion now accepts comma-joined strings from subprocess callers (was rejected by ValidateSet). v0.9.5 - Auto-detect active server by probing Pulse for opponent name. v0.9.4 fixed unwrap bug. v0.9.3 added recently-active anchor. v0.9.0 removed OCR.
 #>
 param(
-    [int64[]]$CharacterId,
+    [string[]]$CharacterId,
     [string]$PlayerName,
     [ValidateSet("terran", "protoss", "zerg", "random")]
     [string]$Race,
@@ -51,6 +51,35 @@ if ($BadRegions.Count -gt 0) {
     Write-Host ("ERROR: invalid -ActiveRegion value(s): {0}. Allowed: us, eu, kr, cn." -f ($BadRegions -join ', ')) -ForegroundColor Red
     exit 1
 }
+
+# Normalise -CharacterId. Same shape problem as -ActiveRegion: callers may
+# pass an actual array (@(994428, 8970877)) or a single comma-joined string
+# ("994428,8970877") -- the latter is what powershell.exe -File receives
+# when subprocess.Popen passes the arg list (Python launcher path:
+# scripts/poller_launch.py -> core/launcher_config.build_poller_argv ->
+# ",".join(ids)). The original [int64[]] param type silently coerced the
+# comma-string via locale-aware int parsing (en-US comma == thousand
+# separator), turning "994428,8970877" into the single bogus int64
+# 9944288970877. SC2Pulse returned no teams for that ID, applyPulseRating
+# was never called, the session widget's 'SERVER MMR' line stayed on '--'
+# and session.state.json kept region=null. We now accept [string[]], split
+# on commas, and TryParse each piece so both shapes work and bad input
+# produces a clear warning instead of a silently-corrupted ID.
+$ParsedCharacterIds = New-Object System.Collections.Generic.List[int64]
+foreach ($Raw in @($CharacterId)) {
+    if ($null -eq $Raw) { continue }
+    foreach ($Part in ([string]$Raw) -split ',') {
+        $Trim = $Part.Trim()
+        if ([string]::IsNullOrEmpty($Trim)) { continue }
+        $N = [int64]0
+        if ([int64]::TryParse($Trim, [ref]$N)) {
+            [void]$ParsedCharacterIds.Add($N)
+        } else {
+            Write-Host ("WARNING: ignoring non-numeric CharacterId '{0}'" -f $Trim) -ForegroundColor Yellow
+        }
+    }
+}
+[int64[]]$CharacterId = $ParsedCharacterIds.ToArray()
 
 # --- CONFIGURATION FOR HISTORY ---
 # Canonical Black Book path. The Python data layer (core.paths.HISTORY_FILE)
