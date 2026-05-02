@@ -621,6 +621,54 @@ function extractTeamRegionLabel(team) {
     return PULSE_STRING_REGION_LABEL[key] || null;
 }
 
+// SC2Pulse character lookup (used as a fallback when the user's own
+// rating fetch can't resolve a region -- e.g. character_ids.txt is
+// empty/wrong on a fresh install). Given a SC2Pulse character_id,
+// returns the region as the short label ('NA' | 'EU' | 'KR' | 'CN')
+// used by the session widget, or null if the character can't be found.
+// Note: SC2Pulse returns ch.region as the string 'US'/'EU'/'KR'/'CN'
+// on /character/{id} (vs. numeric on /group/team). We surface 'US' as
+// 'NA' to match the convention SC2 players use ('NA server').
+async function fetchPulseCharacterRegion(characterId) {
+    const pc = pulseConfig();
+    if (!pc.apiRoot) return null;
+    const id = encodeURIComponent(String(characterId));
+    const url = `${pc.apiRoot}/character/${id}`;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const body = await res.json();
+        // /character/{id} returns an array [character_obj] for valid
+        // IDs and [] for unknown ones.
+        const ch = Array.isArray(body) && body.length > 0 ? body[0] : null;
+        if (!ch) return null;
+        // Reuse the same normalization used for team payloads by
+        // wrapping the character in a synthetic team shape.
+        return extractTeamRegionLabel({ members: [{ character: ch }] });
+    } catch (err) {
+        console.error('[Pulse] character fetch failed:', err.message);
+        return null;
+    }
+}
+
+// Eagerly capture the user's region from any Pulse team response,
+// regardless of whether the team's rating reading is fresh enough to
+// apply. SC2Pulse returns the user's region inside team.members[0].
+// character.region on every team payload; previously we only read it
+// inside applyPulseRating(), which is gated on freshness -- so when
+// every post-match attempt came back stale (game was unranked or Pulse
+// hadn't ingested yet) the session widget never learned the region.
+// Returns true when the region actually changed (caller may want to log).
+function maybeUpdateSessionRegionFromTeam(team) {
+    const regionLabel = extractTeamRegionLabel(team);
+    if (!regionLabel) return false;
+    if (session.region === regionLabel) return false;
+    session.region = regionLabel;
+    saveSession();
+    broadcastSession();
+    return true;
+}
+
 function applyPulseRating(rating, sourceTag, team) {
     if (!Number.isFinite(rating)) return false;
     if (session.mmrStart == null) session.mmrStart = rating;
@@ -669,6 +717,13 @@ async function refreshMmrFromPulseAfterMatch() {
     for (let i = 0; i < attempts; i++) {
         const team = await pulseGetActiveRating();
         if (team) {
+            // Fix A (region eager-capture): the team payload always
+            // carries the user's region even when the rating reading
+            // is too stale to apply. Update session.region now so the
+            // widget shows the right server within seconds of game end.
+            if (maybeUpdateSessionRegionFromTeam(team.raw)) {
+                console.log(`[Pulse] region updated from post-match team payload: ${session.region}`);
+            }
             const ageSinceMatchSec = (Date.now() - team.lastPlayedMs) / 1000;
             const lastPlayedAfterMatch = team.lastPlayedMs >= (matchAt - 5000);
             const ratingChanged = Number.isFinite(ratingBefore) && team.rating !== ratingBefore;
@@ -1863,6 +1918,28 @@ app.post('/api/replay/deep', (req, res) => {
         }
         saveSession();
         broadcastSession();
+    }
+
+    // Fix B (region fallback via opponent pulse ID): if Fix A's
+    // post-match team-payload capture didn't resolve a region (e.g.
+    // the user's character_ids file is missing/wrong on a fresh
+    // install, so fetchPulseTeams returns null), use the opponent's
+    // SC2Pulse character_id as a one-shot fallback. 1v1 ranked
+    // matchmaking puts both players on the same region.
+    if (!session.region && d.oppPulseId) {
+        fetchPulseCharacterRegion(d.oppPulseId)
+            .then((region) => {
+                if (!region) return;
+                if (session.region) return; // raced with Fix A
+                session.region = region;
+                saveSession();
+                broadcastSession();
+                console.log(
+                    `[Pulse] region inferred from opp pulseId=${d.oppPulseId}: ${region}`
+                );
+            })
+            .catch((err) => console.error(
+                '[Pulse] opp-pulseId region lookup failed:', err.message));
     }
 
     res.json({ ok: true });
