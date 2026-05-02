@@ -60,7 +60,9 @@ function buildHarness() {
 }
 
 /**
- * Minimal valid v2 build body.
+ * Minimal valid v3 build body. Stage 7.5b replaced the weighted
+ * `signature` model with rule-based matching: each rule is boolean,
+ * all-must-pass.
  *
  * @returns {object}
  */
@@ -69,9 +71,9 @@ function validBody(overrides) {
     name: 'PvZ Test Build',
     race: 'Protoss',
     vs_race: 'Zerg',
-    signature: [{ t: 95, what: 'BuildStargate', weight: 1.0 }],
-    tolerance_sec: 15,
-    min_match_score: 0.6,
+    rules: [
+      { type: 'before', name: 'BuildStargate', time_lt: 110 },
+    ],
     ...(overrides || {}),
   };
 }
@@ -86,16 +88,18 @@ describe('custom-builds router: schema validation', () => {
     expect(res.body.details[0].keyword).toBe('enum');
   });
 
-  test('POST rejects empty signature array', async () => {
+  test('POST rejects empty rules array', async () => {
     const { app } = buildHarness();
-    const res = await request(app).post('/api/custom-builds').send(validBody({ signature: [] }));
+    const res = await request(app).post('/api/custom-builds').send(validBody({ rules: [] }));
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('validation_failed');
   });
 
-  test('POST rejects out-of-range tolerance_sec', async () => {
+  test('POST rejects out-of-range time_lt', async () => {
     const { app } = buildHarness();
-    const res = await request(app).post('/api/custom-builds').send(validBody({ tolerance_sec: 1 }));
+    const res = await request(app).post('/api/custom-builds').send(
+      validBody({ rules: [{ type: 'before', name: 'BuildStargate', time_lt: 99999 }] })
+    );
     expect(res.status).toBe(400);
   });
 });
@@ -145,19 +149,19 @@ describe('custom-builds router: CRUD round-trip', () => {
     await new Promise((r) => setTimeout(r, 1100));
     const res = await request(app)
       .put('/api/custom-builds/' + create.body.id)
-      .send(validBody({ name: 'Renamed Build', tier: 'S' }));
+      .send(validBody({ name: 'Renamed Build', skill_level: 'master' }));
     expect(res.status).toBe(200);
     expect(res.body.name).toBe('Renamed Build');
-    expect(res.body.tier).toBe('S');
+    expect(res.body.skill_level).toBe('master');
     expect(res.body.updated_at > orig).toBe(true);
   });
 
   test('PATCH applies whitelisted fields, flips sync_state', async () => {
     const { app } = buildHarness();
     const create = await request(app).post('/api/custom-builds').send(validBody());
-    const res = await request(app).patch('/api/custom-builds/' + create.body.id).send({ tier: 'A', forbidden: 'x' });
+    const res = await request(app).patch('/api/custom-builds/' + create.body.id).send({ skill_level: 'gold', forbidden: 'x' });
     expect(res.status).toBe(200);
-    expect(res.body.tier).toBe('A');
+    expect(res.body.skill_level).toBe('gold');
     expect(res.body.forbidden).toBeUndefined();
     expect(res.body.sync_state).toBe('pending');
   });
@@ -177,13 +181,20 @@ describe('custom-builds router: CRUD round-trip', () => {
 describe('custom-builds router: dedup with community cache', () => {
   test('custom build wins over community cache on id collision', async () => {
     const { app, dataDir } = buildHarness();
+    const sampleRule = [{ type: 'before', name: 'BuildPylon', time_lt: 30 }];
     fs.writeFileSync(
       path.join(dataDir, 'community_builds.cache.json'),
       JSON.stringify({
-        version: 2,
+        version: 3,
         builds: [
-          { id: 'pvz-test-build', name: 'Community Version', race: 'Protoss', vs_race: 'Zerg', signature: [], tier: 'B' },
-          { id: 'community-only', name: 'Solo', race: 'Zerg', vs_race: 'Terran', signature: [] },
+          {
+            id: 'pvz-test-build', name: 'Community Version', race: 'Protoss',
+            vs_race: 'Zerg', rules: sampleRule, skill_level: 'silver',
+          },
+          {
+            id: 'community-only', name: 'Solo', race: 'Zerg',
+            vs_race: 'Terran', rules: sampleRule,
+          },
         ],
       })
     );
@@ -199,22 +210,23 @@ describe('custom-builds router: dedup with community cache', () => {
 });
 
 describe('custom-builds router: derive draft from a real game', () => {
-  test('POST /from-game extracts a deduped signature', async () => {
+  test('POST /from-game returns a v3 draft with empty rules and full event count', async () => {
     const { app } = buildHarness();
     const events = [
       { t: 18, what: 'BuildPylon' },
       { t: 30, what: 'BuildGateway' },
-      { t: 30, what: 'BuildGateway' }, // duplicate `what` should dedupe
+      { t: 30, what: 'BuildGateway' },
       { t: 95, what: 'BuildStargate' },
-      { t: 200, what: 'GameEvent' }, // not a Build/Train/Research/Morph token
+      { t: 200, what: 'GameEvent' },
     ];
     const res = await request(app).post('/api/custom-builds/from-game').send({ events, name: 'X' });
     expect(res.status).toBe(200);
     expect(res.body.event_count).toBe(5);
-    expect(res.body.draft.signature.length).toBe(3); // pylon, gateway, stargate
-    const tokens = res.body.draft.signature.map((s) => s.what);
-    expect(tokens).toContain('BuildStargate');
-    expect(tokens.filter((t) => t === 'BuildGateway').length).toBe(1);
+    // Stage 7.5b: pickRulesFromEvents intentionally returns []. The
+    // editor opens with 0 rules and the user clicks [+] to add them.
+    expect(Array.isArray(res.body.draft.rules)).toBe(true);
+    expect(res.body.draft.rules).toEqual([]);
+    expect(res.body.draft.name).toBe('X');
   });
 
   test('POST /from-game errors when no events resolve', async () => {
@@ -249,23 +261,20 @@ describe('custom-builds router: preview-matches against meta DB', () => {
       })
     );
     const candidate = {
-      signature: [{ t: 95, what: 'BuildStargate', weight: 1.0 }],
-      tolerance_sec: 15,
-      min_match_score: 0.6,
+      rules: [{ type: 'before', name: 'BuildStargate', time_lt: 110 }],
     };
     const res = await request(app).post('/api/custom-builds/preview-matches').send(candidate);
     expect(res.status).toBe(200);
     expect(res.body.scanned_games).toBe(2);
     expect(res.body.matches.length).toBe(1);
     expect(res.body.matches[0].game_id).toBe('g-1');
-    expect(res.body.matches[0].score).toBe(1);
   });
 
-  test('POST /preview-matches errors on missing signature', async () => {
+  test('POST /preview-matches errors on missing rules', async () => {
     const { app } = buildHarness();
     const res = await request(app).post('/api/custom-builds/preview-matches').send({});
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe('missing_signature');
+    expect(res.body.error).toBe('missing_rules');
   });
 });
 
@@ -312,8 +321,9 @@ describe('community_sync service: queue mutation under stubbed fetch', () => {
         json: async () => ({
           upserts: [{
             id: 'pulled-build', name: 'Pulled', race: 'Zerg', vsRace: 'Protoss',
-            tier: 'S', signature: [{ t: 50, what: 'BuildSpawningPool', weight: 1 }],
-            toleranceSec: 15, minMatchScore: 0.6, version: 3,
+            skillLevel: 'master',
+            rules: [{ type: 'before', name: 'BuildSpawningPool', time_lt: 80 }],
+            version: 3,
             createdAt: 1700000000000, updatedAt: 1714000000000,
             authorClientId: 'aa', authorDisplay: 'pro',
           }],
@@ -369,10 +379,12 @@ describe('helpers', () => {
     expect(H.parseLogLine('garbage')).toBeNull();
   });
 
-  test('scoreSignature: matches within tolerance, misses outside', () => {
-    const cand = { signature: [{ t: 95, what: 'BuildStargate', weight: 1.0 }] };
-    expect(H.scoreSignature([{ t: 90, what: 'BuildStargate' }], cand, 15)).toBe(1);
-    expect(H.scoreSignature([{ t: 200, what: 'BuildStargate' }], cand, 15)).toBe(0);
+  test('evaluateRule (before): matches when event occurs in window, fails outside', () => {
+    // Stage 7.5b: scoreSignature was retired with the v2 weighted-score
+    // model. v3 uses boolean per-rule evaluateRule / evaluateRules.
+    const rule = { type: 'before', name: 'BuildStargate', time_lt: 100 };
+    expect(H.evaluateRule([{ t: 90, what: 'BuildStargate' }], rule).ok).toBe(true);
+    expect(H.evaluateRule([{ t: 200, what: 'BuildStargate' }], rule).ok).toBe(false);
   });
 
   test('uniqueIdFor appends -2 on collision', () => {
@@ -380,21 +392,21 @@ describe('helpers', () => {
     expect(H.uniqueIdFor('My Build', new Set(['my-build']))).toBe('my-build-2');
   });
 
-  test('toRemote/fromRemote round-trip preserves signature', () => {
+  test('toRemote/fromRemote round-trip preserves rules', () => {
     const local = {
-      id: 'x', name: 'X', race: 'Protoss', vs_race: 'Zerg', tier: 'A',
+      id: 'x', name: 'X', race: 'Protoss', vs_race: 'Zerg', skill_level: 'gold',
       description: 'd', win_conditions: [], loses_to: [], transitions_into: [],
-      signature: [{ t: 1, what: 'BuildPylon', weight: 1 }],
-      tolerance_sec: 15, min_match_score: 0.6,
+      rules: [{ type: 'before', name: 'BuildPylon', time_lt: 30 }],
       created_at: '2026-04-29T00:00:00Z', updated_at: '2026-04-29T00:00:00Z',
       author: 'me', sync_state: 'pending',
     };
     const remote = SYNC_T.toRemote(local, 'aabb');
     expect(remote.vsRace).toBe('Zerg');
-    expect(remote.toleranceSec).toBe(15);
+    expect(remote.skillLevel).toBe('gold');
     const back = SYNC_T.fromRemote({ ...remote, version: 1, createdAt: 1714000000000, updatedAt: 1714000000000 });
     expect(back.vs_race).toBe('Zerg');
-    expect(back.signature[0].what).toBe('BuildPylon');
+    expect(back.rules[0].name).toBe('BuildPylon');
+    expect(back.rules[0].type).toBe('before');
     expect(back.sync_state).toBe('synced');
   });
 
