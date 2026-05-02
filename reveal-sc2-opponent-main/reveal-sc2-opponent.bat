@@ -19,16 +19,25 @@ setlocal
 set "ROOT=%~dp0"
 set "HELPER=%ROOT%scripts\poller_launch.py"
 
-REM Use whichever Python is on PATH. The installed copy registers
-REM ``python`` system-wide; if you use ``py`` instead, change this.
-where python >nul 2>nul
-if errorlevel 1 (
-    echo ERROR: python not found on PATH.
+REM Prefer the Windows ``py`` launcher because it survives PATH gaps
+REM that frequently break ``python`` (Microsoft Store alias, multiple
+REM Python installs, embedded distributions). Fall back to ``python``
+REM only if ``py`` isn't present so machines that ship just one or
+REM the other still work.
+set "PYTHON="
+where py >nul 2>nul
+if not errorlevel 1 set "PYTHON=py"
+if not defined PYTHON (
+    where python >nul 2>nul
+    if not errorlevel 1 set "PYTHON=python"
+)
+if not defined PYTHON (
+    echo ERROR: neither ``py`` nor ``python`` found on PATH.
     echo Install Python 3.12 or run via the desktop launcher.
     endlocal
     exit /b 1
 )
 
-python "%HELPER%"
+%PYTHON% "%HELPER%"
 set "RC=%ERRORLEVEL%"
 endlocal & exit /b %RC%

@@ -8,6 +8,61 @@ Releases are tagged `vMAJOR.MINOR.PATCH`; the GitHub Actions release
 workflow builds the Windows installer on each tag push and attaches the
 `.exe` and `.sha256` to the corresponding GitHub Release.
 
+## [1.4.0] - 2026-05-02
+
+### Fixed
+
+- **Launcher: only 1 of 3 cmd windows loaded.** ``START_SC2_TOOLS.bat``
+  Box 1 pointed at ``C:\SC2TOOLS\SC2Replay-Analyzer\SC2ReplayAnalyzer.py``,
+  a separate Python project that no longer exists after the merge into
+  ``reveal-sc2-opponent-main``, so the backend never started. Boxes 2
+  and 3 used ``python`` while Box 1 used ``py`` -- whichever variant
+  was missing from PATH made those panels error out immediately.
+  Restructured to ``[1/4]``: Box 1 runs ``npm start`` directly from
+  ``stream-overlay-backend``; Box 2 launches the analyzer GUI silently
+  via ``pythonw -m gui.run_gui`` (logs go to ``data/analyzer.log``);
+  Boxes 3 and 4 use a top-of-file ``%PYTHON%`` variable so the
+  interpreter choice is consistent across panels; Box 4 calls
+  ``scripts/poller_launch.py`` directly instead of double-shelling
+  through ``reveal-sc2-opponent.bat``. ``reveal-sc2-opponent.bat``
+  itself now prefers ``py`` and falls back to ``python`` so the
+  standalone path still works when only one of the two is installed.
+
+- **Onboarding: replay import failed during the wizard.**
+  ``pickPythonProjectDir()`` in ``stream-overlay-backend/analyzer.js``
+  only looked for the legacy sibling ``SC2Replay-Analyzer`` directory.
+  Since the project is now merged into ``reveal-sc2-opponent-main``
+  the lookup returned ``null`` and the wizard surfaced "Could not
+  locate the SC2Replay-Analyzer Python project." Even after the path
+  check, ``scripts/macro_cli.py`` flat-out didn't exist -- the
+  ``/macro/backfill/start`` endpoint was shelling out to a script
+  that was never written.
+
+### Added
+
+- ``scripts/macro_cli.py`` -- new CLI with a ``backfill`` subcommand
+  that reads the configured replay folders from
+  ``data/config.json`` (``paths.replay_folders``), recursively scans
+  every ``.SC2Replay`` file, parses each one with
+  ``core.sc2_replay_parser.parse_live`` (load_level=2, fast), and
+  imports the resulting games into ``data/meta_database.json`` via
+  ``AnalyzerDBStore``. Idempotent on game id; supports
+  ``--db`` / ``--player`` / ``--limit`` / ``--force``. Emits one
+  newline-delimited JSON object per replay so the onboarding wizard
+  can render a live progress bar:
+  ``{"progress": {"i": N, "total": T, "ok": bool, "file": "..."}}``
+  followed by a single
+  ``{"result": {"updated": ..., "errors": ..., "skipped": ..., "total": ...}}``.
+
+### Changed
+
+- ``analyzer.js`` ``pickPythonProjectDir()`` now prefers the merged
+  layout: ``ROOT`` itself (the ``reveal-sc2-opponent-main`` project)
+  is treated as the Python root when ``ROOT/core`` exists, so the
+  ML and macro CLIs no longer require a sibling SC2Replay-Analyzer
+  directory. The legacy sibling and ``C:\SC2TOOLS\SC2Replay-Analyzer``
+  paths are kept as fallbacks for un-migrated installs.
+
 ## [1.3.0] - 2026-05-01
 
 ### Added
