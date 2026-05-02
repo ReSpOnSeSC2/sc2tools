@@ -169,13 +169,26 @@ function salvageJsonObject(raw) {
     // dropping one trailing record per attempt. Catches "write was
     // interrupted mid-record".
     closingCandidates.push({ label: 'append-close-brace', text: trimmed + '\n}\n' });
+    // v1.4.7 fix: collect ALL `},\n` boundaries then attempt the LAST 500
+    // (walking backward from end of file). The pre-1.4.7 code had a bug
+    // where the `bounds.length < 50` cap inside the regex loop kept only
+    // the FIRST 50 boundaries from the *start* of the file, so for any
+    // file with more than 50 record boundaries (e.g. meta_database.json
+    // at ~72,000) the truncated tail was never reached -- recovery
+    // silently failed even though the file was salvageable. The 500-cap
+    // on candidates kept here is a fast-path safeguard so we don't try
+    // tens of thousands of attempts on a totally garbage file; in
+    // practice salvage of a single mid-record truncation succeeds in
+    // < 100 attempts.
     const BOUND_RE = /},\s*\n/g;
     const bounds = [];
     let m;
-    while ((m = BOUND_RE.exec(raw)) !== null && bounds.length < 50) {
+    while ((m = BOUND_RE.exec(raw)) !== null) {
         bounds.push(m.index);  // index of the `}` itself
     }
-    for (let i = bounds.length - 1; i >= 0; i--) {
+    const MAX_DROP_ATTEMPTS = 500;
+    const dropStart = Math.max(0, bounds.length - MAX_DROP_ATTEMPTS);
+    for (let i = bounds.length - 1; i >= dropStart; i--) {
         const cut = bounds[i];
         closingCandidates.push({
             label: 'drop-trailing-records(cut@' + cut + ')',
