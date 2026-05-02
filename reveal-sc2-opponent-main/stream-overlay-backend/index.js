@@ -63,6 +63,7 @@ const { createDiagnosticsRouter } = require('./routes/diagnostics');
 const { createCustomBuildsRouter } = require('./routes/custom-builds');
 // Stage 12.1: auto-update endpoints (see routes/version.js).
 const { createVersionRouter } = require('./routes/version');
+const { createRuntimeRouter } = require('./routes/runtime');
 const { createCommunitySyncService } = require('./services/community_sync');
 // node-fetch v2 ships in node_modules; stick with that to keep CJS
 // require() compatibility on older node runtimes that don't have a
@@ -1471,6 +1472,15 @@ app.use('/api/custom-builds', createCustomBuildsRouter({
 // Stage 12.1: /api/version + /api/update/start. The router decides
 // when to auto-exit so the silent installer can replace files.
 app.use(createVersionRouter());
+
+// Stage 1.4: /api/runtime/* -- restart helpers for processes spawned
+// outside this backend's child tree (the PowerShell poller). Watcher
+// hot-reloads config.json on its own, so it isn't represented here.
+app.use(createRuntimeRouter({
+    repoRoot: ROOT,
+    pythonExe: process.env.PYTHON
+        || (process.platform === 'win32' ? 'py' : 'python3'),
+}));
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });

@@ -180,11 +180,79 @@
               identities={identities}
               pulseIds={pulseIds}
               errors={errors} onPatchConfig={onPatchConfig} />
+            <SettingsRuntimeControlsGroup />
             <SettingsProfileRacesGroup races={profile.races}
               errors={errors} onPatch={onPatch} />
             <SettingsProfileTuningGroup profile={profile}
               errors={errors} onPatch={onPatch} />
           </div>
+        );
+      }
+
+      // Runtime controls -- helper-process restart affordances.
+      // The watcher hot-reloads data/config.json on its own (every ~5s),
+      // so changing replay_folders or the player handle in Settings
+      // takes effect without any user action. The PowerShell poller
+      // runs in its own console window and can't be hot-restarted from
+      // here, so we expose a "Restart Poller" button that spawns a
+      // fresh window via POST /api/runtime/restart-poller and instruct
+      // the user to close the old one.
+      function SettingsRuntimeControlsGroup() {
+        const [busy, setBusy] = useState(false);
+        const [status, setStatus] = useState(null);
+        const restart = async () => {
+          setBusy(true);
+          setStatus(null);
+          try {
+            const res = await fetch("/api/runtime/restart-poller",
+                                    { method: "POST" });
+            const body = await res.json().catch(() => ({}));
+            if (res.ok && body && body.ok) {
+              setStatus({
+                kind: "ok",
+                msg: "New poller window starting"
+                     + (body.pid ? ` (pid ${body.pid}). ` : ". ")
+                     + "Close the old SC2 -- API Poller window to use "
+                     + "the new identity.",
+              });
+            } else {
+              setStatus({
+                kind: "err",
+                msg: (body && body.error) || `restart failed (${res.status})`,
+              });
+            }
+          } catch (err) {
+            setStatus({ kind: "err", msg: String(err.message || err) });
+          } finally {
+            setBusy(false);
+          }
+        };
+        return (
+          <fieldset className="border border-base-700 rounded p-4">
+            <legend className="px-2 text-sm font-semibold text-neutral-100">
+              Runtime helpers
+            </legend>
+            <p className="text-xs text-neutral-400 mb-3 leading-relaxed">
+              After you save, the replay watcher re-reads
+              <code className="text-neutral-300 mx-1">data/config.json</code>
+              automatically (~5 s) and picks up new replay folders and
+              the player handle without a restart. The SC2Pulse poller
+              runs in its own PowerShell window, so it needs a fresh
+              spawn to use the new identity.
+            </p>
+            <div className="flex items-center gap-3">
+              <SettingsButton kind="secondary" onClick={restart}
+                              disabled={busy}>
+                {busy ? "Starting…" : "Restart Poller"}
+              </SettingsButton>
+              {status ? (
+                <span className={"text-xs " + (status.kind === "ok"
+                  ? "text-emerald-300" : "text-red-300")}>
+                  {status.msg}
+                </span>
+              ) : null}
+            </div>
+          </fieldset>
         );
       }
 
@@ -425,6 +493,7 @@
     settingsBattlenetFromIdentity,
     settingsShallowEqual,
     SettingsProfileIdentitiesGroup,
-    SettingsIdentityRow
+    SettingsIdentityRow,
+    SettingsRuntimeControlsGroup
   });
 })();

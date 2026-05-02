@@ -109,6 +109,51 @@ if ($null -eq $CharacterId -or $CharacterId.Length -eq 0) {
     }
 }
 
+# --- Identity pattern --------------------------------------------------
+# Earlier versions of this script hardcoded the player handle as
+# (?i)ReSpOnSe in the "who's me?" regex used by Get-MyResult and the
+# live opponent-detection block. That broke for every other user. We
+# now derive the pattern from -PlayerName when supplied; if it's blank
+# we fall back to looking up character names from Pulse for each
+# resolved $CharacterId so the regex still has a real signal to match.
+$Script:MyNamePattern = $null
+if (-not [string]::IsNullOrWhiteSpace($PlayerName)) {
+    $Script:MyNamePattern = "(?i)" + [regex]::Escape($PlayerName)
+} else {
+    $NameParts = New-Object System.Collections.Generic.HashSet[string]
+    foreach ($CharId in $CharacterId) {
+        try {
+            $CharInfo = Invoke-RestMethod -Uri "${Sc2PulseApiRoot_Bootstrap}/character/${CharId}"
+            $RawName = $null
+            if ($null -ne $CharInfo.members -and $null -ne $CharInfo.members.character) {
+                $RawName = $CharInfo.members.character.name
+            } elseif ($null -ne $CharInfo.character) {
+                $RawName = $CharInfo.character.name
+            }
+            if (-not [string]::IsNullOrWhiteSpace($RawName)) {
+                # Pulse names look like "Name#1234" -- the in-game name
+                # the SC2 client API returns is just the part before #.
+                $Stripped = ($RawName -split '#')[0]
+                if (-not [string]::IsNullOrWhiteSpace($Stripped)) {
+                    $null = $NameParts.Add($Stripped)
+                }
+            }
+        } catch {
+            # Per-id miss is fine; we just need at least one match.
+        }
+    }
+    if ($NameParts.Count -gt 0) {
+        $EscapedParts = $NameParts | ForEach-Object { [regex]::Escape($_) }
+        $Script:MyNamePattern = "(?i)(" + ($EscapedParts -join '|') + ")"
+        Write-Host "Derived player-name pattern from Pulse: $Script:MyNamePattern" -ForegroundColor DarkGray
+    }
+}
+if ([string]::IsNullOrWhiteSpace($Script:MyNamePattern)) {
+    Write-Host "WARNING: could not derive a player-name pattern; opponent detection may misclassify players." -ForegroundColor Yellow
+    # Match-nothing pattern -- safer than a stale hardcoded handle.
+    $Script:MyNamePattern = "(?!x)x"
+}
+
 # Publish the resolved Character IDs to a shared file at the project
 # root so the Node overlay backend (and any other component) can read
 # them without re-implementing the auto-detect. Single source of truth:
@@ -389,7 +434,7 @@ function Get-OpponentRecord {
 
 function Get-MyResult {
     param([Object[]]$Players)
-    $Me = $Players | Where-Object { $_.Type -ne "computer" -and $_.Name -match "(?i)ReSpOnSe" } | Select-Object -First 1
+    $Me = $Players | Where-Object { $_.Type -ne "computer" -and $_.Name -match $Script:MyNamePattern } | Select-Object -First 1
     if ($null -eq $Me) { return $null }
     if ($Me.result -ne "Undecided" -and -not [string]::IsNullOrEmpty($Me.result)) { return $Me.result }
     return $null
@@ -795,8 +840,8 @@ while($true) {
         
         if(-not [string]::IsNullOrEmpty($FilePath) -and (Test-Path -Path $FilePath)) { Clear-Content -Path $FilePath }
 
-        $Me = $Script:CurrentGame.Players | Where-Object { $_.Type -ne "computer" -and $_.Name -match "(?i)ReSpOnSe" } | Select-Object -First 1
-        $Opponent = $Script:CurrentGame.Players | Where-Object { $_.Type -ne "computer" -and $_.Name -notmatch "(?i)ReSpOnSe" } | Select-Object -First 1
+        $Me = $Script:CurrentGame.Players | Where-Object { $_.Type -ne "computer" -and $_.Name -match $Script:MyNamePattern } | Select-Object -First 1
+        $Opponent = $Script:CurrentGame.Players | Where-Object { $_.Type -ne "computer" -and $_.Name -notmatch $Script:MyNamePattern } | Select-Object -First 1
 
         if ($null -eq $Opponent -or $null -eq $Me) {
             Write-Host "Waiting for players to load fully..." -ForegroundColor Yellow
