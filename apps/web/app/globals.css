@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: theme("colors.bg.DEFAULT");
+  color: theme("colors.text.DEFAULT");
+  font-family: theme("fontFamily.sans");
+}
+
+a {
+  color: theme("colors.accent.DEFAULT");
+}
+a:hover {
+  color: theme("colors.accent.hover");
+}
+
+*:focus-visible {
+  outline: 2px solid theme("colors.accent.DEFAULT");
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}
+
+.card {
+  background: theme("colors.bg.surface");
+  border: 1px solid theme("colors.border.DEFAULT");
+  border-radius: 12px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  background: theme("colors.accent.DEFAULT");
+  color: theme("colors.bg.DEFAULT");
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.btn:hover {
+  background: theme("colors.accent.hover");
+}
+.btn-secondary {
+  background: theme("colors.bg.elevated");
+  color: theme("colors.text.DEFAULT");
+  border: 1px solid theme("colors.border.DEFAULT");
+}
+.btn-danger {
+  background: theme("colors.danger");
+  color: theme("colors.bg.DEFAULT");
+}
+
+.input {
+  background: theme("colors.bg.elevated");
+  border: 1px solid theme("colors.border.DEFAULT");
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  color: theme("colors.text.DEFAULT");
+  width: 100%;
+}
+.input:focus {
+  border-color: theme("colors.accent.DEFAULT");
+}
