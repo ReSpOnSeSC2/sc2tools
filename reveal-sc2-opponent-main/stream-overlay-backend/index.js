@@ -59,6 +59,8 @@ const { createBackupsRouter } = require('./routes/backups');
 // schema validation, SC2Pulse, Twitch, OBS, disk, logs, and the macro
 // engine version pin. /api/diagnostics/bundle streams a redacted .zip.
 const { createDiagnosticsRouter } = require('./routes/diagnostics');
+const { createRecoveryRouter } = require('./routes/recovery');
+const integritySweep = require('./lib/integrity_sweep');
 // Stage 7.4: custom-builds router + community sync service.
 const { createCustomBuildsRouter } = require('./routes/custom-builds');
 // Stage 12.1: auto-update endpoints (see routes/version.js).

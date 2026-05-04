@@ -62,12 +62,146 @@
 'use strict';
 
 const fs = require('fs');
+const path = require('path');
 const { withFileLockSync } = require('./file-lock');
 
 const TMP_SUFFIX = '.tmp';
 const BAK_SUFFIX = '.bak';
 const DEFAULT_JSON_INDENT = 2;
 const DEFAULT_ENCODING = 'utf8';
+
+// ---------------------------------------------------------------------------
+// Stage 4 of STAGE_DATA_INTEGRITY_ROADMAP -- validate-before-rename gate.
+// ---------------------------------------------------------------------------
+// Per-basename minimum top-level key count. The atomic-write helper
+// refuses to rename a temp into a tracked file when the temp would drop
+// the live file below the floor. Set SC2TOOLS_INTEGRITY_FLOORS=0 to
+// bypass the gate (emergency rollback hatch).
+const FILE_FLOORS = Object.freeze({
+  'MyOpponentHistory.json': 100,
+  'meta_database.json':     50,
+  'custom_builds.json':     0,    // legitimate empty-state on first install
+  'profile.json':           1,    // always at least 1 player
+  'config.json':            5,    // core keys after onboarding
+});
+const INTEGRITY_FLOORS_ENV_VAR = 'SC2TOOLS_INTEGRITY_FLOORS';
+const INTEGRITY_FLOORS_DISABLE_VALUE = '0';
+
+class DataIntegrityError extends Error {
+  /**
+   * Raised by the validate-before-rename gate.
+   *
+   * Two trip conditions:
+   *   - Temp file failed to parse / round-trip.
+   *   - Temp would shrink the live file below its FILE_FLOORS entry.
+   *
+   * Callers MUST NOT silently retry; the right response is loud
+   * logging + operator review.
+   *
+   * @param {string} message
+   */
+  constructor(message) {
+    super(message);
+    this.name = 'DataIntegrityError';
+  }
+}
+
+function _floorsDisabled() {
+  return process.env[INTEGRITY_FLOORS_ENV_VAR] === INTEGRITY_FLOORS_DISABLE_VALUE;
+}
+
+function _resolveFloor(targetPath) {
+  if (_floorsDisabled()) return null;
+  const base = path.basename(targetPath);
+  return Object.prototype.hasOwnProperty.call(FILE_FLOORS, base)
+    ? FILE_FLOORS[base]
+    : null;
+}
+
+function _existingTopLevelKeyCount(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return 0;
+    let raw = fs.readFileSync(filePath, 'utf8');
+    if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
+    raw = raw.replace(/[\s\x00]+$/, '');
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? Object.keys(parsed).length
+      : 0;
+  } catch (_err) {
+    return 0;
+  }
+}
+
+/**
+ * Stage 4 gate -- read the bytes back from `tmp` and verify:
+ *   1. JSON round-trips.
+ *   2. Top-level shape matches the in-memory value (dict vs list, len).
+ *   3. The shrinkage floor is honoured for tracked files.
+ *
+ * Throws DataIntegrityError on any failure; never deletes the temp
+ * (caller's normal cleanup path handles that).
+ *
+ * @param {string} tmpPath
+ * @param {string} targetPath
+ * @param {*} inMemoryData
+ */
+function _validateTempBeforeRename(tmpPath, targetPath, inMemoryData) {
+  let roundTripped;
+  try {
+    let raw = fs.readFileSync(tmpPath, 'utf8');
+    if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
+    roundTripped = JSON.parse(raw);
+  } catch (err) {
+    throw new DataIntegrityError(
+      `validate-before-rename: temp ${tmpPath} failed JSON parse: ${err.message}`,
+    );
+  }
+  // Top-level shape match.
+  if (inMemoryData && typeof inMemoryData === 'object' && !Array.isArray(inMemoryData)) {
+    if (!roundTripped || typeof roundTripped !== 'object' || Array.isArray(roundTripped)) {
+      throw new DataIntegrityError(
+        `validate-before-rename: temp ${tmpPath} parsed to non-object but in-memory was object`,
+      );
+    }
+    const inKeys = Object.keys(inMemoryData).length;
+    const outKeys = Object.keys(roundTripped).length;
+    if (inKeys !== outKeys) {
+      throw new DataIntegrityError(
+        `validate-before-rename: temp ${tmpPath} has ${outKeys} keys `
+        + `but in-memory has ${inKeys}; refusing rename`,
+      );
+    }
+  } else if (Array.isArray(inMemoryData)) {
+    if (!Array.isArray(roundTripped)) {
+      throw new DataIntegrityError(
+        `validate-before-rename: temp ${tmpPath} parsed to non-array but in-memory was array`,
+      );
+    }
+    if (roundTripped.length !== inMemoryData.length) {
+      throw new DataIntegrityError(
+        `validate-before-rename: temp has ${roundTripped.length} items `
+        + `but in-memory has ${inMemoryData.length}`,
+      );
+    }
+  }
+  // Shrinkage floor.
+  const floor = _resolveFloor(targetPath);
+  if (floor !== null && roundTripped && typeof roundTripped === 'object'
+      && !Array.isArray(roundTripped)) {
+    const onDisk = _existingTopLevelKeyCount(targetPath);
+    const candidateKeys = Object.keys(roundTripped).length;
+    if (onDisk >= floor && candidateKeys < floor) {
+      throw new DataIntegrityError(
+        `validate-before-rename: refusing to publish ${targetPath}: `
+        + `live file has ${onDisk} top-level keys, candidate has `
+        + `${candidateKeys} (floor=${floor}). This is the read-modify-`
+        + `write wipe pattern.`,
+      );
+    }
+  }
+}
 
 /**
  * Write a JSON-serialisable value to disk atomically, keeping a .bak
@@ -110,8 +244,20 @@ function atomicWriteJson(filePath, data, options) {
       fs.closeSync(fd);
     }
 
-    // Step 4: snapshot the current live file to .bak so reads can fall back.
-    // Best-effort -- a missing or unreadable live file is not an error here.
+    // Step 4a: Stage 4 of STAGE_DATA_INTEGRITY_ROADMAP -- validate
+    // the on-disk temp before the rename. A torn write or a shrinkage
+    // wipe is caught HERE and the live file is left untouched.
+    try {
+      _validateTempBeforeRename(tmp, filePath, data);
+    } catch (validateErr) {
+      try { fs.unlinkSync(tmp); } catch (_e) { /* tmp may be gone */ }
+      throw validateErr;
+    }
+
+    // Step 4b: snapshot the current live file to .bak so reads can fall
+    // back. Best-effort -- a missing or unreadable live file is not an
+    // error here. Only runs after the validate gate has passed so a
+    // bad write never overwrites a good .bak.
     try {
       if (fs.existsSync(filePath)) {
         fs.copyFileSync(filePath, bak);
@@ -337,6 +483,10 @@ module.exports = {
   safeReadJson,
   validateCriticalFiles,
   quarantineCorruptFile,
+  // Stage 4 surface area.
+  DataIntegrityError,
+  FILE_FLOORS,
+  INTEGRITY_FLOORS_ENV_VAR,
   // Constants exported for tests + tools that need to recognise tmp files.
   TMP_SUFFIX,
   BAK_SUFFIX,

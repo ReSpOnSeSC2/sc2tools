@@ -306,6 +306,30 @@ function Get-History {
 # `analyzer.js` then refuses to parse. The tmp + Move-Item dance below
 # guarantees the destination file is either fully-written-good or
 # untouched -- never half-written.
+# Stage 3 of STAGE_DATA_INTEGRITY_ROADMAP -- cross-process lock helper.
+# Dot-source the same Lock-FileAtomic.ps1 that the Python (core/file_lock.py)
+# and Node (lib/file-lock.js) sides also coordinate against. The lockfile
+# under data/.locks/<safe>.lock guarantees a Save-History rename never
+# races a parallel Python or Node writer's atomic publish.
+$_LockFileAtomicPath = Join-Path $PSScriptRoot 'lib\Lock-FileAtomic.ps1'
+if (Test-Path -LiteralPath $_LockFileAtomicPath) {
+    . $_LockFileAtomicPath
+} else {
+    # Defensive: if the lib file is missing (clean checkout, packaging
+    # accident) define a no-op shim so Save-History still runs.  This
+    # matches the SC2TOOLS_DATA_LOCK_ENABLED=0 emergency-rollback hatch.
+    function Lock-FileAtomic {
+        param(
+            [Parameter(Mandatory)] [string]      $TargetPath,
+            [Parameter(Mandatory)] [scriptblock] $ScriptBlock,
+            [int] $TimeoutSec    = 30,
+            [int] $StaleAfterSec = 30
+        )
+        return & $ScriptBlock
+    }
+    Write-Host "WARNING: lib/Lock-FileAtomic.ps1 missing; Save-History will run without the cross-process lock." -ForegroundColor Yellow
+}
+
 function Write-FileAtomic {
     param(
         [Parameter(Mandatory)] [string] $TargetPath,
@@ -420,7 +444,19 @@ function Save-History {
     $Json = $sb.ToString()
     # Atomic write: tmp + rename. Survives a mid-write kill without
     # leaving a half-written file on disk.
-    Write-FileAtomic -TargetPath $HistoryFilePath -Content $Json -Encoding ([System.Text.Encoding]::UTF8)
+    #
+    # Stage 3 of STAGE_DATA_INTEGRITY_ROADMAP: wrap the atomic write
+    # in the cross-process lock so the rename cannot race a Python
+    # or Node writer mid-publish. Lock-FileAtomic creates a lockfile
+    # under data/.locks/<safe>.lock for the duration of the script
+    # block; the matching Python helper (core.file_lock.file_lock)
+    # and Node helper (lib/file-lock.withFileLockSync) honour the
+    # same file. Falls back to a no-op when the helper file is
+    # missing (defensive shim defined above) or when the user has
+    # set $env:SC2TOOLS_DATA_LOCK_ENABLED='0'.
+    Lock-FileAtomic -TargetPath $HistoryFilePath -TimeoutSec 30 -ScriptBlock {
+        Write-FileAtomic -TargetPath $HistoryFilePath -Content $Json -Encoding ([System.Text.Encoding]::UTF8)
+    }
 }
 
 function Update-OpponentHistory {

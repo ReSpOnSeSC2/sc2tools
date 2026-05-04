@@ -70,7 +70,16 @@ SERVER_URL_LIVE = "http://localhost:3000/api/replay"
 SERVER_URL_DEEP = "http://localhost:3000/api/replay/deep"
 
 POST_TIMEOUT_SEC = 3
-DEEP_POST_TIMEOUT_SEC = 6
+# Deep parse payloads carry tracker events + full build log + graph
+# series, which can run to several hundred KB. During catch-up bursts
+# the local Node server queues replays back-to-back and a tight 6s
+# budget intermittently times out (observed on Taito Citadel runs).
+# 15s leaves room for the server to drain the queue without making
+# the watcher block noticeably when the server is genuinely down --
+# `_post_json` short-circuits on connection-refused either way.
+DEEP_POST_TIMEOUT_SEC = 15
+POST_MAX_RETRIES = 3
+POST_RETRY_BACKOFF_BASE_SEC = 0.5  # 0.5s, 1s, 2s
 
 # Catch-up scan tunables. See `_catch_up_at_startup` for context.
 #
@@ -87,6 +96,14 @@ import glob  # noqa: E402
 
 CATCH_UP_BUFFER = timedelta(hours=6)
 CATCH_UP_FALLBACK = timedelta(days=14)
+
+# Per-process memo of (toon, name_pulse_id, toon_pulse_id) tuples we've
+# already warned about. The reconcile log is diagnostic -- once per
+# opponent per watcher session is plenty; firing on every replay
+# against the same person clutters the catch-up log without adding
+# information. Reset on process restart, which is fine: the operator
+# sees the warning once after a restart and that's the signal.
+_RECONCILE_WARNED: set = set()
 
 # How often we re-stat config.json for the hot-reload check. 5 s is fast
 # enough that "save in Settings, see watcher pick it up" feels live, and
@@ -278,19 +295,47 @@ def _deep_payload(ctx: ReplayContext) -> Optional[Dict[str, Any]]:
 # HTTP delivery
 # =========================================================
 def _post_json(url: str, payload: Dict[str, Any], timeout: int) -> bool:
-    try:
-        r = requests.post(url, json=payload, timeout=timeout)
-        r.raise_for_status()
-        print(f"[Watcher] Delivered to {url}")
-        return True
-    except requests.exceptions.ConnectionError:
-        print(f"[Watcher] POST failed: connection refused ({url})")
-    except requests.exceptions.Timeout:
-        print(f"[Watcher] POST failed: timeout ({url})")
-    except requests.exceptions.HTTPError as e:
-        print(f"[Watcher] POST failed: HTTP error {e}")
-    except Exception as e:
-        print(f"[Watcher] POST failed: {e}")
+    """POST JSON to the local server with retry on transient failures.
+
+    Retry policy:
+      * Timeouts and 5xx server errors are retried with exponential
+        backoff -- the local Node server is usually just busy under
+        catch-up burst load and a short backoff lets it drain.
+      * Connection-refused is NOT retried: the server isn't running,
+        no amount of waiting will fix that.
+      * 4xx errors (other than 408/429) are NOT retried: bad payload
+        shape won't get better on a retry.
+    """
+    last_msg = ""
+    for attempt in range(POST_MAX_RETRIES):
+        try:
+            r = requests.post(url, json=payload, timeout=timeout)
+            r.raise_for_status()
+            print(f"[Watcher] Delivered to {url}")
+            return True
+        except requests.exceptions.ConnectionError:
+            # Server is down. Retrying won't help.
+            print(f"[Watcher] POST failed: connection refused ({url})")
+            return False
+        except requests.exceptions.Timeout:
+            last_msg = f"timeout ({url})"
+        except requests.exceptions.HTTPError as e:
+            status = getattr(e.response, "status_code", None)
+            # 4xx (except 408 timeout / 429 rate-limit) is final.
+            if status is not None and 400 <= status < 500 and status not in (408, 429):
+                print(f"[Watcher] POST failed: HTTP error {e}")
+                return False
+            last_msg = f"HTTP error {e}"
+        except Exception as e:
+            # Unknown failure mode -- don't retry blindly.
+            print(f"[Watcher] POST failed: {e}")
+            return False
+        if attempt < POST_MAX_RETRIES - 1:
+            time.sleep(POST_RETRY_BACKOFF_BASE_SEC * (2 ** attempt))
+    print(
+        f"[Watcher] POST failed: {last_msg} "
+        f"(gave up after {POST_MAX_RETRIES} attempts)"
+    )
     return False
 
 
@@ -463,15 +508,23 @@ class ReplayHandler(FileSystemEventHandler):
             and toon_pulse_id != name_pulse_id
         ):
             # Name-based lookup would have routed this game to a
-            # different person -- classic barcode collision. We log
-            # at WARN-equivalent so the diagnostics page can surface
-            # it; PII is hashed.
+            # different person -- classic barcode collision OR a
+            # legacy Black Book entry from before the toon resolver
+            # existed. We log once per (toon, mismatched-pair) per
+            # process so the operator sees the signal but the log
+            # doesn't fill up when playing the same opponent twenty
+            # times. Routing already prefers toon_pulse_id, so the
+            # game is correctly attributed regardless.
             from core.pulse_resolver import _hash_name
-            print(
-                "[Watcher] reconcile: name lookup pointed to "
-                f"{name_pulse_id} but toon resolves to {toon_pulse_id} "
-                f"for {_hash_name(opp_clean)}; using toon."
-            )
+            warn_key = (opp.handle or "", str(name_pulse_id), str(toon_pulse_id))
+            if warn_key not in _RECONCILE_WARNED:
+                _RECONCILE_WARNED.add(warn_key)
+                print(
+                    "[Watcher] reconcile: name lookup pointed to "
+                    f"{name_pulse_id} but toon resolves to {toon_pulse_id} "
+                    f"for {_hash_name(opp_clean)}; using toon. "
+                    "(further occurrences for this opponent will be silent)"
+                )
 
         # OPPONENT build-log lines, deduped so the timeline shows real
         # milestones (buildings, upgrades, first-of-each-unit) rather

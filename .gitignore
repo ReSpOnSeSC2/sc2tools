@@ -115,3 +115,23 @@ nsa*.tmp
 **/*.pre-stripstrays-*
 **/*.tmp.promoted-*
 **/*.tmp.promoted-from*
+
+# Orphan-recovery output. recover_orphan_history.py writes timestamped
+# directories full of per-record .tmp_<uuid>.json fragments while it
+# sweeps the on-disk Black Book; individual fragments can grow to
+# hundreds of MB on a corrupted history (one such commit was rejected
+# by GitHub at 266 MB > 100 MB hard limit). Per-incident output, never
+# source-controlled.
+**/recovery-orphans-*/
+**/data/*.pre-recovery-*
+**/.tmp_*.json
+
+# Cross-process file locks (atomic_io / Lock-FileAtomic.ps1). Tiny,
+# transient, machine-local; checking them in causes spurious diffs and
+# false conflicts on every run.
+**/data/.locks/
+
+# Build/install marker files. .python-deps-stamp is touched by the
+# bootstrap script after pip install completes; it's a per-machine
+# state file, not a source artifact.
+**/data/.python-deps-stamp

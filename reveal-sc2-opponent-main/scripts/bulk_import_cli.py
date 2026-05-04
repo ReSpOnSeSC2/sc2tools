@@ -88,13 +88,19 @@ def _emit(obj: Dict[str, Any]) -> None:
 
 
 def _atomic_write_json(path: str, payload: Any) -> None:
-    """Write JSON atomically: tmp -> fsync -> rename."""
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2, default=str, ensure_ascii=False)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp, path)
+    """Atomic JSON write -- thin wrapper around the canonical helper.
+
+    Routes through ``core.atomic_io.atomic_write_json`` (Stage 2 of the
+    data-integrity roadmap) so ``bulk_import_cli`` shares the same
+    cross-process file lock, ``.bak`` snapshot, and validate-before-
+    rename gate as every other writer in the project.
+
+    Kept under the legacy private name so the existing call sites do
+    not need to change.
+    """
+    from core.atomic_io import atomic_write_json
+
+    atomic_write_json(path, payload, indent=2)
 
 
 def _load_json_or(path: str, default: Any) -> Any:

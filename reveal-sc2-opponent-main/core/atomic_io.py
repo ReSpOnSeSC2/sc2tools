@@ -58,13 +58,152 @@ import logging
 import os
 import shutil
 import tempfile
-from typing import Any
+from typing import Any, Dict, Optional
 
 from core.file_lock import file_lock  # noqa: E402  (sibling module)
 
 logger = logging.getLogger(__name__)
 
 BAK_SUFFIX = ".bak"
+
+# ---------------------------------------------------------------------------
+# Stage 4 of STAGE_DATA_INTEGRITY_ROADMAP -- validate-before-rename gate.
+# ---------------------------------------------------------------------------
+# Per-basename minimum top-level dict key count. The atomic-write helper
+# refuses to rename a temp into a tracked file when the temp would drop
+# the live file below the floor. Set the env var
+# ``SC2TOOLS_INTEGRITY_FLOORS=0`` to bypass the gate (emergency rollback
+# hatch; matches the same opt-out style as the file lock).
+#
+# Floors are conservative -- the smallest legitimate post-onboarding
+# version of each file. Smaller-than-floor writes are the read-modify-
+# write wipe pattern from the April-2026 truncation incidents.
+FILE_FLOORS: Dict[str, int] = {
+    "MyOpponentHistory.json": 100,
+    "meta_database.json":     50,
+    "custom_builds.json":     0,    # legitimate empty-state
+    "profile.json":           1,    # always at least 1 player
+    "config.json":            5,    # core keys after onboarding
+}
+INTEGRITY_FLOORS_ENV_VAR = "SC2TOOLS_INTEGRITY_FLOORS"
+INTEGRITY_FLOORS_DISABLE_VALUE = "0"
+
+
+class DataIntegrityError(RuntimeError):
+    """Raised by the validate-before-rename gate.
+
+    Two trip conditions:
+
+    * The temp file failed to parse / round-trip JSON. The on-disk live
+      file is unchanged; the temp is removed.
+    * The temp would shrink the live file below its registered floor in
+      :data:`FILE_FLOORS`. Live file unchanged; temp removed.
+
+    Callers MUST NOT silently retry. The right response is to log the
+    error and require operator review -- a retry against the same
+    in-memory dict will trip the same gate.
+    """
+
+
+def _floors_disabled() -> bool:
+    return os.environ.get(INTEGRITY_FLOORS_ENV_VAR, "1") == INTEGRITY_FLOORS_DISABLE_VALUE
+
+
+def _resolve_floor(target_path: str) -> Optional[int]:
+    """Return the registered floor for ``target_path``, or None if untracked."""
+    if _floors_disabled():
+        return None
+    base = os.path.basename(target_path)
+    return FILE_FLOORS.get(base)
+
+
+def _existing_top_level_key_count(path: str) -> int:
+    """Return current top-level dict key count, or 0 on missing/unparseable."""
+    try:
+        if not os.path.exists(path):
+            return 0
+        with open(path, "rb") as f:
+            raw = f.read()
+        if raw.startswith(b"\xef\xbb\xbf"):
+            raw = raw[3:]
+        raw = raw.strip(b" \t\r\n\x00")
+        if not raw:
+            return 0
+        parsed = json.loads(raw.decode("utf-8"))
+        return len(parsed) if isinstance(parsed, dict) else 0
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def _validate_temp_before_rename(
+    tmp_path: str,
+    target_path: str,
+    in_memory_data: Any,
+) -> None:
+    """Run the Stage 4 gate against the temp file before publishing it.
+
+    Reads the bytes back from disk and verifies:
+
+      1. The JSON parses cleanly (catches torn writes, partial fsyncs,
+         encoding-related corruption).
+      2. The shape matches the in-memory value at the top-level shape
+         (dict vs. list vs. scalar) and, for dicts, the same key set.
+         A mismatch here means the on-disk bytes were corrupted between
+         the f.write and the fsync -- so the rename would publish junk.
+      3. The shrinkage floor in :data:`FILE_FLOORS` is honoured: if the
+         live file currently has >= floor keys, the candidate must too.
+
+    Raises :class:`DataIntegrityError` on any failure. Does not unlink
+    the temp -- the caller's normal cleanup path handles that.
+    """
+    # 1) Round-trip parse.
+    try:
+        with open(tmp_path, "rb") as f:
+            raw = f.read()
+        if raw.startswith(b"\xef\xbb\xbf"):
+            raw = raw[3:]
+        round_tripped = json.loads(raw.decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise DataIntegrityError(
+            f"validate-before-rename: temp {tmp_path} failed JSON parse: {exc}"
+        ) from exc
+
+    # 2) Shape match against the in-memory value.
+    if isinstance(in_memory_data, dict):
+        if not isinstance(round_tripped, dict):
+            raise DataIntegrityError(
+                f"validate-before-rename: temp {tmp_path} parsed to a "
+                f"{type(round_tripped).__name__} but in-memory was dict"
+            )
+        if len(round_tripped) != len(in_memory_data):
+            raise DataIntegrityError(
+                f"validate-before-rename: temp {tmp_path} has "
+                f"{len(round_tripped)} keys but in-memory has "
+                f"{len(in_memory_data)}; refusing rename"
+            )
+    elif isinstance(in_memory_data, list):
+        if not isinstance(round_tripped, list):
+            raise DataIntegrityError(
+                f"validate-before-rename: temp parsed to "
+                f"{type(round_tripped).__name__} but in-memory was list"
+            )
+        if len(round_tripped) != len(in_memory_data):
+            raise DataIntegrityError(
+                f"validate-before-rename: temp has {len(round_tripped)} "
+                f"items but in-memory has {len(in_memory_data)}"
+            )
+
+    # 3) Shrinkage floor.
+    floor = _resolve_floor(target_path)
+    if floor is not None and isinstance(round_tripped, dict):
+        on_disk = _existing_top_level_key_count(target_path)
+        if on_disk >= floor and len(round_tripped) < floor:
+            raise DataIntegrityError(
+                f"validate-before-rename: refusing to publish {target_path}: "
+                f"live file currently has {on_disk} top-level keys, "
+                f"candidate has {len(round_tripped)} (floor={floor}). "
+                f"This is the read-modify-write wipe pattern."
+            )
 
 
 def atomic_write_json(
@@ -107,6 +246,12 @@ def atomic_write_json(
                 # page cache.
                 f.flush()
                 os.fsync(f.fileno())
+            # Stage 4: validate-before-rename. Read the temp back and
+            # confirm it parses, has the expected shape, and would not
+            # shrink the live file below its registered floor. A torn
+            # write or accidental wipe is caught HERE, not by the user
+            # opening a half-written file in the SPA.
+            _validate_temp_before_rename(tmp_path, path, data)
             # Snapshot the current live file to .bak *after* the temp is
             # safely written but *before* the rename. This means .bak
             # always holds the last intact commit so safe_read_json can

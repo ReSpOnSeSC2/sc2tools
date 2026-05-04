@@ -63,9 +63,12 @@ from __future__ import annotations
 import json
 import os
 
-from .atomic_io import atomic_write_text
+from .atomic_io import (
+    DataIntegrityError as _AtomicIODataIntegrityError,
+    atomic_write_json as _canonical_atomic_write_json,
+    atomic_write_text,
+)
 import shutil
-import tempfile
 import threading
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
@@ -83,17 +86,15 @@ from .paths import (
 # =========================================================
 # Atomic write
 # =========================================================
-class DataIntegrityError(RuntimeError):
-    """Raised when an existing data file cannot be safely read or written.
-
-    Callers that catch this MUST NOT proceed with a save() that would
-    overwrite the file with default-fallback content -- that is exactly
-    how the 27MB MyOpponentHistory.json was reduced to 15KB on
-    2026-05-02 (read returned {} on a transient parse error, the watcher
-    appended today's 2 opponents, and atomic-replace blew away 3,175
-    historical records). The right response is to log loudly, abort the
-    write, and require operator review.
-    """
+# Stage 4 of STAGE_DATA_INTEGRITY_ROADMAP unifies the two
+# DataIntegrityError classes that used to live independently in
+# core.atomic_io and core.data_store. The exception type itself is
+# now defined in atomic_io (so the canonical helper can raise it
+# from inside the validate-before-rename gate); this module's
+# alias keeps the historical import path
+# (``from core.data_store import DataIntegrityError``) working
+# for every existing caller.
+DataIntegrityError = _AtomicIODataIntegrityError
 
 
 # Catastrophic-shrinkage threshold. Used by save() callers to refuse
@@ -127,19 +128,18 @@ def _atomic_write_json(
     *,
     min_keep_keys: Optional[int] = None,
 ) -> None:
-    """Atomic JSON write with .bak preservation and shrinkage guard.
+    """Atomic JSON write -- shrinkage guard + canonical helper.
 
-    Sequence:
-        1. Serialize to a temp file (mkstemp, same dir = same fs = atomic rename).
-        2. flush + fsync the temp so bytes hit the platter before rename.
-        3. Snapshot the current live file to ``<path>.bak`` (best-effort).
-        4. ``os.replace`` swap.
+    Stage 2 of STAGE_DATA_INTEGRITY_ROADMAP: this is now a thin wrapper
+    around :func:`core.atomic_io.atomic_write_json`. The canonical helper
+    handles the cross-process lock, the .bak snapshot, the
+    flush + fsync, the validate-before-rename gate (Stage 4), and the
+    atomic rename. This wrapper only adds the data-store-specific
+    shrinkage guard (refuse to wipe a previously-large dict).
 
-    The .bak step closes the gap that caused 2026-05-02's data loss:
-    the previous version of this function did NOT keep a .bak, so once
-    the live file got truncated by a faulty save() there was no
-    same-directory rollback -- only timestamped quarantine copies that
-    drifted out of date. Now every save preserves the prior commit.
+    The shrinkage guard fires BEFORE the canonical helper runs, so a
+    rejection leaves the live file untouched and never produces a
+    .tmp file.
 
     Args:
         path: Destination JSON file.
@@ -151,8 +151,8 @@ def _atomic_write_json(
             ``DataIntegrityError`` so callers can log loudly and abort.
 
     Raises:
-        DataIntegrityError: when the shrinkage guard trips. The temp
-            file is cleaned up; the live file is unchanged.
+        DataIntegrityError: when the shrinkage guard trips. The live
+            file is unchanged.
     """
     if min_keep_keys is not None and isinstance(data, dict):
         on_disk = _existing_top_level_key_count(path)
@@ -165,38 +165,11 @@ def _atomic_write_json(
                 f"blindly."
             )
 
-    parent = os.path.dirname(path) or "."
-    os.makedirs(parent, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(
-        prefix=".tmp_",
-        suffix=".json",
-        dir=parent,
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=indent, ensure_ascii=False)
-            # flush + fsync before rename so the NTFS lazy writer cannot
-            # leave the renamed-into-place file with only the bytes
-            # already in the page cache (the April-2026 truncation
-            # mechanism). See core/atomic_io.py for the full write-up.
-            f.flush()
-            os.fsync(f.fileno())
-        # Snapshot the current live file to .bak BEFORE the rename so
-        # safe_read_json (and tooling that reads <path>.bak directly)
-        # always has the last intact commit available for recovery.
-        # Best-effort: a copy failure must not abort the rename.
-        try:
-            if os.path.exists(path):
-                shutil.copy2(path, path + ".bak")
-        except Exception:
-            pass  # keep the rename moving; .bak is a defense, not a gate
-        os.replace(tmp_path, path)
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+    # Delegate to the canonical helper. It wraps the write in the
+    # cross-process file_lock, snapshots .bak, fsyncs the temp before
+    # rename, runs the Stage 4 validate-before-rename gate, and does
+    # the atomic os.replace.
+    _canonical_atomic_write_json(path, data, indent=indent)
 
 def _read_json(path: str, default: Any) -> Any:
     """Read JSON with crash-safety + corruption-aware return semantics.
