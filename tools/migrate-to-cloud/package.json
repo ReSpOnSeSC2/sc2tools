@@ -1,0 +1,19 @@
+{
+  "name": "@sc2tools/migrate-to-cloud",
+  "version": "0.1.0",
+  "private": true,
+  "description": "One-shot migrator: reads the local app's MyOpponentHistory.json + meta_database.json + custom_builds.json and uploads every record into the cloud SaaS account.",
+  "type": "commonjs",
+  "main": "src/cli.js",
+  "bin": {
+    "sc2tools-migrate": "bin/migrate-to-cloud.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node bin/migrate-to-cloud.js",
+    "test": "node --test src/__tests__/*.test.js"
+  },
+  "dependencies": {}
+}

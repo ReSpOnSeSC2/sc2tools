@@ -21,14 +21,12 @@
 const { COLLECTIONS } = require("../config/constants");
 
 class SchemaMigrationError extends Error {
-  /** @param {string} msg */
   constructor(msg) {
     super(msg);
     this.name = "SchemaMigrationError";
   }
 }
 class SchemaTooNewError extends Error {
-  /** @param {string} msg */
   constructor(msg) {
     super(msg);
     this.name = "SchemaTooNewError";
@@ -84,31 +82,6 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
-  [COLLECTIONS.ML_MODELS]: {
-    collection: COLLECTIONS.ML_MODELS,
-    currentVersion: 1,
-    versionKey: VERSION_KEY,
-  },
-  [COLLECTIONS.ML_JOBS]: {
-    collection: COLLECTIONS.ML_JOBS,
-    currentVersion: 1,
-    versionKey: VERSION_KEY,
-  },
-  [COLLECTIONS.IMPORT_JOBS]: {
-    collection: COLLECTIONS.IMPORT_JOBS,
-    currentVersion: 1,
-    versionKey: VERSION_KEY,
-  },
-  [COLLECTIONS.MACRO_JOBS]: {
-    collection: COLLECTIONS.MACRO_JOBS,
-    currentVersion: 1,
-    versionKey: VERSION_KEY,
-  },
-  [COLLECTIONS.AGENT_RELEASES]: {
-    collection: COLLECTIONS.AGENT_RELEASES,
-    currentVersion: 1,
-    versionKey: VERSION_KEY,
-  },
 });
 
 /** @type {{collection:string,fromVersion:number,toVersion:number,forward:Function,backward:Function,description?:string}[]} */
@@ -138,7 +111,7 @@ function registerMigration(m) {
   ) {
     throw new Error("registerMigration: malformed migration");
   }
-  if (!getSpec(m.collection)) {
+  if (!REGISTRY[m.collection]) {
     throw new Error(`registerMigration: unknown collection '${m.collection}'`);
   }
   MIGRATIONS.push(m);
@@ -146,10 +119,9 @@ function registerMigration(m) {
 
 /** @param {string} collection */
 function getSpec(collection) {
-  if (!Object.prototype.hasOwnProperty.call(REGISTRY, collection)) return null;
-  return /** @type {Record<string, {collection: string, currentVersion: number, versionKey: string}>} */ (REGISTRY)[
-    collection
-  ];
+  return Object.prototype.hasOwnProperty.call(REGISTRY, collection)
+    ? REGISTRY[collection]
+    : null;
 }
 
 /** @param {string} collection */
@@ -182,11 +154,6 @@ function getOnDiskVersion(doc, collection) {
   return typeof v === "number" && Number.isInteger(v) ? v : null;
 }
 
-/**
- * @param {string} collection
- * @param {number} fromV
- * @param {number} toV
- */
 function _findStep(collection, fromV, toV) {
   for (const m of MIGRATIONS) {
     if (
@@ -200,11 +167,6 @@ function _findStep(collection, fromV, toV) {
   return null;
 }
 
-/**
- * @param {string} collection
- * @param {number} fromV
- * @param {number} toV
- */
 function _chainForward(collection, fromV, toV) {
   if (fromV === toV) return [];
   if (toV < fromV) {
@@ -227,11 +189,6 @@ function _chainForward(collection, fromV, toV) {
   return out;
 }
 
-/**
- * @param {string} collection
- * @param {number} fromV
- * @param {number} toV
- */
 function _chainBackward(collection, fromV, toV) {
   if (fromV === toV) return [];
   if (toV > fromV) {
