@@ -162,17 +162,35 @@ def parse_replay_for_cloud(
 
 
 def _read_player_handle() -> Optional[str]:
-    """Cooperate with the existing watcher's config.json convention."""
-    cfg_path = Path(os.environ.get("SC2TOOLS_PLAYER_CONFIG", "")) or None
-    if cfg_path and cfg_path.exists():
-        try:
-            import json
+    """Cooperate with the existing watcher's config.json convention.
 
-            cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
-            return cfg.get("last_player") or cfg.get("player_name")
-        except (OSError, ValueError):
-            return None
-    return os.environ.get("SC2TOOLS_PLAYER_HANDLE")
+    Resolution order:
+      1. SC2TOOLS_PLAYER_CONFIG env var pointing at a config.json
+         (legacy compat with the desktop overlay watcher).
+      2. SC2TOOLS_PLAYER_HANDLE env var.
+
+    Returns None if neither is usable. NOTE: the empty-string check
+    matters — Path('') silently becomes Path('.') on Windows (the cwd,
+    which exists), and reading a directory as text raises OSError,
+    swallowed by the except below, hiding the env-var fallback. So
+    treat an empty/missing SC2TOOLS_PLAYER_CONFIG as "no config file"
+    explicitly.
+    """
+    cfg_path_str = os.environ.get("SC2TOOLS_PLAYER_CONFIG", "").strip()
+    if cfg_path_str:
+        cfg_path = Path(cfg_path_str)
+        if cfg_path.is_file():
+            try:
+                import json
+
+                cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
+                handle = cfg.get("last_player") or cfg.get("player_name")
+                if handle:
+                    return str(handle)
+            except (OSError, ValueError):
+                # Fall through to the env-var fallback.
+                pass
+    return os.environ.get("SC2TOOLS_PLAYER_HANDLE") or None
 
 
 def _result_str(player_result: Optional[str]) -> Optional[str]:
