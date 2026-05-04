@@ -143,6 +143,100 @@ describe("HTTP integration", () => {
     });
   });
 
+  describe("/v1/opponents profile DNA", () => {
+    test("returns the full DNA payload after a few games", async () => {
+      const games = [
+        Object.assign(makeGame("opp-pulse-game-1", "Victory"), {
+          opponent: {
+            displayName: "Foo",
+            race: "Zerg",
+            mmr: 4000,
+            pulseId: "opp-pulse-1",
+            strategy: "Macro",
+          },
+          buildLog: ["[1:30] Pylon", "[2:30] Gateway", "[3:00] Cybernetics"],
+          oppBuildLog: ["[1:30] Pool", "[2:00] Hatchery"],
+        }),
+        Object.assign(makeGame("opp-pulse-game-2", "Defeat"), {
+          opponent: {
+            displayName: "Foo",
+            race: "Zerg",
+            mmr: 4000,
+            pulseId: "opp-pulse-1",
+            strategy: "Allin",
+          },
+          buildLog: ["[2:00] Pylon", "[2:45] Gateway"],
+          oppBuildLog: ["[1:50] Pool"],
+        }),
+        Object.assign(makeGame("opp-pulse-game-3", "Victory"), {
+          opponent: {
+            displayName: "Foo",
+            race: "Zerg",
+            mmr: 4000,
+            pulseId: "opp-pulse-1",
+            strategy: "Macro",
+          },
+          buildLog: ["[1:45] Pylon"],
+          oppBuildLog: ["[1:55] Pool", "[2:30] Hatchery"],
+        }),
+      ];
+      for (const g of games) {
+        const post = await withAuth(request(app).post("/v1/games"))
+          .send(g)
+          .set("content-type", "application/json");
+        expect(post.status).toBe(202);
+      }
+      const res = await withAuth(
+        request(app).get("/v1/opponents/opp-pulse-1"),
+      );
+      expect(res.status).toBe(200);
+      const body = res.body;
+      expect(body.pulseId).toBe("opp-pulse-1");
+      expect(body.totals.total).toBe(3);
+      expect(body.totals.wins).toBe(2);
+      expect(body.totals.losses).toBe(1);
+      expect(body.byMap.Goldenaura.wins).toBe(2);
+      expect(body.byMap.Goldenaura.losses).toBe(1);
+      expect(body.byStrategy.Macro.wins).toBe(2);
+      expect(body.byStrategy.Allin.losses).toBe(1);
+      // top strategies sorted by count
+      expect(body.topStrategies[0].strategy).toBe("Macro");
+      expect(body.topStrategies[0].count).toBe(2);
+      // recency-weighted predictions
+      expect(body.predictedStrategies.length).toBeGreaterThan(0);
+      const macroPred = body.predictedStrategies.find(
+        (p) => p.strategy === "Macro",
+      );
+      expect(macroPred).toBeTruthy();
+      // matchup-aware median timings
+      expect(body.myRace).toBe("P");
+      expect(body.oppRaceModal).toBe("Z");
+      expect(body.matchupLabel).toBe("PvZ");
+      expect(body.matchupCounts.PvZ).toBe(3);
+      expect(body.medianTimingsLegacy.SpawningPool.sampleCount).toBe(3);
+      expect(body.medianTimingsLegacy.Gateway.sampleCount).toBe(2);
+      expect(body.medianTimingsLegacy.Pylon.source).toBe("build_log");
+      expect(body.medianTimingsLegacy.SpawningPool.source).toBe(
+        "opp_build_log",
+      );
+      expect(body.medianTimings.Pylon.median).toBeGreaterThan(0);
+      expect(body.medianTimings.Pylon.count).toBe(3);
+      expect(body.matchupTimings.PvZ.SpawningPool.count).toBe(3);
+      // last 5 games + full games array
+      expect(body.last5Games.length).toBe(3);
+      expect(body.games.length).toBe(3);
+      expect(body.games[0].my_build).toBeDefined();
+      expect(body.games[0].opp_strategy).toBeTruthy();
+    });
+
+    test("404 for unknown pulseId", async () => {
+      const res = await withAuth(
+        request(app).get("/v1/opponents/does-not-exist"),
+      );
+      expect(res.status).toBe(404);
+    });
+  });
+
   describe("/v1/spatial", () => {
     test("/spatial/maps returns an empty array for users without spatial data", async () => {
       const res = await withAuth(request(app).get("/v1/spatial/maps"));
