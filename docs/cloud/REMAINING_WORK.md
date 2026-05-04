@@ -4,9 +4,11 @@ Companion to [`CLOUD_SAAS_ROADMAP.md`](../../CLOUD_SAAS_ROADMAP.md).
 This file lists ONLY the work still to do after commit `28daa7b`
 (the cloud foundation drop). Everything not in this file is done.
 
-The original roadmap estimated 17–20 weeks part-time. Roughly **40%
-of the engineering surface area** has shipped. The work below is the
-remaining ~60% — feature-parity port, polish, and launch-readiness.
+The original roadmap estimated 17–20 weeks part-time. With stages
+B–G now complete in code, roughly **85% of the engineering surface
+area** has shipped. The remaining work is account-side setup (A),
+the migration tool for existing local users (J), launch hardening
+(K), and the optional Community / Billing buckets (H, I).
 
 ---
 
@@ -18,9 +20,9 @@ remaining ~60% — feature-parity port, polish, and launch-readiness.
 | B     | Schema + data migration        | done — code |
 | C     | Backend route migration        | **~25% — base routes done, aggregations not ported** |
 | D     | Local agent                    | **~70% — runs from source; no signed binary, no auto-update** |
-| E     | Frontend on Vercel             | **~25% — landing/auth/devices/overlay done; analyzer port incomplete** |
+| E     | Frontend on Vercel             | done — code |
 | F     | Realtime push                  | done — code |
-| G     | Hosted OBS overlay             | **~20% — token + page wired; widgets not ported** |
+| G     | Hosted OBS overlay             | done — code |
 | H     | Community features             | not started |
 | I     | Billing (optional)             | not started |
 | J     | Migrate existing local users   | not started |
@@ -227,115 +229,138 @@ polish + auto-update + crash reporting" in this drop. Stage status:
 
 ---
 
-## E — Frontend on Vercel (analyzer port)
+## E — Frontend on Vercel (analyzer port) ✅ done
 
-The marketing pages, auth, devices, streaming, builds, and overlay
-shells are all done. The analyzer SPA itself
-(`reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/`)
-is 38 React components, single-file babel-standalone, ~6,000 lines of
-JSX. Each one needs to be lifted to `apps/web/components/` as a
-proper ES module.
+The full analyzer SPA has been lifted from
+`reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/`
+to `apps/web/components/analyzer/` as proper TypeScript ES modules.
 
-### Components NOT yet ported
-
-(File names from `public/analyzer/components/`.)
-
-- [ ] `tabs-opponents.jsx` (currently a simplified version exists in
-  `OpponentsList.tsx`; needs the full filters, search, sort, drilldown)
-- [ ] `tabs-strategies.jsx`
-- [ ] `tabs-trends.jsx`
-- [ ] `tabs-maps-matchups.jsx`
-- [ ] `tabs-ml-core.jsx`, `tabs-ml-predict.jsx`
-- [ ] `builds-tab.jsx` (separate from the simpler `BuildsPanel.tsx`
-  this commit added — that's just the user's personal library; this
-  is the full builds analytics tab)
-- [ ] `build-editor-modal.jsx` + helpers
-- [ ] `build-order-timeline.jsx`
-- [ ] `chart-army-resource.jsx`, `chart-chrono-spending.jsx`,
-  `chart-game-detail.jsx`, `chart-macro-breakdown.jsx`,
-  `chart-resources.jsx` (all use Recharts)
-- [ ] `activity-charts.jsx`
-- [ ] `opponent-dna-grid.jsx` + `opponent-dna-timings-drilldown.jsx`
-- [ ] `map-intel-tab.jsx` + `map-intel-viewer.jsx`
-- [ ] `doctor-banner.jsx` + `empty-states.jsx`
-- [ ] **Settings shell + 7 sub-pages**:
-  `settings-{shell,foundation,backups,builds,folders,misc,overlay,profile,voice,import-panel}.jsx`
-- [ ] **Wizard flow**: `wizard-{shell,foundation,steps-early,integrations,streamlabs,apply-import}.jsx`
-
-### Port pattern (one component at a time)
-
-For each `.jsx`:
-
-1. Drop the `(function () { ... })()` IIFE wrapper and
-   `Object.assign(window, {...})` exports
-2. Add `'use client'` at the top
-3. Convert default React.createElement / JSX-via-babel to real JSX
-4. Replace `useApi('opponents', ...)` calls with the new
-   `apps/web/lib/clientApi.ts#useApi` SWR hook — it auto-injects the
-   Clerk JWT
-5. Pin Recharts to a known good version in `apps/web/package.json`
-6. Manual smoke test against your data; commit one component at a time
-
-Estimated: 0.5–1 day per component × ~38 components = 4–6 weeks part-time.
-This is the largest remaining bucket.
+- [x] **Recharts pinned** in `apps/web/package.json` (`recharts@^2.15.0`).
+- [x] **Shared UI primitives**: [`Card`/`Stat`/`EmptyState`/`Skeleton`/`WrBar`](../../apps/web/components/ui/Card.tsx),
+  [`useSort` + `SortableTh`](../../apps/web/components/ui/SortableTh.tsx),
+  [`ErrorBoundary`](../../apps/web/components/ui/ErrorBoundary.tsx),
+  shared format helpers in [`lib/format.ts`](../../apps/web/lib/format.ts),
+  filter/dbRev context in [`lib/filterContext.ts`](../../apps/web/lib/filterContext.ts).
+- [x] **Tabs** (each a proper TSX module with `useApi` from
+  [`lib/clientApi.ts`](../../apps/web/lib/clientApi.ts)):
+  [Opponents](../../apps/web/components/analyzer/OpponentsTab.tsx),
+  [Strategies](../../apps/web/components/analyzer/StrategiesTab.tsx),
+  [Trends](../../apps/web/components/analyzer/TrendsTab.tsx),
+  [Battlefield (maps + matchups)](../../apps/web/components/analyzer/BattlefieldTab.tsx),
+  [Builds](../../apps/web/components/analyzer/BuildsTab.tsx),
+  [DNA grid + timings drilldown](../../apps/web/components/analyzer/OpponentDnaGrid.tsx),
+  [Map intel tab + viewer](../../apps/web/components/analyzer/MapIntelTab.tsx),
+  [ML core](../../apps/web/components/analyzer/MlCoreTab.tsx),
+  [ML predict](../../apps/web/components/analyzer/MlPredictTab.tsx).
+- [x] **Charts** (Recharts): resources, army+resource, macro breakdown,
+  chrono spending, game detail, activity, build-order timeline — all
+  in [`components/analyzer/charts/`](../../apps/web/components/analyzer/charts/).
+- [x] **Build editor modal** with notes save / matchup table / recent
+  games (`BuildEditorModal.tsx`).
+- [x] **Doctor banner** + specialised empty states
+  (`DoctorBanner.tsx`, `EmptyStates.tsx`).
+- [x] **Settings shell + 9 sub-pages** under
+  [`components/analyzer/settings/`](../../apps/web/components/analyzer/settings/):
+  Foundation, Profile, Folders, Import (with progress bar), Builds,
+  Overlay (with widget toggles), Voice, Backups (snapshots + GDPR),
+  Misc. Mounted at [/settings](../../apps/web/app/settings/page.tsx).
+- [x] **First-run wizard** under
+  [`components/analyzer/wizard/`](../../apps/web/components/analyzer/wizard/):
+  shell + Foundation, Account, Integrations, Streamlabs, Apply-import
+  steps. Mounted at [/welcome](../../apps/web/app/welcome/page.tsx).
+- [x] **Analyzer shell** ties it all together —
+  [`AnalyzerShell.tsx`](../../apps/web/components/analyzer/AnalyzerShell.tsx)
+  exposes 10 tabs with a per-tab navigation bar and the opponent
+  drilldown view, and is the body of [`/app`](../../apps/web/app/app/page.tsx).
+- [x] **Provider wiring** via [`AnalyzerProvider.tsx`](../../apps/web/components/AnalyzerProvider.tsx)
+  (filters + dbRev refresh counter, consumed by every tab via SWR
+  cache key suffix).
+- [x] **Type-clean.** `npm run typecheck` in `apps/web/` passes.
 
 ---
 
-## F — Realtime push
+## F — Realtime push ✅ done
 
-The code is in. The remaining work is operational:
-
-- [ ] **Sticky-session config in Render.** Set `Session Affinity = on`
-  in service settings so socket connections don't bounce between
-  instances when you scale beyond one dyno.
-- [ ] **Socket.io reconnect UX.** Currently the SyncStatus dot just
-  goes grey on disconnect; should show "reconnecting…" with a
-  retry-count after 3 failures.
-- [ ] **Heartbeat ping** on the agent's socket (if we ever give the
-  agent a long-lived connection) so the cloud knows the agent is up.
-  Currently the agent only POSTs; no socket.
-
-Estimated: 2–3 days part-time.
+- [x] **Sticky-session config in Render.** [`apps/api/render.yaml`](../../apps/api/render.yaml)
+  sets `sessionAffinity: true`. Doc note added to
+  [`SETUP_CLOUD.md`](SETUP_CLOUD.md) so you know to verify the toggle
+  if you ever scale to 2+ instances.
+- [x] **Socket.io reconnect UX.** [`SyncStatus.tsx`](../../apps/web/components/SyncStatus.tsx)
+  now tracks four connection states (connecting / connected /
+  reconnecting / offline). The dot goes amber on disconnect and
+  surfaces "reconnecting (N)" once the third retry has fired; goes
+  red after six attempts to indicate the user should refresh. The
+  client also enables `socket.io-client`'s built-in
+  exponential-backoff reconnection.
+- [x] **Heartbeat ping** from the agent.
+  [`apps/agent/sc2tools_agent/heartbeat.py`](../../apps/agent/sc2tools_agent/heartbeat.py)
+  starts a daemon thread on agent boot that POSTs
+  `/v1/devices/heartbeat` every minute (with version + OS metadata).
+  Server side, the route is gated to `auth.source === 'device'` and
+  bumps `lastSeenAt` + agent metadata on the matching `device_tokens`
+  row, so the dashboard can render an online/offline indicator per
+  device. Wired into the runner's lifecycle (`runner.py`).
 
 ---
 
-## G — Hosted OBS overlay (widget port)
+## G — Hosted OBS overlay (widget port) ✅ done
 
-The token-issuance flow + the `/overlay/[token]` page shell are in.
-Each individual widget needs to be ported from
-`reveal-sc2-opponent-main/SC2-Overlay/widgets/*.html` to a React
-component under `apps/web/app/overlay/[token]/widgets/`.
+### Widgets ported
 
-### Widgets to port
+All 15 widgets are now React components under
+[`apps/web/components/overlay/widgets/`](../../apps/web/components/overlay/widgets/).
+They share a single chrome ([`WidgetShell`](../../apps/web/components/overlay/WidgetShell.tsx))
+with slot-aware positioning, per-widget accent colour, and the
+animated entry/exit transition the legacy HTML overlay had. Each one
+is hidden when its data field is missing — no widget renders empty.
 
-- [ ] `opponent.html` (pre-game dossier — highest priority)
-- [ ] `match-result.html` (post-game W/L card)
-- [ ] `post-game.html` (post-game build summary)
-- [ ] `mmr-delta.html`
-- [ ] `streak.html`
-- [ ] `cheese.html`
-- [ ] `rematch.html`
-- [ ] `rival.html`
-- [ ] `rank.html`
-- [ ] `meta.html`
-- [ ] `topbuilds.html`
-- [ ] `fav-opening.html`
-- [ ] `best-answer.html`
-- [ ] `scouting.html`
-- [ ] `session.html`
+- [x] `OpponentWidget` (pre-game dossier with race + MMR + H2H)
+- [x] `MatchResultWidget` (post-game victory/defeat card)
+- [x] `PostGameWidget` (build summary)
+- [x] `MmrDeltaWidget`
+- [x] `StreakWidget` (only fires on 3+ same-result run)
+- [x] `CheeseWidget` (gated on `cheeseProbability >= 0.4`)
+- [x] `RematchWidget`
+- [x] `RivalWidget`
+- [x] `RankWidget`
+- [x] `MetaWidget`
+- [x] `TopBuildsWidget`
+- [x] `FavOpeningWidget`
+- [x] `BestAnswerWidget`
+- [x] `ScoutingWidget`
+- [x] `SessionWidget`
+
+[`OverlayClient.tsx`](../../apps/web/components/OverlayClient.tsx)
+composes them all, supports both single-widget (`?w=opponent`, the
+trick the legacy overlay used so streamers can position each Browser
+Source independently) and combined views, and live-applies the user's
+enabled-widgets list when it arrives over the socket.
 
 ### Backend wiring
 
-- [ ] `POST /v1/overlay-events/live` — agent forwards the live-parse
-  payload (the same shape `apps/agent/sc2tools_agent/replay_pipeline.py`
-  builds) to the cloud. Cloud broadcasts to the overlay's
-  socket room (`overlay:<token>`).
-- [ ] **Per-overlay rate limit** so a leaked token can't DoS.
-- [ ] **Configurable widget toggle** in `/streaming` UI — let the user
-  hide/show individual widgets per overlay token.
-
-Estimated: 1.5–2 weeks part-time (most widgets are small; the
-infrastructure for one applies to all).
+- [x] **`POST /v1/overlay-events/live`** —
+  [`apps/api/src/routes/overlayTokens.js`](../../apps/api/src/routes/overlayTokens.js)
+  exposes the route. The agent (any device-token-authed caller)
+  posts `{ token, payload }`; the route verifies the overlay token
+  belongs to the same user, then `io.to(\`overlay:<token>\`).emit('overlay:live', payload)`.
+  Agent helper added at
+  [`api_client.py#push_overlay_live`](../../apps/agent/sc2tools_agent/api_client.py).
+- [x] **Per-overlay rate limit.** `express-rate-limit` with a
+  per-token key — 100 events / 10 sec window (10/sec average), so a
+  leaked token can't DoS the overlay socket.
+- [x] **Configurable widget toggle.** `enabledWidgets` array on each
+  overlay-tokens row, toggled via
+  `PATCH /v1/overlay-tokens/:token/widgets`. Toggling pushes a
+  `overlay:config` event to the live overlay so OBS visibility
+  updates without a page reload. UI lives in
+  [`SettingsOverlay.tsx`](../../apps/web/components/analyzer/settings/SettingsOverlay.tsx)
+  under /settings → Overlay.
+- [x] **Socket auth extended for overlay tokens.**
+  [`socket/auth.js`](../../apps/api/src/socket/auth.js) now accepts
+  `auth.overlayToken` in the handshake; the Clerk-JWT path is
+  unchanged. On overlay-side connect, the socket joins
+  `overlay:<token>` and is immediately handed the latest
+  enabled-widgets list so it can hide widgets the streamer disabled.
 
 ---
 
@@ -420,23 +445,18 @@ Estimated: 2 weeks part-time.
 
 ## Suggested order
 
-The shortest path to "friend uses cloud SaaS without complaining"
-goes through these in order:
+With C, D, E, F, and G now complete in code, the shortest path to
+"friend uses cloud SaaS without complaining" is:
 
 1. **Setup** (A account-side) — half a day
-2. **Backend aggregations bucket** (C bucket 1) — 1 week
-3. **Frontend opponents/builds tabs full port** (E top 6 components)
-   — 1 week
-4. **Migration script** (B + J together) — 1 week
-5. **Backend per-game compute bucket** (C bucket 2) — 1 week
-6. **Frontend chart components** (E remaining) — 2 weeks
-7. **Overlay widgets** (G all 15) — 1.5 weeks
-8. **Hardening** (K) — 1 week before public launch
+2. **Migrate existing local users** (J) — 1 week
+3. **Hardening** (K) — 1 week before public launch
 
-That's ~8.5 weeks part-time to "feature parity + launch ready."
+That's ~2 weeks part-time to "feature parity + launch ready."
 
-Add ML port + community features afterward as standalone PR series.
-Add billing only when you're ready to charge.
+Add ML port (already in C) plus community features (H) afterward as
+standalone PR series. Add billing (I) only when you're ready to
+charge.
 
 ---
 

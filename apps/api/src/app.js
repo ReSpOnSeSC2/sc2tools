@@ -214,7 +214,11 @@ function mountRoutes(app, deps, services) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildOverlayTokensRouter({ overlayTokens: services.overlayTokens, auth }),
+    buildOverlayTokensRouter({
+      overlayTokens: services.overlayTokens,
+      auth,
+      io: deps.io,
+    }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,

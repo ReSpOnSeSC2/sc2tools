@@ -30,12 +30,19 @@ async function main() {
     },
   });
 
-  const { app } = buildApp({ db, logger, config, io });
+  const { app, services } = /** @type {{
+    app: import('express').Express,
+    services: {
+      overlayTokens: import('./services/types').OverlayTokensService,
+      [k: string]: unknown,
+    },
+  }} */ (buildApp({ db, logger, config, io }));
   httpServer.on("request", app);
   attachSocketAuth(io, {
     secretKey: config.clerkSecretKey,
     issuer: config.clerkJwtIssuer,
     audience: config.clerkJwtAudience,
+    resolveOverlayToken: (token) => services.overlayTokens.resolve(token),
   });
 
   httpServer.listen(config.port, () => {

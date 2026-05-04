@@ -197,6 +197,14 @@ Render hosts the Express + MongoDB API.
 > a few active accounts, upgrade to Standard ($25/mo) which doesn't
 > sleep.
 
+> **About sticky sessions**: `render.yaml` sets `sessionAffinity: true`
+> so Socket.io upgrades work across multiple instances. You don't need
+> to do anything for the single-instance Starter tier; if you scale to
+> 2+ web instances later, this is what keeps overlay + sync sockets
+> from bouncing mid-handshake. Verify the toggle is on under
+> **Service** → **Settings** → **Health & Networking** → **Session
+> Affinity** if you ever scale up.
+
 ---
 
 ## 4. Vercel — host the website

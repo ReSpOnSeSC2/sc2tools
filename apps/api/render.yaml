@@ -17,6 +17,14 @@ services:
     dockerfilePath: ./apps/api/Dockerfile
     healthCheckPath: /v1/health
     autoDeploy: true
+    # Sticky sessions are required for Socket.io once we scale beyond a
+    # single instance: the client opens an XHR-poll handshake against
+    # one node, then upgrades to WebSocket — both legs must hit the
+    # same node or the upgrade fails. Render's "Session Affinity"
+    # routes by cookie, which is exactly what `socket.io-client` uses
+    # in fallback transports. Leave on even at one instance — it's a
+    # no-op and makes scale-up safe.
+    sessionAffinity: true
     envVars:
       - key: NODE_ENV
         value: production

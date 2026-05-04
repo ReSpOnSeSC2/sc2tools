@@ -1,6 +1,7 @@
 import { apiFetch } from "@/lib/api";
-import { OpponentsList } from "@/components/OpponentsList";
+import { AnalyzerShell } from "@/components/analyzer/AnalyzerShell";
 import { SyncStatus } from "@/components/SyncStatus";
+import { NoGamesYet } from "@/components/analyzer/EmptyStates";
 import Link from "next/link";
 
 type Me = {
@@ -43,28 +44,7 @@ export default async function AnalyzerHome() {
         </Link>
       </header>
 
-      {noGames ? <FirstRunCard /> : <OpponentsList />}
-    </div>
-  );
-}
-
-function FirstRunCard() {
-  return (
-    <div className="card space-y-3 p-6">
-      <h2 className="text-lg font-semibold">No games yet</h2>
-      <p className="text-text-muted">
-        Install the SC2 Tools Agent on your gaming PC. It watches your
-        Replays folder and streams every finished game here in seconds.
-      </p>
-      <ol className="list-decimal space-y-1 pl-6 text-text-muted">
-        <li>
-          <Link href="/download">Download the agent</Link>
-        </li>
-        <li>
-          Open <Link href="/devices">Devices</Link> to pair it.
-        </li>
-        <li>Play a ranked game. This page updates live.</li>
-      </ol>
+      {noGames ? <NoGamesYet /> : <AnalyzerShell />}
     </div>
   );
 }
