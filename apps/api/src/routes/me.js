@@ -14,9 +14,12 @@ const express = require("express");
  */
 function buildMeRouter(deps) {
   const router = express.Router();
-  router.use(deps.auth);
 
-  router.get("/me", async (req, res, next) => {
+  // Auth applied per-route, NOT via router.use(). Router-level middleware
+  // here would intercept every /v1/* request that doesn't match an
+  // earlier-mounted router, blocking unauthenticated endpoints like
+  // /v1/device-pairings/start with a spurious 401.
+  router.get("/me", deps.auth, async (req, res, next) => {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");

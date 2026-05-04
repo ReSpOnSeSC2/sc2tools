@@ -21,7 +21,7 @@ except ImportError:  # python-dotenv missing in dev install — silent.
     pass
 
 
-_DEFAULT_API_BASE = "http://localhost:8080"
+_DEFAULT_API_BASE = "https://sc2tools-api.onrender.com"
 _DEFAULT_POLL_INTERVAL_SEC = 10
 _DEFAULT_PARSE_CONCURRENCY = 1
 
