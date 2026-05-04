@@ -1,0 +1,63 @@
+"use strict";
+
+require("dotenv").config();
+
+const http = require("http");
+const pinoModule = require("pino");
+const { Server: IoServer } = require("socket.io");
+
+const pino = /** @type {any} */ (pinoModule).default || pinoModule;
+
+const { loadConfig } = require("./config/loader");
+const { connect } = require("./db/connect");
+const { buildApp } = require("./app");
+const { attachSocketAuth } = require("./socket/auth");
+
+async function main() {
+  const config = loadConfig();
+  const logger = pino({ level: config.logLevel });
+  logger.info({ port: config.port, db: config.mongoDb }, "boot_start");
+
+  const db = await connect({ uri: config.mongoUri, dbName: config.mongoDb });
+  logger.info("mongo_connected");
+
+  const httpServer = http.createServer();
+  const io = new IoServer(httpServer, {
+    cors: {
+      origin: config.corsAllowedOrigins.length
+        ? config.corsAllowedOrigins
+        : true,
+    },
+  });
+
+  const { app } = buildApp({ db, logger, config, io });
+  httpServer.on("request", app);
+  attachSocketAuth(io, {
+    secretKey: config.clerkSecretKey,
+    issuer: config.clerkJwtIssuer,
+    audience: config.clerkJwtAudience,
+  });
+
+  httpServer.listen(config.port, () => {
+    logger.info({ port: config.port }, "listening");
+  });
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+
+  /** @param {string} signal */
+  async function shutdown(signal) {
+    logger.info({ signal }, "shutdown_start");
+    httpServer.close();
+    io.close();
+    await db.close();
+    logger.info("shutdown_complete");
+    process.exit(0);
+  }
+}
+
+main().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error("fatal_boot_error", err);
+  process.exit(1);
+});

@@ -1,0 +1,30 @@
+# Render blueprint for the SC2 Tools cloud API.
+# After pushing this repo to GitHub, point Render at apps/api/render.yaml
+# from "Blueprints → New Blueprint" and it provisions the service.
+services:
+  - type: web
+    name: sc2tools-api
+    runtime: docker
+    plan: starter
+    region: oregon
+    rootDir: apps/api
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /v1/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: sc2tools_saas
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: SERVER_PEPPER_HEX
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "120"

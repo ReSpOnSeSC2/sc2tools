@@ -3115,20 +3115,31 @@ let _ioRef = null;  // captured by startWatching so the ML routes can broadcast
 function startWatching(io) {
     _ioRef = io;
     dbCache.aggCache.clear();
-    let last = { meta: dbCache.meta.signature, opp: dbCache.opp.signature };
-    setInterval(() => {
-        const changedMeta = reloadIfChanged('meta');
-        const changedOpp  = reloadIfChanged('opp');
-        if (changedMeta || changedOpp) {
-            try {
-                io.emit('analyzer_db_changed', {
-                    metaRevision: dbCache.meta.revision,
-                    oppRevision:  dbCache.opp.revision,
-                });
-            } catch (_) {}
-            last = { meta: dbCache.meta.signature, opp: dbCache.opp.signature };
-        }
-    }, 4000);
+    const bg = require('./lib/background-loader');
+
+    function emitChange() {
+        try {
+            io.emit('analyzer_db_changed', {
+                metaRevision: dbCache.meta.revision,
+                oppRevision:  dbCache.opp.revision,
+            });
+        } catch (_) {}
+    }
+
+    bg.startLoader({
+        filePath: META_DB_PATH,
+        slot: dbCache.meta,
+        onReloaded: () => { dbCache.aggCache.clear(); emitChange(); },
+        onError: (err) => console.warn('[Analyzer] meta bg-load failed:', err.message),
+        pollMs: 2000,
+    });
+    bg.startLoader({
+        filePath: OPP_HISTORY_PATH,
+        slot: dbCache.opp,
+        onReloaded: () => { dbCache.aggCache.clear(); emitChange(); },
+        onError: (err) => console.warn('[Analyzer] opp bg-load failed:', err.message),
+        pollMs: 2000,
+    });
 }
 
 // --------------------------------------------------------------

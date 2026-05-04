@@ -8,6 +8,77 @@ Releases are tagged `vMAJOR.MINOR.PATCH`; the GitHub Actions release
 workflow builds the Windows installer on each tag push and attaches the
 `.exe` and `.sha256` to the corresponding GitHub Release.
 
+## [Unreleased] - 2026-05-04
+
+### Added
+
+- **Cloud SaaS foundation (Stage A + D + E + F + G slice).** New monorepo
+  layout under `apps/`:
+
+  - **`apps/api/`** — Express + MongoDB cloud API (Render-deployable via
+    `apps/api/render.yaml`). Clerk JWT auth + long-lived device-token
+    auth so the local agent and the web SPA share routes. Per-user
+    storage of opponents, games, custom builds. HMAC-pepper hashing of
+    opponent battle-tags so PII never lands in the cloud DB. Routes:
+    `/v1/health`, `/v1/me`, `/v1/opponents{,/:pulseId}`,
+    `/v1/games{,/:gameId}` (POST ingest), `/v1/custom-builds`,
+    `/v1/device-pairings/{start,:code,claim}`, `/v1/devices`,
+    `/v1/overlay-tokens`. Socket.io live `games:changed` push.
+  - **`apps/web/`** — Next.js 15 (App Router) frontend, Vercel-ready.
+    Clerk-hosted sign-in (Google + Discord + email/password). Real
+    pages: landing, sign-in/up, `/app` analyzer (with live SyncStatus
+    pill), `/devices` pairing flow, `/streaming` overlay-token mgmt,
+    `/builds` library, public `/overlay/[token]` for OBS Browser
+    Source. SWR-driven data fetching with per-request Clerk JWTs.
+  - **`apps/agent/`** — Python single-file agent (PyInstaller-ready).
+    Watches the user's SC2 Replays folder (watchdog FS events +
+    periodic OneDrive sweep), parses each replay through the existing
+    `SC2Replay-Analyzer` parsers (chrono fix preserved), uploads to
+    `/v1/games`. Tray UI (pystray) with live status + console
+    fallback. Atomic state writes for the device token + dedupe
+    cursor. Pairing-code flow.
+
+- **`docs/cloud/SETUP_CLOUD.md`** — top-to-bottom 60-90 min setup
+  walkthrough covering MongoDB Atlas, Clerk (with optional custom
+  Google OAuth credentials), Render, Vercel, custom domain wiring,
+  agent install on the gaming PC, OBS overlay configuration, and
+  troubleshooting.
+
+### Performance
+
+- **Opponents tab no longer freezes when new replays land.** The
+  4-second `setInterval` in `analyzer.js#startWatching` was calling
+  `fs.readFileSync` + `JSON.parse` on `MyOpponentHistory.json`
+  (~27 MB) and `meta_database.json` (~137 MB) on the main event loop —
+  blocking GET `/api/opponents` for hundreds of milliseconds every
+  cycle. Replaced with a worker-thread-backed background loader
+  (`stream-overlay-backend/lib/background-loader.js{,.worker.js}`)
+  that:
+  - Detects file changes via the same cheap mtime+size+head/tail
+    signature as before.
+  - Off-loads the 27 MB JSON parse to a `worker_threads` worker so
+    HTTP requests stream through unimpeded.
+  - Atomically swaps `dbCache.meta.data` / `dbCache.opp.data` once the
+    parse returns.
+  - Salvages the valid prefix on truncated mid-write reads (matches
+    the existing `salvageJsonObject` algorithm so behaviour parity is
+    maintained).
+  - Emits the same `analyzer_db_changed` Socket.io event so live SPA
+    tabs continue to refresh in real time.
+
+### Tests
+
+- New: `apps/api/__tests__/{hash,gameRecord}.test.js` — 10 cases
+  covering HMAC pepper determinism, token randomness, validator
+  enums and required fields.
+- New: `apps/agent/tests/{test_state,test_config,test_api_client}.py`
+  — atomic-write round-trip, env handling, retry/auth behaviour.
+- New: `stream-overlay-backend/__tests__/background-loader.test.js`
+  — 4 cases asserting worker-driven reload, signature change
+  detection, and stable-signature no-op.
+- All `tsc --noEmit --strict` clean for `apps/api/`. Unit suites
+  green: 10/10 (api), 4/4 (analyzer background loader).
+
 ## [1.4.7] - 2026-05-02
 
 ### Fixed (critical)
