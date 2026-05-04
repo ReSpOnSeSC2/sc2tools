@@ -182,6 +182,40 @@ class DevicePairingsService {
       { $set: { revokedAt: new Date() } },
     );
   }
+
+  /**
+   * Record a heartbeat from an agent. Bumps `lastSeenAt` and stamps
+   * the most recent agent metadata (version, OS) so the dashboard can
+   * surface "agent is up to date" / "agent appears stopped" badges.
+   *
+   * The agent posts to /v1/devices/heartbeat with its bearer token;
+   * the auth middleware turns that into a userId + tokenHash on
+   * `req.auth`. We trust the body's metadata since the bearer was
+   * verified, but we cap field lengths defensively.
+   *
+   * @param {string} userId
+   * @param {string} tokenHash
+   * @param {{version?: string, os?: string, osRelease?: string}} body
+   */
+  async recordHeartbeat(userId, tokenHash, body) {
+    const now = new Date();
+    /** @type {Record<string, unknown>} */
+    const update = { lastSeenAt: now };
+    if (body && typeof body.version === "string") {
+      update.agentVersion = body.version.slice(0, 64);
+    }
+    if (body && typeof body.os === "string") {
+      update.agentOs = body.os.slice(0, 32);
+    }
+    if (body && typeof body.osRelease === "string") {
+      update.agentOsRelease = body.osRelease.slice(0, 64);
+    }
+    await this.db.deviceTokens.updateOne(
+      { userId, tokenHash },
+      { $set: update },
+    );
+    return { receivedAt: now };
+  }
 }
 
 /** @param {number} status @param {string} code */

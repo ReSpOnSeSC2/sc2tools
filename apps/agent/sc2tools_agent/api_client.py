@@ -47,6 +47,24 @@ class ApiClient:
             raise PermissionError("agent_not_paired")
         return self._post("/v1/games", auth=True, body={"games": games})
 
+    # ---------------- Live overlay events ----------------
+    def push_overlay_live(
+        self, *, token: str, payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Push a pre/post-game payload to one specific overlay token.
+
+        The cloud broadcasts to ``overlay:<token>`` and the OBS overlay
+        receives it over Socket.io. Auth is the agent's device token —
+        the cloud verifies the overlay token belongs to the same user.
+        """
+        if not self.device_token:
+            raise PermissionError("agent_not_paired")
+        return self._post(
+            "/v1/overlay-events/live",
+            auth=True,
+            body={"token": token, "payload": payload},
+        )
+
     # ---------------- internals ----------------
     def _get(
         self,

@@ -57,13 +57,36 @@ export interface DevicePairingsService {
   findTokenByHash(hash: string): Promise<{ userId: string } | null>;
   listDevices(userId: string): Promise<object[]>;
   revoke(userId: string, tokenHash: string): Promise<void>;
+  recordHeartbeat(
+    userId: string,
+    tokenHash: string,
+    body: {
+      version?: string;
+      os?: string;
+      osRelease?: string;
+    },
+  ): Promise<{ receivedAt: Date }>;
 }
 
 export interface OverlayTokensService {
   create(userId: string, label: string): Promise<object>;
   list(userId: string): Promise<object[]>;
-  resolve(token: string): Promise<{ userId: string; label: string } | null>;
+  resolve(token: string): Promise<
+    | {
+        userId: string;
+        label: string;
+        enabledWidgets: string[];
+      }
+    | null
+  >;
   revoke(userId: string, token: string): Promise<void>;
+  setWidgetEnabled(
+    userId: string,
+    token: string,
+    widget: string,
+    enabled: boolean,
+  ): Promise<{ enabledWidgets: string[] }>;
+  tokenBelongsToUser(userId: string, token: string): Promise<boolean>;
 }
 
 export interface AggregationsService {

@@ -11,6 +11,10 @@ declare global {
       auth?: {
         userId: string;
         source: "clerk" | "device";
+        // Only set when source === "device" — used by the heartbeat
+        // route to identify which device row to update without trusting
+        // a request body field.
+        tokenHash?: string;
       };
     }
   }

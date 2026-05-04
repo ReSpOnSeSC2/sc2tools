@@ -28,6 +28,7 @@ from .crash_reporter import (
     init_crash_reporter,
     shutdown as shutdown_crash_reporter,
 )
+from .heartbeat import Heartbeat
 from .pairing import ensure_paired
 from .replay_finder import all_multiplayer_dirs, find_replays_root
 from .state import AgentState, load_state, save_state
@@ -83,6 +84,7 @@ def _run_main_loop(cfg: AgentConfig, log_dir: Path) -> int:
     upload: Optional[UploadQueue] = None
     watcher: Optional[ReplayWatcher] = None
     updater: Optional[Updater] = None
+    heartbeat: Optional[Heartbeat] = None
 
     if can_use_tray():
         tray = TrayUI(
@@ -139,10 +141,13 @@ def _run_main_loop(cfg: AgentConfig, log_dir: Path) -> int:
         ),
     )
 
+    heartbeat = Heartbeat(api)
+
     try:
         upload.start()
         watcher.start()
         updater.start()
+        heartbeat.start()
         ui.on_status(
             "watching for replays" + (" (paused)" if state.paused else ""),
         )
@@ -156,6 +161,8 @@ def _run_main_loop(cfg: AgentConfig, log_dir: Path) -> int:
         return 1
     finally:
         log.info("agent_stopping")
+        if heartbeat:
+            heartbeat.stop()
         if updater:
             updater.stop()
         if watcher:

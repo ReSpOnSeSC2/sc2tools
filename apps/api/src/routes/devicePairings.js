@@ -78,6 +78,32 @@ function buildDevicePairingsRouter(deps) {
     }
   });
 
+  // Heartbeat: agent POSTs every minute so the dashboard can show
+  // "agent online / offline / last-seen". Auth-required, but the only
+  // realistic caller is a device token (the web UI never POSTs here).
+  router.post("/devices/heartbeat", deps.auth, async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      if (auth.source !== "device" || !auth.tokenHash) {
+        // Heartbeat is meaningless from the web; reject so we don't
+        // pollute the device row with browser metadata.
+        res.status(403).json({
+          error: { code: "device_token_required" },
+        });
+        return;
+      }
+      const result = await deps.pairings.recordHeartbeat(
+        auth.userId,
+        auth.tokenHash,
+        req.body || {},
+      );
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }
 

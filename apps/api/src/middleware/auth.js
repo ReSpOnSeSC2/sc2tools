@@ -33,9 +33,14 @@ function buildAuth(deps) {
       // are random base64url. Try device token first when length suggests
       // it (cheaper — DB hit only, no signature verify).
       if (looksLikeDeviceToken(raw)) {
-        const hit = await deps.getDeviceToken(sha256(raw));
+        const tokenHash = sha256(raw);
+        const hit = await deps.getDeviceToken(tokenHash);
         if (hit) {
-          req.auth = { userId: hit.userId, source: "device" };
+          req.auth = {
+            userId: hit.userId,
+            source: "device",
+            tokenHash,
+          };
           next();
           return;
         }
