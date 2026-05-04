@@ -27,6 +27,15 @@ class AgentState:
     uploaded: Dict[str, str] = field(default_factory=dict)
     """Map of replay file path → ISO timestamp it was uploaded."""
 
+    paused: bool = False
+    """When True the watcher keeps observing but the upload queue is
+    drained without sending — flipped by the tray's "Pause syncing"
+    action and persisted across restarts."""
+
+    replay_folder_override: Optional[str] = None
+    """User-chosen replay folder from the tray's "Choose replay
+    folder…" picker. Takes precedence over the default discovery."""
+
     @property
     def is_paired(self) -> bool:
         return bool(self.device_token)
@@ -48,6 +57,8 @@ def load_state(state_dir: Path) -> AgentState:
         user_id=raw.get("user_id"),
         paired_at=raw.get("paired_at"),
         uploaded=dict(raw.get("uploaded") or {}),
+        paused=bool(raw.get("paused") or False),
+        replay_folder_override=raw.get("replay_folder_override"),
     )
 
 

@@ -14,10 +14,10 @@ remaining ~60% — feature-parity port, polish, and launch-readiness.
 
 | Stage | Title                          | Status        |
 | ----- | ------------------------------ | ------------- |
-| A     | Foundation                     | done — code |
-| B     | Schema + data migration        | code done; **migration script not written** |
-| C     | Backend route migration        | **~25% — base routes done, aggregations not ported** |
-| D     | Local agent                    | **~70% — runs from source; no signed binary, no auto-update** |
+| A     | Foundation                     | done — code; account-side steps are user-only (see below) |
+| B     | Schema + data migration        | done — code |
+| C     | Backend route migration        | done — code; SPA-side consumers still pending (Stage E) |
+| D     | Local agent                    | done — code; signed installer requires user-supplied EV cert |
 | E     | Frontend on Vercel             | **~25% — landing/auth/devices/overlay done; analyzer port incomplete** |
 | F     | Realtime push                  | done — code |
 | G     | Hosted OBS overlay             | **~20% — token + page wired; widgets not ported** |
@@ -87,109 +87,125 @@ instead of in-memory.
 
 ### Routes NOT yet ported
 
-Each of these needs a service + route + tests in `apps/api/`:
+Each of these needed a service + route + tests in `apps/api/`. Done:
 
-- [ ] `GET /v1/summary` — race / matchup totals + win rate aggregates
-- [ ] `GET /v1/builds` — list, with per-build stats
-- [ ] `GET /v1/builds/:name` — drilldown
-- [ ] `GET /v1/opp-strategies` — list of detected opponent strategies
-- [ ] `GET /v1/build-vs-strategy` — cross-tab matrix
-- [ ] `GET /v1/maps` — per-map win rates
-- [ ] `GET /v1/matchups` — race × race × map
-- [ ] `GET /v1/random-summary` — random-race tracker
-- [ ] `GET /v1/timeseries` — daily/weekly W-L timeseries for charts
-- [ ] `GET /v1/games/:gameId/build-order` — recomputed build-order
-  view (used by the timeline component)
-- [ ] `POST /v1/games/:gameId/opp-build-order` — opponent build
-  order rebuild
-- [ ] `POST /v1/games/:gameId/macro-breakdown` — invokes the macro
-  CLI on a single game; result cached
-- [ ] `GET /v1/games/:gameId/apm-curve` — per-minute APM series
-- [ ] `POST /v1/macro/backfill/start` + `GET /v1/macro/backfill/status`
-- [ ] `GET /v1/spatial/{maps,buildings,proxy,battle,death-zone,opponent-proxies}`
-- [ ] `GET /v1/catalog`, `GET /v1/export.csv`
-- [ ] `POST /v1/import/{scan,start,cancel,extract-identities,pick-folder}`,
-  `GET /v1/import/{status,cores}`
-- [ ] `GET /v1/definitions`
-- [ ] ML routes: `/v1/ml/{status,train,predict,pregame,options}`
-- [ ] `GET /v1/map-image`, `GET /v1/playback`
+- [x] `GET /v1/summary` — `AggregationsService.summary` (`$facet`)
+- [x] `GET /v1/builds` — `BuildsService.list`
+- [x] `GET /v1/builds/:name` — `BuildsService.detail`
+- [x] `GET /v1/opp-strategies` — `BuildsService.oppStrategies`
+- [x] `GET /v1/build-vs-strategy` — `AggregationsService.buildVsStrategy`
+- [x] `GET /v1/maps` — `AggregationsService.maps`
+- [x] `GET /v1/matchups` — `AggregationsService.matchups`
+- [x] `GET /v1/random-summary` — `AggregationsService.randomSummary`
+- [x] `GET /v1/timeseries` — `AggregationsService.timeseries`
+- [x] `GET /v1/games/:gameId/build-order` — pure JS parse of the
+  stored `buildLog` (no Python needed)
+- [x] `POST /v1/games/:gameId/opp-build-order` — agent writeback or
+  recompute request
+- [x] `POST /v1/games/:gameId/macro-breakdown` — agent writeback or
+  Socket.io recompute request
+- [x] `GET /v1/games/:gameId/apm-curve` — read stored series
+- [x] `POST /v1/macro/backfill/start` + `GET /v1/macro/backfill/status`
+  — `MacroBackfillService` (per-user job in `macro_jobs`)
+- [x] `GET /v1/spatial/{maps,buildings,proxy,battle,death-zone,opponent-proxies}`
+  — `SpatialService` (Mongo aggregations + scipy KDE via
+  `scripts/spatial_cli.py`, with a JS bin-counter fallback)
+- [x] `GET /v1/catalog`, `GET /v1/export.csv` — `CatalogService` (CSV
+  is a streaming generator capped at `LIMITS.CSV_EXPORT_MAX_ROWS`)
+- [x] `POST /v1/import/{scan,start,cancel,extract-identities,pick-folder}`,
+  `GET /v1/import/{status,cores,jobs}` — `ImportService` relays to the
+  agent over Socket.io and tracks lifecycle in `import_jobs`
+- [x] `GET /v1/definitions` — bundled JSON
+- [x] ML routes: `/v1/ml/{status,train,predict,pregame,options}` —
+  `MLService` shells out to `scripts/ml_cli.py`, persists model blobs
+  in `ml_models`
+- [x] `GET /v1/map-image`, `GET /v1/playback` (501 stub for the latter
+  since playback requires the user's local SC2 install)
 
-### Service-layer scaffolding for those routes
+### Service-layer scaffolding for those routes — done
 
-The hot work in each port is replacing
-`dbCache.opp.data[pulseId]` and friends with the right MongoDB
-aggregation pipeline. The shapes go from "scan everything in memory"
-to "tell Mongo what you want." Group these logical buckets and ship
-one PR per bucket so review stays sane:
+Each bucket is now an explicit service in `apps/api/src/services/`:
 
-1. **Aggregations bucket** — summary, matchups, maps, build-vs-strategy,
-   random-summary, timeseries. All live behind one `AggregationsService`
-   that issues `$facet` pipelines.
-2. **Per-game compute bucket** — build-order, apm-curve,
-   macro-breakdown. These spawn the Python CLIs (`macro_cli.py`,
-   `buildorder_cli.py`) inside the Render container — same pattern as
-   today, but the input game JSON comes from Mongo.
-3. **Import bucket** — the existing `bulk_import_cli.py` flow lifts
-   onto the API node-for-node; the route endpoints proxy stdout
-   ndjson over Socket.io.
-4. **ML bucket** — wraps `ml_cli.py` the same way.
-5. **Spatial + map bucket** — the spatial endpoints all return small
-   JSON; just queries.
+1. **Aggregations bucket** — `AggregationsService` issues `$facet`
+   pipelines for summary / matchups / maps / build-vs-strategy /
+   random-summary / timeseries / games-list.
+2. **Per-game compute bucket** — `PerGameComputeService` parses the
+   stored `buildLog` arrays in pure JS (no Python required) and reads
+   stored macro / apm payloads. Recompute requests are emitted to the
+   agent's Socket.io room — the agent owns the .SC2Replay file.
+3. **Import bucket** — `ImportService` is a coordinator: it relays
+   `import:scan_request` / `import:start_request` / etc. to the user's
+   agent and tracks job lifecycle in `import_jobs`. The agent runs
+   `scripts/bulk_import_cli.py` locally.
+4. **ML bucket** — `MLService` shells out to `scripts/ml_cli.py` (which
+   is bundled in the Render image at `/opt/sc2-analyzer`), persists
+   the resulting model blob in `ml_models`, and serves predict /
+   pregame from it.
+5. **Spatial + map bucket** — `SpatialService` runs Mongo aggregations
+   plus an optional `scripts/spatial_cli.py` KDE pass. Falls back to
+   a pure-JS bin counter when scipy is unavailable.
 
-Estimated: 2–3 weeks part-time per bucket. Total ~3–4 weeks for the
-high-value buckets (1, 2, 3); ML and spatial can ship later.
+Each bucket has a router under `apps/api/src/routes/` and a unit-test
+file under `apps/api/__tests__/`. The integration suite at
+`__tests__/routes.integration.test.js` exercises the full HTTP wiring
+end-to-end against an in-process MongoDB Memory Server.
 
-### Dockerfile add: Python toolchain
+### Dockerfile: Python toolchain — done
 
-The Render service will need Python and the analyzer's Python
-dependencies for buckets 2 and 3. Update `apps/api/Dockerfile`:
+`apps/api/Dockerfile` is now a two-stage build:
 
-```dockerfile
-FROM node:22-alpine
-RUN apk add --no-cache python3 py3-pip
-COPY ../../SC2Replay-Analyzer/requirements.txt /tmp/py-req.txt
-RUN pip install --no-cache-dir -r /tmp/py-req.txt
-# ...
-```
+* **stage 1** (`python:3.12-slim-bookworm`) installs the analyzer's
+  Python deps into a venv at `/opt/sc2-py`.
+* **stage 2** (`node:22-bookworm-slim`) copies that venv plus the
+  `SC2Replay-Analyzer/` source to `/opt/sc2-analyzer` and runs the
+  Express API.
 
-(Or split into a separate Render worker service that just hosts the
-Python parsers and listens on an internal queue — cleaner long term,
-adds 1 week to schedule.)
+`render.yaml` was updated to build with `dockerContext: .` (the repo
+root) so the COPY of `SC2Replay-Analyzer/` resolves. Two new env vars
+— `SC2_PY_PYTHON` and `SC2_PY_ANALYZER_DIR` — point the runner at the
+prebuilt venv and analyzer source.
 
 ---
 
-## D — Local agent (finishing touches)
+## D — Local agent (finishing touches) — done
 
-The agent works end-to-end. What's left is packaging + polish:
+The agent went from "runs from source" to "shippable .exe with tray
+polish + auto-update + crash reporting" in this drop. Stage status:
 
-- [ ] **Signed Windows installer.** PyInstaller `--onefile --windowed`
-  + an EV code-signing cert (~$70/yr from a CA like SSL.com or
-  DigiCert) so SmartScreen doesn't scare users.
-- [ ] **Auto-update flow.**
-  - Add `GET /v1/agent/version` to the API returning the latest
-    semver + signed installer URL.
-  - Agent checks on startup; if newer is available, downloads to a
-    temp dir, verifies the signature, and runs the installer.
-- [ ] **Tray UX polish.**
-  - Multi-line tooltip with last-uploaded filename + timestamp
-  - "Pause syncing" action that flips a flag in `state.json`
-  - "Open log folder" action
-  - "Re-sync from scratch" action that wipes `state.uploaded` and
-    re-uploads everything
-- [ ] **Crash reporter.** Sentry SDK with a redaction filter so
-  battle-tags / paths don't leak into the trace.
-- [ ] **Windows service mode.** Optional: register as a service so it
-  restarts on logon failure. Trade-off: harder to surface a tray
-  icon. Probably skip and stick with Startup-folder shortcut.
-- [ ] **macOS / Linux builds.** Defer until someone asks. PyInstaller
-  supports both; the watchdog + pystray code is already cross-platform.
-- [ ] **Replay-folder reconfig UI.** Right now the agent picks
-  `find_replays_root()` automatically. If a user has multiple SC2
-  installs (Battle.net + PTR), they need to override via
-  `SC2TOOLS_REPLAY_FOLDER` env var. Add a tray menu item that opens a
-  folder picker.
-
-Estimated: 1.5–2 weeks part-time.
+- [x] **Signed Windows installer.** `apps/agent/packaging/installer.nsi`
+  is a per-user (no-admin) NSIS installer that drops the EXE under
+  `%LOCALAPPDATA%\sc2tools`, registers a Startup-folder shortcut, and
+  writes an Add/Remove Programs entry.
+  `apps/agent/packaging/build-installer.ps1` runs the full pipeline
+  (PyInstaller → NSIS → optional `signtool`).
+  *(Account-side: the EV code-signing certificate purchase is the only
+  step that still needs the user — pass `-SigningCert path\to\cert.pfx`
+  to the build script and the SHA-256 / timestamp dance is handled.)*
+- [x] **Auto-update flow.**
+  - `GET /v1/agent/version` returns the latest release for the agent's
+    channel + platform with `update_available`, `latest`, `releaseNotes`,
+    SHA-256, and download URL (see Stage C: AgentVersionService).
+  - `apps/agent/sc2tools_agent/updater.py` polls on startup + every
+    12h, downloads to `%TEMP%`, verifies the SHA-256, and either
+    launches the installer (frozen .exe) or records the latest version
+    seen in `state.json` (source-run).
+- [x] **Tray UX polish.** Multi-line tooltip (status / last upload /
+  watching path) plus menu items: Open dashboard, Pause/Resume syncing
+  (persisted in `state.paused`), Open log folder, Re-sync from scratch,
+  Choose replay folder…, Check for updates.
+- [x] **Crash reporter.** `crash_reporter.py` wires Sentry SDK with a
+  redaction filter that scrubs battle-tag / display-name / token keys
+  from event dicts and replaces `C:\Users\<user>\…` with `<user-home>`
+  in any string. Disabled when `SC2TOOLS_SENTRY_DSN` is unset.
+- [x] **Replay-folder reconfig UI.** Tray's "Choose replay folder…"
+  opens the native tk folder picker on a daemon thread; the picked
+  path is stored in `state.replay_folder_override` and the watcher
+  re-discovers roots on its next sweep.
+- [ ] **Windows service mode.** Skipped per the original recommendation
+  — Startup-folder shortcut is fine and the tray icon survives.
+- [ ] **macOS / Linux builds.** Deferred until someone asks. The
+  updater + crash reporter + watcher already work cross-platform; only
+  the NSIS installer and the .pfx code-signing path are Windows-only.
 
 ---
 

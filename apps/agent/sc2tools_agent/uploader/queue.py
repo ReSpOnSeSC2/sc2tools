@@ -53,6 +53,8 @@ class UploadQueue:
         self._on_success = on_success or (lambda _p: None)
         self._on_failure = on_failure or (lambda _p, _e: None)
         self._lock = threading.Lock()
+        self._paused = bool(getattr(state, "paused", False))
+        self._resync_requested = threading.Event()
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -83,12 +85,48 @@ class UploadQueue:
     def pending_count(self) -> int:
         return self._q.qsize()
 
+    def set_paused(self, paused: bool) -> None:
+        """Pause or resume the worker. While paused, the worker keeps
+        draining the queue but holds onto each job (re-enqueueing it
+        with a brief sleep) so we don't hit the network until the user
+        un-pauses."""
+        with self._lock:
+            self._paused = bool(paused)
+        log.info("upload_queue_paused=%s", paused)
+
+    def is_paused(self) -> bool:
+        with self._lock:
+            return self._paused
+
+    def request_full_resync(self) -> None:
+        """Signal the watcher / runner that every replay should be
+        re-considered for upload. The actual rescan happens on the
+        watcher's next sweep — this just clears the in-memory dedupe
+        cache so jobs aren't filtered out on submit()."""
+        self._resync_requested.set()
+        log.info("upload_queue_resync_requested")
+
+    def is_resync_requested(self) -> bool:
+        return self._resync_requested.is_set()
+
+    def acknowledge_resync(self) -> None:
+        self._resync_requested.clear()
+
     # ---------------- internals ----------------
     def _run(self) -> None:
         while not self._stop.is_set():
             try:
                 job = self._q.get(timeout=1.0)
             except queue.Empty:
+                continue
+            if self.is_paused():
+                # Re-enqueue and sleep; never lose work because we paused.
+                try:
+                    self._q.put_nowait(job)
+                except queue.Full:
+                    log.error("upload_queue_full_during_pause; dropping")
+                self._q.task_done()
+                time.sleep(1.0)
                 continue
             try:
                 self._upload_one(job)

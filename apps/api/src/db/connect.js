@@ -15,6 +15,11 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   devicePairings: import('mongodb').Collection,
  *   deviceTokens: import('mongodb').Collection,
  *   overlayTokens: import('mongodb').Collection,
+ *   mlModels: import('mongodb').Collection,
+ *   mlJobs: import('mongodb').Collection,
+ *   importJobs: import('mongodb').Collection,
+ *   macroJobs: import('mongodb').Collection,
+ *   agentReleases: import('mongodb').Collection,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -47,6 +52,11 @@ async function connect({ uri, dbName }) {
     devicePairings: db.collection(COLLECTIONS.DEVICE_PAIRINGS),
     deviceTokens: db.collection(COLLECTIONS.DEVICE_TOKENS),
     overlayTokens: db.collection(COLLECTIONS.OVERLAY_TOKENS),
+    mlModels: db.collection(COLLECTIONS.ML_MODELS),
+    mlJobs: db.collection(COLLECTIONS.ML_JOBS),
+    importJobs: db.collection(COLLECTIONS.IMPORT_JOBS),
+    macroJobs: db.collection(COLLECTIONS.MACRO_JOBS),
+    agentReleases: db.collection(COLLECTIONS.AGENT_RELEASES),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -92,6 +102,22 @@ async function ensureIndexes(ctx) {
 
   await ctx.overlayTokens.createIndex({ token: 1 }, { unique: true });
   await ctx.overlayTokens.createIndex({ userId: 1, createdAt: -1 });
+
+  // Analytics hot-paths added by the C-bucket port. These accelerate
+  // the $facet aggregations the AggregationsService and BuildsService
+  // run on every tab change in the SPA.
+  await ctx.games.createIndex({ userId: 1, myBuild: 1, date: -1 });
+  await ctx.games.createIndex({ userId: 1, "opponent.strategy": 1 });
+  await ctx.games.createIndex({ userId: 1, map: 1, date: -1 });
+
+  await ctx.mlModels.createIndex({ userId: 1, kind: 1 }, { unique: true });
+  await ctx.mlJobs.createIndex({ userId: 1, createdAt: -1 });
+
+  await ctx.importJobs.createIndex({ userId: 1, createdAt: -1 });
+  await ctx.macroJobs.createIndex({ userId: 1, createdAt: -1 });
+
+  await ctx.agentReleases.createIndex({ channel: 1, version: 1 }, { unique: true });
+  await ctx.agentReleases.createIndex({ channel: 1, publishedAt: -1 });
 }
 
 module.exports = { connect, ensureIndexes };
