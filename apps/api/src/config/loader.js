@@ -23,6 +23,9 @@ const HEX_64_REGEX = /^[0-9a-fA-F]{64}$/;
  *   serverPepper: Buffer,
  *   corsAllowedOrigins: string[],
  *   rateLimitPerMinute: number,
+ *   agentReleaseAdminToken: string|null,
+ *   pythonExe: string|null,
+ *   pythonAnalyzerDir: string|null,
  * }}
  *
  * Example:
@@ -50,6 +53,9 @@ function loadConfig(env = process.env) {
       env.RATE_LIMIT_PER_MINUTE,
       DEFAULTS.RATE_LIMIT_PER_MINUTE,
     ),
+    agentReleaseAdminToken: env.AGENT_RELEASE_ADMIN_TOKEN || null,
+    pythonExe: env.SC2_PY_PYTHON || null,
+    pythonAnalyzerDir: env.SC2_PY_ANALYZER_DIR || null,
   };
 }
 

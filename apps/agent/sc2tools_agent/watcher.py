@@ -96,6 +96,14 @@ class ReplayWatcher:
 
     # ---------------- internals ----------------
     def _discover_roots(self) -> list[Path]:
+        # The user-chosen folder (set from the tray's "Choose replay
+        # folder…" picker) takes precedence over both the env-var
+        # config and the auto-discovery.
+        override = getattr(self._state, "replay_folder_override", None)
+        if override:
+            override_path = Path(override)
+            if override_path.exists():
+                return [override_path]
         if self._cfg.replay_folder:
             return [self._cfg.replay_folder]
         root = find_replays_root()
@@ -111,6 +119,15 @@ class ReplayWatcher:
                 log.exception("sweep_failed")
 
     def _sweep_once(self) -> None:
+        # If the runner triggered a "Re-sync from scratch" via the tray,
+        # rediscover the roots (in case the override changed too) and
+        # walk every file again. The state.uploaded dict was already
+        # cleared by the runner before signalling, so keys that match
+        # below would be re-enqueued anyway — but we still want fresh
+        # roots in case the override changed since the agent started.
+        if self._upload.is_resync_requested():
+            self._roots = self._discover_roots()
+            self._upload.acknowledge_resync()
         if not self._roots:
             self._roots = self._discover_roots()
             if not self._roots:

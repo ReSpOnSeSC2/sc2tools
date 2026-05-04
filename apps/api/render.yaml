@@ -1,14 +1,20 @@
 # Render blueprint for the SC2 Tools cloud API.
 # After pushing this repo to GitHub, point Render at apps/api/render.yaml
 # from "Blueprints → New Blueprint" and it provisions the service.
+#
+# IMPORTANT: the Docker build needs the repo ROOT as its context so it
+# can COPY SC2Replay-Analyzer/ into the image. We deliberately omit
+# `rootDir` (or set it to the repo root) and point dockerfilePath at
+# the API's Dockerfile. Setting rootDir: apps/api would scope the
+# build context to the API directory and the analyzer COPY would fail.
 services:
   - type: web
     name: sc2tools-api
     runtime: docker
     plan: starter
     region: oregon
-    rootDir: apps/api
-    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerfilePath: ./apps/api/Dockerfile
     healthCheckPath: /v1/health
     autoDeploy: true
     envVars:
@@ -28,3 +34,11 @@ services:
         sync: false
       - key: RATE_LIMIT_PER_MINUTE
         value: "120"
+      - key: AGENT_RELEASE_ADMIN_TOKEN
+        sync: false
+      # The Dockerfile pre-installs the analyzer + venv at these paths.
+      # Override only if you've re-staged them somewhere else.
+      - key: SC2_PY_PYTHON
+        value: /opt/sc2-py/bin/python
+      - key: SC2_PY_ANALYZER_DIR
+        value: /opt/sc2-analyzer

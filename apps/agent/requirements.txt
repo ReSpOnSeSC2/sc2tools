@@ -4,3 +4,7 @@ watchdog==5.0.3
 pystray==0.19.5
 Pillow==11.0.0
 python-dotenv==1.0.1
+# Crash reporter — optional at install time (the agent degrades to
+# console logging when the dep is absent), pinned here for reproducible
+# .exe builds.
+sentry-sdk==2.18.0

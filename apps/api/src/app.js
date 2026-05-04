@@ -22,6 +22,17 @@ const { GamesService } = require("./services/games");
 const { CustomBuildsService } = require("./services/customBuilds");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
+const { AggregationsService } = require("./services/aggregations");
+const { BuildsService } = require("./services/builds");
+const {
+  PerGameComputeService,
+  MacroBackfillService,
+} = require("./services/perGameCompute");
+const { ImportService } = require("./services/import");
+const { SpatialService } = require("./services/spatial");
+const { CatalogService } = require("./services/catalog");
+const { MLService } = require("./services/ml");
+const { AgentVersionService } = require("./services/agentVersion");
 
 const { buildHealthRouter } = require("./routes/health");
 const { buildMeRouter } = require("./routes/me");
@@ -30,6 +41,17 @@ const { buildGamesRouter } = require("./routes/games");
 const { buildCustomBuildsRouter } = require("./routes/customBuilds");
 const { buildDevicePairingsRouter } = require("./routes/devicePairings");
 const { buildOverlayTokensRouter } = require("./routes/overlayTokens");
+const { buildAggregationsRouter } = require("./routes/aggregations");
+const { buildBuildsRouter } = require("./routes/builds");
+const {
+  buildPerGameRouter,
+  buildMacroBackfillRouter,
+} = require("./routes/perGame");
+const { buildImportsRouter } = require("./routes/imports");
+const { buildSpatialRouter } = require("./routes/spatial");
+const { buildCatalogRouter } = require("./routes/catalog");
+const { buildMlRouter } = require("./routes/ml");
+const { buildAgentVersionRouter } = require("./routes/agentVersion");
 
 const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
 
@@ -69,7 +91,34 @@ function makeServices(deps) {
   const customBuilds = new CustomBuildsService(deps.db);
   const pairings = new DevicePairingsService(deps.db);
   const overlayTokens = new OverlayTokensService(deps.db);
-  return { users, opponents, games, customBuilds, pairings, overlayTokens };
+  const aggregations = new AggregationsService(deps.db);
+  const builds = new BuildsService(deps.db);
+  const catalog = new CatalogService(deps.db);
+  const perGame = new PerGameComputeService(deps.db, {
+    catalog: catalog.catalogLookup(),
+  });
+  const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
+  const imports = new ImportService(deps.db, { io: deps.io });
+  const spatial = new SpatialService(deps.db);
+  const ml = new MLService(deps.db, { io: deps.io });
+  const agentVersion = new AgentVersionService(deps.db);
+  return {
+    users,
+    opponents,
+    games,
+    customBuilds,
+    pairings,
+    overlayTokens,
+    aggregations,
+    builds,
+    catalog,
+    perGame,
+    macroBackfill,
+    imports,
+    spatial,
+    ml,
+    agentVersion,
+  };
 }
 
 /**
@@ -120,7 +169,20 @@ function mountRoutes(app, deps, services) {
     ensureUser: (clerkUserId) => services.users.ensureFromClerk(clerkUserId),
   });
 
+  // Public routers (no `router.use(auth)`) MUST mount before any
+  // auth-using router. Express runs every mounted router in order, and
+  // each auth-using router's top-level `router.use(auth)` fires for ANY
+  // request entering /v1 — including ones the auth-using router won't
+  // even handle. Mounting public routes first short-circuits before
+  // those auth-eager middlewares get a turn.
   app.use(SERVICE.ROUTE_PREFIX, buildHealthRouter({ db: deps.db }));
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildAgentVersionRouter({
+      agentVersion: services.agentVersion,
+      adminToken: deps.config.agentReleaseAdminToken,
+    }),
+  );
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMeRouter({ users: services.users, games: services.games, auth }),
@@ -149,6 +211,41 @@ function mountRoutes(app, deps, services) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildOverlayTokensRouter({ overlayTokens: services.overlayTokens, auth }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildAggregationsRouter({ aggregations: services.aggregations, auth }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildBuildsRouter({ builds: services.builds, auth }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildPerGameRouter({ perGame: services.perGame, auth, io: deps.io }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildMacroBackfillRouter({
+      macroBackfill: services.macroBackfill,
+      auth,
+    }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildImportsRouter({ imports: services.imports, auth }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildSpatialRouter({ spatial: services.spatial, auth }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildCatalogRouter({ catalog: services.catalog, auth }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildMlRouter({ ml: services.ml, auth }),
   );
 }
 
