@@ -286,13 +286,56 @@ function Get-History {
             $JsonObj = $Content | ConvertFrom-Json
             $HistoryHash = @{}
             if ($JsonObj) {
-                $JsonObj.PSObject.Properties | ForEach-Object { $HistoryHash[$_.Name] = ConvertTo-DeepHashtable $_.Value }
+                $JsonObj.PSObject.Properties | ForEach-Object {
+                    # Stage 6: skip schema-version metadata so the
+                    # iterators that walk $History.Keys never treat
+                    # the integer stamp as a pulse_id.  Mirrors
+                    # core.data_store._strip_schema_meta.
+                    if ($_.Name -eq '_schema_version') { return }
+                    $HistoryHash[$_.Name] = ConvertTo-DeepHashtable $_.Value
+                }
             }
             return $HistoryHash
         } catch { return @{} }
     }
     return @{}
 }
+
+# Stage 5 of STAGE_DATA_INTEGRITY_ROADMAP -- boot-time integrity sweep.
+# Invokes the Python sweeper once at scanner startup so any orphans from
+# the previous shutdown surface in /api/recovery before the user notices
+# a smaller-than-expected file in the SPA. Best-effort: if Python isn't
+# on PATH or the import fails, we just log the error and continue --
+# the lock contract still protects the live writes.
+function Invoke-IntegritySweepAtBoot {
+    $pythonExe = $null
+    foreach ($candidate in @('python', 'py', 'python3')) {
+        try {
+            $probe = & $candidate --version 2>&1
+            if ($LASTEXITCODE -eq 0 -and $probe -match 'Python') {
+                $pythonExe = $candidate
+                break
+            }
+        } catch { continue }
+    }
+    if ($null -eq $pythonExe) {
+        Write-Host '[integrity] python not on PATH; skipping boot sweep' -ForegroundColor DarkGray
+        return
+    }
+    try {
+        # Run the sweep with the project root as CWD so core/* imports.
+        Push-Location $PSScriptRoot
+        $output = & $pythonExe -m core.integrity_sweep 2>&1
+        $code = $LASTEXITCODE
+        Pop-Location
+        if ($code -ne 0) {
+            Write-Host "[integrity] sweep exit=$code; output: $output" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host ("[integrity] boot sweep error: " + $_.Exception.Message) -ForegroundColor Yellow
+    }
+}
+Invoke-IntegritySweepAtBoot
 
 # Atomic write helper -- prevents partial writes if the process is killed
 # mid-flush. Writes to a sibling temp file in the same directory then
@@ -411,6 +454,14 @@ function Save-History {
     if (-not ($HistoryData -is [System.Collections.IDictionary])) {
         throw "Save-History: expected hashtable, got $($HistoryData.GetType().FullName)"
     }
+    # Stage 6 of STAGE_DATA_INTEGRITY_ROADMAP -- stamp the schema
+    # version into the hashtable before serialising. Mirrors the
+    # value pinned in core/schema_versioning.py and
+    # lib/schema_versioning.js (MyOpponentHistory.json -> v1).
+    # Hard-coded here rather than read from a Python-side helper so
+    # the PowerShell scanner stays self-contained on a clean install.
+    # A future bump must update all three constants in lock-step.
+    $HistoryData['_schema_version'] = 1
     $sb = [System.Text.StringBuilder]::new(8192)
     [void]$sb.Append('{')
     [void]$sb.Append([Environment]::NewLine)
@@ -1120,15 +1171,30 @@ while($true) {
             $RegionPickReason = "in-band MMR match (delta=$($Best.Delta), $($UsedSensitivity), oppMMR=$($DetectedOppMmr))"
         }
 
-        # Phase 5: no in-band match. Prefer the user's highest-MMR team for
-        # the race they're playing -- main accounts almost always sit on the
-        # region you actively play. Falls through to Find-PlayerProfile only
-        # if even that returns nothing.
+        # Phase 5: no in-band match. Prefer the user's MOST-RECENTLY-played
+        # team -- if you played on EU 9 minutes ago and US 18 hours ago,
+        # you're on EU right now even when US has a higher rating. Falls
+        # back to highest-MMR only when no team has been played in the
+        # recency window (e.g., on the very first run after a long break).
+        # Mirrors Find-PlayerProfile's recency-first logic so the anchor
+        # picker behaves consistently across both code paths.
         if (-not $ActiveProfile) {
-            $HighestMmrTeam = $TeamsByRecency | Sort-Object -Property @{Expression='Rating';Descending=$true} | Select-Object -First 1
-            if ($null -ne $HighestMmrTeam) {
-                $ActiveProfile = Create-PlayerProfile -RecentTeam $HighestMmrTeam
-                $RegionPickReason = "no in-band match; using highest-MMR user team (rating=$($HighestMmrTeam.Rating))"
+            $RECENT_ACTIVE_SECONDS = 86400  # 24h: match Find-PlayerProfile
+            $RecentTeams = @($TeamsByRecency | Where-Object { $_.LastPlayedAgo -le $RECENT_ACTIVE_SECONDS })
+            if ($RecentTeams.Count -gt 0) {
+                # Most-recent first; tie-break on Rating descending so two
+                # teams played in the same minute pick the higher-rated one.
+                $RecentTeam = $RecentTeams | Sort-Object -Property `
+                    @{Expression='LastPlayedAgo';Descending=$false}, `
+                    @{Expression='Rating';Descending=$true} | Select-Object -First 1
+                $ActiveProfile = Create-PlayerProfile -RecentTeam $RecentTeam
+                $RegionPickReason = "no in-band match; using most-recently-played user team (rating=$($RecentTeam.Rating), lastPlayed=$([int32]$RecentTeam.LastPlayedAgo)s ago)"
+            } else {
+                $HighestMmrTeam = $TeamsByRecency | Sort-Object -Property @{Expression='Rating';Descending=$true} | Select-Object -First 1
+                if ($null -ne $HighestMmrTeam) {
+                    $ActiveProfile = Create-PlayerProfile -RecentTeam $HighestMmrTeam
+                    $RegionPickReason = "no in-band match, no recent activity; using highest-MMR user team (rating=$($HighestMmrTeam.Rating))"
+                }
             }
         }
 

@@ -89,6 +89,16 @@ NODE_BARE_WRITE_EXEMPT = {
         "stream-overlay-backend",
         "analyzer.js",
     ),
+    # routes/doctor.js writes a tiny "probe" file (timestamp string) to
+    # verify the data dir is writable, then unlinks it. Not a data
+    # file -- it's a fs-permission probe. Documented as part of the
+    # bootstrap doctor banner (commit 68e50fe).
+    os.path.join(
+        "reveal-sc2-opponent-main",
+        "stream-overlay-backend",
+        "routes",
+        "doctor.js",
+    ),
 }
 
 PYTHON_BARE_WRITE_EXEMPT = {

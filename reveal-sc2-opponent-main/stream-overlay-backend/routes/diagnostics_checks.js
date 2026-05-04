@@ -683,11 +683,65 @@ async function checkCloudOptInQueue() {
     detail: { note: 'Will report unflushed observation count once shipped.' } });
 }
 
+/**
+ * Stage 5 -- data-integrity sweep status.
+ * Reports the most recent integrity sweep state: candidates staged,
+ * orphans seen, and any non-ok findings. Does NOT mutate the live
+ * file; the SPA's "Apply recovery" button is the only path that does.
+ *
+ * @param {{ dataDir: string }} deps
+ * @returns {Promise<object>}
+ */
+async function checkDataIntegrity(deps) {
+  const integritySweep = require('../lib/integrity_sweep');
+  let report;
+  try {
+    report = integritySweep.runSweep(deps.dataDir);
+  } catch (err) {
+    return buildResult({
+      id: 'data_integrity', title: 'Data integrity',
+      status: STATUS_ERR,
+      summary: 'sweep failed: ' + (err && err.message || err),
+      detail: {},
+    });
+  }
+  const nonOk = report.findings.filter((f) => f.status !== 'ok');
+  let status;
+  let summary;
+  if (nonOk.length === 0 && report.orphans_aged.length === 0) {
+    status = 'ok';
+    summary = 'All tracked files OK; no orphan tmp files.';
+  } else if (report.candidates_staged.length > 0) {
+    status = 'warn';
+    summary = `${report.candidates_staged.length} recovery candidate(s) ready -- click Apply`;
+  } else {
+    status = nonOk.length > 0 ? STATUS_ERR : 'warn';
+    summary = `${nonOk.length} file(s) degraded; ${report.orphans_aged.length} aged orphan(s)`;
+  }
+  return buildResult({
+    id: 'data_integrity', title: 'Data integrity',
+    status,
+    summary,
+    detail: {
+      orphans_seen: report.orphans_seen.length,
+      orphans_aged: report.orphans_aged.length,
+      candidates_staged: report.candidates_staged.length,
+      findings: report.findings.map((f) => ({
+        basename: f.basename,
+        status: f.status,
+        live_keys: f.live_keys,
+        candidate_source: f.candidate_source,
+      })),
+      warnings: report.warnings,
+    },
+  });
+}
+
 module.exports = {
   checkPython, checkSc2Reader, checkReplayFolders, checkMetaDatabase,
   checkProfileConfig, checkBattleNetPulse, checkTwitch, checkObs,
   checkDiskSpace, checkRecentErrors, checkMacroEngineVersion,
-  checkCommunityBuildsApi, checkCloudOptInQueue,
+  checkCommunityBuildsApi, checkCloudOptInQueue, checkDataIntegrity,
   // Exported for tests:
   _internals: {
     interpretPythonVersion, inspectReplayFolder, scanForReplays,

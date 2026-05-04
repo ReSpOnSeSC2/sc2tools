@@ -69,6 +69,8 @@ const CHECK_RUNNERS = Object.freeze([
   ['macro_engine_version', checks.checkMacroEngineVersion],
   ['community_builds_api', checks.checkCommunityBuildsApi],
   ['cloud_optin_queue', checks.checkCloudOptInQueue],
+  // Stage 5 of STAGE_DATA_INTEGRITY_ROADMAP.
+  ['data_integrity', checks.checkDataIntegrity],
 ]);
 
 // ------------------------------------------------------------------

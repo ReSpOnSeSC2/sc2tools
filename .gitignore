@@ -135,3 +135,15 @@ nsa*.tmp
 # bootstrap script after pip install completes; it's a per-machine
 # state file, not a source artifact.
 **/data/.python-deps-stamp
+
+# Stage 8 SQLite shadow DB. Regenerable from the JSON files via
+# `python -m core.sqlite_shadow build`; per-machine state, not a
+# source artifact.
+**/data/shadow.sqlite3
+**/data/shadow.sqlite3-shm
+**/data/shadow.sqlite3-wal
+
+# Stage 4 shrink-incident snapshots written when the validate-before-
+# rename gate catches a wipe and the operator preserves the prior
+# state for forensics. Per-incident; never source-controlled.
+**/data/*.shrink-incident-*

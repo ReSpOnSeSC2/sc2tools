@@ -1575,6 +1575,33 @@ app.use(createDiagnosticsRouter({
     analyzerScriptsDir: path.resolve(ROOT, '..', 'SC2Replay-Analyzer'),
 }));
 
+// Stage 5 of STAGE_DATA_INTEGRITY_ROADMAP -- recovery endpoints.
+// GET  /api/recovery        -> list orphans + recovery candidates
+// POST /api/recovery/apply  -> promote a candidate to its live target
+app.use(createRecoveryRouter({ dataDir: DATA_DIR }));
+
+// Stage 5 boot-time sweep. Runs once at startup so any orphans from
+// the previous shutdown surface in /api/recovery before the user
+// notices a smaller-than-expected file in the SPA. Best-effort: a
+// crash here must NOT prevent the server from listening, since the
+// SPA can survive without recovery candidates.
+try {
+    const _bootReport = integritySweep.runSweep(DATA_DIR);
+    if (_bootReport.candidates_staged.length > 0) {
+        console.warn(
+            '[integrity] %d recovery candidate(s) staged at boot; '
+            + 'visit /api/recovery to apply',
+            _bootReport.candidates_staged.length,
+        );
+    } else if (_bootReport.warnings.length > 0) {
+        console.warn('[integrity] sweep warnings:', _bootReport.warnings.join(' | '));
+    } else {
+        console.log('[integrity] OK');
+    }
+} catch (_sweepErr) {
+    console.warn('[integrity] boot sweep error:', _sweepErr && _sweepErr.message);
+}
+
 // Stage 7.4: community sync service + custom-builds router. The
 // service is constructed before the Socket.io server is wired so we
 // can pass a lazy io getter into the router (io is declared a few

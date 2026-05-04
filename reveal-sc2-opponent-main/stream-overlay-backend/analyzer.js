@@ -224,13 +224,33 @@ function readJsonStripBom(p) {
 
 function reloadIfChanged(which) {
     const cfg = which === 'meta'
-        ? { slot: dbCache.meta, path: META_DB_PATH }
-        : { slot: dbCache.opp,  path: OPP_HISTORY_PATH };
+        ? { slot: dbCache.meta, path: META_DB_PATH, basename: 'meta_database.json' }
+        : { slot: dbCache.opp,  path: OPP_HISTORY_PATH, basename: 'MyOpponentHistory.json' };
     if (!fs.existsSync(cfg.path)) return false;
     const sig = fileSignature(cfg.path);
     if (sig === cfg.slot.signature) return false;
     try {
-        cfg.slot.data = readJsonStripBom(cfg.path) || {};
+        const parsed = readJsonStripBom(cfg.path) || {};
+        // Stage 6: refuse a newer-than-expected file (silent field-drop
+        // is the wipe pattern Stage 4 was designed to prevent), then
+        // strip the schema-version stamp so iterators that walk
+        // `data.values()` don't see it.
+        try {
+            const sv = require('./lib/schema_versioning');
+            sv.assertNotTooNew(parsed, cfg.basename);
+            const spec = sv.getSpec(cfg.basename);
+            if (spec && parsed && typeof parsed === 'object'
+                && !Array.isArray(parsed)) {
+                delete parsed[spec.version_key];
+            }
+        } catch (svErr) {
+            if (svErr && svErr.name === 'SchemaTooNewError') {
+                console.error('[Analyzer] ' + which + ' rejected: ' + svErr.message);
+                return false;
+            }
+            // Any other schema_versioning error is best-effort; continue.
+        }
+        cfg.slot.data = parsed;
         cfg.slot.signature = sig;
         cfg.slot.revision += 1;
         cfg.slot.loadedAt = Date.now();
@@ -276,6 +296,14 @@ function ensureLoaded() {
 // reloadIfChanged sees the updated signature without overwriting our edits.
 function persistMetaDb() {
     if (!dbCache.meta || !dbCache.meta.data) return;
+    // Stage 6 of STAGE_DATA_INTEGRITY_ROADMAP -- stamp the registry's
+    // current schema version into the dict before serialising so a
+    // later read can detect a newer-than-expected on-disk file. Best-
+    // effort: any failure leaves dbCache.meta.data untouched.
+    try {
+        const sv = require('./lib/schema_versioning');
+        sv.stampVersion(dbCache.meta.data, 'meta_database.json');
+    } catch (_e) { /* best-effort -- write goes through anyway */ }
     // Delegate the durable write to the canonical helper. The shape
     // (write tmp -> fsync -> rename) lives in lib/atomic-fs.js so
     // every JSON writer in the backend uses one battle-tested impl.

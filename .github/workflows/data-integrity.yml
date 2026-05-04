@@ -1,0 +1,128 @@
+# Stage 7 of STAGE_DATA_INTEGRITY_ROADMAP -- enforce the lint rules
+# and run the cross-language integration tests on every PR + push.
+#
+# What this workflow does
+# -----------------------
+# 1. ``check_atomic_writes.py``         -- legacy guard from ADR 0016.
+# 2. ``check_data_integrity_invariants.py``
+#                                      -- Stage 7 lint (Python mkstemp,
+#                                          Node openSync 'wx', PowerShell
+#                                          writes against data\*.json).
+# 3. Python unit tests:
+#       tests/core/test_recover_orphan_history.py
+#       tests/core/test_stage2_helper_unification.py
+#       tests/core/test_stage4_validate_before_rename.py
+#       tests/core/test_integrity_sweep.py
+#       tests/core/test_schema_versioning.py
+# 4. Node unit + integration tests:
+#       __tests__/atomic-fs.test.js
+#       __tests__/file-lock.test.js
+#       __tests__/stage4_validate_before_rename.test.js
+#       __tests__/recovery.test.js
+#       __tests__/schema_versioning.test.js
+#       __tests__/integration/cross_process_lock.test.js
+#         (only when running on a Windows runner; PowerShell is required.)
+#
+# Failure of any step blocks the merge.
+
+name: data-integrity
+
+on:
+  pull_request:
+    paths:
+      - 'reveal-sc2-opponent-main/core/**'
+      - 'reveal-sc2-opponent-main/scripts/**'
+      - 'reveal-sc2-opponent-main/tests/**'
+      - 'reveal-sc2-opponent-main/lib/**'
+      - 'reveal-sc2-opponent-main/Reveal-Sc2Opponent.ps1'
+      - 'reveal-sc2-opponent-main/stream-overlay-backend/lib/**'
+      - 'reveal-sc2-opponent-main/stream-overlay-backend/routes/**'
+      - 'reveal-sc2-opponent-main/stream-overlay-backend/__tests__/**'
+      - 'scripts/check_atomic_writes.py'
+      - 'scripts/check_data_integrity_invariants.py'
+      - '.github/workflows/data-integrity.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: data-integrity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint -- atomic-fs invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: ADR 0016 atomic-write guard
+        run: python scripts/check_atomic_writes.py --verbose
+      - name: Stage 7 invariants check
+        run: python scripts/check_data_integrity_invariants.py --verbose
+
+  python-tests:
+    name: Python data-integrity unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Run targeted unit tests
+        working-directory: reveal-sc2-opponent-main
+        run: |
+          python -m unittest \
+            tests.core.test_recover_orphan_history \
+            tests.core.test_stage2_helper_unification \
+            tests.core.test_stage4_validate_before_rename \
+            tests.core.test_integrity_sweep \
+            tests.core.test_schema_versioning \
+            tests.core.test_data_store_link_game \
+            tests.core.test_data_store_find_by_name \
+            tests.core.test_data_store_merge_unknown \
+            tests.core.test_pulse_resolver \
+            tests.core.test_merge_unknown_pulse_ids
+
+  node-tests:
+    name: Node data-integrity unit + integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install
+        working-directory: reveal-sc2-opponent-main/stream-overlay-backend
+        run: npm ci
+      - name: Run targeted Jest suites
+        working-directory: reveal-sc2-opponent-main/stream-overlay-backend
+        run: |
+          npx jest \
+            __tests__/atomic-fs.test.js \
+            __tests__/file-lock.test.js \
+            __tests__/stage4_validate_before_rename.test.js \
+            __tests__/recovery.test.js \
+            __tests__/schema_versioning.test.js
+
+  cross-language:
+    name: 3-process cross-language lock (Windows runner)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Install Node deps
+        working-directory: reveal-sc2-opponent-main/stream-overlay-backend
+        run: npm ci
+      - name: 3-process integration test
+        working-directory: reveal-sc2-opponent-main/stream-overlay-backend
+        run: npx jest __tests__/integration/cross_process_lock.test.js
