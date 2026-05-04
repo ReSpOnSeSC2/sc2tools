@@ -1,6 +1,8 @@
 "use strict";
 
 const crypto = require("crypto");
+const { COLLECTIONS } = require("../config/constants");
+const { stampVersion } = require("../db/schemaVersioning");
 
 /**
  * User service. The `users` collection maps Clerk user ids → our
@@ -28,12 +30,15 @@ class UsersService {
     }
     const userId = crypto.randomUUID();
     const now = new Date();
-    const doc = {
-      userId,
-      clerkUserId,
-      createdAt: now,
-      lastSeenAt: now,
-    };
+    const doc = stampVersion(
+      {
+        userId,
+        clerkUserId,
+        createdAt: now,
+        lastSeenAt: now,
+      },
+      COLLECTIONS.USERS,
+    );
     try {
       await this.db.users.insertOne(doc);
     } catch (err) {

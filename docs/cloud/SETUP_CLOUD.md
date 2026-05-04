@@ -57,6 +57,43 @@ independently.
 > Tip — to verify the cluster is reachable, install the `mongodb`
 > Node package (`npm i -g mongodb`) and run `node -e "require('mongodb').MongoClient.connect('YOUR_URI').then(()=>console.log('ok')).catch(console.error)"`.
 
+### 1b. Backups + alerting (do this BEFORE you have real users)
+
+Atlas's free tier includes daily snapshots if you turn them on. Cost
+on the M0 free tier is $0; on M10+ paid tiers it's a few dollars per
+month. Worth every penny.
+
+1. **Backups.** Atlas → your cluster → **Backup** tab → **Enable
+   backup** (M2 tier and up). On M0 free tier, take manual snapshots
+   from this same panel weekly until you upgrade.
+2. **Alerts.** Atlas → **Project Settings** → **Alerts** → **Add
+   Alert**. Add at minimum:
+
+   | Alert                                | Why it matters                              |
+   | ------------------------------------ | ------------------------------------------- |
+   | Connections > 80% of max             | Catch leaks before they 503 your API        |
+   | Replication lag > 10s                | Reads from a stale secondary feel like bugs |
+   | Disk usage > 80%                     | Mongo refuses writes near the cap           |
+   | CPU usage > 90% (5 min sustained)    | Slow queries or runaway aggregation         |
+   | Backup snapshot failed               | Silent backup failures are the worst kind   |
+
+   Route every alert to your email (and ideally a Discord/Slack
+   webhook — Atlas supports both). Avoid SMS unless you're certain
+   you want middle-of-the-night pages.
+3. **Connection alerting (the 5-min job).** Atlas → **Project
+   Settings** → **Project Health** → toggle on **Real-time alerts**.
+   This sends a notification within ~5 minutes of any of the metric
+   alerts above tripping. The default threshold is fine.
+4. **Restore drill.** At least once before launch, snapshot →
+   click **Restore** → restore into a *separate* cluster (not the
+   live one). Confirm you can read your collections out. A backup
+   you've never restored is a backup you don't have.
+
+Document the restore procedure in `docs/cloud/RUNBOOK.md` (TODO; see
+section K of [`REMAINING_WORK.md`](REMAINING_WORK.md)). Keeping this
+playbook in the repo means future-you can recover the system at 3am
+without having to remember it.
+
 ---
 
 ## 2. Clerk — Google sign-in (and Discord, if you want)
@@ -64,7 +101,7 @@ independently.
 Clerk handles all the OAuth UI so you never touch a passwords table.
 
 1. Go to https://dashboard.clerk.com/ → **Add application**.
-   - Name: **SC2 Tools** (or whatever you want)
+   - Name: **SC2Tools** (or whatever you want)
    - **Email + password**: ON (good fallback)
    - **Google**: ON (this is what your users will mostly use)
    - **Discord**: ON if you want streamers to sign in with their
@@ -90,7 +127,7 @@ Clerk handles all the OAuth UI so you never touch a passwords table.
 ### 2b. (Recommended for production) Bring your own Google OAuth credentials
 
 By default, Clerk's Google sign-in shows "Sign in to {Clerk Project Name}".
-Once you have your own domain, you'll want it to say "Sign in to SC2 Tools"
+Once you have your own domain, you'll want it to say "Sign in to SC2Tools"
 with your favicon. To do that:
 
 1. Go to https://console.cloud.google.com/ → create a new project named

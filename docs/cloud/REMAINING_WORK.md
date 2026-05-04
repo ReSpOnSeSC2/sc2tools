@@ -14,8 +14,8 @@ remaining ~60% — feature-parity port, polish, and launch-readiness.
 
 | Stage | Title                          | Status        |
 | ----- | ------------------------------ | ------------- |
-| A     | Foundation                     | done — code |
-| B     | Schema + data migration        | code done; **migration script not written** |
+| A     | Foundation                     | done — code; account-side steps are user-only (see below) |
+| B     | Schema + data migration        | done — code |
 | C     | Backend route migration        | **~25% — base routes done, aggregations not ported** |
 | D     | Local agent                    | **~70% — runs from source; no signed binary, no auto-update** |
 | E     | Frontend on Vercel             | **~25% — landing/auth/devices/overlay done; analyzer port incomplete** |
@@ -34,7 +34,15 @@ to bring the live system online.
 
 ## A — Foundation: account setup tasks
 
-The code side is done. You still need to do these manually:
+**Code side: done.** The supporting blueprint files
+(`apps/api/render.yaml`, `apps/api/.env.example`, `apps/web/.env.example`,
+`apps/agent/.env.example`) and the [`SETUP_CLOUD.md`](SETUP_CLOUD.md)
+walkthrough have been audited and are ready for the account-side work
+below.
+
+**Account side: only the human user can do these** (third-party signups,
+domain purchases, payment cards). They cannot be automated by an
+agent. Walk through [`SETUP_CLOUD.md`](SETUP_CLOUD.md) to complete:
 
 - [ ] Buy the domain (`sc2tools.app` recommended)
 - [ ] Create the Clerk application + Google OAuth
@@ -44,29 +52,39 @@ The code side is done. You still need to do these manually:
 - [ ] Wire env vars in Render + Vercel per `.env.example`
 - [ ] Confirm `/v1/health` returns 200 and `/sign-in` loads
 
-Walkthrough: [`docs/cloud/SETUP_CLOUD.md`](SETUP_CLOUD.md).
-
 ---
 
-## B — Schema + data migration
+## B — Schema + data migration ✅ done
 
-- [ ] **`docs/CLOUD_SCHEMA.md`** — write a doc describing each
-  collection's document shape, the indexes, and the hot queries each
-  index serves. Auto-generate from `apps/api/src/db/connect.js`.
-- [ ] **`tools/migrate-to-cloud/`** — Node CLI that reads
-  `data/MyOpponentHistory.json` + `data/meta_database.json` and
-  upserts every record into the user's cloud account. Requirements:
-  - Dry-run mode (`--dry-run`) that prints a summary without writing
-  - Comparison report (local count vs cloud count after)
-  - Resume-friendly: keys on `gameId` + `pulseId`, never duplicates
-  - Reads a Clerk-issued personal token from a CLI prompt (the user
-    pastes one from `clerk.com/dashboard → API keys → personal`)
-- [ ] **Schema versioning hook** — extend the existing
-  `lib/schema_versioning.js` pattern from the local app to the cloud
-  collections so a future format change can roll forward safely.
-- [ ] **Atlas backups + connection alerting** (5-min job in Atlas UI)
-
-Estimated: 1 week part-time.
+- [x] **[`docs/CLOUD_SCHEMA.md`](../CLOUD_SCHEMA.md)** — collection
+  shapes, indexes, and the hot queries each index serves. Derived
+  from [`apps/api/src/db/connect.js`](../../apps/api/src/db/connect.js)
+  and the service modules.
+- [x] **[`tools/migrate-to-cloud/`](../../tools/migrate-to-cloud/)** —
+  Node 20+ CLI (zero third-party deps) that reads
+  `data/MyOpponentHistory.json`, `data/meta_database.json`,
+  `data/custom_builds.json`, and `data/profile.json` and upserts every
+  record into the user's cloud account. Implements:
+  - Dry-run mode (`--dry-run`)
+  - Reconcile pass (`--reconcile-only`) comparing local vs cloud
+    counts
+  - Resume-friendly: deterministic `gameId` (sha256-truncated from
+    `pulseId|date|map` for opp-history entries; existing meta `id`
+    for meta entries), so re-runs upsert rather than duplicate
+  - Clerk personal/session token via `--token` or interactive stdin
+  - 7 unit tests against representative fixtures (`node --test`)
+- [x] **Schema versioning hook** —
+  [`apps/api/src/db/schemaVersioning.js`](../../apps/api/src/db/schemaVersioning.js)
+  mirrors the local app's `lib/schema_versioning.js` pattern. Every
+  service write path stamps `_schemaVersion` on insert/upsert; future
+  format changes register a `(fromVersion, toVersion, forward,
+  backward)` migration and `migrateDoc` rolls older docs forward.
+  14 Jest tests cover stamping, forward/backward chaining, and the
+  too-new safety check.
+- [ ] **Atlas backups + connection alerting** — see
+  [`SETUP_CLOUD.md` §1b](SETUP_CLOUD.md#1b-backups--alerting-do-this-before-you-have-real-users).
+  The Atlas UI work itself is account-side and only the user can do
+  it; the doc is in place.
 
 ---
 

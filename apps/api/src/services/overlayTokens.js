@@ -1,6 +1,8 @@
 "use strict";
 
+const { COLLECTIONS } = require("../config/constants");
 const { randomToken } = require("../util/hash");
+const { stampVersion } = require("../db/schemaVersioning");
 
 /**
  * Overlay tokens are bearer tokens for the public OBS overlay route.
@@ -24,14 +26,19 @@ class OverlayTokensService {
   async create(userId, label) {
     const token = randomToken(24);
     const now = new Date();
-    await this.db.overlayTokens.insertOne({
-      token,
-      userId,
-      label: label || "Default",
-      createdAt: now,
-      lastSeenAt: null,
-      revokedAt: null,
-    });
+    await this.db.overlayTokens.insertOne(
+      stampVersion(
+        {
+          token,
+          userId,
+          label: label || "Default",
+          createdAt: now,
+          lastSeenAt: null,
+          revokedAt: null,
+        },
+        COLLECTIONS.OVERLAY_TOKENS,
+      ),
+    );
     return { token, label, createdAt: now };
   }
 

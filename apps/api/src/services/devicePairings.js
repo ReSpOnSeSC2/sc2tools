@@ -1,7 +1,8 @@
 "use strict";
 
-const { LIMITS } = require("../config/constants");
+const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { randomDigits, randomToken, sha256 } = require("../util/hash");
+const { stampVersion } = require("../db/schemaVersioning");
 
 const PAIRING_TTL_MS = LIMITS.PAIRING_CODE_TTL_SEC * 1000;
 
@@ -43,14 +44,19 @@ class DevicePairingsService {
     for (let i = 0; i < 5; i++) {
       const code = randomDigits(LIMITS.PAIRING_CODE_LEN);
       try {
-        await this.db.devicePairings.insertOne({
-          code,
-          createdAt: new Date(now),
-          expiresAt,
-          claimedAt: null,
-          userId: null,
-          consumedAt: null,
-        });
+        await this.db.devicePairings.insertOne(
+          stampVersion(
+            {
+              code,
+              createdAt: new Date(now),
+              expiresAt,
+              claimedAt: null,
+              userId: null,
+              consumedAt: null,
+            },
+            COLLECTIONS.DEVICE_PAIRINGS,
+          ),
+        );
         return { code, expiresAt };
       } catch (err) {
         const code = /** @type {any} */ (err)?.code;
@@ -105,14 +111,19 @@ class DevicePairingsService {
     const token = randomToken(32);
     const tokenHash = sha256(token);
     const now = new Date();
-    await this.db.deviceTokens.insertOne({
-      tokenHash,
-      userId: row.userId,
-      createdAt: now,
-      lastSeenAt: now,
-      pairingCode: code,
-      revokedAt: null,
-    });
+    await this.db.deviceTokens.insertOne(
+      stampVersion(
+        {
+          tokenHash,
+          userId: row.userId,
+          createdAt: now,
+          lastSeenAt: now,
+          pairingCode: code,
+          revokedAt: null,
+        },
+        COLLECTIONS.DEVICE_TOKENS,
+      ),
+    );
     await this.db.devicePairings.updateOne(
       { code },
       { $set: { consumedAt: now } },
