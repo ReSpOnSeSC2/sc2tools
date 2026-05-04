@@ -32,7 +32,7 @@ RUN python -m venv /opt/sc2-py
 ENV PATH="/opt/sc2-py/bin:${PATH}"
 COPY SC2Replay-Analyzer/requirements.txt /tmp/sc2-requirements.txt
 RUN /opt/sc2-py/bin/pip install --upgrade pip wheel setuptools \
-    && /opt/sc2-py/bin/pip install --no-deps-on-error -r /tmp/sc2-requirements.txt
+    && /opt/sc2-py/bin/pip install -r /tmp/sc2-requirements.txt
 
 # ---- Stage 2: runtime ----
 FROM ${NODE_IMAGE} AS runtime
