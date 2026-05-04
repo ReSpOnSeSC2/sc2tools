@@ -1,4 +1,5 @@
 import { BuildsPanel } from "@/components/BuildsPanel";
+import { Banner } from "@/components/Banner";
 
 export const metadata = {
   title: "Builds · SC2 Tools",
@@ -14,6 +15,7 @@ export default function BuildsPage() {
           publish it to the community library.
         </p>
       </header>
+      <Banner variant="divider" />
       <BuildsPanel />
     </div>
   );

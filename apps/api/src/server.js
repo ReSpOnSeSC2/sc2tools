@@ -12,10 +12,15 @@ const { loadConfig } = require("./config/loader");
 const { connect } = require("./db/connect");
 const { buildApp } = require("./app");
 const { attachSocketAuth } = require("./socket/auth");
+const sentry = require("./util/sentry");
 
 async function main() {
   const config = loadConfig();
   const logger = pino({ level: config.logLevel });
+  // Initialise Sentry early so anything thrown during bootstrap is
+  // captured. No-op when SENTRY_DSN is unset or @sentry/node isn't
+  // installed yet.
+  sentry.init();
   logger.info({ port: config.port, db: config.mongoDb }, "boot_start");
 
   const db = await connect({ uri: config.mongoUri, dbName: config.mongoDb });
@@ -64,6 +69,7 @@ async function main() {
 }
 
 main().catch((err) => {
+  sentry.captureException(err);
   // eslint-disable-next-line no-console
   console.error("fatal_boot_error", err);
   process.exit(1);

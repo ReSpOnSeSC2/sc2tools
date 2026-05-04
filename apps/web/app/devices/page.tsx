@@ -1,4 +1,5 @@
 import { DevicesPanel } from "@/components/DevicesPanel";
+import { Banner } from "@/components/Banner";
 
 export const metadata = {
   title: "Devices · SC2 Tools",
@@ -14,6 +15,7 @@ export default function DevicesPage() {
           replays will start syncing automatically.
         </p>
       </header>
+      <Banner variant="divider" />
       <DevicesPanel />
     </div>
   );

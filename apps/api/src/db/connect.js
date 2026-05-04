@@ -20,6 +20,9 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   importJobs: import('mongodb').Collection,
  *   macroJobs: import('mongodb').Collection,
  *   agentReleases: import('mongodb').Collection,
+ *   communityBuilds: import('mongodb').Collection,
+ *   communityReports: import('mongodb').Collection,
+ *   userBackups: import('mongodb').Collection,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -57,6 +60,9 @@ async function connect({ uri, dbName }) {
     importJobs: db.collection(COLLECTIONS.IMPORT_JOBS),
     macroJobs: db.collection(COLLECTIONS.MACRO_JOBS),
     agentReleases: db.collection(COLLECTIONS.AGENT_RELEASES),
+    communityBuilds: db.collection(COLLECTIONS.COMMUNITY_BUILDS),
+    communityReports: db.collection(COLLECTIONS.COMMUNITY_REPORTS),
+    userBackups: db.collection(COLLECTIONS.USER_BACKUPS),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -118,6 +124,20 @@ async function ensureIndexes(ctx) {
 
   await ctx.agentReleases.createIndex({ channel: 1, version: 1 }, { unique: true });
   await ctx.agentReleases.createIndex({ channel: 1, publishedAt: -1 });
+
+  // Community indexes — slug is the public URL key. {removed: 1, votes: -1}
+  // serves "top published" lists; {ownerUserId, slug} keeps per-author
+  // dedupe + the publish/unpublish toggle.
+  await ctx.communityBuilds.createIndex({ slug: 1 }, { unique: true });
+  await ctx.communityBuilds.createIndex({ ownerUserId: 1, slug: 1 });
+  await ctx.communityBuilds.createIndex({ removed: 1, votes: -1 });
+  await ctx.communityBuilds.createIndex({ matchup: 1, removed: 1, votes: -1 });
+
+  await ctx.communityReports.createIndex({ targetType: 1, targetId: 1 });
+  await ctx.communityReports.createIndex({ resolvedAt: 1, createdAt: -1 });
+
+  await ctx.userBackups.createIndex({ userId: 1, createdAt: -1 });
+  await ctx.userBackups.createIndex({ id: 1 }, { unique: true });
 }
 
 module.exports = { connect, ensureIndexes };

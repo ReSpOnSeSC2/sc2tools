@@ -17,6 +17,15 @@ services:
     dockerfilePath: ./apps/api/Dockerfile
     healthCheckPath: /v1/health
     autoDeploy: true
+    # Autoscaling: scale 1→3 instances based on CPU. /v1/health is a
+    # cheap Mongo ping so it's safe as a load probe. Combined with
+    # sessionAffinity below, a sudden burst (50 agents reconnect after
+    # a deploy) doesn't 503.
+    numInstances: 1
+    scaling:
+      minInstances: 1
+      maxInstances: 3
+      targetCPUPercent: 70
     # Sticky sessions are required for Socket.io once we scale beyond a
     # single instance: the client opens an XHR-poll handshake against
     # one node, then upgrades to WebSocket — both legs must hit the
@@ -43,6 +52,10 @@ services:
       - key: RATE_LIMIT_PER_MINUTE
         value: "120"
       - key: AGENT_RELEASE_ADMIN_TOKEN
+        sync: false
+      # Optional. Set to enable Sentry error reporting; leave unset for
+      # local builds. Pair with `npm install @sentry/node` in apps/api.
+      - key: SENTRY_DSN
         sync: false
       # The Dockerfile pre-installs the analyzer + venv at these paths.
       # Override only if you've re-staged them somewhere else.

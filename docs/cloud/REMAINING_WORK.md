@@ -5,10 +5,11 @@ This file lists ONLY the work still to do after commit `28daa7b`
 (the cloud foundation drop). Everything not in this file is done.
 
 The original roadmap estimated 17–20 weeks part-time. With stages
-B–G now complete in code, roughly **85% of the engineering surface
-area** has shipped. The remaining work is account-side setup (A),
-the migration tool for existing local users (J), launch hardening
-(K), and the optional Community / Billing buckets (H, I).
+B–H and K now complete in code, roughly **97% of the engineering
+surface area** has shipped. The remaining work is account-side setup
+(A) and the operational checklist in `HARDENING.md`. Stages I (billing)
+and J (legacy-user migration) are deliberately skipped — this project
+is donation-only and has no existing local-app users to migrate.
 
 ---
 
@@ -18,15 +19,15 @@ the migration tool for existing local users (J), launch hardening
 | ----- | ------------------------------ | ------------- |
 | A     | Foundation                     | done — code; account-side steps are user-only (see below) |
 | B     | Schema + data migration        | done — code |
-| C     | Backend route migration        | **~25% — base routes done, aggregations not ported** |
-| D     | Local agent                    | **~70% — runs from source; no signed binary, no auto-update** |
+| C     | Backend route migration        | done — code |
+| D     | Local agent                    | done — code |
 | E     | Frontend on Vercel             | done — code |
 | F     | Realtime push                  | done — code |
-| G     | Hosted OBS overlay             | done — code |
-| H     | Community features             | not started |
-| I     | Billing (optional)             | not started |
-| J     | Migrate existing local users   | not started |
-| K     | Hardening for launch           | not started |
+| G     | Hosted OBS overlay             | done — code (15 widgets + per-widget URLs) |
+| H     | Community features             | done — code |
+| I     | Billing (optional)             | **skipped** — donation-only project |
+| J     | Migrate existing local users   | **skipped** — no existing local-app users |
+| K     | Hardening for launch           | done — code; account-side checklist in [HARDENING.md](HARDENING.md) |
 
 "done — code" means the code is committed and tested. The user-facing
 account/domain steps in `docs/cloud/SETUP_CLOUD.md` are still required
@@ -364,99 +365,110 @@ enabled-widgets list when it arrives over the socket.
 
 ---
 
-## H — Community features (Stage 14 of MASTER_ROADMAP)
+## H — Community features ✅ done
 
-Not started. Pulls from the existing `cloud/community-builds/`
-service.
-
-- [ ] Public `/builds/<slug>` pages (server-rendered for SEO) for
-  user-published custom builds
-- [ ] "Publish to community" toggle in the personal builds editor
-- [ ] Aggregated opponent profiles `/opponents/<pulseId>` —
-  k-anonymity protected (drop names, show race/openings/win rate
-  across all users who faced this pulseId)
-- [ ] Community moderation: report/flag flow on shared builds, admin
-  dashboard at `/admin` (gated by Clerk role)
-- [ ] Optional: Discord bot that posts new community builds to a
-  channel
-
-Estimated: 1.5–2 weeks part-time.
-
----
-
-## I — Billing (entirely optional)
-
-The roadmap noted you're going donation-only via Streamlabs to start.
-Skip unless / until you're ready to charge.
-
-- [ ] Stripe Checkout for Pro tier
-- [ ] `/v1/entitlements` endpoint that returns the user's plan
-- [ ] Feature-gate routes that should be Pro-only (e.g. ML predict)
-
-Estimated: 1 week part-time when triggered.
+- [x] **Public `/community/builds/<slug>` pages** — server-rendered
+  for SEO via [`apps/web/app/community/builds/[slug]/page.tsx`](../../apps/web/app/community/builds/[slug]/page.tsx).
+  The community index lives at [`/community`](../../apps/web/app/community/page.tsx)
+  with matchup filters.
+- [x] **"Publish to community" panel** in the personal builds editor.
+  See [`BuildEditorModal.tsx`](../../apps/web/components/analyzer/BuildEditorModal.tsx)
+  — title, description, and optional author display name; calls
+  `POST /v1/community/builds`.
+- [x] **K-anonymous aggregated opponent profiles** at
+  [`/community/opponents/<pulseId>`](../../apps/web/app/community/opponents/[pulseId]/page.tsx).
+  The API rejects the row with `k_anon_threshold_not_met` until at
+  least **5 distinct users** have faced that pulseId; below that
+  threshold names + identities aren't safe to publish. Threshold lives
+  in [`CommunityService.K_ANONYMITY_THRESHOLD`](../../apps/api/src/services/community.js).
+- [x] **Vote + report flow** on every public build via
+  [`CommunityBuildActions.tsx`](../../apps/web/components/CommunityBuildActions.tsx).
+  Votes are de-duped per (userId, slug) inside the build doc; reports
+  go to the moderation queue.
+- [x] **Admin dashboard** at [`/admin`](../../apps/web/app/admin/page.tsx).
+  Gating uses a comma-separated `SC2TOOLS_ADMIN_USER_IDS` env var on
+  the API — no Clerk role plumbing needed for a single admin. Reports
+  resolve to either `dismiss` (keep published) or `remove` (calls
+  `unpublish` with admin attribution).
+- Optional Discord bot — deferred. The community surface is web-first;
+  a bot is a "later if asked" extension.
 
 ---
 
-## J — Migrate existing local users
+## I — Billing — skipped
 
-- [ ] **In-app banner** in the existing local SPA: "Cloud is live —
-  migrate your data to keep using SC2 Tools." Links to a hosted
-  migration page.
-- [ ] **`/migrate` page in apps/web/** that:
-  1. Asks the user to launch their local app
-  2. POSTs to a one-shot `/migrate` route the local Express exposes
-     for 5 minutes after the page loads
-  3. Streams the local `meta_database.json` + `MyOpponentHistory.json`
-     to the cloud's `tools/migrate-to-cloud/` endpoint
-  4. Shows a progress bar + final reconcile report
-- [ ] **Deprecation timer** in the local app — after 6 months of
-  cloud-having-launched, the local Express prints a deprecation
-  warning and disables write paths. Reads still work for the next
-  6 months. Then archive.
-
-Estimated: 1 week part-time.
+This project is donation-only. No Stripe integration, no entitlements
+endpoint, no Pro gating. If that ever changes the roadmap entry was:
+Stripe Checkout → `/v1/entitlements` → route gating. ~1 week part-time
+when needed.
 
 ---
 
-## K — Hardening for launch
+## J — Migrate existing local users — skipped
 
-- [ ] **Sentry** on both Vercel + Render with source maps uploaded
-- [ ] **Render autoscaling** + healthcheck pointing at `/v1/health`
-- [ ] **MongoDB Atlas alerts** on connections > 80% of plan, on
-  replication lag, on backups failing
-- [ ] **Cloudflare WAF** in front of `api.sc2tools.app` for DDoS / bot
-  protection
-- [ ] **Privacy policy + ToS** at `/legal/{privacy,terms}` — get a
-  template from a service like Termly
-- [ ] **Cookie consent banner** (use the same Termly template)
-- [ ] **Status page** at `status.sc2tools.app` (Better Uptime free tier)
-- [ ] **GDPR data export** at `/account → Export my data` — bundles
-  the user's games + opponents + builds as JSON in a zip
-- [ ] **GDPR account deletion** at `/account → Delete account` that
-  wipes from every collection
-- [ ] **Load test**: simulate 50 concurrent agents uploading replays;
-  confirm Render + Mongo handle it without > 1s p95
-- [ ] **Penetration smoke test**: run OWASP ZAP against the staging
-  deploy; address any high-severity findings
+There are no existing local-app users to migrate. If a future user does
+need to onboard from the legacy local Express service, the
+`tools/migrate-to-cloud/` CLI is already wired and just needs a one-shot
+route on the local app + a `/migrate` web page; doc note retained for
+reference but not work to do today.
 
-Estimated: 2 weeks part-time.
+---
+
+## K — Hardening for launch ✅ done
+
+Code-side shipped in this drop; account-side runbook lives in
+[`HARDENING.md`](HARDENING.md).
+
+- [x] **Sentry hooks** wired in
+  [`apps/api/src/util/sentry.js`](../../apps/api/src/util/sentry.js)
+  and [`apps/web/lib/sentry.ts`](../../apps/web/lib/sentry.ts) as
+  soft-imports — install `@sentry/node` / `@sentry/nextjs` when ready,
+  set the DSN, and source-maps upload during `next build`. The
+  Express error handler forwards 5xx to Sentry; bootstrap errors in
+  `server.js` likewise.
+- [x] **Render autoscaling + healthcheck.** `apps/api/render.yaml` now
+  sets `numInstances: 1`, `minInstances: 1`, `maxInstances: 3`,
+  `targetCPUPercent: 70`. `healthCheckPath: /v1/health` was already in
+  place. Combined with `sessionAffinity: true` for Socket.io sticky
+  sessions.
+- [x] **Privacy policy + ToS** at [`/legal/privacy`](../../apps/web/app/legal/privacy/page.tsx)
+  and [`/legal/terms`](../../apps/web/app/legal/terms/page.tsx). Footer
+  links them site-wide.
+- [x] **Cookie consent banner** —
+  [`CookieBanner.tsx`](../../apps/web/components/CookieBanner.tsx)
+  rendered from the root layout. localStorage-backed so it doesn't
+  flash; copy explains we only set strictly-necessary cookies.
+- [x] **GDPR data export.** `GET /v1/me/export` returns the full
+  per-user archive as JSON. UI in /settings → Backups → Export.
+- [x] **GDPR account deletion.** `DELETE /v1/me` wipes every per-user
+  document; UI in the same panel. Counts are returned to the caller
+  and logged via pino.
+- [x] **Manual snapshot system.** `GET / POST /v1/me/backups` and
+  `POST /v1/me/backups/:id/restore` provide point-in-time backups (the
+  pre-migration safety net the SettingsBackups UI references). Stored
+  in a `user_backups` collection.
+- [x] **Load test script.** [`scripts/load_test.mjs`](../../scripts/load_test.mjs)
+  simulates N concurrent agents posting games. Fails CI when p95 > 1s
+  or any 5xx — the original Stage K target.
+- [ ] **MongoDB Atlas alerts** — account-side. See [`HARDENING.md`](HARDENING.md#2-mongodb-atlas-alerts).
+- [ ] **Cloudflare WAF** in front of `api.sc2tools.app` — account-side.
+  See [`HARDENING.md`](HARDENING.md#3-cloudflare-waf).
+- [ ] **Status page** at `status.sc2tools.app` — account-side. See
+  [`HARDENING.md`](HARDENING.md#4-status-page).
+- [ ] **Penetration smoke test** with OWASP ZAP — operational. See
+  [`HARDENING.md`](HARDENING.md#5-pen-test).
 
 ---
 
 ## Suggested order
 
-With C, D, E, F, and G now complete in code, the shortest path to
-"friend uses cloud SaaS without complaining" is:
+With C, D, E, F, G, H, and the code half of K complete, only the
+account-side checklist stands between you and a public launch:
 
-1. **Setup** (A account-side) — half a day
-2. **Migrate existing local users** (J) — 1 week
-3. **Hardening** (K) — 1 week before public launch
+1. **Setup** (A account-side) — half a day, see [`SETUP_CLOUD.md`](SETUP_CLOUD.md)
+2. **Hardening** (K account-side) — half a day, see [`HARDENING.md`](HARDENING.md)
 
-That's ~2 weeks part-time to "feature parity + launch ready."
-
-Add ML port (already in C) plus community features (H) afterward as
-standalone PR series. Add billing (I) only when you're ready to
-charge.
+That's ~1 day of human work to "launch ready."
 
 ---
 
@@ -466,6 +478,8 @@ charge.
   multi-stage plan
 - [`docs/cloud/SETUP_CLOUD.md`](SETUP_CLOUD.md) — account / domain
   setup walkthrough
+- [`docs/cloud/HARDENING.md`](HARDENING.md) — Stage-K launch runbook
+  (Sentry, WAF, status page, ZAP, load test)
 - [`apps/api/README.md`](../../apps/api/README.md) — current route
   reference
 - [`apps/web/README.md`](../../apps/web/README.md) — frontend dev

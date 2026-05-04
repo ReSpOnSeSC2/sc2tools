@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { Banner } from "@/components/Banner";
 
 export default function LandingPage() {
   return (
     <div className="space-y-12">
-      <section className="space-y-5 py-12">
+      <Banner variant="hero" />
+
+      <section className="space-y-5 py-4">
         <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
           Real opponent intel for StarCraft II — no install, no fuss.
         </h1>
@@ -37,6 +40,8 @@ export default function LandingPage() {
           body="Laptop, second monitor, phone. All synced via your Google sign-in."
         />
       </section>
+
+      <Banner variant="divider" />
 
       <section className="card space-y-3 p-6">
         <h2 className="text-xl font-semibold">How it works</h2>

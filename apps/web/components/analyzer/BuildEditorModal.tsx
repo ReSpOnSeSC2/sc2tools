@@ -43,9 +43,22 @@ export function BuildEditorModal({
 
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [publishMsg, setPublishMsg] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishMeta, setPublishMeta] = useState({
+    title: "",
+    description: "",
+    authorName: "",
+  });
   useEffect(() => {
-    if (data) setNotes(data.notes || "");
-  }, [data]);
+    if (data) {
+      setNotes(data.notes || "");
+      setPublishMeta((m) => ({
+        ...m,
+        title: m.title || data.name || buildName,
+      }));
+    }
+  }, [data, buildName]);
 
   async function save() {
     if (saving) return;
@@ -63,6 +76,32 @@ export function BuildEditorModal({
       bumpRev();
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function publishToCommunity() {
+    if (publishing) return;
+    setPublishing(true);
+    setPublishMsg(null);
+    try {
+      const result = await apiCall<{ slug: string }>(
+        getToken,
+        "/v1/community/builds",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            slug: buildName,
+            title: publishMeta.title,
+            description: publishMeta.description,
+            authorName: publishMeta.authorName,
+          }),
+        },
+      );
+      setPublishMsg(`Published! /community/builds/${result.slug}`);
+    } catch (err: any) {
+      setPublishMsg(err?.message || "Could not publish.");
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -149,6 +188,60 @@ export function BuildEditorModal({
                 </table>
               </Card>
             )}
+
+            <Card title="Publish to community">
+              <p className="mb-2 text-xs text-text-muted">
+                Share this build at <code>/community/builds/...</code>. You
+                can unpublish or edit at any time. Title and description are
+                public; your account name is shown unless you override it.
+              </p>
+              <div className="space-y-2">
+                <input
+                  className="input"
+                  placeholder="Title"
+                  value={publishMeta.title}
+                  onChange={(e) =>
+                    setPublishMeta((m) => ({ ...m, title: e.target.value }))
+                  }
+                />
+                <textarea
+                  className="input min-h-[80px]"
+                  rows={3}
+                  placeholder="Description (optional)"
+                  value={publishMeta.description}
+                  onChange={(e) =>
+                    setPublishMeta((m) => ({
+                      ...m,
+                      description: e.target.value,
+                    }))
+                  }
+                />
+                <input
+                  className="input"
+                  placeholder="Display name (optional)"
+                  value={publishMeta.authorName}
+                  onChange={(e) =>
+                    setPublishMeta((m) => ({
+                      ...m,
+                      authorName: e.target.value,
+                    }))
+                  }
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-text-muted">
+                    {publishMsg}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={publishToCommunity}
+                    disabled={publishing}
+                  >
+                    {publishing ? "Publishing…" : "Publish to community"}
+                  </button>
+                </div>
+              </div>
+            </Card>
 
             {data.recentGames && data.recentGames.length > 0 && (
               <Card title="Recent games">

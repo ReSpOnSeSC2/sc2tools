@@ -33,6 +33,8 @@ const { SpatialService } = require("./services/spatial");
 const { CatalogService } = require("./services/catalog");
 const { MLService } = require("./services/ml");
 const { AgentVersionService } = require("./services/agentVersion");
+const { GdprService } = require("./services/gdpr");
+const { CommunityService } = require("./services/community");
 
 const { buildHealthRouter } = require("./routes/health");
 const { buildMeRouter } = require("./routes/me");
@@ -52,6 +54,7 @@ const { buildSpatialRouter } = require("./routes/spatial");
 const { buildCatalogRouter } = require("./routes/catalog");
 const { buildMlRouter } = require("./routes/ml");
 const { buildAgentVersionRouter } = require("./routes/agentVersion");
+const { buildCommunityRouter } = require("./routes/community");
 
 const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
 
@@ -102,6 +105,8 @@ function makeServices(deps) {
   const spatial = new SpatialService(deps.db);
   const ml = new MLService(deps.db, { io: deps.io });
   const agentVersion = new AgentVersionService(deps.db);
+  const gdpr = new GdprService(deps.db);
+  const community = new CommunityService(deps.db);
   return {
     users,
     opponents,
@@ -118,6 +123,8 @@ function makeServices(deps) {
     spatial,
     ml,
     agentVersion,
+    gdpr,
+    community,
   };
 }
 
@@ -193,7 +200,13 @@ function mountRoutes(app, deps, services) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildMeRouter({ users: services.users, games: services.games, auth }),
+    buildMeRouter({
+      users: services.users,
+      games: services.games,
+      gdpr: services.gdpr,
+      auth,
+      logger: deps.logger,
+    }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
@@ -254,6 +267,19 @@ function mountRoutes(app, deps, services) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMlRouter({ ml: services.ml, auth }),
+  );
+  // Community is partly public (build directory + k-anon opp profiles)
+  // and partly authed (publish, vote, report). The router handles auth
+  // per-route, like devicePairings — mount with the public bundle so
+  // no upstream `router.use(auth)` intercepts the unauthed reads.
+  const adminIds = new Set(deps.config.adminUserIds || []);
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildCommunityRouter({
+      community: services.community,
+      auth,
+      isAdmin: (req) => Boolean(req.auth && adminIds.has(req.auth.userId)),
+    }),
   );
 }
 

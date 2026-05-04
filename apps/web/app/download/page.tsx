@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Banner } from "@/components/Banner";
 
 export const metadata = {
   title: "Download the agent · SC2 Tools",
@@ -15,6 +16,8 @@ export default function DownloadPage() {
           background, and syncs the result here.
         </p>
       </header>
+
+      <Banner variant="divider" />
 
       <section className="card space-y-4 p-6">
         <h2 className="text-xl font-semibold">Windows (recommended)</h2>
