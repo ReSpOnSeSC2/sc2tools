@@ -119,6 +119,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   if (isLoading) return <Skeleton rows={6} />;
   if (!data) return <EmptyState title="Opponent not found" sub={pulseId} />;
   const t = data.totals || {};
+  const publicHref = `/community/opponents/${encodeURIComponent(pulseId)}`;
   const byMap: any[] = Object.entries(data.byMap || {}).map(([k, v]: any) => ({
     name: k,
     ...v,
@@ -144,6 +145,12 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
           <div className="font-mono text-xs text-text-dim">
             Pulse ID {data.pulseId || pulseId}
           </div>
+          <Link
+            href={publicHref}
+            className="text-xs text-accent hover:underline"
+          >
+            community profile →
+          </Link>
         </div>
         <div className="grid grid-cols-4 gap-3">
           <Stat label="Games" value={t.total || 0} />

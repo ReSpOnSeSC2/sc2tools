@@ -1,5 +1,7 @@
 "use strict";
 
+const sentry = require("../util/sentry");
+
 /**
  * Build a 4-arg Express error handler that logs structured fields and
  * returns a JSON error envelope. NEVER leaks stack traces in prod.
@@ -21,6 +23,10 @@ function buildErrorHandler(logger) {
       },
       "request_failed",
     );
+    // Forward unexpected 5xx to Sentry. 4xx are user errors and noise.
+    if (status >= 500) {
+      sentry.captureException(err);
+    }
     res.status(status).json({
       error: {
         code,

@@ -59,7 +59,7 @@ export function SettingsBackups() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `sc2tools-export-${Date.now()}.zip`;
+    a.download = `sc2tools-export-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }

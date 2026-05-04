@@ -56,6 +56,7 @@ function loadConfig(env = process.env) {
     agentReleaseAdminToken: env.AGENT_RELEASE_ADMIN_TOKEN || null,
     pythonExe: env.SC2_PY_PYTHON || null,
     pythonAnalyzerDir: env.SC2_PY_ANALYZER_DIR || null,
+    adminUserIds: parseCsv(env.SC2TOOLS_ADMIN_USER_IDS),
   };
 }
 

@@ -30,6 +30,9 @@ const COLLECTIONS = Object.freeze({
   IMPORT_JOBS: "import_jobs",
   MACRO_JOBS: "macro_jobs",
   AGENT_RELEASES: "agent_releases",
+  COMMUNITY_BUILDS: "community_builds",
+  COMMUNITY_REPORTS: "community_reports",
+  USER_BACKUPS: "user_backups",
 });
 
 const LIMITS = Object.freeze({

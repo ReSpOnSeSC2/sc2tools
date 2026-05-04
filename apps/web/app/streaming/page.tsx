@@ -1,4 +1,5 @@
 import { StreamingPanel } from "@/components/StreamingPanel";
+import { Banner } from "@/components/Banner";
 
 export const metadata = {
   title: "Streaming · SC2 Tools",
@@ -14,6 +15,7 @@ export default function StreamingPage() {
           height 1080. It updates live during your stream.
         </p>
       </header>
+      <Banner variant="divider" />
       <StreamingPanel />
     </div>
   );
