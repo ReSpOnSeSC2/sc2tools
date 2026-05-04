@@ -30,7 +30,46 @@ if not exist "%ROOT%\stream-overlay-backend" (
     endlocal
     exit /b 1
 )
+
+REM -- Preflight: Node and Python must be on PATH before we go further.
+REM    The friend's install crashed because npm and py weren't installed
+REM    at all -- turn that into an actionable error instead of a silent crash.
+where node >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: Node.js is not on PATH.
+    echo Install Node.js LTS from https://nodejs.org/ then reopen this launcher.
+    pause
+    endlocal
+    exit /b 1
+)
+where py >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: Python launcher ^(py^) is not on PATH.
+    echo Install Python 3.10+ from https://www.python.org/downloads/
+    echo and tick "Add Python to PATH" in the installer.
+    pause
+    endlocal
+    exit /b 1
+)
+
 cd /d "%ROOT%"
+
+REM -- Bootstrap: install npm + pip deps when missing or stale.
+REM    Both routines are idempotent: a stamp file (size+mtime of the
+REM    lock / requirements file) lets warm boots skip the install in
+REM    well under a second. First-run install can take ~30-60s.
+call :EnsureNpmDeps
+if errorlevel 1 (
+    pause
+    endlocal
+    exit /b 1
+)
+call :EnsurePyDeps
+if errorlevel 1 (
+    pause
+    endlocal
+    exit /b 1
+)
 
 REM -- 1. Express overlay backend (Node) ----------------------------
 REM    The merged backend serves /api/* and the SPA at /analyzer/.
@@ -77,3 +116,76 @@ echo.
 timeout /t 3 /nobreak >nul
 
 endlocal
+exit /b 0
+
+REM ============================================================
+REM Subroutines
+REM ============================================================
+
+:EnsureNpmDeps
+REM    Compares size+mtime of stream-overlay-backend\package-lock.json
+REM    against a stamp file under node_modules\. On first run or lock
+REM    drift we run ``npm ci`` (deterministic, fails loud on lock drift)
+REM    and write the new stamp. ``call`` is required for npm because
+REM    npm.cmd is itself a batch file -- without ``call`` control would
+REM    not return to this script.
+set "BE_DIR=%ROOT%\stream-overlay-backend"
+set "LOCK=%BE_DIR%\package-lock.json"
+set "STAMP=%BE_DIR%\node_modules\.installed-stamp"
+if not exist "%LOCK%" (
+    echo [bootstrap] No package-lock.json under "%BE_DIR%" -- skipping npm install.
+    goto :eof
+)
+for %%I in ("%LOCK%") do set "CUR_SIG=%%~zI-%%~tI"
+set "OLD_SIG="
+if exist "%STAMP%" (
+    for /f "usebackq delims=" %%L in ("%STAMP%") do set "OLD_SIG=%%L"
+)
+if exist "%BE_DIR%\node_modules" if "%CUR_SIG%"=="%OLD_SIG%" (
+    echo [bootstrap] node_modules up to date.
+    goto :eof
+)
+echo [bootstrap] Installing Node dependencies via ``npm ci`` -- this can take ~30s on first run...
+pushd "%BE_DIR%"
+call npm ci
+set "RC=%ERRORLEVEL%"
+popd
+if not "%RC%"=="0" (
+    echo [bootstrap] ERROR: npm ci failed with exit code %RC%.
+    echo Open "%BE_DIR%" manually and run ``npm install`` to see the full output.
+    exit /b 1
+)
+> "%STAMP%" echo %CUR_SIG%
+echo [bootstrap] node_modules ready ^(stamp written to %STAMP%^).
+goto :eof
+
+:EnsurePyDeps
+REM    Same idempotent pattern for Python: stamp keyed off requirements.txt.
+REM    pip is naturally idempotent, but skipping the run on warm boots
+REM    keeps launch time down to ~3s instead of ~6s.
+set "REQ=%ROOT%\requirements.txt"
+set "STAMP=%ROOT%\data\.python-deps-stamp"
+if not exist "%REQ%" (
+    echo [bootstrap] No requirements.txt at "%REQ%" -- skipping pip install.
+    goto :eof
+)
+if not exist "%ROOT%\data" mkdir "%ROOT%\data"
+for %%I in ("%REQ%") do set "CUR_SIG=%%~zI-%%~tI"
+set "OLD_SIG="
+if exist "%STAMP%" (
+    for /f "usebackq delims=" %%L in ("%STAMP%") do set "OLD_SIG=%%L"
+)
+if "%CUR_SIG%"=="%OLD_SIG%" (
+    echo [bootstrap] Python deps up to date.
+    goto :eof
+)
+echo [bootstrap] Installing Python dependencies (pip install -r requirements.txt)...
+%PYTHON% -m pip install -r "%REQ%"
+if errorlevel 1 (
+    echo [bootstrap] ERROR: pip install failed.
+    echo Try running the install manually to see the error.
+    exit /b 1
+)
+> "%STAMP%" echo %CUR_SIG%
+echo [bootstrap] Python deps ready ^(stamp written to %STAMP%^).
+goto :eof

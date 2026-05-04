@@ -40,10 +40,8 @@ SHARED_BASENAMES: List[str] = [
 def _resolve_repo_pair() -> Tuple[Path, Path]:
     """Locate both repos relative to this script's location.
 
-    Looks two levels up (scripts/ -> repo -> SC2TOOLS) for the sibling
-    repo. Falls back to absolute paths under ``C:\\SC2TOOLS`` (the
-    canonical desktop install layout) if the relative lookup fails.
-    Returns ``(repo_a, repo_b)`` in alphabetical order so the output
+    Looks two levels up (scripts/ -> repo -> parent) for the sibling
+    repo. Returns ``(repo_a, repo_b)`` in alphabetical order so output
     is deterministic.
     """
     here = Path(__file__).resolve()
@@ -55,14 +53,6 @@ def _resolve_repo_pair() -> Tuple[Path, Path]:
         "reveal-sc2-opponent-main": parent / "reveal-sc2-opponent-main",
     }
     found = {name: p for name, p in candidates.items() if p.is_dir()}
-    if len(found) < 2:
-        # Fallback: absolute Windows-style desktop paths used by the
-        # in-house installs. POSIX systems will hit the relative lookup
-        # above instead.
-        for name in candidates:
-            abs_path = Path(f"C:/SC2TOOLS/{name}")
-            if abs_path.is_dir():
-                found[name] = abs_path
 
     if "SC2Replay-Analyzer" not in found or "reveal-sc2-opponent-main" not in found:
         print(

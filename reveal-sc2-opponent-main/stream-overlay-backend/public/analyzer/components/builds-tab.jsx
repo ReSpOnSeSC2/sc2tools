@@ -117,7 +117,9 @@
                   {items.length === 0 ? (
                     <tr>
                       <td colSpan="8">
-                        <EmptyState />
+                        {window.BuildsEmptyState
+                          ? <window.BuildsEmptyState filters={filters} />
+                          : <EmptyState />}
                       </td>
                     </tr>
                   ) : (
