@@ -213,9 +213,30 @@ def _sanitize_name(name: str) -> str:
 
 
 def _to_iso(date: Any) -> str:
-    if isinstance(date, str) and date:
-        # Tolerant: trust upstream if it's already ISO-ish.
-        return date if "T" in date else date.replace(" ", "T")
+    """Return an RFC 3339 / JSON-Schema 'date-time' string in UTC.
+
+    The server's request schema requires a full date-time including a
+    timezone designator. sc2reader's replay.date is a naive datetime
+    (no tzinfo), and earlier versions of this helper returned its
+    ``isoformat()`` directly — which produced strings like
+    '2025-11-25T18:27:19' that the server rejected with
+    "/date must match format \"date-time\"". Always normalise to UTC
+    with a 'Z' suffix.
+    """
+    dt: Optional[datetime] = None
     if isinstance(date, datetime):
-        return date.astimezone(timezone.utc).isoformat()
-    return datetime.now(timezone.utc).isoformat()
+        dt = date
+    elif isinstance(date, str) and date:
+        s = date if "T" in date else date.replace(" ", "T")
+        # Python's fromisoformat doesn't handle trailing 'Z' until 3.11.
+        # Normalise it to '+00:00' which fromisoformat accepts everywhere.
+        try:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        except ValueError:
+            dt = None
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    # Output in UTC with explicit 'Z' designator.
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")

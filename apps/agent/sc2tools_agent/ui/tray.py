@@ -89,11 +89,7 @@ class TrayUI:
         from PIL import Image, ImageDraw
 
         self._stop_cb = on_quit
-        # 64×64 indicator. The accent matches the SPA theme; the dark
-        # foreground keeps it legible on light Windows themes too.
-        icon_img = Image.new("RGB", (64, 64), color=(124, 140, 255))
-        draw = ImageDraw.Draw(icon_img)
-        draw.text((18, 16), "SC2", fill=(11, 13, 18))
+        icon_img = self._load_icon_image()
 
         self._icon = pystray.Icon(
             "sc2tools-agent",
@@ -113,6 +109,35 @@ class TrayUI:
                 self._icon.stop()
             except Exception:  # noqa: BLE001
                 pass
+
+    # ---------------- icon image ----------------
+
+    def _load_icon_image(self):
+        """Return a Pillow Image for the tray icon.
+
+        Loads ``sc2tools_agent/ui/tray_icon.png`` if present; falls back
+        to a small procedural icon so the agent never crashes if the
+        asset is missing or unreadable.
+        """
+        from PIL import Image, ImageDraw
+
+        icon_path = Path(__file__).resolve().parent / "tray_icon.png"
+        if icon_path.exists():
+            try:
+                img = Image.open(icon_path)
+                # Tray icons render best at 64×64 on Windows. RGBA so
+                # transparency around the logo doesn't get filled in.
+                img = img.convert("RGBA")
+                img = img.resize((64, 64), Image.LANCZOS)
+                return img
+            except Exception:  # noqa: BLE001
+                # Asset is corrupt — fall through to the procedural icon.
+                pass
+
+        icon_img = Image.new("RGB", (64, 64), color=(124, 140, 255))
+        draw = ImageDraw.Draw(icon_img)
+        draw.text((18, 16), "SC2", fill=(11, 13, 18))
+        return icon_img
 
     # ---------------- callbacks from the runner ----------------
 
