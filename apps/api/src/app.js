@@ -169,12 +169,12 @@ function mountRoutes(app, deps, services) {
     ensureUser: (clerkUserId) => services.users.ensureFromClerk(clerkUserId),
   });
 
-  // Public routers (no `router.use(auth)`) MUST mount before any
-  // auth-using router. Express runs every mounted router in order, and
-  // each auth-using router's top-level `router.use(auth)` fires for ANY
-  // request entering /v1 — including ones the auth-using router won't
-  // even handle. Mounting public routes first short-circuits before
-  // those auth-eager middlewares get a turn.
+  // Public routers (no `router.use(auth)` — public endpoints OR per-route
+  // auth) MUST mount before any auth-using router. Express runs every
+  // mounted router in order, and each auth-using router's top-level
+  // `router.use(auth)` fires for ANY request entering /v1 — including
+  // ones the auth-using router won't even handle. Mounting public routes
+  // first short-circuits before those auth-eager middlewares get a turn.
   app.use(SERVICE.ROUTE_PREFIX, buildHealthRouter({ db: deps.db }));
   app.use(
     SERVICE.ROUTE_PREFIX,
@@ -182,6 +182,14 @@ function mountRoutes(app, deps, services) {
       agentVersion: services.agentVersion,
       adminToken: deps.config.agentReleaseAdminToken,
     }),
+  );
+  // devicePairings has unauth /start and /:code (the agent has no token
+  // yet) plus auth-required /claim and /devices. Per-route auth inside
+  // the router handles both — it just needs to mount with the public
+  // routers so the unauth'd endpoints aren't intercepted upstream.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildDevicePairingsRouter({ pairings: services.pairings, auth }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
@@ -203,10 +211,6 @@ function mountRoutes(app, deps, services) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildCustomBuildsRouter({ customBuilds: services.customBuilds, auth }),
-  );
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildDevicePairingsRouter({ pairings: services.pairings, auth }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
