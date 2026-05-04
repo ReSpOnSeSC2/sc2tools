@@ -14,6 +14,15 @@ import { OpponentDnaGrid } from "./OpponentDnaGrid";
 import { MapIntelTab } from "./MapIntelTab";
 import { ActivityCharts } from "./charts/ActivityCharts";
 import { DoctorBanner } from "./DoctorBanner";
+import { StrategyTendencyChart } from "./StrategyTendencyChart";
+import type { StrategyEntry } from "./StrategyTendencyChart";
+import { PredictedStrategiesList } from "./PredictedStrategiesList";
+import type { Prediction } from "./PredictedStrategiesList";
+import { Last5GamesTimeline } from "./Last5GamesTimeline";
+import type { ProfileGame } from "./Last5GamesTimeline";
+import { AllGamesTable } from "./AllGamesTable";
+import { MedianTimingsGrid } from "./MedianTimingsGrid";
+import type { MatchupTimings, TimingInfo } from "./MedianTimingsGrid";
 
 const TABS = [
   { id: "opponents", label: "Opponents" },
@@ -112,36 +121,68 @@ import { useApi } from "@/lib/clientApi";
 import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
 
+type OpponentProfileResp = {
+  pulseId?: string;
+  name?: string;
+  displayNameSample?: string;
+  totals?: { wins: number; losses: number; total: number; winRate: number };
+  byMap?: Record<string, { wins: number; losses: number }>;
+  byStrategy?: Record<string, { wins: number; losses: number }>;
+  topStrategies?: StrategyEntry[];
+  predictedStrategies?: Prediction[];
+  myRace?: string;
+  oppRaceModal?: string;
+  matchupLabel?: string;
+  matchupCounts?: Record<string, number>;
+  matchupTimings?: Record<string, MatchupTimings>;
+  matchupTimingsLegacy?: Record<string, MatchupTimings>;
+  medianTimings?: Record<string, TimingInfo>;
+  medianTimingsLegacy?: Record<string, TimingInfo>;
+  medianTimingsOrder?: string[];
+  last5Games?: ProfileGame[];
+  games?: ProfileGame[];
+};
+
 function ProfileBody({ pulseId }: { pulseId: string }) {
-  const { data, isLoading } = useApi<any>(
+  const { data, isLoading } = useApi<OpponentProfileResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}`,
   );
   if (isLoading) return <Skeleton rows={6} />;
   if (!data) return <EmptyState title="Opponent not found" sub={pulseId} />;
-  const t = data.totals || {};
+  const t = data.totals || { wins: 0, losses: 0, total: 0, winRate: 0 };
   const publicHref = `/community/opponents/${encodeURIComponent(pulseId)}`;
-  const byMap: any[] = Object.entries(data.byMap || {}).map(([k, v]: any) => ({
-    name: k,
-    ...v,
-    total: v.wins + v.losses,
-    winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
-  }));
-  const byStrategy: any[] = Object.entries(data.byStrategy || {}).map(
-    ([k, v]: any) => ({
-      name: k,
-      ...v,
+  const byMap = Object.entries(data.byMap || {})
+    .map(([name, v]) => ({
+      name,
+      wins: v.wins,
+      losses: v.losses,
       total: v.wins + v.losses,
       winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
-    }),
-  );
+    }))
+    .sort((a, b) => b.total - a.total);
+  const byStrategy = Object.entries(data.byStrategy || {})
+    .map(([name, v]) => ({
+      name,
+      wins: v.wins,
+      losses: v.losses,
+      total: v.wins + v.losses,
+      winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
+    }))
+    .sort((a, b) => b.total - a.total);
+  const medianTimings = data.medianTimingsLegacy || {};
+  const medianTimingsOrder =
+    data.medianTimingsOrder && data.medianTimingsOrder.length
+      ? data.medianTimingsOrder
+      : Object.keys(medianTimings);
+  const matchupTimings = data.matchupTimingsLegacy || {};
+  const matchupCounts = data.matchupCounts || {};
+  const games = data.games || [];
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">
-            {data.name || "unnamed"}
-          </h1>
+          <h1 className="text-2xl font-semibold">{data.name || "unnamed"}</h1>
           <div className="font-mono text-xs text-text-dim">
             Pulse ID {data.pulseId || pulseId}
           </div>
@@ -210,6 +251,45 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
           )}
         </Card>
       </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Card title="Build tendencies (top 5 strategies)">
+          <StrategyTendencyChart strategies={data.topStrategies || []} />
+        </Card>
+        <Card title="Likely strategies next">
+          <PredictedStrategiesList
+            predictions={data.predictedStrategies || []}
+          />
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Card
+          title={`Median key timings${data.matchupLabel ? ` — ${data.matchupLabel}` : ""}`}
+        >
+          <MedianTimingsGrid
+            timings={medianTimings}
+            order={medianTimingsOrder}
+            matchupLabel={data.matchupLabel || ""}
+            matchupCounts={matchupCounts}
+            matchupTimings={matchupTimings}
+            opponentName={data.name || data.pulseId || pulseId}
+          />
+          <p className="mt-2 text-[10px] text-text-dim">
+            Opponent-tech cards come from the agent-uploaded opponent build
+            log; your-tech cards come from your build log. Click a card with
+            samples to see the contributing games. "-" means no samples in
+            this matchup.
+          </p>
+        </Card>
+        <Card title="Last 5 games">
+          <Last5GamesTimeline games={data.last5Games || []} />
+        </Card>
+      </div>
+
+      <Card title={`All games (${games.length}) · newest first`}>
+        <AllGamesTable games={games} />
+      </Card>
     </div>
   );
 }
