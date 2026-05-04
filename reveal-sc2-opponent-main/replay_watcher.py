@@ -446,6 +446,29 @@ def main() -> int:
     from core.paths import HISTORY_FILE as _HF, META_DB_FILE as _MDB, CONFIG_FILE as _CF
     validate_critical_files([_HF, _MDB, _CF])
 
+    # 0a) Stage 5 of STAGE_DATA_INTEGRITY_ROADMAP -- run the boot-time
+    # integrity sweep. Surfaces orphans + corrupt live files so the
+    # SPA's Diagnostics tab can offer the user a one-click recovery.
+    # NEVER auto-publishes; only stages candidates under
+    # data/.recovery/. Best-effort: a sweep failure must not block
+    # the watcher from coming up.
+    try:
+        from core import integrity_sweep as _isweep
+        from core.paths import DATA_DIR as _DATA_DIR
+        _boot_report = _isweep.run_sweep(_DATA_DIR)
+        if _boot_report.candidates_staged:
+            print(
+                f"[integrity] {len(_boot_report.candidates_staged)} "
+                f"recovery candidate(s) staged at boot; visit the "
+                f"Diagnostics tab in the SPA to apply"
+            )
+        elif _boot_report.warnings:
+            print("[integrity] sweep warnings: " + " | ".join(_boot_report.warnings))
+        else:
+            print("[integrity] OK")
+    except Exception as _sweep_exc:  # noqa: BLE001
+        print(f"[integrity] boot sweep error: {_sweep_exc}")
+
     # 1) Catch up first so a freshly-launched watcher absorbs anything
     #    played while it was off, BEFORE we attach the live observer.
     #    Doing it in this order avoids a tiny window where a brand-new

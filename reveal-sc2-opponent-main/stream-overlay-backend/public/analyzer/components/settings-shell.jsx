@@ -298,6 +298,208 @@
         document.body.removeChild(a);
       }
 
+      // Stage 5 of STAGE_DATA_INTEGRITY_ROADMAP: read the integrity
+      // sweep state and post-back to /api/recovery/apply when the user
+      // clicks "Apply recovery". Lives next to DiagnosticsView so the
+      // recovery panel renders on the same tab as the integrity check.
+      async function recoveryFetchState() {
+        const r = await fetch("/api/recovery", { credentials: "same-origin" });
+        if (!r.ok) throw new Error("HTTP " + r.status + " from /api/recovery");
+        return r.json();
+      }
+      async function diMetricsFetch() {
+        const r = await fetch("/api/data-integrity/metrics",
+                              { credentials: "same-origin" });
+        if (!r.ok) throw new Error("HTTP " + r.status + " from /api/data-integrity/metrics");
+        return r.json();
+      }
+      function DataIntegrityMetricsCard() {
+        // Stage 7: write-health dashboard widget. Polls every 30s
+        // when the Diagnostics tab is open; values are process-local
+        // so a backend restart resets them (which is documented in
+        // the lib/data_integrity_metrics.js header).
+        const [snap, setSnap] = useState(null);
+        const [err, setErr] = useState(null);
+        useEffect(() => {
+          let alive = true;
+          const tick = async () => {
+            try {
+              const body = await diMetricsFetch();
+              if (alive) { setSnap(body); setErr(null); }
+            } catch (e) {
+              if (alive) setErr(String((e && e.message) || e));
+            }
+          };
+          tick();
+          const id = setInterval(tick, 30_000);
+          return () => { alive = false; clearInterval(id); };
+        }, []);
+        if (err) {
+          return <div className="text-xs text-red-400">Metrics: {err}</div>;
+        }
+        if (!snap) {
+          return <div className="text-xs text-neutral-500">Loading write health…</div>;
+        }
+        const counters = snap.counters || {};
+        const ATTEMPTED = counters.write_attempted || {};
+        const SUCCEEDED = counters.write_succeeded || {};
+        const FAILED = counters.write_failed || {};
+        const REJECTED = counters.validation_rejected || {};
+        const APPLIED = counters.recovery_applied || {};
+        const sumOf = (m) => Object.values(m).reduce((a, b) => a + b, 0);
+        return (
+          <div className="mt-2 border-t border-base-700 pt-3 space-y-1">
+            <div className="text-xs text-neutral-400 uppercase tracking-wider">
+              Stage 7 — write health (this session)
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+              <div><span className="text-neutral-500">attempted</span> {sumOf(ATTEMPTED)}</div>
+              <div><span className="text-neutral-500">succeeded</span> {sumOf(SUCCEEDED)}</div>
+              <div className={sumOf(FAILED) > 0 ? "text-red-400" : ""}>
+                <span className="text-neutral-500">failed</span> {sumOf(FAILED)}
+              </div>
+              <div className={sumOf(REJECTED) > 0 ? "text-amber-300" : ""}>
+                <span className="text-neutral-500">rejected</span> {sumOf(REJECTED)}
+              </div>
+              <div><span className="text-neutral-500">applied</span> {sumOf(APPLIED)}</div>
+            </div>
+            {(snap.recent_errors || []).length > 0 && (
+              <details className="text-xs text-neutral-500">
+                <summary>Recent integrity errors ({snap.recent_errors.length})</summary>
+                <pre className="text-[10px] whitespace-pre-wrap">
+                  {JSON.stringify(snap.recent_errors.slice(-5), null, 2)}
+                </pre>
+              </details>
+            )}
+          </div>
+        );
+      }
+      async function recoveryApplyCandidate(candidatePath) {
+        const r = await fetch("/api/recovery/apply", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ candidate_path: candidatePath }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          throw new Error(body && body.message
+            ? body.error + ": " + body.message
+            : "HTTP " + r.status + " from /api/recovery/apply");
+        }
+        return body;
+      }
+
+      function RecoveryPanel({ onApplied }) {
+        const [data, setData] = useState(null);
+        const [busy, setBusy] = useState(false);
+        const [error, setError] = useState(null);
+        const [applyingPath, setApplyingPath] = useState(null);
+        const [success, setSuccess] = useState(null);
+
+        const reload = async () => {
+          setBusy(true); setError(null);
+          try {
+            const body = await recoveryFetchState();
+            setData(body);
+          } catch (err) {
+            setError(String((err && err.message) || err));
+          } finally {
+            setBusy(false);
+          }
+        };
+        useEffect(() => { reload(); }, []);
+        const onApply = async (candidatePath) => {
+          setApplyingPath(candidatePath); setError(null); setSuccess(null);
+          try {
+            const body = await recoveryApplyCandidate(candidatePath);
+            setSuccess("Applied " + body.applied.from + " -> " + body.applied.to);
+            await reload();
+            if (typeof onApplied === "function") onApplied();
+          } catch (err) {
+            setError(String((err && err.message) || err));
+          } finally {
+            setApplyingPath(null);
+          }
+        };
+        if (busy && !data) {
+          return (
+            <div className="text-xs text-neutral-500">
+              Scanning for orphaned tmp files…
+            </div>
+          );
+        }
+        if (error && !data) {
+          return (
+            <div className="text-xs text-red-400">
+              Recovery scan failed: {error}
+            </div>
+          );
+        }
+        if (!data) return null;
+        const candidates = (data.findings || []).filter((f) => f.candidate_path);
+        const degraded = (data.findings || []).filter((f) => f.status !== "ok");
+        if (candidates.length === 0 && degraded.length === 0
+            && (data.orphans_aged || []).length === 0) {
+          return (
+            <div className="text-xs text-neutral-500">
+              No orphans, no degraded files. Sweep run at {data.timestamp}.
+            </div>
+          );
+        }
+        return (
+          <div className="space-y-2 mt-2 border-t border-base-700 pt-3">
+            <div className="text-xs text-neutral-400 uppercase tracking-wider">
+              Stage 5 — recovery candidates
+            </div>
+            {error && (
+              <div className="text-xs text-red-400">Error: {error}</div>
+            )}
+            {success && (
+              <div className="text-xs text-emerald-400">{success}</div>
+            )}
+            {candidates.length === 0 ? (
+              <div className="text-xs text-amber-300">
+                {degraded.length} file(s) flagged but no candidate available.
+                You may need to restore from backup manually.
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {candidates.map((f) => (
+                  <div key={f.basename}
+                       className="flex items-center justify-between
+                                  bg-base-800 border border-base-700 rounded
+                                  px-3 py-2 text-xs">
+                    <div>
+                      <div className="font-mono">{f.basename}</div>
+                      <div className="text-neutral-500">
+                        live: {f.live_keys} keys → candidate:
+                        {" "}{f.candidate_keys} keys
+                        {" "}({f.candidate_source})
+                      </div>
+                    </div>
+                    <button type="button"
+                            disabled={applyingPath === f.candidate_path}
+                            onClick={() => onApply(f.candidate_path)}
+                            className="px-3 py-1 rounded
+                                       bg-emerald-700 hover:bg-emerald-600
+                                       text-white disabled:opacity-50">
+                      {applyingPath === f.candidate_path
+                        ? "Applying…" : "Apply recovery"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {(data.orphans_aged || []).length > 0 && (
+              <div className="text-[11px] text-neutral-500">
+                Aged orphans: {data.orphans_aged.join(", ")}
+              </div>
+            )}
+          </div>
+        );
+      }
+
       function DiagnosticsView() {
         const [data, setData] = useState(null);
         const [busy, setBusy] = useState(false);
@@ -340,6 +542,15 @@
                 ))}
               </div>
             )}
+            {/* Stage 5 recovery panel: stays mounted on the Diagnostics
+                tab so users land here on incident reports and can apply
+                recovery candidates without hunting through the SPA. */}
+            <RecoveryPanel onApplied={() => refresh(true)} />
+            {/* Stage 7 write-health widget. Same data-integrity surface
+                as the recovery panel; rendered separately so users can
+                see counters at a glance even when there's nothing to
+                recover. */}
+            <DataIntegrityMetricsCard />
           </section>
         );
       }

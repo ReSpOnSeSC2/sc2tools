@@ -41,6 +41,7 @@ const fs = require('fs');
 
 const integritySweep = require('../lib/integrity_sweep');
 const { DataIntegrityError } = require('../lib/atomic-fs');
+const metrics = require('../lib/data_integrity_metrics');
 
 const HTTP_BAD_REQUEST = 400;
 const HTTP_FORBIDDEN = 403;
@@ -166,6 +167,9 @@ function createRecoveryRouter(options) {
 
     try {
       integritySweep.applyCandidate(absCandidate, absTarget);
+      metrics.counterInc('recovery_applied', {
+        basename: path.basename(absTarget),
+      });
       res.json({
         applied: {
           from: path.relative(dataDir, absCandidate),
@@ -175,12 +179,24 @@ function createRecoveryRouter(options) {
     } catch (err) {
       const status = err instanceof DataIntegrityError
         ? HTTP_BAD_REQUEST : HTTP_INTERNAL;
+      metrics.error(
+        err instanceof DataIntegrityError
+          ? 'recovery_apply_integrity'
+          : 'recovery_apply_failed',
+        { detail: { target: path.basename(absTarget), message: err.message } },
+      );
       res.status(status).json({
         error: err instanceof DataIntegrityError ? 'integrity_violation'
           : 'apply_failed',
         message: String(err && err.message || err),
       });
     }
+  });
+
+  // Stage 7 of STAGE_DATA_INTEGRITY_ROADMAP -- metrics endpoint for
+  // the SPA's "write health" dashboard widget.
+  router.get('/api/data-integrity/metrics', (_req, res) => {
+    res.json(metrics.snapshot());
   });
 
   return router;

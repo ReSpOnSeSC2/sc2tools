@@ -232,6 +232,15 @@ def atomic_write_json(
     # (Node backend, PowerShell scanner) targeting the same logical
     # file so concurrent renames cannot clobber each other's .bak
     # snapshot. Opt-out via SC2TOOLS_DATA_LOCK_ENABLED=0.
+    #
+    # Stage 6 note: the schema-version stamp is NOT auto-injected
+    # here -- per the roadmap, individual writers
+    # (data_store.BlackBookStore.save / AnalyzerStore.save / the JS
+    # analyzer dbCache / the PowerShell scanner) call
+    # ``schema_versioning.stamp_version(data, basename)`` themselves
+    # before invoking this helper. That keeps the canonical helper
+    # shape-agnostic so existing iterators that walk ``db.values()``
+    # don't see a stray integer key in the data.
     with file_lock(path):
         parent = os.path.dirname(path) or "."
         os.makedirs(parent, exist_ok=True)

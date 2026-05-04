@@ -224,9 +224,26 @@ function atomicWriteJson(filePath, data, options) {
   if (typeof filePath !== 'string' || !filePath) {
     throw new TypeError('atomicWriteJson: filePath must be a non-empty string');
   }
+  // Stage 7 metrics: count + measure duration around the lock + write.
+  // Best-effort require() so a partial install (no metrics module on
+  // disk) doesn't block the write.
+  let metrics = null;
+  try { metrics = require('./data_integrity_metrics'); } catch (_e) { /* */ }
+  const _basename = path.basename(filePath);
+  const _started = Date.now();
+  if (metrics) metrics.counterInc('write_attempted', { basename: _basename });
   // Cross-process lock: serialize against any other writer hitting
   // the same logical file (Python watcher, PowerShell scanner) so
   // we never race a .bak snapshot against another writer's rename.
+  //
+  // Stage 6 note: the schema-version stamp is NOT auto-injected
+  // here -- per the roadmap, the individual writers (analyzer.js
+  // dbCache, routes/custom-builds.js, settings router, the
+  // BlackBookStore on the Python side) call
+  // ``stampVersion(data, basename)`` themselves before invoking
+  // this helper. Keeping the helper shape-agnostic prevents a
+  // stray top-level integer leaking into iterators that walk
+  // ``db.values()``.
   withFileLockSync(filePath, () => {
     const indent = options && typeof options.indent === 'number'
       ? options.indent : DEFAULT_JSON_INDENT;
@@ -250,6 +267,12 @@ function atomicWriteJson(filePath, data, options) {
     try {
       _validateTempBeforeRename(tmp, filePath, data);
     } catch (validateErr) {
+      if (metrics) {
+        metrics.counterInc('validation_rejected', { basename: _basename });
+        metrics.error('DataIntegrityError', {
+          detail: { basename: _basename, message: validateErr.message },
+        });
+      }
       try { fs.unlinkSync(tmp); } catch (_e) { /* tmp may be gone */ }
       throw validateErr;
     }
@@ -273,7 +296,14 @@ function atomicWriteJson(filePath, data, options) {
     } catch (err) {
       // Best-effort cleanup so a failed rename doesn't leave .tmp junk.
       try { fs.unlinkSync(tmp); } catch (_e) { /* tmp may be gone */ }
+      if (metrics) metrics.counterInc('write_failed', { basename: _basename });
       throw err;
+    }
+    if (metrics) {
+      metrics.counterInc('write_succeeded', { basename: _basename });
+      metrics.histogramRecord(
+        'write_duration_ms', Date.now() - _started, { basename: _basename },
+      );
     }
   });
 }

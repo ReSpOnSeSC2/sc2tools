@@ -333,6 +333,11 @@ function withFileLockSync(targetPath, fn, opts) {
   if (isDisabled()) {
     return fn();
   }
+  // Stage 7: count + measure lock acquisition. Best-effort require()
+  // so a partial install doesn't block the lock.
+  let metrics = null;
+  try { metrics = require('./data_integrity_metrics'); } catch (_e) { /* */ }
+  const _basename = path.basename(targetPath);
   const timeoutSec = (opts && opts.timeoutSec) || DEFAULT_TIMEOUT_SEC;
   const staleAfterSec = (opts && opts.staleAfterSec) || DEFAULT_STALE_AFTER_SEC;
   const lockDir = resolveLockDir(targetPath);
@@ -341,16 +346,22 @@ function withFileLockSync(targetPath, fn, opts) {
   const deadline = Date.now() + timeoutSec * 1000;
   let attempt = 0;
   let lastSeen = null;
+  let contended = false;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
     if (tryCreateLockfile(lockPath, meta)) {
+      if (metrics) {
+        metrics.counterInc('lock_acquired', { basename: _basename });
+        if (contended) metrics.counterInc('lock_contended', { basename: _basename });
+      }
       try {
         return fn();
       } finally {
         releaseOwned(lockPath, meta);
       }
     }
+    contended = true;
     const observed = readLockMeta(lockPath);
     if (isStale(observed, staleAfterSec)) {
       tryStealLock(lockPath, observed);
@@ -359,6 +370,7 @@ function withFileLockSync(targetPath, fn, opts) {
       continue;
     }
     if (Date.now() >= deadline) {
+      if (metrics) metrics.counterInc('lock_timeout', { basename: _basename });
       const holderPid = observed && observed.pid ? observed.pid : '?';
       throw new FileLockTimeoutError(
         `file-lock: timeout after ${timeoutSec}s waiting on ${lockPath}; `

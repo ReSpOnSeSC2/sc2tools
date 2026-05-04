@@ -97,6 +97,46 @@ from .paths import (
 DataIntegrityError = _AtomicIODataIntegrityError
 
 
+# Stage 6 helpers ------------------------------------------------------
+def _stamp_for_save(data: Any, basename: str) -> Any:
+    """Mutate `data` in place to carry the registry's schema version.
+
+    Best-effort: if the schema_versioning module is unavailable for
+    any reason (partial install, circular-import edge cases) we
+    leave `data` untouched rather than blocking the save.
+    """
+    try:
+        from core.schema_versioning import stamp_version
+        stamp_version(data, basename)
+    except Exception:  # noqa: BLE001
+        pass
+    return data
+
+
+def _strip_schema_meta(data: Any, basename: str) -> Any:
+    """Remove the schema-version stamp from `data` before user code reads it.
+
+    Iterators that walk ``data.values()`` (e.g.
+    BlackBookStore.load -> SettingsView aggregations) must not see
+    the integer stamp as if it were an opponent record. Pop the
+    registry's version_key on read.
+    """
+    if not isinstance(data, dict):
+        return data
+    try:
+        from core.schema_versioning import get_spec, assert_not_too_new
+        spec = get_spec(basename)
+        if spec is not None:
+            # Stage 6: refuse to load a newer-than-expected file --
+            # silent field drop is the wipe pattern Stage 4 was
+            # designed to prevent.
+            assert_not_too_new(data, basename)
+            data.pop(spec.version_key, None)
+    except Exception:  # noqa: BLE001
+        pass
+    return data
+
+
 # Catastrophic-shrinkage threshold. Used by save() callers to refuse
 # writes that would drop > 50% of top-level keys on a previously-large
 # file. Floor of 100 keeps small files (e.g. fresh installs) from
@@ -187,6 +227,12 @@ def _read_json(path: str, default: Any) -> Any:
     a watcher that then runs ``data[pulse_id] = ...; save(data)`` is
     exactly how 27MB became 15KB on 2026-05-02. The default branch is
     reserved for the "no file" case.
+
+    Stage 6: every successful parse goes through
+    :func:`_strip_schema_meta` so callers that walk ``data.values()``
+    never see the integer schema-version stamp. Callers that need
+    the version (the SchemaTooNew check) consult schema_versioning
+    against the unstripped on-disk dict via a separate read path.
     """
     if not os.path.exists(path):
         return default
@@ -194,7 +240,7 @@ def _read_json(path: str, default: Any) -> Any:
     # Tier 1: primary
     parsed = _try_parse_json(path)
     if parsed is not None:
-        return parsed
+        return _strip_schema_meta(parsed, os.path.basename(path))
 
     # Tier 2: .bak
     bak_path = path + ".bak"
@@ -207,7 +253,7 @@ def _read_json(path: str, default: Any) -> Any:
             shutil.copy2(bak_path, path)
         except Exception:
             pass
-        return parsed
+        return _strip_schema_meta(parsed, os.path.basename(path))
 
     # Tier 3: tolerant partial-recovery on primary
     try:
@@ -220,7 +266,7 @@ def _read_json(path: str, default: Any) -> Any:
                     cf.write(raw)
             except Exception:
                 pass
-            return recovered
+            return _strip_schema_meta(recovered, os.path.basename(path))
     except Exception:
         pass
 
@@ -338,7 +384,12 @@ class BlackBookStore:
     # --- read/write -----------------------------------------------------
     def load(self) -> Dict[str, Any]:
         with self._lock:
-            return _read_json(self.path, {})
+            data = _read_json(self.path, {})
+            # Stage 6: drop the schema-version metadata so iterators
+            # that walk db.values() never see the stamp as if it were
+            # an opponent record. Future migrations would run here
+            # before the strip; for v1 we simply pop and continue.
+            return _strip_schema_meta(data, "MyOpponentHistory.json")
 
     def save(self, data: Dict[str, Any]) -> None:
         with self._lock:
@@ -348,6 +399,11 @@ class BlackBookStore:
                 if on_disk >= _SHRINKAGE_FLOOR_MIN_KEYS
                 else None
             )
+            # Stage 6: stamp the registry's current schema version
+            # under `_schema_version` so a later read can detect a
+            # newer-than-expected file and refuse to silently drop
+            # fields it doesn't understand.
+            _stamp_for_save(data, "MyOpponentHistory.json")
             _atomic_write_json(self.path, data, min_keep_keys=floor)
 
     # --- helpers --------------------------------------------------------
@@ -611,6 +667,11 @@ class AnalyzerDBStore:
             data = _read_json(self.path, {})
             if not isinstance(data, dict):
                 data = {}
+            # Stage 6: pop the schema-version stamp before the
+            # KNOWN_BUILDS hydration loop so iterators that walk
+            # ``data.values()`` never encounter the integer stamp as
+            # if it were a build-record dict.
+            _strip_schema_meta(data, "meta_database.json")
             for b in KNOWN_BUILDS:
                 if b not in data:
                     data[b] = {"games": [], "wins": 0, "losses": 0}
@@ -622,6 +683,8 @@ class AnalyzerDBStore:
 
     def save(self, data: Dict[str, Any]) -> None:
         with self._lock:
+            # Stage 6: stamp before save (opposite of load's strip).
+            _stamp_for_save(data, "meta_database.json")
             on_disk = _existing_top_level_key_count(self.path)
             floor = (
                 max(_SHRINKAGE_FLOOR_MIN_KEYS, int(on_disk * _SHRINKAGE_FLOOR_RATIO))
