@@ -63,7 +63,15 @@ const { createDiagnosticsRouter } = require('./routes/diagnostics');
 const { createCustomBuildsRouter } = require('./routes/custom-builds');
 // Stage 12.1: auto-update endpoints (see routes/version.js).
 const { createVersionRouter } = require('./routes/version');
+// Stub creation on startup: friend's-install fix. When the data/*
+// JSON files don't exist (fresh clone), endpoints silently return
+// [] and the SPA shows "No data". Stubs satisfy the file-exists
+// branch so empty-state CTAs (components/empty-states.jsx) render.
+const { ensureDataStubs } = require('./lib/ensure-stubs');
 const { createRuntimeRouter } = require('./routes/runtime');
+// Doctor / startup diagnostics. Powers /api/doctor/check + the
+// dismissable banner in the SPA (components/doctor-banner.jsx).
+const { createDoctorRouter, runStartupCheck } = require('./routes/doctor');
 const { createCommunitySyncService } = require('./services/community_sync');
 // node-fetch v2 ships in node_modules; stick with that to keep CJS
 // require() compatibility on older node runtimes that don't have a
@@ -77,6 +85,10 @@ const fetch = (typeof globalThis.fetch === 'function')
 // ------------------------------------------------------------------
 const ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'data');
+// Create empty stubs for meta_database.json / MyOpponentHistory.json /
+// custom_builds.json if they don't exist. config.json is intentionally
+// excluded -- the wizard keys off its absence as the first-run signal.
+ensureDataStubs(DATA_DIR);
 
 // Prefer the unified data/ location if it exists; fall back to project root.
 function pickHistoryPath() {
@@ -1597,6 +1609,17 @@ app.use(createRuntimeRouter({
         || (process.platform === 'win32' ? 'py' : 'python3'),
 }));
 
+// /api/doctor/check -- structured diagnostics powering the SPA
+// banner. Surfaces stale CLI installs, missing python, unwritable
+// data dir, etc., so the user gets an actionable message instead
+// of a silent "No data" empty state.
+app.use(createDoctorRouter({
+    repoRoot: ROOT,
+    dataDir: DATA_DIR,
+    pythonExe: process.env.PYTHON
+        || (process.platform === 'win32' ? 'py' : 'python3'),
+}));
+
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 
@@ -2617,6 +2640,10 @@ if (require.main === module) {
 
     server.listen(PORT, async () => {
         console.log(`[Server] Listening on http://localhost:${PORT}`);
+        // Doctor / startup diagnostics. Logs warnings for any non-ok
+        // checks; the SPA banner shows the same data to the user.
+        runStartupCheck({ repoRoot: ROOT, dataDir: DATA_DIR })
+            .catch((e) => console.warn('[doctor] startup check failed:', e.message));
         console.log(`[Server] Dev panel: http://localhost:${PORT}/static/debug.html`);
         console.log(`[Server] !build:    http://localhost:${PORT}/static/last-build.html`);
         console.log(`[Server] History:   ${HISTORY_FILE_PATH}`);

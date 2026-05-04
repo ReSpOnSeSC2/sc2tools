@@ -356,6 +356,9 @@
     <script type="text/babel" data-presets="react" data-type="module" src="/static/analyzer/components/tabs-ml-predict.jsx"></script>
     <script type="text/babel" data-presets="react" data-type="module" src="/static/analyzer/components/map-intel-tab.jsx"></script>
     <script type="text/babel" data-presets="react" data-type="module" src="/static/analyzer/components/map-intel-viewer.jsx"></script>
+    <!-- Friend's-install fix: doctor banner + empty-state CTAs. -->
+    <script type="text/babel" data-presets="react" data-type="module" src="/static/analyzer/components/doctor-banner.jsx"></script>
+    <script type="text/babel" data-presets="react" data-type="module" src="/static/analyzer/components/empty-states.jsx"></script>
 
     <script type="text/babel" data-presets="react">
       // ============================================================
@@ -2125,6 +2128,25 @@
             window.removeEventListener("sc2:analyzer-db-changed", handler);
         }, []);
 
+        // Doctor banner + empty-state CTAs dispatch these events to
+        // request UI navigation without poking App's internals.
+        useEffect(() => {
+          const onOpenWizard = () => setShowWizard(true);
+          const onOpenTab = (e) => {
+            const tabId = e && e.detail && e.detail.tab;
+            if (tabId) setTab(tabId);
+          };
+          const onResetFilters = () => setFilters({});
+          window.addEventListener("sc2:open-wizard", onOpenWizard);
+          window.addEventListener("sc2:open-tab", onOpenTab);
+          window.addEventListener("sc2:reset-filters", onResetFilters);
+          return () => {
+            window.removeEventListener("sc2:open-wizard", onOpenWizard);
+            window.removeEventListener("sc2:open-tab", onOpenTab);
+            window.removeEventListener("sc2:reset-filters", onResetFilters);
+          };
+        }, []);
+
         // Probe whether the user has run the wizard before. 200 -> exists,
         // 404/error -> show wizard. We default to "show" on net failure so
         // a non-running backend never silently traps the user in the SPA.
@@ -2267,6 +2289,7 @@
         return (
           <div className="min-h-screen flex flex-col">
             <UpdateBanner />
+            <DoctorBanner />
             <header className="border-b border-base-700 bg-base-800/60 backdrop-blur sticky top-0 z-10">
               <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
                 <div className="text-lg font-semibold text-neutral-100">

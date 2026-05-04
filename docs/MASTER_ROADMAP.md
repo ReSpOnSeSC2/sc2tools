@@ -36,6 +36,12 @@ This document is built so you can execute it top-to-bottom. Every prompt is self
 - [Appendix C — Launch checklist](#appendix-c--launch-checklist)
 - [Appendix D — Suggested ship rhythm](#appendix-d--suggested-ship-rhythm)
 
+> **Companion doc:** [`CLOUD_SAAS_ROADMAP.md`](./CLOUD_SAAS_ROADMAP.md) —
+> per-user SaaS pivot to Vercel + Render + MongoDB (signed-in users,
+> hosted UI, hosted overlay). Complements Stage 14's anonymous
+> community pool; the two ship side-by-side, with the community pool
+> becoming a free feature of the SaaS.
+
 ---
 
 ## Master Architecture Preamble

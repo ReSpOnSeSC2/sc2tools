@@ -38,6 +38,10 @@ const express = require('express');
 const { spawn } = require('child_process');
 // settings-pr1n: atomic file writes (Hard Rule #4).
 const atomicFs = require('./lib/atomic-fs');
+// CLI version probe -- detects stale Python installs that lack a
+// required argparse subcommand and rejects with a typed error
+// the SPA can render as a fix hint.
+const { ensureCliReady } = require('./lib/cli-probe');
 
 // SC2 catalog (mirrors core/sc2_catalog.py). Used by the build-order
 // endpoint so the browser can render canonical display names + race +
@@ -311,7 +315,17 @@ function getDefaultPlayerName() {
 
 // Spawn the python macro_cli.py with subcmd+args, parse newline-delimited
 // JSON from stdout, resolve with the array of records. Mirrors runMlCli.
-function runMacroCli(subcmd, args = []) {
+// Pre-flights the CLI via ensureCliReady so a stale checkout missing
+// the requested subcommand surfaces as CliVersionError, not raw stderr.
+async function runMacroCli(subcmd, args = []) {
+    const projDirPre = pythonProjectDirOrErr();
+    if (projDirPre.error) throw new Error(projDirPre.error);
+    await ensureCliReady({
+        pythonExe: pickPythonExe(),
+        projectDir: projDirPre.dir,
+        cliName: 'macro_cli',
+        required: ['backfill', 'compute'],
+    });
     return new Promise((resolve, reject) => {
         const projDir = pythonProjectDirOrErr();
         if (projDir.error) return reject(new Error(projDir.error));
@@ -2030,7 +2044,9 @@ router.post('/games/:gameId/macro-breakdown', (req, res) => {
             res.json({ ok: true, build, macro_score: r.macro_score, ...fullBreakdown });
         })
         .catch((err) => {
-            res.status(500).json({ ok: false, error: String(err && err.message || err) });
+            const body = { ok: false, error: String(err && err.message || err) };
+            if (err && err.kind) body.kind = err.kind;
+            res.status(500).json(body);
         });
 });
 
@@ -2042,7 +2058,15 @@ router.post('/games/:gameId/macro-breakdown', (req, res) => {
 // ControlGroup events) curve for both players. Read-only -- the result
 // is cached in memory (5min TTL, capped) so re-opening the same drawer
 // doesn't re-spawn Python.
-function runApmCli(args = []) {
+async function runApmCli(args = []) {
+    const projDirPre = pythonProjectDirOrErr();
+    if (projDirPre.error) throw new Error(projDirPre.error);
+    await ensureCliReady({
+        pythonExe: pickPythonExe(),
+        projectDir: projDirPre.dir,
+        cliName: 'apm_cli',
+        required: ['compute'],
+    });
     return new Promise((resolve, reject) => {
         const projDir = pythonProjectDirOrErr();
         if (projDir.error) return reject(new Error(projDir.error));
@@ -2125,9 +2149,9 @@ router.get('/games/:gameId/apm-curve', (req, res) => {
             res.json(payload);
         })
         .catch((err) => {
-            res.status(500).json({
-                ok: false, error: String((err && err.message) || err),
-            });
+            const body = { ok: false, error: String((err && err.message) || err) };
+            if (err && err.kind) body.kind = err.kind;
+            res.status(500).json(body);
         });
 });
 
@@ -3112,8 +3136,6 @@ function pickPythonProjectDir() {
     // moment they pull this change without running the migration.
     const sibling = path.resolve(ROOT, '..', 'SC2Replay-Analyzer');
     if (fs.existsSync(sibling)) return sibling;
-    const winDefault = 'C:\\SC2TOOLS\\SC2Replay-Analyzer';
-    if (fs.existsSync(winDefault)) return winDefault;
     return null;
 }
 

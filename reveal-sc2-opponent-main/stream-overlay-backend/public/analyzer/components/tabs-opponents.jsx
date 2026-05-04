@@ -134,7 +134,9 @@
                   {items.length === 0 ? (
                     <tr>
                       <td colSpan="8">
-                        <EmptyState />
+                        {window.OpponentsEmptyState
+                          ? <window.OpponentsEmptyState />
+                          : <EmptyState />}
                       </td>
                     </tr>
                   ) : (
