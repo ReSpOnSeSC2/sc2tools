@@ -1,5 +1,8 @@
 "use strict";
 
+const { COLLECTIONS } = require("../config/constants");
+const { stampVersion } = require("../db/schemaVersioning");
+
 /**
  * Custom builds service. Per-user authored builds. Stored under
  * (userId, slug) — slug is a stable client-generated id.
@@ -49,6 +52,8 @@ class CustomBuildsService {
     const doc = { ...build, userId, updatedAt: now };
     delete doc._id;
     delete doc.deletedAt;
+    delete doc._schemaVersion;
+    stampVersion(doc, COLLECTIONS.CUSTOM_BUILDS);
     await this.db.customBuilds.updateOne(
       { userId, slug: build.slug },
       { $setOnInsert: { createdAt: now }, $set: doc, $unset: { deletedAt: "" } },

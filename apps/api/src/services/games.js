@@ -1,6 +1,7 @@
 "use strict";
 
-const { LIMITS } = require("../config/constants");
+const { LIMITS, COLLECTIONS } = require("../config/constants");
+const { stampVersion } = require("../db/schemaVersioning");
 
 /**
  * Games service. One document per (userId, gameId). Idempotent on
@@ -27,6 +28,8 @@ class GamesService {
     /** @type {Record<string, any>} */
     const doc = { ...game, userId, date };
     delete doc._id;
+    delete doc._schemaVersion;
+    stampVersion(doc, COLLECTIONS.GAMES);
     const res = await this.db.games.updateOne(
       { userId, gameId: game.gameId },
       {
