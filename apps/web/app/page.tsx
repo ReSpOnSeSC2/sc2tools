@@ -137,13 +137,22 @@ const HERO_PEEK_SLIDES: ReadonlyArray<HeroPeek> = [
       "Opponent profile page in SC2 Tools showing matchup record, build tendencies, and median key timings",
   },
   {
-    id: "peek-overlay",
+    id: "peek-overlay-live",
     eyebrow: "See it before you sign up",
     title: "Live OBS overlay — copy & paste",
     body: "15 broadcast-ready widgets behind one URL. Drop it into a Browser Source and you're streaming.",
     imageSrc: "/landing/overlay-live.png",
     imageAlt:
       "StarCraft II gameplay with the SC2 Tools live OBS overlay running — opponent identity card, session record, and rematch flag",
+  },
+  {
+    id: "peek-overlay-rematch",
+    eyebrow: "See it before you sign up",
+    title: "Familiar-opponent flags, on stream",
+    body: "Run-it-back? The overlay calls out repeats with last-result, head-to-head record, and the games that got you there.",
+    imageSrc: "/landing/overlay-rematch.png",
+    imageAlt:
+      "Stream overlay rematch widget — opponent name, MMR, FAMILIAR / Last Defeat tag, and a list of recent games",
   },
   {
     id: "peek-builds",
@@ -153,6 +162,15 @@ const HERO_PEEK_SLIDES: ReadonlyArray<HeroPeek> = [
     imageSrc: "/landing/builds.png",
     imageAlt:
       "Custom Builds page in SC2 Tools showing per-build wins, losses, win rate, and trend sparklines",
+  },
+  {
+    id: "peek-build-editor",
+    eyebrow: "See it before you sign up",
+    title: "Save any replay as a custom build",
+    body: "Open a game, click ‘Save as new build’, promote starred events into rules — your library reclassifies in place.",
+    imageSrc: "/landing/build-editor.png",
+    imageAlt:
+      "Save-as-new-build editor with the source replay timeline on the left and one-click rule promotion buttons",
   },
 ];
 
