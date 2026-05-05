@@ -75,14 +75,28 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     SC2_PY_ANALYZER_DIR=/opt/sc2-analyzer \
     PATH="/opt/sc2-py/bin:${PATH}"
 
+# libgomp1 is required by numpy/scipy at runtime. We deliberately do NOT
+# install Debian's python3 here — Bookworm ships 3.11, but the venv's
+# binary is linked against libpython3.12.so.1.0 which only ships with
+# the upstream python:3.12 image. We bring that in via COPY below.
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
-        python3 \
-        python3-distutils \
         libgomp1 \
         ca-certificates \
         tini \
     && rm -rf /var/lib/apt/lists/*
+
+# Bring in the upstream CPython 3.12 install from stage 1. This includes
+# /usr/local/lib/libpython3.12.so.1.0 (shared library the venv binary
+# is dynamically linked against) and /usr/local/lib/python3.12 (the
+# stdlib, located via the venv's pyvenv.cfg `home = /usr/local/bin`).
+# Without this, /opt/sc2-py/bin/python fails to start with
+# "error while loading shared libraries: libpython3.12.so.1.0".
+COPY --from=python-deps /usr/local /usr/local
+# Refresh the dynamic linker cache so libpython3.12.so.1.0 is found at
+# /usr/local/lib (already on Debian's default search path, but ldconfig
+# rebuilds the cache file the loader actually reads).
+RUN ldconfig
 
 # Bring in the prebuilt Python virtualenv with sc2reader / numpy / etc.
 COPY --from=python-deps /opt/sc2-py /opt/sc2-py
