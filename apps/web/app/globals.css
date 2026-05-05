@@ -120,6 +120,30 @@ a:hover {
 }
 
 /* ============================================================
+ * Chrome animations — used by the mobile nav drawer + scrim. The
+ * `motion-safe:animate-[…]` Tailwind variant references these by
+ * name, so they run only when the user hasn't asked for reduced
+ * motion (the @media block above already neutralizes them when set).
+ * ============================================================ */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ============================================================
  * Halos + glows — brand cyan / accent radial backdrops
  * ============================================================ */
 .halo-cyan {
