@@ -45,13 +45,24 @@ COPY SC2Replay-Analyzer/requirements.txt /tmp/sc2-requirements.txt
 # by a previous failed run (defensive — should be a no-op on a
 # from-scratch layer, but covers cache-pruning edge cases).
 RUN rm -rf /opt/sc2-py \
-    && python -m venv /opt/sc2-py \
-    && test -x /opt/sc2-py/bin/python \
+    && python -m venv --copies /opt/sc2-py \
+    && test -f /opt/sc2-py/bin/python \
+    && test ! -L /opt/sc2-py/bin/python \
     && /opt/sc2-py/bin/pip install --upgrade pip wheel setuptools \
     && /opt/sc2-py/bin/pip install -r /tmp/sc2-requirements.txt \
     && /opt/sc2-py/bin/python --version \
     && /opt/sc2-py/bin/python -c "import sc2reader; print('stage1_sc2reader', sc2reader.__version__)" \
     && ls -la /opt/sc2-py/bin/python /opt/sc2-py/bin/pip
+# CRITICAL: the venv MUST be created with --copies, not the default
+# symlink-based layout. By default, /opt/sc2-py/bin/python is a symlink
+# to /usr/local/bin/python — that path exists in this stage's
+# python:3.12-slim base, but NOT in stage 2's node:22-bookworm-slim
+# runtime image. Without --copies, the COPY --from=python-deps
+# transfers a symlink whose target is missing on the runtime image,
+# and the resulting "spawn /opt/sc2-py/bin/python ENOENT" surfaces
+# at request time as preview_unavailable. The two `test` invocations
+# above guarantee the binary is a real file, not a symlink, so a
+# regression here fails the build.
 ENV PATH="/opt/sc2-py/bin:${PATH}"
 
 # ---- Stage 2: runtime ----
