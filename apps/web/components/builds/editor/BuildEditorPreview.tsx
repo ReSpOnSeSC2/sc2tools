@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, X } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { formatTime, PREVIEW_PAGE_SIZE } from "@/lib/build-rules";
 import type { BuildOrderEvent } from "@/lib/build-events";
@@ -75,12 +75,13 @@ export function BuildEditorPreview({
       <h3 className="text-caption font-semibold uppercase tracking-wider text-text-muted">
         3 · Match preview
       </h3>
-      <p
-        className="text-body text-text"
-        aria-live="polite"
-      >
-        {banner}
-      </p>
+      {error ? (
+        <PreviewErrorCallout message={error} />
+      ) : (
+        <p className="text-body text-text" aria-live="polite">
+          {banner}
+        </p>
+      )}
       {hiddenCount > 0 ? (
         <p className="text-caption text-text-dim">
           {hiddenCount} hidden ·{" "}
@@ -144,7 +145,8 @@ function computeBannerText(args: {
 }): string {
   const { rules, preview, loading, error, matchesCount } = args;
   if (loading) return "Scoring against your games…";
-  if (error) return `Preview error: ${error}`;
+  // Error is rendered by <PreviewErrorCallout/>, not here.
+  if (error) return "";
   if (rules.length === 0) return "Add a rule to see matches.";
   const total = preview.matches.length;
   const pct =
@@ -152,6 +154,24 @@ function computeBannerText(args: {
       ? ((total / preview.scanned_games) * 100).toFixed(1)
       : "0.0";
   return `✓ ${matchesCount}${preview.truncated ? "+" : ""} of your ${preview.scanned_games} games match all ${rules.length} rules (${pct}%).`;
+}
+
+function PreviewErrorCallout({ message }: { message: string }) {
+  return (
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-caption text-danger"
+    >
+      <AlertTriangle
+        className="mt-0.5 h-4 w-4 flex-shrink-0"
+        aria-hidden="true"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium">Couldn&apos;t score your games</p>
+        <p className="mt-0.5 text-text-muted">{message}</p>
+      </div>
+    </div>
+  );
 }
 
 /* ------------------------------------------------------------------ */

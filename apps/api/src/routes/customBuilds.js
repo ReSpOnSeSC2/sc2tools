@@ -38,7 +38,16 @@ function buildCustomBuildsRouter(deps) {
         return;
       }
       const body = req.body || {};
-      const rules = Array.isArray(body.rules) ? body.rules : [];
+      const rawRules = Array.isArray(body.rules) ? body.rules : [];
+      // Drop placeholder rules (empty name) so the user sees a useful
+      // preview while typing instead of zero matches + a 500.
+      const rules = rawRules.filter(
+        (r) =>
+          r &&
+          typeof r === "object" &&
+          typeof r.name === "string" &&
+          r.name.trim().length > 0,
+      );
       if (rules.length === 0) {
         res.json({
           matches: [],
@@ -57,8 +66,22 @@ function buildCustomBuildsRouter(deps) {
       const matches = [];
       /** @type {Array<{game_id: string, build_name: string, failed_rule_name?: string, failed_reason: string, map: string|null, result: string|null, date: Date|null}>} */
       const almostMatches = [];
+      let evalErrors = 0;
       for (const g of games) {
-        const evalRes = evaluateRules(rules, g.events);
+        let evalRes;
+        try {
+          evalRes = evaluateRules(rules, g.events);
+        } catch (e) {
+          // One bad game shouldn't fail the whole preview. Log + skip.
+          evalErrors++;
+          if (req.log) {
+            req.log.warn(
+              { err: e, gameId: g && g.gameId },
+              "preview_eval_failed",
+            );
+          }
+          continue;
+        }
         const summary = {
           game_id: g.gameId,
           build_name: g.myBuild || `${g.myRace || "?"} vs ${g.oppRace || "?"}`,
@@ -90,6 +113,7 @@ function buildCustomBuildsRouter(deps) {
         truncated:
           matches.length >= PREVIEW_TRUNCATION_LIMIT ||
           almostMatches.length >= PREVIEW_TRUNCATION_LIMIT,
+        eval_errors: evalErrors > 0 ? evalErrors : undefined,
       });
     } catch (err) {
       next(err);

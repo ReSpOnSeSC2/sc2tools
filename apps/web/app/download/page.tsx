@@ -1,73 +1,244 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import {
+  Activity,
+  ChevronDown,
+  ChevronRight,
+  ShieldCheck,
+} from "lucide-react";
 import { Banner } from "@/components/Banner";
+import { DownloadCard } from "@/components/onboarding/DownloadCard";
+import { usePlatformDetect } from "@/components/onboarding/usePlatformDetect";
+import type { DetectedOS } from "@/components/onboarding/types";
 
-export const metadata = {
-  title: "Download the agent · SC2 Tools",
-};
+const OS_TABS: ReadonlyArray<{ id: DetectedOS; label: string }> = [
+  { id: "windows", label: "Windows" },
+  { id: "macos", label: "macOS" },
+  { id: "linux", label: "Linux" },
+];
 
+const SYS_REQUIREMENTS: ReadonlyArray<{ heading: string; body: string }> = [
+  {
+    heading: "Disk",
+    body: "~80 MB for the agent and its parser cache. The replay folder itself is untouched.",
+  },
+  {
+    heading: "OS",
+    body: "Windows 10+, macOS 12+, or modern x86_64 Linux. The Windows build is signed; macOS/Linux ship as source.",
+  },
+  {
+    heading: "Network",
+    body: "Outbound HTTPS to api.sc2tools.app. No inbound ports — your replays never leave the machine.",
+  },
+  {
+    heading: "StarCraft II",
+    body: "A live install with at least one ranked game on disk. Both 1v1 and team replays parse.",
+  },
+];
+
+/**
+ * /download — public landing for the agent installer. Surfaces the
+ * same DownloadCard the onboarding wizard uses, plus an OS picker and
+ * an expandable manual-install pane. All version + size + SHA-256
+ * fields are pulled from the API at request time, never hardcoded.
+ */
 export default function DownloadPage() {
+  const detected = usePlatformDetect();
+  const [active, setActive] = useState<DetectedOS | null>(null);
+  const os = active ?? (detected === "unknown" ? "windows" : detected);
+
   return (
-    <div className="space-y-8">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-semibold">Download the SC2 Tools Agent</h1>
-        <p className="max-w-2xl text-text-muted">
-          The agent is a small, single-file Windows program. It watches
-          your Replays folder, parses each finished game in the
-          background, and syncs the result here.
+    <div className="space-y-10">
+      <header className="space-y-3">
+        <h1 className="text-display-lg font-semibold tracking-tight text-text">
+          Download the SC2 Tools Agent
+        </h1>
+        <p className="max-w-2xl text-body-lg text-text-muted">
+          A small background watcher that turns every finished ranked
+          match into a structured record on your dashboard. Read-only
+          on your replays folder. Replays themselves never leave your
+          machine — only the parsed JSON record syncs.
         </p>
       </header>
 
       <Banner variant="divider" />
 
-      <section className="card space-y-4 p-6">
-        <h2 className="text-xl font-semibold">Windows (recommended)</h2>
-        <p className="text-text-muted">
-          Until the signed binary is published, you can run the agent
-          from source. Both flows produce identical results.
-        </p>
-        <div className="space-y-3">
-          <h3 className="font-semibold">Run from source</h3>
-          <pre className="overflow-x-auto rounded bg-bg-elevated p-4 text-sm">
-            <code>{`# 1. Clone the repo
-git clone https://github.com/ReSpOnSeSC2/sc2tools.git
+      <div className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,360px)]">
+        <section className="space-y-4">
+          <OsTabs active={os} onChange={setActive} detected={detected} />
+          <DownloadCard os={os} />
+          <ManualInstall />
+        </section>
+
+        <aside className="space-y-4">
+          <RecapCard />
+          <SysReqCard />
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function OsTabs({
+  active,
+  onChange,
+  detected,
+}: {
+  active: DetectedOS;
+  onChange: (next: DetectedOS) => void;
+  detected: DetectedOS;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Choose your operating system"
+      className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-bg-subtle/40 p-1"
+    >
+      {OS_TABS.map((t) => {
+        const isActive = active === t.id;
+        const isDetected = detected === t.id;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(t.id)}
+            className={[
+              "inline-flex h-9 min-w-[88px] items-center justify-center gap-1.5 rounded-md px-3 text-caption font-medium transition-colors",
+              isActive
+                ? "bg-bg-surface text-text shadow-[var(--shadow-card)]"
+                : "text-text-muted hover:bg-bg-elevated hover:text-text",
+            ].join(" ")}
+          >
+            {t.label}
+            {isDetected && !isActive ? (
+              <span className="rounded-full bg-accent-cyan/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent-cyan">
+                detected
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ManualInstall() {
+  return (
+    <details className="group rounded-xl border border-border bg-bg-surface">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 sm:p-5">
+        <div className="min-w-0">
+          <h3 className="text-body-lg font-semibold text-text">
+            Manual install + verification
+          </h3>
+          <p className="text-caption text-text-muted">
+            Run from source or verify the signed binary by hand.
+          </p>
+        </div>
+        <ChevronRight
+          className="h-5 w-5 flex-shrink-0 text-text-muted group-open:hidden"
+          aria-hidden
+        />
+        <ChevronDown
+          className="hidden h-5 w-5 flex-shrink-0 text-text-muted group-open:block"
+          aria-hidden
+        />
+      </summary>
+      <div className="space-y-4 border-t border-border px-4 py-4 sm:px-5 sm:py-5">
+        <div className="space-y-2">
+          <h4 className="text-caption font-semibold uppercase tracking-wider text-text-muted">
+            Run from source
+          </h4>
+          <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">
+            {`git clone https://github.com/ReSpOnSeSC2/sc2tools.git
 cd sc2tools/apps/agent
-
-# 2. Install Python deps
 py -m pip install -r requirements.txt
-
-# 3. Configure
-copy .env.example .env
-# Edit .env and set SC2TOOLS_API_BASE to your API URL
-
-# 4. Run
-py -m sc2tools_agent`}</code>
+py -m sc2tools_agent`}
           </pre>
         </div>
-        <p className="text-text-muted">
-          On first run the agent prints a 6-digit pairing code. Enter it
-          on the <Link href="/devices">Devices</Link> page to bind this
-          machine to your account.
-        </p>
-      </section>
+        <div className="space-y-2">
+          <h4 className="text-caption font-semibold uppercase tracking-wider text-text-muted">
+            Verify the SHA-256
+          </h4>
+          <p className="text-caption text-text-muted">
+            On Windows PowerShell:
+          </p>
+          <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">
+            {`Get-FileHash .\\sc2tools-agent.exe -Algorithm SHA256`}
+          </pre>
+          <p className="text-caption text-text-muted">On macOS / Linux:</p>
+          <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">
+            {`shasum -a 256 sc2tools-agent`}
+          </pre>
+          <p className="text-caption text-text-muted">
+            The output should match the SHA-256 the download card
+            shows above.
+          </p>
+        </div>
+      </div>
+    </details>
+  );
+}
 
-      <section className="card space-y-3 p-6">
-        <h2 className="text-xl font-semibold">What does the agent do?</h2>
-        <ul className="list-disc space-y-1 pl-6 text-text-muted">
-          <li>Watches your StarCraft II Replays folder.</li>
-          <li>
-            Parses each new <code>.SC2Replay</code> with sc2reader
-            (~150–500&nbsp;ms per replay).
-          </li>
-          <li>
-            Runs the macro engine (with the chrono fix) to produce SQ,
-            APM, and a per-build aggregate.
-          </li>
-          <li>
-            Uploads the resulting JSON record to your account. The replay
-            file itself never leaves your machine.
-          </li>
-        </ul>
-      </section>
+function RecapCard() {
+  return (
+    <div className="space-y-2 rounded-xl border border-border bg-bg-surface p-4 sm:p-5">
+      <header className="flex items-center gap-2">
+        <Activity
+          className="h-5 w-5 text-accent-cyan"
+          aria-hidden
+        />
+        <h3 className="text-body-lg font-semibold text-text">
+          What it does
+        </h3>
+      </header>
+      <ul role="list" className="ml-5 list-disc space-y-1 text-caption text-text-muted">
+        <li>Watches your StarCraft II replay folder for new files.</li>
+        <li>
+          Parses each new <code>.SC2Replay</code> with sc2reader (~150–500&nbsp;ms
+          per replay).
+        </li>
+        <li>
+          Uploads the parsed JSON record to your account. The replay
+          file itself never leaves your machine.
+        </li>
+      </ul>
+      <p className="pt-1 text-caption text-text-dim">
+        Already have an account?{" "}
+        <Link
+          href="/devices"
+          className="text-accent-cyan underline-offset-2 hover:underline"
+        >
+          Pair a new machine →
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+function SysReqCard() {
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-bg-surface p-4 sm:p-5">
+      <header className="flex items-center gap-2">
+        <ShieldCheck
+          className="h-5 w-5 text-accent-cyan"
+          aria-hidden
+        />
+        <h3 className="text-body-lg font-semibold text-text">
+          System requirements
+        </h3>
+      </header>
+      <dl className="space-y-2 text-caption">
+        {SYS_REQUIREMENTS.map((r) => (
+          <div key={r.heading}>
+            <dt className="font-semibold text-text">{r.heading}</dt>
+            <dd className="text-text-muted">{r.body}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
