@@ -1,27 +1,137 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 
-type CardProps = {
-  title?: ReactNode;
-  right?: ReactNode;
-  children: ReactNode;
-  className?: string;
+/**
+ * Card primitive — surface container with variants.
+ *
+ * Two usage shapes are supported:
+ *   1. Legacy props ({ title, right }) — used by analyzer pages.
+ *   2. Composed (Card.Header / Card.Body / Card.Footer) — preferred
+ *      for new code so the structure is explicit.
+ */
+
+export type CardVariant = "default" | "elevated" | "feature" | "interactive";
+
+const VARIANT_CLASSES: Record<CardVariant, string> = {
+  default: "bg-bg-surface border border-border",
+  elevated:
+    "bg-bg-surface border border-border shadow-[var(--shadow-card)]",
+  feature:
+    "bg-bg-surface border border-accent/30 shadow-halo-cyan",
+  interactive:
+    "bg-bg-surface border border-border hover:border-border-strong hover:bg-bg-elevated transition-colors cursor-pointer",
 };
 
-export function Card({ title, right, children, className = "" }: CardProps) {
+interface CardBaseProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
+  variant?: CardVariant;
+  /** Legacy: render header inline. Prefer composing <Card.Header>. */
+  title?: ReactNode;
+  /** Legacy: right slot in inline header. */
+  right?: ReactNode;
+  /** Legacy: when both title/right omitted, body still gets default padding. */
+  padded?: boolean;
+}
+
+export function Card({
+  variant = "default",
+  title,
+  right,
+  padded = true,
+  className = "",
+  children,
+  ...rest
+}: CardBaseProps) {
+  const hasInlineHeader = title !== undefined || right !== undefined;
   return (
-    <section className={`card overflow-hidden ${className}`}>
-      {(title || right) && (
-        <header className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h3 className="text-sm font-semibold text-text">{title}</h3>
-          {right ? <div>{right}</div> : null}
+    <section
+      className={[
+        "overflow-hidden rounded-xl",
+        VARIANT_CLASSES[variant],
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      {...rest}
+    >
+      {hasInlineHeader ? (
+        <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+          {title ? (
+            <h3 className="text-caption font-semibold text-text">{title}</h3>
+          ) : (
+            <span />
+          )}
+          {right ? <div className="flex items-center gap-2">{right}</div> : null}
         </header>
+      ) : null}
+      {hasInlineHeader || padded ? (
+        <div className={hasInlineHeader ? "p-4" : padded ? "p-4" : ""}>
+          {children}
+        </div>
+      ) : (
+        children
       )}
-      <div className="p-4">{children}</div>
     </section>
   );
 }
+
+Card.Header = function CardHeader({
+  className = "",
+  children,
+  ...rest
+}: HTMLAttributes<HTMLElement>) {
+  return (
+    <header
+      className={[
+        "flex items-center justify-between gap-3 border-b border-border px-4 py-3",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      {...rest}
+    >
+      {children}
+    </header>
+  );
+};
+
+Card.Body = function CardBody({
+  className = "",
+  children,
+  ...rest
+}: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={["p-4", className].filter(Boolean).join(" ")} {...rest}>
+      {children}
+    </div>
+  );
+};
+
+Card.Footer = function CardFooter({
+  className = "",
+  children,
+  ...rest
+}: HTMLAttributes<HTMLElement>) {
+  return (
+    <footer
+      className={[
+        "flex items-center justify-end gap-2 border-t border-border px-4 py-3",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      {...rest}
+    >
+      {children}
+    </footer>
+  );
+};
+
+/* ============================================================
+ * Legacy helper exports — kept so existing analyzer pages keep
+ * compiling. New code should import EmptyState/Stat/Skeleton from
+ * their dedicated primitive modules.
+ * ============================================================ */
 
 export function Stat({
   label,
@@ -89,11 +199,8 @@ export function WrBar({
   return (
     <div className="h-1.5 w-full overflow-hidden rounded bg-bg-elevated">
       <div
-        className="h-full"
-        style={{
-          width: `${wp}%`,
-          background: "#3ec07a",
-        }}
+        className="h-full bg-success"
+        style={{ width: `${wp}%` }}
       />
     </div>
   );

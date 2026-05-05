@@ -2,40 +2,208 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ============================================================
+ * Design tokens — light + dark themes
+ *
+ * Theme is selected by data-theme on <html>:
+ *   <html data-theme="dark">  → dark palette (default)
+ *   <html data-theme="light"> → light palette
+ *
+ * Colors are stored as space-separated RGB channels so Tailwind's
+ * opacity modifiers (bg-accent/30, text-text-muted/80, etc.) work.
+ * Tailwind reads them through the `rgb(var(--…) / <alpha-value>)`
+ * pattern in tailwind.config.ts.
+ *
+ * The <head> no-flash script in app/layout.tsx reads
+ * localStorage('sc2tools.theme') and sets data-theme before paint.
+ * ============================================================ */
+
+:root[data-theme="dark"],
+:root:not([data-theme]) {
   color-scheme: dark;
+
+  --bg: 11 13 18;             /* #0b0d12 */
+  --bg-surface: 17 20 27;     /* #11141b */
+  --bg-elevated: 22 26 35;    /* #161a23 */
+  --bg-subtle: 28 34 48;      /* #1c2230 */
+
+  --text: 230 232 238;        /* #e6e8ee */
+  --text-muted: 154 163 178;  /* #9aa3b2 */
+  --text-dim: 107 114 128;    /* #6b7280 */
+
+  --accent: 124 140 255;      /* #7c8cff */
+  --accent-hover: 148 160 255;/* #94a0ff */
+  --accent-cyan: 62 192 199;  /* #3ec0c7 */
+
+  --success: 62 192 122;      /* #3ec07a */
+  --warning: 230 180 80;      /* #e6b450 */
+  --danger: 255 107 107;      /* #ff6b6b */
+
+  --border: 31 37 51;         /* #1f2533 */
+  --border-strong: 42 49 66;  /* #2a3142 */
+
+  --halo-cyan: rgba(62, 192, 199, 0.18);
+  --halo-accent: rgba(124, 140, 255, 0.18);
+
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.02), 0 8px 24px rgba(0, 0, 0, 0.32);
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: 246 247 251;          /* #f6f7fb */
+  --bg-surface: 255 255 255;  /* #ffffff */
+  --bg-elevated: 250 251 255; /* #fafbff */
+  --bg-subtle: 238 240 247;   /* #eef0f7 */
+
+  --text: 14 17 24;           /* #0e1118 */
+  --text-muted: 90 99 120;    /* #5a6378 */
+  --text-dim: 128 137 160;    /* #8089a0 */
+
+  --accent: 91 109 255;       /* #5b6dff */
+  --accent-hover: 68 88 240;  /* #4458f0 */
+  --accent-cyan: 30 160 168;  /* #1ea0a8 */
+
+  --success: 34 163 90;       /* #22a35a */
+  --warning: 183 130 36;      /* #b78224 */
+  --danger: 214 73 78;        /* #d6494e */
+
+  --border: 223 227 238;      /* #dfe3ee */
+  --border-strong: 199 206 224;/* #c7cee0 */
+
+  --halo-cyan: rgba(30, 160, 168, 0.14);
+  --halo-accent: rgba(91, 109, 255, 0.14);
+
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.6), 0 6px 20px rgba(15, 23, 42, 0.08);
+}
+
+/* ============================================================
+ * Base element styles
+ * ============================================================ */
 html,
 body {
-  background: theme("colors.bg.DEFAULT");
-  color: theme("colors.text.DEFAULT");
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
   font-family: theme("fontFamily.sans");
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 a {
-  color: theme("colors.accent.DEFAULT");
+  color: rgb(var(--accent));
 }
 a:hover {
-  color: theme("colors.accent.hover");
+  color: rgb(var(--accent-hover));
 }
 
 *:focus-visible {
-  outline: 2px solid theme("colors.accent.DEFAULT");
+  outline: 2px solid rgb(var(--accent));
   outline-offset: 2px;
   border-radius: 4px;
 }
 
+::selection {
+  background: rgb(var(--accent));
+  color: rgb(var(--bg));
+}
+
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
+/* ============================================================
+ * Halos + glows — brand cyan / accent radial backdrops
+ * ============================================================ */
+.halo-cyan {
+  box-shadow: 0 0 60px var(--halo-cyan);
+}
+.halo-accent {
+  box-shadow: 0 0 60px var(--halo-accent);
+}
+.glow-text-cyan {
+  color: rgb(var(--accent-cyan));
+  text-shadow:
+    0 0 18px var(--halo-cyan),
+    0 0 2px rgba(255, 255, 255, 0.5);
+}
+
+.gradient-backdrop {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, var(--halo-cyan) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 100%, var(--halo-accent) 0%, transparent 60%),
+    rgb(var(--bg));
+}
+
+/* ============================================================
+ * Typography utilities (mirror tailwind.config fontSize scale)
+ * ============================================================ */
+.t-display-xl {
+  font-size: 64px;
+  line-height: 72px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.t-display-lg {
+  font-size: 48px;
+  line-height: 56px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.t-h1 {
+  font-size: 36px;
+  line-height: 44px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.t-h2 {
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.t-h3 {
+  font-size: 22px;
+  line-height: 30px;
+  font-weight: 600;
+}
+.t-h4 {
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
+}
+.t-body-lg {
+  font-size: 17px;
+  line-height: 26px;
+}
+.t-body {
+  font-size: 15px;
+  line-height: 24px;
+}
+.t-caption {
+  font-size: 13px;
+  line-height: 20px;
+}
+.t-mono {
+  font-family: theme("fontFamily.mono");
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* ============================================================
+ * Legacy aliases — keep so existing pages render unchanged while
+ * we migrate to the primitive library. Remove after Phase 17.
+ * ============================================================ */
 .card {
-  background: theme("colors.bg.surface");
-  border: 1px solid theme("colors.border.DEFAULT");
+  background: rgb(var(--bg-surface));
+  border: 1px solid rgb(var(--border));
   border-radius: 12px;
 }
 
@@ -45,34 +213,42 @@ a:hover {
   gap: 0.5rem;
   padding: 0.55rem 1rem;
   border-radius: 8px;
-  background: theme("colors.accent.DEFAULT");
-  color: theme("colors.bg.DEFAULT");
+  background: rgb(var(--accent));
+  color: rgb(var(--bg));
   font-weight: 600;
   border: none;
   cursor: pointer;
   transition: background 120ms ease;
 }
 .btn:hover {
-  background: theme("colors.accent.hover");
+  background: rgb(var(--accent-hover));
 }
 .btn-secondary {
-  background: theme("colors.bg.elevated");
-  color: theme("colors.text.DEFAULT");
-  border: 1px solid theme("colors.border.DEFAULT");
+  background: rgb(var(--bg-elevated));
+  color: rgb(var(--text));
+  border: 1px solid rgb(var(--border));
+}
+.btn-secondary:hover {
+  background: rgb(var(--bg-subtle));
+  color: rgb(var(--text));
 }
 .btn-danger {
-  background: theme("colors.danger");
-  color: theme("colors.bg.DEFAULT");
+  background: rgb(var(--danger));
+  color: #ffffff;
 }
 
 .input {
-  background: theme("colors.bg.elevated");
-  border: 1px solid theme("colors.border.DEFAULT");
+  background: rgb(var(--bg-elevated));
+  border: 1px solid rgb(var(--border));
   border-radius: 8px;
   padding: 0.55rem 0.75rem;
-  color: theme("colors.text.DEFAULT");
+  color: rgb(var(--text));
   width: 100%;
 }
 .input:focus {
-  border-color: theme("colors.accent.DEFAULT");
+  border-color: rgb(var(--accent));
+  outline: none;
+}
+.input::placeholder {
+  color: rgb(var(--text-dim));
 }
