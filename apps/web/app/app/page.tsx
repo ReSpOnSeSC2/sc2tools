@@ -1,8 +1,11 @@
+import Link from "next/link";
+import { Download } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { AnalyzerShell } from "@/components/analyzer/AnalyzerShell";
-import { SyncStatus } from "@/components/SyncStatus";
+import { DashboardKpiStrip } from "@/components/analyzer/DashboardKpiStrip";
 import { NoGamesYet } from "@/components/analyzer/EmptyStates";
-import Link from "next/link";
+import { SyncStatus } from "@/components/SyncStatus";
+import { Card } from "@/components/ui/Card";
 
 type Me = {
   userId: string;
@@ -15,14 +18,14 @@ export default async function AnalyzerHome() {
 
   if (!meRes.ok) {
     return (
-      <div className="card p-6">
-        <h1 className="mb-2 text-2xl font-semibold">Analyzer</h1>
+      <Card padded>
+        <h1 className="mb-2 text-h2 font-semibold">Analyzer</h1>
         <p className="text-danger">
           Could not reach the API ({meRes.status} {meRes.error}). Check
           NEXT_PUBLIC_API_BASE in your env, and that the API server is
           running.
         </p>
-      </div>
+      </Card>
     );
   }
 
@@ -30,21 +33,32 @@ export default async function AnalyzerHome() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Analyzer</h1>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-h1 font-semibold">Analyzer</h1>
           <SyncStatus
             total={meRes.data.games.total}
             latest={meRes.data.games.latest}
             userId={meRes.data.userId}
           />
         </div>
-        <Link href="/download" className="btn btn-secondary">
+        <Link
+          href="/download"
+          className="inline-flex min-h-[44px] items-center gap-2 self-start rounded-lg border border-border bg-bg-elevated px-4 py-2 text-body font-semibold text-text transition-colors hover:bg-bg-subtle hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:self-auto"
+        >
+          <Download className="h-4 w-4" aria-hidden />
           Get the agent
         </Link>
       </header>
 
-      {noGames ? <NoGamesYet /> : <AnalyzerShell />}
+      {noGames ? (
+        <NoGamesYet />
+      ) : (
+        <>
+          <DashboardKpiStrip totalGames={meRes.data.games.total} />
+          <AnalyzerShell />
+        </>
+      )}
     </div>
   );
 }

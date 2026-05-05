@@ -22,11 +22,13 @@ type ConnState =
  * `games:changed` so it ticks without a page refresh.
  *
  * Connection UX:
- *  - On first connect: green dot, no extra text.
- *  - On disconnect: dot goes amber and we show "reconnecting…" once
- *    we've passed the 3rd retry — one or two transient blips are
- *    invisible, but a sustained loss is surfaced.
- *  - After several attempts: dot goes red with "offline" label.
+ *  - Connected: cyan dot + pulse — taps the brand glow.
+ *  - Polling/connecting: dim grey dot.
+ *  - Reconnecting (>=3 attempts): warning amber.
+ *  - Offline: danger red, shown after several attempts.
+ *
+ * All colors flow through CSS variables so the bar reads cleanly in
+ * both light and dark themes.
  */
 export function SyncStatus({ total: initialTotal, latest, userId }: Props) {
   const { getToken } = useAuth();
@@ -76,39 +78,80 @@ export function SyncStatus({ total: initialTotal, latest, userId }: Props) {
     };
   }, [getToken, userId]);
 
-  const dot =
-    conn.kind === "connected"
-      ? { color: "var(--success, #3ec07a)", label: "live" }
-      : conn.kind === "reconnecting"
-        ? { color: "#e6b450", label: `reconnecting (${conn.attempts})` }
-        : conn.kind === "offline"
-          ? { color: "#ff6b6b", label: "offline" }
-          : { color: "#6b7280", label: "connecting…" };
-
-  const showHint = conn.kind === "reconnecting" && conn.attempts >= 3;
-  const showOffline = conn.kind === "offline";
+  const visual = visualForState(conn);
 
   return (
-    <p className="text-sm text-text-muted">
-      <span className="font-mono text-text">{total}</span>{" "}
-      games synced
-      {latestAt ? ` · last ${formatRelative(latestAt)}` : ""}
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-muted">
       <span
-        className="ml-2 inline-block h-2 w-2 rounded-full align-middle"
-        style={{ background: dot.color }}
-        aria-label={dot.label}
-        title={dot.label}
-      />
-      {showHint && (
-        <span className="ml-2 text-xs text-warning">
-          reconnecting… (try {conn.attempts})
+        role="status"
+        aria-live="polite"
+        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-bg-elevated px-2 py-0.5 font-medium"
+      >
+        <span
+          aria-hidden
+          className={[
+            "inline-block h-2 w-2 rounded-full",
+            visual.dotClass,
+            visual.pulse ? "motion-safe:animate-pulse" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        />
+        <span className={visual.textClass}>{visual.label}</span>
+      </span>
+      <span>
+        <span className="font-mono tabular-nums text-text">{total}</span> games
+        synced
+        {latestAt ? ` · last ${formatRelative(latestAt)}` : ""}
+      </span>
+      {conn.kind === "reconnecting" && conn.attempts >= 3 ? (
+        <span className="text-caption text-warning">
+          retry {conn.attempts}…
         </span>
-      )}
-      {showOffline && (
-        <span className="ml-2 text-xs text-danger">offline — click to retry</span>
-      )}
+      ) : null}
     </p>
   );
+}
+
+type Visual = {
+  label: string;
+  dotClass: string;
+  textClass: string;
+  pulse: boolean;
+};
+
+function visualForState(conn: ConnState): Visual {
+  switch (conn.kind) {
+    case "connected":
+      return {
+        label: "Live",
+        dotClass: "bg-accent-cyan",
+        textClass: "text-accent-cyan",
+        pulse: true,
+      };
+    case "reconnecting":
+      return {
+        label: "Reconnecting",
+        dotClass: "bg-warning",
+        textClass: "text-warning",
+        pulse: true,
+      };
+    case "offline":
+      return {
+        label: "Offline",
+        dotClass: "bg-danger",
+        textClass: "text-danger",
+        pulse: false,
+      };
+    case "connecting":
+    default:
+      return {
+        label: "Polling",
+        dotClass: "bg-text-dim",
+        textClass: "text-text-dim",
+        pulse: false,
+      };
+  }
 }
 
 function formatRelative(iso: string): string {

@@ -309,9 +309,8 @@ export function StrategiesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <h2 className="text-base font-semibold">Strategies</h2>
-        <div className="ml-auto inline-flex overflow-hidden rounded border border-border">
+      <div className="flex items-center justify-end gap-3">
+        <div className="inline-flex overflow-hidden rounded border border-border">
           {(["opp", "bvs"] as const).map((v) => (
             <button
               key={v}

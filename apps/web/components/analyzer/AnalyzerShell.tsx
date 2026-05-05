@@ -1,295 +1,308 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  Activity,
+  Brain,
+  ChevronDown,
+  Fingerprint,
+  Layers,
+  Map as MapIcon,
+  MapPin,
+  Settings as SettingsIcon,
+  Sparkles,
+  Swords,
+  TrendingUp,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { AnalyzerProvider } from "@/components/AnalyzerProvider";
-import { OpponentsTab } from "./OpponentsTab";
-import { StrategiesTab } from "./StrategiesTab";
-import { TrendsTab } from "./TrendsTab";
+import { Modal } from "@/components/ui/Modal";
+import { Section } from "@/components/ui/Section";
+import { Tabs } from "@/components/ui/Tabs";
+import { ActivityCharts } from "./charts/ActivityCharts";
 import { BattlefieldTab } from "./BattlefieldTab";
 import { BuildsTab } from "./BuildsTab";
+import { DoctorBanner } from "./DoctorBanner";
+import { MapIntelTab } from "./MapIntelTab";
 import { MlCoreTab } from "./MlCoreTab";
 import { MlPredictTab } from "./MlPredictTab";
 import { OpponentDnaGrid } from "./OpponentDnaGrid";
-import { MapIntelTab } from "./MapIntelTab";
-import { ActivityCharts } from "./charts/ActivityCharts";
-import { DoctorBanner } from "./DoctorBanner";
-import { StrategyTendencyChart } from "./StrategyTendencyChart";
-import type { StrategyEntry } from "./StrategyTendencyChart";
-import { PredictedStrategiesList } from "./PredictedStrategiesList";
-import type { Prediction } from "./PredictedStrategiesList";
-import { Last5GamesTimeline } from "./Last5GamesTimeline";
-import type { ProfileGame } from "./Last5GamesTimeline";
-import { AllGamesTable } from "./AllGamesTable";
-import { MedianTimingsGrid } from "./MedianTimingsGrid";
-import type { MatchupTimings, TimingInfo } from "./MedianTimingsGrid";
+import { OpponentsTab } from "./OpponentsTab";
+import { ProfileView } from "./ProfileView";
+import { StrategiesTab } from "./StrategiesTab";
+import { TrendsTab } from "./TrendsTab";
 
-const TABS = [
-  { id: "opponents", label: "Opponents" },
-  { id: "strategies", label: "Strategies" },
-  { id: "trends", label: "Trends" },
-  { id: "battlefield", label: "Battlefield" },
-  { id: "builds", label: "Builds" },
-  { id: "dna", label: "DNA" },
-  { id: "map-intel", label: "Map intel" },
-  { id: "activity", label: "Activity" },
-  { id: "ml-core", label: "ML core" },
-  { id: "ml-predict", label: "ML predict" },
+type TabId =
+  | "opponents"
+  | "strategies"
+  | "trends"
+  | "battlefield"
+  | "builds"
+  | "dna"
+  | "map-intel"
+  | "activity"
+  | "ml-core"
+  | "ml-predict";
+
+type TabDef = {
+  id: TabId;
+  label: string;
+  icon: LucideIcon;
+  description?: string;
+};
+
+const TABS: readonly TabDef[] = [
+  { id: "opponents", label: "Opponents", icon: Users, description: "Drill into the players you've faced." },
+  { id: "strategies", label: "Strategies", icon: Swords, description: "Build vs strategy and per-strategy results." },
+  { id: "trends", label: "Trends", icon: TrendingUp, description: "Win-rate trajectory across periods." },
+  { id: "battlefield", label: "Battlefield", icon: MapIcon, description: "Maps and matchup performance." },
+  { id: "builds", label: "Builds", icon: Layers, description: "Your builds, performance, and editor." },
+  { id: "dna", label: "DNA", icon: Fingerprint, description: "Opponent timing fingerprint grid." },
+  { id: "map-intel", label: "Map intel", icon: MapPin, description: "Spatial heatmaps for known maps." },
+  { id: "activity", label: "Activity", icon: Activity, description: "Per-game charts of resources, army, chrono." },
+  { id: "ml-core", label: "ML core", icon: Brain, description: "Train and inspect the local model." },
+  { id: "ml-predict", label: "ML predict", icon: Sparkles, description: "Live predictions from the trained model." },
 ] as const;
-
-type TabId = (typeof TABS)[number]["id"];
 
 export function AnalyzerShell() {
   const [tab, setTab] = useState<TabId>("opponents");
   const [profileId, setProfileId] = useState<string | null>(null);
+
+  const onTabChange = (next: string) => {
+    setTab(next as TabId);
+    setProfileId(null);
+  };
+
+  const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
 
   return (
     <AnalyzerProvider>
       <div className="space-y-5">
         <DoctorBanner />
 
-        <nav className="flex flex-wrap items-center gap-1 border-b border-border">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => {
-                setTab(t.id);
-                setProfileId(null);
-              }}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm transition ${
-                tab === t.id
-                  ? "border-accent text-accent"
-                  : "border-transparent text-text-muted hover:text-text"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-          <Link
-            href="/settings"
-            className="ml-auto px-3 py-2 text-xs uppercase tracking-wide text-text-muted hover:text-text"
-          >
-            Settings →
-          </Link>
-        </nav>
+        <div className="space-y-4 lg:grid lg:grid-cols-[220px_1fr] lg:gap-6 lg:space-y-0">
+          <MobileDrawerNav value={tab} onChange={onTabChange} active={activeTab} />
+          <TabletScrollNav value={tab} onChange={onTabChange} />
+          <DesktopSidebarNav value={tab} onChange={onTabChange} />
 
-        <div>
-          {tab === "opponents" &&
-            (profileId ? (
-              <ProfileView pulseId={profileId} onBack={() => setProfileId(null)} />
-            ) : (
-              <OpponentsTab onOpen={(id) => setProfileId(id)} />
-            ))}
-          {tab === "strategies" && <StrategiesTab />}
-          {tab === "trends" && <TrendsTab />}
-          {tab === "battlefield" && <BattlefieldTab />}
-          {tab === "builds" && <BuildsTab />}
-          {tab === "dna" && <OpponentDnaGrid />}
-          {tab === "map-intel" && <MapIntelTab />}
-          {tab === "activity" && <ActivityCharts />}
-          {tab === "ml-core" && <MlCoreTab />}
-          {tab === "ml-predict" && <MlPredictTab />}
+          <div className="min-w-0">
+            <Section
+              title={
+                <span className="inline-flex items-center gap-2">
+                  <activeTab.icon
+                    className="h-5 w-5 text-accent-cyan"
+                    aria-hidden
+                  />
+                  {activeTab.label}
+                </span>
+              }
+              description={activeTab.description}
+              actions={
+                <Link
+                  href="/settings"
+                  className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md px-3 py-2 text-caption uppercase tracking-wider text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                >
+                  <SettingsIcon className="h-3.5 w-3.5" aria-hidden />
+                  Settings
+                </Link>
+              }
+            >
+              <TabPanel
+                tab={tab}
+                profileId={profileId}
+                setProfileId={setProfileId}
+              />
+            </Section>
+          </div>
         </div>
       </div>
     </AnalyzerProvider>
   );
 }
 
-function ProfileView({
-  pulseId,
-  onBack,
+function MobileDrawerNav({
+  value,
+  onChange,
+  active,
 }: {
-  pulseId: string;
-  onBack: () => void;
+  value: TabId;
+  onChange: (next: string) => void;
+  active: TabDef;
 }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (open) setOpen(false);
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <div className="space-y-3">
+    <div className="sm:hidden">
       <button
         type="button"
-        onClick={onBack}
-        className="text-xs uppercase tracking-wider text-text-muted hover:text-text"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2 text-left transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
-        ← back
+        <span className="inline-flex items-center gap-2 text-body font-medium text-text">
+          <active.icon
+            className="h-4 w-4 flex-shrink-0 text-accent-cyan"
+            aria-hidden
+          />
+          {active.label}
+        </span>
+        <ChevronDown
+          className="h-4 w-4 flex-shrink-0 text-text-muted"
+          aria-hidden
+        />
       </button>
-      <ProfileBody pulseId={pulseId} />
+
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Analyzer sections"
+        description="Pick a section to drill into."
+        size="sm"
+      >
+        <ul className="-mx-2 flex flex-col gap-0.5">
+          {TABS.map(({ id, label, icon: Icon, description }) => {
+            const selected = id === value;
+            return (
+              <li key={id}>
+                <button
+                  type="button"
+                  onClick={() => onChange(id)}
+                  aria-pressed={selected}
+                  className={[
+                    "flex min-h-[44px] w-full items-start gap-2 rounded-md px-3 py-2 text-left",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+                    selected
+                      ? "bg-accent/15 text-accent"
+                      : "text-text-muted hover:bg-bg-elevated hover:text-text",
+                  ].join(" ")}
+                >
+                  <Icon
+                    className={[
+                      "mt-0.5 h-4 w-4 flex-shrink-0",
+                      selected ? "text-accent" : "text-accent-cyan",
+                    ].join(" ")}
+                    aria-hidden
+                  />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-body font-medium">{label}</span>
+                    {description ? (
+                      <span className="text-caption text-text-dim">
+                        {description}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </Modal>
     </div>
   );
 }
 
-import { useApi } from "@/lib/clientApi";
-import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
-import { pct1, wrColor } from "@/lib/format";
-
-type OpponentProfileResp = {
-  pulseId?: string;
-  name?: string;
-  displayNameSample?: string;
-  totals?: { wins: number; losses: number; total: number; winRate: number };
-  byMap?: Record<string, { wins: number; losses: number }>;
-  byStrategy?: Record<string, { wins: number; losses: number }>;
-  topStrategies?: StrategyEntry[];
-  predictedStrategies?: Prediction[];
-  myRace?: string;
-  oppRaceModal?: string;
-  matchupLabel?: string;
-  matchupCounts?: Record<string, number>;
-  matchupTimings?: Record<string, MatchupTimings>;
-  matchupTimingsLegacy?: Record<string, MatchupTimings>;
-  medianTimings?: Record<string, TimingInfo>;
-  medianTimingsLegacy?: Record<string, TimingInfo>;
-  medianTimingsOrder?: string[];
-  last5Games?: ProfileGame[];
-  games?: ProfileGame[];
-};
-
-function ProfileBody({ pulseId }: { pulseId: string }) {
-  const { data, isLoading } = useApi<OpponentProfileResp>(
-    `/v1/opponents/${encodeURIComponent(pulseId)}`,
-  );
-  if (isLoading) return <Skeleton rows={6} />;
-  if (!data) return <EmptyState title="Opponent not found" sub={pulseId} />;
-  const t = data.totals || { wins: 0, losses: 0, total: 0, winRate: 0 };
-  const publicHref = `/community/opponents/${encodeURIComponent(pulseId)}`;
-  const byMap = Object.entries(data.byMap || {})
-    .map(([name, v]) => ({
-      name,
-      wins: v.wins,
-      losses: v.losses,
-      total: v.wins + v.losses,
-      winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
-    }))
-    .sort((a, b) => b.total - a.total);
-  const byStrategy = Object.entries(data.byStrategy || {})
-    .map(([name, v]) => ({
-      name,
-      wins: v.wins,
-      losses: v.losses,
-      total: v.wins + v.losses,
-      winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
-    }))
-    .sort((a, b) => b.total - a.total);
-  const medianTimings = data.medianTimingsLegacy || {};
-  const medianTimingsOrder =
-    data.medianTimingsOrder && data.medianTimingsOrder.length
-      ? data.medianTimingsOrder
-      : Object.keys(medianTimings);
-  const matchupTimings = data.matchupTimingsLegacy || {};
-  const matchupCounts = data.matchupCounts || {};
-  const games = data.games || [];
-
+function TabletScrollNav({
+  value,
+  onChange,
+}: {
+  value: TabId;
+  onChange: (next: string) => void;
+}) {
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{data.name || "unnamed"}</h1>
-          <div className="font-mono text-xs text-text-dim">
-            Pulse ID {data.pulseId || pulseId}
-          </div>
-          <Link
-            href={publicHref}
-            className="text-xs text-accent hover:underline"
-          >
-            community profile →
-          </Link>
-        </div>
-        <div className="grid grid-cols-4 gap-3">
-          <Stat label="Games" value={t.total || 0} />
-          <Stat label="W" value={t.wins || 0} color="#3ec07a" />
-          <Stat label="L" value={t.losses || 0} color="#ff6b6b" />
-          <Stat
-            label="WR"
-            value={pct1(t.winRate)}
-            color={wrColor(t.winRate, t.total)}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        <Card title="By map">
-          {byMap.length === 0 ? (
-            <EmptyState sub="No maps yet" />
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {byMap.map((m) => (
-                <li key={m.name}>
-                  <div className="flex justify-between">
-                    <span>{m.name}</span>
-                    <span
-                      className="tabular-nums"
-                      style={{ color: wrColor(m.winRate, m.total) }}
-                    >
-                      {m.wins}-{m.losses} · {pct1(m.winRate)}
-                    </span>
-                  </div>
-                  <WrBar wins={m.wins} losses={m.losses} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-        <Card title="By strategy">
-          {byStrategy.length === 0 ? (
-            <EmptyState sub="No strategies tagged yet" />
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {byStrategy.map((s) => (
-                <li key={s.name}>
-                  <div className="flex justify-between">
-                    <span>{s.name}</span>
-                    <span
-                      className="tabular-nums"
-                      style={{ color: wrColor(s.winRate, s.total) }}
-                    >
-                      {s.wins}-{s.losses} · {pct1(s.winRate)}
-                    </span>
-                  </div>
-                  <WrBar wins={s.wins} losses={s.losses} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Card title="Build tendencies (top 5 strategies)">
-          <StrategyTendencyChart strategies={data.topStrategies || []} />
-        </Card>
-        <Card title="Likely strategies next">
-          <PredictedStrategiesList
-            predictions={data.predictedStrategies || []}
-          />
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Card
-          title={`Median key timings${data.matchupLabel ? ` — ${data.matchupLabel}` : ""}`}
+    <div className="hidden sm:block lg:hidden">
+      <Tabs value={value} onValueChange={onChange} orientation="horizontal">
+        <Tabs.List
+          ariaLabel="Analyzer sections"
+          className="!flex-nowrap"
         >
-          <MedianTimingsGrid
-            timings={medianTimings}
-            order={medianTimingsOrder}
-            matchupLabel={data.matchupLabel || ""}
-            matchupCounts={matchupCounts}
-            matchupTimings={matchupTimings}
-            opponentName={data.name || data.pulseId || pulseId}
-          />
-          <p className="mt-2 text-[10px] text-text-dim">
-            Opponent-tech cards come from the agent-uploaded opponent build
-            log; your-tech cards come from your build log. Click a card with
-            samples to see the contributing games. "-" means no samples in
-            this matchup.
-          </p>
-        </Card>
-        <Card title="Last 5 games">
-          <Last5GamesTimeline games={data.last5Games || []} />
-        </Card>
-      </div>
-
-      <Card title={`All games (${games.length}) · newest first`}>
-        <AllGamesTable games={games} />
-      </Card>
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <Tabs.Trigger key={id} value={id} className="!flex-shrink-0">
+              <span className="inline-flex items-center gap-1.5">
+                <Icon className="h-4 w-4 flex-shrink-0" aria-hidden />
+                <span>{label}</span>
+              </span>
+            </Tabs.Trigger>
+          ))}
+        </Tabs.List>
+      </Tabs>
     </div>
   );
+}
+
+function DesktopSidebarNav({
+  value,
+  onChange,
+}: {
+  value: TabId;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <aside className="hidden lg:block">
+      <Tabs
+        value={value}
+        onValueChange={onChange}
+        orientation="vertical"
+        className="!block"
+      >
+        <Tabs.List ariaLabel="Analyzer sections">
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <Tabs.Trigger key={id} value={id}>
+              <span className="flex items-center gap-2">
+                <Icon className="h-4 w-4 flex-shrink-0" aria-hidden />
+                <span className="truncate">{label}</span>
+              </span>
+            </Tabs.Trigger>
+          ))}
+        </Tabs.List>
+      </Tabs>
+    </aside>
+  );
+}
+
+function TabPanel({
+  tab,
+  profileId,
+  setProfileId,
+}: {
+  tab: TabId;
+  profileId: string | null;
+  setProfileId: (id: string | null) => void;
+}) {
+  switch (tab) {
+    case "opponents":
+      return profileId ? (
+        <ProfileView pulseId={profileId} onBack={() => setProfileId(null)} />
+      ) : (
+        <OpponentsTab onOpen={(id) => setProfileId(id)} />
+      );
+    case "strategies":
+      return <StrategiesTab />;
+    case "trends":
+      return <TrendsTab />;
+    case "battlefield":
+      return <BattlefieldTab />;
+    case "builds":
+      return <BuildsTab />;
+    case "dna":
+      return <OpponentDnaGrid />;
+    case "map-intel":
+      return <MapIntelTab />;
+    case "activity":
+      return <ActivityCharts />;
+    case "ml-core":
+      return <MlCoreTab />;
+    case "ml-predict":
+      return <MlPredictTab />;
+    default: {
+      const _exhaustive: never = tab;
+      return _exhaustive;
+    }
+  }
 }

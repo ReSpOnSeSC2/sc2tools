@@ -3,7 +3,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import { fmtDate, fmtMinutes, raceColour } from "@/lib/format";
+import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
+import { Icon } from "@/components/ui/Icon";
+import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import type { ProfileGame } from "./Last5GamesTimeline";
 
 type BuildOrderEvent = {
@@ -32,13 +35,29 @@ type BuildOrderResp = {
   opp_early_events: BuildOrderEvent[];
 };
 
+type GameRowData = ProfileGame & {
+  opp_race?: string;
+  macro_score?: number | null;
+};
+
+const SORT_COLS = {
+  date: "date",
+  map: "map",
+  race: "opp_race",
+  strategy: "opp_strategy",
+  build: "my_build",
+  macro: "macro_score",
+  length: "game_length",
+  result: "result",
+} as const;
+
 /**
  * All games table for the opponent profile. Rows are clickable: a
  * click expands the build-order timeline pulled from
  * `/v1/games/:id/build-order`. Both your-tech and opponent-tech
  * timelines are shown side-by-side when available.
  *
- * Mirrors the legacy `GamesTableWithBuildOrder` for `perspective="opponent"`.
+ * Mobile (<md): collapses to a stacked card list with the same data.
  */
 export function AllGamesTable({
   games,
@@ -51,6 +70,14 @@ export function AllGamesTable({
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const sort = useSort(SORT_COLS.date, "desc");
+
+  const sortedGames = useMemo(() => {
+    return sort.sortRows(
+      games as GameRowData[],
+      (row, col) => (row as unknown as Record<string, unknown>)[col],
+    );
+  }, [games, sort]);
 
   useEffect(() => {
     if (!targetGameId || !tableRef.current) return;
@@ -72,36 +99,51 @@ export function AllGamesTable({
     return <EmptyState title="No games yet" />;
   }
 
+  const toggle = (id: string | null | undefined) => {
+    if (!id) return;
+    setExpandedId((cur) => (cur === id ? null : id));
+  };
+
   return (
-    <div className="overflow-x-auto">
-      <table ref={tableRef} className="w-full text-sm">
-        <thead className="sticky top-0 z-10 bg-bg-elevated text-[11px] uppercase text-text-muted">
-          <tr>
-            <th className="w-6 px-2 py-1 text-left"></th>
-            <th className="px-2 py-1 text-left">Date</th>
-            <th className="px-2 py-1 text-left">Map</th>
-            <th className="px-2 py-1 text-left">Race</th>
-            <th className="px-2 py-1 text-left">Strategy</th>
-            <th className="px-2 py-1 text-left">My Build</th>
-            <th className="px-2 py-1 text-right">Macro</th>
-            <th className="px-2 py-1 text-right">Length</th>
-            <th className="px-2 py-1 text-right">Result</th>
-          </tr>
-        </thead>
-        <tbody>
-          {games.map((g, i) => (
-            <GameRow
-              key={g.id || `_idx_${i}`}
-              game={g}
-              expanded={!!g.id && expandedId === g.id}
-              onToggle={() => {
-                if (!g.id) return;
-                setExpandedId((cur) => (cur === g.id ? null : g.id || null));
-              }}
-            />
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      <div className="hidden overflow-x-auto md:block">
+        <table ref={tableRef} className="w-full text-sm">
+          <thead className="sticky top-0 z-10 bg-bg-elevated text-[11px] uppercase text-text-muted">
+            <tr>
+              <th className="w-6 px-2 py-1 text-left" aria-hidden></th>
+              <SortableTh col={SORT_COLS.date} label="Date" {...sort} />
+              <SortableTh col={SORT_COLS.map} label="Map" {...sort} />
+              <SortableTh col={SORT_COLS.race} label="Race" {...sort} />
+              <SortableTh col={SORT_COLS.strategy} label="Strategy" {...sort} />
+              <SortableTh col={SORT_COLS.build} label="My Build" {...sort} />
+              <SortableTh col={SORT_COLS.macro} label="Macro" {...sort} align="right" />
+              <SortableTh col={SORT_COLS.length} label="Length" {...sort} align="right" />
+              <SortableTh col={SORT_COLS.result} label="Result" {...sort} align="right" />
+            </tr>
+          </thead>
+          <tbody>
+            {sortedGames.map((g, i) => (
+              <GameRow
+                key={g.id || `_idx_${i}`}
+                game={g}
+                expanded={!!g.id && expandedId === g.id}
+                onToggle={() => toggle(g.id)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <ul className="space-y-2 md:hidden">
+        {sortedGames.map((g, i) => (
+          <GameMobileCard
+            key={g.id || `_idx_${i}`}
+            game={g}
+            expanded={!!g.id && expandedId === g.id}
+            onToggle={() => toggle(g.id)}
+          />
+        ))}
+      </ul>
     </div>
   );
 }
@@ -111,13 +153,142 @@ function GameRow({
   expanded,
   onToggle,
 }: {
-  game: ProfileGame & { opp_race?: string; macro_score?: number | null };
+  game: GameRowData;
   expanded: boolean;
   onToggle: () => void;
 }) {
   const expandable = !!game.id;
-  const opp_race = (game as any).opp_race as string | undefined;
-  const macro = (game as any).macro_score as number | null | undefined;
+  const { macro, macroColour, resultBadge } = useGameMeta(game);
+
+  return (
+    <Fragment>
+      <tr
+        data-game-row-id={game.id || ""}
+        className={[
+          "border-t border-border transition-colors",
+          expandable ? "cursor-pointer hover:bg-bg-elevated/60" : "",
+          expanded ? "bg-bg-elevated/40" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onClick={expandable ? onToggle : undefined}
+      >
+        <td className="select-none px-2 py-1 text-text-dim">
+          {expandable ? (expanded ? "▾" : "▸") : ""}
+        </td>
+        <td className="px-2 py-1 font-mono text-xs text-text-muted">
+          {fmtDate(game.date)}
+        </td>
+        <td className="px-2 py-1 text-text">{game.map || "—"}</td>
+        <td className="px-2 py-1">
+          <RaceTag race={game.opp_race} />
+        </td>
+        <td className="px-2 py-1 text-text-muted">
+          {game.opp_strategy || "—"}
+        </td>
+        <td className="px-2 py-1">
+          <BuildBadge name={game.my_build || null} />
+        </td>
+        <td
+          className={`px-2 py-1 text-right font-semibold tabular-nums ${macroColour}`}
+        >
+          {typeof macro === "number" ? macro : "—"}
+        </td>
+        <td className="px-2 py-1 text-right tabular-nums text-text-muted">
+          {game.game_length ? fmtMinutes(game.game_length) : "—"}
+        </td>
+        <td className="px-2 py-1 text-right">{resultBadge}</td>
+      </tr>
+      {expanded && game.id ? (
+        <tr className="bg-bg-elevated/30">
+          <td colSpan={9} className="px-2 pb-3">
+            <BuildOrderRow gameId={game.id} />
+          </td>
+        </tr>
+      ) : null}
+    </Fragment>
+  );
+}
+
+function GameMobileCard({
+  game,
+  expanded,
+  onToggle,
+}: {
+  game: GameRowData;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const expandable = !!game.id;
+  const { macro, macroColour, resultBadge } = useGameMeta(game);
+
+  return (
+    <li
+      className={[
+        "rounded-lg border border-border bg-bg-surface transition-colors",
+        expanded ? "border-border-strong" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <button
+        type="button"
+        onClick={expandable ? onToggle : undefined}
+        disabled={!expandable}
+        aria-expanded={expanded}
+        className="flex min-h-[44px] w-full items-start justify-between gap-3 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-default"
+      >
+        <div className="flex flex-1 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <RaceTag race={game.opp_race} />
+            {resultBadge}
+            <span className="font-mono text-[11px] text-text-dim">
+              {fmtDate(game.date)}
+            </span>
+          </div>
+          <div className="text-caption text-text">{game.map || "—"}</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-text-muted">
+            <span>
+              opp: <span className="text-text">{game.opp_strategy || "—"}</span>
+            </span>
+            <span>
+              me: <span className="text-text">{game.my_build || "—"}</span>
+            </span>
+            <span>
+              macro:{" "}
+              <span className={`tabular-nums ${macroColour}`}>
+                {typeof macro === "number" ? macro : "—"}
+              </span>
+            </span>
+            <span>
+              len:{" "}
+              <span className="tabular-nums text-text">
+                {game.game_length ? fmtMinutes(game.game_length) : "—"}
+              </span>
+            </span>
+          </div>
+        </div>
+        {expandable ? (
+          <span className="select-none pt-0.5 text-text-dim" aria-hidden>
+            {expanded ? "▾" : "▸"}
+          </span>
+        ) : null}
+      </button>
+      {expanded && game.id ? (
+        <div className="border-t border-border px-3 py-3">
+          <BuildOrderRow gameId={game.id} />
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+function useGameMeta(game: GameRowData): {
+  macro: number | null | undefined;
+  macroColour: string;
+  resultBadge: React.ReactNode;
+} {
+  const macro = game.macro_score;
   const macroColour =
     macro == null
       ? "text-text-dim"
@@ -129,59 +300,47 @@ function GameRow({
   const result = game.result || "";
   const isWin = result === "Win" || result === "Victory";
   const isLoss = result === "Loss" || result === "Defeat";
-  const resultColour = isWin
-    ? "text-success"
-    : isLoss
-      ? "text-danger"
-      : "text-text-dim";
+  const resultBadge = result ? (
+    <Badge
+      size="sm"
+      variant={isWin ? "success" : isLoss ? "danger" : "neutral"}
+    >
+      {result}
+    </Badge>
+  ) : (
+    <span className="text-text-dim">—</span>
+  );
+  return { macro, macroColour, resultBadge };
+}
+
+function RaceTag({ race }: { race?: string | null }) {
+  const r = (race || "").toUpperCase();
+  const letter = r[0] || "?";
+  const colour = raceColour(race);
+  const hasRace = letter !== "?";
   return (
-    <Fragment>
-      <tr
-        data-game-row-id={game.id || ""}
-        className={
-          "border-t border-border " +
-          (expandable ? "cursor-pointer hover:bg-bg-elevated/60 " : "") +
-          (expanded ? "bg-bg-elevated/40" : "")
-        }
-        onClick={expandable ? onToggle : undefined}
-      >
-        <td className="select-none px-2 py-1 text-text-dim">
-          {expandable ? (expanded ? "▾" : "▸") : ""}
-        </td>
-        <td className="px-2 py-1 font-mono text-xs text-text-muted">
-          {fmtDate(game.date)}
-        </td>
-        <td className="px-2 py-1 text-text">{game.map || "—"}</td>
-        <td
-          className="px-2 py-1 font-mono text-xs"
-          style={{ color: raceColour(opp_race) }}
-        >
-          {(opp_race || "?")[0]?.toUpperCase()}
-        </td>
-        <td className="px-2 py-1 text-text-muted">
-          {game.opp_strategy || "—"}
-        </td>
-        <td className="px-2 py-1 text-text" title="The build I played">
-          {game.my_build || "—"}
-        </td>
-        <td className={`px-2 py-1 text-right font-semibold tabular-nums ${macroColour}`}>
-          {typeof macro === "number" ? macro : "—"}
-        </td>
-        <td className="px-2 py-1 text-right tabular-nums text-text-muted">
-          {game.game_length ? fmtMinutes(game.game_length) : "—"}
-        </td>
-        <td className={`px-2 py-1 text-right font-semibold ${resultColour}`}>
-          {result || "—"}
-        </td>
-      </tr>
-      {expanded && game.id ? (
-        <tr className="bg-bg-elevated/30">
-          <td colSpan={9} className="px-2 pb-3">
-            <BuildOrderRow gameId={game.id} />
-          </td>
-        </tr>
+    <span
+      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+      style={{
+        color: colour,
+        borderColor: `${colour}55`,
+        background: `${colour}14`,
+      }}
+    >
+      {hasRace ? (
+        <Icon name={r} kind="race" size={14} fallback="" decorative />
       ) : null}
-    </Fragment>
+      <span className="font-mono">{letter}</span>
+    </span>
+  );
+}
+
+function BuildBadge({ name }: { name: string | null }) {
+  if (!name) return <span className="text-text-dim">—</span>;
+  return (
+    <Badge size="sm" variant="neutral" title={`The build I played: ${name}`}>
+      {name}
+    </Badge>
   );
 }
 
@@ -248,7 +407,10 @@ function BuildOrderColumn({
               </span>
               <span
                 className="rounded px-1.5 py-0.5 text-[10px] uppercase"
-                style={{ background: categoryColour(e.category) + "22", color: categoryColour(e.category) }}
+                style={{
+                  background: categoryColour(e.category) + "22",
+                  color: categoryColour(e.category),
+                }}
               >
                 {e.category || "—"}
               </span>
@@ -278,7 +440,8 @@ function categoryColour(c: string | undefined): string {
 
 function cssEscape(value: string): string {
   if (typeof CSS !== "undefined" && CSS.escape) return CSS.escape(value);
-  return value.replace(/[^a-zA-Z0-9_-]/g, (c) =>
-    `\\${c.charCodeAt(0).toString(16)} `,
+  return value.replace(
+    /[^a-zA-Z0-9_-]/g,
+    (c) => `\\${c.charCodeAt(0).toString(16)} `,
   );
 }
