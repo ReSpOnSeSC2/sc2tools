@@ -158,7 +158,6 @@ export function BattlefieldTab() {
 
       <MapDiagnostic />
 
-
       <Card title="Matchups">
         {sortedMu.length === 0 ? (
           <EmptyState title="No matchups match" />
