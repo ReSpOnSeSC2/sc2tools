@@ -27,21 +27,32 @@ RUN apt-get update \
         build-essential \
         gcc \
         libgomp1 \
+        python3-venv \
     && rm -rf /var/lib/apt/lists/*
-RUN python -m venv /opt/sc2-py
-ENV PATH="/opt/sc2-py/bin:${PATH}"
 COPY SC2Replay-Analyzer/requirements.txt /tmp/sc2-requirements.txt
-# Combined into one layer with a self-verification step at the end so a
-# silent pip-install regression can never be re-used from cache. If the
-# pip install succeeds but somehow leaves /opt/sc2-py/bin/python
-# missing or sc2reader unimportable, this RUN fails and the layer
-# isn't cached as "successful" — preventing the corruption mode where
-# Render's layer cache shipped an empty venv (commit 46f49ce, 2026-05).
-RUN /opt/sc2-py/bin/pip install --upgrade pip wheel setuptools \
+# Single self-verifying RUN: create the venv, install deps, prove
+# python+sc2reader work, all in one layer so a partial state can
+# never be cached as "successful". Render's layer cache had a stale
+# entry where `python -m venv` and `pip install` were each marked
+# successful but the resulting /opt/sc2-py was empty when COPY'd into
+# the runtime stage. By chaining venv creation + install + verify
+# into a single RUN with `set -e` semantics (Docker's default), if
+# any step doesn't actually produce a usable interpreter the layer
+# is rejected and BuildKit retries on the next build instead of
+# shipping a broken image.
+#
+# The `rm -rf /opt/sc2-py` at the start scrubs any stale files left
+# by a previous failed run (defensive — should be a no-op on a
+# from-scratch layer, but covers cache-pruning edge cases).
+RUN rm -rf /opt/sc2-py \
+    && python -m venv /opt/sc2-py \
+    && test -x /opt/sc2-py/bin/python \
+    && /opt/sc2-py/bin/pip install --upgrade pip wheel setuptools \
     && /opt/sc2-py/bin/pip install -r /tmp/sc2-requirements.txt \
     && /opt/sc2-py/bin/python --version \
     && /opt/sc2-py/bin/python -c "import sc2reader; print('stage1_sc2reader', sc2reader.__version__)" \
-    && test -x /opt/sc2-py/bin/python
+    && ls -la /opt/sc2-py/bin/python /opt/sc2-py/bin/pip
+ENV PATH="/opt/sc2-py/bin:${PATH}"
 
 # ---- Stage 2: runtime ----
 FROM ${NODE_IMAGE} AS runtime
