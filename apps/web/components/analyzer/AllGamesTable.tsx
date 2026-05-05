@@ -8,6 +8,8 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import type { ProfileGame } from "./Last5GamesTimeline";
+import { MacroBreakdownModal } from "./MacroBreakdownModal";
+import { BuildOrderTimeline } from "./charts/BuildOrderTimeline";
 
 type BuildOrderEvent = {
   time: number;
@@ -37,6 +39,7 @@ type BuildOrderResp = {
 
 type GameRowData = ProfileGame & {
   opp_race?: string;
+  my_race?: string;
   macro_score?: number | null;
 };
 
@@ -159,6 +162,7 @@ function GameRow({
 }) {
   const expandable = !!game.id;
   const { macro, macroColour, resultBadge } = useGameMeta(game);
+  const [macroOpen, setMacroOpen] = useState(false);
 
   return (
     <Fragment>
@@ -189,10 +193,15 @@ function GameRow({
         <td className="px-2 py-1">
           <BuildBadge name={game.my_build || null} />
         </td>
-        <td
-          className={`px-2 py-1 text-right font-semibold tabular-nums ${macroColour}`}
-        >
-          {typeof macro === "number" ? macro : "—"}
+        <td className="px-2 py-1 text-right">
+          <MacroCell
+            game={game}
+            macro={macro}
+            macroColour={macroColour}
+            open={macroOpen}
+            onOpen={() => setMacroOpen(true)}
+            onClose={() => setMacroOpen(false)}
+          />
         </td>
         <td className="px-2 py-1 text-right tabular-nums text-text-muted">
           {game.game_length ? fmtMinutes(game.game_length) : "—"}
@@ -202,7 +211,7 @@ function GameRow({
       {expanded && game.id ? (
         <tr className="bg-bg-elevated/30">
           <td colSpan={9} className="px-2 pb-3">
-            <BuildOrderRow gameId={game.id} />
+            <BuildOrderRow gameId={game.id} game={game} />
           </td>
         </tr>
       ) : null}
@@ -210,6 +219,60 @@ function GameRow({
   );
 }
 
+
+function MacroCell({
+  game,
+  macro,
+  macroColour,
+  open,
+  onOpen,
+  onClose,
+}: {
+  game: GameRowData;
+  macro: number | null | undefined;
+  macroColour: string;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
+  const hasScore = typeof macro === "number";
+  const hasGameId = !!game.id;
+  if (!hasGameId) {
+    return (
+      <span className={`font-semibold tabular-nums ${macroColour}`}>
+        {hasScore ? macro : "—"}
+      </span>
+    );
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen();
+        }}
+        aria-label={
+          hasScore
+            ? `Open macro breakdown (score ${macro})`
+            : "Open macro breakdown"
+        }
+        title="Open macro breakdown"
+        className={`inline-flex h-7 min-w-[28px] items-center justify-center rounded px-1.5 font-semibold tabular-nums underline decoration-dotted underline-offset-4 hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${macroColour}`}
+      >
+        {hasScore ? macro : "—"}
+      </button>
+      {open && game.id ? (
+        <MacroBreakdownModal
+          open={open}
+          gameId={game.id}
+          initialScore={typeof macro === "number" ? macro : null}
+          onClose={onClose}
+        />
+      ) : null}
+    </>
+  );
+}
 function GameMobileCard({
   game,
   expanded,
@@ -276,7 +339,7 @@ function GameMobileCard({
       </button>
       {expanded && game.id ? (
         <div className="border-t border-border px-3 py-3">
-          <BuildOrderRow gameId={game.id} />
+          <BuildOrderRow gameId={game.id} game={game} />
         </div>
       ) : null}
     </li>
@@ -344,7 +407,21 @@ function BuildBadge({ name }: { name: string | null }) {
   );
 }
 
-function BuildOrderRow({ gameId }: { gameId: string }) {
+/**
+ * BuildOrderRow — expanded-row content. Loads /v1/games/:id/build-order
+ * and hands the raw events to the icon-rich BuildOrderTimeline widget,
+ * which wires the You/Opponent perspective toggle and the
+ * Save-as-build modal flow (POSTs to /v1/custom-builds/:slug under the
+ * hood). The widget falls back to a friendly empty state when an
+ * opponent build log hasn't been extracted yet.
+ */
+function BuildOrderRow({
+  gameId,
+  game,
+}: {
+  gameId: string;
+  game: GameRowData;
+}) {
   const { data, isLoading, error } = useApi<BuildOrderResp>(
     `/v1/games/${encodeURIComponent(gameId)}/build-order`,
   );
@@ -364,78 +441,22 @@ function BuildOrderRow({ gameId }: { gameId: string }) {
   }
   if (!data) return null;
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-      <BuildOrderColumn
-        title={`Your build${data.my_build ? ` — ${data.my_build}` : ""}`}
-        events={data.events}
-      />
-      <BuildOrderColumn
-        title={`Opponent's build${data.opp_strategy ? ` — ${data.opp_strategy}` : ""}`}
-        events={data.opp_events}
-        emptySub="Opponent build log not extracted yet"
-      />
-    </div>
+    <BuildOrderTimeline
+      events={data.events || []}
+      oppEvents={data.opp_events || []}
+      defaultPerspective="you"
+      gameId={gameId}
+      race={data.my_race || game.my_race}
+      oppRace={data.opp_race || game.opp_race}
+      title={
+        data.my_build ? `Your build — ${data.my_build}` : "Your build"
+      }
+      onSaveAsBuild={async () => {
+        // SaveAsBuildButton handles the API call internally via
+        // SaveAsBuildModal -> apiCall to /v1/custom-builds/:slug.
+      }}
+    />
   );
-}
-
-function BuildOrderColumn({
-  title,
-  events,
-  emptySub,
-}: {
-  title: string;
-  events: BuildOrderEvent[];
-  emptySub?: string;
-}) {
-  const visible = useMemo(
-    () => (events || []).filter((e) => e && e.name && e.time != null),
-    [events],
-  );
-  return (
-    <Card title={title}>
-      {visible.length === 0 ? (
-        <EmptyState sub={emptySub || "No build events parsed"} />
-      ) : (
-        <ul className="max-h-[300px] space-y-1 overflow-y-auto pr-1 text-xs">
-          {visible.map((e, i) => (
-            <li
-              key={`${e.time}-${e.name}-${i}`}
-              className="flex items-center gap-3"
-            >
-              <span className="w-12 font-mono tabular-nums text-text-dim">
-                {e.time_display}
-              </span>
-              <span
-                className="rounded px-1.5 py-0.5 text-[10px] uppercase"
-                style={{
-                  background: categoryColour(e.category) + "22",
-                  color: categoryColour(e.category),
-                }}
-              >
-                {e.category || "—"}
-              </span>
-              <span className="truncate text-text">{e.display || e.name}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
-
-function categoryColour(c: string | undefined): string {
-  switch (c) {
-    case "tech":
-      return "#3ec07a";
-    case "production":
-      return "#7c8cff";
-    case "expansion":
-      return "#e6b450";
-    case "defense":
-      return "#ff9d6c";
-    default:
-      return "#9aa3b2";
-  }
 }
 
 function cssEscape(value: string): string {
