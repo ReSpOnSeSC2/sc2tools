@@ -8,7 +8,8 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import type { ProfileGame } from "./Last5GamesTimeline";
-import { MacroBreakdownModal } from "./MacroBreakdownModal";
+import { MacroBreakdownPanel } from "./macro/MacroBreakdownPanel";
+import type { PanelHeaderMeta } from "./macro/MacroBreakdownPanel.types";
 import { BuildOrderTimeline } from "./charts/BuildOrderTimeline";
 
 type BuildOrderEvent = {
@@ -263,15 +264,26 @@ function MacroCell({
         {hasScore ? macro : "—"}
       </button>
       {open && game.id ? (
-        <MacroBreakdownModal
+        <MacroBreakdownPanel
           open={open}
           gameId={game.id}
           initialScore={typeof macro === "number" ? macro : null}
+          headerMeta={panelHeaderMetaFromGame(game)}
           onClose={onClose}
         />
       ) : null}
     </>
   );
+}
+
+function panelHeaderMetaFromGame(game: GameRowData): PanelHeaderMeta {
+  return {
+    myRace: game.my_race ?? null,
+    opponentRace: game.opp_race ?? null,
+    map: game.map ?? null,
+    result: game.result ?? null,
+    dateIso: game.date ?? null,
+  };
 }
 function GameMobileCard({
   game,
@@ -284,6 +296,7 @@ function GameMobileCard({
 }) {
   const expandable = !!game.id;
   const { macro, macroColour, resultBadge } = useGameMeta(game);
+  const [macroOpen, setMacroOpen] = useState(false);
 
   return (
     <li
@@ -294,49 +307,59 @@ function GameMobileCard({
         .filter(Boolean)
         .join(" ")}
     >
-      <button
-        type="button"
-        onClick={expandable ? onToggle : undefined}
-        disabled={!expandable}
-        aria-expanded={expanded}
-        className="flex min-h-[44px] w-full items-start justify-between gap-3 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-default"
-      >
-        <div className="flex flex-1 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <RaceTag race={game.opp_race} />
-            {resultBadge}
-            <span className="font-mono text-[11px] text-text-dim">
-              {fmtDate(game.date)}
-            </span>
-          </div>
-          <div className="text-caption text-text">{game.map || "—"}</div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-text-muted">
-            <span>
-              opp: <span className="text-text">{game.opp_strategy || "—"}</span>
-            </span>
-            <span>
-              me: <span className="text-text">{game.my_build || "—"}</span>
-            </span>
-            <span>
-              macro:{" "}
-              <span className={`tabular-nums ${macroColour}`}>
-                {typeof macro === "number" ? macro : "—"}
+      <div className="flex items-stretch gap-1 px-3 py-2">
+        <button
+          type="button"
+          onClick={expandable ? onToggle : undefined}
+          disabled={!expandable}
+          aria-expanded={expanded}
+          aria-label={expandable ? "Toggle build order" : undefined}
+          className="flex min-h-[44px] flex-1 items-start justify-between gap-3 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-default"
+        >
+          <div className="flex flex-1 flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <RaceTag race={game.opp_race} />
+              {resultBadge}
+              <span className="font-mono text-[11px] text-text-dim">
+                {fmtDate(game.date)}
               </span>
-            </span>
-            <span>
-              len:{" "}
-              <span className="tabular-nums text-text">
-                {game.game_length ? fmtMinutes(game.game_length) : "—"}
+            </div>
+            <div className="text-caption text-text">{game.map || "—"}</div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-text-muted">
+              <span>
+                opp: <span className="text-text">{game.opp_strategy || "—"}</span>
               </span>
-            </span>
+              <span>
+                me: <span className="text-text">{game.my_build || "—"}</span>
+              </span>
+              <span>
+                len:{" "}
+                <span className="tabular-nums text-text">
+                  {game.game_length ? fmtMinutes(game.game_length) : "—"}
+                </span>
+              </span>
+            </div>
           </div>
-        </div>
-        {expandable ? (
-          <span className="select-none pt-0.5 text-text-dim" aria-hidden>
-            {expanded ? "▾" : "▸"}
+          {expandable ? (
+            <span className="select-none pt-0.5 text-text-dim" aria-hidden>
+              {expanded ? "▾" : "▸"}
+            </span>
+          ) : null}
+        </button>
+        <div className="flex flex-shrink-0 flex-col items-end justify-between gap-1 pl-1">
+          <span className="text-[10px] uppercase tracking-wider text-text-dim">
+            macro
           </span>
-        ) : null}
-      </button>
+          <MacroCell
+            game={game}
+            macro={macro}
+            macroColour={macroColour}
+            open={macroOpen}
+            onOpen={() => setMacroOpen(true)}
+            onClose={() => setMacroOpen(false)}
+          />
+        </div>
+      </div>
       {expanded && game.id ? (
         <div className="border-t border-border px-3 py-3">
           <BuildOrderRow gameId={game.id} game={game} />
