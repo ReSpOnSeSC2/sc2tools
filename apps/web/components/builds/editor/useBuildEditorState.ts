@@ -385,9 +385,37 @@ export function useBuildEditorState(
 function extractMessage(err: unknown): string | null {
   if (!err) return null;
   if (err instanceof Error) return err.message;
-  if (typeof err === "string") return err;
+  if (typeof err === "string") {
+    // Older callers passed JSON envelopes through here; strip them.
+    return humanizeIfJsonEnvelope(err);
+  }
   if (typeof err === "object" && err && "message" in err) {
-    return String((err as { message: unknown }).message);
+    const raw = String((err as { message: unknown }).message);
+    return humanizeIfJsonEnvelope(raw);
   }
   return null;
+}
+
+function humanizeIfJsonEnvelope(s: string): string {
+  // Last-line defense: if a raw JSON envelope ever leaks through,
+  // collapse it to the inner message so we never render `{"error":...}`
+  // verbatim to users.
+  const trimmed = s.trim();
+  if (trimmed[0] !== "{") return s;
+  try {
+    const obj = JSON.parse(trimmed) as unknown;
+    const e =
+      obj && typeof obj === "object"
+        ? (obj as { error?: { message?: unknown; code?: unknown } }).error
+        : undefined;
+    if (e && typeof e === "object") {
+      const m = typeof e.message === "string" ? e.message : "";
+      const c = typeof e.code === "string" ? e.code : "";
+      if (m && m !== "internal_error") return m;
+      if (c) return c;
+    }
+  } catch {
+    /* not JSON — fall through */
+  }
+  return s;
 }

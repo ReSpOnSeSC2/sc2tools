@@ -146,12 +146,19 @@ function SourceTimelinePanel({
 }: SourceTimelinePanelProps) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-bg-subtle/50">
-      <div className="sticky top-0 flex items-center gap-2 border-b border-border bg-bg-subtle/90 px-3 py-1.5 backdrop-blur">
+      <div className="sticky top-0 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-bg-subtle/90 px-3 py-1.5 backdrop-blur">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
           Source replay timeline ({rows.length})
         </span>
-        <span className="text-[10px] text-text-dim">
-          · ★ = tech-defining (good to add)
+        <span
+          className="inline-flex items-center gap-1 rounded-full border border-accent-cyan/40 bg-accent-cyan/10 px-2 py-0.5 text-[10px] font-semibold text-accent-cyan"
+          title="Tech-defining events are the strongest signal of a build's identity. Adding them as rules gives the cleanest matches."
+        >
+          <Star
+            className="h-3 w-3 fill-accent-cyan text-accent-cyan"
+            aria-hidden="true"
+          />
+          Tech-defining — good to add
         </span>
       </div>
       <div className="max-h-[360px] overflow-y-auto">
@@ -164,8 +171,8 @@ function SourceTimelinePanel({
             {rows.map((r) => {
               const inRules = inUseNames.has(r.what);
               const rowAccent = r.isTech
-                ? "bg-accent-cyan/5"
-                : "opacity-80 hover:opacity-100";
+                ? "bg-accent-cyan/10 border-l-2 border-accent-cyan"
+                : "border-l-2 border-transparent opacity-80 hover:opacity-100";
               return (
                 <li
                   key={r.key}
@@ -174,10 +181,10 @@ function SourceTimelinePanel({
                   <span className="w-10 font-mono tabular-nums text-text-dim">
                     {r.timeDisplay}
                   </span>
-                  <span className="w-4">
+                  <span className="flex w-4 items-center justify-center">
                     {r.isTech ? (
                       <Star
-                        className="h-3 w-3 text-accent-cyan"
+                        className="h-3.5 w-3.5 fill-accent-cyan text-accent-cyan drop-shadow-[0_0_4px_rgba(62,192,199,0.55)]"
                         aria-label="Tech-defining event"
                       />
                     ) : null}
@@ -189,7 +196,7 @@ function SourceTimelinePanel({
                     className="flex-shrink-0"
                   />
                   <span
-                    className={`flex-1 truncate ${r.isTech ? "font-medium text-text" : "text-text"}`}
+                    className={`flex-1 truncate ${r.isTech ? "font-semibold text-text" : "text-text"}`}
                     title={r.what}
                   >
                     {r.display}
