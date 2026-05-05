@@ -148,7 +148,6 @@ export function TrendsTab() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-base font-semibold">Trends</h2>
         {kpis.streak.kind && kpis.streak.count > 0 && (
           <span
             className={`rounded px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
