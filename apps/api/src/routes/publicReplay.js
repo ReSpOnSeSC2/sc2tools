@@ -99,9 +99,14 @@ function buildPublicReplayRouter(deps = {}) {
           if (deps.logger) {
             deps.logger.warn({ err }, "preview_replay_python_error");
           }
+          // Map runner-level failures (timeout, oversize, exit_nonzero
+          // with no records) to a stable code so the front end can
+          // render a tailored hint instead of the generic
+          // "python_error" string.
+          const code = mapPythonErrorKindToCode(err.kind);
           res
             .status(502)
-            .json({ error: { code: "python_error", message: err.message } });
+            .json({ error: { code, message: err.message } });
           return;
         }
         next(err);
@@ -127,6 +132,30 @@ const PREVIEW_TIMEOUT_MS = 30 * 1000;
 // the canonical SC2Replay magic is `\x1b`.
 const MPQ_MAGIC_USER_DATA = Buffer.from([0x4d, 0x50, 0x51, 0x1b]);
 const MPQ_MAGIC_ARCHIVE = Buffer.from([0x4d, 0x50, 0x51, 0x1a]);
+
+/**
+ * Translate a `PythonError.kind` from the runner into the stable code
+ * the front end's friendly-errors map keys on. The runner's `kind`
+ * values come from `runPythonNdjson` — keep this in sync with that
+ * file's switch statements.
+ *
+ * @param {string | undefined} kind
+ * @returns {string}
+ */
+function mapPythonErrorKindToCode(kind) {
+  switch (kind) {
+    case "timeout":
+      return "preview_timeout";
+    case "oversize":
+      return "parser_overflow";
+    case "spawn_error":
+    case "missing_analyzer_dir":
+      return "preview_unavailable";
+    case "exit_nonzero":
+    default:
+      return "python_error";
+  }
+}
 
 /**
  * SC2 replay files are MPQ archives wrapped in a user-data preamble —

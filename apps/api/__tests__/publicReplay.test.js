@@ -2,18 +2,16 @@
 "use strict";
 
 /**
- * /v1/public/preview-replay route — body validation tests.
+ * /v1/public/preview-replay route — body validation and runner-error tests.
  *
  * The CLI itself requires sc2reader + a real .SC2Replay file, so we
- * mock pythonAvailable() to return false in one suite (covers the 503
- * path) and only assert on the body-shape rejections that don't need
- * a Python spawn (empty body, wrong magic).
+ * mock pythonAvailable() and runPythonNdjson() to drive the route's
+ * branches without spawning Python.
  */
 
 const request = require("supertest");
 const pino = require("pino");
 const express = require("express");
-const rateLimit = require("express-rate-limit");
 
 jest.mock("../src/util/pythonRunner", () => {
   const real = jest.requireActual("../src/util/pythonRunner");
@@ -154,5 +152,83 @@ describe("POST /public/preview-replay", () => {
       .send(mpq);
     expect(res.status).toBe(422);
     expect(res.body.error.code).toBe("no_two_humans");
+  });
+
+  test("422 forwards replay_too_new from the CLI when sc2reader can't read a newer SC2 patch", async () => {
+    pythonRunner.pythonAvailable.mockReturnValue(true);
+    pythonRunner.runPythonNdjson.mockResolvedValueOnce([
+      {
+        ok: false,
+        code: "replay_too_new",
+        message:
+          "sc2reader load failed: ord() expected a character, but string of length 0 found",
+      },
+    ]);
+    const mpq = Buffer.alloc(64);
+    mpq.set([0x4d, 0x50, 0x51, 0x1b]);
+    const app = makeApp(logger);
+    const res = await request(app)
+      .post("/public/preview-replay")
+      .set("content-type", "application/octet-stream")
+      .send(mpq);
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("replay_too_new");
+  });
+
+  test("502 with mapped code when the Python runner raises a timeout PythonError", async () => {
+    pythonRunner.pythonAvailable.mockReturnValue(true);
+    const { PythonError } = jest.requireActual("../src/util/pythonRunner");
+    pythonRunner.runPythonNdjson.mockImplementationOnce(() => {
+      throw new PythonError("python_timeout", { kind: "timeout" });
+    });
+    const mpq = Buffer.alloc(64);
+    mpq.set([0x4d, 0x50, 0x51, 0x1b]);
+    const app = makeApp(logger);
+    const res = await request(app)
+      .post("/public/preview-replay")
+      .set("content-type", "application/octet-stream")
+      .send(mpq);
+    expect(res.status).toBe(502);
+    expect(res.body.error.code).toBe("preview_timeout");
+  });
+
+  test("502 with python_error when the Python process exits non-zero with no records", async () => {
+    pythonRunner.pythonAvailable.mockReturnValue(true);
+    const { PythonError } = jest.requireActual("../src/util/pythonRunner");
+    pythonRunner.runPythonNdjson.mockImplementationOnce(() => {
+      throw new PythonError("python_exit_1", {
+        kind: "exit_nonzero",
+        exitCode: 1,
+        stderr: "",
+      });
+    });
+    const mpq = Buffer.alloc(64);
+    mpq.set([0x4d, 0x50, 0x51, 0x1b]);
+    const app = makeApp(logger);
+    const res = await request(app)
+      .post("/public/preview-replay")
+      .set("content-type", "application/octet-stream")
+      .send(mpq);
+    expect(res.status).toBe(502);
+    expect(res.body.error.code).toBe("python_error");
+  });
+
+  test("502 with preview_unavailable when the Python spawn itself fails", async () => {
+    pythonRunner.pythonAvailable.mockReturnValue(true);
+    const { PythonError } = jest.requireActual("../src/util/pythonRunner");
+    pythonRunner.runPythonNdjson.mockImplementationOnce(() => {
+      throw new PythonError("ENOENT: no such file or directory", {
+        kind: "spawn_error",
+      });
+    });
+    const mpq = Buffer.alloc(64);
+    mpq.set([0x4d, 0x50, 0x51, 0x1b]);
+    const app = makeApp(logger);
+    const res = await request(app)
+      .post("/public/preview-replay")
+      .set("content-type", "application/octet-stream")
+      .send(mpq);
+    expect(res.status).toBe(502);
+    expect(res.body.error.code).toBe("preview_unavailable");
   });
 });

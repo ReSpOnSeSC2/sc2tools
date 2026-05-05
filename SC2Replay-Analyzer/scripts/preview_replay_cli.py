@@ -1,18 +1,35 @@
-"""Public landing-page preview CLI.
+"""Public landing-page preview CLI for sc2tools.com.
 
-Parses a single .SC2Replay file end-to-end and emits one JSON line that
-the cloud's `/v1/public/preview-replay` route streams back to the
-marketing landing demo. The output is the smallest shape that lets the
-demo render an "opponent dossier" — both players' identity + race +
-build log + the shared map / duration.
+Parses a single .SC2Replay file and emits one JSON line that the cloud's
+``/v1/public/preview-replay`` route streams back to the marketing
+landing demo. The output is the smallest shape that lets the demo
+render an "opponent dossier" — both players' identity + race + build
+log + the shared map / duration.
 
 We deliberately do NOT pick a "you" side: the visitor isn't signed in,
-we have no `my_handle`, and a marketing demo doesn't need to identify
+we have no ``my_handle``, and a marketing demo doesn't need to identify
 the uploader. The modal renders a perspective toggle so the visitor
 can read whichever side they care about.
 
 Auth: none. The route is rate-limited per IP and capped at a small
 body size so the CLI assumes inputs are tiny, one replay at a time.
+
+Hardening: this CLI is the public-facing parser. Compared to the
+desktop / agent ingestion path, it must NEVER let a Python crash
+escape — every exception (including ``BaseException`` like
+``SystemExit``) is converted into a structured ``ok: false`` line and
+the process exits 0. The route's friendly-errors map then turns the
+code into a human-readable hint. Otherwise the route handler raises
+``python_error`` and the user sees the generic "The cloud parser hit
+an error" message, which doesn't tell them anything actionable.
+
+To keep the dependency surface small and predictable, this CLI imports
+``sc2reader`` directly rather than going through
+``core.replay_loader`` — that module's transitive imports
+(``analytics.macro_score`` -> numpy/pandas, ``detectors.*`` ->
+customtkinter via the desktop UI tree) are not needed here and have
+historically been the source of import-time failures on the slim
+Render image.
 
 Output (stdout, NDJSON, single line on success):
 
@@ -21,20 +38,7 @@ Output (stdout, NDJSON, single line on success):
       "game_id": "...",
       "map": "Equilibrium LE",
       "duration_sec": 642,
-      "players": [
-        {
-          "name": "ReSpOnSe",
-          "race": "Protoss",
-          "result": "Victory",
-          "build_log": ["[0:00] Probe", ...]
-        },
-        {
-          "name": "scvSlayer",
-          "race": "Terran",
-          "result": "Defeat",
-          "build_log": ["[0:00] SCV", ...]
-        }
-      ]
+      "players": [ ... two entries ... ]
     }
 
 On failure: a single object with ``ok: false`` and a ``code`` /
@@ -51,15 +55,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
-from typing import Any, Dict, List, Optional
-
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_ROOT = os.path.dirname(_HERE)
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
-
 import re
+import sys
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+
 
 # Cap how many build-log lines we emit. The marketing modal only needs
 # enough to look meaningful; the live product is unlimited.
@@ -70,36 +69,101 @@ _BUILD_LOG_PREVIEW_LIMIT = 60
 # real product filters out at parse time.
 _NOISE_RE = re.compile(r"^(Beacon|Reward|Spray)", re.IGNORECASE)
 
+# When sc2reader can't read a replay because the SC2 patch that
+# generated it is newer than sc2reader's bundled protocol catalog, the
+# library throws a handful of low-level errors deep inside the binary
+# decoder. The exact text varies across replay versions but always
+# matches one of these signatures. We use them to map
+# "library-too-old-for-this-patch" into a specific code so the front
+# end can show a friendlier hint than "Couldn't parse that replay."
+_PATCH_TOO_NEW_SIGNATURES: Tuple[str, ...] = (
+    "ord() expected a character",
+    "ReadError",
+    "is not a valid",  # protocol enum bumps
+    "BuildIdNotSupported",
+    "could not load protocol",
+    "no module named 'sc2reader.resources.protocol",
+    "tuple index out of range",  # truncated protocol tables
+)
+
+# Skip filters for the public preview build-log. Mirror the canonical
+# event_extractor SKIP_UNITS / SKIP_BUILDINGS lists — but we keep this
+# CLI self-contained so the public route doesn't import the desktop
+# tree. Workers, larva, locusts, spawn-eggs etc. would otherwise
+# dominate the first 60 lines and make the dossier look like noise.
+_SKIP_UNITS = frozenset({
+    "MULE", "Larva", "LocustMP", "Probe", "SCV", "Drone", "Egg",
+    "BroodlingEscort", "Broodling", "Changeling", "ChangelingMarine",
+    "ChangelingMarineShield", "ChangelingZergling", "ChangelingZealot",
+    "InfestedTerran", "AutoTurret", "PointDefenseDrone", "Interceptor",
+    "AdeptPhaseShift", "Overlord", "OverseerCocoon", "BanelingCocoon",
+    "RavagerCocoon", "LurkerCocoon", "TransportOverlordCocoon",
+})
+_SKIP_BUILDINGS = frozenset({
+    "SupplyDepot", "SupplyDepotLowered", "CreepTumor",
+    "CreepTumorBurrowed", "CreepTumorQueen", "ShieldBattery",
+})
+_RACE_PREFIXES: Tuple[str, ...] = ("Protoss", "Terran", "Zerg")
+
 
 def _emit(obj: Dict[str, Any]) -> None:
+    """Write one NDJSON record to stdout."""
     sys.stdout.write(json.dumps(obj, default=str) + "\n")
     sys.stdout.flush()
 
 
 def _err(code: str, message: str) -> int:
+    """Emit a structured failure record and return 0.
+
+    The CLI ALWAYS exits 0 — the caller (`runPythonNdjson`) treats a
+    non-zero exit with no records as ``python_error``, which surfaces
+    as the unfriendly "cloud parser hit an error" string. Returning a
+    structured record lets the route map ``code`` to a friendly hint.
+    """
     _emit({"ok": False, "code": code, "message": message})
     return 0
 
 
-def _truncated(lines: List[str]) -> List[str]:
-    if len(lines) <= _BUILD_LOG_PREVIEW_LIMIT:
-        return lines
-    return lines[:_BUILD_LOG_PREVIEW_LIMIT]
+def _classify_load_failure(exc: BaseException) -> str:
+    """Map an sc2reader load-time exception to a code the UI knows.
+
+    Returns ``"replay_too_new"`` when the failure looks like sc2reader
+    can't read a newer SC2 patch's protocol; ``"parse_failed"``
+    otherwise.
+    """
+    text = f"{type(exc).__name__}: {exc}"
+    low = text.lower()
+    for sig in _PATCH_TOO_NEW_SIGNATURES:
+        if sig.lower() in low:
+            return "replay_too_new"
+    return "parse_failed"
 
 
-def _format_build_log(events: List[Dict[str, Any]]) -> List[str]:
-    """Mirror replay_loader.process_replay_task: '[m:ss] Name' per event,
-    minus the noise lines (Beacon/Spray/RewardDance) the real product
-    filters at parse time."""
-    lines: List[str] = []
-    for e in sorted(events, key=lambda x: x.get("time", 0)):
-        name = str(e.get("name") or "")
-        if not name or _NOISE_RE.match(name):
-            continue
-        t = int(e.get("time", 0) or 0)
-        m, s = t // 60, t % 60
-        lines.append(f"[{m}:{s:02d}] {name}")
-    return _truncated(lines)
+def _clean_unit_name(raw: str) -> str:
+    """Strip race prefixes and Lower/Upper variant suffixes."""
+    name = raw
+    for prefix in _RACE_PREFIXES:
+        name = name.replace(prefix, "")
+    for suffix in ("Lower", "Upper"):
+        name = name.replace(suffix, "")
+    return name.strip()
+
+
+def _is_human(player: Any) -> bool:
+    if getattr(player, "is_observer", False):
+        return False
+    if getattr(player, "is_referee", False):
+        return False
+    return True
+
+
+def _player_name(player: Any) -> str:
+    s = str(getattr(player, "name", "") or "").strip()
+    return s or "?"
+
+
+def _player_handle(player: Any) -> Optional[str]:
+    return getattr(player, "toon_handle", None) or getattr(player, "handle", None)
 
 
 def _race(player: Any) -> str:
@@ -113,45 +177,190 @@ def _result(player: Any) -> str:
     return s or "Unknown"
 
 
-def _player_name(player: Any) -> str:
-    s = str(getattr(player, "name", "") or "").strip()
-    return s or "?"
+def _owner_pid(event: Any) -> Optional[int]:
+    """Best-effort owner-pid extraction across sc2reader event variants."""
+    for attr in ("control_pid", "pid"):
+        pid = getattr(event, attr, None)
+        if isinstance(pid, int) and pid > 0:
+            return pid
+    unit = getattr(event, "unit", None)
+    if unit is not None:
+        owner = getattr(unit, "owner", None)
+        owner_pid = getattr(owner, "pid", None) if owner is not None else None
+        if isinstance(owner_pid, int) and owner_pid > 0:
+            return owner_pid
+    player = getattr(event, "player", None)
+    pid = getattr(player, "pid", None) if player is not None else None
+    if isinstance(pid, int) and pid > 0:
+        return pid
+    return None
 
 
-def _player_handle(player: Any) -> Optional[str]:
-    return getattr(player, "toon_handle", None) or getattr(player, "handle", None)
+def _unit_type_name(event: Any) -> Optional[str]:
+    name = getattr(event, "unit_type_name", None)
+    if name:
+        return str(name)
+    unit = getattr(event, "unit", None)
+    if unit is not None:
+        n = getattr(unit, "name", None)
+        if n:
+            return str(n)
+    return None
 
 
-def _is_human(player: Any) -> bool:
-    if getattr(player, "is_observer", False):
-        return False
-    if getattr(player, "is_referee", False):
-        return False
-    return True
+def _walk_events(replay: Any) -> Dict[int, List[Dict[str, Any]]]:
+    """Walk tracker events and bucket them by player pid.
+
+    Returns a dict ``{pid: [event_dict, ...]}``. Each event_dict is
+    ``{"name": "Nexus", "time": 12, "type": "building" | "unit" | "upgrade"}``.
+
+    The whole loop is wrapped in a try/except so a corrupt tracker
+    stream still yields whatever it managed to read instead of
+    aborting the dossier entirely.
+    """
+    try:
+        from sc2reader.events.tracker import (
+            UnitBornEvent, UnitInitEvent, UnitDoneEvent,
+            UpgradeCompleteEvent, UnitTypeChangeEvent,
+        )
+    except ImportError:
+        return {}
+
+    by_pid: Dict[int, List[Dict[str, Any]]] = {}
+    source: Iterable[Any] = (
+        getattr(replay, "tracker_events", None)
+        or getattr(replay, "events", None)
+        or []
+    )
+    try:
+        for evt in source:
+            try:
+                pid = _owner_pid(evt)
+                raw = _unit_type_name(evt)
+                second = int(getattr(evt, "second", 0) or 0)
+                if pid is None:
+                    continue
+                if isinstance(evt, UpgradeCompleteEvent):
+                    name = getattr(evt, "upgrade_type_name", None)
+                    if not name:
+                        continue
+                    bucket = by_pid.setdefault(pid, [])
+                    bucket.append(
+                        {"name": str(name), "time": second, "type": "upgrade"}
+                    )
+                    continue
+                if raw is None:
+                    continue
+                clean = _clean_unit_name(raw)
+                if not clean:
+                    continue
+                if isinstance(evt, UnitInitEvent):
+                    if clean in _SKIP_BUILDINGS:
+                        continue
+                    bucket = by_pid.setdefault(pid, [])
+                    bucket.append(
+                        {"name": clean, "time": second, "type": "building"}
+                    )
+                elif isinstance(evt, UnitBornEvent):
+                    if clean in _SKIP_BUILDINGS or clean in _SKIP_UNITS:
+                        continue
+                    bucket = by_pid.setdefault(pid, [])
+                    bucket.append(
+                        {"name": clean, "time": second, "type": "unit"}
+                    )
+                elif isinstance(evt, UnitTypeChangeEvent):
+                    # Morph (Lair/Hive/OrbitalCommand etc.) — only emit
+                    # the ones that look like canonical building morphs;
+                    # unit-shape morphs (BanelingCocoon -> Baneling)
+                    # would double-count born events.
+                    if clean in _SKIP_BUILDINGS or clean in _SKIP_UNITS:
+                        continue
+                    bucket = by_pid.setdefault(pid, [])
+                    bucket.append(
+                        {"name": clean, "time": second, "type": "building"}
+                    )
+                elif isinstance(evt, UnitDoneEvent):
+                    # Deliberately skipped — UnitInitEvent already
+                    # covers the start of construction, which is what
+                    # build orders care about.
+                    pass
+            except Exception:
+                # Per-event failures are swallowed so one weird event
+                # doesn't kill the whole pass.
+                continue
+    except Exception:
+        # Iterator-level failure — return whatever we collected so far.
+        pass
+    return by_pid
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Preview a single replay.")
-    parser.add_argument("--file", required=True, help="Path to .SC2Replay")
-    args = parser.parse_args()
+def _format_build_log(events: List[Dict[str, Any]]) -> List[str]:
+    """Render bucketed events as ``"[m:ss] Name"`` lines, deduped and capped."""
+    lines: List[str] = []
+    seen: set = set()
+    try:
+        ordered = sorted(
+            events,
+            key=lambda e: (int(e.get("time", 0) or 0), str(e.get("name", "")))
+        )
+    except Exception:
+        ordered = events
+    for e in ordered:
+        try:
+            name = str(e.get("name") or "")
+            if not name or _NOISE_RE.match(name):
+                continue
+            t = int(e.get("time", 0) or 0)
+            if t < 0:
+                t = 0
+            m, s = divmod(t, 60)
+            line = f"[{m}:{s:02d}] {name}"
+            # Drop consecutive duplicates at the same second so back-to-back
+            # zergling/marine spam doesn't dominate the preview.
+            key = (t, name)
+            if key in seen:
+                continue
+            seen.add(key)
+            lines.append(line)
+            if len(lines) >= _BUILD_LOG_PREVIEW_LIMIT:
+                break
+        except Exception:
+            continue
+    return lines
 
-    path = args.file
+
+def _load_replay_with_fallback(path: str) -> Any:
+    """Mirror ``core.replay_loader.load_replay_with_fallback`` inline.
+
+    Tries load_level=4, falls back to level 3 on tracker bugs, and
+    re-raises only on the second-attempt failure. Importing sc2reader
+    here keeps this CLI free of the desktop tree's optional deps.
+    """
+    import sc2reader  # local import — module-level imports kept lean
+    try:
+        return sc2reader.load_replay(path, load_level=4)
+    except Exception:
+        return sc2reader.load_replay(path, load_level=3)
+
+
+def _run(path: str) -> int:
+    """Inner driver. Caller wraps this in a BaseException net."""
     if not os.path.isfile(path):
         return _err("file_not_found", f"replay not found: {path}")
 
     try:
-        from core.replay_loader import load_replay_with_fallback
-        from core.event_extractor import extract_events
+        import sc2reader  # noqa: F401  — fail fast if missing
     except ImportError as exc:
         return _err(
             "parser_import_failed",
-            f"could not import analyzer modules: {exc}",
+            f"could not import sc2reader: {exc}",
         )
 
     try:
-        replay = load_replay_with_fallback(path)
+        replay = _load_replay_with_fallback(path)
     except Exception as exc:  # noqa: BLE001
-        return _err("parse_failed", f"sc2reader load failed: {exc}")
+        code = _classify_load_failure(exc)
+        return _err(code, f"sc2reader load failed: {exc}")
 
     humans = [p for p in getattr(replay, "players", []) if _is_human(p)]
     if len(humans) < 2:
@@ -162,15 +371,21 @@ def main() -> int:
     p1, p2 = humans[0], humans[1]
 
     try:
-        my_events, opp_events, _ = extract_events(replay, p1.pid)
+        bucketed = _walk_events(replay)
     except Exception as exc:  # noqa: BLE001
-        return _err("extract_failed", f"event extractor failed: {exc}")
+        return _err("extract_failed", f"event walk failed: {exc}")
+
+    p1_events = bucketed.get(getattr(p1, "pid", -1), [])
+    p2_events = bucketed.get(getattr(p2, "pid", -2), [])
 
     map_name = str(getattr(replay, "map_name", "") or "")
     length_sec = 0
     gl = getattr(replay, "game_length", None)
     if gl is not None and getattr(gl, "seconds", None) is not None:
-        length_sec = int(gl.seconds)
+        try:
+            length_sec = int(gl.seconds)
+        except Exception:  # noqa: BLE001
+            length_sec = 0
     date_str = ""
     if getattr(replay, "date", None) is not None:
         try:
@@ -192,20 +407,36 @@ def main() -> int:
                 "race": _race(p1),
                 "result": _result(p1),
                 "handle": _player_handle(p1),
-                "build_log": _format_build_log(my_events),
+                "build_log": _format_build_log(p1_events),
             },
             {
                 "name": _player_name(p2),
                 "race": _race(p2),
                 "result": _result(p2),
                 "handle": _player_handle(p2),
-                "build_log": _format_build_log(opp_events),
+                "build_log": _format_build_log(p2_events),
             },
         ],
     }
-
     _emit(payload)
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Preview a single replay.")
+    parser.add_argument("--file", required=True, help="Path to .SC2Replay")
+    args = parser.parse_args()
+
+    # Top-level safety net: catch BaseException so even SystemExit from
+    # deep in a transitive dep can't surface as a Python crash. The
+    # route would otherwise turn that into a 502 python_error and the
+    # user sees the unfriendly "cloud parser hit an error" message
+    # instead of an actionable hint.
+    try:
+        return _run(args.file)
+    except BaseException as exc:  # noqa: BLE001
+        kind = type(exc).__name__
+        return _err("python_error", f"{kind}: {exc}")
 
 
 if __name__ == "__main__":
