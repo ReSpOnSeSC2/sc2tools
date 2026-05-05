@@ -55,6 +55,7 @@ const { buildCatalogRouter } = require("./routes/catalog");
 const { buildMlRouter } = require("./routes/ml");
 const { buildAgentVersionRouter } = require("./routes/agentVersion");
 const { buildCommunityRouter } = require("./routes/community");
+const { buildPublicReplayRouter } = require("./routes/publicReplay");
 
 const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
 
@@ -183,6 +184,13 @@ function mountRoutes(app, deps, services) {
   // ones the auth-using router won't even handle. Mounting public routes
   // first short-circuits before those auth-eager middlewares get a turn.
   app.use(SERVICE.ROUTE_PREFIX, buildHealthRouter({ db: deps.db }));
+  // Public marketing-page replay preview. Unauth'd by design — the
+  // landing page demo accepts a single .SC2Replay upload and returns
+  // a parsed dossier. Rate-limited per IP inside the router.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildPublicReplayRouter({ logger: deps.logger }),
+  );
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAgentVersionRouter({
