@@ -221,6 +221,7 @@ function mountRoutes(app, deps, services) {
       users: services.users,
       games: services.games,
       gdpr: services.gdpr,
+      pairings: services.pairings,
       auth,
       isAdmin,
       logger: deps.logger,
