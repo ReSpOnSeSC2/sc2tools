@@ -56,6 +56,14 @@ RUN apt-get update \
 # Bring in the prebuilt Python virtualenv with sc2reader / numpy / etc.
 COPY --from=python-deps /opt/sc2-py /opt/sc2-py
 
+# Build-time assertion: fail the image build if stage 1 didn't produce a
+# usable venv with sc2reader installed. Without this, a silently-empty
+# stage 1 (cache regression, env mismatch) can ship a runnable Node app
+# that 502s every replay-preview request with `ENOENT spawn python`.
+# Failing here surfaces the problem in the Render build log instead.
+RUN /opt/sc2-py/bin/python --version \
+    && /opt/sc2-py/bin/python -c "import sc2reader, sys; print('sc2reader', sc2reader.__version__, 'on', sys.version)"
+
 # The analyzer's CLIs and shared modules. Everything under
 # `scripts/`, `core/`, `analytics/`, `data/` is read at runtime.
 COPY SC2Replay-Analyzer /opt/sc2-analyzer

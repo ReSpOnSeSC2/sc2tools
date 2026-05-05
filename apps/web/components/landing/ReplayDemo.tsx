@@ -5,6 +5,9 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRight,
+  Check,
+  ChevronDown,
+  Copy,
   FileUp,
   Loader2,
   Sparkles,
@@ -17,6 +20,7 @@ import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { API_BASE } from "@/lib/clientApi";
 
+/* eslint-disable max-lines */
 /**
  * ReplayDemo — landing-page "drop a replay, see the real dossier" CTA.
  *
@@ -52,6 +56,16 @@ interface PreviewDossier {
 interface PreviewError {
   code: string;
   message: string;
+  /** Server-assigned correlation ID (`x-request-id` response header
+   *  or `error.requestId` body field). Surfaced in the modal's
+   *  technical-details disclosure so a user can paste it into a bug
+   *  report and we can grep the server logs for the same trace. */
+  requestId?: string;
+  /** HTTP status code returned by the API. Recorded so the
+   *  technical-details disclosure can show e.g. "HTTP 502" alongside
+   *  the application-level code, since they encode different things
+   *  (transport vs domain). */
+  httpStatus?: number;
 }
 
 const MAX_BYTES = 5 * 1024 * 1024; // matches the API limit
@@ -115,17 +129,26 @@ export function ReplayDemo() {
         headers: { "content-type": "application/octet-stream" },
         body: buf,
       });
+      const requestId =
+        res.headers.get("x-request-id") || undefined;
       const json = await res.json().catch(() => null);
       if (!res.ok || !json) {
         const code = json?.error?.code || `http_${res.status}`;
         const message = json?.error?.message || "";
-        setError({ code, message });
+        setError({
+          code,
+          message,
+          requestId: json?.error?.requestId || requestId,
+          httpStatus: res.status,
+        });
         return;
       }
       if (json.ok !== true) {
         setError({
           code: json.error?.code || "parse_failed",
           message: json.error?.message || "",
+          requestId: json.error?.requestId || requestId,
+          httpStatus: res.status,
         });
         return;
       }
@@ -277,10 +300,119 @@ function DossierError({ error }: { error: PreviewError }) {
           <p className="text-text-muted">{friendly}</p>
         </div>
       </div>
+      <ErrorTechnicalDetails error={error} />
       <p className="text-caption text-text-muted">
         Sign up and the agent will parse every replay automatically — even
         the ones the public demo can&rsquo;t handle.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Collapsible "Show technical details" disclosure for the error
+ * modal. Surfaces the application-level code, raw error message,
+ * HTTP status, and server-assigned request ID — plus a copy button
+ * that lays it all out as a one-line plaintext blob suitable for
+ * pasting into a bug report or chat.
+ *
+ * Why this exists: the friendly message tells the visitor what to do
+ * next, but it deliberately doesn't expose internals. When something
+ * is wrong with the cloud parser itself (vs. a quirky replay), the
+ * fastest path to a fix is the user pasting us the request ID so we
+ * can grep the Render logs for the matching trace. Hiding it behind
+ * a disclosure keeps the friendly path uncluttered while making the
+ * diagnostic path one click away.
+ */
+function ErrorTechnicalDetails({ error }: { error: PreviewError }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const lines: string[] = [`code: ${error.code}`];
+  if (typeof error.httpStatus === "number") {
+    lines.push(`http: ${error.httpStatus}`);
+  }
+  if (error.requestId) {
+    lines.push(`request_id: ${error.requestId}`);
+  }
+  if (error.message) {
+    lines.push(`message: ${error.message}`);
+  }
+  lines.push(`time: ${new Date().toISOString()}`);
+  const blob = lines.join("\n");
+
+  async function onCopy() {
+    try {
+      await navigator.clipboard.writeText(blob);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      // Clipboard can fail in restricted iframes; silently no-op.
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-bg-elevated/40">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-caption font-medium text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <span className="flex items-center gap-2">
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform motion-safe:duration-150 ${
+              open ? "rotate-0" : "-rotate-90"
+            }`}
+            aria-hidden
+          />
+          Show technical details
+        </span>
+        <span className="font-mono text-text-dim">{error.code}</span>
+      </button>
+      {open ? (
+        <div className="space-y-2 border-t border-border px-3 py-3">
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 font-mono text-caption">
+            <dt className="text-text-dim">code</dt>
+            <dd className="break-all text-text">{error.code}</dd>
+            {typeof error.httpStatus === "number" ? (
+              <>
+                <dt className="text-text-dim">http</dt>
+                <dd className="text-text">{error.httpStatus}</dd>
+              </>
+            ) : null}
+            {error.requestId ? (
+              <>
+                <dt className="text-text-dim">request_id</dt>
+                <dd className="break-all text-text">{error.requestId}</dd>
+              </>
+            ) : null}
+            {error.message ? (
+              <>
+                <dt className="text-text-dim">message</dt>
+                <dd className="break-all text-text">{error.message}</dd>
+              </>
+            ) : null}
+          </dl>
+          <button
+            type="button"
+            onClick={() => void onCopy()}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-bg-surface px-2.5 text-caption font-medium text-text-muted hover:bg-bg-subtle hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {copied ? (
+              <>
+                <Check className="h-3.5 w-3.5 text-success" aria-hidden />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="h-3.5 w-3.5" aria-hidden />
+                Copy details
+              </>
+            )}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -469,6 +601,7 @@ function ReplayDropPreview({ onActivate }: { onActivate: () => void }) {
 }
 
 /* ---------------- helpers ---------------- */
+
 
 function formatDuration(seconds: number): string {
   const total = Math.max(0, Math.floor(Number(seconds) || 0));

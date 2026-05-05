@@ -31,6 +31,15 @@ customtkinter via the desktop UI tree) are not needed here and have
 historically been the source of import-time failures on the slim
 Render image.
 
+Modes:
+  ``--file PATH``     parse a replay (the normal mode)
+  ``--self-test``     emit an environment report (python version,
+                      sc2reader version, working dir, sys.path) and
+                      exit. Used by the cloud's
+                      ``/preview-replay/health`` diagnostic endpoint
+                      to verify the entire chain is reachable without
+                      uploading a real replay.
+
 Output (stdout, NDJSON, single line on success):
 
     {
@@ -48,6 +57,7 @@ the caller can read stdout instead of guessing from exit codes.
 Usage:
 
     python scripts/preview_replay_cli.py --file /tmp/upload.SC2Replay
+    python scripts/preview_replay_cli.py --self-test
 """
 
 from __future__ import annotations
@@ -55,8 +65,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import re
 import sys
+import time
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
@@ -110,6 +122,14 @@ def _emit(obj: Dict[str, Any]) -> None:
     """Write one NDJSON record to stdout."""
     sys.stdout.write(json.dumps(obj, default=str) + "\n")
     sys.stdout.flush()
+
+
+def _step(step: str, **fields: Any) -> None:
+    """Emit a step-marker NDJSON line so the route can correlate
+    Python-side progress with server-side timing logs."""
+    payload: Dict[str, Any] = {"trace": True, "step": step}
+    payload.update(fields)
+    _emit(payload)
 
 
 def _err(code: str, message: str) -> int:
@@ -209,15 +229,7 @@ def _unit_type_name(event: Any) -> Optional[str]:
 
 
 def _walk_events(replay: Any) -> Dict[int, List[Dict[str, Any]]]:
-    """Walk tracker events and bucket them by player pid.
-
-    Returns a dict ``{pid: [event_dict, ...]}``. Each event_dict is
-    ``{"name": "Nexus", "time": 12, "type": "building" | "unit" | "upgrade"}``.
-
-    The whole loop is wrapped in a try/except so a corrupt tracker
-    stream still yields whatever it managed to read instead of
-    aborting the dossier entirely.
-    """
+    """Walk tracker events and bucket them by player pid."""
     try:
         from sc2reader.events.tracker import (
             UnitBornEvent, UnitInitEvent, UnitDoneEvent,
@@ -269,10 +281,6 @@ def _walk_events(replay: Any) -> Dict[int, List[Dict[str, Any]]]:
                         {"name": clean, "time": second, "type": "unit"}
                     )
                 elif isinstance(evt, UnitTypeChangeEvent):
-                    # Morph (Lair/Hive/OrbitalCommand etc.) — only emit
-                    # the ones that look like canonical building morphs;
-                    # unit-shape morphs (BanelingCocoon -> Baneling)
-                    # would double-count born events.
                     if clean in _SKIP_BUILDINGS or clean in _SKIP_UNITS:
                         continue
                     bucket = by_pid.setdefault(pid, [])
@@ -280,16 +288,10 @@ def _walk_events(replay: Any) -> Dict[int, List[Dict[str, Any]]]:
                         {"name": clean, "time": second, "type": "building"}
                     )
                 elif isinstance(evt, UnitDoneEvent):
-                    # Deliberately skipped — UnitInitEvent already
-                    # covers the start of construction, which is what
-                    # build orders care about.
                     pass
             except Exception:
-                # Per-event failures are swallowed so one weird event
-                # doesn't kill the whole pass.
                 continue
     except Exception:
-        # Iterator-level failure — return whatever we collected so far.
         pass
     return by_pid
 
@@ -315,8 +317,6 @@ def _format_build_log(events: List[Dict[str, Any]]) -> List[str]:
                 t = 0
             m, s = divmod(t, 60)
             line = f"[{m}:{s:02d}] {name}"
-            # Drop consecutive duplicates at the same second so back-to-back
-            # zergling/marine spam doesn't dominate the preview.
             key = (t, name)
             if key in seen:
                 continue
@@ -330,12 +330,7 @@ def _format_build_log(events: List[Dict[str, Any]]) -> List[str]:
 
 
 def _load_replay_with_fallback(path: str) -> Any:
-    """Mirror ``core.replay_loader.load_replay_with_fallback`` inline.
-
-    Tries load_level=4, falls back to level 3 on tracker bugs, and
-    re-raises only on the second-attempt failure. Importing sc2reader
-    here keeps this CLI free of the desktop tree's optional deps.
-    """
+    """Mirror ``core.replay_loader.load_replay_with_fallback`` inline."""
     import sc2reader  # local import — module-level imports kept lean
     try:
         return sc2reader.load_replay(path, load_level=4)
@@ -343,10 +338,49 @@ def _load_replay_with_fallback(path: str) -> Any:
         return sc2reader.load_replay(path, load_level=3)
 
 
-def _run(path: str) -> int:
-    """Inner driver. Caller wraps this in a BaseException net."""
+def _self_test() -> int:
+    """Emit one JSON line describing the Python environment.
+
+    Used by the cloud's ``GET /v1/public/preview-replay/health``
+    diagnostic endpoint — confirms the spawn chain works, sc2reader
+    is importable, and reports the version. Always exits 0 so the
+    runner gets a clean read on stdout.
+    """
+    info: Dict[str, Any] = {
+        "ok": True,
+        "self_test": True,
+        "python_version": sys.version.split()[0],
+        "python_implementation": platform.python_implementation(),
+        "platform": platform.platform(),
+        "executable": sys.executable,
+        "cwd": os.getcwd(),
+    }
+    try:
+        import sc2reader
+        info["sc2reader_version"] = getattr(sc2reader, "__version__", "unknown")
+        info["sc2reader_import_ok"] = True
+    except BaseException as exc:  # noqa: BLE001
+        info["ok"] = False
+        info["sc2reader_import_ok"] = False
+        info["sc2reader_import_error"] = f"{type(exc).__name__}: {exc}"
+    _emit(info)
+    return 0
+
+
+def _run(path: str, trace: bool) -> int:
+    """Inner driver. Caller wraps this in a BaseException net.
+
+    When ``trace`` is set, emits a stream of step-marker NDJSON lines
+    so the server can correlate per-stage timing. The route ignores
+    these (it scans for the first ``ok:true|false`` record) but pino
+    can log them as structured progress events.
+    """
+    t0 = time.monotonic()
+
     if not os.path.isfile(path):
         return _err("file_not_found", f"replay not found: {path}")
+    if trace:
+        _step("file_check_passed", path_size=os.path.getsize(path))
 
     try:
         import sc2reader  # noqa: F401  — fail fast if missing
@@ -355,9 +389,22 @@ def _run(path: str) -> int:
             "parser_import_failed",
             f"could not import sc2reader: {exc}",
         )
+    if trace:
+        _step(
+            "sc2reader_imported",
+            version=getattr(sc2reader, "__version__", "unknown"),
+            elapsed_ms=int((time.monotonic() - t0) * 1000),
+        )
 
     try:
+        t_load = time.monotonic()
         replay = _load_replay_with_fallback(path)
+        if trace:
+            _step(
+                "sc2reader_loaded",
+                load_ms=int((time.monotonic() - t_load) * 1000),
+                map_name=str(getattr(replay, "map_name", "") or ""),
+            )
     except Exception as exc:  # noqa: BLE001
         code = _classify_load_failure(exc)
         return _err(code, f"sc2reader load failed: {exc}")
@@ -371,7 +418,15 @@ def _run(path: str) -> int:
     p1, p2 = humans[0], humans[1]
 
     try:
+        t_walk = time.monotonic()
         bucketed = _walk_events(replay)
+        if trace:
+            _step(
+                "events_walked",
+                walk_ms=int((time.monotonic() - t_walk) * 1000),
+                pids=list(bucketed.keys()),
+                event_counts={str(k): len(v) for k, v in bucketed.items()},
+            )
     except Exception as exc:  # noqa: BLE001
         return _err("extract_failed", f"event walk failed: {exc}")
 
@@ -418,22 +473,38 @@ def _run(path: str) -> int:
             },
         ],
     }
+    if trace:
+        payload["total_ms"] = int((time.monotonic() - t0) * 1000)
     _emit(payload)
     return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Preview a single replay.")
-    parser.add_argument("--file", required=True, help="Path to .SC2Replay")
+    parser.add_argument("--file", help="Path to .SC2Replay")
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Emit a Python environment / sc2reader-version report and exit.",
+    )
+    parser.add_argument(
+        "--trace",
+        action="store_true",
+        help=(
+            "Emit per-step NDJSON markers in addition to the final result. "
+            "The route forwards these to the server log for diagnostics."
+        ),
+    )
     args = parser.parse_args()
 
     # Top-level safety net: catch BaseException so even SystemExit from
-    # deep in a transitive dep can't surface as a Python crash. The
-    # route would otherwise turn that into a 502 python_error and the
-    # user sees the unfriendly "cloud parser hit an error" message
-    # instead of an actionable hint.
+    # deep in a transitive dep can't surface as a Python crash.
     try:
-        return _run(args.file)
+        if args.self_test:
+            return _self_test()
+        if not args.file:
+            return _err("missing_arg", "either --file or --self-test is required")
+        return _run(args.file, trace=bool(args.trace))
     except BaseException as exc:  # noqa: BLE001
         kind = type(exc).__name__
         return _err("python_error", f"{kind}: {exc}")
