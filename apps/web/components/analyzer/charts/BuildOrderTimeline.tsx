@@ -159,10 +159,10 @@ export function BuildOrderTimeline({
   const handleSaved = useCallback(
     (payload: SaveAsBuildPayload & { slug: string }) => {
       // Parent handler is notification-only — the build is already
-      // persisted by the modal's onCustomSave / built-in PUT. Errors
-      // from the parent's handler must not roll back our success
-      // state, so they're swallowed here and the caller is expected
-      // to surface them through its own UI.
+      // persisted by the BuildEditorModal's built-in PUT. Errors from
+      // the parent's handler must not roll back our success state,
+      // so they're swallowed here and the caller is expected to
+      // surface them through its own UI.
       try {
         const maybe = onSaveAsBuild?.(payload) as unknown;
         if (
@@ -213,6 +213,11 @@ export function BuildOrderTimeline({
               {onSaveAsBuild ? (
                 <SaveAsBuildButton
                   rows={rowsActive}
+                  events={
+                    effectivePerspective === "opponent"
+                      ? oppEvents ?? []
+                      : events
+                  }
                   perspective={effectivePerspective}
                   race={saveRace}
                   vsRace={saveVsRace}

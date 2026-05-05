@@ -44,6 +44,23 @@ export interface CustomBuildsService {
   softDelete(userId: string, slug: string): Promise<void>;
 }
 
+export interface PerGameComputeServiceListedGame {
+  gameId: string;
+  myBuild: string | null;
+  myRace: string | null;
+  oppRace: string | null;
+  events: Array<{
+    time: number;
+    name: string;
+    race?: string;
+    category?: string;
+    is_building?: boolean;
+  }>;
+  result: string | null;
+  date: Date | null;
+  map: string | null;
+}
+
 export interface DevicePairingsService {
   start(): Promise<{ code: string; expiresAt: Date }>;
   claim(userId: string, code: string): Promise<void>;
@@ -138,6 +155,10 @@ export interface PerGameComputeService {
     gameId: string,
     payload: { oppBuildLog: string[]; oppEarlyBuildLog?: string[] },
   ): Promise<void>;
+  listForRulePreview(
+    userId: string,
+    opts?: { race?: string; vsRace?: string; limit?: number },
+  ): Promise<PerGameComputeServiceListedGame[]>;
 }
 
 export interface MacroBackfillService {

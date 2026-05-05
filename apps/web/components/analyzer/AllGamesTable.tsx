@@ -410,10 +410,11 @@ function BuildBadge({ name }: { name: string | null }) {
 /**
  * BuildOrderRow — expanded-row content. Loads /v1/games/:id/build-order
  * and hands the raw events to the icon-rich BuildOrderTimeline widget,
- * which wires the You/Opponent perspective toggle and the
- * Save-as-build modal flow (POSTs to /v1/custom-builds/:slug under the
- * hood). The widget falls back to a friendly empty state when an
- * opponent build log hasn't been extracted yet.
+ * which wires the You/Opponent perspective toggle and the rich
+ * BuildEditorModal flow (PUTs to /v1/custom-builds/:slug with v3 rules
+ * + strategy notes + share-with-community + reclassify). The widget
+ * falls back to a friendly empty state when an opponent build log
+ * hasn't been extracted yet.
  */
 function BuildOrderRow({
   gameId,
@@ -452,8 +453,8 @@ function BuildOrderRow({
         data.my_build ? `Your build — ${data.my_build}` : "Your build"
       }
       onSaveAsBuild={async () => {
-        // SaveAsBuildButton handles the API call internally via
-        // SaveAsBuildModal -> apiCall to /v1/custom-builds/:slug.
+        // SaveAsBuildButton handles the API call internally via the
+        // BuildEditorModal -> PUT /v1/custom-builds/:slug flow.
       }}
     />
   );

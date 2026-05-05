@@ -48,6 +48,72 @@ const BUILD_SCHEMA = {
       type: "string",
       enum: ["Protoss", "Terran", "Zerg", "Random"],
     },
+    /**
+     * v3 rule schema — full SPA build editor parity. When `rules` is
+     * present the agent's classifier evaluates them against parsed
+     * events; if absent, the legacy `signature` array is used.
+     */
+    rules: {
+      type: "array",
+      maxItems: 30,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["type", "name", "time_lt"],
+        properties: {
+          type: {
+            type: "string",
+            enum: [
+              "before",
+              "not_before",
+              "count_max",
+              "count_exact",
+              "count_min",
+            ],
+          },
+          name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 80,
+            pattern: "^[A-Za-z][A-Za-z0-9]*$",
+          },
+          time_lt: { type: "integer", minimum: 1, maximum: 1800 },
+          count: { type: "integer", minimum: 0, maximum: 200 },
+        },
+      },
+    },
+    /** Strategy notes — chips lists. */
+    skillLevel: {
+      type: ["string", "null"],
+      enum: [
+        "bronze",
+        "silver",
+        "gold",
+        "platinum",
+        "diamond",
+        "master",
+        "grandmaster",
+        null,
+      ],
+    },
+    winConditions: {
+      type: "array",
+      maxItems: 20,
+      items: { type: "string", maxLength: 280 },
+    },
+    losesTo: {
+      type: "array",
+      maxItems: 20,
+      items: { type: "string", maxLength: 280 },
+    },
+    transitionsInto: {
+      type: "array",
+      maxItems: 20,
+      items: { type: "string", maxLength: 280 },
+    },
+    shareWithCommunity: { type: "boolean" },
+    /** Schema version — server stores 3 for new editor saves. */
+    schemaVersion: { type: "integer", minimum: 1, maximum: 10 },
   },
 };
 
