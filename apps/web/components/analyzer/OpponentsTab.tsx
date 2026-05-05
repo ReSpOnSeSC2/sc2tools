@@ -1,14 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ExternalLink } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { fmtAgo, pct1, wrColor } from "@/lib/format";
+import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import { Skeleton, EmptyState } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 
 type Opp = {
   pulseId: string;
+  pulseCharacterId?: string | null;
+  toonHandle?: string | null;
   name?: string;
   displayNameSample?: string;
   wins: number;
@@ -107,7 +111,12 @@ export function OpponentsTab({
           <thead className="bg-bg-elevated">
             <tr>
               <SortableTh col="name" label="Opponent" {...sort} />
-              <SortableTh col="pulseId" label="Pulse ID" {...sort} width="8rem" />
+              <SortableTh
+                col="pulseCharacterId"
+                label="Pulse ID"
+                {...sort}
+                width="9rem"
+              />
               <SortableTh col="wins" label="W" {...sort} align="right" width="5rem" />
               <SortableTh col="losses" label="L" {...sort} align="right" width="5rem" />
               <SortableTh col="games" label="Games" {...sort} align="right" width="5rem" />
@@ -138,12 +147,8 @@ export function OpponentsTab({
                       <span className="italic text-text-dim">unnamed</span>
                     )}
                   </td>
-                  <td
-                    className="truncate px-3 py-1.5 font-mono text-xs text-text-dim"
-                    title={o.pulseId}
-                  >
-                    {o.pulseId}
-                  </td>
+                  <PulseIdCell opp={o} />
+
                   <td className="px-3 py-1.5 text-right tabular-nums text-success">
                     {o.wins}
                   </td>
@@ -172,5 +177,58 @@ export function OpponentsTab({
         </table>
       </div>
     </div>
+  );
+}
+
+/**
+ * The "Pulse ID" cell. When the agent has resolved the opponent's
+ * canonical SC2Pulse character id (e.g. "994428"), show it as a link
+ * to sc2pulse.nephest.com — that's the page the user reaches via the
+ * url shape they explicitly called out:
+ * https://sc2pulse.nephest.com/sc2/?type=character&id=<id>&m=1.
+ *
+ * When we only have the raw toon_handle (e.g. "1-S2-1-267727" — the
+ * value that appears in their replay-folder path), show that in dim
+ * mono, with an explicit "(toon)" hint so the user can tell at a
+ * glance that resolution hasn't happened yet (e.g. SC2Pulse was down
+ * during the first ingest, or the opponent isn't ranked yet).
+ */
+function PulseIdCell({ opp }: { opp: Opp }) {
+  const label = pickPulseLabel(opp);
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
+  if (!label) {
+    return (
+      <td className="px-3 py-1.5 text-xs text-text-dim">—</td>
+    );
+  }
+  if (label.isPulseCharacterId) {
+    return (
+      <td
+        className="truncate px-3 py-1.5 font-mono text-xs"
+        title={opp.toonHandle || opp.pulseId}
+      >
+        <a
+          href={sc2pulseCharacterUrl(label.value)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={stop}
+          className="inline-flex items-center gap-1 text-accent-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+        >
+          {label.value}
+          <ExternalLink className="h-3 w-3" aria-hidden />
+        </a>
+      </td>
+    );
+  }
+  return (
+    <td
+      className="truncate px-3 py-1.5 font-mono text-xs text-text-dim"
+      title={`${label.value} · sc2pulse character id not resolved yet`}
+    >
+      {label.value}
+      <span className="ml-1 text-[10px] uppercase tracking-wider text-text-dim/70">
+        toon
+      </span>
+    </td>
   );
 }

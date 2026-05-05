@@ -29,7 +29,19 @@ const GAME_SCHEMA = {
       type: "object",
       additionalProperties: true,
       properties: {
+        // pulseId is the per-opponent storage key. Historically holds
+        // the raw sc2reader toon_handle (region-realm-bnid); kept stable
+        // for backwards compat with existing rows.
         pulseId: { type: "string", maxLength: 200 },
+        // toonHandle: the raw sc2reader toon_handle (e.g. "1-S2-1-267727").
+        // Carried separately so we can retroactively resolve a
+        // pulseCharacterId on later games even if the first ingestion
+        // happened while sc2pulse.nephest.com was unreachable.
+        toonHandle: { type: "string", maxLength: 64 },
+        // pulseCharacterId: the canonical SC2Pulse character ID (numeric
+        // string) — e.g. "994428". This is what the UI shows in the
+        // "Pulse ID" column and what links to sc2pulse.nephest.com.
+        pulseCharacterId: { type: "string", pattern: "^[0-9]+$", maxLength: 32 },
         displayName: { type: "string", maxLength: 80 },
         race: { type: "string", maxLength: 24 },
         mmr: { type: "integer", minimum: 0, maximum: 9999 },
