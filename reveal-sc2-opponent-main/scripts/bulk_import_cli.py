@@ -315,7 +315,27 @@ def _write_black_book_for(opp_db_path: str,
         # No reliable identity -- skip rather than create a phantom
         # row the watcher's reconciler can't match.
         return None
-    pulse_id = f"unknown:{opp_name}"
+    # Resolve the opponent's real SC2Pulse character_id from their
+    # toon_handle when possible -- otherwise the Opponents tab shows
+    # "unknown:<Name>" as the Pulse ID instead of a numeric value
+    # like 994428 (the SC2Pulse character.id used in URLs such as
+    # https://sc2pulse.nephest.com/sc2/?type=character&id=994428).
+    # Best-effort: resolution returns None when SC2Pulse is offline
+    # or no candidate matches the bnid; we fall back to the synthetic
+    # "unknown:<Name>" key so the watcher's merge_unknown_into_numeric
+    # reconciler can fold the row into a numeric record later.
+    opp_toon = (game.get("opp_toon") or "").strip()
+    pulse_id = None
+    if opp_toon:
+        try:
+            from core.pulse_resolver import resolve_pulse_id_by_toon
+            pulse_id = resolve_pulse_id_by_toon(opp_toon, opp_name)
+        except Exception as exc:  # noqa: BLE001
+            _eprint(f"[bulk_import] pulse_id resolve failed for "
+                    f"{opp_name!r} toon={opp_toon}: {exc}")
+            pulse_id = None
+    if not pulse_id:
+        pulse_id = f"unknown:{opp_name}"
     bb_result = bb_game["Result"]
     try:
         return store.upsert_game(
@@ -542,6 +562,12 @@ def _process_replay_task(file_path: str, player_name: str) -> Dict[str, Any]:
         "file_path": abs_path,
         "my_race_initial": my_race_initial,
         "opp_race_initial": opp_race_initial,
+        # Carry the opponent's toon_handle forward so the parent
+        # process can resolve a real SC2Pulse character_id via
+        # resolve_pulse_id_by_toon(); without this the Black Book
+        # falls back to "unknown:<Name>" and the SPA Opponents tab
+        # shows that synthetic key as the Pulse ID.
+        "opp_toon": getattr(ctx.opponent, "handle", None) or None,
     }
 
     return {
