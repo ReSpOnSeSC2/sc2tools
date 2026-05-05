@@ -15,6 +15,33 @@ const { parseFilters } = require("../util/parseQuery");
  */
 function buildCatalogRouter(deps) {
   const router = express.Router();
+
+  // /v1/map-image is a public static asset endpoint — minimaps ship
+  // with the analyzer and contain no per-user data. Keeping it
+  // unauthenticated lets the SPA's <img> tag load it without a bearer
+  // token (browsers can't attach Authorization to <img src>).
+  router.get("/map-image", (req, res, next) => {
+    try {
+      const name = String(req.query.map || "").trim();
+      if (!name) {
+        res.status(400).json({ error: { code: "map_required" } });
+        return;
+      }
+      const found = deps.catalog.mapImagePath(name);
+      if (!found) {
+        res.status(404).json({ error: { code: "map_image_not_found" } });
+        return;
+      }
+      res.setHeader("content-type", found.contentType);
+      res.setHeader("cache-control", "public, max-age=86400");
+      fs.createReadStream(found.path)
+        .on("error", (e) => next(e))
+        .pipe(res);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.use(deps.auth);
 
   router.get("/catalog", async (_req, res, next) => {
@@ -50,29 +77,6 @@ function buildCatalogRouter(deps) {
         }
       }
       res.end();
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  router.get("/map-image", (req, res, next) => {
-    try {
-      requireAuth(req);
-      const name = String(req.query.map || "").trim();
-      if (!name) {
-        res.status(400).json({ error: { code: "map_required" } });
-        return;
-      }
-      const found = deps.catalog.mapImagePath(name);
-      if (!found) {
-        res.status(404).json({ error: { code: "map_image_not_found" } });
-        return;
-      }
-      res.setHeader("content-type", found.contentType);
-      res.setHeader("cache-control", "public, max-age=86400");
-      fs.createReadStream(found.path)
-        .on("error", (e) => next(e))
-        .pipe(res);
     } catch (err) {
       next(err);
     }

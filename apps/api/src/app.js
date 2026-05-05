@@ -92,7 +92,6 @@ function makeServices(deps) {
   const users = new UsersService(deps.db);
   const opponents = new OpponentsService(deps.db, deps.config.serverPepper);
   const games = new GamesService(deps.db);
-  const customBuilds = new CustomBuildsService(deps.db);
   const pairings = new DevicePairingsService(deps.db);
   const overlayTokens = new OverlayTokensService(deps.db);
   const aggregations = new AggregationsService(deps.db);
@@ -101,6 +100,7 @@ function makeServices(deps) {
   const perGame = new PerGameComputeService(deps.db, {
     catalog: catalog.catalogLookup(),
   });
+  const customBuilds = new CustomBuildsService(deps.db, { perGame });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io });
   const spatial = new SpatialService(deps.db);

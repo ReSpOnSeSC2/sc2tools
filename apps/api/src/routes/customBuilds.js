@@ -207,6 +207,58 @@ function buildCustomBuildsRouter(deps) {
     }
   });
 
+  /**
+   * GET /v1/custom-builds/stats
+   *
+   * Aggregate W/L/winRate per saved build by re-running each build's
+   * rules against the user's recent games. Lets the BuildsLibrary card
+   * grid show real numbers immediately after save, instead of waiting
+   * for the agent to reclassify and tag games with `myBuild`.
+   */
+  router.get("/custom-builds/stats", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      if (!deps.perGame) {
+        res.status(503).json({ error: { code: "stats_unavailable" } });
+        return;
+      }
+      const items = await deps.customBuilds.evaluateAllStats(auth.userId);
+      res.json(items);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /v1/custom-builds/:slug/matches
+   *
+   * Per-build detail mirroring /v1/builds/:name shape. Same totals/
+   * byMatchup/byMap/byStrategy/recent fields, but driven by the saved
+   * rules so newly-saved builds show their matched games right away.
+   */
+  router.get("/custom-builds/:slug/matches", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      if (!deps.perGame) {
+        res.status(503).json({ error: { code: "stats_unavailable" } });
+        return;
+      }
+      const result = await deps.customBuilds.evaluateBuild(
+        auth.userId,
+        String(req.params.slug),
+      );
+      if (!result) {
+        res.status(404).json({ error: { code: "not_found" } });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/custom-builds/:slug", async (req, res, next) => {
     try {
       const auth = req.auth;
