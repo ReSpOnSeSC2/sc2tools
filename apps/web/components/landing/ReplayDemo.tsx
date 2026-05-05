@@ -2,114 +2,129 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, FileUp, Sparkles, Upload } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  FileUp,
+  Loader2,
+  Sparkles,
+  Upload,
+  User as UserIcon,
+} from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
+import { API_BASE } from "@/lib/clientApi";
 
 /**
- * ReplayDemo — landing-page "drop a replay, peek at the dossier" CTA.
+ * ReplayDemo — landing-page "drop a replay, see the real dossier" CTA.
  *
- * The demo is honest: we don't parse the user's file in the browser
- * (sc2reader is Python-only) and we don't expose an unauth'd
- * server-side parser. Picking a file opens a sample dossier — drawn
- * from a real ladder replay we curate for marketing — and the modal
- * is labelled "Sample" everywhere so a visitor never confuses it for
- * a parse of *their* file. The filename + size of their file appear
- * in the modal header so they feel acknowledged.
+ * The demo runs a real parse on the server: when the visitor picks a
+ * file, we POST the binary to /v1/public/preview-replay (an unauth'd
+ * rate-limited route backed by sc2reader). The route returns both
+ * players' identity, race, result, and build log. We render that in a
+ * modal with a perspective toggle so the visitor can read whichever
+ * side they care about.
  *
- * Per project rule: this is the only synthetic-looking content in
- * shipping code, and it's explicitly framed as a curated sample, not
- * a stat about the user.
+ * No mock data — if the upload fails, we surface the failure and a
+ * sign-up CTA instead of pretending we know what's in the file.
  */
 
-interface PickedReplay {
+interface PreviewPlayer {
   name: string;
-  sizeKb: number;
-  /** Try to read a few hints from the SC2 default filename pattern. */
-  hints: ReplayFilenameHints;
+  race: string;
+  result: string;
+  handle: string | null;
+  build_log: string[];
+  mmr?: number;
 }
 
-interface ReplayFilenameHints {
-  matchup?: string;
-  map?: string;
+interface PreviewDossier {
+  ok: true;
+  game_id: string;
+  map: string;
+  duration_sec: number;
+  date: string;
+  players: [PreviewPlayer, PreviewPlayer];
 }
 
-// Curated sample drawn from a real ladder replay. Used solely on the
-// marketing landing page as a "what you'll see" example, never as a
-// stand-in for a logged-in user's data.
-const SAMPLE_DOSSIER = {
-  opponent: "scvSlayer",
-  race: "Terran" as const,
-  matchup: "PvT",
-  map: "Equilibrium LE",
-  mmr: 4180,
-  league: "Diamond 1",
-  headToHead: { wins: 3, losses: 5 },
-  signature: [
-    {
-      time: "0:17",
-      label: "Supply Depot",
-      tag: "Standard",
-    },
-    {
-      time: "1:00",
-      label: "Barracks",
-      tag: "Tell · 1-base play",
-    },
-    {
-      time: "2:30",
-      label: "Bunker",
-      tag: "Cheese watch",
-    },
-    {
-      time: "4:45",
-      label: "Factory + Reactor",
-      tag: "Hellion follow-up likely",
-    },
-    {
-      time: "5:20",
-      label: "+1 Vehicle Weapons",
-      tag: "Mech transition",
-    },
-  ],
-  tells: [
-    "No 2nd CC by 2:00 → 1-base bunker push or banshee opener",
-    "Reactor before Tech Lab on Factory → hellions, not cyclones",
-    "Engineering Bay before 5:30 → committing to mech",
-  ],
-} as const;
-
-const FILENAME_MATCHUP_RE = /([PTZR])v([PTZR])/i;
-
-function readFilenameHints(name: string): ReplayFilenameHints {
-  const hints: ReplayFilenameHints = {};
-  const matchup = FILENAME_MATCHUP_RE.exec(name);
-  if (matchup) hints.matchup = `${matchup[1].toUpperCase()}v${matchup[2].toUpperCase()}`;
-  // SC2 default filenames: "Map (...).SC2Replay" or "Map_yyyy-mm-dd_xx.SC2Replay"
-  const noExt = name.replace(/\.SC2Replay$/i, "");
-  const beforeDate = noExt.split(/[_\s]\d{4}-\d{2}-\d{2}/)[0];
-  if (beforeDate && beforeDate.length > 1 && beforeDate.length < 60) {
-    hints.map = beforeDate.replace(/[_-]+/g, " ").trim();
-  }
-  return hints;
+interface PreviewError {
+  code: string;
+  message: string;
 }
+
+const MAX_BYTES = 5 * 1024 * 1024; // matches the API limit
+const FRIENDLY_ERRORS: Record<string, string> = {
+  empty_body: "That file looked empty — pick another replay?",
+  not_a_replay:
+    "That doesn't look like a .SC2Replay file. Pick a real replay from your StarCraft II folder.",
+  no_two_humans:
+    "This demo only handles 1v1 replays with two human players (no vs-AI / co-op).",
+  ai_game: "This demo only handles 1v1 vs another human, not vs-AI.",
+  parser_no_output: "The parser ran but returned nothing. Try a different replay.",
+  python_error: "The cloud parser hit an error on this replay. Try a different one.",
+  parse_failed: "Couldn't parse that replay. Try a different one.",
+  preview_unavailable:
+    "The live preview is temporarily offline. Sign up and your real replays will still parse.",
+  rate_limited: "Easy! Wait a minute then try another replay.",
+  too_large: "That file is bigger than the demo accepts. Pick a smaller one or sign up.",
+};
 
 export function ReplayDemo() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [picked, setPicked] = useState<PickedReplay | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [filename, setFilename] = useState<string | null>(null);
+  const [dossier, setDossier] = useState<PreviewDossier | null>(null);
+  const [error, setError] = useState<PreviewError | null>(null);
   const [open, setOpen] = useState(false);
+  const [perspective, setPerspective] = useState<0 | 1>(0);
 
-  const onPick = (file: File | null) => {
+  async function onPick(file: File | null) {
     if (!file) return;
-    setPicked({
-      name: file.name,
-      sizeKb: Math.round(file.size / 1024),
-      hints: readFilenameHints(file.name),
-    });
+    setFilename(file.name);
+    setDossier(null);
+    setError(null);
+    setPerspective(0);
     setOpen(true);
-  };
+    if (file.size === 0) {
+      setError({ code: "empty_body", message: "" });
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      setError({ code: "too_large", message: "" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const res = await fetch(`${API_BASE}/v1/public/preview-replay`, {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream" },
+        body: buf,
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json) {
+        const code = json?.error?.code || `http_${res.status}`;
+        const message = json?.error?.message || "";
+        setError({ code, message });
+        return;
+      }
+      if (json.ok !== true) {
+        setError({
+          code: json.error?.code || "parse_failed",
+          message: json.error?.message || "",
+        });
+        return;
+      }
+      setDossier(json as PreviewDossier);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "network error";
+      setError({ code: "network", message });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <section className="mx-auto max-w-5xl">
@@ -124,12 +139,12 @@ export function ReplayDemo() {
             </Badge>
             <h2 className="text-h2 font-semibold text-text md:text-h1">
               Drop a <span className="text-accent-cyan">.SC2Replay</span> file —
-              peek at the dossier.
+              see the real dossier.
             </h2>
             <p className="text-body-lg text-text-muted">
-              Pick any replay from your StarCraft II folder. We&rsquo;ll
-              acknowledge it instantly and show you a sample of the opponent
-              page you&rsquo;ll get for every game once you sign in.
+              Pick any replay from your StarCraft II folder. We&rsquo;ll parse
+              it on the spot, then surface the opponent&rsquo;s identity,
+              race, build order, and timings — no account required.
             </p>
             <div className="flex flex-wrap gap-3 pt-1">
               <Button
@@ -145,7 +160,7 @@ export function ReplayDemo() {
                 type="file"
                 accept=".SC2Replay"
                 className="sr-only"
-                onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+                onChange={(e) => void onPick(e.target.files?.[0] ?? null)}
               />
               <Link
                 href="/sign-up"
@@ -156,7 +171,8 @@ export function ReplayDemo() {
               </Link>
             </div>
             <p className="text-caption text-text-dim">
-              Files stay on your machine — the demo doesn&rsquo;t upload.
+              Files are parsed once and discarded — nothing about your replay
+              is stored.
             </p>
           </div>
 
@@ -171,69 +187,238 @@ export function ReplayDemo() {
         title={
           <span className="flex flex-wrap items-center gap-2">
             <span className="text-h4 font-semibold text-text">
-              Sample opponent dossier
+              Replay dossier
             </span>
-            {picked ? (
+            {filename ? (
               <Badge variant="cyan" size="sm">
-                {picked.name.length > 36
-                  ? `${picked.name.slice(0, 33)}…`
-                  : picked.name}
+                {filename.length > 36
+                  ? `${filename.slice(0, 33)}…`
+                  : filename}
               </Badge>
             ) : null}
           </span>
         }
         description={
-          picked ? (
-            <SamplePickedDescription picked={picked} />
-          ) : (
-            "What you'll see for every replay after signing in."
-          )
+          dossier
+            ? `Parsed live — ${dossier.players[0].name} vs ${dossier.players[1].name} on ${dossier.map}`
+            : busy
+              ? "Parsing your replay…"
+              : error
+                ? "Something didn't work."
+                : "Drop a replay above to see it parsed live."
         }
-        footer={<SampleFooter />}
+        footer={<DossierFooter />}
       >
-        <SampleDossier />
+        {busy ? (
+          <DossierLoading />
+        ) : error ? (
+          <DossierError error={error} />
+        ) : dossier ? (
+          <Dossier
+            dossier={dossier}
+            perspective={perspective}
+            setPerspective={setPerspective}
+          />
+        ) : (
+          <DossierLoading />
+        )}
       </Modal>
     </section>
   );
 }
 
-function SamplePickedDescription({ picked }: { picked: PickedReplay }) {
-  return (
-    <>
-      Got it — <strong className="text-text">{picked.sizeKb} KB</strong>
-      {picked.hints.matchup ? (
-        <>
-          {" "}
-          ·{" "}
-          <strong className="text-text">{picked.hints.matchup}</strong>
-        </>
-      ) : null}
-      {picked.hints.map ? (
-        <>
-          {" "}
-          on <strong className="text-text">{picked.hints.map}</strong>
-        </>
-      ) : null}
-. Live parsing requires an account — below is a sample dossier so
-      you can see what it looks like first.
-    </>
-  );
-}
-
-function SampleFooter() {
+function DossierFooter() {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-caption text-text-muted">
-        This dossier is from a real ladder replay we keep as a sample.
+        Live parsed. Sign up to keep every replay in your library forever.
       </p>
       <Link
         href="/sign-up"
         className="inline-flex h-10 min-w-[44px] items-center justify-center gap-2 rounded-lg bg-accent px-4 text-body font-semibold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
-        Parse my replays for real
+        Save my replays for real
         <ArrowRight className="h-4 w-4" aria-hidden />
       </Link>
     </div>
+  );
+}
+
+function DossierLoading() {
+  return (
+    <div className="flex items-center justify-center gap-3 py-12 text-text-muted">
+      <Loader2 className="h-5 w-5 animate-spin text-accent-cyan" aria-hidden />
+      <span className="text-body">Parsing replay…</span>
+    </div>
+  );
+}
+
+function DossierError({ error }: { error: PreviewError }) {
+  const friendly = FRIENDLY_ERRORS[error.code] || error.message ||
+    "We couldn't parse that replay.";
+  return (
+    <div className="space-y-4 py-4">
+      <div className="flex items-start gap-3 rounded-lg border border-danger/40 bg-danger/10 p-4 text-body text-danger">
+        <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" aria-hidden />
+        <div className="space-y-1">
+          <p className="font-medium">Couldn&apos;t parse that replay</p>
+          <p className="text-text-muted">{friendly}</p>
+        </div>
+      </div>
+      <p className="text-caption text-text-muted">
+        Sign up and the agent will parse every replay automatically — even
+        the ones the public demo can&rsquo;t handle.
+      </p>
+    </div>
+  );
+}
+
+function Dossier({
+  dossier,
+  perspective,
+  setPerspective,
+}: {
+  dossier: PreviewDossier;
+  perspective: 0 | 1;
+  setPerspective: (next: 0 | 1) => void;
+}) {
+  const me = dossier.players[perspective];
+  const opp = dossier.players[perspective === 0 ? 1 : 0];
+  return (
+    <div className="space-y-5">
+      <PerspectiveToggle
+        players={dossier.players}
+        active={perspective}
+        onSelect={setPerspective}
+      />
+      <div className="rounded-lg border border-border bg-bg-elevated/40 p-4">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <h3 className="text-h3 font-semibold text-text">{opp.name}</h3>
+          <Badge variant="cyan" size="sm">
+            {raceMatchup(me.race, opp.race)}
+          </Badge>
+          <Badge variant="neutral" size="sm">
+            {opp.race}
+          </Badge>
+          {typeof opp.mmr === "number" ? (
+            <Badge variant="neutral" size="sm">
+              {opp.mmr} MMR
+            </Badge>
+          ) : null}
+          <Badge
+            variant={isVictory(me.result) ? "success" : "danger"}
+            size="sm"
+          >
+            You: {me.result || "?"}
+          </Badge>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-text-muted">
+          <span>
+            Map: <strong className="text-text">{dossier.map || "?"}</strong>
+          </span>
+          <span>
+            Duration:{" "}
+            <strong className="text-text">
+              {formatDuration(dossier.duration_sec)}
+            </strong>
+          </span>
+          {dossier.date ? (
+            <span>
+              Played:{" "}
+              <strong className="text-text">
+                {formatDate(dossier.date)}
+              </strong>
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div>
+        <h4 className="mb-2 text-caption font-semibold uppercase tracking-wider text-text-muted">
+          {opp.name}&rsquo;s build order
+        </h4>
+        {opp.build_log.length === 0 ? (
+          <p className="text-caption text-text-dim">
+            No mappable events on this side of the replay.
+          </p>
+        ) : (
+          <BuildOrderList lines={opp.build_log} />
+        )}
+      </div>
+
+      <div>
+        <h4 className="mb-2 text-caption font-semibold uppercase tracking-wider text-text-muted">
+          Your build order ({me.name})
+        </h4>
+        {me.build_log.length === 0 ? (
+          <p className="text-caption text-text-dim">
+            No mappable events on your side of the replay.
+          </p>
+        ) : (
+          <BuildOrderList lines={me.build_log} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PerspectiveToggle({
+  players,
+  active,
+  onSelect,
+}: {
+  players: readonly [PreviewPlayer, PreviewPlayer];
+  active: 0 | 1;
+  onSelect: (next: 0 | 1) => void;
+}) {
+  return (
+    <div className="flex gap-2 rounded-lg border border-border bg-bg-elevated/40 p-1">
+      {players.map((p, i) => {
+        const isActive = active === i;
+        return (
+          <button
+            key={p.handle ?? `p${i}`}
+            type="button"
+            onClick={() => onSelect(i as 0 | 1)}
+            aria-pressed={isActive}
+            className={[
+              "inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-caption font-medium",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+              isActive
+                ? "bg-accent-cyan/15 text-accent-cyan"
+                : "text-text-muted hover:bg-bg-subtle hover:text-text",
+            ].join(" ")}
+          >
+            <UserIcon className="h-4 w-4" aria-hidden />
+            <span>
+              <span className="font-semibold">{p.name}</span>
+              <span className="ml-1 text-text-dim">· {p.race}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function BuildOrderList({ lines }: { lines: readonly string[] }) {
+  return (
+    <ul className="divide-y divide-border rounded-lg border border-border">
+      {lines.map((line, i) => {
+        const parsed = parseBuildLogLine(line);
+        return (
+          <li
+            key={`${i}-${line}`}
+            className="flex flex-wrap items-center gap-3 px-3 py-1.5 text-body"
+          >
+            <span className="w-12 font-mono tabular-nums text-text-dim">
+              {parsed.time}
+            </span>
+            <span className="flex-1 truncate text-text">{parsed.name}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -264,86 +449,47 @@ function ReplayDropPreview({ onActivate }: { onActivate: () => void }) {
           Pick a replay
         </span>
         <span className="block text-caption text-text-muted">
-          .SC2Replay · stays on your device
+          .SC2Replay · parsed live, never stored
         </span>
       </span>
     </button>
   );
 }
 
-function SampleDossier() {
-  return (
-    <div className="space-y-5">
-      <div className="rounded-lg border border-border bg-bg-elevated/40 p-4">
-        <div className="flex flex-wrap items-baseline gap-3">
-          <h3 className="text-h3 font-semibold text-text">
-            {SAMPLE_DOSSIER.opponent}
-          </h3>
-          <Badge variant="cyan" size="sm">
-            {SAMPLE_DOSSIER.matchup}
-          </Badge>
-          <Badge variant="neutral" size="sm">
-            {SAMPLE_DOSSIER.race}
-          </Badge>
-          <Badge variant="neutral" size="sm">
-            {SAMPLE_DOSSIER.league}
-          </Badge>
-          <Badge variant="neutral" size="sm">
-            {SAMPLE_DOSSIER.mmr} MMR
-          </Badge>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-text-muted">
-          <span>
-            Map: <strong className="text-text">{SAMPLE_DOSSIER.map}</strong>
-          </span>
-          <span>
-            Head-to-head:{" "}
-            <strong className="text-text">
-              {SAMPLE_DOSSIER.headToHead.wins}W &mdash;{" "}
-              {SAMPLE_DOSSIER.headToHead.losses}L
-            </strong>
-          </span>
-        </div>
-      </div>
+/* ---------------- helpers ---------------- */
 
-      <div>
-        <h4 className="mb-2 text-caption font-semibold uppercase tracking-wider text-text-muted">
-          Build signature
-        </h4>
-        <ul className="divide-y divide-border rounded-lg border border-border">
-          {SAMPLE_DOSSIER.signature.map((row) => (
-            <li
-              key={row.time}
-              className="flex flex-wrap items-center gap-3 px-3 py-2 text-body"
-            >
-              <span className="w-12 font-mono tabular-nums text-text-dim">
-                {row.time}
-              </span>
-              <span className="flex-1 truncate font-medium text-text">
-                {row.label}
-              </span>
-              <span className="text-caption text-text-muted">{row.tag}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+function formatDuration(seconds: number): string {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s < 10 ? "0" + s : s}`;
+}
 
-      <div>
-        <h4 className="mb-2 text-caption font-semibold uppercase tracking-wider text-text-muted">
-          Scouting tells
-        </h4>
-        <ul className="space-y-1.5 text-body text-text-muted">
-          {SAMPLE_DOSSIER.tells.map((t) => (
-            <li key={t} className="flex items-start gap-2">
-              <span
-                aria-hidden
-                className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-cyan"
-              />
-              <span>{t}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
+function formatDate(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString();
+}
+
+function raceMatchup(myRace: string, oppRace: string): string {
+  const m = (myRace || "?").charAt(0).toUpperCase();
+  const o = (oppRace || "?").charAt(0).toUpperCase();
+  return `${m}v${o}`;
+}
+
+function isVictory(result: string): boolean {
+  if (!result) return false;
+  return /^(victory|win)/i.test(result);
+}
+
+interface ParsedLine {
+  time: string;
+  name: string;
+}
+
+function parseBuildLogLine(raw: string): ParsedLine {
+  const m = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/.exec(raw);
+  if (!m) return { time: "—", name: raw };
+  return { time: `${m[1]}:${m[2]}`, name: m[3] };
 }

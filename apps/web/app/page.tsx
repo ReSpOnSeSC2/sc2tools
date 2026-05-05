@@ -10,12 +10,10 @@ import {
   Download,
   Fingerprint,
   Heart,
-  LayoutDashboard,
   Library,
   Map,
   Mic2,
   Shield,
-  Sparkles,
   Swords,
   Tv,
   Wand2,
@@ -25,7 +23,6 @@ import { Banner } from "@/components/Banner";
 import {
   Badge,
   Card,
-  DeviceFrame,
   GlowHalo,
   Section,
 } from "@/components/ui";
@@ -45,7 +42,6 @@ export default function LandingPage() {
       <HeroSection />
       <ReplayDemo />
       <PillarsSection />
-      <ShowcaseSection />
       <HowItWorksSection />
       <SocialProofSection />
       <DonateBanner />
@@ -141,13 +137,22 @@ const HERO_PEEK_SLIDES: ReadonlyArray<HeroPeek> = [
       "Opponent profile page in SC2 Tools showing matchup record, build tendencies, and median key timings",
   },
   {
-    id: "peek-overlay",
+    id: "peek-overlay-live",
     eyebrow: "See it before you sign up",
     title: "Live OBS overlay — copy & paste",
     body: "15 broadcast-ready widgets behind one URL. Drop it into a Browser Source and you're streaming.",
     imageSrc: "/landing/overlay-live.png",
     imageAlt:
       "StarCraft II gameplay with the SC2 Tools live OBS overlay running — opponent identity card, session record, and rematch flag",
+  },
+  {
+    id: "peek-overlay-rematch",
+    eyebrow: "See it before you sign up",
+    title: "Familiar-opponent flags, on stream",
+    body: "Run-it-back? The overlay calls out repeats with last-result, head-to-head record, and the games that got you there.",
+    imageSrc: "/landing/overlay-rematch.png",
+    imageAlt:
+      "Stream overlay rematch widget — opponent name, MMR, FAMILIAR / Last Defeat tag, and a list of recent games",
   },
   {
     id: "peek-builds",
@@ -157,6 +162,15 @@ const HERO_PEEK_SLIDES: ReadonlyArray<HeroPeek> = [
     imageSrc: "/landing/builds.png",
     imageAlt:
       "Custom Builds page in SC2 Tools showing per-build wins, losses, win rate, and trend sparklines",
+  },
+  {
+    id: "peek-build-editor",
+    eyebrow: "See it before you sign up",
+    title: "Save any replay as a custom build",
+    body: "Open a game, click ‘Save as new build’, promote starred events into rules — your library reclassifies in place.",
+    imageSrc: "/landing/build-editor.png",
+    imageAlt:
+      "Save-as-new-build editor with the source replay timeline on the left and one-click rule promotion buttons",
   },
 ];
 
@@ -298,136 +312,6 @@ function PillarCard({ icon: Icon, title, body }: Pillar) {
         </div>
       </Card>
     </li>
-  );
-}
-
-/* =============================================================== */
-/* SHOWCASE                                                         */
-/* =============================================================== */
-
-interface ShowcaseItem {
-  route: string;
-  feature: string;
-  icon: LucideIcon;
-  title: string;
-  body: string;
-  imageSrc: string;
-  imageAlt: string;
-}
-
-const SHOWCASE_ITEMS: ReadonlyArray<ShowcaseItem> = [
-  {
-    route: "sc2tools.com/app",
-    feature: "Dashboard",
-    icon: LayoutDashboard,
-    title: "Your KPI room — between every game",
-    body: "Total games, by-matchup bars, recent results, and MMR delta — all under one filter-aware lens that persists across every page.",
-    imageSrc: "/landing/builds.png",
-    imageAlt:
-      "Dashboard view in SC2 Tools with games-today, win-rate, streak, and total-games KPIs over the Builds tab",
-  },
-  {
-    route: "sc2tools.com/app/opponents",
-    feature: "Opponent DNA",
-    icon: Fingerprint,
-    title: "Opponent dossiers that survive name changes",
-    body: "Click any opponent and see every game, their build tendencies, detected strategies, and median timings — keyed to a stable Pulse ID, not an in-replay name.",
-    imageSrc: "/landing/opponent-dna.png",
-    imageAlt:
-      "Opponent profile with by-map win rate, build tendencies, last 5 games, and median key timings per matchup",
-  },
-  {
-    route: "sc2tools.com/settings/overlay",
-    feature: "Live Overlay",
-    icon: Tv,
-    title: "Stream-ready in one Browser Source",
-    body: "Pop your hosted overlay URL into OBS. Pre-game scouting card, live W-L, post-game build reveal, streak splashes — all from one event bus.",
-    imageSrc: "/landing/overlay-rematch.png",
-    imageAlt:
-      "Overlay rematch widget on stream — shows opponent name, MMR, FAMILIAR flag with last result, and recent games",
-  },
-  {
-    route: "sc2tools.com/builds",
-    feature: "Build classifier",
-    icon: Wand2,
-    title: "Tunable classifier, syncable library",
-    body: "Auto-classified openers with per-build W-L, last-played, and a custom library you sync between machines and share with the community.",
-    imageSrc: "/landing/build-editor.png",
-    imageAlt:
-      "Save-as-new-build editor in SC2 Tools — basics fields plus the source replay timeline with one-click rule promotion",
-  },
-];
-
-function ShowcaseSection() {
-  return (
-    <section className="mx-auto max-w-6xl space-y-12">
-      <header className="mx-auto max-w-3xl text-center">
-        <p className="text-caption font-semibold uppercase tracking-wider text-accent-cyan">
-          Live preview
-        </p>
-        <h2 className="mt-2 text-h2 font-semibold md:text-h1">
-          See it before you sign up
-        </h2>
-        <p className="mt-3 text-body-lg text-text-muted">
-          Four surfaces. One data pipeline. No tagging required.
-        </p>
-      </header>
-      <div className="space-y-12 md:space-y-20">
-        {SHOWCASE_ITEMS.map((item, i) => (
-          <ShowcaseRow key={item.feature} index={i} {...item} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ShowcaseRow({
-  index,
-  route,
-  feature,
-  title,
-  body,
-  imageSrc,
-  imageAlt,
-}: ShowcaseItem & { index: number }) {
-  const reverse = index % 2 === 1;
-  return (
-    <div
-      className={[
-        "flex flex-col gap-6 md:items-center md:gap-10",
-        reverse ? "md:flex-row-reverse" : "md:flex-row",
-      ].join(" ")}
-    >
-      <div className="space-y-3 md:max-w-md md:flex-1">
-        <Badge
-          variant="cyan"
-          iconLeft={<Sparkles className="h-3.5 w-3.5" aria-hidden />}
-        >
-          {feature}
-        </Badge>
-        <h3 className="text-h2 font-semibold text-text">{title}</h3>
-        <p className="text-body-lg text-text-muted">{body}</p>
-      </div>
-      <div className="md:flex-1">
-        <DeviceFrame variant="browser" title={route} glow>
-          <ShowcaseShot src={imageSrc} alt={imageAlt} />
-        </DeviceFrame>
-      </div>
-    </div>
-  );
-}
-
-function ShowcaseShot({ src, alt }: { src: string; alt: string }) {
-  return (
-    <div className="relative aspect-[16/9] overflow-hidden bg-bg">
-      <Image
-        src={src}
-        alt={alt}
-        fill
-        sizes="(min-width: 1024px) 50vw, 100vw"
-        className="object-cover"
-      />
-    </div>
   );
 }
 
