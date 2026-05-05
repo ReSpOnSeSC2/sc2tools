@@ -11,5 +11,7 @@ sentry-sdk==2.18.0
 # PySide6 powers the production GUI (sc2tools_agent.ui.gui). The agent
 # falls back to the system tray + console UI when this is missing, so
 # the dependency is recommended-but-not-required for source installs.
-# Pinned for reproducible .exe builds via PyInstaller.
-PySide6==6.8.0.1
+# Loose pin (>=6.7,<7) so pip can pick whichever 6.x wheel matches the
+# Python build on the runner — strict ==6.8.0.1 has bitten us when the
+# matching wheel isn't published for a 3.12 sub-version yet.
+PySide6>=6.7,<7
