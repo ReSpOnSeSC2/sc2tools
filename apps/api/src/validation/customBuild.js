@@ -38,6 +38,16 @@ const BUILD_SCHEMA = {
     },
     notes: { type: "string", maxLength: 8000 },
     isPublic: { type: "boolean" },
+    /**
+     * Provenance fields populated when the build is captured from a
+     * specific replay (Phase 6 "Save as new build" flow).
+     */
+    perspective: { type: "string", enum: ["you", "opponent"] },
+    sourceGameId: { type: "string", maxLength: 200 },
+    opponentRace: {
+      type: "string",
+      enum: ["Protoss", "Terran", "Zerg", "Random"],
+    },
   },
 };
 

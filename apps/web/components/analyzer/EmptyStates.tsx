@@ -4,7 +4,6 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import {
   Activity,
-  Brain,
   Download,
   Filter,
   Gamepad2,
@@ -100,17 +99,6 @@ export function NoBuildOrder({
           Ask the agent to recompute
         </Button>
       }
-    />
-  );
-}
-
-export function NoMlModel() {
-  return (
-    <EmptyStatePanel
-      size="md"
-      icon={<Brain className="h-5 w-5" aria-hidden />}
-      title="No ML model trained"
-      description="Train your first model in the ML Core tab. Needs at least ~50 recent ranked games."
     />
   );
 }

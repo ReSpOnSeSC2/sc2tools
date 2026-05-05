@@ -146,6 +146,14 @@ export function SaveAsBuildModal({
               description: gameId
                 ? `Captured from game ${gameId} (${describePerspective(perspective)} build).`
                 : `Captured ${describePerspective(perspective)} build.`,
+              perspective,
+              sourceGameId: gameId,
+              // When saving from the opponent's perspective, the user's
+              // selected vsRace IS the opponent's race — but we record
+              // it explicitly so the builds page can surface a "from
+              // opponent" badge with the actual race played.
+              opponentRace:
+                perspective === "opponent" ? raceValue : undefined,
             }),
           },
         );

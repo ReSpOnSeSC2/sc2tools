@@ -15,9 +15,9 @@ export function WizardFoundation() {
       </p>
       <ul className="ml-5 list-disc space-y-1">
         <li>Detailed history of every ranked match.</li>
-        <li>Opponent dossiers with predicted strategies and timings.</li>
+        <li>Opponent dossiers with detected strategies and timings.</li>
         <li>OBS overlay with 15+ widgets — opponent card, MMR delta, etc.</li>
-        <li>Multi-folder replay imports, custom builds, ML predictions.</li>
+        <li>Multi-folder replay imports, custom builds, community pool.</li>
       </ul>
       <p>
         All you need is a Battle.net account in good standing and a few

@@ -45,6 +45,11 @@
   --halo-cyan: rgba(62, 192, 199, 0.18);
   --halo-accent: rgba(124, 140, 255, 0.18);
 
+  --race-protoss: 124 140 255;   /* #7c8cff — matches accent */
+  --race-terran:  255 107 107;   /* #ff6b6b — danger-ish ladder colour */
+  --race-zerg:    167 139 250;   /* #a78bfa — violet, ladder canon */
+  --race-random:  154 163 178;   /* muted neutral */
+
   --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.02), 0 8px 24px rgba(0, 0, 0, 0.32);
 }
 
@@ -73,6 +78,11 @@
 
   --halo-cyan: rgba(30, 160, 168, 0.14);
   --halo-accent: rgba(91, 109, 255, 0.14);
+
+  --race-protoss: 91 109 255;    /* #5b6dff */
+  --race-terran:  214 73 78;     /* #d6494e */
+  --race-zerg:    124 95 230;    /* #7c5fe6 — darker for AA on white */
+  --race-random:  90 99 120;     /* matches text-muted */
 
   --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.6), 0 6px 20px rgba(15, 23, 42, 0.08);
 }

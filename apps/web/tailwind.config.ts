@@ -39,6 +39,12 @@ const config: Config = {
         success: channel("--success"),
         warning: channel("--warning"),
         danger: channel("--danger"),
+        race: {
+          protoss: channel("--race-protoss"),
+          terran: channel("--race-terran"),
+          zerg: channel("--race-zerg"),
+          random: channel("--race-random"),
+        },
         border: {
           DEFAULT: channel("--border"),
           strong: channel("--border-strong"),
