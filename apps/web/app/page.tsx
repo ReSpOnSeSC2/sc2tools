@@ -4,7 +4,6 @@ import {
   ArrowRight,
   BarChart3,
   BookOpen,
-  Brain,
   CheckCircle2,
   Cloud,
   Download,
@@ -15,6 +14,7 @@ import {
   Mic2,
   Shield,
   Sparkles,
+  Swords,
   Tv,
   Wand2,
 } from "lucide-react";
@@ -137,9 +137,9 @@ const PILLARS: ReadonlyArray<Pillar> = [
     body: "15 broadcast-ready widgets, per-widget URLs.",
   },
   {
-    icon: Brain,
-    title: "ML Build Prediction",
-    body: "Predict opponent strategy from early scout cues.",
+    icon: Swords,
+    title: "Strategy Detection",
+    body: "Per-matchup playbook with rule-based opener identification across 100+ builds.",
   },
   {
     icon: Map,
@@ -218,7 +218,7 @@ const SHOWCASE_ITEMS: ReadonlyArray<ShowcaseItem> = [
     feature: "Opponent DNA",
     icon: Fingerprint,
     title: "Opponent dossiers that survive name changes",
-    body: "Click any opponent and see every game, their build tendencies, predicted strategies, and median timings — keyed to a stable Pulse ID, not an in-replay name.",
+    body: "Click any opponent and see every game, their build tendencies, detected strategies, and median timings — keyed to a stable Pulse ID, not an in-replay name.",
   },
   {
     route: "sc2tools.app/streaming",

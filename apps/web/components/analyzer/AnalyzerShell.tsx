@@ -4,14 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
-  Brain,
   ChevronDown,
   Fingerprint,
   Layers,
   Map as MapIcon,
   MapPin,
   Settings as SettingsIcon,
-  Sparkles,
   Swords,
   TrendingUp,
   Users,
@@ -26,8 +24,6 @@ import { BattlefieldTab } from "./BattlefieldTab";
 import { BuildsTab } from "./BuildsTab";
 import { DoctorBanner } from "./DoctorBanner";
 import { MapIntelTab } from "./MapIntelTab";
-import { MlCoreTab } from "./MlCoreTab";
-import { MlPredictTab } from "./MlPredictTab";
 import { OpponentDnaGrid } from "./OpponentDnaGrid";
 import { OpponentsTab } from "./OpponentsTab";
 import { ProfileView } from "./ProfileView";
@@ -42,9 +38,7 @@ type TabId =
   | "builds"
   | "dna"
   | "map-intel"
-  | "activity"
-  | "ml-core"
-  | "ml-predict";
+  | "activity";
 
 type TabDef = {
   id: TabId;
@@ -62,8 +56,6 @@ const TABS: readonly TabDef[] = [
   { id: "dna", label: "DNA", icon: Fingerprint, description: "Opponent timing fingerprint grid." },
   { id: "map-intel", label: "Map intel", icon: MapPin, description: "Spatial heatmaps for known maps." },
   { id: "activity", label: "Activity", icon: Activity, description: "Per-game charts of resources, army, chrono." },
-  { id: "ml-core", label: "ML core", icon: Brain, description: "Train and inspect the local model." },
-  { id: "ml-predict", label: "ML predict", icon: Sparkles, description: "Live predictions from the trained model." },
 ] as const;
 
 export function AnalyzerShell() {
@@ -296,10 +288,6 @@ function TabPanel({
       return <MapIntelTab />;
     case "activity":
       return <ActivityCharts />;
-    case "ml-core":
-      return <MlCoreTab />;
-    case "ml-predict":
-      return <MlPredictTab />;
     default: {
       const _exhaustive: never = tab;
       return _exhaustive;

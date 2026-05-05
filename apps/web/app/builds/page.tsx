@@ -1,22 +1,15 @@
-import { BuildsPanel } from "@/components/BuildsPanel";
-import { Banner } from "@/components/Banner";
+import { BuildsLibrary } from "@/components/builds/BuildsLibrary";
 
 export const metadata = {
-  title: "Builds · SC2 Tools",
+  title: "Custom builds · SC2 Tools",
+  description:
+    "Your private library of StarCraft II openers — synced across devices, optionally shared with the community.",
 };
 
 export default function BuildsPage() {
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Custom builds</h1>
-        <p className="text-text-muted">
-          Build orders you author yourself. Mark a build public to
-          publish it to the community library.
-        </p>
-      </header>
-      <Banner variant="divider" />
-      <BuildsPanel />
+      <BuildsLibrary />
     </div>
   );
 }

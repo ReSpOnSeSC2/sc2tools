@@ -2,8 +2,8 @@
 
 import { SignIn } from "@clerk/nextjs";
 import {
-  Brain,
   Cloud,
+  Replace,
   Sparkles,
   Tv,
   type LucideIcon,
@@ -32,7 +32,7 @@ interface MarketingBullet {
 
 const BULLETS: ReadonlyArray<MarketingBullet> = [
   {
-    icon: Brain,
+    icon: Replace,
     text: "Replay parsing keeps running — every game classified in seconds.",
   },
   {
@@ -87,8 +87,8 @@ function FeatureHighlight() {
         />
         <p className="text-caption text-text-muted">
           <span className="font-semibold text-text">Latest:</span>{" "}
-          ML build prediction now flags ZvT openers from the first scout —
-          available the moment you sign in.
+          Strategy detection now spots ZvT openers from the first scouting
+          tells — live in your dashboard the moment you sign in.
         </p>
       </div>
     </div>

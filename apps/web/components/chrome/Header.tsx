@@ -22,8 +22,8 @@ import { MobileNav, type MobileNavLink } from "./MobileNav";
 
 const NAV_LINKS: readonly MobileNavLink[] = [
   { href: "/app", label: "Dashboard", auth: "in" },
-  { href: "/builds", label: "Builds", auth: "in" },
-  { href: "/community", label: "Community", auth: "any" },
+  { href: "/builds", label: "Custom builds", auth: "in" },
+  { href: "/community", label: "Community builds", auth: "any" },
   { href: "/streaming", label: "Streaming", auth: "in" },
   { href: "/settings", label: "Settings", auth: "in" },
 ];
