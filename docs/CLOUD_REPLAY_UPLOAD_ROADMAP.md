@@ -105,6 +105,8 @@ Why these choices:
 - Surface errors with the existing `useToast`. Failed uploads
   retain a "retry" button.
 
+- clean production quality frontend UI easy to use for non technical users, sticking with the same UI structure the rest of the program follows. production quality code no MOCK DATA. fully properly wired.
+
 **Tests**
 
 - `__tests__/imports/upload.spec.js` — multer round-trip, size + MIME
@@ -234,9 +236,7 @@ Once the upload pipeline is stable:
 - **R2 vs S3** for storage backend — same code, but R2 has free egress
   which matters for the community-builds download flow. Defer to
   whoever picks up Phase A.
-- **Per-user storage cap.** Probably 500 MB for free tier, 5 GB for
-  paid. Surfaced in `SettingsBackups` next to the export action.
-- **Zip-of-replays import.** Common pattern: "here's my replay folder
+- **Per-user storage cap.** 200MB - **Zip-of-replays import.** Common pattern: "here's my replay folder
   zipped." Worth supporting in Phase A or pushing to Phase E? My read:
   Phase A — the worker can unzip and fan-out into N jobs with the same
   `import_jobs` parent.

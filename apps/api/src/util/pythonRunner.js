@@ -308,12 +308,41 @@ function resolveProjectDir() {
 }
 
 /**
- * @returns {boolean} true when a Python project dir is reachable on
- * this host. Lets routes degrade to a clean 503 instead of spawning
- * and failing.
+ * @returns {string | null} the resolved Python executable path if one
+ * exists on disk; null otherwise. Both the configured path
+ * (`SC2_PY_PYTHON` env var) and the default `python3` on PATH are
+ * accepted — bare `python3` skips the existsSync check because PATH
+ * lookup happens at spawn time.
+ */
+function resolvePythonExe() {
+  const fromEnv = process.env[PYTHON.PYTHON_EXE_ENV];
+  const candidate =
+    fromEnv && fromEnv.trim() ? fromEnv.trim() : PYTHON.DEFAULT_EXE;
+  // Absolute paths must exist on disk; bare names (e.g. "python3") rely
+  // on PATH, so we accept them optimistically.
+  if (path.isAbsolute(candidate)) {
+    return fs.existsSync(candidate) ? candidate : null;
+  }
+  return candidate;
+}
+
+/**
+ * @returns {boolean} true when both the analyzer project dir AND the
+ * Python interpreter are reachable on this host. Lets routes degrade
+ * to a clean 503 BEFORE attempting to spawn — otherwise the spawn
+ * itself fails with ENOENT and the failure surfaces as a 502, which
+ * is harder for operators to triage at a glance.
+ *
+ * On Render this catches deployment regressions where the multi-stage
+ * Docker build's `COPY --from=python-deps /opt/sc2-py /opt/sc2-py`
+ * was missing or partially applied — the route returns 503 with
+ * `preview_unavailable` instead of bubbling the ENOENT through the
+ * runner.
  */
 function pythonAvailable() {
-  return resolveProjectDir() !== null;
+  if (resolveProjectDir() === null) return false;
+  if (resolvePythonExe() === null) return false;
+  return true;
 }
 
 module.exports = {
@@ -323,5 +352,6 @@ module.exports = {
   writeTempFile,
   pickPythonExe,
   resolveProjectDir,
+  resolvePythonExe,
   pythonAvailable,
 };
