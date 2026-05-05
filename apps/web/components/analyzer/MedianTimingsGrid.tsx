@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui/Card";
+import { Icon } from "@/components/ui/Icon";
 import { wrColor } from "@/lib/format";
 import { buildingDisplayName } from "@/lib/timingCatalog";
 
@@ -279,6 +280,11 @@ function TimingCard({
       ? "—"
       : `${Math.round(i.winRateWhenBuilt * 100)}%`;
   const wrPillBg = wrColor(i.winRateWhenBuilt, i.sampleCount || 0);
+  // Icon resolution: prefer the explicit iconFile from the API
+  // payload, fall back to the token (which is already capitalized
+  // like "Cybernetics" or "RoboticsFacility" — Icon's normalizer
+  // handles either).
+  const iconName = (i.iconFile || "").replace(/\.png$/i, "") || token;
 
   return (
     <div
@@ -308,18 +314,26 @@ function TimingCard({
       data-empty={empty ? "1" : "0"}
       data-source={i.source || ""}
     >
-      <div className="min-w-0">
-        <div className="truncate text-[11px] uppercase tracking-wider text-text-dim">
-          {display}
-        </div>
-        <div
-          className={
-            "mt-0.5 text-xl font-semibold tabular-nums " +
-            (empty ? "text-text-dim" : "text-text")
-          }
-        >
-          {i.medianDisplay || "-"}
-        </div>
+      <div className="flex items-start gap-2">
+        <Icon
+          name={iconName}
+          kind="building"
+          size={32}
+          decorative
+          className={empty ? "opacity-50" : ""}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[11px] uppercase tracking-wider text-text-dim">
+            {display}
+          </div>
+          <div
+            className={
+              "mt-0.5 text-xl font-semibold tabular-nums " +
+              (empty ? "text-text-dim" : "text-text")
+            }
+          >
+            {i.medianDisplay || "-"}
+          </div>
         {!empty && i.sampleCount >= 2 && i.p25Display && i.p75Display ? (
           <div className="text-[10px] tabular-nums text-text-dim">
             {i.p25Display} — {i.p75Display}
@@ -329,6 +343,7 @@ function TimingCard({
         ) : (
           <div className="text-[10px] text-text-dim">single sample</div>
         )}
+        </div>
       </div>
       <div className="mt-1 flex items-center gap-1 text-[10px]">
         <span className="tabular-nums text-text-dim">n={i.sampleCount || 0}</span>
@@ -593,3 +608,60 @@ function writeLocal(key: string, value: string): void {
     /* private mode */
   }
 }
+          ? "border-accent bg-accent/15 text-accent"
+          : "border-border bg-bg-elevated text-text-muted hover:text-text")
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+function readLocal(key: string): string | null {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeLocal(key: string, value: string): void {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return;
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* private mode */
+  }
+}
+cent/15 text-accent"
+          : "border-border bg-bg-elevated text-text-muted hover:text-text")
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+function readLocal(key: string): string | null {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeLocal(key: string, value: string): void {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return;
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* private mode */
+  }
+}
+ private mode */
+  }
+}
+}
+
