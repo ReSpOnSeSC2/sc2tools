@@ -31,8 +31,17 @@ RUN apt-get update \
 RUN python -m venv /opt/sc2-py
 ENV PATH="/opt/sc2-py/bin:${PATH}"
 COPY SC2Replay-Analyzer/requirements.txt /tmp/sc2-requirements.txt
+# Combined into one layer with a self-verification step at the end so a
+# silent pip-install regression can never be re-used from cache. If the
+# pip install succeeds but somehow leaves /opt/sc2-py/bin/python
+# missing or sc2reader unimportable, this RUN fails and the layer
+# isn't cached as "successful" — preventing the corruption mode where
+# Render's layer cache shipped an empty venv (commit 46f49ce, 2026-05).
 RUN /opt/sc2-py/bin/pip install --upgrade pip wheel setuptools \
-    && /opt/sc2-py/bin/pip install -r /tmp/sc2-requirements.txt
+    && /opt/sc2-py/bin/pip install -r /tmp/sc2-requirements.txt \
+    && /opt/sc2-py/bin/python --version \
+    && /opt/sc2-py/bin/python -c "import sc2reader; print('stage1_sc2reader', sc2reader.__version__)" \
+    && test -x /opt/sc2-py/bin/python
 
 # ---- Stage 2: runtime ----
 FROM ${NODE_IMAGE} AS runtime
