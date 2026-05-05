@@ -7,15 +7,24 @@ export function MmrDeltaWidget({ live }: { live: LiveGamePayload | null }) {
   if (!live || typeof live.mmrDelta !== "number") return null;
   const positive = live.mmrDelta >= 0;
   return (
-    <WidgetShell slot="top-right-mmr" accent="gold" visible width={240}>
+    <WidgetShell
+      slot="top-right-mmr"
+      accent={positive ? "green" : "red"}
+      halo
+      visible
+      width={300}
+    >
       <WidgetHeader>
         <Dim>MMR</Dim>
         <span
           style={{
-            fontSize: 22,
+            fontSize: 28,
             fontWeight: 800,
             color: positive ? "#3ec07a" : "#ff6b6b",
-            tabSize: "tabular-nums" as any,
+            fontVariantNumeric: "tabular-nums",
+            textShadow: positive
+              ? "0 0 12px rgba(62,192,122,0.4)"
+              : "0 0 12px rgba(255,107,107,0.4)",
           }}
         >
           {positive ? "+" : ""}
@@ -25,7 +34,7 @@ export function MmrDeltaWidget({ live }: { live: LiveGamePayload | null }) {
       {typeof live.myMmr === "number" && (
         <WidgetFooter>
           <Dim>now</Dim>
-          <span>{live.myMmr}</span>
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>{live.myMmr}</span>
         </WidgetFooter>
       )}
     </WidgetShell>

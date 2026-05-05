@@ -9,13 +9,13 @@ export function RivalWidget({ live }: { live: LiveGamePayload | null }) {
   const wins = r.headToHead?.wins ?? 0;
   const losses = r.headToHead?.losses ?? 0;
   return (
-    <WidgetShell slot="top-center-3" accent="magenta" visible>
+    <WidgetShell slot="top-center-3" accent="magenta" visible width={380}>
       <WidgetHeader>
-        <span>Rival</span>
+        <span style={{ fontSize: 15 }}>Rival</span>
         <Dim>{r.name || "—"}</Dim>
       </WidgetHeader>
       <WidgetFooter>
-        <span>
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>
           {wins}-{losses} <Dim>all-time</Dim>
         </span>
         {r.note && <Dim>{r.note}</Dim>}
