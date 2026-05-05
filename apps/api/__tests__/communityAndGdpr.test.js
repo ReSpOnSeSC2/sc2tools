@@ -23,7 +23,6 @@ describe("community + gdpr integration", () => {
   let app;
   let services;
   let userAId;
-  let adminId;
 
   const config = {
     port: 0,
@@ -54,15 +53,18 @@ describe("community + gdpr integration", () => {
       lastSeenAt: new Date(),
     });
     userAId = "u_a";
-    const adminRes = await db.users.insertOne({
+    await db.users.insertOne({
       userId: "u_admin",
       clerkUserId: "clerk_admin",
       createdAt: new Date(),
       lastSeenAt: new Date(),
     });
-    adminId = "u_admin";
 
-    config.adminUserIds = [adminId];
+    // SC2TOOLS_ADMIN_USER_IDS holds *Clerk* user IDs (the `user_xxx`
+    // strings from the Clerk dashboard), not internal UUIDs — match
+    // the verifyToken mock above which returns sub: "clerk_admin"
+    // for the "admin-x" bearer.
+    config.adminUserIds = ["clerk_admin"];
     const built = buildApp({
       db,
       logger: pino({ level: "silent" }),
@@ -298,6 +300,20 @@ describe("community + gdpr integration", () => {
         .set("authorization", "Bearer admin-x");
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.items)).toBe(true);
+    });
+
+    test("/v1/me reports isAdmin per the admin list", async () => {
+      const nonAdmin = await request(app)
+        .get("/v1/me")
+        .set("authorization", "Bearer user-a");
+      expect(nonAdmin.status).toBe(200);
+      expect(nonAdmin.body.isAdmin).toBe(false);
+
+      const admin = await request(app)
+        .get("/v1/me")
+        .set("authorization", "Bearer admin-x");
+      expect(admin.status).toBe(200);
+      expect(admin.body.isAdmin).toBe(true);
     });
   });
 });

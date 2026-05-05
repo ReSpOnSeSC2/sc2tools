@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Menu } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { useApi } from "@/lib/clientApi";
 import { MobileNav, type MobileNavLink } from "./MobileNav";
 
 /**
@@ -18,14 +19,25 @@ import { MobileNav, type MobileNavLink } from "./MobileNav";
  *     header is sticky regardless).
  *   - The hamburger opens MobileNav (also includes a ThemeToggle so
  *     touch users keep parity with desktop).
+ *   - The "Admin" link is appended only when /v1/me reports the
+ *     signed-in user is on SC2TOOLS_ADMIN_USER_IDS. SWR dedupes the
+ *     /me call against the rest of the SPA so this costs nothing.
  */
 
-const NAV_LINKS: readonly MobileNavLink[] = [
+type MeAdminProbe = { isAdmin?: boolean };
+
+const BASE_NAV_LINKS: readonly MobileNavLink[] = [
   { href: "/app", label: "Dashboard", auth: "in" },
   { href: "/builds", label: "Custom builds", auth: "in" },
   { href: "/community", label: "Community builds", auth: "any" },
   { href: "/settings", label: "Settings", auth: "in" },
 ];
+
+const ADMIN_LINK: MobileNavLink = {
+  href: "/admin",
+  label: "Admin",
+  auth: "admin",
+};
 
 function isActiveLink(href: string, pathname: string): boolean {
   if (href === pathname) return true;
@@ -36,6 +48,12 @@ export function Header() {
   const pathname = usePathname() ?? "/";
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // useApi gates on isSignedIn internally, so this fetch is a no-op
+  // for signed-out visitors — they never see the Admin link anyway.
+  const { data: me } = useApi<MeAdminProbe>("/v1/me");
+  const navLinks: readonly MobileNavLink[] = me?.isAdmin
+    ? [...BASE_NAV_LINKS, ADMIN_LINK]
+    : BASE_NAV_LINKS;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);
@@ -67,7 +85,7 @@ export function Header() {
             className="hidden items-center gap-0.5 lg:flex"
             aria-label="Primary"
           >
-            {NAV_LINKS.map((link) => {
+            {navLinks.map((link) => {
               const active = isActiveLink(link.href, pathname);
               const node = (
                 <NavLink
@@ -77,7 +95,7 @@ export function Header() {
                   active={active}
                 />
               );
-              if (link.auth === "in") {
+              if (link.auth === "in" || link.auth === "admin") {
                 return <SignedIn key={link.href}>{node}</SignedIn>;
               }
               return node;
@@ -130,7 +148,7 @@ export function Header() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         pathname={pathname}
-        links={NAV_LINKS}
+        links={navLinks}
       />
     </>
   );

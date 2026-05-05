@@ -88,6 +88,10 @@ describe("HTTP integration", () => {
       const res = await withAuth(request(app).get("/v1/me"));
       expect(res.status).toBe(200);
       expect(res.body.userId).toBeTruthy();
+      // adminUserIds is unset in this fixture, so the caller is never
+      // an admin — the flag still has to be present so the web client
+      // can rely on its shape.
+      expect(res.body.isAdmin).toBe(false);
     });
   });
 

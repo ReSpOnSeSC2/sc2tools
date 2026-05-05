@@ -23,8 +23,14 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 export type MobileNavLink = {
   href: string;
   label: string;
-  /** "in" — only visible when signed in; "any" — visible to everyone. */
-  auth: "in" | "any";
+  /**
+   * "in"    — visible when signed in.
+   * "any"   — visible to everyone.
+   * "admin" — visible when signed in AND the caller is on the admin list
+   *           (the parent decides this from the /v1/me payload and only
+   *           passes admin links through when the user qualifies).
+   */
+  auth: "in" | "any" | "admin";
 };
 
 export interface MobileNavProps {
@@ -148,7 +154,7 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
         >
           <ul className="space-y-1">
             {links.map((link) => {
-              if (link.auth === "in") {
+              if (link.auth === "in" || link.auth === "admin") {
                 return (
                   <SignedIn key={link.href}>
                     <DrawerLink

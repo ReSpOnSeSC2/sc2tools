@@ -23,11 +23,13 @@ const { validateProfile } = require("../validation/profile");
  *   games: import('../services/types').GamesService,
  *   gdpr: import('../services/gdpr').GdprService,
  *   auth: import('express').RequestHandler,
+ *   isAdmin?: (req: import('express').Request) => boolean,
  *   logger?: import('pino').Logger,
  * }} deps
  */
 function buildMeRouter(deps) {
   const router = express.Router();
+  const isAdmin = deps.isAdmin || (() => false);
 
   // Auth applied per-route, NOT via router.use(). Router-level middleware
   // here would intercept every /v1/* request that doesn't match an
@@ -43,6 +45,7 @@ function buildMeRouter(deps) {
         userId: auth.userId,
         source: auth.source,
         games: stats,
+        isAdmin: isAdmin(req),
       });
     } catch (err) {
       next(err);
