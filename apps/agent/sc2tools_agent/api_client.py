@@ -36,6 +36,20 @@ class ApiClient:
         url = f"/v1/device-pairings/{code}"
         return self._get(url, auth=False, allow_202=True)
 
+    # ---------------- Profile (player handle, etc.) ----------------
+    def get_profile(self) -> Dict[str, Any]:
+        """Fetch the per-user profile (battleTag, pulseId, region, …).
+
+        The web settings page persists these via PUT /v1/me/profile;
+        the agent reads them so it can resolve the player handle from
+        the cloud instead of an env var. Returns ``{}`` if the user
+        hasn't filled anything in yet — never raises on a 404 since
+        the endpoint always responds with ``{}`` for a fresh account.
+        """
+        if not self.device_token:
+            raise PermissionError("agent_not_paired")
+        return self._get("/v1/me/profile", auth=True)
+
     # ---------------- Game ingest ----------------
     def upload_game(self, game: Dict[str, Any]) -> Dict[str, Any]:
         if not self.device_token:

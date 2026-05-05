@@ -1,9 +1,22 @@
 // Service interfaces consumed by route handlers. Pure type-only
 // declarations — no runtime exports.
 
+export interface UserProfile {
+  battleTag?: string;
+  pulseId?: string;
+  region?: string;
+  preferredRace?: string;
+  displayName?: string;
+}
+
 export interface UsersService {
   ensureFromClerk(clerkUserId: string): Promise<{ userId: string }>;
   touch(userId: string): Promise<void>;
+  getProfile(userId: string): Promise<UserProfile>;
+  updateProfile(
+    userId: string,
+    profile: { [K in keyof UserProfile]?: string | null },
+  ): Promise<UserProfile>;
 }
 
 export interface OpponentsService {
