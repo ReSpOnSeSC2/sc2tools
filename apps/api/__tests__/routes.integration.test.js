@@ -68,6 +68,16 @@ describe("HTTP integration", () => {
     });
   });
 
+  describe("/v1/ping", () => {
+    test("returns 200 without auth and disables caching", async () => {
+      const res = await request(app).get("/v1/ping");
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("ok");
+      expect(typeof res.body.time).toBe("string");
+      expect(res.headers["cache-control"]).toMatch(/no-store/);
+    });
+  });
+
   describe("/v1/me", () => {
     test("401 without bearer", async () => {
       const res = await request(app).get("/v1/me");

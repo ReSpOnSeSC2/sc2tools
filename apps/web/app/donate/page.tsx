@@ -165,26 +165,17 @@ interface CostLine {
   approxMonthlyUsd: number;
   /** Set when billed annually; we show both the per-month + per-year. */
   approxYearlyUsd?: number;
-  /** Public pricing-page link so the figures are auditable. */
-  pricingHref: string;
+  /** Optional public pricing-page link so the figures are auditable. */
+  pricingHref?: string;
 }
 
 const COST_LINES: ReadonlyArray<CostLine> = [
   {
-    id: "render-api",
+    id: "render",
     icon: Server,
-    label: "Render — API service",
+    label: "Render — paid web service",
     detail:
-      "Paid Render web service. Runs the Express + Socket.io API: auth, replay sync, the live overlay event bus.",
-    approxMonthlyUsd: 25,
-    pricingHref: "https://render.com/pricing",
-  },
-  {
-    id: "render-web",
-    icon: Server,
-    label: "Render — web service",
-    detail:
-      "Second paid Render service. Hosts the Next.js app you're reading this on, including server-rendered opponent pages.",
+      "One paid Render subscription. Runs the Express + Socket.io API (auth, replay sync, live overlay event bus) plus the Next.js frontend you're reading this on.",
     approxMonthlyUsd: 25,
     pricingHref: "https://render.com/pricing",
   },
@@ -205,7 +196,6 @@ const COST_LINES: ReadonlyArray<CostLine> = [
       "Annual .com registration so the project has a home that won't disappear.",
     approxMonthlyUsd: 1,
     approxYearlyUsd: 15,
-    pricingHref: "https://www.icann.org/resources/pages/registrars-listing-2012-02-25-en",
   },
 ];
 
@@ -261,8 +251,8 @@ function CostBreakdown() {
         These are vendor list prices, not invoiced totals — the actual bill
         wobbles a few dollars with usage. There&rsquo;s no salary line, no
         marketing line, no overhead. Every penny tipped goes against this
-        bill, and even a small tip helps: $5 covers a couple of days on one
-        of the Render services or roughly two days of MongoDB. Thank you.
+        bill, and even a small tip helps: $5 covers a few days on the Render
+        service or roughly two days of MongoDB. Thank you.
       </p>
     </Section>
   );
@@ -281,15 +271,17 @@ function CostRow({ line }: { line: CostLine }) {
       <div className="min-w-0 flex-1">
         <p className="text-body font-semibold text-text">{line.label}</p>
         <p className="text-caption text-text-muted">{line.detail}</p>
-        <a
-          href={line.pricingHref}
-          target="_blank"
-          rel="noopener"
-          className="mt-1 inline-flex items-center gap-1 text-caption text-accent-cyan hover:underline"
-        >
-          Pricing page
-          <ExternalLink className="h-3 w-3" aria-hidden />
-        </a>
+        {line.pricingHref ? (
+          <a
+            href={line.pricingHref}
+            target="_blank"
+            rel="noopener"
+            className="mt-1 inline-flex items-center gap-1 text-caption text-accent-cyan hover:underline"
+          >
+            Pricing page
+            <ExternalLink className="h-3 w-3" aria-hidden />
+          </a>
+        ) : null}
       </div>
       <div className="text-right tabular-nums">
         <p className="text-body font-semibold text-text">

@@ -26,6 +26,9 @@ const HEX_64_REGEX = /^[0-9a-fA-F]{64}$/;
  *   agentReleaseAdminToken: string|null,
  *   pythonExe: string|null,
  *   pythonAnalyzerDir: string|null,
+ *   adminUserIds: string[],
+ *   keepaliveTargets: string[],
+ *   keepaliveIntervalMs: number,
  * }}
  *
  * Example:
@@ -57,6 +60,11 @@ function loadConfig(env = process.env) {
     pythonExe: env.SC2_PY_PYTHON || null,
     pythonAnalyzerDir: env.SC2_PY_ANALYZER_DIR || null,
     adminUserIds: parseCsv(env.SC2TOOLS_ADMIN_USER_IDS),
+    keepaliveTargets: parseCsv(env.KEEPALIVE_TARGETS),
+    keepaliveIntervalMs: parseInteger(
+      env.KEEPALIVE_INTERVAL_MS,
+      DEFAULTS.KEEPALIVE_INTERVAL_MS,
+    ),
   };
 }
 

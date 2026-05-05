@@ -9,6 +9,10 @@ const DEFAULTS = Object.freeze({
   LOG_LEVEL: "info",
   DB_NAME: "sc2tools_saas",
   RATE_LIMIT_PER_MINUTE: 120,
+  // Keep-alive heartbeat for Render's "starter" idle timeout (15min). 13min
+  // gives a healthy safety margin and stays just below typical CDN cache
+  // windows so the upstream actually sees the request.
+  KEEPALIVE_INTERVAL_MS: 13 * 60 * 1000,
 });
 
 const SERVICE = Object.freeze({

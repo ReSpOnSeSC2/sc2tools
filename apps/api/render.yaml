@@ -63,3 +63,15 @@ services:
         value: /opt/sc2-py/bin/python
       - key: SC2_PY_ANALYZER_DIR
         value: /opt/sc2-analyzer
+      # Keep-alive heartbeat. Comma-separated list of full URLs the worker
+      # GETs every 13 minutes (under Render's 15-min idle window). Set this
+      # to the public web origin's /api/ping (and optionally this API's own
+      # /v1/ping) to stop the starter instance from sleeping. Leave unset
+      # to disable.
+      #   e.g. https://sc2tools.com/api/ping,https://api.sc2tools.com/v1/ping
+      - key: KEEPALIVE_TARGETS
+        sync: false
+      # Override the 13-minute default if your Render plan has a different
+      # idle window. Value is in milliseconds; minimum enforced at 60000.
+      - key: KEEPALIVE_INTERVAL_MS
+        sync: false
