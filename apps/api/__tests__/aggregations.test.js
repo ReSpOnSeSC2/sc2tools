@@ -48,17 +48,26 @@ describe("services/aggregations", () => {
     expect(out.byMap["Goldenaura"].winRate).toBeCloseTo(2 / 3);
   });
 
-  test("matchups returns rows with computed winRate", async () => {
+  test("matchups returns rows with computed winRate and recent results", async () => {
+    // _matchupsOnce now makes two aggregate calls: the grouped facet
+    // and a second pass to attach the last-N results per bucket. Mock
+    // both so the recent[] field actually populates.
     const games = buildGames([
       () => [
         { name: "vs P", wins: 4, losses: 2, total: 6 },
         { name: "vs T", wins: 1, losses: 3, total: 4 },
+      ],
+      () => [
+        { _id: "vs P", results: ["Victory", "Defeat", "Victory"] },
+        { _id: "vs T", results: ["Defeat", "Victory"] },
       ],
     ]);
     const svc = new AggregationsService({ games });
     const out = /** @type {any[]} */ (await svc.matchups("u1", {}));
     expect(out[0].winRate).toBeCloseTo(4 / 6);
     expect(out[1].winRate).toBeCloseTo(1 / 4);
+    expect(out[0].recent).toEqual(["win", "loss", "win"]);
+    expect(out[1].recent).toEqual(["loss", "win"]);
   });
 
   test("randomSummary computes per-race win rates and best/worst", async () => {
