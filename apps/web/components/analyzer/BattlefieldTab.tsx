@@ -13,25 +13,23 @@ import {
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
-import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
+import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 
-type MapRow = {
+type Row = {
+  /** Matchup label ("vs P") or map name. The API returns this as `name`
+   *  for both /v1/maps and /v1/matchups, but the UI displays it as the
+   *  Matchup or Map column. */
   name: string;
-  wins: number;
-  losses: number;
-  total: number;
-  winRate: number;
-};
-
-type MatchupRow = {
-  matchup: string;
   wins: number;
   losses: number;
   total: number;
   winRate: number;
   recent?: ("win" | "loss")[];
 };
+
+type MapRow = Row;
+type MatchupRow = Row;
 
 const LS_MIN_MAPS = "analyzer.battlefield.maps.minGames";
 const MIN_STEPS = [1, 3, 5, 10, 20];
@@ -73,7 +71,7 @@ function MinGames({
             key={n}
             type="button"
             onClick={() => onChange(n)}
-            className={`px-2 py-1 text-xs tabular-nums transition ${
+            className={`px-3 py-1.5 text-xs tabular-nums transition sm:px-2 sm:py-1 ${
               value === n
                 ? "bg-accent/20 text-accent"
                 : "text-text-muted hover:bg-bg-elevated"
@@ -136,11 +134,17 @@ export function BattlefieldTab() {
   const muSort = useSort("total", "desc");
 
   const sortedMaps = useMemo(
-    () => mapSort.sortRows(mapRows, (row, col) => (row as any)[col]),
+    () =>
+      mapSort.sortRows(mapRows, (row, col) =>
+        (row as Record<string, unknown>)[col],
+      ),
     [mapRows, mapSort],
   );
   const sortedMu = useMemo(
-    () => muSort.sortRows(muRows, (row, col) => (row as any)[col]),
+    () =>
+      muSort.sortRows(muRows, (row, col) =>
+        (row as Record<string, unknown>)[col],
+      ),
     [muRows, muSort],
   );
 
@@ -156,39 +160,72 @@ export function BattlefieldTab() {
         {sortedMu.length === 0 ? (
           <EmptyState title="No matchups match" />
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-bg-elevated">
-              <tr>
-                <SortableTh col="matchup" label="Matchup" {...muSort} />
-                <SortableTh col="wins" label="W" {...muSort} align="right" />
-                <SortableTh col="losses" label="L" {...muSort} align="right" />
-                <SortableTh col="total" label="Games" {...muSort} align="right" />
-                <SortableTh col="winRate" label="WR" {...muSort} align="right" />
-                <th className="px-3 py-2 text-right text-[11px] uppercase text-text-dim">
-                  Recent
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Mobile — stacked rows. */}
+            <ul className="divide-y divide-border md:hidden">
               {sortedMu.map((m) => (
-                <tr key={m.matchup} className="border-t border-border">
-                  <td className="px-3 py-1.5">{m.matchup}</td>
-                  <td className="px-3 py-1.5 text-right text-success">{m.wins}</td>
-                  <td className="px-3 py-1.5 text-right text-danger">{m.losses}</td>
-                  <td className="px-3 py-1.5 text-right">{m.total}</td>
-                  <td
-                    className="px-3 py-1.5 text-right tabular-nums"
-                    style={{ color: wrColor(m.winRate, m.total) }}
-                  >
-                    {pct1(m.winRate)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right">
+                <li key={m.name} className="flex flex-col gap-1.5 px-1 py-2.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-sm font-medium text-text">
+                      {m.name}
+                    </span>
+                    <span
+                      className="font-mono text-sm tabular-nums"
+                      style={{ color: wrColor(m.winRate, m.total) }}
+                    >
+                      {pct1(m.winRate)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-[11px] text-text-dim">
+                    <span>
+                      <span className="text-success">{m.wins}W</span> ·{" "}
+                      <span className="text-danger">{m.losses}L</span> ·{" "}
+                      {m.total} games
+                    </span>
                     <FormSparkline results={m.recent} />
-                  </td>
-                </tr>
+                  </div>
+                  <WrBar wins={m.wins} losses={m.losses} />
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+
+            {/* Desktop — table. */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-bg-elevated">
+                  <tr>
+                    <SortableTh col="name" label="Matchup" {...muSort} />
+                    <SortableTh col="wins" label="W" {...muSort} align="right" />
+                    <SortableTh col="losses" label="L" {...muSort} align="right" />
+                    <SortableTh col="total" label="Games" {...muSort} align="right" />
+                    <SortableTh col="winRate" label="WR" {...muSort} align="right" />
+                    <th className="px-3 py-2 text-right text-[11px] uppercase text-text-dim">
+                      Recent
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedMu.map((m) => (
+                    <tr key={m.name} className="border-t border-border">
+                      <td className="px-3 py-1.5 font-medium">{m.name}</td>
+                      <td className="px-3 py-1.5 text-right text-success">{m.wins}</td>
+                      <td className="px-3 py-1.5 text-right text-danger">{m.losses}</td>
+                      <td className="px-3 py-1.5 text-right">{m.total}</td>
+                      <td
+                        className="px-3 py-1.5 text-right tabular-nums"
+                        style={{ color: wrColor(m.winRate, m.total) }}
+                      >
+                        {pct1(m.winRate)}
+                      </td>
+                      <td className="px-3 py-1.5 text-right">
+                        <FormSparkline results={m.recent} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Card>
 
@@ -197,7 +234,9 @@ export function BattlefieldTab() {
           <EmptyState title="No maps match" />
         ) : (
           <>
-            <div className="h-72">
+            {/* Bar chart hides on small screens — it doesn't read well at
+                phone widths and the mobile list below shows the same data. */}
+            <div className="hidden h-72 sm:block">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={sortedMaps.map((m) => ({
@@ -233,33 +272,62 @@ export function BattlefieldTab() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <table className="mt-4 w-full text-sm">
-              <thead className="bg-bg-elevated">
-                <tr>
-                  <SortableTh col="name" label="Map" {...mapSort} />
-                  <SortableTh col="wins" label="W" {...mapSort} align="right" />
-                  <SortableTh col="losses" label="L" {...mapSort} align="right" />
-                  <SortableTh col="total" label="Games" {...mapSort} align="right" />
-                  <SortableTh col="winRate" label="WR" {...mapSort} align="right" />
-                </tr>
-              </thead>
-              <tbody>
-                {sortedMaps.map((m) => (
-                  <tr key={m.name} className="border-t border-border">
-                    <td className="px-3 py-1.5">{m.name}</td>
-                    <td className="px-3 py-1.5 text-right text-success">{m.wins}</td>
-                    <td className="px-3 py-1.5 text-right text-danger">{m.losses}</td>
-                    <td className="px-3 py-1.5 text-right">{m.total}</td>
-                    <td
-                      className="px-3 py-1.5 text-right tabular-nums"
+
+            {/* Mobile — stacked list. */}
+            <ul className="divide-y divide-border md:hidden">
+              {sortedMaps.map((m) => (
+                <li key={m.name} className="flex flex-col gap-1.5 px-1 py-2.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-sm font-medium text-text">
+                      {m.name}
+                    </span>
+                    <span
+                      className="font-mono text-sm tabular-nums"
                       style={{ color: wrColor(m.winRate, m.total) }}
                     >
                       {pct1(m.winRate)}
-                    </td>
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-text-dim">
+                    <span className="text-success">{m.wins}W</span> ·{" "}
+                    <span className="text-danger">{m.losses}L</span> ·{" "}
+                    {m.total} games
+                  </div>
+                  <WrBar wins={m.wins} losses={m.losses} />
+                </li>
+              ))}
+            </ul>
+
+            {/* Desktop — table. */}
+            <div className="mt-4 hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-bg-elevated">
+                  <tr>
+                    <SortableTh col="name" label="Map" {...mapSort} />
+                    <SortableTh col="wins" label="W" {...mapSort} align="right" />
+                    <SortableTh col="losses" label="L" {...mapSort} align="right" />
+                    <SortableTh col="total" label="Games" {...mapSort} align="right" />
+                    <SortableTh col="winRate" label="WR" {...mapSort} align="right" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {sortedMaps.map((m) => (
+                    <tr key={m.name} className="border-t border-border">
+                      <td className="px-3 py-1.5">{m.name}</td>
+                      <td className="px-3 py-1.5 text-right text-success">{m.wins}</td>
+                      <td className="px-3 py-1.5 text-right text-danger">{m.losses}</td>
+                      <td className="px-3 py-1.5 text-right">{m.total}</td>
+                      <td
+                        className="px-3 py-1.5 text-right tabular-nums"
+                        style={{ color: wrColor(m.winRate, m.total) }}
+                      >
+                        {pct1(m.winRate)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </Card>
