@@ -1,0 +1,138 @@
+# Builds the SC2 Tools Agent Windows installer (the new PySide6 GUI
+# desktop app — apps/agent/). Runs on a real Windows runner so the
+# PyInstaller bundle is genuinely a Windows .exe.
+#
+# Triggers:
+#   * Manual dispatch — click "Run workflow" on the Actions tab any
+#     time. Optionally pass a version override.
+#   * Tag push matching `agent-v*.*.*` — produces the same artifact
+#     AND attaches it to the corresponding GitHub Release.
+#
+# Output:
+#   * dist/SC2ToolsAgent-Setup-<version>.exe
+#   * dist/SC2ToolsAgent-Setup-<version>.exe.sha256
+#
+# Both are uploaded as a workflow artifact (downloadable from the
+# Actions tab for 30 days) regardless of trigger. On tag pushes the
+# files are ALSO uploaded to the GitHub Release page so end users can
+# grab them directly.
+#
+# To trigger manually: GitHub → Actions → "agent installer" → Run
+# workflow. To cut a release: `git tag agent-v0.3.0 && git push --tags`.
+
+name: agent installer
+
+on:
+  push:
+    tags:
+      - 'agent-v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (e.g. 0.3.0). Defaults to the value in sc2tools_agent/__init__.py.'
+        required: false
+        type: string
+
+permissions:
+  contents: write  # needed for softprops/action-gh-release on tag push
+
+concurrency:
+  group: agent-installer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build agent installer (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    defaults:
+      run:
+        # The build script lives under apps/agent and resolves all
+        # paths relative to itself, so anchor every step there.
+        working-directory: apps/agent
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so __version__ derivation works
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = '${{ inputs.version }}'
+          if (-not $v) {
+            if ($env:GITHUB_REF -like 'refs/tags/agent-v*') {
+              $v = $env:GITHUB_REF -replace '^refs/tags/agent-v', ''
+            } else {
+              # Read the canonical __version__ from the package.
+              $line = Select-String -Path 'sc2tools_agent\__init__.py' `
+                                    -Pattern '^__version__\s*=\s*"([^"]+)"'
+              if (-not $line) { throw 'No __version__ found.' }
+              $v = $line.Matches[0].Groups[1].Value
+            }
+          }
+          "version=$v" | Out-File -Append $env:GITHUB_OUTPUT
+          Write-Host "Building SC2 Tools Agent v$v"
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: apps/agent/requirements.txt
+
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis -y --no-progress --version 3.10
+        working-directory: .  # choco doesn't care; keep CWD clean
+
+      - name: Make NSIS available to subsequent steps
+        shell: pwsh
+        run: |
+          $nsisDir = "C:\Program Files (x86)\NSIS"
+          if (-not (Test-Path $nsisDir)) { throw "NSIS install path missing: $nsisDir" }
+          Add-Content -Path $env:GITHUB_PATH -Value $nsisDir
+          Write-Host "Added $nsisDir to PATH"
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          .\packaging\build-installer.ps1 `
+            -Version '${{ steps.ver.outputs.version }}' `
+            -Installer `
+            -Clean
+
+      - name: Generate SHA-256 sidecar
+        shell: pwsh
+        run: |
+          $exe = "dist\SC2ToolsAgent-Setup-${{ steps.ver.outputs.version }}.exe"
+          if (-not (Test-Path $exe)) { throw "Installer not found: $exe" }
+          $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLower()
+          "$hash *$(Split-Path $exe -Leaf)" | Out-File -Encoding ascii "$exe.sha256"
+          Write-Host "SHA-256: $hash"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SC2ToolsAgent-Setup-${{ steps.ver.outputs.version }}
+          path: |
+            apps/agent/dist/SC2ToolsAgent-Setup-${{ steps.ver.outputs.version }}.exe
+            apps/agent/dist/SC2ToolsAgent-Setup-${{ steps.ver.outputs.version }}.exe.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/agent-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            apps/agent/dist/SC2ToolsAgent-Setup-${{ steps.ver.outputs.version }}.exe
+            apps/agent/dist/SC2ToolsAgent-Setup-${{ steps.ver.outputs.version }}.exe.sha256
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.ver.outputs.version, '-') }}
