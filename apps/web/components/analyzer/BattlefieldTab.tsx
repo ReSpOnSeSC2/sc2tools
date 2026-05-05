@@ -156,6 +156,9 @@ export function BattlefieldTab() {
         <MinGames value={minGames} onChange={setMinGames} />
       </div>
 
+      <MapDiagnostic />
+
+
       <Card title="Matchups">
         {sortedMu.length === 0 ? (
           <EmptyState title="No matchups match" />
@@ -350,5 +353,65 @@ export function BattlefieldTab() {
         )}
       </Card>
     </div>
+  );
+}
+
+type MapDiagnosticItem = {
+  map: string;
+  count: number;
+  firstSeen?: string | null;
+  lastSeen?: string | null;
+};
+
+function MapDiagnostic() {
+  const { dbRev } = useFilters();
+  const [open, setOpen] = useState(false);
+  const { data, isLoading } = useApi<{ items: MapDiagnosticItem[] }>(
+    open ? `/v1/maps/diagnostic#${dbRev}` : null,
+  );
+  const items = data?.items || [];
+  const total = items.reduce((acc, m) => acc + m.count, 0);
+
+  return (
+    <details
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+      className="rounded-lg border border-border bg-bg-surface p-3 text-sm"
+    >
+      <summary className="cursor-pointer select-none text-text-muted">
+        Map diagnostic{" "}
+        <span className="text-text-dim">
+          (every distinct map value the agent uploaded — useful when the
+          panel above looks wrong)
+        </span>
+      </summary>
+      {!open ? null : isLoading ? (
+        <p className="mt-2 text-xs text-text-dim">Loading…</p>
+      ) : items.length === 0 ? (
+        <p className="mt-2 text-xs text-text-dim">No games yet.</p>
+      ) : (
+        <>
+          <p className="mt-2 text-xs text-text-dim">
+            {items.length} distinct map{items.length === 1 ? "" : "s"} across{" "}
+            {total} games.{" "}
+            {items.length === 1
+              ? "Every replay you've uploaded has this exact map name. If you've actually played on more than one map, the agent isn't picking up sc2reader's map_name correctly — try restarting the agent or re-running it on a fresh replay."
+              : "Looks healthy."}
+          </p>
+          <ul className="mt-2 divide-y divide-border text-xs">
+            {items.map((m) => (
+              <li
+                key={m.map}
+                className="flex flex-wrap items-center justify-between gap-2 py-1.5"
+              >
+                <code className="font-mono text-text">{m.map}</code>
+                <span className="tabular-nums text-text-muted">
+                  {m.count} games
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </details>
   );
 }

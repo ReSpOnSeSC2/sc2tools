@@ -187,6 +187,47 @@ class AggregationsService {
   }
 
   /**
+   * Diagnostic: every distinct value of the `map` field on the user's
+   * games, with counts and date range. Helps surface data-quality
+   * issues (e.g. an agent that uploads the same map name for every
+   * replay) without exposing raw replay docs.
+   *
+   * @param {string} userId
+   * @returns {Promise<Array<{
+   *   map: string,
+   *   count: number,
+   *   firstSeen: Date|null,
+   *   lastSeen: Date|null,
+   * }>>}
+   */
+  async distinctMaps(userId) {
+    const rows = await this.db.games
+      .aggregate([
+        { $match: { userId } },
+        {
+          $group: {
+            _id: { $ifNull: ["$map", "Unknown"] },
+            count: { $sum: 1 },
+            firstSeen: { $min: "$date" },
+            lastSeen: { $max: "$date" },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            map: "$_id",
+            count: 1,
+            firstSeen: 1,
+            lastSeen: 1,
+          },
+        },
+        { $sort: { count: -1 } },
+      ])
+      .toArray();
+    return rows;
+  }
+
+  /**
    * Per-map W/L breakdown. Same shape as matchups() but keyed by map.
    *
    * @param {string} userId
