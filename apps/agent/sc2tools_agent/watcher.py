@@ -148,7 +148,7 @@ class ReplayWatcher:
             if not _wait_for_file_ready(path, SETTLE_TIMEOUT_SEC):
                 log.warning("file_never_settled %s", path.name)
                 return
-            game = parse_replay_for_cloud(path)
+            game = parse_replay_for_cloud(path, state_dir=self._cfg.state_dir)
             if not game:
                 # AI / unresolved / parse error — record so we don't
                 # re-attempt every sweep.

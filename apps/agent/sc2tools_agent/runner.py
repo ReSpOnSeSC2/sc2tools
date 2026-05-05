@@ -30,6 +30,7 @@ from .crash_reporter import (
 )
 from .heartbeat import Heartbeat
 from .pairing import ensure_paired
+from .player_handle import refresh_from_cloud as refresh_player_handle
 from .replay_finder import all_multiplayer_dirs, find_replays_root
 from .state import AgentState, load_state, save_state
 from .ui import ConsoleUI, TrayUI, can_use_tray
@@ -122,6 +123,18 @@ def _run_main_loop(cfg: AgentConfig, log_dir: Path) -> int:
             return 1
         api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
         ui.on_paired(state.user_id or "")
+
+    # Now that we're paired, refresh the cached player handle from the
+    # cloud. Best-effort: failures (offline, server down) leave the
+    # existing on-disk cache in place so the parser still has a value.
+    try:
+        cached = refresh_player_handle(api, cfg.state_dir)
+        if cached:
+            log.info("player_handle_cached_from_cloud")
+        else:
+            log.info("player_handle_cloud_empty; using local fallback")
+    except Exception:  # noqa: BLE001
+        log.exception("player_handle_refresh_unhandled")
 
     upload = UploadQueue(
         cfg=cfg,

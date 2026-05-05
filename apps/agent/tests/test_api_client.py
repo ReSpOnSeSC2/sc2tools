@@ -60,3 +60,24 @@ def test_poll_pairing_accepts_202() -> None:
     ):
         out = api.poll_pairing("123456")
     assert out["status"] == "pending"
+
+
+def test_get_profile_requires_pairing() -> None:
+    api = ApiClient(base_url="http://x", device_token=None)
+    with pytest.raises(PermissionError):
+        api.get_profile()
+
+
+def test_get_profile_sends_bearer_and_returns_payload() -> None:
+    api = ApiClient(base_url="http://x", device_token="tok")
+    payload = {"battleTag": "Foo#1234", "pulseId": "9876"}
+    with patch(
+        "requests.request",
+        return_value=_mock_response(200, payload),
+    ) as m:
+        out = api.get_profile()
+    assert out == payload
+    args, kwargs = m.call_args
+    assert kwargs["headers"]["authorization"] == "Bearer tok"
+    assert args[0] == "GET"
+    assert args[1].endswith("/v1/me/profile")

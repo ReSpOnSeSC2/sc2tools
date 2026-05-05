@@ -89,9 +89,15 @@ def parse_replay_for_cloud(
     file_path: Path,
     *,
     player_handle: Optional[str] = None,
+    state_dir: Optional[Path] = None,
 ) -> Optional[CloudGame]:
     """Parse one .SC2Replay and return a CloudGame, or None if the
-    replay is unusable (AI game, unresolved player, parse error)."""
+    replay is unusable (AI game, unresolved player, parse error).
+
+    ``player_handle`` is an optional explicit override (e.g. tests).
+    Otherwise we resolve through ``state_dir``'s cached cloud value
+    or the legacy env-var fallback.
+    """
     try:
         # Lazy import: the analyzer package is only imported when we
         # actually need to parse — keeps startup fast and pairing-only
@@ -106,7 +112,7 @@ def parse_replay_for_cloud(
         )
         return None
 
-    handle = player_handle or _read_player_handle()
+    handle = player_handle or _read_player_handle(state_dir)
     try:
         ctx = parse_deep(str(file_path), handle)
     except Exception as exc:  # noqa: BLE001
@@ -161,36 +167,17 @@ def parse_replay_for_cloud(
     )
 
 
-def _read_player_handle() -> Optional[str]:
-    """Cooperate with the existing watcher's config.json convention.
+def _read_player_handle(state_dir: Optional[Path] = None) -> Optional[str]:
+    """Resolve the player handle without touching the network.
 
-    Resolution order:
-      1. SC2TOOLS_PLAYER_CONFIG env var pointing at a config.json
-         (legacy compat with the desktop overlay watcher).
-      2. SC2TOOLS_PLAYER_HANDLE env var.
+    Order: cloud disk cache (refreshed at agent start-up) > legacy
+    SC2TOOLS_PLAYER_CONFIG JSON > SC2TOOLS_PLAYER_HANDLE env var.
 
-    Returns None if neither is usable. NOTE: the empty-string check
-    matters — Path('') silently becomes Path('.') on Windows (the cwd,
-    which exists), and reading a directory as text raises OSError,
-    swallowed by the except below, hiding the env-var fallback. So
-    treat an empty/missing SC2TOOLS_PLAYER_CONFIG as "no config file"
-    explicitly.
+    See ``player_handle.refresh_from_cloud`` for the cache-write side.
     """
-    cfg_path_str = os.environ.get("SC2TOOLS_PLAYER_CONFIG", "").strip()
-    if cfg_path_str:
-        cfg_path = Path(cfg_path_str)
-        if cfg_path.is_file():
-            try:
-                import json
+    from .player_handle import resolve
 
-                cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
-                handle = cfg.get("last_player") or cfg.get("player_name")
-                if handle:
-                    return str(handle)
-            except (OSError, ValueError):
-                # Fall through to the env-var fallback.
-                pass
-    return os.environ.get("SC2TOOLS_PLAYER_HANDLE") or None
+    return resolve(state_dir)
 
 
 def _result_str(player_result: Optional[str]) -> Optional[str]:

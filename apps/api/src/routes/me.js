@@ -1,12 +1,17 @@
 "use strict";
 
 const express = require("express");
+const { validateProfile } = require("../validation/profile");
 
 /**
  * /v1/me — sanity endpoint for the web app. Returns the user record
  * + last-sync timestamps so the SPA can render onboarding state.
  *
- * Also hosts the GDPR endpoints:
+ * Also hosts:
+ *   GET    /me/profile   — read battleTag/pulseId/region/preferredRace/displayName
+ *   PUT    /me/profile   — replace those fields (also reachable via the
+ *                          agent's device-token, so the desktop app can
+ *                          read its handle from the cloud after pairing)
  *   GET    /me/export    — download every per-user record as JSON
  *   DELETE /me           — permanently delete the account
  *   GET    /me/backups   — list manual snapshots
@@ -39,6 +44,35 @@ function buildMeRouter(deps) {
         source: auth.source,
         games: stats,
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/me/profile", deps.auth, async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const profile = await deps.users.getProfile(auth.userId);
+      res.json(profile);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.put("/me/profile", deps.auth, async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const result = validateProfile(req.body);
+      if (!result.valid) {
+        res.status(400).json({
+          error: { code: "invalid_profile", details: result.errors },
+        });
+        return;
+      }
+      const profile = await deps.users.updateProfile(auth.userId, result.value);
+      res.json(profile);
     } catch (err) {
       next(err);
     }
