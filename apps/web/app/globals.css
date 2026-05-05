@@ -143,6 +143,23 @@ a:hover {
 }
 
 /* ============================================================
+ * Animations — landing page motion. Subtle by design; the global
+ * prefers-reduced-motion query above disables all animations.
+ * ============================================================ */
+@keyframes halo-pulse-soft {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+.animate-halo-pulse-soft {
+  animation: halo-pulse-soft 8s ease-in-out infinite;
+}
+
+/* ============================================================
  * Typography utilities (mirror tailwind.config fontSize scale)
  * ============================================================ */
 .t-display-xl {
