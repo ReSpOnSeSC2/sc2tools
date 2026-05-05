@@ -61,9 +61,16 @@ export function OpponentsTab({
     }));
   }, [data]);
 
+  // Client-side min-games filter. The API doesn't honour `min_games`
+  // on /v1/opponents, so without this the input did nothing.
+  const filteredItems = useMemo(
+    () => rawItems.filter((o) => (o.games || 0) >= minGames),
+    [rawItems, minGames],
+  );
+
   const items = useMemo(
-    () => sort.sortRows(rawItems, (row, col) => (row as any)[col]),
-    [rawItems, sort],
+    () => sort.sortRows(filteredItems, (row, col) => (row as any)[col]),
+    [filteredItems, sort],
   );
 
   if (isLoading) return <Skeleton rows={8} />;
