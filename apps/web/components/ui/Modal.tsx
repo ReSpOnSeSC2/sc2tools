@@ -24,13 +24,14 @@ import { X } from "lucide-react";
  * For destructive confirmations use ConfirmDialog (built on this).
  */
 
-export type ModalSize = "sm" | "md" | "lg" | "xl";
+export type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl";
 
 const SIZE_CLASSES: Record<ModalSize, string> = {
   sm: "sm:max-w-md",
   md: "sm:max-w-lg",
   lg: "sm:max-w-2xl",
   xl: "sm:max-w-4xl",
+  "2xl": "sm:max-w-6xl",
 };
 
 export interface ModalProps {

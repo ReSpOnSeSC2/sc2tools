@@ -344,10 +344,10 @@ class MacroBackfillService {
   async listForRulePreview(userId, opts = {}) {
     /** @type {Record<string, any>} */
     const filter = { userId };
-    if (opts.race && opts.race !== "Any") filter.myRace = opts.race;
-    if (opts.vsRace && opts.vsRace !== "Any") {
-      filter["opponent.race"] = opts.vsRace;
-    }
+    const raceMatcher = buildRaceFilter(opts.race);
+    if (raceMatcher) filter.myRace = raceMatcher;
+    const vsMatcher = buildRaceFilter(opts.vsRace);
+    if (vsMatcher) filter["opponent.race"] = vsMatcher;
     const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 600));
     const games = await this.db.games
       .find(filter, {
@@ -434,6 +434,25 @@ function clampPositive(raw, fallback) {
   const n = typeof raw === "number" ? raw : Number.parseInt(String(raw || ""), 10);
   if (!Number.isFinite(n) || n <= 0) return fallback;
   return n;
+}
+
+/**
+ * Build a Mongo filter that matches a race regardless of whether the
+ * stored value is the full name ("Protoss") or the single letter
+ * ("P"). The cloud agent stores full names, but defensively accept
+ * any case + first-letter so a legacy import can't strand the editor.
+ *
+ * @param {unknown} raw
+ * @returns {Record<string, unknown> | null}
+ */
+function buildRaceFilter(raw) {
+  if (raw === undefined || raw === null) return null;
+  const s = String(raw).trim();
+  if (!s || s === "Any") return null;
+  const letter = s.charAt(0).toUpperCase();
+  // Match "Protoss", "protoss", "PROTOSS", "P", "p" — and equivalent
+  // for Terran/Zerg/Random — without leaking adjacent races.
+  return { $regex: `^${letter}`, $options: "i" };
 }
 
 module.exports = {

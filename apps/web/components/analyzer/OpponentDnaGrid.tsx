@@ -2,10 +2,25 @@
 
 import { useMemo, useState } from "react";
 import { useApi } from "@/lib/clientApi";
-import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import { useFilters } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { OpponentDnaTimingsDrilldown } from "./OpponentDnaTimingsDrilldown";
+
+type OpponentListItem = {
+  pulseId: string;
+  displayNameSample?: string;
+  race?: string;
+  gameCount?: number;
+  wins?: number;
+  losses?: number;
+  openings?: Record<string, number>;
+};
+
+type OpponentListResp = {
+  items?: OpponentListItem[];
+  nextBefore?: string | null;
+};
 
 type DnaCell = {
   name: string;
@@ -14,32 +29,48 @@ type DnaCell = {
   wins: number;
   losses: number;
   winRate: number;
-  topStrategies?: { name: string; share: number }[];
-  predicted?: { name: string; weight: number }[];
+  topStrategies: { name: string; share: number }[];
 };
+
+const MIN_GAMES_FOR_CARD = 3;
 
 /**
  * Opponent DNA grid — at-a-glance card per recurring opponent showing
- * record, win-rate ribbon, top strategies, and predicted-next.
- * Click a card to open the timings drilldown.
+ * record, win-rate ribbon, top openings (from the stored counts), and a
+ * click-through to a per-opponent timing fingerprint drilldown.
+ *
+ * Reads the same `/v1/opponents` list endpoint used by the Opponents
+ * tab, then derives DNA cells client-side. The detail endpoint
+ * (`/v1/opponents/:pulseId`) provides the matchup timings rendered by
+ * `OpponentDnaTimingsDrilldown`.
  */
 export function OpponentDnaGrid() {
-  const { filters, dbRev } = useFilters();
+  const { dbRev } = useFilters();
   const [open, setOpen] = useState<string | null>(null);
-  const { data, isLoading } = useApi<DnaCell[]>(
-    `/v1/opponents${filtersToQuery({ ...filters, dna: 1 })}#${dbRev}`,
+  const { data, isLoading, error } = useApi<OpponentListResp>(
+    `/v1/opponents?limit=100#${dbRev}`,
   );
 
-  const cells = useMemo(
-    () => (data || []).filter((c) => (c.total || 0) >= 3),
-    [data],
-  );
+  const cells = useMemo<DnaCell[]>(() => {
+    const items = data?.items;
+    if (!Array.isArray(items)) return [];
+    return items
+      .map(itemToDnaCell)
+      .filter((c): c is DnaCell => c !== null && c.total >= MIN_GAMES_FOR_CARD);
+  }, [data]);
 
   if (isLoading) return <Skeleton rows={6} />;
+  if (error) {
+    return (
+      <Card>
+        <EmptyState title="Couldn't load opponents" sub={error.message} />
+      </Card>
+    );
+  }
   if (cells.length === 0) {
     return (
       <Card>
-        <EmptyState title="Need at least 3 games per opponent to build a DNA card" />
+        <EmptyState title={`Need at least ${MIN_GAMES_FOR_CARD} games per opponent to build a DNA card`} />
       </Card>
     );
   }
@@ -56,7 +87,7 @@ export function OpponentDnaGrid() {
               open === c.pulseId ? "ring-2 ring-accent" : ""
             }`}
           >
-            <div className="flex items-baseline justify-between">
+            <div className="flex items-baseline justify-between gap-2">
               <h3 className="truncate text-sm font-semibold">{c.name}</h3>
               <span
                 className="font-mono tabular-nums text-xs"
@@ -68,9 +99,9 @@ export function OpponentDnaGrid() {
             <div className="mt-1 text-[11px] text-text-dim">
               {c.wins}W &ndash; {c.losses}L ({c.total} games)
             </div>
-            {c.topStrategies && c.topStrategies.length > 0 && (
+            {c.topStrategies.length > 0 ? (
               <div className="mt-3 space-y-1 text-[11px]">
-                <div className="text-text-dim">Top builds</div>
+                <div className="text-text-dim">Top openings</div>
                 {c.topStrategies.slice(0, 3).map((s) => (
                   <div key={s.name} className="flex items-center gap-2">
                     <div className="h-1 flex-1 overflow-hidden rounded bg-bg-elevated">
@@ -79,39 +110,61 @@ export function OpponentDnaGrid() {
                         style={{ width: `${s.share * 100}%` }}
                       />
                     </div>
-                    <span className="w-24 truncate text-text-muted">{s.name}</span>
+                    <span className="w-24 truncate text-text-muted" title={s.name}>
+                      {s.name}
+                    </span>
                     <span className="w-10 text-right tabular-nums text-text-dim">
                       {pct1(s.share)}
                     </span>
                   </div>
                 ))}
               </div>
-            )}
-            {c.predicted && c.predicted.length > 0 && (
-              <div className="mt-3 text-[11px]">
-                <div className="text-text-dim">Likely next</div>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {c.predicted.slice(0, 3).map((p) => (
-                    <span
-                      key={p.name}
-                      className="rounded bg-accent/15 px-1.5 py-0.5 text-accent"
-                      title={`${pct1(p.weight)} confidence`}
-                    >
-                      {p.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+            ) : null}
           </button>
         ))}
       </div>
-      {open && (
+      {open ? (
         <OpponentDnaTimingsDrilldown
           pulseId={open}
           onClose={() => setOpen(null)}
         />
-      )}
+      ) : null}
     </div>
   );
+}
+
+function itemToDnaCell(item: OpponentListItem | null | undefined): DnaCell | null {
+  if (!item || !item.pulseId) return null;
+  const wins = Number.isFinite(item.wins) ? Number(item.wins) : 0;
+  const losses = Number.isFinite(item.losses) ? Number(item.losses) : 0;
+  const total =
+    Number.isFinite(item.gameCount) && Number(item.gameCount) > 0
+      ? Number(item.gameCount)
+      : wins + losses;
+  const decided = wins + losses;
+  const winRate = decided ? wins / decided : 0;
+  return {
+    pulseId: String(item.pulseId),
+    name: item.displayNameSample || String(item.pulseId),
+    total,
+    wins,
+    losses,
+    winRate,
+    topStrategies: openingsToShare(item.openings),
+  };
+}
+
+function openingsToShare(
+  openings: Record<string, number> | undefined,
+): { name: string; share: number }[] {
+  if (!openings || typeof openings !== "object") return [];
+  const entries = Object.entries(openings).filter(
+    ([, v]) => Number.isFinite(v) && Number(v) > 0,
+  );
+  if (entries.length === 0) return [];
+  const total = entries.reduce((acc, [, v]) => acc + Number(v), 0);
+  if (!total) return [];
+  return entries
+    .map(([name, count]) => ({ name, share: Number(count) / total }))
+    .sort((a, b) => b.share - a.share);
 }

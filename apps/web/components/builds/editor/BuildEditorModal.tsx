@@ -153,7 +153,7 @@ export function BuildEditorModal({
             </>
           )
         }
-        size="xl"
+        size="2xl"
         disableScrimClose={editor.saving}
         hideClose={editor.saving}
         footer={
@@ -172,40 +172,44 @@ export function BuildEditorModal({
             e.preventDefault();
             editor.save(false);
           }}
-          className="space-y-6"
+          className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-5"
         >
-          <BuildEditorBasics
-            draft={editor.draft}
-            setDraft={editor.setDraft}
-            errors={editor.errors}
-          />
-          <BuildEditorRules
-            draft={editor.draft}
-            errors={editor.errors}
-            sourceRows={sourceRows}
-            updateRule={editor.updateRule}
-            removeRule={editor.removeRule}
-            cycleRule={editor.cycleRule}
-            addRuleFromEvent={editor.addRuleFromEvent}
-            addCustomRule={editor.addCustomRule}
-          />
-          <BuildEditorPreview
-            preview={editor.preview}
-            loading={editor.previewLoading}
-            error={editor.previewError}
-            rules={editor.draft.rules}
-            expandedMatchId={editor.expandedMatchId}
-            toggleInspect={editor.toggleInspect}
-            hiddenMatchIds={editor.hiddenMatchIds}
-            hideMatch={editor.hideMatch}
-            unhideAll={editor.unhideAll}
-            inspectCache={editor.inspectCache}
-            inspectLoading={editor.inspectLoading}
-            previewPage={editor.previewPage}
-            almostPage={editor.almostPage}
-            setPreviewPage={editor.setPreviewPage}
-            setAlmostPage={editor.setAlmostPage}
-          />
+          <div className="flex min-w-0 flex-col gap-4">
+            <BuildEditorBasics
+              draft={editor.draft}
+              setDraft={editor.setDraft}
+              errors={editor.errors}
+            />
+            <BuildEditorPreview
+              preview={editor.preview}
+              loading={editor.previewLoading}
+              error={editor.previewError}
+              rules={editor.draft.rules}
+              expandedMatchId={editor.expandedMatchId}
+              toggleInspect={editor.toggleInspect}
+              hiddenMatchIds={editor.hiddenMatchIds}
+              hideMatch={editor.hideMatch}
+              unhideAll={editor.unhideAll}
+              inspectCache={editor.inspectCache}
+              inspectLoading={editor.inspectLoading}
+              previewPage={editor.previewPage}
+              almostPage={editor.almostPage}
+              setPreviewPage={editor.setPreviewPage}
+              setAlmostPage={editor.setAlmostPage}
+            />
+          </div>
+          <div className="min-w-0">
+            <BuildEditorRules
+              draft={editor.draft}
+              errors={editor.errors}
+              sourceRows={sourceRows}
+              updateRule={editor.updateRule}
+              removeRule={editor.removeRule}
+              cycleRule={editor.cycleRule}
+              addRuleFromEvent={editor.addRuleFromEvent}
+              addCustomRule={editor.addCustomRule}
+            />
+          </div>
         </form>
       </Modal>
       <BuildEditorToasts toasts={editor.toasts} dismiss={editor.dismissToast} />

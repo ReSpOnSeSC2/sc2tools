@@ -51,7 +51,7 @@ const TABS: readonly TabDef[] = [
   { id: "opponents", label: "Opponents", icon: Users, description: "Drill into the players you've faced." },
   { id: "strategies", label: "Strategies", icon: Swords, description: "Build vs strategy and per-strategy results." },
   { id: "trends", label: "Trends", icon: TrendingUp, description: "Win-rate trajectory across periods." },
-  { id: "battlefield", label: "Battlefield", icon: MapIcon, description: "Maps and matchup performance." },
+  { id: "battlefield", label: "Maps", icon: MapIcon, description: "Maps and matchup performance." },
   { id: "builds", label: "Builds", icon: Layers, description: "Your builds, performance, and editor." },
   { id: "dna", label: "DNA", icon: Fingerprint, description: "Opponent timing fingerprint grid." },
   { id: "map-intel", label: "Map intel", icon: MapPin, description: "Spatial heatmaps for known maps." },
