@@ -18,8 +18,9 @@ type ReportsResp = { items: Report[] };
 
 /**
  * /admin — moderation dashboard. Server gates by checking the caller's
- * userId against SC2TOOLS_ADMIN_USER_IDS in the API config; non-admins
- * see an empty queue (the API returns 403 and SWR surfaces an error).
+ * Clerk user ID against SC2TOOLS_ADMIN_USER_IDS in the API config;
+ * non-admins get a 403 (surfaced as a "Forbidden" card here) and the
+ * "Admin" header link is hidden for them via /v1/me.isAdmin.
  */
 export default function AdminPage() {
   const { getToken } = useAuth();

@@ -206,6 +206,15 @@ function mountRoutes(app, deps, services) {
     SERVICE.ROUTE_PREFIX,
     buildDevicePairingsRouter({ pairings: services.pairings, auth }),
   );
+  // SC2TOOLS_ADMIN_USER_IDS is a CSV of *Clerk* user IDs (the
+  // `user_xxx` strings from the Clerk dashboard), so the gate compares
+  // against `req.auth.clerkUserId`. Device-auth requests don't carry
+  // a Clerk ID and therefore can never be admins, which is what we
+  // want — moderation is a web-only surface.
+  const adminIds = new Set(deps.config.adminUserIds || []);
+  /** @param {import('express').Request} req */
+  const isAdmin = (req) =>
+    Boolean(req.auth && req.auth.clerkUserId && adminIds.has(req.auth.clerkUserId));
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMeRouter({
@@ -213,6 +222,7 @@ function mountRoutes(app, deps, services) {
       games: services.games,
       gdpr: services.gdpr,
       auth,
+      isAdmin,
       logger: deps.logger,
     }),
   );
@@ -221,13 +231,12 @@ function mountRoutes(app, deps, services) {
   // report). Per-route auth inside the router handles both — but the
   // router MUST mount with the public bundle so no later
   // `router.use(auth)` intercepts the unauthed GETs.
-  const adminIds = new Set(deps.config.adminUserIds || []);
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildCommunityRouter({
       community: services.community,
       auth,
-      isAdmin: (req) => Boolean(req.auth && adminIds.has(req.auth.userId)),
+      isAdmin,
     }),
   );
   app.use(

@@ -9,8 +9,11 @@ const BEARER_PREFIX = "Bearer ";
  * Build the auth middleware. Accepts EITHER a Clerk session JWT (web
  * users) or a long-lived device token (the local agent).
  *
- * On success, attaches `req.auth = { userId, source }` where `source`
- * is "clerk" or "device".
+ * On success, attaches `req.auth = { userId, source, clerkUserId? }`.
+ * `clerkUserId` is present only when `source === "clerk"` — it's the raw
+ * Clerk identifier (e.g. `user_2abc...`), needed for env-var gates like
+ * SC2TOOLS_ADMIN_USER_IDS where admins paste IDs straight from the Clerk
+ * dashboard rather than the internal UUID.
  *
  * @param {{
  *   secretKey: string,
@@ -59,7 +62,11 @@ function buildAuth(deps) {
         return;
       }
       const user = await deps.ensureUser(claims.sub);
-      req.auth = { userId: user.userId, source: "clerk" };
+      req.auth = {
+        userId: user.userId,
+        clerkUserId: claims.sub,
+        source: "clerk",
+      };
       next();
     } catch (err) {
       next(httpError(401, "auth_failed", err instanceof Error ? err : undefined));

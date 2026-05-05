@@ -387,9 +387,12 @@ enabled-widgets list when it arrives over the socket.
   go to the moderation queue.
 - [x] **Admin dashboard** at [`/admin`](../../apps/web/app/admin/page.tsx).
   Gating uses a comma-separated `SC2TOOLS_ADMIN_USER_IDS` env var on
-  the API — no Clerk role plumbing needed for a single admin. Reports
-  resolve to either `dismiss` (keep published) or `remove` (calls
-  `unpublish` with admin attribution).
+  the API — values are **Clerk user IDs** (`user_xxx`, copied from the
+  Clerk dashboard), not internal UUIDs, so no DB lookup is needed to
+  promote a moderator. The site header surfaces an "Admin" link only
+  when `/v1/me` reports `isAdmin: true`. Reports resolve to either
+  `dismiss` (keep published) or `remove` (calls `unpublish` with
+  admin attribution).
 - Optional Discord bot — deferred. The community surface is web-first;
   a bot is a "later if asked" extension.
 
