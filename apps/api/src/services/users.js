@@ -110,6 +110,40 @@ class UsersService {
   }
 
   /**
+   * Read per-user preferences for a given type key (e.g. "misc", "voice").
+   * Returns {} when not yet set.
+   *
+   * @param {string} userId
+   * @param {string} type
+   * @returns {Promise<Record<string, unknown>>}
+   */
+  async getPreferences(userId, type) {
+    const doc = await this.db.users.findOne(
+      { userId },
+      { projection: { _id: 0, [`preferences.${type}`]: 1 } },
+    );
+    return (doc && doc.preferences && doc.preferences[type]) || {};
+  }
+
+  /**
+   * Merge-replace the preferences sub-document for a given type key.
+   * The entire sub-object is replaced atomically so stale keys don't
+   * accumulate; callers should always send the full preferences object.
+   *
+   * @param {string} userId
+   * @param {string} type
+   * @param {Record<string, unknown>} prefs
+   * @returns {Promise<Record<string, unknown>>}
+   */
+  async updatePreferences(userId, type, prefs) {
+    await this.db.users.updateOne(
+      { userId },
+      { $set: { [`preferences.${type}`]: prefs } },
+    );
+    return prefs;
+  }
+
+  /**
    * Replace the profile block on the user record. Empty/missing
    * fields are unset on disk so the document doesn't accumulate
    * stale entries. The profile is the only writable surface — we

@@ -8,20 +8,24 @@ const { validateProfile } = require("../validation/profile");
  * + last-sync timestamps so the SPA can render onboarding state.
  *
  * Also hosts:
- *   GET    /me/profile   — read battleTag/pulseId/region/preferredRace/displayName
- *   PUT    /me/profile   — replace those fields (also reachable via the
- *                          agent's device-token, so the desktop app can
- *                          read its handle from the cloud after pairing)
- *   GET    /me/export    — download every per-user record as JSON
- *   DELETE /me           — permanently delete the account
- *   GET    /me/backups   — list manual snapshots
- *   POST   /me/backups   — take a manual snapshot
- *   POST   /me/backups/:id/restore — restore from a snapshot
+ *   GET    /me/profile              — read battleTag/pulseId/region/preferredRace/displayName
+ *   PUT    /me/profile              — replace those fields (also reachable via the
+ *                                     agent's device-token, so the desktop app can
+ *                                     read its handle from the cloud after pairing)
+ *   GET    /me/preferences/:type    — read stored preferences ("misc" | "voice")
+ *   PUT    /me/preferences/:type    — replace preferences for that type
+ *   GET    /me/doctor               — diagnostic warnings (no agent, no profile, etc.)
+ *   GET    /me/export               — download every per-user record as JSON
+ *   DELETE /me                      — permanently delete the account
+ *   GET    /me/backups              — list manual snapshots
+ *   POST   /me/backups              — take a manual snapshot
+ *   POST   /me/backups/:id/restore  — restore from a snapshot
  *
  * @param {{
  *   users: import('../services/types').UsersService,
  *   games: import('../services/types').GamesService,
  *   gdpr: import('../services/gdpr').GdprService,
+ *   pairings: import('../services/devicePairings').DevicePairingsService,
  *   auth: import('express').RequestHandler,
  *   isAdmin?: (req: import('express').Request) => boolean,
  *   logger?: import('pino').Logger,
@@ -76,6 +80,94 @@ function buildMeRouter(deps) {
       }
       const profile = await deps.users.updateProfile(auth.userId, result.value);
       res.json(profile);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Allowlist of preference types the client may read/write.
+  const PREF_TYPES = new Set(["misc", "voice"]);
+
+  router.get("/me/preferences/:type", deps.auth, async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const { type } = req.params;
+      if (!PREF_TYPES.has(type)) {
+        res.status(404).json({ error: { code: "unknown_preference_type" } });
+        return;
+      }
+      const prefs = await deps.users.getPreferences(auth.userId, type);
+      res.json(prefs);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.put("/me/preferences/:type", deps.auth, async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const { type } = req.params;
+      if (!PREF_TYPES.has(type)) {
+        res.status(404).json({ error: { code: "unknown_preference_type" } });
+        return;
+      }
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        res.status(400).json({ error: { code: "invalid_body" } });
+        return;
+      }
+      const saved = await deps.users.updatePreferences(auth.userId, type, req.body);
+      res.json(saved);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/me/doctor", deps.auth, async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+
+      /** @type {Array<{id: string, severity: 'info'|'warn'|'error', message: string, cta?: {label: string, href: string}}>} */
+      const warnings = [];
+
+      const [profile, devices, gameStats] = await Promise.all([
+        deps.users.getProfile(auth.userId),
+        deps.pairings.listDevices(auth.userId),
+        deps.games.stats(auth.userId),
+      ]);
+
+      if (!profile.battleTag) {
+        warnings.push({
+          id: "no_profile",
+          severity: "warn",
+          message:
+            "Your SC2 profile isn't set up yet. Add your BattleTag to see opponent matchup stats.",
+          cta: { label: "Set up profile", href: "/settings#profile" },
+        });
+      }
+
+      if (devices.length === 0) {
+        warnings.push({
+          id: "no_agent",
+          severity: "warn",
+          message:
+            "No SC2 agent is connected. Install and pair the desktop agent to start importing replays.",
+          cta: { label: "Connect agent", href: "/devices" },
+        });
+      }
+
+      if (gameStats.total === 0) {
+        warnings.push({
+          id: "no_games",
+          severity: "info",
+          message:
+            "No games recorded yet. The agent will import your recent replays automatically after pairing.",
+        });
+      }
+
+      res.json({ ok: warnings.filter((w) => w.severity !== "info").length === 0, warnings });
     } catch (err) {
       next(err);
     }
