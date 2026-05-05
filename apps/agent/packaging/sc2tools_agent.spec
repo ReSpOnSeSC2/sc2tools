@@ -8,6 +8,7 @@ Builds a single Windows EXE that bundles:
   * SC2Replay-Analyzer (sibling package, imported at runtime by
     replay_pipeline.py for sc2reader-based parsing)
   * sc2reader, watchdog, pystray, Pillow, requests, sentry-sdk
+  * PySide6 (Qt6) - production GUI window
 
 Build:
     cd apps/agent
@@ -26,10 +27,15 @@ for a single .exe (slower first-run because the runtime unpacks into
 
 from pathlib import Path
 
+# PyInstaller helper for collecting whole packages - used for PySide6
+# so every Qt plugin (platforms, imageformats, styles) is bundled.
+from PyInstaller.utils.hooks import collect_all  # type: ignore[import-not-found]
+
 ONE_FILE = True
 
 HERE = Path.cwd()
 ANALYZER_DIR = HERE / ".." / ".." / "SC2Replay-Analyzer"
+ICON_DIR = HERE / "sc2tools_agent" / "ui"
 
 # Bring the analyzer's Python source + its data dir along so the
 # bundled .exe can `import core.sc2_replay_parser` exactly the same
@@ -40,6 +46,11 @@ if ANALYZER_DIR.exists():
         src = ANALYZER_DIR / sub
         if src.exists():
             DATAS.append((str(src), f"SC2Replay-Analyzer/{sub}"))
+
+# Tray + GUI icon - referenced at runtime via Path(__file__).parent.
+TRAY_ICON = ICON_DIR / "tray_icon.png"
+if TRAY_ICON.exists():
+    DATAS.append((str(TRAY_ICON), "sc2tools_agent/ui"))
 
 # sc2reader internals + matplotlib pyplot lazy imports need explicit
 # hidden imports because PyInstaller can't statically detect them.
@@ -62,25 +73,51 @@ HIDDEN = [
     "sentry_sdk.integrations",
 ]
 
+# PySide6 - collect_all pulls every submodule, plus the Qt plugin
+# directories the windowed runtime needs (qwindows, etc.). Without
+# this, the frozen .exe boots and immediately fails with
+# "could not find or load the Qt platform plugin".
+PYSIDE6_DATAS, PYSIDE6_BINARIES, PYSIDE6_HIDDEN = collect_all("PySide6")
+DATAS += PYSIDE6_DATAS
+BINARIES = list(PYSIDE6_BINARIES)
+HIDDEN += PYSIDE6_HIDDEN
+HIDDEN += [
+    "PySide6.QtCore",
+    "PySide6.QtGui",
+    "PySide6.QtWidgets",
+]
+
 block_cipher = None
 
 a = Analysis(
     ["../sc2tools_agent/__main__.py"],
     pathex=[str(HERE / "..")],
-    binaries=[],
+    binaries=BINARIES,
     datas=DATAS,
     hiddenimports=HIDDEN,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # Keep the bundle slim — we don't ship Jupyter, IPython, or
-        # tests in the user-facing .exe.
+        # Keep the bundle slim - we don't ship Jupyter, IPython, or
+        # tests in the user-facing .exe. We also drop the PySide6
+        # modules the agent doesn't touch (QtWebEngine, QtSql, 3D)
+        # - that trims a lot out of the installer.
         "IPython",
         "jupyter",
         "pytest",
         "matplotlib.tests",
         "numpy.tests",
+        "PySide6.QtWebEngineCore",
+        "PySide6.QtWebEngineWidgets",
+        "PySide6.QtMultimedia",
+        "PySide6.QtMultimediaWidgets",
+        "PySide6.QtSql",
+        "PySide6.Qt3DCore",
+        "PySide6.Qt3DRender",
+        "PySide6.QtBluetooth",
+        "PySide6.QtCharts",
+        "PySide6.QtDataVisualization",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
