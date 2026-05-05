@@ -1,24 +1,33 @@
 "use client";
 
-import { useApi } from "@/lib/clientApi";
+import useSWR from "swr";
 import type { AgentVersionResp, DetectedOS } from "./types";
 
 /**
- * Fetch the latest stable release from `GET /v1/agent/version`. Sends
- * `current=0.0.0` so the server always returns the latest artifact's
- * metadata (the agent endpoint short-circuits with
- * `update_available:false` when the agent is already up-to-date).
+ * Fetch the latest stable release. Hits the local Next.js route at
+ * `/api/agent/version`, which proxies to the GitHub releases API and
+ * returns the same `AgentVersionResp` shape the agent's auto-updater
+ * already expects. The route is public — no Clerk JWT, no Mongo —
+ * so the download page works for logged-out visitors and for users
+ * who haven't paired a device yet.
  *
  * We pin to the stable channel and the user's detected OS so the
- * server picks the right artifact. Falls back to "windows" while OS
- * detection is pending — the API returns `null` on missing platform,
- * which surfaces as `data.artifact === undefined` so the UI can show a
- * graceful "no installer yet" state.
+ * route can pick the right artifact. Falls back to "windows" while
+ * OS detection is pending. The route returns no `artifact` field
+ * when there is no installer for the platform yet, which surfaces
+ * as `data.artifact === undefined` so the UI can show its graceful
+ * "no installer yet" state.
  */
 export function useReleaseInfo(os: DetectedOS) {
   const platform = osToPlatformParam(os);
-  const path = `/v1/agent/version?channel=stable&platform=${platform}&current=0.0.0`;
-  return useApi<AgentVersionResp>(path);
+  const path = `/api/agent/version?channel=stable&platform=${platform}&current=0.0.0`;
+  return useSWR<AgentVersionResp>(path, async (p: string) => {
+    const res = await fetch(p, { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`release_fetch_failed_${res.status}`);
+    }
+    return (await res.json()) as AgentVersionResp;
+  });
 }
 
 function osToPlatformParam(os: DetectedOS): string {
