@@ -6,17 +6,17 @@ import Image from "next/image";
  * SC2 Tools branded banner.
  *
  * Asset resolution:
- *   - The wide artwork at `apps/web/public/banner.png` (the "SC2TOOLS"
- *     sci-fi banner, ~2000x800) is preferred for the hero variant.
- *     Drop the file in and the layout switches automatically.
+ *   - The wide artwork at `apps/web/public/banner.png` is preferred for
+ *     the hero variant. Drop the file in and the layout switches.
  *   - Until that file exists, the hero falls back to a composed layout
- *     that pairs the round shield logo (`/logo.png`) with an
+ *     that pairs the round shield logo (`/logo.png`) with the
  *     "SC2TOOLS" wordmark + tech-grid accent stripes.
  *   - The "divider" variant always uses the round logo.
  *
- * The presence check runs at request time on the server (Server
- * Component), so swapping the image is a matter of dropping the file
- * in `apps/web/public/` — no code change.
+ * All cyan / purple glow values flow through CSS variables defined in
+ * app/globals.css (--halo-cyan, --halo-accent, --accent-cyan). Phase 17
+ * migrated this module off raw RGB literals so the banner adapts to
+ * both light and dark themes.
  */
 
 type BannerVariant = "hero" | "divider";
@@ -42,12 +42,12 @@ function bannerExists(): boolean {
 function HeroBanner() {
   const useWideArt = bannerExists();
   return (
-    <div className="relative my-2 overflow-hidden rounded-xl border border-accent/30 bg-bg-elevated/40 shadow-[0_0_60px_rgba(124,140,255,0.18)]">
+    <div className="relative my-2 overflow-hidden rounded-xl border border-accent/30 bg-bg-elevated/40 shadow-halo-accent">
       <div
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-0 animate-halo-pulse-soft"
         style={{
           background:
-            "radial-gradient(ellipse at center, rgba(62,192,199,0.18) 0%, rgba(62,192,199,0) 65%)",
+            "radial-gradient(ellipse at center, var(--halo-cyan) 0%, transparent 65%)",
         }}
         aria-hidden
       />
@@ -83,7 +83,7 @@ function ComposedBanner() {
           className="absolute inset-0 -z-10 rounded-full blur-2xl"
           style={{
             background:
-              "radial-gradient(circle at center, rgba(62,192,199,0.7) 0%, rgba(62,192,199,0) 70%)",
+              "radial-gradient(circle at center, rgb(var(--accent-cyan) / 0.5) 0%, transparent 70%)",
           }}
           aria-hidden
         />
@@ -99,11 +99,10 @@ function ComposedBanner() {
       <div className="min-w-0 flex-1">
         <AccentStripes />
         <h1
-          className="font-mono text-4xl font-extrabold tracking-[0.18em] md:text-6xl"
+          className="font-mono text-4xl font-extrabold tracking-[0.18em] text-accent-cyan md:text-6xl"
           style={{
             textShadow:
-              "0 0 18px rgba(62,192,199,0.55), 0 0 2px rgba(255,255,255,0.6)",
-            color: "#cdeff3",
+              "0 0 18px rgb(var(--accent-cyan) / 0.55), 0 0 2px rgb(var(--text) / 0.4)",
           }}
         >
           SC2TOOLS
@@ -120,7 +119,7 @@ function AccentStripes({ mirrored = false }: { mirrored?: boolean }) {
       className={`flex items-center gap-2 ${mirrored ? "mt-3" : "mb-3"}`}
       aria-hidden
     >
-      <span className="h-[3px] w-12 bg-accent/80 shadow-[0_0_12px_rgba(124,140,255,0.7)]" />
+      <span className="h-[3px] w-12 bg-accent/80 shadow-halo-accent" />
       <span className="h-[3px] w-6 bg-accent/60" />
       <span className="h-[3px] w-3 bg-accent/40" />
     </div>
@@ -140,7 +139,7 @@ function DividerBanner() {
         alt=""
         width={56}
         height={56}
-        className="flex-shrink-0 rounded-full opacity-90 shadow-[0_0_24px_rgba(62,192,199,0.45)]"
+        className="flex-shrink-0 rounded-full opacity-90 shadow-halo-cyan"
       />
       <span className="h-px flex-1 bg-gradient-to-l from-transparent via-accent/60 to-accent/80" />
     </div>
