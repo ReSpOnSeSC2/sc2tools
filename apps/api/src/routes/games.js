@@ -79,6 +79,8 @@ function buildGamesRouter(deps) {
         if (game.opponent && game.opponent.pulseId) {
           await deps.opponents.recordGame(userId, {
             pulseId: game.opponent.pulseId,
+            toonHandle: game.opponent.toonHandle,
+            pulseCharacterId: game.opponent.pulseCharacterId,
             displayName: game.opponent.displayName || "",
             race: game.opponent.race || "U",
             mmr: game.opponent.mmr,

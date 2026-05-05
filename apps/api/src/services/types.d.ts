@@ -29,6 +29,8 @@ export interface OpponentsService {
     userId: string,
     game: {
       pulseId: string;
+      toonHandle?: string;
+      pulseCharacterId?: string;
       displayName: string;
       race: string;
       mmr?: number;

@@ -66,4 +66,44 @@ describe("validateGameRecord", () => {
       expect(/** @type {any} */ (r.value).opponent.mmr).toBe(4500);
     }
   });
+
+  test("accepts toonHandle and pulseCharacterId on opponent", () => {
+    const r = validateGameRecord({
+      gameId: "abc-123",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      opponent: {
+        pulseId: "1-S2-1-716965",
+        toonHandle: "1-S2-1-716965",
+        pulseCharacterId: "994428",
+        displayName: "BrenMcBash",
+        race: "Terran",
+      },
+    });
+    expect(r.valid).toBe(true);
+    if (r.valid) {
+      const opp = /** @type {any} */ (r.value).opponent;
+      expect(opp.toonHandle).toBe("1-S2-1-716965");
+      expect(opp.pulseCharacterId).toBe("994428");
+    }
+  });
+
+  test("rejects non-numeric pulseCharacterId", () => {
+    const r = validateGameRecord({
+      gameId: "abc-123",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      opponent: {
+        pulseId: "1-S2-1-716965",
+        pulseCharacterId: "not-a-number",
+        displayName: "x",
+        race: "Terran",
+      },
+    });
+    expect(r.valid).toBe(false);
+  });
 });

@@ -139,12 +139,18 @@ def parse_replay_for_cloud(
             opponent["leagueId"] = int(opp.league_id)
         except (TypeError, ValueError):
             pass
-    if getattr(ctx, "opp_pulse_id", None):
-        opponent["pulseId"] = str(ctx.opp_pulse_id)
-    elif opp.handle:
-        # Fall back to the toon handle when SC2Pulse hasn't been polled
-        # yet; the API treats it as a stable per-opponent id.
+    # Identity: keep the in-replay toon_handle as the storage key
+    # (`pulseId`) so the existing per-opponent record stays stable even
+    # when SC2Pulse is offline or the lookup misses. Always emit the
+    # raw toon under `toonHandle`. Best-effort resolve to the canonical
+    # SC2Pulse character id and emit it as `pulseCharacterId` — that's
+    # the value the UI links to on sc2pulse.nephest.com.
+    if opp.handle:
+        opponent["toonHandle"] = str(opp.handle)
         opponent["pulseId"] = str(opp.handle)
+    pulse_character_id = _resolve_pulse_character_id(opp)
+    if pulse_character_id is not None:
+        opponent["pulseCharacterId"] = pulse_character_id
     if getattr(ctx, "opp_strategy", None):
         opponent["strategy"] = str(ctx.opp_strategy)
 
@@ -165,6 +171,36 @@ def parse_replay_for_cloud(
         opp_early_build_log=list(getattr(ctx, "opp_early_build_log", []) or []),
         opp_build_log=list(getattr(ctx, "opp_build_log", []) or []),
     )
+
+
+def _resolve_pulse_character_id(opp: Any) -> Optional[str]:
+    """Best-effort toon_handle → SC2Pulse character ID lookup.
+
+    Delegates to the resolver in ``reveal-sc2-opponent-main`` (added to
+    sys.path by ``_ensure_analyzer_on_path``). Returns ``None`` when the
+    sibling repo isn't present, the resolver is offline, the toon is
+    malformed, or no candidate matches the bnid. Never raises — a
+    failed lookup is identical in outcome to the resolver returning
+    ``None`` and must not break the upload path.
+
+    The same toon is cached process-wide inside the resolver, so a
+    catch-up scan of N replays against the same opponent only hits
+    SC2Pulse once.
+    """
+    handle = getattr(opp, "handle", None)
+    if not handle:
+        return None
+    try:
+        from core.pulse_resolver import resolve_pulse_id_by_toon  # type: ignore
+    except ImportError:
+        return None
+    name = getattr(opp, "name", "") or ""
+    clean = name.split("]", 1)[1].strip() if "]" in name else name.strip()
+    try:
+        return resolve_pulse_id_by_toon(str(handle), clean) or None
+    except Exception as exc:  # noqa: BLE001
+        log.info("pulse_character_id_resolve_failed: %s", exc)
+        return None
 
 
 def _read_player_handle(state_dir: Optional[Path] = None) -> Optional[str]:

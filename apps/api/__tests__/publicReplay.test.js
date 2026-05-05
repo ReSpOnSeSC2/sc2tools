@@ -80,6 +80,35 @@ describe("POST /public/preview-replay", () => {
     expect(res.body.error.code).toBe("not_a_replay");
   });
 
+  test("accepts the MPQ user-data magic ('MPQ\\x1b') used by real SC2 replays", async () => {
+    // Real .SC2Replay files start with MPQ\x1b (User Data Header), not
+    // MPQ\x1a (Archive Header). Regression guard: the original check
+    // rejected every real replay because it only matched \x1a.
+    pythonRunner.pythonAvailable.mockReturnValue(true);
+    pythonRunner.runPythonNdjson.mockResolvedValueOnce([
+      {
+        ok: true,
+        game_id: "g2",
+        map: "Real LE",
+        duration_sec: 720,
+        players: [
+          { name: "a", race: "Zerg", build_log: ["[0:00] Hatchery"] },
+          { name: "b", race: "Protoss", build_log: ["[0:00] Nexus"] },
+        ],
+      },
+    ]);
+    const mpq = Buffer.alloc(64);
+    mpq.set([0x4d, 0x50, 0x51, 0x1b]);
+    const app = makeApp(logger);
+    const res = await request(app)
+      .post("/public/preview-replay")
+      .set("content-type", "application/octet-stream")
+      .send(mpq);
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.map).toBe("Real LE");
+  });
+
   test("forwards the parsed dossier when the CLI succeeds", async () => {
     pythonRunner.pythonAvailable.mockReturnValue(true);
     pythonRunner.runPythonNdjson.mockResolvedValueOnce([

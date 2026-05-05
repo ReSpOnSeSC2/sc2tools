@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, ExternalLink } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
+import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import { AllGamesTable } from "./AllGamesTable";
 import { Last5GamesTimeline } from "./Last5GamesTimeline";
 import type { ProfileGame } from "./Last5GamesTimeline";
@@ -17,6 +18,8 @@ import type { StrategyEntry } from "./StrategyTendencyChart";
 
 type OpponentProfileResp = {
   pulseId?: string;
+  pulseCharacterId?: string | null;
+  toonHandle?: string | null;
   name?: string;
   displayNameSample?: string;
   totals?: { wins: number; losses: number; total: number; winRate: number };
@@ -99,9 +102,11 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-h2 font-semibold">{data.name || "unnamed"}</h1>
-          <div className="font-mono text-caption text-text-dim">
-            Pulse ID {data.pulseId || pulseId}
-          </div>
+          <ProfilePulseLine
+            pulseCharacterId={data.pulseCharacterId}
+            toonHandle={data.toonHandle}
+            pulseId={data.pulseId || pulseId}
+          />
           <Link
             href={publicHref}
             className="text-caption text-accent hover:underline"
@@ -206,6 +211,57 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
       <Card title={`All games (${games.length}) · newest first`}>
         <AllGamesTable games={games} />
       </Card>
+    </div>
+  );
+}
+
+/**
+ * Pulse identity line in the profile header. Mirrors the table-cell
+ * treatment in OpponentsTab: when we have a real SC2Pulse character
+ * id, link out to nephest with the resolved id; otherwise fall back to
+ * the toon_handle (the value from the user's replay folder name) and
+ * label it accordingly.
+ */
+function ProfilePulseLine({
+  pulseCharacterId,
+  toonHandle,
+  pulseId,
+}: {
+  pulseCharacterId?: string | null;
+  toonHandle?: string | null;
+  pulseId: string;
+}) {
+  const label = pickPulseLabel({ pulseCharacterId, toonHandle, pulseId });
+  if (!label) {
+    return (
+      <div className="font-mono text-caption text-text-dim">Pulse ID —</div>
+    );
+  }
+  if (label.isPulseCharacterId) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 font-mono text-caption text-text-dim">
+        <span>Pulse ID</span>
+        <a
+          href={sc2pulseCharacterUrl(label.value)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-accent-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+        >
+          {label.value}
+          <ExternalLink className="h-3 w-3" aria-hidden />
+        </a>
+        {toonHandle ? (
+          <span className="text-text-dim/70">· toon {toonHandle}</span>
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <div className="font-mono text-caption text-text-dim">
+      Toon {label.value}
+      <span className="ml-2 text-[10px] uppercase tracking-wider text-text-dim/70">
+        sc2pulse id not resolved yet
+      </span>
     </div>
   );
 }

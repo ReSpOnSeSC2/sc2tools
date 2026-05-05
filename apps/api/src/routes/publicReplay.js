@@ -119,19 +119,29 @@ function buildPublicReplayRouter(deps = {}) {
 const PREVIEW_MAX_BYTES = 5 * 1024 * 1024; // 5 MB — way bigger than any real replay
 const PREVIEW_RATE_LIMIT_PER_MIN = 6;
 const PREVIEW_TIMEOUT_MS = 30 * 1000;
-const MPQ_MAGIC = Buffer.from([0x4d, 0x50, 0x51, 0x1a]); // "MPQ\x1a"
+// SC2 replays begin with the MPQ User Data Header ("MPQ\x1b"). The
+// `\x1a` variant is the inner Archive Header — it lives somewhere
+// inside the file at the offset specified by the user-data preamble,
+// never at byte 0 in a real replay. Accept both so a stripped MPQ
+// archive (rare, mostly synthetic test fixtures) still parses, but
+// the canonical SC2Replay magic is `\x1b`.
+const MPQ_MAGIC_USER_DATA = Buffer.from([0x4d, 0x50, 0x51, 0x1b]);
+const MPQ_MAGIC_ARCHIVE = Buffer.from([0x4d, 0x50, 0x51, 0x1a]);
 
 /**
- * SC2 replay files are MPQ archives — the first four bytes are the
- * MPQ magic. Reject anything that doesn't start with that header so
- * we don't waste a Python spawn on a JPG or random text.
+ * SC2 replay files are MPQ archives wrapped in a user-data preamble —
+ * the first four bytes are "MPQ\x1b". A bare MPQ archive ("MPQ\x1a")
+ * is also accepted for test fixtures and tooling that has stripped
+ * the user-data preamble. Reject anything else so we don't waste a
+ * Python spawn on a JPG or random text.
  *
  * @param {Buffer} body
  * @returns {boolean}
  */
 function looksLikeMpqHeader(body) {
   if (body.length < 4) return false;
-  return body.subarray(0, 4).equals(MPQ_MAGIC);
+  const head = body.subarray(0, 4);
+  return head.equals(MPQ_MAGIC_USER_DATA) || head.equals(MPQ_MAGIC_ARCHIVE);
 }
 
 /**

@@ -235,6 +235,60 @@ describe("HTTP integration", () => {
       );
       expect(res.status).toBe(404);
     });
+
+    test("persists toonHandle + pulseCharacterId round-trip", async () => {
+      const game = Object.assign(makeGame("opp-cid-game-1", "Victory"), {
+        opponent: {
+          displayName: "BrenMcBash",
+          race: "Terran",
+          pulseId: "1-S2-1-716965",
+          toonHandle: "1-S2-1-716965",
+          pulseCharacterId: "994428",
+        },
+        buildLog: ["[1:30] Pylon"],
+        oppBuildLog: ["[1:30] CommandCenter"],
+      });
+      const post = await withAuth(request(app).post("/v1/games"))
+        .send(game)
+        .set("content-type", "application/json");
+      expect(post.status).toBe(202);
+      const detail = await withAuth(
+        request(app).get("/v1/opponents/1-S2-1-716965"),
+      );
+      expect(detail.status).toBe(200);
+      expect(detail.body.toonHandle).toBe("1-S2-1-716965");
+      expect(detail.body.pulseCharacterId).toBe("994428");
+      const list = await withAuth(request(app).get("/v1/opponents"));
+      expect(list.status).toBe(200);
+      const row = list.body.items.find(
+        (i) => i.pulseId === "1-S2-1-716965",
+      );
+      expect(row).toBeTruthy();
+      expect(row.pulseCharacterId).toBe("994428");
+      expect(row.toonHandle).toBe("1-S2-1-716965");
+    });
+
+    test("does not clobber resolved pulseCharacterId on a later offline game", async () => {
+      const offline = Object.assign(makeGame("opp-cid-game-2", "Victory"), {
+        opponent: {
+          displayName: "BrenMcBash",
+          race: "Terran",
+          pulseId: "1-S2-1-716965",
+          toonHandle: "1-S2-1-716965",
+          // pulseCharacterId omitted — sc2pulse offline at this ingest
+        },
+      });
+      const post = await withAuth(request(app).post("/v1/games"))
+        .send(offline)
+        .set("content-type", "application/json");
+      expect(post.status).toBe(202);
+      const detail = await withAuth(
+        request(app).get("/v1/opponents/1-S2-1-716965"),
+      );
+      expect(detail.status).toBe(200);
+      // The previously resolved id must still be present.
+      expect(detail.body.pulseCharacterId).toBe("994428");
+    });
   });
 
   describe("/v1/spatial", () => {
