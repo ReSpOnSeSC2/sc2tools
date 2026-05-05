@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -8,6 +9,7 @@ import {
   Cloud,
   Download,
   Fingerprint,
+  Heart,
   LayoutDashboard,
   Library,
   Map,
@@ -27,6 +29,11 @@ import {
   GlowHalo,
   Section,
 } from "@/components/ui";
+import {
+  HeroCarousel,
+  type HeroCarouselSlide,
+} from "@/components/landing/HeroCarousel";
+import { ReplayDemo } from "@/components/landing/ReplayDemo";
 
 /* =============================================================== */
 /* PAGE                                                             */
@@ -36,10 +43,12 @@ export default function LandingPage() {
   return (
     <div className="space-y-24 md:space-y-32">
       <HeroSection />
+      <ReplayDemo />
       <PillarsSection />
       <ShowcaseSection />
       <HowItWorksSection />
       <SocialProofSection />
+      <DonateBanner />
       <FinalCtaSection />
     </div>
   );
@@ -50,21 +59,36 @@ export default function LandingPage() {
 /* =============================================================== */
 
 function HeroSection() {
+  const slides: ReadonlyArray<HeroCarouselSlide> = [
+    {
+      id: "hero",
+      label: "Your opponent's build, before they build it",
+      content: <HeroBannerSlide />,
+    },
+    ...HERO_PEEK_SLIDES.map((peek) => ({
+      id: peek.id,
+      label: peek.eyebrow,
+      content: <HeroPeekSlide {...peek} />,
+    })),
+  ];
   return (
     <section className="relative pt-2">
-      <Banner variant="hero" />
-      <div className="relative mx-auto mt-10 max-w-3xl space-y-6 md:mt-14">
+      <HeroCarousel
+        slides={slides}
+        ariaLabel="SC2 Tools landing carousel"
+      />
+      <div className="relative mx-auto mt-8 max-w-3xl space-y-4 text-center md:mt-10">
         <h1 className="text-[40px] font-bold leading-[44px] tracking-tight md:text-display-lg lg:text-display-xl">
           Your opponent&apos;s build,
           <br />
           <span className="text-accent-cyan">before they build it.</span>
         </h1>
-        <p className="max-w-2xl text-body-lg text-text-muted">
+        <p className="mx-auto max-w-2xl text-body-lg text-text-muted">
           Sign in, install a 15&nbsp;MB agent, and every replay you finish
           surfaces an opponent dossier, build classifier, and live OBS
           overlay — across every device.
         </p>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
           <CtaLink
             href="/sign-up"
             iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}
@@ -79,9 +103,93 @@ function HeroSection() {
             Download the agent
           </CtaLink>
         </div>
-        <TrustStrip />
+        <div className="flex justify-center">
+          <TrustStrip />
+        </div>
       </div>
     </section>
+  );
+}
+
+/* ----- Hero carousel slide bodies -------------------------------- */
+
+function HeroBannerSlide() {
+  return (
+    <div className="relative">
+      <Banner variant="hero" />
+    </div>
+  );
+}
+
+interface HeroPeek {
+  id: string;
+  eyebrow: string;
+  title: string;
+  body: string;
+  imageSrc: string;
+  imageAlt: string;
+}
+
+const HERO_PEEK_SLIDES: ReadonlyArray<HeroPeek> = [
+  {
+    id: "peek-dossier",
+    eyebrow: "See it before you sign up",
+    title: "Opponent dossier — auto-built",
+    body: "Race, MMR, build tendencies, recent matchup history — surfaced the moment a replay finishes parsing.",
+    imageSrc: "/landing/opponent-dna.png",
+    imageAlt:
+      "Opponent profile page in SC2 Tools showing matchup record, build tendencies, and median key timings",
+  },
+  {
+    id: "peek-overlay",
+    eyebrow: "See it before you sign up",
+    title: "Live OBS overlay — copy & paste",
+    body: "15 broadcast-ready widgets behind one URL. Drop it into a Browser Source and you're streaming.",
+    imageSrc: "/landing/overlay-live.png",
+    imageAlt:
+      "StarCraft II gameplay with the SC2 Tools live OBS overlay running — opponent identity card, session record, and rematch flag",
+  },
+  {
+    id: "peek-builds",
+    eyebrow: "See it before you sign up",
+    title: "Build classifier — no tagging",
+    body: "Every replay auto-classified into your build library. Win-rate per opener, per matchup, per map.",
+    imageSrc: "/landing/builds.png",
+    imageAlt:
+      "Custom Builds page in SC2 Tools showing per-build wins, losses, win rate, and trend sparklines",
+  },
+];
+
+function HeroPeekSlide({
+  eyebrow,
+  title,
+  body,
+  imageSrc,
+  imageAlt,
+}: HeroPeek) {
+  return (
+    <div className="relative grid min-h-[260px] items-center gap-6 px-6 py-8 sm:min-h-[320px] sm:px-10 sm:py-12 md:min-h-[420px] md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] md:gap-10 md:py-14">
+      <GlowHalo color="cyan" position="center" size={60} opacity={0.55} />
+      <div className="relative space-y-3 text-center md:text-left">
+        <p className="text-caption font-semibold uppercase tracking-wider text-accent-cyan">
+          {eyebrow}
+        </p>
+        <h2 className="text-h2 font-semibold text-text md:text-h1">{title}</h2>
+        <p className="text-body-lg text-text-muted">{body}</p>
+      </div>
+      <div className="relative">
+        <div className="overflow-hidden rounded-xl border border-border bg-bg-elevated/40 shadow-halo-cyan">
+          <Image
+            src={imageSrc}
+            alt={imageAlt}
+            width={1600}
+            height={900}
+            sizes="(min-width: 1024px) 60vw, 100vw"
+            className="block h-auto w-full"
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -203,36 +311,50 @@ interface ShowcaseItem {
   icon: LucideIcon;
   title: string;
   body: string;
+  imageSrc: string;
+  imageAlt: string;
 }
 
 const SHOWCASE_ITEMS: ReadonlyArray<ShowcaseItem> = [
   {
-    route: "sc2tools.app/app",
+    route: "sc2tools.com/app",
     feature: "Dashboard",
     icon: LayoutDashboard,
     title: "Your KPI room — between every game",
     body: "Total games, by-matchup bars, recent results, and MMR delta — all under one filter-aware lens that persists across every page.",
+    imageSrc: "/landing/builds.png",
+    imageAlt:
+      "Dashboard view in SC2 Tools with games-today, win-rate, streak, and total-games KPIs over the Builds tab",
   },
   {
-    route: "sc2tools.app/app/opponents",
+    route: "sc2tools.com/app/opponents",
     feature: "Opponent DNA",
     icon: Fingerprint,
     title: "Opponent dossiers that survive name changes",
     body: "Click any opponent and see every game, their build tendencies, detected strategies, and median timings — keyed to a stable Pulse ID, not an in-replay name.",
+    imageSrc: "/landing/opponent-dna.png",
+    imageAlt:
+      "Opponent profile with by-map win rate, build tendencies, last 5 games, and median key timings per matchup",
   },
   {
-    route: "sc2tools.app/streaming",
+    route: "sc2tools.com/settings/overlay",
     feature: "Live Overlay",
     icon: Tv,
     title: "Stream-ready in one Browser Source",
     body: "Pop your hosted overlay URL into OBS. Pre-game scouting card, live W-L, post-game build reveal, streak splashes — all from one event bus.",
+    imageSrc: "/landing/overlay-rematch.png",
+    imageAlt:
+      "Overlay rematch widget on stream — shows opponent name, MMR, FAMILIAR flag with last result, and recent games",
   },
   {
-    route: "sc2tools.app/builds",
+    route: "sc2tools.com/builds",
     feature: "Build classifier",
     icon: Wand2,
     title: "Tunable classifier, syncable library",
     body: "Auto-classified openers with per-build W-L, last-played, and a custom library you sync between machines and share with the community.",
+    imageSrc: "/landing/build-editor.png",
+    imageAlt:
+      "Save-as-new-build editor in SC2 Tools — basics fields plus the source replay timeline with one-click rule promotion",
   },
 ];
 
@@ -263,9 +385,10 @@ function ShowcaseRow({
   index,
   route,
   feature,
-  icon,
   title,
   body,
+  imageSrc,
+  imageAlt,
 }: ShowcaseItem & { index: number }) {
   const reverse = index % 2 === 1;
   return (
@@ -287,38 +410,23 @@ function ShowcaseRow({
       </div>
       <div className="md:flex-1">
         <DeviceFrame variant="browser" title={route} glow>
-          <ScreenshotPlaceholder icon={icon} feature={feature} />
+          <ShowcaseShot src={imageSrc} alt={imageAlt} />
         </DeviceFrame>
       </div>
     </div>
   );
 }
 
-function ScreenshotPlaceholder({
-  icon: Icon,
-  feature,
-}: {
-  icon: LucideIcon;
-  feature: string;
-}) {
+function ShowcaseShot({ src, alt }: { src: string; alt: string }) {
   return (
-    <div
-      data-placeholder="true"
-      className="relative flex aspect-[16/9] flex-col items-center justify-center gap-3 overflow-hidden bg-bg"
-    >
-      <GlowHalo color="cyan" position="center" size={70} opacity={0.85} />
-      <div
-        aria-hidden
-        className="relative inline-flex h-14 w-14 items-center justify-center rounded-xl border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
-      >
-        <Icon className="h-7 w-7" />
-      </div>
-      <div className="relative space-y-0.5 text-center">
-        <div className="text-body font-semibold text-text">
-          Screenshot · {feature}
-        </div>
-        <div className="text-caption text-text-dim">Coming with v1.0</div>
-      </div>
+    <div className="relative aspect-[16/9] overflow-hidden bg-bg">
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        sizes="(min-width: 1024px) 50vw, 100vw"
+        className="object-cover"
+      />
     </div>
   );
 }
@@ -404,6 +512,45 @@ function SocialProofSection() {
         someone trying to win their next game. Bug reports and feature
         requests go straight into the build.
       </p>
+    </section>
+  );
+}
+
+/* =============================================================== */
+/* DONATE BANNER                                                    */
+/* =============================================================== */
+
+function DonateBanner() {
+  return (
+    <section className="mx-auto max-w-5xl">
+      <Card padded={false}>
+        <div className="grid items-center gap-6 p-6 md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-8 md:p-8">
+          <span
+            aria-hidden
+            className="inline-flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan shadow-halo-cyan"
+          >
+            <Heart className="h-7 w-7" />
+          </span>
+          <div className="space-y-1">
+            <Badge variant="cyan">Donation-supported</Badge>
+            <h2 className="text-h3 font-semibold text-text md:text-h2">
+              Free now, free forever — donations keep the servers up.
+            </h2>
+            <p className="text-body text-text-muted">
+              Two paid Render services, a MongoDB Atlas M10 cluster, and the
+              sc2tools.com domain run the cloud. If SC2 Tools is helping your
+              ladder grind, a one-time tip helps cover the bill.
+            </p>
+          </div>
+          <Link
+            href="/donate"
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-accent px-5 text-body-lg font-semibold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:self-center"
+          >
+            See how to chip in
+            <ArrowRight className="h-5 w-5" aria-hidden />
+          </Link>
+        </div>
+      </Card>
     </section>
   );
 }

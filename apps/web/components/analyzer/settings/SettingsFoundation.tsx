@@ -42,9 +42,9 @@ const QUICK_LINKS: ReadonlyArray<{
     description: "Pair the desktop agent or extra browsers",
   },
   {
-    href: "/streaming",
+    href: "/settings#overlay",
     label: "Streaming overlay",
-    description: "Mint OBS browser-source URLs",
+    description: "Copy OBS browser-source URLs",
   },
   {
     href: "/builds",
@@ -55,6 +55,11 @@ const QUICK_LINKS: ReadonlyArray<{
     href: "/download",
     label: "Download / update agent",
     description: "Latest desktop client + release notes",
+  },
+  {
+    href: "/donate",
+    label: "Donate / support",
+    description: "Render, MongoDB, the domain — see where it goes",
   },
 ];
 

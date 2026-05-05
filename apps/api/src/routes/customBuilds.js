@@ -8,6 +8,51 @@ const PREVIEW_TRUNCATION_LIMIT = 200;
 const PREVIEW_GAME_SCAN_CAP = 600;
 
 /**
+ * Permissive matchup filter mirroring the local SPA semantics: a game
+ * is in-scope when the requested vsRace is "Any"/missing, when the
+ * stored opponent race matches, when no opponent race is recorded
+ * (legacy imports), or when the build bucket name's prefix encodes the
+ * matchup (e.g. "PvT — …"). Same for myRace.
+ *
+ * Strict matching here was the cause of the editor showing
+ * "0 games scanned" when the user clearly had games — agents that
+ * predate the race-normalisation pass leave myRace/opponent.race
+ * blank.
+ *
+ * @param {{myRace?: string|null, oppRace?: string|null, myBuild?: string|null}} g
+ * @param {string|undefined} race
+ * @param {string|undefined} vsRace
+ * @returns {boolean}
+ */
+function gameMatchesMatchup(g, race, vsRace) {
+  return raceMatches(g.myRace, race, g.myBuild, 0)
+    && raceMatches(g.oppRace, vsRace, g.myBuild, 2);
+}
+
+/**
+ * @param {string|null|undefined} actual
+ * @param {string|undefined} requested
+ * @param {string|null|undefined} buildName
+ * @param {number} bucketPos  0 = my-race char of "PvT" bucket, 2 = vs-race char
+ * @returns {boolean}
+ */
+function raceMatches(actual, requested, buildName, bucketPos) {
+  if (!requested || requested === "Any") return true;
+  if (!actual) {
+    if (typeof buildName === "string" && /^[PTZ]v[PTZ]/.test(buildName)) {
+      const letter = requested.charAt(0).toUpperCase();
+      if (buildName.charAt(bucketPos) === letter) return true;
+    }
+    // Legacy import without race info — be permissive so the user
+    // doesn't see "0 games scanned" on a brand new build.
+    return true;
+  }
+  const a = actual.charAt(0).toUpperCase();
+  const r = requested.charAt(0).toUpperCase();
+  return a === r;
+}
+
+/**
  * /v1/custom-builds — user's private build library.
  *
  * @param {{
@@ -23,11 +68,22 @@ function buildCustomBuildsRouter(deps) {
   /**
    * POST /v1/custom-builds/preview-matches
    *
-   * Body: { rules: BuildRule[], race?: string, vsRace?: string, limit?: number }
+   * Body: {
+   *   rules: BuildRule[],
+   *   race?: string,           — saver's own race
+   *   vsRace?: string,         — opposing race
+   *   perspective?: 'you'|'opponent',
+   *                            — which side of each replay to scan
+   * }
    *
    * Scans the signed-in user's games (capped at PREVIEW_GAME_SCAN_CAP)
    * and returns which games match all rules vs which fail exactly one.
    * Used by the live preview band in the BuildEditor modal.
+   *
+   * Perspective handling: when "opponent", we evaluate rules against
+   * `oppBuildLog`. The myRace / vsRace gate flips accordingly so the
+   * filter still asks "is this game's matchup the one this build is
+   * for", regardless of which side authored the build.
    */
   router.post("/custom-builds/preview-matches", async (req, res, next) => {
     try {
@@ -57,9 +113,10 @@ function buildCustomBuildsRouter(deps) {
         });
         return;
       }
+      const race = typeof body.race === "string" ? body.race : undefined;
+      const vsRace = typeof body.vsRace === "string" ? body.vsRace : undefined;
+      const perspective = body.perspective === "opponent" ? "opponent" : "you";
       const games = await deps.perGame.listForRulePreview(auth.userId, {
-        race: typeof body.race === "string" ? body.race : undefined,
-        vsRace: typeof body.vsRace === "string" ? body.vsRace : undefined,
         limit: PREVIEW_GAME_SCAN_CAP,
       });
       /** @type {Array<{game_id: string, build_name: string, map: string|null, result: string|null, date: Date|null}>} */
@@ -67,10 +124,29 @@ function buildCustomBuildsRouter(deps) {
       /** @type {Array<{game_id: string, build_name: string, failed_rule_name?: string, failed_reason: string, map: string|null, result: string|null, date: Date|null}>} */
       const almostMatches = [];
       let evalErrors = 0;
+      let scanned = 0;
       for (const g of games) {
+        // Build "what race is on each side of this game" relative to
+        // the build's perspective, then ask `gameMatchesMatchup` whether
+        // the rule's race + vs match.
+        const sideRace = perspective === "opponent" ? g.oppRace : g.myRace;
+        const otherRace = perspective === "opponent" ? g.myRace : g.oppRace;
+        if (
+          !gameMatchesMatchup(
+            { myRace: sideRace, oppRace: otherRace, myBuild: g.myBuild },
+            race,
+            vsRace,
+          )
+        ) {
+          continue;
+        }
+        const events =
+          perspective === "opponent" ? g.oppEvents || [] : g.events || [];
+        if (events.length === 0) continue;
+        scanned++;
         let evalRes;
         try {
-          evalRes = evaluateRules(rules, g.events);
+          evalRes = evaluateRules(rules, events);
         } catch (e) {
           // One bad game shouldn't fail the whole preview. Log + skip.
           evalErrors++;
@@ -109,7 +185,7 @@ function buildCustomBuildsRouter(deps) {
       res.json({
         matches,
         almost_matches: almostMatches,
-        scanned_games: games.length,
+        scanned_games: scanned,
         truncated:
           matches.length >= PREVIEW_TRUNCATION_LIMIT ||
           almostMatches.length >= PREVIEW_TRUNCATION_LIMIT,

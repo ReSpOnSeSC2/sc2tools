@@ -102,9 +102,14 @@ export default function PrivacyPage() {
             Settings → Backups → Export / delete (GDPR)
           </a>
           . Deletion is hard — there is no recovery. If you live in the EU, UK,
-          or California, you have additional rights under GDPR and CCPA; email{" "}
-          <a href="mailto:privacy@sc2tools.app" className="underline">
-            privacy@sc2tools.app
+          or California, you have additional rights under GDPR and CCPA; open a
+          ticket at{" "}
+          <a
+            href="https://github.com/ReSpOnSeSC2/sc2tools/issues"
+            rel="noopener"
+            className="underline"
+          >
+            github.com/ReSpOnSeSC2/sc2tools/issues
           </a>{" "}
           to exercise them.
         </p>
@@ -124,9 +129,13 @@ export default function PrivacyPage() {
         <h2 className="text-xl font-semibold">Children</h2>
         <p>
           SC2 Tools is not directed at children under 13. If you believe a
-          child has signed up, email{" "}
-          <a href="mailto:privacy@sc2tools.app" className="underline">
-            privacy@sc2tools.app
+          child has signed up, open a ticket at{" "}
+          <a
+            href="https://github.com/ReSpOnSeSC2/sc2tools/issues"
+            rel="noopener"
+            className="underline"
+          >
+            github.com/ReSpOnSeSC2/sc2tools/issues
           </a>{" "}
           and we will delete the account.
         </p>
@@ -143,8 +152,12 @@ export default function PrivacyPage() {
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Contact</h2>
         <p>
-          <a href="mailto:privacy@sc2tools.app" className="underline">
-            privacy@sc2tools.app
+          <a
+            href="https://github.com/ReSpOnSeSC2/sc2tools/issues"
+            rel="noopener"
+            className="underline"
+          >
+            github.com/ReSpOnSeSC2/sc2tools/issues
           </a>
         </p>
       </section>

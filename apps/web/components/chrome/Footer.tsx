@@ -23,7 +23,7 @@ interface FooterLink {
 const PRODUCT_LINKS: readonly FooterLink[] = [
   { href: "/app", label: "Dashboard" },
   { href: "/builds", label: "Builds" },
-  { href: "/streaming", label: "Streaming" },
+  { href: "/settings#overlay", label: "Overlay" },
   { href: "/devices", label: "Devices" },
   { href: "/download", label: "Download agent" },
 ];
@@ -31,6 +31,7 @@ const PRODUCT_LINKS: readonly FooterLink[] = [
 const RESOURCES_LINKS: readonly FooterLink[] = [
   { href: "/community", label: "Community" },
   { href: "/welcome", label: "Getting started" },
+  { href: "/donate", label: "Donate / support" },
   { href: "/sign-in", label: "Sign in" },
 ];
 
@@ -134,7 +135,7 @@ function FooterColumn({ title, links, extra }: FooterColumnProps) {
 function StatusBadge() {
   return (
     <a
-      href="https://status.sc2tools.app"
+      href="https://status.sc2tools.com"
       rel="noopener"
       className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-elevated px-2.5 py-1 text-[11px] font-medium text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >

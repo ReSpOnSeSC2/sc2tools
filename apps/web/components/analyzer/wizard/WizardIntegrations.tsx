@@ -8,9 +8,10 @@ export function WizardIntegrations() {
       <h2 className="text-lg font-semibold text-text">Optional integrations</h2>
       <ul className="ml-5 list-disc space-y-2">
         <li>
-          <strong>OBS overlay.</strong> Mint a token in{" "}
-          <Link href="/streaming">Streaming</Link> and paste the URL into a
-          Browser Source. Choose which widgets you want active per stream.
+          <strong>OBS overlay.</strong> Open{" "}
+          <Link href="/settings#overlay">Settings &rsaquo; Overlay</Link> and
+          copy the URLs into OBS Browser Sources — each widget is transparent
+          and positioned independently.
         </li>
         <li>
           <strong>SC2ReplayStats / Spawning Tool.</strong> Continue using

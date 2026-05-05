@@ -1,22 +1,15 @@
-import { StreamingPanel } from "@/components/StreamingPanel";
-import { Banner } from "@/components/Banner";
+import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "Streaming · SC2 Tools",
 };
 
-export default function StreamingPage() {
-  return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Streaming overlay</h1>
-        <p className="text-text-muted">
-          One URL. Drop it into OBS Browser Source, set width 1920 and
-          height 1080. It updates live during your stream.
-        </p>
-      </header>
-      <Banner variant="divider" />
-      <StreamingPanel />
-    </div>
-  );
+/**
+ * Legacy /streaming route. The streaming overlay manager moved to
+ * /settings (Overlay tab) so the page chrome only carries one
+ * "configure your account" entry point. Anyone who deep-linked to
+ * /streaming gets bounced to the new home.
+ */
+export default function StreamingPage(): never {
+  redirect("/settings#overlay");
 }

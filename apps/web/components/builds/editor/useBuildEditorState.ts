@@ -123,6 +123,7 @@ export function useBuildEditorState(
               rules: draft.rules,
               race: draft.race,
               vsRace: draft.vsRace,
+              perspective: context.perspective === "opponent" ? "opponent" : "you",
             }),
           },
         );
@@ -139,7 +140,7 @@ export function useBuildEditorState(
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [open, draft.rules, draft.race, draft.vsRace, getToken]);
+  }, [open, draft.rules, draft.race, draft.vsRace, context.perspective, getToken]);
 
   // Reset pagination when preview changes.
   useEffect(() => {
