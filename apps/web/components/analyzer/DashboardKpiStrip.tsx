@@ -6,14 +6,11 @@ import { useApi } from "@/lib/clientApi";
 import { GlowHalo } from "@/components/ui/GlowHalo";
 import { StatCard } from "@/components/ui/Stat";
 import { pct1, wrColor } from "@/lib/format";
-
-type Period = {
-  date: string;
-  games: number;
-  wins: number;
-  losses: number;
-  winRate: number;
-};
+import {
+  apiToPeriods,
+  type ApiTimeseriesResponse,
+  type Period,
+} from "@/lib/timeseries";
 
 interface DashboardKpiStripProps {
   totalGames: number;
@@ -25,14 +22,16 @@ interface DashboardKpiStripProps {
  * lifetime games on record. The leading stat (Games today) has a cyan
  * brand halo to draw the eye.
  *
- * Data flows: pulls /v1/timeseries?bucket=day for the freshest data.
+ * Data flows: pulls /v1/timeseries?interval=day for the freshest data.
  * The lifetime total comes from the parent page (already fetched by
  * the server component) so we don't pay for a second roundtrip.
  */
 export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
-  const { data, isLoading } = useApi<Period[]>("/v1/timeseries?bucket=day");
+  const { data, isLoading } = useApi<ApiTimeseriesResponse>(
+    "/v1/timeseries?interval=day",
+  );
 
-  const kpis = useMemo(() => computeKpis(data || []), [data]);
+  const kpis = useMemo(() => computeKpis(apiToPeriods(data)), [data]);
 
   const placeholder = isLoading ? "—" : "0";
 
