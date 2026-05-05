@@ -48,17 +48,26 @@ describe("services/aggregations", () => {
     expect(out.byMap["Goldenaura"].winRate).toBeCloseTo(2 / 3);
   });
 
-  test("matchups returns rows with computed winRate", async () => {
+  test("matchups returns rows with computed winRate and recent results", async () => {
+    // _matchupsOnce now makes two aggregate calls: the grouped facet
+    // and a second pass to attach the last-N results per bucket. Mock
+    // both so the recent[] field actually populates.
     const games = buildGames([
       () => [
         { name: "vs P", wins: 4, losses: 2, total: 6 },
         { name: "vs T", wins: 1, losses: 3, total: 4 },
+      ],
+      () => [
+        { _id: "vs P", results: ["Victory", "Defeat", "Victory"] },
+        { _id: "vs T", results: ["Defeat", "Victory"] },
       ],
     ]);
     const svc = new AggregationsService({ games });
     const out = /** @type {any[]} */ (await svc.matchups("u1", {}));
     expect(out[0].winRate).toBeCloseTo(4 / 6);
     expect(out[1].winRate).toBeCloseTo(1 / 4);
+    expect(out[0].recent).toEqual(["win", "loss", "win"]);
+    expect(out[1].recent).toEqual(["loss", "win"]);
   });
 
   test("randomSummary computes per-race win rates and best/worst", async () => {
@@ -138,29 +147,6 @@ describe("services/aggregations", () => {
     );
     expect(out.total).toBe(5);
     expect(out.count).toBe(2);
-  });
-
-  test("mapsDiagnostic returns every distinct raw map value with counts", async () => {
-    const games = buildGames([
-      () => [
-        { value: "10000 Feet LE", kind: "string", length: 13, count: 86 },
-        { value: "Equilibrium LE", kind: "string", length: 14, count: 25 },
-        { value: "10000 Feet LE ", kind: "string", length: 14, count: 12 },
-        { value: "", kind: "empty", length: 0, count: 3 },
-        { value: null, kind: "missing", length: null, count: 2 },
-      ],
-    ]);
-    const svc = new AggregationsService({ games });
-    const out = /** @type {any} */ (await svc.mapsDiagnostic("u1"));
-    expect(out.distinct).toBe(5);
-    expect(out.total).toBe(86 + 25 + 12 + 3 + 2);
-    expect(out.rows[0].value).toBe("10000 Feet LE");
-    // The trailing-space row is preserved so the user can see the
-    // collision their eyes can't see in the headline panel.
-    expect(out.rows[2].value).toBe("10000 Feet LE ");
-    expect(out.rows[2].length).toBe(14);
-    expect(out.rows[3].kind).toBe("empty");
-    expect(out.rows[4].kind).toBe("missing");
   });
 
   test("groupByRacePlayed returns a per-race map", async () => {

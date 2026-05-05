@@ -33,38 +33,95 @@ class SpatialService {
   }
 
   /**
-   * List the maps the user has spatial data for.
+   * List every map the user has games on, with W/L/winRate so the SPA
+   * map page renders the same shape it did in the legacy analyzer.
+   *
+   * Includes maps with no spatial extracts. The `hasSpatial` flag
+   * tells the heatmap viewer whether buildings/proxy/battle/death-zone
+   * layers will produce results for that map.
    *
    * @param {string} userId
    * @param {object} filters
+   * @returns {Promise<Array<{
+   *   name: string,
+   *   total: number,
+   *   wins: number,
+   *   losses: number,
+   *   winRate: number,
+   *   lastPlayed: Date | null,
+   *   hasSpatial: boolean,
+   *   bounds: object | null,
+   * }>>}
    */
   async maps(userId, filters) {
-    const match = {
-      ...gamesMatchStage(userId, filters),
-      "spatial.map_bounds": { $exists: true },
-    };
-    return this.db.games
+    const match = gamesMatchStage(userId, filters);
+    const rows = await this.db.games
       .aggregate([
         { $match: match },
         {
           $group: {
-            _id: { map: "$map", bounds: "$spatial.map_bounds" },
-            games: { $sum: 1 },
+            _id: { $ifNull: ["$map", "Unknown"] },
+            total: { $sum: 1 },
+            wins: {
+              $sum: {
+                $cond: [
+                  {
+                    $in: [
+                      { $toLower: { $ifNull: ["$result", ""] } },
+                      ["victory", "win"],
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+            losses: {
+              $sum: {
+                $cond: [
+                  {
+                    $in: [
+                      { $toLower: { $ifNull: ["$result", ""] } },
+                      ["defeat", "loss"],
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
             lastPlayed: { $max: "$date" },
+            spatialSamples: {
+              $sum: {
+                $cond: [{ $ifNull: ["$spatial.map_bounds", false] }, 1, 0],
+              },
+            },
+            bounds: { $first: "$spatial.map_bounds" },
           },
         },
         {
           $project: {
             _id: 0,
-            name: "$_id.map",
-            bounds: "$_id.bounds",
-            games: 1,
+            name: "$_id",
+            total: 1,
+            wins: 1,
+            losses: 1,
             lastPlayed: 1,
+            bounds: 1,
+            hasSpatial: { $gt: ["$spatialSamples", 0] },
+            winRate: {
+              $cond: [
+                { $gt: [{ $add: ["$wins", "$losses"] }, 0] },
+                { $divide: ["$wins", { $add: ["$wins", "$losses"] }] },
+                0,
+              ],
+            },
           },
         },
-        { $sort: { games: -1, name: 1 } },
+        { $sort: { total: -1, name: 1 } },
       ])
       .toArray();
+    return rows;
   }
 
   /**

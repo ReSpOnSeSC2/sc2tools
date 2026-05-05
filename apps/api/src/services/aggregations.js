@@ -122,7 +122,109 @@ class AggregationsService {
         ...matchupFacet().map(stripFacetWrappers).flat(),
       ])
       .toArray();
-    return finalizeRows(rows);
+    return finalizeRows(await this._attachRecentResults(userId, filters, rows));
+  }
+
+  /**
+   * Pull the last 10 results per matchup bucket so the SPA's form
+   * sparkline column has data. Done as a second aggregation so the
+   * grouping query stays simple. Recency is on the game's `date`
+   * field, newest first.
+   *
+   * @private
+   * @param {string} userId
+   * @param {object} filters
+   * @param {Array<{name: string}>} rows
+   */
+  async _attachRecentResults(userId, filters, rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return rows;
+    const match = gamesMatchStage(userId, filters);
+    const byMatchup = await this.db.games
+      .aggregate([
+        { $match: match },
+        { $sort: { date: -1 } },
+        {
+          $project: {
+            _id: 0,
+            result: 1,
+            date: 1,
+            matchup: {
+              $cond: [
+                { $eq: [{ $ifNull: ["$opponent.race", ""] }, ""] },
+                "vs Unknown",
+                {
+                  $concat: [
+                    "vs ",
+                    { $toUpper: { $substrCP: ["$opponent.race", 0, 1] } },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        {
+          $group: {
+            _id: "$matchup",
+            results: { $push: "$result" },
+          },
+        },
+      ])
+      .toArray();
+    const recentByName = new Map();
+    for (const r of byMatchup) {
+      if (!r || !Array.isArray(r.results)) continue;
+      const out = [];
+      for (const raw of r.results) {
+        const tag = bucketResult(raw);
+        if (tag) {
+          out.push(tag);
+          if (out.length >= 10) break;
+        }
+      }
+      recentByName.set(r._id, out);
+    }
+    return rows.map((row) => ({ ...row, recent: recentByName.get(row.name) || [] }));
+  }
+
+  /**
+   * Diagnostic: every distinct value of the `map` field on the user's
+   * games, with counts and date range. Helps surface data-quality
+   * issues (e.g. an agent that uploads the same map name for every
+   * replay) without exposing raw replay docs.
+   *
+   * @param {string} userId
+   * @returns {Promise<Array<{
+   *   map: string,
+   *   count: number,
+   *   firstSeen: Date|null,
+   *   lastSeen: Date|null,
+   * }>>}
+   */
+  async distinctMaps(userId) {
+    const rows = await this.db.games
+      .aggregate([
+        { $match: { userId } },
+        {
+          $group: {
+            _id: { $ifNull: ["$map", "Unknown"] },
+            count: { $sum: 1 },
+            firstSeen: { $min: "$date" },
+            lastSeen: { $max: "$date" },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            map: "$_id",
+            count: 1,
+            firstSeen: 1,
+            lastSeen: 1,
+          },
+        },
+        { $sort: { count: -1 } },
+      ])
+      .toArray();
+    return rows;
   }
 
   /**
@@ -150,61 +252,6 @@ class AggregationsService {
       ])
       .toArray();
     return finalizeRows(rows);
-  }
-
-  /**
-   * Diagnostic: list every distinct raw `map` value in the user's
-   * games collection, with the per-value count and a sample of the
-   * raw bytes (so it's obvious when two visually-identical strings
-   * actually differ — e.g. trailing whitespace, smart quotes, or
-   * the localised vs canonical name colliding under one display).
-   *
-   * Bypasses the normal filter bar by design — the user clicks this
-   * when the headline panel "looks wrong" and they want ground truth.
-   *
-   * @param {string} userId
-   */
-  async mapsDiagnostic(userId) {
-    const rows = await this.db.games
-      .aggregate([
-        { $match: { userId } },
-        {
-          $group: {
-            _id: { $ifNull: ["$map", null] },
-            count: { $sum: 1 },
-          },
-        },
-        {
-          $project: {
-            _id: 0,
-            value: "$_id",
-            // Distinguish "" (empty) from null at the API surface so
-            // the UI can show the difference rather than silently
-            // bucketing them together.
-            kind: {
-              $switch: {
-                branches: [
-                  { case: { $eq: ["$_id", null] }, then: "missing" },
-                  { case: { $eq: ["$_id", ""] }, then: "empty" },
-                ],
-                default: "string",
-              },
-            },
-            length: {
-              $cond: [
-                { $eq: [{ $type: "$_id" }, "string"] },
-                { $strLenCP: { $ifNull: ["$_id", ""] } },
-                null,
-              ],
-            },
-            count: 1,
-          },
-        },
-        { $sort: { count: -1, value: 1 } },
-      ])
-      .toArray();
-    const total = rows.reduce((acc, r) => acc + (r.count || 0), 0);
-    return { total, distinct: rows.length, rows };
   }
 
   /**
@@ -503,6 +550,22 @@ function bucketSwitch() {
       default: null,
     },
   };
+}
+
+/**
+ * Normalise a stored game result into "win" | "loss" | null.
+ * Mirrors the Mongo-side bucketSwitch but in JS, for use after a
+ * $project pulls the raw `result` field.
+ *
+ * @param {string | null | undefined} raw
+ * @returns {'win' | 'loss' | null}
+ */
+function bucketResult(raw) {
+  if (!raw) return null;
+  const s = String(raw).toLowerCase();
+  if (s === "win" || s === "victory") return "win";
+  if (s === "loss" || s === "defeat") return "loss";
+  return null;
 }
 
 function matchupFacet() {

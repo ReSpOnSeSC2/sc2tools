@@ -1,12 +1,13 @@
 "use strict";
 
 const express = require("express");
-const fs = require("fs");
 const { parseFilters } = require("../util/parseQuery");
 
 /**
- * /v1/catalog, /v1/definitions, /v1/export.csv, /v1/map-image,
- * /v1/playback — static + per-user export routes.
+ * /v1/catalog, /v1/definitions, /v1/export.csv, /v1/playback —
+ * static + per-user export routes. /v1/map-image lives in its own
+ * public router (see routes/mapImage.js) because <img> tags can't
+ * attach an Authorization header.
  *
  * @param {{
  *   catalog: import('../services/types').CatalogService,
@@ -50,29 +51,6 @@ function buildCatalogRouter(deps) {
         }
       }
       res.end();
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  router.get("/map-image", (req, res, next) => {
-    try {
-      requireAuth(req);
-      const name = String(req.query.map || "").trim();
-      if (!name) {
-        res.status(400).json({ error: { code: "map_required" } });
-        return;
-      }
-      const found = deps.catalog.mapImagePath(name);
-      if (!found) {
-        res.status(404).json({ error: { code: "map_image_not_found" } });
-        return;
-      }
-      res.setHeader("content-type", found.contentType);
-      res.setHeader("cache-control", "public, max-age=86400");
-      fs.createReadStream(found.path)
-        .on("error", (e) => next(e))
-        .pipe(res);
     } catch (err) {
       next(err);
     }

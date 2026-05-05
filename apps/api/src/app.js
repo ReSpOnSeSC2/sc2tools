@@ -52,6 +52,7 @@ const {
 const { buildImportsRouter } = require("./routes/imports");
 const { buildSpatialRouter } = require("./routes/spatial");
 const { buildCatalogRouter } = require("./routes/catalog");
+const { buildMapImageRouter } = require("./routes/mapImage");
 const { buildMlRouter } = require("./routes/ml");
 const { buildAgentVersionRouter } = require("./routes/agentVersion");
 const { buildCommunityRouter } = require("./routes/community");
@@ -92,7 +93,6 @@ function makeServices(deps) {
   const users = new UsersService(deps.db);
   const opponents = new OpponentsService(deps.db, deps.config.serverPepper);
   const games = new GamesService(deps.db);
-  const customBuilds = new CustomBuildsService(deps.db);
   const pairings = new DevicePairingsService(deps.db);
   const overlayTokens = new OverlayTokensService(deps.db);
   const aggregations = new AggregationsService(deps.db);
@@ -101,6 +101,7 @@ function makeServices(deps) {
   const perGame = new PerGameComputeService(deps.db, {
     catalog: catalog.catalogLookup(),
   });
+  const customBuilds = new CustomBuildsService(deps.db, { perGame });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io });
   const spatial = new SpatialService(deps.db);
@@ -191,6 +192,13 @@ function mountRoutes(app, deps, services) {
     SERVICE.ROUTE_PREFIX,
     buildPublicReplayRouter({ logger: deps.logger }),
   );
+  // Map minimaps (used by <img src> in the SPA). MUST sit with the
+  // public routers — bearer tokens can't be attached to image
+  // requests. See routes/mapImage.js for details.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildMapImageRouter({ catalog: services.catalog }),
+  );
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAgentVersionRouter({
@@ -221,6 +229,7 @@ function mountRoutes(app, deps, services) {
       users: services.users,
       games: services.games,
       gdpr: services.gdpr,
+      pairings: services.pairings,
       auth,
       isAdmin,
       logger: deps.logger,

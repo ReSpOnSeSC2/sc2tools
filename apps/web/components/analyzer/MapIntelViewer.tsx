@@ -4,67 +4,108 @@ import { useState } from "react";
 import { useApi, API_BASE } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
+import type { MapEntry } from "./MapIntelTab";
 
-type Heatmap = {
-  width: number;
-  height: number;
-  cells: { x: number; y: number; weight: number }[];
+type HeatCell = { x: number; y: number; intensity: number; value?: number };
+
+type HeatmapResp = {
+  ok?: boolean;
+  kind?: string;
+  map?: string;
+  grid?: number;
+  bounds?: { minX: number; minY: number; maxX: number; maxY: number } | null;
+  points?: number;
+  cells?: HeatCell[];
 };
 
-type ProxyResp = Heatmap;
-type BattleResp = Heatmap;
-type DeathResp = Heatmap;
-type BuildingsResp = { items: { x: number; y: number; type: string }[] };
+type BuildingsResp = {
+  ok?: boolean;
+  cells?: HeatCell[];
+  bounds?: HeatmapResp["bounds"];
+  points?: number;
+  grid?: number;
+};
 
-const LAYERS = ["proxy", "battle", "death-zone", "buildings"] as const;
-type Layer = (typeof LAYERS)[number];
+const LAYERS: ReadonlyArray<{
+  key: "proxy" | "battle" | "death-zone" | "buildings" | "opponent-proxies";
+  label: string;
+  hint: string;
+  color: string;
+}> = [
+  { key: "proxy", label: "My proxies", hint: "Where you forward-base", color: "#7c8cff" },
+  { key: "opponent-proxies", label: "Opp. proxies", hint: "Where they proxy on you", color: "#ff8a3d" },
+  { key: "battle", label: "Battles", hint: "Large engagements", color: "#3ec07a" },
+  { key: "death-zone", label: "Death zones", hint: "Where your army dies", color: "#ff6b6b" },
+  { key: "buildings", label: "Buildings", hint: "Your placed structures", color: "#a78bfa" },
+];
 
-export function MapIntelViewer({ mapName }: { mapName: string }) {
+type LayerKey = (typeof LAYERS)[number]["key"];
+
+/**
+ * Heatmap viewer for a single selected map. Calls the `/v1/spatial/*`
+ * endpoints lazily as the user toggles layers, overlays cells on the
+ * map minimap, and falls back to a clear empty state when the map has
+ * no spatial extracts (the layer list still renders so the user can
+ * see why nothing is shown).
+ */
+export function MapIntelViewer({
+  mapName,
+  summary,
+}: {
+  mapName: string;
+  summary: MapEntry | null;
+}) {
   const { filters, dbRev } = useFilters();
-  const [layer, setLayer] = useState<Layer>("proxy");
+  const [layer, setLayer] = useState<LayerKey>("proxy");
   const params = filtersToQuery({ ...filters, map: mapName });
   const cacheKey = `${dbRev}-${mapName}`;
 
-  const proxy = useApi<ProxyResp>(
-    layer === "proxy" ? `/v1/spatial/proxy${params}#${cacheKey}` : null,
-  );
-  const battle = useApi<BattleResp>(
-    layer === "battle" ? `/v1/spatial/battle${params}#${cacheKey}` : null,
-  );
-  const death = useApi<DeathResp>(
-    layer === "death-zone" ? `/v1/spatial/death-zone${params}#${cacheKey}` : null,
+  const heat = useApi<HeatmapResp>(
+    layer !== "buildings"
+      ? `/v1/spatial/${layer}${params}#${cacheKey}-${layer}`
+      : null,
   );
   const buildings = useApi<BuildingsResp>(
-    layer === "buildings" ? `/v1/spatial/buildings${params}#${cacheKey}` : null,
+    layer === "buildings"
+      ? `/v1/spatial/buildings${params}#${cacheKey}-buildings`
+      : null,
   );
 
-  const heat: Heatmap | null =
-    layer === "proxy"
-      ? proxy.data || null
-      : layer === "battle"
-        ? battle.data || null
-        : layer === "death-zone"
-          ? death.data || null
-          : null;
-
-  const isLoading =
-    proxy.isLoading || battle.isLoading || death.isLoading || buildings.isLoading;
+  const isLoading = heat.isLoading || buildings.isLoading;
+  const layerMeta = LAYERS.find((l) => l.key === layer)!;
+  const cells = layer === "buildings" ? buildings.data?.cells : heat.data?.cells;
+  const grid =
+    (layer === "buildings" ? buildings.data?.grid : heat.data?.grid) || 64;
+  const points =
+    layer === "buildings" ? buildings.data?.points : heat.data?.points;
 
   return (
-    <Card title={`${mapName} · ${layer}`}>
-      <div className="mb-3 inline-flex overflow-hidden rounded border border-border">
+    <Card title={`${mapName} · heatmaps`}>
+      {summary ? (
+        <p className="-mt-2 mb-3 text-xs text-text-dim">
+          {summary.total} games · {summary.wins}W &ndash; {summary.losses}L
+          {summary.hasSpatial ? null : (
+            <span className="ml-2 rounded bg-warning/10 px-1.5 py-0.5 text-warning">
+              No spatial extracts yet — agent needs to re-analyse replays
+            </span>
+          )}
+        </p>
+      ) : null}
+
+      <div className="mb-3 flex flex-wrap gap-1">
         {LAYERS.map((l) => (
           <button
-            key={l}
+            key={l.key}
             type="button"
-            onClick={() => setLayer(l)}
-            className={`px-2 py-1 text-xs ${
-              layer === l
-                ? "bg-accent/20 text-accent"
-                : "text-text-muted hover:bg-bg-elevated"
+            onClick={() => setLayer(l.key)}
+            title={l.hint}
+            className={`rounded px-2 py-1 text-xs ${
+              layer === l.key
+                ? "bg-accent/20 text-accent ring-1 ring-accent/40"
+                : "bg-bg-elevated text-text-muted hover:text-text"
             }`}
           >
-            {l}
+            {l.label}
           </button>
         ))}
       </div>
@@ -77,46 +118,69 @@ export function MapIntelViewer({ mapName }: { mapName: string }) {
             src={`${API_BASE}/v1/map-image?map=${encodeURIComponent(mapName)}`}
             alt={`${mapName} minimap`}
             className="absolute inset-0 h-full w-full object-cover opacity-60"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
           />
-          {heat && heat.cells.length > 0 && (
-            <HeatmapOverlay heat={heat} />
-          )}
-          {layer === "buildings" &&
-            buildings.data &&
-            buildings.data.items.length > 0 && (
-              <BuildingsOverlay items={buildings.data.items} />
-            )}
-          {((layer !== "buildings" && (!heat || heat.cells.length === 0)) ||
-            (layer === "buildings" &&
-              (!buildings.data || buildings.data.items.length === 0))) && (
+          {cells && cells.length > 0 ? (
+            <HeatmapOverlay
+              cells={cells}
+              grid={grid}
+              color={layerMeta.color}
+            />
+          ) : (
             <div className="absolute inset-0 flex items-center justify-center">
-              <EmptyState title="No samples for this layer" />
+              <EmptyState
+                title={`No ${layerMeta.label.toLowerCase()} samples`}
+                sub={
+                  summary?.hasSpatial
+                    ? "No samples for this layer on this map yet."
+                    : "Agent hasn't extracted spatial data for this map."
+                }
+              />
             </div>
           )}
         </div>
       )}
+
+      <div className="mt-2 flex items-center justify-between text-[11px] text-text-dim">
+        <span>
+          {layerMeta.hint} · {points || 0} sample
+          {(points || 0) === 1 ? "" : "s"}
+        </span>
+        <span className="font-mono">grid {grid}×{grid}</span>
+      </div>
     </Card>
   );
 }
 
-function HeatmapOverlay({ heat }: { heat: Heatmap }) {
-  const max = Math.max(...heat.cells.map((c) => c.weight), 1);
+function HeatmapOverlay({
+  cells,
+  grid,
+  color,
+}: {
+  cells: HeatCell[];
+  grid: number;
+  color: string;
+}) {
+  const radius = Math.max(0.6, 100 / grid / 1.4);
   return (
     <svg
-      viewBox={`0 0 ${heat.width} ${heat.height}`}
+      viewBox={`0 0 ${grid} ${grid}`}
       preserveAspectRatio="none"
       className="absolute inset-0 h-full w-full"
     >
-      {heat.cells.map((c, i) => {
-        const a = Math.min(1, c.weight / max);
+      {cells.map((c, i) => {
+        const a = clamp01(c.intensity);
+        if (a <= 0) return null;
         return (
           <circle
-            key={i}
-            cx={c.x}
-            cy={c.y}
-            r={Math.max(2, heat.width * 0.012)}
-            fill="#ff6b6b"
-            fillOpacity={a * 0.8}
+            key={`${c.x}-${c.y}-${i}`}
+            cx={c.x + 0.5}
+            cy={c.y + 0.5}
+            r={radius}
+            fill={color}
+            fillOpacity={0.25 + a * 0.6}
           />
         );
       })}
@@ -124,30 +188,9 @@ function HeatmapOverlay({ heat }: { heat: Heatmap }) {
   );
 }
 
-function BuildingsOverlay({
-  items,
-}: {
-  items: { x: number; y: number; type: string }[];
-}) {
-  return (
-    <svg
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      className="absolute inset-0 h-full w-full"
-    >
-      {items.map((b, i) => (
-        <rect
-          key={i}
-          x={b.x - 0.6}
-          y={b.y - 0.6}
-          width={1.2}
-          height={1.2}
-          fill="#7c8cff"
-          fillOpacity={0.7}
-        >
-          <title>{b.type}</title>
-        </rect>
-      ))}
-    </svg>
-  );
+function clamp01(n: number | undefined): number {
+  if (n == null || !Number.isFinite(n)) return 0;
+  if (n <= 0) return 0;
+  if (n >= 1) return 1;
+  return n;
 }

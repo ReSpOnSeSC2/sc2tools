@@ -464,6 +464,22 @@ describe("HTTP integration", () => {
     });
   });
 
+  describe("/v1/map-image (public)", () => {
+    test("does NOT require a bearer token (browsers can't attach one to <img>)", async () => {
+      // Critical regression guard: 401 here means a public route is
+      // sitting behind some auth-using router's `router.use(auth)`.
+      const res = await request(app).get("/v1/map-image?map=test");
+      expect(res.status).not.toBe(401);
+      expect([400, 404]).toContain(res.status);
+    });
+
+    test("returns 400 when the ?map param is missing", async () => {
+      const res = await request(app).get("/v1/map-image");
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("map_required");
+    });
+  });
+
   test("UNUSED services to silence the no-unused-vars rule", () => {
     expect(services).toBeDefined();
   });
