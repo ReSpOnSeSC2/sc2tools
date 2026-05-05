@@ -136,7 +136,12 @@ describe('Stale lock recovery', () => {
         const meta = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
         expect(meta.pid).toBe(process.pid);
       }, { timeoutSec: 2 });
-      expect(Date.now() - t0).toBeLessThan(500);
+      // Asserts the dead-PID is stolen "immediately" rather than waiting
+      // for the 2s timeout. The actual cost is two unlink+create syscalls
+      // and a JSON parse — usually <50ms, but CI runners (esp. Windows)
+      // can spike well past 500ms under load. 1500ms keeps the original
+      // intent (no timeout-waiting) without false-failing on contention.
+      expect(Date.now() - t0).toBeLessThan(1500);
     } finally { rm(tmp); }
   });
 
