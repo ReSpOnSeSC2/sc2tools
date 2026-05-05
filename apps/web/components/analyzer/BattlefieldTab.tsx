@@ -33,6 +33,19 @@ type MatchupRow = {
   recent?: ("win" | "loss")[];
 };
 
+type MapDiagnosticRow = {
+  value: string | null;
+  kind: "string" | "empty" | "missing";
+  length: number | null;
+  count: number;
+};
+
+type MapDiagnostic = {
+  total: number;
+  distinct: number;
+  rows: MapDiagnosticRow[];
+};
+
 const LS_MIN_MAPS = "analyzer.battlefield.maps.minGames";
 const MIN_STEPS = [1, 3, 5, 10, 20];
 
@@ -109,6 +122,105 @@ function FormSparkline({ results }: { results?: ("win" | "loss")[] }) {
   );
 }
 
+type DiagSwrShape = {
+  data: MapDiagnostic | undefined;
+  isLoading: boolean;
+  error: unknown;
+};
+
+function MapDiagnosticDisclosure({
+  open,
+  onToggle,
+  api,
+}: {
+  open: boolean;
+  onToggle: (next: boolean) => void;
+  api: DiagSwrShape;
+}) {
+  return (
+    <details
+      open={open}
+      onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}
+      className="rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-muted"
+    >
+      <summary className="cursor-pointer select-none">
+        Map diagnostic{" "}
+        <span className="text-text-dim">
+          (every distinct map value the agent uploaded — useful when the panel
+          above looks wrong)
+        </span>
+      </summary>
+      <div className="mt-3">
+        {!open ? null : api.isLoading ? (
+          <Skeleton rows={3} />
+        ) : api.error ? (
+          <div className="text-danger">Failed to load map diagnostic.</div>
+        ) : !api.data || api.data.rows.length === 0 ? (
+          <div className="text-text-dim">No games yet.</div>
+        ) : (
+          <>
+            <div className="mb-2 text-xs text-text-dim">
+              {api.data.distinct} distinct value
+              {api.data.distinct === 1 ? "" : "s"} across {api.data.total}{" "}
+              games.
+              {api.data.distinct === 1 ? (
+                <>
+                  {" "}
+                  Only one distinct value means every uploaded record is tagged
+                  the same — the bug is upstream of this view (in the
+                  agent&apos;s replay parser or upload payload), not in the
+                  aggregation.
+                </>
+              ) : null}
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-bg-elevated">
+                <tr>
+                  <th className="px-3 py-2 text-left text-[11px] uppercase text-text-dim">
+                    Raw map value
+                  </th>
+                  <th className="px-3 py-2 text-right text-[11px] uppercase text-text-dim">
+                    Length
+                  </th>
+                  <th className="px-3 py-2 text-right text-[11px] uppercase text-text-dim">
+                    Games
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {api.data.rows.map((row, i) => (
+                  <tr key={i} className="border-t border-border">
+                    <td className="px-3 py-1.5 font-mono text-xs">
+                      {renderRawValue(row)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">
+                      {row.length ?? "—"}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">
+                      {row.count}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function renderRawValue(row: MapDiagnosticRow) {
+  if (row.kind === "missing") {
+    return <span className="italic text-text-dim">missing field</span>;
+  }
+  if (row.kind === "empty") {
+    return <span className="italic text-text-dim">empty string</span>;
+  }
+  // JSON.stringify makes whitespace and zero-width chars visible.
+  return JSON.stringify(row.value ?? "");
+}
+
 export function BattlefieldTab() {
   const { filters, dbRev } = useFilters();
   const [minGames, setMinGames] = useState<number>(() =>
@@ -121,6 +233,13 @@ export function BattlefieldTab() {
   );
   const muApi = useApi<MatchupRow[]>(
     `/v1/matchups${filtersToQuery(filters)}#${dbRev}`,
+  );
+  // Diagnostic disclosure is rendered always but only fetched when the
+  // user opens it. Gate the SWR key on the open flag so collapsed users
+  // don't pay the round-trip.
+  const [diagOpen, setDiagOpen] = useState(false);
+  const diagApi = useApi<MapDiagnostic>(
+    diagOpen ? `/v1/maps/diagnostic#${dbRev}` : null,
   );
 
   const mapRows = useMemo(
@@ -151,6 +270,12 @@ export function BattlefieldTab() {
       <div className="flex items-center justify-end">
         <MinGames value={minGames} onChange={setMinGames} />
       </div>
+
+      <MapDiagnosticDisclosure
+        open={diagOpen}
+        onToggle={setDiagOpen}
+        api={diagApi}
+      />
 
       <Card title="Matchups">
         {sortedMu.length === 0 ? (

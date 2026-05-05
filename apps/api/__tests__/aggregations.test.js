@@ -140,6 +140,29 @@ describe("services/aggregations", () => {
     expect(out.count).toBe(2);
   });
 
+  test("mapsDiagnostic returns every distinct raw map value with counts", async () => {
+    const games = buildGames([
+      () => [
+        { value: "10000 Feet LE", kind: "string", length: 13, count: 86 },
+        { value: "Equilibrium LE", kind: "string", length: 14, count: 25 },
+        { value: "10000 Feet LE ", kind: "string", length: 14, count: 12 },
+        { value: "", kind: "empty", length: 0, count: 3 },
+        { value: null, kind: "missing", length: null, count: 2 },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (await svc.mapsDiagnostic("u1"));
+    expect(out.distinct).toBe(5);
+    expect(out.total).toBe(86 + 25 + 12 + 3 + 2);
+    expect(out.rows[0].value).toBe("10000 Feet LE");
+    // The trailing-space row is preserved so the user can see the
+    // collision their eyes can't see in the headline panel.
+    expect(out.rows[2].value).toBe("10000 Feet LE ");
+    expect(out.rows[2].length).toBe(14);
+    expect(out.rows[3].kind).toBe("empty");
+    expect(out.rows[4].kind).toBe("missing");
+  });
+
   test("groupByRacePlayed returns a per-race map", async () => {
     const games = buildGames([
       () => [{ totals: [{ wins: 1, losses: 1, total: 2 }], byMatchup: [], byMap: [], recent: [] }],

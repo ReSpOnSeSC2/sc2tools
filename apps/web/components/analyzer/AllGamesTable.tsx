@@ -186,7 +186,7 @@ function GameRow({
         </td>
         <td className="px-2 py-1 text-text">{game.map || "—"}</td>
         <td className="px-2 py-1">
-          <RaceTag race={game.opp_race} />
+          <RaceTag race={game.opp_race} strategy={game.opp_strategy} />
         </td>
         <td className="px-2 py-1 text-text-muted">
           {game.opp_strategy || "—"}
@@ -318,7 +318,7 @@ function GameMobileCard({
         >
           <div className="flex flex-1 flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
-              <RaceTag race={game.opp_race} />
+              <RaceTag race={game.opp_race} strategy={game.opp_strategy} />
               {resultBadge}
               <span className="font-mono text-[11px] text-text-dim">
                 {fmtDate(game.date)}
@@ -399,11 +399,69 @@ function useGameMeta(game: GameRowData): {
   return { macro, macroColour, resultBadge };
 }
 
-function RaceTag({ race }: { race?: string | null }) {
-  const r = (race || "").toUpperCase();
-  const letter = r[0] || "?";
-  const colour = raceColour(race);
-  const hasRace = letter !== "?";
+/**
+ * Map any race code/name we might receive ("T", "t", "Terran",
+ * "Protoss") to the canonical full name the icon set is keyed on
+ * ("terran", "protoss", "zerg", "random"). The Icon component's
+ * race set only contains full names, so passing a single letter
+ * silently dropped the icon — we now resolve to the full name once
+ * here.
+ */
+function canonicalRace(input?: string | null): {
+  full: "Terran" | "Protoss" | "Zerg" | "Random" | null;
+  letter: "T" | "P" | "Z" | "R" | null;
+} {
+  if (!input) return { full: null, letter: null };
+  const head = String(input).trim().charAt(0).toUpperCase();
+  switch (head) {
+    case "T":
+      return { full: "Terran", letter: "T" };
+    case "P":
+      return { full: "Protoss", letter: "P" };
+    case "Z":
+      return { full: "Zerg", letter: "Z" };
+    case "R":
+      return { full: "Random", letter: "R" };
+    default:
+      return { full: null, letter: null };
+  }
+}
+
+/**
+ * Best-effort race derivation from a strategy/build name like
+ * "Terran - Proxy Rax" or "Zerg - Roach Allin". The classifier
+ * upstream emits these "<Race> - <Detail>" strings, so when the
+ * raw opp_race didn't make it through (e.g. older drilldowns) we
+ * can still light up the Race column instead of showing a "?".
+ */
+function raceFromStrategyName(name?: string | null): string | null {
+  if (!name) return null;
+  const head = name.trim().split(/\s*[-–—:|]/)[0];
+  if (!head) return null;
+  const lower = head.toLowerCase();
+  if (lower.startsWith("terran")) return "Terran";
+  if (lower.startsWith("protoss")) return "Protoss";
+  if (lower.startsWith("zerg")) return "Zerg";
+  if (lower.startsWith("random")) return "Random";
+  return null;
+}
+
+function RaceTag({
+  race,
+  strategy,
+}: {
+  race?: string | null;
+  strategy?: string | null;
+}) {
+  // 1) trust opp_race if it resolves to a real race
+  // 2) otherwise infer from strategy name ("Terran - Proxy Rax")
+  let resolved = canonicalRace(race);
+  if (!resolved.letter) {
+    resolved = canonicalRace(raceFromStrategyName(strategy));
+  }
+  const colour = raceColour(resolved.full || race);
+  const letter = resolved.letter || "?";
+  const hasRace = !!resolved.full;
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
@@ -412,9 +470,22 @@ function RaceTag({ race }: { race?: string | null }) {
         borderColor: `${colour}55`,
         background: `${colour}14`,
       }}
+      title={
+        hasRace
+          ? `Opponent race: ${resolved.full}${
+              !race && strategy ? " (inferred from strategy name)" : ""
+            }`
+          : "Opponent race not recorded for this game"
+      }
     >
-      {hasRace ? (
-        <Icon name={r} kind="race" size={14} fallback="" decorative />
+      {hasRace && resolved.full ? (
+        <Icon
+          name={resolved.full}
+          kind="race"
+          size={14}
+          fallback=""
+          decorative
+        />
       ) : null}
       <span className="font-mono">{letter}</span>
     </span>

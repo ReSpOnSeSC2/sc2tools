@@ -9,8 +9,13 @@ export type ProfileGame = {
   result?: string | null;
   map?: string | null;
   opp_strategy?: string | null;
+  /** Opponent race code or full name. Optional — older drilldowns
+   *  built ProfileGame lists before this field existed and dropped it,
+   *  which is why the Race column rendered "?" everywhere. */
+  opp_race?: string | null;
   my_build?: string | null;
   game_length?: number | null;
+  macro_score?: number | null;
 };
 
 /**

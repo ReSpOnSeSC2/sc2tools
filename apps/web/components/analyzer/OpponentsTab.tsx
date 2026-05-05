@@ -39,7 +39,11 @@ export function OpponentsTab({
 }) {
   const { filters, dbRev } = useFilters();
   const [search, setSearch] = useState("");
-  const [minGames, setMinGames] = useState(1);
+  // The input is a controlled string so the user can backspace through
+  // the existing value on mobile (and desktop) without it snapping back
+  // to "1" mid-edit. The numeric `minGames` derives from it.
+  const [minGamesText, setMinGamesText] = useState("1");
+  const minGames = Math.max(1, Number.parseInt(minGamesText, 10) || 1);
   const sort = useSort("lastPlayed", "desc");
 
   const params = useMemo(
@@ -94,10 +98,24 @@ export function OpponentsTab({
             Min games
           </span>
           <input
-            type="number"
-            min={1}
-            value={minGames}
-            onChange={(e) => setMinGames(Number(e.target.value) || 1)}
+            // `inputMode="numeric"` opens the digit keypad on mobile
+            // without locking us into the spinner UI that fights with
+            // backspace. Stays a regular text input so empty is a
+            // valid intermediate state — onBlur snaps back to "1".
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={minGamesText}
+            onChange={(e) => {
+              const next = e.target.value.replace(/\D/g, "");
+              setMinGamesText(next);
+            }}
+            onBlur={() => {
+              if (!minGamesText || Number.parseInt(minGamesText, 10) < 1) {
+                setMinGamesText("1");
+              }
+            }}
+            aria-label="Minimum games"
             className="input w-20"
           />
         </div>

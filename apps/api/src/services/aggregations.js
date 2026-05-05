@@ -153,6 +153,61 @@ class AggregationsService {
   }
 
   /**
+   * Diagnostic: list every distinct raw `map` value in the user's
+   * games collection, with the per-value count and a sample of the
+   * raw bytes (so it's obvious when two visually-identical strings
+   * actually differ — e.g. trailing whitespace, smart quotes, or
+   * the localised vs canonical name colliding under one display).
+   *
+   * Bypasses the normal filter bar by design — the user clicks this
+   * when the headline panel "looks wrong" and they want ground truth.
+   *
+   * @param {string} userId
+   */
+  async mapsDiagnostic(userId) {
+    const rows = await this.db.games
+      .aggregate([
+        { $match: { userId } },
+        {
+          $group: {
+            _id: { $ifNull: ["$map", null] },
+            count: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            value: "$_id",
+            // Distinguish "" (empty) from null at the API surface so
+            // the UI can show the difference rather than silently
+            // bucketing them together.
+            kind: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ["$_id", null] }, then: "missing" },
+                  { case: { $eq: ["$_id", ""] }, then: "empty" },
+                ],
+                default: "string",
+              },
+            },
+            length: {
+              $cond: [
+                { $eq: [{ $type: "$_id" }, "string"] },
+                { $strLenCP: { $ifNull: ["$_id", ""] } },
+                null,
+              ],
+            },
+            count: 1,
+          },
+        },
+        { $sort: { count: -1, value: 1 } },
+      ])
+      .toArray();
+    const total = rows.reduce((acc, r) => acc + (r.count || 0), 0);
+    return { total, distinct: rows.length, rows };
+  }
+
+  /**
    * Cross-tab of (myBuild, opponent.strategy). Sorted by total desc.
    *
    * @param {string} userId

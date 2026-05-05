@@ -543,14 +543,20 @@ function StrategyGamesView({
       if (drill.build && g.build !== drill.build) return false;
       return true;
     });
+    // Forward opp_race / macro_score through. AllGamesTable widens
+    // ProfileGame to GameRowData expecting these — without them, the
+    // Race column falls back to "?" for every row even when the
+    // strategy name explicitly says "Terran - …" or "Zerg - …".
     return filteredRaw.map((g) => ({
       id: g.id || null,
       date: g.date || null,
       result: g.result || null,
       map: g.map || null,
       opp_strategy: g.opp_strategy || null,
+      opp_race: g.opp_race || null,
       my_build: g.build || null,
       game_length: g.game_length ?? null,
+      macro_score: g.macro_score ?? null,
     }));
   }, [data, drill]);
 

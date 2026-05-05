@@ -45,6 +45,20 @@ function buildAggregationsRouter(deps) {
     }
   });
 
+  // Diagnostic — every distinct raw `map` value the agent uploaded for
+  // this user, ignoring the filter bar. Used by the BattlefieldTab
+  // "Map diagnostic" disclosure when the headline panel shows a single
+  // map and the user wants to see whether the data is really one map
+  // or whether something downstream is collapsing them.
+  router.get("/maps/diagnostic", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      res.json(await deps.aggregations.mapsDiagnostic(userId));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/build-vs-strategy", async (req, res, next) => {
     try {
       const userId = requireAuth(req).userId;
