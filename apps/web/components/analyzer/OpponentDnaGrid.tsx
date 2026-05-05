@@ -189,20 +189,20 @@ function DnaToolbar({
   shown: number;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
       <input
-        className="input w-56"
+        className="input w-full sm:w-56"
         placeholder="search opponent…"
         value={search}
         onChange={(e) => onSearch(e.target.value)}
       />
-      <div className="inline-flex overflow-hidden rounded border border-border">
+      <div className="inline-flex w-full overflow-x-auto rounded border border-border sm:w-auto">
         {MATCHUP_OPTIONS.map((m) => (
           <button
             key={m.key}
             type="button"
             onClick={() => onMatchup(m.key)}
-            className={`px-2 py-1 text-xs ${
+            className={`flex-1 whitespace-nowrap px-3 py-1.5 text-xs sm:flex-none sm:px-2 sm:py-1 ${
               matchup === m.key
                 ? "bg-accent/20 text-accent"
                 : "text-text-muted hover:bg-bg-elevated"
@@ -212,37 +212,39 @@ function DnaToolbar({
           </button>
         ))}
       </div>
-      <label className="flex items-center gap-1.5 text-xs text-text-muted">
-        Sort
-        <select
-          className="input"
-          value={sortKey}
-          onChange={(e) => onSort(e.target.value as SortKey)}
-        >
-          {SORT_OPTIONS.map((s) => (
-            <option key={s.key} value={s.key}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex items-center gap-1.5 text-xs text-text-muted">
-        Min games
-        <input
-          type="number"
-          min={1}
-          max={50}
-          value={minGames}
-          onChange={(e) => {
-            const n = Number(e.target.value);
-            if (Number.isFinite(n)) onMinGames(Math.max(1, Math.min(50, n)));
-          }}
-          className="input w-16"
-        />
-      </label>
-      <span className="ml-auto text-xs text-text-dim">
-        {shown} of {total}
-      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5 text-xs text-text-muted">
+          Sort
+          <select
+            className="input"
+            value={sortKey}
+            onChange={(e) => onSort(e.target.value as SortKey)}
+          >
+            {SORT_OPTIONS.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-text-muted">
+          Min games
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={minGames}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n)) onMinGames(Math.max(1, Math.min(50, n)));
+            }}
+            className="input w-16"
+          />
+        </label>
+        <span className="ml-auto text-xs text-text-dim sm:ml-0">
+          {shown} of {total}
+        </span>
+      </div>
     </div>
   );
 }
