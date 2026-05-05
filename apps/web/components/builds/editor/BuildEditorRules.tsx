@@ -73,7 +73,7 @@ export function BuildEditorRules({
   const inUseNames = new Set(draft.rules.map((r) => r.name));
   const ruleCap = draft.rules.length >= RULES_MAX_PER_BUILD;
   return (
-    <section aria-label="Match rules" className="space-y-3">
+    <section aria-label="Match rules" className="space-y-2">
       <h3 className="text-caption font-semibold uppercase tracking-wider text-text-muted">
         2 · Match rules{" "}
         <span className="font-normal normal-case text-text-dim">
@@ -89,7 +89,7 @@ export function BuildEditorRules({
         </p>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <SourceTimelinePanel
           rows={sourceRows}
           inUseNames={inUseNames}
@@ -104,7 +104,7 @@ export function BuildEditorRules({
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-caption text-text-muted">
+      <div className="flex flex-wrap items-center gap-1.5 text-caption text-text-muted">
         <span>Add custom rule:</span>
         {CUSTOM_RULE_BUTTONS.map((b) => (
           <button
@@ -161,7 +161,7 @@ function SourceTimelinePanel({
           Tech-defining — good to add
         </span>
       </div>
-      <div className="max-h-[360px] overflow-y-auto">
+      <div className="max-h-[260px] overflow-y-auto">
         {rows.length === 0 ? (
           <p className="px-3 py-6 text-caption text-text-dim">
             No mappable events on this game.
@@ -263,7 +263,7 @@ function RulesListPanel({
           · click ⚙ to cycle type · click time to edit
         </span>
       </div>
-      <div className="max-h-[360px] overflow-y-auto">
+      <div className="max-h-[260px] overflow-y-auto">
         {rules.length === 0 ? (
           <p className="px-3 py-6 text-caption text-text-dim">
             No rules yet. Click + on a ★ tech-defining event in the left

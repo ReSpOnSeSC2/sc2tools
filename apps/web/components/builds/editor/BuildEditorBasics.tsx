@@ -36,12 +36,12 @@ export function BuildEditorBasics({
   const [showStrategyNotes, setShowStrategyNotes] = useState(false);
 
   return (
-    <section aria-label="Basics" className="space-y-4">
+    <section aria-label="Basics" className="space-y-2.5">
       <h3 className="text-caption font-semibold uppercase tracking-wider text-text-muted">
         1 · Basics
       </h3>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Field label="Name" required error={errors.name}>
           <Input
             value={draft.name}
@@ -99,8 +99,8 @@ export function BuildEditorBasics({
         label={`Description (${draft.description.length}/${DESC_MAX_CHARS})`}
       >
         <textarea
-          className="block w-full resize-none rounded-lg border border-border bg-bg-elevated px-3 py-2 text-body text-text placeholder:text-text-dim focus:border-accent-cyan focus:outline-none focus:ring-1 focus:ring-accent-cyan"
-          rows={3}
+          className="block w-full resize-none rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-dim focus:border-accent-cyan focus:outline-none focus:ring-1 focus:ring-accent-cyan"
+          rows={2}
           maxLength={DESC_MAX_CHARS}
           value={draft.description}
           onChange={(e) =>
@@ -110,38 +110,38 @@ export function BuildEditorBasics({
         />
       </Field>
 
-      <label className="flex items-start gap-3">
-        <Toggle
-          checked={draft.shareWithCommunity}
-          onChange={(next) =>
-            setDraft((d) => ({ ...d, shareWithCommunity: next }))
-          }
-          aria-label="Share with community"
-        />
-        <span className="text-caption text-text">
-          <span className="block font-medium">Share with community</span>
-          <span className="block text-text-dim">
-            Visible to all players. Privacy details apply.
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <label className="flex items-center gap-2">
+          <Toggle
+            checked={draft.shareWithCommunity}
+            onChange={(next) =>
+              setDraft((d) => ({ ...d, shareWithCommunity: next }))
+            }
+            aria-label="Share with community"
+          />
+          <span className="text-caption text-text">
+            <span className="block font-medium">Share with community</span>
+            <span className="block text-text-dim">Visible to all players</span>
           </span>
-        </span>
-      </label>
+        </label>
 
-      <button
-        type="button"
-        onClick={() => setShowStrategyNotes((v) => !v)}
-        aria-expanded={showStrategyNotes}
-        className="inline-flex items-center gap-1 text-caption text-text-muted hover:text-text"
-      >
-        {showStrategyNotes ? (
-          <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-        ) : (
-          <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-        )}
-        Strategy notes (optional)
-      </button>
+        <button
+          type="button"
+          onClick={() => setShowStrategyNotes((v) => !v)}
+          aria-expanded={showStrategyNotes}
+          className="ml-auto inline-flex items-center gap-1 text-caption text-text-muted hover:text-text"
+        >
+          {showStrategyNotes ? (
+            <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+          )}
+          Strategy notes (optional)
+        </button>
+      </div>
 
       {showStrategyNotes ? (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <ChipsField
             label="Win conditions"
             values={draft.winConditions}
