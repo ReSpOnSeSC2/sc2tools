@@ -201,6 +201,74 @@ class PerGameComputeService {
     stampVersion(set, COLLECTIONS.GAMES);
     await this.db.games.updateOne({ userId, gameId }, { $set: set });
   }
+
+  /**
+   * Iterate the user's games for rule-based preview matching. Returns
+   * lightweight {gameId, parsedEvents, myBuild, myRace, oppRace, ...}
+   * tuples suitable for a server-side rules evaluator. Pulls only the
+   * fields the evaluator needs (buildLog, oppBuildLog, race, current
+   * bucket).
+   *
+   * Filtering is intentionally permissive: we always return up to
+   * `limit` of the user's most recent games and let the route layer
+   * decide which ones the rules apply to. The previous implementation
+   * used a strict regex on `myRace` / `opponent.race`, which silently
+   * excluded games where those fields were missing or stored in a
+   * different shape (legacy imports, older agent versions). Returning
+   * both my-events AND opp-events lets the route honour the build's
+   * perspective without a second query.
+   *
+   * @param {string} userId
+   * @param {{ limit?: number }} [opts]
+   * @returns {Promise<Array<{
+   *   gameId: string,
+   *   myBuild: string|null,
+   *   myRace: string|null,
+   *   oppRace: string|null,
+   *   events: any[],
+   *   oppEvents: any[],
+   *   result: string|null,
+   *   date: Date|null,
+   *   map: string|null,
+   * }>>}
+   */
+  async listForRulePreview(userId, opts = {}) {
+    const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 600));
+    const games = await this.db.games
+      .find(
+        { userId },
+        {
+          projection: {
+            _id: 0,
+            gameId: 1,
+            myBuild: 1,
+            myRace: 1,
+            opponent: 1,
+            buildLog: 1,
+            oppBuildLog: 1,
+            result: 1,
+            date: 1,
+            map: 1,
+          },
+        },
+      )
+      .sort({ date: -1 })
+      .limit(limit)
+      .toArray();
+    return games.map(
+      /** @param {any} g */ (g) => ({
+        gameId: String(g.gameId || ""),
+        myBuild: g.myBuild || null,
+        myRace: g.myRace || null,
+        oppRace: g.opponent ? g.opponent.race || null : null,
+        events: parseBuildLogLines(g.buildLog || [], this.catalog),
+        oppEvents: parseBuildLogLines(g.oppBuildLog || [], this.catalog),
+        result: g.result || null,
+        date: g.date || null,
+        map: g.map || null,
+      }),
+    );
+  }
 }
 
 /**
@@ -331,54 +399,6 @@ class MacroBackfillService {
       .toArray();
   }
 
-  /**
-   * Iterate the user's games for rule-based preview matching. Returns
-   * lightweight {gameId, parsedEvents, myBuild, myRace, oppRace, ...}
-   * tuples suitable for a server-side rules evaluator. Pulls only
-   * fields the evaluator needs (buildLog, race, current bucket).
-   *
-   * @param {string} userId
-   * @param {{ race?: string, vsRace?: string, limit?: number }} [opts]
-   * @returns {Promise<Array<{gameId: string, myBuild: string|null, myRace: string|null, oppRace: string|null, events: any[], result: string|null, date: Date|null, map: string|null}>>}
-   */
-  async listForRulePreview(userId, opts = {}) {
-    /** @type {Record<string, any>} */
-    const filter = { userId };
-    const raceMatcher = buildRaceFilter(opts.race);
-    if (raceMatcher) filter.myRace = raceMatcher;
-    const vsMatcher = buildRaceFilter(opts.vsRace);
-    if (vsMatcher) filter["opponent.race"] = vsMatcher;
-    const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 600));
-    const games = await this.db.games
-      .find(filter, {
-        projection: {
-          _id: 0,
-          gameId: 1,
-          myBuild: 1,
-          myRace: 1,
-          opponent: 1,
-          buildLog: 1,
-          result: 1,
-          date: 1,
-          map: 1,
-        },
-      })
-      .sort({ date: -1 })
-      .limit(limit)
-      .toArray();
-    return games.map(
-      /** @param {any} g */ (g) => ({
-        gameId: String(g.gameId || ""),
-        myBuild: g.myBuild || null,
-        myRace: g.myRace || null,
-        oppRace: g.opponent ? g.opponent.race || null : null,
-        events: parseBuildLogLines(g.buildLog || [], this.catalog),
-        result: g.result || null,
-        date: g.date || null,
-        map: g.map || null,
-      }),
-    );
-  }
 }
 
 /**
@@ -434,25 +454,6 @@ function clampPositive(raw, fallback) {
   const n = typeof raw === "number" ? raw : Number.parseInt(String(raw || ""), 10);
   if (!Number.isFinite(n) || n <= 0) return fallback;
   return n;
-}
-
-/**
- * Build a Mongo filter that matches a race regardless of whether the
- * stored value is the full name ("Protoss") or the single letter
- * ("P"). The cloud agent stores full names, but defensively accept
- * any case + first-letter so a legacy import can't strand the editor.
- *
- * @param {unknown} raw
- * @returns {Record<string, unknown> | null}
- */
-function buildRaceFilter(raw) {
-  if (raw === undefined || raw === null) return null;
-  const s = String(raw).trim();
-  if (!s || s === "Any") return null;
-  const letter = s.charAt(0).toUpperCase();
-  // Match "Protoss", "protoss", "PROTOSS", "P", "p" — and equivalent
-  // for Terran/Zerg/Random — without leaking adjacent races.
-  return { $regex: `^${letter}`, $options: "i" };
 }
 
 module.exports = {

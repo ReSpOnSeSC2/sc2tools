@@ -1,28 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import {
   Plus,
   Copy,
   Trash2,
   Tv,
-  ChevronDown,
-  ChevronRight,
   Check,
+  AlertTriangle,
 } from "lucide-react";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
-import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { Section } from "@/components/ui/Section";
-import { Field } from "@/components/ui/Field";
-import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Toggle } from "@/components/ui/Toggle";
 import { Badge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { fmtAgo } from "@/lib/format";
+
+/**
+ * Settings · Overlay tab.
+ *
+ * The user shouldn't have to click "Create" to start using the overlay
+ * — a brand-new account auto-mints a "Default" token the first time
+ * this tab loads, then renders every widget URL inline with a Copy
+ * button. Multiple tokens are still supported (handy for "main scene"
+ * vs "friend test"), but they're surfaced as a compact list at the
+ * bottom rather than gating the URLs behind a form.
+ */
 
 type OverlayToken = {
   token: string;
@@ -35,55 +42,86 @@ type OverlayToken = {
 
 type OverlayResp = { items: OverlayToken[] };
 
-const WIDGETS: ReadonlyArray<string> = [
-  "opponent",
-  "match-result",
-  "post-game",
-  "mmr-delta",
-  "streak",
-  "cheese",
-  "rematch",
-  "rival",
-  "rank",
-  "meta",
-  "topbuilds",
-  "fav-opening",
-  "best-answer",
-  "scouting",
-  "session",
+interface WidgetMeta {
+  id: string;
+  label: string;
+  hint: string;
+}
+
+const WIDGETS: ReadonlyArray<WidgetMeta> = [
+  { id: "opponent", label: "Opponent identity", hint: "Pre-game dossier — race, MMR, head-to-head" },
+  { id: "match-result", label: "Match result", hint: "Victory / Defeat card after the game" },
+  { id: "post-game", label: "Post-game build", hint: "Build summary at end of game" },
+  { id: "mmr-delta", label: "MMR delta", hint: "± MMR change from this game" },
+  { id: "streak", label: "Streak", hint: "Active 3+ win/loss run" },
+  { id: "cheese", label: "Cheese alert", hint: "Triggers on cheese probability ≥ 0.4" },
+  { id: "rematch", label: "Rematch", hint: "Flags when you've played this opponent recently" },
+  { id: "rival", label: "Rival", hint: "Frequent-opponent context" },
+  { id: "rank", label: "Rank", hint: "Player's league / tier / MMR" },
+  { id: "meta", label: "Meta snapshot", hint: "Current ladder top builds for the matchup" },
+  { id: "topbuilds", label: "Top builds", hint: "Your best builds vs this matchup" },
+  { id: "fav-opening", label: "Favourite opening", hint: "Opponent's most-shown opening" },
+  { id: "best-answer", label: "Best answer", hint: "Your best counter vs that opening" },
+  { id: "scouting", label: "Scouting tells", hint: "Predicted strategies + tell timings" },
+  { id: "session", label: "Session record", hint: "Today's W-L + MMR drift" },
 ];
 
 export function SettingsOverlay({ origin }: { origin?: string }) {
   const { getToken } = useAuth();
-  const { data, isLoading, mutate } = useApi<OverlayResp>(
+  const { data, isLoading, error, mutate } = useApi<OverlayResp>(
     "/v1/overlay-tokens",
   );
   const { toast } = useToast();
 
-  const [label, setLabel] = useState("");
-  const [minting, setMinting] = useState(false);
   const [busyToken, setBusyToken] = useState<string | null>(null);
   const [pendingRevoke, setPendingRevoke] = useState<OverlayToken | null>(null);
   const [revoking, setRevoking] = useState(false);
+  const [autoMintError, setAutoMintError] = useState<string | null>(null);
+  const autoMintingRef = useRef(false);
 
-  async function mint() {
-    const trimmed = label.trim() || "Default";
-    if (minting) return;
-    setMinting(true);
+  const items = useMemo(
+    () => (data?.items ?? []).filter((i) => !i.revokedAt),
+    [data],
+  );
+  const activeToken = items[0] ?? null;
+
+  // Auto-mint a default token on first visit so the user can copy URLs
+  // immediately without clicking through a form.
+  useEffect(() => {
+    if (isLoading || error) return;
+    if (data && items.length === 0 && !autoMintingRef.current) {
+      autoMintingRef.current = true;
+      void (async () => {
+        try {
+          await apiCall(getToken, "/v1/overlay-tokens", {
+            method: "POST",
+            body: JSON.stringify({ label: "Default" }),
+          });
+          await mutate();
+        } catch (err) {
+          const message =
+            (err as ClientApiError | undefined)?.message ?? "Please try again.";
+          setAutoMintError(message);
+        } finally {
+          autoMintingRef.current = false;
+        }
+      })();
+    }
+  }, [isLoading, error, data, items.length, getToken, mutate]);
+
+  async function mintAdditional() {
     try {
+      const label = `Token ${items.length + 1}`;
       await apiCall(getToken, "/v1/overlay-tokens", {
         method: "POST",
-        body: JSON.stringify({ label: trimmed }),
+        body: JSON.stringify({ label }),
       });
-      setLabel("");
       await mutate();
-      toast.success(`Minted "${trimmed}" overlay token`);
+      toast.success(`Minted "${label}"`);
     } catch (err) {
       const message =
         (err as ClientApiError | undefined)?.message ?? "Please try again.";
       toast.error("Couldn't mint token", { description: message });
-    } finally {
-      setMinting(false);
     }
   }
 
@@ -132,66 +170,111 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
   }
 
   if (isLoading) return <Skeleton rows={3} />;
-  const items = (data?.items ?? []).filter((i) => !i.revokedAt);
+  if (error) {
+    return (
+      <Card>
+        <p className="px-2 py-3 text-body text-danger">
+          Couldn&apos;t load your overlay tokens. {error.message}
+        </p>
+      </Card>
+    );
+  }
+  if (autoMintError && !activeToken) {
+    return (
+      <Card>
+        <div className="flex items-start gap-2 px-2 py-3 text-body text-danger">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden />
+          <div className="space-y-2">
+            <p>Couldn&apos;t mint your first overlay token automatically.</p>
+            <p className="text-caption text-text-muted">
+              {autoMintError}
+            </p>
+            <Button onClick={() => void mutate()} variant="secondary" size="sm">
+              Try again
+            </Button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+  if (!activeToken) {
+    // Auto-mint is in flight — render a quiet placeholder so the page
+    // doesn't flash a confusing empty state for the half-second the
+    // POST takes.
+    return <Skeleton rows={3} />;
+  }
 
   return (
     <div className="space-y-6">
       <Section
-        title="Mint a new overlay URL"
-        description="Each token is a hidden bearer credential. Paste the resulting URL into OBS as a Browser Source."
+        title="OBS Browser Source URLs"
+        description="Copy the URLs you want into OBS. Each widget is transparent and positioned independently. The URLs share the same socket connection so your overlay stays in sync."
       >
-        <Card>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void mint();
-            }}
-            className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto] sm:items-end"
-          >
-            <Field label="Label" hint="Helps you tell tokens apart later">
-              <Input
-                value={label}
-                placeholder="main stream, friend test, …"
-                onChange={(e) => setLabel(e.target.value)}
-              />
-            </Field>
-            <Button
-              type="submit"
-              variant="primary"
-              loading={minting}
-              iconLeft={<Plus className="h-4 w-4" aria-hidden />}
-            >
-              Mint token
-            </Button>
-          </form>
+        <Card padded={false}>
+          <ActiveTokenHeader token={activeToken} origin={origin} />
+          <AllInOneRow token={activeToken} origin={origin} />
+          <WidgetList
+            token={activeToken}
+            origin={origin}
+            busy={busyToken === activeToken.token}
+            onToggleWidget={(w, on) => toggleWidget(activeToken.token, w, on)}
+          />
         </Card>
       </Section>
 
       <Section
-        title="Active overlay tokens"
-        description="Each token grants access to the OBS Browser Source URL. Revoke immediately if a stream key leaks."
+        title="Manage tokens"
+        description="Each token is a hidden bearer credential. Revoke a token to invalidate every URL above (handy if a stream key ever leaks)."
       >
-        <Card padded={items.length === 0}>
-          {items.length === 0 ? (
-            <EmptyStatePanel
-              icon={<Tv className="h-6 w-6" aria-hidden />}
-              title="No active overlays"
-              description="Mint a token above to generate your first overlay URL."
-            />
-          ) : (
-            <ul className="space-y-3 p-4">
-              {items.map((t) => (
-                <OverlayTokenCard
-                  key={t.token}
-                  token={t}
-                  origin={origin}
-                  busy={busyToken === t.token}
-                  onRequestRevoke={() => setPendingRevoke(t)}
-                  onToggleWidget={(w, on) => toggleWidget(t.token, w, on)}
-                />
-              ))}
-            </ul>
-          )}
+        <Card padded={false}>
+          <ul className="divide-y divide-border">
+            {items.map((t) => (
+              <li
+                key={t.token}
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-body font-medium text-text">
+                      {t.label}
+                    </span>
+                    <Badge variant="cyan" size="sm">
+                      {`${t.token.slice(0, 6)}…${t.token.slice(-4)}`}
+                    </Badge>
+                    {t.token === activeToken.token ? (
+                      <Badge variant="success" size="sm">
+                        active
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className="mt-0.5 text-caption text-text-muted">
+                    Created {fmtAgo(t.createdAt)}
+                    {t.lastSeenAt
+                      ? ` · seen ${fmtAgo(t.lastSeenAt)}`
+                      : " · not yet connected"}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPendingRevoke(t)}
+                  iconLeft={<Trash2 className="h-4 w-4" aria-hidden />}
+                >
+                  Revoke
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <div className="border-t border-border px-4 py-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void mintAdditional()}
+              iconLeft={<Plus className="h-4 w-4" aria-hidden />}
+            >
+              Mint another token
+            </Button>
+          </div>
         </Card>
       </Section>
 
@@ -214,108 +297,141 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
   );
 }
 
-function OverlayTokenCard({
+function ActiveTokenHeader({
+  token,
+  origin,
+}: {
+  token: OverlayToken;
+  origin?: string;
+}) {
+  void origin;
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+      <Tv className="h-4 w-4 flex-shrink-0 text-accent-cyan" aria-hidden />
+      <span className="text-body font-medium text-text">{token.label}</span>
+      <Badge variant="cyan" size="sm">
+        {`${token.token.slice(0, 6)}…${token.token.slice(-4)}`}
+      </Badge>
+      <span className="ml-auto text-caption text-text-muted">
+        {token.lastSeenAt
+          ? `Seen ${fmtAgo(token.lastSeenAt)}`
+          : "Not yet connected"}
+      </span>
+    </div>
+  );
+}
+
+function AllInOneRow({
+  token,
+  origin,
+}: {
+  token: OverlayToken;
+  origin?: string;
+}) {
+  const url = `${origin ?? ""}/overlay/${token.token}`;
+  return (
+    <div className="space-y-2 border-b border-border px-4 py-3">
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <span className="text-caption font-semibold uppercase tracking-wider text-text-muted">
+          All-in-one URL
+        </span>
+        <span className="text-caption text-text-muted">
+          One Browser Source · all enabled widgets composited together
+        </span>
+      </div>
+      <UrlRow url={url} compact={false} />
+    </div>
+  );
+}
+
+function WidgetList({
   token,
   origin,
   busy,
-  onRequestRevoke,
   onToggleWidget,
 }: {
   token: OverlayToken;
   origin?: string;
   busy: boolean;
-  onRequestRevoke: () => void;
   onToggleWidget: (widget: string, enabled: boolean) => void;
 }) {
-  const url = `${origin ?? ""}/overlay/${token.token}`;
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const enabled = new Set<string>(token.enabledWidgets ?? WIDGETS);
+  const enabled = useMemo(
+    () => new Set<string>(token.enabledWidgets ?? WIDGETS.map((w) => w.id)),
+    [token.enabledWidgets],
+  );
+  return (
+    <div className="space-y-2 px-4 py-3">
+      <p className="text-caption text-text-muted">
+        Add only the widgets you actually use to OBS, position each
+        independently. Toggle a widget off here to hide it from the
+        all-in-one URL above without revoking the token.
+      </p>
+      <ul className="divide-y divide-border rounded-lg border border-border">
+        {WIDGETS.map((w) => {
+          const url = `${origin ?? ""}/overlay/${token.token}/widget/${w.id}`;
+          const isOn = enabled.has(w.id);
+          return (
+            <li
+              key={w.id}
+              className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:gap-3"
+            >
+              <div className="flex items-start gap-3 sm:min-w-[14rem] sm:flex-shrink-0">
+                <Toggle
+                  checked={isOn}
+                  disabled={busy}
+                  onChange={(on) => onToggleWidget(w.id, on)}
+                  label={`Toggle ${w.label}`}
+                />
+                <div className="min-w-0">
+                  <div className="text-body font-medium text-text">
+                    {w.label}
+                  </div>
+                  <div className="text-caption text-text-dim">{w.hint}</div>
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <UrlRow url={url} compact />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
+function UrlRow({ url, compact }: { url: string; compact: boolean }) {
+  const [copied, setCopied] = useState(false);
   const onCopy = async () => {
     if (!navigator.clipboard) return;
     await navigator.clipboard.writeText(url);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
   };
-
   return (
-    <li className="rounded-lg border border-border bg-bg-elevated">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-body font-medium text-text">
-              {token.label}
-            </span>
-            <Badge variant="cyan" size="sm">
-              {`${token.token.slice(0, 6)}…${token.token.slice(-4)}`}
-            </Badge>
-          </div>
-          <div className="mt-0.5 text-caption text-text-muted">
-            Created {fmtAgo(token.createdAt)}
-            {token.lastSeenAt
-              ? ` · seen ${fmtAgo(token.lastSeenAt)}`
-              : " · not yet connected"}
-          </div>
-        </div>
-        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onCopy}
-            iconLeft={
-              copied ? (
-                <Check className="h-4 w-4" aria-hidden />
-              ) : (
-                <Copy className="h-4 w-4" aria-hidden />
-              )
-            }
-          >
-            {copied ? "Copied" : "Copy URL"}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onRequestRevoke}
-            iconLeft={<Trash2 className="h-4 w-4" aria-hidden />}
-          >
-            Revoke
-          </Button>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 border-t border-border px-4 py-2.5 text-caption text-text-muted hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
+    <div className="flex flex-wrap items-stretch gap-2">
+      <code
+        className={[
+          "min-w-0 flex-1 break-all rounded bg-bg-elevated p-2 font-mono",
+          compact ? "text-[11px]" : "text-caption",
+        ].join(" ")}
       >
-        <span>
-          Configure widgets ({enabled.size} of {WIDGETS.length})
-        </span>
-        {open ? (
-          <ChevronDown className="h-4 w-4" aria-hidden />
-        ) : (
-          <ChevronRight className="h-4 w-4" aria-hidden />
-        )}
-      </button>
-      {open ? (
-        <div className="grid grid-cols-1 gap-2 border-t border-border px-4 py-3 sm:grid-cols-2 lg:grid-cols-3">
-          {WIDGETS.map((w) => (
-            <label
-              key={w}
-              className="flex items-center justify-between gap-3 rounded-md border border-transparent px-2 py-1.5 hover:border-border hover:bg-bg-surface"
-            >
-              <span className="text-caption text-text">{w}</span>
-              <Toggle
-                checked={enabled.has(w)}
-                disabled={busy}
-                onChange={(on) => onToggleWidget(w, on)}
-                label={`Toggle ${w}`}
-              />
-            </label>
-          ))}
-        </div>
-      ) : null}
-    </li>
+        {url}
+      </code>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => void onCopy()}
+        iconLeft={
+          copied ? (
+            <Check className="h-4 w-4" aria-hidden />
+          ) : (
+            <Copy className="h-4 w-4" aria-hidden />
+          )
+        }
+      >
+        {copied ? "Copied" : "Copy"}
+      </Button>
+    </div>
   );
 }

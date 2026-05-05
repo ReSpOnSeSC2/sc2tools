@@ -57,18 +57,21 @@ export interface CustomBuildsService {
   softDelete(userId: string, slug: string): Promise<void>;
 }
 
+export interface ParsedBuildLogEvent {
+  time: number;
+  name: string;
+  race?: string;
+  category?: string;
+  is_building?: boolean;
+}
+
 export interface PerGameComputeServiceListedGame {
   gameId: string;
   myBuild: string | null;
   myRace: string | null;
   oppRace: string | null;
-  events: Array<{
-    time: number;
-    name: string;
-    race?: string;
-    category?: string;
-    is_building?: boolean;
-  }>;
+  events: ParsedBuildLogEvent[];
+  oppEvents: ParsedBuildLogEvent[];
   result: string | null;
   date: Date | null;
   map: string | null;
@@ -170,7 +173,7 @@ export interface PerGameComputeService {
   ): Promise<void>;
   listForRulePreview(
     userId: string,
-    opts?: { race?: string; vsRace?: string; limit?: number },
+    opts?: { limit?: number },
   ): Promise<PerGameComputeServiceListedGame[]>;
 }
 

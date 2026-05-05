@@ -29,7 +29,7 @@ const SYS_REQUIREMENTS: ReadonlyArray<{ heading: string; body: string }> = [
   },
   {
     heading: "Network",
-    body: "Outbound HTTPS to api.sc2tools.app. No inbound ports — your replays never leave the machine.",
+    body: "Outbound HTTPS to api.sc2tools.com. No inbound ports — your replays never leave the machine.",
   },
   {
     heading: "StarCraft II",

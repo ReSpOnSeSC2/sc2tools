@@ -24,7 +24,7 @@ import { X } from "lucide-react";
  * For destructive confirmations use ConfirmDialog (built on this).
  */
 
-export type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl";
+export type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
 
 const SIZE_CLASSES: Record<ModalSize, string> = {
   sm: "sm:max-w-md",
@@ -32,6 +32,7 @@ const SIZE_CLASSES: Record<ModalSize, string> = {
   lg: "sm:max-w-2xl",
   xl: "sm:max-w-4xl",
   "2xl": "sm:max-w-6xl",
+  "3xl": "sm:max-w-[1400px]",
 };
 
 export interface ModalProps {
@@ -127,7 +128,11 @@ export function Modal({
         tabIndex={-1}
         className={[
           "relative w-full bg-bg-surface text-text border border-border shadow-[var(--shadow-card)]",
-          "max-h-[100dvh] sm:max-h-[85vh] overflow-hidden flex flex-col",
+          "max-h-[100dvh] overflow-hidden flex flex-col",
+          // 3xl gets more vertical room for the build editor's timeline.
+          size === "3xl"
+            ? "sm:max-h-[94vh]"
+            : "sm:max-h-[85vh]",
           "rounded-t-2xl sm:rounded-xl",
           "pb-[env(safe-area-inset-bottom,0px)]",
           SIZE_CLASSES[size],

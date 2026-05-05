@@ -121,8 +121,12 @@ export default function TermsPage() {
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Contact</h2>
         <p>
-          <a href="mailto:hello@sc2tools.app" className="underline">
-            hello@sc2tools.app
+          <a
+            href="https://github.com/ReSpOnSeSC2/sc2tools/issues"
+            rel="noopener"
+            className="underline"
+          >
+            github.com/ReSpOnSeSC2/sc2tools/issues
           </a>
         </p>
       </section>

@@ -161,7 +161,7 @@ function SourceTimelinePanel({
           Tech-defining — good to add
         </span>
       </div>
-      <div className="max-h-[260px] overflow-y-auto">
+      <div className="max-h-[260px] overflow-y-auto sm:max-h-[420px] lg:max-h-[60vh]">
         {rows.length === 0 ? (
           <p className="px-3 py-6 text-caption text-text-dim">
             No mappable events on this game.
@@ -263,7 +263,7 @@ function RulesListPanel({
           · click ⚙ to cycle type · click time to edit
         </span>
       </div>
-      <div className="max-h-[260px] overflow-y-auto">
+      <div className="max-h-[260px] overflow-y-auto sm:max-h-[420px] lg:max-h-[60vh]">
         {rules.length === 0 ? (
           <p className="px-3 py-6 text-caption text-text-dim">
             No rules yet. Click + on a ★ tech-defining event in the left

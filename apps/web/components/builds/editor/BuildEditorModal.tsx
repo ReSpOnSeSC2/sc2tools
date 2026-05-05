@@ -153,7 +153,7 @@ export function BuildEditorModal({
             </>
           )
         }
-        size="2xl"
+        size="3xl"
         disableScrimClose={editor.saving}
         hideClose={editor.saving}
         footer={
