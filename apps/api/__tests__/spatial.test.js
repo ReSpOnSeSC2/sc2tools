@@ -14,14 +14,40 @@ function buildGames(rows) {
 }
 
 describe("services/spatial", () => {
-  test("maps returns the user's available maps", async () => {
+  test("maps returns the user's available maps with W/L/winRate", async () => {
     const games = buildGames([
-      { name: "Goldenaura", bounds: { minX: 0, minY: 0, maxX: 100, maxY: 100 }, games: 4, lastPlayed: new Date() },
-      { name: "Acropolis", bounds: { minX: 0, minY: 0, maxX: 100, maxY: 100 }, games: 1, lastPlayed: new Date() },
+      {
+        name: "Goldenaura",
+        total: 4,
+        wins: 3,
+        losses: 1,
+        winRate: 0.75,
+        lastPlayed: new Date(),
+        hasSpatial: true,
+        bounds: { minX: 0, minY: 0, maxX: 100, maxY: 100 },
+      },
+      {
+        name: "Acropolis",
+        total: 1,
+        wins: 0,
+        losses: 1,
+        winRate: 0,
+        lastPlayed: new Date(),
+        hasSpatial: false,
+        bounds: null,
+      },
     ]);
     const svc = new SpatialService({ games });
     const out = await svc.maps("u1", {});
     expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({
+      name: "Goldenaura",
+      total: 4,
+      wins: 3,
+      losses: 1,
+      hasSpatial: true,
+    });
+    expect(out[0].winRate).toBeCloseTo(0.75);
   });
 
   test("buildings returns an empty payload when no games match", async () => {

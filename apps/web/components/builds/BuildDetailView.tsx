@@ -57,9 +57,12 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const buildSwr = useApi<CustomBuild>(
     `/v1/custom-builds/${encodeURIComponent(slug)}`,
   );
+  // Detail comes from the rule-eval endpoint so freshly saved builds
+  // show the games they actually match (instead of 0 until the agent
+  // tags games with `myBuild`). Same shape as /v1/builds/:name.
   const detailSwr = useApi<BuildDetailResponse>(
-    buildSwr.data?.name
-      ? `/v1/builds/${encodeURIComponent(buildSwr.data.name)}`
+    buildSwr.data
+      ? `/v1/custom-builds/${encodeURIComponent(slug)}/matches`
       : null,
   );
 

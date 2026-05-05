@@ -44,7 +44,11 @@ function BuildsLibraryInner() {
   const { getToken } = useAuth();
   const { toast } = useToast();
   const builds = useApi<ListResponse>("/v1/custom-builds");
-  const stats = useApi<BuildStats[]>("/v1/builds");
+  // Custom-build stats come from rule evaluation against the user's
+  // recent games — see /v1/custom-builds/stats — so a freshly saved
+  // build's W/L appears immediately, instead of waiting for the agent
+  // to reclassify games and tag `myBuild`.
+  const stats = useApi<BuildStats[]>("/v1/custom-builds/stats");
 
   const [filters, setFilters] = useState<BuildFilterState>(DEFAULT_FILTERS);
   const [editorOpen, setEditorOpen] = useState(false);
