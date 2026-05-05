@@ -229,9 +229,27 @@ export function BattlefieldTab() {
         )}
       </Card>
 
-      <Card title="Win rate by map">
+      <Card
+        title="Win rate by map"
+        right={
+          (mapsApi.data || []).length > sortedMaps.length ? (
+            <span className="text-[11px] text-text-dim">
+              {sortedMaps.length} of {(mapsApi.data || []).length} maps
+              shown · {((mapsApi.data || []).length - sortedMaps.length)}{" "}
+              hidden by min games ≥ {minGames}
+            </span>
+          ) : null
+        }
+      >
         {sortedMaps.length === 0 ? (
-          <EmptyState title="No maps match" />
+          <EmptyState
+            title="No maps match"
+            sub={
+              (mapsApi.data || []).length > 0
+                ? `${(mapsApi.data || []).length} map${(mapsApi.data || []).length === 1 ? "" : "s"} hidden by the Min games ≥ ${minGames} filter. Drop it to 1 to see every map.`
+                : undefined
+            }
+          />
         ) : (
           <>
             {/* Bar chart hides on small screens — it doesn't read well at
