@@ -1,14 +1,15 @@
 ; NSIS installer for the SC2 Tools Agent.
 ;
 ; Build with:
-;   makensis -DAGENT_VERSION=0.2.0 packaging/installer.nsi
+;   makensis -DAGENT_VERSION=0.3.0 packaging/installer.nsi
 ;
 ; The installer:
 ;   * places sc2tools-agent.exe under %LOCALAPPDATA%\sc2tools (per-user;
 ;     no admin elevation required so SmartScreen behaves);
 ;   * registers a Startup-folder shortcut so the agent runs on every
-;     login;
-;   * adds an "SC2 Tools Agent" Start menu entry;
+;     login (with --start-minimized so it never pops a window at logon);
+;   * adds an "SC2 Tools Agent" Start menu entry (launches the GUI);
+;   * adds an optional desktop shortcut;
 ;   * registers the uninstaller in Add/Remove Programs.
 ;
 ; If you want the auto-updater to ship signed binaries, sign the
@@ -65,9 +66,7 @@ VIAddVersionKey "LegalCopyright" "(c) SC2 Tools contributors"
 !insertmacro MUI_LANGUAGE "English"
 
 Section "Install"
-    ; Stop any running agent so we can replace the .exe in place. The
-    ; agent's auto-updater normally has done this for us, but this is a
-    ; defensive belt-and-braces.
+    ; Stop any running agent so we can replace the .exe in place.
     nsExec::Exec 'taskkill /F /IM "${APP_EXECUTABLE}" /T'
 
     SetOutPath "$INSTDIR"
@@ -98,10 +97,20 @@ Section "Install"
     WriteUninstaller "$INSTDIR\Uninstall.exe"
 
     ; Auto-start at logon. Per-user Startup folder, no admin needed.
-    CreateShortCut "${APP_STARTUP_LINK}"   "$INSTDIR\${APP_EXECUTABLE}" "" "$INSTDIR\${APP_EXECUTABLE}"
-    CreateShortCut "${APP_STARTMENU_LINK}" "$INSTDIR\${APP_EXECUTABLE}" "" "$INSTDIR\${APP_EXECUTABLE}"
+    ;   * Startup-folder shortcut passes --start-minimized so the agent
+    ;     comes up to the system tray on every boot.
+    ;   * Start Menu shortcut launches the GUI window directly so a user
+    ;     who clicked it actually sees the dashboard.
+    CreateShortCut "${APP_STARTUP_LINK}"   "$INSTDIR\${APP_EXECUTABLE}" \
+        "--start-minimized" "$INSTDIR\${APP_EXECUTABLE}" 0 SW_SHOWMINIMIZED
+    CreateShortCut "${APP_STARTMENU_LINK}" "$INSTDIR\${APP_EXECUTABLE}" \
+        "" "$INSTDIR\${APP_EXECUTABLE}"
 
-    ; Launch the freshly-installed agent so the user doesn't have to
+    ; Optional desktop shortcut for non-technical users.
+    CreateShortCut "$DESKTOP\SC2 Tools Agent.lnk" \
+        "$INSTDIR\${APP_EXECUTABLE}" "" "$INSTDIR\${APP_EXECUTABLE}"
+
+    ; Launch the freshly-installed agent so the user does not have to
     ; reboot or hunt for the icon.
     Exec '"$INSTDIR\${APP_EXECUTABLE}"'
 SectionEnd
@@ -111,6 +120,7 @@ Section "Uninstall"
 
     Delete "${APP_STARTUP_LINK}"
     Delete "${APP_STARTMENU_LINK}"
+    Delete "$DESKTOP\SC2 Tools Agent.lnk"
 
     Delete "$INSTDIR\${APP_EXECUTABLE}"
     Delete "$INSTDIR\Uninstall.exe"
@@ -119,7 +129,7 @@ Section "Uninstall"
     DeleteRegKey HKCU "${APP_REG_KEY}"
 
     ; State (pairing token, log files) lives at the same %LOCALAPPDATA%
-    ; root but in a sibling subfolder. Leave it intact on uninstall —
+    ; root but in a sibling subfolder. Leave it intact on uninstall -
     ; users running a re-install or moving to a beta channel expect to
     ; keep their pairing.
 SectionEnd

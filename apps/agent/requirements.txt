@@ -4,7 +4,12 @@ watchdog==5.0.3
 pystray==0.19.5
 Pillow==11.0.0
 python-dotenv==1.0.1
-# Crash reporter — optional at install time (the agent degrades to
+# Crash reporter - optional at install time (the agent degrades to
 # console logging when the dep is absent), pinned here for reproducible
 # .exe builds.
 sentry-sdk==2.18.0
+# PySide6 powers the production GUI (sc2tools_agent.ui.gui). The agent
+# falls back to the system tray + console UI when this is missing, so
+# the dependency is recommended-but-not-required for source installs.
+# Pinned for reproducible .exe builds via PyInstaller.
+PySide6==6.8.0.1
