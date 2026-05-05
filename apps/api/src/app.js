@@ -208,6 +208,20 @@ function mountRoutes(app, deps, services) {
       logger: deps.logger,
     }),
   );
+  // Community is partly public (build directory + author profiles +
+  // k-anon opponent profiles) and partly authed (publish, vote,
+  // report). Per-route auth inside the router handles both — but the
+  // router MUST mount with the public bundle so no later
+  // `router.use(auth)` intercepts the unauthed GETs.
+  const adminIds = new Set(deps.config.adminUserIds || []);
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildCommunityRouter({
+      community: services.community,
+      auth,
+      isAdmin: (req) => Boolean(req.auth && adminIds.has(req.auth.userId)),
+    }),
+  );
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildOpponentsRouter({ opponents: services.opponents, auth }),
@@ -267,19 +281,6 @@ function mountRoutes(app, deps, services) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMlRouter({ ml: services.ml, auth }),
-  );
-  // Community is partly public (build directory + k-anon opp profiles)
-  // and partly authed (publish, vote, report). The router handles auth
-  // per-route, like devicePairings — mount with the public bundle so
-  // no upstream `router.use(auth)` intercepts the unauthed reads.
-  const adminIds = new Set(deps.config.adminUserIds || []);
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildCommunityRouter({
-      community: services.community,
-      auth,
-      isAdmin: (req) => Boolean(req.auth && adminIds.has(req.auth.userId)),
-    }),
   );
 }
 

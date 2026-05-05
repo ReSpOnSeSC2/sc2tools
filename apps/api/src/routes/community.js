@@ -6,9 +6,11 @@ const express = require("express");
  * /v1/community/* — public-read + auth'd-write community endpoints.
  *
  * Public reads (no auth):
- *   GET /community/builds            — list top published builds
- *   GET /community/builds/:slug      — detail
- *   GET /community/opponents/:pulseId — k-anonymous aggregate
+ *   GET /community/builds              — list published builds
+ *                                        (matchup, sort, q, limit, offset)
+ *   GET /community/builds/:slug        — detail
+ *   GET /community/authors/:userId     — public author profile
+ *   GET /community/opponents/:pulseId  — k-anonymous aggregate
  *
  * Authed writes:
  *   POST   /community/builds                 — publish a private build
@@ -36,7 +38,23 @@ function buildCommunityRouter(deps) {
       const limit = req.query.limit
         ? Number.parseInt(String(req.query.limit), 10)
         : undefined;
-      const result = await deps.community.listPublic({ matchup, limit });
+      const offset = req.query.offset
+        ? Number.parseInt(String(req.query.offset), 10)
+        : undefined;
+      const sortRaw = req.query.sort ? String(req.query.sort) : "top";
+      const sort = ["top", "new", "controversial"].includes(sortRaw)
+        ? /** @type {'top'|'new'|'controversial'} */ (sortRaw)
+        : "top";
+      const search = req.query.q
+        ? String(req.query.q).trim().slice(0, 80)
+        : undefined;
+      const result = await deps.community.listPublic({
+        matchup,
+        limit,
+        offset,
+        sort,
+        search: search || undefined,
+      });
       res.json(result);
     } catch (err) {
       next(err);
@@ -51,6 +69,31 @@ function buildCommunityRouter(deps) {
         return;
       }
       res.json(row);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * Public author profile. 404s for users with no published builds, or
+   * for users who have never declared a public `authorName` (the
+   * implicit opt-out — see CommunityService.getAuthor).
+   */
+  router.get("/community/authors/:userId", async (req, res, next) => {
+    try {
+      const profile = await deps.community.getAuthor(
+        String(req.params.userId),
+      );
+      if (!profile) {
+        res.status(404).json({
+          error: {
+            code: "author_not_found",
+            message: "This profile is private or doesn't exist.",
+          },
+        });
+        return;
+      }
+      res.json(profile);
     } catch (err) {
       next(err);
     }
