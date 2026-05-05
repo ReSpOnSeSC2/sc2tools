@@ -12,6 +12,7 @@ const { loadConfig } = require("./config/loader");
 const { connect } = require("./db/connect");
 const { buildApp } = require("./app");
 const { attachSocketAuth } = require("./socket/auth");
+const { buildKeepaliveWorker } = require("./services/keepalive");
 const sentry = require("./util/sentry");
 
 async function main() {
@@ -54,6 +55,16 @@ async function main() {
     logger.info({ port: config.port }, "listening");
   });
 
+  // Keep-alive heartbeat. Runs only when KEEPALIVE_TARGETS is configured —
+  // typically the public web origin's /api/ping URL — so dev environments
+  // and the test harness stay quiet by default.
+  const keepalive = buildKeepaliveWorker({
+    targets: config.keepaliveTargets,
+    intervalMs: config.keepaliveIntervalMs,
+    logger,
+  });
+  keepalive.start();
+
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
@@ -62,6 +73,7 @@ async function main() {
     logger.info({ signal }, "shutdown_start");
     httpServer.close();
     io.close();
+    await keepalive.stop();
     await db.close();
     logger.info("shutdown_complete");
     process.exit(0);
