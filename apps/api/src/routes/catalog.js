@@ -1,12 +1,13 @@
 "use strict";
 
 const express = require("express");
-const fs = require("fs");
 const { parseFilters } = require("../util/parseQuery");
 
 /**
- * /v1/catalog, /v1/definitions, /v1/export.csv, /v1/map-image,
- * /v1/playback — static + per-user export routes.
+ * /v1/catalog, /v1/definitions, /v1/export.csv, /v1/playback —
+ * static + per-user export routes. /v1/map-image lives in its own
+ * public router (see routes/mapImage.js) because <img> tags can't
+ * attach an Authorization header.
  *
  * @param {{
  *   catalog: import('../services/types').CatalogService,
@@ -15,33 +16,6 @@ const { parseFilters } = require("../util/parseQuery");
  */
 function buildCatalogRouter(deps) {
   const router = express.Router();
-
-  // /v1/map-image is a public static asset endpoint — minimaps ship
-  // with the analyzer and contain no per-user data. Keeping it
-  // unauthenticated lets the SPA's <img> tag load it without a bearer
-  // token (browsers can't attach Authorization to <img src>).
-  router.get("/map-image", (req, res, next) => {
-    try {
-      const name = String(req.query.map || "").trim();
-      if (!name) {
-        res.status(400).json({ error: { code: "map_required" } });
-        return;
-      }
-      const found = deps.catalog.mapImagePath(name);
-      if (!found) {
-        res.status(404).json({ error: { code: "map_image_not_found" } });
-        return;
-      }
-      res.setHeader("content-type", found.contentType);
-      res.setHeader("cache-control", "public, max-age=86400");
-      fs.createReadStream(found.path)
-        .on("error", (e) => next(e))
-        .pipe(res);
-    } catch (err) {
-      next(err);
-    }
-  });
-
   router.use(deps.auth);
 
   router.get("/catalog", async (_req, res, next) => {

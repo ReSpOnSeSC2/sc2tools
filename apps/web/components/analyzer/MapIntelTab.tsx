@@ -22,8 +22,8 @@ export type MapEntry = {
 /**
  * Map intel tab — list of maps the user has played, with W/L/WR for
  * each one (parity with the legacy SPA `maps` table) plus a heatmap
- * viewer when a map is picked. Maps without spatial extracts still
- * appear in the list; the viewer just shows an empty layer.
+ * viewer when a map is picked. Mobile renders as stacked cards;
+ * tablet/desktop uses a sortable table.
  */
 export function MapIntelTab() {
   const { filters, dbRev } = useFilters();
@@ -67,7 +67,7 @@ export function MapIntelTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <input
-          className="input w-72"
+          className="input w-full sm:w-72"
           placeholder="search map…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -78,52 +78,71 @@ export function MapIntelTab() {
             checked={hideSmall}
             onChange={(e) => setHideSmall(e.target.checked)}
           />
-          hide maps with &lt; 3 games
+          hide &lt; 3 games
         </label>
-        <span className="text-xs text-text-dim">
+        <span className="ml-auto text-xs text-text-dim">
           {rows.length} of {data.length} maps
         </span>
       </div>
 
-      <Card>
-        {rows.length === 0 ? (
+      {rows.length === 0 ? (
+        <Card>
           <EmptyState title="No maps match those filters" />
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-bg-elevated">
-              <tr>
-                <SortableTh col="name" label="Map" {...sort} />
-                <SortableTh col="wins" label="W" {...sort} align="right" />
-                <SortableTh col="losses" label="L" {...sort} align="right" />
-                <SortableTh col="total" label="Games" {...sort} align="right" />
-                <SortableTh col="winRate" label="WR" {...sort} align="right" />
-                <th className="w-32 px-3 py-2 text-left text-[11px] uppercase text-text-dim">
-                  Trend
-                </th>
-                <SortableTh
-                  col="lastPlayed"
-                  label="Last played"
-                  {...sort}
-                  align="right"
-                />
-                <th className="w-20 px-3 py-2 text-right text-[11px] uppercase text-text-dim">
-                  Heatmap
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((m) => (
-                <MapRow
-                  key={m.name}
-                  m={m}
-                  selected={selected === m.name}
-                  onSelect={() => setSelected(m.name)}
-                />
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <>
+          {/* Mobile / tablet — stacked cards. */}
+          <div className="grid gap-2 md:hidden">
+            {rows.map((m) => (
+              <MapMobileCard
+                key={m.name}
+                m={m}
+                selected={selected === m.name}
+                onSelect={() => setSelected(m.name)}
+              />
+            ))}
+          </div>
+
+          {/* Desktop — sortable table. */}
+          <Card padded={false} className="hidden md:block">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-bg-elevated">
+                  <tr>
+                    <SortableTh col="name" label="Map" {...sort} />
+                    <SortableTh col="wins" label="W" {...sort} align="right" />
+                    <SortableTh col="losses" label="L" {...sort} align="right" />
+                    <SortableTh col="total" label="Games" {...sort} align="right" />
+                    <SortableTh col="winRate" label="WR" {...sort} align="right" />
+                    <th className="w-32 px-3 py-2 text-left text-[11px] uppercase text-text-dim">
+                      Trend
+                    </th>
+                    <SortableTh
+                      col="lastPlayed"
+                      label="Last played"
+                      {...sort}
+                      align="right"
+                    />
+                    <th className="w-20 px-3 py-2 text-right text-[11px] uppercase text-text-dim">
+                      Heatmap
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((m) => (
+                    <MapRow
+                      key={m.name}
+                      m={m}
+                      selected={selected === m.name}
+                      onSelect={() => setSelected(m.name)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
 
       {selected ? (
         <MapIntelViewer
@@ -132,6 +151,66 @@ export function MapIntelTab() {
         />
       ) : null}
     </div>
+  );
+}
+
+function MapMobileCard({
+  m,
+  selected,
+  onSelect,
+}: {
+  m: MapEntry;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={[
+        "w-full rounded-lg border p-3 text-left transition",
+        selected
+          ? "border-accent bg-accent/10"
+          : "border-border bg-bg-surface hover:bg-bg-elevated",
+      ].join(" ")}
+    >
+      <div className="flex items-center gap-3">
+        <img
+          src={`${API_BASE}/v1/map-image?map=${encodeURIComponent(m.name)}`}
+          alt=""
+          className="h-12 w-16 flex-none rounded border border-border bg-bg-elevated object-cover"
+          loading="lazy"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
+          }}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="truncate text-sm font-semibold text-text">
+              {m.name}
+            </span>
+            <span
+              className="font-mono text-xs tabular-nums"
+              style={{ color: wrColor(m.winRate, m.total) }}
+            >
+              {pct1(m.winRate)}
+            </span>
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-text-dim">
+            <span className="text-success">{m.wins}W</span>
+            <span className="text-danger">{m.losses}L</span>
+            <span>· {m.total} games</span>
+            {m.lastPlayed ? <span>· {fmtAgo(m.lastPlayed)}</span> : null}
+            {m.hasSpatial ? (
+              <span className="text-accent">· heatmap ready</span>
+            ) : null}
+          </div>
+          <div className="mt-2">
+            <WrBar wins={m.wins} losses={m.losses} />
+          </div>
+        </div>
+      </div>
+    </button>
   );
 }
 

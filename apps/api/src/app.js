@@ -52,6 +52,7 @@ const {
 const { buildImportsRouter } = require("./routes/imports");
 const { buildSpatialRouter } = require("./routes/spatial");
 const { buildCatalogRouter } = require("./routes/catalog");
+const { buildMapImageRouter } = require("./routes/mapImage");
 const { buildMlRouter } = require("./routes/ml");
 const { buildAgentVersionRouter } = require("./routes/agentVersion");
 const { buildCommunityRouter } = require("./routes/community");
@@ -190,6 +191,13 @@ function mountRoutes(app, deps, services) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildPublicReplayRouter({ logger: deps.logger }),
+  );
+  // Map minimaps (used by <img src> in the SPA). MUST sit with the
+  // public routers — bearer tokens can't be attached to image
+  // requests. See routes/mapImage.js for details.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildMapImageRouter({ catalog: services.catalog }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
