@@ -7,19 +7,26 @@ export function TopBuildsWidget({ live }: { live: LiveGamePayload | null }) {
   const builds = live?.topBuilds || [];
   if (builds.length === 0) return null;
   return (
-    <WidgetShell slot="bottom-right" accent="gold" visible width={300}>
+    <WidgetShell slot="bottom-right" accent="gold" visible width={380}>
       <WidgetHeader>
-        <span>Your top builds</span>
+        <span style={{ fontSize: 15 }}>Your top builds</span>
         <Dim>vs {live?.oppRace || "?"}</Dim>
       </WidgetHeader>
-      <ul style={{ fontSize: 12, listStyle: "none", marginTop: 4 }}>
+      <ul style={{ fontSize: 13, listStyle: "none", padding: 0, marginTop: 6 }}>
         {builds.slice(0, 3).map((b) => (
           <li
             key={b.name}
-            style={{ display: "flex", justifyContent: "space-between" }}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              padding: "2px 0",
+            }}
           >
-            <span>{b.name}</span>
-            <span style={{ opacity: 0.7 }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {b.name}
+            </span>
+            <span style={{ opacity: 0.7, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
               {Math.round(b.winRate * 100)}% / {b.total}
             </span>
           </li>

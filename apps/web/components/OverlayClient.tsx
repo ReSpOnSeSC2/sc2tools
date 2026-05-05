@@ -97,11 +97,15 @@ export function OverlayClient({ token }: { token: string }) {
     return enabled.has(id);
   }
 
+  // Pre-game / pre-data: render nothing visible. The OBS Browser Source
+  // stays fully transparent so streamers can position it without a
+  // placeholder string flashing on stream before the first message.
   if (!live) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <span className="text-sm text-text-muted">Waiting for next game…</span>
-      </div>
+      <div
+        className="relative h-screen w-screen"
+        style={{ background: "transparent" }}
+      />
     );
   }
 

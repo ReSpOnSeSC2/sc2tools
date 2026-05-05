@@ -7,21 +7,30 @@ export function MatchResultWidget({ live }: { live: LiveGamePayload | null }) {
   if (!live || !live.result) return null;
   const win = live.result === "win";
   return (
-    <WidgetShell slot="top-center" accent={win ? "green" : "red"} visible>
+    <WidgetShell
+      slot="top-center"
+      accent={win ? "green" : "red"}
+      halo
+      visible
+      width={480}
+    >
       <WidgetHeader>
-        <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-          <RaceIcon race={live.myRace} />
-          <span style={{ fontSize: 13, opacity: 0.7 }}>
+        <span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
+          <RaceIcon race={live.myRace} size={24} />
+          <span style={{ fontSize: 14, opacity: 0.7, fontVariantNumeric: "tabular-nums" }}>
             {live.matchup || `${live.myRace || "?"}v${live.oppRace || "?"}`}
           </span>
-          <RaceIcon race={live.oppRace} />
+          <RaceIcon race={live.oppRace} size={24} />
         </span>
         <span
           style={{
-            fontSize: 18,
+            fontSize: 22,
             fontWeight: 800,
-            letterSpacing: 1,
+            letterSpacing: 1.5,
             color: win ? "#3ec07a" : "#ff6b6b",
+            textShadow: win
+              ? "0 0 14px rgba(62,192,122,0.45)"
+              : "0 0 14px rgba(255,107,107,0.45)",
           }}
         >
           {win ? "VICTORY" : "DEFEAT"}
