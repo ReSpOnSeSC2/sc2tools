@@ -99,6 +99,12 @@ describe("community + gdpr integration", () => {
       expect(list.status).toBe(200);
       expect(list.body.items.length).toBe(1);
       expect(list.body.items[0].title).toBe("Macro PvT");
+      // Phase 9: ownerUserId is the internal UUID (not the Clerk id) and
+      // is exposed publicly so the frontend can link to the author
+      // profile page.
+      expect(list.body.items[0].ownerUserId).toBe("u_a");
+      expect(typeof list.body.total).toBe("number");
+      expect(list.body.hasMore).toBe(false);
 
       const detail = await request(app).get(
         `/v1/community/builds/${slug}`,
@@ -106,8 +112,77 @@ describe("community + gdpr integration", () => {
       expect(detail.status).toBe(200);
       expect(detail.body.build).toBeTruthy();
       expect(detail.body.build.slug).toBe("my-build");
-      // Public detail must not leak ownerUserId.
-      expect(detail.body.ownerUserId).toBeUndefined();
+      expect(detail.body.ownerUserId).toBe("u_a");
+      // Per-user vote arrays must NOT be returned publicly.
+      expect(detail.body.upvotes).toBeUndefined();
+      expect(detail.body.downvotes).toBeUndefined();
+    });
+
+    test("list supports sort=new and q= search", async () => {
+      // Newest-first sort: the previously published build is the only
+      // one in the collection, so it must appear regardless of sort.
+      const newest = await request(app).get(
+        "/v1/community/builds?sort=new",
+      );
+      expect(newest.status).toBe(200);
+      expect(newest.body.items.length).toBeGreaterThan(0);
+
+      const found = await request(app).get(
+        "/v1/community/builds?q=macro",
+      );
+      expect(found.status).toBe(200);
+      expect(found.body.items.length).toBeGreaterThan(0);
+
+      const missed = await request(app).get(
+        "/v1/community/builds?q=zzznonexistent",
+      );
+      expect(missed.status).toBe(200);
+      expect(missed.body.items.length).toBe(0);
+    });
+  });
+
+  describe("public author profile (Phase 10)", () => {
+    test("404 when the author has no public name on any build", async () => {
+      // u_a's only published build above carries no authorName, so the
+      // implicit anonymization rule yields a 404.
+      const res = await request(app).get("/v1/community/authors/u_a");
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe("author_not_found");
+    });
+
+    test("returns aggregate after the author publishes with a name", async () => {
+      await services.customBuilds.upsert("u_a", {
+        slug: "named-build",
+        name: "Glaive Adept Timing",
+        race: "Protoss",
+        matchup: "PvT",
+      });
+      const pub = await request(app)
+        .post("/v1/community/builds")
+        .set("authorization", "Bearer user-a")
+        .send({
+          slug: "named-build",
+          title: "Glaive Adept Timing",
+          description: "Punish 1-1-1.",
+          authorName: "Reaver",
+        });
+      expect(pub.status).toBe(201);
+
+      const res = await request(app).get("/v1/community/authors/u_a");
+      expect(res.status).toBe(200);
+      expect(res.body.userId).toBe("u_a");
+      expect(res.body.displayName).toBe("Reaver");
+      expect(Array.isArray(res.body.builds)).toBe(true);
+      expect(res.body.builds.length).toBeGreaterThan(0);
+      expect(typeof res.body.totalBuilds).toBe("number");
+      expect(typeof res.body.totalVotes).toBe("number");
+    });
+
+    test("404 for unknown user id", async () => {
+      const res = await request(app).get(
+        "/v1/community/authors/u_does_not_exist",
+      );
+      expect(res.status).toBe(404);
     });
   });
 

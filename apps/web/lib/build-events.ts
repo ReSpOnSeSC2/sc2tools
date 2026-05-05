@@ -419,6 +419,47 @@ export function eventsToSignature(
   return order.map((k) => acc.get(k)!).filter(Boolean);
 }
 
+/**
+ * Convert the persisted `signature` shape (one entry per unit with a
+ * count and a "before this time" timestamp) back into display rows.
+ * Used by the community build detail page where the timeline reads a
+ * compressed signature instead of full per-instance events.
+ *
+ * Each signature entry yields one row. The count surfaces as a "×N"
+ * note so a single line still expresses the "12 zerglings before
+ * 4:00" shape.
+ */
+export function signatureToRows(
+  signature: ReadonlyArray<BuildSignatureItem> | null | undefined,
+): BuildEventRow[] {
+  if (!signature || signature.length === 0) return [];
+  const rows: BuildEventRow[] = [];
+  signature.forEach((item, index) => {
+    const rawName = String(item?.unit || "").trim();
+    if (!rawName) return;
+    const match = matchName(rawName);
+    const displayName = humanizeBuildName(rawName) || rawName;
+    const category = categoryFromMatch(match);
+    const time = Number.isFinite(item.beforeSec)
+      ? Math.max(0, Number(item.beforeSec))
+      : 0;
+    rows.push({
+      key: `sig-${index}-${rawName}`,
+      time,
+      timeDisplay: formatBuildTime(time),
+      rawName,
+      displayName,
+      category,
+      iconName: match ? match.iconName : null,
+      iconKind: match ? match.iconKind : null,
+      iconPath: match
+        ? `${ICON_BASE}/${kindDir(match.iconKind)}/${match.iconName}.png`
+        : null,
+    });
+  });
+  return rows;
+}
+
 /** Slugify a free-form name into the slug pattern accepted by the API. */
 export function slugifyBuildName(name: string): string {
   const trimmed = (name || "").trim().toLowerCase();

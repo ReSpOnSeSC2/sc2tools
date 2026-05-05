@@ -7,6 +7,61 @@ const { stampVersion } = require("../db/schemaVersioning");
 const K_ANONYMITY_THRESHOLD = 5;
 
 /**
+ * Projection used for every public listing/detail of a community
+ * build. Centralised so list/detail/author-aggregate stay in sync —
+ * anything new added to a build doc is automatically excluded from
+ * public responses unless explicitly opted in here.
+ */
+const PUBLIC_PROJECTION = Object.freeze({
+  _id: 0,
+  slug: 1,
+  ownerUserId: 1,
+  title: 1,
+  description: 1,
+  matchup: 1,
+  authorName: 1,
+  votes: 1,
+  publishedAt: 1,
+  updatedAt: 1,
+  build: 1,
+});
+
+/**
+ * @param {Record<string, number>} counts
+ * @param {number} total
+ * @param {number} threshold — minimum share to qualify as dominant
+ * @returns {string | null}
+ */
+function pickDominant(counts, total, threshold) {
+  let best = "";
+  let bestN = 0;
+  for (const [k, n] of Object.entries(counts)) {
+    if (n > bestN) {
+      best = k;
+      bestN = n;
+    }
+  }
+  if (!best || total === 0) return null;
+  return bestN / total >= threshold ? best : null;
+}
+
+/**
+ * @param {Record<string, number>} counts
+ * @returns {string | null}
+ */
+function pickTop(counts) {
+  let best = "";
+  let bestN = 0;
+  for (const [k, n] of Object.entries(counts)) {
+    if (n > bestN) {
+      best = k;
+      bestN = n;
+    }
+  }
+  return best || null;
+}
+
+/**
  * Community service.
  *
  * Two public-read entities:
@@ -103,45 +158,197 @@ class CommunityService {
 
   /**
    * Public list — only non-removed builds, optionally filtered by
-   * matchup. Ordered by votes desc.
+   * matchup or a free-text query. Sortable by top votes, newest, or
+   * "controversial" (high engagement, near-50/50 vote split).
    *
-   * @param {{matchup?: string, limit?: number}} opts
+   * `ownerUserId` is exposed so the frontend can link author chips to
+   * `/community/authors/:userId`. It is our internal UUID, not the
+   * Clerk id, so it's safe to surface publicly (decoupled from auth
+   * provider, see UsersService.ensureFromClerk).
+   *
+   * @param {{
+   *   matchup?: string,
+   *   limit?: number,
+   *   offset?: number,
+   *   sort?: 'top' | 'new' | 'controversial',
+   *   search?: string,
+   * }} opts
    */
   async listPublic(opts = {}) {
     const filter = /** @type {Record<string, any>} */ ({ removed: false });
     if (opts.matchup) filter.matchup = opts.matchup;
+    if (opts.search) {
+      const escaped = String(opts.search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(escaped, "i");
+      filter.$or = [
+        { title: re },
+        { description: re },
+        { authorName: re },
+      ];
+    }
     const limit = Math.min(opts.limit || 30, 100);
+    const offset = Math.max(0, Number(opts.offset) || 0);
+    const sortKey = opts.sort || "top";
+    /** @type {Record<string, 1 | -1>} */
+    let sort;
+    switch (sortKey) {
+      case "new":
+        sort = { publishedAt: -1, votes: -1 };
+        break;
+      case "controversial":
+        // Controversial: lots of votes either way. We approximate by
+        // ordering on the sum of upvotes + downvotes desc. The
+        // pipeline path computes the sum field on the fly.
+        return this._listControversial(filter, { limit, offset });
+      case "top":
+      default:
+        sort = { votes: -1, publishedAt: -1 };
+        break;
+    }
+    const cursor = this.db.communityBuilds
+      .find(filter, { projection: PUBLIC_PROJECTION })
+      .sort(sort)
+      .skip(offset)
+      .limit(limit + 1); // Fetch one extra to know whether more exist.
+    const rows = await cursor.toArray();
+    const hasMore = rows.length > limit;
+    const items = rows.slice(0, limit);
+    const total = await this.db.communityBuilds.countDocuments(filter);
+    return { items, hasMore, total, offset, limit };
+  }
+
+  /**
+   * @param {Record<string, any>} filter
+   * @param {{limit: number, offset: number}} page
+   */
+  async _listControversial(filter, page) {
     const items = await this.db.communityBuilds
-      .find(filter, {
-        projection: {
-          _id: 0,
-          slug: 1,
-          title: 1,
-          description: 1,
-          matchup: 1,
-          authorName: 1,
-          votes: 1,
-          publishedAt: 1,
-          updatedAt: 1,
+      .aggregate([
+        { $match: filter },
+        {
+          $addFields: {
+            engagement: {
+              $add: [
+                { $size: { $ifNull: ["$upvotes", []] } },
+                { $size: { $ifNull: ["$downvotes", []] } },
+              ],
+            },
+          },
         },
-      })
-      .sort({ votes: -1, publishedAt: -1 })
-      .limit(limit)
+        { $sort: { engagement: -1, publishedAt: -1 } },
+        { $skip: page.offset },
+        { $limit: page.limit + 1 },
+        { $project: { ...PUBLIC_PROJECTION, engagement: 0 } },
+      ])
       .toArray();
-    return { items };
+    const hasMore = items.length > page.limit;
+    const total = await this.db.communityBuilds.countDocuments(filter);
+    return {
+      items: items.slice(0, page.limit),
+      hasMore,
+      total,
+      offset: page.offset,
+      limit: page.limit,
+    };
   }
 
   /**
    * Public detail — full build content. 404s when removed.
+   * Exposes `ownerUserId` (our internal UUID) so the frontend can link
+   * to the author profile page.
    *
    * @param {string} slug
    */
   async getPublic(slug) {
     const row = await this.db.communityBuilds.findOne(
       { slug, removed: false },
-      { projection: { _id: 0, ownerUserId: 0 } },
+      {
+        // Strip Mongo-internal fields and the per-user vote arrays.
+        // ownerUserId is intentionally exposed.
+        projection: { _id: 0, upvotes: 0, downvotes: 0 },
+      },
     );
     return row;
+  }
+
+  /**
+   * Public author profile aggregate. Returns null when the author has
+   * no published builds OR when none of their builds carry a public
+   * `authorName` — that's the implicit "no public profile" opt-out.
+   * Users who never declare a display name on a publish stay private.
+   *
+   * @param {string} userId — internal UUID (not Clerk id)
+   * @returns {Promise<{
+   *   userId: string,
+   *   displayName: string,
+   *   joinedAt: Date | null,
+   *   builds: object[],
+   *   totalBuilds: number,
+   *   totalVotes: number,
+   *   primaryRace: string | null,
+   *   topMatchup: string | null,
+   *   topBuild: object | null,
+   *   recent: object[],
+   * } | null>}
+   */
+  async getAuthor(userId) {
+    if (!userId) return null;
+    const builds = await this.db.communityBuilds
+      .find(
+        { ownerUserId: userId, removed: false },
+        { projection: PUBLIC_PROJECTION },
+      )
+      .sort({ publishedAt: -1 })
+      .toArray();
+    if (builds.length === 0) return null;
+    // Anonymization gate: at least one build must have a non-empty
+    // authorName for the profile to be public. Users who publish
+    // without a display name stay private (404 from the route).
+    const named = builds.filter(
+      (b) => typeof b.authorName === "string" && b.authorName.trim().length > 0,
+    );
+    if (named.length === 0) return null;
+    // Most-recent declared authorName wins as the canonical display.
+    const displayName = named[0].authorName.trim();
+    const totalVotes = builds.reduce(
+      (acc, b) => acc + (Number.isFinite(b.votes) ? b.votes : 0),
+      0,
+    );
+    /** @type {Record<string, number>} */
+    const raceCounts = {};
+    /** @type {Record<string, number>} */
+    const matchupCounts = {};
+    for (const b of builds) {
+      const r = b.build?.race;
+      if (r) raceCounts[r] = (raceCounts[r] || 0) + 1;
+      if (b.matchup) matchupCounts[b.matchup] = (matchupCounts[b.matchup] || 0) + 1;
+    }
+    const primaryRace = pickDominant(raceCounts, builds.length, 0.6);
+    const topMatchup = pickTop(matchupCounts);
+    const topBuild = builds.reduce((best, cur) => {
+      if (!best) return cur;
+      return (cur.votes ?? 0) > (best.votes ?? 0) ? cur : best;
+    }, /** @type {any} */ (null));
+    const joinedAt = builds.length
+      ? builds.reduce((earliest, b) => {
+          const t = b.publishedAt ? new Date(b.publishedAt).getTime() : NaN;
+          if (!Number.isFinite(t)) return earliest;
+          if (earliest == null || t < earliest) return t;
+          return earliest;
+        }, /** @type {number | null} */ (null))
+      : null;
+    return {
+      userId,
+      displayName,
+      joinedAt: joinedAt != null ? new Date(joinedAt) : null,
+      builds,
+      totalBuilds: builds.length,
+      totalVotes,
+      primaryRace,
+      topMatchup,
+      topBuild,
+      recent: builds.slice(0, 5),
+    };
   }
 
   /**

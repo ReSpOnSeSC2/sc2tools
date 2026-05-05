@@ -1,97 +1,216 @@
 import Link from "next/link";
+import { Sparkles, Users } from "lucide-react";
 import { getJson } from "@/lib/serverApi";
 import { Banner } from "@/components/Banner";
+import { Card } from "@/components/ui/Card";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { CommunityBuildCard } from "@/components/community/CommunityBuildCard";
+import { CommunityFilterBar } from "@/components/community/CommunityFilterBar";
+import {
+  COMMUNITY_SORTS,
+  type CommunityBuildListResponse,
+  type CommunitySort,
+} from "@/components/community/types";
 
 export const metadata = {
   title: "Community builds — SC2 Tools",
   description:
-    "Player-published StarCraft II build orders, ranked by community votes.",
+    "Player-published StarCraft II build orders, ranked by community votes. Filter by matchup, sort by top, new, or controversial, and save any build to your private library.",
+  openGraph: {
+    title: "Community builds — SC2 Tools",
+    description:
+      "Player-published StarCraft II build orders, ranked by community votes.",
+    images: [{ url: "/banner.png", width: 2000, height: 800 }],
+  },
 };
 
-type Build = {
-  slug: string;
-  title: string;
-  description: string;
-  matchup?: string;
-  authorName?: string;
-  votes: number;
-  publishedAt: string;
-};
+const PAGE_SIZE = 24;
+
+function isSort(value: string | undefined): value is CommunitySort {
+  return COMMUNITY_SORTS.some((s) => s.value === value);
+}
 
 export default async function CommunityPage({
   searchParams,
 }: {
-  searchParams: Promise<{ matchup?: string }>;
+  searchParams: Promise<{
+    matchup?: string;
+    sort?: string;
+    q?: string;
+    offset?: string;
+  }>;
 }) {
   const sp = await searchParams;
-  const qs = sp.matchup ? `?matchup=${encodeURIComponent(sp.matchup)}` : "";
-  const data = await getJson<{ items: Build[] }>(`/v1/community/builds${qs}`);
+  const matchup = (sp.matchup || "").trim();
+  const sort: CommunitySort = isSort(sp.sort) ? sp.sort : "top";
+  const search = (sp.q || "").trim();
+  const offset = Math.max(0, Number.parseInt(sp.offset || "0", 10) || 0);
+
+  const params = new URLSearchParams();
+  if (matchup) params.set("matchup", matchup);
+  if (sort) params.set("sort", sort);
+  if (search) params.set("q", search);
+  params.set("limit", String(PAGE_SIZE));
+  params.set("offset", String(offset));
+
+  const data = await getJson<CommunityBuildListResponse>(
+    `/v1/community/builds?${params.toString()}`,
+  );
   const items = data?.items || [];
-  const matchups = ["PvT", "PvZ", "PvP", "TvP", "TvZ", "TvT", "ZvP", "ZvT", "ZvZ"];
+  const total = data?.total ?? 0;
+  const hasMore = data?.hasMore ?? false;
+
+  const showingTo = offset + items.length;
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold">Community builds</h1>
-        <p className="text-text-muted">
-          Builds published by SC2 Tools players. Sign in to publish your own
-          or vote.
-        </p>
-      </header>
+      <PageHeader
+        eyebrow={
+          <span className="inline-flex items-center gap-1.5">
+            <Users className="h-3 w-3" aria-hidden />
+            Community
+          </span>
+        }
+        title="Community builds"
+        description="Builds published by SC2 Tools players. Vote, save to your private library, or publish your own."
+        actions={
+          <Link
+            href="/builds"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-border bg-bg-elevated px-4 text-body font-semibold text-text transition-colors hover:border-border-strong hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          >
+            <Sparkles className="h-4 w-4 text-accent-cyan" aria-hidden />
+            Publish a build
+          </Link>
+        }
+      />
 
       <Banner variant="divider" />
 
-      <nav className="flex flex-wrap gap-2 text-sm">
-        <Link
-          href="/community"
-          className={`btn ${!sp.matchup ? "" : "btn-secondary"}`}
-        >
-          All
-        </Link>
-        {matchups.map((m) => (
-          <Link
-            key={m}
-            href={`/community?matchup=${m}`}
-            className={`btn ${sp.matchup === m ? "" : "btn-secondary"}`}
-          >
-            {m}
-          </Link>
-        ))}
-      </nav>
+      <CommunityFilterBar
+        initialMatchup={matchup}
+        initialSort={sort}
+        initialSearch={search}
+      />
 
       {items.length === 0 ? (
-        <p className="card p-6 text-text-muted">
-          No published builds yet.
-          {sp.matchup ? ` Try a different matchup.` : ` Be the first!`}
-        </p>
-      ) : (
-        <ul className="space-y-3">
-          {items.map((b) => (
-            <li key={b.slug} className="card p-5">
-              <Link href={`/community/builds/${b.slug}`} className="space-y-2">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h2 className="text-lg font-semibold text-accent">
-                    {b.title}
-                  </h2>
-                  <span className="font-mono text-sm tabular-nums text-text-muted">
-                    {b.votes >= 0 ? "▲" : "▼"} {Math.abs(b.votes)}
-                  </span>
-                </div>
-                <div className="text-xs uppercase tracking-wide text-text-dim">
-                  {b.matchup || "any matchup"}
-                  {b.authorName ? ` · ${b.authorName}` : ""}
-                </div>
-                {b.description && (
-                  <p className="text-sm text-text-muted">
-                    {b.description.slice(0, 240)}
-                    {b.description.length > 240 ? "…" : ""}
-                  </p>
-                )}
+        <Card>
+          <EmptyStatePanel
+            size="lg"
+            title={search ? "No builds match your search" : "No builds yet"}
+            description={
+              search
+                ? `Nothing matched "${search}". Try a different keyword or remove the matchup filter.`
+                : matchup
+                  ? `No published ${matchup} builds yet. Be the first — publish from your library.`
+                  : "Be the first to publish a build to the community."
+            }
+            action={
+              <Link
+                href={search || matchup ? "/community" : "/builds"}
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-border bg-bg-elevated px-4 text-body font-semibold text-text transition-colors hover:border-border-strong hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+              >
+                {search || matchup ? "Reset filters" : "Open my library"}
               </Link>
-            </li>
-          ))}
-        </ul>
+            }
+          />
+        </Card>
+      ) : (
+        <>
+          <div className="flex items-baseline justify-between text-caption text-text-muted">
+            <span>
+              Showing{" "}
+              <span className="font-mono tabular-nums text-text">
+                {offset + 1}–{showingTo}
+              </span>{" "}
+              of <span className="font-mono tabular-nums text-text">{total}</span>
+              {matchup ? ` · ${matchup}` : ""}
+            </span>
+          </div>
+          <ul
+            role="list"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+          >
+            {items.map((b) => (
+              <li key={b.slug} role="listitem" className="h-full">
+                <CommunityBuildCard build={b} />
+              </li>
+            ))}
+          </ul>
+          <Pagination
+            offset={offset}
+            limit={PAGE_SIZE}
+            total={total}
+            hasMore={hasMore}
+            search={search}
+            sort={sort}
+            matchup={matchup}
+          />
+        </>
       )}
     </div>
   );
 }
+
+function Pagination({
+  offset,
+  limit,
+  total,
+  hasMore,
+  search,
+  sort,
+  matchup,
+}: {
+  offset: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+  search: string;
+  sort: CommunitySort;
+  matchup: string;
+}) {
+  const prev = Math.max(0, offset - limit);
+  const next = offset + limit;
+  function urlFor(o: number): string {
+    const sp = new URLSearchParams();
+    if (matchup) sp.set("matchup", matchup);
+    if (sort && sort !== "top") sp.set("sort", sort);
+    if (search) sp.set("q", search);
+    if (o > 0) sp.set("offset", String(o));
+    const qs = sp.toString();
+    return qs ? `/community?${qs}` : "/community";
+  }
+  if (total <= limit) return null;
+  return (
+    <nav
+      aria-label="Pagination"
+      className="flex items-center justify-between gap-2 pt-2"
+    >
+      <Link
+        href={urlFor(prev)}
+        aria-disabled={offset === 0}
+        className={[
+          "inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-border px-4 text-body font-semibold transition-colors",
+          offset === 0
+            ? "pointer-events-none opacity-40"
+            : "bg-bg-elevated text-text hover:border-border-strong hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        ].join(" ")}
+      >
+        ← Previous
+      </Link>
+      <Link
+        href={urlFor(next)}
+        aria-disabled={!hasMore}
+        className={[
+          "inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-border px-4 text-body font-semibold transition-colors",
+          !hasMore
+            ? "pointer-events-none opacity-40"
+            : "bg-bg-elevated text-text hover:border-border-strong hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        ].join(" ")}
+      >
+        Next →
+      </Link>
+    </nav>
+  );
+}
+
