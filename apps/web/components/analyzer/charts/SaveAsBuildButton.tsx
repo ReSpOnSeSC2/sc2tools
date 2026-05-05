@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Save } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { SaveAsBuildModal } from "./SaveAsBuildModal";
+import { BuildEditorModal } from "@/components/builds/editor";
+import type { BuildOrderEvent } from "@/lib/build-events";
 import type {
   BuildEventRow,
   BuildPerspective,
@@ -13,24 +14,27 @@ import type {
 } from "./BuildOrderTimeline.types";
 
 /**
- * SaveAsBuildButton — opens SaveAsBuildModal with the current
- * perspective's events as the build snapshot. The button is the
- * integration point for surfaces that pass an onSaveAsBuild handler
- * to the timeline.
+ * SaveAsBuildButton — opens the rich BuildEditorModal pre-seeded with
+ * the active perspective's raw events. Replaces the legacy lite
+ * SaveAsBuildModal so the cloud editor reaches feature parity with
+ * the local SPA.
+ *
+ * The button is the integration point for surfaces that pass an
+ * `onSaveAsBuild` handler to the BuildOrderTimeline. Parents are
+ * notified via `onSaved` after a successful save.
  */
 export interface SaveAsBuildButtonProps {
-  rows: BuildEventRow[];
+  /** Display rows — used only to gate the button when there are 0 events. */
+  rows: ReadonlyArray<BuildEventRow>;
+  /** Raw events for the active perspective, fed into the editor. */
+  events: ReadonlyArray<BuildOrderEvent>;
   perspective: BuildPerspective;
   race: Race;
   vsRace: VsRace;
   defaultName?: string;
   gameId?: string;
-  /** Notified after a successful save. */
+  /** Notified after a successful save (no return value expected). */
   onSaved?: (payload: SaveAsBuildPayload & { slug: string }) => void;
-  /** Custom save handler — overrides the built-in API call. */
-  onCustomSave?: (
-    payload: SaveAsBuildPayload & { slug: string },
-  ) => Promise<void> | void;
   disabled?: boolean;
   size?: "sm" | "md";
   className?: string;
@@ -38,13 +42,13 @@ export interface SaveAsBuildButtonProps {
 
 export function SaveAsBuildButton({
   rows,
+  events,
   perspective,
   race,
   vsRace,
   defaultName,
   gameId,
   onSaved,
-  onCustomSave,
   disabled,
   size = "sm",
   className = "",
@@ -68,19 +72,26 @@ export function SaveAsBuildButton({
       >
         Save as new build
       </Button>
-      <SaveAsBuildModal
+      <BuildEditorModal
         open={open}
         onClose={() => setOpen(false)}
-        rows={rows}
-        defaultName={defaultName}
-        perspective={perspective}
+        events={events}
+        gameId={gameId}
         race={race}
         vsRace={vsRace}
-        gameId={gameId}
-        onSaved={(payload) => {
-          onSaved?.(payload);
+        perspective={perspective}
+        defaultName={defaultName}
+        onSaved={(slug, draft) => {
+          onSaved?.({
+            slug,
+            name: draft.name,
+            race: draft.race,
+            vsRace: draft.vsRace,
+            rows: rows.slice(),
+            gameId,
+            perspective,
+          });
         }}
-        onCustomSave={onCustomSave}
       />
     </>
   );

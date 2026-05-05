@@ -330,6 +330,55 @@ class MacroBackfillService {
       .limit(LIMITS.MACRO_JOB_HISTORY)
       .toArray();
   }
+
+  /**
+   * Iterate the user's games for rule-based preview matching. Returns
+   * lightweight {gameId, parsedEvents, myBuild, myRace, oppRace, ...}
+   * tuples suitable for a server-side rules evaluator. Pulls only
+   * fields the evaluator needs (buildLog, race, current bucket).
+   *
+   * @param {string} userId
+   * @param {{ race?: string, vsRace?: string, limit?: number }} [opts]
+   * @returns {Promise<Array<{gameId: string, myBuild: string|null, myRace: string|null, oppRace: string|null, events: any[], result: string|null, date: Date|null, map: string|null}>>}
+   */
+  async listForRulePreview(userId, opts = {}) {
+    /** @type {Record<string, any>} */
+    const filter = { userId };
+    if (opts.race && opts.race !== "Any") filter.myRace = opts.race;
+    if (opts.vsRace && opts.vsRace !== "Any") {
+      filter["opponent.race"] = opts.vsRace;
+    }
+    const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 600));
+    const games = await this.db.games
+      .find(filter, {
+        projection: {
+          _id: 0,
+          gameId: 1,
+          myBuild: 1,
+          myRace: 1,
+          opponent: 1,
+          buildLog: 1,
+          result: 1,
+          date: 1,
+          map: 1,
+        },
+      })
+      .sort({ date: -1 })
+      .limit(limit)
+      .toArray();
+    return games.map(
+      /** @param {any} g */ (g) => ({
+        gameId: String(g.gameId || ""),
+        myBuild: g.myBuild || null,
+        myRace: g.myRace || null,
+        oppRace: g.opponent ? g.opponent.race || null : null,
+        events: parseBuildLogLines(g.buildLog || [], this.catalog),
+        result: g.result || null,
+        date: g.date || null,
+        map: g.map || null,
+      }),
+    );
+  }
 }
 
 /**

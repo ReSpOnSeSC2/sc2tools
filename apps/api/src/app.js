@@ -237,7 +237,11 @@ function mountRoutes(app, deps, services) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildCustomBuildsRouter({ customBuilds: services.customBuilds, auth }),
+    buildCustomBuildsRouter({
+      customBuilds: services.customBuilds,
+      perGame: services.perGame,
+      auth,
+    }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
