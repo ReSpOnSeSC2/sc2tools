@@ -34,7 +34,7 @@ export interface HeroCarouselSlide {
 
 export interface HeroCarouselProps {
   slides: ReadonlyArray<HeroCarouselSlide>;
-  /** Auto-advance interval; default 7000ms. Set 0 to disable. */
+  /** Auto-advance interval; default 5500ms. Set 0 to disable. */
   intervalMs?: number;
   /** ARIA label for the whole carousel region. */
   ariaLabel?: string;
@@ -42,7 +42,7 @@ export interface HeroCarouselProps {
 
 export function HeroCarousel({
   slides,
-  intervalMs = 7000,
+  intervalMs = 5500,
   ariaLabel = "Product highlights",
 }: HeroCarouselProps) {
   const [active, setActive] = useState(0);
@@ -83,8 +83,10 @@ export function HeroCarousel({
       ref={containerRef}
       aria-roledescription="carousel"
       aria-label={ariaLabel}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      // Hover does NOT pause — the user wants the carousel to keep
+      // sliding even when they're reading it. Focus still pauses
+      // because a keyboard user reading the slide should be able to
+      // finish before the next one appears (a11y best practice).
       onFocus={() => setPaused(true)}
       onBlur={(e) => {
         if (
@@ -113,7 +115,7 @@ export function HeroCarousel({
     >
       <div
         aria-live="polite"
-        className="relative overflow-hidden rounded-2xl border border-accent/30 bg-bg-elevated/40 shadow-halo-accent"
+        className="group relative overflow-hidden rounded-2xl border border-accent/30 bg-bg-elevated/40 shadow-halo-accent"
       >
         <ul className="relative" role="list">
           {slides.map((slide, i) => {
@@ -199,4 +201,9 @@ const NAV_BTN_CLS = [
   "rounded-full border border-border bg-bg-surface/80 text-text shadow-md backdrop-blur",
   "hover:bg-bg-surface hover:border-accent-cyan",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+  // Hidden by default; fade in when the visitor hovers the carousel
+  // or focuses any element inside it (so keyboard users can find them).
+  "opacity-0 motion-safe:transition-opacity motion-safe:duration-200",
+  "group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100",
+  "motion-reduce:opacity-100",
 ].join(" ");
