@@ -21,7 +21,7 @@ import type { AgentVersionResp, DetectedOS } from "./types";
 export function useReleaseInfo(os: DetectedOS) {
   const platform = osToPlatformParam(os);
   const path = `/api/agent/version?channel=stable&platform=${platform}&current=0.0.0`;
-  return useSWR<AgentVersionResp>(path, async (p) => {
+  return useSWR<AgentVersionResp>(path, async (p: string) => {
     const res = await fetch(p, { cache: "no-store" });
     if (!res.ok) {
       throw new Error(`release_fetch_failed_${res.status}`);
