@@ -50,7 +50,13 @@ export function OpponentsTab({
 
   // We don't pass `limit` here — the paginator owns page size and
   // chases `nextBefore` until exhaustion (or a safe page cap).
-  const params = useMemo(() => ({ ...filters, search }), [filters, search]);
+  // `search` is intentionally NOT in the path: the backend ignores it
+  // (filter happens client-side below), and including it would re-key
+  // the paginator on every keystroke — which resets the items array,
+  // re-triggers the loading-skeleton early-return, and unmounts the
+  // search input mid-edit. Only re-fetch when the actual server-side
+  // filters change.
+  const params = useMemo(() => ({ ...filters }), [filters]);
   const path = `/v1/opponents${filtersToQuery(params)}`;
   const { items: rawItems, isLoading, error, pagesFetched, hitMaxPages } =
     useApiPaginated<Opp>(path, dbRev);
@@ -96,7 +102,7 @@ export function OpponentsTab({
     [filteredItems, sort],
   );
 
-  if (isLoading && rawItems.length === 0) return <Skeleton rows={8} />;
+  const showSkeleton = isLoading && rawItems.length === 0;
 
   return (
     <div className="space-y-4">
@@ -169,7 +175,13 @@ export function OpponentsTab({
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 ? (
+            {showSkeleton ? (
+              <tr>
+                <td colSpan={8} className="px-3 py-3">
+                  <Skeleton rows={8} />
+                </td>
+              </tr>
+            ) : items.length === 0 ? (
               <tr>
                 <td colSpan={8}>
                   <EmptyState title="No opponents match these filters" />

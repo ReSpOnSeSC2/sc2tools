@@ -27,9 +27,12 @@ const VARIANT_CLASSES: Record<BadgeVariant, string> = {
   danger: "bg-danger/15 text-danger border-danger/30",
 };
 
+// `min-h-` (not `h-`) so a badge that wraps to two lines (e.g. a long
+// build name in a narrow table column) grows to enclose the wrapped
+// text instead of clipping into a tiny stranded pill behind it.
 const SIZE_CLASSES: Record<BadgeSize, string> = {
-  sm: "h-5 px-1.5 text-[11px] gap-1",
-  md: "h-6 px-2 text-caption gap-1.5",
+  sm: "min-h-5 py-0.5 px-1.5 text-[11px] gap-1",
+  md: "min-h-6 py-0.5 px-2 text-caption gap-1.5",
 };
 
 export function Badge({

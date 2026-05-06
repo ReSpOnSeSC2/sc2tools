@@ -137,7 +137,7 @@ function cacheHeaders() {
 }
 
 async function fetchLatestRelease(): Promise<GitHubRelease | null> {
-  const apiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=20`;
+  const apiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=30`;
   const res = await fetch(apiUrl, {
     headers: {
       Accept: "application/vnd.github+json",
@@ -152,16 +152,37 @@ async function fetchLatestRelease(): Promise<GitHubRelease | null> {
     throw new Error(`github releases fetch ${res.status}`);
   }
   const releases = (await res.json()) as GitHubRelease[];
-  return (
-    releases.find(
-      (r) =>
-        TAG_REGEX.test(r.tag_name || "") &&
-        !r.draft &&
-        !r.prerelease &&
-        Array.isArray(r.assets) &&
-        r.assets.some((a) => EXE_REGEXES.some((rx) => rx.test(a.name))),
-    ) || null
+  // GitHub's `/releases` endpoint orders results lexicographically by
+  // tag, NOT by semver — so `agent-v0.3.11` lands AFTER `agent-v0.3.4`
+  // ("11" < "4" as a string). Picking `releases.find(...)` would
+  // therefore freeze the download page on `v0.3.4` even after `v0.3.11`
+  // ships. Filter to eligible releases first, then sort by semver
+  // descending so the actual newest version always wins.
+  const eligible = releases.filter(
+    (r) =>
+      TAG_REGEX.test(r.tag_name || "") &&
+      !r.draft &&
+      !r.prerelease &&
+      Array.isArray(r.assets) &&
+      r.assets.some((a) => EXE_REGEXES.some((rx) => rx.test(a.name))),
   );
+  if (eligible.length === 0) return null;
+  eligible.sort((a, b) => compareSemverTagDesc(a.tag_name, b.tag_name));
+  return eligible[0];
+}
+
+/**
+ * Sort comparator: descending by the semver embedded in an
+ * `agent-vX.Y.Z` tag name. Tags that don't parse fall to the end so
+ * a malformed tag never starves a real release.
+ */
+function compareSemverTagDesc(a: string, b: string): number {
+  const va = parseSemver(a.replace(/^agent-v/, ""));
+  const vb = parseSemver(b.replace(/^agent-v/, ""));
+  for (let i = 0; i < 3; i++) {
+    if (va[i] !== vb[i]) return vb[i] - va[i];
+  }
+  return 0;
 }
 
 function pickAssetForPlatform(
