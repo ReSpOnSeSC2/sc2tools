@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 
 export interface BuildEditorSaveBarProps {
@@ -11,6 +12,12 @@ export interface BuildEditorSaveBarProps {
   onSave: (andReclassify: boolean) => void;
   /** When "edit", primary button reads "Save changes" instead of "Save build". */
   mode?: "create" | "edit";
+  /**
+   * Landing-page demo mode: replaces Save build / Save & Reclassify
+   * with a sign-up CTA. Cancel still closes the modal so the visitor
+   * isn't trapped.
+   */
+  demoMode?: boolean;
 }
 
 /**
@@ -29,7 +36,29 @@ export function BuildEditorSaveBar({
   onCancel,
   onSave,
   mode = "create",
+  demoMode = false,
 }: BuildEditorSaveBarProps) {
+  if (demoMode) {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex-1 text-caption text-text-muted">
+          Demo: rules and preview are local — sign up to save this build to
+          your library.
+        </span>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button variant="ghost" onClick={onCancel}>
+            Close
+          </Button>
+          <Link
+            href="/sign-up"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-body font-semibold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          >
+            Sign up to save
+          </Link>
+        </div>
+      </div>
+    );
+  }
   // In edit mode the user might be tweaking metadata (name, description,
   // skill level, strategy notes) without touching the rules — so don't
   // gate save on having at least one rule. Create mode still requires

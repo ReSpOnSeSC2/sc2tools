@@ -38,11 +38,11 @@ import { ReplayDemo } from "@/components/landing/ReplayDemo";
 export default function LandingPage() {
   return (
     <div className="space-y-24 md:space-y-32">
-      <HeroSection />
+      <SocialProofSection />
       <ReplayDemo />
       <PillarsSection />
       <HowItWorksSection />
-      <SocialProofSection />
+      <HeroSection />
       <DonateBanner />
       <FinalCtaSection />
     </div>

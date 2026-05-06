@@ -47,6 +47,13 @@ export interface BuildEditorModalProps {
   lockedSlug?: string;
   /** Switches the title eyebrow from "Save as new build" to "Edit build". */
   mode?: "create" | "edit";
+  /**
+   * Demo mode (landing-page replay preview). The editor stays fully
+   * interactive — name, race/vsRace, source-timeline rule promotion,
+   * custom rule pickers, strategy notes — but the preview-matches
+   * fetch is suppressed and Save is replaced with a sign-up CTA.
+   */
+  demoMode?: boolean;
 }
 
 /**
@@ -75,6 +82,7 @@ export function BuildEditorModal({
   initialDraft,
   lockedSlug,
   mode = "create",
+  demoMode = false,
 }: BuildEditorModalProps) {
   const sourceRows = useMemo(() => eventsToSourceRows(events), [events]);
 
@@ -117,6 +125,7 @@ export function BuildEditorModal({
     open,
     initialDraft: seedDraft,
     lockedSlug,
+    demoMode,
     context: {
       gameId,
       sourceEvents: events,
@@ -176,6 +185,7 @@ export function BuildEditorModal({
             onCancel={onClose}
             onSave={editor.save}
             mode={mode}
+            demoMode={demoMode}
           />
         }
       >
