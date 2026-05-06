@@ -152,16 +152,38 @@ async function fetchLatestRelease(): Promise<GitHubRelease | null> {
     throw new Error(`github releases fetch ${res.status}`);
   }
   const releases = (await res.json()) as GitHubRelease[];
-  return (
-    releases.find(
-      (r) =>
-        TAG_REGEX.test(r.tag_name || "") &&
-        !r.draft &&
-        !r.prerelease &&
-        Array.isArray(r.assets) &&
-        r.assets.some((a) => EXE_REGEXES.some((rx) => rx.test(a.name))),
-    ) || null
+
+  // Filter to releases that look like a publishable agent tag with
+  // an installer asset attached.
+  const candidates = releases.filter(
+    (r) =>
+      TAG_REGEX.test(r.tag_name || "") &&
+      !r.draft &&
+      !r.prerelease &&
+      Array.isArray(r.assets) &&
+      r.assets.some((a) => EXE_REGEXES.some((rx) => rx.test(a.name))),
   );
+
+  // Sort by semver descending. GitHub's ``releases`` endpoint sorts
+  // lexicographically by tag name, which mis-ranks ``agent-v0.3.11``
+  // BELOW ``agent-v0.3.4`` because the character '4' is greater than
+  // '1' in ASCII. Without this resort, every release with a 2-digit
+  // patch number gets ignored and the website hands users a stale
+  // installer (the v0.3.11 incident: site stuck on 0.3.4 even after
+  // 0.3.11 was published 3 hours later, asset uploaded, tag matching
+  // the regex). ``parseSemver`` already exists for the per-call
+  // ``isNewer`` comparison; reusing it here so semver-awareness is
+  // applied consistently to both pick and compare paths.
+  candidates.sort((a, b) => {
+    const av = parseSemver(a.tag_name.replace(/^agent-v/, ""));
+    const bv = parseSemver(b.tag_name.replace(/^agent-v/, ""));
+    for (let i = 0; i < 3; i++) {
+      if (av[i] !== bv[i]) return bv[i] - av[i];
+    }
+    return 0;
+  });
+
+  return candidates[0] || null;
 }
 
 function pickAssetForPlatform(
