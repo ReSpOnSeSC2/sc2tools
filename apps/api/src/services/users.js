@@ -66,6 +66,80 @@ class UsersService {
   }
 
   /**
+   * Read the lightweight account summary used by /v1/me — userId,
+   * clerkUserId (when known), and the cached email. We project narrowly
+   * so the row doesn't drag the entire profile into memory on every page
+   * load.
+   *
+   * @param {string} userId
+   * @returns {Promise<{userId: string, clerkUserId: string|null, email: string|null}>}
+   */
+  async getSummary(userId) {
+    const doc = await this.db.users.findOne(
+      { userId },
+      { projection: { _id: 0, userId: 1, clerkUserId: 1, email: 1 } },
+    );
+    if (!doc) return { userId, clerkUserId: null, email: null };
+    return {
+      userId: doc.userId,
+      clerkUserId: typeof doc.clerkUserId === "string" ? doc.clerkUserId : null,
+      email: typeof doc.email === "string" && doc.email.length > 0
+        ? doc.email
+        : null,
+    };
+  }
+
+  /**
+   * Cache an email on the user record. Idempotent — only writes when the
+   * value actually changes, so we don't churn `_schemaVersion` or
+   * `lastSeenAt` on no-op refreshes.
+   *
+   * @param {string} userId
+   * @param {string} email
+   */
+  async setEmail(userId, email) {
+    if (typeof email !== "string" || email.length === 0) return;
+    await this.db.users.updateOne(
+      { userId, email: { $ne: email } },
+      { $set: { email, emailUpdatedAt: new Date() } },
+    );
+  }
+
+  /**
+   * Webhook entrypoint: upsert email by Clerk user id. The user row may
+   * not exist yet if the webhook lands before the user's first API call,
+   * so we insert a stub on miss using the same shape `ensureFromClerk`
+   * produces. Returns true when an email was written or a stub created.
+   *
+   * @param {string} clerkUserId
+   * @param {string|null} email
+   * @returns {Promise<boolean>}
+   */
+  async upsertFromWebhook(clerkUserId, email) {
+    if (!clerkUserId) return false;
+    const now = new Date();
+    /** @type {Record<string, unknown>} */
+    const set = { lastSeenAt: now };
+    if (typeof email === "string" && email.length > 0) {
+      set.email = email;
+      set.emailUpdatedAt = now;
+    }
+    /** @type {Record<string, unknown>} */
+    const setOnInsert = {
+      userId: crypto.randomUUID(),
+      clerkUserId,
+      createdAt: now,
+    };
+    stampVersion(setOnInsert, COLLECTIONS.USERS);
+    const res = await this.db.users.updateOne(
+      { clerkUserId },
+      { $set: set, $setOnInsert: setOnInsert },
+      { upsert: true },
+    );
+    return res.modifiedCount > 0 || res.upsertedCount > 0;
+  }
+
+  /**
    * Read the public-facing profile fields. Returns an empty object
    * when no fields have been set, never null, so callers can spread
    * the result without a null check.

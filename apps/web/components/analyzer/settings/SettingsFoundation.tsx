@@ -16,10 +16,11 @@ import { fmtAgo } from "@/lib/format";
 
 type Me = {
   userId: string;
-  email?: string;
+  email?: string | null;
   source?: string;
   games?: { total: number; latest: string | null };
   agentVersion?: string | null;
+  agentPaired?: boolean;
 };
 
 type RowIcon = typeof Mail;
@@ -91,7 +92,9 @@ export function SettingsFoundation() {
     },
     {
       label: "Agent version",
-      value: me.data.agentVersion || "—",
+      value:
+        me.data.agentVersion ||
+        (me.data.agentPaired ? "Unknown" : "Not paired"),
       Icon: PackageCheck,
     },
   ];

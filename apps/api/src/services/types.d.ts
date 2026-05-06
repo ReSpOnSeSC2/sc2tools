@@ -9,6 +9,12 @@ export interface UserProfile {
   displayName?: string;
 }
 
+export interface UserSummary {
+  userId: string;
+  clerkUserId: string | null;
+  email: string | null;
+}
+
 export interface UsersService {
   ensureFromClerk(clerkUserId: string): Promise<{ userId: string }>;
   touch(userId: string): Promise<void>;
@@ -17,6 +23,9 @@ export interface UsersService {
     userId: string,
     profile: { [K in keyof UserProfile]?: string | null },
   ): Promise<UserProfile>;
+  getSummary(userId: string): Promise<UserSummary>;
+  setEmail(userId: string, email: string): Promise<void>;
+  upsertFromWebhook(clerkUserId: string, email: string | null): Promise<boolean>;
 }
 
 export interface OpponentsService {
@@ -91,6 +100,7 @@ export interface DevicePairingsService {
   >;
   findTokenByHash(hash: string): Promise<{ userId: string } | null>;
   listDevices(userId: string): Promise<object[]>;
+  latestAgent(userId: string): Promise<{ paired: boolean; version: string | null }>;
   revoke(userId: string, tokenHash: string): Promise<void>;
   recordHeartbeat(
     userId: string,
