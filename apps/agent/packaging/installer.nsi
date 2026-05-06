@@ -2,20 +2,6 @@
 ;
 ; Build with:
 ;   makensis -DAGENT_VERSION=0.3.0 packaging/installer.nsi
-;
-; The installer:
-;   * places sc2tools-agent.exe under %LOCALAPPDATA%\sc2tools (per-user;
-;     no admin elevation required so SmartScreen behaves);
-;   * registers a Startup-folder shortcut so the agent runs on every
-;     login (with --start-minimized so it never pops a window at logon);
-;   * adds an "SC2 Tools Agent" Start menu entry (launches the GUI);
-;   * adds an optional desktop shortcut;
-;   * registers the uninstaller in Add/Remove Programs.
-;
-; If you want the auto-updater to ship signed binaries, sign the
-; output .exe with signtool AFTER NSIS finishes:
-;   signtool sign /fd SHA256 /tr http://timestamp.sectigo.com /td SHA256 \
-;     /a SC2ToolsAgent-Setup-${AGENT_VERSION}.exe
 
 Unicode True
 SetCompressor /SOLID lzma
@@ -53,11 +39,9 @@ VIAddVersionKey "LegalCopyright" "(c) SC2 Tools contributors"
 !include "FileFunc.nsh"
 
 !define MUI_ABORTWARNING
-; Custom installer/uninstaller icons are optional. We do NOT define
-; MUI_ICON / MUI_UNICON when the file is absent because NSIS otherwise
-; aborts with "can't open file" instead of falling back to its default
-; icon. Drop a 256-colour icon.ico next to this script if you want
-; branded chrome on the wizard.
+; Custom installer/uninstaller icons are optional. We only define
+; MUI_ICON / MUI_UNICON when the file is present so NSIS falls back
+; to its default icon instead of aborting with "can't open file".
 !if /FileExists "${__FILEDIR__}\icon.ico"
   !define MUI_ICON   "icon.ico"
   !define MUI_UNICON "icon.ico"
@@ -73,19 +57,14 @@ VIAddVersionKey "LegalCopyright" "(c) SC2 Tools contributors"
 !insertmacro MUI_LANGUAGE "English"
 
 Section "Install"
-    ; Stop any running agent so we can replace the .exe in place.
     nsExec::Exec 'taskkill /F /IM "${APP_EXECUTABLE}" /T'
 
     SetOutPath "$INSTDIR"
-
-    ; The PyInstaller one-file build emits a single .exe to dist/.
     File "..\dist\${APP_EXECUTABLE}"
 
-    ; Persist the install dir so the uninstaller can find us.
     WriteRegStr HKCU "${APP_REG_KEY}" "InstallDir"     "$INSTDIR"
     WriteRegStr HKCU "${APP_REG_KEY}" "Version"         "${AGENT_VERSION}"
 
-    ; Add/Remove Programs entry.
     WriteRegStr HKCU "${APP_UNINST_KEY}" "DisplayName"     "${APP_NAME}"
     WriteRegStr HKCU "${APP_UNINST_KEY}" "DisplayVersion"  "${AGENT_VERSION}"
     WriteRegStr HKCU "${APP_UNINST_KEY}" "Publisher"       "${APP_PUBLISHER}"
@@ -103,22 +82,13 @@ Section "Install"
 
     WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-    ; Auto-start at logon. Per-user Startup folder, no admin needed.
-    ;   * Startup-folder shortcut passes --start-minimized so the agent
-    ;     comes up to the system tray on every boot.
-    ;   * Start Menu shortcut launches the GUI window directly so a user
-    ;     who clicked it actually sees the dashboard.
     CreateShortCut "${APP_STARTUP_LINK}"   "$INSTDIR\${APP_EXECUTABLE}" \
         "--start-minimized" "$INSTDIR\${APP_EXECUTABLE}" 0 SW_SHOWMINIMIZED
     CreateShortCut "${APP_STARTMENU_LINK}" "$INSTDIR\${APP_EXECUTABLE}" \
         "" "$INSTDIR\${APP_EXECUTABLE}"
-
-    ; Optional desktop shortcut for non-technical users.
     CreateShortCut "$DESKTOP\SC2 Tools Agent.lnk" \
         "$INSTDIR\${APP_EXECUTABLE}" "" "$INSTDIR\${APP_EXECUTABLE}"
 
-    ; Launch the freshly-installed agent so the user does not have to
-    ; reboot or hunt for the icon.
     Exec '"$INSTDIR\${APP_EXECUTABLE}"'
 SectionEnd
 
@@ -134,6 +104,4 @@ Section "Uninstall"
 
     DeleteRegKey HKCU "${APP_UNINST_KEY}"
     DeleteRegKey HKCU "${APP_REG_KEY}"
-
-    ; State (pairing token, log files) lives at the same %LOCALAPPDATA%
-    ; root but in a sibling subfolder. Leave it
+SectionEnd

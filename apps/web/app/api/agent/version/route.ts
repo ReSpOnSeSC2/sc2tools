@@ -1,20 +1,19 @@
 /**
  * GET /api/agent/version
  *
- * Public, unauthenticated metadata feed for the SC2 Tools installer.
- * Resolves the latest GitHub release matching `v*.*.*` (the existing
- * release.yml workflow tags this way) and reshapes the response into
- * the AgentVersionResp contract the download page consumes.
+ * Public, unauthenticated metadata feed for the SC2 Tools AGENT
+ * installer. Resolves the latest GitHub release matching `agent-v*.*.*`
+ * (the new lightweight PySide6 agent that connects to sc2tools.app)
+ * and reshapes the response into the AgentVersionResp contract the
+ * download page consumes.
  *
- * Why a Next.js route and not the Express API: the download page
- * needs to work for logged-out visitors too, and the existing
- * `/v1/agent/version` is gated through `useApi` (which requires Clerk
- * auth) and reads from a Mongo collection nobody has populated yet.
- * This route hits the GitHub API directly and is shaped identically,
- * so the existing components light up immediately.
+ * Important: this route deliberately ignores `v*` releases — those are
+ * the legacy SC2 Tools merged toolkit (bundled Python + Node, runs at
+ * localhost:3000) which is for the maintainer's local use only and
+ * must NOT be linked from the public website.
  *
  * Caching: edge-cached for 10 min via the s-maxage header. The
- * GitHub API also gets a `next: { revalidate: 600 }` so we never
+ * GitHub API also gets `next: { revalidate: 600 }` so we never
  * hammer it more than 6 times an hour.
  */
 
@@ -26,14 +25,11 @@ export const revalidate = 600;
 const GITHUB_OWNER = "ReSpOnSeSC2";
 const GITHUB_REPO = "sc2tools";
 
-// The existing workflow (release.yml) ships installers with this tag
-// pattern and asset filename. We accept either the merged-toolkit
-// installer (SC2Tools-Setup-*.exe) or the future agent-only installer
-// (SC2ToolsAgent-Setup-*.exe) so both build pipelines can feed the
-// download page without further wiring.
-const TAG_REGEX = /^v\d+\.\d+\.\d+(?:[-+].*)?$/;
+// Only the new lightweight agent. The legacy SC2Tools-Setup-*.exe
+// installers are deliberately NOT matched here — they are private
+// dev artifacts that should never be offered to public visitors.
+const TAG_REGEX = /^agent-v\d+\.\d+\.\d+(?:[-+].*)?$/;
 const EXE_REGEXES: RegExp[] = [
-  /^SC2Tools-Setup-.*\.exe$/i,
   /^SC2ToolsAgent-Setup-.*\.exe$/i,
   /^sc2tools-agent.*\.exe$/i,
 ];
@@ -69,7 +65,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const version = release.tag_name.replace(/^v/, "");
+    const version = release.tag_name.replace(/^agent-v/, "");
     const platformAsset = pickAssetForPlatform(release.assets, platformParam);
     if (!platformAsset) {
       return NextResponse.json(
