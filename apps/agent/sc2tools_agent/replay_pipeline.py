@@ -190,6 +190,13 @@ class CloudGame:
     early_build_log: list
     opp_early_build_log: list
     opp_build_log: list
+    # Optional structured outputs the cloud uses to render the Activity
+    # tab's per-game charts and the macro-breakdown drilldown. Computing
+    # these requires a deep parse + extra event walks; we attach them
+    # whenever they're available so the SPA never falls back to its
+    # "macro breakdown not available" empty state for new uploads.
+    macro_breakdown: Optional[Dict[str, Any]] = None
+    apm_curve: Optional[Dict[str, Any]] = None
 
     def to_payload(self) -> Dict[str, Any]:
         out: Dict[str, Any] = {
@@ -214,6 +221,10 @@ class CloudGame:
             out["spq"] = round(float(self.spq), 2)
         if self.opponent:
             out["opponent"] = self.opponent
+        if self.macro_breakdown is not None:
+            out["macroBreakdown"] = self.macro_breakdown
+        if self.apm_curve is not None:
+            out["apmCurve"] = self.apm_curve
         return out
 
 
@@ -327,6 +338,9 @@ def parse_replay_for_cloud(
     if result is None:
         return None
 
+    macro_breakdown, derived_macro_score = _compute_macro_breakdown(ctx)
+    apm_curve = _compute_apm_curve(ctx)
+
     opponent = {
         "displayName": _sanitize_name(opp.name),
         "race": opp.race or "U",
@@ -353,6 +367,10 @@ def parse_replay_for_cloud(
     if getattr(ctx, "opp_strategy", None):
         opponent["strategy"] = str(ctx.opp_strategy)
 
+    macro_score_value = getattr(ctx, "macro_score", None)
+    if macro_score_value is None and derived_macro_score is not None:
+        macro_score_value = derived_macro_score
+
     return CloudGame(
         game_id=str(ctx.game_id),
         date_iso=_to_iso(ctx.date_iso),
@@ -361,7 +379,7 @@ def parse_replay_for_cloud(
         my_build=getattr(ctx, "my_build", None),
         map_name=str(ctx.map_name),
         duration_sec=int(ctx.length_seconds or 0),
-        macro_score=getattr(ctx, "macro_score", None),
+        macro_score=macro_score_value,
         apm=getattr(me, "apm", None),
         spq=getattr(me, "spq", None),
         opponent=opponent,
@@ -369,7 +387,174 @@ def parse_replay_for_cloud(
         early_build_log=list(getattr(ctx, "early_build_log", []) or []),
         opp_early_build_log=list(getattr(ctx, "opp_early_build_log", []) or []),
         opp_build_log=list(getattr(ctx, "opp_build_log", []) or []),
+        macro_breakdown=macro_breakdown,
+        apm_curve=apm_curve,
     )
+
+
+def _compute_macro_breakdown(
+    ctx: Any,
+) -> tuple[Optional[Dict[str, Any]], Optional[float]]:
+    """Build the macroBreakdown payload the cloud stores alongside the game.
+
+    Returns ``(payload, score)`` where ``payload`` is the dict spread into
+    the game document's ``macroBreakdown`` field (matching the shape the
+    web app's ``MacroBreakdownData`` type expects) and ``score`` is the
+    macro_score the engine derived (used as a fallback when the parser
+    didn't surface one). Either may be ``None`` on failure — the upload
+    path treats that as "no breakdown available, fall back to the slim
+    record" rather than failing the whole game ingest.
+    """
+    me = getattr(ctx, "me", None)
+    opp = getattr(ctx, "opponent", None)
+    replay = getattr(ctx, "raw", None)
+    if me is None or replay is None:
+        return None, None
+    try:
+        from core.event_extractor import extract_macro_events  # type: ignore
+        from analytics.macro_score import compute_macro_score  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        log.debug("macro_breakdown_imports_unavailable: %s", exc)
+        return None, None
+    try:
+        my_macro = extract_macro_events(replay, me.pid)
+    except Exception as exc:  # noqa: BLE001
+        log.debug("extract_macro_events_my_failed: %s", exc)
+        return None, None
+    opp_stats: list = []
+    if opp is not None and getattr(opp, "pid", None) is not None:
+        try:
+            opp_macro = extract_macro_events(replay, opp.pid)
+            opp_stats = list(opp_macro.get("stats_events") or [])
+        except Exception as exc:  # noqa: BLE001
+            log.debug("extract_macro_events_opp_failed: %s", exc)
+            opp_stats = []
+    game_length = (
+        int(my_macro.get("game_length_sec") or 0)
+        or int(getattr(ctx, "length_seconds", 0) or 0)
+    )
+    try:
+        score = compute_macro_score(my_macro, me.race, game_length)
+    except Exception as exc:  # noqa: BLE001
+        log.debug("compute_macro_score_failed: %s", exc)
+        return None, None
+    macro_score_val = score.get("macro_score")
+    payload: Dict[str, Any] = {
+        "raw": score.get("raw", {}) or {},
+        "all_leaks": score.get("all_leaks", []) or [],
+        "top_3_leaks": score.get("top_3_leaks", []) or [],
+        "stats_events": list(my_macro.get("stats_events") or []),
+        "opp_stats_events": opp_stats,
+    }
+    derived: Optional[float] = None
+    if isinstance(macro_score_val, (int, float)):
+        derived = float(macro_score_val)
+    return payload, derived
+
+
+def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
+    """Build the apmCurve payload (windowed APM/SPM samples per player).
+
+    Walks ``replay.events`` once, bucketing each side's command/selection
+    actions into 30-second windows, then converts those into per-second
+    rates. Mirrors the shape PerGameComputeService.apmCurve returns so
+    the SPA's ApmSpmChart renders without further translation.
+    """
+    me = getattr(ctx, "me", None)
+    opp = getattr(ctx, "opponent", None)
+    replay = getattr(ctx, "raw", None)
+    if me is None or replay is None:
+        return None
+    window_sec = 30
+    me_pid = getattr(me, "pid", None)
+    opp_pid = getattr(opp, "pid", None) if opp is not None else None
+    counts_apm: Dict[int, Dict[int, int]] = {}
+    counts_spm: Dict[int, Dict[int, int]] = {}
+    try:
+        events = getattr(replay, "events", None) or []
+    except Exception:  # noqa: BLE001
+        events = []
+    try:
+        from sc2reader.events.game import (  # type: ignore
+            CommandEvent,
+            SelectionEvent,
+        )
+    except Exception:  # noqa: BLE001
+        CommandEvent = None  # type: ignore
+        SelectionEvent = None  # type: ignore
+    for ev in events:
+        pid = getattr(ev, "pid", None)
+        if pid is None:
+            player = getattr(ev, "player", None)
+            pid = getattr(player, "pid", None) if player else None
+        if pid not in (me_pid, opp_pid):
+            continue
+        sec = getattr(ev, "second", None)
+        if sec is None:
+            frame = getattr(ev, "frame", None)
+            if frame is not None:
+                try:
+                    sec = int(frame) // 16
+                except (TypeError, ValueError):
+                    sec = None
+        if sec is None:
+            continue
+        bucket = int(sec) // window_sec
+        if CommandEvent is not None and isinstance(ev, CommandEvent):
+            counts_apm.setdefault(pid, {}).setdefault(bucket, 0)
+            counts_apm[pid][bucket] += 1
+            continue
+        if SelectionEvent is not None and isinstance(ev, SelectionEvent):
+            counts_spm.setdefault(pid, {}).setdefault(bucket, 0)
+            counts_spm[pid][bucket] += 1
+    game_length = int(getattr(ctx, "length_seconds", 0) or 0)
+    if game_length <= 0:
+        return None
+    bucket_count = max(1, (game_length + window_sec - 1) // window_sec)
+    has_data = False
+
+    def _samples_for(pid: Optional[int]) -> list:
+        nonlocal has_data
+        if pid is None:
+            return []
+        out: list = []
+        apm_buckets = counts_apm.get(pid, {})
+        spm_buckets = counts_spm.get(pid, {})
+        for b in range(bucket_count):
+            t_sec = b * window_sec
+            apm_val = apm_buckets.get(b, 0) * (60 / window_sec)
+            spm_val = spm_buckets.get(b, 0) * (60 / window_sec)
+            if apm_val or spm_val:
+                has_data = True
+            out.append({
+                "t": t_sec,
+                "apm": round(float(apm_val), 1),
+                "spm": round(float(spm_val), 1),
+            })
+        return out
+
+    players: list = []
+    if me_pid is not None:
+        players.append({
+            "pid": me_pid,
+            "name": getattr(me, "name", "") or "",
+            "race": getattr(me, "race", "") or "",
+            "is_me": True,
+            "samples": _samples_for(me_pid),
+        })
+    if opp_pid is not None:
+        players.append({
+            "pid": opp_pid,
+            "name": getattr(opp, "name", "") or "",
+            "race": getattr(opp, "race", "") or "",
+            "is_me": False,
+            "samples": _samples_for(opp_pid),
+        })
+    return {
+        "window_sec": window_sec,
+        "has_data": has_data,
+        "players": players,
+    }
 
 
 def _resolve_pulse_character_id(

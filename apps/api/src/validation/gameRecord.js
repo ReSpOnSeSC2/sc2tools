@@ -54,6 +54,29 @@ const GAME_SCHEMA = {
     earlyBuildLog: { type: "array", maxItems: 1000 },
     oppEarlyBuildLog: { type: "array", maxItems: 1000 },
     oppBuildLog: { type: "array", maxItems: 5000 },
+    // Structured macro analytics. The agent computes these on each
+    // upload so the SPA's Activity tab and macro-breakdown drilldown
+    // can render charts without a follow-up recompute round-trip.
+    macroBreakdown: {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        raw: { type: "object", additionalProperties: true },
+        all_leaks: { type: "array", maxItems: 100 },
+        top_3_leaks: { type: "array", maxItems: 10 },
+        stats_events: { type: "array", maxItems: 5000 },
+        opp_stats_events: { type: "array", maxItems: 5000 },
+      },
+    },
+    apmCurve: {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        window_sec: { type: "integer", minimum: 1, maximum: 600 },
+        has_data: { type: "boolean" },
+        players: { type: "array", maxItems: 8 },
+      },
+    },
   },
 };
 
