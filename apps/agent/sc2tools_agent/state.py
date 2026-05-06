@@ -17,7 +17,7 @@ import os
 import tempfile
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 STATE_FILENAME = "agent.json"
 
@@ -38,8 +38,21 @@ class AgentState:
     action and persisted across restarts."""
 
     replay_folder_override: Optional[str] = None
-    """User-chosen replay folder from the "Choose replay folder..."
-    picker. Takes precedence over the default discovery."""
+    """Legacy single-folder override. Kept for back-compat with state
+    files written by 0.3.x. New code reads/writes ``replay_folders_override``
+    instead and migrates this field forward at load time."""
+
+    replay_folders_override: List[str] = field(default_factory=list)
+    """User-chosen replay folders. Each entry is watched recursively, so
+    a region/account-level path catches every Multiplayer subfolder
+    underneath it. When non-empty, takes precedence over auto-discovery
+    — but auto-discovery is still merged in if the user wants the
+    default + extras (handled in the runner's discovery helper).
+
+    StarCraft II creates a separate Replays folder per region+toon, so
+    a player who plays on multiple regions or with multiple BattleTags
+    needs more than one entry here. The Settings tab exposes Add/Remove
+    buttons over this list."""
 
     # ---- GUI preferences (introduced with the PySide6 main window) ----
 
@@ -85,13 +98,22 @@ def load_state(state_dir: Path) -> AgentState:
         return AgentState()
     if not isinstance(raw, dict):
         return AgentState()
+    legacy_single = _coerce_str(raw.get("replay_folder_override"))
+    folders_raw = raw.get("replay_folders_override")
+    folders = _coerce_str_list(folders_raw)
+    # Forward-migrate the legacy single-string field into the list so
+    # older state files don't lose their override after upgrade.
+    if legacy_single and legacy_single not in folders:
+        folders.insert(0, legacy_single)
+
     return AgentState(
         device_token=raw.get("device_token"),
         user_id=raw.get("user_id"),
         paired_at=raw.get("paired_at"),
         uploaded=dict(raw.get("uploaded") or {}),
         paused=bool(raw.get("paused") or False),
-        replay_folder_override=raw.get("replay_folder_override"),
+        replay_folder_override=legacy_single,
+        replay_folders_override=folders,
         api_base_override=_coerce_str(raw.get("api_base_override")),
         log_level_override=_coerce_str(raw.get("log_level_override")),
         autostart_enabled=bool(raw.get("autostart_enabled") or False),
@@ -127,3 +149,29 @@ def _coerce_str(value: object) -> Optional[str]:
     if isinstance(value, str) and value.strip():
         return value.strip()
     return None
+
+
+def _coerce_str_list(value: object) -> List[str]:
+    """Return ``value`` as a deduplicated list of non-empty strings.
+
+    Tolerates a JSON list, a single string, or a missing/None field —
+    in every case the result is a fresh ``list[str]`` the caller can
+    mutate without touching the source state.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    seen: set[str] = set()
+    out: List[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        s = item.strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+    return out

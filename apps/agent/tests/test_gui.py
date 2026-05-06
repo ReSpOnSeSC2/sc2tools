@@ -66,6 +66,7 @@ def test_settings_payload_defaults_to_none() -> None:
     assert p.api_base is None
     assert p.log_level is None
     assert p.replay_folder is None
+    assert p.replay_folders is None
     assert p.autostart_enabled is None
     assert p.start_minimized is None
 
@@ -83,8 +84,36 @@ def test_settings_payload_round_trips_explicit_values(tmp_path: Path) -> None:
     assert p.api_base == "https://example.test"
     assert p.log_level == "DEBUG"
     assert p.replay_folder == tmp_path
+    # Legacy single-folder field should auto-migrate into the list.
+    assert p.replay_folders == [tmp_path]
     assert p.autostart_enabled is True
     assert p.start_minimized is True
+
+
+def test_settings_payload_explicit_folder_list_wins(tmp_path: Path) -> None:
+    """When the caller passes both fields, the explicit list takes
+    priority — the legacy single field is only a fallback."""
+    from sc2tools_agent.ui.gui import SettingsPayload
+
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    p = SettingsPayload(
+        replay_folder=tmp_path,
+        replay_folders=[a, b],
+    )
+    assert p.replay_folders == [a, b]
+    assert p.replay_folder == tmp_path
+
+
+def test_settings_payload_empty_folder_list_means_clear() -> None:
+    """An explicit empty list signals "clear the override list" — distinct
+    from None ("no change"). The runner needs to be able to tell the
+    difference to honour the Settings tab's Auto-detect button."""
+    from sc2tools_agent.ui.gui import SettingsPayload
+
+    p = SettingsPayload(replay_folders=[])
+    assert p.replay_folders == []
+    assert p.replay_folders is not None
 
 
 def test_log_level_filter() -> None:

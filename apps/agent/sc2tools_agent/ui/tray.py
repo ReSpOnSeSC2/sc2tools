@@ -230,12 +230,15 @@ class TrayUI:
         with self._lock:
             if self._update_pending:
                 return f"Update available: {self._update_pending}"
-            if self._replay_folders:
-                root = str(self._replay_folders[0])
-                if len(root) > 56:
-                    root = "…" + root[-55:]
-                return f"Watching: {root}"
-            return "Watching: (no folder)"
+            if not self._replay_folders:
+                return "Watching: (no folder)"
+            root = str(self._replay_folders[0])
+            if len(root) > 56:
+                root = "…" + root[-55:]
+            if len(self._replay_folders) > 1:
+                extra = len(self._replay_folders) - 1
+                return f"Watching: {root}  (+{extra} more)"
+            return f"Watching: {root}"
 
     def _pause_label(self, _icon) -> str:
         with self._lock:

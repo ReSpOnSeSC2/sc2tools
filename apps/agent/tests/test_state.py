@@ -108,3 +108,79 @@ def test_unknown_keys_are_ignored(tmp_path: Path) -> None:
     )
     loaded = load_state(tmp_path)
     assert loaded.device_token == "t-abc"
+
+
+# ---------------- Multi-folder override migration ------------------------
+
+
+def test_legacy_single_folder_migrates_into_list(tmp_path: Path) -> None:
+    """0.3.x agents wrote ``replay_folder_override`` as a bare string.
+    On upgrade, that single value should appear in the new list field
+    so the user's override is not lost."""
+    (tmp_path / "agent.json").write_text(
+        json.dumps(
+            {
+                "device_token": "t",
+                "replay_folder_override": "/legacy/path",
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded = load_state(tmp_path)
+    assert loaded.replay_folder_override == "/legacy/path"
+    assert loaded.replay_folders_override == ["/legacy/path"]
+
+
+def test_legacy_string_merges_with_modern_list(tmp_path: Path) -> None:
+    """If both fields are present (e.g. user upgraded mid-flight), the
+    legacy string is merged into the front of the list, deduplicated."""
+    (tmp_path / "agent.json").write_text(
+        json.dumps(
+            {
+                "replay_folder_override": "/x",
+                "replay_folders_override": ["/y", "/x"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded = load_state(tmp_path)
+    assert loaded.replay_folders_override == ["/y", "/x"]
+
+
+def test_modern_list_round_trips(tmp_path: Path) -> None:
+    s = AgentState(replay_folders_override=["/a", "/b", "/c"])
+    save_state(tmp_path, s)
+    loaded = load_state(tmp_path)
+    assert loaded.replay_folders_override == ["/a", "/b", "/c"]
+
+
+def test_string_in_list_field_is_tolerated(tmp_path: Path) -> None:
+    """Defensive parsing — a hand-edited state file that drops a single
+    string into the list field should still load."""
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"replay_folders_override": "/single/raw/string"}),
+        encoding="utf-8",
+    )
+    loaded = load_state(tmp_path)
+    assert loaded.replay_folders_override == ["/single/raw/string"]
+
+
+def test_dashboard_url_falls_back_to_dot_com() -> None:
+    """The default dashboard origin is sc2tools.com — not .app — and the
+    runner must produce that fallback whenever no api.* hostname is in
+    play. A regression here sends users to a dead domain on first
+    launch."""
+    from sc2tools_agent.runner import _dashboard_url_from_api
+
+    assert (
+        _dashboard_url_from_api("https://sc2tools-api.onrender.com")
+        == "https://sc2tools.com"
+    )
+    assert (
+        _dashboard_url_from_api("https://api.sc2tools.com")
+        == "https://sc2tools.com"
+    )
+    assert (
+        _dashboard_url_from_api("http://localhost:8080")
+        == "http://localhost:3000"
+    )

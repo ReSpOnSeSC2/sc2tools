@@ -8,6 +8,46 @@ Releases are tagged `vMAJOR.MINOR.PATCH`; the GitHub Actions release
 workflow builds the Windows installer on each tag push and attaches the
 `.exe` and `.sha256` to the corresponding GitHub Release.
 
+## [Unreleased] - 2026-05-06
+
+### Fixed (agent v0.3.3)
+
+- **Replay parsing in the frozen exe.** The PyInstaller bundle did not
+  ship `reveal-sc2-opponent-main/core/sc2_replay_parser.py`, and even if
+  it had, the runtime `sys.path` patcher used a `parents[3]` walk that
+  pointed outside `_MEIPASS` once frozen. Result: every `.SC2Replay`
+  the watcher saw failed to parse with a flooding `Could not import
+  sc2_replay_parser` error and nothing ever uploaded. The spec now
+  bundles the reveal package alongside `SC2Replay-Analyzer`, and
+  `replay_pipeline._ensure_analyzer_on_path` switches to `_MEIPASS` in
+  frozen mode and the repo root in source mode.
+- **Open dashboard sent users to a dead domain.** The runner's
+  `_dashboard_url_from_api` fallback hard-coded `https://sc2tools.app`,
+  which is no longer authoritative. The marketing + dashboard origin is
+  `sc2tools.com`. Updated the runner default, the console UI's pairing
+  text, the GUI's API-base placeholder, and the NSIS installer's
+  `URLInfoAbout` registry value.
+- **Dashboard action row clipped its button labels.** Five buttons in
+  one row at the window's minimum width forced Qt to shrink each
+  button below its natural size, so `Re-sync from scratch` rendered
+  with the trailing word past the button border. Split into two rows
+  (local vs. external actions), gave each button a `Maximum, Fixed`
+  size policy, and used shorter labels with explanatory tooltips so
+  the layout stays readable at 820 px wide.
+
+### Added (agent v0.3.3)
+
+- **Multi-folder replay watching.** StarCraft II writes a separate
+  `Replays/Multiplayer` directory per (region, battle.net handle)
+  pair, so a player on multiple regions or alts needed more than one
+  override. State now stores `replay_folders_override` as a list and
+  forward-migrates the old `replay_folder_override` string. The
+  Settings tab presents a real list with **Add folder…**, **Remove
+  selected**, and **Auto-detect** buttons; the dashboard's "Add replay
+  folder…" appends rather than replaces; the tray menu shows
+  `(+N more)` when more than one folder is being watched. The watcher
+  picks up new entries on its next sweep without a restart.
+
 ## [Unreleased] - 2026-05-04
 
 ### Added

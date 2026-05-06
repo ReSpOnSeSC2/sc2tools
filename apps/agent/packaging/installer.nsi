@@ -72,7 +72,7 @@ Section "Install"
     WriteRegStr HKCU "${APP_UNINST_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
     WriteRegStr HKCU "${APP_UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
     WriteRegStr HKCU "${APP_UNINST_KEY}" "InstallLocation" "$INSTDIR"
-    WriteRegStr HKCU "${APP_UNINST_KEY}" "URLInfoAbout"    "https://sc2tools.app"
+    WriteRegStr HKCU "${APP_UNINST_KEY}" "URLInfoAbout"    "https://sc2tools.com"
     WriteRegDWORD HKCU "${APP_UNINST_KEY}" "NoModify" 1
     WriteRegDWORD HKCU "${APP_UNINST_KEY}" "NoRepair" 1
 

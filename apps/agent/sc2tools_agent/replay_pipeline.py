@@ -24,14 +24,31 @@ log = logging.getLogger(__name__)
 
 
 def _ensure_analyzer_on_path() -> None:
-    """Add SC2Replay-Analyzer/ to sys.path so we can import its core."""
-    here = Path(__file__).resolve()
-    # apps/agent/sc2tools_agent/replay_pipeline.py
-    # → repo root is parents[3]
-    for candidate in (
-        here.parents[3] / "SC2Replay-Analyzer",
-        here.parents[3] / "reveal-sc2-opponent-main",
-    ):
+    """Add the analyzer source roots to sys.path so we can ``import core.*``.
+
+    The actual ``core.sc2_replay_parser`` module lives in
+    ``reveal-sc2-opponent-main/core/`` — bundled alongside the agent in
+    the frozen exe and laid out at the repo root in source mode.
+
+    Both bases are probed because legacy installs may still need the
+    ``SC2Replay-Analyzer`` companion modules. The reveal package is
+    inserted LAST so it ends up FIRST on ``sys.path``: ``from core.X``
+    must resolve through it (it's the package that owns the
+    ``sc2_replay_parser``, ``pulse_resolver`` and friends the agent
+    actually calls).
+    """
+    if getattr(sys, "frozen", False):
+        # PyInstaller one-file mode unpacks our DATAS into _MEIPASS at
+        # startup; the analyzer dirs live at the top of that tree.
+        meipass = getattr(sys, "_MEIPASS", None)
+        base = Path(meipass) if meipass else Path(sys.executable).resolve().parent
+    else:
+        # Source: this file is at apps/agent/sc2tools_agent/replay_pipeline.py
+        # so the repo root is parents[3].
+        base = Path(__file__).resolve().parents[3]
+
+    for sub in ("SC2Replay-Analyzer", "reveal-sc2-opponent-main"):
+        candidate = base / sub
         if candidate.exists() and str(candidate) not in sys.path:
             sys.path.insert(0, str(candidate))
 
@@ -105,9 +122,11 @@ def parse_replay_for_cloud(
         from core.sc2_replay_parser import parse_deep  # type: ignore
     except ImportError as exc:
         log.error(
-            "Could not import sc2_replay_parser. "
-            "Did you 'pip install -r requirements.txt' "
-            "AND keep SC2Replay-Analyzer/ next to apps/agent/? %s",
+            "Could not import core.sc2_replay_parser. Frozen exe missing "
+            "the bundled analyzer (rebuild from packaging/sc2tools_agent.spec) "
+            "or, in source mode, ensure reveal-sc2-opponent-main/ sits next "
+            "to apps/agent/. sys.path[:6]=%s exc=%s",
+            sys.path[:6],
             exc,
         )
         return None
