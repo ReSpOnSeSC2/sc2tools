@@ -399,6 +399,7 @@ function toRecent(g) {
     opp_strategy: (g.opponent && g.opponent.strategy) || null,
     result: g.result || null,
     duration: g.durationSec != null ? g.durationSec : null,
+    macroScore: typeof g.macroScore === "number" ? g.macroScore : null,
   };
 }
 

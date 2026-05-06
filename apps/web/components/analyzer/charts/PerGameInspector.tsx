@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, MapPin, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { AlertCircle, CalendarDays, MapPin, RefreshCcw, Search } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
-import { useApi } from "@/lib/clientApi";
+import { apiCall, useApi } from "@/lib/clientApi";
+import type { ClientApiError } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { fmtDate, fmtMinutes } from "@/lib/format";
 import { computeEffectiveRace } from "@/lib/macro";
@@ -324,7 +327,8 @@ function MacroPill({ score }: { score: number | null | undefined }) {
 }
 
 function SelectedGameCharts({ game }: { game: SelectedGame }) {
-  const { data, error, isLoading } = useApi<MacroBreakdownData>(
+  const { getToken } = useAuth();
+  const { data, error, isLoading, mutate } = useApi<MacroBreakdownData>(
     `/v1/games/${encodeURIComponent(game.id)}/macro-breakdown`,
     { revalidateOnFocus: false },
   );
@@ -333,14 +337,68 @@ function SelectedGameCharts({ game }: { game: SelectedGame }) {
     { revalidateOnFocus: false },
   );
 
+  const [recomputing, setRecomputing] = useState(false);
+  const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRecomputing(false);
+    setRecomputeMsg(null);
+  }, [game.id]);
+
+  const recompute = useCallback(async () => {
+    if (recomputing) return;
+    setRecomputeMsg(null);
+    setRecomputing(true);
+    try {
+      await apiCall<{ ok: boolean }>(
+        getToken,
+        `/v1/games/${encodeURIComponent(game.id)}/macro-breakdown`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+      setRecomputeMsg(
+        "Recompute requested — your SC2 agent will re-parse this replay shortly.",
+      );
+      mutate();
+    } catch (err) {
+      const e = err as { message?: string };
+      setRecomputeMsg(e.message || "Recompute failed.");
+    } finally {
+      setRecomputing(false);
+    }
+  }, [getToken, game.id, mutate, recomputing]);
+
   const myRace = coerceRace(game.my_race ?? data?.race ?? null);
   const oppRace = coerceRace(game.opp_race);
+  const effectiveMacroScore =
+    typeof data?.macro_score === "number"
+      ? data.macro_score
+      : (game.macro_score ?? null);
+
+  const errorIs404 = isNotComputedError(error);
 
   return (
     <div className="space-y-4">
-      <GameSummaryCard game={game} myRace={myRace} oppRace={oppRace} />
+      <GameSummaryCard
+        game={game}
+        myRace={myRace}
+        oppRace={oppRace}
+        macroScore={effectiveMacroScore}
+        onRecompute={recompute}
+        recomputing={recomputing}
+      />
 
-      {error ? (
+      {recomputeMsg ? (
+        <p className="text-caption text-text-muted" role="status">
+          {recomputeMsg}
+        </p>
+      ) : null}
+
+      {errorIs404 ? (
+        <NotComputedPanel
+          onRecompute={recompute}
+          recomputing={recomputing}
+        />
+      ) : error ? (
         <Card title="Couldn't load this game">
           <EmptyState title="Error" sub={error.message} />
         </Card>
@@ -349,12 +407,10 @@ function SelectedGameCharts({ game }: { game: SelectedGame }) {
           <Skeleton rows={6} />
         </Card>
       ) : !data ? null : data.ok === false ? (
-        <Card title="Charts not yet computed">
-          <EmptyState
-            title="Macro breakdown pending"
-            sub="The desktop agent hasn't recomputed this replay since the latest schema bump. Open the replay row in All games and click Recompute to refresh the sample stream."
-          />
-        </Card>
+        <NotComputedPanel
+          onRecompute={recompute}
+          recomputing={recomputing}
+        />
       ) : (
         <ChartGrid
           data={data}
@@ -368,14 +424,62 @@ function SelectedGameCharts({ game }: { game: SelectedGame }) {
   );
 }
 
+function isNotComputedError(err: ClientApiError | undefined): boolean {
+  if (!err) return false;
+  if (err.status === 404) return true;
+  if (err.code === "macro_not_computed" || err.code === "game_not_found") return true;
+  return false;
+}
+
+function NotComputedPanel({
+  onRecompute,
+  recomputing,
+}: {
+  onRecompute: () => void;
+  recomputing: boolean;
+}) {
+  return (
+    <Card padded>
+      <div className="rounded-lg border border-border bg-bg-elevated/40 p-5">
+        <div className="inline-flex items-center gap-2 text-caption font-semibold text-accent-cyan">
+          <AlertCircle className="h-4 w-4" aria-hidden />
+          Macro breakdown not available for this game yet
+        </div>
+        <p className="mt-2 text-caption text-text-muted">
+          Your SC2 agent hasn&apos;t uploaded a breakdown for this replay. Click{" "}
+          <span className="font-semibold text-text">Recompute</span> below to
+          ask it to re-parse the file.
+        </p>
+        <div className="mt-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={recomputing}
+            onClick={onRecompute}
+            iconLeft={<RefreshCcw className="h-3.5 w-3.5" aria-hidden />}
+          >
+            {recomputing ? "Recomputing…" : "Recompute now"}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function GameSummaryCard({
   game,
   myRace,
   oppRace,
+  macroScore,
+  onRecompute,
+  recomputing,
 }: {
   game: SelectedGame;
   myRace: Race;
   oppRace: Race;
+  macroScore: number | null;
+  onRecompute: () => void;
+  recomputing: boolean;
 }) {
   const result = (game.result || "").toLowerCase();
   const isWin = ["win", "victory"].includes(result);
@@ -427,21 +531,30 @@ function GameSummaryCard({
             ) : null}
           </div>
         </div>
-        <SummaryStat
-          label="Macro"
-          value={
-            game.macro_score == null ? "—" : game.macro_score.toFixed(1)
-          }
-          tone={
-            game.macro_score == null
-              ? "neutral"
-              : game.macro_score >= 75
-                ? "success"
-                : game.macro_score >= 50
-                  ? "warning"
-                  : "danger"
-          }
-        />
+        <div className="flex flex-col items-end gap-2">
+          <SummaryStat
+            label="Macro"
+            value={macroScore == null ? "—" : macroScore.toFixed(1)}
+            tone={
+              macroScore == null
+                ? "neutral"
+                : macroScore >= 75
+                  ? "success"
+                  : macroScore >= 50
+                    ? "warning"
+                    : "danger"
+            }
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={recomputing}
+            onClick={onRecompute}
+            iconLeft={<RefreshCcw className="h-3.5 w-3.5" aria-hidden />}
+          >
+            {recomputing ? "Recomputing…" : "Recompute"}
+          </Button>
+        </div>
       </div>
     </Card>
   );

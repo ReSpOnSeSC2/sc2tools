@@ -518,6 +518,7 @@ class AggregationsService {
         build: { $ifNull: ["$myBuild", ""] },
         game_length: { $ifNull: ["$durationSec", 0] },
         macro_score: { $ifNull: ["$macroScore", null] },
+        my_race: { $ifNull: ["$myRace", ""] },
       },
     });
     pipeline.push({ $sort: sort });
