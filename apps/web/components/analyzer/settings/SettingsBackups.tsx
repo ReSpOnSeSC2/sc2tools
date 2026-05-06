@@ -16,6 +16,8 @@ import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DestructiveConfirmDialog } from "@/components/ui/DestructiveConfirmDialog";
+import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import { fmtAgo } from "@/lib/format";
 
@@ -38,6 +40,10 @@ export function SettingsBackups() {
   const [pendingDelete, setPendingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [wipeSince, setWipeSince] = useState("");
+  const [wipeUntil, setWipeUntil] = useState("");
+  const [pendingWipe, setPendingWipe] = useState(false);
+  const [wiping, setWiping] = useState(false);
 
   async function snap() {
     if (snapping) return;
@@ -123,6 +129,51 @@ export function SettingsBackups() {
     }
   }
 
+  async function confirmWipeGames() {
+    if (wiping) return;
+    setWiping(true);
+    try {
+      const body: Record<string, string> = {};
+      if (wipeSince) {
+        const d = new Date(wipeSince);
+        if (!Number.isNaN(d.getTime())) body.since = d.toISOString();
+      }
+      if (wipeUntil) {
+        const d = new Date(wipeUntil);
+        if (!Number.isNaN(d.getTime())) body.until = d.toISOString();
+      }
+      const res = await apiCall<{
+        deleted: boolean;
+        counts: {
+          games: number;
+          opponents: number;
+          macroJobs: number;
+        };
+      }>(
+        getToken,
+        "/v1/me/games/wipe",
+        { method: "POST", body: JSON.stringify(body) },
+      );
+      const c = res.counts;
+      toast.success(
+        `Deleted ${c.games} game${c.games === 1 ? "" : "s"}`,
+        {
+          description:
+            "Open your SC2 Tools agent and click Resync to upload fresh records.",
+        },
+      );
+      setPendingWipe(false);
+      setWipeSince("");
+      setWipeUntil("");
+    } catch (err) {
+      const message =
+        (err as ClientApiError | undefined)?.message ?? "Please try again.";
+      toast.error("Couldn't wipe game history", { description: message });
+    } finally {
+      setWiping(false);
+    }
+  }
+
   if (backups.isLoading) return <Skeleton rows={3} />;
   const items = backups.data?.items ?? [];
 
@@ -164,8 +215,52 @@ export function SettingsBackups() {
       </Section>
 
       <Section
-        title="Export & delete (GDPR)"
-        description="Bundle every game, build, opponent record, overlay token, and ML model artifact as JSON in a zip. Account deletion is permanent."
+        title="Delete game history"
+        description="Wipes your replays, opponent records, and macro jobs. Custom builds, device pairings, overlay tokens, and your account stay intact. Use this before a fresh agent re-sync."
+      >
+        <Card>
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-caption text-text-muted">
+                <span>From (optional)</span>
+                <Input
+                  type="date"
+                  value={wipeSince}
+                  onChange={(e) => setWipeSince(e.target.value)}
+                  aria-label="Wipe games on or after this date"
+                />
+              </label>
+              <label className="space-y-1 text-caption text-text-muted">
+                <span>Until (optional, exclusive)</span>
+                <Input
+                  type="date"
+                  value={wipeUntil}
+                  onChange={(e) => setWipeUntil(e.target.value)}
+                  aria-label="Wipe games before this date"
+                />
+              </label>
+            </div>
+            <p className="text-caption text-text-muted">
+              Leave both empty to wipe every game.
+            </p>
+            <div>
+              <Button
+                variant="danger"
+                onClick={() => setPendingWipe(true)}
+                iconLeft={<Trash2 className="h-4 w-4" aria-hidden />}
+              >
+                {wipeSince || wipeUntil
+                  ? "Delete games in range"
+                  : "Delete all games"}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </Section>
+
+      <Section
+        title="Export & delete account (GDPR)"
+        description="Bundle every game, build, opponent record, overlay token, and ML model artifact as JSON. Account deletion is permanent."
       >
         <Card>
           <div className="flex flex-wrap items-center gap-2">
@@ -203,16 +298,31 @@ export function SettingsBackups() {
         intent="danger"
         loading={restoring}
       />
-      <ConfirmDialog
+      <DestructiveConfirmDialog
         open={pendingDelete}
         onClose={() => (deleting ? undefined : setPendingDelete(false))}
         onConfirm={confirmDelete}
         title="Permanently delete your account?"
         description="This wipes every game, build, and overlay token tied to your cloud user. Cannot be undone."
+        confirmWord="DELETE"
         confirmLabel="Delete account"
-        cancelLabel="Cancel"
-        intent="danger"
         loading={deleting}
+      />
+      <DestructiveConfirmDialog
+        open={pendingWipe}
+        onClose={() => (wiping ? undefined : setPendingWipe(false))}
+        onConfirm={confirmWipeGames}
+        title="Delete game history?"
+        description={
+          wipeSince || wipeUntil
+            ? `Wipes every game ${wipeSince ? `on or after ${wipeSince}` : ""}${
+                wipeSince && wipeUntil ? " and " : ""
+              }${wipeUntil ? `before ${wipeUntil}` : ""}, plus the matching opponent counters. Re-sync your agent afterwards to repopulate.`
+            : "Wipes every game, opponent record, and macro job tied to your account. Custom builds and device pairings are preserved. Re-sync your agent afterwards to repopulate."
+        }
+        confirmWord="DELETE"
+        confirmLabel="Delete games"
+        loading={wiping}
       />
     </div>
   );
