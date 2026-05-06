@@ -17,6 +17,7 @@ const { buildErrorHandler } = require("./middleware/errorHandler");
 const { buildAuth } = require("./middleware/auth");
 
 const { UsersService } = require("./services/users");
+const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
 const { OpponentsService } = require("./services/opponents");
 const { GamesService } = require("./services/games");
 const { CustomBuildsService } = require("./services/customBuilds");
@@ -59,6 +60,7 @@ const { buildAgentVersionRouter } = require("./routes/agentVersion");
 const { buildCommunityRouter } = require("./routes/community");
 const { buildPublicReplayRouter } = require("./routes/publicReplay");
 const { buildSeasonsRouter } = require("./routes/seasons");
+const { buildClerkWebhookRouter } = require("./routes/clerkWebhook");
 
 const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
 
@@ -79,11 +81,17 @@ const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
  */
 function buildApp(deps) {
   const services = makeServices(deps);
+  const clerk = deps.config.clerkSecretKey
+    ? buildClerkClient({
+        secretKey: deps.config.clerkSecretKey,
+        logger: deps.logger,
+      })
+    : noopClerkClient();
   const app = express();
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
   applyBaseMiddleware(app, deps);
-  mountRoutes(app, deps, services);
+  mountRoutes(app, deps, services, clerk);
   app.use(buildErrorHandler(deps.logger));
   return { app, services };
 }
@@ -154,7 +162,18 @@ function applyBaseMiddleware(app, deps) {
     }),
   );
   app.use(requestId);
-  app.use(express.json({ limit: JSON_LIMIT }));
+  // Stash the raw bytes alongside the parsed body so the Clerk webhook
+  // route can verify the Svix HMAC against the exact payload Clerk
+  // signed (re-stringifying req.body would canonicalize whitespace and
+  // break the signature). Cheap — Buffer ref, not a copy.
+  app.use(
+    express.json({
+      limit: JSON_LIMIT,
+      verify: (req, _res, buf) => {
+        /** @type {any} */ (req).rawBody = buf;
+      },
+    }),
+  );
   app.use(
     rateLimit({
       windowMs: 60 * 1000,
@@ -172,8 +191,9 @@ function applyBaseMiddleware(app, deps) {
  * @param {import('express').Express} app
  * @param {AppDeps} deps
  * @param {ReturnType<typeof makeServices>} services
+ * @param {import('./services/clerkClient').ClerkClient} clerk
  */
-function mountRoutes(app, deps, services) {
+function mountRoutes(app, deps, services, clerk) {
   const auth = buildAuth({
     secretKey: deps.config.clerkSecretKey,
     issuer: deps.config.clerkJwtIssuer,
@@ -235,8 +255,20 @@ function mountRoutes(app, deps, services) {
       games: services.games,
       gdpr: services.gdpr,
       pairings: services.pairings,
+      clerk,
       auth,
       isAdmin,
+      logger: deps.logger,
+    }),
+  );
+  // Clerk webhook receiver. Mounted with the public bundle because
+  // it carries no Authorization header — its identity comes from the
+  // Svix signature verified inside the router.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildClerkWebhookRouter({
+      users: services.users,
+      secret: deps.config.clerkWebhookSecret,
       logger: deps.logger,
     }),
   );

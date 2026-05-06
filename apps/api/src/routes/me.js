@@ -26,6 +26,7 @@ const { validateProfile } = require("../validation/profile");
  *   games: import('../services/types').GamesService,
  *   gdpr: import('../services/gdpr').GdprService,
  *   pairings: import('../services/devicePairings').DevicePairingsService,
+ *   clerk?: import('../services/clerkClient').ClerkClient,
  *   auth: import('express').RequestHandler,
  *   isAdmin?: (req: import('express').Request) => boolean,
  *   logger?: import('pino').Logger,
@@ -34,6 +35,7 @@ const { validateProfile } = require("../validation/profile");
 function buildMeRouter(deps) {
   const router = express.Router();
   const isAdmin = deps.isAdmin || (() => false);
+  const clerk = deps.clerk || null;
 
   // Auth applied per-route, NOT via router.use(). Router-level middleware
   // here would intercept every /v1/* request that doesn't match an
@@ -44,11 +46,42 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       await deps.users.touch(auth.userId);
-      const stats = await deps.games.stats(auth.userId);
+      const [stats, summary, agent] = await Promise.all([
+        deps.games.stats(auth.userId),
+        deps.users.getSummary(auth.userId),
+        deps.pairings.latestAgent(auth.userId),
+      ]);
+      // Lazy email backfill: if the row pre-dates the webhook (or no
+      // webhook is configured), pull the email from Clerk on first read
+      // and cache it. Best-effort — clerk.getEmail returns null on
+      // failure and we just render "—" until the next request.
+      let email = summary.email;
+      if (!email && clerk && auth.source === "clerk" && auth.clerkUserId) {
+        const fresh = await clerk.getEmail(auth.clerkUserId);
+        if (fresh) {
+          email = fresh;
+          // Awaited so that subsequent requests in the same client
+          // session see the cached value. setEmail is a no-op when the
+          // value hasn't changed, so this stays cheap.
+          try {
+            await deps.users.setEmail(auth.userId, fresh);
+          } catch (err) {
+            if (deps.logger) {
+              deps.logger.warn(
+                { err, userId: auth.userId },
+                "users_set_email_failed",
+              );
+            }
+          }
+        }
+      }
       res.json({
         userId: auth.userId,
         source: auth.source,
         games: stats,
+        email,
+        agentVersion: agent.version,
+        agentPaired: agent.paired,
         isAdmin: isAdmin(req),
       });
     } catch (err) {

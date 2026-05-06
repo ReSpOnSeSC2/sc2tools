@@ -171,6 +171,32 @@ class DevicePairingsService {
   }
 
   /**
+   * One-shot summary of the user's most recently active agent. Drives the
+   * "Agent version" row on the Settings → Foundation card: callers can
+   * distinguish "no agent paired" (paired=false) from "paired but version
+   * unknown" (paired=true, version=null) — the latter happens between
+   * claim and the first heartbeat.
+   *
+   * @param {string} userId
+   * @returns {Promise<{paired: boolean, version: string|null}>}
+   */
+  async latestAgent(userId) {
+    const row = await this.db.deviceTokens.findOne(
+      { userId, revokedAt: null },
+      {
+        sort: { lastSeenAt: -1 },
+        projection: { _id: 0, agentVersion: 1 },
+      },
+    );
+    if (!row) return { paired: false, version: null };
+    const version =
+      typeof row.agentVersion === "string" && row.agentVersion.length > 0
+        ? row.agentVersion
+        : null;
+    return { paired: true, version };
+  }
+
+  /**
    * Revoke one device token. The caller must own it.
    *
    * @param {string} userId

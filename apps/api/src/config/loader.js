@@ -20,6 +20,7 @@ const HEX_64_REGEX = /^[0-9a-fA-F]{64}$/;
  *   clerkSecretKey: string,
  *   clerkJwtIssuer: string|undefined,
  *   clerkJwtAudience: string|undefined,
+ *   clerkWebhookSecret: string|null,
  *   serverPepper: Buffer,
  *   corsAllowedOrigins: string[],
  *   rateLimitPerMinute: number,
@@ -50,6 +51,7 @@ function loadConfig(env = process.env) {
     clerkSecretKey,
     clerkJwtIssuer: env.CLERK_JWT_ISSUER || undefined,
     clerkJwtAudience: env.CLERK_JWT_AUDIENCE || undefined,
+    clerkWebhookSecret: env.CLERK_WEBHOOK_SECRET || null,
     serverPepper: Buffer.from(pepperHex, "hex"),
     corsAllowedOrigins: parseCsv(env.CORS_ALLOWED_ORIGINS),
     rateLimitPerMinute: parseInteger(
