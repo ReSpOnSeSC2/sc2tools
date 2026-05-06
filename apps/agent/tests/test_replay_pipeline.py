@@ -93,6 +93,8 @@ def test_swallows_resolver_exceptions(_stub_pulse_resolver):
     assert _resolve_pulse_character_id(_make_opp("1-S2-1-RAISES")) is None
 
 
+
+
 # -------------------------------------------------------------------------
 # Toon-handle path extraction & by-toon player resolution.
 #

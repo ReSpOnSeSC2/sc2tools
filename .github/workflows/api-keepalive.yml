@@ -1,0 +1,82 @@
+name: api-keepalive
+
+# Pings the production API every 5 minutes so Render's free-tier
+# starter instance never sleeps. The in-process keepalive worker in
+# ``apps/api/src/services/keepalive.js`` is a defensive belt-and-braces
+# layer that only runs when the process is already alive — it can't
+# wake a process that Render has already shut down. This workflow is
+# the external monitor that fires from GitHub's infrastructure
+# regardless of whether the API is up, so a cold-started API gets
+# nudged awake within 5 minutes of going idle.
+#
+# Cost: free. GitHub Actions' cron is best-effort with a few-minute
+# jitter on the start time — that's fine because we're trying to beat
+# Render's 15-minute idle window with significant margin.
+#
+# Why a separate workflow instead of a curl in the existing release
+# pipeline: this needs to run on a schedule independent of pushes,
+# and keeping it isolated means a failed ping can't poison release
+# CI. The workflow itself uses no secrets and pings only public
+# endpoints.
+
+on:
+  schedule:
+    # Every 5 minutes — well under Render's 15-min idle window.
+    # GitHub may delay scheduled runs by a few minutes during peak
+    # load; even with a 10-min worst-case, we still beat the idle
+    # threshold.
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  # If a previous run is still in flight (rare but possible during
+  # GitHub Actions slowdowns), let the queued one supersede it.
+  group: api-keepalive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Ping production API
+        run: |
+          set -euo pipefail
+
+          # Two endpoints, both unauthenticated. /v1/ping is the
+          # cheapest possible request (no DB hit, plain JSON 200);
+          # /v1/health is the comprehensive check that exercises the
+          # Mongo connection. Hitting both means we surface the right
+          # signal in CI logs if either layer is broken.
+          for endpoint in /v1/ping /v1/health; do
+            url="https://sc2tools-api.onrender.com${endpoint}"
+            echo "==> ${url}"
+            # --max-time 60 because Render cold-starts can take 30+ s;
+            # we want to wait through the wakeup, not bail early.
+            # --retry 2 with exponential backoff to absorb transient
+            # 502s while a fresh container spins up.
+            curl --silent --show-error --fail \
+              --max-time 60 \
+              --retry 2 --retry-delay 5 --retry-all-errors \
+              --write-out 'http=%{http_code}  time=%{time_total}s\n' \
+              "${url}"
+          done
+
+      - name: Ping public web
+        # The Next.js frontend on Render shares the same idle problem
+        # as the API. Pinging /api/ping (a tiny route in
+        # apps/web/app/api/ping/route.ts) keeps the SSR runtime warm
+        # so users hitting sc2tools.com don't see a cold-start spinner.
+        run: |
+          set -euo pipefail
+          url="https://sc2tools.com/api/ping"
+          echo "==> ${url}"
+          curl --silent --show-error --fail \
+            --max-time 60 \
+            --retry 2 --retry-delay 5 --retry-all-errors \
+            --write-out 'http=%{http_code}  time=%{time_total}s\n' \
+            "${url}"
