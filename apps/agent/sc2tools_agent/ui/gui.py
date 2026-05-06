@@ -340,6 +340,7 @@ class SettingsPayload:
         "autostart_enabled",
         "start_minimized",
         "player_handle",
+        "parse_concurrency",
     )
 
     def __init__(
@@ -352,6 +353,7 @@ class SettingsPayload:
         autostart_enabled: Optional[bool] = None,
         start_minimized: Optional[bool] = None,
         player_handle: Optional[str] = None,
+        parse_concurrency: Optional[int] = None,
     ) -> None:
         self.api_base = api_base
         self.log_level = log_level
@@ -369,6 +371,9 @@ class SettingsPayload:
         # replays). ``None`` means "no change"; an empty string clears
         # the override and falls back to the cloud profile + auto-detect.
         self.player_handle = player_handle
+        # How many parse threads the watcher's ThreadPoolExecutor runs.
+        # ``None`` means "no change"; the runner's default is 4.
+        self.parse_concurrency = parse_concurrency
 
 
 # ---------------------------------------------------------------------
@@ -1040,6 +1045,53 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             form.addRow("Player handle", self._handle_input)
 
+            # Parse concurrency: how many replays the watcher parses
+            # in parallel. Slider capped at the host's logical CPU
+            # count — beyond that the GIL prevents further speedup
+            # for sc2reader's mostly-Python work, so a higher cap
+            # would just mislead the user. Defaults to ``min(4, cpu)``
+            # so a 2-core laptop doesn't get oversubscribed and a
+            # 16-core workstation gets a sensible starting point.
+            cpu_max = max(1, os.cpu_count() or 4)
+            default_workers = min(4, cpu_max)
+            concurrency_block = QtWidgets.QWidget()
+            concurrency_h = QtWidgets.QHBoxLayout(concurrency_block)
+            concurrency_h.setContentsMargins(0, 0, 0, 0)
+            concurrency_h.setSpacing(10)
+            self._concurrency_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+            self._concurrency_slider.setRange(1, cpu_max)
+            self._concurrency_slider.setValue(default_workers)
+            self._concurrency_slider.setTickPosition(
+                QtWidgets.QSlider.TicksBelow,
+            )
+            # Tick every core, but cap visible tick density at 16 on
+            # huge-core machines so the slider doesn't turn into a
+            # comb of pixel-thin marks the user can't read.
+            self._concurrency_slider.setTickInterval(
+                max(1, cpu_max // 16) if cpu_max > 16 else 1,
+            )
+            self._concurrency_slider.setToolTip(
+                f"How many replays to parse and upload in parallel. "
+                f"Each worker uses one CPU thread for sc2reader plus "
+                f"one network connection. Raise to drain a big "
+                f"backfill faster; lower so the agent doesn't slow "
+                f"your game. Capped at your logical CPU count "
+                f"({cpu_max}). Takes effect on next agent restart.",
+            )
+            self._concurrency_value_label = QtWidgets.QLabel()
+            self._concurrency_value_label.setMinimumWidth(96)
+
+            def _refresh_label(val: int) -> None:
+                self._concurrency_value_label.setText(
+                    f"{int(val)} / {cpu_max} cores",
+                )
+
+            self._concurrency_slider.valueChanged.connect(_refresh_label)
+            _refresh_label(default_workers)
+            concurrency_h.addWidget(self._concurrency_slider, 1)
+            concurrency_h.addWidget(self._concurrency_value_label)
+            form.addRow("Parse concurrency", concurrency_block)
+
             self._log_combo = QtWidgets.QComboBox()
             self._log_combo.addItems(["INFO", "DEBUG", "WARNING", "ERROR"])
             form.addRow("Log level", self._log_combo)
@@ -1281,6 +1333,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 autostart_enabled=self._autostart_check.isChecked(),
                 start_minimized=self._minimized_check.isChecked(),
                 player_handle=self._handle_input.text().strip(),
+                parse_concurrency=int(self._concurrency_slider.value()),
             )
             try:
                 ui._on_save_settings(payload)
@@ -1575,6 +1628,17 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._api_input.setText(initial.api_base)
             if initial.player_handle:
                 self._handle_input.setText(initial.player_handle)
+            if initial.parse_concurrency:
+                # Clamp into the slider's [1, cpu_max] range so a state
+                # file from a different machine (e.g. user copied their
+                # profile from a 16-core box to a 4-core laptop) doesn't
+                # leave the slider out of bounds.
+                cur = int(initial.parse_concurrency)
+                cur = max(
+                    self._concurrency_slider.minimum(),
+                    min(self._concurrency_slider.maximum(), cur),
+                )
+                self._concurrency_slider.setValue(cur)
             if initial.log_level:
                 idx = self._log_combo.findText(
                     initial.log_level, QtCore.Qt.MatchFixedString,

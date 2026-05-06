@@ -23,7 +23,15 @@ except ImportError:  # python-dotenv missing in dev install — silent.
 
 _DEFAULT_API_BASE = "https://sc2tools-api.onrender.com"
 _DEFAULT_POLL_INTERVAL_SEC = 10
-_DEFAULT_PARSE_CONCURRENCY = 1
+# Default parse concurrency: 4 workers. The replay-parse path is a
+# mix of CPU-bound sc2reader work (GIL-bound) and I/O (reading the
+# MPQ archive + uploading the JSON record), so more workers than
+# CPU cores can still help. 4 is a safe baseline on modern PCs and
+# delivers ~3x throughput vs. the old 1-worker default during a
+# backfill of thousands of historical replays. Users with weaker
+# hardware can lower it via the Settings tab; users with strong
+# CPUs and a backfill in progress can push it higher (8–16).
+_DEFAULT_PARSE_CONCURRENCY = 4
 
 
 @dataclass(frozen=True)

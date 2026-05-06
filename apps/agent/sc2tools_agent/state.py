@@ -76,6 +76,14 @@ class AgentState:
     """When True, the GUI starts hidden - only the tray icon shows.
     Useful when the agent is set to launch on login."""
 
+    parse_concurrency_override: Optional[int] = None
+    """How many parse threads the watcher's ThreadPoolExecutor runs.
+    None = use the config default (4). The Settings tab exposes this
+    so users on weaker hardware can drop it to 1, and users with a
+    big backfill on a strong CPU can raise it to 8 or 16. Persisted
+    here (rather than only as an env var) so a GUI change survives
+    restarts without the user re-typing it."""
+
     @property
     def is_paired(self) -> bool:
         return bool(self.device_token)
@@ -118,6 +126,9 @@ def load_state(state_dir: Path) -> AgentState:
         log_level_override=_coerce_str(raw.get("log_level_override")),
         autostart_enabled=bool(raw.get("autostart_enabled") or False),
         start_minimized=bool(raw.get("start_minimized") or False),
+        parse_concurrency_override=_coerce_int(
+            raw.get("parse_concurrency_override"),
+        ),
     )
 
 
@@ -138,6 +149,26 @@ def save_state(state_dir: Path, state: AgentState) -> None:
         except OSError:
             pass
         raise
+
+
+def _coerce_int(value: object) -> Optional[int]:
+    """Return ``value`` as a positive int if possible; ``None`` otherwise.
+
+    Used for state-stored override fields that the GUI may write as
+    a JSON number or string. We clamp to ``>= 1`` because the Settings
+    tab's spinbox already gates the range, but a hand-edited state
+    file could put a zero or negative there and silently break the
+    watcher's ThreadPoolExecutor (which requires max_workers >= 1).
+    """
+    if isinstance(value, bool):
+        # ``True`` would otherwise coerce to ``1`` — guard against the
+        # case where someone hand-edits the state file.
+        return None
+    try:
+        n = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return n if n >= 1 else None
 
 
 def _coerce_str(value: object) -> Optional[str]:
