@@ -1,25 +1,21 @@
 /**
  * GET /api/agent/version
  *
- * Public, unauthenticated metadata feed for the SC2 Tools Agent
- * installer. Resolves the latest GitHub release matching `agent-v*.*.*`
- * and reshapes the response into the AgentVersionResp contract the
- * download page (and, in time, the agent's auto-updater) consume.
+ * Public, unauthenticated metadata feed for the SC2 Tools installer.
+ * Resolves the latest GitHub release matching `v*.*.*` (the existing
+ * release.yml workflow tags this way) and reshapes the response into
+ * the AgentVersionResp contract the download page consumes.
  *
  * Why a Next.js route and not the Express API: the download page
  * needs to work for logged-out visitors too, and the existing
  * `/v1/agent/version` is gated through `useApi` (which requires Clerk
  * auth) and reads from a Mongo collection nobody has populated yet.
  * This route hits the GitHub API directly and is shaped identically,
- * so the existing components light up the moment the workflow tags
- * its first release.
+ * so the existing components light up immediately.
  *
- * Caching strategy:
- *   * `revalidate = 600` (10 min) — fresh enough for a release page,
- *     gentle enough to never trip GitHub's 60-req/hr unauthenticated
- *     rate limit.
- *   * `Cache-Control: public, s-maxage=600` so the CDN edge can serve
- *     repeat hits without us hitting GitHub at all.
+ * Caching: edge-cached for 10 min via the s-maxage header. The
+ * GitHub API also gets a `next: { revalidate: 600 }` so we never
+ * hammer it more than 6 times an hour.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -29,7 +25,18 @@ export const revalidate = 600;
 
 const GITHUB_OWNER = "ReSpOnSeSC2";
 const GITHUB_REPO = "sc2tools";
-const RELEASE_TAG_PREFIX = "agent-v";
+
+// The existing workflow (release.yml) ships installers with this tag
+// pattern and asset filename. We accept either the merged-toolkit
+// installer (SC2Tools-Setup-*.exe) or the future agent-only installer
+// (SC2ToolsAgent-Setup-*.exe) so both build pipelines can feed the
+// download page without further wiring.
+const TAG_REGEX = /^v\d+\.\d+\.\d+(?:[-+].*)?$/;
+const EXE_REGEXES: RegExp[] = [
+  /^SC2Tools-Setup-.*\.exe$/i,
+  /^SC2ToolsAgent-Setup-.*\.exe$/i,
+  /^sc2tools-agent.*\.exe$/i,
+];
 
 type Asset = {
   name: string;
@@ -54,15 +61,15 @@ export async function GET(req: NextRequest) {
   const current = url.searchParams.get("current") || "0.0.0";
 
   try {
-    const release = await fetchLatestAgentRelease();
+    const release = await fetchLatestRelease();
     if (!release) {
-      return NextResponse.json(emptyResp(channelParam, platformParam, current), {
-        status: 200,
-        headers: cacheHeaders(),
-      });
+      return NextResponse.json(
+        emptyResp(channelParam, platformParam, current),
+        { status: 200, headers: cacheHeaders() },
+      );
     }
 
-    const version = release.tag_name.replace(RELEASE_TAG_PREFIX, "");
+    const version = release.tag_name.replace(/^v/, "");
     const platformAsset = pickAssetForPlatform(release.assets, platformParam);
     if (!platformAsset) {
       return NextResponse.json(
@@ -105,13 +112,11 @@ export async function GET(req: NextRequest) {
       { status: 200, headers: cacheHeaders() },
     );
   } catch (err) {
-    // Surface a graceful empty response on any failure — the UI
-    // already renders a "no installer yet" state for that case.
     console.error("[/api/agent/version] github fetch failed", err);
-    return NextResponse.json(emptyResp(channelParam, platformParam, current), {
-      status: 200,
-      headers: { "Cache-Control": "no-store" },
-    });
+    return NextResponse.json(
+      emptyResp(channelParam, platformParam, current),
+      { status: 200, headers: { "Cache-Control": "no-store" } },
+    );
   }
 }
 
@@ -135,17 +140,12 @@ function cacheHeaders() {
   };
 }
 
-async function fetchLatestAgentRelease(): Promise<GitHubRelease | null> {
-  // /releases (not /releases/latest) so we can filter to agent-v* tags
-  // — the repo also publishes other tag prefixes (the merged toolkit
-  // installer, etc.) and /latest would pick whichever was newest
-  // overall.
+async function fetchLatestRelease(): Promise<GitHubRelease | null> {
   const apiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=20`;
   const res = await fetch(apiUrl, {
     headers: {
       Accept: "application/vnd.github+json",
       "User-Agent": "sc2tools-website",
-      // GITHUB_TOKEN bumps the rate limit from 60/hr to 5000/hr when set.
       ...(process.env.GITHUB_TOKEN
         ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
         : {}),
@@ -159,9 +159,11 @@ async function fetchLatestAgentRelease(): Promise<GitHubRelease | null> {
   return (
     releases.find(
       (r) =>
-        r.tag_name?.startsWith(RELEASE_TAG_PREFIX) &&
+        TAG_REGEX.test(r.tag_name || "") &&
         !r.draft &&
-        !r.prerelease,
+        !r.prerelease &&
+        Array.isArray(r.assets) &&
+        r.assets.some((a) => EXE_REGEXES.some((rx) => rx.test(a.name))),
     ) || null
   );
 }
@@ -170,17 +172,11 @@ function pickAssetForPlatform(
   assets: Asset[],
   platform: string,
 ): Asset | null {
-  if (platform === "windows") {
-    return (
-      assets.find(
-        (a) =>
-          /SC2ToolsAgent-Setup.*\.exe$/i.test(a.name) ||
-          /sc2tools-agent.*\.exe$/i.test(a.name),
-      ) || null
-    );
+  if (platform !== "windows") return null;
+  for (const rx of EXE_REGEXES) {
+    const hit = assets.find((a) => rx.test(a.name));
+    if (hit) return hit;
   }
-  // No first-class macOS/Linux installers yet — the page falls back to
-  // the "Run from source" panel for those.
   return null;
 }
 
@@ -196,7 +192,6 @@ async function fetchSha256(
     });
     if (!res.ok) return null;
     const text = await res.text();
-    // Format produced by our workflow: "<hash> *<filename>"
     const match = text.trim().match(/^([0-9a-f]{64})/i);
     return match ? match[1].toLowerCase() : null;
   } catch {
