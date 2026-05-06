@@ -5,12 +5,32 @@ import { useAuth } from "@clerk/nextjs";
 import { useApi, apiCall } from "@/lib/clientApi";
 
 type Device = {
+  deviceId: string;
   userId: string;
   createdAt: string;
   lastSeenAt: string | null;
+  hostname?: string;
+  agentVersion?: string;
+  agentOs?: string;
+  agentOsRelease?: string;
 };
 
 type DevicesResponse = { items: Device[] };
+
+/**
+ * Build the human label for a device row. We always have *something*
+ * to show (the agent has at minimum sent a heartbeat with version+os
+ * by the time it appears here), but a brand-new pairing that hasn't
+ * heartbeat yet has no metadata at all — fall back to "Unknown device"
+ * + the pair date so the row is still distinguishable.
+ */
+function deviceLabel(d: Device): string {
+  const parts: string[] = [];
+  if (d.hostname) parts.push(d.hostname);
+  if (d.agentOs) parts.push(d.agentOs);
+  if (d.agentVersion) parts.push(`v${d.agentVersion}`);
+  return parts.length > 0 ? parts.join(" · ") : "Unknown device";
+}
 
 export function DevicesPanel() {
   const { getToken } = useAuth();
@@ -22,6 +42,7 @@ export function DevicesPanel() {
     kind: "ok" | "err";
     msg: string;
   } | null>(null);
+  const [unpairing, setUnpairing] = useState<string | null>(null);
 
   async function onClaim(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +71,34 @@ export function DevicesPanel() {
       setFeedback({ kind: "err", msg: m });
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function onUnpair(d: Device) {
+    const label = deviceLabel(d);
+    if (
+      !window.confirm(
+        `Unpair "${label}"? The agent on that PC will stop syncing until you pair it again.`,
+      )
+    ) {
+      return;
+    }
+    setFeedback(null);
+    setUnpairing(d.deviceId);
+    try {
+      await apiCall(getToken, `/v1/devices/${encodeURIComponent(d.deviceId)}`, {
+        method: "DELETE",
+      });
+      setFeedback({ kind: "ok", msg: `Unpaired ${label}.` });
+      await mutate();
+    } catch (err: unknown) {
+      const m =
+        typeof err === "object" && err !== null && "message" in err
+          ? String((err as { message: unknown }).message)
+          : "unpair_failed";
+      setFeedback({ kind: "err", msg: m });
+    } finally {
+      setUnpairing(null);
     }
   }
 
@@ -103,20 +152,35 @@ export function DevicesPanel() {
           </p>
         ) : (
           <ul className="space-y-2">
-            {data.items.map((d, i) => (
-              <li
-                key={d.createdAt + i}
-                className="flex items-center justify-between rounded border border-border bg-bg-elevated p-3 text-sm"
-              >
-                <span>
-                  Paired {new Date(d.createdAt).toLocaleString()} · last
-                  seen{" "}
-                  {d.lastSeenAt
-                    ? new Date(d.lastSeenAt).toLocaleString()
-                    : "never"}
-                </span>
-              </li>
-            ))}
+            {data.items.map((d) => {
+              const isBusy = unpairing === d.deviceId;
+              return (
+                <li
+                  key={d.deviceId}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-border bg-bg-elevated p-3 text-sm"
+                >
+                  <div className="space-y-1">
+                    <div className="font-medium">{deviceLabel(d)}</div>
+                    <div className="text-xs text-text-muted">
+                      Paired {new Date(d.createdAt).toLocaleString()} · last
+                      seen{" "}
+                      {d.lastSeenAt
+                        ? new Date(d.lastSeenAt).toLocaleString()
+                        : "never"}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-danger text-xs"
+                    onClick={() => onUnpair(d)}
+                    disabled={isBusy}
+                    aria-label={`Unpair ${deviceLabel(d)}`}
+                  >
+                    {isBusy ? "Unpairing…" : "Unpair"}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

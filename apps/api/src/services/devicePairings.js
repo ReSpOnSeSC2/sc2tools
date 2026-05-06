@@ -1,5 +1,6 @@
 "use strict";
 
+const { ObjectId } = require("mongodb");
 const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { randomDigits, randomToken, sha256 } = require("../util/hash");
 const { stampVersion } = require("../db/schemaVersioning");
@@ -158,16 +159,37 @@ class DevicePairingsService {
   /**
    * List a user's active devices.
    *
+   * Returns rows with a stable string `deviceId` (the row's `_id` as
+   * hex) so the SPA can label and revoke each device without ever
+   * seeing the bearer-token hash. Hostname/os/version come from the
+   * agent's most recent heartbeat — when the agent hasn't checked in
+   * yet, those fields are absent and the UI falls back to whatever
+   * pieces are present.
+   *
    * @param {string} userId
+   * @returns {Promise<Array<{
+   *   deviceId: string,
+   *   userId: string,
+   *   createdAt: Date,
+   *   lastSeenAt: Date | null,
+   *   hostname?: string,
+   *   agentVersion?: string,
+   *   agentOs?: string,
+   *   agentOsRelease?: string,
+   * }>>}
    */
   async listDevices(userId) {
-    return this.db.deviceTokens
+    const rows = await this.db.deviceTokens
       .find(
         { userId, revokedAt: null },
-        { projection: { _id: 0, tokenHash: 0 } },
+        { projection: { tokenHash: 0 } },
       )
       .sort({ lastSeenAt: -1 })
       .toArray();
+    return rows.map((row) => {
+      const { _id, ...rest } = /** @type {any} */ (row);
+      return { deviceId: String(_id), ...rest };
+    });
   }
 
   /**
@@ -210,6 +232,33 @@ class DevicePairingsService {
   }
 
   /**
+   * Revoke a device by its row id (the string the SPA receives in
+   * `listDevices`). The match is also gated on `userId` so a malicious
+   * caller can't unpair somebody else's device by guessing an id.
+   *
+   * Returns `true` when a row was actually flipped; `false` for an
+   * unknown / already-revoked / wrong-owner id, so the route can map
+   * that to a 404 instead of silently 204'ing.
+   *
+   * @param {string} userId
+   * @param {string} deviceId
+   * @returns {Promise<boolean>}
+   */
+  async revokeById(userId, deviceId) {
+    let _id;
+    try {
+      _id = new ObjectId(deviceId);
+    } catch (_e) {
+      return false;
+    }
+    const res = await this.db.deviceTokens.updateOne(
+      { _id, userId, revokedAt: null },
+      { $set: { revokedAt: new Date() } },
+    );
+    return res.matchedCount > 0;
+  }
+
+  /**
    * Record a heartbeat from an agent. Bumps `lastSeenAt` and stamps
    * the most recent agent metadata (version, OS) so the dashboard can
    * surface "agent is up to date" / "agent appears stopped" badges.
@@ -221,7 +270,7 @@ class DevicePairingsService {
    *
    * @param {string} userId
    * @param {string} tokenHash
-   * @param {{version?: string, os?: string, osRelease?: string}} body
+   * @param {{version?: string, os?: string, osRelease?: string, hostname?: string}} body
    */
   async recordHeartbeat(userId, tokenHash, body) {
     const now = new Date();
@@ -235,6 +284,14 @@ class DevicePairingsService {
     }
     if (body && typeof body.osRelease === "string") {
       update.agentOsRelease = body.osRelease.slice(0, 64);
+    }
+    // Hostnames are usually short and ASCII, but we cap defensively
+    // (a 64-char limit easily fits any practical machine name) and
+    // ignore empty strings so an unset hostname doesn't blow away a
+    // previously-recorded one.
+    if (body && typeof body.hostname === "string") {
+      const trimmed = body.hostname.trim().slice(0, 64);
+      if (trimmed) update.hostname = trimmed;
     }
     await this.db.deviceTokens.updateOne(
       { userId, tokenHash },

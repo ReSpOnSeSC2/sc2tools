@@ -88,6 +88,17 @@ export interface PerGameComputeServiceListedGame {
   map: string | null;
 }
 
+export interface DeviceListItem {
+  deviceId: string;
+  userId: string;
+  createdAt: Date;
+  lastSeenAt: Date | null;
+  hostname?: string;
+  agentVersion?: string;
+  agentOs?: string;
+  agentOsRelease?: string;
+}
+
 export interface DevicePairingsService {
   start(): Promise<{ code: string; expiresAt: Date }>;
   claim(userId: string, code: string): Promise<void>;
@@ -99,9 +110,10 @@ export interface DevicePairingsService {
     | { status: "ready"; deviceToken: string; userId: string }
   >;
   findTokenByHash(hash: string): Promise<{ userId: string } | null>;
-  listDevices(userId: string): Promise<object[]>;
+  listDevices(userId: string): Promise<DeviceListItem[]>;
   latestAgent(userId: string): Promise<{ paired: boolean; version: string | null }>;
   revoke(userId: string, tokenHash: string): Promise<void>;
+  revokeById(userId: string, deviceId: string): Promise<boolean>;
   recordHeartbeat(
     userId: string,
     tokenHash: string,
@@ -109,6 +121,7 @@ export interface DevicePairingsService {
       version?: string;
       os?: string;
       osRelease?: string;
+      hostname?: string;
     },
   ): Promise<{ receivedAt: Date }>;
 }

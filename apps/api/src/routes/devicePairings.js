@@ -67,11 +67,22 @@ function buildDevicePairingsRouter(deps) {
     }
   });
 
-  router.delete("/devices/:tokenHash", deps.auth, async (req, res, next) => {
+  // Revoke a device the user owns. The id is the `deviceId` string the
+  // SPA gets back from `GET /devices` (the row's `_id` as hex). We
+  // never let the bearer-token hash itself reach the client, so this
+  // is the only legitimate way to unpair from the web UI.
+  router.delete("/devices/:deviceId", deps.auth, async (req, res, next) => {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
-      await deps.pairings.revoke(auth.userId, String(req.params.tokenHash));
+      const ok = await deps.pairings.revokeById(
+        auth.userId,
+        String(req.params.deviceId),
+      );
+      if (!ok) {
+        res.status(404).json({ error: { code: "device_not_found" } });
+        return;
+      }
       res.status(204).end();
     } catch (err) {
       next(err);
