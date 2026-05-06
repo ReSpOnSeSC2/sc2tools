@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { ExternalLink } from "lucide-react";
-import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import { useApiPaginated } from "@/lib/useApiPaginated";
 import { fmtAgo, pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import { Skeleton, EmptyState } from "@/components/ui/Card";
@@ -24,13 +24,15 @@ type Opp = {
   lastSeen?: string | null;
 };
 
-type OpponentsResponse = {
-  items: Opp[];
-};
-
 /**
  * Opponents tab — full filters, search, sort, drilldown.
- * Mirrors `OpponentsTab` from the legacy analyzer SPA.
+ *
+ * Fetches the opponents list with cursor pagination so users with
+ * thousands of recorded games see every opponent in one table, not
+ * just the first 100. Also re-aggregates from the games collection
+ * when the global date filter is set, so toggling between "All time"
+ * and "Season N" updates wins/losses/games per opponent within the
+ * window.
  */
 export function OpponentsTab({
   onOpen,
@@ -46,34 +48,47 @@ export function OpponentsTab({
   const minGames = Math.max(1, Number.parseInt(minGamesText, 10) || 1);
   const sort = useSort("lastPlayed", "desc");
 
-  const params = useMemo(
-    () => ({ ...filters, search, min_games: minGames, limit: 1000 }),
-    [filters, search, minGames],
-  );
+  // We don't pass `limit` here — the paginator owns page size and
+  // chases `nextBefore` until exhaustion (or a safe page cap).
+  const params = useMemo(() => ({ ...filters, search }), [filters, search]);
   const path = `/v1/opponents${filtersToQuery(params)}`;
-  const { data, isLoading } = useApi<OpponentsResponse | Opp[]>(
-    `${path}#${dbRev}`,
-  );
+  const { items: rawItems, isLoading, error, pagesFetched, hitMaxPages } =
+    useApiPaginated<Opp>(path, dbRev);
 
-  const rawItems: Opp[] = useMemo(() => {
-    if (!data) return [];
-    const arr = Array.isArray(data) ? data : data.items || [];
-    return arr.map((o) => ({
+  const normalised: Opp[] = useMemo(() => {
+    return (rawItems || []).map((o) => ({
       ...o,
       name: o.name || o.displayNameSample || "",
       games: o.games ?? o.gameCount ?? o.wins + o.losses,
       winRate:
-        o.winRate ??
-        (o.wins + o.losses > 0 ? o.wins / (o.wins + o.losses) : 0),
+        o.winRate
+        ?? (o.wins + o.losses > 0 ? o.wins / (o.wins + o.losses) : 0),
       lastPlayed: o.lastPlayed || o.lastSeen || null,
     }));
-  }, [data]);
+  }, [rawItems]);
 
-  // Client-side min-games filter. The API doesn't honour `min_games`
-  // on /v1/opponents, so without this the input did nothing.
+  // Client-side search across name + ids. The backend `search` query
+  // param is a no-op for the legacy endpoint, so filter here.
+  const searchedItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return normalised;
+    return normalised.filter((o) => {
+      const name = (o.name || "").toLowerCase();
+      const pulse = (o.pulseId || "").toLowerCase();
+      const toon = (o.toonHandle || "").toLowerCase();
+      const cid = (o.pulseCharacterId || "").toString().toLowerCase();
+      return (
+        name.includes(q)
+        || pulse.includes(q)
+        || toon.includes(q)
+        || cid.includes(q)
+      );
+    });
+  }, [normalised, search]);
+
   const filteredItems = useMemo(
-    () => rawItems.filter((o) => (o.games || 0) >= minGames),
-    [rawItems, minGames],
+    () => searchedItems.filter((o) => (o.games || 0) >= minGames),
+    [searchedItems, minGames],
   );
 
   const items = useMemo(
@@ -81,7 +96,7 @@ export function OpponentsTab({
     [filteredItems, sort],
   );
 
-  if (isLoading) return <Skeleton rows={8} />;
+  if (isLoading && rawItems.length === 0) return <Skeleton rows={8} />;
 
   return (
     <div className="space-y-4">
@@ -91,17 +106,14 @@ export function OpponentsTab({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="search opponent name or ID…"
-          className="input w-72"
+          aria-label="Search opponents"
+          className="input min-h-[44px] w-full sm:w-72"
         />
         <div className="flex items-center gap-2">
           <span className="text-xs uppercase tracking-wide text-text-dim">
             Min games
           </span>
           <input
-            // `inputMode="numeric"` opens the digit keypad on mobile
-            // without locking us into the spinner UI that fights with
-            // backspace. Stays a regular text input so empty is a
-            // valid intermediate state — onBlur snaps back to "1".
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
@@ -116,13 +128,26 @@ export function OpponentsTab({
               }
             }}
             aria-label="Minimum games"
-            className="input w-20"
+            className="input min-h-[44px] w-20"
           />
         </div>
-        <span className="text-xs text-text-dim">
-          click any column to sort · click a row to open deep dive →
-        </span>
+        <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
+          <span className="text-xs text-text-dim">
+            {items.length.toLocaleString()} of {normalised.length.toLocaleString()} shown
+            {pagesFetched > 1 ? ` · ${pagesFetched} pages` : null}
+            {hitMaxPages ? " · narrow your filter for more" : null}
+          </span>
+          <span className="hidden text-xs text-text-dim sm:inline">
+            click any column to sort · click a row to open deep dive →
+          </span>
+        </div>
       </div>
+
+      {error ? (
+        <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+          Could not load opponents — {error.message}
+        </div>
+      ) : null}
 
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
@@ -201,15 +226,10 @@ export function OpponentsTab({
 /**
  * The "Pulse ID" cell. When the agent has resolved the opponent's
  * canonical SC2Pulse character id (e.g. "994428"), show it as a link
- * to sc2pulse.nephest.com — that's the page the user reaches via the
- * url shape they explicitly called out:
- * https://sc2pulse.nephest.com/sc2/?type=character&id=<id>&m=1.
- *
- * When we only have the raw toon_handle (e.g. "1-S2-1-267727" — the
- * value that appears in their replay-folder path), show that in dim
- * mono, with an explicit "(toon)" hint so the user can tell at a
- * glance that resolution hasn't happened yet (e.g. SC2Pulse was down
- * during the first ingest, or the opponent isn't ranked yet).
+ * to sc2pulse.nephest.com. Otherwise, show the raw toon_handle in dim
+ * mono with a "(toon)" hint so the user can tell at a glance that
+ * resolution hasn't happened yet (e.g. SC2Pulse was down during
+ * the first ingest, or the opponent isn't ranked yet).
  */
 function PulseIdCell({ opp }: { opp: Opp }) {
   const label = pickPulseLabel(opp);

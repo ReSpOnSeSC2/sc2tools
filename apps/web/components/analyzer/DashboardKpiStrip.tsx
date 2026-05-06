@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
-import { Gamepad2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, Gamepad2 } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
+import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { GlowHalo } from "@/components/ui/GlowHalo";
 import { StatCard } from "@/components/ui/Stat";
 import { pct1, wrColor } from "@/lib/format";
@@ -11,29 +12,102 @@ import {
   type ApiTimeseriesResponse,
   type Period,
 } from "@/lib/timeseries";
+import {
+  PRESETS,
+  resolvePreset,
+  shortLabelFor,
+  type PresetId,
+} from "@/lib/datePresets";
 
 interface DashboardKpiStripProps {
   totalGames: number;
 }
 
+const LS_KEY = "analyzer.kpi.winRatePreset";
+
+const WIN_RATE_PRESET_OPTIONS: PresetId[] = [
+  "current_season",
+  "today",
+  "last_week",
+  "last_7d",
+  "this_month",
+  "last_30d",
+  "last_90d",
+  "this_year",
+  "last_year",
+  "all",
+];
+
+function readStoredPreset(): PresetId | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LS_KEY);
+    return raw ? (raw as PresetId) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredPreset(value: PresetId): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LS_KEY, value);
+  } catch {
+    /* non-fatal */
+  }
+}
+
 /**
- * Top-of-dashboard KPI strip. Four stats summarising current play:
- * games played today, 7-day win rate, current win/loss streak, and
- * lifetime games on record. The leading stat (Games today) has a cyan
- * brand halo to draw the eye.
+ * Top-of-dashboard KPI strip — Games today, customizable Win Rate,
+ * Active Streak, and lifetime Total games.
  *
- * Data flows: pulls /v1/timeseries?interval=day for the freshest data.
- * The lifetime total comes from the parent page (already fetched by
- * the server component) so we don't pay for a second roundtrip.
+ * The Win Rate card has a preset picker so the user can ask "what's
+ * my win rate this season?" or "in the last 30 days?" without
+ * touching the global filter. Sticky per-tab choice via localStorage.
  */
 export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
-  const { data, isLoading } = useApi<ApiTimeseriesResponse>(
+  const { seasons } = useFilters();
+
+  // The Win Rate card has its own preset, defaulting to "current_season"
+  // so it answers "how am I doing right now?" out of the box.
+  const [wrPreset, setWrPreset] = useState<PresetId>("current_season");
+  useEffect(() => {
+    const stored = readStoredPreset();
+    if (stored) setWrPreset(stored);
+  }, []);
+  const onPickWrPreset = (id: PresetId) => {
+    setWrPreset(id);
+    writeStoredPreset(id);
+  };
+
+  const wrRange = useMemo(
+    () => resolvePreset(wrPreset, undefined, seasons),
+    [wrPreset, seasons],
+  );
+  const wrQuery = useMemo(() => {
+    const params: Record<string, unknown> = { interval: "day" };
+    if (wrRange.since) params.since = wrRange.since.toISOString();
+    if (wrRange.until) params.until = wrRange.until.toISOString();
+    return filtersToQuery(params);
+  }, [wrRange]);
+
+  // Global series — used for Games today and Active streak.
+  const globalSeries = useApi<ApiTimeseriesResponse>(
     "/v1/timeseries?interval=day",
   );
+  const globalKpis = useMemo(
+    () => computeKpis(apiToPeriods(globalSeries.data)),
+    [globalSeries.data],
+  );
 
-  const kpis = useMemo(() => computeKpis(apiToPeriods(data)), [data]);
+  // Win rate uses its own series scoped by the chosen preset.
+  const wrSeries = useApi<ApiTimeseriesResponse>(
+    `/v1/timeseries${wrQuery}`,
+  );
+  const wrStats = useMemo(() => computeWrStats(apiToPeriods(wrSeries.data)), [wrSeries.data]);
 
-  const placeholder = isLoading ? "—" : "0";
+  const placeholder = globalSeries.isLoading ? "—" : "0";
+  const wrPlaceholder = wrSeries.isLoading ? "—" : "0";
 
   return (
     <div
@@ -42,47 +116,61 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
     >
       <LeadStat
         label="Games today"
-        value={kpis.gamesToday ?? placeholder}
+        value={globalKpis.gamesToday ?? placeholder}
         icon={<Gamepad2 className="h-4 w-4" aria-hidden />}
-        hint={kpis.gamesToday ? "Keep the streak alive" : "No games yet today"}
+        hint={
+          globalKpis.gamesToday ? "Keep the streak alive" : "No games yet today"
+        }
       />
+
       <StatCard
-        label="Win rate (7d)"
+        label={
+          <WinRateLabel
+            currentPreset={wrPreset}
+            onPick={onPickWrPreset}
+            seasons={seasons}
+          />
+        }
         value={
-          kpis.totals7d > 0 ? (
-            <span style={{ color: wrColor(kpis.winRate7d, kpis.totals7d) }}>
-              {pct1(kpis.winRate7d)}
+          wrStats.totalGames > 0 ? (
+            <span style={{ color: wrColor(wrStats.winRate, wrStats.totalGames) }}>
+              {pct1(wrStats.winRate)}
             </span>
           ) : (
-            placeholder
+            wrPlaceholder
           )
         }
         hint={
-          kpis.totals7d > 0
-            ? `${kpis.wins7d}–${kpis.losses7d} over ${kpis.totals7d} games`
-            : "Need 7 days of data"
+          wrStats.totalGames > 0
+            ? `${wrStats.wins}–${wrStats.losses} over ${wrStats.totalGames} games`
+            : "No games in this window"
         }
         size="md"
       />
+
       <StatCard
         label="Active streak"
         value={
-          kpis.streak.count > 0 ? (
+          globalKpis.streak.count > 0 ? (
             <span
               className={
-                kpis.streak.kind === "win" ? "text-success" : "text-danger"
+                globalKpis.streak.kind === "win"
+                  ? "text-success"
+                  : "text-danger"
               }
             >
-              {kpis.streak.kind === "win" ? "W" : "L"}
-              <span className="ml-0.5 tabular-nums">{kpis.streak.count}</span>
+              {globalKpis.streak.kind === "win" ? "W" : "L"}
+              <span className="ml-0.5 tabular-nums">
+                {globalKpis.streak.count}
+              </span>
             </span>
           ) : (
             placeholder
           )
         }
         hint={
-          kpis.streak.count > 0
-            ? kpis.streak.kind === "win"
+          globalKpis.streak.count > 0
+            ? globalKpis.streak.kind === "win"
               ? "Riding a win streak"
               : "Keep at it — turning is part of the game"
             : "Tied or no recent games"
@@ -92,14 +180,99 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
       <StatCard
         label="Total games"
         value={
-          <span className="tabular-nums">
-            {totalGames.toLocaleString()}
-          </span>
+          <span className="tabular-nums">{totalGames.toLocaleString()}</span>
         }
         hint="Lifetime synced replays"
         size="md"
       />
     </div>
+  );
+}
+
+function WinRateLabel({
+  currentPreset,
+  onPick,
+  seasons,
+}: {
+  currentPreset: PresetId;
+  onPick: (id: PresetId) => void;
+  seasons: ReturnType<typeof useFilters>["seasons"];
+}) {
+  const [open, setOpen] = useState(false);
+  const label = `Win rate · ${shortLabelFor(currentPreset, seasons)}`;
+
+  // ESC closes the menu — same UX as the global FilterBar.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  return (
+    <span className="relative inline-flex items-center gap-1">
+      <span>{label}</span>
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Change Win Rate timeframe"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex h-7 w-7 items-center justify-center rounded text-text-dim hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+      </button>
+
+      {open ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close timeframe menu"
+            className="fixed inset-0 z-30"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-40 mt-1 w-56 max-w-[80vw] rounded-lg border border-border bg-bg-surface p-1 text-left shadow-card"
+          >
+            {WIN_RATE_PRESET_OPTIONS.map((id) => {
+              const friendly =
+                id === "current_season"
+                  ? `Current season${
+                      seasons.find((s) => s.isCurrent)
+                        ? ` (${seasons.find((s) => s.isCurrent)?.number})`
+                        : ""
+                    }`
+                  : PRESETS.find((p) => p.id === id)?.label || id;
+              const selected = currentPreset === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={selected}
+                  onClick={() => {
+                    onPick(id);
+                    setOpen(false);
+                  }}
+                  className={[
+                    "flex min-h-[40px] w-full items-center rounded px-2 py-1.5 text-left text-sm",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                    selected
+                      ? "bg-accent/15 text-accent"
+                      : "text-text-muted hover:bg-bg-elevated hover:text-text",
+                  ].join(" ")}
+                >
+                  {friendly}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
+    </span>
   );
 }
 
@@ -124,9 +297,7 @@ function LeadStat({
             {label}
           </span>
         }
-        value={
-          <span className="text-accent-cyan">{value}</span>
-        }
+        value={<span className="text-accent-cyan">{value}</span>}
         hint={hint}
         size="md"
         className="border-accent-cyan/40 bg-bg-surface"
@@ -137,10 +308,6 @@ function LeadStat({
 
 interface ComputedKpis {
   gamesToday: number | null;
-  wins7d: number;
-  losses7d: number;
-  totals7d: number;
-  winRate7d: number;
   streak: { kind: "win" | "loss" | null; count: number };
 }
 
@@ -148,29 +315,36 @@ function computeKpis(series: Period[]): ComputedKpis {
   if (series.length === 0) {
     return {
       gamesToday: null,
-      wins7d: 0,
-      losses7d: 0,
-      totals7d: 0,
-      winRate7d: 0,
       streak: { kind: null, count: 0 },
     };
   }
   const todayKey = todayKeyLocal();
   const last = series[series.length - 1];
   const gamesToday = last && last.date === todayKey ? last.games || 0 : 0;
-  const last7 = series.slice(-7);
-  const wins7d = last7.reduce((acc, p) => acc + (p.wins || 0), 0);
-  const losses7d = last7.reduce((acc, p) => acc + (p.losses || 0), 0);
-  const totals7d = wins7d + losses7d;
-  const winRate7d = totals7d > 0 ? wins7d / totals7d : 0;
   const streak = streakFromSeries(series);
-  return { gamesToday, wins7d, losses7d, totals7d, winRate7d, streak };
+  return { gamesToday, streak };
+}
+
+function computeWrStats(series: Period[]): {
+  wins: number;
+  losses: number;
+  totalGames: number;
+  winRate: number;
+} {
+  const wins = series.reduce((acc, p) => acc + (p.wins || 0), 0);
+  const losses = series.reduce((acc, p) => acc + (p.losses || 0), 0);
+  const totalGames = wins + losses;
+  return {
+    wins,
+    losses,
+    totalGames,
+    winRate: totalGames > 0 ? wins / totalGames : 0,
+  };
 }
 
 /**
  * Walk the day-bucketed series backwards, treating each day as a
- * batch of W or L outcomes. We only count days that are pure wins or
- * pure losses; mixed days break the streak.
+ * batch of W or L outcomes. Mixed days break the streak.
  */
 function streakFromSeries(
   series: Period[],

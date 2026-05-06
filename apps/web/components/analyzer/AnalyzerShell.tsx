@@ -22,7 +22,9 @@ import { Tabs } from "@/components/ui/Tabs";
 import { ActivityCharts } from "./charts/ActivityCharts";
 import { BattlefieldTab } from "./BattlefieldTab";
 import { BuildsTab } from "./BuildsTab";
+import { DashboardKpiStrip } from "./DashboardKpiStrip";
 import { DoctorBanner } from "./DoctorBanner";
+import { FilterBar } from "./FilterBar";
 import { MapIntelTab } from "./MapIntelTab";
 import { OpponentDnaGrid } from "./OpponentDnaGrid";
 import { OpponentsTab } from "./OpponentsTab";
@@ -58,7 +60,7 @@ const TABS: readonly TabDef[] = [
   { id: "activity", label: "Activity", icon: Activity, description: "Per-game charts of resources, army, chrono." },
 ] as const;
 
-export function AnalyzerShell() {
+export function AnalyzerShell({ totalGames }: { totalGames: number }) {
   const [tab, setTab] = useState<TabId>("opponents");
   const [profileId, setProfileId] = useState<string | null>(null);
 
@@ -73,6 +75,12 @@ export function AnalyzerShell() {
     <AnalyzerProvider>
       <div className="space-y-5">
         <DoctorBanner />
+
+        <DashboardKpiStrip totalGames={totalGames} />
+
+        <div className="rounded-lg border border-border bg-bg-surface px-3 py-3 sm:py-2">
+          <FilterBar />
+        </div>
 
         <div className="space-y-4 lg:grid lg:grid-cols-[220px_1fr] lg:gap-6 lg:space-y-0">
           <MobileDrawerNav value={tab} onChange={onTabChange} active={activeTab} />

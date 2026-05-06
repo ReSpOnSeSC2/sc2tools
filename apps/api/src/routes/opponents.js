@@ -1,6 +1,7 @@
 "use strict";
 
 const express = require("express");
+const { parseFilters } = require("../util/parseQuery");
 
 /**
  * /v1/opponents — list and detail.
@@ -20,7 +21,12 @@ function buildOpponentsRouter(deps) {
       if (!auth) throw new Error("auth_required");
       const limit = parseLimit(req.query.limit);
       const before = parseDate(req.query.before);
-      const result = await deps.opponents.list(auth.userId, { limit, before });
+      const filters = parseFilters(req.query);
+      const result = await deps.opponents.list(auth.userId, {
+        limit,
+        before,
+        filters,
+      });
       res.json(result);
     } catch (err) {
       next(err);
