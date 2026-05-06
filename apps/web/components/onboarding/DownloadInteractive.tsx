@@ -21,11 +21,11 @@ const OS_TABS: ReadonlyArray<{ id: DetectedOS; label: string }> = [
 const SYS_REQUIREMENTS: ReadonlyArray<{ heading: string; body: string }> = [
   {
     heading: "Disk",
-    body: "~80 MB for the agent and its parser cache. The replay folder itself is untouched.",
+    body: "~250 MB for the installer (Python + Qt runtime bundled). The replay folder itself is untouched.",
   },
   {
     heading: "OS",
-    body: "Windows 10+, macOS 12+, or modern x86_64 Linux. The Windows build is signed; macOS/Linux ship as source.",
+    body: "Windows 10+. macOS and Linux currently install from source (see below).",
   },
   {
     heading: "Network",
