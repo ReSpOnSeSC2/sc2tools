@@ -28,7 +28,7 @@ export function SaveBar({
   onSave,
   onReset,
   saveLabel = "Save changes",
-  resetLabel = "Reset",
+  resetLabel = "Discard",
   message = "You have unsaved changes",
   disableUnloadGuard = false,
 }: SaveBarProps) {
@@ -68,7 +68,7 @@ export function SaveBar({
               iconLeft={<RotateCcw className="h-4 w-4" aria-hidden />}
             >
               <span className="hidden sm:inline">{resetLabel}</span>
-              <span className="sm:hidden">Reset</span>
+              <span className="sm:hidden">{resetLabel}</span>
             </Button>
           ) : null}
           <Button

@@ -56,7 +56,7 @@ function SignUpMarketing() {
         No card.
       </h1>
       <p className="max-w-prose text-body-lg text-text-muted">
-        Install a 15&nbsp;MB agent, finish a replay, and watch your
+        Install a 450&nbsp;MB agent, finish a replay, and watch your
         opponent dossier fill out automatically.
       </p>
       <ul className="space-y-3">

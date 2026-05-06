@@ -29,7 +29,7 @@ import type { BuildDetailRow, BuildRecentGame } from "./types";
  * `/v1/custom-builds/:slug/matches` (custom builds).
  *
  * Both endpoints share the same envelope: totals + by-cuts + recent +
- * dossier extras (DNA-style timings, opponent-strategy predictions,
+ * dossier extras (median key timings, opponent-strategy predictions,
  * macro aggregate). See `apps/api/src/services/buildDossier.js`.
  */
 export interface BuildDossierData {

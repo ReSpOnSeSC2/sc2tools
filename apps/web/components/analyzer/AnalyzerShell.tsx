@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   Activity,
   ChevronDown,
-  Fingerprint,
   Layers,
   Map as MapIcon,
   MapPin,
@@ -26,7 +25,6 @@ import { DashboardKpiStrip } from "./DashboardKpiStrip";
 import { DoctorBanner } from "./DoctorBanner";
 import { FilterBar } from "./FilterBar";
 import { MapIntelTab } from "./MapIntelTab";
-import { OpponentDnaGrid } from "./OpponentDnaGrid";
 import { OpponentsTab } from "./OpponentsTab";
 import { ProfileView } from "./ProfileView";
 import { StrategiesTab } from "./StrategiesTab";
@@ -38,7 +36,6 @@ type TabId =
   | "trends"
   | "battlefield"
   | "builds"
-  | "dna"
   | "map-intel"
   | "activity";
 
@@ -55,7 +52,6 @@ const TABS: readonly TabDef[] = [
   { id: "trends", label: "Trends", icon: TrendingUp, description: "Win-rate trajectory across periods." },
   { id: "battlefield", label: "Maps", icon: MapIcon, description: "Maps and matchup performance." },
   { id: "builds", label: "Builds", icon: Layers, description: "Your builds, performance, and editor." },
-  { id: "dna", label: "DNA", icon: Fingerprint, description: "Opponent timing fingerprint grid." },
   { id: "map-intel", label: "Map intel", icon: MapPin, description: "Spatial heatmaps for known maps." },
   { id: "activity", label: "Activity", icon: Activity, description: "Per-game charts of resources, army, chrono." },
 ] as const;
@@ -290,8 +286,6 @@ function TabPanel({
       return <BattlefieldTab />;
     case "builds":
       return <BuildsTab />;
-    case "dna":
-      return <OpponentDnaGrid />;
     case "map-intel":
       return <MapIntelTab />;
     case "activity":

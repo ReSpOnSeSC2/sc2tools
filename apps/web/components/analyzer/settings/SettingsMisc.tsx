@@ -77,7 +77,7 @@ export function SettingsMisc() {
     <>
       <Section
         title="App preferences"
-        description="Default tab and the small dials that don't fit elsewhere. Light/dark theme is controlled by the toggle in the page header."
+        description="Default tab and the small dials that don't fit elsewhere."
       >
         <Card>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

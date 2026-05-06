@@ -18,8 +18,8 @@ import type {
  * BuildOrderTimeline — vertical icon-rich list of build steps.
  *
  * Replaces the legacy text-only horizontal track. Renders the same
- * data on Dashboard, Builds page (Phase 7), and Opponent DNA (Phase 11)
- * so the build view stays consistent across surfaces.
+ * data on Dashboard, Builds page (Phase 7), and the opponent profile
+ * timings panel so the build view stays consistent across surfaces.
  *
  * Composition:
  *   - Header: title + perspective toggle + save-as-build (optional)
