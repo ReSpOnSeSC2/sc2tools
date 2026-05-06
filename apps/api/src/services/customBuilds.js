@@ -3,6 +3,7 @@
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { evaluateRules } = require("./buildRulesEvaluator");
+const { computeDossierExtras } = require("./buildDossier");
 
 const STATS_GAME_SCAN_CAP = 1000;
 const RECENT_GAMES_LIMIT = 50;
@@ -128,6 +129,7 @@ class CustomBuildsService {
       gameMatchesBuildMatchup(g, build, perspective),
     );
     const matched = filterMatchingGames(inMatchup, rules, perspective);
+    const extras = computeDossierExtras(matched);
     return {
       slug: build.slug,
       name: build.name || build.slug,
@@ -141,6 +143,7 @@ class CustomBuildsService {
       recent: matched.slice(0, RECENT_GAMES_LIMIT).map(toRecent),
       scannedGames: games.length,
       ruleCount: rules.length,
+      ...extras,
     };
   }
 

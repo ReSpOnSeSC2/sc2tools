@@ -1,6 +1,24 @@
 "use strict";
 
 const { gamesMatchStage } = require("../util/parseQuery");
+const { computeDossierExtras } = require("./buildDossier");
+
+const DOSSIER_PROJECTION = {
+  _id: 0,
+  gameId: 1,
+  date: 1,
+  result: 1,
+  map: 1,
+  myRace: 1,
+  myBuild: 1,
+  durationSec: 1,
+  macroScore: 1,
+  apm: 1,
+  spq: 1,
+  buildLog: 1,
+  oppBuildLog: 1,
+  opponent: 1,
+};
 
 const BUCKET_BRANCHES = [
   { case: { $eq: [{ $toLower: { $ifNull: ["$result", ""] } }, "victory"] }, then: "win" },
@@ -185,6 +203,11 @@ class BuildsService {
     const [doc] = await cursor.toArray();
     const totals = doc?.totals?.[0];
     if (!totals || !totals.total) return null;
+    const dossierGames = await this.db.games
+      .find(baseMatch, { projection: DOSSIER_PROJECTION })
+      .sort({ date: -1 })
+      .toArray();
+    const extras = computeDossierExtras(dossierGames);
     return {
       name,
       totals: { ...totals, winRate: totals.total ? totals.wins / totals.total : 0 },
@@ -192,6 +215,7 @@ class BuildsService {
       byMap: addWinRates(doc.byMap || []),
       byStrategy: addWinRates(doc.byStrategy || []),
       recent: doc.recent || [],
+      ...extras,
     };
   }
 
