@@ -189,7 +189,16 @@ function isStale(meta, staleAfterSec) {
 function tryStealLock(lockPath, expected) {
   const current = readLockMeta(lockPath);
   if (current === null) return true;
-  if (expected !== null && JSON.stringify(current) !== JSON.stringify(expected)) {
+  // `expected === null` means our caller's first read of the holder
+  // metadata failed — typically because the holder was mid-write and
+  // the file was briefly opened with FileShare.None (PowerShell), or
+  // an antivirus held the bytes for a tick. If the second read NOW
+  // returns a valid holder, that holder is healthy; we MUST NOT steal.
+  // Loop and let the next iteration re-evaluate staleness with a
+  // clean read. Without this guard, a sharing-violation transient on
+  // a fresh lockfile causes lost updates across processes.
+  if (expected === null) return false;
+  if (JSON.stringify(current) !== JSON.stringify(expected)) {
     return false;
   }
   try {
@@ -232,6 +241,13 @@ function isDisabled() {
  * what we wrote. If a stale-steal swapped a different holder in, we
  * stay out of their way.
  *
+ * On Windows, another process briefly holding a read handle on our
+ * lockfile (liveness check, antivirus indexer) makes DeleteFile fail
+ * with a sharing violation -- surfaced to libuv as EBUSY/EACCES/EPERM.
+ * Retry a few times with brief sleeps so we don't leak the lockfile;
+ * on POSIX this loop is a no-op because unlink succeeds on the first
+ * try regardless of open handles.
+ *
  * @param {string} lockPath
  * @param {object} ours
  */
@@ -245,11 +261,26 @@ function releaseOwned(lockPath, ours) {
     );
     return;
   }
-  try {
-    fs.unlinkSync(lockPath);
-  } catch (err) {
-    if (err && err.code === 'ENOENT') return;
-    process.stderr.write(`[file-lock] release error: ${err.message}\n`);
+  const TRANSIENT_CODES = new Set(['EBUSY', 'EACCES', 'EPERM']);
+  const MAX_ATTEMPTS = 6;
+  let lastErr = null;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    try {
+      fs.unlinkSync(lockPath);
+      return;
+    } catch (err) {
+      if (err && err.code === 'ENOENT') return;
+      lastErr = err;
+      if (!err || !TRANSIENT_CODES.has(err.code)) break;
+      const ms = Math.min(5 * (1 << attempt), 80);
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        // intentional empty body — sync sleep so callers stay sync
+      }
+    }
+  }
+  if (lastErr) {
+    process.stderr.write(`[file-lock] release error: ${lastErr.message}\n`);
   }
 }
 

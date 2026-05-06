@@ -114,6 +114,36 @@ describe('withFileLock (async)', () => {
   });
 });
 
+describe('Steal-race guard (regression)', () => {
+  // Regression for the cross-language steal-race that produced lost
+  // updates when a contender's first read of a holder's lockfile
+  // returned null (transient sharing-violation -- happens for real on
+  // Windows when PowerShell's FileShare.None create races a Node read
+  // by milliseconds). Before the fix, tryStealLock(lockPath, null)
+  // unlinked a perfectly healthy holder's lockfile, so two writers
+  // would think they held the lock simultaneously.
+  test('tryStealLock refuses to steal when expected is null but current is healthy', () => {
+    const tmp = makeTmp('sc2-lock-steal-race-');
+    try {
+      const target = path.join(tmp, 'MyOpponentHistory.json');
+      const lockPath = path.join(tmp, '.locks', _internals.safeLockName(target));
+      fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+      const meta = {
+        pid: process.pid,
+        host: 'test',
+        lang: 'node',
+        platform: 'Test',
+        since: Date.now(),
+        stamp: '2026-05-06T00:00:00Z',
+      };
+      fs.writeFileSync(lockPath, JSON.stringify(meta), 'utf8');
+      const stole = _internals.tryStealLock(lockPath, null);
+      expect(stole).toBe(false);
+      expect(fs.existsSync(lockPath)).toBe(true);
+    } finally { rm(tmp); }
+  });
+});
+
 describe('Stale lock recovery', () => {
   function writeLock(lockPath, { pid, ageSec }) {
     fs.mkdirSync(path.dirname(lockPath), { recursive: true });

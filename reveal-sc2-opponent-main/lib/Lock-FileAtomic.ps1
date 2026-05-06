@@ -250,11 +250,17 @@ function _LFA-TrySteal {
     # now legitimately holding it).
     $current = _LFA-ReadMeta -LockPath $LockPath
     if ($null -eq $current) { return $true }
-    if ($null -ne $Expected) {
-        $a = ($current | ConvertTo-Json -Depth 5 -Compress)
-        $b = ($Expected | ConvertTo-Json -Depth 5 -Compress)
-        if ($a -ne $b) { return $false }
-    }
+    # $Expected = $null means our caller's first read failed -- almost
+    # always because the holder was mid-write and the file was briefly
+    # opened with FileShare.None. If THIS read returns valid metadata
+    # the holder is healthy; we MUST NOT steal. Loop and let the next
+    # iteration re-evaluate staleness with a clean read. Without this
+    # guard a sharing-violation transient lets us delete a fresh
+    # holder's lockfile and produce lost updates across processes.
+    if ($null -eq $Expected) { return $false }
+    $a = ($current | ConvertTo-Json -Depth 5 -Compress)
+    $b = ($Expected | ConvertTo-Json -Depth 5 -Compress)
+    if ($a -ne $b) { return $false }
     try {
         Remove-Item -LiteralPath $LockPath -Force -ErrorAction Stop
         return $true
@@ -279,12 +285,26 @@ function _LFA-ReleaseOwned {
         Write-Verbose "[Lock-FileAtomic] release skipped: holder changed under us (pid=$($curPid.Value) ours=$($Meta.pid))"
         return
     }
-    try {
-        Remove-Item -LiteralPath $LockPath -Force -ErrorAction Stop
-    } catch [System.Management.Automation.ItemNotFoundException] {
-        return
-    } catch {
-        Write-Verbose "[Lock-FileAtomic] release error: $($_.Exception.Message)"
+    # Retry on transient sharing violations: another process briefly
+    # holding a read handle (liveness check, antivirus indexer) makes
+    # Remove-Item fail with ERROR_SHARING_VIOLATION on Windows. The
+    # other reader releases within milliseconds.
+    $maxAttempts = 6
+    $lastErr = $null
+    for ($attempt = 0; $attempt -lt $maxAttempts; $attempt++) {
+        try {
+            Remove-Item -LiteralPath $LockPath -Force -ErrorAction Stop
+            return
+        } catch [System.Management.Automation.ItemNotFoundException] {
+            return
+        } catch {
+            $lastErr = $_
+        }
+        $delayMs = [Math]::Min(5 * [Math]::Pow(2, $attempt), 80)
+        Start-Sleep -Milliseconds ([int]$delayMs)
+    }
+    if ($null -ne $lastErr) {
+        Write-Verbose "[Lock-FileAtomic] release error: $($lastErr.Exception.Message)"
     }
 }
 
