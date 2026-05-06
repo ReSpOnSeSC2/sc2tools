@@ -124,7 +124,10 @@ class CustomBuildsService {
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
     });
-    const matched = filterMatchingGames(games, rules, perspective);
+    const inMatchup = games.filter((g) =>
+      gameMatchesBuildMatchup(g, build, perspective),
+    );
+    const matched = filterMatchingGames(inMatchup, rules, perspective);
     return {
       slug: build.slug,
       name: build.name || build.slug,
@@ -161,8 +164,13 @@ class CustomBuildsService {
       /** @param {any} b */ (b) => {
         const rules = extractRules(b);
         const perspective = b.perspective === "opponent" ? "opponent" : "you";
+        const inMatchup = games.filter((g) =>
+          gameMatchesBuildMatchup(g, b, perspective),
+        );
         const matched =
-          rules.length === 0 ? [] : filterMatchingGames(games, rules, perspective);
+          rules.length === 0
+            ? []
+            : filterMatchingGames(inMatchup, rules, perspective);
         const t = rollupTotals(matched);
         return {
           name: b.name || b.slug,
@@ -219,6 +227,63 @@ function ruleNameFromUnit(raw) {
   const noun = trimmed.replace(/[^A-Za-z0-9]/g, "");
   if (!noun) return "";
   return "Build" + noun.charAt(0).toUpperCase() + noun.slice(1);
+}
+
+/**
+ * Strict matchup gate. A saved build with a single-matchup target
+ * (e.g. PvP, PvT) must only count games where both sides line up;
+ * otherwise the build silently absorbs cross-matchup replays and
+ * Top-matchups / Recent-games / Vs-strategy all show wrong rows.
+ *
+ * Semantics:
+ *   - vsRace omitted or "Any" → opponent side is unconstrained.
+ *   - From perspective="you", race is the user's race and vsRace is the
+ *     opponent's race (compared to g.myRace / g.oppRace).
+ *   - From perspective="opponent", the build describes what the opponent
+ *     ran, so race is the opponent's race and vsRace is the user's race
+ *     (sides flipped).
+ *   - When the game has no race recorded (legacy import), fall back to
+ *     the "PvT — …" prefix on g.myBuild; if neither is available we
+ *     drop the game from the bucket. The previous permissive behavior
+ *     in the live preview let unverifiable replays leak in, which is
+ *     exactly what produced PvT games on a PvP build.
+ *
+ * @param {{myRace: string|null, oppRace: string|null, myBuild?: string|null}} g
+ * @param {any} build
+ * @param {'you'|'opponent'} perspective
+ * @returns {boolean}
+ */
+function gameMatchesBuildMatchup(g, build, perspective) {
+  const mySideActual = perspective === "opponent" ? g.oppRace : g.myRace;
+  const oppSideActual = perspective === "opponent" ? g.myRace : g.oppRace;
+  const myBucketPos = perspective === "opponent" ? 2 : 0;
+  const oppBucketPos = perspective === "opponent" ? 0 : 2;
+  return (
+    raceStrictMatch(mySideActual, build && build.race, g.myBuild, myBucketPos) &&
+    raceStrictMatch(
+      oppSideActual,
+      build && build.vsRace,
+      g.myBuild,
+      oppBucketPos,
+    )
+  );
+}
+
+/**
+ * @param {string|null|undefined} actual
+ * @param {string|undefined} requested
+ * @param {string|null|undefined} buildName
+ * @param {number} bucketPos
+ * @returns {boolean}
+ */
+function raceStrictMatch(actual, requested, buildName, bucketPos) {
+  if (!requested || requested === "Any") return true;
+  const r = requested.charAt(0).toUpperCase();
+  if (actual) return actual.charAt(0).toUpperCase() === r;
+  if (typeof buildName === "string" && /^[PTZ]v[PTZ]/.test(buildName)) {
+    return buildName.charAt(bucketPos) === r;
+  }
+  return false;
 }
 
 /**
