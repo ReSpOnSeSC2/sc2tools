@@ -265,13 +265,43 @@ class _Handler(FileSystemEventHandler):
 
 
 def _walk_replays(root: Path) -> Iterable[Path]:
+    """Yield every .SC2Replay under ``root``, newest first.
+
+    Sorting by mtime-descending matters for UX during a backfill.
+    A user with 12,000+ replays watching the dashboard sees their
+    MOST RECENT games show up in 'Recent uploads' first, not the
+    alphabetically-first map's thousand replays from years ago.
+    Without this sort, ``os.walk`` returns files in arbitrary
+    filesystem order — typically alphabetical, which means the
+    sweep grinds through every "10000 Feet LE (N).SC2Replay" before
+    touching any "Acid Plant" / "Old Republic" / etc., and the
+    user (correctly) thinks the agent is map-filtering.
+
+    We materialise the full list once per sweep — fine for tens of
+    thousands of files (each ``Path`` is ~80 bytes, plus one stat
+    call each). Yielding lazily but unsorted would be cheaper but
+    defeat the whole point of this fix.
+    """
+    candidates: list[tuple[float, Path]] = []
     try:
         for dirpath, _dirnames, filenames in os.walk(root):
             for name in filenames:
-                if name.lower().endswith(REPLAY_SUFFIX.lower()):
-                    yield Path(dirpath) / name
+                if not name.lower().endswith(REPLAY_SUFFIX.lower()):
+                    continue
+                p = Path(dirpath) / name
+                try:
+                    mtime = p.stat().st_mtime
+                except OSError:
+                    # Stale dirent or permission glitch — skip the
+                    # file entirely rather than yielding it without
+                    # a sort key, which would scramble the ordering.
+                    continue
+                candidates.append((mtime, p))
     except OSError:
         return
+    candidates.sort(key=lambda pair: pair[0], reverse=True)
+    for _, p in candidates:
+        yield p
 
 
 def _wait_for_file_ready(path: Path, timeout_sec: float) -> bool:

@@ -293,6 +293,29 @@ def parse_replay_for_cloud(
                         exc,
                     )
                     return None
+                # Promote the discovered name into the local cache so
+                # the NEXT replay's first parse already picks up "us"
+                # without needing the toon-fallback re-parse. Without
+                # this, every replay in a backfill where the cloud
+                # handle is wrong/stale costs two full parse_deep
+                # calls (~2× slowdown). One promotion fixes the whole
+                # backfill from that point on.
+                if state_dir is not None:
+                    cached = _read_player_handle(state_dir)
+                    if cached != me_p.name:
+                        try:
+                            from .player_handle import write_cache
+                            write_cache(state_dir, me_p.name)
+                            log.info(
+                                "player_handle_cache_repaired old=%r new=%r "
+                                "reason=cloud_handle_did_not_match_replay",
+                                cached,
+                                me_p.name,
+                            )
+                        except OSError:
+                            log.warning(
+                                "player_handle_cache_repair_failed",
+                            )
 
     if not ctx.me or not ctx.opponent:
         return None

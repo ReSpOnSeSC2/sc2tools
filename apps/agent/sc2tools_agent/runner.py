@@ -154,11 +154,27 @@ def _bootstrap(args: argparse.Namespace) -> tuple:
     """Apply state-stored env overrides, then load config + logging."""
     cfg = load_config()
     state = load_state(cfg.state_dir)
+    needs_reload = False
     if state.api_base_override and not os.environ.get("SC2TOOLS_API_BASE"):
         os.environ["SC2TOOLS_API_BASE"] = state.api_base_override
-        cfg = load_config()
+        needs_reload = True
     if state.log_level_override and not os.environ.get("SC2TOOLS_LOG_LEVEL"):
         os.environ["SC2TOOLS_LOG_LEVEL"] = state.log_level_override
+    # The Settings-tab parse-concurrency knob is persisted in state
+    # but ``AgentConfig`` reads it from the env var (so command-line
+    # / .env / state all converge on one source of truth). Re-load
+    # the config after promoting state into the env so the watcher
+    # sees the user's chosen worker count on the very first sweep.
+    if (
+        state.parse_concurrency_override
+        and not os.environ.get("SC2TOOLS_PARSE_CONCURRENCY")
+    ):
+        os.environ["SC2TOOLS_PARSE_CONCURRENCY"] = str(
+            state.parse_concurrency_override,
+        )
+        needs_reload = True
+    if needs_reload:
+        cfg = load_config()
 
     if state.start_minimized:
         args.start_minimized = True
@@ -333,6 +349,11 @@ def _run_with_gui(
         # set. Empty when nothing has been resolved yet — the placeholder
         # text in the input field tells them the implications.
         player_handle=read_player_handle_cache(cfg.state_dir) or "",
+        # Show the EFFECTIVE concurrency the watcher will use this run,
+        # which is the override-if-set otherwise the config default.
+        # cfg.parse_concurrency already incorporates env vars + state
+        # via _bootstrap, so it's the single source of truth.
+        parse_concurrency=cfg.parse_concurrency,
     )
 
     gui = GuiUI(
@@ -610,6 +631,13 @@ def _handle_save_settings(
             )
         except OSError:
             log.exception("player_handle_cache_write_failed")
+    if payload.parse_concurrency is not None:
+        # Clamp into the same range the spinbox enforces, so a malformed
+        # JSON edit can't slip a 0 / negative through. Stored on state
+        # so the next ``_bootstrap`` call promotes it into the env var
+        # before AgentConfig reads it.
+        n = int(payload.parse_concurrency)
+        state.parse_concurrency_override = max(1, min(32, n))
     if payload.replay_folders is not None:
         # The Settings tab owns the full list — replace, don't merge.
         cleaned: list[str] = []

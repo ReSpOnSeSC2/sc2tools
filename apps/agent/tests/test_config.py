@@ -34,18 +34,22 @@ def test_defaults() -> None:
     cfg = load_config()
     assert cfg.api_base == "https://sc2tools-api.onrender.com"
     assert cfg.poll_interval_sec == 10
-    assert cfg.parse_concurrency == 1
+    # Default bumped from 1 to 4 in v0.3.7 — modern PCs benefit from
+    # parallel parses during the historical-replay backfill, and the
+    # sc2reader call mixes CPU + I/O so 4 workers stays well within
+    # the GIL's effective concurrency budget on a typical multi-core.
+    assert cfg.parse_concurrency == 4
     assert cfg.replay_folder is None
 
 
 def test_env_overrides() -> None:
     os.environ["SC2TOOLS_API_BASE"] = "https://api.sc2tools.com/"
     os.environ["SC2TOOLS_POLL_INTERVAL"] = "30"
-    os.environ["SC2TOOLS_PARSE_CONCURRENCY"] = "4"
+    os.environ["SC2TOOLS_PARSE_CONCURRENCY"] = "8"
     cfg = load_config()
     assert cfg.api_base == "https://api.sc2tools.com"  # trailing slash stripped
     assert cfg.poll_interval_sec == 30
-    assert cfg.parse_concurrency == 4
+    assert cfg.parse_concurrency == 8
 
 
 def test_invalid_int_falls_back_to_default() -> None:
