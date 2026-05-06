@@ -30,7 +30,10 @@ export interface LeakWindow {
 }
 
 export interface ChronoTarget {
-  name: string;
+  /** Cloud canonical key. */
+  name?: string;
+  /** Agent legacy key — older payloads emitted this; treated as a fallback. */
+  building_name?: string;
   count: number;
 }
 
@@ -65,6 +68,12 @@ export interface StatsEvent {
   food_workers?: number;
   minerals_collection_rate?: number;
   vespene_collection_rate?: number;
+  /** Current bank — drives the "unspent" series of the resources chart. */
+  minerals_current?: number;
+  vespene_current?: number;
+  /** Cost of units/buildings/upgrades still being built. */
+  minerals_used_in_progress?: number;
+  vespene_used_in_progress?: number;
 }
 
 export interface UnitTimelineEntry {
