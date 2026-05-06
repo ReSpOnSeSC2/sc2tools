@@ -204,6 +204,64 @@ def test_pulse_timeout_does_not_block_caller(monkeypatch, _stub_pulse_resolver):
     )
 
 
+# -------------------------------------------------------------------------
+# CloudGame.to_payload — locks down the wire shape for /v1/games. The web
+# app's Activity tab and macro-breakdown drilldown both depend on the new
+# macroBreakdown / apmCurve fields being passed through verbatim.
+# -------------------------------------------------------------------------
+
+
+def _bare_cloud_game(**overrides):
+    from sc2tools_agent.replay_pipeline import CloudGame
+
+    base = dict(
+        game_id="g1",
+        date_iso="2026-05-04T12:00:00+00:00",
+        result="Victory",
+        my_race="Protoss",
+        my_build=None,
+        map_name="Goldenaura",
+        duration_sec=600,
+        macro_score=None,
+        apm=None,
+        spq=None,
+        opponent=None,
+        build_log=[],
+        early_build_log=[],
+        opp_early_build_log=[],
+        opp_build_log=[],
+    )
+    base.update(overrides)
+    return CloudGame(**base)
+
+
+def test_to_payload_omits_macro_breakdown_when_unset():
+    payload = _bare_cloud_game().to_payload()
+    assert "macroBreakdown" not in payload
+    assert "apmCurve" not in payload
+
+
+def test_to_payload_includes_macro_breakdown_and_apm_curve_when_set():
+    breakdown = {
+        "raw": {"sq": 75},
+        "all_leaks": [],
+        "top_3_leaks": [],
+        "stats_events": [{"time": 60, "minerals_current": 50}],
+        "opp_stats_events": [],
+    }
+    curve = {
+        "window_sec": 30,
+        "has_data": True,
+        "players": [{"pid": 1, "name": "me", "race": "Protoss", "samples": []}],
+    }
+    payload = _bare_cloud_game(
+        macro_breakdown=breakdown,
+        apm_curve=curve,
+    ).to_payload()
+    assert payload["macroBreakdown"] is breakdown
+    assert payload["apmCurve"] is curve
+
+
 def test_probe_analyzer_succeeds_in_source_layout():
     """In the canonical source layout the bundled analyzer is on disk
     next to apps/agent/, so probe_analyzer must succeed. If this

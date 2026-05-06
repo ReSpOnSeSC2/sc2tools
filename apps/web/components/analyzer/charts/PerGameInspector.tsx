@@ -446,9 +446,11 @@ function NotComputedPanel({
           Macro breakdown not available for this game yet
         </div>
         <p className="mt-2 text-caption text-text-muted">
-          Your SC2 agent hasn&apos;t uploaded a breakdown for this replay. Click{" "}
-          <span className="font-semibold text-text">Recompute</span> below to
-          ask it to re-parse the file.
+          Newer replays upload the breakdown automatically. Older ones were
+          synced before that field existed — Recompute asks your SC2 agent to
+          re-parse the .SC2Replay file. Make sure the agent is running, then
+          click <span className="font-semibold text-text">Recompute</span> or
+          open the agent and trigger a Resync to refresh every replay at once.
         </p>
         <div className="mt-3">
           <Button
