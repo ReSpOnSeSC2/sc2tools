@@ -131,14 +131,105 @@ def resolve(state_dir: Optional[Path]) -> Optional[str]:
     pipeline once per replay — the cloud refresh runs separately at
     start-up so we never block parsing on an HTTP call.
 
-    Order: disk cache (last cloud value) > SC2TOOLS_PLAYER_CONFIG JSON
-    > SC2TOOLS_PLAYER_HANDLE env var.
+    Order: disk cache (last cloud value or auto-detected) >
+    SC2TOOLS_PLAYER_CONFIG JSON > SC2TOOLS_PLAYER_HANDLE env var.
     """
     if state_dir is not None:
         cached = read_cache(state_dir)
         if cached:
             return cached
     return _read_env_fallback()
+
+
+def auto_detect_from_replays(
+    folders: list, max_scan: int = 30,
+) -> Optional[str]:
+    """Derive the player display name by scanning recent replays.
+
+    SC2 organises replays under
+    ``Accounts/<account>/<toonHandle>/Replays/Multiplayer/`` — the
+    folder path itself tells us which toon owns the directory, so the
+    player whose ``toon_handle`` matches that path is unambiguously
+    the user. We pick the most recently modified replay across the
+    supplied folders, parse it at ``live`` depth (load_level=2, fast),
+    and return the matching player's display name.
+
+    The result is intended to be written to the cache via
+    ``write_cache`` so subsequent parses use the standard
+    name-substring matcher in the analyzer without further work.
+
+    Returns ``None`` when no replays exist, no toon-shaped folder is
+    in the path, the analyzer can't be loaded, or the parsed replay
+    contains no human player matching the path's toon (a corrupt or
+    cooperative-mode file). All failures are silent — the caller
+    decides whether to log.
+    """
+    candidates = _gather_recent_replays(folders, max_scan=max_scan)
+    if not candidates:
+        return None
+    # Importing replay_pipeline runs ``_ensure_analyzer_on_path`` as a
+    # side-effect, which is what makes ``core.sc2_replay_parser``
+    # resolvable below. Order matters: this must happen BEFORE the
+    # parser import, otherwise a caller that pulled
+    # ``auto_detect_from_replays`` directly (without first touching
+    # replay_pipeline) would silently fall through to the bail-out
+    # branch and the agent would believe the analyzer is broken.
+    from .replay_pipeline import _toon_handle_from_path  # local to avoid cycle
+
+    try:
+        from core.sc2_replay_parser import parse_live  # type: ignore
+    except ImportError:
+        # The replay_pipeline import probe will surface this same
+        # condition with full diagnostics; here we just bail.
+        return None
+
+    for path in candidates:
+        toon = _toon_handle_from_path(path)
+        if not toon:
+            continue
+        try:
+            ctx = parse_live(str(path), "")
+        except Exception:  # noqa: BLE001
+            continue
+        for p in getattr(ctx, "all_players", None) or []:
+            if getattr(p, "is_observer", False) or getattr(p, "is_referee", False):
+                continue
+            if str(getattr(p, "handle", "") or "") == toon:
+                name = getattr(p, "name", "") or ""
+                # Strip any clan tag — the analyzer's ``is_me``
+                # substring match works regardless of the prefix, but
+                # storing the bare display name keeps the cache file
+                # human-readable and survives a clan switch.
+                if "]" in name:
+                    name = name.split("]", 1)[1].strip()
+                if name:
+                    return name
+    return None
+
+
+def _gather_recent_replays(folders: list, *, max_scan: int) -> list:
+    """Walk ``folders`` and return up to ``max_scan`` most-recent replays.
+
+    Used by ``auto_detect_from_replays``. We keep the scan tight so the
+    one-shot startup detection doesn't stall the agent on an account
+    with thousands of replays — the user only needs ONE matching file.
+    """
+    out: list = []
+    for folder in folders or []:
+        try:
+            base = Path(folder)
+        except TypeError:
+            continue
+        if not base.exists():
+            continue
+        try:
+            for p in base.rglob("*.SC2Replay"):
+                if p.is_file():
+                    out.append(p)
+        except OSError:
+            continue
+    out.sort(key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True)
+    return out[:max_scan]
 
 
 def _read_env_fallback() -> Optional[str]:

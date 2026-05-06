@@ -339,6 +339,7 @@ class SettingsPayload:
         "replay_folders",
         "autostart_enabled",
         "start_minimized",
+        "player_handle",
     )
 
     def __init__(
@@ -350,6 +351,7 @@ class SettingsPayload:
         replay_folders: Optional[List[Path]] = None,
         autostart_enabled: Optional[bool] = None,
         start_minimized: Optional[bool] = None,
+        player_handle: Optional[str] = None,
     ) -> None:
         self.api_base = api_base
         self.log_level = log_level
@@ -362,6 +364,11 @@ class SettingsPayload:
         self.replay_folders = replay_folders
         self.autostart_enabled = autostart_enabled
         self.start_minimized = start_minimized
+        # Player handle (battleTag without the # discriminator, or any
+        # substring that uniquely identifies the user in their own
+        # replays). ``None`` means "no change"; an empty string clears
+        # the override and falls back to the cloud profile + auto-detect.
+        self.player_handle = player_handle
 
 
 # ---------------------------------------------------------------------
@@ -1010,7 +1017,28 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._api_input.setPlaceholderText(
                 "e.g. https://api.sc2tools.com  (leave blank for default)",
             )
+            self._api_input.setToolTip(
+                "Where the agent uploads parsed replays and fetches your "
+                "profile. Leave blank to use the production cloud API "
+                "(https://sc2tools-api.onrender.com). Override only when "
+                "you're running a private API instance — e.g. local dev "
+                "or a self-hosted ingest endpoint.",
+            )
             form.addRow("API base URL", self._api_input)
+
+            self._handle_input = QtWidgets.QLineEdit()
+            self._handle_input.setPlaceholderText(
+                "e.g. ReSpOnSe  (leave blank to auto-detect from replays)",
+            )
+            self._handle_input.setToolTip(
+                "Your in-game player name. Used to identify which player "
+                "is YOU in each replay. Leave blank to auto-detect from "
+                "the most recent replay in your watched folders. The "
+                "value can be a clan-tagged display name or just a "
+                "unique substring; the parser does a case-sensitive "
+                "substring match against in-replay player names.",
+            )
+            form.addRow("Player handle", self._handle_input)
 
             self._log_combo = QtWidgets.QComboBox()
             self._log_combo.addItems(["INFO", "DEBUG", "WARNING", "ERROR"])
@@ -1252,6 +1280,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 replay_folder=folders[0] if folders else None,
                 autostart_enabled=self._autostart_check.isChecked(),
                 start_minimized=self._minimized_check.isChecked(),
+                player_handle=self._handle_input.text().strip(),
             )
             try:
                 ui._on_save_settings(payload)
@@ -1544,6 +1573,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             initial = ui._initial_settings
             if initial.api_base:
                 self._api_input.setText(initial.api_base)
+            if initial.player_handle:
+                self._handle_input.setText(initial.player_handle)
             if initial.log_level:
                 idx = self._log_combo.findText(
                     initial.log_level, QtCore.Qt.MatchFixedString,

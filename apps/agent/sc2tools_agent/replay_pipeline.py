@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -86,17 +87,18 @@ def _ensure_analyzer_on_path() -> None:
     ``reveal-sc2-opponent-main/core/`` — bundled alongside the agent in
     the frozen exe and laid out at the repo root in source mode.
 
-    Both bases are probed because legacy installs may still need the
-    ``SC2Replay-Analyzer`` companion modules. The reveal package is
-    inserted LAST so it ends up FIRST on ``sys.path``: ``from core.X``
-    must resolve through it (it's the package that owns the
-    ``sc2_replay_parser``, ``pulse_resolver`` and friends the agent
-    actually calls).
+    The legacy ``SC2Replay-Analyzer`` package is added too because some
+    auxiliary helpers historically resolved through it. The reveal
+    package is inserted LAST so it ends up FIRST on ``sys.path``:
+    ``from core.X`` must resolve through it (it owns
+    ``sc2_replay_parser``, ``pulse_resolver`` and the build-detector
+    modules the agent actually calls).
     """
     bases = _candidate_bases()
-    # SC2Replay-Analyzer first so the reveal package's `core` ends up
-    # earlier on sys.path (we insert at position 0, so the LAST insert
-    # wins).
+    # Order matters: each insert prepends to sys.path[0], so the LAST
+    # entry inserted wins lookup priority. Probe SC2Replay-Analyzer
+    # first, then reveal-sc2-opponent-main, so reveal's ``core`` is
+    # what Python finds when resolving ``import core.sc2_replay_parser``.
     for sub in ("SC2Replay-Analyzer", "reveal-sc2-opponent-main"):
         for base in bases:
             candidate = base / sub
@@ -115,6 +117,48 @@ class AnalyzerImportError(RuntimeError):
     a future restart or rebuild may resolve it and the replays should
     be re-tried.
     """
+
+
+def probe_analyzer() -> tuple[bool, Optional[str]]:
+    """Try to import ``core.sc2_replay_parser`` once at startup.
+
+    Returns ``(True, None)`` on success, ``(False, error_message)`` on
+    failure. The runner calls this right after agent boot so a broken
+    bundle is visible in the log immediately — without waiting for the
+    first replay to arrive (which can be hours later).
+
+    On failure we also dump the candidate bases we probed and the head
+    of ``sys.path`` so the user can see exactly where we looked. That
+    diagnostic was missing in v0.3.x and made the "No module named
+    'core'" loop genuinely opaque.
+    """
+    _ensure_analyzer_on_path()
+    try:
+        from core.sc2_replay_parser import parse_deep  # type: ignore # noqa: F401
+        log.info(
+            "analyzer_ready frozen=%s sys_path_head=%s",
+            getattr(sys, "frozen", False),
+            [p for p in sys.path[:4] if p],
+        )
+        return True, None
+    except ImportError as exc:
+        bases = [str(b) for b in _candidate_bases()]
+        # Synthesise a precise hint about which sibling root we did
+        # find — that's almost always what the user needs to fix.
+        found_reveal = any((Path(b) / "reveal-sc2-opponent-main" / "core" /
+                            "sc2_replay_parser.py").exists() for b in bases)
+        found_analyzer = any((Path(b) / "SC2Replay-Analyzer" / "core").exists()
+                             for b in bases)
+        msg = (
+            f"analyzer_import_failed exc={exc!r} "
+            f"frozen={getattr(sys, 'frozen', False)} "
+            f"reveal_core_present={found_reveal} "
+            f"analyzer_core_present={found_analyzer} "
+            f"bases_probed={bases} "
+            f"sys_path_head={sys.path[:6]}"
+        )
+        log.error(msg)
+        return False, msg
 
 
 @dataclass
@@ -186,31 +230,58 @@ def parse_replay_for_cloud(
         # bundled DATAS finished extracting (rare PyInstaller race) or
         # the user moved the install. A cheap retry beats permanently
         # skipping every replay the watcher sees.
-        _ensure_analyzer_on_path()
-        try:
-            from core.sc2_replay_parser import parse_deep  # type: ignore
-        except ImportError:
-            log.error(
-                "Could not import core.sc2_replay_parser. Frozen exe missing "
-                "the bundled analyzer (rebuild from packaging/sc2tools_agent.spec) "
-                "or, in source mode, ensure reveal-sc2-opponent-main/ sits next "
-                "to apps/agent/. sys.path[:6]=%s exc=%s",
-                sys.path[:6],
-                exc,
-            )
+        ok, diag = probe_analyzer()
+        if not ok:
             # Raise instead of returning None so the watcher can tell
             # this apart from a per-replay parse failure and avoid
-            # marking the file as permanently skipped.
-            raise AnalyzerImportError(str(exc)) from exc
+            # marking the file as permanently skipped. probe_analyzer
+            # already logged the full diagnostic, so the message we
+            # carry on the exception just needs to identify the cause.
+            raise AnalyzerImportError(diag or str(exc)) from exc
+        from core.sc2_replay_parser import parse_deep  # type: ignore
 
     handle = player_handle or _read_player_handle(state_dir)
     try:
-        ctx = parse_deep(str(file_path), handle)
+        ctx = parse_deep(str(file_path), handle or "")
     except Exception as exc:  # noqa: BLE001
         log.warning("parse_deep_failed for %s: %s", file_path.name, exc)
         return None
 
-    if ctx.is_ai_game or not ctx.me or not ctx.opponent:
+    if ctx.is_ai_game:
+        return None
+
+    # The configured handle didn't substring-match any player name in
+    # this replay. Before giving up, derive the player toon from the
+    # file path (replays live in
+    # ``Accounts/<account>/<toon>/Replays/Multiplayer/X.SC2Replay``)
+    # and re-resolve "us" by toon_handle. This is the canonical
+    # identity SC2 itself uses to write the replay, so it can never be
+    # ambiguous the way a substring match against a clan-tagged display
+    # name can be. Without this fallback, an unset/stale battleTag
+    # silently turns every upload into a no-op — exactly the failure
+    # mode that left ``state.uploaded`` empty in v0.3.4 even though the
+    # analyzer import worked.
+    if not ctx.me or not ctx.opponent:
+        toon = _toon_handle_from_path(file_path)
+        if toon and getattr(ctx, "all_players", None):
+            me_p, opp_p = _resolve_by_toon(ctx.all_players, toon)
+            if me_p and opp_p and me_p.name:
+                # Re-parse with the discovered name so the deep-parse
+                # extras (build detector, opp_strategy, build_log) are
+                # keyed off the right player. parse_deep is the only
+                # path that fills those — calling _resolve_me_opp on
+                # the existing ctx would skip them.
+                try:
+                    ctx = parse_deep(str(file_path), me_p.name)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning(
+                        "parse_deep_failed_after_toon_recovery for %s: %s",
+                        file_path.name,
+                        exc,
+                    )
+                    return None
+
+    if not ctx.me or not ctx.opponent:
         return None
 
     me = ctx.me
@@ -305,6 +376,49 @@ def _read_player_handle(state_dir: Optional[Path] = None) -> Optional[str]:
     from .player_handle import resolve
 
     return resolve(state_dir)
+
+
+_TOON_HANDLE_RE = re.compile(r"^\d+-S2-\d+-\d+$")
+
+
+def _toon_handle_from_path(path: Path) -> Optional[str]:
+    """Extract the SC2 toon handle from a replay's full path.
+
+    SC2 writes replays to
+    ``Documents/StarCraft II/Accounts/<accountId>/<toonHandle>/Replays/Multiplayer/``.
+    The toon-handle component is structured as ``<region>-S2-<realm>-<bnid>``
+    (e.g. ``1-S2-1-267727``). Return that token if present; otherwise
+    None. Used as a deterministic fallback for "who is me?" when the
+    user-supplied ``my_handle`` substring match fails.
+    """
+    for part in path.parts:
+        if _TOON_HANDLE_RE.match(part):
+            return part
+    return None
+
+
+def _resolve_by_toon(
+    all_players: list, toon: str,
+) -> tuple[Optional[Any], Optional[Any]]:
+    """Pick (me, opp) from ``ctx.all_players`` by exact toon match.
+
+    The ``handle`` attribute on a parsed player is the same
+    ``<region>-S2-<realm>-<bnid>`` string SC2 stores in the replay
+    payload, so an exact compare against the path-derived toon is
+    unambiguous — no clan-tag or rename collisions like the substring
+    match against display names suffers.
+    """
+    me = None
+    opp = None
+    for p in all_players:
+        if getattr(p, "is_observer", False) or getattr(p, "is_referee", False):
+            continue
+        handle = getattr(p, "handle", None)
+        if me is None and handle and str(handle) == toon:
+            me = p
+        elif opp is None:
+            opp = p
+    return me, opp
 
 
 def _result_str(player_result: Optional[str]) -> Optional[str]:

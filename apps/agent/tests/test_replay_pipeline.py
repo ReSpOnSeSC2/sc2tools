@@ -91,3 +91,91 @@ def test_swallows_resolver_exceptions(_stub_pulse_resolver):
     # log and return None — never propagate, since a transient outage
     # cannot be allowed to break the upload path.
     assert _resolve_pulse_character_id(_make_opp("1-S2-1-RAISES")) is None
+
+
+# -------------------------------------------------------------------------
+# Toon-handle path extraction & by-toon player resolution.
+#
+# These exist to lock down the v0.3.5 fallback that fires when the
+# user-supplied ``my_handle`` substring match fails. Without them, an
+# unset/stale battleTag silently turns every upload into a no-op
+# (the failure mode that left ``state.uploaded`` empty in v0.3.4).
+# -------------------------------------------------------------------------
+
+
+def test_toon_handle_from_path_finds_token_in_sc2_layout():
+    from sc2tools_agent.replay_pipeline import _toon_handle_from_path
+
+    p = Path(
+        "C:/Users/x/OneDrive/Pictures/Documents/StarCraft II/Accounts/"
+        "50983875/1-S2-1-267727/Replays/Multiplayer/foo.SC2Replay"
+    )
+    assert _toon_handle_from_path(p) == "1-S2-1-267727"
+
+
+def test_toon_handle_from_path_returns_none_when_not_in_sc2_layout():
+    from sc2tools_agent.replay_pipeline import _toon_handle_from_path
+
+    assert _toon_handle_from_path(Path("C:/random/dir/file.SC2Replay")) is None
+    # An account-level path (no toon segment) must also miss — the
+    # fallback can't disambiguate "us" without the toon component.
+    assert (
+        _toon_handle_from_path(
+            Path("C:/x/StarCraft II/Accounts/50983875/Replays/foo.SC2Replay"),
+        )
+        is None
+    )
+
+
+def test_resolve_by_toon_picks_matching_player_and_other_as_opponent():
+    from sc2tools_agent.replay_pipeline import _resolve_by_toon
+
+    players = [
+        SimpleNamespace(name="OtherGuy", handle="1-S2-1-9999", is_observer=False),
+        SimpleNamespace(name="Me", handle="1-S2-1-267727", is_observer=False),
+    ]
+    me, opp = _resolve_by_toon(players, "1-S2-1-267727")
+    assert me is not None and me.name == "Me"
+    assert opp is not None and opp.name == "OtherGuy"
+
+
+def test_resolve_by_toon_skips_observers():
+    from sc2tools_agent.replay_pipeline import _resolve_by_toon
+
+    players = [
+        SimpleNamespace(
+            name="Caster", handle="1-S2-1-267727", is_observer=True,
+        ),
+        SimpleNamespace(name="Me", handle="1-S2-1-267727", is_observer=False),
+        SimpleNamespace(name="Opp", handle="1-S2-1-1234", is_observer=False),
+    ]
+    me, opp = _resolve_by_toon(players, "1-S2-1-267727")
+    assert me is not None and me.name == "Me"
+    assert opp is not None and opp.name == "Opp"
+
+
+def test_resolve_by_toon_returns_none_when_no_match():
+    from sc2tools_agent.replay_pipeline import _resolve_by_toon
+
+    players = [
+        SimpleNamespace(name="A", handle="1-S2-1-1", is_observer=False),
+        SimpleNamespace(name="B", handle="1-S2-1-2", is_observer=False),
+    ]
+    me, opp = _resolve_by_toon(players, "1-S2-1-267727")
+    assert me is None
+    # opp can be set or not — only ``me is None`` fails the upload
+    # path; the surrounding caller bails before using opp.
+
+
+def test_probe_analyzer_succeeds_in_source_layout():
+    """In the canonical source layout the bundled analyzer is on disk
+    next to apps/agent/, so probe_analyzer must succeed. If this
+    starts failing, either the worktree is missing
+    ``reveal-sc2-opponent-main/`` or ``_ensure_analyzer_on_path``
+    regressed — both block every replay upload, so we want CI to
+    catch it loudly."""
+    from sc2tools_agent.replay_pipeline import probe_analyzer
+
+    ok, diag = probe_analyzer()
+    assert ok, f"probe_analyzer failed in source layout: {diag}"
+    assert diag is None

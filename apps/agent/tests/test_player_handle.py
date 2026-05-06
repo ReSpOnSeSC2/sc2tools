@@ -105,3 +105,42 @@ def test_refresh_swallows_network_errors_and_keeps_existing_cache(
     api.get_profile.side_effect = ConnectionError("offline")
     assert player_handle.refresh_from_cloud(api, tmp_path) is None
     assert player_handle.read_cache(tmp_path) == "Existing#0001"
+
+
+# -------------------------------------------------------------------------
+# Auto-detect from replays
+# -------------------------------------------------------------------------
+
+
+def test_auto_detect_returns_none_when_no_folders():
+    assert player_handle.auto_detect_from_replays([]) is None
+
+
+def test_auto_detect_returns_none_when_folder_missing(tmp_path: Path):
+    missing = tmp_path / "nope"
+    assert player_handle.auto_detect_from_replays([missing]) is None
+
+
+def test_auto_detect_returns_none_when_no_replays(tmp_path: Path):
+    # Empty SC2-shaped folder. The function must not crash; it returns
+    # None so the runner falls through to the "uploads disabled" warning.
+    folder = tmp_path / "Accounts" / "111" / "1-S2-1-2" / "Replays" / "Multiplayer"
+    folder.mkdir(parents=True)
+    assert player_handle.auto_detect_from_replays([folder]) is None
+
+
+def test_auto_detect_resolves_real_replay():
+    """Run against a real bundled replay fixture if one exists.
+
+    The agent worktree includes the user's actual SC2 replays only on
+    a developer's box, so we skip when the canonical fixture path is
+    missing rather than failing CI."""
+    fixture_folder = Path(
+        "C:/Users/jay19/OneDrive/Pictures/Documents/StarCraft II/"
+        "Accounts/50983875/1-S2-1-267727/Replays/Multiplayer",
+    )
+    if not fixture_folder.exists():
+        pytest.skip("real-replay fixture not present on this host")
+    out = player_handle.auto_detect_from_replays([fixture_folder], max_scan=3)
+    # Whatever the latest replay reveals, it must be a non-empty string.
+    assert isinstance(out, str) and out
