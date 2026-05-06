@@ -127,10 +127,14 @@ def probe_analyzer() -> tuple[bool, Optional[str]]:
     bundle is visible in the log immediately — without waiting for the
     first replay to arrive (which can be hours later).
 
-    On failure we also dump the candidate bases we probed and the head
-    of ``sys.path`` so the user can see exactly where we looked. That
-    diagnostic was missing in v0.3.x and made the "No module named
-    'core'" loop genuinely opaque.
+    Catches ``Exception`` (not just ``ImportError``) on purpose: a
+    badly-bundled frozen exe can fail with ``FileNotFoundError``
+    inside sc2reader's data-file loader, ``AttributeError`` in a Qt
+    plugin probe, etc. Any of those bubbling out of the boot worker
+    would kill the whole agent — but we'd rather log a precise
+    diagnostic and let the agent run in a degraded "GUI-only, no
+    parsing" mode so the user can still see Settings, fix the
+    underlying problem, and try again.
     """
     _ensure_analyzer_on_path()
     try:
@@ -141,7 +145,7 @@ def probe_analyzer() -> tuple[bool, Optional[str]]:
             [p for p in sys.path[:4] if p],
         )
         return True, None
-    except ImportError as exc:
+    except Exception as exc:  # noqa: BLE001
         bases = [str(b) for b in _candidate_bases()]
         # Synthesise a precise hint about which sibling root we did
         # find — that's almost always what the user needs to fix.
@@ -150,14 +154,19 @@ def probe_analyzer() -> tuple[bool, Optional[str]]:
         found_analyzer = any((Path(b) / "SC2Replay-Analyzer" / "core").exists()
                              for b in bases)
         msg = (
-            f"analyzer_import_failed exc={exc!r} "
+            f"analyzer_import_failed exc_type={type(exc).__name__} "
+            f"exc={exc!r} "
             f"frozen={getattr(sys, 'frozen', False)} "
             f"reveal_core_present={found_reveal} "
             f"analyzer_core_present={found_analyzer} "
             f"bases_probed={bases} "
             f"sys_path_head={sys.path[:6]}"
         )
-        log.error(msg)
+        # log.exception captures the full traceback so the user can see
+        # WHICH sub-import failed (sc2reader/data, a missing Qt plugin,
+        # whatever) — that's exactly the diagnostic that was missing
+        # before we surfaced the v0.3.5 sc2reader-data bug at boot.
+        log.exception("analyzer_probe_failed %s", msg)
         return False, msg
 
 
@@ -225,11 +234,15 @@ def parse_replay_for_cloud(
         # actually need to parse — keeps startup fast and pairing-only
         # flows from pulling in sc2reader.
         from core.sc2_replay_parser import parse_deep  # type: ignore
-    except ImportError as exc:
-        # Re-probe sys.path in case the agent was launched before the
-        # bundled DATAS finished extracting (rare PyInstaller race) or
-        # the user moved the install. A cheap retry beats permanently
-        # skipping every replay the watcher sees.
+    except Exception as exc:  # noqa: BLE001
+        # Catch broader than ImportError on purpose. A frozen exe with
+        # missing sc2reader data files raises FileNotFoundError; a Qt
+        # plugin probe failing inside an analyzer transitive import
+        # raises AttributeError. Both used to slip past an
+        # ``except ImportError`` clause and bubble up as uncaught
+        # exceptions inside the watcher's ThreadPoolExecutor — which
+        # silently swallows them. probe_analyzer normalises every
+        # failure mode to a single (ok, diag) signal we can act on.
         ok, diag = probe_analyzer()
         if not ok:
             # Raise instead of returning None so the watcher can tell

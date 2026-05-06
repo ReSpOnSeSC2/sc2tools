@@ -27,9 +27,14 @@ for a single .exe (slower first-run because the runtime unpacks into
 
 from pathlib import Path
 
-# PyInstaller helper for collecting whole packages - used for PySide6
-# so every Qt plugin (platforms, imageformats, styles) is bundled.
-from PyInstaller.utils.hooks import collect_all  # type: ignore[import-not-found]
+# PyInstaller helpers for collecting whole packages — used for PySide6
+# (Qt plugins) and sc2reader (CSV game-data files loaded via
+# ``pkgutil.get_data`` which PyInstaller's static analyser cannot see).
+from PyInstaller.utils.hooks import (  # type: ignore[import-not-found]
+    collect_all,
+    collect_data_files,
+    collect_submodules,
+)
 
 ONE_FILE = True
 
@@ -71,6 +76,14 @@ if TRAY_ICON.exists():
 
 # sc2reader internals + matplotlib pyplot lazy imports need explicit
 # hidden imports because PyInstaller can't statically detect them.
+# CRITICAL: sc2reader also ships CSV game-data files inside its wheel
+# (sc2reader/data/HotS/, /LotV/, /WoL/) which it loads via
+# ``pkgutil.get_data`` from ``sc2reader/constants.py``. PyInstaller's
+# static analyser can't see those reads, so we collect them explicitly
+# below — without this, every parse crashes with FileNotFoundError the
+# moment sc2reader tries to look up a unit/ability ID. Bug surfaced
+# in v0.3.5 once probe_analyzer started executing the import chain at
+# boot; in earlier versions it failed silently per-replay.
 HIDDEN = [
     "sc2reader",
     "sc2reader.engine",
@@ -89,6 +102,17 @@ HIDDEN = [
     "sentry_sdk",
     "sentry_sdk.integrations",
 ]
+# Pull EVERY sc2reader submodule + its bundled CSV game-data files.
+# ``collect_submodules`` walks the package's __path__ and emits the
+# full hidden-imports list; ``collect_data_files`` does the same for
+# non-Python siblings (CSVs, JSONs). Both are idempotent against the
+# explicit HIDDEN entries above.
+HIDDEN += collect_submodules("sc2reader")
+SC2READER_DATAS = collect_data_files("sc2reader")
+
+# sc2reader CSV game-data files (collected above). MUST be in DATAS
+# or every parse crashes with FileNotFoundError on the first lookup.
+DATAS += SC2READER_DATAS
 
 # PySide6 - collect_all pulls every submodule, plus the Qt plugin
 # directories the windowed runtime needs (qwindows, etc.). Without
