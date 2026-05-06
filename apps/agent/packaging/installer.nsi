@@ -53,8 +53,15 @@ VIAddVersionKey "LegalCopyright" "(c) SC2 Tools contributors"
 !include "FileFunc.nsh"
 
 !define MUI_ABORTWARNING
-!define MUI_ICON   "icon.ico"
-!define MUI_UNICON "icon.ico"
+; Custom installer/uninstaller icons are optional. We do NOT define
+; MUI_ICON / MUI_UNICON when the file is absent because NSIS otherwise
+; aborts with "can't open file" instead of falling back to its default
+; icon. Drop a 256-colour icon.ico next to this script if you want
+; branded chrome on the wizard.
+!if /FileExists "${__FILEDIR__}\icon.ico"
+  !define MUI_ICON   "icon.ico"
+  !define MUI_UNICON "icon.ico"
+!endif
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
@@ -129,7 +136,4 @@ Section "Uninstall"
     DeleteRegKey HKCU "${APP_REG_KEY}"
 
     ; State (pairing token, log files) lives at the same %LOCALAPPDATA%
-    ; root but in a sibling subfolder. Leave it intact on uninstall -
-    ; users running a re-install or moving to a beta channel expect to
-    ; keep their pairing.
-SectionEnd
+    ; root but in a sibling subfolder. Leave it
