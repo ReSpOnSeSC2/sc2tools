@@ -29,7 +29,7 @@ export const revalidate = 600;
 
 const GITHUB_OWNER = "ReSpOnSeSC2";
 const GITHUB_REPO = "sc2tools";
-const RELEASE_TAG_PREFIX = "agent-v";
+const RELEASE_TAG_PREFIX = "v";
 
 type Asset = {
   name: string;
@@ -175,7 +175,8 @@ function pickAssetForPlatform(
       assets.find(
         (a) =>
           /SC2ToolsAgent-Setup.*\.exe$/i.test(a.name) ||
-          /sc2tools-agent.*\.exe$/i.test(a.name),
+          /sc2tools-agent.*\.exe$/i.test(a.name) ||
+          /SC2Tools-Setup.*\.exe$/i.test(a.name),
       ) || null
     );
   }
