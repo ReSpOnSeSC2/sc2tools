@@ -197,10 +197,19 @@ class OpponentsService {
    * + per matchup), last 5 games, and the full games array (newest
    * first) for the all-games table.
    *
+   * Date-range filtering: when `opts.since` / `opts.until` are provided,
+   * totals / byMap / byStrategy / topStrategies / median + matchup
+   * timings / matchup counts / the all-games table are computed from
+   * the games inside the window. `last5Games` and `predictedStrategies`
+   * always come from the unfiltered (full-history) games list, since the
+   * UI surfaces them as "what's likely next" and "most recent activity"
+   * — both of which would be misleading if scoped to a stale window.
+   *
    * @param {string} userId
    * @param {string} pulseId
+   * @param {{ since?: Date, until?: Date }} [opts]
    */
-  async get(userId, pulseId) {
+  async get(userId, pulseId, opts = {}) {
     const doc = await this.db.opponents.findOne(
       { userId, pulseId },
       { projection: { _id: 0 } },
@@ -213,10 +222,15 @@ class OpponentsService {
       )
       .sort({ date: -1 })
       .toArray();
-    const games = rawGames.map(serializeGameForProfile);
-    const aggregates = aggregateByMapAndStrategy(games);
-    const totals = computeTotals(games, doc);
-    const dna = computeDnaFields(games);
+    const allGames = rawGames.map(serializeGameForProfile);
+    const filteredGames = filterGamesByDate(allGames, opts.since, opts.until);
+    const aggregates = aggregateByMapAndStrategy(filteredGames);
+    const totals = computeTotals(filteredGames, doc);
+    const dna = computeDnaFields(filteredGames);
+    // Predictions and the most-recent-5 list always reflect the full
+    // history — see method jsdoc.
+    const predictedStrategies = Dna.recencyWeightedStrategies(allGames);
+    const last5Games = allGames.slice(0, 5);
     const matchupTimingsLegacy = dna.matchupTimings;
     const matchupTimings = projectMatchupTimings(matchupTimingsLegacy);
     return {
@@ -226,7 +240,7 @@ class OpponentsService {
       byMap: aggregates.byMap,
       byStrategy: aggregates.byStrategy,
       topStrategies: dna.topStrategies,
-      predictedStrategies: dna.predictedStrategies,
+      predictedStrategies,
       myRace: dna.myRace,
       oppRaceModal: dna.oppRaceModal,
       matchupLabel: dna.matchupLabel,
@@ -236,8 +250,8 @@ class OpponentsService {
       medianTimings: projectMedianTimings(dna.medianTimings),
       medianTimingsLegacy: dna.medianTimings,
       medianTimingsOrder: dna.medianTimingsOrder,
-      last5Games: dna.last5Games,
-      games,
+      last5Games,
+      games: filteredGames,
     };
   }
 
@@ -371,6 +385,37 @@ function serializeGameForProfile(g) {
     game_length: g.durationSec || 0,
     macro_score: typeof g.macroScore === "number" ? g.macroScore : null,
   };
+}
+
+/**
+ * Restrict a games array to those whose `date` falls inside the
+ * inclusive [since, until] range. Either bound can be omitted. Games
+ * with an unparseable date are kept (matches the rest of the pipeline,
+ * which tolerates legacy rows without timestamps).
+ *
+ * @param {Array<object>} games
+ * @param {Date|undefined} since
+ * @param {Date|undefined} until
+ */
+function filterGamesByDate(games, since, until) {
+  if (!since && !until) return games;
+  const sinceMs =
+    since instanceof Date && !Number.isNaN(since.getTime())
+      ? since.getTime()
+      : null;
+  const untilMs =
+    until instanceof Date && !Number.isNaN(until.getTime())
+      ? until.getTime()
+      : null;
+  if (sinceMs === null && untilMs === null) return games;
+  return games.filter((g) => {
+    if (!g || !g.date) return true;
+    const t = new Date(g.date).getTime();
+    if (Number.isNaN(t)) return true;
+    if (sinceMs !== null && t < sinceMs) return false;
+    if (untilMs !== null && t > untilMs) return false;
+    return true;
+  });
 }
 
 /**

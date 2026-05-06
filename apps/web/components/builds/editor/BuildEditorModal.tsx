@@ -34,11 +34,19 @@ export interface BuildEditorModalProps {
   /** Called when a save succeeds with the persisted slug + draft. */
   onSaved?: (slug: string, draft: BuildEditorDraft) => void;
   /**
-   * Optional initial draft override. Currently unused by the
-   * SaveAsBuildButton flow but provided so a future "edit existing
-   * build" entry point can drop straight into the modal.
+   * Optional initial draft override. The edit-existing-build entry
+   * point seeds this from a fetched custom-build doc so name, rules,
+   * skill level and strategy notes appear pre-populated.
    */
   initialDraft?: Partial<BuildEditorDraft>;
+  /**
+   * When set, save() targets this slug instead of slugifying the name.
+   * Use this for the edit-existing-build flow so renames update the
+   * same document rather than creating a new one.
+   */
+  lockedSlug?: string;
+  /** Switches the title eyebrow from "Save as new build" to "Edit build". */
+  mode?: "create" | "edit";
 }
 
 /**
@@ -65,6 +73,8 @@ export function BuildEditorModal({
   defaultName,
   onSaved,
   initialDraft,
+  lockedSlug,
+  mode = "create",
 }: BuildEditorModalProps) {
   const sourceRows = useMemo(() => eventsToSourceRows(events), [events]);
 
@@ -106,6 +116,7 @@ export function BuildEditorModal({
   const editor = useBuildEditorState({
     open,
     initialDraft: seedDraft,
+    lockedSlug,
     context: {
       gameId,
       sourceEvents: events,
@@ -130,7 +141,7 @@ export function BuildEditorModal({
         title={
           <span className="flex items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-              Save as new build
+              {mode === "edit" ? "Edit build" : "Save as new build"}
             </span>
             <span className="truncate text-h4 font-semibold text-text">
               {editor.draft.name || "Untitled"}
@@ -164,6 +175,7 @@ export function BuildEditorModal({
             saveError={editor.saveError}
             onCancel={onClose}
             onSave={editor.save}
+            mode={mode}
           />
         }
       >

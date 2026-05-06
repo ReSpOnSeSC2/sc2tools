@@ -30,6 +30,12 @@ export interface UseBuildEditorStateOptions {
   open: boolean;
   context: BuildEditorContext;
   initialDraft: BuildEditorDraft;
+  /**
+   * When set, save() PUTs to this slug regardless of the current name,
+   * preserving the existing build's identity through renames. Used by
+   * the edit-existing-build flow.
+   */
+  lockedSlug?: string;
   /** Notified after a successful save with the persisted slug + payload. */
   onSaved?: (slug: string, payload: BuildEditorDraft) => void;
 }
@@ -47,7 +53,7 @@ interface BuildOrderApiResp {
 export function useBuildEditorState(
   opts: UseBuildEditorStateOptions,
 ): BuildEditorState {
-  const { open, context, initialDraft, onSaved } = opts;
+  const { open, context, initialDraft, lockedSlug, onSaved } = opts;
   const { getToken } = useAuth();
 
   const [draft, setDraft] = useState<BuildEditorDraft>(initialDraft);
@@ -298,7 +304,7 @@ export function useBuildEditorState(
       setErrors({});
       setSaving(true);
       setSaveError(null);
-      const slug = slugifyRuleName(sanitised.payload.name);
+      const slug = lockedSlug || slugifyRuleName(sanitised.payload.name);
       const body = {
         name: sanitised.payload.name,
         race: sanitised.payload.race,
@@ -346,7 +352,7 @@ export function useBuildEditorState(
         pushToast("error", `Save failed: ${message}`);
       }
     },
-    [draft, context.gameId, context.perspective, getToken, onSaved, pushToast],
+    [draft, context.gameId, context.perspective, getToken, lockedSlug, onSaved, pushToast],
   );
 
   return {

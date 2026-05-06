@@ -15,7 +15,6 @@ import { useDirtyForm } from "@/components/ui/useDirtyForm";
 import { usePublishDirty } from "./SettingsContext";
 
 type Misc = {
-  theme?: "dark" | "system";
   defaultTab?: string;
   showWizardOnNextLogin?: boolean;
   analytics?: boolean;
@@ -78,27 +77,10 @@ export function SettingsMisc() {
     <>
       <Section
         title="App preferences"
-        description="Default tab, theme behavior, and the small dials that don't fit elsewhere."
+        description="Default tab and the small dials that don't fit elsewhere. Light/dark theme is controlled by the toggle in the page header."
       >
         <Card>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field
-              label="Theme handling"
-              hint="Use 'System' to follow your OS dark/light setting"
-            >
-              <Select
-                value={draft.theme ?? "dark"}
-                onChange={(e) =>
-                  setDraft((d) => ({
-                    ...d,
-                    theme: e.target.value as Misc["theme"],
-                  }))
-                }
-              >
-                <option value="dark">Dark (always)</option>
-                <option value="system">System</option>
-              </Select>
-            </Field>
             <Field label="Default tab" hint="Where the analyzer opens by default">
               <Select
                 value={draft.defaultTab ?? "opponents"}
