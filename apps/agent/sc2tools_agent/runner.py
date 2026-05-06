@@ -45,13 +45,19 @@ from .crash_reporter import (
 )
 from .heartbeat import Heartbeat
 from .pairing import ensure_paired
-from .player_handle import refresh_from_cloud as refresh_player_handle
+from .player_handle import (
+    auto_detect_from_replays,
+    read_cache as read_player_handle_cache,
+    refresh_from_cloud as refresh_player_handle,
+    write_cache as write_player_handle_cache,
+)
 from .replay_finder import (
     all_multiplayer_dirs,
     all_multiplayer_dirs_anywhere,
     find_all_replays_roots,
     find_replays_root,
 )
+from .replay_pipeline import probe_analyzer
 from .state import AgentState, load_state, save_state
 from .ui import (
     ConsoleUI,
@@ -228,14 +234,15 @@ def _run_headless(cfg: AgentConfig, log_dir: Path) -> int:
         api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
         ui.on_paired(state.user_id or "")
 
-    try:
-        cached = refresh_player_handle(api, cfg.state_dir)
-        if cached:
-            log.info("player_handle_cached_from_cloud")
-        else:
-            log.info("player_handle_cloud_empty; using local fallback")
-    except Exception:  # noqa: BLE001
-        log.exception("player_handle_refresh_unhandled")
+    probe_ok, probe_diag = probe_analyzer()
+    if not probe_ok:
+        log.error(
+            "analyzer_probe_failed_at_startup — replays will not be parsed "
+            "until the analyzer can be loaded. Diagnostic: %s",
+            probe_diag,
+        )
+
+    _ensure_player_handle(api, cfg, state, initial_replay_folders, log)
 
     upload = UploadQueue(
         cfg=cfg,
@@ -321,6 +328,11 @@ def _run_with_gui(
         ),
         autostart_enabled=autostart.is_enabled(),
         start_minimized=state.start_minimized,
+        # Surface the cached handle (cloud profile or prior auto-detect)
+        # so the user sees what the agent will use when no override is
+        # set. Empty when nothing has been resolved yet — the placeholder
+        # text in the input field tells them the implications.
+        player_handle=read_player_handle_cache(cfg.state_dir) or "",
     )
 
     gui = GuiUI(
@@ -445,14 +457,16 @@ def _gui_boot_worker(
             )
             ui.on_paired(state.user_id or "")
 
-        try:
-            cached = refresh_player_handle(api, cfg.state_dir)
-            if cached:
-                log.info("player_handle_cached_from_cloud")
-            else:
-                log.info("player_handle_cloud_empty; using local fallback")
-        except Exception:  # noqa: BLE001
-            log.exception("player_handle_refresh_unhandled")
+        probe_ok, probe_diag = probe_analyzer()
+        if not probe_ok:
+            log.error(
+                "analyzer_probe_failed_at_startup — replays will not be "
+                "parsed until the analyzer can be loaded. Diagnostic: %s",
+                probe_diag,
+            )
+
+        folders_for_detect = _discover_replay_folders(cfg, state)
+        _ensure_player_handle(api, cfg, state, folders_for_detect, log)
 
         upload = UploadQueue(
             cfg=cfg,
@@ -586,6 +600,16 @@ def _handle_save_settings(
         state.api_base_override = payload.api_base or None
     if payload.log_level:
         state.log_level_override = payload.log_level
+    if payload.player_handle is not None:
+        # Empty string means "clear my override and fall back to cloud
+        # profile / auto-detect". Anything else writes the user-typed
+        # value into the cache the parser reads on every replay.
+        try:
+            write_player_handle_cache(
+                cfg.state_dir, payload.player_handle or None,
+            )
+        except OSError:
+            log.exception("player_handle_cache_write_failed")
     if payload.replay_folders is not None:
         # The Settings tab owns the full list — replace, don't merge.
         cleaned: list[str] = []
@@ -671,6 +695,77 @@ def _handle_update_available(
 
 
 # ---------------- helpers ----------------
+
+
+def _ensure_player_handle(
+    api: ApiClient,
+    cfg: AgentConfig,
+    state: AgentState,
+    folders: List[Path],
+    log: logging.Logger,
+) -> Optional[str]:
+    """Resolve a usable player handle, persist it, and return it.
+
+    Resolution order, picking the first that yields a non-empty value:
+
+      1. **Cloud profile** (``GET /v1/me/profile``) — the user typed
+         it into Settings → Profile in the web app. This is the
+         canonical source.
+      2. **Disk cache** — the most recent successful resolution. Lets
+         offline launches and transient API outages keep working.
+      3. **Auto-detect from replays** — read the most recent replay
+         in the watched folders, match the path's toon-handle to a
+         player record, and harvest their display name. This means a
+         brand-new install with ZERO setup still uploads correctly
+         the first time the user plays a multiplayer game.
+
+    On a successful auto-detect the value is written to the cache so
+    subsequent starts (and the per-replay parser path) skip the scan.
+
+    Returns the resolved handle, or ``None`` if no source produced one.
+    Never raises — all branches are defensive because this runs in
+    the GUI boot worker and must not abort agent startup.
+    """
+    # 1. Cloud — if it returns a value, refresh_from_cloud already wrote
+    #    the disk cache for us, so nothing more to do here.
+    try:
+        cloud_handle = refresh_player_handle(api, cfg.state_dir)
+    except Exception:  # noqa: BLE001
+        log.exception("player_handle_refresh_unhandled")
+        cloud_handle = None
+    if cloud_handle:
+        log.info("player_handle_resolved source=cloud")
+        return cloud_handle
+
+    # 2. Disk cache (cloud was empty / offline / unreachable).
+    cached = read_player_handle_cache(cfg.state_dir)
+    if cached:
+        log.info("player_handle_resolved source=cache value=%s", cached)
+        return cached
+
+    # 3. Auto-detect from a recent replay. This is the only path that
+    #    produces a usable handle for a fresh-install user who hasn't
+    #    set their battleTag in the web UI — without it the agent
+    #    would happily run forever, silently uploading zero games.
+    try:
+        detected = auto_detect_from_replays(folders)
+    except Exception:  # noqa: BLE001
+        log.exception("player_handle_auto_detect_unhandled")
+        detected = None
+    if detected:
+        try:
+            write_player_handle_cache(cfg.state_dir, detected)
+        except OSError:
+            log.warning("player_handle_cache_write_failed_post_autodetect")
+        log.info("player_handle_resolved source=auto_detect value=%s", detected)
+        return detected
+
+    log.warning(
+        "player_handle_unresolved — uploads will be skipped until the "
+        "user sets battleTag in Settings → Profile or plays a game in "
+        "a watched folder so auto-detect has something to scan.",
+    )
+    return None
 
 
 def _discover_replay_folders(
