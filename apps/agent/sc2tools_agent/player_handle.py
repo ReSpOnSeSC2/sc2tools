@@ -112,17 +112,41 @@ def refresh_from_cloud(
 def _pick_handle_from_profile(profile: object) -> Optional[str]:
     """Pull the best identifier out of a ``GET /v1/me/profile`` response.
 
-    The web UI lets users fill battleTag (e.g. "Name#1234") or pulseId.
-    The replay parser matches against the in-replay name, so battleTag
-    is the right choice when present; pulseId is a fallback when only
-    the SC2Pulse character id has been set.
+    The replay parser identifies "us" by substring-matching the
+    handle against the in-replay player name. SC2 writes only the
+    display name into the replay (no ``#discriminator``), so the
+    handle has to be the bare display-name portion or the match
+    fails for everyone with a battleTag like ``Name#1234``.
+
+    Resolution order:
+      1. ``displayName`` — the cleanest source (what the web profile
+         page now shows separately from the battleTag).
+      2. ``battleTag`` — but **stripped of the discriminator**.
+         "ReSpOnSe#1872" → "ReSpOnSe". Without this strip the
+         substring match fails because the in-replay name doesn't
+         carry the ``#1872`` suffix, every parse falls through to
+         the toon-handle fallback, and every replay pays the cost
+         of two ``parse_deep`` calls.
+      3. ``pulseId`` — last resort when the user has only set their
+         SC2Pulse character id and nothing else.
     """
     if not isinstance(profile, dict):
         return None
-    for key in ("battleTag", "pulseId"):
-        v = profile.get(key)
-        if isinstance(v, str) and v.strip():
-            return v.strip()
+    name = profile.get("displayName")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    bt = profile.get("battleTag")
+    if isinstance(bt, str) and bt.strip():
+        # Strip everything from the first ``#`` onward. SC2 in-replay
+        # names never contain it, so keeping it would break the
+        # substring matcher.
+        bare = bt.split("#", 1)[0].strip()
+        if bare:
+            return bare
+        return bt.strip()
+    pulse = profile.get("pulseId")
+    if isinstance(pulse, str) and pulse.strip():
+        return pulse.strip()
     return None
 
 

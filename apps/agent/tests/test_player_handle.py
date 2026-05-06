@@ -69,14 +69,43 @@ def test_read_cache_recovers_from_corrupt_file(tmp_path: Path) -> None:
 
 
 def test_refresh_from_cloud_writes_battletag(tmp_path: Path) -> None:
+    """battleTag is used when displayName isn't set, but the
+    discriminator is stripped because SC2 doesn't put it in the
+    in-replay player name."""
     api = MagicMock()
     api.get_profile.return_value = {
         "battleTag": "Cloud#1234",
         "pulseId": "999",
     }
     handle = player_handle.refresh_from_cloud(api, tmp_path)
-    assert handle == "Cloud#1234"  # battleTag preferred over pulseId
-    assert player_handle.read_cache(tmp_path) == "Cloud#1234"
+    assert handle == "Cloud"  # discriminator stripped, NOT "Cloud#1234"
+    assert player_handle.read_cache(tmp_path) == "Cloud"
+
+
+def test_refresh_from_cloud_prefers_display_name_over_battletag(
+    tmp_path: Path,
+) -> None:
+    """When both displayName and battleTag are set (the common case
+    after the user fills out their web profile), displayName wins —
+    it's the cleanest match against the in-replay player name."""
+    api = MagicMock()
+    api.get_profile.return_value = {
+        "displayName": "ReSpOnSe",
+        "battleTag": "ReSpOnSe#1872",
+        "pulseId": "994428",
+    }
+    handle = player_handle.refresh_from_cloud(api, tmp_path)
+    assert handle == "ReSpOnSe"
+
+
+def test_refresh_from_cloud_battletag_without_discriminator(
+    tmp_path: Path,
+) -> None:
+    """A battleTag with no '#' (legacy/edge case) returns as-is."""
+    api = MagicMock()
+    api.get_profile.return_value = {"battleTag": "JustAName"}
+    handle = player_handle.refresh_from_cloud(api, tmp_path)
+    assert handle == "JustAName"
 
 
 def test_refresh_from_cloud_falls_back_to_pulse_id(tmp_path: Path) -> None:
