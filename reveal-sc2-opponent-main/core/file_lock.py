@@ -221,9 +221,17 @@ def _try_steal(lock_path: str, expected: Optional[Dict[str, Any]]) -> bool:
     if current is None:
         # Already gone -- a competing acquirer beat us to it.
         return True
-    # Refuse to steal if metadata changed under us (someone is now
-    # actively holding it).
-    if expected is not None and current != expected:
+    # ``expected is None`` means our caller's first read of the holder
+    # metadata failed (typically because the holder was mid-write and
+    # the file was briefly inaccessible -- PowerShell uses
+    # FileShare.None, and Windows AV scans new files transiently). If
+    # the second read NOW returns valid metadata, that holder is
+    # healthy; we MUST NOT steal. Without this guard, a sharing-
+    # violation transient on a fresh lockfile lets us silently delete
+    # a real holder's lock and produce lost updates.
+    if expected is None:
+        return False
+    if current != expected:
         return False
     try:
         os.unlink(lock_path)
@@ -332,6 +340,12 @@ def _release_owned(lock_path: str, meta: Dict[str, Any]) -> None:
     If we got pre-empted by a stale-steal somewhere else, the file may
     now belong to a different process. Removing it would orphan that
     holder; safer to log + skip.
+
+    On Windows another process briefly holding a read handle for a
+    liveness check (or AV indexing) makes ``os.unlink`` raise
+    ``PermissionError`` (ERROR_SHARING_VIOLATION). Retry a few times
+    with brief sleeps so we don't leak the lockfile -- on POSIX the
+    first attempt always succeeds and the loop exits immediately.
     """
     current = _read_lock_meta(lock_path)
     if current is None:
@@ -344,12 +358,26 @@ def _release_owned(lock_path: str, meta: Dict[str, Any]) -> None:
             file=sys.stderr,
         )
         return
-    try:
-        os.unlink(lock_path)
-    except FileNotFoundError:
-        return
-    except OSError as exc:
-        print(f"[file_lock] release error: {exc}", file=sys.stderr)
+    max_attempts = 6
+    last_exc: Optional[BaseException] = None
+    for attempt in range(max_attempts):
+        try:
+            os.unlink(lock_path)
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError as exc:
+            last_exc = exc
+        except OSError as exc:
+            last_exc = exc
+            # EBUSY / EACCES / EPERM are the codes we get on Windows
+            # when another process is briefly holding a read handle.
+            if exc.errno not in (errno.EBUSY, errno.EACCES, errno.EPERM):
+                break
+        delay_ms = min(5 * (2 ** attempt), 80)
+        time.sleep(delay_ms / 1000.0)
+    if last_exc is not None:
+        print(f"[file_lock] release error: {last_exc}", file=sys.stderr)
 
 
 __all__ = [

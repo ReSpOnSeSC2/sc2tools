@@ -85,6 +85,43 @@ class FileLockHappyPath(unittest.TestCase):
                 os.environ.pop(file_lock.ENABLE_ENV_VAR, None)
 
 
+class FileLockStealRaceGuard(unittest.TestCase):
+    """Regression for the cross-language steal-race that produced lost
+    updates when a contender's first read of the holder's lockfile
+    returned ``None`` (transient sharing-violation, happens for real on
+    Windows when PowerShell's FileShare.None create races a Python read
+    by milliseconds). Before the fix, ``_try_steal(lock_path, None)``
+    unlinked a perfectly healthy holder's lockfile."""
+
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.mkdtemp(prefix="sc2_lock_steal_race_")
+        self.target = os.path.join(self.tmpdir, "MyOpponentHistory.json")
+        self.lock_path = os.path.join(
+            self.tmpdir, file_lock.LOCK_DIR_NAME,
+            file_lock._safe_lock_name(self.target),
+        )
+        os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_try_steal_refuses_when_expected_is_none_and_current_healthy(self) -> None:
+        meta = {
+            "pid": os.getpid(),
+            "host": "test-host",
+            "lang": "python",
+            "platform": "Test",
+            "since": int(time.time() * 1000),
+            "stamp": "2026-05-06T00:00:00Z",
+        }
+        with open(self.lock_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f)
+
+        stole = file_lock._try_steal(self.lock_path, None)
+        self.assertFalse(stole)
+        self.assertTrue(os.path.exists(self.lock_path))
+
+
 class FileLockStaleRecovery(unittest.TestCase):
 
     def setUp(self) -> None:
