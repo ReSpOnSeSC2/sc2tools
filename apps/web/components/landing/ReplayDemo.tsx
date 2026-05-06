@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -12,13 +12,18 @@ import {
   Loader2,
   Sparkles,
   Upload,
-  User as UserIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { API_BASE } from "@/lib/clientApi";
+import { BuildEditorModal } from "@/components/builds/editor";
+import {
+  normalizeBuildName,
+  type BuildOrderEvent,
+} from "@/lib/build-events";
+import type { RaceLite, VsRaceLite } from "@/lib/build-rules";
 
 /* eslint-disable max-lines */
 /**
@@ -27,9 +32,14 @@ import { API_BASE } from "@/lib/clientApi";
  * The demo runs a real parse on the server: when the visitor picks a
  * file, we POST the binary to /v1/public/preview-replay (an unauth'd
  * rate-limited route backed by sc2reader). The route returns both
- * players' identity, race, result, and build log. We render that in a
- * modal with a perspective toggle so the visitor can read whichever
- * side they care about.
+ * players' identity, race, result, and build log.
+ *
+ * On success we open the rich BuildEditorModal in demoMode so the
+ * visitor can experience the real "Save as new build" template:
+ * source-replay timeline, rule promotion, basics editing, strategy
+ * notes — everything except the actual save (which is gated behind
+ * sign-up). This is closer to what they'll actually do once signed
+ * in than the read-only dossier we used to ship here.
  *
  * No mock data — if the upload fails, we surface the failure and a
  * sign-up CTA instead of pretending we know what's in the file.
@@ -103,16 +113,30 @@ export function ReplayDemo() {
   const [filename, setFilename] = useState<string | null>(null);
   const [dossier, setDossier] = useState<PreviewDossier | null>(null);
   const [error, setError] = useState<PreviewError | null>(null);
-  const [open, setOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  // Which player's build the editor is seeded with. Default to the
+  // first player (index 0) — the visitor can swap sides via the
+  // floating perspective chip rendered above the modal scrim.
   const [perspective, setPerspective] = useState<0 | 1>(0);
+
+  const me = dossier?.players[perspective] ?? null;
+  const opp = dossier?.players[perspective === 0 ? 1 : 0] ?? null;
+  const editorEvents = useMemo(
+    () => (me ? buildLogToEvents(me.build_log, me.race) : []),
+    [me],
+  );
+  const editorRace: RaceLite = coerceRace(me?.race);
+  const editorVsRace: VsRaceLite = coerceVsRace(opp?.race);
 
   async function onPick(file: File | null) {
     if (!file) return;
     setFilename(file.name);
     setDossier(null);
     setError(null);
+    setEditorOpen(false);
     setPerspective(0);
-    setOpen(true);
+    setStatusOpen(true);
     if (file.size === 0) {
       setError({ code: "empty_body", message: "" });
       return;
@@ -153,6 +177,11 @@ export function ReplayDemo() {
         return;
       }
       setDossier(json as PreviewDossier);
+      // Hand off from the small status modal to the rich save-as-new-build
+      // template. The editor opens with the parsed events seeded into
+      // its source-replay column.
+      setStatusOpen(false);
+      setEditorOpen(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "network error";
       setError({ code: "network", message });
@@ -174,12 +203,13 @@ export function ReplayDemo() {
             </Badge>
             <h2 className="text-h2 font-semibold text-text md:text-h1">
               Drop a <span className="text-accent-cyan">.SC2Replay</span> file —
-              see the real dossier.
+              build a custom build from it.
             </h2>
             <p className="text-body-lg text-text-muted">
               Pick any replay from your StarCraft II folder. We&rsquo;ll parse
-              it on the spot, then surface the opponent&rsquo;s identity,
-              race, build order, and timings — no account required.
+              it on the spot, then drop you straight into the
+              save-as-new-build template — promote starred events into rules,
+              tweak the basics, and feel the real workflow before you sign up.
             </p>
             <div className="flex flex-wrap gap-3 pt-1">
               <Button
@@ -216,13 +246,13 @@ export function ReplayDemo() {
       </Card>
 
       <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        size="2xl"
+        open={statusOpen}
+        onClose={() => setStatusOpen(false)}
+        size="lg"
         title={
           <span className="flex flex-wrap items-center gap-2">
             <span className="text-h4 font-semibold text-text">
-              Replay dossier
+              {busy ? "Parsing replay…" : "Replay preview"}
             </span>
             {filename ? (
               <Badge variant="cyan" size="sm">
@@ -234,47 +264,155 @@ export function ReplayDemo() {
           </span>
         }
         description={
-          dossier
-            ? `Parsed live — ${dossier.players[0].name} vs ${dossier.players[1].name} on ${dossier.map}`
-            : busy
-              ? "Parsing your replay…"
-              : error
-                ? "Something didn't work."
-                : "Drop a replay above to see it parsed live."
+          busy
+            ? "Parsing your replay on the cloud preview server…"
+            : error
+              ? "Something didn't work."
+              : "Pick a replay above to see it parsed live."
         }
-        footer={<DossierFooter />}
       >
         {busy ? (
           <DossierLoading />
         ) : error ? (
           <DossierError error={error} />
-        ) : dossier ? (
-          <Dossier
-            dossier={dossier}
-            perspective={perspective}
-            setPerspective={setPerspective}
-          />
         ) : (
           <DossierLoading />
         )}
       </Modal>
+
+      <BuildEditorModal
+        open={editorOpen && !!dossier}
+        onClose={() => setEditorOpen(false)}
+        events={editorEvents}
+        gameId={dossier?.game_id}
+        race={editorRace}
+        vsRace={editorVsRace}
+        perspective="you"
+        defaultName={defaultBuildName(me, opp)}
+        demoMode
+      />
+
+      {dossier && editorOpen ? (
+        <PerspectiveSwitcherToast
+          dossier={dossier}
+          perspective={perspective}
+          onSelect={setPerspective}
+        />
+      ) : null}
     </section>
   );
 }
 
-function DossierFooter() {
+/* ---------------- Demo helpers ---------------- */
+
+/**
+ * Convert the public preview's `[m:ss] EventName` build-log strings
+ * into BuildOrderEvent records the BuildEditor's source-timeline
+ * column understands. We don't have category/is_building hints from
+ * the public CLI, so we run each name through normalizeBuildName to
+ * recover them.
+ */
+function buildLogToEvents(
+  buildLog: ReadonlyArray<string>,
+  race: string | undefined,
+): BuildOrderEvent[] {
+  const events: BuildOrderEvent[] = [];
+  for (const line of buildLog) {
+    const m = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/.exec(line);
+    if (!m) continue;
+    const minutes = parseInt(m[1], 10);
+    const seconds = parseInt(m[2], 10);
+    if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) continue;
+    const time = minutes * 60 + seconds;
+    const name = m[3];
+    if (!name) continue;
+    const norm = normalizeBuildName(name);
+    const cat: BuildOrderEvent["category"] | undefined =
+      norm.category === "other" ? undefined : norm.category;
+    events.push({
+      time,
+      name,
+      time_display: `${minutes}:${seconds.toString().padStart(2, "0")}`,
+      display: norm.displayName,
+      category: cat,
+      is_building: norm.category === "building",
+      race,
+    });
+  }
+  return events;
+}
+
+function coerceRace(r: string | undefined): RaceLite {
+  if (r === "Protoss" || r === "Terran" || r === "Zerg" || r === "Random") {
+    return r;
+  }
+  return "Random";
+}
+
+function coerceVsRace(r: string | undefined): VsRaceLite {
+  if (
+    r === "Protoss" ||
+    r === "Terran" ||
+    r === "Zerg" ||
+    r === "Random" ||
+    r === "Any"
+  ) {
+    return r;
+  }
+  return "Any";
+}
+
+function defaultBuildName(
+  me: PreviewPlayer | null,
+  opp: PreviewPlayer | null,
+): string | undefined {
+  if (!me || !opp) return undefined;
+  const a = me.race?.charAt(0).toUpperCase() || "?";
+  const b = opp.race?.charAt(0).toUpperCase() || "?";
+  return `${a}v${b} — Custom`;
+}
+
+/**
+ * Floating chip rendered alongside the BuildEditor demo modal so the
+ * visitor can flip between which player's build the editor is seeded
+ * with. Positioned at the top of the viewport so it sits above the
+ * modal scrim without competing with the editor's own header.
+ */
+function PerspectiveSwitcherToast({
+  dossier,
+  perspective,
+  onSelect,
+}: {
+  dossier: PreviewDossier;
+  perspective: 0 | 1;
+  onSelect: (next: 0 | 1) => void;
+}) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <p className="text-caption text-text-muted">
-        Live parsed. Sign up to keep every replay in your library forever.
-      </p>
-      <Link
-        href="/sign-up"
-        className="inline-flex h-10 min-w-[44px] items-center justify-center gap-2 rounded-lg bg-accent px-4 text-body font-semibold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-      >
-        Save my replays for real
-        <ArrowRight className="h-4 w-4" aria-hidden />
-      </Link>
+    <div className="pointer-events-none fixed inset-x-0 top-3 z-[60] flex justify-center px-3">
+      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-bg-elevated/95 px-3 py-1.5 text-caption text-text-muted shadow-lg backdrop-blur">
+        <span className="hidden sm:inline">Editing build for:</span>
+        {dossier.players.map((p, i) => {
+          const isActive = perspective === i;
+          return (
+            <button
+              key={p.handle ?? `p${i}`}
+              type="button"
+              onClick={() => onSelect(i as 0 | 1)}
+              aria-pressed={isActive}
+              className={[
+                "inline-flex items-center gap-1 rounded-full px-3 py-1 font-medium",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                isActive
+                  ? "bg-accent-cyan/20 text-accent-cyan"
+                  : "text-text-muted hover:bg-bg-subtle hover:text-text",
+              ].join(" ")}
+            >
+              <span>{p.name}</span>
+              <span className="text-text-dim">· {p.race}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -417,155 +555,6 @@ function ErrorTechnicalDetails({ error }: { error: PreviewError }) {
   );
 }
 
-function Dossier({
-  dossier,
-  perspective,
-  setPerspective,
-}: {
-  dossier: PreviewDossier;
-  perspective: 0 | 1;
-  setPerspective: (next: 0 | 1) => void;
-}) {
-  const me = dossier.players[perspective];
-  const opp = dossier.players[perspective === 0 ? 1 : 0];
-  return (
-    <div className="space-y-5">
-      <PerspectiveToggle
-        players={dossier.players}
-        active={perspective}
-        onSelect={setPerspective}
-      />
-      <div className="rounded-lg border border-border bg-bg-elevated/40 p-4">
-        <div className="flex flex-wrap items-baseline gap-3">
-          <h3 className="text-h3 font-semibold text-text">{opp.name}</h3>
-          <Badge variant="cyan" size="sm">
-            {raceMatchup(me.race, opp.race)}
-          </Badge>
-          <Badge variant="neutral" size="sm">
-            {opp.race}
-          </Badge>
-          {typeof opp.mmr === "number" ? (
-            <Badge variant="neutral" size="sm">
-              {opp.mmr} MMR
-            </Badge>
-          ) : null}
-          <Badge
-            variant={isVictory(me.result) ? "success" : "danger"}
-            size="sm"
-          >
-            You: {me.result || "?"}
-          </Badge>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-text-muted">
-          <span>
-            Map: <strong className="text-text">{dossier.map || "?"}</strong>
-          </span>
-          <span>
-            Duration:{" "}
-            <strong className="text-text">
-              {formatDuration(dossier.duration_sec)}
-            </strong>
-          </span>
-          {dossier.date ? (
-            <span>
-              Played:{" "}
-              <strong className="text-text">
-                {formatDate(dossier.date)}
-              </strong>
-            </span>
-          ) : null}
-        </div>
-      </div>
-
-      <div>
-        <h4 className="mb-2 text-caption font-semibold uppercase tracking-wider text-text-muted">
-          {opp.name}&rsquo;s build order
-        </h4>
-        {opp.build_log.length === 0 ? (
-          <p className="text-caption text-text-dim">
-            No mappable events on this side of the replay.
-          </p>
-        ) : (
-          <BuildOrderList lines={opp.build_log} />
-        )}
-      </div>
-
-      <div>
-        <h4 className="mb-2 text-caption font-semibold uppercase tracking-wider text-text-muted">
-          Your build order ({me.name})
-        </h4>
-        {me.build_log.length === 0 ? (
-          <p className="text-caption text-text-dim">
-            No mappable events on your side of the replay.
-          </p>
-        ) : (
-          <BuildOrderList lines={me.build_log} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PerspectiveToggle({
-  players,
-  active,
-  onSelect,
-}: {
-  players: readonly [PreviewPlayer, PreviewPlayer];
-  active: 0 | 1;
-  onSelect: (next: 0 | 1) => void;
-}) {
-  return (
-    <div className="flex gap-2 rounded-lg border border-border bg-bg-elevated/40 p-1">
-      {players.map((p, i) => {
-        const isActive = active === i;
-        return (
-          <button
-            key={p.handle ?? `p${i}`}
-            type="button"
-            onClick={() => onSelect(i as 0 | 1)}
-            aria-pressed={isActive}
-            className={[
-              "inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-caption font-medium",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-              isActive
-                ? "bg-accent-cyan/15 text-accent-cyan"
-                : "text-text-muted hover:bg-bg-subtle hover:text-text",
-            ].join(" ")}
-          >
-            <UserIcon className="h-4 w-4" aria-hidden />
-            <span>
-              <span className="font-semibold">{p.name}</span>
-              <span className="ml-1 text-text-dim">· {p.race}</span>
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function BuildOrderList({ lines }: { lines: readonly string[] }) {
-  return (
-    <ul className="divide-y divide-border rounded-lg border border-border">
-      {lines.map((line, i) => {
-        const parsed = parseBuildLogLine(line);
-        return (
-          <li
-            key={`${i}-${line}`}
-            className="flex flex-wrap items-center gap-3 px-3 py-1.5 text-body"
-          >
-            <span className="w-12 font-mono tabular-nums text-text-dim">
-              {parsed.time}
-            </span>
-            <span className="flex-1 truncate text-text">{parsed.name}</span>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 function ReplayDropPreview({ onActivate }: { onActivate: () => void }) {
   return (
     <button
@@ -600,41 +589,3 @@ function ReplayDropPreview({ onActivate }: { onActivate: () => void }) {
   );
 }
 
-/* ---------------- helpers ---------------- */
-
-
-function formatDuration(seconds: number): string {
-  const total = Math.max(0, Math.floor(Number(seconds) || 0));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${s < 10 ? "0" + s : s}`;
-}
-
-function formatDate(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString();
-}
-
-function raceMatchup(myRace: string, oppRace: string): string {
-  const m = (myRace || "?").charAt(0).toUpperCase();
-  const o = (oppRace || "?").charAt(0).toUpperCase();
-  return `${m}v${o}`;
-}
-
-function isVictory(result: string): boolean {
-  if (!result) return false;
-  return /^(victory|win)/i.test(result);
-}
-
-interface ParsedLine {
-  time: string;
-  name: string;
-}
-
-function parseBuildLogLine(raw: string): ParsedLine {
-  const m = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/.exec(raw);
-  if (!m) return { time: "—", name: raw };
-  return { time: `${m[1]}:${m[2]}`, name: m[3] };
-}

@@ -38,6 +38,14 @@ export interface UseBuildEditorStateOptions {
   lockedSlug?: string;
   /** Notified after a successful save with the persisted slug + payload. */
   onSaved?: (slug: string, payload: BuildEditorDraft) => void;
+  /**
+   * Demo mode (landing-page replay preview). The editor is fully
+   * interactive but skips authenticated network calls: the
+   * preview-matches fetch is suppressed (the user has no library to
+   * match against), inline inspect is a no-op, and save() bails out
+   * with a sign-up nudge instead of PUTing to the API.
+   */
+  demoMode?: boolean;
 }
 
 interface BuildOrderApiResp {
@@ -53,7 +61,7 @@ interface BuildOrderApiResp {
 export function useBuildEditorState(
   opts: UseBuildEditorStateOptions,
 ): BuildEditorState {
-  const { open, context, initialDraft, lockedSlug, onSaved } = opts;
+  const { open, context, initialDraft, lockedSlug, onSaved, demoMode } = opts;
   const { getToken } = useAuth();
 
   const [draft, setDraft] = useState<BuildEditorDraft>(initialDraft);
@@ -105,6 +113,19 @@ export function useBuildEditorState(
   // Debounced preview fetch.
   useEffect(() => {
     if (!open) return;
+    if (demoMode) {
+      // Demo (landing page): no signed-in library to match against, so
+      // we render an empty preview without firing the auth'd request.
+      setPreview({
+        matches: [],
+        almost_matches: [],
+        scanned_games: 0,
+        truncated: false,
+      });
+      setPreviewError(null);
+      setPreviewLoading(false);
+      return;
+    }
     if (draft.rules.length === 0) {
       setPreview({
         matches: [],
@@ -146,7 +167,7 @@ export function useBuildEditorState(
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [open, draft.rules, draft.race, draft.vsRace, context.perspective, getToken]);
+  }, [open, demoMode, draft.rules, draft.race, draft.vsRace, context.perspective, getToken]);
 
   // Reset pagination when preview changes.
   useEffect(() => {
@@ -246,6 +267,10 @@ export function useBuildEditorState(
   const toggleInspect = useCallback(
     (gameId: string) => {
       if (!gameId) return;
+      // Demo mode has no preview matches to inspect, so this is a
+      // no-op. We keep the callback identity stable to avoid effect
+      // churn in BuildEditorPreview.
+      if (demoMode) return;
       setExpandedMatchId((cur) => (cur === gameId ? null : gameId));
       if (inspectCache[gameId] || inspectLoading[gameId]) return;
       setInspectLoading((p) => ({ ...p, [gameId]: true }));
@@ -270,7 +295,7 @@ export function useBuildEditorState(
         }
       })();
     },
-    [getToken, inspectCache, inspectLoading],
+    [demoMode, getToken, inspectCache, inspectLoading],
   );
 
   const hideMatch = useCallback((gameId: string) => {
@@ -302,6 +327,18 @@ export function useBuildEditorState(
         return;
       }
       setErrors({});
+      if (demoMode) {
+        // Landing-page demo: surface a sign-up nudge and bail before
+        // we hit the auth'd endpoint. The save bar still routes the
+        // visitor toward /sign-up via its own button, but a stray
+        // form-submit (Enter in a text field) lands here too.
+        pushToast(
+          "warn",
+          "Sign up to save this build to your library.",
+          { label: "Sign up", href: "/sign-up" },
+        );
+        return;
+      }
       setSaving(true);
       setSaveError(null);
       const slug = lockedSlug || slugifyRuleName(sanitised.payload.name);
@@ -352,7 +389,7 @@ export function useBuildEditorState(
         pushToast("error", `Save failed: ${message}`);
       }
     },
-    [draft, context.gameId, context.perspective, getToken, lockedSlug, onSaved, pushToast],
+    [draft, context.gameId, context.perspective, demoMode, getToken, lockedSlug, onSaved, pushToast],
   );
 
   return {
