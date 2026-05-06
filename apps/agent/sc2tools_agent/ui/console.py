@@ -27,7 +27,7 @@ class ConsoleUI:
         print(
             f"\n{bar}\n"
             f"  PAIRING CODE: {code}\n"
-            f"  Open  https://sc2tools.app/devices  and enter this code.\n"
+            f"  Open  https://sc2tools.com/devices  and enter this code.\n"
             f"  (Locally: http://localhost:3000/devices)\n"
             f"{bar}\n"
         )

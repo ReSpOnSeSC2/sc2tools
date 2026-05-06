@@ -96,20 +96,53 @@ class ReplayWatcher:
 
     # ---------------- internals ----------------
     def _discover_roots(self) -> list[Path]:
-        # The user-chosen folder (set from the tray's "Choose replay
-        # folder…" picker) takes precedence over both the env-var
-        # config and the auto-discovery.
-        override = getattr(self._state, "replay_folder_override", None)
-        if override:
-            override_path = Path(override)
-            if override_path.exists():
-                return [override_path]
+        """Return every folder we should watch + sweep, deduplicated.
+
+        Each region and battle.net handle has its own
+        ``Replays/Multiplayer`` directory, so the user may have
+        configured several. Watchdog handlers and the sweep loop both
+        operate per-root, and ``recursive=True`` means a parent dir
+        catches every Multiplayer subfolder underneath it — so the
+        list can be a mix of full account roots and individual
+        Multiplayer dirs without double-uploading anything (the
+        ``state.uploaded`` cursor dedupes by absolute path).
+        """
+        out: list[Path] = []
+        seen: set[str] = set()
+
+        def _add(p: Path) -> None:
+            try:
+                key = str(p.resolve())
+            except OSError:
+                key = str(p)
+            if key in seen:
+                return
+            seen.add(key)
+            out.append(p)
+
+        # Modern multi-folder override.
+        for raw in getattr(self._state, "replay_folders_override", []) or []:
+            path = Path(raw)
+            if path.exists():
+                _add(path)
+
+        if out:
+            return out
+
+        # Env-var override path (tests, headless servers).
         if self._cfg.replay_folder:
-            return [self._cfg.replay_folder]
+            _add(self._cfg.replay_folder)
+            return out
+
+        # Auto-discover every (account, toon) pair under the SC2 root.
         root = find_replays_root()
         if not root:
             return []
-        return all_multiplayer_dirs(root) or [root]
+        for mp in all_multiplayer_dirs(root):
+            _add(mp)
+        if not out:
+            _add(root)
+        return out
 
     def _sweep_loop(self) -> None:
         while not self._stop.wait(self._cfg.poll_interval_sec):

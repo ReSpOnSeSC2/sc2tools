@@ -189,6 +189,8 @@ QPushButton {{
     border-radius: 6px;
     padding: 7px 14px;
     font-weight: 500;
+    min-height: 18px;
+    text-align: center;
 }}
 QPushButton:hover {{
     background-color: {_SUBTLE};
@@ -322,12 +324,19 @@ class SettingsPayload:
     without ``dataclasses`` shenanigans on Python 3.8 / 3.9 stub
     environments. Fields use ``None`` to mean "no change" so the
     runner can update only what the user actually edited.
+
+    ``replay_folders`` carries the FULL list (replace, not merge);
+    ``replay_folder`` is the legacy single-path field — still accepted
+    on input for back-compat with older callers, but the runner reads
+    ``replay_folders`` first and falls back to wrapping the single
+    field into a list.
     """
 
     __slots__ = (
         "api_base",
         "log_level",
         "replay_folder",
+        "replay_folders",
         "autostart_enabled",
         "start_minimized",
     )
@@ -338,12 +347,19 @@ class SettingsPayload:
         api_base: Optional[str] = None,
         log_level: Optional[str] = None,
         replay_folder: Optional[Path] = None,
+        replay_folders: Optional[List[Path]] = None,
         autostart_enabled: Optional[bool] = None,
         start_minimized: Optional[bool] = None,
     ) -> None:
         self.api_base = api_base
         self.log_level = log_level
         self.replay_folder = replay_folder
+        # Normalise: if the caller only provided the legacy single-folder
+        # field, lift it into the list so the runner has a single
+        # authoritative source for "replace".
+        if replay_folders is None and replay_folder is not None:
+            replay_folders = [replay_folder]
+        self.replay_folders = replay_folders
         self.autostart_enabled = autostart_enabled
         self.start_minimized = start_minimized
 
@@ -800,37 +816,84 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             return {"frame": card, "value": value_lbl, "label": label_lbl}
 
         def _build_action_row(self) -> QtWidgets.QWidget:
-            row = QtWidgets.QFrame()
-            h = QtWidgets.QHBoxLayout(row)
-            h.setContentsMargins(0, 0, 0, 0)
-            h.setSpacing(8)
+            # Two-row layout: cramming five buttons into one row makes
+            # Qt shrink labels below their natural width on smaller
+            # window sizes (which is what users were seeing — "Re-sync
+            # from scratch" rendering with the trailing "scratch"
+            # clipped past the button border). Splitting into local
+            # actions on top and external actions on the bottom keeps
+            # every label fully readable down to the window's minimum
+            # size of 820 px.
+            outer = QtWidgets.QFrame()
+            v = QtWidgets.QVBoxLayout(outer)
+            v.setContentsMargins(0, 0, 0, 0)
+            v.setSpacing(8)
+
+            local_row = QtWidgets.QHBoxLayout()
+            local_row.setSpacing(8)
+            local_row.setContentsMargins(0, 0, 0, 0)
 
             self._pause_btn = QtWidgets.QPushButton(
                 "Resume syncing" if self._paused else "Pause syncing",
             )
+            self._pause_btn.setSizePolicy(
+                QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed,
+            )
+            self._pause_btn.setToolTip(
+                "Pause keeps the watcher running but stops uploads; "
+                "resume drains the queue.",
+            )
             self._pause_btn.clicked.connect(self._click_pause)
-            h.addWidget(self._pause_btn)
+            local_row.addWidget(self._pause_btn)
 
-            resync_btn = QtWidgets.QPushButton("Re-sync from scratch")
+            resync_btn = QtWidgets.QPushButton("Re-sync")
+            resync_btn.setSizePolicy(
+                QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed,
+            )
+            resync_btn.setToolTip(
+                "Re-sync from scratch — clear the local upload cursor "
+                "and re-upload every replay we can see (the cloud "
+                "de-duplicates by game ID).",
+            )
             resync_btn.clicked.connect(self._click_resync)
-            h.addWidget(resync_btn)
+            local_row.addWidget(resync_btn)
 
-            choose_btn = QtWidgets.QPushButton("Choose replay folder…")
+            choose_btn = QtWidgets.QPushButton("Add replay folder…")
+            choose_btn.setSizePolicy(
+                QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed,
+            )
+            choose_btn.setToolTip(
+                "Add another StarCraft II Replays folder to the watch "
+                "list. Each region/account has its own folder, so add "
+                "one entry per region you play on.",
+            )
             choose_btn.clicked.connect(self._click_choose_folder)
-            h.addWidget(choose_btn)
+            local_row.addWidget(choose_btn)
+            local_row.addStretch(1)
+            v.addLayout(local_row)
 
-            h.addStretch(1)
+            ext_row = QtWidgets.QHBoxLayout()
+            ext_row.setSpacing(8)
+            ext_row.setContentsMargins(0, 0, 0, 0)
+            ext_row.addStretch(1)
 
             updates_btn = QtWidgets.QPushButton("Check for updates")
+            updates_btn.setSizePolicy(
+                QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed,
+            )
             updates_btn.clicked.connect(self._click_check_updates)
-            h.addWidget(updates_btn)
+            ext_row.addWidget(updates_btn)
 
             dash_btn = QtWidgets.QPushButton("Open dashboard")
             dash_btn.setObjectName("primary")
+            dash_btn.setSizePolicy(
+                QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed,
+            )
             dash_btn.clicked.connect(self._open_dashboard)
-            h.addWidget(dash_btn)
+            ext_row.addWidget(dash_btn)
+            v.addLayout(ext_row)
 
-            return row
+            return outer
 
         # ---- Recent tab ----
 
@@ -941,7 +1004,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             self._api_input = QtWidgets.QLineEdit()
             self._api_input.setPlaceholderText(
-                "e.g. https://api.sc2tools.app  (leave blank for default)",
+                "e.g. https://api.sc2tools.com  (leave blank for default)",
             )
             form.addRow("API base URL", self._api_input)
 
@@ -949,21 +1012,52 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._log_combo.addItems(["INFO", "DEBUG", "WARNING", "ERROR"])
             form.addRow("Log level", self._log_combo)
 
-            folder_row = QtWidgets.QHBoxLayout()
-            folder_row.setSpacing(8)
-            self._folder_input = QtWidgets.QLineEdit()
-            self._folder_input.setReadOnly(True)
-            self._folder_input.setPlaceholderText(
-                "Auto-detect SC2 Replays folder",
+            # Replay folders: a real list, because StarCraft II writes
+            # replays to a separate folder per (region, toon) — players
+            # who use multiple regions or BattleTags need more than
+            # one entry. Leaving the list empty re-enables auto-discovery.
+            folder_block = QtWidgets.QWidget()
+            folder_v = QtWidgets.QVBoxLayout(folder_block)
+            folder_v.setContentsMargins(0, 0, 0, 0)
+            folder_v.setSpacing(6)
+
+            self._folder_list = QtWidgets.QListWidget()
+            self._folder_list.setSelectionMode(
+                QtWidgets.QAbstractItemView.ExtendedSelection,
             )
-            folder_row.addWidget(self._folder_input, stretch=1)
-            browse_btn = QtWidgets.QPushButton("Browse…")
-            browse_btn.clicked.connect(self._browse_folder)
-            folder_row.addWidget(browse_btn)
-            clear_btn = QtWidgets.QPushButton("Clear")
-            clear_btn.clicked.connect(lambda: self._folder_input.setText(""))
-            folder_row.addWidget(clear_btn)
-            form.addRow("Replay folder", folder_row)
+            self._folder_list.setUniformItemSizes(True)
+            self._folder_list.setAlternatingRowColors(False)
+            self._folder_list.setMinimumHeight(96)
+            self._folder_list.setHorizontalScrollBarPolicy(
+                QtCore.Qt.ScrollBarAsNeeded,
+            )
+            self._folder_list.setToolTip(
+                "Each region and battle.net handle stores replays in a "
+                "different folder. Add every Replays/Multiplayer folder "
+                "you want synced.",
+            )
+            folder_v.addWidget(self._folder_list)
+
+            folder_btns = QtWidgets.QHBoxLayout()
+            folder_btns.setSpacing(6)
+            add_btn = QtWidgets.QPushButton("Add folder…")
+            add_btn.clicked.connect(self._add_folder_row)
+            folder_btns.addWidget(add_btn)
+            remove_btn = QtWidgets.QPushButton("Remove selected")
+            remove_btn.clicked.connect(self._remove_folder_rows)
+            folder_btns.addWidget(remove_btn)
+            auto_btn = QtWidgets.QPushButton("Auto-detect")
+            auto_btn.setToolTip(
+                "Clear the list and let the agent rediscover every "
+                "Replays/Multiplayer folder under your StarCraft II "
+                "Accounts directory.",
+            )
+            auto_btn.clicked.connect(self._auto_detect_folders)
+            folder_btns.addWidget(auto_btn)
+            folder_btns.addStretch(1)
+            folder_v.addLayout(folder_btns)
+
+            form.addRow("Replay folders", folder_block)
 
             from .. import autostart as autostart_mod  # local import keeps import-time safe
 
@@ -1065,9 +1159,21 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _on_folders_changed(self, folders: List[str]) -> None:
             ui._replay_folders = [Path(p) for p in folders]
-            if folders:
-                self._folder_input.setText(folders[0])
+            self._sync_folder_list_widget(folders)
             self._refresh_status_card()
+
+        def _sync_folder_list_widget(self, folders: List[str]) -> None:
+            """Mirror the canonical folder list into the Settings list
+            widget without disturbing the user's selection state."""
+            current = [
+                self._folder_list.item(i).text()
+                for i in range(self._folder_list.count())
+            ]
+            if current == list(folders):
+                return
+            self._folder_list.clear()
+            for raw in folders:
+                self._folder_list.addItem(raw)
 
         def _on_quit_requested(self) -> None:
             self._really_quit = True
@@ -1130,14 +1236,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 log.exception("gui_check_updates_failed")
 
         def _click_save_settings(self) -> None:
+            folders: List[Path] = []
+            for i in range(self._folder_list.count()):
+                raw = self._folder_list.item(i).text().strip()
+                if raw:
+                    folders.append(Path(raw))
             payload = SettingsPayload(
                 api_base=self._api_input.text().strip() or None,
                 log_level=self._log_combo.currentText(),
-                replay_folder=(
-                    Path(self._folder_input.text().strip())
-                    if self._folder_input.text().strip()
-                    else None
-                ),
+                replay_folders=folders,
+                replay_folder=folders[0] if folders else None,
                 autostart_enabled=self._autostart_check.isChecked(),
                 start_minimized=self._minimized_check.isChecked(),
             )
@@ -1175,14 +1283,43 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _open_log_folder(self) -> None:
             _open_path_in_explorer(ui._log_dir)
 
-        def _browse_folder(self) -> None:
+        def _add_folder_row(self) -> None:
+            seed = ""
+            if self._folder_list.count():
+                last = self._folder_list.item(self._folder_list.count() - 1)
+                if last is not None:
+                    seed = last.text()
+            elif ui._replay_folders:
+                seed = str(ui._replay_folders[0])
             picked = QtWidgets.QFileDialog.getExistingDirectory(
                 self,
-                "Choose your StarCraft II Replays folder",
-                self._folder_input.text() or "",
+                "Choose a StarCraft II Replays folder",
+                seed,
             )
-            if picked:
-                self._folder_input.setText(picked)
+            if not picked:
+                return
+            # Reject duplicates so the list never grows by re-adding the
+            # same path. We compare resolved paths so trailing slashes
+            # and case differences (Windows) collapse into one.
+            target = str(Path(picked).resolve())
+            for i in range(self._folder_list.count()):
+                existing = Path(self._folder_list.item(i).text())
+                try:
+                    if str(existing.resolve()) == target:
+                        return
+                except OSError:
+                    continue
+            self._folder_list.addItem(picked)
+
+        def _remove_folder_rows(self) -> None:
+            for item in self._folder_list.selectedItems():
+                row = self._folder_list.row(item)
+                self._folder_list.takeItem(row)
+
+        def _auto_detect_folders(self) -> None:
+            """Clear the list — the runner falls back to auto-discovery
+            when ``replay_folders_override`` is empty."""
+            self._folder_list.clear()
 
         def _reveal_replay(
             self, item: "QtWidgets.QTableWidgetItem",
@@ -1319,10 +1456,18 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 )
                 if idx >= 0:
                     self._log_combo.setCurrentIndex(idx)
-            if initial.replay_folder:
-                self._folder_input.setText(str(initial.replay_folder))
+            # Folder list seed order:
+            #   1. Settings payload's explicit list (user-saved override)
+            #   2. Settings payload's legacy single folder (forward-migrated)
+            #   3. Currently watched folders surfaced by the runner
+            seeded: List[str] = []
+            if initial.replay_folders:
+                seeded = [str(p) for p in initial.replay_folders]
+            elif initial.replay_folder:
+                seeded = [str(initial.replay_folder)]
             elif ui._replay_folders:
-                self._folder_input.setText(str(ui._replay_folders[0]))
+                seeded = [str(p) for p in ui._replay_folders]
+            self._sync_folder_list_widget(seeded)
             self._autostart_check.setChecked(
                 bool(initial.autostart_enabled),
             )

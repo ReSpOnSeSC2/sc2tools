@@ -32,18 +32,18 @@ def _isolate_env(tmp_path: Path) -> Iterator[None]:
 
 def test_defaults() -> None:
     cfg = load_config()
-    assert cfg.api_base == "http://localhost:8080"
+    assert cfg.api_base == "https://sc2tools-api.onrender.com"
     assert cfg.poll_interval_sec == 10
     assert cfg.parse_concurrency == 1
     assert cfg.replay_folder is None
 
 
 def test_env_overrides() -> None:
-    os.environ["SC2TOOLS_API_BASE"] = "https://api.sc2tools.app/"
+    os.environ["SC2TOOLS_API_BASE"] = "https://api.sc2tools.com/"
     os.environ["SC2TOOLS_POLL_INTERVAL"] = "30"
     os.environ["SC2TOOLS_PARSE_CONCURRENCY"] = "4"
     cfg = load_config()
-    assert cfg.api_base == "https://api.sc2tools.app"  # trailing slash stripped
+    assert cfg.api_base == "https://api.sc2tools.com"  # trailing slash stripped
     assert cfg.poll_interval_sec == 30
     assert cfg.parse_concurrency == 4
 

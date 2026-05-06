@@ -194,7 +194,7 @@ def _run_headless(cfg: AgentConfig, log_dir: Path) -> int:
             on_pause=lambda paused: _handle_pause(cfg, state, upload, paused),
             on_resync=lambda: _handle_resync(cfg, state, upload),
             on_choose_folder=lambda picked: _handle_choose_folder(
-                cfg, state, picked, tray, log,
+                cfg, state, picked, tray, log, upload=upload,
             ),
             on_check_updates=lambda: updater.check_now() if updater else None,
         )
@@ -308,6 +308,7 @@ def _run_with_gui(
     initial_settings = SettingsPayload(
         api_base=state.api_base_override,
         log_level=state.log_level_override or "INFO",
+        replay_folders=[Path(p) for p in state.replay_folders_override],
         replay_folder=(
             Path(state.replay_folder_override)
             if state.replay_folder_override
@@ -519,15 +520,36 @@ def _handle_choose_folder(
     picked: Optional[Path],
     tray: Optional[TrayUI],
     log: logging.Logger,
+    upload: Optional[UploadQueue] = None,
 ) -> None:
+    """Tray "Choose replay folder…" — appends to the override list.
+
+    Calls into ``upload.request_full_resync()`` so the watcher picks
+    up the new root on its next sweep without needing a restart. The
+    resync flag triggers a rediscovery, not a re-upload — the
+    ``state.uploaded`` cursor is still respected so existing replays
+    are not double-sent.
+    """
     if not picked:
         log.info("folder_picker_cancelled")
         return
-    state.replay_folder_override = str(picked)
+    raw = str(picked)
+    if raw not in state.replay_folders_override:
+        state.replay_folders_override.append(raw)
+    # Keep the legacy single-string field aligned so a downgrade to an
+    # older agent build still finds *something* to watch.
+    state.replay_folder_override = raw
     save_state(cfg.state_dir, state)
-    log.info("replay_folder_overridden path=%s", picked)
+    log.info(
+        "replay_folder_added path=%s total=%d",
+        picked,
+        len(state.replay_folders_override),
+    )
+    folders = [Path(p) for p in state.replay_folders_override]
     if tray:
-        tray.set_replay_folders([picked])
+        tray.set_replay_folders(folders)
+    if upload:
+        upload.request_full_resync()
 
 
 def _handle_choose_folder_gui(
@@ -538,9 +560,13 @@ def _handle_choose_folder_gui(
     log: logging.Logger,
 ) -> None:
     """Same as ``_handle_choose_folder`` but updates BOTH tray and GUI."""
-    _handle_choose_folder(cfg, state, picked, cell.tray, log)
-    if picked and cell.gui:
-        cell.gui.set_replay_folders([picked])
+    _handle_choose_folder(
+        cfg, state, picked, cell.tray, log, upload=cell.upload,
+    )
+    if cell.gui:
+        cell.gui.set_replay_folders(
+            [Path(p) for p in state.replay_folders_override],
+        )
 
 
 def _handle_save_settings(
@@ -555,10 +581,20 @@ def _handle_save_settings(
         state.api_base_override = payload.api_base or None
     if payload.log_level:
         state.log_level_override = payload.log_level
-    if payload.replay_folder is not None:
-        state.replay_folder_override = (
-            str(payload.replay_folder) if payload.replay_folder else None
-        )
+    if payload.replay_folders is not None:
+        # The Settings tab owns the full list — replace, don't merge.
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for entry in payload.replay_folders:
+            raw = str(entry).strip()
+            if not raw or raw in seen:
+                continue
+            seen.add(raw)
+            cleaned.append(raw)
+        state.replay_folders_override = cleaned
+        # Keep the legacy single-folder field pointing at the first
+        # entry so a downgrade still has somewhere to watch.
+        state.replay_folder_override = cleaned[0] if cleaned else None
     if payload.start_minimized is not None:
         state.start_minimized = bool(payload.start_minimized)
     if payload.autostart_enabled is not None:
@@ -573,17 +609,24 @@ def _handle_save_settings(
 
     save_state(cfg.state_dir, state)
 
-    if payload.replay_folder and cell.tray:
-        cell.tray.set_replay_folders([payload.replay_folder])
-    if payload.replay_folder and cell.gui:
-        cell.gui.set_replay_folders([payload.replay_folder])
+    if payload.replay_folders is not None:
+        folders = [Path(p) for p in state.replay_folders_override]
+        if cell.tray:
+            cell.tray.set_replay_folders(folders)
+        if cell.gui:
+            cell.gui.set_replay_folders(folders)
+        # Force the live watcher to rediscover roots on its next sweep
+        # so the new list takes effect without a restart.
+        if cell.upload:
+            cell.upload.request_full_resync()
 
     log.info(
-        "settings_saved api_base=%s log_level=%s autostart=%s minimised=%s",
+        "settings_saved api_base=%s log_level=%s autostart=%s minimised=%s folders=%d",
         bool(state.api_base_override),
         state.log_level_override,
         state.autostart_enabled,
         state.start_minimized,
+        len(state.replay_folders_override),
     )
 
 
@@ -628,12 +671,50 @@ def _handle_update_available(
 def _discover_replay_folders(
     cfg: AgentConfig, state: AgentState,
 ) -> List[Path]:
-    if state.replay_folder_override:
-        override = Path(state.replay_folder_override)
-        if override.exists():
-            return [override]
+    """Resolve every replay folder the watcher should observe.
+
+    StarCraft II writes replays to a separate ``Replays/Multiplayer``
+    folder for each (region, toon) pair, so a player who plays on
+    multiple regions or with multiple battle.net handles owns more
+    than one. The watcher takes a list and observes every entry
+    recursively — passing in the parent of a Multiplayer dir (or the
+    full ``StarCraft II/Accounts`` root) is fine because watchdog plus
+    our periodic sweep both walk recursively.
+
+    Resolution order:
+      1. The user's explicit list from the Settings tab. Takes
+         precedence in full when non-empty — auto-discovery is
+         skipped so the user never gets a "ghost" extra folder
+         appearing.
+      2. The single-folder env override (``SC2TOOLS_REPLAY_FOLDER``).
+         Mostly used by tests and headless runs.
+      3. Auto-discovery: every ``Replays/Multiplayer`` dir under the
+         detected ``StarCraft II/Accounts`` root.
+    """
+    out: List[Path] = []
+    seen: set[str] = set()
+
+    def _add(p: Path) -> None:
+        try:
+            key = str(p.resolve())
+        except OSError:
+            key = str(p)
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(p)
+
+    for raw in state.replay_folders_override:
+        path = Path(raw)
+        if path.exists():
+            _add(path)
+
+    if out:
+        return out
+
     if cfg.replay_folder:
         return [cfg.replay_folder]
+
     root = find_replays_root()
     if not root:
         return []
@@ -643,18 +724,27 @@ def _discover_replay_folders(
     return [root]
 
 
+_DEFAULT_DASHBOARD_URL = "https://sc2tools.com"
+
+
 def _dashboard_url_from_api(api_base: str) -> str:
     """Best-guess dashboard URL from the API URL.
 
-    Prod:    https://api.sc2tools.app  -> https://sc2tools.app
-    Render:  https://sc2tools-api.onrender.com -> https://sc2tools.app
-    Local:   http://localhost:8080 -> http://localhost:3000
+    Prod:    https://api.sc2tools.com         -> https://sc2tools.com
+    Render:  https://sc2tools-api.onrender.com -> https://sc2tools.com
+    Local:   http://localhost:8080            -> http://localhost:3000
+
+    The production marketing + dashboard origin lives on the ``.com``
+    apex (``sc2tools.com``); ``.app`` is no longer authoritative, and a
+    stale ``.app`` link sends users to a broken page. The URL is also
+    used as the base for the pairing page (``/devices``), so getting
+    this right is critical for first-launch onboarding.
     """
     if api_base.startswith("http://localhost"):
         return "http://localhost:3000"
     if "://api." in api_base:
         return api_base.replace("://api.", "://", 1)
-    return "https://sc2tools.app"
+    return _DEFAULT_DASHBOARD_URL
 
 
 def _pairing_url_from_api(api_base: str) -> str:
