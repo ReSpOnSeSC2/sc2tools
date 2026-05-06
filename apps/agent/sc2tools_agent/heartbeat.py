@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import platform
+import socket
 import threading
 import time
 from typing import Optional
@@ -22,6 +23,24 @@ from .api_client import ApiClient
 
 DEFAULT_INTERVAL_SEC = 60.0
 INITIAL_DELAY_SEC = 5.0
+
+
+def _local_hostname() -> Optional[str]:
+    """Best-effort, non-throwing hostname lookup.
+
+    The cloud uses this to label rows on the Devices page so the user
+    can tell their gaming PC apart from the laptop. ``socket.gethostname``
+    can technically raise on misconfigured boxes, so we swallow and
+    return ``None`` — the cloud falls back to OS + version when no
+    hostname is sent.
+    """
+    try:
+        name = socket.gethostname()
+    except Exception:  # noqa: BLE001
+        return None
+    if not name:
+        return None
+    return name.strip() or None
 
 
 class Heartbeat:
@@ -75,6 +94,9 @@ class Heartbeat:
             "osRelease": platform.release(),
             "ts": int(time.time() * 1000),
         }
+        hostname = _local_hostname()
+        if hostname:
+            body["hostname"] = hostname
         # Reuse the api_client request infrastructure (auth, retries,
         # backoff). Failures are logged-only — we'll try again next tick.
         try:
