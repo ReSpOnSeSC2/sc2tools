@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
+import { BuildOrderTimeline } from "@/components/analyzer/charts/BuildOrderTimeline";
 import { useApi } from "@/lib/clientApi";
 import { fmtDate, fmtMinutes } from "@/lib/format";
+import type { BuildOrderEvent } from "@/lib/build-events";
 import type { BuildRecentGame } from "./types";
 
 interface BuildOrderResp {
@@ -18,8 +20,8 @@ interface BuildOrderResp {
   opp_race: string | null;
   map: string | null;
   result: string | null;
-  events: { time: number; time_display: string; name: string; display: string; race: string; category: string }[];
-  opp_events: { time: number; time_display: string; name: string; display: string; race: string; category: string }[];
+  events: BuildOrderEvent[];
+  opp_events: BuildOrderEvent[];
 }
 
 /**
@@ -135,7 +137,7 @@ function GameRow({
       {expanded ? (
         <tr className="bg-bg-elevated/20">
           <td colSpan={8} className="px-2 pb-3 pt-1">
-            <BuildOrderExpansion gameId={game.gameId} />
+            <BuildOrderExpansion gameId={game.gameId} game={game} />
           </td>
         </tr>
       ) : null}
@@ -196,7 +198,7 @@ function GameMobile({
       </button>
       {expanded ? (
         <div className="border-t border-border px-3 py-2">
-          <BuildOrderExpansion gameId={game.gameId} />
+          <BuildOrderExpansion gameId={game.gameId} game={game} />
         </div>
       ) : null}
     </li>
@@ -214,7 +216,13 @@ function MacroCell({ value }: { value: number | null }) {
   return <span className={cls}>{value.toFixed(1)}</span>;
 }
 
-function BuildOrderExpansion({ gameId }: { gameId: string }) {
+function BuildOrderExpansion({
+  gameId,
+  game,
+}: {
+  gameId: string;
+  game: BuildRecentGame;
+}) {
   const { data, isLoading, error } = useApi<BuildOrderResp>(
     `/v1/games/${encodeURIComponent(gameId)}/build-order`,
   );
@@ -230,52 +238,14 @@ function BuildOrderExpansion({ gameId }: { gameId: string }) {
   }
   if (!data) return null;
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-      <BuildOrderColumn
-        title={`Your build${data.my_build ? ` — ${data.my_build}` : ""}`}
-        events={data.events}
-      />
-      <BuildOrderColumn
-        title={`Opponent's build${data.opp_strategy ? ` — ${data.opp_strategy}` : ""}`}
-        events={data.opp_events}
-        emptySub="Opponent build log not extracted yet."
-      />
-    </div>
-  );
-}
-
-function BuildOrderColumn({
-  title,
-  events,
-  emptySub,
-}: {
-  title: string;
-  events: BuildOrderResp["events"];
-  emptySub?: string;
-}) {
-  const visible = useMemo(
-    () => (events || []).filter((e) => e && e.name && e.time != null),
-    [events],
-  );
-  return (
-    <Card title={title}>
-      {visible.length === 0 ? (
-        <EmptyState sub={emptySub || "No build events parsed."} />
-      ) : (
-        <ul className="max-h-[280px] space-y-1 overflow-y-auto pr-1 text-caption">
-          {visible.map((e, i) => (
-            <li
-              key={`${e.time}-${e.name}-${i}`}
-              className="flex items-center gap-3"
-            >
-              <span className="w-12 font-mono tabular-nums text-text-dim">
-                {e.time_display}
-              </span>
-              <span className="truncate text-text">{e.display || e.name}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
+    <BuildOrderTimeline
+      events={data.events || []}
+      oppEvents={data.opp_events || []}
+      defaultPerspective="you"
+      gameId={gameId}
+      race={data.my_race}
+      oppRace={data.opp_race || game.opp_race}
+      title={data.my_build ? `Your build — ${data.my_build}` : "Your build"}
+    />
   );
 }
