@@ -1,6 +1,8 @@
 "use client";
 
+import * as React from "react";
 import { useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   Apple,
@@ -75,6 +77,8 @@ export function DownloadCard({
 
       <ShaSnippet sha={artifact.sha256} fileSize={artifact.sizeBytes} />
 
+      <NextSteps />
+
       {releaseNotes ? (
         <details className="group rounded-lg border border-border bg-bg-subtle/40 p-3">
           <summary className="cursor-pointer list-none text-caption font-medium text-text-muted hover:text-text">
@@ -148,6 +152,92 @@ function ShaSnippet({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Post-download walkthrough — agent installer flow.
+ *
+ * Non-technical users tend to bail out after clicking Download because
+ * they don't know whether to trust the SmartScreen warning, where the
+ * installer puts things, or how to pair the agent to their account.
+ * We spell out all five steps here so they can't get stuck.
+ */
+function NextSteps() {
+  const steps: ReadonlyArray<{ heading: string; body: React.ReactNode }> = [
+    {
+      heading: "Double-click the installer",
+      body: <>in your Downloads folder. The agent is small (~80&nbsp;MB) and installs in seconds.</>,
+    },
+    {
+      heading: "If Windows shows a blue “protected your PC” prompt",
+      body: (
+        <>
+          click <em>More info</em>, then <em>Run anyway</em>. The
+          installer is unsigned for now — that warning is normal and
+          doesn&apos;t mean anything is wrong.
+        </>
+      ),
+    },
+    {
+      heading: "Click Next, then Install",
+      body: <>the defaults are fine. Per-user install, no admin password needed.</>,
+    },
+    {
+      heading: "The Agent window opens automatically",
+      body: (
+        <>
+          showing a big 6-digit pairing code. Click <em>Open pairing
+          page</em>, sign into SC2 Tools in your browser, and paste the
+          code. Done.
+        </>
+      ),
+    },
+    {
+      heading: "It runs in the background from now on",
+      body: (
+        <>
+          Look for the SC2 Tools icon in your system tray (next to the
+          clock). Every replay you finish is parsed and synced
+          automatically — your replay files never leave your machine.
+        </>
+      ),
+    },
+  ];
+
+  return (
+    <div className="rounded-lg border border-border bg-bg-subtle/40 p-4">
+      <p className="mb-3 text-caption font-semibold uppercase tracking-wider text-text-muted">
+        After you download
+      </p>
+      <ol className="space-y-2.5 text-caption text-text">
+        {steps.map((s, i) => (
+          <li key={s.heading} className="flex gap-3">
+            <span
+              className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-accent-cyan/15 text-[11px] font-semibold text-accent-cyan"
+              aria-hidden
+            >
+              {i + 1}
+            </span>
+            <span>
+              <strong className="font-semibold text-text">
+                {s.heading}
+              </strong>{" "}
+              {s.body}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-3 border-t border-border/60 pt-3 text-caption text-text-muted">
+        Already paired this machine?{" "}
+        <Link
+          href="/devices"
+          className="text-accent-cyan underline-offset-2 hover:underline"
+        >
+          Manage your devices →
+        </Link>
+      </p>
     </div>
   );
 }
