@@ -128,8 +128,15 @@ a = Analysis(
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 EXE_NAME = "sc2tools-agent"
-ICON_PATH = HERE / "icon.ico"
-ICON_KW = {"icon": str(ICON_PATH)} if ICON_PATH.exists() else {}
+# Icon lives under packaging/ next to this spec. We probe both that
+# canonical location and the legacy HERE root so a developer dropping
+# an icon.ico at the agent root for quick iteration still works.
+_ICON_CANDIDATES = [
+    HERE / "packaging" / "icon.ico",
+    HERE / "icon.ico",
+]
+ICON_PATH = next((p for p in _ICON_CANDIDATES if p.exists()), None)
+ICON_KW = {"icon": str(ICON_PATH)} if ICON_PATH else {}
 
 if ONE_FILE:
     exe = EXE(
