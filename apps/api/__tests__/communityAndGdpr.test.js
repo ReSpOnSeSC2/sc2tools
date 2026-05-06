@@ -284,6 +284,83 @@ describe("community + gdpr integration", () => {
       const after = await db.games.countDocuments({ userId: "u_del" });
       expect(after).toBe(0);
     });
+
+    test("wipeGames clears games + rebuilds opponents from the survivors", async () => {
+      const userId = "u_wipe";
+      await db.users.insertOne({
+        userId,
+        clerkUserId: "clerk_wipe",
+        createdAt: new Date(),
+        lastSeenAt: new Date(),
+      });
+      // Two games against the same opponent. recordGame is called once
+      // per upload via the route layer; here we mirror that so the
+      // opponents counter starts at 2 (the state we expect after a
+      // normal upload flow).
+      const oldDate = new Date("2024-01-01T00:00:00Z");
+      const newDate = new Date("2026-04-01T00:00:00Z");
+      const opponent = {
+        pulseId: "p_wipe_1",
+        displayName: "WipeFoe",
+        race: "Zerg",
+      };
+      await services.games.upsert(userId, {
+        gameId: "g_wipe_old",
+        date: oldDate.toISOString(),
+        result: "Victory",
+        myRace: "Protoss",
+        map: "M1",
+        opponent,
+      });
+      await services.opponents.recordGame(userId, {
+        ...opponent,
+        result: "Victory",
+        playedAt: oldDate,
+      });
+      await services.games.upsert(userId, {
+        gameId: "g_wipe_new",
+        date: newDate.toISOString(),
+        result: "Defeat",
+        myRace: "Protoss",
+        map: "M2",
+        opponent,
+      });
+      await services.opponents.recordGame(userId, {
+        ...opponent,
+        result: "Defeat",
+        playedAt: newDate,
+      });
+
+      expect(await db.games.countDocuments({ userId })).toBe(2);
+      const before = await db.opponents.findOne({ userId, pulseId: "p_wipe_1" });
+      expect(before.gameCount).toBe(2);
+
+      // Wipe just the OLD game (date < 2025-01-01).
+      const partial = await services.gdpr.wipeGames(userId, {
+        until: new Date("2025-01-01T00:00:00Z"),
+      });
+      expect(partial.games).toBe(1);
+      expect(await db.games.countDocuments({ userId })).toBe(1);
+      const afterPartial = await db.opponents.findOne({
+        userId,
+        pulseId: "p_wipe_1",
+      });
+      // Opponents got rebuilt from the surviving game — counters reset
+      // to 1 (one defeat, zero wins) instead of being half-decremented.
+      expect(afterPartial.gameCount).toBe(1);
+      expect(afterPartial.losses).toBe(1);
+      expect(afterPartial.wins).toBe(0);
+
+      // Now wipe everything — opponents collection should empty out.
+      const full = await services.gdpr.wipeGames(userId);
+      expect(full.games).toBe(1);
+      expect(await db.games.countDocuments({ userId })).toBe(0);
+      expect(await db.opponents.countDocuments({ userId })).toBe(0);
+
+      // User row stays intact — wipeGames is scoped, unlike deleteAll.
+      const userRow = await db.users.findOne({ userId });
+      expect(userRow).not.toBeNull();
+    });
   });
 
   describe("admin gating", () => {

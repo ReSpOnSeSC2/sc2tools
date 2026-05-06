@@ -240,6 +240,43 @@ function buildMeRouter(deps) {
     }
   });
 
+  // Scoped wipe: clears the user's replay history (games, opponents,
+  // macro jobs) but keeps their account, custom builds, device pairings,
+  // overlay tokens, and ML models. Optional ISO `since` / `until` bound
+  // the wipe to a date range. Used by Settings → "Delete game history"
+  // before a fresh agent re-sync.
+  router.post("/me/games/wipe", deps.auth, async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const body = req.body || {};
+      const since = parseIso(body.since);
+      const until = parseIso(body.until);
+      if (body.since !== undefined && body.since !== null && !since) {
+        res.status(400).json({
+          error: { code: "bad_request", message: "since must be ISO-8601" },
+        });
+        return;
+      }
+      if (body.until !== undefined && body.until !== null && !until) {
+        res.status(400).json({
+          error: { code: "bad_request", message: "until must be ISO-8601" },
+        });
+        return;
+      }
+      const counts = await deps.gdpr.wipeGames(auth.userId, { since, until });
+      if (deps.logger) {
+        deps.logger.info(
+          { userId: auth.userId, counts },
+          "gdpr_games_wiped",
+        );
+      }
+      res.json({ deleted: true, counts });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/me/backups", deps.auth, async (req, res, next) => {
     try {
       const auth = req.auth;
@@ -281,6 +318,21 @@ function buildMeRouter(deps) {
   );
 
   return router;
+}
+
+/**
+ * Parse an ISO-8601 string into a Date, or return null on bad input.
+ * Permissive on falsy values — `null` / `undefined` mean "no bound",
+ * not "invalid".
+ *
+ * @param {unknown} raw
+ * @returns {Date|null}
+ */
+function parseIso(raw) {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw !== "string") return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 module.exports = { buildMeRouter };
