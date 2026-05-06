@@ -721,6 +721,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             self._status_sub = QtWidgets.QLabel("")
             self._status_sub.setObjectName("muted")
+            self._status_sub.setWordWrap(True)
+            self._status_sub.setTextInteractionFlags(
+                QtCore.Qt.TextSelectableByMouse,
+            )
             grid.addWidget(self._status_sub, 1, 1)
 
             self._update_badge = QtWidgets.QLabel("")
@@ -1048,9 +1052,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             folder_btns.addWidget(remove_btn)
             auto_btn = QtWidgets.QPushButton("Auto-detect")
             auto_btn.setToolTip(
-                "Clear the list and let the agent rediscover every "
-                "Replays/Multiplayer folder under your StarCraft II "
-                "Accounts directory.",
+                "Scan your StarCraft II Accounts folder and add every "
+                "Replays/Multiplayer directory found. Existing entries "
+                "are preserved; only missing folders are appended.",
             )
             auto_btn.clicked.connect(self._auto_detect_folders)
             folder_btns.addWidget(auto_btn)
@@ -1317,9 +1321,89 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._folder_list.takeItem(row)
 
         def _auto_detect_folders(self) -> None:
-            """Clear the list — the runner falls back to auto-discovery
-            when ``replay_folders_override`` is empty."""
+            """Actively scan the StarCraft II Accounts tree and populate
+            the list with every Replays/Multiplayer dir we find.
+
+            Previously this just cleared the list and relied on the
+            runner doing auto-discovery on the next start — but the
+            user couldn't *see* what was about to be watched, and if
+            the rediscovery picked up extra (or missed) folders they'd
+            only find out by relaunching. Doing the scan inline here
+            is fast (just a couple of iterdir calls), and the result
+            is dropped straight into the list widget so the user can
+            review and Save.
+            """
+            from .. import replay_finder
+
+            roots = replay_finder.find_all_replays_roots()
+            if not roots:
+                QtWidgets.QMessageBox.information(
+                    self,
+                    "Auto-detect",
+                    "Couldn't find a StarCraft II Accounts folder. "
+                    "Pick one manually with the Add folder… button.",
+                )
+                return
+            multi = replay_finder.all_multiplayer_dirs_anywhere()
+            # Final fallback: if no Multiplayer subdirs exist yet
+            # (brand-new SC2 install with no replays played), watch
+            # every detected Accounts root so they get picked up the
+            # moment SC2 writes its first replay.
+            if not multi:
+                multi = list(roots)
+            # Preserve any user-added folders that the auto-scan didn't
+            # find — they may be on a removable drive that's currently
+            # disconnected, or a custom path the user wants kept.
+            existing: list[str] = []
+            existing_keys: set[str] = set()
+            for i in range(self._folder_list.count()):
+                raw = self._folder_list.item(i).text().strip()
+                if not raw:
+                    continue
+                try:
+                    key = str(Path(raw).resolve())
+                except OSError:
+                    key = raw
+                if key in existing_keys:
+                    continue
+                existing_keys.add(key)
+                existing.append(raw)
+
+            new_entries: list[str] = []
+            for mp in multi:
+                try:
+                    key = str(mp.resolve())
+                except OSError:
+                    key = str(mp)
+                if key in existing_keys:
+                    continue
+                existing_keys.add(key)
+                new_entries.append(str(mp))
+
+            # If neither the existing list nor the scan found anything,
+            # fall back to the Accounts root so the user has a place to
+            # start.
+            if not existing and not new_entries:
+                new_entries.append(str(root))
+
+            combined = existing + new_entries
             self._folder_list.clear()
+            for entry in combined:
+                self._folder_list.addItem(entry)
+
+            if new_entries:
+                self._settings_status.setText(
+                    f"Auto-detect added {len(new_entries)} folder"
+                    f"{'s' if len(new_entries) != 1 else ''} · "
+                    "click Save settings to apply",
+                )
+            else:
+                self._settings_status.setText(
+                    "Auto-detect: no new folders found",
+                )
+            QtCore.QTimer.singleShot(
+                6000, lambda: self._settings_status.setText(""),
+            )
 
         def _reveal_replay(
             self, item: "QtWidgets.QTableWidgetItem",
@@ -1395,13 +1479,23 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                     "Replays will keep accumulating; press Resume to "
                     "drain the queue.",
                 )
-            folder = (
-                str(ui._replay_folders[0])
-                if ui._replay_folders
-                else "(no folder configured)"
-            )
+            folders = list(ui._replay_folders or [])
+            if not folders:
+                folder_label = "(no folder configured)"
+            elif len(folders) == 1:
+                folder_label = str(folders[0])
+            else:
+                # Pluralise and enumerate every folder so the user can
+                # confirm at a glance that EVERY region/toon is being
+                # watched, not just the first one. Each path goes on its
+                # own line for readability — the muted secondary label
+                # word-wraps so this doesn't blow out the card width.
+                lines = "\n".join(f"  • {p}" for p in folders)
+                folder_label = f"{len(folders)} folders\n{lines}"
             primary = "Watching for replays"
-            secondary = f"Folder: {folder}  ·  API: {ui._api_base}"
+            if len(folders) > 1:
+                primary = f"Watching {len(folders)} replay folders"
+            secondary = f"Folder: {folder_label}\nAPI: {ui._api_base}"
             return primary, secondary
 
         def _refresh_pairing_card(self) -> None:

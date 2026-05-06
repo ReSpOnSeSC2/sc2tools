@@ -29,8 +29,13 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from .config import AgentConfig
-from .replay_finder import all_multiplayer_dirs, find_replays_root
-from .replay_pipeline import parse_replay_for_cloud
+from .replay_finder import (
+    all_multiplayer_dirs,
+    all_multiplayer_dirs_anywhere,
+    find_all_replays_roots,
+    find_replays_root,
+)
+from .replay_pipeline import AnalyzerImportError, parse_replay_for_cloud
 from .state import AgentState
 from .uploader.queue import UploadJob, UploadQueue
 
@@ -64,6 +69,11 @@ class ReplayWatcher:
         self._inflight: set[str] = set()
         self._inflight_lock = threading.Lock()
         self._roots: list[Path] = []
+        # Throttle the systemic "analyzer not loadable" log so a stuck
+        # bundle doesn't fill agent.log with thousands of identical
+        # errors (one per replay × however many SC2 has on disk).
+        self._analyzer_unavailable: bool = False
+        self._analyzer_error_logged_at: float = 0.0
 
     def start(self) -> None:
         roots = self._discover_roots()
@@ -134,14 +144,16 @@ class ReplayWatcher:
             _add(self._cfg.replay_folder)
             return out
 
-        # Auto-discover every (account, toon) pair under the SC2 root.
-        root = find_replays_root()
-        if not root:
-            return []
-        for mp in all_multiplayer_dirs(root):
+        # Auto-discover every (account, toon) pair under EVERY SC2 root
+        # we can reach (regular Documents, OneDrive, redirected
+        # Pictures\Documents, etc.). Returning a per-root match means a
+        # player with multiple regions/handles sees every Multiplayer
+        # folder watched simultaneously, not just the first one.
+        for mp in all_multiplayer_dirs_anywhere():
             _add(mp)
         if not out:
-            _add(root)
+            for root in find_all_replays_roots():
+                _add(root)
         return out
 
     def _sweep_loop(self) -> None:
@@ -181,10 +193,41 @@ class ReplayWatcher:
             if not _wait_for_file_ready(path, SETTLE_TIMEOUT_SEC):
                 log.warning("file_never_settled %s", path.name)
                 return
-            game = parse_replay_for_cloud(path, state_dir=self._cfg.state_dir)
+            try:
+                game = parse_replay_for_cloud(
+                    path, state_dir=self._cfg.state_dir,
+                )
+            except AnalyzerImportError:
+                # Systemic failure (bundled analyzer can't be loaded).
+                # Do NOT mark the replay as skipped — once the user
+                # restarts with a fixed bundle, every replay sitting on
+                # disk should still be eligible for upload. Throttle
+                # the log so we don't spam agent.log with thousands of
+                # copies of the same import error.
+                now = time.monotonic()
+                if (
+                    not self._analyzer_unavailable
+                    or (now - self._analyzer_error_logged_at) > 60.0
+                ):
+                    log.error(
+                        "analyzer_unavailable_skipping_until_restart "
+                        "path=%s — replays will be re-tried on next "
+                        "agent launch.",
+                        path.name,
+                    )
+                    self._analyzer_error_logged_at = now
+                self._analyzer_unavailable = True
+                return
+            else:
+                # We got past the import; reset the throttle so a
+                # subsequent failure (e.g., after a reload) is logged
+                # promptly.
+                if self._analyzer_unavailable:
+                    log.info("analyzer_recovered")
+                    self._analyzer_unavailable = False
             if not game:
-                # AI / unresolved / parse error — record so we don't
-                # re-attempt every sweep.
+                # AI / unresolved / per-file parse error — record so we
+                # don't re-attempt every sweep.
                 self._state.uploaded[str(path)] = "skipped"
                 return
             self._upload.submit(UploadJob(file_path=path, game=game))

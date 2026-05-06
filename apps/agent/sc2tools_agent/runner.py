@@ -46,7 +46,12 @@ from .crash_reporter import (
 from .heartbeat import Heartbeat
 from .pairing import ensure_paired
 from .player_handle import refresh_from_cloud as refresh_player_handle
-from .replay_finder import all_multiplayer_dirs, find_replays_root
+from .replay_finder import (
+    all_multiplayer_dirs,
+    all_multiplayer_dirs_anywhere,
+    find_all_replays_roots,
+    find_replays_root,
+)
 from .state import AgentState, load_state, save_state
 from .ui import (
     ConsoleUI,
@@ -715,13 +720,22 @@ def _discover_replay_folders(
     if cfg.replay_folder:
         return [cfg.replay_folder]
 
-    root = find_replays_root()
-    if not root:
-        return []
-    multi = all_multiplayer_dirs(root)
+    # Discover every Replays/Multiplayer directory under EVERY detected
+    # StarCraft II Accounts root. A player with one toon per region —
+    # or one regular-Documents and one OneDrive copy of the same tree —
+    # ends up with multiple folders here, and we want all of them.
+    multi = all_multiplayer_dirs_anywhere()
     if multi:
-        return list(multi)
-    return [root]
+        for mp in multi:
+            _add(mp)
+        return out
+
+    # No Multiplayer dirs detected — fall back to watching the Accounts
+    # roots themselves so the recursive walker still picks up replays
+    # SC2 writes after we start.
+    for root in find_all_replays_roots():
+        _add(root)
+    return out
 
 
 _DEFAULT_DASHBOARD_URL = "https://sc2tools.com"

@@ -23,6 +23,62 @@ from typing import Any, Dict, Optional
 log = logging.getLogger(__name__)
 
 
+def _candidate_bases() -> list[Path]:
+    """Yield every plausible base dir to probe for the analyzer roots.
+
+    We're defensive here because PyInstaller's one-file mode has bitten
+    us in the past: ``_MEIPASS`` is the canonical extract dir, but on
+    some installer configurations the DATAS land next to the .exe
+    instead, and on others both locations are valid (one-folder mode).
+    Source layout adds yet another variant — Cowork plugins, editable
+    installs, and repo-root invocations all resolve ``parents[3]``
+    differently.
+
+    Probing every reasonable base costs nothing (just a few stat
+    calls) and catches every observed deployment without a special-
+    case for each.
+    """
+    seen: set[str] = set()
+    out: list[Path] = []
+
+    def _add(p: Optional[Path]) -> None:
+        if p is None:
+            return
+        try:
+            key = str(p.resolve())
+        except OSError:
+            key = str(p)
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(p)
+
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            _add(Path(meipass))
+        exe_dir = Path(sys.executable).resolve().parent
+        _add(exe_dir)
+        # One-folder PyInstaller layout sometimes nests the runtime in
+        # a subdir next to the launcher (sc2tools-agent/ holds the
+        # bundle). Probe both.
+        _add(exe_dir.parent)
+    else:
+        here = Path(__file__).resolve()
+        # apps/agent/sc2tools_agent/replay_pipeline.py -> parents[3] is
+        # the repo root in the canonical layout. Probe a couple more
+        # parents for editable / nested installs.
+        for n in (3, 2, 4):
+            try:
+                _add(here.parents[n])
+            except IndexError:
+                pass
+        # And the cwd, for "python -m sc2tools_agent" launched from
+        # inside the repo root.
+        _add(Path.cwd())
+    return out
+
+
 def _ensure_analyzer_on_path() -> None:
     """Add the analyzer source roots to sys.path so we can ``import core.*``.
 
@@ -37,23 +93,28 @@ def _ensure_analyzer_on_path() -> None:
     ``sc2_replay_parser``, ``pulse_resolver`` and friends the agent
     actually calls).
     """
-    if getattr(sys, "frozen", False):
-        # PyInstaller one-file mode unpacks our DATAS into _MEIPASS at
-        # startup; the analyzer dirs live at the top of that tree.
-        meipass = getattr(sys, "_MEIPASS", None)
-        base = Path(meipass) if meipass else Path(sys.executable).resolve().parent
-    else:
-        # Source: this file is at apps/agent/sc2tools_agent/replay_pipeline.py
-        # so the repo root is parents[3].
-        base = Path(__file__).resolve().parents[3]
-
+    bases = _candidate_bases()
+    # SC2Replay-Analyzer first so the reveal package's `core` ends up
+    # earlier on sys.path (we insert at position 0, so the LAST insert
+    # wins).
     for sub in ("SC2Replay-Analyzer", "reveal-sc2-opponent-main"):
-        candidate = base / sub
-        if candidate.exists() and str(candidate) not in sys.path:
-            sys.path.insert(0, str(candidate))
+        for base in bases:
+            candidate = base / sub
+            if candidate.exists() and str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
 
 
 _ensure_analyzer_on_path()
+
+
+class AnalyzerImportError(RuntimeError):
+    """Raised when the bundled analyzer package can't be loaded.
+
+    Distinct from a per-replay parse failure — callers (the watcher)
+    must not mark replays as permanently skipped on this error, because
+    a future restart or rebuild may resolve it and the replays should
+    be re-tried.
+    """
 
 
 @dataclass
@@ -121,15 +182,26 @@ def parse_replay_for_cloud(
         # flows from pulling in sc2reader.
         from core.sc2_replay_parser import parse_deep  # type: ignore
     except ImportError as exc:
-        log.error(
-            "Could not import core.sc2_replay_parser. Frozen exe missing "
-            "the bundled analyzer (rebuild from packaging/sc2tools_agent.spec) "
-            "or, in source mode, ensure reveal-sc2-opponent-main/ sits next "
-            "to apps/agent/. sys.path[:6]=%s exc=%s",
-            sys.path[:6],
-            exc,
-        )
-        return None
+        # Re-probe sys.path in case the agent was launched before the
+        # bundled DATAS finished extracting (rare PyInstaller race) or
+        # the user moved the install. A cheap retry beats permanently
+        # skipping every replay the watcher sees.
+        _ensure_analyzer_on_path()
+        try:
+            from core.sc2_replay_parser import parse_deep  # type: ignore
+        except ImportError:
+            log.error(
+                "Could not import core.sc2_replay_parser. Frozen exe missing "
+                "the bundled analyzer (rebuild from packaging/sc2tools_agent.spec) "
+                "or, in source mode, ensure reveal-sc2-opponent-main/ sits next "
+                "to apps/agent/. sys.path[:6]=%s exc=%s",
+                sys.path[:6],
+                exc,
+            )
+            # Raise instead of returning None so the watcher can tell
+            # this apart from a per-replay parse failure and avoid
+            # marking the file as permanently skipped.
+            raise AnalyzerImportError(str(exc)) from exc
 
     handle = player_handle or _read_player_handle(state_dir)
     try:

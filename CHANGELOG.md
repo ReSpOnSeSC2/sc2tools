@@ -10,6 +10,52 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased] - 2026-05-06
 
+### Fixed (agent v0.3.4)
+
+- **Dashboard "Active" card showed only one folder.** When the Settings
+  tab was configured with multiple `Replays/Multiplayer` directories
+  (one per region or BattleTag), the dashboard's status line still read
+  `Folder: <first folder only>` — giving the false impression the agent
+  was ignoring the rest. `_format_status_lines` in `ui/gui.py` now
+  enumerates every watched folder, pluralises the headline
+  (`Watching 2 replay folders`), and the status sub-label uses
+  `setWordWrap(True)` so long path lists render cleanly.
+- **Auto-detect button erased the list instead of populating it.** The
+  Settings tab's Auto-detect previously called `self._folder_list.clear()`
+  on the assumption the runner would rediscover on next start — but
+  the user couldn't see the result, and any folders the auto-scan
+  missed would silently disappear. The button now actively scans
+  `find_all_replays_roots()` + `all_multiplayer_dirs_anywhere()` and
+  populates the list inline, preserving any user-added entries that
+  the scan didn't find.
+- **Auto-discovery only saw the first Documents location.** The legacy
+  `find_replays_root()` returned the FIRST matching `Documents` folder
+  and stopped, so a user with both regular `Documents` AND a OneDrive
+  copy of the SC2 tree only had one root watched. Replaced with
+  `find_all_replays_roots()` (returns every match, deduped by resolved
+  path) and `all_multiplayer_dirs_anywhere()` (unions every Multiplayer
+  dir across every root). Probed extra Windows locations:
+  `Pictures\Documents`, `%USERPROFILE%\Documents`, and
+  `%USERPROFILE%\OneDrive\Pictures\Documents`. Both the runner's
+  startup discovery and the watcher's `_discover_roots` now use the
+  union helper.
+- **Replay-parser import error permanently skipped every replay.**
+  When `parse_replay_for_cloud` failed to import
+  `core.sc2_replay_parser` (frozen-exe DATAS missing, race during
+  PyInstaller extract, or a broken install), it returned `None` and
+  the watcher's `_handle_replay` recorded the path as `"skipped"` in
+  `state.uploaded`. Even after a fix or restart that resolved the
+  import, those replays would never re-enter the queue. Introduced
+  `AnalyzerImportError` so the watcher can distinguish a systemic
+  import failure (don't skip; throttle the log to once per minute;
+  retry on next sweep / restart) from a per-replay parse failure
+  (skip as before). On recovery the watcher emits
+  `analyzer_recovered`. Made `_ensure_analyzer_on_path` more robust:
+  it now probes `_MEIPASS`, the exe parent, the exe grandparent, and
+  several `parents[n]` levels for source mode, then retries the
+  import once after re-probing in case the bundle DATAS finished
+  extracting between the first attempt and the retry.
+
 ### Fixed (agent v0.3.3)
 
 - **Replay parsing in the frozen exe.** The PyInstaller bundle did not
