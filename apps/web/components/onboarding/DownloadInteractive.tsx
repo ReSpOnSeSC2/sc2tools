@@ -21,7 +21,7 @@ const OS_TABS: ReadonlyArray<{ id: DetectedOS; label: string }> = [
 const SYS_REQUIREMENTS: ReadonlyArray<{ heading: string; body: string }> = [
   {
     heading: "Disk",
-    body: "~250 MB for the installer (Python + Qt runtime bundled). The replay folder itself is untouched.",
+    body: "~450 MB for the installer (Python + Qt runtime bundled). The replay folder itself is untouched.",
   },
   {
     heading: "OS",

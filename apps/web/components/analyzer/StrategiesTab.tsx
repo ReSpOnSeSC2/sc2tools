@@ -278,8 +278,11 @@ function BuildVsStrategyView({
 }) {
   const { filters, dbRev } = useFilters();
   const [search, setSearch] = useState("");
+  // Default to the table view because it carries more usable density
+  // (raw W/L/games/WR per cell) than the heatmap. Honour any existing
+  // preference saved in localStorage.
   const [view, setView] = useState<"heatmap" | "table">(() =>
-    readLs(LS_BVS_VW, "heatmap" as "heatmap" | "table"),
+    readLs(LS_BVS_VW, "table" as "heatmap" | "table"),
   );
   const [minGames, setMinGames] = useState<number>(() => readLs(LS_MIN, 3));
   const sort = useSort("total", "desc");
@@ -323,7 +326,7 @@ function BuildVsStrategyView({
         />
         <MinGamesPicker value={minGames} onChange={setMinGames} />
         <div className="inline-flex overflow-hidden rounded border border-border">
-          {(["heatmap", "table"] as const).map((v) => (
+          {(["table", "heatmap"] as const).map((v) => (
             <button
               key={v}
               type="button"
@@ -629,8 +632,11 @@ function StrategyGamesView({
 
 export function StrategiesTab() {
   const { filters } = useFilters();
+  // Default to "bvs" — Build vs strategy carries more actionable
+  // information (your build paired with what they did) than the flat
+  // by-opponent-strategy summary. Existing saved preferences win.
   const [view, setView] = useState<"opp" | "bvs">(() =>
-    readLs(LS_VIEW, "opp" as "opp" | "bvs"),
+    readLs(LS_VIEW, "bvs" as "opp" | "bvs"),
   );
   const [drill, setDrill] = useState<DrillFilter | null>(null);
   useEffect(() => writeLs(LS_VIEW, view), [view]);
@@ -655,7 +661,7 @@ export function StrategiesTab() {
             : "My build × Their strategy"}
         </h2>
         <div className="inline-flex overflow-hidden rounded border border-border">
-          {(["opp", "bvs"] as const).map((v) => (
+          {(["bvs", "opp"] as const).map((v) => (
             <button
               key={v}
               type="button"
