@@ -14,6 +14,7 @@ import { apiCall, useApi } from "@/lib/clientApi";
 import { Skeleton } from "@/components/ui/Card";
 import { coerceRace } from "@/lib/race";
 import { BuildCard } from "./BuildCard";
+import { BuildDossierModal } from "./BuildDossierModal";
 import { BuildEditorSheet } from "./BuildEditorSheet";
 import { BuildFilterBar, type BuildFilterState } from "./BuildFilterBar";
 import { BuildPublishModal } from "./BuildPublishModal";
@@ -55,6 +56,7 @@ function BuildsLibraryInner() {
   const [editorBuild, setEditorBuild] = useState<CustomBuild | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishBuild, setPublishBuild] = useState<CustomBuild | null>(null);
+  const [dossierBuild, setDossierBuild] = useState<CustomBuild | null>(null);
   const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
   const [deletePending, setDeletePending] = useState(false);
 
@@ -74,11 +76,20 @@ function BuildsLibraryInner() {
     setEditorOpen(true);
   }, []);
 
+  const openDossier = useCallback(
+    (slug: string) => {
+      const target = items.find((b) => b.slug === slug) || null;
+      setDossierBuild(target);
+    },
+    [items],
+  );
+
   const openEdit = useCallback(
     (slug: string) => {
       const target = items.find((b) => b.slug === slug) || null;
       setEditorBuild(target);
       setEditorOpen(true);
+      setDossierBuild(null);
     },
     [items],
   );
@@ -88,11 +99,15 @@ function BuildsLibraryInner() {
       const target = items.find((b) => b.slug === slug) || null;
       setPublishBuild(target);
       setPublishOpen(true);
+      setDossierBuild(null);
     },
     [items],
   );
 
-  const askDelete = useCallback((slug: string) => setDeletingSlug(slug), []);
+  const askDelete = useCallback((slug: string) => {
+    setDeletingSlug(slug);
+    setDossierBuild(null);
+  }, []);
 
   const confirmDelete = useCallback(async () => {
     if (!deletingSlug) return;
@@ -194,6 +209,7 @@ function BuildsLibraryInner() {
                 <li key={b.slug}>
                   <BuildCard
                     build={b}
+                    onOpen={openDossier}
                     onEdit={openEdit}
                     onDelete={askDelete}
                     onPublish={openPublish}
@@ -205,6 +221,15 @@ function BuildsLibraryInner() {
         </>
       )}
 
+      {dossierBuild ? (
+        <BuildDossierModal
+          build={dossierBuild}
+          onClose={() => setDossierBuild(null)}
+          onEdit={openEdit}
+          onPublish={openPublish}
+          onDelete={askDelete}
+        />
+      ) : null}
       <BuildEditorSheet
         open={editorOpen}
         onClose={() => setEditorOpen(false)}

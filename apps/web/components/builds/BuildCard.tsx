@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type MouseEvent, type SyntheticEvent } from "react";
-import Link from "next/link";
 import { Eye, MoreVertical, Pencil, Send, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -18,6 +17,7 @@ import type { DecoratedBuild } from "./types";
 
 export interface BuildCardProps {
   build: DecoratedBuild;
+  onOpen: (slug: string) => void;
   onEdit: (slug: string) => void;
   onDelete: (slug: string) => void;
   onPublish: (slug: string) => void;
@@ -25,11 +25,17 @@ export interface BuildCardProps {
 
 /**
  * BuildCard — race-tinted card representing one custom build in the
- * library grid. Clicking the body navigates to /builds/[slug]; the
- * kebab menu surfaces edit / publish / delete without leaving the
- * grid. The whole card has a left rail in the build's race tint.
+ * library grid. Clicking the body opens the dossier modal in place;
+ * the kebab menu surfaces edit / publish / delete. The whole card has
+ * a left rail in the build's race tint.
  */
-export function BuildCard({ build, onEdit, onDelete, onPublish }: BuildCardProps) {
+export function BuildCard({
+  build,
+  onOpen,
+  onEdit,
+  onDelete,
+  onPublish,
+}: BuildCardProps) {
   const tint = raceTint(build.race);
   const matchup = matchupLabel(build.race, (build.vsRace as VsRace) ?? "Any");
   const stats = build.stats;
@@ -48,13 +54,16 @@ export function BuildCard({ build, onEdit, onDelete, onPublish }: BuildCardProps
         aria-hidden
         className={["absolute left-0 top-0 h-full w-1", tint.rail].join(" ")}
       />
-      <Link
-        href={`/builds/${encodeURIComponent(build.slug)}`}
+      <button
+        type="button"
+        onClick={() => onOpen(build.slug)}
+        aria-label={`Open ${build.name || "build"} dossier`}
         className={[
-          "block h-full p-5 pl-6",
+          "absolute inset-0 z-0",
           "focus-visible:outline-none focus-visible:bg-bg-elevated",
         ].join(" ")}
-      >
+      />
+      <div className="relative pointer-events-none p-5 pl-6">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -97,16 +106,18 @@ export function BuildCard({ build, onEdit, onDelete, onPublish }: BuildCardProps
               </p>
             ) : null}
           </div>
-          <BuildKebab
-            slug={build.slug}
-            isPublic={!!build.isPublic}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onPublish={onPublish}
-          />
+          <div className="pointer-events-auto">
+            <BuildKebab
+              slug={build.slug}
+              isPublic={!!build.isPublic}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onPublish={onPublish}
+            />
+          </div>
         </div>
         <BuildStatsRow build={build} stats={stats} />
-      </Link>
+      </div>
     </Card>
   );
 }

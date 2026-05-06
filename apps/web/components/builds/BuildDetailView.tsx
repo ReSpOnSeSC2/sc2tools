@@ -17,11 +17,8 @@ import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Section } from "@/components/ui/Section";
-import { StatCard } from "@/components/ui/Stat";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { apiCall, useApi } from "@/lib/clientApi";
-import { fmtAgo, pct1, wrColor } from "@/lib/format";
 import {
   coerceRace,
   matchupLabel,
@@ -29,14 +26,10 @@ import {
   raceTint,
   type VsRace,
 } from "@/lib/race";
+import { BuildDossier } from "./BuildDossier";
 import { BuildEditorSheet } from "./BuildEditorSheet";
 import { BuildPublishModal } from "./BuildPublishModal";
-import {
-  BreakdownCard,
-  TopOpponentsCard,
-} from "./BuildBreakdownCards";
-import { BuildGamesTable } from "./BuildGamesTable";
-import type { BuildDetailResponse, CustomBuild } from "./types";
+import type { CustomBuild } from "./types";
 
 export interface BuildDetailViewProps {
   slug: string;
@@ -57,14 +50,11 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const buildSwr = useApi<CustomBuild>(
     `/v1/custom-builds/${encodeURIComponent(slug)}`,
   );
-  // Detail comes from the rule-eval endpoint so freshly saved builds
-  // show the games they actually match (instead of 0 until the agent
-  // tags games with `myBuild`). Same shape as /v1/builds/:name.
-  const detailSwr = useApi<BuildDetailResponse>(
-    buildSwr.data
-      ? `/v1/custom-builds/${encodeURIComponent(slug)}/matches`
-      : null,
-  );
+  // The dossier surface fetches `/v1/custom-builds/:slug/matches` —
+  // same shape as the analyzer modal and the new `<BuildDossier />`.
+  const dossierPath = buildSwr.data
+    ? `/v1/custom-builds/${encodeURIComponent(slug)}/matches`
+    : null;
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -75,9 +65,8 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
     async (saved: CustomBuild) => {
       toast.success(`Saved “${saved.name}”.`);
       await buildSwr.mutate();
-      await detailSwr.mutate();
     },
-    [toast, buildSwr, detailSwr],
+    [toast, buildSwr],
   );
 
   const handleDelete = useCallback(async () => {
@@ -112,10 +101,8 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const build = buildSwr.data;
   const race = coerceRace(build.race);
   const tint = raceTint(race);
-  const matchup = matchupLabel(race, (build.vsRace as VsRace) ?? "Any");
+  const mu = matchupLabel(race, (build.vsRace as VsRace) ?? "Any");
   const fromOpponent = build.perspective === "opponent";
-  const detail = detailSwr.data;
-  const totals = detail?.totals;
 
   return (
     <div className="space-y-6">
@@ -131,7 +118,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         eyebrow={
           <span className="inline-flex items-center gap-2">
             <Icon name={raceIconName(race)} kind="race" size={14} decorative />
-            <span>{matchup}</span>
+            <span>{mu}</span>
             {fromOpponent ? (
               <Badge size="sm" variant="cyan" iconLeft={<Eye className="h-3 w-3" aria-hidden />}>
                 From opponent
@@ -173,33 +160,12 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         }
       />
 
-      <PerformanceStrip totals={totals} loading={detailSwr.isLoading} />
-
-      <NotesPanel notes={build.notes} />
-
-      {detailSwr.isLoading && !detail ? (
-        <Skeleton rows={6} />
-      ) : (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <BreakdownCard
-              title="Vs opponent strategy"
-              rows={detail?.byStrategy ?? []}
-              emptySub="No strategies tagged on games using this build yet."
-            />
-            <BreakdownCard
-              title="Vs map"
-              rows={detail?.byMap ?? []}
-              emptySub="Once a few games on this build land, map breakdowns appear here."
-            />
-          </div>
-          <TopOpponentsCard
-            rows={detail?.byMatchup ?? []}
-            accentClass={tint.text}
-          />
-          <BuildGamesTable games={detail?.recent ?? []} />
-        </div>
-      )}
+      {dossierPath ? (
+        <BuildDossier
+          apiPath={dossierPath}
+          headerSlot={() => <NotesPanel notes={build.notes} accent={tint.text} />}
+        />
+      ) : null}
 
       <BuildEditorSheet
         open={editorOpen}
@@ -229,54 +195,13 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   );
 }
 
-function PerformanceStrip({
-  totals,
-  loading,
+function NotesPanel({
+  notes,
+  accent,
 }: {
-  totals: BuildDetailResponse["totals"] | undefined;
-  loading: boolean;
+  notes?: string;
+  accent: string;
 }) {
-  if (loading && !totals) {
-    return <Skeleton rows={1} />;
-  }
-  const total = totals?.total ?? 0;
-  const wr = totals?.winRate ?? 0;
-  const last = totals?.lastPlayed ?? null;
-  return (
-    <Section title="Performance">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          label="Games"
-          value={total.toLocaleString()}
-          hint="On this build"
-        />
-        <StatCard
-          label="Wins"
-          value={
-            <span className="text-success">{(totals?.wins ?? 0).toLocaleString()}</span>
-          }
-        />
-        <StatCard
-          label="Losses"
-          value={
-            <span className="text-danger">{(totals?.losses ?? 0).toLocaleString()}</span>
-          }
-        />
-        <StatCard
-          label="Win rate"
-          value={
-            <span style={{ color: wrColor(wr, total) }}>
-              {total > 0 ? pct1(wr) : "—"}
-            </span>
-          }
-          hint={last ? `Last played ${fmtAgo(last)}` : "No recorded games yet"}
-        />
-      </div>
-    </Section>
-  );
-}
-
-function NotesPanel({ notes }: { notes?: string }) {
   if (!notes || !notes.trim()) {
     return (
       <Card title="Personal notes">
@@ -289,7 +214,9 @@ function NotesPanel({ notes }: { notes?: string }) {
   }
   return (
     <Card title="Personal notes">
-      <pre className="whitespace-pre-wrap break-words font-sans text-body text-text">
+      <pre
+        className={["whitespace-pre-wrap break-words font-sans text-body", accent].join(" ")}
+      >
         {notes}
       </pre>
     </Card>

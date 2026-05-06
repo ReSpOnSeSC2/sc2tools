@@ -2,31 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { apiCall, useApi } from "@/lib/clientApi";
+import { apiCall } from "@/lib/clientApi";
 import { useFilters } from "@/lib/filterContext";
-import { fmtAgo, pct1, wrColor } from "@/lib/format";
-import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
-
-type BuildDetail = {
-  name: string;
-  notes?: string;
-  total: number;
-  wins: number;
-  losses: number;
-  winRate: number;
-  matchups?: { matchup: string; wins: number; losses: number; total: number; winRate: number }[];
-  recentGames?: {
-    gameId: string;
-    date: string;
-    map: string;
-    opponent: string;
-    result: "win" | "loss";
-  }[];
-};
+import { Card } from "@/components/ui/Card";
+import {
+  BuildDossier,
+  type BuildDossierData,
+} from "@/components/builds/BuildDossier";
 
 /**
- * Modal for inspecting a build, editing its notes / synonyms (if it's
- * a custom one), and jumping into recent games.
+ * Modal that opens from the analyzer's Builds tab. Shows the same rich
+ * dossier surface as the standalone /builds/[slug] page (Performance,
+ * matchup/map breakdown, top opponents, build tendencies, predicted
+ * strategies, median key timings, last 5 games, macro aggregate, recent
+ * games table) plus the personal-notes textarea and publish-to-community
+ * form.
+ *
+ * The build is identified by display name here (the value of the
+ * `myBuild` field on stored games). When the user has saved a custom
+ * build with this name, Notes/Publish PATCH against
+ * `/v1/custom-builds/:name`; otherwise these controls quietly stay
+ * inert because the saved-build doc doesn't exist.
  */
 export function BuildEditorModal({
   buildName,
@@ -37,32 +33,53 @@ export function BuildEditorModal({
 }) {
   const { getToken } = useAuth();
   const { bumpRev } = useFilters();
-  const { data, isLoading, mutate } = useApi<BuildDetail>(
-    `/v1/builds/${encodeURIComponent(buildName)}`,
-  );
+  const apiPath = `/v1/builds/${encodeURIComponent(buildName)}`;
 
   const [notes, setNotes] = useState("");
+  const [notesLoaded, setNotesLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [notesSavedAt, setNotesSavedAt] = useState<number | null>(null);
   const [publishMsg, setPublishMsg] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishMeta, setPublishMeta] = useState({
-    title: "",
+    title: buildName,
     description: "",
     authorName: "",
   });
-  useEffect(() => {
-    if (data) {
-      setNotes(data.notes || "");
-      setPublishMeta((m) => ({
-        ...m,
-        title: m.title || data.name || buildName,
-      }));
-    }
-  }, [data, buildName]);
 
-  async function save() {
+  // Pull the user's saved-build doc so the Notes textarea reflects the
+  // current value when the modal opens. /v1/custom-builds/:slug is
+  // keyed by slug; if the user saved this build with the same string
+  // as both name and slug, we'll get the doc back.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const doc = await apiCall<{ notes?: string; name?: string }>(
+          getToken,
+          `/v1/custom-builds/${encodeURIComponent(buildName)}`,
+        );
+        if (cancelled) return;
+        setNotes(doc.notes || "");
+        if (doc.name && doc.name !== buildName) {
+          setPublishMeta((m) => ({ ...m, title: doc.name || buildName }));
+        }
+      } catch {
+        // 404 just means this isn't a saved custom build — keep notes blank.
+      } finally {
+        if (!cancelled) setNotesLoaded(true);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [buildName, getToken]);
+
+  async function saveNotes() {
     if (saving) return;
     setSaving(true);
+    setNotesSavedAt(null);
     try {
       await apiCall(
         getToken,
@@ -72,8 +89,8 @@ export function BuildEditorModal({
           body: JSON.stringify({ notes }),
         },
       );
-      await mutate();
       bumpRev();
+      setNotesSavedAt(Date.now());
     } finally {
       setSaving(false);
     }
@@ -98,8 +115,12 @@ export function BuildEditorModal({
         },
       );
       setPublishMsg(`Published! /community/builds/${result.slug}`);
-    } catch (err: any) {
-      setPublishMsg(err?.message || "Could not publish.");
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: unknown }).message)
+          : "Could not publish.";
+      setPublishMsg(message);
     } finally {
       setPublishing(false);
     }
@@ -111,11 +132,14 @@ export function BuildEditorModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl space-y-4"
+        className="w-full max-w-4xl space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="card flex items-center justify-between border-accent/40 px-4 py-3">
-          <h2 className="text-base font-semibold">{buildName}</h2>
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold">{buildName}</h2>
+            <p className="text-[11px] text-text-dim">Build dossier</p>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -125,178 +149,153 @@ export function BuildEditorModal({
           </button>
         </div>
 
-        {isLoading ? (
-          <Skeleton rows={4} />
-        ) : !data ? (
-          <Card>
-            <EmptyState title="Build not found" />
-          </Card>
-        ) : (
-          <>
-            <Card title="Performance">
-              <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-                <Stat label="Games" value={data.total} />
-                <Stat label="Wins" value={data.wins} color="#3ec07a" />
-                <Stat label="Losses" value={data.losses} color="#ff6b6b" />
-                <Stat
-                  label="Win rate"
-                  value={pct1(data.winRate)}
-                  color={wrColor(data.winRate, data.total)}
-                />
-              </div>
-            </Card>
-
-            <Card title="Notes">
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={4}
-                className="input min-h-[120px]"
-                placeholder="Personal notes, synonyms, scouting tells…"
-              />
-              <div className="mt-2 flex justify-end">
-                <button
-                  type="button"
-                  onClick={save}
-                  className="btn"
-                  disabled={saving}
-                >
-                  {saving ? "Saving…" : "Save notes"}
-                </button>
-              </div>
-            </Card>
-
-            {data.matchups && data.matchups.length > 0 && (
-              <Card title="By matchup">
-                <table className="w-full text-sm">
-                  <tbody>
-                    {data.matchups.map((m) => (
-                      <tr key={m.matchup} className="border-t border-border">
-                        <td className="px-3 py-1.5">{m.matchup}</td>
-                        <td className="px-3 py-1.5 text-right">
-                          {m.wins}W &ndash; {m.losses}L
-                        </td>
-                        <td
-                          className="px-3 py-1.5 text-right tabular-nums"
-                          style={{ color: wrColor(m.winRate, m.total) }}
-                        >
-                          {pct1(m.winRate)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Card>
-            )}
-
-            <Card title="Publish to community">
-              <p className="mb-2 text-xs text-text-muted">
-                Share this build at <code>/community/builds/...</code>. You
-                can unpublish or edit at any time. Title and description are
-                public; your account name is shown unless you override it.
-              </p>
-              <div className="space-y-2">
-                <input
-                  className="input"
-                  placeholder="Title"
-                  value={publishMeta.title}
-                  onChange={(e) =>
-                    setPublishMeta((m) => ({ ...m, title: e.target.value }))
-                  }
-                />
-                <textarea
-                  className="input min-h-[80px]"
-                  rows={3}
-                  placeholder="Description (optional)"
-                  value={publishMeta.description}
-                  onChange={(e) =>
-                    setPublishMeta((m) => ({
-                      ...m,
-                      description: e.target.value,
-                    }))
-                  }
-                />
-                <input
-                  className="input"
-                  placeholder="Display name (optional)"
-                  value={publishMeta.authorName}
-                  onChange={(e) =>
-                    setPublishMeta((m) => ({
-                      ...m,
-                      authorName: e.target.value,
-                    }))
-                  }
-                />
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-text-muted">
-                    {publishMsg}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={publishToCommunity}
-                    disabled={publishing}
-                  >
-                    {publishing ? "Publishing…" : "Publish to community"}
-                  </button>
-                </div>
-              </div>
-            </Card>
-
-            {data.recentGames && data.recentGames.length > 0 && (
-              <Card title="Recent games">
-                <ul className="divide-y divide-border text-sm">
-                  {data.recentGames.map((g) => (
-                    <li
-                      key={g.gameId}
-                      className="flex items-center justify-between px-1 py-2"
-                    >
-                      <span>
-                        <span
-                          className="font-mono text-xs"
-                          style={{
-                            color: g.result === "win" ? "#3ec07a" : "#ff6b6b",
-                          }}
-                        >
-                          {g.result.toUpperCase()}
-                        </span>{" "}
-                        vs {g.opponent || "—"} · {g.map}
-                      </span>
-                      <span className="text-xs text-text-dim">
-                        {fmtAgo(g.date)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            )}
-          </>
-        )}
+        <BuildDossier
+          apiPath={apiPath}
+          footerSlot={(data) => (
+            <NotesAndPublish
+              buildName={buildName}
+              data={data}
+              notes={notes}
+              setNotes={setNotes}
+              notesLoaded={notesLoaded}
+              saving={saving}
+              notesSavedAt={notesSavedAt}
+              onSaveNotes={saveNotes}
+              publishing={publishing}
+              publishMsg={publishMsg}
+              publishMeta={publishMeta}
+              setPublishMeta={setPublishMeta}
+              onPublish={publishToCommunity}
+            />
+          )}
+        />
       </div>
     </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  color,
+function NotesAndPublish({
+  buildName,
+  data,
+  notes,
+  setNotes,
+  notesLoaded,
+  saving,
+  notesSavedAt,
+  onSaveNotes,
+  publishing,
+  publishMsg,
+  publishMeta,
+  setPublishMeta,
+  onPublish,
 }: {
-  label: string;
-  value: string | number;
-  color?: string;
+  buildName: string;
+  data: BuildDossierData | null;
+  notes: string;
+  setNotes: (n: string) => void;
+  notesLoaded: boolean;
+  saving: boolean;
+  notesSavedAt: number | null;
+  onSaveNotes: () => Promise<void>;
+  publishing: boolean;
+  publishMsg: string | null;
+  publishMeta: { title: string; description: string; authorName: string };
+  setPublishMeta: (
+    next: (prev: {
+      title: string;
+      description: string;
+      authorName: string;
+    }) => { title: string; description: string; authorName: string },
+  ) => void;
+  onPublish: () => void;
 }) {
+  const savedRecently =
+    notesSavedAt != null && Date.now() - notesSavedAt < 60_000;
   return (
-    <div className="rounded border border-border bg-bg-elevated p-3">
-      <div className="text-[10px] uppercase tracking-wider text-text-dim">
-        {label}
-      </div>
-      <div
-        className="mt-1 text-lg font-semibold tabular-nums"
-        style={color ? { color } : undefined}
-      >
-        {value}
-      </div>
+    <div className="space-y-4">
+      <Card title="Personal notes">
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={4}
+          className="input min-h-[120px]"
+          placeholder={
+            notesLoaded
+              ? "Personal notes, synonyms, scouting tells…"
+              : "Loading saved notes…"
+          }
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-[11px] text-text-dim">
+            {savedRecently ? "Saved." : "Notes are private to your account."}
+          </span>
+          <button
+            type="button"
+            onClick={onSaveNotes}
+            className="btn"
+            disabled={saving || !notesLoaded}
+          >
+            {saving ? "Saving…" : "Save notes"}
+          </button>
+        </div>
+      </Card>
+
+      <Card title="Publish to community">
+        <p className="mb-2 text-xs text-text-muted">
+          Share this build at <code>/community/builds/...</code>. You can
+          unpublish or edit at any time. Title and description are public; your
+          account name is shown unless you override it.
+        </p>
+        <div className="space-y-2">
+          <input
+            className="input"
+            placeholder="Title"
+            value={publishMeta.title}
+            onChange={(e) =>
+              setPublishMeta((m) => ({ ...m, title: e.target.value }))
+            }
+          />
+          <textarea
+            className="input min-h-[80px]"
+            rows={3}
+            placeholder="Description (optional)"
+            value={publishMeta.description}
+            onChange={(e) =>
+              setPublishMeta((m) => ({
+                ...m,
+                description: e.target.value,
+              }))
+            }
+          />
+          <input
+            className="input"
+            placeholder="Display name (optional)"
+            value={publishMeta.authorName}
+            onChange={(e) =>
+              setPublishMeta((m) => ({
+                ...m,
+                authorName: e.target.value,
+              }))
+            }
+          />
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-text-muted">{publishMsg}</span>
+            <button
+              type="button"
+              className="btn"
+              onClick={onPublish}
+              disabled={publishing}
+              title={
+                data && data.totals.total === 0
+                  ? `${buildName} hasn't matched any games yet`
+                  : undefined
+              }
+            >
+              {publishing ? "Publishing…" : "Publish to community"}
+            </button>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
