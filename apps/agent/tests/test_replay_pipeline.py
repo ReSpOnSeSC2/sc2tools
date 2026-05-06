@@ -169,6 +169,41 @@ def test_resolve_by_toon_returns_none_when_no_match():
     # path; the surrounding caller bails before using opp.
 
 
+def test_pulse_timeout_does_not_block_caller(monkeypatch, _stub_pulse_resolver):
+    """v0.3.10 regression: the timeout fired but the caller still
+    blocked because ``concurrent.futures.ThreadPoolExecutor`` inside
+    a ``with`` block calls ``shutdown(wait=True)`` on exit. v0.3.11
+    rewrote the wrapper to use a daemon thread that gets abandoned
+    on timeout, so the parse pipeline never waits for a stuck
+    sc2pulse call to actually finish.
+    """
+    import sys
+    import time
+    from types import SimpleNamespace
+
+    class _SlowModule:
+        @staticmethod
+        def resolve_pulse_id_by_toon(handle, name):
+            time.sleep(3)  # well above the 0.2 s cap below
+            return "should_never_reach_caller"
+
+    monkeypatch.setitem(sys.modules, "core.pulse_resolver", _SlowModule)
+    monkeypatch.setenv("SC2TOOLS_PULSE_TIMEOUT_SEC", "0.2")
+
+    from sc2tools_agent.replay_pipeline import _resolve_pulse_character_id
+
+    started = time.monotonic()
+    out = _resolve_pulse_character_id(
+        SimpleNamespace(handle="1-S2-1-267727", name="ReSpOnSe"),
+    )
+    elapsed = time.monotonic() - started
+    assert out is None
+    # Caller must return well under 1 s even though the stub sleeps 3 s.
+    assert elapsed < 1.0, (
+        f"timeout did not unblock the caller (elapsed {elapsed:.2f}s)"
+    )
+
+
 def test_probe_analyzer_succeeds_in_source_layout():
     """In the canonical source layout the bundled analyzer is on disk
     next to apps/agent/, so probe_analyzer must succeed. If this

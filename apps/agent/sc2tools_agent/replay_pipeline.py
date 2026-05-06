@@ -434,22 +434,44 @@ def _resolve_pulse_character_id(
             return None
 
     # Backfill path: hard wall-clock cap so a slow sc2pulse can't
-    # serialise the parse queue. ThreadPoolExecutor + Future.result
-    # with a timeout — orphaned thread completes in the background
-    # and warms the resolver's module-level cache for next time.
-    import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=1, thread_name_prefix="pulse-lookup",
-    ) as ex:
-        future = ex.submit(resolve_pulse_id_by_toon, str(handle), clean)
+    # serialise the parse queue. We use a bare daemon thread + a
+    # ``threading.Event`` — emphatically NOT a
+    # ``concurrent.futures.ThreadPoolExecutor`` inside a ``with``
+    # block, which was the v0.3.10 mistake. ``with``-block exit
+    # calls ``shutdown(wait=True)`` and that waits for the running
+    # call to finish even after we got TimeoutError, defeating the
+    # whole point of the timeout. A daemon thread gets abandoned
+    # cleanly: it keeps running in the background until the resolver
+    # responds (warming the resolver's module-level cache so the
+    # NEXT replay against this opponent is instant), but it never
+    # blocks the calling parse thread or process exit.
+    import threading
+
+    result: list = [None]
+    error: list = [None]
+    done = threading.Event()
+
+    def _runner() -> None:
         try:
-            return future.result(timeout=timeout_sec) or None
-        except concurrent.futures.TimeoutError:
-            future.cancel()
-            return None
+            result[0] = resolve_pulse_id_by_toon(str(handle), clean)
         except Exception as exc:  # noqa: BLE001
-            log.info("pulse_character_id_resolve_failed: %s", exc)
-            return None
+            error[0] = exc
+        finally:
+            done.set()
+
+    t = threading.Thread(
+        target=_runner, name="pulse-lookup", daemon=True,
+    )
+    t.start()
+    if not done.wait(timeout=timeout_sec):
+        # Timeout — abandon the thread. It will complete eventually
+        # and update the resolver's in-memory cache; subsequent
+        # replays against the same opponent benefit.
+        return None
+    if error[0] is not None:
+        log.info("pulse_character_id_resolve_failed: %s", error[0])
+        return None
+    return result[0] or None
 
 
 def _pulse_timeout_for(file_path: Optional[Path]) -> float:
