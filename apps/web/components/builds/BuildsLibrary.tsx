@@ -16,6 +16,7 @@ import { coerceRace } from "@/lib/race";
 import { BuildCard } from "./BuildCard";
 import { BuildDossierModal } from "./BuildDossierModal";
 import { BuildEditorSheet } from "./BuildEditorSheet";
+import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildFilterBar, type BuildFilterState } from "./BuildFilterBar";
 import { BuildPublishModal } from "./BuildPublishModal";
 import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
@@ -54,6 +55,7 @@ function BuildsLibraryInner() {
   const [filters, setFilters] = useState<BuildFilterState>(DEFAULT_FILTERS);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorBuild, setEditorBuild] = useState<CustomBuild | null>(null);
+  const [richEditBuild, setRichEditBuild] = useState<CustomBuild | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishBuild, setPublishBuild] = useState<CustomBuild | null>(null);
   const [dossierBuild, setDossierBuild] = useState<CustomBuild | null>(null);
@@ -87,8 +89,9 @@ function BuildsLibraryInner() {
   const openEdit = useCallback(
     (slug: string) => {
       const target = items.find((b) => b.slug === slug) || null;
-      setEditorBuild(target);
-      setEditorOpen(true);
+      // Opens the rich rule-based editor (the same modal used by
+      // "Save as new build") pre-populated with the existing build.
+      setRichEditBuild(target);
       setDossierBuild(null);
     },
     [items],
@@ -235,6 +238,14 @@ function BuildsLibraryInner() {
         onClose={() => setEditorOpen(false)}
         build={editorBuild}
         onSaved={handleSaved}
+      />
+      <EditCustomBuildLauncher
+        build={richEditBuild}
+        onClose={() => setRichEditBuild(null)}
+        onSaved={async (saved) => {
+          await handleSaved(saved);
+          setRichEditBuild(null);
+        }}
       />
       <BuildPublishModal
         open={publishOpen}

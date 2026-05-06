@@ -9,6 +9,8 @@ export interface BuildEditorSaveBarProps {
   saveError: string | null;
   onCancel: () => void;
   onSave: (andReclassify: boolean) => void;
+  /** When "edit", primary button reads "Save changes" instead of "Save build". */
+  mode?: "create" | "edit";
 }
 
 /**
@@ -26,8 +28,15 @@ export function BuildEditorSaveBar({
   saveError,
   onCancel,
   onSave,
+  mode = "create",
 }: BuildEditorSaveBarProps) {
-  const saveDisabled = saving || previewLoading || ruleCount === 0;
+  // In edit mode the user might be tweaking metadata (name, description,
+  // skill level, strategy notes) without touching the rules — so don't
+  // gate save on having at least one rule. Create mode still requires
+  // a rule, otherwise the saved build is non-functional from the start.
+  const requiresRule = mode !== "edit";
+  const saveDisabled =
+    saving || previewLoading || (requiresRule && ruleCount === 0);
   return (
     <div className="flex flex-wrap items-center gap-3">
       {saveError ? (
@@ -54,12 +63,12 @@ export function BuildEditorSaveBar({
           title={
             previewLoading
               ? "Wait for the preview to settle…"
-              : ruleCount === 0
+              : requiresRule && ruleCount === 0
                 ? "Add at least one rule to enable saving."
                 : undefined
           }
         >
-          {saving ? "Saving…" : "Save build"}
+          {saving ? "Saving…" : mode === "edit" ? "Save changes" : "Save build"}
         </Button>
         <Button
           variant="secondary"

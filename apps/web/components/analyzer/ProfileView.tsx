@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
+import { useFilters } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
@@ -63,8 +64,13 @@ export function ProfileView({
 }
 
 function ProfileBody({ pulseId }: { pulseId: string }) {
+  // Date-range filter applies to every panel below except "Likely
+  // strategies next" and "Last 5 games", which the API resolves from
+  // the unfiltered history regardless of since/until.
+  const { filters } = useFilters();
+  const profileQuery = buildProfileQuery(filters.since, filters.until);
   const { data, isLoading } = useApi<OpponentProfileResp>(
-    `/v1/opponents/${encodeURIComponent(pulseId)}`,
+    `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}`,
   );
   if (isLoading) return <Skeleton rows={6} />;
   if (!data) return <EmptyState title="Opponent not found" sub={pulseId} />;
@@ -213,6 +219,14 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
       </Card>
     </div>
   );
+}
+
+function buildProfileQuery(since: string | undefined, until: string | undefined): string {
+  const usp = new URLSearchParams();
+  if (since) usp.set("since", since);
+  if (until) usp.set("until", until);
+  const q = usp.toString();
+  return q ? `?${q}` : "";
 }
 
 /**

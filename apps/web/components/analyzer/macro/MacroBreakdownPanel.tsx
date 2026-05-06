@@ -125,7 +125,7 @@ export function MacroBreakdownPanel({
         { method: "POST", body: JSON.stringify({}) },
       );
       setRecomputeMsg(
-        "Recompute requested — your SC2 agent will re-parse the replay shortly.",
+        "Recompute requested. If your desktop agent is online and listening, it'll re-upload shortly. If nothing changes after a minute, open the agent app and click Resync.",
       );
       mutate();
     } catch (err) {
@@ -572,8 +572,13 @@ function ErrorState({
         body={
           <>
             Your SC2 agent hasn&apos;t uploaded a breakdown for this replay.
-            Click <span className="font-semibold text-text">Recompute</span>{" "}
-            below to ask it to re-parse the file.
+            The reliable fix is to{" "}
+            <span className="font-semibold text-text">
+              open the agent app and click Resync
+            </span>{" "}
+            — it re-uploads every replay, breakdowns included. Recompute
+            below pings the agent for just this game; it only works if your
+            agent version listens for per-game requests.
           </>
         }
         onRecompute={onRecompute}

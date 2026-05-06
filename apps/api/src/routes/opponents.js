@@ -37,9 +37,14 @@ function buildOpponentsRouter(deps) {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
+      // Date-range filter applies to every panel except "Likely
+      // strategies next" and "Last 5 games", which always reflect the
+      // most recent activity for the opponent regardless of the picker.
+      const filters = parseFilters(req.query);
       const opp = await deps.opponents.get(
         auth.userId,
         String(req.params.pulseId),
+        { since: filters.since, until: filters.until },
       );
       if (!opp) {
         res.status(404).json({ error: { code: "not_found" } });

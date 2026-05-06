@@ -356,14 +356,18 @@ function SelectedGameCharts({ game }: { game: SelectedGame }) {
         { method: "POST", body: JSON.stringify({}) },
       );
       setRecomputeMsg(
-        "Recompute requested — your SC2 agent will re-parse this replay shortly.",
+        "Recompute requested. If your desktop agent is online and listening, it'll re-upload shortly. If nothing changes after a minute, open the agent app and click Resync — that re-parses every replay on disk.",
       );
       mutate();
     } catch (err) {
       const e = err as { message?: string };
       setRecomputeMsg(e.message || "Recompute failed.");
-    } finally {
-      setRecomputing(false);
+    }
+    // Don't drop the spinner immediately — give SWR a beat to see the
+    // re-upload land. If the agent isn't listening at all, the user can
+    // tell from the unchanged empty state plus the Resync hint above.
+    finally {
+      window.setTimeout(() => setRecomputing(false), 1500);
     }
   }, [getToken, game.id, mutate, recomputing]);
 
@@ -446,11 +450,20 @@ function NotComputedPanel({
           Macro breakdown not available for this game yet
         </div>
         <p className="mt-2 text-caption text-text-muted">
-          Newer replays upload the breakdown automatically. Older ones were
-          synced before that field existed — Recompute asks your SC2 agent to
-          re-parse the .SC2Replay file. Make sure the agent is running, then
-          click <span className="font-semibold text-text">Recompute</span> or
-          open the agent and trigger a Resync to refresh every replay at once.
+          Newer replays upload the breakdown automatically. Older replays were
+          synced before that field existed, so the data has to come from your
+          desktop agent re-parsing the .SC2Replay file on disk.
+        </p>
+        <p className="mt-2 text-caption text-text-muted">
+          The reliable path:{" "}
+          <span className="font-semibold text-text">
+            open the agent app and click Resync
+          </span>{" "}
+          — that clears the upload cursor and re-sends every replay,
+          including the macro breakdown. Recompute below also pings the agent
+          for just this one game; if your agent is online and listens for
+          per-game requests it'll re-upload, otherwise nothing visible will
+          change.
         </p>
         <div className="mt-3">
           <Button
@@ -460,7 +473,7 @@ function NotComputedPanel({
             onClick={onRecompute}
             iconLeft={<RefreshCcw className="h-3.5 w-3.5" aria-hidden />}
           >
-            {recomputing ? "Recomputing…" : "Recompute now"}
+            {recomputing ? "Recomputing…" : "Recompute this game"}
           </Button>
         </div>
       </div>
