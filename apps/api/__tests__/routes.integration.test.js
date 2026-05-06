@@ -305,6 +305,140 @@ describe("HTTP integration", () => {
     });
   });
 
+  describe("/v1/opponents listing with filters", () => {
+    // The legacy listing endpoint just returned the opponents
+    // collection — it ignored the global filter bar entirely. This
+    // batch verifies the new behavior:
+    //   * with no filters, the route streams the full opponents
+    //     collection via cursor pagination (limit + before).
+    //   * with a since/until window, it re-aggregates from games and
+    //     only returns opponents the user actually played in that
+    //     window, with wins/losses counted in-window.
+    const since = "2026-01-01T00:00:00.000Z";
+    const until = "2026-01-31T23:59:59.999Z";
+    const oldDate = "2025-06-15T12:00:00.000Z";
+    const inWindowDate = "2026-01-15T12:00:00.000Z";
+    const games = [
+      Object.assign(makeGame("filter-old-1", "Victory"), {
+        date: oldDate,
+        opponent: {
+          displayName: "OldFriend",
+          race: "Zerg",
+          mmr: 4000,
+          pulseId: "filter-opp-old",
+          strategy: "Macro",
+        },
+      }),
+      Object.assign(makeGame("filter-in-1", "Victory"), {
+        date: inWindowDate,
+        opponent: {
+          displayName: "JanRival",
+          race: "Terran",
+          mmr: 4100,
+          pulseId: "filter-opp-jan",
+          strategy: "Macro",
+        },
+      }),
+      Object.assign(makeGame("filter-in-2", "Defeat"), {
+        date: inWindowDate,
+        opponent: {
+          displayName: "JanRival",
+          race: "Terran",
+          mmr: 4100,
+          pulseId: "filter-opp-jan",
+          strategy: "Macro",
+        },
+      }),
+    ];
+
+    beforeAll(async () => {
+      for (const game of games) {
+        const post = await withAuth(request(app).post("/v1/games"))
+          .send(game)
+          .set("content-type", "application/json");
+        expect(post.status).toBe(202);
+      }
+    });
+
+    test("no filters: lifetime counters from the opponents collection", async () => {
+      const res = await withAuth(request(app).get("/v1/opponents"));
+      expect(res.status).toBe(200);
+      const ids = (res.body.items || []).map((o) => o.pulseId);
+      // Both opponents should appear (one from before the filter window,
+      // one inside it). The legacy doc-based path is what's exercised
+      // here — no since/until passed.
+      expect(ids).toEqual(expect.arrayContaining(["filter-opp-old", "filter-opp-jan"]));
+    });
+
+    test("with since/until: only in-window opponents, in-window counts", async () => {
+      const res = await withAuth(
+        request(app).get(
+          `/v1/opponents?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`,
+        ),
+      );
+      expect(res.status).toBe(200);
+      const ids = (res.body.items || []).map((o) => o.pulseId);
+      // The pre-window opponent is dropped, the in-window one keeps its 1W-1L.
+      expect(ids).toEqual(["filter-opp-jan"]);
+      const jan = res.body.items[0];
+      expect(jan.wins).toBe(1);
+      expect(jan.losses).toBe(1);
+      expect(jan.gameCount).toBe(2);
+    });
+
+    test("oppRace filter narrows the in-window aggregation", async () => {
+      const res = await withAuth(
+        request(app).get(
+          `/v1/opponents?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&opp_race=Z`,
+        ),
+      );
+      expect(res.status).toBe(200);
+      // JanRival is Terran, so the Zerg filter excludes everyone in window.
+      expect(res.body.items).toEqual([]);
+    });
+  });
+
+  describe("/v1/seasons", () => {
+    test("returns the cached SC2Pulse catalog without auth", async () => {
+      // Inject a deterministic fake catalog so the test doesn't
+      // depend on SC2Pulse being reachable from CI.
+      services.seasons._cache = {
+        items: [
+          {
+            battlenetId: 67,
+            region: "us",
+            year: 2026,
+            number: 2,
+            start: "2026-04-01T00:00:00Z",
+            end: "2026-07-01T00:00:00Z",
+          },
+          {
+            battlenetId: 67,
+            region: "eu",
+            year: 2026,
+            number: 2,
+            start: "2026-04-01T00:00:00Z",
+            end: "2026-07-01T00:00:00Z",
+          },
+          {
+            battlenetId: 66,
+            region: "us",
+            year: 2026,
+            number: 1,
+            start: "2026-01-01T00:00:00Z",
+            end: "2026-04-01T00:00:00Z",
+          },
+        ],
+        fetchedAt: Date.now(),
+      };
+      const res = await request(app).get("/v1/seasons");
+      expect(res.status).toBe(200);
+      expect(res.body.current).toBe(67);
+      expect(Array.isArray(res.body.items)).toBe(true);
+      expect(res.body.items).toHaveLength(3);
+    });
+  });
+
   describe("/v1/spatial", () => {
     test("/spatial/maps returns an empty array for users without spatial data", async () => {
       const res = await withAuth(request(app).get("/v1/spatial/maps"));

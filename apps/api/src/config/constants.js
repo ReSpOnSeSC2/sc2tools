@@ -45,6 +45,11 @@ const LIMITS = Object.freeze({
   GAMES_LIST_MAX: 10000,
   GAMES_LIST_DEFAULT: 2000,
   OPPONENTS_PAGE_SIZE: 100,
+  // The analyzer SPA can request up to this many opponents in one
+  // call so users with thousands of replays don't have to flip
+  // through pages just to see the full table. Cursor pagination
+  // (`before`) still works above this; this is a per-request ceiling.
+  OPPONENTS_LIST_MAX: 5000,
   PAIRING_CODE_TTL_SEC: 600,
   PAIRING_CODE_LEN: 6,
   CSV_EXPORT_MAX_ROWS: 50000,

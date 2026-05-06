@@ -35,6 +35,7 @@ const { MLService } = require("./services/ml");
 const { AgentVersionService } = require("./services/agentVersion");
 const { GdprService } = require("./services/gdpr");
 const { CommunityService } = require("./services/community");
+const { SeasonsService } = require("./services/seasons");
 
 const { buildHealthRouter } = require("./routes/health");
 const { buildMeRouter } = require("./routes/me");
@@ -57,6 +58,7 @@ const { buildMlRouter } = require("./routes/ml");
 const { buildAgentVersionRouter } = require("./routes/agentVersion");
 const { buildCommunityRouter } = require("./routes/community");
 const { buildPublicReplayRouter } = require("./routes/publicReplay");
+const { buildSeasonsRouter } = require("./routes/seasons");
 
 const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
 
@@ -109,6 +111,7 @@ function makeServices(deps) {
   const agentVersion = new AgentVersionService(deps.db);
   const gdpr = new GdprService(deps.db);
   const community = new CommunityService(deps.db);
+  const seasons = new SeasonsService();
   return {
     users,
     opponents,
@@ -127,6 +130,7 @@ function makeServices(deps) {
     agentVersion,
     gdpr,
     community,
+    seasons,
   };
 }
 
@@ -185,6 +189,7 @@ function mountRoutes(app, deps, services) {
   // ones the auth-using router won't even handle. Mounting public routes
   // first short-circuits before those auth-eager middlewares get a turn.
   app.use(SERVICE.ROUTE_PREFIX, buildHealthRouter({ db: deps.db }));
+  app.use(SERVICE.ROUTE_PREFIX, buildSeasonsRouter({ seasons: services.seasons }));
   // Public marketing-page replay preview. Unauth'd by design — the
   // landing page demo accepts a single .SC2Replay upload and returns
   // a parsed dossier. Rate-limited per IP inside the router.

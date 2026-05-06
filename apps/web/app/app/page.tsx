@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Download } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { AnalyzerShell } from "@/components/analyzer/AnalyzerShell";
-import { DashboardKpiStrip } from "@/components/analyzer/DashboardKpiStrip";
 import { NoGamesYet } from "@/components/analyzer/EmptyStates";
 import { SyncStatus } from "@/components/SyncStatus";
 import { Card } from "@/components/ui/Card";
@@ -54,10 +53,7 @@ export default async function AnalyzerHome() {
       {noGames ? (
         <NoGamesYet />
       ) : (
-        <>
-          <DashboardKpiStrip totalGames={meRes.data.games.total} />
-          <AnalyzerShell />
-        </>
+        <AnalyzerShell totalGames={meRes.data.games.total} />
       )}
     </div>
   );
