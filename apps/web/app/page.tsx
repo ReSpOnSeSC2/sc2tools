@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Cloud,
   Download,
-  Fingerprint,
   Heart,
   Library,
   Map,
@@ -80,7 +79,7 @@ function HeroSection() {
           <span className="text-accent-cyan">before they build it.</span>
         </h1>
         <p className="mx-auto max-w-2xl text-body-lg text-text-muted">
-          Sign in, install a 15&nbsp;MB agent, and every replay you finish
+          Sign in, install a 450&nbsp;MB agent, and every replay you finish
           surfaces an opponent dossier, build classifier, and live OBS
           overlay — across every device.
         </p>
@@ -237,57 +236,78 @@ interface Pillar {
   body: string;
 }
 
-const PILLARS: ReadonlyArray<Pillar> = [
-  {
-    icon: Wand2,
-    title: "Auto Replay Classification",
-    body: "Parse every game in seconds, no tagging.",
-  },
-  {
-    icon: Fingerprint,
-    title: "Opponent Intel DNA",
-    body: "Persistent dossiers that survive name changes.",
-  },
-  {
-    icon: BarChart3,
-    title: "Build Recognizer",
-    body: "Per-opener W-L with map and MMR breakdowns.",
-  },
+interface PositionedPillar extends Pillar {
+  /** Tailwind grid placement classes for the lg+ triangle layout. */
+  placement: string;
+}
+
+/**
+ * Pillars laid out as a 4 → 2 → 1 triangle on lg+, narrowing toward the
+ * apex. Apex is the marquee feature (Live OBS Overlay); the middle band
+ * carries the in-game analysis layer; the four-card base is the data
+ * pipeline that feeds everything above it. On smaller viewports the
+ * placement classes are ignored and pillars flow as a regular 2-col grid
+ * (or stack on mobile), so the order below is also the read order.
+ *
+ * Apex sits at DOM top so the section reads top→bottom; the visual
+ * "build up from the foundation" cue comes from the widening triangle.
+ */
+const PILLARS: ReadonlyArray<PositionedPillar> = [
+  // Apex — marquee feature
   {
     icon: Tv,
     title: "Live OBS Overlay",
-    body: "15 broadcast-ready widgets, per-widget URLs.",
+    body: "15 broadcast-ready widgets, per-widget URLs. Drop one URL into Browser Source and you're streaming.",
+    placement: "lg:col-span-2 lg:col-start-4",
   },
+  // Middle band — analysis & in-game support
   {
     icon: Swords,
     title: "Strategy Detection",
     body: "Per-matchup playbook with rule-based opener identification across 100+ builds.",
-  },
-  {
-    icon: Map,
-    title: "Map Intel & Veto Planning",
-    body: "Per-map win rates and timing libraries.",
-  },
-  {
-    icon: Library,
-    title: "Custom Build Library",
-    body: "Sync your openers, browse the community pool.",
+    placement: "lg:col-span-2 lg:col-start-3",
   },
   {
     icon: Mic2,
     title: "Voice Readout",
     body: "Optional in-ear scouting card before each game.",
+    placement: "lg:col-span-2 lg:col-start-5",
+  },
+  // Base — the data pipeline
+  {
+    icon: Wand2,
+    title: "Auto Replay Classification",
+    body: "Parse every game in seconds, no tagging.",
+    placement: "lg:col-span-2 lg:col-start-1",
+  },
+  {
+    icon: BarChart3,
+    title: "Build Recognizer",
+    body: "Per-opener W-L with map and MMR breakdowns.",
+    placement: "lg:col-span-2 lg:col-start-3",
+  },
+  {
+    icon: Map,
+    title: "Map Intel & Veto Planning",
+    body: "Per-map win rates and timing libraries.",
+    placement: "lg:col-span-2 lg:col-start-5",
+  },
+  {
+    icon: Library,
+    title: "Custom Build Library",
+    body: "Sync your openers, browse the community pool.",
+    placement: "lg:col-span-2 lg:col-start-7",
   },
 ];
 
 function PillarsSection() {
   return (
     <Section
-      title="Eight pillars, one workflow"
+      title="Seven pillars, one workflow"
       description="Every cloud feature you'll use, all wired into the same data pipeline."
       className="mx-auto max-w-6xl"
     >
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-8">
         {PILLARS.map((p) => (
           <PillarCard key={p.title} {...p} />
         ))}
@@ -296,9 +316,9 @@ function PillarsSection() {
   );
 }
 
-function PillarCard({ icon: Icon, title, body }: Pillar) {
+function PillarCard({ icon: Icon, title, body, placement }: PositionedPillar) {
   return (
-    <li className="h-full">
+    <li className={["h-full", placement].filter(Boolean).join(" ")}>
       <Card variant="feature" padded={false} className="h-full">
         <div className="flex h-full flex-col gap-3 p-5">
           <div
@@ -329,7 +349,7 @@ const STEPS: ReadonlyArray<Step> = [
   {
     num: "01",
     title: "Install the agent",
-    body: "Download the 15 MB binary and pair it with your account in 90 seconds.",
+    body: "Download the 450 MB installer and pair it with your account in 90 seconds.",
   },
   {
     num: "02",
@@ -421,7 +441,7 @@ function DonateBanner() {
               Free now, free forever — donations keep the servers up.
             </h2>
             <p className="text-body text-text-muted">
-              Two paid Render services, a MongoDB Atlas M10 cluster, and the
+              One paid Render service, a MongoDB Atlas M10 cluster, and the
               sc2tools.com domain run the cloud. If SC2 Tools is helping your
               ladder grind, a one-time tip helps cover the bill.
             </p>

@@ -19,7 +19,7 @@ const SEASONS_TO_SHOW = 16;
 /**
  * Global date-range filter that drives every analyzer tab. Selection
  * is held in the shared filter context, so the same `since/until` hits
- * the Opponents, Strategies, Trends, Maps, Builds, DNA, Map intel and
+ * the Opponents, Strategies, Trends, Maps, Builds, Map intel and
  * Activity tabs at once.
  *
  * The picker presents three groups:
