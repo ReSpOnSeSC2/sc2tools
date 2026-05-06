@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -346,7 +347,7 @@ def parse_replay_for_cloud(
     if opp.handle:
         opponent["toonHandle"] = str(opp.handle)
         opponent["pulseId"] = str(opp.handle)
-    pulse_character_id = _resolve_pulse_character_id(opp)
+    pulse_character_id = _resolve_pulse_character_id(opp, file_path=file_path)
     if pulse_character_id is not None:
         opponent["pulseCharacterId"] = pulse_character_id
     if getattr(ctx, "opp_strategy", None):
@@ -371,7 +372,9 @@ def parse_replay_for_cloud(
     )
 
 
-def _resolve_pulse_character_id(opp: Any) -> Optional[str]:
+def _resolve_pulse_character_id(
+    opp: Any, *, file_path: Optional[Path] = None,
+) -> Optional[str]:
     """Best-effort toon_handle → SC2Pulse character ID lookup.
 
     Delegates to the resolver in ``reveal-sc2-opponent-main`` (added to
@@ -380,6 +383,28 @@ def _resolve_pulse_character_id(opp: Any) -> Optional[str]:
     malformed, or no candidate matches the bnid. Never raises — a
     failed lookup is identical in outcome to the resolver returning
     ``None`` and must not break the upload path.
+
+    Tiered wall-clock timeout (added v0.3.10):
+
+      * **Live games** (replay mtime within 30 minutes of now) get
+        the full pulse_resolver budget — typically 30 s with
+        retries — because the user is staring at the dashboard
+        right after the match and wants the opponent's pulse
+        profile link to populate.
+      * **Backfill** (older replays) get a hard 4 s cap. sc2pulse's
+        public API rate-limits aggressively (we measured 0.25 s
+        for the first ~3 calls then 25-70 s for subsequent ones)
+        and a single 70 s sc2pulse hang against 12 worker threads
+        cascades through the whole queue. 4 s is generous against
+        warm cache hits; misses fall through to ``None`` and the
+        replay uploads with toonHandle/pulseId still set, just
+        without ``pulseCharacterId``. The dashboard's view-on-
+        sc2pulse link is the only feature that needs the field,
+        and it's not worth a 90-second-per-replay backfill stall.
+
+    Override either tier with ``SC2TOOLS_PULSE_TIMEOUT_SEC`` (single
+    value applied to both live and backfill; useful for tests). Set
+    to ``0`` to disable the lookup entirely (offline / CI builds).
 
     The same toon is cached process-wide inside the resolver, so a
     catch-up scan of N replays against the same opponent only hits
@@ -394,11 +419,67 @@ def _resolve_pulse_character_id(opp: Any) -> Optional[str]:
         return None
     name = getattr(opp, "name", "") or ""
     clean = name.split("]", 1)[1].strip() if "]" in name else name.strip()
-    try:
-        return resolve_pulse_id_by_toon(str(handle), clean) or None
-    except Exception as exc:  # noqa: BLE001
-        log.info("pulse_character_id_resolve_failed: %s", exc)
+
+    timeout_sec = _pulse_timeout_for(file_path)
+    if timeout_sec <= 0:
         return None
+    if timeout_sec >= 30:
+        # Live game (or test override). No need for the parent-side
+        # timeout wrapper — let the resolver's own 30 s × 3-retry
+        # logic apply. Saves a thread spawn per call.
+        try:
+            return resolve_pulse_id_by_toon(str(handle), clean) or None
+        except Exception as exc:  # noqa: BLE001
+            log.info("pulse_character_id_resolve_failed: %s", exc)
+            return None
+
+    # Backfill path: hard wall-clock cap so a slow sc2pulse can't
+    # serialise the parse queue. ThreadPoolExecutor + Future.result
+    # with a timeout — orphaned thread completes in the background
+    # and warms the resolver's module-level cache for next time.
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix="pulse-lookup",
+    ) as ex:
+        future = ex.submit(resolve_pulse_id_by_toon, str(handle), clean)
+        try:
+            return future.result(timeout=timeout_sec) or None
+        except concurrent.futures.TimeoutError:
+            future.cancel()
+            return None
+        except Exception as exc:  # noqa: BLE001
+            log.info("pulse_character_id_resolve_failed: %s", exc)
+            return None
+
+
+def _pulse_timeout_for(file_path: Optional[Path]) -> float:
+    """Return the wall-clock cap to apply to one sc2pulse call.
+
+    Logic:
+      * env override (``SC2TOOLS_PULSE_TIMEOUT_SEC``) wins when set
+      * else, if the replay is recent (mtime within 30 min), 30 s
+        — full live-game budget
+      * else 4 s — backfill cap
+
+    Negative / non-numeric env values fall through to the tiered
+    behaviour. ``0`` disables lookups entirely.
+    """
+    raw = os.environ.get("SC2TOOLS_PULSE_TIMEOUT_SEC", "").strip()
+    if raw:
+        try:
+            n = float(raw)
+            if n >= 0:
+                return n
+        except ValueError:
+            pass
+    if file_path is not None:
+        try:
+            age = time.time() - file_path.stat().st_mtime
+            if age < 30 * 60:
+                return 30.0
+        except OSError:
+            pass
+    return 4.0
 
 
 def _read_player_handle(state_dir: Optional[Path] = None) -> Optional[str]:

@@ -120,33 +120,22 @@ class ReplayWatcher:
         self._stop = threading.Event()
         self._observer: Optional[Observer] = None
         self._sweeper: Optional[threading.Thread] = None
-        # Pick threads vs processes based on the env var. Process mode
-        # is opt-in for v0.3.9 — once we've shaken out the frozen-exe
-        # edge cases on Windows we'll flip the default. Process mode
-        # bypasses the GIL for sc2reader's CPU-bound parse work, which
-        # measured ~5× faster on the affected user's 12k-replay backfill.
-        use_processes = (
-            os.environ.get("SC2TOOLS_PARSE_USE_PROCESSES", "")
-            .strip()
-            .lower()
-            in ("1", "true", "yes", "on")
+        # Threading mode is the only supported parse pool in v0.3.10+.
+        # The opt-in process pool from 0.3.9 (``SC2TOOLS_PARSE_USE_PROCESSES``)
+        # crashed every child during spawn on PyInstaller windowed exes
+        # — ``concurrent.futures.process.BrokenProcessPool`` with no
+        # readable detail. The plumbing for process mode is still in
+        # place (``_parse_in_worker``, ``_on_worker_done``, the
+        # ``Executor`` abstraction below) so a future release can
+        # re-enable it once the frozen-exe spawn path is debugged
+        # against a real install. Until then we skip the env var
+        # entirely — users shouldn't be juggling shell variables to
+        # turn on a feature that doesn't work yet.
+        self._executor: Executor = ThreadPoolExecutor(
+            max_workers=cfg.parse_concurrency,
+            thread_name_prefix="sc2tools-parse",
         )
-        if use_processes:
-            log.info(
-                "watcher_using_process_pool max_workers=%d "
-                "(set SC2TOOLS_PARSE_USE_PROCESSES=0 to revert)",
-                cfg.parse_concurrency,
-            )
-            self._executor: Executor = ProcessPoolExecutor(
-                max_workers=cfg.parse_concurrency,
-            )
-            self._uses_processes = True
-        else:
-            self._executor = ThreadPoolExecutor(
-                max_workers=cfg.parse_concurrency,
-                thread_name_prefix="sc2tools-parse",
-            )
-            self._uses_processes = False
+        self._uses_processes = False
         self._inflight: set[str] = set()
         self._inflight_lock = threading.Lock()
         self._roots: list[Path] = []
@@ -308,7 +297,16 @@ class ReplayWatcher:
         try:
             kind, path_str, payload = future.result()
         except Exception as exc:  # noqa: BLE001
-            log.warning("parse_worker_crashed: %s", exc)
+            # ``BrokenProcessPool`` arrives with an empty str() in some
+            # cases — log the type + repr so silent crashes during
+            # child spawn are debuggable. See the v0.3.9 frozen-exe
+            # incident: the bare ``%s`` produced 9 lines of
+            # "parse_worker_crashed:" with nothing after the colon.
+            log.warning(
+                "parse_worker_crashed type=%s repr=%r",
+                type(exc).__name__,
+                exc,
+            )
             return
         path = Path(path_str)
         try:
