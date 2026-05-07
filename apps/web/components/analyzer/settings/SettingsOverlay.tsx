@@ -10,6 +10,7 @@ import {
   Check,
   AlertTriangle,
   Play,
+  Square,
   Sparkles,
   RefreshCw,
 } from "lucide-react";
@@ -22,6 +23,7 @@ import { Badge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { fmtAgo } from "@/lib/format";
+import { TEST_DURATION_MS } from "@/components/overlay/widgetLifecycle";
 
 /**
  * Settings · Overlay tab.
@@ -66,7 +68,7 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
   { id: "fav-opening", label: "Favourite opening", hint: "Opponent's most-shown opening" },
   { id: "best-answer", label: "Best answer", hint: "Your best counter vs that opening" },
   { id: "scouting", label: "Scouting tells", hint: "Predicted strategies + tell timings" },
-  { id: "session", label: "Session record", hint: "Today's W-L + MMR drift" },
+  { id: "session", label: "Session record", hint: "Today's W-L + your current MMR" },
 ];
 
 export function SettingsOverlay({ origin }: { origin?: string }) {
@@ -82,6 +84,20 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
   const [autoMintError, setAutoMintError] = useState<string | null>(null);
   const [testingWidget, setTestingWidget] = useState<string | null>(null);
   const autoMintingRef = useRef(false);
+  // Tracks the in-flight Test fire so we can cancel/clean it up if the
+  // user navigates away or fires another test before the visibility
+  // window expires. The window mirrors `TEST_DURATION_MS` so the
+  // button's loading state matches when the OBS widget actually
+  // disappears.
+  const testTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (testTimerRef.current !== null) {
+        window.clearTimeout(testTimerRef.current);
+        testTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const items = useMemo(
     () => (data?.items ?? []).filter((i) => !i.revokedAt),
@@ -178,9 +194,37 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
   // OBS without waiting for a real ladder game. Server-side the
   // endpoint shares the same per-token rate limiter as the agent's
   // live route, so a Test mash can't flood the socket.
+  //
+  // We hold the button in its "testing" state for the same window the
+  // OBS widget itself stays visible (`TEST_DURATION_MS`, ~20 s) and
+  // disable every other Test button alongside it. That way the user
+  // gets a single coherent fire-and-forget cue: click → button locks
+  // → widget appears in OBS → both reset together. Without this the
+  // button would snap back as soon as the API responded (~100 ms),
+  // leaving the user mashing "Test" while the previous widget was
+  // still on screen.
+  function clearTestTimer() {
+    if (testTimerRef.current !== null) {
+      window.clearTimeout(testTimerRef.current);
+      testTimerRef.current = null;
+    }
+  }
+
   async function testWidget(token: string, widget?: string) {
-    if (testingWidget) return;
+    // Treat a click while a test is in flight as "cancel + clear" —
+    // the streamer can dismiss the test before the natural visibility
+    // window expires. Per-widget cancel only fires when the click is
+    // on the SAME widget that's currently testing; clicks on other
+    // widgets are still gated by the disabled state in the UI.
+    if (testingWidget) {
+      const key = widget || "all";
+      if (testingWidget === key) {
+        await cancelTest(token, widget);
+      }
+      return;
+    }
     const key = widget || "all";
+    clearTestTimer();
     setTestingWidget(key);
     try {
       await apiCall(getToken, "/v1/overlay-events/test", {
@@ -192,15 +236,42 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
           ? `Sent test data to "${widget}"`
           : "Sent test data to every enabled widget",
         {
-          description: "Check your OBS Browser Source — the widget should render with sample data.",
+          description:
+            "Renders for ~20 s in OBS, then auto-hides. Click Stop to dismiss early.",
         },
       );
+      // Hold the loading state for the same window the overlay
+      // widget itself stays visible. When it expires the button
+      // resets so the streamer can fire another test.
+      testTimerRef.current = window.setTimeout(() => {
+        setTestingWidget(null);
+        testTimerRef.current = null;
+      }, TEST_DURATION_MS);
     } catch (err) {
       const message =
         (err as ClientApiError | undefined)?.message ?? "Please try again.";
       toast.error("Couldn't fire test event", { description: message });
-    } finally {
+      // Reset immediately on failure — the OBS widget never received
+      // anything so there's nothing to wait for.
       setTestingWidget(null);
+    }
+  }
+
+  async function cancelTest(token: string, widget?: string) {
+    clearTestTimer();
+    setTestingWidget(null);
+    try {
+      await apiCall(getToken, "/v1/overlay-events/test/cancel", {
+        method: "POST",
+        body: JSON.stringify({ token, widget }),
+      });
+    } catch (err) {
+      // Cancel is best-effort — the OBS widget will still auto-hide
+      // when its natural timer expires. Log the failure so the user
+      // knows but don't block them mashing Test again.
+      const message =
+        (err as ClientApiError | undefined)?.message ?? "Please try again.";
+      toast.error("Couldn't dismiss the test", { description: message });
     }
   }
 
@@ -375,6 +446,11 @@ function ActiveTokenHeader({
   anyTesting: boolean;
 }) {
   void origin;
+  // Treat "testing this very button" specially so the click reads as
+  // a Stop instead of a (no-op) repeat fire. Other widgets still see
+  // the dimmed disabled state — there's only ever one in-flight test
+  // at a time per token.
+  const otherTesting = anyTesting && !testing;
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
       <Tv className="h-4 w-4 flex-shrink-0 text-accent-cyan" aria-hidden />
@@ -392,11 +468,21 @@ function ActiveTokenHeader({
           variant="secondary"
           size="sm"
           onClick={onTestAll}
-          disabled={anyTesting}
-          loading={testing}
-          iconLeft={<Sparkles className="h-4 w-4" aria-hidden />}
+          disabled={otherTesting}
+          iconLeft={
+            testing ? (
+              <Square className="h-4 w-4" aria-hidden />
+            ) : (
+              <Sparkles className="h-4 w-4" aria-hidden />
+            )
+          }
+          title={
+            testing
+              ? "Click to dismiss the test fire early"
+              : "Fire sample data at every enabled widget"
+          }
         >
-          Test all
+          {testing ? "Stop test" : "Test all"}
         </Button>
       </span>
     </div>
@@ -483,11 +569,16 @@ function WidgetList({
                   compact
                   onTest={() => onTestWidget(w.id)}
                   testing={isTesting}
-                  testDisabled={anyTesting || !isOn}
+                  // Other widgets stay locked while a different widget
+                  // is testing — only the testing widget's own button
+                  // remains clickable, where it acts as Stop.
+                  testDisabled={(anyTesting && !isTesting) || !isOn}
                   testTitle={
-                    isOn
-                      ? "Fire sample data at this widget"
-                      : "Enable this widget first to test it"
+                    isTesting
+                      ? "Click to dismiss the test fire early"
+                      : isOn
+                        ? "Fire sample data at this widget"
+                        : "Enable this widget first to test it"
                   }
                 />
               </div>
@@ -550,12 +641,20 @@ function UrlRow({
           variant="secondary"
           size="sm"
           onClick={onTest}
-          loading={testing}
+          // No loading spinner once testing starts — the Stop label
+          // already conveys "in flight". The button stays enabled
+          // so a second click triggers the cancel path.
           disabled={testDisabled}
           title={testTitle}
-          iconLeft={<Play className="h-4 w-4" aria-hidden />}
+          iconLeft={
+            testing ? (
+              <Square className="h-4 w-4" aria-hidden />
+            ) : (
+              <Play className="h-4 w-4" aria-hidden />
+            )
+          }
         >
-          Test
+          {testing ? "Stop" : "Test"}
         </Button>
       ) : null}
     </div>

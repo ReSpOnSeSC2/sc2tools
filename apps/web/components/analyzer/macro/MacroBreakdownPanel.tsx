@@ -28,7 +28,6 @@ import { Icon } from "@/components/ui/Icon";
 import { MacroChartSection } from "./MacroChartSection";
 import { MacroLeaksList } from "./MacroLeaksList";
 import { MacroPenaltyBars } from "./MacroPenaltyBars";
-import { PlayerStatsTable } from "./PlayerStatsTable";
 import { SpendingQuotientStat } from "./SpendingQuotientStat";
 import type {
   LeakItem,
@@ -180,6 +179,7 @@ export function MacroBreakdownPanel({
             ) : !data ? null : (
               <BreakdownBody
                 data={data}
+                gameId={gameId}
                 initialScore={initialScore}
                 highlightedKey={highlightedKey}
                 onHighlight={setHighlightedKey}
@@ -332,12 +332,14 @@ function PanelFooter({
 
 function BreakdownBody({
   data,
+  gameId,
   initialScore,
   highlightedKey,
   onHighlight,
   headerMeta,
 }: {
   data: MacroBreakdownData;
+  gameId: string;
   initialScore?: number | null;
   highlightedKey: string | null;
   onHighlight: (key: string | null, leak: LeakItem | null) => void;
@@ -413,6 +415,7 @@ function BreakdownBody({
             oppName={headerMeta?.opponentName ?? null}
             myRace={headerMeta?.myRace ?? data.race ?? null}
             oppRace={headerMeta?.opponentRace ?? null}
+            gameId={gameId}
           />
         )}
       </section>
@@ -481,29 +484,6 @@ function BreakdownBody({
         ) : null}
       </div>
 
-      <section
-        aria-labelledby="player-stats-heading"
-        className="space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-4"
-      >
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3
-            id="player-stats-heading"
-            className="text-caption font-semibold uppercase tracking-wider text-text-muted"
-          >
-            Replay Player Unit Statistics
-          </h3>
-          <p className="text-[11px] text-text-dim">
-            Cumulative counters from the replay tracker stream.
-          </p>
-        </div>
-        <PlayerStatsTable
-          stats={data.player_stats}
-          myName={headerMeta?.playerName ?? null}
-          oppName={headerMeta?.opponentName ?? null}
-          myRace={headerMeta?.myRace ?? data.race ?? null}
-          oppRace={headerMeta?.opponentRace ?? null}
-        />
-      </section>
     </div>
   );
 }
