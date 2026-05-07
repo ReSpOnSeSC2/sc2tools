@@ -310,6 +310,70 @@ function buildCustomBuildsRouter(deps) {
     }
   });
 
+  /**
+   * POST /v1/custom-builds/:slug/reclassify
+   *
+   * Re-evaluate the saved build's rules against every stored game and
+   * write `myBuild = build.name` on each match (and clear the tag from
+   * games that previously matched but no longer do, unless the body
+   * sets `replace: false`). Returns counts so the UI can show
+   * "Tagged 12, cleared 0".
+   *
+   * This is the "no-agent reclassify" path: the cloud already has the
+   * parsed buildLog/oppBuildLog for every uploaded game, so this is a
+   * single Mongo updateMany loop — not a round-trip to the desktop
+   * agent.
+   */
+  router.post("/custom-builds/:slug/reclassify", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      if (!deps.perGame) {
+        res.status(503).json({ error: { code: "reclassify_unavailable" } });
+        return;
+      }
+      const body = req.body || {};
+      const result = await deps.customBuilds.reclassify(
+        auth.userId,
+        String(req.params.slug),
+        { replace: body.replace !== false },
+      );
+      if (!result) {
+        res.status(404).json({ error: { code: "not_found" } });
+        return;
+      }
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * POST /v1/custom-builds/reclassify-all
+   *
+   * Re-evaluate every saved build against every stored game in one
+   * pass. Useful after editing several builds at once, or after the
+   * user adds many new replays. First-write-wins on conflicts, ranked
+   * by the build's most recent edit timestamp.
+   */
+  router.post("/custom-builds/reclassify-all", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      if (!deps.perGame) {
+        res.status(503).json({ error: { code: "reclassify_unavailable" } });
+        return;
+      }
+      const body = req.body || {};
+      const out = await deps.customBuilds.reclassifyAll(auth.userId, {
+        clearUnmatched: !!body.clearUnmatched,
+      });
+      res.json({ ok: true, ...out });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }
 

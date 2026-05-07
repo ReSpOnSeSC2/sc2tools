@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
@@ -25,6 +26,14 @@ type BvsCell = {
   total: number;
   winRate: number;
 };
+
+const RACE_OPTIONS = [
+  { value: "", label: "Any race" },
+  { value: "P", label: "Protoss" },
+  { value: "T", label: "Terran" },
+  { value: "Z", label: "Zerg" },
+  { value: "R", label: "Random" },
+] as const;
 
 type GamesListResp = {
   ok: boolean;
@@ -630,6 +639,223 @@ function StrategyGamesView({
 /* Tab shell                                                            */
 /* -------------------------------------------------------------------- */
 
+/**
+ * Filter bar specific to the Strategies tab — exposes the four
+ * dimensions the user typically asks about when looking at strategy
+ * data: my race, my build, opponent race, opponent strategy.
+ *
+ * The values write through to the global filter context so the
+ * `Build vs strategy`, `By opponent strategy`, and drill-down views
+ * all read from the same source of truth. They also propagate to
+ * other tabs once set — that's intentional: a user who narrows to
+ * "PvP — DT vs Stargate" wants their Trends, Maps, and Activity tabs
+ * to reflect the same scope.
+ */
+function StrategyFiltersBar() {
+  const { filters, setFilters, dbRev } = useFilters();
+  // Pull the universe of builds + opponent strategies the user has
+  // games for, so the dropdowns only show options that will actually
+  // produce results. We pull these without the build/strategy/race
+  // filters applied so toggling one doesn't empty the other.
+  const baseQuery = useMemo(() => {
+    const { build, opp_strategy, race, opp_race, ...rest } = filters;
+    return filtersToQuery(rest);
+  }, [filters]);
+  const buildsResp = useApi<Array<{ name: string; total: number }>>(
+    `/v1/builds${baseQuery}#${dbRev}`,
+  );
+  const stratsResp = useApi<Array<{ name: string; total: number }>>(
+    `/v1/opp-strategies${baseQuery}#${dbRev}`,
+  );
+
+  const buildOptions = useMemo(
+    () => sortedDistinct(buildsResp.data),
+    [buildsResp.data],
+  );
+  const stratOptions = useMemo(
+    () => sortedDistinct(stratsResp.data),
+    [stratsResp.data],
+  );
+
+  const update = (patch: Partial<typeof filters>) => {
+    /** @type {any} */
+    const next = { ...filters, ...patch };
+    for (const k of ["race", "opp_race", "build", "opp_strategy"] as const) {
+      if (next[k] === "" || next[k] == null) delete next[k];
+    }
+    setFilters(next);
+  };
+
+  const clearAll = () => {
+    const { build, opp_strategy, race, opp_race, ...rest } = filters;
+    setFilters(rest);
+  };
+
+  const activeChips: Array<{ key: string; label: string; clear: () => void }> = [];
+  if (filters.race) {
+    activeChips.push({
+      key: "race",
+      label: `My race · ${labelFromCode(filters.race)}`,
+      clear: () => update({ race: undefined }),
+    });
+  }
+  if (filters.build) {
+    activeChips.push({
+      key: "build",
+      label: `My build · ${truncateLabel(filters.build)}`,
+      clear: () => update({ build: undefined }),
+    });
+  }
+  if (filters.opp_race) {
+    activeChips.push({
+      key: "opp_race",
+      label: `Opp race · ${labelFromCode(filters.opp_race)}`,
+      clear: () => update({ opp_race: undefined }),
+    });
+  }
+  if (filters.opp_strategy) {
+    activeChips.push({
+      key: "opp_strategy",
+      label: `Opp strategy · ${truncateLabel(filters.opp_strategy)}`,
+      clear: () => update({ opp_strategy: undefined }),
+    });
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-bg-surface p-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <FilterSelect
+          label="My race"
+          value={filters.race ?? ""}
+          onChange={(v) => update({ race: v || undefined })}
+          options={RACE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))}
+        />
+        <FilterSelect
+          label="My build"
+          value={filters.build ?? ""}
+          onChange={(v) => update({ build: v || undefined })}
+          options={[
+            { value: "", label: "Any build" },
+            ...buildOptions.map((o) => ({
+              value: o.name,
+              label: `${truncateLabel(o.name, 36)} (${o.total})`,
+            })),
+          ]}
+          disabled={buildsResp.isLoading}
+        />
+        <FilterSelect
+          label="Opp race"
+          value={filters.opp_race ?? ""}
+          onChange={(v) => update({ opp_race: v || undefined })}
+          options={RACE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))}
+        />
+        <FilterSelect
+          label="Opp strategy"
+          value={filters.opp_strategy ?? ""}
+          onChange={(v) => update({ opp_strategy: v || undefined })}
+          options={[
+            { value: "", label: "Any strategy" },
+            ...stratOptions.map((o) => ({
+              value: o.name,
+              label: `${truncateLabel(o.name, 36)} (${o.total})`,
+            })),
+          ]}
+          disabled={stratsResp.isLoading}
+        />
+      </div>
+      {activeChips.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-text-dim">
+            Active
+          </span>
+          {activeChips.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={c.clear}
+              title="Clear this filter"
+              className="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-3 text-xs text-accent transition hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <span>{c.label}</span>
+              <X className="h-3 w-3" aria-hidden />
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={clearAll}
+            className="ml-auto min-h-[32px] rounded px-2 text-[11px] uppercase tracking-wider text-text-muted transition hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            Clear all
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: Array<{ value: string; label: string }>;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[10px] uppercase tracking-wider text-text-dim">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="min-h-[44px] w-full rounded-md border border-border bg-bg-elevated px-2.5 text-sm text-text transition-colors hover:border-border-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {options.map((o) => (
+          <option key={o.value || "_any"} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function sortedDistinct(
+  rows: Array<{ name: string; total: number }> | undefined,
+): Array<{ name: string; total: number }> {
+  if (!rows) return [];
+  return [...rows]
+    .filter((r) => r && typeof r.name === "string" && r.name.length > 0)
+    .sort((a, b) => (b.total || 0) - (a.total || 0));
+}
+
+function labelFromCode(code: string): string {
+  switch (String(code).toUpperCase()[0]) {
+    case "P":
+      return "Protoss";
+    case "T":
+      return "Terran";
+    case "Z":
+      return "Zerg";
+    case "R":
+      return "Random";
+    default:
+      return code;
+  }
+}
+
+function truncateLabel(s: string, n = 28): string {
+  if (s.length <= n) return s;
+  return `${s.slice(0, n - 1)}…`;
+}
+
 export function StrategiesTab() {
   const { filters } = useFilters();
   // Default to "bvs" — Build vs strategy carries more actionable
@@ -654,19 +880,20 @@ export function StrategiesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <StrategyFiltersBar />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-base font-semibold text-text">
           {view === "opp"
             ? "Win rate vs opponent strategies"
             : "My build × Their strategy"}
         </h2>
-        <div className="inline-flex overflow-hidden rounded border border-border">
+        <div className="inline-flex self-start overflow-hidden rounded border border-border sm:self-auto">
           {(["bvs", "opp"] as const).map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => setView(v)}
-              className={`px-3 py-1 text-xs ${
+              className={`min-h-[36px] px-3 py-1 text-xs ${
                 view === v
                   ? "bg-accent/20 text-accent"
                   : "text-text-muted hover:bg-bg-elevated"

@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, type MouseEvent, type SyntheticEvent } from "react";
-import { Eye, MoreVertical, Pencil, Send, Trash2 } from "lucide-react";
+import {
+  Eye,
+  Loader2,
+  MoreVertical,
+  Pencil,
+  RefreshCw,
+  Send,
+  Trash2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -21,6 +29,8 @@ export interface BuildCardProps {
   onEdit: (slug: string) => void;
   onDelete: (slug: string) => void;
   onPublish: (slug: string) => void;
+  onReclassify?: (slug: string) => void;
+  reclassifying?: boolean;
 }
 
 /**
@@ -35,6 +45,8 @@ export function BuildCard({
   onEdit,
   onDelete,
   onPublish,
+  onReclassify,
+  reclassifying = false,
 }: BuildCardProps) {
   const tint = raceTint(build.race);
   const matchup = matchupLabel(build.race, (build.vsRace as VsRace) ?? "Any");
@@ -96,6 +108,17 @@ export function BuildCard({
                   Published
                 </Badge>
               ) : null}
+              {reclassifying ? (
+                <Badge
+                  variant="neutral"
+                  size="sm"
+                  iconLeft={
+                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                  }
+                >
+                  Reclassifying…
+                </Badge>
+              ) : null}
             </div>
             <h3 className="break-words text-h4 font-semibold leading-tight text-text">
               {build.name || "Untitled build"}
@@ -113,6 +136,8 @@ export function BuildCard({
               onEdit={onEdit}
               onDelete={onDelete}
               onPublish={onPublish}
+              onReclassify={onReclassify}
+              reclassifying={reclassifying}
             />
           </div>
         </div>
@@ -188,6 +213,8 @@ interface BuildKebabProps {
   onEdit: (slug: string) => void;
   onDelete: (slug: string) => void;
   onPublish: (slug: string) => void;
+  onReclassify?: (slug: string) => void;
+  reclassifying?: boolean;
 }
 
 function BuildKebab({
@@ -196,6 +223,8 @@ function BuildKebab({
   onEdit,
   onDelete,
   onPublish,
+  onReclassify,
+  reclassifying = false,
 }: BuildKebabProps) {
   const [open, setOpen] = useState(false);
 
@@ -240,7 +269,7 @@ function BuildKebab({
           <ul
             role="menu"
             className={[
-              "absolute right-0 top-12 z-40 w-44 overflow-hidden rounded-md border border-border bg-bg-surface shadow-[var(--shadow-card)]",
+              "absolute right-0 top-12 z-40 w-52 overflow-hidden rounded-md border border-border bg-bg-surface shadow-[var(--shadow-card)]",
             ].join(" ")}
           >
             <KebabItem
@@ -251,6 +280,23 @@ function BuildKebab({
                 onEdit(slug);
               }}
             />
+            {onReclassify ? (
+              <KebabItem
+                icon={
+                  reclassifying ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" aria-hidden />
+                  )
+                }
+                label={reclassifying ? "Reclassifying…" : "Reclassify replays"}
+                disabled={reclassifying}
+                onClick={() => {
+                  setOpen(false);
+                  onReclassify(slug);
+                }}
+              />
+            ) : null}
             <KebabItem
               icon={<Send className="h-4 w-4" aria-hidden />}
               label={isPublic ? "Publish update" : "Publish"}
@@ -280,11 +326,13 @@ function KebabItem({
   label,
   onClick,
   tone,
+  disabled,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   tone?: "danger";
+  disabled?: boolean;
 }) {
   return (
     <li>
@@ -292,9 +340,11 @@ function KebabItem({
         type="button"
         role="menuitem"
         onClick={onClick}
+        disabled={disabled}
         className={[
           "flex w-full items-center gap-2 px-3 py-2 text-left text-caption",
           "focus-visible:outline-none focus-visible:bg-bg-elevated",
+          "disabled:cursor-not-allowed disabled:opacity-60",
           tone === "danger"
             ? "text-danger hover:bg-danger/10"
             : "text-text hover:bg-bg-elevated",

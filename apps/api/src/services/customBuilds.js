@@ -188,6 +188,224 @@ class CustomBuildsService {
       },
     );
   }
+
+  /**
+   * Reclassify the user's stored games against ONE saved build.
+   *
+   * For each game whose stored events satisfy the build's rules (and
+   * whose matchup matches the build's race/vsRace gate), set the
+   * game document's `myBuild` to the build's name. For games that
+   * were previously tagged with this build's name but no longer
+   * match, clear the tag (only when `replace` is true) so the
+   * standard /v1/builds aggregations stay accurate.
+   *
+   * Important: we never push back to the agent. The cloud already has
+   * every game's parsed buildLog/oppBuildLog, so reclassification is
+   * a single Mongo updateMany loop.
+   *
+   * @param {string} userId
+   * @param {string} slug
+   * @param {{ replace?: boolean }} [opts]
+   * @returns {Promise<null | {
+   *   slug: string,
+   *   name: string,
+   *   scanned: number,
+   *   matched: number,
+   *   tagged: number,
+   *   cleared: number,
+   *   ruleCount: number,
+   * }>}
+   */
+  async reclassify(userId, slug, opts = {}) {
+    if (!this.perGame) throw new Error("perGame_unavailable");
+    const build = await this.get(userId, slug);
+    if (!build) return null;
+    const replace = opts.replace !== false;
+    const rules = extractRules(build);
+    const buildName = build.name || build.slug;
+    const perspective = build.perspective === "opponent" ? "opponent" : "you";
+    const games = await this.perGame.listForRulePreview(userId, {
+      limit: STATS_GAME_SCAN_CAP,
+    });
+    const inMatchup = games.filter((g) =>
+      gameMatchesBuildMatchup(g, build, perspective),
+    );
+    const matched =
+      rules.length === 0
+        ? []
+        : filterMatchingGames(inMatchup, rules, perspective);
+    const matchedIds = new Set(matched.map((g) => g.gameId).filter(Boolean));
+
+    const toTag = matched
+      .filter((g) => g.myBuild !== buildName && Boolean(g.gameId))
+      .map((g) => g.gameId);
+    let cleared = 0;
+    let tagged = 0;
+    if (toTag.length > 0) {
+      const res = await tagGames(
+        this._gamesCollection(),
+        userId,
+        toTag,
+        buildName,
+      );
+      tagged = res.modifiedCount || 0;
+    }
+    if (replace) {
+      // Clear tag from games that *used to* match but no longer do.
+      const stillMatching = Array.from(matchedIds);
+      const clearRes = await this._gamesCollection().updateMany(
+        {
+          userId,
+          myBuild: buildName,
+          ...(stillMatching.length > 0
+            ? { gameId: { $nin: stillMatching } }
+            : {}),
+        },
+        { $unset: { myBuild: "" } },
+      );
+      cleared = clearRes.modifiedCount || 0;
+    }
+    return {
+      slug: build.slug,
+      name: buildName,
+      scanned: games.length,
+      matched: matched.length,
+      tagged,
+      cleared,
+      ruleCount: rules.length,
+    };
+  }
+
+  /**
+   * Reclassify the user's stored games against EVERY saved build.
+   *
+   * Single scan, each game tested against each build's rules. Builds
+   * are processed in `updatedAt desc` order so the most recently
+   * edited build wins when a game matches multiple. Games that match
+   * no build keep whatever tag was already present unless
+   * `clearUnmatched` is true.
+   *
+   * @param {string} userId
+   * @param {{ clearUnmatched?: boolean }} [opts]
+   * @returns {Promise<{
+   *   builds: number,
+   *   scanned: number,
+   *   tagged: number,
+   *   cleared: number,
+   *   perBuild: Array<{slug: string, name: string, matched: number, tagged: number}>,
+   * }>}
+   */
+  async reclassifyAll(userId, opts = {}) {
+    if (!this.perGame) throw new Error("perGame_unavailable");
+    const clearUnmatched = !!opts.clearUnmatched;
+    const builds = await this.list(userId);
+    const games = await this.perGame.listForRulePreview(userId, {
+      limit: STATS_GAME_SCAN_CAP,
+    });
+    /** @type {Map<string, string>} */
+    const desiredTag = new Map();
+    /** @type {Set<string>} */
+    const ownedNames = new Set();
+    /** @type {Array<{slug: string, name: string, matched: number, tagged: number}>} */
+    const perBuild = [];
+
+    for (const b of builds) {
+      const rules = extractRules(b);
+      const perspective = b.perspective === "opponent" ? "opponent" : "you";
+      const buildName = b.name || b.slug;
+      ownedNames.add(buildName);
+      let matchedCount = 0;
+      if (rules.length > 0) {
+        const inMatchup = games.filter((g) =>
+          gameMatchesBuildMatchup(g, b, perspective),
+        );
+        const matched = filterMatchingGames(inMatchup, rules, perspective);
+        for (const g of matched) {
+          if (!g.gameId) continue;
+          // First-write-wins: if another (more recently updated) build
+          // already claimed this game, leave it alone. `list()` orders
+          // by updatedAt desc.
+          if (!desiredTag.has(g.gameId)) desiredTag.set(g.gameId, buildName);
+        }
+        matchedCount = matched.length;
+      }
+      perBuild.push({
+        slug: b.slug,
+        name: buildName,
+        matched: matchedCount,
+        tagged: 0,
+      });
+    }
+
+    let totalTagged = 0;
+    /** @type {Map<string, string[]>} */
+    const grouped = new Map();
+    for (const [gid, name] of desiredTag) {
+      const arr = grouped.get(name) || [];
+      arr.push(gid);
+      grouped.set(name, arr);
+    }
+    const games_ = this._gamesCollection();
+    for (const [name, ids] of grouped) {
+      if (ids.length === 0) continue;
+      const res = await tagGames(games_, userId, ids, name);
+      totalTagged += res.modifiedCount || 0;
+      const row = perBuild.find((p) => p.name === name);
+      if (row) row.tagged = res.modifiedCount || 0;
+    }
+
+    let cleared = 0;
+    if (clearUnmatched && ownedNames.size > 0) {
+      // Clear tags for games whose `myBuild` references one of THIS
+      // user's saved builds but no longer matches that build's rules.
+      // We never touch tags that belong to community builds or the
+      // legacy agent classifier — those names are unknown to us.
+      const namesArr = Array.from(ownedNames);
+      const taggedIds = Array.from(desiredTag.keys());
+      const clearRes = await games_.updateMany(
+        {
+          userId,
+          myBuild: { $in: namesArr },
+          ...(taggedIds.length > 0 ? { gameId: { $nin: taggedIds } } : {}),
+        },
+        { $unset: { myBuild: "" } },
+      );
+      cleared = clearRes.modifiedCount || 0;
+    }
+
+    return {
+      builds: builds.length,
+      scanned: games.length,
+      tagged: totalTagged,
+      cleared,
+      perBuild,
+    };
+  }
+
+  /**
+   * @private
+   * @returns {import('mongodb').Collection}
+   */
+  _gamesCollection() {
+    // We share the DbContext with the rest of the API; reach for the
+    // games collection without holding a separate handle so the service
+    // stays a thin layer over Mongo.
+    return /** @type {any} */ (this.db).games;
+  }
+}
+
+/**
+ * @param {import('mongodb').Collection} games
+ * @param {string} userId
+ * @param {string[]} gameIds
+ * @param {string} buildName
+ */
+async function tagGames(games, userId, gameIds, buildName) {
+  if (!gameIds || gameIds.length === 0) return { modifiedCount: 0 };
+  return games.updateMany(
+    { userId, gameId: { $in: gameIds } },
+    { $set: { myBuild: buildName } },
+  );
 }
 
 /**

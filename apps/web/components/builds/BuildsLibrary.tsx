@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Plus, Library, BookOpen, Sparkles } from "lucide-react";
+import { Plus, Library, BookOpen, RefreshCw, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -22,6 +22,26 @@ import { BuildPublishModal } from "./BuildPublishModal";
 import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
 
 type ListResponse = { items: CustomBuild[] };
+
+type ReclassifyResult = {
+  ok: true;
+  slug: string;
+  name: string;
+  scanned: number;
+  matched: number;
+  tagged: number;
+  cleared: number;
+  ruleCount: number;
+};
+
+type ReclassifyAllResult = {
+  ok: true;
+  builds: number;
+  scanned: number;
+  tagged: number;
+  cleared: number;
+  perBuild: Array<{ slug: string; name: string; matched: number; tagged: number }>;
+};
 
 const DEFAULT_FILTERS: BuildFilterState = {
   search: "",
@@ -61,6 +81,8 @@ function BuildsLibraryInner() {
   const [dossierBuild, setDossierBuild] = useState<CustomBuild | null>(null);
   const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
   const [deletePending, setDeletePending] = useState(false);
+  const [reclassifyingSlug, setReclassifyingSlug] = useState<string | null>(null);
+  const [reclassifyAllPending, setReclassifyAllPending] = useState(false);
 
   const items = builds.data?.items ?? [];
   const decorated = useMemo<DecoratedBuild[]>(
@@ -153,6 +175,62 @@ function BuildsLibraryInner() {
     [builds, toast],
   );
 
+  const reclassifyOne = useCallback(
+    async (slug: string) => {
+      const target = items.find((b) => b.slug === slug);
+      if (!target) return;
+      setReclassifyingSlug(slug);
+      try {
+        const res = await apiCall<ReclassifyResult>(
+          getToken,
+          `/v1/custom-builds/${encodeURIComponent(slug)}/reclassify`,
+          { method: "POST", body: JSON.stringify({ replace: true }) },
+        );
+        const summary = describeReclassify({
+          tagged: res.tagged,
+          cleared: res.cleared,
+          matched: res.matched,
+        });
+        toast.success(`Reclassified “${res.name}”.`, { description: summary });
+        await stats.mutate();
+        await builds.mutate();
+      } catch (err) {
+        toast.error("Couldn’t reclassify replays", {
+          description: extractErr(err),
+        });
+      } finally {
+        setReclassifyingSlug(null);
+      }
+    },
+    [getToken, items, stats, builds, toast],
+  );
+
+  const reclassifyAll = useCallback(async () => {
+    setReclassifyAllPending(true);
+    try {
+      const res = await apiCall<ReclassifyAllResult>(
+        getToken,
+        "/v1/custom-builds/reclassify-all",
+        { method: "POST", body: JSON.stringify({ clearUnmatched: true }) },
+      );
+      toast.success(`Reclassified ${res.builds} build${res.builds === 1 ? "" : "s"}.`, {
+        description: describeReclassify({
+          tagged: res.tagged,
+          cleared: res.cleared,
+          matched: res.perBuild.reduce((a, b) => a + (b.matched || 0), 0),
+        }),
+      });
+      await stats.mutate();
+      await builds.mutate();
+    } catch (err) {
+      toast.error("Couldn’t reclassify replays", {
+        description: extractErr(err),
+      });
+    } finally {
+      setReclassifyAllPending(false);
+    }
+  }, [getToken, stats, builds, toast]);
+
   const isInitialLoad = !builds.data && builds.isLoading;
   const totalCount = decorated.length;
   const filteredCount = filtered.length;
@@ -174,6 +252,17 @@ function BuildsLibraryInner() {
               <BookOpen className="h-4 w-4" aria-hidden />
               Definitions
             </Link>
+            {decorated.length > 0 ? (
+              <Button
+                variant="secondary"
+                onClick={reclassifyAll}
+                loading={reclassifyAllPending}
+                iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />}
+                title="Re-evaluate every saved build's rules against your stored replays and update build tags. Runs in the cloud — no agent required."
+              >
+                Reclassify replays
+              </Button>
+            ) : null}
             <Button
               onClick={openCreate}
               iconLeft={<Plus className="h-4 w-4" aria-hidden />}
@@ -216,6 +305,8 @@ function BuildsLibraryInner() {
                     onEdit={openEdit}
                     onDelete={askDelete}
                     onPublish={openPublish}
+                    onReclassify={reclassifyOne}
+                    reclassifying={reclassifyingSlug === b.slug}
                   />
                 </li>
               ))}
@@ -269,6 +360,34 @@ function BuildsLibraryInner() {
       />
     </>
   );
+}
+
+function describeReclassify({
+  tagged,
+  cleared,
+  matched,
+}: {
+  tagged: number;
+  cleared: number;
+  matched: number;
+}): string {
+  if (tagged === 0 && cleared === 0) {
+    return matched > 0
+      ? `${matched} game${matched === 1 ? "" : "s"} already tagged — nothing to update.`
+      : "No games matched. Try adjusting your rules and saving the build again.";
+  }
+  const parts: string[] = [];
+  if (tagged > 0) parts.push(`Tagged ${tagged} game${tagged === 1 ? "" : "s"}`);
+  if (cleared > 0)
+    parts.push(`cleared ${cleared} stale tag${cleared === 1 ? "" : "s"}`);
+  return parts.join(" · ");
+}
+
+function extractErr(err: unknown): string {
+  if (err && typeof err === "object" && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return "Something went wrong.";
 }
 
 function FirstRunEmptyState({ onCreate }: { onCreate: () => void }) {

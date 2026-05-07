@@ -19,6 +19,8 @@ type StoredFilters = {
   map?: string;
   mmr_min?: number;
   mmr_max?: number;
+  build?: string;
+  opp_strategy?: string;
 };
 
 function readStored(): StoredFilters | null {
