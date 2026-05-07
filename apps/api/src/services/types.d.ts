@@ -232,6 +232,17 @@ export interface AggregationsService {
   ): Promise<object>;
 }
 
+export interface StreakService {
+  current(
+    userId: string,
+    filters?: object,
+  ): Promise<{
+    kind: "win" | "loss" | null;
+    count: number;
+    lastGameAt: string | null;
+  }>;
+}
+
 export interface BuildsService {
   list(userId: string, filters: object): Promise<object[]>;
   detail(

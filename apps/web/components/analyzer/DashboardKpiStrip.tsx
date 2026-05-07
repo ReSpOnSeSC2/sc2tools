@@ -97,14 +97,20 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
     return filtersToQuery(params);
   }, [wrRange, tz]);
 
-  // Global series — used for Games today and Active streak.
+  // Global series — used for Games today. Streak is fetched from a
+  // dedicated /v1/streak endpoint that walks games one-by-one (the
+  // day-bucketed series can't represent streak correctly because a
+  // single mixed day collapses the count to 0).
   const globalSeries = useApi<ApiTimeseriesResponse>(
     `/v1/timeseries?interval=day&tz=${encodeURIComponent(tz)}`,
   );
-  const globalKpis = useMemo(
-    () => computeKpis(apiToPeriods(globalSeries.data, tz), tz),
+  const gamesToday = useMemo(
+    () => computeGamesToday(apiToPeriods(globalSeries.data, tz), tz),
     [globalSeries.data, tz],
   );
+
+  const streakResp = useApi<StreakResponse>("/v1/streak");
+  const streak = streakResp.data ?? { kind: null, count: 0, lastGameAt: null };
 
   // Win rate uses its own series scoped by the chosen preset.
   const wrSeries = useApi<ApiTimeseriesResponse>(
@@ -116,6 +122,7 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
   );
 
   const placeholder = globalSeries.isLoading ? "—" : "0";
+  const streakPlaceholder = streakResp.isLoading ? "—" : "0";
   const wrPlaceholder = wrSeries.isLoading ? "—" : "0";
 
   return (
@@ -125,11 +132,9 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
     >
       <LeadStat
         label="Games today"
-        value={globalKpis.gamesToday ?? placeholder}
+        value={gamesToday ?? placeholder}
         icon={<Gamepad2 className="h-4 w-4" aria-hidden />}
-        hint={
-          globalKpis.gamesToday ? "Keep the streak alive" : "No games yet today"
-        }
+        hint={gamesToday ? "Keep the streak alive" : "No games yet today"}
       />
 
       <StatCard
@@ -160,26 +165,22 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
       <StatCard
         label="Active streak"
         value={
-          globalKpis.streak.count > 0 ? (
+          streak.count > 0 && streak.kind ? (
             <span
               className={
-                globalKpis.streak.kind === "win"
-                  ? "text-success"
-                  : "text-danger"
+                streak.kind === "win" ? "text-success" : "text-danger"
               }
             >
-              {globalKpis.streak.kind === "win" ? "W" : "L"}
-              <span className="ml-0.5 tabular-nums">
-                {globalKpis.streak.count}
-              </span>
+              {streak.kind === "win" ? "W" : "L"}
+              <span className="ml-0.5 tabular-nums">{streak.count}</span>
             </span>
           ) : (
-            placeholder
+            streakPlaceholder
           )
         }
         hint={
-          globalKpis.streak.count > 0
-            ? globalKpis.streak.kind === "win"
+          streak.count > 0 && streak.kind
+            ? streak.kind === "win"
               ? "Riding a win streak"
               : "Keep at it — turning is part of the game"
             : "Tied or no recent games"
@@ -315,26 +316,28 @@ function LeadStat({
   );
 }
 
-interface ComputedKpis {
-  gamesToday: number | null;
-  streak: { kind: "win" | "loss" | null; count: number };
+interface StreakResponse {
+  kind: "win" | "loss" | null;
+  count: number;
+  lastGameAt: string | null;
 }
 
-function computeKpis(series: Period[], timeZone: string): ComputedKpis {
-  if (series.length === 0) {
-    return {
-      gamesToday: null,
-      streak: { kind: null, count: 0 },
-    };
-  }
-  // Look up today by date rather than trusting the array tail. The
-  // server sorts ascending but if a clock skew or filter hides today,
-  // a `find` is more forgiving than `series[series.length - 1]`.
+/**
+ * Find today's bucket in the day-resolution timeseries by IANA-tz date
+ * key. We don't trust the array tail because clock skew or a hidden
+ * preset could hide today; a keyed `find` is more forgiving.
+ *
+ * Returns ``null`` when the series is empty so the caller can render a
+ * loading placeholder instead of a hard zero.
+ */
+function computeGamesToday(
+  series: Period[],
+  timeZone: string,
+): number | null {
+  if (series.length === 0) return null;
   const todayKey = todayKeyIn(timeZone);
   const todayPeriod = series.find((p) => p.date === todayKey);
-  const gamesToday = todayPeriod ? todayPeriod.games || 0 : 0;
-  const streak = streakFromSeries(series);
-  return { gamesToday, streak };
+  return todayPeriod ? todayPeriod.games || 0 : 0;
 }
 
 function computeWrStats(series: Period[]): {
@@ -352,29 +355,5 @@ function computeWrStats(series: Period[]): {
     totalGames,
     winRate: totalGames > 0 ? wins / totalGames : 0,
   };
-}
-
-/**
- * Walk the day-bucketed series backwards, treating each day as a
- * batch of W or L outcomes. Mixed days break the streak.
- */
-function streakFromSeries(
-  series: Period[],
-): { kind: "win" | "loss" | null; count: number } {
-  let kind: "win" | "loss" | null = null;
-  let count = 0;
-  for (let i = series.length - 1; i >= 0; i--) {
-    const p = series[i];
-    const w = p.wins || 0;
-    const l = p.losses || 0;
-    if (w === 0 && l === 0) continue;
-    const dayKind: "win" | "loss" | "mixed" =
-      w > 0 && l === 0 ? "win" : l > 0 && w === 0 ? "loss" : "mixed";
-    if (dayKind === "mixed") break;
-    if (kind === null) kind = dayKind;
-    if (kind !== dayKind) break;
-    count += dayKind === "win" ? w : l;
-  }
-  return { kind, count };
 }
 

@@ -3,6 +3,10 @@
 const { LIMITS } = require("../config/constants");
 const { gamesMatchStage } = require("../util/parseQuery");
 const trendsAgg = require("./trendsAggregations");
+const {
+  attachRecentByMap,
+  attachRecentByMatchup,
+} = require("./recentResults");
 
 const RACES_PLAYED = ["Protoss", "Terran", "Zerg"];
 const RACE_LETTER_TO_NAME = { P: "Protoss", T: "Terran", Z: "Zerg" };
@@ -123,68 +127,9 @@ class AggregationsService {
         ...matchupFacet().map(stripFacetWrappers).flat(),
       ])
       .toArray();
-    return finalizeRows(await this._attachRecentResults(userId, filters, rows));
-  }
-
-  /**
-   * Pull the last 10 results per matchup bucket so the SPA's form
-   * sparkline column has data. Done as a second aggregation so the
-   * grouping query stays simple. Recency is on the game's `date`
-   * field, newest first.
-   *
-   * @private
-   * @param {string} userId
-   * @param {object} filters
-   * @param {Array<{name: string}>} rows
-   */
-  async _attachRecentResults(userId, filters, rows) {
-    if (!Array.isArray(rows) || rows.length === 0) return rows;
-    const match = gamesMatchStage(userId, filters);
-    const byMatchup = await this.db.games
-      .aggregate([
-        { $match: match },
-        { $sort: { date: -1 } },
-        {
-          $project: {
-            _id: 0,
-            result: 1,
-            date: 1,
-            matchup: {
-              $cond: [
-                { $eq: [{ $ifNull: ["$opponent.race", ""] }, ""] },
-                "vs Unknown",
-                {
-                  $concat: [
-                    "vs ",
-                    { $toUpper: { $substrCP: ["$opponent.race", 0, 1] } },
-                  ],
-                },
-              ],
-            },
-          },
-        },
-        {
-          $group: {
-            _id: "$matchup",
-            results: { $push: "$result" },
-          },
-        },
-      ])
-      .toArray();
-    const recentByName = new Map();
-    for (const r of byMatchup) {
-      if (!r || !Array.isArray(r.results)) continue;
-      const out = [];
-      for (const raw of r.results) {
-        const tag = bucketResult(raw);
-        if (tag) {
-          out.push(tag);
-          if (out.length >= 10) break;
-        }
-      }
-      recentByName.set(r._id, out);
-    }
-    return rows.map((row) => ({ ...row, recent: recentByName.get(row.name) || [] }));
+    return finalizeRows(
+      await attachRecentByMatchup(this.db, userId, filters, rows),
+    );
   }
 
   /**
@@ -252,7 +197,9 @@ class AggregationsService {
         ...mapFacet().map(stripFacetWrappers).flat(),
       ])
       .toArray();
-    return finalizeRows(rows);
+    return finalizeRows(
+      await attachRecentByMap(this.db, userId, filters, rows),
+    );
   }
 
   /**
@@ -595,22 +542,6 @@ function bucketSwitch() {
       default: null,
     },
   };
-}
-
-/**
- * Normalise a stored game result into "win" | "loss" | null.
- * Mirrors the Mongo-side bucketSwitch but in JS, for use after a
- * $project pulls the raw `result` field.
- *
- * @param {string | null | undefined} raw
- * @returns {'win' | 'loss' | null}
- */
-function bucketResult(raw) {
-  if (!raw) return null;
-  const s = String(raw).toLowerCase();
-  if (s === "win" || s === "victory") return "win";
-  if (s === "loss" || s === "defeat") return "loss";
-  return null;
 }
 
 function matchupFacet() {

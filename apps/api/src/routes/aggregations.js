@@ -8,6 +8,7 @@ const { parseFilters, parseFiniteInt } = require("../util/parseQuery");
  *
  * @param {{
  *   aggregations: import('../services/types').AggregationsService,
+ *   streak: import('../services/streak').StreakService,
  *   auth: import('express').RequestHandler,
  * }} deps
  */
@@ -164,6 +165,19 @@ function buildAggregationsRouter(deps) {
       res.json(
         await deps.aggregations.activityCalendar(userId, { tz }, filters),
       );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Current consecutive same-result streak across the user's games.
+  // Game-level (not day-bucketed) so a mixed day no longer drops a
+  // mid-streak indicator to 0. See services/streak.js for the rationale.
+  router.get("/streak", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      res.json(await deps.streak.current(userId, filters));
     } catch (err) {
       next(err);
     }

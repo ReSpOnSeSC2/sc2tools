@@ -27,6 +27,7 @@ const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { OverlayLiveService } = require("./services/overlayLive");
 const { AggregationsService } = require("./services/aggregations");
+const { StreakService } = require("./services/streak");
 const { BuildsService } = require("./services/builds");
 const {
   PerGameComputeService,
@@ -144,6 +145,7 @@ function makeServices(deps) {
   // ``opponents`` collections every other read service touches.
   const overlayLive = new OverlayLiveService(deps.db);
   const aggregations = new AggregationsService(deps.db);
+  const streak = new StreakService(deps.db);
   const builds = new BuildsService(deps.db);
   const catalog = new CatalogService(deps.db);
   const perGame = new PerGameComputeService(deps.db, {
@@ -172,6 +174,7 @@ function makeServices(deps) {
     overlayTokens,
     overlayLive,
     aggregations,
+    streak,
     builds,
     catalog,
     perGame,
@@ -378,7 +381,11 @@ function mountRoutes(app, deps, services, clerk) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildAggregationsRouter({ aggregations: services.aggregations, auth }),
+    buildAggregationsRouter({
+      aggregations: services.aggregations,
+      streak: services.streak,
+      auth,
+    }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
