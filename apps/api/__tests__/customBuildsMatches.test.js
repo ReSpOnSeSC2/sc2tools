@@ -139,7 +139,7 @@ describe("GET /v1/custom-builds/:slug/matches matchup gate", () => {
         rules: [{ type: "before", name: "BuildOracle", time_lt: 418 }],
       }),
     );
-    expect(putRes.status).toBe(204);
+    expect(putRes.status).toBe(200);
 
     const res = await withAuth(
       request(app).get("/v1/custom-builds/pvp-custom/matches"),
@@ -194,7 +194,7 @@ describe("GET /v1/custom-builds/:slug/matches matchup gate", () => {
         rules: [{ type: "before", name: "BuildOracle", time_lt: 418 }],
       }),
     );
-    expect(putRes.status).toBe(204);
+    expect(putRes.status).toBe(200);
 
     const res = await withAuth(
       request(app).get("/v1/custom-builds/protoss-any/matches"),

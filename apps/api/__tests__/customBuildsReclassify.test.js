@@ -125,6 +125,8 @@ describe("POST /v1/custom-builds/:slug/reclassify", () => {
       opponent: { displayName: "DuncanTheFat", race: "Terran" },
     });
 
+    // PUT now reclassifies cloud-side as part of save so opponent /
+    // recent-games views see the new build name immediately.
     const putRes = await withAuth(
       request(app).put("/v1/custom-builds/pvp-oracle").send({
         slug: "pvp-oracle",
@@ -134,13 +136,20 @@ describe("POST /v1/custom-builds/:slug/reclassify", () => {
         rules: [{ type: "before", name: "BuildOracle", time_lt: 418 }],
       }),
     );
-    expect(putRes.status).toBe(204);
+    expect(putRes.status).toBe(200);
+    expect(putRes.body.reclassify).toMatchObject({
+      tagged: 1,
+      matched: 1,
+      name: "PvP Oracle Opener",
+    });
 
+    // Subsequent explicit reclassify is a no-op because the PUT already
+    // tagged everything that matches.
     const res = await withAuth(
       request(app).post("/v1/custom-builds/pvp-oracle/reclassify").send({}),
     );
     expect(res.status).toBe(200);
-    expect(res.body.tagged).toBe(1);
+    expect(res.body.tagged).toBe(0);
     expect(res.body.matched).toBe(1);
     expect(res.body.name).toBe("PvP Oracle Opener");
 
@@ -189,6 +198,71 @@ describe("POST /v1/custom-builds/:slug/reclassify", () => {
         .send({}),
     );
     expect(res.status).toBe(404);
+  });
+
+  test("PUT auto-tags games on save AND clears stale tags from a renamed build", async () => {
+    // Regression: the BuildDetail view (live rule eval) and the opponent
+    // profile / Recent games table (stored myBuild) used to drift when
+    // the user saved a custom build but never clicked Reclassify. PUT
+    // now does the cloud-side reclassify itself so the two views stay
+    // in sync without a separate user action.
+    //
+    // Tests in this suite share the same Mongo instance, so we use
+    // vsRace=Random (no other fixture uses it) + a unique rule token
+    // so the matchup gate cleanly isolates this test's game from the
+    // prior PvP/PvT fixtures.
+    const userId = await bootstrap();
+
+    await services.games.upsert(userId, {
+      gameId: "g-rename-1",
+      date: new Date("2026-05-04T00:00:00Z"),
+      myRace: "Protoss",
+      myBuild: "PvR — Auto-detected old label",
+      // PhotonCannon is unique to this test — no other fixture's
+      // buildLog contains it, so the rule below only matches g-rename-1.
+      buildLog: [...PROTOSS_OPENER, "[3:30] PhotonCannon"],
+      oppBuildLog: PROTOSS_OPP_OPENER,
+      result: "Victory",
+      map: "Equilibrium LE",
+      opponent: { displayName: "renameTest", race: "Random" },
+    });
+
+    const initial = await withAuth(
+      request(app).put("/v1/custom-builds/rename-build").send({
+        slug: "rename-build",
+        name: "First name",
+        race: "Protoss",
+        vsRace: "Random",
+        rules: [{ type: "before", name: "BuildPhotonCannon", time_lt: 600 }],
+      }),
+    );
+    expect(initial.status).toBe(200);
+    expect(initial.body.reclassify).toMatchObject({
+      tagged: 1,
+      matched: 1,
+      name: "First name",
+    });
+
+    let row = await db.games.findOne({ userId, gameId: "g-rename-1" });
+    expect(row.myBuild).toBe("First name");
+
+    // Rename via second PUT — replace=true default should re-stamp the
+    // game under the new name in one pass, with no manual reclassify
+    // in between.
+    const renamed = await withAuth(
+      request(app).put("/v1/custom-builds/rename-build").send({
+        slug: "rename-build",
+        name: "Second name",
+        race: "Protoss",
+        vsRace: "Random",
+        rules: [{ type: "before", name: "BuildPhotonCannon", time_lt: 600 }],
+      }),
+    );
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.reclassify.tagged).toBe(1);
+
+    row = await db.games.findOne({ userId, gameId: "g-rename-1" });
+    expect(row.myBuild).toBe("Second name");
   });
 });
 
