@@ -22,6 +22,10 @@ export type AnalyzerFilters = {
   map?: string;
   mmr_min?: number;
   mmr_max?: number;
+  /** Filter by the user's classified build (myBuild on game records). */
+  build?: string;
+  /** Filter by the detected opponent strategy (opponent.strategy). */
+  opp_strategy?: string;
   /** Preset id selected in the date filter; not sent to the API. */
   preset?: PresetId;
 };

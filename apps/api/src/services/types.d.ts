@@ -66,6 +66,31 @@ export interface CustomBuildsService {
   get(userId: string, slug: string): Promise<object | null>;
   upsert(userId: string, build: object & { slug: string }): Promise<void>;
   softDelete(userId: string, slug: string): Promise<void>;
+  evaluateBuild(userId: string, slug: string): Promise<object | null>;
+  evaluateAllStats(userId: string): Promise<object[]>;
+  reclassify(
+    userId: string,
+    slug: string,
+    opts?: { replace?: boolean },
+  ): Promise<{
+    slug: string;
+    name: string;
+    scanned: number;
+    matched: number;
+    tagged: number;
+    cleared: number;
+    ruleCount: number;
+  } | null>;
+  reclassifyAll(
+    userId: string,
+    opts?: { clearUnmatched?: boolean },
+  ): Promise<{
+    builds: number;
+    scanned: number;
+    tagged: number;
+    cleared: number;
+    perBuild: Array<{ slug: string; name: string; matched: number; tagged: number }>;
+  }>;
 }
 
 export interface ParsedBuildLogEvent {
