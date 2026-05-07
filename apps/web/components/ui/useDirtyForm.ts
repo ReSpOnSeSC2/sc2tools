@@ -25,8 +25,8 @@ export function useDirtyForm<T>(
 ): UseDirtyFormResult<T> {
   const [draft, setDraftState] = useState<T>(initial);
   const [hydrated, setHydrated] = useState(false);
+  const [savedSnapshot, setSavedSnapshot] = useState<string>("");
   const lastServerRef = useRef<string>("");
-  const lastSavedRef = useRef<string>("");
 
   // When the server value updates, only overwrite the draft if the user
   // hasn't started editing. After a save, we reset the dirty baseline.
@@ -38,24 +38,24 @@ export function useDirtyForm<T>(
 
     if (!hydrated) {
       setDraftState(serverValue);
-      lastSavedRef.current = json;
+      setSavedSnapshot(json);
       setHydrated(true);
       return;
     }
     // External update + draft was clean → adopt the new server value.
     const draftJson = stableStringify(draft);
-    const wasClean = draftJson === lastSavedRef.current;
+    const wasClean = draftJson === savedSnapshot;
     if (isExternalUpdate && wasClean) {
       setDraftState(serverValue);
-      lastSavedRef.current = json;
+      setSavedSnapshot(json);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverValue]);
 
   const dirty = useMemo(() => {
     if (!hydrated) return false;
-    return stableStringify(draft) !== lastSavedRef.current;
-  }, [draft, hydrated]);
+    return stableStringify(draft) !== savedSnapshot;
+  }, [draft, hydrated, savedSnapshot]);
 
   return {
     draft,
@@ -63,12 +63,13 @@ export function useDirtyForm<T>(
     dirty,
     reset: () => {
       if (serverValue !== undefined) {
+        const json = stableStringify(serverValue);
         setDraftState(serverValue);
-        lastSavedRef.current = stableStringify(serverValue);
+        setSavedSnapshot(json);
       }
     },
     markSaved: () => {
-      lastSavedRef.current = stableStringify(draft);
+      setSavedSnapshot(stableStringify(draft));
     },
   };
 }
