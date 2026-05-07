@@ -12,6 +12,7 @@ const { validateGameRecord } = require("../validation/gameRecord");
  * @param {{
  *   games: import('../services/types').GamesService,
  *   opponents: import('../services/types').OpponentsService,
+ *   customBuilds?: import('../services/types').CustomBuildsService,
  *   io?: import('socket.io').Server,
  *   auth: import('express').RequestHandler,
  * }} deps
@@ -89,6 +90,25 @@ function buildGamesRouter(deps) {
             opening: game.opponent.opening,
             playedAt: new Date(game.date),
           });
+        }
+        // Override the agent's built-in classifier when the user has a
+        // saved custom build whose rules match this replay. Without this
+        // the opponent profile / Recent games column always shows the
+        // agent's auto label even after the user named their opener and
+        // saved it — and a click-Reclassify pass would just be re-undone
+        // by the next upload. Fail-soft: a thrown evaluator never blocks
+        // the ingest itself.
+        if (deps.customBuilds && typeof deps.customBuilds.tagSingleGame === "function") {
+          try {
+            await deps.customBuilds.tagSingleGame(userId, game);
+          } catch (e) {
+            if (req.log) {
+              req.log.warn(
+                { err: e, gameId: game.gameId, userId },
+                "ingest_custom_build_tag_failed",
+              );
+            }
+          }
         }
         accepted.push({ gameId: game.gameId, created });
       }

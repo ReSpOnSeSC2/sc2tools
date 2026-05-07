@@ -91,6 +91,20 @@ export interface CustomBuildsService {
     cleared: number;
     perBuild: Array<{ slug: string; name: string; matched: number; tagged: number }>;
   }>;
+  tagSingleGame(
+    userId: string,
+    game: {
+      gameId?: string;
+      myRace?: string | null;
+      myBuild?: string | null;
+      buildLog?: string[];
+      oppBuildLog?: string[];
+      opponent?: { race?: string | null } | null;
+    },
+  ): Promise<
+    | null
+    | { gameId: string; matched: number; chosen: string | null; ruleCount: number }
+  >;
 }
 
 export interface ParsedBuildLogEvent {

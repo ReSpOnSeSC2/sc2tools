@@ -294,6 +294,7 @@ function mountRoutes(app, deps, services, clerk) {
     buildGamesRouter({
       games: services.games,
       opponents: services.opponents,
+      customBuilds: services.customBuilds,
       io: deps.io,
       auth,
     }),

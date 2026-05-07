@@ -4,6 +4,7 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { evaluateRules } = require("./buildRulesEvaluator");
 const { computeDossierExtras } = require("./buildDossier");
+const { parseBuildLogLines } = require("./perGameCompute");
 
 const STATS_GAME_SCAN_CAP = 1000;
 const RECENT_GAMES_LIMIT = 50;
@@ -279,10 +280,12 @@ class CustomBuildsService {
   /**
    * Reclassify the user's stored games against EVERY saved build.
    *
-   * Single scan, each game tested against each build's rules. Builds
-   * are processed in `updatedAt desc` order so the most recently
-   * edited build wins when a game matches multiple. Games that match
-   * no build keep whatever tag was already present unless
+   * Single scan, each game tested against each build's rules. When a
+   * game matches multiple builds, the "closest" build wins: the build
+   * with the most rules (the most specific) takes the game. Ties on
+   * rule count are broken by `updatedAt desc` (most recently edited
+   * wins), consistent with the per-slug `reclassify` flow. Games that
+   * match no build keep whatever tag was already present unless
    * `clearUnmatched` is true.
    *
    * @param {string} userId
@@ -302,14 +305,15 @@ class CustomBuildsService {
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
     });
-    /** @type {Map<string, string>} */
-    const desiredTag = new Map();
+    /** @type {Map<string, {name: string, ruleCount: number, ord: number}>} */
+    const claims = new Map();
     /** @type {Set<string>} */
     const ownedNames = new Set();
     /** @type {Array<{slug: string, name: string, matched: number, tagged: number}>} */
     const perBuild = [];
 
-    for (const b of builds) {
+    for (let i = 0; i < builds.length; i++) {
+      const b = builds[i];
       const rules = extractRules(b);
       const perspective = b.perspective === "opponent" ? "opponent" : "you";
       const buildName = b.name || b.slug;
@@ -322,10 +326,21 @@ class CustomBuildsService {
         const matched = filterMatchingGames(inMatchup, rules, perspective);
         for (const g of matched) {
           if (!g.gameId) continue;
-          // First-write-wins: if another (more recently updated) build
-          // already claimed this game, leave it alone. `list()` orders
-          // by updatedAt desc.
-          if (!desiredTag.has(g.gameId)) desiredTag.set(g.gameId, buildName);
+          // Closest-match: keep whichever claim has more rules. Ties
+          // broken by index (lower = more recent, since `list()` orders
+          // by `updatedAt desc`).
+          const cur = claims.get(g.gameId);
+          if (
+            !cur ||
+            rules.length > cur.ruleCount ||
+            (rules.length === cur.ruleCount && i < cur.ord)
+          ) {
+            claims.set(g.gameId, {
+              name: buildName,
+              ruleCount: rules.length,
+              ord: i,
+            });
+          }
         }
         matchedCount = matched.length;
       }
@@ -336,6 +351,9 @@ class CustomBuildsService {
         tagged: 0,
       });
     }
+    /** @type {Map<string, string>} */
+    const desiredTag = new Map();
+    for (const [gid, claim] of claims) desiredTag.set(gid, claim.name);
 
     let totalTagged = 0;
     /** @type {Map<string, string[]>} */
@@ -379,6 +397,124 @@ class CustomBuildsService {
       tagged: totalTagged,
       cleared,
       perBuild,
+    };
+  }
+
+  /**
+   * Tag a freshly-ingested game against the user's saved custom builds
+   * and stamp `myBuild` on the game document if any match. This is the
+   * piece that keeps the opponent profile / Recent games view in sync
+   * with what the user actually plays — without it, the agent's
+   * built-in classifier always wins, and a brand new replay never gets
+   * the user's custom-build name no matter how many times they hit
+   * Reclassify (the next upload re-tags it back to the agent's label).
+   *
+   * Closest-match selection: builds with more rules win. Ties are
+   * broken by `updatedAt desc` (most recently edited wins). When no
+   * saved build matches, the game's `myBuild` is left as the agent
+   * uploaded it.
+   *
+   * No-ops when the input game has no parsed events (legacy import,
+   * bad parse on the agent side) or when the user has no saved builds.
+   * Called from `POST /v1/games` after `games.upsert` so a single
+   * ingest path covers both new uploads and re-uploads.
+   *
+   * @param {string} userId
+   * @param {{
+   *   gameId?: string,
+   *   myRace?: string|null,
+   *   myBuild?: string|null,
+   *   buildLog?: string[],
+   *   oppBuildLog?: string[],
+   *   opponent?: { race?: string|null }|null,
+   * }} game
+   * @returns {Promise<null | {
+   *   gameId: string,
+   *   matched: number,
+   *   chosen: string|null,
+   *   ruleCount: number,
+   * }>}
+   */
+  async tagSingleGame(userId, game) {
+    if (!this.perGame || !game || !game.gameId) return null;
+    const builds = await this.list(userId);
+    if (builds.length === 0) return null;
+    // Parse the just-uploaded build logs into the same event shape the
+    // rule evaluator expects. We pull this from the game payload (not
+    // re-reading from Mongo) so this stays a pure post-write hook with
+    // no extra round-trip.
+    // The catalog enriches events (is_building / category / race) for
+    // rules that depend on those fields; we reach for it via /any/ to
+    // mirror how the rest of this file reaches for the games collection
+    // — the typed surface in types.d.ts intentionally omits internals.
+    const catalog = /** @type {any} */ (this.perGame).catalog || null;
+    const events = parseBuildLogLines(
+      Array.isArray(game.buildLog) ? game.buildLog : [],
+      catalog,
+    );
+    const oppEvents = parseBuildLogLines(
+      Array.isArray(game.oppBuildLog) ? game.oppBuildLog : [],
+      catalog,
+    );
+    if (events.length === 0 && oppEvents.length === 0) {
+      return { gameId: game.gameId, matched: 0, chosen: null, ruleCount: 0 };
+    }
+    const oppRace =
+      game.opponent && typeof game.opponent === "object"
+        ? game.opponent.race || null
+        : null;
+    const probe = {
+      gameId: String(game.gameId),
+      myRace: game.myRace || null,
+      oppRace,
+      myBuild: game.myBuild || null,
+      events,
+      oppEvents,
+    };
+
+    /** @type {{name: string, ruleCount: number, ord: number} | null} */
+    let best = null;
+    let matchCount = 0;
+    for (let i = 0; i < builds.length; i++) {
+      const b = /** @type {any} */ (builds[i]);
+      const rules = extractRules(b);
+      if (rules.length === 0) continue;
+      const perspective = b.perspective === "opponent" ? "opponent" : "you";
+      if (!gameMatchesBuildMatchup(probe, b, perspective)) continue;
+      const evs = perspective === "opponent" ? probe.oppEvents : probe.events;
+      if (evs.length === 0) continue;
+      let result;
+      try {
+        result = evaluateRules(/** @type {any} */ (rules), evs);
+      } catch (_e) {
+        continue;
+      }
+      if (!result.pass) continue;
+      matchCount += 1;
+      const buildName = b.name || b.slug;
+      if (
+        !best ||
+        rules.length > best.ruleCount ||
+        (rules.length === best.ruleCount && i < best.ord)
+      ) {
+        best = { name: buildName, ruleCount: rules.length, ord: i };
+      }
+    }
+
+    if (!best) {
+      return { gameId: probe.gameId, matched: 0, chosen: null, ruleCount: 0 };
+    }
+    if (game.myBuild !== best.name) {
+      await this._gamesCollection().updateOne(
+        { userId, gameId: probe.gameId },
+        { $set: { myBuild: best.name } },
+      );
+    }
+    return {
+      gameId: probe.gameId,
+      matched: matchCount,
+      chosen: best.name,
+      ruleCount: best.ruleCount,
     };
   }
 
