@@ -8,7 +8,12 @@ Releases are tagged `vMAJOR.MINOR.PATCH`; the GitHub Actions release
 workflow builds the Windows installer on each tag push and attaches the
 `.exe` and `.sha256` to the corresponding GitHub Release.
 
-## [Unreleased] - 2026-05-06
+## [Unreleased]
+
+## [agent-v0.4.0] - 2026-05-06
+
+Released as `agent-v0.4.0` on GitHub. Installer:
+`SC2ToolsAgent-Setup-0.4.0.exe` (~305 MB).
 
 ### Added (agent v0.4.0)
 
