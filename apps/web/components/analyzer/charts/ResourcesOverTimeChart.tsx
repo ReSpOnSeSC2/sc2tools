@@ -258,7 +258,7 @@ export function ResourcesOverTimeChart({
           aria-label="Income, unspent bank, and in-progress costs over game time, both players overlaid"
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           preserveAspectRatio="none"
-          className="block h-[240px] w-full min-w-[480px]"
+          className="block h-[200px] w-full min-w-[320px] sm:h-[240px] sm:min-w-[480px]"
         >
           {bandPath ? (
             <path d={bandPath} fill={COLOR_BAND} opacity={BAND_OPACITY} />

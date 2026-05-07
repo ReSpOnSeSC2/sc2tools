@@ -99,7 +99,7 @@ export function ActiveArmyChart({
           aria-label="Army supply value and worker count over game time, both players overlaid"
           viewBox={`0 0 ${layout.width} ${layout.height}`}
           preserveAspectRatio="none"
-          className="block h-[240px] w-full min-w-[480px]"
+          className="block h-[200px] w-full min-w-[320px] sm:h-[240px] sm:min-w-[480px]"
         >
           <Grid layout={layout} />
           <XAxis layout={layout} />

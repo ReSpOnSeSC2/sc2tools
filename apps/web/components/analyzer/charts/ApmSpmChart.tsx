@@ -141,7 +141,7 @@ export function ApmSpmChart({ data, myPlayerName, myRace }: ApmSpmChartProps) {
           aria-label="Actions per minute and selections per minute over game time"
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           preserveAspectRatio="none"
-          className="block h-[220px] w-full min-w-[480px]"
+          className="block h-[200px] w-full min-w-[320px] sm:h-[220px] sm:min-w-[480px]"
         >
           {Y_TICK_FRACS.map((f, i) => {
             const y = PAD_TOP + (1 - f) * layout.plotH;

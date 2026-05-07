@@ -38,11 +38,13 @@ import { ReplayDemo } from "@/components/landing/ReplayDemo";
 export default function LandingPage() {
   return (
     <div className="space-y-24 md:space-y-32">
+      <CarouselSection />
       <SocialProofSection />
       <ReplayDemo />
+      <AgentDownloadSection />
       <PillarsSection />
       <HowItWorksSection />
-      <HeroSection />
+      <HeroHeadlineSection />
       <DonateBanner />
       <FinalCtaSection />
     </div>
@@ -50,10 +52,10 @@ export default function LandingPage() {
 }
 
 /* =============================================================== */
-/* HERO                                                             */
+/* CAROUSEL — top-of-page product peek                              */
 /* =============================================================== */
 
-function HeroSection() {
+function CarouselSection() {
   const slides: ReadonlyArray<HeroCarouselSlide> = [
     {
       id: "hero",
@@ -72,12 +74,18 @@ function HeroSection() {
         slides={slides}
         ariaLabel="SC2 Tools landing carousel"
       />
-      <div className="relative mx-auto mt-8 max-w-3xl space-y-4 text-center md:mt-10">
-        <h1 className="text-[40px] font-bold leading-[44px] tracking-tight md:text-display-lg lg:text-display-xl">
-          Your opponent&apos;s build,
-          <br />
-          <span className="text-accent-cyan">before they build it.</span>
-        </h1>
+    </section>
+  );
+}
+
+/* =============================================================== */
+/* AGENT DOWNLOAD — the install / sign-up CTA cluster               */
+/* =============================================================== */
+
+function AgentDownloadSection() {
+  return (
+    <section className="relative">
+      <div className="relative mx-auto max-w-3xl space-y-4 text-center">
         <p className="mx-auto max-w-2xl text-body-lg text-text-muted">
           Sign in, install a 450&nbsp;MB agent, and every replay you finish
           surfaces an opponent dossier, build classifier, and live OBS
@@ -101,6 +109,24 @@ function HeroSection() {
         <div className="flex justify-center">
           <TrustStrip />
         </div>
+      </div>
+    </section>
+  );
+}
+
+/* =============================================================== */
+/* HERO HEADLINE — the brand promise, no carousel, no CTAs          */
+/* =============================================================== */
+
+function HeroHeadlineSection() {
+  return (
+    <section className="relative">
+      <div className="relative mx-auto max-w-3xl text-center">
+        <h1 className="text-[40px] font-bold leading-[44px] tracking-tight md:text-display-lg lg:text-display-xl">
+          Your opponent&apos;s build,
+          <br />
+          <span className="text-accent-cyan">before they build it.</span>
+        </h1>
       </div>
     </section>
   );
