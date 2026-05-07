@@ -168,7 +168,7 @@ function NextSteps() {
   const steps: ReadonlyArray<{ heading: string; body: React.ReactNode }> = [
     {
       heading: "Double-click the installer",
-      body: <>in your Downloads folder. The agent is small (~80&nbsp;MB) and installs in seconds.</>,
+      body: <>in your Downloads folder. It installs in seconds.</>,
     },
     {
       heading: "If Windows shows a blue “protected your PC” prompt",
