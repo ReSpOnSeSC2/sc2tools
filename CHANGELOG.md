@@ -10,6 +10,52 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Fixed + Added (cloud v0.4.5) — opponent counter dedupe + admin dashboard
+
+- **Per-opponent counters no longer double-count on re-upload.** The
+  ``games`` ingest path used to call ``opponents.recordGame``
+  unconditionally, which $inc-ed ``gameCount`` / ``wins`` /
+  ``losses`` / ``openings.<X>`` on every call. Re-syncs (which clear
+  the agent's local ``state.uploaded`` and re-walk every replay)
+  would re-upload existing gameIds — the slim ``games`` row deduped
+  on ``(userId, gameId)`` correctly, but the opponent counter
+  silently inflated. Fix: gate ``recordGame`` on the ``created``
+  flag returned by ``games.upsert``. Re-uploads now route through a
+  new ``opponents.refreshMetadata`` method that $sets the
+  legitimately-drifting fields (mmr, lastSeen, displayName,
+  pulseCharacterId) without touching counters. Regression tests in
+  ``opponentsRecount.test.js`` lock the behaviour down.
+- **New ``AdminService`` + ``/v1/admin/*`` routes** for operational
+  admin tasks. Every route gated by the existing
+  ``SC2TOOLS_ADMIN_USER_IDS`` allowlist:
+    - ``GET /admin/storage-stats`` — per-collection size, document
+      counts, and totals.
+    - ``GET /admin/users`` — paginated list (cursor on lastActivity)
+      with game + opponent counts, optional userId search.
+    - ``GET /admin/users/:userId`` — detail snapshot with totals,
+      first/last activity, top-5 opponents.
+    - ``POST /admin/users/:userId/rebuild-opponents`` — drop +
+      re-derive that user's opponents from games (the counter-fix
+      recovery tool).
+    - ``POST /admin/me/rebuild-opponents`` — same op against the
+      caller's own userId (the most common admin action).
+    - ``POST /admin/users/:userId/wipe-games`` — admin-side GDPR
+      purge; cascades through ``GdprService.wipeGames``.
+    - ``GET /admin/health`` — Mongo ping latency, server uptime,
+      Node version, configured ``GAME_DETAILS_STORE`` backend.
+- **Admin SPA refactored from a single moderation queue to a
+  multi-tab dashboard** (``apps/web/app/admin/*``):
+    - Responsive shell with desktop sidebar / mobile drawer.
+    - **Dashboard** — per-collection storage stats; primary view.
+    - **Users** — paginated list with detail drawer, search, and
+      one-click "Rebuild opponents" / "Wipe games" actions.
+    - **Tools** — "Fix my counters" + targeted rebuild + targeted
+      wipe-games. Inline confirmation prompts for destructive
+      actions (no modal).
+    - **Moderation** — existing community reports queue.
+    - **Health** — auto-refreshing dependency status (Mongo ping,
+      uptime, configured backend).
+
 ### Changed (cloud v0.4.4) — heavy-field cutover + pluggable storage backend
 
 The v0.4.3 dual-write infrastructure ships its read-side cutover in

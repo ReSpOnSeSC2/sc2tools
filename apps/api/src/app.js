@@ -39,6 +39,7 @@ const { AgentVersionService } = require("./services/agentVersion");
 const { GdprService } = require("./services/gdpr");
 const { CommunityService } = require("./services/community");
 const { SeasonsService } = require("./services/seasons");
+const { AdminService } = require("./services/admin");
 
 const { buildHealthRouter } = require("./routes/health");
 const { buildMeRouter } = require("./routes/me");
@@ -63,6 +64,7 @@ const { buildCommunityRouter } = require("./routes/community");
 const { buildPublicReplayRouter } = require("./routes/publicReplay");
 const { buildSeasonsRouter } = require("./routes/seasons");
 const { buildClerkWebhookRouter } = require("./routes/clerkWebhook");
+const { buildAdminRouter } = require("./routes/admin");
 
 const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
 
@@ -144,6 +146,9 @@ function makeServices(deps) {
   const gdpr = new GdprService(deps.db);
   const community = new CommunityService(deps.db);
   const seasons = new SeasonsService();
+  // AdminService composes db + gdpr; deliberately near the bottom so
+  // its dependencies are already constructed.
+  const admin = new AdminService({ db: deps.db, gdpr });
   return {
     users,
     opponents,
@@ -164,6 +169,7 @@ function makeServices(deps) {
     gdpr,
     community,
     seasons,
+    admin,
   };
 }
 
@@ -308,6 +314,19 @@ function mountRoutes(app, deps, services, clerk) {
       community: services.community,
       auth,
       isAdmin,
+    }),
+  );
+  // Operational admin router — gated on isAdmin(req) inside the
+  // router. Mounted alongside the rest of the v1 prefix so
+  // /v1/admin/* shares CORS, rate-limit, and JSON parsing config.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildAdminRouter({
+      admin: services.admin,
+      gdpr: services.gdpr,
+      auth,
+      isAdmin,
+      gameDetailsStoreKind: deps.config.gameDetailsStore,
     }),
   );
   app.use(

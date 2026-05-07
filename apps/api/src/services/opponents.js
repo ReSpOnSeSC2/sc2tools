@@ -360,6 +360,62 @@ class OpponentsService {
       { upsert: true },
     );
   }
+
+  /**
+   * Refresh the per-opponent metadata fields that legitimately drift
+   * between encounters (display name, MMR, league, identity link,
+   * lastSeen) WITHOUT touching any counter. Called from the games
+   * ingest path on a re-upload — i.e. when the slim row already
+   * existed in ``games`` and ``recordGame``'s $inc would otherwise
+   * double-count gameCount / wins / losses / openings.
+   *
+   * Public companion of ``recordGame``: same input shape minus the
+   * fields that drive counters (result, opening). Idempotent — every
+   * re-upload of the same game produces the same write.
+   *
+   * @param {string} userId
+   * @param {{
+   *   pulseId: string,
+   *   toonHandle?: string,
+   *   pulseCharacterId?: string,
+   *   displayName?: string,
+   *   race: string,
+   *   mmr?: number,
+   *   leagueId?: number,
+   *   playedAt: Date,
+   * }} game
+   */
+  async refreshMetadata(userId, game) {
+    if (!game.pulseId) throw new Error("pulseId required");
+    /** @type {Record<string, any>} */
+    const set = {
+      displayNameHash: hmac(this.pepper, game.displayName || ""),
+      displayNameSample: game.displayName || "",
+      race: game.race,
+      lastSeen: game.playedAt,
+      _schemaVersion: OPPONENTS_VERSION,
+    };
+    if (typeof game.mmr === "number") set.mmr = game.mmr;
+    if (typeof game.leagueId === "number") set.leagueId = game.leagueId;
+    if (typeof game.toonHandle === "string" && game.toonHandle.length > 0) {
+      set.toonHandle = game.toonHandle;
+    }
+    if (
+      typeof game.pulseCharacterId === "string"
+      && game.pulseCharacterId.length > 0
+    ) {
+      set.pulseCharacterId = game.pulseCharacterId;
+    }
+    // updateOne (NOT upsert: true) — we only refresh rows that
+    // already exist. If the opponent row is missing entirely, the
+    // ingest path's ``created`` check already determined this was
+    // not a new-game ingest and any earlier insert was lost; the
+    // admin "Rebuild opponents" tool reconstructs from games.
+    await this.db.opponents.updateOne(
+      { userId, pulseId: game.pulseId },
+      { $set: set },
+    );
+  }
 }
 
 /**

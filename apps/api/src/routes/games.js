@@ -114,18 +114,48 @@ function buildGamesRouter(deps) {
           continue;
         }
         if (game.opponent && game.opponent.pulseId) {
-          await deps.opponents.recordGame(userId, {
-            pulseId: game.opponent.pulseId,
-            toonHandle: game.opponent.toonHandle,
-            pulseCharacterId: game.opponent.pulseCharacterId,
-            displayName: game.opponent.displayName || "",
-            race: game.opponent.race || "U",
-            mmr: game.opponent.mmr,
-            leagueId: game.opponent.leagueId,
-            result: game.result,
-            opening: game.opponent.opening,
-            playedAt: new Date(game.date),
-          });
+          // Only update the opponent doc when this is a brand-new
+          // game (created === true). Re-uploads of an existing
+          // gameId would otherwise double-count: ``recordGame``
+          // does $inc on gameCount/wins/losses/openings.<X> and
+          // doesn't dedupe on gameId, so a Resync — which clears
+          // the agent's local ``state.uploaded`` and re-walks the
+          // entire replay folder — would inflate every opponent's
+          // counters by exactly the number of times their replay
+          // was re-uploaded. The slim ``games`` row dedupes on
+          // ``(userId, gameId)`` so the actual game-count truth
+          // always lives there; the opponent counter is just a
+          // cached aggregate, and we only bump it when the
+          // canonical row was actually inserted.
+          if (created) {
+            await deps.opponents.recordGame(userId, {
+              pulseId: game.opponent.pulseId,
+              toonHandle: game.opponent.toonHandle,
+              pulseCharacterId: game.opponent.pulseCharacterId,
+              displayName: game.opponent.displayName || "",
+              race: game.opponent.race || "U",
+              mmr: game.opponent.mmr,
+              leagueId: game.opponent.leagueId,
+              result: game.result,
+              opening: game.opponent.opening,
+              playedAt: new Date(game.date),
+            });
+          } else if (deps.opponents.refreshMetadata) {
+            // Existing game re-upload: still refresh the per-opponent
+            // metadata that legitimately drifts between encounters
+            // (display name, MMR, league, lastSeen, identity-link
+            // resolution) without touching any counter.
+            await deps.opponents.refreshMetadata(userId, {
+              pulseId: game.opponent.pulseId,
+              toonHandle: game.opponent.toonHandle,
+              pulseCharacterId: game.opponent.pulseCharacterId,
+              displayName: game.opponent.displayName || "",
+              race: game.opponent.race || "U",
+              mmr: game.opponent.mmr,
+              leagueId: game.opponent.leagueId,
+              playedAt: new Date(game.date),
+            });
+          }
         }
         // Override the agent's built-in classifier when the user has a
         // saved custom build whose rules match this replay. Without this
