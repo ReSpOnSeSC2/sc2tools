@@ -1,8 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useAuth } from "@clerk/nextjs";
-import { AlertCircle, CalendarDays, MapPin, RefreshCcw, Search } from "lucide-react";
+import {
+  AlertCircle,
+  CalendarDays,
+  ChevronLeft,
+  ListTree,
+  MapPin,
+  RefreshCcw,
+  Search,
+} from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
@@ -24,23 +37,32 @@ import type {
   LeakItem,
   MacroBreakdownData,
 } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
+import type { BuildOrderEvent } from "@/lib/build-events";
 import { ApmSpmChart, type ApmCurveData } from "./ApmSpmChart";
+import { BuildOrderTimeline } from "./BuildOrderTimeline";
 import { ChronoAllocationChart } from "./ChronoAllocationChart";
 import { ResourcesOverTimeChart } from "./ResourcesOverTimeChart";
 
 /**
  * PerGameInspector — the Activity tab's main surface.
  *
- * Two-pane layout (stacks on mobile):
- *   - Left: searchable list of recent games (driven by /v1/games-list)
- *   - Right: per-game charts for the selected game — Active Army &
- *     Workers, Resources over time, APM/SPM, and Chrono allocation
- *     (Protoss only).
+ * Two-pane layout on desktop, detail-first on mobile:
+ *   - Left (lg+): searchable list of recent games. On <lg the list owns
+ *     the full panel until the user picks a game; selection swaps in
+ *     the detail view with a sticky "Back" button so the user is never
+ *     scrolled past a long picker to find the charts.
+ *   - Right: per-game charts for the selected game. The cards render
+ *     progressively — Build order from `buildLog` (always uploaded by
+ *     the agent), Active Army / Resources / Chrono from the macro
+ *     breakdown when present, APM/SPM from `apmCurve` when present.
+ *     Each card carries its own empty state instead of one big blocker
+ *     for the whole tab.
  *
- * Charts hit /v1/games/:id/macro-breakdown and /v1/games/:id/apm-curve.
- * No data is synthesised — older replays without PlayerStatsEvent rows
- * surface inline empty states explaining how to refresh the sample
- * stream.
+ * Data sources hit /v1/games-list, /v1/games/:id/build-order,
+ * /v1/games/:id/macro-breakdown and /v1/games/:id/apm-curve. No data
+ * is synthesised — older replays without PlayerStatsEvent rows or APM
+ * curves surface inline empty states explaining how to refresh the
+ * sample stream via the agent's Resync.
  */
 
 type GamesListResp = {
@@ -59,6 +81,22 @@ type GamesListResp = {
     macro_score?: number | null;
     my_race?: string;
   }>;
+};
+
+type BuildOrderResp = {
+  ok?: boolean;
+  game_id?: string;
+  my_build?: string | null;
+  my_race?: string | null;
+  opp_strategy?: string | null;
+  opponent?: string | null;
+  opp_race?: string | null;
+  map?: string | null;
+  result?: string | null;
+  events?: BuildOrderEvent[];
+  early_events?: BuildOrderEvent[];
+  opp_events?: BuildOrderEvent[];
+  opp_early_events?: BuildOrderEvent[];
 };
 
 interface SelectedGame {
@@ -111,12 +149,20 @@ export function PerGameInspector() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // On mobile, hide the picker once a game is selected so the user
+  // lands on the charts immediately. Defaulting to false avoids an
+  // initial render where the picker takes over the screen on lg+.
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
+
   useEffect(() => {
     if (games.length === 0) {
       setSelectedId(null);
       return;
     }
     if (!selectedId || !games.some((g) => g.id === selectedId)) {
+      // Auto-select most recent so desktop users see charts immediately,
+      // but DON'T flip into mobile-detail mode — first paint on mobile
+      // should land on the picker.
       setSelectedId(games[0].id);
     }
   }, [games, selectedId]);
@@ -144,21 +190,55 @@ export function PerGameInspector() {
     [games, selectedId],
   );
 
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId(id);
+    setMobileShowDetail(true);
+    // Snap to the top so the summary card is in view, not hidden
+    // beneath the just-tapped picker row.
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, []);
+
+  const handleBack = useCallback(() => {
+    setMobileShowDetail(false);
+  }, []);
+
+  const showPickerMobile = !mobileShowDetail;
+  const showDetailMobile = mobileShowDetail;
+
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)]">
-      <GamePicker
-        games={filteredGames}
-        totalGames={games.length}
-        isLoading={isLoading && games.length === 0}
-        error={error?.message}
-        search={search}
-        onSearch={setSearch}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-      />
-      <div className="min-w-0 space-y-4">
+    <div className="lg:grid lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <div
+        className={[
+          // Mobile/tablet: only show the picker when no game is open.
+          // lg+: always render side-by-side regardless of detail state.
+          showPickerMobile ? "block" : "hidden",
+          "lg:block",
+        ].join(" ")}
+      >
+        <GamePicker
+          games={filteredGames}
+          totalGames={games.length}
+          isLoading={isLoading && games.length === 0}
+          error={error?.message}
+          search={search}
+          onSearch={setSearch}
+          selectedId={selectedId}
+          onSelect={handleSelect}
+        />
+      </div>
+      <div
+        className={[
+          "min-w-0 space-y-4",
+          // Mobile/tablet: only show the detail when the user picked a
+          // game. The lg+ panel always renders both columns.
+          showDetailMobile ? "mt-4 block lg:mt-0" : "hidden",
+          "lg:block",
+        ].join(" ")}
+      >
         {selected ? (
-          <SelectedGameCharts game={selected} />
+          <SelectedGameCharts game={selected} onBack={handleBack} />
         ) : (
           <Card title="Select a replay">
             <EmptyState
@@ -221,7 +301,7 @@ function GamePicker({
           />
         </div>
       </div>
-      <div className="max-h-[640px] flex-1 overflow-y-auto lg:max-h-[80vh]">
+      <div className="max-h-[70vh] flex-1 overflow-y-auto lg:max-h-[80vh]">
         {error ? (
           <p className="p-3 text-caption text-danger">{error}</p>
         ) : isLoading ? (
@@ -275,11 +355,11 @@ function GamePickerRow({
       aria-selected={selected}
       onClick={onSelect}
       className={[
-        "block w-full border-b border-border px-3 py-2 text-left transition-colors min-h-[60px]",
+        "block w-full border-b border-border px-3 py-2.5 text-left transition-colors min-h-[60px]",
         "focus-visible:outline-none focus-visible:bg-bg-elevated focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset",
         selected
           ? "bg-bg-elevated/80 border-l-2 border-l-accent"
-          : "hover:bg-bg-elevated/50",
+          : "hover:bg-bg-elevated/50 active:bg-bg-elevated/70",
       ].join(" ")}
     >
       <div className="flex items-center justify-between gap-2 text-caption">
@@ -326,14 +406,29 @@ function MacroPill({ score }: { score: number | null | undefined }) {
   );
 }
 
-function SelectedGameCharts({ game }: { game: SelectedGame }) {
+function SelectedGameCharts({
+  game,
+  onBack,
+}: {
+  game: SelectedGame;
+  onBack: () => void;
+}) {
   const { getToken } = useAuth();
   const { data, error, isLoading, mutate } = useApi<MacroBreakdownData>(
     `/v1/games/${encodeURIComponent(game.id)}/macro-breakdown`,
     { revalidateOnFocus: false },
   );
-  const { data: apm, isLoading: apmLoading } = useApi<ApmCurveData>(
-    `/v1/games/${encodeURIComponent(game.id)}/apm-curve`,
+  const { data: apm, isLoading: apmLoading, error: apmError } =
+    useApi<ApmCurveData>(
+      `/v1/games/${encodeURIComponent(game.id)}/apm-curve`,
+      { revalidateOnFocus: false },
+    );
+  const {
+    data: buildOrder,
+    isLoading: buildOrderLoading,
+    error: buildOrderError,
+  } = useApi<BuildOrderResp>(
+    `/v1/games/${encodeURIComponent(game.id)}/build-order`,
     { revalidateOnFocus: false },
   );
 
@@ -363,9 +458,6 @@ function SelectedGameCharts({ game }: { game: SelectedGame }) {
       const e = err as { message?: string };
       setRecomputeMsg(e.message || "Recompute failed.");
     }
-    // Don't drop the spinner immediately — give SWR a beat to see the
-    // re-upload land. If the agent isn't listening at all, the user can
-    // tell from the unchanged empty state plus the Resync hint above.
     finally {
       window.setTimeout(() => setRecomputing(false), 1500);
     }
@@ -378,10 +470,13 @@ function SelectedGameCharts({ game }: { game: SelectedGame }) {
       ? data.macro_score
       : (game.macro_score ?? null);
 
-  const errorIs404 = isNotComputedError(error);
+  const macroNotComputed = isNotComputedError(error) || data?.ok === false;
+  const macroFatalError = error && !isNotComputedError(error);
 
   return (
     <div className="space-y-4">
+      <BackBar onBack={onBack} />
+
       <GameSummaryCard
         game={game}
         myRace={myRace}
@@ -389,41 +484,58 @@ function SelectedGameCharts({ game }: { game: SelectedGame }) {
         macroScore={effectiveMacroScore}
         onRecompute={recompute}
         recomputing={recomputing}
+        macroAvailable={!macroNotComputed && !!data}
       />
 
       {recomputeMsg ? (
-        <p className="text-caption text-text-muted" role="status">
+        <p
+          className="rounded-lg border border-border bg-bg-elevated/60 px-3 py-2 text-caption text-text-muted"
+          role="status"
+        >
           {recomputeMsg}
         </p>
       ) : null}
 
-      {errorIs404 ? (
-        <NotComputedPanel
-          onRecompute={recompute}
-          recomputing={recomputing}
-        />
-      ) : error ? (
-        <Card title="Couldn't load this game">
-          <EmptyState title="Error" sub={error.message} />
-        </Card>
-      ) : isLoading ? (
-        <Card title="Loading charts">
-          <Skeleton rows={6} />
-        </Card>
-      ) : !data ? null : data.ok === false ? (
-        <NotComputedPanel
-          onRecompute={recompute}
-          recomputing={recomputing}
-        />
-      ) : (
-        <ChartGrid
-          data={data}
-          apm={apm ?? null}
-          apmLoading={apmLoading}
-          game={game}
-          myRace={myRace}
-        />
-      )}
+      <BuildOrderCard
+        data={buildOrder}
+        isLoading={buildOrderLoading}
+        error={buildOrderError?.message}
+        gameId={game.id}
+        myRace={myRace}
+        oppRace={oppRace}
+      />
+
+      <ApmCard
+        apm={apm ?? null}
+        isLoading={apmLoading}
+        error={apmError?.message}
+        myRace={myRace}
+      />
+
+      <MacroChartGroup
+        data={data ?? null}
+        isLoading={isLoading}
+        notComputed={!!macroNotComputed}
+        fatalError={macroFatalError ? error : undefined}
+        recomputing={recomputing}
+        onRecompute={recompute}
+        myRace={myRace}
+      />
+    </div>
+  );
+}
+
+function BackBar({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="lg:hidden">
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex min-h-[44px] items-center gap-1 rounded-md px-2 py-1 text-caption uppercase tracking-wider text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      >
+        <ChevronLeft className="h-4 w-4" aria-hidden />
+        All replays
+      </button>
     </div>
   );
 }
@@ -435,52 +547,6 @@ function isNotComputedError(err: ClientApiError | undefined): boolean {
   return false;
 }
 
-function NotComputedPanel({
-  onRecompute,
-  recomputing,
-}: {
-  onRecompute: () => void;
-  recomputing: boolean;
-}) {
-  return (
-    <Card padded>
-      <div className="rounded-lg border border-border bg-bg-elevated/40 p-5">
-        <div className="inline-flex items-center gap-2 text-caption font-semibold text-accent-cyan">
-          <AlertCircle className="h-4 w-4" aria-hidden />
-          Macro breakdown not available for this game yet
-        </div>
-        <p className="mt-2 text-caption text-text-muted">
-          Newer replays upload the breakdown automatically. Older replays were
-          synced before that field existed, so the data has to come from your
-          desktop agent re-parsing the .SC2Replay file on disk.
-        </p>
-        <p className="mt-2 text-caption text-text-muted">
-          The reliable path:{" "}
-          <span className="font-semibold text-text">
-            open the agent app and click Resync
-          </span>{" "}
-          — that clears the upload cursor and re-sends every replay,
-          including the macro breakdown. Recompute below also pings the agent
-          for just this one game; if your agent is online and listens for
-          per-game requests it'll re-upload, otherwise nothing visible will
-          change.
-        </p>
-        <div className="mt-3">
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={recomputing}
-            onClick={onRecompute}
-            iconLeft={<RefreshCcw className="h-3.5 w-3.5" aria-hidden />}
-          >
-            {recomputing ? "Recomputing…" : "Recompute this game"}
-          </Button>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 function GameSummaryCard({
   game,
   myRace,
@@ -488,6 +554,7 @@ function GameSummaryCard({
   macroScore,
   onRecompute,
   recomputing,
+  macroAvailable,
 }: {
   game: SelectedGame;
   myRace: Race;
@@ -495,6 +562,7 @@ function GameSummaryCard({
   macroScore: number | null;
   onRecompute: () => void;
   recomputing: boolean;
+  macroAvailable: boolean;
 }) {
   const result = (game.result || "").toLowerCase();
   const isWin = ["win", "victory"].includes(result);
@@ -546,7 +614,7 @@ function GameSummaryCard({
             ) : null}
           </div>
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-shrink-0 flex-col items-end gap-2">
           <SummaryStat
             label="Macro"
             value={macroScore == null ? "—" : macroScore.toFixed(1)}
@@ -566,6 +634,11 @@ function GameSummaryCard({
             loading={recomputing}
             onClick={onRecompute}
             iconLeft={<RefreshCcw className="h-3.5 w-3.5" aria-hidden />}
+            aria-label={
+              macroAvailable
+                ? "Re-request the macro breakdown for this game"
+                : "Ask the desktop agent to compute the macro breakdown for this game"
+            }
           >
             {recomputing ? "Recomputing…" : "Recompute"}
           </Button>
@@ -606,19 +679,145 @@ function SummaryStat({
   );
 }
 
-function ChartGrid({
+function BuildOrderCard({
   data,
+  isLoading,
+  error,
+  gameId,
+  myRace,
+  oppRace,
+}: {
+  data: BuildOrderResp | undefined;
+  isLoading: boolean;
+  error?: string;
+  gameId: string;
+  myRace: Race;
+  oppRace: Race;
+}) {
+  if (isLoading && !data) {
+    return (
+      <Card>
+        <div className="flex items-center gap-2 text-caption text-text-muted">
+          <ListTree className="h-4 w-4 text-accent-cyan" aria-hidden />
+          <span className="font-semibold uppercase tracking-wider text-text">
+            Build order
+          </span>
+        </div>
+        <div className="mt-3">
+          <Skeleton rows={4} />
+        </div>
+      </Card>
+    );
+  }
+  if (error) {
+    return (
+      <Card title="Build order">
+        <p className="text-caption text-danger">{error}</p>
+      </Card>
+    );
+  }
+  if (!data) return null;
+  const events = data.events || [];
+  const oppEvents = data.opp_events || [];
+  return (
+    <BuildOrderTimeline
+      events={events}
+      oppEvents={oppEvents}
+      defaultPerspective="you"
+      gameId={gameId}
+      race={data.my_race || myRace}
+      oppRace={data.opp_race || oppRace}
+      title={data.my_build ? `Your build — ${data.my_build}` : "Your build"}
+      onSaveAsBuild={async () => {
+        // SaveAsBuildButton handles the API call internally via the
+        // BuildEditorModal -> PUT /v1/custom-builds/:slug flow.
+      }}
+    />
+  );
+}
+
+function ApmCard({
   apm,
-  apmLoading,
-  game,
+  isLoading,
+  error,
   myRace,
 }: {
-  data: MacroBreakdownData;
   apm: ApmCurveData | null;
-  apmLoading: boolean;
-  game: SelectedGame;
+  isLoading: boolean;
+  error?: string;
   myRace: Race;
 }) {
+  if (isLoading && !apm) {
+    return (
+      <Card padded>
+        <Skeleton rows={5} />
+      </Card>
+    );
+  }
+  if (error) {
+    return (
+      <Card padded>
+        <div className="flex flex-col items-start gap-2 rounded-lg border border-border bg-bg-subtle p-4">
+          <div className="inline-flex items-center gap-2 text-caption font-semibold text-accent-cyan">
+            <AlertCircle className="h-4 w-4" aria-hidden />
+            APM / SPM unavailable
+          </div>
+          <p className="text-caption text-text-muted">
+            The agent hasn't uploaded an APM curve for this replay yet. Open
+            the desktop agent and click Resync to push it.
+          </p>
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <Card padded>
+      <ApmSpmChart data={apm} myPlayerName={null} myRace={myRace} />
+    </Card>
+  );
+}
+
+function MacroChartGroup({
+  data,
+  isLoading,
+  notComputed,
+  fatalError,
+  recomputing,
+  onRecompute,
+  myRace,
+}: {
+  data: MacroBreakdownData | null;
+  isLoading: boolean;
+  notComputed: boolean;
+  fatalError?: ClientApiError;
+  recomputing: boolean;
+  onRecompute: () => void;
+  myRace: Race;
+}) {
+  if (fatalError) {
+    return (
+      <Card title="Couldn't load macro charts">
+        <EmptyState title="Error" sub={fatalError.message} />
+      </Card>
+    );
+  }
+
+  if (notComputed || !data) {
+    if (isLoading) {
+      return (
+        <Card padded>
+          <Skeleton rows={5} />
+        </Card>
+      );
+    }
+    return (
+      <NotComputedPanel
+        recomputing={recomputing}
+        onRecompute={onRecompute}
+      />
+    );
+  }
+
   const samples = data.stats_events ?? [];
   const oppSamples = data.opp_stats_events ?? [];
   const leaks: LeakItem[] = data.all_leaks ?? data.top_3_leaks ?? [];
@@ -644,18 +843,59 @@ function ChartGrid({
           gameLengthSec={data.game_length_sec}
         />
       </Card>
-      <Card padded className={showChrono ? "" : "xl:col-span-2"}>
-        {apmLoading && !apm ? (
-          <Skeleton rows={5} />
-        ) : (
-          <ApmSpmChart data={apm} myPlayerName={null} myRace={myRace} />
-        )}
-      </Card>
       {showChrono ? (
-        <Card padded>
+        <Card padded className="xl:col-span-2">
           <ChronoAllocationChart targets={chronoTargets} />
         </Card>
       ) : null}
     </div>
+  );
+}
+
+function NotComputedPanel({
+  onRecompute,
+  recomputing,
+}: {
+  onRecompute: () => void;
+  recomputing: boolean;
+}) {
+  return (
+    <Card padded>
+      <div className="rounded-lg border border-border bg-bg-elevated/40 p-5">
+        <div className="inline-flex items-center gap-2 text-caption font-semibold text-accent-cyan">
+          <AlertCircle className="h-4 w-4" aria-hidden />
+          Macro breakdown not available for this game yet
+        </div>
+        <p className="mt-2 text-caption text-text-muted">
+          Newer replays upload the breakdown automatically. Older replays were
+          synced before that field existed, so the data has to come from your
+          desktop agent re-parsing the .SC2Replay file on disk. The build
+          order above still works because it comes from the build log the
+          agent always uploads.
+        </p>
+        <p className="mt-2 text-caption text-text-muted">
+          The reliable path:{" "}
+          <span className="font-semibold text-text">
+            open the agent app and click Resync
+          </span>{" "}
+          — that clears the upload cursor and re-sends every replay,
+          including the macro breakdown. Recompute below pings the agent for
+          just this one game; if your agent is online and listens for
+          per-game requests it'll re-upload, otherwise nothing visible will
+          change.
+        </p>
+        <div className="mt-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={recomputing}
+            onClick={onRecompute}
+            iconLeft={<RefreshCcw className="h-3.5 w-3.5" aria-hidden />}
+          >
+            {recomputing ? "Recomputing…" : "Recompute this game"}
+          </Button>
+        </div>
+      </div>
+    </Card>
   );
 }
