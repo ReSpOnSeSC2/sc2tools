@@ -10,6 +10,11 @@ import {
   type WidgetId,
 } from "@/components/overlay/widgetLifecycle";
 import {
+  useVoiceReadout,
+  type VoicePrefs,
+} from "@/components/overlay/useVoiceReadout";
+import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
+import {
   OpponentWidget,
   MatchResultWidget,
   PostGameWidget,
@@ -63,11 +68,40 @@ export function OverlayWidgetClient({
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [enabled, setEnabled] = useState<boolean>(true);
   const [visible, setVisible] = useState<boolean>(false);
+  const [voicePrefs, setVoicePrefs] = useState<VoicePrefs | null>(null);
 
-  useOverlayWidgetSocket(token, widget, setLive, setSession, setEnabled);
+  useOverlayWidgetSocket(
+    token,
+    widget,
+    setLive,
+    setSession,
+    setEnabled,
+    setVoicePrefs,
+  );
   useWidgetVisibility(widget as WidgetId, live, session, setVisible);
 
-  if (!enabled || !visible) return <div style={{ background: "transparent" }} />;
+  // Voice readout is only run from the scouting widget when each
+  // widget is its own Browser Source — otherwise every Source would
+  // race to speak the same payload and the streamer would hear the
+  // line two or three times. The all-in-one overlay (OverlayClient)
+  // owns voice for that mode. Mirrors the legacy
+  // `voice-readout.js` which was only included from scouting.html.
+  const enableVoiceHere = widget === "scouting";
+  const voice = useVoiceReadout(
+    enableVoiceHere ? live : null,
+    enableVoiceHere ? voicePrefs : null,
+  );
+
+  if (!enabled || !visible) {
+    return (
+      <>
+        <div style={{ background: "transparent" }} />
+        {voice.needsGesture ? (
+          <VoiceGestureBanner onClick={voice.onUserGesture} />
+        ) : null}
+      </>
+    );
+  }
 
   // In solo mode, override the WidgetShell's slot positioning so the
   // widget hugs the top-left of its Browser Source frame. The streamer
@@ -93,6 +127,9 @@ export function OverlayWidgetClient({
         }
       `}</style>
       <WidgetRenderer widget={widget as WidgetId} live={live} session={session} />
+      {voice.needsGesture ? (
+        <VoiceGestureBanner onClick={voice.onUserGesture} />
+      ) : null}
     </div>
   );
 }
@@ -154,6 +191,7 @@ function useOverlayWidgetSocket(
   setLive: (msg: LiveGamePayload | null) => void,
   setSession: (msg: SessionSummary | null) => void,
   setEnabled: (on: boolean) => void,
+  setVoicePrefs: (prefs: VoicePrefs | null) => void,
 ) {
   useEffect(() => {
     const socket: Socket = io(API_BASE, {
@@ -169,11 +207,17 @@ function useOverlayWidgetSocket(
       reconnectionDelayMax: 5000,
     });
     socket.on("overlay:live", (msg: LiveGamePayload) => setLive(msg));
-    socket.on("overlay:config", (msg: { enabledWidgets?: string[] }) => {
-      if (msg && Array.isArray(msg.enabledWidgets)) {
-        setEnabled(msg.enabledWidgets.includes(widget));
-      }
-    });
+    socket.on(
+      "overlay:config",
+      (msg: { enabledWidgets?: string[]; voicePrefs?: VoicePrefs }) => {
+        if (msg && Array.isArray(msg.enabledWidgets)) {
+          setEnabled(msg.enabledWidgets.includes(widget));
+        }
+        if (msg && msg.voicePrefs && typeof msg.voicePrefs === "object") {
+          setVoicePrefs(msg.voicePrefs);
+        }
+      },
+    );
     socket.on("overlay:session", (msg: SessionSummary) => {
       if (msg && typeof msg === "object") setSession(msg);
     });
@@ -197,7 +241,7 @@ function useOverlayWidgetSocket(
     return () => {
       socket.disconnect();
     };
-  }, [token, widget, setLive, setSession, setEnabled]);
+  }, [token, widget, setLive, setSession, setEnabled, setVoicePrefs]);
 }
 
 /**

@@ -32,6 +32,7 @@ const { sha256 } = require("../util/hash");
  *     wins: number, losses: number, games: number,
  *     mmrStart?: number, mmrCurrent?: number,
  *   }>,
+ *   resolveVoicePrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  * }} opts
  */
 function attachSocketAuth(io, opts) {
@@ -112,17 +113,34 @@ function attachSocketAuth(io, opts) {
       const u = socket.data.overlayUserId;
       if (t) socket.join(`overlay:${t}`);
       if (u) socket.join(`user:${u}`);
-      // Push the per-token config (enabled widgets) so the overlay can
-      // immediately hide widgets the user disabled, without waiting for
-      // the next pre-game payload.
+      // Push the per-token config (enabled widgets + voice prefs) so
+      // the overlay can immediately hide disabled widgets and prime its
+      // voice-readout layer without waiting for the next pre-game
+      // payload. Voice prefs are stored on the user document, not the
+      // overlay token, so we resolve them in parallel and merge.
       if (t && opts.resolveOverlayToken) {
         opts
           .resolveOverlayToken(t)
-          .then((info) => {
-            if (info && Array.isArray(info.enabledWidgets)) {
-              socket.emit("overlay:config", {
-                enabledWidgets: info.enabledWidgets,
-              });
+          .then(async (info) => {
+            if (!info) return;
+            /** @type {{ enabledWidgets?: string[], voicePrefs?: Record<string, unknown> }} */
+            const config = {};
+            if (Array.isArray(info.enabledWidgets)) {
+              config.enabledWidgets = info.enabledWidgets;
+            }
+            if (opts.resolveVoicePrefs) {
+              try {
+                const prefs = await opts.resolveVoicePrefs(info.userId);
+                if (prefs && typeof prefs === "object") {
+                  config.voicePrefs = prefs;
+                }
+              } catch {
+                // Voice prefs are optional — never fail the connect on
+                // a preferences-table miss.
+              }
+            }
+            if (config.enabledWidgets || config.voicePrefs) {
+              socket.emit("overlay:config", config);
             }
           })
           .catch(() => {});

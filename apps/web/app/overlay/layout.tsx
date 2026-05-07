@@ -59,6 +59,13 @@ export default function OverlayLayout({
           0%, 100% { opacity: 0.55; }
           50% { opacity: 1; }
         }
+        @keyframes voiceGesturePulse {
+          0%, 100% { box-shadow: 0 6px 20px rgba(0,0,0,0.55), 0 0 24px rgba(62,192,199,0.18); }
+          50%      { box-shadow: 0 6px 20px rgba(0,0,0,0.55), 0 0 36px rgba(62,192,199,0.42); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .voice-gesture-banner { animation: none !important; }
+        }
       `}</style>
       {children}
     </div>

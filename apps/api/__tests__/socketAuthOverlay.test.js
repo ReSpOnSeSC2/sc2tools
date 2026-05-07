@@ -224,4 +224,59 @@ describe("attachSocketAuth (overlay)", () => {
       false,
     );
   });
+
+  test("overlay:config carries voicePrefs when resolveVoicePrefs returns a value", async () => {
+    const io = setupIo();
+    attachSocketAuth(io, {
+      secretKey: "sk_test",
+      resolveOverlayToken: async () => ({
+        userId: "u1",
+        label: "test",
+        enabledWidgets: ["scouting"],
+      }),
+      resolveVoicePrefs: async (userId) => {
+        expect(userId).toBe("u1");
+        return { enabled: true, rate: 1.1, voice: "Microsoft David" };
+      },
+    });
+    const socket = await io.runHandshake({
+      auth: { overlayToken: "tok-1" },
+    });
+    io.runConnect(socket);
+    await new Promise((r) => setImmediate(r));
+
+    const cfg = socket.emitted.find((e) => e.event === "overlay:config");
+    expect(cfg).toBeDefined();
+    expect(cfg.payload.enabledWidgets).toEqual(["scouting"]);
+    expect(cfg.payload.voicePrefs).toEqual({
+      enabled: true,
+      rate: 1.1,
+      voice: "Microsoft David",
+    });
+  });
+
+  test("overlay:config still emits widgets when voicePrefs lookup fails", async () => {
+    const io = setupIo();
+    attachSocketAuth(io, {
+      secretKey: "sk_test",
+      resolveOverlayToken: async () => ({
+        userId: "u1",
+        label: "test",
+        enabledWidgets: ["scouting"],
+      }),
+      resolveVoicePrefs: async () => {
+        throw new Error("preferences collection unreachable");
+      },
+    });
+    const socket = await io.runHandshake({
+      auth: { overlayToken: "tok-1" },
+    });
+    io.runConnect(socket);
+    await new Promise((r) => setImmediate(r));
+
+    const cfg = socket.emitted.find((e) => e.event === "overlay:config");
+    expect(cfg).toBeDefined();
+    expect(cfg.payload.enabledWidgets).toEqual(["scouting"]);
+    expect(cfg.payload.voicePrefs).toBeUndefined();
+  });
 });
