@@ -424,7 +424,12 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     )
 
     # ---- Mock extract_macro_events / compute_macro_score. ----
-    def _fake_extract(_replay, pid):
+    # Signature mirrors the v0.5+ SC2Replay-Analyzer extractor:
+    # ``(replay, my_pid, opp_pid=None)`` returning ``opp_stats_events``
+    # and ``unit_timeline`` alongside the my-side samples. The agent's
+    # _compute_macro_breakdown now passes both pids in one call so the
+    # composition snapshot can render both sides without a second walk.
+    def _fake_extract(_replay, _pid, _opp_pid=None):
         return {
             "stats_events": [
                 {"time": 0, "food_used": 12, "food_made": 15,
@@ -436,6 +441,15 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
                  "food_workers": 18, "minerals_collection_rate": 800,
                  "vespene_collection_rate": 50},
             ],
+            "opp_stats_events": [
+                {"time": 0, "food_used": 12, "food_workers": 12},
+                {"time": 60, "food_used": 21, "food_workers": 17},
+            ],
+            "unit_timeline": [
+                {"time": 0, "my": {}, "opp": {}},
+                {"time": 60, "my": {"Zealot": 1}, "opp": {"Zergling": 6}},
+            ],
+            "player_stats": {},
             "ability_events": [],
             "production_buildings": [],
             "bases": [],
