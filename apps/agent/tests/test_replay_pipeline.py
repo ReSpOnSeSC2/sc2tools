@@ -274,3 +274,254 @@ def test_probe_analyzer_succeeds_in_source_layout():
     ok, diag = probe_analyzer()
     assert ok, f"probe_analyzer failed in source layout: {diag}"
     assert diag is None
+
+
+# -------------------------------------------------------------------------
+# Opponent build-log derivation — _build_log_from_events.
+#
+# These guard against the v0.4.0 regression where the agent shipped
+# empty oppBuildLog arrays even though the strategy detector had clearly
+# walked the same opp_events stream. The SPA shows
+# "No opponent build extracted yet" whenever the array is empty, so a
+# silent failure here is a user-visible bug.
+# -------------------------------------------------------------------------
+
+
+def test_build_log_from_events_formats_buildings_and_units():
+    from sc2tools_agent.replay_pipeline import _build_log_from_events
+
+    events = [
+        {"type": "building", "name": "Nexus", "time": 0},
+        {"type": "building", "name": "Pylon", "time": 17},
+        {"type": "building", "name": "Gateway", "time": 49},
+        {"type": "unit", "name": "Probe", "time": 12},
+        {"type": "unit", "name": "Zealot", "time": 95},
+        {"type": "upgrade", "name": "WarpGateResearch", "time": 240},
+    ]
+    full, early = _build_log_from_events(events)
+    # Full log includes everything, sorted by time.
+    assert full[0] == "[0:00] Nexus"
+    assert "[0:12] Probe" in full
+    assert "[1:35] Zealot" in full
+    assert "[4:00] WarpGateResearch" in full
+    # Early log caps at 5:00 (300s) — same as the user-build cutoff.
+    assert all("[5:" not in line and "[6:" not in line for line in early)
+    # And shorter than the full log when any events exist past 5:00.
+    assert len(early) <= len(full)
+
+
+def test_build_log_from_events_empty_input_returns_empty_lists():
+    from sc2tools_agent.replay_pipeline import _build_log_from_events
+
+    assert _build_log_from_events(None) == ([], [])
+    assert _build_log_from_events([]) == ([], [])
+
+
+def test_build_log_from_events_swallows_formatter_exceptions(monkeypatch):
+    """Formatter blowing up on a malformed event must not propagate.
+
+    The watcher uploads each replay independently; one corrupt
+    opp_events stream cannot be allowed to fail the rest of the
+    upload pipeline. Verify the catcher is in place by stubbing
+    ``build_log_lines`` to raise.
+    """
+    import sys
+
+    class _Boom:
+        @staticmethod
+        def build_log_lines(*_args, **_kwargs):
+            raise RuntimeError("synthetic_failure")
+
+    monkeypatch.setitem(sys.modules, "core.event_extractor", _Boom)
+    from sc2tools_agent.replay_pipeline import _build_log_from_events
+
+    full, early = _build_log_from_events(
+        [{"type": "building", "name": "Pylon", "time": 17}],
+    )
+    assert full == []
+    assert early == []
+
+
+# -------------------------------------------------------------------------
+# parse_replay_for_cloud end-to-end via mocked parse_deep.
+#
+# Mock the deep-parse step so the test never touches sc2reader or a real
+# .SC2Replay binary. Asserts that the wire payload carries the rich
+# structured outputs (macroBreakdown, oppBuildLog, apmCurve) the SPA's
+# dual-build timeline + macro drilldown depend on. This is the
+# regression test that catches v0.4.0 features silently breaking — if
+# any one of the four fail-soft branches (imports / extract / score /
+# format) starts swallowing too much, this test fails loudly.
+# -------------------------------------------------------------------------
+
+
+def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
+    monkeypatch, tmp_path,
+):
+    import sys
+    from types import SimpleNamespace
+
+    # ---- Mock parse_deep so we don't need a real .SC2Replay file. ----
+    me = SimpleNamespace(
+        pid=1, name="Me", race="Protoss", result="Win",
+        handle="1-S2-1-267727", mmr=4500, apm=180.0, spq=82.0,
+    )
+    opp = SimpleNamespace(
+        pid=2, name="Opp", race="Zerg", result="Loss",
+        handle="1-S2-2-690921", mmr=4400, league_id=5,
+    )
+    # build_log lines for the user's perspective.
+    user_lines = [
+        "[0:00] Nexus",
+        "[0:17] Pylon",
+        "[0:49] Gateway",
+        "[1:43] CyberneticsCore",
+    ]
+    # opp_events is what the agent re-formats into oppBuildLog +
+    # oppEarlyBuildLog. The strategy detector also reads this list,
+    # so both fields must be populated together for a realistic
+    # parse.
+    opp_events = [
+        {"type": "building", "name": "Hatchery", "time": 0},
+        {"type": "building", "name": "SpawningPool", "time": 50},
+        {"type": "building", "name": "Hatchery", "time": 100},
+        {"type": "unit", "name": "Drone", "time": 12},
+        {"type": "building", "name": "Lair", "time": 380},
+    ]
+    fake_ctx = SimpleNamespace(
+        game_id="2026-05-06T17:48:32|Opp|Goldenaura|600",
+        date_iso="2026-05-06T17:48:32",
+        map_name="Goldenaura",
+        length_seconds=600,
+        is_ai_game=False,
+        me=me,
+        opponent=opp,
+        all_players=[me, opp],
+        my_events=[],
+        opp_events=opp_events,
+        my_build="PvP - 4 Adept/Oracle",
+        opp_strategy="Zerg - 3 Base Macro (Hatch First)",
+        build_log=user_lines,
+        early_build_log=user_lines[:3],
+        # Older parsers (v0.3.x) never populated these — agent has to
+        # derive them from opp_events. Setting them to empty here
+        # exercises the fallback path that was missing in v0.3.11.
+        opp_build_log=[],
+        opp_early_build_log=[],
+        macro_score=None,
+        raw=object(),  # any non-None placeholder; the macro / apm
+                       # extractors below are stubbed and never read it
+        file_path=str(tmp_path / "fake.SC2Replay"),
+    )
+
+    def _fake_parse_deep(_path, _handle):
+        return fake_ctx
+
+    monkeypatch.setitem(
+        sys.modules,
+        "core.sc2_replay_parser",
+        SimpleNamespace(parse_deep=_fake_parse_deep),
+    )
+
+    # ---- Mock extract_macro_events / compute_macro_score. ----
+    def _fake_extract(_replay, pid):
+        return {
+            "stats_events": [
+                {"time": 0, "food_used": 12, "food_made": 15,
+                 "minerals_current": 50, "vespene_current": 0,
+                 "food_workers": 12, "minerals_collection_rate": 0,
+                 "vespene_collection_rate": 0},
+                {"time": 60, "food_used": 22, "food_made": 23,
+                 "minerals_current": 250, "vespene_current": 100,
+                 "food_workers": 18, "minerals_collection_rate": 800,
+                 "vespene_collection_rate": 50},
+            ],
+            "ability_events": [],
+            "production_buildings": [],
+            "bases": [],
+            "unit_births": [],
+            "game_length_sec": 600,
+        }
+
+    def _fake_compute(_macro, _race, _length):
+        return {
+            "macro_score": 78,
+            "raw": {"sq": 80.0, "base_score": 75.0,
+                     "supply_block_penalty": 1.0, "race_penalty": 2.0,
+                     "float_penalty": 0.0,
+                     "chronos_actual": 5, "chronos_expected": 8},
+            "all_leaks": [
+                {"name": "Chrono Efficiency", "detail": "5/8 expected",
+                 "penalty": 2.0, "mineral_cost": 200, "quantity": 3},
+            ],
+            "top_3_leaks": [
+                {"name": "Chrono Efficiency", "detail": "5/8 expected",
+                 "penalty": 2.0, "mineral_cost": 200, "quantity": 3},
+            ],
+        }
+
+    monkeypatch.setitem(
+        sys.modules,
+        "core.event_extractor",
+        SimpleNamespace(
+            extract_macro_events=_fake_extract,
+            build_log_lines=__import__(
+                "core.event_extractor", fromlist=["build_log_lines"],
+            ).build_log_lines,
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "analytics.macro_score",
+        SimpleNamespace(compute_macro_score=_fake_compute),
+    )
+
+    # ---- Drive the pipeline. ----
+    from pathlib import Path
+    from sc2tools_agent.replay_pipeline import parse_replay_for_cloud
+    fake_path = tmp_path / "fake.SC2Replay"
+    fake_path.write_bytes(b"")  # parse_deep is mocked, so binary content unused
+    result = parse_replay_for_cloud(fake_path, player_handle="Me")
+
+    assert result is not None, "parse_replay_for_cloud must succeed for a happy-path replay"
+    payload = result.to_payload()
+
+    # ---- The two regressions we're locking down. ----
+    assert "macroBreakdown" in payload, (
+        "macroBreakdown missing from upload — SPA renders empty "
+        "'Macro breakdown not available' state when this happens. "
+        "Check _compute_macro_breakdown's fail-soft branches in "
+        "replay_pipeline.py (look for WARNING-level logs)."
+    )
+    mb = payload["macroBreakdown"]
+    assert isinstance(mb.get("top_3_leaks"), list)
+    assert len(mb["top_3_leaks"]) >= 1
+    assert isinstance(mb.get("all_leaks"), list)
+    assert isinstance(mb.get("stats_events"), list)
+    assert len(mb["stats_events"]) >= 1
+    assert "raw" in mb
+
+    assert payload["oppBuildLog"], (
+        "oppBuildLog empty — SPA's dual build timeline shows "
+        "'No opponent build extracted yet' when this happens. "
+        "Check _build_log_from_events / opp_events derivation in "
+        "replay_pipeline.py (look for WARNING-level logs)."
+    )
+    # The first opponent event was a Hatchery at t=0 — must surface
+    # in the formatted build log so the dual-build timeline can
+    # render the opponent's opening.
+    assert any("Hatchery" in line for line in payload["oppBuildLog"])
+    # Early-log cap: only events <= 5:00 (300s).
+    assert payload["oppEarlyBuildLog"], "oppEarlyBuildLog must also populate"
+    assert all(_minutes_in(line) <= 5 for line in payload["oppEarlyBuildLog"])
+
+    # macroScore from the stub bubbles up as the headline number even
+    # though ctx.macro_score was None.
+    assert payload["macroScore"] == 78
+
+
+def _minutes_in(line: str) -> int:
+    """Pull the [m:ss] minute prefix out of a build-log line."""
+    import re
+    m = re.match(r"^\[(\d+):", line)
+    return int(m.group(1)) if m else 0
