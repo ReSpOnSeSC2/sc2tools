@@ -18,6 +18,9 @@ export type MapEntry = {
   lastPlayed?: string | null;
   hasSpatial?: boolean;
   bounds?: { minX: number; minY: number; maxX: number; maxY: number } | null;
+  /** Last 10 decided results, newest-first. Empty when the map has
+   *  no W/L outcomes (eg. only ties on the map). */
+  recent?: ("win" | "loss")[];
 };
 
 /**

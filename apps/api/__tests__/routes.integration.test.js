@@ -103,6 +103,23 @@ describe("HTTP integration", () => {
     });
   });
 
+  describe("/v1/streak", () => {
+    test("401 without bearer", async () => {
+      const res = await request(app).get("/v1/streak");
+      expect(res.status).toBe(401);
+    });
+
+    test("returns the empty-state shape for a fresh user", async () => {
+      const res = await withAuth(request(app).get("/v1/streak"));
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        kind: null,
+        count: 0,
+        lastGameAt: null,
+      });
+    });
+  });
+
   describe("/v1/games ingest + reads", () => {
     test("POST /v1/games accepts and persists a single game", async () => {
       const game = makeGame("g1", "Victory");
@@ -614,15 +631,49 @@ describe("HTTP integration", () => {
     });
   });
 
+  // /v1/streak end-to-end — kept at the tail of the file so the
+  // bulk ingest used by the regression test doesn't disturb the
+  // earlier "POST /v1/games persists a single game" expectation
+  // (which counts the items list).
+  describe("/v1/streak (end-to-end)", () => {
+    test("counts a mid-streak across mixed-day games (regression)", async () => {
+      // The dashboard previously walked /v1/timeseries day buckets
+      // and dropped the streak to 0 the moment any single day mixed
+      // wins and losses. /v1/streak walks games one by one — so an
+      // L sandwiched in earlier history must not break the trail of
+      // W's at the head, and a same-day flip stays per-game.
+      //
+      // Far-future ISO dates pin these games to the head of the
+      // stream so prior tests' ingests can't shift them off the tail
+      // of the streak walk.
+      const day = (h) => `2099-12-31T${String(h).padStart(2, "0")}:00:00Z`;
+      const ingest = await withAuth(request(app).post("/v1/games")).send({
+        games: [
+          makeGame("streak-w-1", "Victory", day(22)),
+          makeGame("streak-w-2", "Victory", day(21)),
+          makeGame("streak-w-3", "Victory", day(20)),
+          makeGame("streak-l-mid", "Defeat", day(19)),
+          makeGame("streak-w-old", "Victory", day(18)),
+        ],
+      });
+      expect(ingest.status).toBe(202);
+      const res = await withAuth(request(app).get("/v1/streak"));
+      expect(res.status).toBe(200);
+      expect(res.body.kind).toBe("win");
+      expect(res.body.count).toBe(3);
+      expect(typeof res.body.lastGameAt).toBe("string");
+    });
+  });
+
   test("UNUSED services to silence the no-unused-vars rule", () => {
     expect(services).toBeDefined();
   });
 });
 
-function makeGame(gameId, result) {
+function makeGame(gameId, result, dateIso) {
   return {
     gameId,
-    date: new Date().toISOString(),
+    date: dateIso || new Date().toISOString(),
     result,
     myRace: "Protoss",
     myBuild: "P - Stargate Rush",

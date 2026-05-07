@@ -1,6 +1,7 @@
 "use strict";
 
 const { gamesMatchStage } = require("../util/parseQuery");
+const { attachRecentByMap } = require("./recentResults");
 const {
   runPythonNdjson,
   pythonAvailable,
@@ -58,6 +59,20 @@ class SpatialService {
     const rows = await this.db.games
       .aggregate([
         { $match: match },
+        // Sort spatially-extracted docs to the head of each group so
+        // ``$first`` on bounds/spatialSamples/etc. always picks a doc
+        // that actually has spatial data when the map has any. The
+        // previous version used the natural order, which dropped
+        // ``bounds`` to ``null`` whenever the most-recent replay on
+        // a map predated the spatial-extract pipeline.
+        {
+          $addFields: {
+            _hasBounds: {
+              $cond: [{ $ifNull: ["$spatial.map_bounds", false] }, 1, 0],
+            },
+          },
+        },
+        { $sort: { _hasBounds: -1, date: -1 } },
         {
           $group: {
             _id: { $ifNull: ["$map", "Unknown"] },
@@ -91,11 +106,11 @@ class SpatialService {
               },
             },
             lastPlayed: { $max: "$date" },
-            spatialSamples: {
-              $sum: {
-                $cond: [{ $ifNull: ["$spatial.map_bounds", false] }, 1, 0],
-              },
-            },
+            spatialSamples: { $sum: "$_hasBounds" },
+            // After the sort above, ``$first`` is now deterministic:
+            // a bounds-having doc if any exist, else the most recent
+            // doc on the map (yielding null bounds — which is what we
+            // want the SPA to see so it can show "no spatial yet").
             bounds: { $first: "$spatial.map_bounds" },
           },
         },
@@ -121,7 +136,10 @@ class SpatialService {
         { $sort: { total: -1, name: 1 } },
       ])
       .toArray();
-    return rows;
+    // Attach the SPA's "form sparkline" data so Map Intel's trend
+    // column matches the Battlefield/Maps tab's behaviour. Cheap
+    // second pass — the SPA renders a single inline list per row.
+    return attachRecentByMap(this.db, userId, filters, rows);
   }
 
   /**
