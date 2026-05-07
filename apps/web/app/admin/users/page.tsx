@@ -147,7 +147,12 @@ export default function AdminUsersPage() {
                     <th className="px-4 py-3 text-right font-semibold">
                       Last activity
                     </th>
-                    <th className="px-4 py-3 text-right font-semibold">First</th>
+                    <th
+                      className="px-4 py-3 text-right font-semibold"
+                      title="Date of the user's earliest replay in the database"
+                    >
+                      First replay
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">

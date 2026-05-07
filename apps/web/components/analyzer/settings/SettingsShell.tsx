@@ -4,9 +4,6 @@ import { useState, type ReactNode } from "react";
 import {
   ServerCog,
   UserRound,
-  FolderOpen,
-  Download,
-  ListTree,
   MonitorPlay,
   Volume2,
   Database,
@@ -30,9 +27,6 @@ interface TabDef {
 const TABS: ReadonlyArray<TabDef> = [
   { id: "foundation", label: "Foundation", Icon: ServerCog },
   { id: "profile", label: "Profile", Icon: UserRound },
-  { id: "folders", label: "Folders", Icon: FolderOpen },
-  { id: "import", label: "Import", Icon: Download },
-  { id: "builds", label: "Builds", Icon: ListTree },
   { id: "overlay", label: "Overlay", Icon: MonitorPlay },
   { id: "voice", label: "Voice", Icon: Volume2 },
   { id: "backups", label: "Backups", Icon: Database },
@@ -42,9 +36,6 @@ const TABS: ReadonlyArray<TabDef> = [
 export type SettingsTabId =
   | "foundation"
   | "profile"
-  | "folders"
-  | "import"
-  | "builds"
   | "overlay"
   | "voice"
   | "backups"

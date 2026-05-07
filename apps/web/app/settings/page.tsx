@@ -6,9 +6,6 @@ import {
 } from "@/components/analyzer/settings/SettingsShell";
 import { SettingsFoundation } from "@/components/analyzer/settings/SettingsFoundation";
 import { SettingsProfile } from "@/components/analyzer/settings/SettingsProfile";
-import { SettingsFolders } from "@/components/analyzer/settings/SettingsFolders";
-import { SettingsImportPanel } from "@/components/analyzer/settings/SettingsImportPanel";
-import { SettingsBuilds } from "@/components/analyzer/settings/SettingsBuilds";
 import { SettingsOverlay } from "@/components/analyzer/settings/SettingsOverlay";
 import { SettingsVoice } from "@/components/analyzer/settings/SettingsVoice";
 import { SettingsBackups } from "@/components/analyzer/settings/SettingsBackups";
@@ -24,7 +21,7 @@ export default function SettingsPage() {
         <PageHeader
           eyebrow="Configuration"
           title="Settings"
-          description="Account, replay folders, overlay tokens, and personal preferences. Edits stay in draft until you save."
+          description="Account, overlay tokens, voice notifications, and personal preferences. Edits stay in draft until you save."
         />
         <SettingsShell
           renderTab={(id: SettingsTabId) => {
@@ -33,12 +30,6 @@ export default function SettingsPage() {
                 return <SettingsFoundation />;
               case "profile":
                 return <SettingsProfile />;
-              case "folders":
-                return <SettingsFolders />;
-              case "import":
-                return <SettingsImportPanel />;
-              case "builds":
-                return <SettingsBuilds />;
               case "overlay":
                 return <SettingsOverlay origin={origin} />;
               case "voice":

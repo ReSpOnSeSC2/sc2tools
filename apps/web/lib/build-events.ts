@@ -460,6 +460,57 @@ export function signatureToRows(
   return rows;
 }
 
+/**
+ * v3 rule shape persisted by the modern BuildEditorModal — kept loose
+ * here because the community detail page reads validated docs from the
+ * server and we just need the fields we surface.
+ */
+export interface BuildRuleLike {
+  type: string;
+  name: string;
+  time_lt: number;
+  count?: number;
+}
+
+/**
+ * Convert v3 `rules` into the same `BuildSignatureItem[]` shape the
+ * existing community timeline renders. Each rule becomes one row,
+ * sorted chronologically by `time_lt`. Negative `not_before`
+ * constraints are dropped because the timeline is a positive-only
+ * "what gets built and when" view; the timeline doesn't have a way to
+ * surface "absent before T" without adding new visual language.
+ *
+ * Used by the community build detail page so builds saved through the
+ * v3 editor (which writes `rules` instead of `signature`) still render
+ * a structured build order rather than the empty-state fallback.
+ */
+export function rulesToSignature(
+  rules: ReadonlyArray<BuildRuleLike> | null | undefined,
+): BuildSignatureItem[] {
+  if (!rules || rules.length === 0) return [];
+  const items: BuildSignatureItem[] = [];
+  for (const r of rules) {
+    if (!r || typeof r !== "object") continue;
+    const name = String(r.name || "").trim();
+    if (!name) continue;
+    if (r.type === "not_before") continue;
+    const isCount =
+      r.type === "count_min" ||
+      r.type === "count_max" ||
+      r.type === "count_exact";
+    const count = isCount
+      ? Math.max(1, Math.min(200, Math.floor(Number(r.count) || 1)))
+      : 1;
+    items.push({
+      unit: name,
+      count,
+      beforeSec: Math.max(0, Math.floor(Number(r.time_lt) || 0)),
+    });
+  }
+  items.sort((a, b) => a.beforeSec - b.beforeSec);
+  return items;
+}
+
 /** Slugify a free-form name into the slug pattern accepted by the API. */
 export function slugifyBuildName(name: string): string {
   const trimmed = (name || "").trim().toLowerCase();
