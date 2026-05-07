@@ -374,4 +374,111 @@ describe("POST /v1/custom-builds/reclassify-all", () => {
     // should claim it; g-b only matches the cyber rule.
     expect([a.myBuild, b.myBuild].every((n) => typeof n === "string")).toBe(true);
   });
+
+  test("closest-match wins: more rules trumps recency", async () => {
+    // Regression for the user-reported "it still shows the old build"
+    // bug after first PR landed: when two builds match a game, the more
+    // specific build (more rules) should claim it — not just the more
+    // recently edited one. We save the most-specific build FIRST so
+    // recency would put it second; the closest-match logic must still
+    // route the game to it.
+    const userId = await bootstrap();
+
+    await services.games.upsert(userId, {
+      gameId: "g-closest",
+      date: new Date("2026-05-04T00:00:00Z"),
+      myRace: "Protoss",
+      buildLog: PROTOSS_OPENER,
+      oppBuildLog: PROTOSS_OPP_OPENER,
+      result: "Victory",
+      map: "Mclosest",
+      opponent: { race: "Protoss", displayName: "p3" },
+    });
+
+    // 3-rule build saved FIRST → updatedAt is older than the 1-rule
+    // build below.
+    await withAuth(
+      request(app).put("/v1/custom-builds/specific-build").send({
+        slug: "specific-build",
+        name: "Specific build (3 rules)",
+        race: "Protoss",
+        vsRace: "Protoss",
+        rules: [
+          { type: "before", name: "BuildGateway", time_lt: 90 },
+          { type: "before", name: "BuildCyberneticsCore", time_lt: 130 },
+          { type: "before", name: "BuildOracle", time_lt: 418 },
+        ],
+      }),
+    );
+    // Wait one ms so updatedAt strictly differs (Mongo timestamps).
+    await new Promise((r) => setTimeout(r, 5));
+    await withAuth(
+      request(app).put("/v1/custom-builds/loose-build").send({
+        slug: "loose-build",
+        name: "Loose build (1 rule)",
+        race: "Protoss",
+        vsRace: "Protoss",
+        rules: [{ type: "before", name: "BuildOracle", time_lt: 418 }],
+      }),
+    );
+
+    const res = await withAuth(
+      request(app).post("/v1/custom-builds/reclassify-all").send({}),
+    );
+    expect(res.status).toBe(200);
+
+    const row = await db.games.findOne({ userId, gameId: "g-closest" });
+    expect(row.myBuild).toBe("Specific build (3 rules)");
+  });
+
+  test("ingest auto-tags a freshly-uploaded replay against saved builds", async () => {
+    // The lived-in case the user complained about: post a fresh
+    // replay via POST /v1/games and the agent's auto-classifier
+    // ("PvZ - 2 Stargate Void Ray") should be overridden by the
+    // user's saved custom build name when the rules match.
+    //
+    // We use vsRace=Random + Random-race opponent so the matchup gate
+    // isolates this test from prior PvP fixtures saved in the same
+    // describe block.
+    const userId = await bootstrap();
+
+    await withAuth(
+      request(app).put("/v1/custom-builds/pvr-ingest").send({
+        slug: "pvr-ingest",
+        name: "PvR Ingest Oracle",
+        race: "Protoss",
+        vsRace: "Random",
+        rules: [{ type: "before", name: "BuildOracle", time_lt: 418 }],
+      }),
+    );
+
+    const post = await withAuth(
+      request(app)
+        .post("/v1/games")
+        .set("content-type", "application/json")
+        .send({
+          gameId: "g-ingest-1",
+          date: "2026-05-05T00:00:00Z",
+          result: "Victory",
+          map: "Equilibrium LE",
+          myRace: "Protoss",
+          // The agent shipped its built-in classifier label:
+          myBuild: "PvR - 2 Stargate Void Ray",
+          buildLog: PROTOSS_OPENER,
+          oppBuildLog: PROTOSS_OPP_OPENER,
+          opponent: {
+            displayName: "ingestOpp",
+            race: "Random",
+            pulseId: "1-S2-9-99999",
+          },
+        }),
+    );
+    expect(post.status).toBe(202);
+    expect(post.body.accepted).toHaveLength(1);
+
+    const row = await db.games.findOne({ userId, gameId: "g-ingest-1" });
+    // myBuild was overwritten from the agent's auto label to the
+    // user's saved build name as part of the ingest pipeline.
+    expect(row.myBuild).toBe("PvR Ingest Oracle");
+  });
 });
