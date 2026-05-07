@@ -82,6 +82,41 @@ export interface UnitTimelineEntry {
   opp?: Record<string, number>;
 }
 
+/**
+ * One row of the Replay Player Unit Statistics table. The agent emits
+ * one record under ``me`` and one under ``opponent`` on macroBreakdown
+ * payloads from the v0.5+ pipeline; older payloads omit player_stats
+ * entirely and the SPA hides the table.
+ */
+export interface PlayerStatsRecord {
+  pid?: number | null;
+  name: string;
+  race?: string | null;
+  is_me: boolean;
+  /** Player MMR; null when unavailable (older replays / own-side). */
+  mmr?: number | null;
+  /** Average actions-per-minute over active windows. */
+  apm?: number | null;
+  /** Average selections-per-minute over active windows. */
+  spm?: number | null;
+  /** Spending Quotient — only populated for the me-side record. */
+  spq?: number | null;
+  /** Total seconds the player was supply-blocked (me-side only). */
+  supply_blocked_seconds?: number | null;
+  units_produced?: number;
+  units_killed?: number;
+  units_lost?: number;
+  workers_built?: number;
+  structures_built?: number;
+  structures_killed?: number;
+  structures_lost?: number;
+}
+
+export interface PlayerStats {
+  me?: PlayerStatsRecord | null;
+  opponent?: PlayerStatsRecord | null;
+}
+
 export interface MacroBreakdownData {
   ok: boolean;
   macro_score?: number | null;
@@ -94,6 +129,8 @@ export interface MacroBreakdownData {
   stats_events?: StatsEvent[];
   opp_stats_events?: StatsEvent[];
   unit_timeline?: UnitTimelineEntry[];
+  /** Optional — only present on v0.5+ agent uploads. */
+  player_stats?: PlayerStats | null;
 }
 
 export interface RaceMeta {

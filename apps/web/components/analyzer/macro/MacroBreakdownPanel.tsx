@@ -25,9 +25,10 @@ import {
 } from "@/lib/macro";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
-import { ActiveArmyChart } from "./ActiveArmyChart";
+import { MacroChartSection } from "./MacroChartSection";
 import { MacroLeaksList } from "./MacroLeaksList";
 import { MacroPenaltyBars } from "./MacroPenaltyBars";
+import { PlayerStatsTable } from "./PlayerStatsTable";
 import { SpendingQuotientStat } from "./SpendingQuotientStat";
 import type {
   LeakItem,
@@ -182,6 +183,7 @@ export function MacroBreakdownPanel({
                 initialScore={initialScore}
                 highlightedKey={highlightedKey}
                 onHighlight={setHighlightedKey}
+                headerMeta={headerMeta}
               />
             )}
           </div>
@@ -333,11 +335,13 @@ function BreakdownBody({
   initialScore,
   highlightedKey,
   onHighlight,
+  headerMeta,
 }: {
   data: MacroBreakdownData;
   initialScore?: number | null;
   highlightedKey: string | null;
   onHighlight: (key: string | null, leak: LeakItem | null) => void;
+  headerMeta?: PanelHeaderMeta;
 }) {
   const score =
     typeof data.macro_score === "number"
@@ -384,6 +388,34 @@ function BreakdownBody({
           explanation="How many mid-game samples showed a sustained mineral surplus. Banked minerals that aren't building units delay your next push."
         />
       </div>
+
+      <section
+        aria-labelledby="chart-heading"
+        className="space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-4"
+      >
+        <h3
+          id="chart-heading"
+          className="text-caption font-semibold uppercase tracking-wider text-text-muted"
+        >
+          Active Army &amp; Workers
+        </h3>
+        {samplesMissing ? (
+          <ChartSamplesMissingHint />
+        ) : (
+          <MacroChartSection
+            samples={data.stats_events || []}
+            oppSamples={data.opp_stats_events || []}
+            unitTimeline={data.unit_timeline}
+            gameLengthSec={data.game_length_sec}
+            leaks={leaks}
+            highlightedKey={highlightedKey}
+            myName={headerMeta?.playerName ?? null}
+            oppName={headerMeta?.opponentName ?? null}
+            myRace={headerMeta?.myRace ?? data.race ?? null}
+            oppRace={headerMeta?.opponentRace ?? null}
+          />
+        )}
+      </section>
 
       <section
         aria-labelledby="penalty-heading"
@@ -450,26 +482,27 @@ function BreakdownBody({
       </div>
 
       <section
-        aria-labelledby="chart-heading"
-        className="space-y-2 rounded-lg border border-border bg-bg-elevated/40 p-4"
+        aria-labelledby="player-stats-heading"
+        className="space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-4"
       >
-        <h3
-          id="chart-heading"
-          className="text-caption font-semibold uppercase tracking-wider text-text-muted"
-        >
-          Active Army &amp; Workers
-        </h3>
-        {samplesMissing ? (
-          <ChartSamplesMissingHint />
-        ) : (
-          <ActiveArmyChart
-            samples={data.stats_events || []}
-            oppSamples={data.opp_stats_events || []}
-            gameLengthSec={data.game_length_sec}
-            leaks={leaks}
-            highlightedKey={highlightedKey}
-          />
-        )}
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3
+            id="player-stats-heading"
+            className="text-caption font-semibold uppercase tracking-wider text-text-muted"
+          >
+            Replay Player Unit Statistics
+          </h3>
+          <p className="text-[11px] text-text-dim">
+            Cumulative counters from the replay tracker stream.
+          </p>
+        </div>
+        <PlayerStatsTable
+          stats={data.player_stats}
+          myName={headerMeta?.playerName ?? null}
+          oppName={headerMeta?.opponentName ?? null}
+          myRace={headerMeta?.myRace ?? data.race ?? null}
+          oppRace={headerMeta?.opponentRace ?? null}
+        />
       </section>
     </div>
   );

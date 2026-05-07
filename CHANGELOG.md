@@ -10,6 +10,61 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Added (agent v0.5.0 + cloud v0.4.6) — sc2replaystats-style macro breakdown
+
+- **Macro Breakdown reordered.** The Active Army & Workers chart now
+  sits between the top-3 KPI cards and "Where the score went" —
+  what the user looks at first instead of last. The penalty bars
+  and leaks lists move down accordingly.
+- **Interactive chart with hover crosshair + tooltip.** Mirrors
+  sc2replaystats: a vertical line tracks the cursor, dots highlight
+  each side's value at the hovered tick, and a floating tooltip
+  shows army value (Σ minerals + gas across non-worker units) and
+  worker count for both players. Hovered time is also lifted into a
+  shared section state so the unit-composition strip below the
+  chart stays in sync.
+- **"Live" unit composition snapshot below the chart** — race-correct
+  worker pill plus army units sorted by mineral+gas cost descending,
+  rendered with the existing SC2 unit icon registry. Each side gets
+  its own card with the player name, race chip, and total army
+  value. Falls back to a friendly "re-sync your agent" hint on
+  payloads without ``unit_timeline``.
+- **Replay Player Unit Statistics table.** Player / Team / MMR /
+  Units Produced / Units Killed / Structures Killed / Workers Built
+  / Supply Blocked / APM / SPM. Switches to a stacked card layout
+  on mobile so the long column list stays legible without
+  horizontal scroll.
+- **Army value uses real unit cost catalog instead of food × 8.**
+  New ``apps/web/lib/sc2-units.ts`` carries the LotV mineral / gas /
+  supply table for every unit and building. ``computeArmyValue``
+  sums (minerals + gas) across non-worker, non-building units in
+  the unit_timeline composition map — matching how
+  sc2replaystats's "army value" headline is computed. Pre-v0.5
+  payloads fall back to ``food_used × 8`` so the chart line shape
+  stays continuous while users re-sync.
+- **Agent v0.5.0 wire-payload additions:**
+    - ``unit_timeline`` (downsampled to the same 30 s ticks as
+      ``stats_events``) carries per-tick army composition for both
+      players. Powers the chart's army-value series, the hover
+      tooltip, and the unit-composition snapshot.
+    - ``player_stats`` summary records the cumulative born/died
+      counters the event extractor populates during its tracker
+      walk (units produced / killed / lost, workers built,
+      structures built / killed / lost), merged with average
+      APM/SPM from the ``apm_curve``. Drives the new stats table.
+- **Event extractor counters.** ``SC2Replay-Analyzer/core/event_extractor.py``
+  now tracks per-player cumulative counters and a mirrored opponent
+  building lifetime dict so structure-kill attribution works in
+  2-player games. Uses sc2reader's ``UnitDiedEvent.killing_player_id``
+  when present and falls back to "the other player got the kill"
+  for replays where the engine couldn't attribute. Additive only —
+  existing scoring and unit_timeline outputs unchanged.
+- **Schema:** ``apps/api/src/validation/gameRecord.js`` declares the
+  new ``unit_timeline`` and ``player_stats`` fields on
+  ``macroBreakdown`` (both already passed through
+  ``additionalProperties: true``; explicit declarations help
+  validation errors and documentation).
+
 ### Fixed + Added (cloud v0.4.5) — opponent counter dedupe + admin dashboard
 
 - **Per-opponent counters no longer double-count on re-upload.** The
