@@ -4,16 +4,17 @@ import { useMemo } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/lib/clientApi";
 import { formatGameClock } from "@/lib/macro";
-import {
-  computeArmyValue,
-  isBuildingUnit,
-  sortedArmyComposition,
-} from "@/lib/sc2-units";
+import { computeArmyValue, sortedArmyComposition } from "@/lib/sc2-units";
 import type {
   StatsEvent,
   UnitTimelineEntry,
 } from "./MacroBreakdownPanel.types";
 import { nearestPoint } from "./activeArmyLayout";
+import {
+  deriveUnitComposition,
+  type BuildEvent,
+  type CompositionSource,
+} from "./compositionAt";
 
 export interface CompositionSnapshotProps {
   gameId: string | null;
@@ -37,18 +38,16 @@ export interface CompositionSnapshotProps {
  * route on the API (see apps/api/src/services/perGameCompute.js
  * #parseBuildLogLines for the canonical parser).
  * ============================================================ */
-interface BuildEvent {
-  time: number;
-  name: string;
-  display?: string;
-  is_building?: boolean;
-}
-
 interface BuildOrderResponse {
   ok?: boolean;
   events?: BuildEvent[];
   opp_events?: BuildEvent[];
 }
+
+/** Pixel size for unit/building chip icons. Bumped from the catalog
+ * "sm" preset (16 px) so the chips remain legible at typical viewing
+ * distances on dense rosters. The chip text scales with the icon. */
+const CHIP_ICON_PX = 22;
 
 /**
  * Live unit + building composition strip beneath the chart. Mirrors
@@ -57,18 +56,21 @@ interface BuildOrderResponse {
  * desc), and the buildings count built so far. As the user hovers
  * the chart above, every count snaps to the matching tick.
  *
- * Data sources:
- *   - Unit roster: ``unit_timeline`` (alive non-worker units sampled
- *     at PlayerStatsEvent cadence — agent v0.5+ uploads).
+ * Data sources (see ``compositionAt.ts`` for the resolution order):
+ *   - Unit roster: prefers ``unit_timeline`` (death-aware) when
+ *     populated; falls back to a build-order-derived cumulative count
+ *     with morph adjustments and timeline-derived death subtraction.
  *   - Worker count: ``stats_events.food_workers`` at the same tick.
  *   - Building count: per-game ``buildLog`` parsed by the API into
- *     ``events`` / ``opp_events`` — we filter on ``is_building`` and
- *     count cumulatively up to the hovered time.
+ *     ``events`` / ``opp_events`` — filtered on ``is_building`` and
+ *     counted cumulatively (with morph collapse) up to the hovered
+ *     time. The build-order endpoint is the same call that powers the
+ *     unit fallback above, so both sources hit a single SWR cache.
  *
- * The build-order fetch is gated on ``gameId``; when null the
- * buildings rail just stays empty. We fetch lazily so opening the
- * panel doesn't pay for the buildings call until the user actually
- * looks at it.
+ * The build-order fetch is gated on ``gameId``; when null, the
+ * roster falls back to whatever ``unit_timeline`` carries. We fetch
+ * lazily so opening the panel doesn't pay for the buildings call
+ * until the user actually looks at it.
  */
 export function CompositionSnapshot({
   gameId,
@@ -95,20 +97,6 @@ export function CompositionSnapshot({
       ? hoveredTime
       : lastT;
 
-  const entry = useMemo(() => {
-    if (!hasTimeline) return null;
-    let best = unitTimeline![0];
-    let bestD = Math.abs((best.time || 0) - targetT);
-    for (let i = 1; i < unitTimeline!.length; i++) {
-      const d = Math.abs((unitTimeline![i].time || 0) - targetT);
-      if (d < bestD) {
-        best = unitTimeline![i];
-        bestD = d;
-      }
-    }
-    return best;
-  }, [hasTimeline, unitTimeline, targetT]);
-
   const myWorkers = useMemo(
     () => workersAt(mySamples, targetT),
     [mySamples, targetT],
@@ -118,36 +106,78 @@ export function CompositionSnapshot({
     [oppSamples, targetT],
   );
 
-  // Build-order payload — used to derive cumulative building counts
-  // at any time T. Both ``events`` and ``opp_events`` share the same
-  // shape; the agent's buildLog parser tags every entry with
-  // ``is_building``.
+  // Single SWR call powers both the units-fallback and the buildings
+  // rail. Same payload shape regardless of which side we render.
   const buildOrder = useApi<BuildOrderResponse>(
     gameId ? `/v1/games/${encodeURIComponent(gameId)}/build-order` : null,
     { revalidateOnFocus: false },
   );
 
-  const myBuildings = useMemo(
+  const myComposition = useMemo(
     () =>
-      countBuildingsAt(buildOrder.data?.events ?? [], targetT, "my"),
+      deriveUnitComposition({
+        timeline: unitTimeline,
+        buildEvents: buildOrder.data?.events,
+        side: "my",
+        t: targetT,
+      }),
+    [unitTimeline, buildOrder.data, targetT],
+  );
+  const oppComposition = useMemo(
+    () =>
+      deriveUnitComposition({
+        timeline: unitTimeline,
+        buildEvents: buildOrder.data?.opp_events,
+        side: "opp",
+        t: targetT,
+      }),
+    [unitTimeline, buildOrder.data, targetT],
+  );
+
+  const myBuildings = useMemo(
+    () => countBuildingsAt(buildOrder.data?.events ?? [], targetT),
     [buildOrder.data, targetT],
   );
   const oppBuildings = useMemo(
-    () =>
-      countBuildingsAt(buildOrder.data?.opp_events ?? [], targetT, "opp"),
+    () => countBuildingsAt(buildOrder.data?.opp_events ?? [], targetT),
     [buildOrder.data, targetT],
   );
 
-  const my = entry?.my ?? {};
-  const opp = entry?.opp ?? {};
-  const myArmyValue = computeArmyValue(my);
-  const oppArmyValue = computeArmyValue(opp);
+  const myArmyValue = computeArmyValue(myComposition.units);
+  const oppArmyValue = computeArmyValue(oppComposition.units);
+
+  // Resolve the snapshot time to display in the header. unit_timeline
+  // entries snap to the agent's sample grid; without one, just use t.
+  const snapshotTime = useMemo(() => {
+    if (!hasTimeline) return targetT;
+    let best = unitTimeline![0].time || 0;
+    let bestD = Math.abs(best - targetT);
+    for (let i = 1; i < unitTimeline!.length; i++) {
+      const time = unitTimeline![i].time || 0;
+      const d = Math.abs(time - targetT);
+      if (d < bestD) {
+        best = time;
+        bestD = d;
+      }
+    }
+    return best;
+  }, [hasTimeline, unitTimeline, targetT]);
 
   const showHint =
     !hasTimeline &&
     Object.keys(myBuildings).length === 0 &&
     Object.keys(oppBuildings).length === 0 &&
+    Object.keys(myComposition.units).length === 0 &&
+    Object.keys(oppComposition.units).length === 0 &&
     !buildOrder.isLoading;
+
+  const buildOrderState: BuildOrderState = buildOrder.isLoading
+    ? "loading"
+    : buildOrder.error
+      ? "error"
+      : buildOrder.data
+        ? "ok"
+        : "absent";
 
   return (
     <div className="space-y-2">
@@ -157,7 +187,7 @@ export function CompositionSnapshot({
         </span>
         <span className="text-[11px] tabular-nums">
           {hoveredTime != null ? "Hovering " : "Game end "}
-          <span className="text-text">{formatGameClock(entry?.time ?? targetT)}</span>
+          <span className="text-text">{formatGameClock(snapshotTime)}</span>
         </span>
       </div>
 
@@ -175,39 +205,25 @@ export function CompositionSnapshot({
           side="me"
           name={myName?.trim() || "You"}
           race={myRace || ""}
-          composition={my}
+          composition={myComposition.units}
+          unitSource={myComposition.source}
           workers={myWorkers}
           armyValue={myArmyValue}
           buildings={myBuildings}
-          time={entry?.time ?? targetT}
-          buildOrderState={
-            buildOrder.isLoading
-              ? "loading"
-              : buildOrder.error
-                ? "error"
-                : buildOrder.data
-                  ? "ok"
-                  : "absent"
-          }
+          time={snapshotTime}
+          buildOrderState={buildOrderState}
         />
         <PlayerStrip
           side="opp"
           name={oppName?.trim() || "Opponent"}
           race={oppRace || ""}
-          composition={opp}
+          composition={oppComposition.units}
+          unitSource={oppComposition.source}
           workers={oppWorkers}
           armyValue={oppArmyValue}
           buildings={oppBuildings}
-          time={entry?.time ?? targetT}
-          buildOrderState={
-            buildOrder.isLoading
-              ? "loading"
-              : buildOrder.error
-                ? "error"
-                : buildOrder.data
-                  ? "ok"
-                  : "absent"
-          }
+          time={snapshotTime}
+          buildOrderState={buildOrderState}
         />
       </div>
     </div>
@@ -221,6 +237,7 @@ function PlayerStrip({
   name,
   race,
   composition,
+  unitSource,
   workers,
   armyValue,
   buildings,
@@ -231,6 +248,7 @@ function PlayerStrip({
   name: string;
   race: string;
   composition: Record<string, number>;
+  unitSource: CompositionSource;
   workers: number;
   armyValue: number;
   buildings: Record<string, number>;
@@ -286,6 +304,7 @@ function PlayerStrip({
         <RosterRow
           label="Units"
           empty="No army units"
+          source={unitSource}
           chips={[
             <UnitChip
               key="__worker__"
@@ -338,15 +357,28 @@ function RosterRow({
   label,
   chips,
   empty,
+  source,
 }: {
   label: string;
   chips: React.ReactNode[];
   empty: string;
+  /**
+   * When provided, surfaces a small badge next to the row label that
+   * tells the user how the data was derived. ``hybrid`` and
+   * ``build_order`` mean we filled in from the build order — the chip
+   * count may include units whose deaths the timeline didn't capture.
+   */
+  source?: CompositionSource;
 }) {
   return (
     <div className="space-y-1">
-      <div className="text-[10px] uppercase tracking-wider text-text-dim">
-        {label}
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] uppercase tracking-wider text-text-dim">
+          {label}
+        </span>
+        {source && source !== "timeline" && source !== "empty" ? (
+          <SourceBadge source={source} />
+        ) : null}
       </div>
       <ul className="flex flex-wrap items-center gap-1.5">
         {chips.length === 0 ? (
@@ -357,6 +389,30 @@ function RosterRow({
       </ul>
     </div>
   );
+}
+
+function SourceBadge({ source }: { source: CompositionSource }) {
+  if (source === "hybrid") {
+    return (
+      <span
+        className="rounded bg-bg-elevated px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-text-muted"
+        title="Counts come from the build order; deaths are derived from the unit timeline. Most accurate when the v0.5+ agent has uploaded both."
+      >
+        build order + deaths
+      </span>
+    );
+  }
+  if (source === "build_order") {
+    return (
+      <span
+        className="rounded bg-bg-elevated px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-warning"
+        title="Counts come from the build order. Per-tick deaths aren't tracked for this game — re-upload via your v0.5+ agent for death-aware accuracy."
+      >
+        build order
+      </span>
+    );
+  }
+  return null;
 }
 
 function UnitChip({
@@ -378,13 +434,13 @@ function UnitChip({
       : "bg-bg-elevated";
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded ${toneClass} px-2 py-1 text-[12px] tabular-nums text-text`}
+      className={`inline-flex items-center gap-1.5 rounded ${toneClass} px-2 py-1 text-[13px] tabular-nums text-text`}
       title={`${count} × ${name}`}
     >
       <Icon
         name={name}
         kind={kind}
-        size="sm"
+        size={CHIP_ICON_PX}
         fallback={fallback}
         decorative
       />
@@ -415,21 +471,17 @@ function workersAt(samples: StatsEvent[], t: number): number {
 /**
  * Reduce a build-order timeline into ``{name: count}`` for buildings
  * built up to and including ``t``. The agent's buildLog only records
- * starts (no death events) but for the composition snapshot showing
+ * starts (no death events), but for the composition snapshot showing
  * total-built-by-T is the right answer — sc2replaystats's overview
  * shows the same cumulative summary.
  *
  * We accept either ``my_pid`` or ``opp_pid`` lists (caller picks); the
  * canonical building name comes from the agent's catalog so morphs
- * (Hatch → Lair → Hive) appear as their final form when reached. The
- * second parameter is unused here but kept on the signature so a
- * future refactor that splits build orders by side can lean on it
- * without touching every call site.
+ * (Hatch → Lair → Hive) appear as their final form when reached.
  */
 function countBuildingsAt(
   events: BuildEvent[],
   t: number,
-  _side: "my" | "opp",
 ): Record<string, number> {
   if (!Array.isArray(events) || events.length === 0) return {};
   const counts: Record<string, number> = {};
@@ -452,7 +504,6 @@ function countBuildingsAt(
     if (time > t) break; // events are sorted ascending
     const name = ev.name || ev.display || "";
     if (!name) continue;
-    if (!isBuildingUnit(name)) continue;
     const prev = morphMap[name];
     if (prev && (counts[prev] || 0) > 0) {
       counts[prev] = (counts[prev] || 0) - 1;
