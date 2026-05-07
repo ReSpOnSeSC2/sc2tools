@@ -127,6 +127,57 @@ def _ensure_analyzer_on_path() -> None:
 _ensure_analyzer_on_path()
 
 
+def _load_sc2ra_module(dotted_name: str) -> Any:
+    """Load a module by dotted name explicitly from ``SC2Replay-Analyzer/``.
+
+    Both ``SC2Replay-Analyzer/`` and ``reveal-sc2-opponent-main/`` ship
+    a ``core/event_extractor.py`` and ``analytics/macro_score.py``.
+    ``_ensure_analyzer_on_path`` puts reveal first on ``sys.path`` so
+    ``core.sc2_replay_parser`` (which only exists in reveal) resolves —
+    but that means ``from core.event_extractor import …`` and
+    ``from analytics.macro_score import …`` get the OLDER reveal copies.
+
+    The reveal copies pre-date the v0.5 macro-breakdown surface: they
+    omit ``unit_timeline`` and ``opp_stats_events`` from the payload,
+    and read the wrong sc2reader attribute (``food_workers``, which
+    doesn't exist on PlayerStatsEvent in sc2reader 1.8.x — the right
+    name is ``workers_active_count``). A breakdown built against those
+    is exactly what the user sees on the SPA: army line works (food_used
+    fallback), worker line stuck at 0, composition snapshot empty.
+
+    Loading SC2Replay-Analyzer's copy via ``importlib.util.spec_from_file_location``
+    sidesteps the ``sys.path`` ordering without touching it (so other
+    reveal-only modules like ``sc2_replay_parser`` keep resolving).
+    Both target modules have no internal cross-package imports — only
+    ``sc2reader`` and stdlib — so loading them in isolation is safe.
+
+    Tests that pre-load a stub into ``sys.modules[dotted_name]`` win
+    over the file lookup so monkeypatched mocks still take effect —
+    that's how ``test_replay_pipeline`` swaps in fake extractors.
+    """
+    import importlib.util
+    cached = sys.modules.get(dotted_name)
+    if cached is not None:
+        return cached
+    parts = dotted_name.split(".")
+    rel = Path(*parts[:-1]) / f"{parts[-1]}.py"
+    for base in _candidate_bases():
+        candidate = base / "SC2Replay-Analyzer" / rel
+        if not candidate.exists():
+            continue
+        spec = importlib.util.spec_from_file_location(
+            f"_sc2ra_{dotted_name.replace('.', '_')}", str(candidate),
+        )
+        if spec is None or spec.loader is None:
+            continue
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    raise ImportError(
+        f"SC2Replay-Analyzer module not found on disk: {dotted_name}",
+    )
+
+
 class AnalyzerImportError(RuntimeError):
     """Raised when the bundled analyzer package can't be loaded.
 
@@ -786,8 +837,17 @@ def _compute_macro_breakdown(
     if me is None or replay is None:
         return None, None
     try:
-        from core.event_extractor import extract_macro_events  # type: ignore
-        from analytics.macro_score import compute_macro_score  # type: ignore
+        # Pin to SC2Replay-Analyzer's copies — see _load_sc2ra_module
+        # for why ``from core.event_extractor import …`` would
+        # otherwise serve the older reveal copy that omits
+        # unit_timeline / opp_stats_events and reads the wrong
+        # workers attribute.
+        extract_macro_events = _load_sc2ra_module(
+            "core.event_extractor",
+        ).extract_macro_events
+        compute_macro_score = _load_sc2ra_module(
+            "analytics.macro_score",
+        ).compute_macro_score
     except Exception as exc:  # noqa: BLE001
         # WARNING (not DEBUG) so a missing-DATAS frozen-exe regression
         # doesn't silently turn every replay's macro card into the
@@ -797,18 +857,29 @@ def _compute_macro_breakdown(
         log.warning("macro_breakdown_imports_unavailable: %s", exc)
         return None, None
     try:
-        my_macro = extract_macro_events(replay, me.pid)
+        # Pass opp_pid so unit_timeline includes both sides — the
+        # SPA's composition snapshot reads ``entry.opp`` for the
+        # opponent column, and without opp_pid that map stays empty.
+        opp_pid = getattr(opp, "pid", None) if opp is not None else None
+        my_macro = extract_macro_events(replay, me.pid, opp_pid)
     except Exception as exc:  # noqa: BLE001
         log.warning("extract_macro_events_my_failed: %s", exc)
         return None, None
     opp_stats: list = []
     if opp is not None and getattr(opp, "pid", None) is not None:
-        try:
-            opp_macro = extract_macro_events(replay, opp.pid)
-            opp_stats = list(opp_macro.get("stats_events") or [])
-        except Exception as exc:  # noqa: BLE001
-            log.warning("extract_macro_events_opp_failed: %s", exc)
-            opp_stats = []
+        # When extract_macro_events ran with both pids above we
+        # already have the opp samples on ``my_macro`` — the new
+        # SC2Replay-Analyzer extractor returns them under
+        # ``opp_stats_events``. Fall back to a separate call against
+        # the old extractor signature for safety.
+        opp_stats = list(my_macro.get("opp_stats_events") or [])
+        if not opp_stats:
+            try:
+                opp_macro = extract_macro_events(replay, opp.pid)
+                opp_stats = list(opp_macro.get("stats_events") or [])
+            except Exception as exc:  # noqa: BLE001
+                log.warning("extract_macro_events_opp_failed: %s", exc)
+                opp_stats = []
     game_length = (
         int(my_macro.get("game_length_sec") or 0)
         or int(getattr(ctx, "length_seconds", 0) or 0)
