@@ -142,7 +142,7 @@ class GdprService {
     }
     const macroJobsRes = await this.db.macroJobs.deleteMany({ userId });
 
-    const opponentsDeleted = await this._rebuildOpponentsForUser(userId);
+    const opponentsDeleted = await this.rebuildOpponentsForUser(userId);
 
     return {
       games: gamesRes.deletedCount || 0,
@@ -157,14 +157,20 @@ class GdprService {
 
   /**
    * Drop every opponent row for the user, then re-derive them from the
-   * surviving games. Called from `wipeGames`. Idempotent: a no-op when
-   * the user has zero games (just leaves the collection empty).
+   * surviving games. Called from ``wipeGames`` and the AdminService's
+   * "Rebuild opponents" tool — see ``services/admin.js``.
    *
-   * @private
+   * Idempotent: a no-op when the user has zero games (just leaves the
+   * collection empty). Returns the pre-rebuild row count so callers
+   * can show a "dropped N → recreated M" message.
+   *
+   * Exposed (no underscore prefix) so the admin tool can call it
+   * directly without depending on the wider ``wipeGames`` flow.
+   *
    * @param {string} userId
    * @returns {Promise<number>} count of opponent rows deleted before rebuild
    */
-  async _rebuildOpponentsForUser(userId) {
+  async rebuildOpponentsForUser(userId) {
     const dropped = await this.db.opponents.deleteMany({ userId });
     const cursor = this.db.games.find(
       { userId, "opponent.pulseId": { $exists: true, $ne: "" } },
