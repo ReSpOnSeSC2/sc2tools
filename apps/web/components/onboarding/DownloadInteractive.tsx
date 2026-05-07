@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { DownloadCard } from "./DownloadCard";
 import { usePlatformDetect } from "./usePlatformDetect";
+import { useReleaseInfo, formatBytes } from "./useReleaseInfo";
 import type { DetectedOS } from "./types";
 
 const OS_TABS: ReadonlyArray<{ id: DetectedOS; label: string }> = [
@@ -18,11 +19,10 @@ const OS_TABS: ReadonlyArray<{ id: DetectedOS; label: string }> = [
   { id: "linux", label: "Linux" },
 ];
 
-const SYS_REQUIREMENTS: ReadonlyArray<{ heading: string; body: string }> = [
-  {
-    heading: "Disk",
-    body: "~450 MB for the installer (Python + Qt runtime bundled). The replay folder itself is untouched.",
-  },
+// Disk size is rendered dynamically from the live installer asset so the
+// number stays in sync with whatever the GitHub release publishes — no
+// more chasing static "~450 MB" text every time the bundle changes size.
+const STATIC_SYS_REQUIREMENTS: ReadonlyArray<{ heading: string; body: string }> = [
   {
     heading: "OS",
     body: "Windows 10+. macOS and Linux currently install from source (see below).",
@@ -58,7 +58,7 @@ export function DownloadInteractive() {
 
       <aside className="space-y-4">
         <RecapCard />
-        <SysReqCard />
+        <SysReqCard os={os} />
       </aside>
     </div>
   );
@@ -200,7 +200,14 @@ function RecapCard() {
   );
 }
 
-function SysReqCard() {
+function SysReqCard({ os }: { os: DetectedOS }) {
+  const release = useReleaseInfo(os);
+  const sizeBytes = release.data?.artifact?.sizeBytes;
+  const diskBody =
+    sizeBytes != null
+      ? `~${formatBytes(sizeBytes)} for the installer (Python + Qt runtime bundled). The replay folder itself is untouched.`
+      : "~305 MB for the installer (Python + Qt runtime bundled). The replay folder itself is untouched.";
+
   return (
     <div className="space-y-3 rounded-xl border border-border bg-bg-surface p-4 sm:p-5">
       <header className="flex items-center gap-2">
@@ -210,7 +217,11 @@ function SysReqCard() {
         </h3>
       </header>
       <dl className="space-y-2 text-caption">
-        {SYS_REQUIREMENTS.map((r) => (
+        <div>
+          <dt className="font-semibold text-text">Disk</dt>
+          <dd className="text-text-muted">{diskBody}</dd>
+        </div>
+        {STATIC_SYS_REQUIREMENTS.map((r) => (
           <div key={r.heading}>
             <dt className="font-semibold text-text">{r.heading}</dt>
             <dd className="text-text-muted">{r.body}</dd>
