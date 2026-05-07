@@ -1,5 +1,7 @@
 "use strict";
 
+const { buildSamplePayload } = require("./overlayLiveSamples");
+
 /**
  * OverlayLiveService — derives the cloud's authoritative
  * ``LiveGamePayload`` for the OBS overlay.
@@ -81,6 +83,51 @@ function bucketResult(raw) {
   if (s === "win" || s === "victory") return "win";
   if (s === "loss" || s === "defeat") return "loss";
   return null;
+}
+
+/**
+ * Format a duration in seconds as `m:ss`. Matches the SPA's
+ * `formatMatchDuration` for the scouting card's recent-games list.
+ *
+ * @param {number} sec
+ * @returns {string}
+ */
+function formatLengthText(sec) {
+  const n = Number(sec);
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  const m = Math.floor(n / 60);
+  const s = Math.round(n % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+/**
+ * Title-case an internal result tag for the scouting widget's chip
+ * text. The SPA stored "Win" / "Loss" / "Tie" — we map the cloud's
+ * "Victory" / "Defeat" to those so the widget can stay rendering-only.
+ *
+ * @param {string|undefined|null} raw
+ * @returns {"Win"|"Loss"|"Tie"|null}
+ */
+function chipResult(raw) {
+  if (!raw) return null;
+  const s = String(raw).toLowerCase();
+  if (s === "win" || s === "victory") return "Win";
+  if (s === "loss" || s === "defeat") return "Loss";
+  if (s === "tie") return "Tie";
+  return null;
+}
+
+/**
+ * Escape user-controlled chars before splicing into a regex anchor.
+ * Race initials never carry regex metachars in practice but the
+ * defensive helper keeps the lookup safe if the agent ever uploads a
+ * non-canonical race string.
+ *
+ * @param {string} s
+ * @returns {string}
+ */
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function matchupLabel(myRace, oppRace) {
@@ -278,6 +325,22 @@ class OverlayLiveService {
       if (top.length > 0) payload.topBuilds = top;
     }
 
+    // Last N games vs this opponent in this matchup. Drives the
+    // scouting card's "LAST GAMES" rows. We exclude the just-uploaded
+    // game from the list so the widget shows *prior* meetings — the
+    // current game's result is surfaced separately by match-result/
+    // post-game widgets.
+    if (opp) {
+      const recent = await this._recentGamesForOpponent(
+        userId,
+        opp,
+        myRace,
+        oppRace,
+        game.gameId,
+      );
+      if (recent.length > 0) payload.recentGames = recent;
+    }
+
     // Best answer — for the opponent's most-likely opening, the
     // streamer's myBuild with the highest winRate (≥3 games for noise).
     const favOpeningStrategy = payload.favOpening?.name;
@@ -304,95 +367,17 @@ class OverlayLiveService {
   }
 
   /**
-   * Build a synthetic full payload that lights up every widget. Used
-   * by the Test button in Settings → Overlay so a streamer can preview
-   * the entire layout without waiting for a real game. Optional
-   * ``widget`` parameter narrows the payload to the keys that single
-   * widget reads, which lets the per-widget Test button fire one panel
-   * at a time.
+   * Synthetic full / per-widget payload for the Settings → Overlay
+   * Test button. Implementation lives in ``overlayLiveSamples`` to
+   * keep this file focused on production derivation logic; the static
+   * passthrough preserves the existing call site shape used by the
+   * /v1/overlay-events/test route + unit tests.
    *
    * @param {string} [widget]
    * @returns {object}
    */
   static buildSamplePayload(widget) {
-    const FULL = {
-      myRace: "Protoss",
-      oppRace: "Zerg",
-      oppName: "TestOpponent",
-      map: "Goldenaura LE",
-      matchup: "PvZ",
-      result: "win",
-      durationSec: 612,
-      oppMmr: 4250,
-      myMmr: 4310,
-      mmrDelta: 22,
-      headToHead: { wins: 4, losses: 2 },
-      streak: { kind: "win", count: 3 },
-      cheeseProbability: 0.65,
-      predictedStrategies: [
-        { name: "Pool first", weight: 0.45 },
-        { name: "Hatch first", weight: 0.35 },
-        { name: "Roach All-in", weight: 0.2 },
-      ],
-      topBuilds: [
-        { name: "P - Stargate", total: 14, winRate: 0.71 },
-        { name: "P - 4 Gate", total: 9, winRate: 0.55 },
-      ],
-      bestAnswer: { build: "P - Stargate", winRate: 0.78, total: 7 },
-      favOpening: { name: "Pool first", share: 0.55, samples: 11 },
-      scouting: [
-        { label: "Pool first", tellAt: 90, confidence: 0.55 },
-        { label: "Hatch first", tellAt: 75, confidence: 0.35 },
-      ],
-      session: { wins: 3, losses: 1, games: 4, mmrStart: 4288, mmrCurrent: 4310 },
-      rank: { league: "Diamond", tier: 1, mmr: 4310 },
-      meta: {
-        matchup: "PvZ",
-        topBuilds: [
-          { name: "Pool first", share: 0.55 },
-          { name: "Hatch first", share: 0.35 },
-        ],
-      },
-      rival: {
-        name: "TestOpponent",
-        headToHead: { wins: 4, losses: 2 },
-        note: "Frequent matchup",
-      },
-      rematch: { isRematch: true, lastResult: "win" },
-    };
-    if (!widget) return FULL;
-    // Per-widget filtering: include only the keys the renderer reads,
-    // plus the small set of universal context fields (myRace etc.) so
-    // the WidgetShell tinting still works. The ``session`` widget is
-    // cloud-driven via its own socket event — Test there is a no-op
-    // and the route layer surfaces a hint.
-    const SHARED = ["myRace", "oppRace", "matchup"];
-    /** @type {Record<string, string[]>} */
-    const PER_WIDGET = {
-      "opponent": ["oppName", "oppMmr", "myMmr", "headToHead"],
-      "match-result": ["result", "durationSec", "map"],
-      "post-game": ["map", "durationSec", "result"],
-      "mmr-delta": ["mmrDelta", "myMmr"],
-      "streak": ["streak"],
-      "cheese": ["cheeseProbability", "predictedStrategies"],
-      "rematch": ["rematch"],
-      "rival": ["rival"],
-      "rank": ["rank"],
-      "meta": ["meta"],
-      "topbuilds": ["topBuilds"],
-      "fav-opening": ["favOpening"],
-      "best-answer": ["bestAnswer", "favOpening"],
-      "scouting": ["scouting", "predictedStrategies"],
-      "session": ["session"],
-    };
-    const keys = PER_WIDGET[widget];
-    if (!keys) return FULL;
-    /** @type {Record<string, any>} */
-    const out = {};
-    for (const k of [...SHARED, ...keys]) {
-      if (FULL[k] !== undefined) out[k] = FULL[k];
-    }
-    return out;
+    return buildSamplePayload(widget);
   }
 
   /**
@@ -459,6 +444,92 @@ class OverlayLiveService {
     if (prev.length === 0) return null;
     const m = Number(prev[0].myMmr);
     return Number.isFinite(m) ? m : null;
+  }
+
+  /**
+   * Last N games against this opponent in this matchup, newest first.
+   * Excludes the just-uploaded game so the scouting widget shows
+   * *prior* meetings — the current game is what the streamer is about
+   * to play, surfaced through the match-result/post-game widgets.
+   *
+   * Match precedence: pulseId (when the agent supplied one — most
+   * stable, survives BattleTag renames) → displayName fallback. We
+   * filter to the same `myRace`/`oppRace` matchup so a streamer who
+   * once ZvT'd the opponent doesn't see those rows during a current
+   * PvZ.
+   *
+   * @param {string} userId
+   * @param {Record<string, any>} opp
+   * @param {string|undefined} myRace
+   * @param {string|undefined} oppRace
+   * @param {string|undefined} excludeGameId
+   * @returns {Promise<Array<{
+   *   result: 'Win'|'Loss'|'Tie',
+   *   lengthText: string,
+   *   map?: string,
+   *   myBuild?: string,
+   *   oppBuild?: string,
+   *   oppRace?: string,
+   *   date?: string,
+   * }>>}
+   */
+  async _recentGamesForOpponent(userId, opp, myRace, oppRace, excludeGameId) {
+    if (!opp) return [];
+    /** @type {Record<string, any>} */
+    const filter = { userId };
+    if (opp.pulseId) {
+      filter["opponent.pulseId"] = opp.pulseId;
+    } else if (opp.displayName) {
+      filter["opponent.displayName"] = opp.displayName;
+    } else {
+      return [];
+    }
+    if (excludeGameId) filter.gameId = { $ne: excludeGameId };
+    if (myRace) {
+      filter.myRace = { $regex: `^${escapeRegex(String(myRace).charAt(0))}`, $options: "i" };
+    }
+    if (oppRace) {
+      filter["opponent.race"] = {
+        $regex: `^${escapeRegex(String(oppRace).charAt(0))}`,
+        $options: "i",
+      };
+    }
+    const rows = await this.db.games
+      .find(filter, {
+        projection: {
+          _id: 0,
+          result: 1,
+          durationSec: 1,
+          map: 1,
+          myBuild: 1,
+          "opponent.strategy": 1,
+          "opponent.race": 1,
+          date: 1,
+        },
+      })
+      .sort({ date: -1 })
+      .limit(5)
+      .toArray()
+      .catch(() => []);
+    /** @type {Array<{result: 'Win'|'Loss'|'Tie', lengthText: string, map?: string, myBuild?: string, oppBuild?: string, oppRace?: string, date?: string}>} */
+    const out = [];
+    for (const r of rows) {
+      const chip = chipResult(r.result);
+      if (!chip) continue;
+      /** @type {{result: 'Win'|'Loss'|'Tie', lengthText: string, map?: string, myBuild?: string, oppBuild?: string, oppRace?: string, date?: string}} */
+      const row = {
+        result: chip,
+        lengthText: formatLengthText(Number(r.durationSec) || 0),
+      };
+      if (r.map) row.map = String(r.map);
+      if (r.myBuild) row.myBuild = String(r.myBuild);
+      if (r.opponent && r.opponent.strategy) row.oppBuild = String(r.opponent.strategy);
+      if (r.opponent && r.opponent.race) row.oppRace = String(r.opponent.race);
+      if (r.date instanceof Date) row.date = r.date.toISOString();
+      else if (typeof r.date === "string") row.date = r.date;
+      out.push(row);
+    }
+    return out;
   }
 
   /**

@@ -12,7 +12,10 @@ const { HEAVY_FIELDS } = require("./gameDetails");
 class GamesService {
   /**
    * @param {{games: import('mongodb').Collection}} db
-   * @param {{ gameDetails?: import('./gameDetails').GameDetailsService }} [opts]
+   * @param {{
+   *   gameDetails?: import('./gameDetails').GameDetailsService,
+   *   users?: { getProfile(userId: string): Promise<{ region?: string }> },
+   * }} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
@@ -20,6 +23,11 @@ class GamesService {
     // path can still construct GamesService without a details stub.
     // The ingest path checks for presence before forwarding.
     this.gameDetails = opts.gameDetails || null;
+    // Optional UsersService so todaySession can stamp the streamer's
+    // region onto the session payload (e.g. "NA 5343" on the SPA's
+    // session widget). When unavailable, the region field stays unset
+    // and the widget falls back to MMR-only.
+    this.users = opts.users || null;
   }
 
   /**
@@ -170,6 +178,9 @@ class GamesService {
    *   games: number,
    *   mmrStart?: number,
    *   mmrCurrent?: number,
+   *   region?: string,
+   *   sessionStartedAt?: string,
+   *   streak?: { kind: 'win'|'loss', count: number },
    * }>}
    */
   async todaySession(userId, timezone) {
@@ -190,24 +201,65 @@ class GamesService {
     let mmrStart;
     /** @type {number|undefined} */
     let mmrCurrent;
+    /** @type {string|undefined} */
+    let sessionStartedAt;
+    /** @type {Array<'win'|'loss'>} */
+    const todayResults = [];
     for (const row of rows) {
       const date = row.date instanceof Date ? row.date : new Date(row.date);
       if (Number.isNaN(date.getTime())) continue;
       if (formatDayKey(date, tz) !== todayKey) continue;
       games += 1;
+      if (sessionStartedAt === undefined) sessionStartedAt = date.toISOString();
       const r = String(row.result || "").toLowerCase();
-      if (r === "victory" || r === "win") wins += 1;
-      else if (r === "defeat" || r === "loss") losses += 1;
+      if (r === "victory" || r === "win") {
+        wins += 1;
+        todayResults.push("win");
+      } else if (r === "defeat" || r === "loss") {
+        losses += 1;
+        todayResults.push("loss");
+      }
       const my = Number(row.myMmr);
       if (Number.isFinite(my)) {
         if (mmrStart === undefined) mmrStart = my;
         mmrCurrent = my;
       }
     }
-    /** @type {{wins: number, losses: number, games: number, mmrStart?: number, mmrCurrent?: number}} */
+    /**
+     * @type {{
+     *   wins: number, losses: number, games: number,
+     *   mmrStart?: number, mmrCurrent?: number,
+     *   region?: string, sessionStartedAt?: string,
+     *   streak?: { kind: 'win'|'loss', count: number },
+     * }}
+     */
     const out = { wins, losses, games };
     if (mmrStart !== undefined) out.mmrStart = mmrStart;
     if (mmrCurrent !== undefined) out.mmrCurrent = mmrCurrent;
+    if (sessionStartedAt !== undefined) out.sessionStartedAt = sessionStartedAt;
+    // Current run = consecutive same-result trail at the end of the day's
+    // game list. Surfaces the SPA's "W4" / "L2" streak chip on the
+    // session widget without requiring a second collection lookup.
+    if (todayResults.length > 0) {
+      const last = todayResults[todayResults.length - 1];
+      let count = 1;
+      for (let i = todayResults.length - 2; i >= 0; i -= 1) {
+        if (todayResults[i] !== last) break;
+        count += 1;
+      }
+      if (count >= 2) out.streak = { kind: last, count };
+    }
+    if (this.users) {
+      try {
+        const profile = await this.users.getProfile(userId);
+        if (profile && typeof profile.region === "string" && profile.region) {
+          out.region = profile.region.toUpperCase();
+        }
+      } catch {
+        // Region is decorative; a lookup failure must never block the
+        // session payload from emitting.
+      }
+    }
     return out;
   }
 }

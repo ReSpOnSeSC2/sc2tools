@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { API_BASE } from "@/lib/clientApi";
 import type { LiveGamePayload } from "@/components/overlay/types";
 import { clientTimezone } from "@/lib/timeseries";
+import {
+  resolveWidgetDurationMs,
+  type WidgetId,
+} from "@/components/overlay/widgetLifecycle";
 import {
   OpponentWidget,
   MatchResultWidget,
@@ -24,23 +28,6 @@ import {
   type SessionSummary,
 } from "@/components/overlay/widgets/PrePostFlow";
 
-type WidgetId =
-  | "opponent"
-  | "match-result"
-  | "post-game"
-  | "mmr-delta"
-  | "streak"
-  | "cheese"
-  | "rematch"
-  | "rival"
-  | "rank"
-  | "meta"
-  | "topbuilds"
-  | "fav-opening"
-  | "best-answer"
-  | "scouting"
-  | "session";
-
 /**
  * Per-widget Browser Source.
  *
@@ -55,9 +42,15 @@ type WidgetId =
  * require an in-process bus only OBS can't help us with: every Browser
  * Source is a separate Chromium instance.
  *
- * Widgets render at their own dimensions; the page wrapper is just a
- * transparent block container. Slot positioning from the all-in-one
- * overlay is overridden so the widget hugs the top-left of its frame.
+ * Visibility lifecycle is driven by `widgetLifecycle.ts`:
+ *
+ *  - Most widgets auto-hide after their natural per-widget duration
+ *    (15s for match-result, 22s for scouting, etc.) so the streamer's
+ *    scene clears between games.
+ *  - `session` and `topbuilds` are persistent HUDs in production.
+ *  - Test fires (`isTest: true` on the payload) cap every widget at
+ *    `TEST_DURATION_MS` so the persistent panels don't sit on the
+ *    scene forever after a Test click.
  */
 export function OverlayWidgetClient({
   token,
@@ -69,35 +62,12 @@ export function OverlayWidgetClient({
   const [live, setLive] = useState<LiveGamePayload | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [enabled, setEnabled] = useState<boolean>(true);
+  const [visible, setVisible] = useState<boolean>(false);
 
-  useEffect(() => {
-    const socket: Socket = io(API_BASE, {
-      // The OBS Browser Source carries no Clerk session; the token IS
-      // the auth. We also send the browser's IANA timezone so the
-      // server's session-record aggregation anchors "today" to the
-      // streamer's wall clock instead of UTC.
-      auth: { overlayToken: token, timezone: clientTimezone() },
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 5000,
-    });
-    socket.on("overlay:live", (msg: LiveGamePayload) => setLive(msg));
-    socket.on("overlay:config", (msg: { enabledWidgets?: string[] }) => {
-      if (msg && Array.isArray(msg.enabledWidgets)) {
-        setEnabled(msg.enabledWidgets.includes(widget));
-      }
-    });
-    socket.on("overlay:session", (msg: SessionSummary) => {
-      if (msg && typeof msg === "object") setSession(msg);
-    });
-    return () => {
-      socket.disconnect();
-    };
-  }, [token, widget]);
+  useOverlayWidgetSocket(token, widget, setLive, setSession, setEnabled);
+  useWidgetVisibility(widget as WidgetId, live, session, setVisible);
 
-  if (!enabled) return <div style={{ background: "transparent" }} />;
+  if (!enabled || !visible) return <div style={{ background: "transparent" }} />;
 
   // In solo mode, override the WidgetShell's slot positioning so the
   // widget hugs the top-left of its Browser Source frame. The streamer
@@ -170,4 +140,90 @@ function WidgetRenderer({
     default:
       return null;
   }
+}
+
+/**
+ * Subscribe to the overlay socket scoped to one widget id. The
+ * configured-widgets event is filtered down to a single boolean so
+ * the caller can short-circuit rendering when the streamer disables
+ * this specific panel.
+ */
+function useOverlayWidgetSocket(
+  token: string,
+  widget: string,
+  setLive: (msg: LiveGamePayload) => void,
+  setSession: (msg: SessionSummary) => void,
+  setEnabled: (on: boolean) => void,
+) {
+  useEffect(() => {
+    const socket: Socket = io(API_BASE, {
+      // The OBS Browser Source carries no Clerk session; the token IS
+      // the auth. We also send the browser's IANA timezone so the
+      // server's session-record aggregation anchors "today" to the
+      // streamer's wall clock instead of UTC.
+      auth: { overlayToken: token, timezone: clientTimezone() },
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 5000,
+    });
+    socket.on("overlay:live", (msg: LiveGamePayload) => setLive(msg));
+    socket.on("overlay:config", (msg: { enabledWidgets?: string[] }) => {
+      if (msg && Array.isArray(msg.enabledWidgets)) {
+        setEnabled(msg.enabledWidgets.includes(widget));
+      }
+    });
+    socket.on("overlay:session", (msg: SessionSummary) => {
+      if (msg && typeof msg === "object") setSession(msg);
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [token, widget, setLive, setSession, setEnabled]);
+}
+
+/**
+ * Re-arm the widget's auto-hide timer every time a fresh payload
+ * arrives. The payload feed differs per widget — `session` reads from
+ * the dedicated `overlay:session` event, every other widget reads
+ * from the merged `overlay:live` payload — and each payload's
+ * `isTest` flag picks production vs. test durations.
+ */
+function useWidgetVisibility(
+  widget: WidgetId,
+  live: LiveGamePayload | null,
+  session: SessionSummary | null,
+  setVisible: (visible: boolean) => void,
+) {
+  const timerRef = useRef<number | null>(null);
+  const sourceForWidget = widget === "session" ? session : live;
+  const isTest = Boolean(
+    widget === "session" ? session?.isTest : live?.isTest,
+  );
+
+  useEffect(() => {
+    if (!sourceForWidget) return;
+    setVisible(true);
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    const duration = resolveWidgetDurationMs(widget, isTest);
+    if (duration === null) return;
+    timerRef.current = window.setTimeout(() => {
+      setVisible(false);
+      timerRef.current = null;
+    }, duration);
+  }, [widget, sourceForWidget, isTest, setVisible]);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    },
+    [],
+  );
 }

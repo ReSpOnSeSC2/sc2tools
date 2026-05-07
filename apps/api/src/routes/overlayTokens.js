@@ -195,6 +195,12 @@ function buildOverlayTokensRouter(deps) {
           ? String(req.body.widget)
           : undefined;
         const payload = OverlayLiveService.buildSamplePayload(widget);
+        // Stamp the test flag so the overlay clients can cap every
+        // widget — including the normally-persistent session/topbuilds
+        // panels — at a short visibility timer. Without this a Test
+        // fire would pin sample data to the scene until the streamer
+        // refreshed the Browser Source.
+        payload.isTest = true;
         if (deps.io) {
           deps.io.to(`overlay:${token}`).emit("overlay:live", payload);
           // Single-widget Test for the session card needs a
@@ -202,11 +208,12 @@ function buildOverlayTokensRouter(deps) {
           // wired off the dedicated socket event rather than
           // ``overlay:live.session``. The same sample payload's
           // session block is reused so the W-L count is consistent
-          // with whatever the streamer just clicked.
+          // with whatever the streamer just clicked, with the test
+          // flag forwarded so the widget puts itself on a timer.
           if ((!widget || widget === "session") && payload.session) {
             deps.io.to(`overlay:${token}`).emit(
               "overlay:session",
-              payload.session,
+              { ...payload.session, isTest: true },
             );
           }
         }
