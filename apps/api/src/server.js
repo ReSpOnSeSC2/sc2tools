@@ -54,6 +54,8 @@ async function main() {
       /** @type {any} */ (services).pairings.findTokenByHash(tokenHash),
     resolveSession: (userId, timezone) =>
       services.games.todaySession(userId, timezone),
+    resolveVoicePrefs: (userId) =>
+      /** @type {any} */ (services).users.getPreferences(userId, "voice"),
   });
 
   httpServer.listen(config.port, () => {

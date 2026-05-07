@@ -11,6 +11,11 @@ import {
   type WidgetId,
 } from "@/components/overlay/widgetLifecycle";
 import {
+  useVoiceReadout,
+  type VoicePrefs,
+} from "@/components/overlay/useVoiceReadout";
+import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
+import {
   OpponentWidget,
   MatchResultWidget,
   PostGameWidget,
@@ -57,6 +62,7 @@ export function OverlayClient({ token }: { token: string }) {
   const [enabled, setEnabled] = useState<Set<WidgetId>>(
     () => new Set(ALL_WIDGETS),
   );
+  const [voicePrefs, setVoicePrefs] = useState<VoicePrefs | null>(null);
   // Per-widget "currently visible" set. Cleared by the per-widget
   // timeouts scheduled in `useWidgetTimers`.
   const [visibleLive, setVisibleLive] = useState<Set<WidgetId>>(new Set());
@@ -72,7 +78,14 @@ export function OverlayClient({ token }: { token: string }) {
     setSessionVisible(false);
   }, []);
 
-  useOverlaySocket(token, setLive, setSession, setEnabled, onClear);
+  useOverlaySocket(
+    token,
+    setLive,
+    setSession,
+    setEnabled,
+    setVoicePrefs,
+    onClear,
+  );
 
   useWidgetTimers({
     live,
@@ -80,6 +93,8 @@ export function OverlayClient({ token }: { token: string }) {
     setVisibleLive,
     setSessionVisible,
   });
+
+  const voice = useVoiceReadout(live, voicePrefs);
 
   // Single-widget mode (OBS users place each widget in its own
   // Browser Source). Read from URL search param, defaulting to "all".
@@ -119,6 +134,9 @@ export function OverlayClient({ token }: { token: string }) {
       {shouldShow("session") && (
         <SessionWidget live={live} session={session} />
       )}
+      {voice.needsGesture ? (
+        <VoiceGestureBanner onClick={voice.onUserGesture} />
+      ) : null}
     </div>
   );
 }
@@ -134,6 +152,7 @@ function useOverlaySocket(
   setLive: (msg: LiveGamePayload | null) => void,
   setSession: (msg: SessionSummary | null) => void,
   setEnabled: (next: Set<WidgetId>) => void,
+  setVoicePrefs: (prefs: VoicePrefs | null) => void,
   onClear: () => void,
 ) {
   useEffect(() => {
@@ -153,11 +172,17 @@ function useOverlaySocket(
     socket.on("overlay:session", (msg: SessionSummary) => {
       if (msg && typeof msg === "object") setSession(msg);
     });
-    socket.on("overlay:config", (msg: { enabledWidgets?: string[] }) => {
-      if (msg && Array.isArray(msg.enabledWidgets)) {
-        setEnabled(new Set(msg.enabledWidgets as WidgetId[]));
-      }
-    });
+    socket.on(
+      "overlay:config",
+      (msg: { enabledWidgets?: string[]; voicePrefs?: VoicePrefs }) => {
+        if (msg && Array.isArray(msg.enabledWidgets)) {
+          setEnabled(new Set(msg.enabledWidgets as WidgetId[]));
+        }
+        if (msg && msg.voicePrefs && typeof msg.voicePrefs === "object") {
+          setVoicePrefs(msg.voicePrefs);
+        }
+      },
+    );
     // Streamer cancelled the test fire — drop every payload + visible
     // flag so the scene snaps clean instead of waiting for the natural
     // visibility timers to expire on each panel.
@@ -165,7 +190,7 @@ function useOverlaySocket(
     return () => {
       socket.disconnect();
     };
-  }, [token, setLive, setSession, setEnabled, onClear]);
+  }, [token, setLive, setSession, setEnabled, setVoicePrefs, onClear]);
 }
 
 /**
