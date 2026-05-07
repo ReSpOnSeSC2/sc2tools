@@ -127,9 +127,13 @@ function buildPerGameRouter(deps) {
       const gameId = String(req.params.gameId);
       const body = req.body || {};
       if (Array.isArray(body.oppBuildLog)) {
+        // ``oppEarlyBuildLog`` from the body is intentionally discarded:
+        // since v0.4.3 it is derived from ``oppBuildLog`` at read time
+        // (perGameCompute.readOppEarlyBuildLog), not stored. Older
+        // agent payloads that still include the field round-trip
+        // harmlessly — writeOpponentBuildOrder $unsets any stale value.
         await deps.perGame.writeOpponentBuildOrder(userId, gameId, {
           oppBuildLog: body.oppBuildLog,
-          oppEarlyBuildLog: body.oppEarlyBuildLog,
         });
         res.status(202).json({ ok: true, persisted: true });
         return;

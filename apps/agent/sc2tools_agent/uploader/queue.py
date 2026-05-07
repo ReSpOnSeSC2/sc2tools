@@ -26,6 +26,20 @@ from ..state import AgentState, save_state
 log = logging.getLogger(__name__)
 
 
+class _ServerRejectedError(Exception):
+    """Server validated the payload and returned ``rejected: [...]``.
+
+    Distinct from a transient transport error so the worker can skip
+    the 2 s sleep + re-enqueue dance: a rejection that came from the
+    schema validator (``"/oppBuildLog must NOT have more than 5000
+    items"`` and friends) will fail the same way every time the same
+    payload is uploaded. Re-enqueueing it just fills the bounded queue,
+    drops new replays with ``upload_queue_full`` warnings, and never
+    converges. Mark the file as permanently rejected in
+    ``state.uploaded`` instead so future sweeps skip it.
+    """
+
+
 @dataclass(frozen=True)
 class UploadJob:
     file_path: Path
@@ -130,6 +144,22 @@ class UploadQueue:
                 continue
             try:
                 self._upload_one(job)
+            except _ServerRejectedError as exc:
+                # Permanent rejection — schema/validator failure. Do
+                # NOT retry: the same payload would fail the same way
+                # forever and starve the queue (which is what filled
+                # the bounded queue and caused
+                # ``upload_queue_full_after_retry; dropping`` cascades
+                # before this branch existed).
+                log.error(
+                    "upload_rejected %s: %s",
+                    job.file_path.name, exc,
+                )
+                self._on_failure(job.file_path, exc)
+                path_str = str(job.file_path)
+                with self._lock:
+                    self._state.uploaded[path_str] = "rejected"
+                    save_state(self._cfg.state_dir, self._state)
             except Exception as exc:  # noqa: BLE001
                 log.warning("upload_failed %s: %s", job.file_path.name, exc)
                 self._on_failure(job.file_path, exc)
@@ -147,7 +177,7 @@ class UploadQueue:
         result = self._api.upload_game(job.game.to_payload())
         accepted = bool((result.get("accepted") or [{}])[0].get("gameId"))
         if not accepted:
-            raise RuntimeError(f"server_rejected: {result!r}")
+            raise _ServerRejectedError(f"server_rejected: {result!r}")
         path_str = str(job.file_path)
         with self._lock:
             self._state.uploaded[path_str] = (

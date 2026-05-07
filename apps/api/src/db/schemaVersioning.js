@@ -59,6 +59,18 @@ const REGISTRY = Object.freeze({
   },
   [COLLECTIONS.GAMES]: {
     collection: COLLECTIONS.GAMES,
+    // v2 — v0.4.3 storage trim: ``earlyBuildLog`` / ``oppEarlyBuildLog``
+    // are dropped (derivable from full logs at read time).
+    // v3 — v0.4.3 split: heavy fields move to ``game_details``.
+    // v4 — v0.4.4 cutover: heavy-field columns are $unset on the
+    //      ``games`` collection now that all readers fetch from the
+    //      ``game_details`` collection (or from R2 when
+    //      ``GAME_DETAILS_STORE=r2``).
+    currentVersion: 4,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.GAME_DETAILS]: {
+    collection: COLLECTIONS.GAME_DETAILS,
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
@@ -79,6 +91,52 @@ const REGISTRY = Object.freeze({
   },
   [COLLECTIONS.OVERLAY_TOKENS]: {
     collection: COLLECTIONS.OVERLAY_TOKENS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  // Operational + ancillary collections. None of these have a
+  // multi-version migration history yet — they all started life on
+  // v1 and stay there until a future shape change. Listing them here
+  // keeps the ``REGISTRY covers every COLLECTIONS entry`` invariant
+  // green and makes future bumps a one-line edit instead of "add
+  // entry + bump test threshold".
+  [COLLECTIONS.ML_MODELS]: {
+    collection: COLLECTIONS.ML_MODELS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.ML_JOBS]: {
+    collection: COLLECTIONS.ML_JOBS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.IMPORT_JOBS]: {
+    collection: COLLECTIONS.IMPORT_JOBS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.MACRO_JOBS]: {
+    collection: COLLECTIONS.MACRO_JOBS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.AGENT_RELEASES]: {
+    collection: COLLECTIONS.AGENT_RELEASES,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.COMMUNITY_BUILDS]: {
+    collection: COLLECTIONS.COMMUNITY_BUILDS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.COMMUNITY_REPORTS]: {
+    collection: COLLECTIONS.COMMUNITY_REPORTS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.USER_BACKUPS]: {
+    collection: COLLECTIONS.USER_BACKUPS,
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },

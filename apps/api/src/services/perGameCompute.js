@@ -2,9 +2,75 @@
 
 const { COLLECTIONS, LIMITS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { HEAVY_FIELDS } = require("./gameDetails");
 
 const BUILD_LOG_LINE_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
 const BUILD_LOG_NOISE_RE = /^(Beacon|Reward|Spray)/;
+
+/**
+ * Cutoff (inclusive, in seconds) the agent used when it shipped a
+ * separate ``earlyBuildLog`` field. Now that the agent (v0.4.3+)
+ * stops sending the early variant — see the storage trim in the
+ * v0.4.3 CHANGELOG — services derive the same window from the full
+ * log on read using this cutoff. Kept module-level so the value is
+ * defined exactly once and matches the agent's
+ * ``build_log_lines(events, cutoff_seconds=300)``.
+ */
+const EARLY_BUILD_LOG_CUTOFF_SEC = 300;
+
+/**
+ * Filter a stored build-log to its first 5 minutes. Mirrors what the
+ * agent used to compute and send as ``earlyBuildLog`` / ``oppEarlyBuildLog``
+ * before v0.4.3.
+ *
+ * @param {string[] | undefined | null} fullLog
+ * @returns {string[]}
+ */
+function deriveEarlyBuildLog(fullLog) {
+  if (!Array.isArray(fullLog) || fullLog.length === 0) return [];
+  const out = [];
+  for (const line of fullLog) {
+    const m = BUILD_LOG_LINE_RE.exec(String(line || ""));
+    if (!m) continue;
+    const sec = Number.parseInt(m[1], 10) * 60 + Number.parseInt(m[2], 10);
+    if (sec > EARLY_BUILD_LOG_CUTOFF_SEC) break;
+    out.push(line);
+  }
+  return out;
+}
+
+/**
+ * Read the early build-log from the game doc if v0.4.x stored it,
+ * else derive from the full log. Lets us drop the redundant field
+ * from new uploads without breaking older docs.
+ *
+ * @param {{ buildLog?: string[], earlyBuildLog?: string[] }} game
+ * @returns {string[]}
+ */
+function readEarlyBuildLog(game) {
+  if (!game) return [];
+  if (Array.isArray(game.earlyBuildLog) && game.earlyBuildLog.length > 0) {
+    return game.earlyBuildLog;
+  }
+  return deriveEarlyBuildLog(game.buildLog);
+}
+
+/**
+ * Same logic, opponent perspective.
+ *
+ * @param {{ oppBuildLog?: string[], oppEarlyBuildLog?: string[] }} game
+ * @returns {string[]}
+ */
+function readOppEarlyBuildLog(game) {
+  if (!game) return [];
+  if (
+    Array.isArray(game.oppEarlyBuildLog)
+    && game.oppEarlyBuildLog.length > 0
+  ) {
+    return game.oppEarlyBuildLog;
+  }
+  return deriveEarlyBuildLog(game.oppBuildLog);
+}
 
 /**
  * PerGameComputeService — operates on a single stored game document.
@@ -27,11 +93,60 @@ const BUILD_LOG_NOISE_RE = /^(Beacon|Reward|Spray)/;
 class PerGameComputeService {
   /**
    * @param {{games: import('mongodb').Collection}} db
-   * @param {{ catalog?: { lookup: (name: string) => object | null } }} [opts]
+   * @param {{
+   *   catalog?: { lookup: (name: string) => object | null },
+   *   gameDetails?: import('./gameDetails').GameDetailsService,
+   * }} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
     this.catalog = opts.catalog || null;
+    // ``gameDetails`` may be omitted in narrow unit tests that only
+    // care about the catalog lookup or the rule-preview cursor.
+    // Production wiring (see ``app.js``) always provides it.
+    this.gameDetails = opts.gameDetails || null;
+  }
+
+  /**
+   * Read a game's heavy blob from the gameDetails store with a
+   * back-compat fallback to the inline copy on the games doc. While
+   * the v0.4.3 cutover migration is in flight, some legacy games
+   * still have ``buildLog`` / ``oppBuildLog`` / ``macroBreakdown`` /
+   * ``apmCurve`` inline; reading the slim row gives us those for
+   * free. Once the $unset cleanup migration runs, the inline copies
+   * are gone and this method serves entirely from the store.
+   *
+   * @private
+   * @param {string} userId
+   * @param {string} gameId
+   * @param {{ slim?: object | null } | undefined} [opts]
+   *        when the caller already loaded the slim games doc, pass
+   *        it through to avoid a second findOne.
+   * @returns {Promise<{ slim: any | null, blob: Record<string, any> }>}
+   */
+  async _readGameWithDetails(userId, gameId, opts = {}) {
+    const [slim, fromStore] = await Promise.all([
+      opts.slim !== undefined
+        ? Promise.resolve(opts.slim)
+        : this.db.games.findOne({ userId, gameId }, { projection: { _id: 0 } }),
+      this.gameDetails
+        ? this.gameDetails.findOne(userId, gameId)
+        : Promise.resolve(null),
+    ]);
+    /** @type {Record<string, any>} */
+    const blob = {};
+    // Detail-store wins when it has a value (it's authoritative
+    // post-cutover); the slim row supplies the legacy fallback.
+    const sources = [slim, fromStore];
+    for (const k of HEAVY_FIELDS) {
+      for (const src of sources) {
+        if (src && src[k] !== undefined) {
+          blob[k] = src[k];
+          break;
+        }
+      }
+    }
+    return { slim, blob };
   }
 
   /**
@@ -42,26 +157,27 @@ class PerGameComputeService {
    * @returns {Promise<object | null>}
    */
   async buildOrder(userId, gameId) {
-    const game = await this.db.games.findOne(
-      { userId, gameId },
-      { projection: { _id: 0 } },
-    );
-    if (!game) return null;
+    const { slim, blob } = await this._readGameWithDetails(userId, gameId);
+    if (!slim) return null;
+    // Merge so ``readEarlyBuildLog`` / ``readOppEarlyBuildLog`` see
+    // a single object with the build-log fields populated, regardless
+    // of whether they came from the slim row or the detail store.
+    const merged = { ...slim, ...blob };
     return {
       ok: true,
-      game_id: game.gameId,
-      my_build: game.myBuild || null,
-      my_race: game.myRace || null,
-      opp_strategy: game.opponent?.strategy || null,
-      opponent: game.opponent?.displayName || null,
-      opp_race: game.opponent?.race || null,
-      map: game.map || null,
-      result: game.result || null,
-      events: parseBuildLogLines(game.buildLog || [], this.catalog),
-      early_events: parseBuildLogLines(game.earlyBuildLog || [], this.catalog),
-      opp_events: parseBuildLogLines(game.oppBuildLog || [], this.catalog),
+      game_id: slim.gameId,
+      my_build: slim.myBuild || null,
+      my_race: slim.myRace || null,
+      opp_strategy: slim.opponent?.strategy || null,
+      opponent: slim.opponent?.displayName || null,
+      opp_race: slim.opponent?.race || null,
+      map: slim.map || null,
+      result: slim.result || null,
+      events: parseBuildLogLines(merged.buildLog || [], this.catalog),
+      early_events: parseBuildLogLines(readEarlyBuildLog(merged), this.catalog),
+      opp_events: parseBuildLogLines(merged.oppBuildLog || [], this.catalog),
       opp_early_events: parseBuildLogLines(
-        game.oppEarlyBuildLog || [],
+        readOppEarlyBuildLog(merged),
         this.catalog,
       ),
     };
@@ -76,7 +192,12 @@ class PerGameComputeService {
    * @param {string} gameId
    */
   async macroBreakdown(userId, gameId) {
-    const game = await this.db.games.findOne(
+    // The slim row carries macroScore + race + durationSec; the
+    // detail blob carries the macroBreakdown payload itself. Fetch
+    // both — the projection on the slim row keeps Mongo's network
+    // cost minimal even though _readGameWithDetails normally pulls
+    // the full doc.
+    const slim = await this.db.games.findOne(
       { userId, gameId },
       {
         projection: {
@@ -85,17 +206,20 @@ class PerGameComputeService {
           macroScore: 1,
           myRace: 1,
           durationSec: 1,
+          gameId: 1,
         },
       },
     );
-    if (!game) return null;
-    if (!game.macroBreakdown) return { ok: false, code: "not_computed" };
+    if (!slim) return null;
+    const { blob } = await this._readGameWithDetails(userId, gameId, { slim });
+    const breakdown = blob.macroBreakdown || slim.macroBreakdown || null;
+    if (!breakdown) return { ok: false, code: "not_computed" };
     return {
       ok: true,
-      macro_score: game.macroScore || null,
-      race: game.myRace || null,
-      game_length_sec: game.durationSec || 0,
-      ...game.macroBreakdown,
+      macro_score: slim.macroScore || null,
+      race: slim.myRace || null,
+      game_length_sec: slim.durationSec || 0,
+      ...breakdown,
     };
   }
 
@@ -111,7 +235,7 @@ class PerGameComputeService {
    * @param {string} gameId
    */
   async apmCurve(userId, gameId) {
-    const game = await this.db.games.findOne(
+    const slim = await this.db.games.findOne(
       { userId, gameId },
       {
         projection: {
@@ -122,17 +246,17 @@ class PerGameComputeService {
         },
       },
     );
-    if (!game) return null;
-    if (!game.apmCurve) return { ok: false, code: "not_computed" };
+    if (!slim) return null;
+    const { blob } = await this._readGameWithDetails(userId, gameId, { slim });
+    const curve = blob.apmCurve || slim.apmCurve || null;
+    if (!curve) return { ok: false, code: "not_computed" };
     return {
       ok: true,
-      game_id: game.gameId,
-      game_length_sec: game.durationSec || 0,
-      window_sec: game.apmCurve.window_sec || 30,
-      has_data: !!game.apmCurve.has_data,
-      players: Array.isArray(game.apmCurve.players)
-        ? game.apmCurve.players
-        : [],
+      game_id: slim.gameId,
+      game_length_sec: slim.durationSec || 0,
+      window_sec: curve.window_sec || 30,
+      has_data: !!curve.has_data,
+      players: Array.isArray(curve.players) ? curve.players : [],
     };
   }
 
@@ -153,16 +277,33 @@ class PerGameComputeService {
     if (!payload || typeof payload.macroScore !== "number") {
       throw new Error("macroScore required");
     }
+    // Slim-row update keeps the surface fields the Recent Games table
+    // and aggregations read directly: macroScore + top3Leaks for
+    // hover cards. The macroBreakdown blob itself goes to the detail
+    // store. ``$unset`` removes any legacy inline copy from games
+    // — the cutover is incremental: each recompute flips one game.
     /** @type {Record<string, any>} */
-    const set = {
-      macroScore: payload.macroScore,
-      macroBreakdown: payload.breakdown || {},
-    };
+    const set = { macroScore: payload.macroScore };
     if (Array.isArray(payload.top3Leaks)) {
       set.top3Leaks = payload.top3Leaks;
     }
     stampVersion(set, COLLECTIONS.GAMES);
-    await this.db.games.updateOne({ userId, gameId }, { $set: set });
+    await this.db.games.updateOne(
+      { userId, gameId },
+      { $set: set, $unset: { macroBreakdown: "" } },
+    );
+    if (this.gameDetails) {
+      const slim = await this.db.games.findOne(
+        { userId, gameId },
+        { projection: { _id: 0, date: 1 } },
+      );
+      const date = slim && slim.date instanceof Date
+        ? slim.date
+        : new Date();
+      await this.gameDetails.upsert(userId, gameId, date, {
+        macroBreakdown: payload.breakdown || {},
+      });
+    }
   }
 
   /**
@@ -174,9 +315,26 @@ class PerGameComputeService {
    */
   async writeApmCurve(userId, gameId, curve) {
     if (!curve || typeof curve !== "object") throw new Error("curve required");
-    const set = { apmCurve: curve };
+    // Bump the slim row's _schemaVersion + $unset any legacy inline
+    // apmCurve so the on-disk row shrinks the next time WiredTiger
+    // compacts. The curve itself moves to the detail store.
+    /** @type {Record<string, any>} */
+    const set = {};
     stampVersion(set, COLLECTIONS.GAMES);
-    await this.db.games.updateOne({ userId, gameId }, { $set: set });
+    await this.db.games.updateOne(
+      { userId, gameId },
+      { $set: set, $unset: { apmCurve: "" } },
+    );
+    if (this.gameDetails) {
+      const slim = await this.db.games.findOne(
+        { userId, gameId },
+        { projection: { _id: 0, date: 1 } },
+      );
+      const date = slim && slim.date instanceof Date
+        ? slim.date
+        : new Date();
+      await this.gameDetails.upsert(userId, gameId, date, { apmCurve: curve });
+    }
   }
 
   /**
@@ -191,15 +349,31 @@ class PerGameComputeService {
     if (!payload || !Array.isArray(payload.oppBuildLog)) {
       throw new Error("oppBuildLog required");
     }
+    const oppBuildLog = payload.oppBuildLog.slice(0, 5000);
+    // Slim row keeps only metadata + the version stamp. The
+    // ``oppBuildLog`` array moves to the detail store; legacy
+    // inline copies (and the deprecated ``oppEarlyBuildLog``) are
+    // $unset so each recompute incrementally trims the games doc.
     /** @type {Record<string, any>} */
-    const set = {
-      oppBuildLog: payload.oppBuildLog.slice(0, 5000),
-    };
-    if (Array.isArray(payload.oppEarlyBuildLog)) {
-      set.oppEarlyBuildLog = payload.oppEarlyBuildLog.slice(0, 5000);
-    }
+    const set = {};
     stampVersion(set, COLLECTIONS.GAMES);
-    await this.db.games.updateOne({ userId, gameId }, { $set: set });
+    await this.db.games.updateOne(
+      { userId, gameId },
+      {
+        $set: set,
+        $unset: { oppBuildLog: "", oppEarlyBuildLog: "" },
+      },
+    );
+    if (this.gameDetails) {
+      const slim = await this.db.games.findOne(
+        { userId, gameId },
+        { projection: { _id: 0, date: 1 } },
+      );
+      const date = slim && slim.date instanceof Date
+        ? slim.date
+        : new Date();
+      await this.gameDetails.upsert(userId, gameId, date, { oppBuildLog });
+    }
   }
 
   /**
@@ -236,6 +410,8 @@ class PerGameComputeService {
    */
   async listForRulePreview(userId, opts = {}) {
     const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 600));
+    // Slim metadata first — needed for both legacy fallback and the
+    // gameId list we'll batch-fetch detail blobs for.
     const games = await this.db.games
       .find(
         { userId },
@@ -246,6 +422,10 @@ class PerGameComputeService {
             myBuild: 1,
             myRace: 1,
             opponent: 1,
+            // Legacy fallback: pre-v0.4.3 docs still have these
+            // inline. Once the cleanup migration runs, the projection
+            // returns ``undefined`` and we serve from the detail
+            // store via the readMany call below.
             buildLog: 1,
             oppBuildLog: 1,
             result: 1,
@@ -261,25 +441,48 @@ class PerGameComputeService {
       .sort({ date: -1 })
       .limit(limit)
       .toArray();
+    // Identify games that need a detail-store lookup — anything
+    // missing buildLog/oppBuildLog inline. With the slim-only schema
+    // this will be every game; with legacy docs still on disk it's
+    // the post-migration ones.
+    const needDetails = [];
+    for (const g of games) {
+      if (!Array.isArray(g.buildLog) || !Array.isArray(g.oppBuildLog)) {
+        needDetails.push(String(g.gameId || ""));
+      }
+    }
+    const blobs = this.gameDetails && needDetails.length > 0
+      ? await this.gameDetails.findMany(userId, needDetails.filter(Boolean))
+      : new Map();
     return games.map(
-      /** @param {any} g */ (g) => ({
-        gameId: String(g.gameId || ""),
-        myBuild: g.myBuild || null,
-        myRace: g.myRace || null,
-        oppRace: g.opponent ? g.opponent.race || null : null,
-        opponent: g.opponent || null,
-        durationSec: typeof g.durationSec === "number" ? g.durationSec : null,
-        macroScore: typeof g.macroScore === "number" ? g.macroScore : null,
-        apm: typeof g.apm === "number" ? g.apm : null,
-        spq: typeof g.spq === "number" ? g.spq : null,
-        buildLog: Array.isArray(g.buildLog) ? g.buildLog : [],
-        oppBuildLog: Array.isArray(g.oppBuildLog) ? g.oppBuildLog : [],
-        events: parseBuildLogLines(g.buildLog || [], this.catalog),
-        oppEvents: parseBuildLogLines(g.oppBuildLog || [], this.catalog),
-        result: g.result || null,
-        date: g.date || null,
-        map: g.map || null,
-      }),
+      /** @param {any} g */ (g) => {
+        const gid = String(g.gameId || "");
+        const blob = blobs.get(gid) || {};
+        const buildLog = Array.isArray(g.buildLog)
+          ? g.buildLog
+          : Array.isArray(blob.buildLog) ? blob.buildLog : [];
+        const oppBuildLog = Array.isArray(g.oppBuildLog)
+          ? g.oppBuildLog
+          : Array.isArray(blob.oppBuildLog) ? blob.oppBuildLog : [];
+        return {
+          gameId: gid,
+          myBuild: g.myBuild || null,
+          myRace: g.myRace || null,
+          oppRace: g.opponent ? g.opponent.race || null : null,
+          opponent: g.opponent || null,
+          durationSec: typeof g.durationSec === "number" ? g.durationSec : null,
+          macroScore: typeof g.macroScore === "number" ? g.macroScore : null,
+          apm: typeof g.apm === "number" ? g.apm : null,
+          spq: typeof g.spq === "number" ? g.spq : null,
+          buildLog,
+          oppBuildLog,
+          events: parseBuildLogLines(buildLog, this.catalog),
+          oppEvents: parseBuildLogLines(oppBuildLog, this.catalog),
+          result: g.result || null,
+          date: g.date || null,
+          map: g.map || null,
+        };
+      },
     );
   }
 }
@@ -473,4 +676,10 @@ module.exports = {
   PerGameComputeService,
   MacroBackfillService,
   parseBuildLogLines,
+  // Exported so other services (dnaTimings, ml) consume the same
+  // derivation logic instead of each rolling their own filter.
+  deriveEarlyBuildLog,
+  readEarlyBuildLog,
+  readOppEarlyBuildLog,
+  EARLY_BUILD_LOG_CUTOFF_SEC,
 };

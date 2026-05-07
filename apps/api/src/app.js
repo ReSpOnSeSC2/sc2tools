@@ -20,6 +20,8 @@ const { UsersService } = require("./services/users");
 const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
 const { OpponentsService } = require("./services/opponents");
 const { GamesService } = require("./services/games");
+const { GameDetailsService } = require("./services/gameDetails");
+const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { CustomBuildsService } = require("./services/customBuilds");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
@@ -101,8 +103,29 @@ function buildApp(deps) {
  */
 function makeServices(deps) {
   const users = new UsersService(deps.db);
-  const opponents = new OpponentsService(deps.db, deps.config.serverPepper);
-  const games = new GamesService(deps.db);
+  // Pluggable backend for the per-game heavy blob. Defaults to
+  // ``MongoDetailsStore`` (in-database); flips to ``R2DetailsStore``
+  // when ``GAME_DETAILS_STORE=r2`` is set with the R2 connection
+  // block populated. See ``services/gameDetailsStore.js`` for the
+  // selection logic. Built first because both ``opponents`` and
+  // ``perGame`` consume it for the post-cutover read paths.
+  const gameDetailsStore = buildStoreFromConfig({
+    db: deps.db,
+    config: {
+      gameDetailsStore: deps.config.gameDetailsStore,
+      r2: deps.config.r2,
+    },
+  });
+  const gameDetails = new GameDetailsService(gameDetailsStore);
+  const opponents = new OpponentsService(
+    deps.db,
+    deps.config.serverPepper,
+    { gameDetails },
+  );
+  // GamesService persists heavy fields through GameDetailsService,
+  // not directly to a collection — the indirection is what makes
+  // the R2 swap a config change instead of a code change.
+  const games = new GamesService(deps.db, { gameDetails });
   const pairings = new DevicePairingsService(deps.db);
   const overlayTokens = new OverlayTokensService(deps.db);
   const aggregations = new AggregationsService(deps.db);
@@ -110,12 +133,13 @@ function makeServices(deps) {
   const catalog = new CatalogService(deps.db);
   const perGame = new PerGameComputeService(deps.db, {
     catalog: catalog.catalogLookup(),
+    gameDetails,
   });
   const customBuilds = new CustomBuildsService(deps.db, { perGame });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io });
   const spatial = new SpatialService(deps.db);
-  const ml = new MLService(deps.db, { io: deps.io });
+  const ml = new MLService(deps.db, { io: deps.io, gameDetails });
   const agentVersion = new AgentVersionService(deps.db);
   const gdpr = new GdprService(deps.db);
   const community = new CommunityService(deps.db);
@@ -124,6 +148,7 @@ function makeServices(deps) {
     users,
     opponents,
     games,
+    gameDetails,
     customBuilds,
     pairings,
     overlayTokens,

@@ -11,6 +11,7 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   profiles: import('mongodb').Collection,
  *   opponents: import('mongodb').Collection,
  *   games: import('mongodb').Collection,
+ *   gameDetails: import('mongodb').Collection,
  *   customBuilds: import('mongodb').Collection,
  *   devicePairings: import('mongodb').Collection,
  *   deviceTokens: import('mongodb').Collection,
@@ -51,6 +52,7 @@ async function connect({ uri, dbName }) {
     profiles: db.collection(COLLECTIONS.PROFILES),
     opponents: db.collection(COLLECTIONS.OPPONENTS),
     games: db.collection(COLLECTIONS.GAMES),
+    gameDetails: db.collection(COLLECTIONS.GAME_DETAILS),
     customBuilds: db.collection(COLLECTIONS.CUSTOM_BUILDS),
     devicePairings: db.collection(COLLECTIONS.DEVICE_PAIRINGS),
     deviceTokens: db.collection(COLLECTIONS.DEVICE_TOKENS),
@@ -93,6 +95,21 @@ async function ensureIndexes(ctx) {
   await ctx.games.createIndex({ userId: 1, gameId: 1 }, { unique: true });
   await ctx.games.createIndex({ userId: 1, date: -1 });
   await ctx.games.createIndex({ userId: 1, oppPulseId: 1, date: -1 });
+
+  // Game-detail rows live in their own collection so the slim
+  // ``games`` collection stays cheap to scan (Recent Games table,
+  // aggregations, opponent profile). Detail rows are looked up by the
+  // SAME (userId, gameId) tuple — same unique index shape — and only
+  // the per-game inspector / macro drilldown / spatial endpoints
+  // touch them. See ``services/gameDetails.js``.
+  await ctx.gameDetails.createIndex(
+    { userId: 1, gameId: 1 },
+    { unique: true },
+  );
+  // ``date`` is duplicated onto the detail row so the spatial
+  // aggregation (``services/spatial.js``) can keep filtering by date
+  // window without a $lookup back to games.
+  await ctx.gameDetails.createIndex({ userId: 1, date: -1 });
 
   await ctx.customBuilds.createIndex({ userId: 1, slug: 1 }, { unique: true });
   await ctx.customBuilds.createIndex({ userId: 1, updatedAt: -1 });

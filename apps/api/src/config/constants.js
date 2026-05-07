@@ -25,6 +25,12 @@ const COLLECTIONS = Object.freeze({
   PROFILES: "profiles",
   OPPONENTS: "opponents",
   GAMES: "games",
+  // Per-game heavy fields (build logs, macroBreakdown, apmCurve,
+  // spatial). Split out of ``games`` in v0.4.3 so list-page queries
+  // can scan slim metadata without dragging ~40 kB of detail data
+  // into RAM per game. Keyed on the same ``{userId, gameId}`` tuple
+  // as games. See ``services/gameDetails.js``.
+  GAME_DETAILS: "game_details",
   CUSTOM_BUILDS: "custom_builds",
   DEVICE_PAIRINGS: "device_pairings",
   DEVICE_TOKENS: "device_tokens",
