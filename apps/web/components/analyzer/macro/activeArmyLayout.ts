@@ -8,6 +8,10 @@
  */
 
 import { computeArmyValue } from "@/lib/sc2-units";
+import {
+  deriveUnitComposition,
+  type BuildEvent,
+} from "./compositionAt";
 import type {
   StatsEvent,
   UnitTimelineEntry,
@@ -70,42 +74,44 @@ export interface ChartLayout {
 }
 
 /**
- * Build a per-time series for one side. Army value comes from the
- * unit_timeline at matching times when available (computed via the
- * unit cost catalog so it matches sc2replaystats's "army value"
- * methodology); falls back to ``food_used * 8`` for pre-v0.5
- * payloads where unit_timeline is absent.
+ * Build a per-time series for one side. Army value is computed from
+ * the SAME hybrid composition source the roster panel uses
+ * (``deriveUnitComposition``): unit_timeline when populated for the
+ * side, build-order-derived counts (with morphs + timeline deaths)
+ * otherwise. This guarantees the chart line and the snapshot Army
+ * total agree at every tick — previously the chart snapped strictly
+ * on exact unit_timeline times and silently fell through to the
+ * food*8 heuristic on misses, producing a number divergent from the
+ * roster.
+ *
+ * Falls back to ``food_used * 8`` only when neither timeline nor
+ * build_order is available for this side, matching the legacy
+ * behaviour for pre-v0.5 slim payloads.
  */
 export function buildSeries(
   samples: StatsEvent[],
   unitTimeline: UnitTimelineEntry[] | undefined,
   side: "my" | "opp",
+  buildEvents?: BuildEvent[] | undefined,
 ): SeriesPoint[] {
   if (!Array.isArray(samples) || samples.length === 0) return [];
-  const tlByTime = new Map<number, Record<string, number>>();
-  if (Array.isArray(unitTimeline)) {
-    for (const entry of unitTimeline) {
-      if (typeof entry?.time !== "number") continue;
-      const composition =
-        side === "my" ? entry.my : entry.opp;
-      if (composition) tlByTime.set(Math.round(entry.time), composition);
-    }
-  }
   const out: SeriesPoint[] = [];
   for (const sample of samples) {
     const t = Math.round(Number(sample.time) || 0);
     const workers = Number(sample.food_workers) || 0;
-    let army = 0;
-    const composition = tlByTime.get(t);
-    if (composition) {
-      army = computeArmyValue(composition);
-    } else {
-      // Fallback: convert food_used to a comparable scale. Without
-      // unit_timeline data we can't compute true mineral+gas value,
-      // but the food*8 heuristic at least keeps the line shape
-      // continuous through the chart while the user re-syncs an
-      // older replay.
+    const derived = deriveUnitComposition({
+      timeline: unitTimeline,
+      buildEvents,
+      side,
+      t,
+    });
+    let army: number;
+    if (derived.source === "empty") {
+      // Last-resort fallback: food*8 keeps the line continuous when
+      // no per-tick composition is available at all.
       army = (Number(sample.food_used) || 0) * FOOD_FALLBACK_MULT;
+    } else {
+      army = computeArmyValue(derived.units);
     }
     out.push({ t, army, workers });
   }
@@ -118,13 +124,15 @@ export function buildLayout(
   oppSamples: StatsEvent[],
   gameLengthSec: number | undefined,
   unitTimeline: UnitTimelineEntry[] | undefined,
+  myBuildEvents?: BuildEvent[] | undefined,
+  oppBuildEvents?: BuildEvent[] | undefined,
 ): ChartLayout | null {
   const my = Array.isArray(mySamples) ? mySamples : [];
   const opp = Array.isArray(oppSamples) ? oppSamples : [];
   if (my.length === 0 && opp.length === 0) return null;
 
-  const mySeries = buildSeries(my, unitTimeline, "my");
-  const oppSeries = buildSeries(opp, unitTimeline, "opp");
+  const mySeries = buildSeries(my, unitTimeline, "my", myBuildEvents);
+  const oppSeries = buildSeries(opp, unitTimeline, "opp", oppBuildEvents);
   const allSeries = mySeries.concat(oppSeries);
 
   const observedT = allSeries.reduce((m, p) => Math.max(m, p.t), 0);
