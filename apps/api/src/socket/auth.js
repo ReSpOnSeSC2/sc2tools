@@ -11,7 +11,9 @@ const { sha256 } = require("../util/hash");
  *  - **OBS overlay** sends `auth.overlayToken = <token>`. The token IS
  *    the auth — there's no Clerk session on a Browser Source. The
  *    socket joins `overlay:<token>` so the agent's live-parse payload
- *    can be broadcast to one specific overlay.
+ *    can be broadcast to one specific overlay. The handshake may also
+ *    carry an `auth.timezone` IANA tz string so the cloud-driven
+ *    session widget anchors "today" to the streamer's wall clock.
  *  - **Desktop agent** sends `auth.deviceToken = <token>`. The token
  *    is the same long-lived value used for REST `Authorization:
  *    Bearer …` calls; the cloud joins the agent into `user:<userId>`
@@ -26,6 +28,10 @@ const { sha256 } = require("../util/hash");
  *   audience?: string,
  *   resolveOverlayToken?: (token: string) => Promise<{userId: string, label: string, enabledWidgets?: string[]}|null>,
  *   resolveDeviceToken?: (tokenHash: string) => Promise<{userId: string}|null>,
+ *   resolveSession?: (userId: string, timezone?: string) => Promise<{
+ *     wins: number, losses: number, games: number,
+ *     mmrStart?: number, mmrCurrent?: number,
+ *   }>,
  * }} opts
  */
 function attachSocketAuth(io, opts) {
@@ -45,6 +51,14 @@ function attachSocketAuth(io, opts) {
         socket.data.overlayToken = overlayToken;
         socket.data.overlayUserId = hit.userId;
         socket.data.kind = "overlay";
+        // Stash the OBS Browser Source's IANA timezone so the
+        // session-widget aggregation can anchor "today" to the
+        // streamer's wall clock. Defaults to UTC at the
+        // service-method layer when missing or malformed.
+        const tz = socket.handshake?.auth?.timezone;
+        if (typeof tz === "string" && tz.length > 0 && tz.length <= 64) {
+          socket.data.timezone = tz;
+        }
         next();
         return;
       }
@@ -113,6 +127,45 @@ function attachSocketAuth(io, opts) {
           })
           .catch(() => {});
       }
+      // Cloud-driven session card. The session-record widget shows
+      // today's W-L (and MMR delta when myMmr is populated on game
+      // rows) and is derived purely from cloud-stored games — so it
+      // works whether or not the local agent is currently posting
+      // pre/post-game live events. Push the latest aggregate as soon
+      // as the overlay socket connects so OBS isn't staring at a blank
+      // panel waiting for the first ``overlay:live`` to arrive.
+      if (u && opts.resolveSession) {
+        opts
+          .resolveSession(u, socket.data.timezone)
+          .then((session) => {
+            if (session) socket.emit("overlay:session", session);
+          })
+          .catch(() => {});
+      }
+      // Allow OBS to refresh its tz late (e.g. after detecting it via
+      // ``Intl.DateTimeFormat().resolvedOptions().timeZone`` on first
+      // render). We honour it for the very next session emission.
+      socket.on(
+        "overlay:set_timezone",
+        /** @param {unknown} tz */
+        (tz) => {
+          if (
+            typeof tz === "string"
+            && tz.length > 0
+            && tz.length <= 64
+            && opts.resolveSession
+            && socket.data.overlayUserId
+          ) {
+            socket.data.timezone = tz;
+            opts
+              .resolveSession(socket.data.overlayUserId, tz)
+              .then((session) => {
+                if (session) socket.emit("overlay:session", session);
+              })
+              .catch(() => {});
+          }
+        },
+      );
       return;
     }
     if (socket.data.kind === "device") {

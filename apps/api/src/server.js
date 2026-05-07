@@ -40,6 +40,7 @@ async function main() {
     app: import('express').Express,
     services: {
       overlayTokens: import('./services/types').OverlayTokensService,
+      games: import('./services/types').GamesService,
       [k: string]: unknown,
     },
   }} */ (buildApp({ db, logger, config, io }));
@@ -51,6 +52,8 @@ async function main() {
     resolveOverlayToken: (token) => services.overlayTokens.resolve(token),
     resolveDeviceToken: (tokenHash) =>
       /** @type {any} */ (services).pairings.findTokenByHash(tokenHash),
+    resolveSession: (userId, timezone) =>
+      services.games.todaySession(userId, timezone),
   });
 
   httpServer.listen(config.port, () => {

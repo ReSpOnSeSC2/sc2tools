@@ -9,10 +9,20 @@ const { validateGameRecord } = require("../validation/gameRecord");
  * Ingest accepts either a single game object or `{games: [...]}` for
  * batches. Each game is upserted by `gameId` so retries are safe.
  *
+ * After a successful ingest this route also pushes:
+ *   - ``games:changed`` to the user's room so an open SPA tab refreshes;
+ *   - ``overlay:session`` to each connected overlay socket so the
+ *     session-record widget ticks immediately;
+ *   - ``overlay:live`` to the user's overlay tokens with a derived
+ *     ``LiveGamePayload`` so every other widget renders the new game
+ *     without the agent needing its own socket connection.
+ *
  * @param {{
  *   games: import('../services/types').GamesService,
  *   opponents: import('../services/types').OpponentsService,
  *   customBuilds?: import('../services/types').CustomBuildsService,
+ *   overlayLive?: import('../services/overlayLive').OverlayLiveService,
+ *   overlayTokens?: import('../services/types').OverlayTokensService,
  *   io?: import('socket.io').Server,
  *   auth: import('express').RequestHandler,
  * }} deps
@@ -183,6 +193,51 @@ function buildGamesRouter(deps) {
         deps.io.to(`user:${userId}`).emit("games:changed", {
           count: accepted.length,
         });
+        // Recompute the session card per connected overlay socket and
+        // push the fresh aggregate. We can't broadcast to the whole
+        // user room because each overlay carries its own timezone in
+        // ``socket.data.timezone`` — "today" depends on the streamer's
+        // wall clock, not on UTC. Best-effort: a transient resolveSocket
+        // failure for one overlay must not block the ingest response.
+        emitSessionUpdate(deps.io, deps.games, userId).catch((err) => {
+          if (req.log) {
+            req.log.warn(
+              { err, userId },
+              "overlay_session_emit_failed",
+            );
+          }
+        });
+        // Derive and broadcast the full LiveGamePayload for every
+        // widget that depends on ``overlay:live``. Built off the LAST
+        // accepted game so a batch upload (Resync, large catch-up)
+        // doesn't fan out one event per game in the burst — the
+        // overlay only renders the current state, not the play-by-
+        // play. ``incoming`` is the validated, non-stripped game
+        // body; we still pass it through buildFromGame because the
+        // service hydrates H2H / streak / topbuilds from cloud
+        // history.
+        if (deps.overlayLive && deps.overlayTokens) {
+          const lastAcceptedId = accepted[accepted.length - 1].gameId;
+          const lastGame = incoming.find(
+            (g) => g && g.gameId === lastAcceptedId,
+          );
+          if (lastGame) {
+            emitOverlayLive(
+              deps.io,
+              deps.overlayLive,
+              deps.overlayTokens,
+              userId,
+              lastGame,
+            ).catch((err) => {
+              if (req.log) {
+                req.log.warn(
+                  { err, userId },
+                  "overlay_live_emit_failed",
+                );
+              }
+            });
+          }
+        }
       }
       res.status(202).json({ accepted, rejected });
     } catch (err) {
@@ -191,6 +246,89 @@ function buildGamesRouter(deps) {
   });
 
   return router;
+}
+
+/**
+ * Push a fresh ``overlay:session`` event to every overlay Browser
+ * Source currently subscribed to this user's socket room. The session
+ * widget is cloud-driven (today's W-L derived from the games
+ * collection) so it must update the moment a new game lands —
+ * otherwise the OBS panel sits on a stale W-L count until the streamer
+ * reloads the Browser Source.
+ *
+ * Per-socket rather than room-broadcast because each overlay's "today"
+ * boundary depends on its own ``socket.data.timezone`` — a streamer
+ * mid-day in PT and a co-host's overlay in CET need different
+ * aggregates. Broadcasting one UTC bucket would mis-align both.
+ *
+ * Concurrency is bounded: the session aggregation is a single
+ * 48-hour-window find against ``games`` per overlay, and a typical
+ * user has 1–3 overlay sockets connected at once. We compute
+ * sequentially to keep Mongo load predictable; a streamer with many
+ * dozens of overlays would still complete inside the request handler's
+ * window without contending with the ingest itself (we already returned
+ * 202 to the agent).
+ *
+ * @param {import('socket.io').Server} io
+ * @param {import('../services/types').GamesService} games
+ * @param {string} userId
+ */
+async function emitSessionUpdate(io, games, userId) {
+  if (!io || !games || !userId) return;
+  /** @type {any[]} */
+  const sockets = await io.in(`user:${userId}`).fetchSockets();
+  for (const socket of sockets) {
+    if (socket?.data?.kind !== "overlay") continue;
+    /** @type {string|undefined} */
+    const tz = socket.data.timezone;
+    try {
+      const session = await games.todaySession(userId, tz);
+      if (session) socket.emit("overlay:session", session);
+    } catch {
+      // Per-overlay failure is non-fatal — keep walking the list so
+      // one bad socket doesn't starve the others of their update.
+    }
+  }
+}
+
+/**
+ * Push a derived ``overlay:live`` payload to every active overlay
+ * token belonging to ``userId``. The cloud derivation closes the gap
+ * the agent's never-called ``push_overlay_live`` left open — every
+ * widget that historically needed an agent connection now renders off
+ * the cloud copy of the same data.
+ *
+ * Per-token (not per-room) emission is deliberate: we'd like to
+ * eventually include the token's enabled-widgets list when filtering
+ * the payload, and we already need the per-token loop for that future
+ * step. Today the same payload goes to every active token of the
+ * user — the overlay client's per-widget gating still hides anything
+ * the streamer disabled.
+ *
+ * Non-fatal: a transient Mongo blip or a missing opponents row
+ * shouldn't block the agent's ingest reply. We swallow the error
+ * after logging at the route layer; the next game's emit is
+ * independent.
+ *
+ * @param {import('socket.io').Server} io
+ * @param {import('../services/overlayLive').OverlayLiveService} overlayLive
+ * @param {import('../services/types').OverlayTokensService} overlayTokens
+ * @param {string} userId
+ * @param {Record<string, any>} game
+ */
+async function emitOverlayLive(io, overlayLive, overlayTokens, userId, game) {
+  if (!io || !overlayLive || !overlayTokens || !userId || !game) return;
+  const payload = await overlayLive.buildFromGame(userId, game);
+  if (!payload) return;
+  // ``list`` returns *all* tokens for the user (active + revoked).
+  // Filter the revoked ones out so a leaked-then-revoked token can't
+  // still receive live data after revocation.
+  const items = await overlayTokens.list(userId);
+  for (const t of items) {
+    if (!t || !t.token) continue;
+    if (t.revokedAt) continue;
+    io.to(`overlay:${t.token}`).emit("overlay:live", payload);
+  }
 }
 
 /** @param {unknown} raw @returns {number|undefined} */

@@ -10,6 +10,68 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Fixed + Added (cloud v0.5.0 + agent v0.5.0) — overlay widgets are fully cloud-driven, with a Test button per widget
+
+The hosted OBS overlay was bleeding through with most widgets blank
+because the agent's ``push_overlay_live`` helper had been wired in
+``api_client.py`` but never actually invoked from any pipeline path.
+Streamers using only the website (no desktop agent) saw nothing for
+every widget except the Session card, which had no socket data flow at
+all. This release closes both gaps and adds a per-widget Test button
+so streamers can validate their OBS layout without needing a real
+ladder match.
+
+- **New ``OverlayLiveService``** (``apps/api/src/services/overlayLive.js``)
+  derives a complete ``LiveGamePayload`` from one freshly-ingested
+  game plus the user's broader cloud history. Cloud-side derivation
+  means every widget — Opponent identity, Match result, Post-game,
+  MMR delta, Streak, Cheese alert, Rematch, Rival, Rank, Meta, Top
+  builds, Favourite opening, Best answer, Scouting tells — renders
+  off the same data the dashboard already holds. The agent no longer
+  needs an overlay socket of its own; it just uploads games as
+  before.
+    - **Per-widget data sources.** ``buildFromGame`` reads ``streak``
+      from the most-recent 20 games, ``mmrDelta`` from the previous
+      game's ``myMmr``, ``rank`` (league + tier) from a Blizzard
+      cutoff table indexed by MMR, ``rival`` / ``headToHead`` /
+      ``favOpening`` / ``predictedStrategies`` / ``scouting`` /
+      ``rematch`` from the opponents row, ``topBuilds`` and
+      ``bestAnswer`` from the games collection cross-tabbed by
+      matchup, and ``meta`` from opponent-strategy share for the
+      matchup. Cheese probability is derived from the opponent's
+      stored strategy via a small keyword set ("Pool first", "Proxy",
+      "Cannon rush", "All-in", etc.) so the alert lights up without
+      a separate detector pass.
+- **New ``POST /v1/overlay-events/test``** route fires a synthetic
+  ``overlay:live`` (and ``overlay:session`` for the session widget)
+  payload at one specific widget — or all widgets at once — so the
+  streamer can preview the OBS layout. Reuses the per-token rate
+  limiter the agent's live route uses, so a Test mash can't flood the
+  socket.
+- **Settings → Overlay UI rewrite.** Each widget URL now has a Test
+  button beside Copy. A "Test all" button on the active token header
+  lights every enabled widget at once. Disabled widgets show a
+  greyed-out Test button (it would no-op anyway). The previous
+  "needs agent" / "cloud" badges are removed because every widget
+  now works from cloud-derived data — the only remaining requirement
+  is that games actually exist in the cloud, which the desktop
+  agent provides.
+- **Cloud-driven Session widget** (carries forward from the same
+  PR's earlier work). The ``games`` collection picks up the new
+  ``overlay:session`` socket event; the route layer recomputes
+  per-overlay-socket on every successful ingest so today's W-L
+  ticks live.
+- **Agent now uploads ``myMmr``** alongside every game so the cloud
+  derivation can compute MMR delta and rank without an external
+  pulse lookup. ``CloudGame.my_mmr`` defaults to ``None`` for non-
+  ranked replays where sc2reader doesn't surface it. Game schema
+  now allows the field on the ingest path.
+- **Coverage.** ``overlayLive.test.js`` (28 cases) locks the
+  ``buildFromGame`` derivation, the sample-payload helpers, the test
+  endpoint behaviour, and the post-ingest fan-out to active tokens.
+  ``overlaySession.test.js`` (10 cases) and ``socketAuthOverlay.test.js``
+  (7 cases) cover the session-card and overlay-handshake paths
+  introduced in the same PR. All 306 API tests pass.
 ### Added (agent v0.5.0 + cloud v0.4.6) — sc2replaystats-style macro breakdown
 
 - **Macro Breakdown reordered.** The Active Army & Workers chart now

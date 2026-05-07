@@ -17,4 +17,4 @@ export { TopBuildsWidget } from "./TopBuildsWidget";
 export { FavOpeningWidget } from "./FavOpeningWidget";
 export { BestAnswerWidget } from "./BestAnswerWidget";
 export { ScoutingWidget } from "./ScoutingWidget";
-export { SessionWidget } from "./SessionWidget";
+export { SessionWidget, type SessionSummary } from "./SessionWidget";

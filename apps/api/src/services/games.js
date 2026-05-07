@@ -138,6 +138,116 @@ class GamesService {
       .toArray();
     return { total, latest: latest[0]?.date || null };
   }
+
+  /**
+   * Today's session aggregate — wins, losses, total game count, and an
+   * MMR delta when the agent has populated ``myMmr`` on the game rows.
+   *
+   * Used by the hosted OBS overlay's session-record widget. The widget
+   * must work whether or not the local agent is currently posting
+   * pre/post-game live events: as long as games are landing in the
+   * cloud (via the agent's normal upload path) we can derive the
+   * session card directly here.
+   *
+   * "Today" is anchored to the overlay's wall clock by accepting an
+   * IANA timezone identifier. An invalid or missing timezone falls
+   * back to UTC so the day boundary is still well-defined; on a clock
+   * skew or unrecognised TZ the widget still ticks rather than going
+   * blank.
+   *
+   * The pre-filter trims the candidate set to a 48-hour window before
+   * the per-row timezone math runs. 48h is a strict superset of "today
+   * in any IANA TZ" (max ±14h offset = 28h diff between two TZ
+   * day-starts) plus headroom for clock skew. For a typical streamer
+   * with ≤50 games per day the in-JS filter is cheap and avoids
+   * pushing $dateTrunc into Mongo for every game row.
+   *
+   * @param {string} userId
+   * @param {string} [timezone] IANA tz, defaults to UTC
+   * @returns {Promise<{
+   *   wins: number,
+   *   losses: number,
+   *   games: number,
+   *   mmrStart?: number,
+   *   mmrCurrent?: number,
+   * }>}
+   */
+  async todaySession(userId, timezone) {
+    const tz = pickTimezone(timezone);
+    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const rows = await this.db.games
+      .find(
+        { userId, date: { $gte: cutoff } },
+        { projection: { _id: 0, result: 1, date: 1, myMmr: 1 } },
+      )
+      .sort({ date: 1 })
+      .toArray();
+    const todayKey = formatDayKey(new Date(), tz);
+    let wins = 0;
+    let losses = 0;
+    let games = 0;
+    /** @type {number|undefined} */
+    let mmrStart;
+    /** @type {number|undefined} */
+    let mmrCurrent;
+    for (const row of rows) {
+      const date = row.date instanceof Date ? row.date : new Date(row.date);
+      if (Number.isNaN(date.getTime())) continue;
+      if (formatDayKey(date, tz) !== todayKey) continue;
+      games += 1;
+      const r = String(row.result || "").toLowerCase();
+      if (r === "victory" || r === "win") wins += 1;
+      else if (r === "defeat" || r === "loss") losses += 1;
+      const my = Number(row.myMmr);
+      if (Number.isFinite(my)) {
+        if (mmrStart === undefined) mmrStart = my;
+        mmrCurrent = my;
+      }
+    }
+    /** @type {{wins: number, losses: number, games: number, mmrStart?: number, mmrCurrent?: number}} */
+    const out = { wins, losses, games };
+    if (mmrStart !== undefined) out.mmrStart = mmrStart;
+    if (mmrCurrent !== undefined) out.mmrCurrent = mmrCurrent;
+    return out;
+  }
+}
+
+/**
+ * Validate an IANA timezone, falling back to UTC.
+ * @param {unknown} raw
+ * @returns {string}
+ */
+function pickTimezone(raw) {
+  if (typeof raw !== "string" || !raw) return "UTC";
+  const s = raw.trim();
+  if (!s) return "UTC";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: s });
+    return s;
+  } catch {
+    return "UTC";
+  }
+}
+
+/**
+ * Format a Date as ``YYYY-MM-DD`` in the supplied timezone. Mirrors
+ * ``apps/web/lib/timeseries.ts#localDateKey`` so the server's
+ * "what is today" answer matches what the overlay computes locally.
+ *
+ * @param {Date|string} value
+ * @param {string} timezone
+ * @returns {string}
+ */
+function formatDayKey(value, timezone) {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return fmt.format(d);
 }
 
 /** @param {unknown} raw @param {number} fallback @returns {number} */

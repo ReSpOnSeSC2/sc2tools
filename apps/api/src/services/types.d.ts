@@ -59,6 +59,16 @@ export interface GamesService {
   get(userId: string, gameId: string): Promise<object | null>;
   upsert(userId: string, game: object & { gameId: string }): Promise<boolean>;
   stats(userId: string): Promise<{ total: number; latest: Date | null }>;
+  todaySession(
+    userId: string,
+    timezone?: string,
+  ): Promise<{
+    wins: number;
+    losses: number;
+    games: number;
+    mmrStart?: number;
+    mmrCurrent?: number;
+  }>;
 }
 
 export interface CustomBuildsService {
@@ -167,7 +177,16 @@ export interface DevicePairingsService {
 
 export interface OverlayTokensService {
   create(userId: string, label: string): Promise<object>;
-  list(userId: string): Promise<object[]>;
+  list(userId: string): Promise<
+    Array<{
+      token: string;
+      label: string;
+      createdAt: Date;
+      lastSeenAt?: Date | null;
+      revokedAt?: Date | null;
+      enabledWidgets: string[];
+    }>
+  >;
   resolve(token: string): Promise<
     | {
         userId: string;

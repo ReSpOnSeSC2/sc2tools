@@ -9,6 +9,8 @@ import {
   Tv,
   Check,
   AlertTriangle,
+  Play,
+  Sparkles,
 } from "lucide-react";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
@@ -58,7 +60,7 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
   { id: "rematch", label: "Rematch", hint: "Flags when you've played this opponent recently" },
   { id: "rival", label: "Rival", hint: "Frequent-opponent context" },
   { id: "rank", label: "Rank", hint: "Player's league / tier / MMR" },
-  { id: "meta", label: "Meta snapshot", hint: "Current ladder top builds for the matchup" },
+  { id: "meta", label: "Meta snapshot", hint: "Top openings opponents bring in this matchup" },
   { id: "topbuilds", label: "Top builds", hint: "Your best builds vs this matchup" },
   { id: "fav-opening", label: "Favourite opening", hint: "Opponent's most-shown opening" },
   { id: "best-answer", label: "Best answer", hint: "Your best counter vs that opening" },
@@ -77,6 +79,7 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
   const [pendingRevoke, setPendingRevoke] = useState<OverlayToken | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [autoMintError, setAutoMintError] = useState<string | null>(null);
+  const [testingWidget, setTestingWidget] = useState<string | null>(null);
   const autoMintingRef = useRef(false);
 
   const items = useMemo(
@@ -169,6 +172,37 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
     }
   }
 
+  // Fire a synthetic ``overlay:live`` payload at the active token so
+  // the streamer can preview a single widget (or the full layout) in
+  // OBS without waiting for a real ladder game. Server-side the
+  // endpoint shares the same per-token rate limiter as the agent's
+  // live route, so a Test mash can't flood the socket.
+  async function testWidget(token: string, widget?: string) {
+    if (testingWidget) return;
+    const key = widget || "all";
+    setTestingWidget(key);
+    try {
+      await apiCall(getToken, "/v1/overlay-events/test", {
+        method: "POST",
+        body: JSON.stringify({ token, widget }),
+      });
+      toast.success(
+        widget
+          ? `Sent test data to "${widget}"`
+          : "Sent test data to every enabled widget",
+        {
+          description: "Check your OBS Browser Source — the widget should render with sample data.",
+        },
+      );
+    } catch (err) {
+      const message =
+        (err as ClientApiError | undefined)?.message ?? "Please try again.";
+      toast.error("Couldn't fire test event", { description: message });
+    } finally {
+      setTestingWidget(null);
+    }
+  }
+
   if (isLoading) return <Skeleton rows={3} />;
   if (error) {
     return (
@@ -210,14 +244,42 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         title="OBS Browser Source URLs"
         description="Copy the URLs you want into OBS. Each widget is transparent and positioned independently. The URLs share the same socket connection so your overlay stays in sync."
       >
+        <Card>
+          <div className="flex items-start gap-3 px-2 py-2 text-caption text-text-muted">
+            <Tv className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-cyan" aria-hidden />
+            <p>
+              The <strong className="text-text">Session record</strong>{" "}
+              widget works the moment your overlay connects. Every other
+              widget renders the moment a game lands in the cloud — install
+              the desktop{" "}
+              <a
+                href="/devices"
+                className="text-accent-cyan underline-offset-2 hover:underline"
+              >
+                agent
+              </a>{" "}
+              so your replays auto-upload, then click <em>Test</em> next to
+              any widget to preview it in OBS without waiting for a real
+              match.
+            </p>
+          </div>
+        </Card>
         <Card padded={false}>
-          <ActiveTokenHeader token={activeToken} origin={origin} />
+          <ActiveTokenHeader
+            token={activeToken}
+            origin={origin}
+            onTestAll={() => void testWidget(activeToken.token)}
+            testing={testingWidget === "all"}
+            anyTesting={testingWidget !== null}
+          />
           <AllInOneRow token={activeToken} origin={origin} />
           <WidgetList
             token={activeToken}
             origin={origin}
             busy={busyToken === activeToken.token}
             onToggleWidget={(w, on) => toggleWidget(activeToken.token, w, on)}
+            onTestWidget={(w) => void testWidget(activeToken.token, w)}
+            testingWidget={testingWidget}
           />
         </Card>
       </Section>
@@ -300,9 +362,15 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
 function ActiveTokenHeader({
   token,
   origin,
+  onTestAll,
+  testing,
+  anyTesting,
 }: {
   token: OverlayToken;
   origin?: string;
+  onTestAll: () => void;
+  testing: boolean;
+  anyTesting: boolean;
 }) {
   void origin;
   return (
@@ -312,10 +380,22 @@ function ActiveTokenHeader({
       <Badge variant="cyan" size="sm">
         {`${token.token.slice(0, 6)}…${token.token.slice(-4)}`}
       </Badge>
-      <span className="ml-auto text-caption text-text-muted">
-        {token.lastSeenAt
-          ? `Seen ${fmtAgo(token.lastSeenAt)}`
-          : "Not yet connected"}
+      <span className="ml-auto flex items-center gap-3">
+        <span className="text-caption text-text-muted">
+          {token.lastSeenAt
+            ? `Seen ${fmtAgo(token.lastSeenAt)}`
+            : "Not yet connected"}
+        </span>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onTestAll}
+          disabled={anyTesting}
+          loading={testing}
+          iconLeft={<Sparkles className="h-4 w-4" aria-hidden />}
+        >
+          Test all
+        </Button>
       </span>
     </div>
   );
@@ -349,11 +429,15 @@ function WidgetList({
   origin,
   busy,
   onToggleWidget,
+  onTestWidget,
+  testingWidget,
 }: {
   token: OverlayToken;
   origin?: string;
   busy: boolean;
   onToggleWidget: (widget: string, enabled: boolean) => void;
+  onTestWidget: (widget: string) => void;
+  testingWidget: string | null;
 }) {
   const enabled = useMemo(
     () => new Set<string>(token.enabledWidgets ?? WIDGETS.map((w) => w.id)),
@@ -363,13 +447,15 @@ function WidgetList({
     <div className="space-y-2 px-4 py-3">
       <p className="text-caption text-text-muted">
         Add only the widgets you actually use to OBS, position each
-        independently. Toggle a widget off here to hide it from the
-        all-in-one URL above without revoking the token.
+        independently. Click <em>Test</em> to fire sample data at one
+        widget so you can see it render and decide where to put it.
       </p>
       <ul className="divide-y divide-border rounded-lg border border-border">
         {WIDGETS.map((w) => {
           const url = `${origin ?? ""}/overlay/${token.token}/widget/${w.id}`;
           const isOn = enabled.has(w.id);
+          const isTesting = testingWidget === w.id;
+          const anyTesting = testingWidget !== null;
           return (
             <li
               key={w.id}
@@ -390,7 +476,18 @@ function WidgetList({
                 </div>
               </div>
               <div className="min-w-0 flex-1">
-                <UrlRow url={url} compact />
+                <UrlRow
+                  url={url}
+                  compact
+                  onTest={() => onTestWidget(w.id)}
+                  testing={isTesting}
+                  testDisabled={anyTesting || !isOn}
+                  testTitle={
+                    isOn
+                      ? "Fire sample data at this widget"
+                      : "Enable this widget first to test it"
+                  }
+                />
               </div>
             </li>
           );
@@ -400,7 +497,21 @@ function WidgetList({
   );
 }
 
-function UrlRow({ url, compact }: { url: string; compact: boolean }) {
+function UrlRow({
+  url,
+  compact,
+  onTest,
+  testing,
+  testDisabled,
+  testTitle,
+}: {
+  url: string;
+  compact: boolean;
+  onTest?: () => void;
+  testing?: boolean;
+  testDisabled?: boolean;
+  testTitle?: string;
+}) {
   const [copied, setCopied] = useState(false);
   const onCopy = async () => {
     if (!navigator.clipboard) return;
@@ -432,6 +543,19 @@ function UrlRow({ url, compact }: { url: string; compact: boolean }) {
       >
         {copied ? "Copied" : "Copy"}
       </Button>
+      {onTest ? (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onTest}
+          loading={testing}
+          disabled={testDisabled}
+          title={testTitle}
+          iconLeft={<Play className="h-4 w-4" aria-hidden />}
+        >
+          Test
+        </Button>
+      ) : null}
     </div>
   );
 }
