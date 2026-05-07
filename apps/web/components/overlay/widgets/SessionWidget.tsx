@@ -68,13 +68,12 @@ export function SessionWidget({
 
   const region = (s.region || "").trim();
   const hasMmr = typeof s.mmrCurrent === "number";
-  const regionLine = region && hasMmr
-    ? `${region} ${s.mmrCurrent}`
-    : hasMmr
-      ? `${s.mmrCurrent} MMR`
-      : region
-        ? `${region} —`
-        : null;
+  // Always render a region + MMR row beneath the W-L so the slot is
+  // visually anchored. A missing piece falls back to "—" so the
+  // streamer can see at a glance that the value isn't being captured
+  // (and the line never silently disappears the way it used to).
+  const regionLabel = region || "—";
+  const mmrLabel = hasMmr ? String(s.mmrCurrent) : "—";
 
   return (
     <WidgetShell slot="top-right" accent="gold" visible width={260}>
@@ -176,22 +175,52 @@ export function SessionWidget({
           ) : null}
         </div>
 
-        {/* Region + current MMR. Spans the full width below the W-L. */}
-        {regionLine ? (
-          <div
+        {/* Region + current MMR. Spans the full width below the W-L.
+            Always rendered so the streamer's scene has a stable anchor;
+            missing pieces fall back to "—" rather than collapsing the
+            row entirely. */}
+        <div
+          style={{
+            gridColumn: "1 / span 2",
+            display: "flex",
+            alignItems: "baseline",
+            gap: 10,
+            marginTop: 8,
+            color: "#e6e8ee",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          <span
             style={{
-              gridColumn: "1 / span 2",
+              fontSize: 16,
+              fontWeight: 700,
+              letterSpacing: 2,
+              opacity: regionLabel === "—" ? 0.45 : 0.85,
+            }}
+          >
+            {regionLabel}
+          </span>
+          <span
+            style={{
               fontSize: 26,
               fontWeight: 800,
               letterSpacing: 1,
-              fontVariantNumeric: "tabular-nums",
-              marginTop: 8,
-              color: "#e6e8ee",
+              opacity: hasMmr ? 1 : 0.45,
             }}
           >
-            {regionLine}
-          </div>
-        ) : null}
+            {mmrLabel}
+          </span>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 2,
+              opacity: 0.55,
+            }}
+          >
+            MMR
+          </span>
+        </div>
       </div>
     </WidgetShell>
   );

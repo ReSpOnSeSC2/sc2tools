@@ -185,15 +185,29 @@ class GamesService {
    */
   async todaySession(userId, timezone) {
     const tz = pickTimezone(timezone);
-    // 14-day window so ``mmrCurrent`` always has a recent value to fall
-    // back on even when the streamer hasn't queued today. The today-key
-    // filter below still keeps wins/losses/games/streak scoped to the
-    // current day; the wider window only feeds the MMR fallback.
+    // 14-day window covers the typical W-L horizon. The today-key
+    // filter below still pins wins/losses/games/streak to the current
+    // day; the wider window only feeds the MMR-fallback inside the
+    // loop. A separate, time-unbounded query further down handles the
+    // case where today's games (and the last 14 days') were all
+    // unranked / customs / AI matches that carry no MMR.
     const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
     const rows = await this.db.games
       .find(
         { userId, date: { $gte: cutoff } },
-        { projection: { _id: 0, result: 1, date: 1, myMmr: 1 } },
+        {
+          projection: {
+            _id: 0,
+            result: 1,
+            date: 1,
+            myMmr: 1,
+            // ``opponent.toonHandle`` is "<region>-S<season>-<realm>-<id>".
+            // The first segment (1=NA, 2=EU, 3=KR/TW, 5=CN, 6=SEA) is
+            // a reliable region hint when the user profile hasn't been
+            // filled in.
+            "opponent.toonHandle": 1,
+          },
+        },
       )
       .sort({ date: 1 })
       .toArray();
@@ -209,6 +223,8 @@ class GamesService {
     let lastKnownMmr;
     /** @type {string|undefined} */
     let sessionStartedAt;
+    /** @type {string|undefined} */
+    let lastKnownToonHandle;
     /** @type {Array<'win'|'loss'>} */
     const todayResults = [];
     for (const row of rows) {
@@ -220,6 +236,10 @@ class GamesService {
       // where the streamer hasn't queued yet. Rows are pre-sorted asc
       // so the last assignment wins.
       if (Number.isFinite(my)) lastKnownMmr = my;
+      const toon = row.opponent && row.opponent.toonHandle;
+      if (typeof toon === "string" && toon.length > 0) {
+        lastKnownToonHandle = toon;
+      }
       if (formatDayKey(date, tz) !== todayKey) continue;
       games += 1;
       if (sessionStartedAt === undefined) sessionStartedAt = date.toISOString();
@@ -236,12 +256,31 @@ class GamesService {
         mmrCurrent = my;
       }
     }
-    // Today had games but none stamped MMR — fall back to whatever the
-    // most recent prior game reported. Keeps the MMR line populated
-    // for newer agents that occasionally drop the field on a corrupt
-    // replay parse.
+    // Tier-1 fallback: today had games but none carried MMR — surface
+    // the most recent MMR from the 14-day window.
     if (mmrCurrent === undefined && lastKnownMmr !== undefined) {
       mmrCurrent = lastKnownMmr;
+    }
+    // Tier-2 fallback: nothing in the last 14 days carried MMR. Reach
+    // back to the most recent game ever that did so the session widget
+    // still renders a number for streamers whose recent week was
+    // unranked. Cheap one-row lookup; only runs when the in-memory
+    // pass missed.
+    if (mmrCurrent === undefined) {
+      try {
+        const newest = await this.db.games.findOne(
+          { userId, myMmr: { $exists: true, $type: "number" } },
+          {
+            projection: { _id: 0, myMmr: 1 },
+            sort: { date: -1 },
+          },
+        );
+        const m = newest ? Number(newest.myMmr) : NaN;
+        if (Number.isFinite(m)) mmrCurrent = m;
+      } catch {
+        // findOne failure is non-fatal — leave mmrCurrent undefined
+        // and let the renderer fall back to its placeholder.
+      }
     }
     /**
      * @type {{
@@ -278,7 +317,38 @@ class GamesService {
         // session payload from emitting.
       }
     }
+    // No region from the profile? Derive one from the most recent
+    // toon handle the agent uploaded. The first segment of a SC2
+    // toon handle is the region id (1=NA, 2=EU, 3=KR, 5=CN, 6=SEA),
+    // so a streamer who hasn't filled in their profile still gets a
+    // sensible label on the overlay.
+    if (out.region === undefined && lastKnownToonHandle) {
+      const inferred = regionFromToonHandle(lastKnownToonHandle);
+      if (inferred) out.region = inferred;
+    }
     return out;
+  }
+}
+
+/**
+ * Map the leading region byte of an SC2 toon handle to a short
+ * Blizzard-region label. Returns ``null`` for unknown region ids so
+ * the caller can leave ``region`` undefined (the renderer treats that
+ * as "no region available").
+ *
+ * @param {string} toonHandle
+ * @returns {string|null}
+ */
+function regionFromToonHandle(toonHandle) {
+  if (typeof toonHandle !== "string") return null;
+  const head = toonHandle.split("-")[0];
+  switch (head) {
+    case "1": return "NA";
+    case "2": return "EU";
+    case "3": return "KR";
+    case "5": return "CN";
+    case "6": return "SEA";
+    default: return null;
   }
 }
 

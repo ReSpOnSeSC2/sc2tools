@@ -193,6 +193,73 @@ describe("services/games.todaySession", () => {
     expect(out.mmrCurrent).toBeUndefined();
   });
 
+  test("falls back to the most recent MMR-stamped game when today's games are unranked", async () => {
+    // Today's session is all unranked (no myMmr). A ranked game from
+    // a few weeks ago carries the user's last known MMR — the
+    // fallback should surface it on `mmrCurrent` so the session
+    // widget still paints a number.
+    const today = new Date();
+    const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    await db.games.insertMany([
+      {
+        userId: "u1",
+        gameId: "ranked-old",
+        result: "Victory",
+        date: monthAgo,
+        myMmr: 4280,
+      },
+      {
+        userId: "u1",
+        gameId: "unranked-today",
+        result: "Defeat",
+        date: today,
+      },
+    ]);
+    const out = await svc.todaySession("u1", "UTC");
+    // Today's W-L still scoped to today: 0W 1L.
+    expect(out.wins).toBe(0);
+    expect(out.losses).toBe(1);
+    // mmrStart stays undefined — no today-game stamped MMR.
+    expect(out.mmrStart).toBeUndefined();
+    // mmrCurrent comes from the time-unbounded fallback.
+    expect(out.mmrCurrent).toBe(4280);
+  });
+
+  test("derives region from the most recent toonHandle when the user profile lacks one", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g1",
+      result: "Victory",
+      date: new Date(),
+      opponent: { toonHandle: "2-S2-1-12345" },
+    });
+    // Stub users service that returns no region (e.g. user hasn't
+    // filled in their profile). The service should derive "EU" from
+    // the leading 2 in the opponent's toon handle.
+    const svcWithUsers = new GamesService(db, {
+      users: { getProfile: async () => ({}) },
+    });
+    const out = await svcWithUsers.todaySession("u1", "UTC");
+    expect(out.region).toBe("EU");
+  });
+
+  test("user profile region wins over the toon-handle fallback", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g1",
+      result: "Victory",
+      date: new Date(),
+      // Toon handle says EU (2-…), but the user explicitly set NA in
+      // their profile — profile must win.
+      opponent: { toonHandle: "2-S2-1-12345" },
+    });
+    const svcWithUsers = new GamesService(db, {
+      users: { getProfile: async () => ({ region: "na" }) },
+    });
+    const out = await svcWithUsers.todaySession("u1", "UTC");
+    expect(out.region).toBe("NA");
+  });
+
   test("populates streak / sessionStartedAt / region for the SPA-style session widget", async () => {
     const t0 = new Date(Date.now() - 25 * 60 * 1000);
     const t1 = new Date(t0.getTime() + 5 * 60 * 1000);
