@@ -10,6 +10,46 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased] - 2026-05-06
 
+### Added (agent v0.4.0)
+
+- **MacroBreakdown + APM curve uploaded with each replay.** The agent
+  now runs `extract_macro_events` + `compute_macro_score` on every
+  parse and ships the structured breakdown (top-3 leaks, all leaks,
+  per-sample stats events for both players, SQ/penalties in `raw`)
+  alongside the slim game record. Same goes for the windowed APM/SPM
+  curve. Without this, the SPA's macro drilldown and Activity-tab APM
+  chart fell back to "Macro breakdown not available for this game yet"
+  even on freshly uploaded games — the cloud doesn't store .SC2Replay
+  binaries, so anything not in the agent payload is unrecoverable
+  later. Upload pipeline is fail-soft: if the analyzer imports fail
+  (frozen-exe DATAS missing) or `compute_macro_score` raises on a
+  malformed replay, the breakdown field is omitted but the game still
+  ingests.
+- **Opponent build-order timeline derived from `opp_events`.** The
+  parser was already extracting opponent buildings/units/upgrades for
+  strategy detection (the `opp_strategy` field has worked since
+  v0.3.0), but the agent never converted that event stream into the
+  `[m:ss] Name` lines the cloud expects. Result: the dual-build
+  timeline always rendered the opponent panel as "No opponent build
+  extracted yet" even when the strategy detector had clearly walked
+  the same data. `_build_log_from_events` now formats both the full
+  log and the 5-minute early-game cap. Same fail-soft policy as
+  macroBreakdown — empty list on failure, never blocks the upload.
+- **Live recompute via Socket.io.** The agent listens for
+  `macro:recompute_request` and `opp_build_order:recompute_request`
+  events from the cloud and re-uploads the requested replay(s)
+  on demand. Drives the SPA's per-game "Recompute now" button and
+  the bulk `/macro/backfill/start` flow. Auth is the existing device
+  token; the cloud joins the socket into the user's room so events
+  fan out to every paired device. Connection is reconnect-on-drop;
+  the agent works fine without `python-socketio` installed (degrades
+  to "click Resync to apply changes" rather than blocking startup).
+- **Per-replay spatial extracts for Map Intel heatmaps.** Each upload
+  now includes building positions, proxy classifications (using the
+  same 50-world-unit threshold as the offline `BaseStrategyDetector`),
+  battle/death markers, and the map's bounding rectangle so the cloud
+  can rasterise across N games per map without re-parsing replays.
+
 ### Fixed (agent v0.3.4)
 
 - **Dashboard "Active" card showed only one folder.** When the Settings

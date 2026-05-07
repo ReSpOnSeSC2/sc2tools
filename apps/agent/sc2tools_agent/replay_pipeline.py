@@ -404,6 +404,25 @@ def parse_replay_for_cloud(
         if not opp_early_build_log and derived_early:
             opp_early_build_log = derived_early
 
+    # One-line INFO summary of what we're about to ship. Lets the user
+    # confirm at a glance whether the rich payload (macroBreakdown +
+    # oppBuildLog + apmCurve + spatial) actually got produced for this
+    # replay, or whether one of the fail-soft paths swallowed it. The
+    # SPA shows "Macro breakdown not available" / "No opponent build
+    # extracted yet" empty states whenever a field is missing, so a
+    # post-mortem from the agent log to the dashboard becomes a single
+    # grep against this line.
+    log.info(
+        "replay_payload_ready file=%s build_log=%d opp_build_log=%d "
+        "macro_breakdown=%s apm_curve=%s spatial=%s",
+        file_path.name,
+        len(my_build_log),
+        len(opp_build_log),
+        "yes" if macro_breakdown is not None else "no",
+        "yes" if apm_curve is not None else "no",
+        "yes" if spatial is not None else "no",
+    )
+
     return CloudGame(
         game_id=str(ctx.game_id),
         date_iso=_to_iso(ctx.date_iso),
@@ -434,23 +453,30 @@ def _build_log_from_events(
     Returns ``(full, early)`` where ``early`` is capped at the first
     five minutes (matching the SPA's ``early_build_log`` semantics).
     Empty lists on failure — never raises.
+
+    Failure modes are logged at WARNING (not DEBUG): the SPA's dual
+    build-order timeline renders an empty "No opponent build extracted
+    yet" panel when these lists are empty, so a silent failure here is
+    indistinguishable from a parse with no opp_events. WARNING makes
+    the cause visible in standard agent logs without forcing the user
+    to flip log_level=DEBUG to diagnose.
     """
     if not events:
         return [], []
     try:
         from core.event_extractor import build_log_lines  # type: ignore
     except Exception as exc:  # noqa: BLE001
-        log.debug("build_log_lines_unavailable: %s", exc)
+        log.warning("build_log_lines_unavailable: %s", exc)
         return [], []
     try:
         full = list(build_log_lines(events, cutoff_seconds=None))
     except Exception as exc:  # noqa: BLE001
-        log.debug("build_log_lines_full_failed: %s", exc)
+        log.warning("build_log_lines_full_failed: %s", exc)
         full = []
     try:
         early = list(build_log_lines(events, cutoff_seconds=300))
     except Exception as exc:  # noqa: BLE001
-        log.debug("build_log_lines_early_failed: %s", exc)
+        log.warning("build_log_lines_early_failed: %s", exc)
         early = []
     return full, early
 
@@ -693,12 +719,17 @@ def _compute_macro_breakdown(
         from core.event_extractor import extract_macro_events  # type: ignore
         from analytics.macro_score import compute_macro_score  # type: ignore
     except Exception as exc:  # noqa: BLE001
-        log.debug("macro_breakdown_imports_unavailable: %s", exc)
+        # WARNING (not DEBUG) so a missing-DATAS frozen-exe regression
+        # doesn't silently turn every replay's macro card into the
+        # "Macro breakdown not available" empty state. See the v0.4.0
+        # CHANGELOG entry — fail-soft is the right policy, but the
+        # cause has to be visible in standard agent logs.
+        log.warning("macro_breakdown_imports_unavailable: %s", exc)
         return None, None
     try:
         my_macro = extract_macro_events(replay, me.pid)
     except Exception as exc:  # noqa: BLE001
-        log.debug("extract_macro_events_my_failed: %s", exc)
+        log.warning("extract_macro_events_my_failed: %s", exc)
         return None, None
     opp_stats: list = []
     if opp is not None and getattr(opp, "pid", None) is not None:
@@ -706,7 +737,7 @@ def _compute_macro_breakdown(
             opp_macro = extract_macro_events(replay, opp.pid)
             opp_stats = list(opp_macro.get("stats_events") or [])
         except Exception as exc:  # noqa: BLE001
-            log.debug("extract_macro_events_opp_failed: %s", exc)
+            log.warning("extract_macro_events_opp_failed: %s", exc)
             opp_stats = []
     game_length = (
         int(my_macro.get("game_length_sec") or 0)
@@ -715,7 +746,7 @@ def _compute_macro_breakdown(
     try:
         score = compute_macro_score(my_macro, me.race, game_length)
     except Exception as exc:  # noqa: BLE001
-        log.debug("compute_macro_score_failed: %s", exc)
+        log.warning("compute_macro_score_failed: %s", exc)
         return None, None
     macro_score_val = score.get("macro_score")
     payload: Dict[str, Any] = {
