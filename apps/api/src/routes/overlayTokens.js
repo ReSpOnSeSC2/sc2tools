@@ -224,6 +224,49 @@ function buildOverlayTokensRouter(deps) {
     },
   );
 
+  // Companion to ``/overlay-events/test`` — broadcasts an
+  // ``overlay:clear`` event so the streamer can dismiss a test fire
+  // before its natural visibility window expires. Same auth + rate
+  // limit; same per-token ownership check.
+  authed.post(
+    "/overlay-events/test/cancel",
+    overlayEventLimiter,
+    async (req, res, next) => {
+      try {
+        const auth = req.auth;
+        if (!auth) throw new Error("auth_required");
+        const token = String(req.body?.token || "");
+        if (!token) {
+          res.status(400).json({
+            error: { code: "bad_request", message: "token required" },
+          });
+          return;
+        }
+        const owns = await deps.overlayTokens.tokenBelongsToUser(
+          auth.userId,
+          token,
+        );
+        if (!owns) {
+          res.status(404).json({
+            error: { code: "not_found", message: "overlay token not found" },
+          });
+          return;
+        }
+        const widget = req.body?.widget
+          ? String(req.body.widget)
+          : undefined;
+        if (deps.io) {
+          deps.io
+            .to(`overlay:${token}`)
+            .emit("overlay:clear", { widget: widget || null });
+        }
+        res.status(202).json({ ok: true, widget: widget || "all" });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
   router.use(authed);
   return router;
 }

@@ -154,7 +154,7 @@ export function MapIntelTab() {
             ? "Toggle layers to inspect proxies, battles, death zones, and structure placement on this map."
             : undefined
         }
-        size="2xl"
+        size="xl"
       >
         {selected ? (
           <MapIntelViewer

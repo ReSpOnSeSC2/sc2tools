@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { API_BASE } from "@/lib/clientApi";
 import type { LiveGamePayload } from "@/components/overlay/types";
@@ -62,7 +62,17 @@ export function OverlayClient({ token }: { token: string }) {
   const [visibleLive, setVisibleLive] = useState<Set<WidgetId>>(new Set());
   const [sessionVisible, setSessionVisible] = useState<boolean>(false);
 
-  useOverlaySocket(token, setLive, setSession, setEnabled);
+  // Stable callback so the socket effect doesn't reconnect on every
+  // render. State setters from useState are reference-stable, so this
+  // closure has no dependencies that need tracking.
+  const onClear = useCallback(() => {
+    setLive(null);
+    setSession(null);
+    setVisibleLive(new Set());
+    setSessionVisible(false);
+  }, []);
+
+  useOverlaySocket(token, setLive, setSession, setEnabled, onClear);
 
   useWidgetTimers({
     live,
@@ -121,9 +131,10 @@ export function OverlayClient({ token }: { token: string }) {
  */
 function useOverlaySocket(
   token: string,
-  setLive: (msg: LiveGamePayload) => void,
-  setSession: (msg: SessionSummary) => void,
+  setLive: (msg: LiveGamePayload | null) => void,
+  setSession: (msg: SessionSummary | null) => void,
   setEnabled: (next: Set<WidgetId>) => void,
+  onClear: () => void,
 ) {
   useEffect(() => {
     const socket: Socket = io(API_BASE, {
@@ -147,10 +158,14 @@ function useOverlaySocket(
         setEnabled(new Set(msg.enabledWidgets as WidgetId[]));
       }
     });
+    // Streamer cancelled the test fire — drop every payload + visible
+    // flag so the scene snaps clean instead of waiting for the natural
+    // visibility timers to expire on each panel.
+    socket.on("overlay:clear", () => onClear());
     return () => {
       socket.disconnect();
     };
-  }, [token, setLive, setSession, setEnabled]);
+  }, [token, setLive, setSession, setEnabled, onClear]);
 }
 
 /**

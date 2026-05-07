@@ -185,7 +185,11 @@ class GamesService {
    */
   async todaySession(userId, timezone) {
     const tz = pickTimezone(timezone);
-    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    // 14-day window so ``mmrCurrent`` always has a recent value to fall
+    // back on even when the streamer hasn't queued today. The today-key
+    // filter below still keeps wins/losses/games/streak scoped to the
+    // current day; the wider window only feeds the MMR fallback.
+    const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
     const rows = await this.db.games
       .find(
         { userId, date: { $gte: cutoff } },
@@ -201,6 +205,8 @@ class GamesService {
     let mmrStart;
     /** @type {number|undefined} */
     let mmrCurrent;
+    /** @type {number|undefined} */
+    let lastKnownMmr;
     /** @type {string|undefined} */
     let sessionStartedAt;
     /** @type {Array<'win'|'loss'>} */
@@ -208,6 +214,12 @@ class GamesService {
     for (const row of rows) {
       const date = row.date instanceof Date ? row.date : new Date(row.date);
       if (Number.isNaN(date.getTime())) continue;
+      const my = Number(row.myMmr);
+      // Track the most recent known MMR across the whole window so the
+      // session widget can render a meaningful number even on days
+      // where the streamer hasn't queued yet. Rows are pre-sorted asc
+      // so the last assignment wins.
+      if (Number.isFinite(my)) lastKnownMmr = my;
       if (formatDayKey(date, tz) !== todayKey) continue;
       games += 1;
       if (sessionStartedAt === undefined) sessionStartedAt = date.toISOString();
@@ -219,11 +231,17 @@ class GamesService {
         losses += 1;
         todayResults.push("loss");
       }
-      const my = Number(row.myMmr);
       if (Number.isFinite(my)) {
         if (mmrStart === undefined) mmrStart = my;
         mmrCurrent = my;
       }
+    }
+    // Today had games but none stamped MMR — fall back to whatever the
+    // most recent prior game reported. Keeps the MMR line populated
+    // for newer agents that occasionally drop the field on a corrupt
+    // replay parse.
+    if (mmrCurrent === undefined && lastKnownMmr !== undefined) {
+      mmrCurrent = lastKnownMmr;
     }
     /**
      * @type {{

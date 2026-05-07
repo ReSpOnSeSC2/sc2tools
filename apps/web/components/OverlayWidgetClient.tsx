@@ -151,8 +151,8 @@ function WidgetRenderer({
 function useOverlayWidgetSocket(
   token: string,
   widget: string,
-  setLive: (msg: LiveGamePayload) => void,
-  setSession: (msg: SessionSummary) => void,
+  setLive: (msg: LiveGamePayload | null) => void,
+  setSession: (msg: SessionSummary | null) => void,
   setEnabled: (on: boolean) => void,
 ) {
   useEffect(() => {
@@ -177,6 +177,23 @@ function useOverlayWidgetSocket(
     socket.on("overlay:session", (msg: SessionSummary) => {
       if (msg && typeof msg === "object") setSession(msg);
     });
+    // Streamer cancelled the test fire — clear local state so the
+    // widget vanishes immediately instead of waiting for the natural
+    // visibility timer to expire. ``msg.widget`` narrows the clear to
+    // a single widget id; null clears every panel on this token.
+    socket.on(
+      "overlay:clear",
+      (msg: { widget?: string | null } | undefined) => {
+        const target = msg?.widget;
+        if (!target || target === widget) {
+          if (widget === "session") {
+            setSession(null);
+          } else {
+            setLive(null);
+          }
+        }
+      },
+    );
     return () => {
       socket.disconnect();
     };
@@ -203,7 +220,17 @@ function useWidgetVisibility(
   );
 
   useEffect(() => {
-    if (!sourceForWidget) return;
+    // Source cleared (e.g. after the streamer cancelled a Test fire) —
+    // hide immediately and drop the pending visibility timer so a
+    // stale tick can't flip the widget back on.
+    if (!sourceForWidget) {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      setVisible(false);
+      return;
+    }
     setVisible(true);
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);

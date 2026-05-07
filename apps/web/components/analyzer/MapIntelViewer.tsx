@@ -2,11 +2,11 @@
 
 import { useCallback, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { RefreshCcw } from "lucide-react";
+import { ImageOff, RefreshCcw } from "lucide-react";
 import { apiCall, useApi, API_BASE } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Button } from "@/components/ui/Button";
-import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import type { MapEntry } from "./MapIntelTab";
 
 type HeatCell = { x: number; y: number; intensity: number; value?: number };
@@ -48,12 +48,20 @@ type LayerKey = (typeof LAYERS)[number]["key"];
  * Heatmap viewer for a single selected map. Calls the `/v1/spatial/*`
  * endpoints lazily as the user toggles layers, overlays cells on the
  * map minimap, and falls back to a clear empty state when the map has
- * no spatial extracts (the layer list still renders so the user can
- * see why nothing is shown).
+ * no spatial extracts.
  *
- * When `embedded` is true, the viewer renders bare (no outer Card)
- * so a parent Modal can host the chrome. Otherwise it wraps itself
- * in a Card for the legacy inline-on-page presentation.
+ * The viewer is split into:
+ *   - Header strip: summary stats + a prominent "Request resync" button
+ *     when no spatial data exists yet on this map.
+ *   - Layer toggle row: 5 chips for the heatmap layers.
+ *   - Minimap canvas: ALWAYS shows the minimap image (loaded from
+ *     `/v1/map-image`) regardless of whether spatial data exists, so
+ *     the user gets visual context. When cells are present they
+ *     overlay; otherwise a non-blocking pill in the corner explains.
+ *   - Legend strip: per-layer hint, sample count, grid size.
+ *
+ * When `embedded` is true the viewer renders without an outer Card so
+ * a parent Modal hosts the chrome. Otherwise it wraps itself in a Card.
  */
 export function MapIntelViewer({
   mapName,
@@ -69,6 +77,7 @@ export function MapIntelViewer({
   const [layer, setLayer] = useState<LayerKey>("proxy");
   const [recomputing, setRecomputing] = useState(false);
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
   const params = filtersToQuery({ ...filters, map: mapName });
   const cacheKey = `${dbRev}-${mapName}`;
 
@@ -89,7 +98,7 @@ export function MapIntelViewer({
   const grid =
     (layer === "buildings" ? buildings.data?.grid : heat.data?.grid) || 64;
   const points =
-    layer === "buildings" ? buildings.data?.points : heat.data?.points;
+    (layer === "buildings" ? buildings.data?.points : heat.data?.points) || 0;
 
   const requestRecompute = useCallback(async () => {
     if (recomputing) return;
@@ -105,7 +114,7 @@ export function MapIntelViewer({
         { method: "POST", body: JSON.stringify({ force: true }) },
       );
       setRecomputeMsg(
-        "Resync requested. If your desktop agent is online, it will re-upload heatmap data shortly. Otherwise open the agent and click Resync.",
+        "Resync requested. If your desktop agent is online, heatmap data will refresh shortly. Otherwise open the agent and click Resync.",
       );
     } catch (err) {
       const e = err as { message?: string };
@@ -115,103 +124,280 @@ export function MapIntelViewer({
     }
   }, [getToken, recomputing]);
 
+  const hasSpatial = !!summary?.hasSpatial;
+  const hasCells = !!cells && cells.length > 0;
+
   const body = (
-    <>
-      {summary ? (
-        <div className="-mt-2 mb-3 flex flex-wrap items-center gap-2 text-xs text-text-dim">
-          <span>
-            {summary.total} games · {summary.wins}W &ndash; {summary.losses}L
-          </span>
-          {summary.hasSpatial ? null : (
-            <>
-              <span className="rounded bg-warning/10 px-1.5 py-0.5 text-warning">
-                No spatial extracts yet — agent needs to re-analyse replays
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                loading={recomputing}
-                onClick={requestRecompute}
-                iconLeft={<RefreshCcw className="h-3 w-3" aria-hidden />}
-              >
-                {recomputing ? "Requesting…" : "Request resync"}
-              </Button>
-            </>
-          )}
-        </div>
-      ) : null}
+    <div className="space-y-3">
+      <SummaryRow
+        summary={summary}
+        hasSpatial={hasSpatial}
+        recomputing={recomputing}
+        onRecompute={requestRecompute}
+      />
+
       {recomputeMsg ? (
         <p
           role="status"
-          className="mb-2 rounded-lg border border-border bg-bg-elevated/40 px-3 py-2 text-caption text-text-muted"
+          className="rounded-lg border border-border bg-bg-elevated/40 px-3 py-2 text-caption text-text-muted"
         >
           {recomputeMsg}
         </p>
       ) : null}
 
-      <div className="mb-3 flex flex-wrap gap-1">
-        {LAYERS.map((l) => (
-          <button
-            key={l.key}
-            type="button"
-            onClick={() => setLayer(l.key)}
-            title={l.hint}
-            className={`rounded px-2 py-1 text-xs ${
-              layer === l.key
-                ? "bg-accent/20 text-accent ring-1 ring-accent/40"
-                : "bg-bg-elevated text-text-muted hover:text-text"
-            }`}
-          >
-            {l.label}
-          </button>
-        ))}
-      </div>
+      <LayerTabs current={layer} onChange={setLayer} />
 
-      {isLoading ? (
-        <Skeleton rows={3} />
-      ) : (
-        <div className="relative aspect-[4/3] w-full overflow-hidden rounded border border-border bg-bg-elevated">
-          <img
-            src={`${API_BASE}/v1/map-image?map=${encodeURIComponent(mapName)}`}
-            alt={`${mapName} minimap`}
-            className="absolute inset-0 h-full w-full object-cover opacity-60"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-          />
-          {cells && cells.length > 0 ? (
-            <HeatmapOverlay
-              cells={cells}
-              grid={grid}
-              color={layerMeta.color}
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <EmptyState
-                title={`No ${layerMeta.label.toLowerCase()} samples`}
-                sub={
-                  summary?.hasSpatial
-                    ? "No samples for this layer on this map yet."
-                    : "Agent hasn't extracted spatial data for this map."
-                }
-              />
-            </div>
-          )}
-        </div>
-      )}
+      <HeatmapCanvas
+        mapName={mapName}
+        layerColor={layerMeta.color}
+        layerLabel={layerMeta.label}
+        cells={cells}
+        grid={grid}
+        isLoading={isLoading}
+        hasCells={hasCells}
+        hasSpatial={hasSpatial}
+        imageError={imageError}
+        onImageError={() => setImageError(true)}
+        onRecompute={requestRecompute}
+        recomputing={recomputing}
+      />
 
-      <div className="mt-2 flex items-center justify-between text-[11px] text-text-dim">
-        <span>
-          {layerMeta.hint} · {points || 0} sample
-          {(points || 0) === 1 ? "" : "s"}
-        </span>
-        <span className="font-mono">grid {grid}×{grid}</span>
-      </div>
-    </>
+      <LegendBar
+        hint={layerMeta.hint}
+        points={points}
+        grid={grid}
+      />
+    </div>
   );
 
   if (embedded) return body;
   return <Card title={`${mapName} · heatmaps`}>{body}</Card>;
+}
+
+function SummaryRow({
+  summary,
+  hasSpatial,
+  recomputing,
+  onRecompute,
+}: {
+  summary: MapEntry | null;
+  hasSpatial: boolean;
+  recomputing: boolean;
+  onRecompute: () => void;
+}) {
+  if (!summary) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-caption">
+      <span className="text-text-muted tabular-nums">
+        {summary.total} games
+      </span>
+      <span aria-hidden className="text-text-dim">
+        ·
+      </span>
+      <span className="text-success tabular-nums">{summary.wins}W</span>
+      <span aria-hidden className="text-text-dim">
+        ·
+      </span>
+      <span className="text-danger tabular-nums">{summary.losses}L</span>
+      {hasSpatial ? (
+        <span className="ml-auto rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+          spatial extracts ready
+        </span>
+      ) : (
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning">
+            no spatial extracts on this map yet
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={recomputing}
+            onClick={onRecompute}
+            iconLeft={<RefreshCcw className="h-3.5 w-3.5" aria-hidden />}
+          >
+            {recomputing ? "Requesting…" : "Request resync"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LayerTabs({
+  current,
+  onChange,
+}: {
+  current: LayerKey;
+  onChange: (key: LayerKey) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Heatmap layers"
+      className="flex flex-wrap gap-1.5 overflow-x-auto pb-1"
+    >
+      {LAYERS.map((l) => {
+        const active = current === l.key;
+        return (
+          <button
+            key={l.key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-controls="heatmap-canvas"
+            onClick={() => onChange(l.key)}
+            title={l.hint}
+            className={[
+              "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs whitespace-nowrap transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+              active
+                ? "bg-accent/20 text-accent ring-1 ring-accent/40"
+                : "bg-bg-elevated text-text-muted hover:bg-bg-elevated/70 hover:text-text",
+            ].join(" ")}
+          >
+            <span
+              aria-hidden
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: l.color }}
+            />
+            {l.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function HeatmapCanvas({
+  mapName,
+  layerColor,
+  layerLabel,
+  cells,
+  grid,
+  isLoading,
+  hasCells,
+  hasSpatial,
+  imageError,
+  onImageError,
+  onRecompute,
+  recomputing,
+}: {
+  mapName: string;
+  layerColor: string;
+  layerLabel: string;
+  cells: HeatCell[] | undefined;
+  grid: number;
+  isLoading: boolean;
+  hasCells: boolean;
+  hasSpatial: boolean;
+  imageError: boolean;
+  onImageError: () => void;
+  onRecompute: () => void;
+  recomputing: boolean;
+}) {
+  return (
+    <div
+      id="heatmap-canvas"
+      role="tabpanel"
+      className="relative aspect-square w-full max-h-[55vh] overflow-hidden rounded-lg border border-border bg-bg-elevated sm:aspect-[4/3]"
+    >
+      {imageError ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg-elevated text-text-muted">
+          <ImageOff className="h-8 w-8 text-text-dim" aria-hidden />
+          <span className="text-caption">
+            {mapName} minimap unavailable
+          </span>
+        </div>
+      ) : (
+        <img
+          src={`${API_BASE}/v1/map-image?map=${encodeURIComponent(mapName)}`}
+          alt={`${mapName} minimap`}
+          className="absolute inset-0 h-full w-full object-cover opacity-50"
+          onError={onImageError}
+        />
+      )}
+
+      {isLoading ? (
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-bg/30 backdrop-blur-[1px]"
+          aria-live="polite"
+        >
+          <span className="rounded-md bg-bg-elevated/90 px-3 py-1.5 text-caption text-text-muted">
+            Loading {layerLabel.toLowerCase()}…
+          </span>
+        </div>
+      ) : hasCells ? (
+        <HeatmapOverlay cells={cells!} grid={grid} color={layerColor} />
+      ) : (
+        <NoSamplesOverlay
+          layerLabel={layerLabel}
+          hasSpatial={hasSpatial}
+          onRecompute={onRecompute}
+          recomputing={recomputing}
+        />
+      )}
+    </div>
+  );
+}
+
+function NoSamplesOverlay({
+  layerLabel,
+  hasSpatial,
+  onRecompute,
+  recomputing,
+}: {
+  layerLabel: string;
+  hasSpatial: boolean;
+  onRecompute: () => void;
+  recomputing: boolean;
+}) {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center p-4">
+      <div className="max-w-sm rounded-lg bg-bg-surface/90 p-4 text-center shadow-[var(--shadow-card)] ring-1 ring-border backdrop-blur supports-[backdrop-filter]:bg-bg-surface/75">
+        <div className="text-caption font-semibold text-text">
+          No {layerLabel.toLowerCase()} on this map yet
+        </div>
+        <p className="mt-1 text-[12px] text-text-muted">
+          {hasSpatial
+            ? "Other layers may have data. Try the toggles above, or play a few more games on this map."
+            : "Your agent hasn't extracted spatial data here yet. Request a resync to backfill."}
+        </p>
+        {!hasSpatial ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={recomputing}
+            onClick={onRecompute}
+            iconLeft={<RefreshCcw className="h-3.5 w-3.5" aria-hidden />}
+            className="mt-3"
+          >
+            {recomputing ? "Requesting…" : "Request resync"}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function LegendBar({
+  hint,
+  points,
+  grid,
+}: {
+  hint: string;
+  points: number;
+  grid: number;
+}) {
+  const sampleLabel = `${points.toLocaleString()} sample${points === 1 ? "" : "s"}`;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-text-dim">
+      <span>
+        {hint} · {sampleLabel}
+      </span>
+      <span className="font-mono">
+        grid {grid}×{grid}
+      </span>
+    </div>
+  );
 }
 
 function HeatmapOverlay({
@@ -223,13 +409,25 @@ function HeatmapOverlay({
   grid: number;
   color: string;
 }) {
-  const radius = Math.max(0.6, 100 / grid / 1.4);
+  // Cell radius scales inversely with grid density so a 64×64 grid
+  // gets crisp dots and a 128×128 grid still shows readable density
+  // without overlapping into mush.
+  const radius = Math.max(0.55, 64 / grid);
   return (
     <svg
       viewBox={`0 0 ${grid} ${grid}`}
       preserveAspectRatio="none"
+      role="img"
+      aria-label={`${cells.length} heatmap cells`}
       className="absolute inset-0 h-full w-full"
     >
+      <defs>
+        <radialGradient id={`heat-${color.slice(1)}`}>
+          <stop offset="0%" stopColor={color} stopOpacity="0.95" />
+          <stop offset="60%" stopColor={color} stopOpacity="0.55" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </radialGradient>
+      </defs>
       {cells.map((c, i) => {
         const a = clamp01(c.intensity);
         if (a <= 0) return null;
@@ -238,9 +436,8 @@ function HeatmapOverlay({
             key={`${c.x}-${c.y}-${i}`}
             cx={c.x + 0.5}
             cy={c.y + 0.5}
-            r={radius}
-            fill={color}
-            fillOpacity={0.25 + a * 0.6}
+            r={radius * (0.9 + a * 0.6)}
+            fill={`url(#heat-${color.slice(1)})`}
           />
         );
       })}

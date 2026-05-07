@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ActiveArmyChart } from "./ActiveArmyChart";
-import { UnitCompositionSnapshot } from "./UnitCompositionSnapshot";
+import { CompositionSnapshot } from "./CompositionSnapshot";
 import type {
   LeakItem,
   StatsEvent,
@@ -20,19 +20,21 @@ export interface MacroChartSectionProps {
   oppName?: string | null;
   myRace?: string | null;
   oppRace?: string | null;
+  /**
+   * Game id, threaded through so the composition snapshot can fetch
+   * the per-game build order and derive a buildings-over-time view.
+   */
+  gameId?: string | null;
 }
 
 /**
- * Pulls the chart and the composition snapshot into a single section
- * sharing one hover state so the user gets the sc2replaystats
- * "scrub the timeline → see the army at that moment" interaction.
+ * Active Army & Workers chart + the live unit/building composition
+ * panel beneath it. The two share a hovered-time state so scrubbing
+ * the chart instantly updates the composition counts (sc2replaystats
+ * parity).
  *
- * Why a wrapper component instead of lifting state into the panel:
- * the panel already manages a leak-highlight key shared with the
- * leaks list and the chart marker layer. Adding the hover-time
- * state next to it would couple two unrelated concerns; a small
- * dedicated section keeps each piece of state local to where it's
- * actually rendered.
+ * The composition snapshot owns its own data fetches (build order via
+ * SWR keyed on ``gameId``) so the chart never blocks on them.
  */
 export function MacroChartSection({
   samples,
@@ -45,6 +47,7 @@ export function MacroChartSection({
   oppName,
   myRace,
   oppRace,
+  gameId,
 }: MacroChartSectionProps) {
   const [hoveredTime, setHoveredTime] = useState<number | null>(null);
   return (
@@ -61,7 +64,8 @@ export function MacroChartSection({
         myName={myName}
         oppName={oppName}
       />
-      <UnitCompositionSnapshot
+      <CompositionSnapshot
+        gameId={gameId ?? null}
         unitTimeline={unitTimeline}
         mySamples={samples}
         oppSamples={oppSamples}
