@@ -10,6 +10,25 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Fixed (agent v0.5.0) — macro-breakdown worker line was flat zero for every game ever uploaded
+
+The bundled `reveal-sc2-opponent-main/core/event_extractor.py` read
+`event.food_workers` off sc2reader's `PlayerStatsEvent`, but
+sc2reader 1.8.x exposes the attribute as `workers_active_count`. The
+broken `getattr(event, "food_workers", 0)` silently returned 0 on
+every sample, so the Macro Breakdown panel's "you wkrs" / "opp wkrs"
+dashed lines drew flat at the bottom of the chart for every game the
+agent has ever uploaded through this extractor — even though the
+army line and the macro score above it were correct. The
+`SC2Replay-Analyzer/core/event_extractor.py` copy was already fixed
+back in April; the agent's path-priority logic
+(`_ensure_analyzer_on_path`) makes the `reveal` copy win at import
+time, so the fix never reached production. This patch mirrors the
+fix into the `reveal` copy with an inline comment so the next
+divergence will be visible. Re-uploading any game (Resync or
+Recompute) on a v0.5.0+ agent build now backfills correct worker
+counts into `macroBreakdown.stats_events`.
+
 ### Fixed + Added (cloud v0.5.0 + agent v0.5.0) — overlay widgets are fully cloud-driven, with a Test button per widget
 
 The hosted OBS overlay was bleeding through with most widgets blank

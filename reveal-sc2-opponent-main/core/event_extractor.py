@@ -448,7 +448,17 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
                         "food_made": getattr(event, "food_made", 0),
                         "minerals_current": getattr(event, "minerals_current", 0),
                         "vespene_current": getattr(event, "vespene_current", 0),
-                        "food_workers": getattr(event, "food_workers", 0),
+                        # sc2reader names this attribute ``workers_active_count``;
+                        # ``food_workers`` does not exist on ``PlayerStatsEvent``
+                        # in 1.8.x (which is what the agent ships). Reading the
+                        # wrong name silently returned 0 on every sample, so the
+                        # macro-breakdown chart's worker line drew flat at zero
+                        # for every game ever uploaded through this extractor.
+                        # Keep the JSON key ``food_workers`` so the whole
+                        # downstream pipeline (cloud schema, macro chart,
+                        # macro_score) stays stable. Mirrors the same fix in
+                        # ``SC2Replay-Analyzer/core/event_extractor.py``.
+                        "food_workers": getattr(event, "workers_active_count", 0),
                         "minerals_collection_rate":
                             getattr(event, "minerals_collection_rate", 0),
                         "vespene_collection_rate":
