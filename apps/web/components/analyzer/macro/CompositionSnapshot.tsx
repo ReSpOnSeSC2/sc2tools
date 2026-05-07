@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { useApi } from "@/lib/clientApi";
 import { formatGameClock } from "@/lib/macro";
 import { computeArmyValue, sortedArmyComposition } from "@/lib/sc2-units";
 import type {
@@ -16,8 +15,20 @@ import {
   type CompositionSource,
 } from "./compositionAt";
 
+/**
+ * Build-order shape — matches the GET /v1/games/:id/build-order
+ * route on the API (see apps/api/src/services/perGameCompute.js
+ * #parseBuildLogLines for the canonical parser). The fetch itself
+ * lives in ``MacroChartSection`` so the chart and the snapshot share a
+ * single SWR call and stay consistent across re-renders.
+ */
+export interface BuildOrderResponse {
+  ok?: boolean;
+  events?: BuildEvent[];
+  opp_events?: BuildEvent[];
+}
+
 export interface CompositionSnapshotProps {
-  gameId: string | null;
   /** Player unit composition timeline (post-downsample wire payload). */
   unitTimeline?: UnitTimelineEntry[];
   /** Player stats samples — supplies the worker count at each tick. */
@@ -31,17 +42,10 @@ export interface CompositionSnapshotProps {
   oppName?: string | null;
   myRace?: string | null;
   oppRace?: string | null;
-}
-
-/* ============================================================
- * Build-order shape — matches the GET /v1/games/:id/build-order
- * route on the API (see apps/api/src/services/perGameCompute.js
- * #parseBuildLogLines for the canonical parser).
- * ============================================================ */
-interface BuildOrderResponse {
-  ok?: boolean;
-  events?: BuildEvent[];
-  opp_events?: BuildEvent[];
+  /** Build-order payload, fetched and shared by the parent. */
+  buildOrderData?: BuildOrderResponse;
+  buildOrderLoading?: boolean;
+  buildOrderError?: boolean;
 }
 
 /** Pixel size for unit/building chip icons. Bumped from the catalog
@@ -73,7 +77,6 @@ const CHIP_ICON_PX = 22;
  * until the user actually looks at it.
  */
 export function CompositionSnapshot({
-  gameId,
   unitTimeline,
   mySamples,
   oppSamples,
@@ -83,6 +86,9 @@ export function CompositionSnapshot({
   oppName,
   myRace,
   oppRace,
+  buildOrderData,
+  buildOrderLoading,
+  buildOrderError,
 }: CompositionSnapshotProps) {
   const hasTimeline = Array.isArray(unitTimeline) && unitTimeline.length > 0;
   const lastT = useMemo(() => {
@@ -106,41 +112,34 @@ export function CompositionSnapshot({
     [oppSamples, targetT],
   );
 
-  // Single SWR call powers both the units-fallback and the buildings
-  // rail. Same payload shape regardless of which side we render.
-  const buildOrder = useApi<BuildOrderResponse>(
-    gameId ? `/v1/games/${encodeURIComponent(gameId)}/build-order` : null,
-    { revalidateOnFocus: false },
-  );
-
   const myComposition = useMemo(
     () =>
       deriveUnitComposition({
         timeline: unitTimeline,
-        buildEvents: buildOrder.data?.events,
+        buildEvents: buildOrderData?.events,
         side: "my",
         t: targetT,
       }),
-    [unitTimeline, buildOrder.data, targetT],
+    [unitTimeline, buildOrderData, targetT],
   );
   const oppComposition = useMemo(
     () =>
       deriveUnitComposition({
         timeline: unitTimeline,
-        buildEvents: buildOrder.data?.opp_events,
+        buildEvents: buildOrderData?.opp_events,
         side: "opp",
         t: targetT,
       }),
-    [unitTimeline, buildOrder.data, targetT],
+    [unitTimeline, buildOrderData, targetT],
   );
 
   const myBuildings = useMemo(
-    () => countBuildingsAt(buildOrder.data?.events ?? [], targetT),
-    [buildOrder.data, targetT],
+    () => countBuildingsAt(buildOrderData?.events ?? [], targetT),
+    [buildOrderData, targetT],
   );
   const oppBuildings = useMemo(
-    () => countBuildingsAt(buildOrder.data?.opp_events ?? [], targetT),
-    [buildOrder.data, targetT],
+    () => countBuildingsAt(buildOrderData?.opp_events ?? [], targetT),
+    [buildOrderData, targetT],
   );
 
   const myArmyValue = computeArmyValue(myComposition.units);
@@ -169,13 +168,13 @@ export function CompositionSnapshot({
     Object.keys(oppBuildings).length === 0 &&
     Object.keys(myComposition.units).length === 0 &&
     Object.keys(oppComposition.units).length === 0 &&
-    !buildOrder.isLoading;
+    !buildOrderLoading;
 
-  const buildOrderState: BuildOrderState = buildOrder.isLoading
+  const buildOrderState: BuildOrderState = buildOrderLoading
     ? "loading"
-    : buildOrder.error
+    : buildOrderError
       ? "error"
-      : buildOrder.data
+      : buildOrderData
         ? "ok"
         : "absent";
 

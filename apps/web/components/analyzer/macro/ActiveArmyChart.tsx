@@ -16,6 +16,7 @@ import type {
   StatsEvent,
   UnitTimelineEntry,
 } from "./MacroBreakdownPanel.types";
+import type { BuildEvent } from "./compositionAt";
 import {
   PAD_LEFT,
   PAD_TOP,
@@ -26,6 +27,18 @@ import {
   type SeriesPoint,
 } from "./activeArmyLayout";
 
+/**
+ * Single hover dispatch — the chart emits these to the parent so the
+ * parent can manage sticky-vs-transient hover state. Mouse moves are
+ * transient ("hover"); touch/pen taps are sticky ("tap"). A
+ * "mouse-leave" only fires for true mouse pointers, so finger lifts
+ * never clear the locked time.
+ */
+export type HoverEvent =
+  | { type: "hover"; time: number }
+  | { type: "tap"; time: number }
+  | { type: "leave" };
+
 export interface ActiveArmyChartProps {
   /** Player samples (food_used, food_workers, …). */
   samples: StatsEvent[];
@@ -33,6 +46,11 @@ export interface ActiveArmyChartProps {
   oppSamples: StatsEvent[];
   /** Optional unit-timeline (per-tick army composition). */
   unitTimeline?: UnitTimelineEntry[];
+  /** Optional build-order events used to derive army composition when
+   *  the unit_timeline is sparse. Threaded through to ``buildLayout``
+   *  so the chart line agrees with the roster snapshot below. */
+  myBuildEvents?: BuildEvent[];
+  oppBuildEvents?: BuildEvent[];
   gameLengthSec?: number;
   /** Leak collection — drives vertical markers along the time axis. */
   leaks: LeakItem[];
@@ -40,8 +58,8 @@ export interface ActiveArmyChartProps {
   highlightedKey?: string | null;
   /** Hovered game-time second — when set, the crosshair locks here. */
   hoveredTime?: number | null;
-  /** Callback fired when the user moves the cursor over the plot area. */
-  onHoverTime?: (t: number | null) => void;
+  /** Callback fired for every hover/tap/leave event. */
+  onHover?: (event: HoverEvent) => void;
   /** Display name of the local player (for the tooltip header). */
   myName?: string | null;
   /** Display name of the opponent (for the tooltip header). */
@@ -59,27 +77,33 @@ const COLOR_LEAK = "rgb(var(--warning))";
  * Active Army & Workers chart — interactive SVG renderer.
  *
  * Hover behaviour mirrors sc2replaystats: a vertical crosshair tracks
- * the cursor, dots highlight each side's value at the hovered tick,
- * and a floating tooltip lists army value (Σ minerals + gas of all
- * non-worker units) and worker count for both players. The hovered
- * time is also lifted to the parent so the unit-composition snapshot
- * below the chart can stay in sync.
+ * the cursor exactly (no snap-jump), dots highlight each side's value
+ * at the nearest sample, and a floating tooltip lists army value
+ * (Σ minerals + gas of all non-worker units) and worker count for
+ * both players. The hovered time is lifted to the parent so the
+ * unit-composition snapshot below the chart stays in sync.
  *
- * Falls back gracefully when the agent payload omits
- * ``unit_timeline`` (older replays): the army series is computed from
- * ``food_used × 8`` and the composition snapshot is hidden by the
- * parent. The chart still works, the tooltip just shows the same
- * fallback number.
+ * Touch/pen taps lock the crosshair via the parent's sticky state —
+ * users don't have to keep a finger pressed to read the values.
+ *
+ * Army series is derived from the same hybrid source the snapshot
+ * uses (unit_timeline preferred, build-order fallback with
+ * timeline-derived deaths), so the chart and the roster's "Army N"
+ * header always agree at every tick. Older slim payloads (no
+ * timeline, no build_order) fall back to ``food_used × 8`` so the
+ * line still renders.
  */
 export function ActiveArmyChart({
   samples,
   oppSamples,
   unitTimeline,
+  myBuildEvents,
+  oppBuildEvents,
   gameLengthSec,
   leaks,
   highlightedKey,
   hoveredTime = null,
-  onHoverTime,
+  onHover,
   myName,
   oppName,
 }: ActiveArmyChartProps) {
@@ -91,8 +115,16 @@ export function ActiveArmyChart({
   >(null);
 
   const layout = useMemo(
-    () => buildLayout(samples, oppSamples, gameLengthSec, unitTimeline),
-    [samples, oppSamples, gameLengthSec, unitTimeline],
+    () =>
+      buildLayout(
+        samples,
+        oppSamples,
+        gameLengthSec,
+        unitTimeline,
+        myBuildEvents,
+        oppBuildEvents,
+      ),
+    [samples, oppSamples, gameLengthSec, unitTimeline, myBuildEvents, oppBuildEvents],
   );
 
   useEffect(() => {
@@ -108,24 +140,82 @@ export function ActiveArmyChart({
     return () => observer.disconnect();
   }, []);
 
-  const handlePointerMove = useCallback(
-    (e: ReactPointerEvent<SVGRectElement>) => {
-      if (!layout || !onHoverTime) return;
+  /**
+   * Map a pointer event into a game-time second within the plot area.
+   *
+   * The overlay <rect> spans viewBox coords [plotLeft, plotLeft+innerW]
+   * — its CSS bounding rect maps to that exact range, so the cursor
+   * fraction within the rect equals the fraction along the time axis
+   * (0…maxT). The previous implementation multiplied the fraction by
+   * the FULL viewBox width (720) before re-mapping through tOfX, which
+   * silently introduced a PAD_LEFT/PAD_RIGHT scaling error: cursor
+   * drift up to ~3.5% of maxT (≈30 s on a 15-min replay) at the
+   * 25%/75% marks. preserveAspectRatio is "none" so the CSS-to-time
+   * mapping is uniform.
+   */
+  const timeFromPointer = useCallback(
+    (e: ReactPointerEvent<SVGRectElement>): number | null => {
+      if (!layout) return null;
       const overlay = overlayRef.current;
-      if (!overlay) return;
+      if (!overlay) return null;
       const rect = overlay.getBoundingClientRect();
-      // Map CSS pixels back into the SVG viewBox coords. preserveAspect
-      // is "none" so the x scale is uniform.
-      const svgX = ((e.clientX - rect.left) / rect.width) * layout.width;
-      const t = layout.tOfX(svgX);
-      onHoverTime(Math.max(0, Math.min(layout.maxT, t)));
+      if (rect.width <= 0) return null;
+      const f = (e.clientX - rect.left) / rect.width;
+      return Math.max(0, Math.min(layout.maxT, f * layout.maxT));
     },
-    [layout, onHoverTime],
+    [layout],
   );
 
-  const handlePointerLeave = useCallback(() => {
-    if (onHoverTime) onHoverTime(null);
-  }, [onHoverTime]);
+  const dispatchPointer = useCallback(
+    (e: ReactPointerEvent<SVGRectElement>, isDown: boolean) => {
+      if (!onHover) return;
+      const t = timeFromPointer(e);
+      if (t == null) return;
+      // Mouse pointers stay transient (clears on leave). Touch and pen
+      // are sticky — a tap or drag locks the crosshair so the user
+      // doesn't have to keep their finger pressed against the screen.
+      if (e.pointerType === "mouse") {
+        onHover({ type: "hover", time: t });
+        return;
+      }
+      // For touch/pen, only the initial pointer-down (and subsequent
+      // pointer-moves while the contact is active) emit taps. We
+      // don't get a separate "tap end" — the parent keeps the lock.
+      if (isDown || e.buttons || e.pressure > 0) {
+        onHover({ type: "tap", time: t });
+      } else {
+        // bare-hover from a stylus that supports it — keep transient
+        onHover({ type: "hover", time: t });
+      }
+    },
+    [onHover, timeFromPointer],
+  );
+
+  const handlePointerMove = useCallback(
+    (e: ReactPointerEvent<SVGRectElement>) => {
+      dispatchPointer(e, false);
+    },
+    [dispatchPointer],
+  );
+
+  const handlePointerDown = useCallback(
+    (e: ReactPointerEvent<SVGRectElement>) => {
+      dispatchPointer(e, true);
+    },
+    [dispatchPointer],
+  );
+
+  const handlePointerLeave = useCallback(
+    (e: ReactPointerEvent<SVGRectElement>) => {
+      if (!onHover) return;
+      // Only mouse leaves clear the hover. Touch lifts must NOT clear
+      // — that's how we get the lock-on-tap behaviour on mobile.
+      if (e.pointerType === "mouse") {
+        onHover({ type: "leave" });
+      }
+    },
+    [onHover],
+  );
 
   if (!layout) {
     return <ChartEmptyState />;
@@ -175,10 +265,10 @@ export function ActiveArmyChart({
             width={layout.innerW}
             height={layout.innerH}
             fill="transparent"
-            style={{ touchAction: "none", cursor: onHoverTime ? "crosshair" : "default" }}
-            onPointerMove={onHoverTime ? handlePointerMove : undefined}
-            onPointerLeave={onHoverTime ? handlePointerLeave : undefined}
-            onPointerDown={onHoverTime ? handlePointerMove : undefined}
+            style={{ touchAction: "none", cursor: onHover ? "crosshair" : "default" }}
+            onPointerMove={onHover ? handlePointerMove : undefined}
+            onPointerLeave={onHover ? handlePointerLeave : undefined}
+            onPointerDown={onHover ? handlePointerDown : undefined}
             aria-hidden
           />
         </svg>
@@ -199,9 +289,15 @@ export function ActiveArmyChart({
 }
 
 interface HoverState {
+  /** Snapped sample time — used by tooltip + dots. */
   t: number;
-  /** Pixel x in SVG viewBox space. */
+  /** Pixel x of the snapped sample, in SVG viewBox space. */
   xView: number;
+  /** Pixel x of the cursor itself, in SVG viewBox space — keeps the
+   *  vertical crosshair flush with the mouse even when samples are
+   *  spaced (otherwise the line jumps to the nearest tick and the
+   *  cursor visibly drifts). */
+  xMouseView: number;
   my: SeriesPoint | null;
   opp: SeriesPoint | null;
 }
@@ -213,22 +309,27 @@ function computeHoverPoints(
   if (typeof hoveredTime !== "number" || !Number.isFinite(hoveredTime)) {
     return null;
   }
-  const my = nearestPoint(layout.mySeries, hoveredTime);
-  const opp = nearestPoint(layout.oppSeries, hoveredTime);
-  // Snap the crosshair to the nearest sample on EITHER side so the
-  // dots line up exactly with the rendered points instead of floating
-  // a few pixels off.
+  const clamped = Math.max(0, Math.min(layout.maxT, hoveredTime));
+  const my = nearestPoint(layout.mySeries, clamped);
+  const opp = nearestPoint(layout.oppSeries, clamped);
+  // Snap the SAMPLE indicator to the nearest sample on either side so
+  // the dots and tooltip read true sample values; keep the vertical
+  // crosshair at the exact cursor position so it tracks the mouse.
   const candidates: number[] = [];
   if (my) candidates.push(my.t);
   if (opp) candidates.push(opp.t);
   const t = candidates.length
     ? candidates.reduce((best, cand) =>
-        Math.abs(cand - hoveredTime) < Math.abs(best - hoveredTime)
-          ? cand
-          : best
+        Math.abs(cand - clamped) < Math.abs(best - clamped) ? cand : best,
       )
-    : hoveredTime;
-  return { t, xView: layout.xOf(t), my, opp };
+    : clamped;
+  return {
+    t,
+    xView: layout.xOf(t),
+    xMouseView: layout.xOf(clamped),
+    my,
+    opp,
+  };
 }
 
 function ChartEmptyState() {
@@ -447,9 +548,9 @@ function HoverCrosshair({
   return (
     <g aria-hidden>
       <line
-        x1={hover.xView}
+        x1={hover.xMouseView}
         y1={layout.plotTop}
-        x2={hover.xView}
+        x2={hover.xMouseView}
         y2={layout.plotBottom}
         stroke={COLOR_HIGHLIGHT}
         strokeWidth={1}
