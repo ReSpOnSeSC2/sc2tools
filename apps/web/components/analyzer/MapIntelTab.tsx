@@ -5,6 +5,7 @@ import { useApi, API_BASE } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { fmtAgo, pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import { MapIntelViewer } from "./MapIntelViewer";
 
@@ -144,12 +145,25 @@ export function MapIntelTab() {
         </>
       )}
 
-      {selected ? (
-        <MapIntelViewer
-          mapName={selected}
-          summary={data.find((m) => m.name === selected) || null}
-        />
-      ) : null}
+      <Modal
+        open={selected !== null}
+        onClose={() => setSelected(null)}
+        title={selected ? `${selected} · heatmaps` : "Map intel"}
+        description={
+          selected
+            ? "Toggle layers to inspect proxies, battles, death zones, and structure placement on this map."
+            : undefined
+        }
+        size="2xl"
+      >
+        {selected ? (
+          <MapIntelViewer
+            mapName={selected}
+            summary={data.find((m) => m.name === selected) || null}
+            embedded
+          />
+        ) : null}
+      </Modal>
     </div>
   );
 }

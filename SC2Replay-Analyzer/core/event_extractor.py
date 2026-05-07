@@ -92,6 +92,145 @@ SKIP_BUILDINGS: Set[str] = {
 WORKER_NAMES: Set[str] = {"Drone", "Probe", "SCV"}
 
 
+# Build / morph / research durations in seconds, used to convert a
+# sc2reader event's "completion" timestamp back into a "construction
+# start" timestamp. The user-facing build orders should always show
+# the start time of an action, not when the engine notified that the
+# action finished.
+#
+# Numbers are LotV 5.0.x balance, the same patch the timing-catalog
+# tokens are aligned with. Older patches differ slightly but the
+# resulting drift is well inside the natural variance the DNA cards
+# already absorb.
+STRUCTURE_MORPH_SECONDS: Dict[str, int] = {
+    # Zerg town-hall morphs
+    "Lair": 57,
+    "Hive": 71,
+    "GreaterSpire": 71,
+    # Terran add-on / upgrade morphs
+    "OrbitalCommand": 25,
+    "PlanetaryFortress": 36,
+    # Protoss
+    "WarpGate": 7,
+}
+
+UNIT_BUILD_SECONDS: Dict[str, int] = {
+    # Protoss
+    "Probe": 12, "Zealot": 27, "Stalker": 30, "Sentry": 26, "Adept": 27,
+    "HighTemplar": 39, "DarkTemplar": 39, "Archon": 9, "Observer": 21,
+    "Immortal": 39, "WarpPrism": 36, "Colossus": 54, "Disruptor": 36,
+    "Phoenix": 25, "VoidRay": 43, "Oracle": 37, "Tempest": 43,
+    "Carrier": 64, "Mothership": 71,
+    # Terran
+    "SCV": 12, "Marine": 18, "Marauder": 21, "Reaper": 32, "Ghost": 29,
+    "Hellion": 21, "Hellbat": 21, "WidowMine": 21, "Cyclone": 32,
+    "SiegeTank": 32, "Thor": 43, "Viking": 30, "Medivac": 30,
+    "Liberator": 43, "Banshee": 43, "Raven": 34, "Battlecruiser": 64,
+    # Zerg (most are larva-morphs — duration is the morph)
+    "Drone": 12, "Overlord": 18, "Queen": 36, "Zergling": 17,
+    "Baneling": 14, "Roach": 19, "Ravager": 9, "Hydralisk": 24,
+    "Lurker": 18, "Mutalisk": 24, "Corruptor": 29, "BroodLord": 24,
+    "Infestor": 36, "SwarmHost": 29, "Viper": 29, "Ultralisk": 39,
+    "Overseer": 12,
+}
+
+UPGRADE_BUILD_SECONDS: Dict[str, int] = {
+    # Protoss
+    "WarpGateResearch": 100, "Charge": 100, "Blink": 121,
+    "ResonatingGlaives": 100, "PsiStorm": 79, "ShadowStride": 100,
+    "ExtendedThermalLance": 100, "GraviticBoosters": 57,
+    "GraviticDrive": 57, "AnionPulseCrystals": 64, "FluxVanes": 43,
+    "TectonicDestabilizers": 100,
+    "ProtossGroundWeaponsLevel1": 128, "ProtossGroundWeaponsLevel2": 152,
+    "ProtossGroundWeaponsLevel3": 176,
+    "ProtossGroundArmorsLevel1": 128, "ProtossGroundArmorsLevel2": 152,
+    "ProtossGroundArmorsLevel3": 176,
+    "ProtossShieldsLevel1": 128, "ProtossShieldsLevel2": 152,
+    "ProtossShieldsLevel3": 176,
+    "ProtossAirWeaponsLevel1": 128, "ProtossAirWeaponsLevel2": 152,
+    "ProtossAirWeaponsLevel3": 176,
+    "ProtossAirArmorsLevel1": 128, "ProtossAirArmorsLevel2": 152,
+    "ProtossAirArmorsLevel3": 176,
+    # Terran
+    "Stimpack": 100, "ShieldWall": 79, "CombatShield": 79,
+    "ConcussiveShells": 43, "HiSecAutoTracking": 57, "StructureArmor": 100,
+    "NeosteelFrame": 71, "CloakingField": 79, "HyperflightRotors": 121,
+    "AdvancedBallistics": 79, "CycloneLockOnDamage": 100,
+    "CycloneRapidFireLaunchers": 100, "EnhancedShockwaves": 79,
+    "PersonalCloaking": 86, "InterferenceMatrix": 57,
+    "TerranInfantryWeaponsLevel1": 114, "TerranInfantryWeaponsLevel2": 136,
+    "TerranInfantryWeaponsLevel3": 157,
+    "TerranInfantryArmorsLevel1": 114, "TerranInfantryArmorsLevel2": 136,
+    "TerranInfantryArmorsLevel3": 157,
+    "TerranVehicleWeaponsLevel1": 114, "TerranVehicleWeaponsLevel2": 136,
+    "TerranVehicleWeaponsLevel3": 157,
+    "TerranVehicleAndShipPlatingLevel1": 114,
+    "TerranVehicleAndShipPlatingLevel2": 136,
+    "TerranVehicleAndShipPlatingLevel3": 157,
+    "TerranShipWeaponsLevel1": 114, "TerranShipWeaponsLevel2": 136,
+    "TerranShipWeaponsLevel3": 157,
+    # Zerg
+    "ZerglingMovementSpeed": 100, "Metabolicboost": 100,
+    "ZerglingAttackSpeed": 100, "CentrifugalHooks": 79,
+    "GlialReconstitution": 71, "TunnelingClaws": 79, "Burrow": 71,
+    "PathogenGlands": 50, "AdrenalGlands": 93, "GroovedSpines": 71,
+    "MuscularAugments": 79, "AdaptiveTalons": 57, "PneumatizedCarapace": 43,
+    "Overlordspeed": 43, "ChitinousPlating": 79, "AnabolicSynthesis": 43,
+    "FlyerAttacks1": 114, "FlyerArmor1": 114,
+    "ZergMissileWeaponsLevel1": 114, "ZergMissileWeaponsLevel2": 136,
+    "ZergMissileWeaponsLevel3": 157,
+    "ZergMeleeWeaponsLevel1": 114, "ZergMeleeWeaponsLevel2": 136,
+    "ZergMeleeWeaponsLevel3": 157,
+    "ZergGroundArmorsLevel1": 114, "ZergGroundArmorsLevel2": 136,
+    "ZergGroundArmorsLevel3": 157,
+    "ZergFlyerWeaponsLevel1": 114, "ZergFlyerWeaponsLevel2": 136,
+    "ZergFlyerWeaponsLevel3": 157,
+    "ZergFlyerArmorsLevel1": 114, "ZergFlyerArmorsLevel2": 136,
+    "ZergFlyerArmorsLevel3": 157,
+}
+
+
+def _start_time(name: str, recorded_sec: int, kind: str) -> int:
+    """Return the construction-start timestamp for an event.
+
+    Kept here as the canonical Python-side mapping table mirrored by
+    the cloud's ``apps/api/src/services/buildDurations.js`` — when one
+    moves, the other should follow.
+
+    The agent's ``extract_events`` deliberately does NOT call this on
+    its own output, because ``opponent.py`` / ``user.py`` detection
+    rules and the per-game uploads consume recorded (mixed-semantic)
+    times. The cloud applies this conversion at the timeline-display
+    layer only, so display surfaces show start times without
+    perturbing rule evaluation. Standalone tooling (CLI scripts that
+    want a start-time view without going through the cloud) can call
+    this directly.
+
+    ``kind`` is one of ``"struct_init"`` (already a start),
+    ``"struct_morph"`` (UnitTypeChangeEvent — completion), ``"unit"``
+    (UnitBornEvent for non-structure units — completion), ``"upgrade"``
+    (UpgradeCompleteEvent — completion). Names not found in any
+    duration table fall through and return the recorded value
+    unchanged.
+    """
+    if recorded_sec is None or recorded_sec < 0:
+        return 0
+    if kind == "struct_init":
+        return int(recorded_sec)
+    if kind == "struct_morph":
+        delta = STRUCTURE_MORPH_SECONDS.get(name)
+    elif kind == "unit":
+        delta = UNIT_BUILD_SECONDS.get(name)
+    elif kind == "upgrade":
+        delta = UPGRADE_BUILD_SECONDS.get(name)
+    else:
+        delta = None
+    if delta is None:
+        return int(recorded_sec)
+    start = int(recorded_sec) - int(delta)
+    return 0 if start < 0 else start
+
+
 def _clean_building_name(raw_name: str) -> str:
     for prefix in ("Protoss", "Terran", "Zerg"):
         raw_name = raw_name.replace(prefix, "")
@@ -177,6 +316,11 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 else:
                     if clean in SKIP_UNITS:
                         continue
+                    # UnitBornEvent's ``second`` is the unit-emerges
+                    # (FINISH) timestamp. Detection rules in
+                    # ``opponent.py`` / ``user.py`` are calibrated against
+                    # this value — see ``_start_time`` for the start-time
+                    # mapping the cloud applies on display.
                     evt = {'type': 'unit', 'name': clean, 'time': event.second, 'x': x, 'y': y}
                 (my_events if pid == my_pid else opp_events).append(evt)
                 stats['processed'] += 1

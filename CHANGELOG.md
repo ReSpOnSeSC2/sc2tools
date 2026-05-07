@@ -10,6 +10,105 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Added (cloud v0.5.0) — Trends tab gains four enrichment charts + Map Intel modal + start-time build-order display
+
+The Trends tab previously answered exactly one question — "did I win
+more this week than last week?" — and that's barely useful. This
+release adds four new lenses on the same dataset, each backed by a
+single-pipeline aggregation so the cost stays linear in the user's
+own history:
+
+- **Win-rate by matchup over time.** Small-multiples chart with one
+  panel per opponent race (P / T / Z / R), 50% reference baseline,
+  bucketed at the user's chosen day / week / month interval. Powered
+  by ``GET /v1/timeseries/matchups``.
+- **Performance by time of day.** 7×6 day-of-week × 4-hour-block
+  heatmap with WR / Volume colour modes. Times are in the user's
+  IANA timezone. Powered by ``GET /v1/timeseries/day-hour``.
+- **Win rate by game length.** Composed bar+line chart with
+  ``<8m / 8–15m / 15–25m / 25m+`` buckets and a 50% reference line,
+  plus per-bucket summary tiles below. Powered by
+  ``GET /v1/length-buckets``.
+- **Activity calendar.** GitHub-style contribution graph; cell hue
+  carries win rate, saturation carries games-played. Doubles as a
+  consistency indicator. Powered by ``GET /v1/activity-calendar``.
+
+Implementations live in
+``apps/api/src/services/trendsAggregations.js`` so
+``aggregations.js`` stays under the per-file size budget. The four
+new chart components live under
+``apps/web/components/analyzer/charts/``; the Trends tab now renders
+on a 2-column grid (single column on mobile) with the matchup
+small-multiples and activity calendar spanning both columns.
+
+### Changed — Map Intel viewer renders inside a modal
+
+Selecting a map in the Map Intel tab used to mount the heatmap
+viewer inline at the bottom of the page, which on mobile pushed it
+below the table out of view (looked like clicking did nothing).
+The viewer now opens in the existing portal-based ``Modal`` so it
+overlays the page on every breakpoint. ``MapIntelViewer`` gained an
+``embedded`` prop that drops the outer Card chrome when a parent
+already provides it.
+
+### Changed — Build-order timelines display construction-START times
+
+Players reason about openings in start-time terms ("I started Cyber
+at 1:50") but sc2reader records different events at different points
+in construction:
+
+- Protoss/Terran structures (UnitInitEvent) — already at the
+  construction-start moment.
+- Zerg structures (UnitBornEvent on drone consumption) — already at
+  start.
+- Structure morphs (Lair / Hive / OrbitalCommand / WarpGate /
+  GreaterSpire / PlanetaryFortress, via UnitTypeChangeEvent) —
+  recorded at FINISH.
+- Units (UnitBornEvent at emergence) — recorded at FINISH.
+- Upgrades (UpgradeCompleteEvent) — recorded at FINISH.
+
+The old timeline was a mix of those semantics, so a Lair would show
+up "later" than the Cybernetics that actually came after it. The
+v0.5 timeline applies a uniform start-time conversion at the API
+response layer (``eventsToStartTime`` in
+``apps/api/src/services/perGameCompute.js``) using build / morph /
+research durations sourced from
+``apps/api/src/services/buildDurations.js``. The same offset is
+applied to the median-timings card via
+``dnaTimings.firstOccurrenceSeconds``.
+
+**Custom-build rule evaluator follows the same start-time
+semantic.** The Save-as-Build button on the BuildOrderTimeline and
+the BuildEditorModal both author rules off the start-time view the
+user sees on screen. To keep "what you see is what fires", the
+cloud rule evaluator now matches against start-time events too —
+``eventsToStartTime`` is applied inside
+``customBuilds.tagSingleGame`` and inside
+``perGame.listForRulePreview``, the two event sources every rule-
+evaluator code path reads from (post-write classification, the
+``/v1/custom-builds/preview-matches`` endpoint, the per-slug
+``reclassify`` flow, and ``reclassifyAll``). New saves are coherent
+with their matches end to end.
+
+Existing user-saved custom builds were authored against the legacy
+mixed-semantic timeline. Their ``time_lt`` thresholds will now match
+slightly more games than before — events appear earlier under the
+start-time semantic, so a "Lair before 6:00" rule that previously
+required Lair-finish-by-6:00 now requires Lair-start-by-6:00 (which
+allows games where Lair finished as late as ~6:57). The shift is at
+most one entity's build duration; for upgrades this is up to ~100s.
+Re-saving a build via the editor recalibrates it against the new
+view.
+
+**What does NOT change:** the ML training surface
+(``MLService.recentEventsForUser``) and the agent's local detection
+(``detectors/opponent.py``, ``detectors/user.py``) continue to
+operate on recorded timestamps. ML models stay valid against their
+training distribution, and ``BUILD_DEFINITIONS`` descriptions in
+``SC2Replay-Analyzer/detectors/definitions.py`` still describe
+agent-side detection that runs off the same recorded-time data it
+always did.
+
 ### Fixed + Added (cloud v0.5.0 + agent v0.5.0) — overlay widgets are fully cloud-driven, with a Test button per widget
 
 The hosted OBS overlay was bleeding through with most widgets blank

@@ -102,6 +102,73 @@ function buildAggregationsRouter(deps) {
     }
   });
 
+  // Win rate vs each opponent race over time. Powers the Trends tab's
+  // "matchup over time" small-multiples chart.
+  router.get("/timeseries/matchups", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      const intervalRaw = String(req.query.interval || "week").toLowerCase();
+      /** @type {'day' | 'week' | 'month'} */
+      const interval =
+        intervalRaw === "day" || intervalRaw === "month"
+          ? intervalRaw
+          : "week";
+      const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
+      res.json(
+        await deps.aggregations.matchupTimeseries(
+          userId,
+          { interval, tz },
+          filters,
+        ),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Day-of-week × hour-of-day heatmap. Powers the Trends tab's
+  // "performance by time" view.
+  router.get("/timeseries/day-hour", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
+      res.json(
+        await deps.aggregations.dayHourHeatmap(userId, { tz }, filters),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // WR by game-length bucket. Powers the Trends tab's "WR by game
+  // length" card.
+  router.get("/length-buckets", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      res.json(await deps.aggregations.lengthBuckets(userId, filters));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Per-day games + win-rate stream for the GitHub-style activity
+  // calendar.
+  router.get("/activity-calendar", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
+      res.json(
+        await deps.aggregations.activityCalendar(userId, { tz }, filters),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // The legacy /games endpoint that powered the Map Intel selector
   // (full filterable list, not the paginated cloud /games surface).
   router.get("/games-list", async (req, res, next) => {

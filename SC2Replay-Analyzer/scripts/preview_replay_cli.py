@@ -116,6 +116,11 @@ _SKIP_BUILDINGS = frozenset({
     "CreepTumorBurrowed", "CreepTumorQueen", "ShieldBattery",
 })
 _RACE_PREFIXES: Tuple[str, ...] = ("Protoss", "Terran", "Zerg")
+# Note: build-log strings emitted from this CLI carry RECORDED times
+# (start for P/T structures, finish for everything else — the same
+# semantic the desktop agent uploads). The cloud applies the
+# start-time conversion at display time via
+# ``apps/api/src/services/buildDurations.js``.
 
 
 def _emit(obj: Dict[str, Any]) -> None:

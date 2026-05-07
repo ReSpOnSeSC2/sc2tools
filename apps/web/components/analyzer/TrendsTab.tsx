@@ -22,6 +22,10 @@ import {
   type ApiTimeseriesResponse,
   type Period,
 } from "@/lib/timeseries";
+import { MatchupOverTimeChart } from "./charts/MatchupOverTimeChart";
+import { TimeOfDayHeatmap } from "./charts/TimeOfDayHeatmap";
+import { GameLengthWrChart } from "./charts/GameLengthWrChart";
+import { ActivityCalendarChart } from "./charts/ActivityCalendarChart";
 
 const LS_BUCKET = "analyzer.trends.bucket";
 const LS_ROLL = "analyzer.trends.rollingOn";
@@ -206,7 +210,7 @@ export function TrendsTab() {
       {series.length === 0 ? (
         <EmptyState />
       ) : (
-        <>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Card title="Games per period (W stacked on L)">
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -272,7 +276,23 @@ export function TrendsTab() {
               </ResponsiveContainer>
             </div>
           </Card>
-        </>
+          {/*
+           * The four enrichment charts the Trends tab gained in v0.5+:
+           * matchup-over-time, time-of-day heatmap, game-length WR,
+           * and the activity calendar. Each spans both columns on
+           * desktop (so the small-multiples and heatmap have room to
+           * breathe) but reflows to single column on mobile via the
+           * outer grid.
+           */}
+          <div className="md:col-span-2">
+            <MatchupOverTimeChart bucket={bucket as "day" | "week" | "month"} />
+          </div>
+          <TimeOfDayHeatmap />
+          <GameLengthWrChart />
+          <div className="md:col-span-2">
+            <ActivityCalendarChart />
+          </div>
+        </div>
       )}
     </div>
   );

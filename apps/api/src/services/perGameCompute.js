@@ -3,6 +3,7 @@
 const { COLLECTIONS, LIMITS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
+const { toStartSeconds } = require("./buildDurations");
 
 const BUILD_LOG_LINE_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
 const BUILD_LOG_NOISE_RE = /^(Beacon|Reward|Spray)/;
@@ -163,6 +164,25 @@ class PerGameComputeService {
     // a single object with the build-log fields populated, regardless
     // of whether they came from the slim row or the detail store.
     const merged = { ...slim, ...blob };
+    // The agent stores recorded times — start for non-morph
+    // structures, finish for units / morphs / upgrades. The
+    // BuildOrderTimeline UI presents construction-START times
+    // ("the moment the player commanded this") which is what
+    // players naturally reason about. ``eventsToStartTime`` rewinds
+    // the finish-time entries using the build-duration catalog so
+    // every row in the timeline answers the same question.
+    //
+    // The raw events are NOT modified for ML or rule evaluation
+    // surfaces — those continue to operate on recorded timestamps
+    // so existing user-saved custom builds and built-in detection
+    // rules keep their calibration.
+    const rawEvents = parseBuildLogLines(merged.buildLog || [], this.catalog);
+    const rawEarly = parseBuildLogLines(readEarlyBuildLog(merged), this.catalog);
+    const rawOpp = parseBuildLogLines(merged.oppBuildLog || [], this.catalog);
+    const rawOppEarly = parseBuildLogLines(
+      readOppEarlyBuildLog(merged),
+      this.catalog,
+    );
     return {
       ok: true,
       game_id: slim.gameId,
@@ -173,13 +193,10 @@ class PerGameComputeService {
       opp_race: slim.opponent?.race || null,
       map: slim.map || null,
       result: slim.result || null,
-      events: parseBuildLogLines(merged.buildLog || [], this.catalog),
-      early_events: parseBuildLogLines(readEarlyBuildLog(merged), this.catalog),
-      opp_events: parseBuildLogLines(merged.oppBuildLog || [], this.catalog),
-      opp_early_events: parseBuildLogLines(
-        readOppEarlyBuildLog(merged),
-        this.catalog,
-      ),
+      events: eventsToStartTime(rawEvents),
+      early_events: eventsToStartTime(rawEarly),
+      opp_events: eventsToStartTime(rawOpp),
+      opp_early_events: eventsToStartTime(rawOppEarly),
     };
   }
 
@@ -476,8 +493,16 @@ class PerGameComputeService {
           spq: typeof g.spq === "number" ? g.spq : null,
           buildLog,
           oppBuildLog,
-          events: parseBuildLogLines(buildLog, this.catalog),
-          oppEvents: parseBuildLogLines(oppBuildLog, this.catalog),
+          // Custom-build rules are authored against the start-time
+          // timeline the user sees, so the preview / reclassify rule
+          // evaluator must match against start-time events too. We
+          // apply ``eventsToStartTime`` here (the single rule-eval
+          // event source) so every downstream caller automatically
+          // sees the right semantic.
+          events: eventsToStartTime(parseBuildLogLines(buildLog, this.catalog)),
+          oppEvents: eventsToStartTime(
+            parseBuildLogLines(oppBuildLog, this.catalog),
+          ),
           result: g.result || null,
           date: g.date || null,
           map: g.map || null,
@@ -623,6 +648,13 @@ class MacroBackfillService {
  * `parseBuildLogLines` from the legacy analyzer.js so the SPA's
  * BuildOrderTimeline component renders identical data.
  *
+ * Returns events at their **recorded** time (the timestamp the agent
+ * stored). Most surfaces use this as-is for rule evaluation and ML
+ * training. Display surfaces that want construction-START times call
+ * ``eventsToStartTime`` to remap ``time``/``time_display`` without
+ * re-parsing — this keeps the rule evaluator semantics rock-stable
+ * across the start-time UI rollout.
+ *
  * @param {string[]} lines
  * @param {{ lookup: (name: string) => object | null } | null} [catalog]
  */
@@ -663,6 +695,38 @@ function parseBuildLogLines(lines, catalog) {
 }
 
 /**
+ * Map a list of parsed events into construction-start time. Re-uses
+ * the same ``buildDurations`` lookup ``firstOccurrenceSeconds`` does,
+ * so display surfaces (build-order timeline, dossier preview) stay
+ * consistent without duplicating the offset table.
+ *
+ * Pure: input is unchanged, output is a fresh array sorted by the
+ * adjusted time.
+ *
+ * @param {Array<ReturnType<typeof parseBuildLogLines>[number]>} events
+ */
+function eventsToStartTime(events) {
+  if (!Array.isArray(events) || events.length === 0) return [];
+  const out = events.map((ev) => {
+    const startSec = Math.round(
+      toStartSeconds(ev.name, ev.time, {
+        isBuilding: !!ev.is_building,
+        category: ev.category,
+      }),
+    );
+    const m = Math.floor(startSec / 60);
+    const s = startSec - m * 60;
+    return {
+      ...ev,
+      time: startSec,
+      time_display: `${m}:${String(s).padStart(2, "0")}`,
+    };
+  });
+  out.sort((a, b) => a.time - b.time);
+  return out;
+}
+
+/**
  * @param {unknown} raw
  * @param {number} fallback
  */
@@ -676,6 +740,7 @@ module.exports = {
   PerGameComputeService,
   MacroBackfillService,
   parseBuildLogLines,
+  eventsToStartTime,
   // Exported so other services (dnaTimings, ml) consume the same
   // derivation logic instead of each rolling their own filter.
   deriveEarlyBuildLog,

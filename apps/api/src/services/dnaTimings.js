@@ -18,6 +18,7 @@
  */
 
 const TimingCatalog = require("./timingCatalog");
+const { toStartSeconds } = require("./buildDurations");
 
 const TIMING_LINE_RE = /^\[(\d+):(\d{2})\]\s+(\w+)/;
 const TREND_ABS_SECONDS = 5.0;
@@ -106,9 +107,16 @@ function firstOccurrenceSeconds(log, tokenSubstring) {
   for (const line of log) {
     const m = TIMING_LINE_RE.exec(String(line || ""));
     if (!m) continue;
-    const name = m[3].toLowerCase();
-    if (name.indexOf(tokLower) === -1) continue;
-    const sec = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+    const rawName = m[3];
+    if (rawName.toLowerCase().indexOf(tokLower) === -1) continue;
+    const recorded = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+    // The timing catalog tokens are buildings; structures emitted via
+    // ``UnitInitEvent`` (P/T) or ``UnitBornEvent`` (Z drone) already
+    // carry start-of-construction times. Morphs (Lair/Hive/etc.) come
+    // through as completion times, so ``toStartSeconds`` rewinds them.
+    const sec = Math.round(
+      toStartSeconds(rawName, recorded, { isBuilding: true }),
+    );
     if (best === null || sec < best) best = sec;
   }
   return best;

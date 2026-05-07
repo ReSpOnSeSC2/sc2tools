@@ -1,7 +1,12 @@
 // @ts-nocheck
 "use strict";
 
-const { parseBuildLogLines, PerGameComputeService, MacroBackfillService } = require("../src/services/perGameCompute");
+const {
+  parseBuildLogLines,
+  eventsToStartTime,
+  PerGameComputeService,
+  MacroBackfillService,
+} = require("../src/services/perGameCompute");
 
 describe("services/perGameCompute", () => {
   describe("parseBuildLogLines", () => {
@@ -87,6 +92,86 @@ describe("services/perGameCompute", () => {
       const events = parseBuildLogLines(["[1:00] Pylon"], catalog);
       expect(events[0].display).toBe("Pylon");
     });
+
+    test("preserves recorded times — rule evaluator depends on this", () => {
+      // The build-rule evaluator and ML training surface are calibrated
+      // against the timestamps the agent recorded (start for non-morph
+      // structures, finish for units / morphs / upgrades). Display
+      // surfaces apply a separate ``eventsToStartTime`` normalization.
+      // If parseBuildLogLines starts shifting times silently, every
+      // user-saved custom build's ``time_lt`` thresholds would
+      // change semantics overnight. Lock this in.
+      const events = parseBuildLogLines([
+        "[1:23] Pylon",
+        "[2:14] Stalker",
+        "[5:00] Lair",
+        "[7:00] WarpGateResearch",
+      ]);
+      const byName = new Map(events.map((e) => [e.name, e.time]));
+      expect(byName.get("Pylon")).toBe(83);
+      expect(byName.get("Stalker")).toBe(134);
+      expect(byName.get("Lair")).toBe(300);
+      expect(byName.get("WarpGateResearch")).toBe(420);
+    });
+  });
+
+  describe("eventsToStartTime", () => {
+    test("rewinds finish-time events using the build-duration table", () => {
+      const recorded = parseBuildLogLines([
+        "[1:23] Pylon",
+        "[3:00] Stalker",
+        "[5:00] Lair",
+        "[5:30] OrbitalCommand",
+        "[7:00] WarpGateResearch",
+      ]);
+      const adjusted = eventsToStartTime(recorded);
+      const byName = new Map(adjusted.map((e) => [e.name, e.time]));
+      // Pylon (UnitInitEvent) is already a start time — unchanged.
+      expect(byName.get("Pylon")).toBe(83);
+      // Stalker trains in 30s — 3:00 finish ⇒ 2:30 start.
+      expect(byName.get("Stalker")).toBe(150);
+      // Lair morphs in 57s — 5:00 finish ⇒ 4:03 start.
+      expect(byName.get("Lair")).toBe(243);
+      // Orbital morphs in 25s — 5:30 finish ⇒ 5:05 start.
+      expect(byName.get("OrbitalCommand")).toBe(305);
+      // WarpGate research takes 100s — 7:00 finish ⇒ 5:20 start.
+      expect(byName.get("WarpGateResearch")).toBe(320);
+    });
+
+    test("does not mutate the input array", () => {
+      const events = parseBuildLogLines(["[5:00] Lair"]);
+      const beforeTime = events[0].time;
+      const out = eventsToStartTime(events);
+      expect(events[0].time).toBe(beforeTime);
+      expect(out[0].time).toBe(243);
+    });
+
+    test("re-sorts by adjusted time so the timeline reads chronologically", () => {
+      // With recorded times these come back as [Cyber 110, Lair 360].
+      // After conversion Lair starts at 303, Cyber stays at 110 — but
+      // the rule evaluator already saw the recorded order. The display
+      // path needs a re-sort so events that started earlier appear
+      // earlier in the timeline.
+      const recorded = parseBuildLogLines([
+        "[6:00] Lair",
+        "[1:50] CyberneticsCore",
+      ]);
+      const adjusted = eventsToStartTime(recorded);
+      expect(adjusted.map((e) => e.name)).toEqual([
+        "CyberneticsCore",
+        "Lair",
+      ]);
+      // Cyber (UnitInit, already start) at 1:50, Lair (morph) rewound
+      // from 6:00 finish to ~5:03 start.
+      expect(adjusted[0].time).toBe(110);
+      expect(adjusted[1].time).toBe(303);
+    });
+
+    test("handles empty / non-array inputs without throwing", () => {
+      expect(eventsToStartTime([])).toEqual([]);
+      expect(eventsToStartTime(null)).toEqual([]);
+      expect(eventsToStartTime(undefined)).toEqual([]);
+    });
   });
 
   describe("PerGameComputeService.buildOrder", () => {
@@ -123,6 +208,104 @@ describe("services/perGameCompute", () => {
       expect(out.opp_events).toHaveLength(1);
       expect(out.opp_early_events).toHaveLength(1);
       expect(out.opponent).toBe("Foo");
+    });
+
+    test("serves events at construction-START time", async () => {
+      // The build log carries recorded times (Lair @ finish=5:00, Probe
+      // @ finish=0:30). The /v1/games/:id/build-order endpoint applies
+      // ``eventsToStartTime`` so the timeline UI shows when the player
+      // *issued* each command instead of when sc2reader noticed the
+      // unit/morph.
+      const svc = buildService({
+        gameId: "g1",
+        myRace: "Zerg",
+        opponent: { race: "T" },
+        buildLog: ["[5:00] Lair", "[1:00] SpawningPool"],
+        oppBuildLog: ["[3:00] Stalker"],
+      });
+      const out = await svc.buildOrder("u1", "g1");
+      const me = new Map(out.events.map((e) => [e.name, e.time]));
+      // SpawningPool is a Zerg structure (already start) — unchanged.
+      expect(me.get("SpawningPool")).toBe(60);
+      // Lair morphs in 57s — 5:00 finish ⇒ 4:03 start.
+      expect(me.get("Lair")).toBe(243);
+      // Opp Stalker (Protoss unit, 30s build) — 3:00 finish ⇒ 2:30 start.
+      const opp = new Map(out.opp_events.map((e) => [e.name, e.time]));
+      expect(opp.get("Stalker")).toBe(150);
+    });
+  });
+
+  describe("listForRulePreview — save→match coherence", () => {
+    // Regression guard: when the user saves a custom build off the
+    // start-time timeline, the saved ``time_lt`` is calibrated against
+    // start times. ``listForRulePreview`` is the rule evaluator's only
+    // event-source, so it must serve start-time events too — otherwise
+    // the saved rule would silently match the wrong games.
+    function buildSvc(games) {
+      const collection = {
+        find() {
+          return {
+            sort() {
+              return {
+                limit() {
+                  return { toArray: () => Promise.resolve(games) };
+                },
+              };
+            },
+          };
+        },
+      };
+      return new PerGameComputeService({ games: collection });
+    }
+
+    test("returns events at start time so saved rules fire on the right games", async () => {
+      const svc = buildSvc([
+        {
+          gameId: "g1",
+          myBuild: null,
+          myRace: "Zerg",
+          opponent: { race: "T" },
+          buildLog: ["[5:00] Lair", "[2:00] Zergling"],
+          oppBuildLog: ["[3:00] Stalker"],
+          result: "Victory",
+          date: new Date("2026-04-01"),
+          map: "Goldenaura",
+        },
+      ]);
+      const [g] = await svc.listForRulePreview("u1", { limit: 10 });
+      const me = new Map(g.events.map((e) => [e.name, e.time]));
+      // Lair: morphs in 57s — finish 5:00 ⇒ start 4:03 (243s).
+      expect(me.get("Lair")).toBe(243);
+      // Zergling: 17s morph — finish 2:00 ⇒ start 1:43 (103s).
+      expect(me.get("Zergling")).toBe(103);
+      // Opponent Stalker: 30s build — finish 3:00 ⇒ start 2:30 (150s).
+      const opp = new Map(g.oppEvents.map((e) => [e.name, e.time]));
+      expect(opp.get("Stalker")).toBe(150);
+    });
+
+    test("a rule saved as 'Lair before 4:30 (start)' matches a game that completed Lair at 5:00", async () => {
+      const { evaluateRules } = require("../src/services/buildRulesEvaluator");
+      const svc = buildSvc([
+        {
+          gameId: "g1",
+          myRace: "Zerg",
+          opponent: { race: "T" },
+          buildLog: ["[5:00] Lair"],
+          oppBuildLog: [],
+          date: new Date("2026-04-01"),
+        },
+      ]);
+      const [g] = await svc.listForRulePreview("u1", { limit: 10 });
+      // Saved-from-timeline rule: "Lair started before 4:30".
+      // The user reads "4:03 Lair" off the start-time timeline and
+      // commits a 4:30 threshold. The evaluator must agree.
+      const rule = { type: "before", name: "BuildLair", time_lt: 270 };
+      const result = evaluateRules([rule], g.events);
+      expect(result.pass).toBe(true);
+
+      // And tighter than the morph-start time fails — no spurious match.
+      const tight = { type: "before", name: "BuildLair", time_lt: 240 };
+      expect(evaluateRules([tight], g.events).pass).toBe(false);
     });
   });
 
