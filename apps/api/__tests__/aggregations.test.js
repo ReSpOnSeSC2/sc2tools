@@ -125,6 +125,64 @@ describe("services/aggregations", () => {
     expect(out.points[0].winRate).toBeCloseTo(2 / 3);
   });
 
+  test("timeseries keeps the most-recent buckets, not the oldest", async () => {
+    let captured;
+    const games = buildGames([
+      (pipeline) => {
+        captured = pipeline;
+        return [];
+      },
+    ]);
+    const svc = new AggregationsService({ games });
+    await svc.timeseries("u1", { interval: "day" }, {});
+    // The pipeline must descend by bucket *before* limiting so that
+    // users with multi-year histories don't lose today.
+    const limitIdx = captured.findIndex(
+      (s) => Object.prototype.hasOwnProperty.call(s, "$limit"),
+    );
+    expect(limitIdx).toBeGreaterThan(-1);
+    const sortBeforeLimit = captured[limitIdx - 1];
+    expect(sortBeforeLimit).toEqual({ $sort: { _id: -1 } });
+    // And we re-sort ascending after limiting so consumers still get
+    // chronological order.
+    const sortAfterLimit = captured[limitIdx + 1];
+    expect(sortAfterLimit).toEqual({ $sort: { _id: 1 } });
+  });
+
+  test("timeseries threads a validated timezone into $dateTrunc", async () => {
+    let captured;
+    const games = buildGames([
+      (pipeline) => {
+        captured = pipeline;
+        return [];
+      },
+    ]);
+    const svc = new AggregationsService({ games });
+    await svc.timeseries(
+      "u1",
+      { interval: "day", tz: "America/Los_Angeles" },
+      {},
+    );
+    const groupStage = captured.find((s) => s.$group);
+    expect(groupStage.$group._id.$dateTrunc.timezone).toBe(
+      "America/Los_Angeles",
+    );
+  });
+
+  test("timeseries falls back to UTC for invalid tz", async () => {
+    let captured;
+    const games = buildGames([
+      (pipeline) => {
+        captured = pipeline;
+        return [];
+      },
+    ]);
+    const svc = new AggregationsService({ games });
+    await svc.timeseries("u1", { interval: "day", tz: "Not/AReal_Zone" }, {});
+    const groupStage = captured.find((s) => s.$group);
+    expect(groupStage.$group._id.$dateTrunc.timezone).toBe("UTC");
+  });
+
   test("gamesList honours offset + limit + search", async () => {
     const all = Array.from({ length: 5 }, (_, i) => ({
       id: `g${i}`,
