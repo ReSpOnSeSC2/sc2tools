@@ -128,6 +128,18 @@ class GdprService {
     }
 
     const gamesRes = await this.db.games.deleteMany(filter);
+    // Mirror the delete on the split-out ``game_details`` collection
+    // so heavy per-game fields (build logs, macro breakdown, apm
+    // curve, spatial extracts) are removed in lockstep with the
+    // slim row. Without this, GDPR purges would leave a sidecar
+    // detail row for every deleted game — a data-residency bug as
+    // soon as the v0.4.3 dual-write makes detail rows a real thing.
+    // The same filter applies (userId + optional date range), since
+    // detail rows duplicate the ``date`` field for exactly this kind
+    // of scoped delete.
+    if (this.db.gameDetails) {
+      await this.db.gameDetails.deleteMany(filter);
+    }
     const macroJobsRes = await this.db.macroJobs.deleteMany({ userId });
 
     const opponentsDeleted = await this._rebuildOpponentsForUser(userId);

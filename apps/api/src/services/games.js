@@ -2,6 +2,7 @@
 
 const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { HEAVY_FIELDS } = require("./gameDetails");
 
 /**
  * Games service. One document per (userId, gameId). Idempotent on
@@ -9,13 +10,27 @@ const { stampVersion } = require("../db/schemaVersioning");
  * record rather than duplicate.
  */
 class GamesService {
-  /** @param {{games: import('mongodb').Collection}} db */
-  constructor(db) {
+  /**
+   * @param {{games: import('mongodb').Collection}} db
+   * @param {{ gameDetails?: import('./gameDetails').GameDetailsService }} [opts]
+   */
+  constructor(db, opts = {}) {
     this.db = db;
+    // Optional dep so unit tests that only need the slim-row code
+    // path can still construct GamesService without a details stub.
+    // The ingest path checks for presence before forwarding.
+    this.gameDetails = opts.gameDetails || null;
   }
 
   /**
    * Insert or update a game record. Returns true if it was new.
+   *
+   * Heavy fields (build logs, macroBreakdown, apmCurve, spatial) are
+   * peeled off the input and persisted into ``game_details`` via the
+   * injected GameDetailsService. The slim row that lands in
+   * ``games`` is roughly 3 kB instead of ~48 kB, which is what makes
+   * list/aggregation queries scan-cheap at scale (the v0.4.3 split
+   * — see ``services/gameDetails.js`` for the rationale).
    *
    * @param {string} userId
    * @param {{gameId: string, date: string | Date} & Record<string, unknown>} game
@@ -29,15 +44,48 @@ class GamesService {
     const doc = { ...game, userId, date };
     delete doc._id;
     delete doc._schemaVersion;
+    // Capture heavy fields BEFORE the slim doc is finalised so we
+    // can hand them to GameDetailsService. The slim row that lands
+    // in ``games`` is then stripped of every heavy field plus the
+    // legacy early-log fields. Total slim size: ~3 kB / doc instead
+    // of ~30 kB.
+    //
+    // Why we $unset every heavy field on the slim row even though
+    // we already deleted it from ``doc``: pre-cutover documents
+    // that already exist in ``games`` carry the heavy fields inline.
+    // The $set patch alone would leave them sitting on disk
+    // indefinitely. The $unset clears them as part of the same
+    // upsert — incremental cutover happens naturally as users
+    // re-upload.
+    /** @type {Record<string, any>} */
+    const heavy = {};
+    for (const k of HEAVY_FIELDS) {
+      if (doc[k] !== undefined) heavy[k] = doc[k];
+      delete doc[k];
+    }
+    delete doc.earlyBuildLog;
+    delete doc.oppEarlyBuildLog;
     stampVersion(doc, COLLECTIONS.GAMES);
+    /** @type {Record<string, string>} */
+    const unset = { earlyBuildLog: "", oppEarlyBuildLog: "" };
+    for (const k of HEAVY_FIELDS) unset[k] = "";
     const res = await this.db.games.updateOne(
       { userId, gameId: game.gameId },
       {
         $setOnInsert: { createdAt: new Date() },
         $set: doc,
+        $unset: unset,
       },
       { upsert: true },
     );
+    if (this.gameDetails && Object.keys(heavy).length > 0) {
+      // Detail-write failures DO propagate now that the slim row no
+      // longer carries the heavy fields. A silent failure here
+      // would leave the per-game inspector permanently empty. The
+      // ingest route catches and logs; failure of one game doesn't
+      // block subsequent games in a batch upload.
+      await this.gameDetails.upsert(userId, game.gameId, date, heavy);
+    }
     return res.upsertedCount === 1;
   }
 

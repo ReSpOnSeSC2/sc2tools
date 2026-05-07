@@ -511,9 +511,12 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     # in the formatted build log so the dual-build timeline can
     # render the opponent's opening.
     assert any("Hatchery" in line for line in payload["oppBuildLog"])
-    # Early-log cap: only events <= 5:00 (300s).
-    assert payload["oppEarlyBuildLog"], "oppEarlyBuildLog must also populate"
-    assert all(_minutes_in(line) <= 5 for line in payload["oppEarlyBuildLog"])
+    # earlyBuildLog / oppEarlyBuildLog were intentionally removed
+    # from the wire shape in v0.4.3 — they are derived server-side
+    # from the full logs at read time. The payload MUST NOT carry
+    # them; the API ingest path also $unsets any legacy stored copy.
+    assert "earlyBuildLog" not in payload
+    assert "oppEarlyBuildLog" not in payload
 
     # macroScore from the stub bubbles up as the headline number even
     # though ctx.macro_score was None.
@@ -525,3 +528,155 @@ def _minutes_in(line: str) -> int:
     import re
     m = re.match(r"^\[(\d+):", line)
     return int(m.group(1)) if m else 0
+
+
+# -------------------------------------------------------------------------
+# Build-log truncation — caps both buildLog/oppBuildLog at 5000 entries
+# and earlyBuildLog/oppEarlyBuildLog at 1000 to match the API's AJV
+# schema (apps/api/src/validation/gameRecord.js). Without this, long
+# Zerg replays produce 8k–14k opp_build_log lines and the upload is
+# silently rejected with "/oppBuildLog must NOT have more than 5000
+# items"; the queue then re-tries the same payload forever, fills up,
+# and drops every subsequent replay. This test locks the cap down on
+# both code paths (ctx.build_log direct + opp_events derivation).
+# -------------------------------------------------------------------------
+
+
+def test_parse_replay_for_cloud_caps_build_logs_to_schema_limits(
+    monkeypatch, tmp_path,
+):
+    import sys
+    from types import SimpleNamespace
+
+    from sc2tools_agent.replay_pipeline import (
+        _BUILD_LOG_CAP, _EARLY_BUILD_LOG_CAP,
+    )
+
+    me = SimpleNamespace(
+        pid=1, name="Me", race="Zerg", result="Win",
+        handle="1-S2-1-267727", mmr=4500, apm=180.0, spq=82.0,
+    )
+    opp = SimpleNamespace(
+        pid=2, name="Opp", race="Zerg", result="Loss",
+        handle="1-S2-2-690921", mmr=4400, league_id=5,
+    )
+    # Simulate a long ZvZ where ctx.build_log is huge (would normally
+    # come from build_log_lines(my_events) — we hand it directly so
+    # the test doesn't depend on sc2reader event types).
+    huge_my_lines = [f"[0:{i:02d}] Zergling" for i in range(60)] + [
+        f"[1:{i:02d}] Zergling" for i in range(60)
+    ]
+    # Pad way past the cap so [:_BUILD_LOG_CAP] actually truncates.
+    huge_my_lines = (
+        huge_my_lines * (max(1, (_BUILD_LOG_CAP * 2) // len(huge_my_lines)) + 1)
+    )
+    assert len(huge_my_lines) > _BUILD_LOG_CAP, (
+        "test fixture must exceed cap to exercise truncation"
+    )
+    huge_my_early = huge_my_lines[:1500]  # exceeds 1000 cap
+
+    # opp_events at >5000 entries forces the derived opp_build_log
+    # path through the cap too. Mix in some event times beyond 5:00
+    # so the early-log truncation has events to drop.
+    opp_events = [
+        {"type": "unit", "name": "Zergling", "time": min(t, 1799)}
+        for t in range(_BUILD_LOG_CAP + 500)
+    ]
+
+    fake_ctx = SimpleNamespace(
+        game_id="2026-05-06T17:48:32|Opp|Goldenaura|1800",
+        date_iso="2026-05-06T17:48:32",
+        map_name="Goldenaura",
+        length_seconds=1800,
+        is_ai_game=False,
+        me=me,
+        opponent=opp,
+        all_players=[me, opp],
+        my_events=[],
+        opp_events=opp_events,
+        my_build="ZvZ - Macro",
+        opp_strategy="ZvZ - Macro",
+        build_log=huge_my_lines,
+        early_build_log=huge_my_early,
+        opp_build_log=[],
+        opp_early_build_log=[],
+        macro_score=None,
+        raw=None,  # disables _compute_macro_breakdown / _compute_apm_curve
+                   # — we only care about build-log truncation here
+        file_path=str(tmp_path / "fake.SC2Replay"),
+    )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "core.sc2_replay_parser",
+        SimpleNamespace(parse_deep=lambda _p, _h: fake_ctx),
+    )
+
+    from pathlib import Path
+    from sc2tools_agent.replay_pipeline import parse_replay_for_cloud
+    fake_path = tmp_path / "fake.SC2Replay"
+    fake_path.write_bytes(b"")
+    result = parse_replay_for_cloud(fake_path, player_handle="Me")
+    assert result is not None
+    payload = result.to_payload()
+
+    # Server's AJV schema rejects anything past these caps; assert each
+    # field is at or under its limit.
+    assert len(payload["buildLog"]) <= _BUILD_LOG_CAP
+    assert len(payload["oppBuildLog"]) <= _BUILD_LOG_CAP
+    # And specifically — the buildLog must be truncated (not just
+    # silently shrunk) when the input exceeds the cap. Truncation
+    # keeps the EARLIEST entries because build_log_lines emits them
+    # sorted ascending by time.
+    assert len(payload["buildLog"]) == _BUILD_LOG_CAP
+    assert len(payload["oppBuildLog"]) == _BUILD_LOG_CAP
+    # earlyBuildLog / oppEarlyBuildLog were dropped from the wire in
+    # v0.4.3 — they're derived server-side from the full logs.
+    assert "earlyBuildLog" not in payload
+    assert "oppEarlyBuildLog" not in payload
+
+
+# -------------------------------------------------------------------------
+# stats_events downsampling — v0.4.3 storage trim. sc2reader emits
+# PlayerStatsEvent every ~10 s, but the SPA's resource/army charts
+# render at 30 s resolution at most. Keeping all 10 s samples doubles
+# per-doc storage on the 30k-game-and-up scale we're targeting, so the
+# agent now keeps only the FIRST event in each 30 s game-time bucket
+# before shipping the macroBreakdown payload. macro_score is computed
+# on the FULL stream first so leak detection / SQ / penalties are
+# unaffected.
+# -------------------------------------------------------------------------
+
+
+def test_downsample_stats_events_keeps_first_per_30s_bucket():
+    from sc2tools_agent.replay_pipeline import (
+        _downsample_stats_events,
+        _STATS_EVENTS_BUCKET_SEC,
+    )
+    assert _STATS_EVENTS_BUCKET_SEC == 30  # locked to chart resolution
+    # 10 s cadence input, 0..120 s — buckets are [0,30), [30,60),
+    # [60,90), [90,120), [120,150) so we expect t=0, 30, 60, 90, 120.
+    events = [{"time": t, "food_used": t} for t in range(0, 130, 10)]
+    out = _downsample_stats_events(events)
+    assert [e["time"] for e in out] == [0, 30, 60, 90, 120]
+
+
+def test_downsample_stats_events_handles_empty_and_none():
+    from sc2tools_agent.replay_pipeline import _downsample_stats_events
+    assert _downsample_stats_events([]) == []
+    assert _downsample_stats_events(None) == []
+
+
+def test_downsample_stats_events_skips_malformed_time():
+    from sc2tools_agent.replay_pipeline import _downsample_stats_events
+    # A row with no time (or a non-numeric one) shouldn't crash —
+    # sc2reader has been seen emitting malformed PlayerStatsEvents on
+    # broken replays. We skip those rows rather than fail the upload.
+    events = [
+        {"time": 0, "food_used": 1},
+        {"food_used": 2},                    # missing time
+        {"time": "garbage", "food_used": 3},  # unparseable time
+        {"time": 35, "food_used": 4},        # bucket 1
+    ]
+    out = _downsample_stats_events(events)
+    assert [e["food_used"] for e in out] == [1, 4]

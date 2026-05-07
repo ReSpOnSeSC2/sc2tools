@@ -23,8 +23,14 @@ const PROFILE_GAME_PROJECTION = {
   spq: 1,
   buildLog: 1,
   oppBuildLog: 1,
-  earlyBuildLog: 1,
-  oppEarlyBuildLog: 1,
+  // earlyBuildLog / oppEarlyBuildLog deliberately omitted: dnaTimings
+  // (the only consumer of game payloads from this projection) reads
+  // only the full ``buildLog`` / ``oppBuildLog`` fields. Skipping the
+  // early arrays here used to load ~6 kB of redundant data per profile
+  // game; v0.4.3+ agents stop emitting them entirely and pre-v0.4.3
+  // docs still derive correctly from the full log when a service
+  // actually needs the early window (see ``readEarlyBuildLog`` in
+  // perGameCompute).
   opponent: 1,
 };
 
@@ -48,10 +54,18 @@ class OpponentsService {
   /**
    * @param {{opponents: import('mongodb').Collection, games: import('mongodb').Collection}} db
    * @param {Buffer} pepper
+   * @param {{ gameDetails?: import('./gameDetails').GameDetailsService }} [opts]
+   *        When provided, the profile loader hydrates ``buildLog`` /
+   *        ``oppBuildLog`` from the detail store for any game whose
+   *        slim row no longer carries them inline (post-cutover
+   *        cleanup migration). Without it, profiles serve only legacy
+   *        inline data — which is the safe default during tests that
+   *        don't exercise the detail-store path.
    */
-  constructor(db, pepper) {
+  constructor(db, pepper, opts = {}) {
     this.db = db;
     this.pepper = pepper;
+    this.gameDetails = opts.gameDetails || null;
   }
 
   /**
@@ -222,6 +236,33 @@ class OpponentsService {
       )
       .sort({ date: -1 })
       .toArray();
+    // dnaTimings reads ``buildLog`` / ``oppBuildLog`` off each game
+    // object to compute first-occurrence-of-token timings. After the
+    // v0.4.3 cutover those arrays move to the detail store; bulk-fetch
+    // them here so ``serializeGameForProfile`` sees a hydrated game.
+    // The fetch is one batched query regardless of how many games the
+    // opponent profile spans, so the per-profile cost is constant.
+    if (this.gameDetails && rawGames.length > 0) {
+      const needIds = [];
+      for (const g of rawGames) {
+        if (!Array.isArray(g.buildLog) || !Array.isArray(g.oppBuildLog)) {
+          if (g.gameId) needIds.push(String(g.gameId));
+        }
+      }
+      if (needIds.length > 0) {
+        const blobs = await this.gameDetails.findMany(userId, needIds);
+        for (const g of rawGames) {
+          const blob = blobs.get(String(g.gameId || ""));
+          if (!blob) continue;
+          if (!Array.isArray(g.buildLog) && Array.isArray(blob.buildLog)) {
+            g.buildLog = blob.buildLog;
+          }
+          if (!Array.isArray(g.oppBuildLog) && Array.isArray(blob.oppBuildLog)) {
+            g.oppBuildLog = blob.oppBuildLog;
+          }
+        }
+      }
+    }
     const allGames = rawGames.map(serializeGameForProfile);
     const filteredGames = filterGamesByDate(allGames, opts.since, opts.until);
     const aggregates = aggregateByMapAndStrategy(filteredGames);

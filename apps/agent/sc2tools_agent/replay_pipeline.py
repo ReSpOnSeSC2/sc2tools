@@ -25,6 +25,23 @@ from typing import Any, Dict, Optional
 log = logging.getLogger(__name__)
 
 
+# Mirror the API's gameRecord schema caps in
+# ``apps/api/src/validation/gameRecord.js``. The server enforces these
+# with AJV's ``maxItems`` and rejects the whole game record with
+# ``"/oppBuildLog must NOT have more than 5000 items"`` when exceeded.
+# Long Zerg replays routinely produce 8k–14k opp_build_log entries
+# because every Zergling/Drone/Overlord spawn is a separate event line,
+# and the agent's queue used to retry the rejected payload forever (the
+# 2 s sleep + re-enqueue in uploader.queue), filling the bounded
+# upload queue and silently dropping every subsequent replay. Capping
+# here is the minimal fix: chronological truncation preserves the
+# early-/mid-game window the rules engine cares about (rules use
+# ``time_lt`` cutoffs that almost always sit inside the first ~10 min,
+# well within 5000 events even for a 30-minute Zerg macro game).
+_BUILD_LOG_CAP = 5000
+_EARLY_BUILD_LOG_CAP = 1000
+
+
 def _candidate_bases() -> list[Path]:
     """Yield every plausible base dir to probe for the analyzer roots.
 
@@ -204,6 +221,13 @@ class CloudGame:
     spatial: Optional[Dict[str, Any]] = None
 
     def to_payload(self) -> Dict[str, Any]:
+        # ``earlyBuildLog`` / ``oppEarlyBuildLog`` are intentionally
+        # NOT shipped: they are exactly ``buildLog`` / ``oppBuildLog``
+        # filtered to ``time < 5:00`` and the server derives them on
+        # read in the few services that need them (perGameCompute,
+        # dnaTimings, ml). Dropping them off the wire saves ~6 kB per
+        # game — about 12 % of the per-doc footprint. See the v0.4.3
+        # CHANGELOG for the storage rationale.
         out: Dict[str, Any] = {
             "gameId": self.game_id,
             "date": self.date_iso,
@@ -212,8 +236,6 @@ class CloudGame:
             "map": self.map_name,
             "durationSec": int(self.duration_sec),
             "buildLog": self.build_log,
-            "earlyBuildLog": self.early_build_log,
-            "oppEarlyBuildLog": self.opp_early_build_log,
             "oppBuildLog": self.opp_build_log,
         }
         if self.my_build:
@@ -403,6 +425,32 @@ def parse_replay_for_cloud(
             opp_build_log = derived_full
         if not opp_early_build_log and derived_early:
             opp_early_build_log = derived_early
+
+    # Cap each list at the server's schema maxItems. Lists are produced
+    # by ``build_log_lines`` already sorted ascending by event time, so
+    # ``[:N]`` keeps the earliest N events — which is exactly the window
+    # the build-order timeline and rules engine read. We capture the
+    # pre-cap sizes so the post-cap INFO line can flag truncation: silent
+    # truncation would be confusing if a user later saw the build-order
+    # timeline stop at the cap minute.
+    my_build_log_pre = len(my_build_log)
+    opp_build_log_pre = len(opp_build_log)
+    my_build_log = my_build_log[:_BUILD_LOG_CAP]
+    early_build_log = early_build_log[:_EARLY_BUILD_LOG_CAP]
+    opp_build_log = opp_build_log[:_BUILD_LOG_CAP]
+    opp_early_build_log = opp_early_build_log[:_EARLY_BUILD_LOG_CAP]
+    if (
+        my_build_log_pre > _BUILD_LOG_CAP
+        or opp_build_log_pre > _BUILD_LOG_CAP
+    ):
+        log.info(
+            "build_log_truncated file=%s build_log=%d->%d "
+            "opp_build_log=%d->%d cap=%d",
+            file_path.name,
+            my_build_log_pre, len(my_build_log),
+            opp_build_log_pre, len(opp_build_log),
+            _BUILD_LOG_CAP,
+        )
 
     # One-line INFO summary of what we're about to ship. Lets the user
     # confirm at a glance whether the rich payload (macroBreakdown +
@@ -744,22 +792,70 @@ def _compute_macro_breakdown(
         or int(getattr(ctx, "length_seconds", 0) or 0)
     )
     try:
+        # Score on the FULL stats_events stream so leaks/SQ/penalty
+        # accuracy is unaffected by the wire-level downsample below.
         score = compute_macro_score(my_macro, me.race, game_length)
     except Exception as exc:  # noqa: BLE001
         log.warning("compute_macro_score_failed: %s", exc)
         return None, None
     macro_score_val = score.get("macro_score")
+    # sc2reader's PlayerStatsEvent fires every ~10 s, which is finer
+    # resolution than the SPA's resource/army charts can render
+    # (typical chart widths give ~5–10 px per sample at 30 s, so the
+    # 10 s grid is invisible). Downsampling to 30 s buckets cuts each
+    # ``stats_events`` array to roughly a third of its original size
+    # — about 12 kB / game saved, the single biggest knob in the
+    # per-game payload. The macro_score above already ran against the
+    # full stream so nothing scoring-side is affected.
     payload: Dict[str, Any] = {
         "raw": score.get("raw", {}) or {},
         "all_leaks": score.get("all_leaks", []) or [],
         "top_3_leaks": score.get("top_3_leaks", []) or [],
-        "stats_events": list(my_macro.get("stats_events") or []),
-        "opp_stats_events": opp_stats,
+        "stats_events": _downsample_stats_events(
+            list(my_macro.get("stats_events") or []),
+        ),
+        "opp_stats_events": _downsample_stats_events(opp_stats),
     }
     derived: Optional[float] = None
     if isinstance(macro_score_val, (int, float)):
         derived = float(macro_score_val)
     return payload, derived
+
+
+# How wide each ``stats_events`` retention bucket is, in game-time
+# seconds. 30 s matches the chart resolution the SPA's
+# ResourcesOverTimeChart and ActiveArmyChart render at — finer
+# granularity is invisible. The constant is module-level so tests can
+# import + assert against it.
+_STATS_EVENTS_BUCKET_SEC = 30
+
+
+def _downsample_stats_events(events: list) -> list:
+    """Keep one ``stats_events`` entry per 30 s game-time bucket.
+
+    Input is sc2reader's ~10 s-cadence ``PlayerStatsEvent`` rows;
+    output is the FIRST event in each 30 s bucket. We keep the first
+    rather than averaging because each row is already a snapshot of
+    cumulative state (food_used, minerals_current, etc.) — averaging
+    would smooth meaningful spikes (a temporary mineral float, a
+    burst of unspent gas) that the user cares about. Empty input
+    returns an empty list; a None input is also handled.
+    """
+    if not events:
+        return []
+    seen_buckets: set[int] = set()
+    out: list = []
+    for ev in events:
+        try:
+            t = int(ev.get("time", 0))
+        except (TypeError, ValueError):
+            continue
+        bucket = t // _STATS_EVENTS_BUCKET_SEC
+        if bucket in seen_buckets:
+            continue
+        seen_buckets.add(bucket)
+        out.append(ev)
+    return out
 
 
 def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:

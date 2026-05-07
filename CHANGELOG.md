@@ -10,6 +10,165 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Changed (cloud v0.4.4) — heavy-field cutover + pluggable storage backend
+
+The v0.4.3 dual-write infrastructure ships its read-side cutover in
+this release. Every consumer of the four heavy fields (``buildLog``,
+``oppBuildLog``, ``macroBreakdown``, ``apmCurve``) now goes through
+``GameDetailsService``; the inline copies on the ``games`` collection
+are scheduled for removal by a migration script.
+
+- **All readers and writers cut over.** ``perGameCompute`` (build
+  order, macro breakdown, APM curve, custom-build preview cursor),
+  the ``opponents`` profile loader (via batched ``findMany``), and
+  the ``ml._writeTrainingNdjson`` pipeline now hydrate heavy fields
+  through ``GameDetailsService`` instead of reading them inline. The
+  ``writeMacroBreakdown``, ``writeApmCurve``, and
+  ``writeOpponentBuildOrder`` paths persist to the detail store and
+  ``$unset`` the legacy inline copies in the same update so each
+  recompute incrementally trims the games doc.
+- **Pluggable storage backend.** ``GameDetailsService`` no longer
+  talks to MongoDB directly — it delegates to a backend implementing
+  the contract in ``services/gameDetailsStore.js``:
+    - ``MongoDetailsStore`` (default): in-database, queryable, no
+      external dependency.
+    - ``R2DetailsStore``: Cloudflare R2 / AWS S3 / Backblaze B2 via
+      ``@aws-sdk/client-s3``. Stores each game's heavy blob as a
+      single gzip-compressed JSON object at
+      ``${prefix}/${userId}/${gameId}.json.gz``. Build logs compress
+      ~6× on real payloads (~30 kB raw → ~5 kB at rest).
+- **Backend selected at runtime.** Set ``GAME_DETAILS_STORE=r2`` plus
+  ``R2_ENDPOINT`` / ``R2_BUCKET`` / ``R2_ACCESS_KEY_ID`` /
+  ``R2_SECRET_ACCESS_KEY`` (and optional ``R2_REGION`` / ``R2_PREFIX``)
+  to flip backends without a code change. Partial R2 configuration
+  fails at boot with a clear error rather than silently falling back
+  to Mongo.
+- **Spatial extracts deliberately stay inline on ``games``.** They
+  drive the heatmap aggregations in ``services/spatial.js`` which
+  filter on ``spatial.*`` fields server-side; an object-storage
+  backend can't serve those queries. Spatial is small (~5 kB / game)
+  so the savings would have been marginal anyway.
+
+#### Migrations (run in this order)
+
+1. ``2026-05-07-trim-early-build-logs.js`` — drops ``earlyBuildLog`` /
+   ``oppEarlyBuildLog`` from existing docs (v0.4.3 carry-over).
+2. ``2026-05-07-backfill-game-details.js`` — populates the
+   ``game_details`` collection from existing inline heavy fields.
+3. ``2026-05-08-unset-heavy-from-games.js`` — drops the four heavy
+   fields from ``games``. Refuses to run unless step 2 has populated
+   the matching detail rows; pass ``--force`` to override.
+4. ``2026-05-08-mongo-to-r2.js`` (optional) — copies every detail
+   blob into R2 and rewrites the Mongo row to a slim
+   ``storedIn: 'r2'`` stub. Run before flipping
+   ``GAME_DETAILS_STORE=r2`` so back-history is reachable through the
+   new backend.
+
+#### Storage projection update
+
+After the v0.4.4 cutover plus R2 offload, per-game cost decomposes:
+
+| Surface | Bytes / game |
+|---|---|
+| ``games`` slim row | ~3 kB on disk |
+| ``game_details`` Mongo metadata stub (when R2-backed) | ~120 B |
+| R2 object (gzip-compressed) | ~5 kB |
+
+For 1M games:
+
+| Stack | Atlas storage | R2 storage | Estimated monthly |
+|---|---|---|---|
+| Mongo-only (v0.4.4) | ~9 GB | — | M10 / $60 |
+| Mongo + R2 (this release, R2 enabled) | ~3 GB | ~5 GB | M2 + R2 / **~$10** |
+
+### Changed (agent v0.4.3 + cloud) — storage trim, ~37% smaller per-game payload
+
+- **`earlyBuildLog` / `oppEarlyBuildLog` removed from the wire shape.**
+  Both arrays were exactly `buildLog` / `oppBuildLog` filtered to
+  `time < 5:00`, costing roughly 6 kB of redundant storage per game.
+  The agent stops sending them; the cloud derives them on read in
+  the three services that need the early window
+  (`perGameCompute.buildOrder`, `dnaTimings`, `ml._writeTrainingNdjson`)
+  via the new `readEarlyBuildLog` / `readOppEarlyBuildLog` helpers.
+  Pre-v0.4.3 docs are unaffected — the readers fall back to the
+  stored field when present, derive from the full log when absent.
+- **`stats_events` / `opp_stats_events` downsampled to 30 s buckets.**
+  sc2reader fires `PlayerStatsEvent` every ~10 s, which is finer
+  resolution than the SPA's `ResourcesOverTimeChart` and
+  `ActiveArmyChart` ever render — chart pixels are 5–10 s wide at
+  typical widths, so the 10 s grid is invisible. The agent now keeps
+  only the first event in each 30 s game-time bucket before shipping
+  the macroBreakdown payload, cutting each array to roughly a third
+  of its original size (~12 kB / game saved). `compute_macro_score`
+  still runs on the FULL stream so leak detection / SQ / penalties
+  are unaffected by the wire-level downsample.
+- **`game_details` collection introduced (dual-write, read cutover deferred).**
+  Heavy per-game fields (`buildLog`, `oppBuildLog`, `macroBreakdown`,
+  `apmCurve`, `spatial`) are mirrored into a new `game_details`
+  collection keyed on the same `(userId, gameId)` tuple as `games`.
+  Existing readers continue to read heavy fields from `games` — the
+  read-side cutover (which lets us $unset the duplicates from `games`
+  to actually reclaim ~40 kB / doc) is the next storage refactor and
+  ships separately. The split sets up Option C (object-storage offload
+  of the heavy fields) cleanly: once readers cut over, swapping the
+  `gameDetails` backend from MongoDB to R2/S3 is a service-level
+  change without touching the rest of the codebase.
+
+#### Migrations
+
+Two one-shot scripts ship with this release. Both are idempotent and
+support `--dry-run`.
+
+- `apps/api/src/db/migrations/2026-05-07-trim-early-build-logs.js`
+  $unsets `earlyBuildLog` / `oppEarlyBuildLog` from every existing
+  game document. Reclaims the ~6 kB / doc immediately (after the
+  next WiredTiger compaction).
+- `apps/api/src/db/migrations/2026-05-07-backfill-game-details.js`
+  copies the heavy fields from existing games into the new
+  `game_details` collection so the dual-write history is complete.
+  Read-side cutover follow-up will then rely on this row existing
+  for every game.
+
+#### Storage projection
+
+For 5k games (current scale): 237 MB → ~150 MB data size
+(~70 MB → ~45 MB on disk).
+
+For 30k games (the ceiling we're trending toward): ~1.5 GB → ~900 MB
+data size (~430 MB → ~270 MB on disk) — comfortably inside Atlas M2
+Shared (2 GB) instead of pushing past M5.
+
+For 1M games (long-horizon target): ~9 GB on disk after the read-side
+cutover lands; layering Cloudflare R2 / S3 on top of `game_details`
+drops Atlas-side storage to ~1 GB and shifts ~8 GB to ~$0.12 / month
+of cold object storage.
+
+### Fixed (agent v0.4.2)
+
+- **Replays with very long event streams no longer get rejected by
+  the cloud and starve the upload queue.** Long Zerg games routinely
+  produced opponent build logs of 8k–14k entries (every Zergling /
+  Drone / Overlord birth becomes its own line), well past the API's
+  ``maxItems: 5000`` cap on ``oppBuildLog``. The server returned a
+  validator rejection (``"/oppBuildLog must NOT have more than 5000
+  items"``), the upload worker treated it as a transient error and
+  re-enqueued the same job every 2 s, and the bounded queue then
+  filled up and silently dropped every fresh replay with
+  ``upload_queue_full; dropping ...``. The agent now caps each build
+  log at the schema limit (5000 for ``buildLog`` / ``oppBuildLog``,
+  1000 for the ``early`` variants) before upload — chronological
+  truncation, so the build-order timeline and rules engine still see
+  the early/mid game window they care about. A one-line
+  ``build_log_truncated ...`` is logged whenever truncation actually
+  happens, so this isn't silent.
+- **Schema rejections no longer loop.** The upload worker now
+  distinguishes a permanent server rejection (200 OK with
+  ``rejected: [...]``) from transient transport errors. Permanent
+  rejections are recorded in ``state.uploaded`` as ``"rejected"`` so
+  the next sweep skips the file instead of re-parsing and re-failing,
+  and the worker returns to draining the queue immediately rather
+  than sleeping 2 s per failure.
+
 ## [agent-v0.4.0] - 2026-05-06
 
 Released as `agent-v0.4.0` on GitHub. Installer:

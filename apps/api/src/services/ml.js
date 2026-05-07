@@ -43,6 +43,10 @@ class MLService {
     this.db = db;
     this.io = opts.io || null;
     this._activeJobs = new Map();
+    // Optional GameDetailsService — used by ``_writeTrainingNdjson``
+    // to hydrate ``buildLog`` for games whose slim row no longer
+    // carries it inline (post-v0.4.3 cutover migration).
+    this.gameDetails = opts.gameDetails || null;
   }
 
   /**
@@ -302,12 +306,21 @@ class MLService {
    * @param {string} userId
    */
   async _writeTrainingNdjson(userId) {
+    // Two-stage scan so the cutover keeps working with both legacy
+    // (buildLog inline on games) and post-cutover (buildLog in the
+    // detail store) docs:
+    //   1. Page slim rows for every eligible game.
+    //   2. Bulk-fetch buildLog for the games that don't have it
+    //      inline anymore.
+    // ``deriveEarlyBuildLog`` is then applied to the unified buildLog
+    // — the Python trainer (``scripts/ml_cli.py``) keeps the same
+    // NDJSON shape it always has, no model-format change.
+    const { deriveEarlyBuildLog } = require("./perGameCompute");
     const cursor = this.db.games
       .find(
         {
           userId,
           myRace: { $exists: true },
-          buildLog: { $exists: true },
           "opponent.race": { $exists: true },
         },
         {
@@ -319,8 +332,11 @@ class MLService {
             myRace: 1,
             myBuild: 1,
             map: 1,
+            // Project the legacy inline copy when present; the
+            // hydration step below fills in any missing ones from
+            // the detail store. We keep the field projected so the
+            // pre-migration code path doesn't need a $exists guard.
             buildLog: 1,
-            earlyBuildLog: 1,
             opponent: 1,
             macroScore: 1,
           },
@@ -328,9 +344,39 @@ class MLService {
       )
       .sort({ date: -1 })
       .limit(LIMITS.ML_TRAINING_MAX_GAMES);
-    const lines = [];
+    /** @type {Array<any>} */
+    const games = [];
+    /** @type {string[]} */
+    const needHydration = [];
     for await (const game of cursor) {
-      lines.push(JSON.stringify(game));
+      games.push(game);
+      if (!Array.isArray(game.buildLog) && game.gameId) {
+        needHydration.push(String(game.gameId));
+      }
+    }
+    if (this.gameDetails && needHydration.length > 0) {
+      const blobs = await this.gameDetails.findMany(userId, needHydration);
+      for (const game of games) {
+        if (Array.isArray(game.buildLog)) continue;
+        const blob = blobs.get(String(game.gameId || ""));
+        if (blob && Array.isArray(blob.buildLog)) {
+          game.buildLog = blob.buildLog;
+        }
+      }
+    }
+    const lines = [];
+    for (const game of games) {
+      if (!Array.isArray(game.buildLog) || game.buildLog.length === 0) {
+        // No build log available for this game — skip rather than
+        // train on an empty feature row, which would silently degrade
+        // the model. Same effect as the old ``$exists: true`` filter.
+        continue;
+      }
+      const enriched = {
+        ...game,
+        earlyBuildLog: deriveEarlyBuildLog(game.buildLog),
+      };
+      lines.push(JSON.stringify(enriched));
     }
     if (lines.length === 0) {
       throw httpError(412, "not_enough_training_data");

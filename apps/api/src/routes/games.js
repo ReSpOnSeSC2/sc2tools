@@ -76,7 +76,43 @@ function buildGamesRouter(deps) {
           continue;
         }
         const game = /** @type {any} */ (validation.value);
-        const created = await deps.games.upsert(userId, game);
+        // v0.4.3 storage trim: drop the redundant earlyBuildLog /
+        // oppEarlyBuildLog fields if the agent (or a back-compat
+        // caller) still sends them. They are derivable from
+        // buildLog / oppBuildLog at read time and were costing ~6 kB
+        // of redundant storage per document. Done at the route layer
+        // so every ingest path benefits without each service having
+        // to remember to strip them.
+        if ("earlyBuildLog" in game) delete game.earlyBuildLog;
+        if ("oppEarlyBuildLog" in game) delete game.oppEarlyBuildLog;
+        // GamesService.upsert now writes the slim row to ``games``
+        // and forwards the heavy fields to GameDetailsService. A
+        // detail-store failure (R2 down, Mongo gameDetails write
+        // refused, etc.) propagates here — we mark the game rejected
+        // rather than silently shipping a broken inspector experience.
+        // The slim row is left in place if the upsert wrote it before
+        // the detail store call failed; the next agent re-upload
+        // recovers, so this is a transient failure mode.
+        let created;
+        try {
+          created = await deps.games.upsert(userId, game);
+        } catch (err) {
+          if (req.log) {
+            req.log.warn(
+              { err, gameId: game.gameId, userId },
+              "ingest_upsert_failed",
+            );
+          }
+          rejected.push({
+            gameId: game.gameId || null,
+            errors: [
+              `upsert_failed: ${
+                err && err.message ? err.message : String(err)
+              }`,
+            ],
+          });
+          continue;
+        }
         if (game.opponent && game.opponent.pulseId) {
           await deps.opponents.recordGame(userId, {
             pulseId: game.opponent.pulseId,
