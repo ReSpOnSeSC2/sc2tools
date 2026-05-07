@@ -154,11 +154,24 @@ def _load_sc2ra_module(dotted_name: str) -> Any:
     Tests that pre-load a stub into ``sys.modules[dotted_name]`` win
     over the file lookup so monkeypatched mocks still take effect —
     that's how ``test_replay_pipeline`` swaps in fake extractors.
+
+    Caching: once we load from disk we register the module under a
+    private ``_sc2ra_*`` key in ``sys.modules`` and check that key
+    FIRST on subsequent calls. This matters because elsewhere in the
+    pipeline ``from core.event_extractor import build_log_lines``
+    runs through Python's normal import machinery and registers
+    reveal's copy at ``sys.modules['core.event_extractor']``. Without
+    the private cache, the next call would return that stale reveal
+    copy from ``sys.modules`` and silently regress.
     """
     import importlib.util
-    cached = sys.modules.get(dotted_name)
-    if cached is not None:
-        return cached
+    internal_name = f"_sc2ra_{dotted_name.replace('.', '_')}"
+    cached_internal = sys.modules.get(internal_name)
+    if cached_internal is not None:
+        return cached_internal
+    cached_test_mock = sys.modules.get(dotted_name)
+    if cached_test_mock is not None:
+        return cached_test_mock
     parts = dotted_name.split(".")
     rel = Path(*parts[:-1]) / f"{parts[-1]}.py"
     for base in _candidate_bases():
@@ -166,11 +179,12 @@ def _load_sc2ra_module(dotted_name: str) -> Any:
         if not candidate.exists():
             continue
         spec = importlib.util.spec_from_file_location(
-            f"_sc2ra_{dotted_name.replace('.', '_')}", str(candidate),
+            internal_name, str(candidate),
         )
         if spec is None or spec.loader is None:
             continue
         mod = importlib.util.module_from_spec(spec)
+        sys.modules[internal_name] = mod
         spec.loader.exec_module(mod)
         return mod
     raise ImportError(
