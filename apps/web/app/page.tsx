@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   ArrowRight,
   BarChart3,
-  BookOpen,
   CheckCircle2,
   Cloud,
   Download,
@@ -513,9 +512,9 @@ function FinalCtaSection() {
             <CtaLink
               href="/community"
               variant="secondary"
-              iconLeft={<BookOpen className="h-5 w-5" aria-hidden />}
+              iconLeft={<Library className="h-5 w-5" aria-hidden />}
             >
-              Read the docs
+              Browse community builds
             </CtaLink>
           </div>
         </div>
