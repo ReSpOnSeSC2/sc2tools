@@ -181,53 +181,64 @@ function BuildPanel({
 
   return (
     <Card padded={false} className="flex flex-col overflow-hidden">
-      <header className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border bg-bg-surface/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-bg-surface/80">
-        <button
-          type="button"
-          aria-expanded={!collapsed}
-          aria-controls={`build-list-${perspective}`}
-          onClick={() => setCollapsed((v) => !v)}
-          className="-ml-1 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          title={collapsed ? "Expand" : "Collapse"}
-        >
-          <ChevronDown
-            className={[
-              "h-4 w-4 transition-transform",
-              collapsed ? "-rotate-90" : "",
-            ].join(" ")}
-            aria-hidden
-          />
-        </button>
-        <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
-          {title}
-        </h3>
-        <span className="text-caption text-text-dim">
-          {rows.length} step{rows.length === 1 ? "" : "s"}
-        </span>
-        <div className="ml-auto">
+      {/*
+       * Mobile-first header — two rows on narrow viewports so the
+       * "Save as new build" CTA never gets pushed off the right edge by
+       * a long ``oppBuildName`` (the previous flex-wrap layout silently
+       * wrapped the button below the title-row, leaving it visually
+       * detached and reported as "missing on mobile"). On ≥640px the
+       * second row collapses back into the title row's right edge.
+       */}
+      <header className="sticky top-0 z-10 flex flex-col gap-2 border-b border-border bg-bg-surface/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-bg-surface/80 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <button
             type="button"
-            onClick={() => setEditorOpen(true)}
-            disabled={noEvents}
-            title={
-              noEvents
-                ? "No build events to save"
-                : `Save ${
-                    perspective === "opponent" ? "the opponent's" : "your"
-                  } build to your library`
-            }
-            className={[
-              "inline-flex h-8 min-h-[32px] items-center gap-1.5 rounded-md px-2.5 text-caption font-semibold transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-              noEvents
-                ? "cursor-not-allowed border border-border bg-bg-subtle text-text-dim"
-                : "border border-accent/30 bg-accent/10 text-accent hover:bg-accent/20",
-            ].join(" ")}
+            aria-expanded={!collapsed}
+            aria-controls={`build-list-${perspective}`}
+            onClick={() => setCollapsed((v) => !v)}
+            className="-ml-1 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            title={collapsed ? "Expand" : "Collapse"}
           >
-            <Save className="h-3.5 w-3.5" aria-hidden />
-            Save as new build
+            <ChevronDown
+              className={[
+                "h-4 w-4 transition-transform",
+                collapsed ? "-rotate-90" : "",
+              ].join(" ")}
+              aria-hidden
+            />
           </button>
+          <h3
+            className="min-w-0 flex-1 truncate text-caption font-semibold uppercase tracking-wider text-text"
+            title={title}
+          >
+            {title}
+          </h3>
+          <span className="flex-shrink-0 text-caption text-text-dim">
+            {rows.length} step{rows.length === 1 ? "" : "s"}
+          </span>
         </div>
+        <button
+          type="button"
+          onClick={() => setEditorOpen(true)}
+          disabled={noEvents}
+          title={
+            noEvents
+              ? "No build events to save"
+              : `Save ${
+                  perspective === "opponent" ? "the opponent's" : "your"
+                } build to your library`
+          }
+          className={[
+            "inline-flex h-9 min-h-[36px] w-full flex-shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-caption font-semibold transition-colors sm:w-auto sm:self-center",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface",
+            noEvents
+              ? "cursor-not-allowed border border-border bg-bg-subtle text-text-dim"
+              : "border border-accent/40 bg-accent/15 text-accent hover:bg-accent/25 active:bg-accent/30",
+          ].join(" ")}
+        >
+          <Save className="h-3.5 w-3.5" aria-hidden />
+          Save as new build
+        </button>
       </header>
       {!collapsed ? (
         <div

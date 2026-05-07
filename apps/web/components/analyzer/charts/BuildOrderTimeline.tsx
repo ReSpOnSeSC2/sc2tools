@@ -196,15 +196,27 @@ export function BuildOrderTimeline({
        * mobile — keeps the perspective toggle + save button reachable.
        */}
       <div className="max-h-[520px] overflow-y-auto">
-        <header className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border bg-bg-surface/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-bg-surface/80">
-          <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
-            {headerTitle}
-          </h3>
-          <span className="text-caption text-text-dim">
-            {rowsActive.length} step{rowsActive.length === 1 ? "" : "s"}
-          </span>
+        {/*
+         * Mobile-first header — title row collapses to its own line so
+         * the perspective toggle and "Save as new build" CTA always
+         * have room on narrow viewports. The previous flex-wrap layout
+         * silently pushed the save button onto an off-screen row when
+         * the build name was long.
+         */}
+        <header className="sticky top-0 z-10 flex flex-col gap-2 border-b border-border bg-bg-surface/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-bg-surface/80 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <h3
+              className="min-w-0 flex-1 truncate text-caption font-semibold uppercase tracking-wider text-text"
+              title={headerTitle}
+            >
+              {headerTitle}
+            </h3>
+            <span className="flex-shrink-0 text-caption text-text-dim">
+              {rowsActive.length} step{rowsActive.length === 1 ? "" : "s"}
+            </span>
+          </div>
           {showHeaderActions ? (
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
               <BuildOrderPerspectiveToggle
                 value={effectivePerspective}
                 onChange={handlePerspectiveChange}
@@ -223,6 +235,7 @@ export function BuildOrderTimeline({
                   vsRace={saveVsRace}
                   gameId={gameId}
                   onSaved={handleSaved}
+                  className="ml-auto sm:ml-0"
                 />
               ) : null}
             </div>

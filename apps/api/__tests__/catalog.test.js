@@ -111,6 +111,53 @@ describe("services/catalog", () => {
     }
   });
 
+  test("mapImagePath finds lowercase snake_case variant in data/map-images", () => {
+    const dir = tempDir();
+    try {
+      fs.mkdirSync(path.join(dir, "data", "map-images"), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "data", "map-images", "acid_plant_le.jpg"),
+        Buffer.from("FAKEJPG"),
+      );
+      const svc = new CatalogService({}, { projectDir: dir });
+      const found = svc.mapImagePath("Acid Plant LE");
+      // The file is in data/map-images (the legacy bundle layout) under a
+      // lowercased filename. We don't pin the exact casing of the returned
+      // path because Windows' case-insensitive filesystem may resolve the
+      // first PascalCase variant we probe — what matters is the lookup
+      // produces a usable result pointing at a real file inside the
+      // map-images directory.
+      expect(found).not.toBeNull();
+      expect(found?.contentType).toBe("image/jpeg");
+      expect(found?.path.toLowerCase()).toContain(
+        path.join("data", "map-images", "acid_plant_le.jpg").toLowerCase(),
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("mapImagePath prefers data/map_assets PascalCase when present", () => {
+    const dir = tempDir();
+    try {
+      fs.mkdirSync(path.join(dir, "data", "map_assets"), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "data", "map_assets", "Goldenaura.jpg"),
+        Buffer.from("PASCAL"),
+      );
+      fs.mkdirSync(path.join(dir, "data", "map-images"), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "data", "map-images", "goldenaura.jpg"),
+        Buffer.from("LOWER"),
+      );
+      const svc = new CatalogService({}, { projectDir: dir });
+      const found = svc.mapImagePath("Goldenaura");
+      expect(found?.path).toContain("map_assets");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("playbackInfo returns the stub error envelope", () => {
     const svc = new CatalogService({}, { projectDir: null });
     const info = /** @type {any} */ (svc.playbackInfo());
