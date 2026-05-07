@@ -246,6 +246,10 @@ function BuildOrderExpansion({
       race={data.my_race}
       oppRace={data.opp_race || game.opp_race}
       title={data.my_build ? `Your build — ${data.my_build}` : "Your build"}
+      onSaveAsBuild={async () => {
+        // SaveAsBuildButton handles the API call internally via the
+        // BuildEditorModal -> PUT /v1/custom-builds/:slug flow.
+      }}
     />
   );
 }
