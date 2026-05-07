@@ -140,13 +140,16 @@ export function MacroBreakdownPanel({
   if (typeof window === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex justify-end" role="presentation">
+    <div
+      className="fixed inset-0 z-50 flex items-stretch justify-stretch overflow-hidden"
+      role="presentation"
+    >
       <button
         type="button"
         aria-label="Close macro breakdown"
         tabIndex={-1}
         onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
       />
       <div
         ref={dialogRef}
@@ -154,7 +157,7 @@ export function MacroBreakdownPanel({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative ml-auto flex h-full w-full max-h-[100dvh] flex-col border-l border-border bg-bg-surface text-text shadow-[var(--shadow-card)] sm:max-w-3xl"
+        className="relative flex h-full w-full max-h-[100dvh] flex-col bg-bg-surface text-text shadow-[var(--shadow-card)] sm:m-4 sm:rounded-xl sm:border sm:border-border sm:max-h-[calc(100dvh-2rem)] md:m-6 md:max-h-[calc(100dvh-3rem)]"
       >
         <PanelHeader
           titleId={titleId}
@@ -162,24 +165,26 @@ export function MacroBreakdownPanel({
           meta={headerMeta}
           onClose={onClose}
         />
-        <div className="flex-1 overflow-y-auto px-4 py-4 pb-[env(safe-area-inset-bottom,0px)] sm:px-5">
-          {isLoading ? (
-            <LoadingState />
-          ) : error ? (
-            <ErrorState
-              status={error.status}
-              message={error.message}
-              recomputing={recomputing}
-              onRecompute={recompute}
-            />
-          ) : !data ? null : (
-            <BreakdownBody
-              data={data}
-              initialScore={initialScore}
-              highlightedKey={highlightedKey}
-              onHighlight={setHighlightedKey}
-            />
-          )}
+        <div className="flex-1 overflow-y-auto px-4 py-5 pb-[env(safe-area-inset-bottom,0px)] sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-6xl">
+            {isLoading ? (
+              <LoadingState />
+            ) : error ? (
+              <ErrorState
+                status={error.status}
+                message={error.message}
+                recomputing={recomputing}
+                onRecompute={recompute}
+              />
+            ) : !data ? null : (
+              <BreakdownBody
+                data={data}
+                initialScore={initialScore}
+                highlightedKey={highlightedKey}
+                onHighlight={setHighlightedKey}
+              />
+            )}
+          </div>
         </div>
         <PanelFooter
           recomputing={recomputing}
@@ -214,68 +219,70 @@ function PanelHeader({
   const oppRaceLetter = (meta?.opponentRace || "").charAt(0).toUpperCase();
   const dateLine = formatHeaderDate(meta?.dateIso);
   return (
-    <header className="flex items-start justify-between gap-3 border-b border-border bg-bg-elevated/40 px-4 py-3 sm:px-5">
-      <div className="space-y-1">
-        <div className="text-caption font-semibold uppercase tracking-wider text-accent-cyan">
-          Macro breakdown
+    <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-bg-elevated/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-6xl items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <div className="text-caption font-semibold uppercase tracking-wider text-accent-cyan">
+            Macro breakdown
+          </div>
+          <h2
+            id={titleId}
+            className="flex flex-wrap items-center gap-2 text-h3 font-semibold text-text sm:text-h2"
+          >
+            {myRaceLetter ? (
+              <Icon
+                name={myRaceLetter}
+                kind="race"
+                size="sm"
+                fallback={myRaceLetter}
+                decorative
+              />
+            ) : null}
+            <span>{playerName}</span>
+            {opponent ? (
+              <>
+                <span className="text-text-dim">vs</span>
+                {oppRaceLetter ? (
+                  <Icon
+                    name={oppRaceLetter}
+                    kind="race"
+                    size="sm"
+                    fallback={oppRaceLetter}
+                    decorative
+                  />
+                ) : null}
+                <span className="truncate">{opponent}</span>
+              </>
+            ) : null}
+          </h2>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-text-muted">
+            {dateLine ? <span>{dateLine}</span> : null}
+            {meta?.map ? (
+              <>
+                {dateLine ? <span aria-hidden>·</span> : null}
+                <span>{meta.map}</span>
+              </>
+            ) : null}
+            {meta?.result ? (
+              <>
+                <span aria-hidden>·</span>
+                <span>{meta.result}</span>
+              </>
+            ) : null}
+            <span className="hidden font-mono text-[11px] text-text-dim sm:ml-auto sm:inline">
+              {gameId}
+            </span>
+          </p>
         </div>
-        <h2
-          id={titleId}
-          className="flex flex-wrap items-center gap-2 text-h3 font-semibold text-text"
+        <button
+          type="button"
+          aria-label="Close macro breakdown"
+          onClick={onClose}
+          className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          {myRaceLetter ? (
-            <Icon
-              name={myRaceLetter}
-              kind="race"
-              size="sm"
-              fallback={myRaceLetter}
-              decorative
-            />
-          ) : null}
-          <span>{playerName}</span>
-          {opponent ? (
-            <>
-              <span className="text-text-dim">vs</span>
-              {oppRaceLetter ? (
-                <Icon
-                  name={oppRaceLetter}
-                  kind="race"
-                  size="sm"
-                  fallback={oppRaceLetter}
-                  decorative
-                />
-              ) : null}
-              <span>{opponent}</span>
-            </>
-          ) : null}
-        </h2>
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-text-muted">
-          {dateLine ? <span>{dateLine}</span> : null}
-          {meta?.map ? (
-            <>
-              {dateLine ? <span aria-hidden>·</span> : null}
-              <span>{meta.map}</span>
-            </>
-          ) : null}
-          {meta?.result ? (
-            <>
-              <span aria-hidden>·</span>
-              <span>{meta.result}</span>
-            </>
-          ) : null}
-          <span className="ml-auto font-mono text-[11px] text-text-dim">
-            {gameId}
-          </span>
-        </p>
+          <X className="h-5 w-5" aria-hidden />
+        </button>
       </div>
-      <button
-        type="button"
-        aria-label="Close macro breakdown"
-        onClick={onClose}
-        className="-mr-1.5 -mt-0.5 inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <X className="h-5 w-5" aria-hidden />
-      </button>
     </header>
   );
 }
@@ -292,22 +299,27 @@ function PanelFooter({
   onClose: () => void;
 }) {
   return (
-    <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-bg-elevated/30 px-4 py-3 sm:px-5">
-      {recomputeMsg ? (
-        <span className="mr-auto text-caption text-text-muted" role="status">
-          {recomputeMsg}
-        </span>
-      ) : null}
-      <Button
-        variant="secondary"
-        onClick={onRecompute}
-        loading={recomputing}
-        disabled={recomputing}
-        iconLeft={<RefreshCcw className="h-4 w-4" aria-hidden />}
-      >
-        {recomputing ? "Recomputing…" : "Recompute"}
-      </Button>
-      <Button onClick={onClose}>Close</Button>
+    <footer className="sticky bottom-0 z-10 border-t border-border bg-bg-elevated/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-end gap-2">
+        {recomputeMsg ? (
+          <span
+            className="mr-auto max-w-full text-caption text-text-muted sm:max-w-[60%]"
+            role="status"
+          >
+            {recomputeMsg}
+          </span>
+        ) : null}
+        <Button
+          variant="secondary"
+          onClick={onRecompute}
+          loading={recomputing}
+          disabled={recomputing}
+          iconLeft={<RefreshCcw className="h-4 w-4" aria-hidden />}
+        >
+          {recomputing ? "Recomputing…" : "Recompute"}
+        </Button>
+        <Button onClick={onClose}>Close</Button>
+      </div>
     </footer>
   );
 }
@@ -344,10 +356,10 @@ function BreakdownBody({
   const samplesMissing = isMissingChartSamples(data);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 sm:space-y-6">
       <Headline score={score} colourClass={headlineColour} />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <SpendingQuotientStat
           label="Spending Quotient"
           value={typeof raw.sq === "number" ? raw.sq : null}

@@ -49,6 +49,8 @@ async function main() {
     issuer: config.clerkJwtIssuer,
     audience: config.clerkJwtAudience,
     resolveOverlayToken: (token) => services.overlayTokens.resolve(token),
+    resolveDeviceToken: (tokenHash) =>
+      /** @type {any} */ (services).pairings.findTokenByHash(tokenHash),
   });
 
   httpServer.listen(config.port, () => {

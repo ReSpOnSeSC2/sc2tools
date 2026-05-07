@@ -111,7 +111,7 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
 
   return (
     <div
-      className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      className="grid auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4"
       data-testid="dashboard-kpi-strip"
     >
       <LeadStat
@@ -288,7 +288,7 @@ function LeadStat({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="relative isolate overflow-hidden rounded-lg shadow-halo-cyan">
+    <div className="relative isolate flex h-full flex-col overflow-hidden rounded-lg shadow-halo-cyan">
       <GlowHalo color="cyan" position="top-left" size={120} opacity={0.9} />
       <StatCard
         label={
@@ -300,7 +300,7 @@ function LeadStat({
         value={<span className="text-accent-cyan">{value}</span>}
         hint={hint}
         size="md"
-        className="border-accent-cyan/40 bg-bg-surface"
+        className="h-full flex-1 border-accent-cyan/40 bg-bg-surface"
       />
     </div>
   );
