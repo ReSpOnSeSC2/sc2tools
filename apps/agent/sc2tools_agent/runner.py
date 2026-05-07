@@ -537,9 +537,7 @@ def _gui_boot_worker(
         socket_client: Optional[SocketClient] = None
         if state.device_token:
             on_macro, on_opp = make_recompute_handlers(
-                state_path=cfg.state_dir / "state.json"
-                if cfg.state_dir is not None
-                else None,
+                state_dir=cfg.state_dir,
                 queue_resync_for_paths=lambda paths: _queue_replays_for_resync(
                     state, upload, paths, log,
                 ),
