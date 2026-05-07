@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Play,
   Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
@@ -282,6 +283,7 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
             testingWidget={testingWidget}
           />
         </Card>
+        <StuckWidgetHelp />
       </Section>
 
       <Section
@@ -557,5 +559,68 @@ function UrlRow({
         </Button>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Help block explaining how to clear a stuck widget in OBS / Streamlabs.
+ *
+ * Stale widgets are normally cleared after ~6 minutes of no new game,
+ * but if the streamer wants the panel gone NOW (e.g. the dossier is
+ * sitting on the previous opponent and they're about to queue), the
+ * Browser Source's cache holds the page state across show/hide. The
+ * vendor-specific "Refresh cache" action forces OBS to redraw the page
+ * and our overlay re-mounts in a clean state.
+ */
+function StuckWidgetHelp() {
+  return (
+    <Card>
+      <div className="flex items-start gap-3 px-2 py-2 text-caption text-text-muted">
+        <RefreshCw
+          className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-cyan"
+          aria-hidden
+        />
+        <div className="space-y-2">
+          <p className="text-text">Widget stuck on the last opponent?</p>
+          <p>
+            Most widgets auto-hide on a per-panel timer (Match result and
+            Streak in seconds, Scouting after about 22 s, Opponent identity
+            after a longer idle gap). The persistent panels &mdash;{" "}
+            <strong className="text-text">Session record</strong> and{" "}
+            <strong className="text-text">Top builds</strong> &mdash; stay
+            on screen by design. If a widget&apos;s sitting stale, force the
+            Browser Source to redraw:
+          </p>
+          <ul className="ml-4 list-disc space-y-1">
+            <li>
+              <strong className="text-text">OBS Studio:</strong> right-click the
+              Browser Source for the widget &rarr; <em>Refresh cache of current
+              page</em>.
+            </li>
+            <li>
+              <strong className="text-text">Streamlabs Desktop:</strong> click
+              the Browser Source&apos;s gear icon (or right-click) &rarr;{" "}
+              <em>Refresh cache</em>. The widget reloads with no stored state.
+            </li>
+            <li>
+              <strong className="text-text">Streamlabs OBS / OBS.live:</strong>{" "}
+              same as Streamlabs Desktop &mdash; the option lives on the source
+              context menu.
+            </li>
+          </ul>
+          <p>
+            <strong className="text-text">Tip:</strong> in OBS Studio you can
+            also tick <em>Shutdown source when not visible</em> and{" "}
+            <em>Refresh browser when scene becomes active</em> on the Browser
+            Source so the widget always re-mounts when you switch scenes.
+          </p>
+          <p>
+            <strong className="text-text">Test fires</strong> always carry a
+            short timer (about 20 s), so previewing the Session or Top builds
+            panels with the Test button never leaves sample data on your scene.
+          </p>
+        </div>
+      </div>
+    </Card>
   );
 }

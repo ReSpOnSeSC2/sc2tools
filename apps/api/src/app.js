@@ -127,8 +127,10 @@ function makeServices(deps) {
   );
   // GamesService persists heavy fields through GameDetailsService,
   // not directly to a collection — the indirection is what makes
-  // the R2 swap a config change instead of a code change.
-  const games = new GamesService(deps.db, { gameDetails });
+  // the R2 swap a config change instead of a code change. It also
+  // borrows UsersService so ``todaySession`` can stamp the streamer's
+  // region onto the overlay's session widget.
+  const games = new GamesService(deps.db, { gameDetails, users });
   const pairings = new DevicePairingsService(deps.db);
   const overlayTokens = new OverlayTokensService(deps.db);
   // OverlayLiveService has no per-user state; constructed once and

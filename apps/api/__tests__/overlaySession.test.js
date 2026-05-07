@@ -193,6 +193,35 @@ describe("services/games.todaySession", () => {
     expect(out.mmrCurrent).toBeUndefined();
   });
 
+  test("populates streak / sessionStartedAt / region for the SPA-style session widget", async () => {
+    const t0 = new Date(Date.now() - 25 * 60 * 1000);
+    const t1 = new Date(t0.getTime() + 5 * 60 * 1000);
+    const t2 = new Date(t0.getTime() + 10 * 60 * 1000);
+    const t3 = new Date(t0.getTime() + 15 * 60 * 1000);
+    await db.games.insertMany([
+      { userId: "u1", gameId: "g1", result: "Defeat", date: t0 },
+      { userId: "u1", gameId: "g2", result: "Victory", date: t1 },
+      { userId: "u1", gameId: "g3", result: "Victory", date: t2 },
+      { userId: "u1", gameId: "g4", result: "Victory", date: t3 },
+    ]);
+    // Inject a stub users service so the region lookup runs without a
+    // real users collection. The service only reads `region` so the
+    // stub returns the bare minimum.
+    const svcWithUsers = new GamesService(db, {
+      users: { getProfile: async () => ({ region: "na" }) },
+    });
+    const out = await svcWithUsers.todaySession("u1", "UTC");
+    expect(out.wins).toBe(3);
+    expect(out.losses).toBe(1);
+    // Most recent run is W3 (g2..g4 all Victory).
+    expect(out.streak).toEqual({ kind: "win", count: 3 });
+    // Earliest game timestamp is surfaced as an ISO string for the widget.
+    expect(typeof out.sessionStartedAt).toBe("string");
+    expect(out.sessionStartedAt).toBe(t0.toISOString());
+    // Region is upper-cased so the widget can paint it as a label.
+    expect(out.region).toBe("NA");
+  });
+
   test("respects the requested timezone when bucketing day boundaries", async () => {
     // Pick a moment we control: a game timestamped at 23:00 UTC.
     // For a UTC overlay this is "today"; for an Auckland overlay

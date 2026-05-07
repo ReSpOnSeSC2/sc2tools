@@ -339,6 +339,94 @@ describe("services/overlayLive.buildFromGame", () => {
     expect(p.bestAnswer.winRate).toBeCloseTo(0.75);
   });
 
+  test("recentGames lists prior matchup-scoped meetings vs this opponent", async () => {
+    const now = Date.now();
+    await db.games.insertMany([
+      // Three prior PvZ games vs the same opponent — drawn in
+      // ascending date so the service's reverse-sort surfaces the
+      // newest first.
+      {
+        userId: "u1",
+        gameId: "rg-1",
+        result: "Defeat",
+        myRace: "Protoss",
+        myBuild: "P - Stargate",
+        map: "Map A",
+        durationSec: 421,
+        date: new Date(now - 4000),
+        opponent: { race: "Zerg", pulseId: "pulse-1", strategy: "12 Pool" },
+      },
+      {
+        userId: "u1",
+        gameId: "rg-2",
+        result: "Victory",
+        myRace: "Protoss",
+        myBuild: "P - 4 Gate",
+        map: "Map B",
+        durationSec: 660,
+        date: new Date(now - 2000),
+        opponent: { race: "Zerg", pulseId: "pulse-1", strategy: "Hatch first" },
+      },
+      // Different matchup — must not appear (TvZ instead of PvZ).
+      {
+        userId: "u1",
+        gameId: "rg-tvz",
+        result: "Victory",
+        myRace: "Terran",
+        durationSec: 500,
+        date: new Date(now - 1000),
+        opponent: { race: "Zerg", pulseId: "pulse-1" },
+      },
+      // Different opponent — must not appear.
+      {
+        userId: "u1",
+        gameId: "rg-other",
+        result: "Victory",
+        myRace: "Protoss",
+        date: new Date(now - 500),
+        opponent: { race: "Zerg", pulseId: "pulse-2" },
+      },
+    ]);
+    const p = await svc.buildFromGame("u1", game({ gameId: "g-current" }));
+    expect(Array.isArray(p.recentGames)).toBe(true);
+    expect(p.recentGames).toHaveLength(2);
+    // Newest first.
+    expect(p.recentGames[0].result).toBe("Win");
+    expect(p.recentGames[0].lengthText).toBe("11:00");
+    expect(p.recentGames[0].map).toBe("Map B");
+    expect(p.recentGames[0].myBuild).toBe("P - 4 Gate");
+    expect(p.recentGames[0].oppBuild).toBe("Hatch first");
+    expect(p.recentGames[1].result).toBe("Loss");
+    expect(p.recentGames[1].lengthText).toBe("7:01");
+  });
+
+  test("recentGames excludes the just-uploaded game so the widget shows priors only", async () => {
+    const now = Date.now();
+    await db.games.insertMany([
+      {
+        userId: "u1",
+        gameId: "g-current",
+        result: "Victory",
+        myRace: "Protoss",
+        durationSec: 700,
+        date: new Date(now),
+        opponent: { race: "Zerg", pulseId: "pulse-1" },
+      },
+      {
+        userId: "u1",
+        gameId: "g-prior",
+        result: "Defeat",
+        myRace: "Protoss",
+        durationSec: 420,
+        date: new Date(now - 5000),
+        opponent: { race: "Zerg", pulseId: "pulse-1" },
+      },
+    ]);
+    const p = await svc.buildFromGame("u1", game({ gameId: "g-current" }));
+    expect(p.recentGames).toHaveLength(1);
+    expect(p.recentGames[0].result).toBe("Loss");
+  });
+
   test("meta widget surfaces top opponent strategies in this matchup", async () => {
     const now = Date.now();
     await db.games.insertMany([
@@ -503,6 +591,29 @@ describe("POST /v1/overlay-events/test", () => {
     expect(captured.liveEmits).toHaveLength(1);
     expect(captured.sessionEmits).toHaveLength(1);
     expect(captured.sessionEmits[0].payload.wins).toBeGreaterThanOrEqual(0);
+  });
+
+  test("test-fired payloads carry isTest:true on both events", async () => {
+    // The overlay clients use this flag to cap the normally-persistent
+    // session/topbuilds widgets at a short visibility timer so a Test
+    // click never pins sample data to the streamer's scene.
+    const token = await mintToken();
+    const res = await request(app)
+      .post("/v1/overlay-events/test")
+      .set("authorization", "Bearer user-overlay-live")
+      .send({ token })
+      .set("content-type", "application/json");
+    expect(res.status).toBe(202);
+    expect(captured.liveEmits[0].payload.isTest).toBe(true);
+    expect(captured.sessionEmits[0].payload.isTest).toBe(true);
+  });
+
+  test("real overlay:live broadcasts (from /v1/games) do NOT carry isTest", async () => {
+    // The ingest path's payload comes from buildFromGame() which never
+    // sets the flag, so production widgets keep their natural
+    // durations and persistent panels stay persistent.
+    const sample = OverlayLiveService.buildSamplePayload();
+    expect(sample.isTest).toBeUndefined();
   });
 });
 

@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { LiveGamePayload } from "../types";
-import { Dim, WidgetHeader, WidgetShell } from "../WidgetShell";
+import { WidgetShell } from "../WidgetShell";
 
 export type SessionSummary = {
   wins: number;
@@ -9,28 +10,33 @@ export type SessionSummary = {
   games: number;
   mmrStart?: number;
   mmrCurrent?: number;
+  region?: string;
+  sessionStartedAt?: string;
+  streak?: { kind: "win" | "loss"; count: number };
+  /**
+   * Set when the aggregate was emitted by the Test route. The
+   * overlay clients use this to put the normally-persistent session
+   * card on a short visibility timer so a Test fire doesn't pin
+   * sample data to the scene forever.
+   */
+  isTest?: boolean;
 };
 
 /**
- * Today's W-L counter (and MMR delta when the agent has populated
- * ``myMmr`` on the games it uploads).
+ * Session card — visual rebuild matching the legacy SPA's
+ * `session.html`. Three things, stacked vertically inside a single
+ * gold-accented card:
  *
- * Two data sources are accepted, in priority order:
+ *   1. Big "WW – LL" with the W and L on separate baseline-aligned
+ *      lines (the SPA's signature look). A small streak chip pinned
+ *      to the corner when on a 2+ run, and the session elapsed time
+ *      ("27m") under the W-L for context.
+ *   2. Big "REGION MMR" line (e.g. "NA 5343") below the W-L,
+ *      anchored in the cloud aggregate's `region` + `mmrCurrent`.
  *
- *  1. ``session`` — pushed by the cloud over the ``overlay:session``
- *     socket event. Fully cloud-derived, fires the moment a new game
- *     lands in Mongo, so the widget works whether or not the local
- *     desktop agent is currently running pre/post-game live events.
- *  2. ``live.session`` — the legacy path the agent's
- *     ``push_overlay_live`` posts when it parses a fresh replay. Used
- *     as a fallback so an older stack that still sends the merged
- *     payload keeps rendering.
- *
- * Showing the panel even at 0W-0L (when the cloud says the streamer
- * has played zero games today but a session aggregate is available) is
- * intentional: it gives the streamer immediate visual confirmation
- * that the Browser Source is wired up correctly, instead of staying
- * blank until the first game finishes.
+ * Two payload paths — `session` (cloud-pushed via the `overlay:session`
+ * event) takes priority over `live.session` (legacy agent-pushed
+ * fallback). Both are typed identically so the renderer doesn't care.
  */
 export function SessionWidget({
   live,
@@ -40,45 +46,179 @@ export function SessionWidget({
   session?: SessionSummary | null;
 }) {
   const s = session ?? live?.session;
+  // Tick once a minute so the elapsed-time stamp ("27m") advances
+  // without the streamer having to refresh the Browser Source. We
+  // recompute in render rather than store the formatted string in
+  // state so the next tick can't miss a minute boundary.
+  const elapsedText = useElapsedMinutes(s?.sessionStartedAt);
   if (!s) return null;
-  const delta =
-    typeof s.mmrCurrent === "number" && typeof s.mmrStart === "number"
-      ? s.mmrCurrent - s.mmrStart
+
+  // Streak chip — prefer the cloud-derived per-day streak; fall back
+  // to the broader `live.streak` which spans days. Keeps the chip
+  // visible across the streamer's whole streak even if today only
+  // started with one game.
+  const streak = s.streak ?? live?.streak ?? null;
+  const streakChip =
+    streak && streak.count >= 2
+      ? {
+          label: `${streak.kind === "win" ? "W" : "L"}${streak.count}`,
+          isWin: streak.kind === "win",
+        }
       : null;
-  const deltaColor =
-    delta == null ? "inherit" : delta >= 0 ? "#3ec07a" : "#ff6b6b";
+
+  const region = (s.region || "").trim();
+  const hasMmr = typeof s.mmrCurrent === "number";
+  const regionLine = region && hasMmr
+    ? `${region} ${s.mmrCurrent}`
+    : hasMmr
+      ? `${s.mmrCurrent} MMR`
+      : region
+        ? `${region} —`
+        : null;
+
   return (
-    <WidgetShell slot="top-right" accent="neutral" visible width={480}>
-      <WidgetHeader>
-        <span style={{ fontSize: 15 }}>Today</span>
-        <span style={{ fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-          {s.wins}W &ndash; {s.losses}L
-        </span>
-      </WidgetHeader>
-      {delta != null && (
+    <WidgetShell slot="top-right" accent="gold" visible width={260}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr auto",
+          alignItems: "start",
+          rowGap: 4,
+          columnGap: 10,
+        }}
+      >
+        {/* Big W stacked above big L. The values run left-aligned so
+            "Xm" can sit underneath the L for a tidy column. */}
         <div
           style={{
-            marginTop: 8,
+            fontVariantNumeric: "tabular-nums",
             display: "flex",
-            justifyContent: "space-between",
-            fontSize: 13,
-            alignItems: "baseline",
+            flexDirection: "column",
+            lineHeight: 1,
           }}
         >
-          <Dim>MMR delta</Dim>
           <span
             style={{
-              color: deltaColor,
-              fontWeight: 700,
-              fontSize: 16,
-              fontVariantNumeric: "tabular-nums",
+              fontSize: 56,
+              fontWeight: 800,
+              letterSpacing: -2,
+              color: "#e6b450",
             }}
           >
-            {delta >= 0 ? "+" : ""}
-            {delta}
+            {s.wins}W &mdash;
           </span>
+          <span
+            style={{
+              fontSize: 56,
+              fontWeight: 800,
+              letterSpacing: -2,
+              color: "#e6b450",
+              marginTop: 2,
+            }}
+          >
+            {s.losses}L
+          </span>
+          {elapsedText ? (
+            <span
+              style={{
+                fontSize: 13,
+                opacity: 0.6,
+                fontWeight: 600,
+                marginTop: 6,
+                letterSpacing: 1,
+              }}
+            >
+              {elapsedText}
+            </span>
+          ) : null}
         </div>
-      )}
+
+        {/* Right column: SESSION label + optional streak chip. */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: 8,
+            paddingTop: 4,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 2,
+              opacity: 0.6,
+              writingMode: "vertical-rl",
+              transform: "rotate(180deg)",
+              color: "#e6b450",
+            }}
+          >
+            SESSION
+          </span>
+          {streakChip ? (
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: 1,
+                padding: "2px 8px",
+                borderRadius: 4,
+                textTransform: "uppercase",
+                background: streakChip.isWin
+                  ? "rgba(62,192,122,0.18)"
+                  : "rgba(255,107,107,0.18)",
+                color: streakChip.isWin ? "#3ec07a" : "#ff6b6b",
+              }}
+            >
+              {streakChip.label}
+            </span>
+          ) : null}
+        </div>
+
+        {/* Region + current MMR. Spans the full width below the W-L. */}
+        {regionLine ? (
+          <div
+            style={{
+              gridColumn: "1 / span 2",
+              fontSize: 26,
+              fontWeight: 800,
+              letterSpacing: 1,
+              fontVariantNumeric: "tabular-nums",
+              marginTop: 8,
+              color: "#e6e8ee",
+            }}
+          >
+            {regionLine}
+          </div>
+        ) : null}
+      </div>
     </WidgetShell>
   );
+}
+
+/**
+ * Re-renders once a minute so the elapsed-time string stays current
+ * without forcing the parent overlay to rebroadcast every minute. The
+ * tick is cheap — one timeout per active widget, cleared on unmount.
+ */
+function useElapsedMinutes(startedAt?: string): string | null {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!startedAt) return;
+    const id = window.setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, [startedAt]);
+  // Reference `tick` so the linter sees the dependency; the value
+  // itself isn't used because Date.now() is computed live.
+  void tick;
+  if (!startedAt) return null;
+  const start = new Date(startedAt).getTime();
+  if (!Number.isFinite(start)) return null;
+  const minutes = Math.max(0, Math.floor((Date.now() - start) / 60_000));
+  if (minutes < 1) return "0m";
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
