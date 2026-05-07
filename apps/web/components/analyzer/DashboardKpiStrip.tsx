@@ -9,6 +9,8 @@ import { StatCard } from "@/components/ui/Stat";
 import { pct1, wrColor } from "@/lib/format";
 import {
   apiToPeriods,
+  clientTimezone,
+  todayKeyIn,
   type ApiTimeseriesResponse,
   type Period,
 } from "@/lib/timeseries";
@@ -80,31 +82,38 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
     writeStoredPreset(id);
   };
 
+  // The browser's timezone is sticky across the component so bucket
+  // keys, today-key derivation, and API requests stay aligned.
+  const tz = useMemo(() => clientTimezone(), []);
+
   const wrRange = useMemo(
     () => resolvePreset(wrPreset, undefined, seasons),
     [wrPreset, seasons],
   );
   const wrQuery = useMemo(() => {
-    const params: Record<string, unknown> = { interval: "day" };
+    const params: Record<string, unknown> = { interval: "day", tz };
     if (wrRange.since) params.since = wrRange.since.toISOString();
     if (wrRange.until) params.until = wrRange.until.toISOString();
     return filtersToQuery(params);
-  }, [wrRange]);
+  }, [wrRange, tz]);
 
   // Global series — used for Games today and Active streak.
   const globalSeries = useApi<ApiTimeseriesResponse>(
-    "/v1/timeseries?interval=day",
+    `/v1/timeseries?interval=day&tz=${encodeURIComponent(tz)}`,
   );
   const globalKpis = useMemo(
-    () => computeKpis(apiToPeriods(globalSeries.data)),
-    [globalSeries.data],
+    () => computeKpis(apiToPeriods(globalSeries.data, tz), tz),
+    [globalSeries.data, tz],
   );
 
   // Win rate uses its own series scoped by the chosen preset.
   const wrSeries = useApi<ApiTimeseriesResponse>(
     `/v1/timeseries${wrQuery}`,
   );
-  const wrStats = useMemo(() => computeWrStats(apiToPeriods(wrSeries.data)), [wrSeries.data]);
+  const wrStats = useMemo(
+    () => computeWrStats(apiToPeriods(wrSeries.data, tz)),
+    [wrSeries.data, tz],
+  );
 
   const placeholder = globalSeries.isLoading ? "—" : "0";
   const wrPlaceholder = wrSeries.isLoading ? "—" : "0";
@@ -311,16 +320,19 @@ interface ComputedKpis {
   streak: { kind: "win" | "loss" | null; count: number };
 }
 
-function computeKpis(series: Period[]): ComputedKpis {
+function computeKpis(series: Period[], timeZone: string): ComputedKpis {
   if (series.length === 0) {
     return {
       gamesToday: null,
       streak: { kind: null, count: 0 },
     };
   }
-  const todayKey = todayKeyLocal();
-  const last = series[series.length - 1];
-  const gamesToday = last && last.date === todayKey ? last.games || 0 : 0;
+  // Look up today by date rather than trusting the array tail. The
+  // server sorts ascending but if a clock skew or filter hides today,
+  // a `find` is more forgiving than `series[series.length - 1]`.
+  const todayKey = todayKeyIn(timeZone);
+  const todayPeriod = series.find((p) => p.date === todayKey);
+  const gamesToday = todayPeriod ? todayPeriod.games || 0 : 0;
   const streak = streakFromSeries(series);
   return { gamesToday, streak };
 }
@@ -366,10 +378,3 @@ function streakFromSeries(
   return { kind, count };
 }
 
-function todayKeyLocal(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}

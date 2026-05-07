@@ -401,7 +401,7 @@ class AggregationsService {
    * Daily / weekly / monthly W-L timeseries for the trends chart.
    *
    * @param {string} userId
-   * @param {{interval?: 'day'|'week'|'month'}} opts
+   * @param {{interval?: 'day'|'week'|'month', tz?: string}} opts
    * @param {object} filters
    */
   async timeseries(userId, opts, filters) {
@@ -413,11 +413,12 @@ class AggregationsService {
   /**
    * @private
    * @param {string} userId
-   * @param {{interval?: 'day'|'week'|'month'} | undefined} opts
+   * @param {{interval?: 'day'|'week'|'month', tz?: string} | undefined} opts
    * @param {object} filters
    */
   async _timeseriesOnce(userId, opts, filters) {
     const interval = pickInterval(opts && opts.interval);
+    const timezone = pickTimezone(opts && opts.tz);
     const match = gamesMatchStage(userId, filters);
     const rows = await this.db.games
       .aggregate([
@@ -429,7 +430,7 @@ class AggregationsService {
               $dateTrunc: {
                 date: "$date",
                 unit: interval,
-                timezone: "UTC",
+                timezone,
               },
             },
             wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
@@ -437,8 +438,12 @@ class AggregationsService {
             total: { $sum: 1 },
           },
         },
-        { $sort: { _id: 1 } },
+        // Keep the most recent N buckets (not the oldest). Users with
+        // multi-year histories were silently losing today's bucket
+        // because `sort asc + limit` truncated the tail.
+        { $sort: { _id: -1 } },
         { $limit: LIMITS.TIMESERIES_MAX_BUCKETS },
+        { $sort: { _id: 1 } },
         {
           $project: {
             _id: 0,
@@ -669,6 +674,26 @@ function pickInterval(raw) {
   if (s === "week") return "week";
   if (s === "month") return "month";
   return "day";
+}
+
+/**
+ * Validate an IANA timezone identifier supplied by the client. Falls
+ * back to UTC for missing or malformed values so we never push an
+ * unresolvable timezone into Mongo's $dateTrunc.
+ *
+ * @param {unknown} raw
+ * @returns {string}
+ */
+function pickTimezone(raw) {
+  if (typeof raw !== "string") return "UTC";
+  const s = raw.trim();
+  if (!s) return "UTC";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: s });
+    return s;
+  } catch {
+    return "UTC";
+  }
 }
 
 /** @param {unknown} raw */

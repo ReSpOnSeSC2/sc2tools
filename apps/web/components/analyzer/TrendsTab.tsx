@@ -18,6 +18,7 @@ import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton, Stat } from "@/components/ui/Card";
 import {
   apiToPeriods,
+  clientTimezone,
   type ApiTimeseriesResponse,
   type Period,
 } from "@/lib/timeseries";
@@ -103,14 +104,18 @@ export function TrendsTab() {
   useEffect(() => writeLs(LS_BUCKET, bucket), [bucket]);
   useEffect(() => writeLs(LS_ROLL, rolling), [rolling]);
 
+  const tz = useMemo(() => clientTimezone(), []);
   const params = useMemo(
-    () => ({ ...filters, interval: bucket }),
-    [filters, bucket],
+    () => ({ ...filters, interval: bucket, tz }),
+    [filters, bucket, tz],
   );
   const { data, isLoading } = useApi<ApiTimeseriesResponse>(
     `/v1/timeseries${filtersToQuery(params)}#${dbRev}`,
   );
-  const series: Period[] = useMemo(() => apiToPeriods(data), [data]);
+  const series: Period[] = useMemo(
+    () => apiToPeriods(data, tz),
+    [data, tz],
+  );
 
   const enriched = useMemo(() => {
     const roll = rollingWinRate(series, ROLL_N);

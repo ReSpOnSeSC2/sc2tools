@@ -89,8 +89,13 @@ function buildAggregationsRouter(deps) {
         intervalRaw === "week" || intervalRaw === "month"
           ? intervalRaw
           : "day";
+      const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
       res.json(
-        await deps.aggregations.timeseries(userId, { interval }, filters),
+        await deps.aggregations.timeseries(
+          userId,
+          { interval, tz },
+          filters,
+        ),
       );
     } catch (err) {
       next(err);
