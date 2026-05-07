@@ -14,7 +14,18 @@ class GamesService {
    * @param {{games: import('mongodb').Collection}} db
    * @param {{
    *   gameDetails?: import('./gameDetails').GameDetailsService,
-   *   users?: { getProfile(userId: string): Promise<{ region?: string }> },
+   *   users?: {
+   *     getProfile(userId: string): Promise<{
+   *       region?: string,
+   *       pulseId?: string,
+   *     }>,
+   *   },
+   *   pulseMmr?: {
+   *     getCurrentMmr(pulseId: string): Promise<{
+   *       mmr: number,
+   *       region: string | null,
+   *     } | null>,
+   *   },
    * }} [opts]
    */
   constructor(db, opts = {}) {
@@ -28,6 +39,11 @@ class GamesService {
     // session widget). When unavailable, the region field stays unset
     // and the widget falls back to MMR-only.
     this.users = opts.users || null;
+    // Optional PulseMmrService — Tier-3 fallback that hits sc2pulse
+    // for the user's current 1v1 ladder rating when no game in the
+    // entire history carries a usable myMmr. Unavailable in unit tests
+    // where the network is mocked; falls through silently.
+    this.pulseMmr = opts.pulseMmr || null;
   }
 
   /**
@@ -282,6 +298,50 @@ class GamesService {
         // and let the renderer fall back to its placeholder.
       }
     }
+    // Read the user profile up front so we can use both `region` and
+    // `pulseId` in the same flow — the Tier-3 SC2Pulse fallback below
+    // depends on `pulseId` being present.
+    /** @type {{ region?: string, pulseId?: string }} */
+    let profile = {};
+    if (this.users) {
+      try {
+        profile = (await this.users.getProfile(userId)) || {};
+      } catch {
+        // Profile is decorative; a lookup failure must never block the
+        // session payload from emitting.
+        profile = {};
+      }
+    }
+    /** @type {string|undefined} */
+    let pulseRegion;
+    // Tier-3 fallback: still no MMR after walking every game we have.
+    // Hit SC2Pulse for the user's current 1v1 ladder rating using the
+    // pulseId from their profile. Streamers whose ranked replays were
+    // uploaded before MMR extraction landed (or who play exclusively
+    // on a build that doesn't carry `scaled_rating`) get a real number
+    // on the overlay instead of a permanent "—".
+    if (
+      mmrCurrent === undefined &&
+      this.pulseMmr &&
+      profile &&
+      typeof profile.pulseId === "string" &&
+      profile.pulseId
+    ) {
+      try {
+        const pulse = await this.pulseMmr.getCurrentMmr(profile.pulseId);
+        if (pulse && Number.isFinite(pulse.mmr)) {
+          mmrCurrent = pulse.mmr;
+          if (typeof pulse.region === "string" && pulse.region) {
+            pulseRegion = pulse.region;
+          }
+        }
+      } catch {
+        // SC2Pulse outages or transient timeouts are non-fatal — the
+        // PulseMmrService already swallows network errors and returns
+        // null; this catch is belt-and-braces against a thrown error
+        // bubbling out of an unfamiliar fetch implementation.
+      }
+    }
     /**
      * @type {{
      *   wins: number, losses: number, games: number,
@@ -306,22 +366,16 @@ class GamesService {
       }
       if (count >= 2) out.streak = { kind: last, count };
     }
-    if (this.users) {
-      try {
-        const profile = await this.users.getProfile(userId);
-        if (profile && typeof profile.region === "string" && profile.region) {
-          out.region = profile.region.toUpperCase();
-        }
-      } catch {
-        // Region is decorative; a lookup failure must never block the
-        // session payload from emitting.
-      }
+    // Region resolution — explicit profile field wins, falls through to
+    // the SC2Pulse-derived region (when Tier-3 fired), then to the toon
+    // handle byte (1=NA, 2=EU, 3=KR, 5=CN, 6=SEA). The session widget
+    // anchors its bottom-row layout on whatever we surface here.
+    if (typeof profile.region === "string" && profile.region) {
+      out.region = profile.region.toUpperCase();
     }
-    // No region from the profile? Derive one from the most recent
-    // toon handle the agent uploaded. The first segment of a SC2
-    // toon handle is the region id (1=NA, 2=EU, 3=KR, 5=CN, 6=SEA),
-    // so a streamer who hasn't filled in their profile still gets a
-    // sensible label on the overlay.
+    if (out.region === undefined && pulseRegion) {
+      out.region = pulseRegion;
+    }
     if (out.region === undefined && lastKnownToonHandle) {
       const inferred = regionFromToonHandle(lastKnownToonHandle);
       if (inferred) out.region = inferred;

@@ -260,6 +260,96 @@ describe("services/games.todaySession", () => {
     expect(out.region).toBe("NA");
   });
 
+  test("Tier-3 SC2Pulse fallback fills mmrCurrent when no game carries myMmr", async () => {
+    // Today's game with no myMmr; no historic myMmr either. The
+    // PulseMmrService stub stands in for the SC2Pulse round-trip.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g1",
+      result: "Victory",
+      date: new Date(),
+      opponent: { toonHandle: "2-S2-1-99999" },
+    });
+    const pulseMmr = {
+      getCurrentMmr: jest.fn(async (pulseId) => {
+        expect(pulseId).toBe("994428");
+        return { mmr: 5343, region: "EU" };
+      }),
+    };
+    const svcWithPulse = new GamesService(db, {
+      users: { getProfile: async () => ({ pulseId: "994428" }) },
+      pulseMmr,
+    });
+    const out = await svcWithPulse.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(5343);
+    expect(out.region).toBe("EU");
+    expect(pulseMmr.getCurrentMmr).toHaveBeenCalledTimes(1);
+  });
+
+  test("Tier-3 SC2Pulse fallback is skipped when a stored myMmr is found", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g1",
+      result: "Victory",
+      date: new Date(),
+      myMmr: 4800,
+    });
+    const pulseMmr = {
+      // If this is hit, the test fails — we want the cheaper stored-MMR
+      // path to short-circuit before the network call.
+      getCurrentMmr: jest.fn(async () => {
+        throw new Error("should_not_be_called");
+      }),
+    };
+    const svcWithPulse = new GamesService(db, {
+      users: { getProfile: async () => ({ pulseId: "994428" }) },
+      pulseMmr,
+    });
+    const out = await svcWithPulse.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(4800);
+    expect(pulseMmr.getCurrentMmr).not.toHaveBeenCalled();
+  });
+
+  test("profile region wins over the SC2Pulse-derived region", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g1",
+      result: "Victory",
+      date: new Date(),
+    });
+    const svcWithPulse = new GamesService(db, {
+      users: {
+        getProfile: async () => ({ pulseId: "994428", region: "kr" }),
+      },
+      pulseMmr: {
+        getCurrentMmr: async () => ({ mmr: 5343, region: "EU" }),
+      },
+    });
+    const out = await svcWithPulse.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(5343);
+    expect(out.region).toBe("KR");
+  });
+
+  test("Tier-3 fallback survives a thrown SC2Pulse error", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g1",
+      result: "Victory",
+      date: new Date(),
+    });
+    const svcWithPulse = new GamesService(db, {
+      users: { getProfile: async () => ({ pulseId: "994428" }) },
+      pulseMmr: {
+        getCurrentMmr: async () => {
+          throw new Error("boom");
+        },
+      },
+    });
+    const out = await svcWithPulse.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBeUndefined();
+    expect(out.wins).toBe(1);
+  });
+
   test("populates streak / sessionStartedAt / region for the SPA-style session widget", async () => {
     const t0 = new Date(Date.now() - 25 * 60 * 1000);
     const t1 = new Date(t0.getTime() + 5 * 60 * 1000);

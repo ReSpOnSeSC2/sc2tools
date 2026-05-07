@@ -40,6 +40,7 @@ const { AgentVersionService } = require("./services/agentVersion");
 const { GdprService } = require("./services/gdpr");
 const { CommunityService } = require("./services/community");
 const { SeasonsService } = require("./services/seasons");
+const { PulseMmrService } = require("./services/pulseMmr");
 const { AdminService } = require("./services/admin");
 
 const { buildHealthRouter } = require("./routes/health");
@@ -125,12 +126,17 @@ function makeServices(deps) {
     deps.config.serverPepper,
     { gameDetails },
   );
+  // PulseMmrService — Tier-3 fallback for the session widget when no
+  // game in the user's history carries a usable myMmr. Constructed
+  // once and shared so the in-process cache survives across requests.
+  const pulseMmr = new PulseMmrService();
   // GamesService persists heavy fields through GameDetailsService,
   // not directly to a collection — the indirection is what makes
   // the R2 swap a config change instead of a code change. It also
   // borrows UsersService so ``todaySession`` can stamp the streamer's
-  // region onto the overlay's session widget.
-  const games = new GamesService(deps.db, { gameDetails, users });
+  // region onto the overlay's session widget, and PulseMmrService for
+  // the SC2Pulse MMR fallback when no game carries `myMmr`.
+  const games = new GamesService(deps.db, { gameDetails, users, pulseMmr });
   const pairings = new DevicePairingsService(deps.db);
   const overlayTokens = new OverlayTokensService(deps.db);
   // OverlayLiveService has no per-user state; constructed once and

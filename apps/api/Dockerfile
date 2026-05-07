@@ -113,6 +113,15 @@ RUN /opt/sc2-py/bin/python --version \
 # `scripts/`, `core/`, `analytics/`, `data/` is read at runtime.
 COPY SC2Replay-Analyzer /opt/sc2-analyzer
 
+# Map minimap thumbnails. SC2Replay-Analyzer/data/ doesn't ship the
+# per-map images itself; the canonical set lives in the legacy
+# reveal-sc2-opponent bundle at data/map-images/. Without these the
+# Map Intel page renders against an empty background (and 404s every
+# /v1/map-image request). The CatalogService.resolveMapImageDirs probe
+# checks both ``data/map_assets`` and ``data/map-images`` so this
+# directory is picked up automatically once it lands on disk.
+COPY reveal-sc2-opponent-main/data/map-images /opt/sc2-analyzer/data/map-images
+
 WORKDIR /app
 
 # Install Node deps separately so npm cache reuses across source changes.

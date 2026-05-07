@@ -26,7 +26,7 @@ class CatalogService {
     this.projectDir = opts.projectDir === undefined ? resolveProjectDir() : opts.projectDir;
     this._catalogCache = null;
     this._definitionsCache = null;
-    this._mapImageDir = this._resolveMapImageDir();
+    this._mapImageDirs = this._resolveMapImageDirs();
   }
 
   /**
@@ -172,31 +172,41 @@ class CatalogService {
 
   /**
    * Resolve a map-image path for a stored map name. The source images
-   * ship with the analyzer (data/map_assets/*.jpg).
+   * ship with the analyzer in either ``data/map_assets/`` (PascalCase
+   * filenames matching the in-replay map name verbatim) or
+   * ``data/map-images/`` (lowercased + snake_cased; this is the layout
+   * the legacy reveal-sc2-opponent bundle uses, which is what we ship
+   * in production today).
+   *
+   * We try every (directory × filename-variant × extension) tuple
+   * until one resolves so a stored map name like "Acid Plant LE" finds
+   * ``acid_plant_le.jpg`` even when only the lowercase bundle is
+   * installed.
    *
    * @param {string} mapName
    * @returns {{ path: string, contentType: string } | null}
    */
   mapImagePath(mapName) {
-    if (!this._mapImageDir || !mapName) return null;
-    const safeName = sanitiseFilename(mapName);
-    if (!safeName) return null;
-    const candidates = [
-      path.join(this._mapImageDir, `${safeName}.jpg`),
-      path.join(this._mapImageDir, `${safeName}.png`),
-      path.join(this._mapImageDir, `${safeName}.webp`),
-    ];
-    for (const candidate of candidates) {
-      try {
-        const stat = fs.statSync(candidate);
-        if (stat.isFile()) {
-          return {
-            path: candidate,
-            contentType: contentTypeFor(candidate),
-          };
+    if (!this._mapImageDirs.length || !mapName) return null;
+    const variants = filenameVariants(mapName);
+    if (variants.length === 0) return null;
+    const extensions = [".jpg", ".png", ".webp"];
+    for (const dir of this._mapImageDirs) {
+      for (const variant of variants) {
+        for (const ext of extensions) {
+          const candidate = path.join(dir, `${variant}${ext}`);
+          try {
+            const stat = fs.statSync(candidate);
+            if (stat.isFile()) {
+              return {
+                path: candidate,
+                contentType: contentTypeFor(candidate),
+              };
+            }
+          } catch (_e) {
+            // try next
+          }
         }
-      } catch (_e) {
-        // try next
       }
     }
     return null;
@@ -237,20 +247,69 @@ class CatalogService {
     return null;
   }
 
-  /** @private */
-  _resolveMapImageDir() {
+  /**
+   * Resolve every directory we know about that could host map-image
+   * assets. Both ``data/map_assets`` (the PascalCase layout the unit
+   * tests build) and ``data/map-images`` (the lowercased layout the
+   * legacy reveal-sc2-opponent bundle ships) are checked; the explicit
+   * env override always wins so deployments with a custom asset volume
+   * stay working.
+   *
+   * @private
+   * @returns {string[]}
+   */
+  _resolveMapImageDirs() {
+    /** @type {string[]} */
+    const dirs = [];
+    /** @param {string} candidate */
+    const tryAdd = (candidate) => {
+      if (!candidate) return;
+      try {
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+          if (!dirs.includes(candidate)) dirs.push(candidate);
+        }
+      } catch (_e) {
+        // ignore — a probe failure just means we don't add it
+      }
+    };
     const fromEnv = process.env.SC2_MAP_IMAGE_DIR;
-    if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
-    if (this.projectDir) {
-      const candidate = path.join(this.projectDir, "data", "map_assets");
-      if (fs.existsSync(candidate)) return candidate;
-    }
-    if (PYTHON.DEFAULT_DIR && fs.existsSync(PYTHON.DEFAULT_DIR)) {
-      const candidate = path.join(PYTHON.DEFAULT_DIR, "data", "map_assets");
-      if (fs.existsSync(candidate)) return candidate;
-    }
-    return null;
+    if (fromEnv) tryAdd(fromEnv);
+    /** @param {string|null|undefined} root */
+    const addRoot = (root) => {
+      if (!root) return;
+      tryAdd(path.join(root, "data", "map_assets"));
+      tryAdd(path.join(root, "data", "map-images"));
+    };
+    addRoot(this.projectDir);
+    addRoot(PYTHON.DEFAULT_DIR);
+    return dirs;
   }
+}
+
+/**
+ * Build the list of filename variants we'll try when resolving a
+ * map-image asset. Mirrors the two bundle layouts:
+ *
+ *   - Verbatim (PascalCase, spaces → ``_``): ``Acid Plant LE`` →
+ *     ``Acid_Plant_LE`` — matches ``data/map_assets/Acid_Plant_LE.jpg``.
+ *   - Lowercase snake_case: ``Acid Plant LE`` → ``acid_plant_le`` —
+ *     matches ``data/map-images/acid_plant_le.jpg`` (the legacy bundle).
+ *
+ * Duplicates are de-duped so we don't fs.statSync the same path twice.
+ *
+ * @param {string} mapName
+ * @returns {string[]}
+ */
+function filenameVariants(mapName) {
+  const safe = sanitiseFilename(mapName);
+  if (!safe) return [];
+  const variants = [safe, safe.toLowerCase()];
+  /** @type {string[]} */
+  const out = [];
+  for (const v of variants) {
+    if (v && !out.includes(v)) out.push(v);
+  }
+  return out;
 }
 
 /** @param {unknown} value */
