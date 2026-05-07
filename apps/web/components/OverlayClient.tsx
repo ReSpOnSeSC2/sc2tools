@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { API_BASE } from "@/lib/clientApi";
 import type { LiveGamePayload } from "@/components/overlay/types";
+import { clientTimezone } from "@/lib/timeseries";
 import {
   OpponentWidget,
   MatchResultWidget,
@@ -20,6 +21,7 @@ import {
   BestAnswerWidget,
   ScoutingWidget,
   SessionWidget,
+  type SessionSummary,
 } from "@/components/overlay/widgets/PrePostFlow";
 
 const ALL_WIDGETS = [
@@ -59,13 +61,18 @@ type WidgetId = (typeof ALL_WIDGETS)[number];
  */
 export function OverlayClient({ token }: { token: string }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
+  const [session, setSession] = useState<SessionSummary | null>(null);
   const [enabled, setEnabled] = useState<Set<WidgetId>>(
     () => new Set(ALL_WIDGETS),
   );
 
   useEffect(() => {
     const socket: Socket = io(API_BASE, {
-      auth: { overlayToken: token },
+      // The OBS Browser Source has no Clerk session — the token IS the
+      // auth. We also pass the browser's IANA timezone so the server's
+      // session aggregate aligns to the streamer's wall-clock "today",
+      // not UTC.
+      auth: { overlayToken: token, timezone: clientTimezone() },
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -77,6 +84,9 @@ export function OverlayClient({ token }: { token: string }) {
       if (msg && Array.isArray(msg.enabledWidgets)) {
         setEnabled(new Set(msg.enabledWidgets as WidgetId[]));
       }
+    });
+    socket.on("overlay:session", (msg: SessionSummary) => {
+      if (msg && typeof msg === "object") setSession(msg);
     });
     return () => {
       socket.disconnect();
@@ -97,38 +107,34 @@ export function OverlayClient({ token }: { token: string }) {
     return enabled.has(id);
   }
 
-  // Pre-game / pre-data: render nothing visible. The OBS Browser Source
-  // stays fully transparent so streamers can position it without a
-  // placeholder string flashing on stream before the first message.
-  if (!live) {
-    return (
-      <div
-        className="relative h-screen w-screen"
-        style={{ background: "transparent" }}
-      />
-    );
-  }
-
+  // The session widget is cloud-driven so it can render without any
+  // ``overlay:live`` payload — it just needs the server to have pushed
+  // a session aggregate. Every other widget depends on a live event
+  // from the agent's pre/post-game parser, so we keep the "no payload
+  // = transparent" behaviour for those by rendering them only when
+  // ``live`` is populated.
   return (
     <div
       className="relative h-screen w-screen"
       style={{ background: "transparent" }}
     >
-      {shouldShow("opponent") && <OpponentWidget live={live} />}
-      {shouldShow("match-result") && <MatchResultWidget live={live} />}
-      {shouldShow("post-game") && <PostGameWidget live={live} />}
-      {shouldShow("mmr-delta") && <MmrDeltaWidget live={live} />}
-      {shouldShow("streak") && <StreakWidget live={live} />}
-      {shouldShow("cheese") && <CheeseWidget live={live} />}
-      {shouldShow("rematch") && <RematchWidget live={live} />}
-      {shouldShow("rival") && <RivalWidget live={live} />}
-      {shouldShow("rank") && <RankWidget live={live} />}
-      {shouldShow("meta") && <MetaWidget live={live} />}
-      {shouldShow("topbuilds") && <TopBuildsWidget live={live} />}
-      {shouldShow("fav-opening") && <FavOpeningWidget live={live} />}
-      {shouldShow("best-answer") && <BestAnswerWidget live={live} />}
-      {shouldShow("scouting") && <ScoutingWidget live={live} />}
-      {shouldShow("session") && <SessionWidget live={live} />}
+      {live && shouldShow("opponent") && <OpponentWidget live={live} />}
+      {live && shouldShow("match-result") && <MatchResultWidget live={live} />}
+      {live && shouldShow("post-game") && <PostGameWidget live={live} />}
+      {live && shouldShow("mmr-delta") && <MmrDeltaWidget live={live} />}
+      {live && shouldShow("streak") && <StreakWidget live={live} />}
+      {live && shouldShow("cheese") && <CheeseWidget live={live} />}
+      {live && shouldShow("rematch") && <RematchWidget live={live} />}
+      {live && shouldShow("rival") && <RivalWidget live={live} />}
+      {live && shouldShow("rank") && <RankWidget live={live} />}
+      {live && shouldShow("meta") && <MetaWidget live={live} />}
+      {live && shouldShow("topbuilds") && <TopBuildsWidget live={live} />}
+      {live && shouldShow("fav-opening") && <FavOpeningWidget live={live} />}
+      {live && shouldShow("best-answer") && <BestAnswerWidget live={live} />}
+      {live && shouldShow("scouting") && <ScoutingWidget live={live} />}
+      {shouldShow("session") && (
+        <SessionWidget live={live} session={session} />
+      )}
     </div>
   );
 }

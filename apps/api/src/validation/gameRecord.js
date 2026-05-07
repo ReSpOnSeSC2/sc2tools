@@ -25,6 +25,10 @@ const GAME_SCHEMA = {
     macroScore: { type: "number", minimum: 0, maximum: 100 },
     apm: { type: "number", minimum: 0, maximum: 5000 },
     spq: { type: "number", minimum: 0 },
+    // Player MMR at the time of the game. Optional — the agent only
+    // surfaces this for ranked replays where sc2reader exposes it. The
+    // overlay's session widget reads this to derive an MMR delta.
+    myMmr: { type: "integer", minimum: 0, maximum: 9999 },
     opponent: {
       type: "object",
       additionalProperties: true,

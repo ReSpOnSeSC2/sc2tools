@@ -6,17 +6,26 @@ const rateLimitModule = require("express-rate-limit");
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
 
+const { OverlayLiveService } = require("../services/overlayLive");
+
 /**
  * /v1/overlay-tokens — user's hosted-overlay tokens.
  * Public consumption of /overlay/<token> is served by the Next.js
  * frontend; the API only manages issuance + lookups.
  *
- * Also: POST /v1/overlay-events/live — agent-only, broadcasts a live
- * pre-game payload to the overlay socket room. Per-token rate-limited
- * so a leaked token can't DoS the cloud.
+ * Also:
+ *   POST /v1/overlay-events/live  — agent-only, broadcasts a live
+ *     pre-game payload to the overlay socket room. Per-token
+ *     rate-limited so a leaked token can't DoS the cloud.
+ *   POST /v1/overlay-events/test  — Clerk-authed (web user only),
+ *     fires a synthetic ``overlay:live`` payload tailored to a single
+ *     widget so the streamer can validate their OBS layout without a
+ *     ladder game. Uses the same per-token rate limiter as the live
+ *     route — a Test-button mash can't flood the socket either.
  *
  * @param {{
  *   overlayTokens: import('../services/types').OverlayTokensService,
+ *   overlayLive?: import('../services/overlayLive').OverlayLiveService,
  *   auth: import('express').RequestHandler,
  *   io?: import('socket.io').Server,
  * }} deps
@@ -142,6 +151,66 @@ function buildOverlayTokensRouter(deps) {
           deps.io.to(`overlay:${token}`).emit("overlay:live", payload || {});
         }
         res.status(202).json({ ok: true });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // Reuses the live-route limiter so a Test-button mash can't flood the
+  // overlay socket either. Note: only requests with the *real* widget
+  // intent path through here; the rate-limit key is the overlay token
+  // so a malicious caller spamming the route can't impact a different
+  // streamer's overlay even at full burst.
+  authed.post(
+    "/overlay-events/test",
+    overlayEventLimiter,
+    async (req, res, next) => {
+      try {
+        const auth = req.auth;
+        if (!auth) throw new Error("auth_required");
+        const token = String(req.body?.token || "");
+        if (!token) {
+          res.status(400).json({
+            error: { code: "bad_request", message: "token required" },
+          });
+          return;
+        }
+        const owns = await deps.overlayTokens.tokenBelongsToUser(
+          auth.userId,
+          token,
+        );
+        if (!owns) {
+          res.status(404).json({
+            error: { code: "not_found", message: "overlay token not found" },
+          });
+          return;
+        }
+        // ``widget`` is optional — omitted means "fire a payload that
+        // lights up every panel at once" so the streamer can validate
+        // the whole layout in one shot. When present, we narrow the
+        // payload to just that widget's fields so neighbouring panels
+        // stay quiet during a per-widget probe.
+        const widget = req.body?.widget
+          ? String(req.body.widget)
+          : undefined;
+        const payload = OverlayLiveService.buildSamplePayload(widget);
+        if (deps.io) {
+          deps.io.to(`overlay:${token}`).emit("overlay:live", payload);
+          // Single-widget Test for the session card needs a
+          // ``overlay:session`` event too — that's the only widget
+          // wired off the dedicated socket event rather than
+          // ``overlay:live.session``. The same sample payload's
+          // session block is reused so the W-L count is consistent
+          // with whatever the streamer just clicked.
+          if ((!widget || widget === "session") && payload.session) {
+            deps.io.to(`overlay:${token}`).emit(
+              "overlay:session",
+              payload.session,
+            );
+          }
+        }
+        res.status(202).json({ ok: true, widget: widget || "all" });
       } catch (err) {
         next(err);
       }

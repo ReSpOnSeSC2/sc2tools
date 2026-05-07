@@ -25,6 +25,7 @@ const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { CustomBuildsService } = require("./services/customBuilds");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
+const { OverlayLiveService } = require("./services/overlayLive");
 const { AggregationsService } = require("./services/aggregations");
 const { BuildsService } = require("./services/builds");
 const {
@@ -130,6 +131,10 @@ function makeServices(deps) {
   const games = new GamesService(deps.db, { gameDetails });
   const pairings = new DevicePairingsService(deps.db);
   const overlayTokens = new OverlayTokensService(deps.db);
+  // OverlayLiveService has no per-user state; constructed once and
+  // shared across requests. It pulls from the same ``games`` /
+  // ``opponents`` collections every other read service touches.
+  const overlayLive = new OverlayLiveService(deps.db);
   const aggregations = new AggregationsService(deps.db);
   const builds = new BuildsService(deps.db);
   const catalog = new CatalogService(deps.db);
@@ -157,6 +162,7 @@ function makeServices(deps) {
     customBuilds,
     pairings,
     overlayTokens,
+    overlayLive,
     aggregations,
     builds,
     catalog,
@@ -339,6 +345,8 @@ function mountRoutes(app, deps, services, clerk) {
       games: services.games,
       opponents: services.opponents,
       customBuilds: services.customBuilds,
+      overlayLive: services.overlayLive,
+      overlayTokens: services.overlayTokens,
       io: deps.io,
       auth,
     }),
@@ -355,6 +363,7 @@ function mountRoutes(app, deps, services, clerk) {
     SERVICE.ROUTE_PREFIX,
     buildOverlayTokensRouter({
       overlayTokens: services.overlayTokens,
+      overlayLive: services.overlayLive,
       auth,
       io: deps.io,
     }),

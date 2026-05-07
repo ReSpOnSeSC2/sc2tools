@@ -3,8 +3,43 @@
 import type { LiveGamePayload } from "../types";
 import { Dim, WidgetHeader, WidgetShell } from "../WidgetShell";
 
-export function SessionWidget({ live }: { live: LiveGamePayload | null }) {
-  const s = live?.session;
+export type SessionSummary = {
+  wins: number;
+  losses: number;
+  games: number;
+  mmrStart?: number;
+  mmrCurrent?: number;
+};
+
+/**
+ * Today's W-L counter (and MMR delta when the agent has populated
+ * ``myMmr`` on the games it uploads).
+ *
+ * Two data sources are accepted, in priority order:
+ *
+ *  1. ``session`` — pushed by the cloud over the ``overlay:session``
+ *     socket event. Fully cloud-derived, fires the moment a new game
+ *     lands in Mongo, so the widget works whether or not the local
+ *     desktop agent is currently running pre/post-game live events.
+ *  2. ``live.session`` — the legacy path the agent's
+ *     ``push_overlay_live`` posts when it parses a fresh replay. Used
+ *     as a fallback so an older stack that still sends the merged
+ *     payload keeps rendering.
+ *
+ * Showing the panel even at 0W-0L (when the cloud says the streamer
+ * has played zero games today but a session aggregate is available) is
+ * intentional: it gives the streamer immediate visual confirmation
+ * that the Browser Source is wired up correctly, instead of staying
+ * blank until the first game finishes.
+ */
+export function SessionWidget({
+  live,
+  session,
+}: {
+  live: LiveGamePayload | null;
+  session?: SessionSummary | null;
+}) {
+  const s = session ?? live?.session;
   if (!s) return null;
   const delta =
     typeof s.mmrCurrent === "number" && typeof s.mmrStart === "number"

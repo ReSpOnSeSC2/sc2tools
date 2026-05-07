@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { API_BASE } from "@/lib/clientApi";
 import type { LiveGamePayload } from "@/components/overlay/types";
+import { clientTimezone } from "@/lib/timeseries";
 import {
   OpponentWidget,
   MatchResultWidget,
@@ -20,6 +21,7 @@ import {
   BestAnswerWidget,
   ScoutingWidget,
   SessionWidget,
+  type SessionSummary,
 } from "@/components/overlay/widgets/PrePostFlow";
 
 type WidgetId =
@@ -65,11 +67,16 @@ export function OverlayWidgetClient({
   widget: string;
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
+  const [session, setSession] = useState<SessionSummary | null>(null);
   const [enabled, setEnabled] = useState<boolean>(true);
 
   useEffect(() => {
     const socket: Socket = io(API_BASE, {
-      auth: { overlayToken: token },
+      // The OBS Browser Source carries no Clerk session; the token IS
+      // the auth. We also send the browser's IANA timezone so the
+      // server's session-record aggregation anchors "today" to the
+      // streamer's wall clock instead of UTC.
+      auth: { overlayToken: token, timezone: clientTimezone() },
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -81,6 +88,9 @@ export function OverlayWidgetClient({
       if (msg && Array.isArray(msg.enabledWidgets)) {
         setEnabled(msg.enabledWidgets.includes(widget));
       }
+    });
+    socket.on("overlay:session", (msg: SessionSummary) => {
+      if (msg && typeof msg === "object") setSession(msg);
     });
     return () => {
       socket.disconnect();
@@ -112,7 +122,7 @@ export function OverlayWidgetClient({
           transform: none !important;
         }
       `}</style>
-      <WidgetRenderer widget={widget as WidgetId} live={live} />
+      <WidgetRenderer widget={widget as WidgetId} live={live} session={session} />
     </div>
   );
 }
@@ -120,9 +130,11 @@ export function OverlayWidgetClient({
 function WidgetRenderer({
   widget,
   live,
+  session,
 }: {
   widget: WidgetId;
   live: LiveGamePayload | null;
+  session: SessionSummary | null;
 }) {
   switch (widget) {
     case "opponent":
@@ -154,7 +166,7 @@ function WidgetRenderer({
     case "scouting":
       return <ScoutingWidget live={live} />;
     case "session":
-      return <SessionWidget live={live} />;
+      return <SessionWidget live={live} session={session} />;
     default:
       return null;
   }

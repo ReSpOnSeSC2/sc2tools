@@ -207,6 +207,12 @@ class CloudGame:
     early_build_log: list
     opp_early_build_log: list
     opp_build_log: list
+    # The signed-in player's MMR at the time of the game. Optional —
+    # sc2reader only fills this for ranked replays; non-ladder games
+    # leave ``me.mmr`` as ``None`` and we forward that through. Defaults
+    # to ``None`` so the dataclass stays backwards-compatible with test
+    # fixtures that pre-date the field.
+    my_mmr: Optional[int] = None
     # Optional structured outputs the cloud uses to render the Activity
     # tab's per-game charts and the macro-breakdown drilldown. Computing
     # these requires a deep parse + extra event walks; we attach them
@@ -246,6 +252,8 @@ class CloudGame:
             out["apm"] = round(float(self.apm), 2)
         if self.spq is not None:
             out["spq"] = round(float(self.spq), 2)
+        if self.my_mmr is not None:
+            out["myMmr"] = int(self.my_mmr)
         if self.opponent:
             out["opponent"] = self.opponent
         if self.macro_breakdown is not None:
@@ -471,6 +479,12 @@ def parse_replay_for_cloud(
         "yes" if spatial is not None else "no",
     )
 
+    my_mmr_raw = getattr(me, "mmr", None)
+    try:
+        my_mmr = int(my_mmr_raw) if my_mmr_raw is not None else None
+    except (TypeError, ValueError):
+        my_mmr = None
+
     return CloudGame(
         game_id=str(ctx.game_id),
         date_iso=_to_iso(ctx.date_iso),
@@ -482,6 +496,7 @@ def parse_replay_for_cloud(
         macro_score=macro_score_value,
         apm=getattr(me, "apm", None),
         spq=getattr(me, "spq", None),
+        my_mmr=my_mmr,
         opponent=opponent,
         build_log=my_build_log,
         early_build_log=early_build_log,
