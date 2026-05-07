@@ -15,6 +15,7 @@ import { RelatedBuilds } from "@/components/community/RelatedBuilds";
 import { SaveToLibraryButton } from "@/components/community/SaveToLibraryButton";
 import { ShareLinkButton } from "@/components/community/ShareLinkButton";
 import type { CommunityBuildDetail } from "@/components/community/types";
+import { rulesToSignature, type BuildRuleLike } from "@/lib/build-events";
 
 export async function generateMetadata({
   params,
@@ -61,7 +62,17 @@ export default async function CommunityBuildPage({
   const build = data.build || {};
   const race = coerceRace(build.race);
   const tint = raceTint(race);
-  const signature = Array.isArray(build.signature) ? build.signature : [];
+  const rawSignature = Array.isArray(build.signature) ? build.signature : [];
+  // v3 builds persist `rules` instead of `signature`; convert so the
+  // existing timeline renders the build order. Falls back to the v2
+  // signature when both are present.
+  const rawRules = Array.isArray(
+    (build as Record<string, unknown>).rules,
+  )
+    ? ((build as Record<string, unknown>).rules as BuildRuleLike[])
+    : [];
+  const signature =
+    rawSignature.length > 0 ? rawSignature : rulesToSignature(rawRules);
   const legacySteps: LegacyStep[] = Array.isArray(
     (build as Record<string, unknown>).steps,
   )
