@@ -276,6 +276,122 @@ def test_probe_analyzer_succeeds_in_source_layout():
     assert diag is None
 
 
+def test_load_sc2ra_module_skips_reveal_copy_pre_registered_in_sys_modules(
+    monkeypatch,
+):
+    """v0.5.1 production regression: ``parse_deep`` is imported from
+    ``core.sc2_replay_parser`` at the top of every parse. That module's
+    own ``from .event_extractor import …`` registers the
+    reveal-sc2-opponent-main copy at ``sys.modules['core.event_extractor']``
+    BEFORE ``_compute_macro_breakdown`` runs. The reveal copy's
+    extractor has signature ``(replay, my_pid)`` (no ``opp_pid``), so
+    ``extract_macro_events(replay, me.pid, opp_pid)`` raises TypeError
+    and the breakdown silently fails — exactly the "Macro breakdown not
+    available for this game yet" empty state the user sees on the SPA.
+
+    The loader must detect when the cached entry is the reveal copy
+    (``__file__`` containing ``reveal-sc2-opponent-main``) and skip it,
+    falling through to disk load from ``SC2Replay-Analyzer/``.
+    """
+    import sys
+    from types import ModuleType
+
+    # Build a fake "real" reveal module — has __file__ pointing into the
+    # reveal directory, just like the one Python's import machinery
+    # produces when reveal's relative-import chain runs.
+    fake_reveal = ModuleType("core.event_extractor")
+    fake_reveal.__file__ = (
+        r"C:\repo\reveal-sc2-opponent-main\core\event_extractor.py"
+    )
+    # Wrong signature on purpose — if the loader returns this, the
+    # production code will fail with TypeError later.
+    fake_reveal.extract_macro_events = lambda replay, my_pid: {}
+    monkeypatch.setitem(sys.modules, "core.event_extractor", fake_reveal)
+    # And drop the private cache key so we test the cold-load path.
+    monkeypatch.delitem(
+        sys.modules, "_sc2ra_core_event_extractor", raising=False,
+    )
+
+    from sc2tools_agent.replay_pipeline import _load_sc2ra_module
+
+    mod = _load_sc2ra_module("core.event_extractor")
+    # Loader must NOT return the reveal stub.
+    assert mod is not fake_reveal, (
+        "loader returned the reveal copy that was already in sys.modules — "
+        "this is the v0.5.1 regression that broke macro breakdown for "
+        "every uploaded replay"
+    )
+    # And the resolved module must be the SC2Replay-Analyzer copy.
+    file_attr = getattr(mod, "__file__", "") or ""
+    assert "SC2Replay-Analyzer" in file_attr, (
+        f"loader returned an unexpected module: {file_attr!r}"
+    )
+    # The v0.5+ Analyzer copy has the ``opp_pid`` parameter — without
+    # it the agent's three-arg call raises TypeError.
+    import inspect
+    sig = inspect.signature(mod.extract_macro_events)
+    assert "opp_pid" in sig.parameters
+
+
+def test_load_sc2ra_module_honors_test_stubs_without_file(monkeypatch):
+    """Test stubs (SimpleNamespace, MagicMock, ad-hoc classes) don't
+    have a ``__file__`` attribute. The loader must honor those so
+    existing monkeypatch-based tests keep working — only modules
+    pointing at the real reveal directory should be skipped.
+    """
+    import sys
+    from types import SimpleNamespace
+
+    sentinel = SimpleNamespace(extract_macro_events=lambda *a, **kw: "stub")
+    monkeypatch.setitem(sys.modules, "core.event_extractor", sentinel)
+    monkeypatch.delitem(
+        sys.modules, "_sc2ra_core_event_extractor", raising=False,
+    )
+
+    from sc2tools_agent.replay_pipeline import _load_sc2ra_module
+
+    mod = _load_sc2ra_module("core.event_extractor")
+    assert mod is sentinel
+
+
+def test_load_sc2ra_module_uses_internal_cache_on_repeat_calls(
+    monkeypatch,
+):
+    """Once the loader has resolved a module from disk, subsequent
+    calls must come from the private ``_sc2ra_*`` cache so a later
+    ``from core.event_extractor import build_log_lines`` (which
+    repopulates ``sys.modules['core.event_extractor']`` with reveal's
+    copy) doesn't undo the first resolution.
+    """
+    import sys
+    from types import ModuleType
+
+    monkeypatch.delitem(
+        sys.modules, "_sc2ra_core_event_extractor", raising=False,
+    )
+    monkeypatch.delitem(sys.modules, "core.event_extractor", raising=False)
+
+    from sc2tools_agent.replay_pipeline import _load_sc2ra_module
+
+    first = _load_sc2ra_module("core.event_extractor")
+    # Now simulate reveal contaminating sys.modules AFTER our first
+    # resolve — exactly what build_log_lines's import does. Use
+    # monkeypatch.setitem so the entry is reverted at test teardown
+    # and doesn't leak into the next test's sys.modules.
+    fake_reveal = ModuleType("core.event_extractor")
+    fake_reveal.__file__ = (
+        r"C:\repo\reveal-sc2-opponent-main\core\event_extractor.py"
+    )
+    fake_reveal.extract_macro_events = lambda *a: {}
+    monkeypatch.setitem(sys.modules, "core.event_extractor", fake_reveal)
+
+    second = _load_sc2ra_module("core.event_extractor")
+    assert second is first, (
+        "private _sc2ra_* cache must shield us from later sys.modules "
+        "pollution by reveal's relative imports"
+    )
+
+
 # -------------------------------------------------------------------------
 # Opponent build-log derivation — _build_log_from_events.
 #
