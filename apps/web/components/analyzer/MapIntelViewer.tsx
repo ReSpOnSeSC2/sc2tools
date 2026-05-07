@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { useApi, API_BASE } from "@/lib/clientApi";
+import { useCallback, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { RefreshCcw } from "lucide-react";
+import { apiCall, useApi, API_BASE } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import { Button } from "@/components/ui/Button";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import type { MapEntry } from "./MapIntelTab";
 
@@ -56,7 +59,10 @@ export function MapIntelViewer({
   summary: MapEntry | null;
 }) {
   const { filters, dbRev } = useFilters();
+  const { getToken } = useAuth();
   const [layer, setLayer] = useState<LayerKey>("proxy");
+  const [recomputing, setRecomputing] = useState(false);
+  const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
   const params = filtersToQuery({ ...filters, map: mapName });
   const cacheKey = `${dbRev}-${mapName}`;
 
@@ -79,16 +85,61 @@ export function MapIntelViewer({
   const points =
     layer === "buildings" ? buildings.data?.points : heat.data?.points;
 
+  const requestRecompute = useCallback(async () => {
+    if (recomputing) return;
+    setRecomputing(true);
+    setRecomputeMsg(null);
+    try {
+      // Mass-recompute is the closest fit to "re-extract spatial
+      // data": it tells the agent to re-parse every replay missing
+      // structured outputs, which now includes the spatial extracts.
+      await apiCall<{ ok: boolean }>(
+        getToken,
+        "/v1/macro/backfill/start",
+        { method: "POST", body: JSON.stringify({ force: true }) },
+      );
+      setRecomputeMsg(
+        "Resync requested. If your desktop agent is online, it will re-upload heatmap data shortly. Otherwise open the agent and click Resync.",
+      );
+    } catch (err) {
+      const e = err as { message?: string };
+      setRecomputeMsg(e?.message || "Couldn't request a resync.");
+    } finally {
+      window.setTimeout(() => setRecomputing(false), 1500);
+    }
+  }, [getToken, recomputing]);
+
   return (
     <Card title={`${mapName} · heatmaps`}>
       {summary ? (
-        <p className="-mt-2 mb-3 text-xs text-text-dim">
-          {summary.total} games · {summary.wins}W &ndash; {summary.losses}L
+        <div className="-mt-2 mb-3 flex flex-wrap items-center gap-2 text-xs text-text-dim">
+          <span>
+            {summary.total} games · {summary.wins}W &ndash; {summary.losses}L
+          </span>
           {summary.hasSpatial ? null : (
-            <span className="ml-2 rounded bg-warning/10 px-1.5 py-0.5 text-warning">
-              No spatial extracts yet — agent needs to re-analyse replays
-            </span>
+            <>
+              <span className="rounded bg-warning/10 px-1.5 py-0.5 text-warning">
+                No spatial extracts yet — agent needs to re-analyse replays
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                loading={recomputing}
+                onClick={requestRecompute}
+                iconLeft={<RefreshCcw className="h-3 w-3" aria-hidden />}
+              >
+                {recomputing ? "Requesting…" : "Request resync"}
+              </Button>
+            </>
           )}
+        </div>
+      ) : null}
+      {recomputeMsg ? (
+        <p
+          role="status"
+          className="mb-2 rounded-lg border border-border bg-bg-elevated/40 px-3 py-2 text-caption text-text-muted"
+        >
+          {recomputeMsg}
         </p>
       ) : null}
 

@@ -197,6 +197,11 @@ class CloudGame:
     # "macro breakdown not available" empty state for new uploads.
     macro_breakdown: Optional[Dict[str, Any]] = None
     apm_curve: Optional[Dict[str, Any]] = None
+    # Per-replay spatial extracts for the Map Intel heatmaps.
+    # Mirrors the SPA's `analytics.spatial.SpatialAggregator` cache:
+    # each list is normalized {x, y, weight?, time?} and the cloud
+    # rasterises them across N games per map.
+    spatial: Optional[Dict[str, Any]] = None
 
     def to_payload(self) -> Dict[str, Any]:
         out: Dict[str, Any] = {
@@ -225,6 +230,8 @@ class CloudGame:
             out["macroBreakdown"] = self.macro_breakdown
         if self.apm_curve is not None:
             out["apmCurve"] = self.apm_curve
+        if self.spatial is not None:
+            out["spatial"] = self.spatial
         return out
 
 
@@ -340,6 +347,13 @@ def parse_replay_for_cloud(
 
     macro_breakdown, derived_macro_score = _compute_macro_breakdown(ctx)
     apm_curve = _compute_apm_curve(ctx)
+    # Per-replay spatial extracts (battle/death/proxy/building points
+    # in world coords + map bounds). The cloud rasterises these across
+    # N games per map for the Map Intel heatmaps; without the upload
+    # the heatmaps stay empty no matter how many replays the user
+    # syncs. Best-effort — failures fall back to None and the heatmap
+    # tiles surface their "no spatial data" empty state.
+    spatial = _compute_spatial_extract(ctx)
 
     opponent = {
         "displayName": _sanitize_name(opp.name),
@@ -371,6 +385,25 @@ def parse_replay_for_cloud(
     if macro_score_value is None and derived_macro_score is not None:
         macro_score_value = derived_macro_score
 
+    # Derive the build logs from the parsed event streams. The legacy
+    # parser only fills ctx.build_log / ctx.early_build_log for the
+    # "us" perspective, so before we ship the upload we synthesize the
+    # opponent equivalents from ctx.opp_events. Without this the cloud
+    # received empty oppBuildLog arrays and the Save-as-new-build flow
+    # for the opponent panel had nothing to capture.
+    my_build_log = list(getattr(ctx, "build_log", []) or [])
+    early_build_log = list(getattr(ctx, "early_build_log", []) or [])
+    opp_build_log = list(getattr(ctx, "opp_build_log", []) or [])
+    opp_early_build_log = list(getattr(ctx, "opp_early_build_log", []) or [])
+    if not opp_build_log or not opp_early_build_log:
+        derived_full, derived_early = _build_log_from_events(
+            getattr(ctx, "opp_events", None),
+        )
+        if not opp_build_log and derived_full:
+            opp_build_log = derived_full
+        if not opp_early_build_log and derived_early:
+            opp_early_build_log = derived_early
+
     return CloudGame(
         game_id=str(ctx.game_id),
         date_iso=_to_iso(ctx.date_iso),
@@ -383,13 +416,259 @@ def parse_replay_for_cloud(
         apm=getattr(me, "apm", None),
         spq=getattr(me, "spq", None),
         opponent=opponent,
-        build_log=list(getattr(ctx, "build_log", []) or []),
-        early_build_log=list(getattr(ctx, "early_build_log", []) or []),
-        opp_early_build_log=list(getattr(ctx, "opp_early_build_log", []) or []),
-        opp_build_log=list(getattr(ctx, "opp_build_log", []) or []),
+        build_log=my_build_log,
+        early_build_log=early_build_log,
+        opp_early_build_log=opp_early_build_log,
+        opp_build_log=opp_build_log,
         macro_breakdown=macro_breakdown,
         apm_curve=apm_curve,
+        spatial=spatial,
     )
+
+
+def _build_log_from_events(
+    events: Any,
+) -> tuple[list, list]:
+    """Format an event-stream list as build-log strings.
+
+    Returns ``(full, early)`` where ``early`` is capped at the first
+    five minutes (matching the SPA's ``early_build_log`` semantics).
+    Empty lists on failure — never raises.
+    """
+    if not events:
+        return [], []
+    try:
+        from core.event_extractor import build_log_lines  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        log.debug("build_log_lines_unavailable: %s", exc)
+        return [], []
+    try:
+        full = list(build_log_lines(events, cutoff_seconds=None))
+    except Exception as exc:  # noqa: BLE001
+        log.debug("build_log_lines_full_failed: %s", exc)
+        full = []
+    try:
+        early = list(build_log_lines(events, cutoff_seconds=300))
+    except Exception as exc:  # noqa: BLE001
+        log.debug("build_log_lines_early_failed: %s", exc)
+        early = []
+    return full, early
+
+
+def _compute_spatial_extract(ctx: Any) -> Optional[Dict[str, Any]]:
+    """Extract per-replay spatial events for the cloud Map Intel heatmaps.
+
+    Mirrors the field names the cloud's SpatialService reads from each
+    game document:
+
+      - ``map_bounds``     {minX, minY, maxX, maxY} world rectangle
+      - ``my_proxies``     [{x, y}] forward bases / proxies (us)
+      - ``opp_proxies``    [{x, y}] forward bases / proxies (opp)
+      - ``buildings``      [{x, y}] every building we placed
+      - ``battles``        [{x, y, weight}] engagement centroids
+      - ``deaths``         [{x, y, weight}] places where our army died
+
+    The legacy SPA owns the canonical extraction in
+    ``analytics/spatial.SpatialAggregator`` which reads through
+    ``core.map_playback_data.build_playback_data``. We piggyback on
+    the same parser so the lists mean exactly what the offline app
+    means by them.
+
+    Returns ``None`` (not an empty dict) when nothing is available so
+    the upload path simply omits the field instead of forcing the
+    cloud to store noise.
+    """
+    me = getattr(ctx, "me", None)
+    opp = getattr(ctx, "opponent", None)
+    if me is None or opp is None:
+        return None
+    try:
+        from core.map_playback_data import (  # type: ignore
+            DEFAULT_BOUNDS,
+            bounds_for as _bounds_for,
+            build_playback_data as _build_playback_data,
+            centroid as _centroid,
+            detect_battle_markers as _detect_battle_markers,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.debug("spatial_imports_unavailable: %s", exc)
+        return None
+    try:
+        from detectors.base import BaseStrategyDetector  # type: ignore
+    except Exception:
+        BaseStrategyDetector = None  # type: ignore
+    replay_path = getattr(ctx, "file_path", None) or getattr(ctx, "replay_path", None)
+    if not replay_path:
+        # parse_deep populates ctx.raw but build_playback_data wants a
+        # filesystem path. If neither is available we skip rather than
+        # raise — the rest of the upload still goes through.
+        return None
+    try:
+        playback = _build_playback_data(str(replay_path))
+    except Exception as exc:  # noqa: BLE001
+        log.debug("build_playback_data_failed: %s", exc)
+        return None
+    if not playback:
+        return None
+
+    map_bounds = None
+    try:
+        b = _bounds_for(playback) or DEFAULT_BOUNDS
+        if isinstance(b, dict):
+            map_bounds = {
+                "minX": float(b.get("x_min", 0.0)),
+                "minY": float(b.get("y_min", 0.0)),
+                "maxX": float(b.get("x_max", 200.0)),
+                "maxY": float(b.get("y_max", 200.0)),
+            }
+    except Exception as exc:  # noqa: BLE001
+        log.debug("bounds_for_failed: %s", exc)
+
+    out: Dict[str, Any] = {}
+    if map_bounds:
+        out["map_bounds"] = map_bounds
+
+    my_pid = getattr(me, "pid", None)
+    opp_pid = getattr(opp, "pid", None)
+
+    my_buildings: list = []
+    opp_buildings: list = []
+    for entry in playback.get("buildings") or []:
+        if not isinstance(entry, dict):
+            continue
+        x = entry.get("x")
+        y = entry.get("y")
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            continue
+        owner = entry.get("owner_pid", entry.get("pid"))
+        sample = {"x": float(x), "y": float(y)}
+        born = entry.get("born_t")
+        if isinstance(born, (int, float)):
+            sample["time"] = float(born)
+        unit_name = entry.get("name") or entry.get("unit_type")
+        if unit_name:
+            sample["name"] = str(unit_name)
+        if owner == my_pid:
+            my_buildings.append(sample)
+        elif owner == opp_pid:
+            opp_buildings.append(sample)
+
+    if my_buildings:
+        out["buildings"] = my_buildings
+
+    # Proxy detection: a building is a "proxy" when it sits closer to
+    # the opponent's main than to ours. We use the SPA's
+    # BaseStrategyDetector._is_proxy threshold (50 world units) so the
+    # cloud and offline view classify identically.
+    if BaseStrategyDetector is not None and (my_buildings or opp_buildings):
+        try:
+            my_main = _main_base_loc(my_buildings)
+            opp_main = _main_base_loc(opp_buildings)
+            if my_main and opp_main:
+                opp_proxies = [
+                    p
+                    for p in opp_buildings
+                    if _euclid(p, my_main) < 50.0
+                ]
+                my_proxies = [
+                    p
+                    for p in my_buildings
+                    if _euclid(p, opp_main) < 50.0
+                ]
+                if my_proxies:
+                    out["my_proxies"] = my_proxies
+                if opp_proxies:
+                    out["opp_proxies"] = opp_proxies
+        except Exception as exc:  # noqa: BLE001
+            log.debug("proxy_classification_failed: %s", exc)
+
+    # Battle + death-zone markers — same _detect_battle_markers helper
+    # the SPA uses, normalised to {x, y, weight} so the cloud's
+    # gridder can drop them straight into the heatmap.
+    try:
+        markers = _detect_battle_markers(playback) or []
+    except Exception as exc:  # noqa: BLE001
+        log.debug("detect_battle_markers_failed: %s", exc)
+        markers = []
+    battles: list = []
+    deaths: list = []
+    for m in markers:
+        if not isinstance(m, dict):
+            continue
+        x = m.get("cx", m.get("x"))
+        y = m.get("cy", m.get("y"))
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            continue
+        sample = {"x": float(x), "y": float(y)}
+        weight = m.get("weight") or m.get("count")
+        if isinstance(weight, (int, float)) and weight > 0:
+            sample["weight"] = float(weight)
+        t = m.get("t") or m.get("time")
+        if isinstance(t, (int, float)):
+            sample["time"] = float(t)
+        battles.append(sample)
+        # When the marker is annotated with "my_lost" > "opp_lost" we
+        # treat it as a death-zone for the user; otherwise skip.
+        my_lost = m.get("my_army_lost") or m.get("my_lost")
+        opp_lost = m.get("opp_army_lost") or m.get("opp_lost")
+        try:
+            if (
+                isinstance(my_lost, (int, float))
+                and isinstance(opp_lost, (int, float))
+                and my_lost > opp_lost
+            ):
+                death_sample = dict(sample)
+                death_sample["weight"] = float(my_lost - opp_lost)
+                deaths.append(death_sample)
+        except Exception:  # noqa: BLE001
+            pass
+    if battles:
+        out["battles"] = battles
+    if deaths:
+        out["deaths"] = deaths
+
+    return out or None
+
+
+def _main_base_loc(buildings: list) -> Optional[Dict[str, float]]:
+    """Pick the canonical "main base" point for the given side.
+
+    First Nexus / CommandCenter / Hatchery wins. Falls back to the
+    earliest building if no town hall is present (rare — happens on
+    parsing failure).
+    """
+    townhall_names = {
+        "Nexus", "CommandCenter", "Hatchery", "OrbitalCommand",
+        "PlanetaryFortress", "Lair", "Hive",
+    }
+    earliest: Optional[Dict[str, Any]] = None
+    earliest_t = float("inf")
+    for b in buildings:
+        if not isinstance(b, dict):
+            continue
+        name = b.get("name")
+        t = b.get("time", float("inf"))
+        if name in townhall_names and isinstance(t, (int, float)) and t < earliest_t:
+            earliest = b
+            earliest_t = float(t)
+    if earliest is None:
+        for b in buildings:
+            t = b.get("time", float("inf")) if isinstance(b, dict) else float("inf")
+            if isinstance(t, (int, float)) and t < earliest_t:
+                earliest = b
+                earliest_t = float(t)
+    if earliest is None:
+        return None
+    return {"x": float(earliest["x"]), "y": float(earliest["y"])}
+
+
+def _euclid(a: Dict[str, Any], b: Dict[str, Any]) -> float:
+    try:
+        dx = float(a["x"]) - float(b["x"])
+        dy = float(a["y"]) - float(b["y"])
+        return (dx * dx + dy * dy) ** 0.5
+    except (KeyError, TypeError, ValueError):
+        return float("inf")
 
 
 def _compute_macro_breakdown(

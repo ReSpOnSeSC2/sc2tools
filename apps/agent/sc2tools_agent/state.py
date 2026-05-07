@@ -32,6 +32,14 @@ class AgentState:
     uploaded: Dict[str, str] = field(default_factory=dict)
     """Map of replay file path -> ISO timestamp it was uploaded."""
 
+    path_by_game_id: Dict[str, str] = field(default_factory=dict)
+    """Reverse lookup: cloud gameId -> local replay file path. Lets the
+    Socket.io recompute handlers translate a gameId-keyed request from
+    the cloud back into a file the watcher can re-parse without us
+    having to walk every replay on disk. Populated incrementally on
+    every successful upload; survives restarts (it's persisted to the
+    same agent.json the rest of the state lives in)."""
+
     paused: bool = False
     """When True the watcher keeps observing but the upload queue is
     drained without sending - flipped by the tray/GUI "Pause syncing"
@@ -114,11 +122,20 @@ def load_state(state_dir: Path) -> AgentState:
     if legacy_single and legacy_single not in folders:
         folders.insert(0, legacy_single)
 
+    raw_path_by_game = raw.get("path_by_game_id") or {}
+    if not isinstance(raw_path_by_game, dict):
+        raw_path_by_game = {}
+    path_by_game_id: Dict[str, str] = {}
+    for gid, pth in raw_path_by_game.items():
+        if isinstance(gid, str) and isinstance(pth, str) and gid and pth:
+            path_by_game_id[gid] = pth
+
     return AgentState(
         device_token=raw.get("device_token"),
         user_id=raw.get("user_id"),
         paired_at=raw.get("paired_at"),
         uploaded=dict(raw.get("uploaded") or {}),
+        path_by_game_id=path_by_game_id,
         paused=bool(raw.get("paused") or False),
         replay_folder_override=legacy_single,
         replay_folders_override=folders,

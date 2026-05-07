@@ -10,7 +10,7 @@ import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import { MacroBreakdownPanel } from "./macro/MacroBreakdownPanel";
 import type { PanelHeaderMeta } from "./macro/MacroBreakdownPanel.types";
-import { BuildOrderTimeline } from "./charts/BuildOrderTimeline";
+import { BuildOrderDualTimeline } from "./charts/BuildOrderDualTimeline";
 
 type BuildOrderEvent = {
   time: number;
@@ -536,20 +536,14 @@ function BuildOrderRow({
   }
   if (!data) return null;
   return (
-    <BuildOrderTimeline
+    <BuildOrderDualTimeline
       events={data.events || []}
       oppEvents={data.opp_events || []}
-      defaultPerspective="you"
       gameId={gameId}
       race={data.my_race || game.my_race}
       oppRace={data.opp_race || game.opp_race}
-      title={
-        data.my_build ? `Your build — ${data.my_build}` : "Your build"
-      }
-      onSaveAsBuild={async () => {
-        // SaveAsBuildButton handles the API call internally via the
-        // BuildEditorModal -> PUT /v1/custom-builds/:slug flow.
-      }}
+      myBuildName={data.my_build}
+      oppBuildName={data.opp_strategy}
     />
   );
 }

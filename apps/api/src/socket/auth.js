@@ -1,9 +1,10 @@
 "use strict";
 
 const { verifyToken } = require("@clerk/backend");
+const { sha256 } = require("../util/hash");
 
 /**
- * Authenticate Socket.io connections. Two flavours of caller:
+ * Authenticate Socket.io connections. Three flavours of caller:
  *
  *  - **Web app** sends `auth.token = <Clerk JWT>` and joins the
  *    private user room (so `games:changed` ticks live).
@@ -11,6 +12,12 @@ const { verifyToken } = require("@clerk/backend");
  *    the auth — there's no Clerk session on a Browser Source. The
  *    socket joins `overlay:<token>` so the agent's live-parse payload
  *    can be broadcast to one specific overlay.
+ *  - **Desktop agent** sends `auth.deviceToken = <token>`. The token
+ *    is the same long-lived value used for REST `Authorization:
+ *    Bearer …` calls; the cloud joins the agent into `user:<userId>`
+ *    so per-game recompute events (`macro:recompute_request`,
+ *    `opp_build_order:recompute_request`) reach the right machine
+ *    without requiring the agent to poll.
  *
  * @param {import('socket.io').Server} io
  * @param {{
@@ -18,6 +25,7 @@ const { verifyToken } = require("@clerk/backend");
  *   issuer?: string,
  *   audience?: string,
  *   resolveOverlayToken?: (token: string) => Promise<{userId: string, label: string, enabledWidgets?: string[]}|null>,
+ *   resolveDeviceToken?: (tokenHash: string) => Promise<{userId: string}|null>,
  * }} opts
  */
 function attachSocketAuth(io, opts) {
@@ -37,6 +45,24 @@ function attachSocketAuth(io, opts) {
         socket.data.overlayToken = overlayToken;
         socket.data.overlayUserId = hit.userId;
         socket.data.kind = "overlay";
+        next();
+        return;
+      }
+
+      const deviceToken = socket.handshake?.auth?.deviceToken;
+      if (deviceToken && typeof deviceToken === "string") {
+        if (!opts.resolveDeviceToken) {
+          next(new Error("device_unsupported"));
+          return;
+        }
+        const tokenHash = sha256(deviceToken);
+        const hit = await opts.resolveDeviceToken(tokenHash);
+        if (!hit) {
+          next(new Error("invalid_device_token"));
+          return;
+        }
+        socket.data.userId = hit.userId;
+        socket.data.kind = "device";
         next();
         return;
       }
@@ -87,6 +113,14 @@ function attachSocketAuth(io, opts) {
           })
           .catch(() => {});
       }
+      return;
+    }
+    if (socket.data.kind === "device") {
+      const u = socket.data.userId;
+      if (u) socket.join(`user:${u}`);
+      // The agent emits this once per startup so the cloud can mark
+      // the device as "online" and surface that in the dashboard.
+      socket.emit("device:hello", { ok: true });
       return;
     }
     const cid = socket.data.clerkUserId;

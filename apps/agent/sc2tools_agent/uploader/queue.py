@@ -148,9 +148,18 @@ class UploadQueue:
         accepted = bool((result.get("accepted") or [{}])[0].get("gameId"))
         if not accepted:
             raise RuntimeError(f"server_rejected: {result!r}")
+        path_str = str(job.file_path)
         with self._lock:
-            self._state.uploaded[str(job.file_path)] = (
+            self._state.uploaded[path_str] = (
                 datetime.now(timezone.utc).isoformat()
             )
+            # Reverse-index by gameId so the Socket.io recompute path
+            # can locate this replay's file on disk in O(1) instead of
+            # re-parsing the whole folder. Skipped only when the
+            # CloudGame somehow lacks a gameId — should never happen
+            # because validate_game_record requires it server-side.
+            game_id = getattr(job.game, "game_id", None)
+            if isinstance(game_id, str) and game_id:
+                self._state.path_by_game_id[game_id] = path_str
             save_state(self._cfg.state_dir, self._state)
         self._on_success(job.file_path)

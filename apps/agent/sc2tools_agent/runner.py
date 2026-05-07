@@ -45,6 +45,7 @@ from .crash_reporter import (
 )
 from .heartbeat import Heartbeat
 from .pairing import ensure_paired
+from .socket_client import SocketClient, make_recompute_handlers
 from .player_handle import (
     auto_detect_from_replays,
     read_cache as read_player_handle_cache,
@@ -212,6 +213,7 @@ def _run_headless(cfg: AgentConfig, log_dir: Path) -> int:
     watcher: Optional[ReplayWatcher] = None
     updater: Optional[Updater] = None
     heartbeat: Optional[Heartbeat] = None
+    socket_client: Optional[SocketClient] = None
 
     if can_use_tray():
         tray = TrayUI(
@@ -280,11 +282,27 @@ def _run_headless(cfg: AgentConfig, log_dir: Path) -> int:
 
     heartbeat = Heartbeat(api)
 
+    if state.device_token:
+        on_macro, on_opp = make_recompute_handlers(
+            state_dir=cfg.state_dir,
+            queue_resync_for_paths=lambda paths: _queue_replays_for_resync(
+                state, upload, paths, log,
+            ),
+        )
+        socket_client = SocketClient(
+            base_url=cfg.api_base,
+            device_token=state.device_token,
+            on_recompute_games=on_macro,
+            on_recompute_opp_build=on_opp,
+        )
+
     try:
         upload.start()
         watcher.start()
         updater.start()
         heartbeat.start()
+        if socket_client is not None:
+            socket_client.start()
         ui.on_status(
             "watching for replays" + (" (paused)" if state.paused else ""),
         )
@@ -298,6 +316,8 @@ def _run_headless(cfg: AgentConfig, log_dir: Path) -> int:
         return 1
     finally:
         log.info("agent_stopping")
+        if socket_client:
+            socket_client.stop()
         if heartbeat:
             heartbeat.stop()
         if updater:
@@ -429,6 +449,8 @@ def _run_with_gui(
 
     log.info("agent_stopping rc=%s", rc)
     request_stop()
+    if getattr(cell, "socket_client", None):
+        cell.socket_client.stop()
     if cell.heartbeat:
         cell.heartbeat.stop()
     if cell.updater:
@@ -512,10 +534,30 @@ def _gui_boot_worker(
         cell.updater = updater
         cell.heartbeat = heartbeat
 
+        socket_client: Optional[SocketClient] = None
+        if state.device_token:
+            on_macro, on_opp = make_recompute_handlers(
+                state_path=cfg.state_dir / "state.json"
+                if cfg.state_dir is not None
+                else None,
+                queue_resync_for_paths=lambda paths: _queue_replays_for_resync(
+                    state, upload, paths, log,
+                ),
+            )
+            socket_client = SocketClient(
+                base_url=cfg.api_base,
+                device_token=state.device_token,
+                on_recompute_games=on_macro,
+                on_recompute_opp_build=on_opp,
+            )
+        cell.socket_client = socket_client
+
         upload.start()
         watcher.start()
         updater.start()
         heartbeat.start()
+        if socket_client is not None:
+            socket_client.start()
         ui.on_status(
             "watching for replays" + (" (paused)" if state.paused else ""),
         )
@@ -552,6 +594,37 @@ def _handle_resync(
     if upload:
         upload.request_full_resync()
     logging.getLogger(__name__).info("agent_resync_requested")
+
+
+def _queue_replays_for_resync(
+    state: AgentState,
+    upload: Optional[UploadQueue],
+    paths: List[Path],
+    log: logging.Logger,
+) -> None:
+    """Drop selected paths from the upload cursor so the next sweep
+    re-parses + re-uploads only those replays.
+
+    Used by the Socket.io client when the cloud asks for a per-game
+    recompute (macro breakdown / opponent build order). Cheaper than
+    a full Resync — the user can have thousands of replays on disk
+    and a one-game recompute shouldn't re-walk every file.
+    """
+    if not paths or upload is None:
+        return
+    removed = 0
+    for p in paths:
+        key = str(p)
+        if state.uploaded.pop(key, None) is not None:
+            removed += 1
+    if removed == 0:
+        return
+    upload.request_full_resync()
+    log.info(
+        "per_game_resync_queued count=%d total_requested=%d",
+        removed,
+        len(paths),
+    )
 
 
 def _handle_choose_folder(
@@ -939,6 +1012,7 @@ class _RuntimeCell:
         "watcher",
         "updater",
         "heartbeat",
+        "socket_client",
     )
 
     def __init__(self) -> None:
@@ -950,6 +1024,7 @@ class _RuntimeCell:
         self.watcher = None
         self.updater = None
         self.heartbeat = None
+        self.socket_client = None
 
 
 class _Multiplexer:

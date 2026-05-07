@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Activity,
   ChevronDown,
   Layers,
   Map as MapIcon,
@@ -18,7 +17,6 @@ import { AnalyzerProvider } from "@/components/AnalyzerProvider";
 import { Modal } from "@/components/ui/Modal";
 import { Section } from "@/components/ui/Section";
 import { Tabs } from "@/components/ui/Tabs";
-import { ActivityCharts } from "./charts/ActivityCharts";
 import { BattlefieldTab } from "./BattlefieldTab";
 import { BuildsTab } from "./BuildsTab";
 import { DashboardKpiStrip } from "./DashboardKpiStrip";
@@ -36,8 +34,7 @@ type TabId =
   | "trends"
   | "battlefield"
   | "builds"
-  | "map-intel"
-  | "activity";
+  | "map-intel";
 
 type TabDef = {
   id: TabId;
@@ -53,7 +50,6 @@ const TABS: readonly TabDef[] = [
   { id: "battlefield", label: "Maps", icon: MapIcon, description: "Maps and matchup performance." },
   { id: "builds", label: "Builds", icon: Layers, description: "Your builds, performance, and editor." },
   { id: "map-intel", label: "Map intel", icon: MapPin, description: "Spatial heatmaps for known maps." },
-  { id: "activity", label: "Activity", icon: Activity, description: "Per-game charts of resources, army, chrono." },
 ] as const;
 
 export function AnalyzerShell({ totalGames }: { totalGames: number }) {
@@ -288,8 +284,6 @@ function TabPanel({
       return <BuildsTab />;
     case "map-intel":
       return <MapIntelTab />;
-    case "activity":
-      return <ActivityCharts />;
     default: {
       const _exhaustive: never = tab;
       return _exhaustive;
