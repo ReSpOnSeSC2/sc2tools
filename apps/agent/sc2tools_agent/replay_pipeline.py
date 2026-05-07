@@ -139,11 +139,14 @@ def _load_sc2ra_module(dotted_name: str) -> Any:
 
     The reveal copies pre-date the v0.5 macro-breakdown surface: they
     omit ``unit_timeline`` and ``opp_stats_events`` from the payload,
-    and read the wrong sc2reader attribute (``food_workers``, which
+    have signature ``(replay, my_pid)`` with no ``opp_pid`` parameter
+    so the agent's ``extract_macro_events(replay, me.pid, opp_pid)``
+    call raises ``TypeError`` on the third positional argument, and
+    read the wrong sc2reader attribute (``food_workers``, which
     doesn't exist on PlayerStatsEvent in sc2reader 1.8.x — the right
     name is ``workers_active_count``). A breakdown built against those
-    is exactly what the user sees on the SPA: army line works (food_used
-    fallback), worker line stuck at 0, composition snapshot empty.
+    is exactly what the user sees on the SPA: macro card empty
+    ("Macro breakdown not available for this game yet").
 
     Loading SC2Replay-Analyzer's copy via ``importlib.util.spec_from_file_location``
     sidesteps the ``sys.path`` ordering without touching it (so other
@@ -151,27 +154,41 @@ def _load_sc2ra_module(dotted_name: str) -> Any:
     Both target modules have no internal cross-package imports — only
     ``sc2reader`` and stdlib — so loading them in isolation is safe.
 
-    Tests that pre-load a stub into ``sys.modules[dotted_name]`` win
-    over the file lookup so monkeypatched mocks still take effect —
-    that's how ``test_replay_pipeline`` swaps in fake extractors.
-
     Caching: once we load from disk we register the module under a
     private ``_sc2ra_*`` key in ``sys.modules`` and check that key
-    FIRST on subsequent calls. This matters because elsewhere in the
-    pipeline ``from core.event_extractor import build_log_lines``
-    runs through Python's normal import machinery and registers
-    reveal's copy at ``sys.modules['core.event_extractor']``. Without
-    the private cache, the next call would return that stale reveal
-    copy from ``sys.modules`` and silently regress.
+    FIRST on subsequent calls. This sidesteps the ``sys.modules``
+    pollution that ``from core.sc2_replay_parser import parse_deep``
+    causes — that import chain executes reveal's
+    ``from .event_extractor import …`` and registers reveal's broken
+    copy at ``sys.modules['core.event_extractor']`` BEFORE we ever
+    get to compute the macro breakdown.
+
+    Test stub support: tests still need a way to inject fake
+    extractors without touching the real file. We honor a sys.modules
+    entry at ``dotted_name`` when it has no ``__file__`` attribute or
+    when its ``__file__`` points inside ``SC2Replay-Analyzer`` — both
+    indicate the entry came from a deliberate inject (test stub or a
+    prior call to this loader) rather than from Python's import
+    machinery resolving reveal's relative import. A real reveal copy
+    has ``__file__`` ending in ``reveal-sc2-opponent-main\\core\\…``
+    and is rejected so disk-load takes over.
     """
     import importlib.util
     internal_name = f"_sc2ra_{dotted_name.replace('.', '_')}"
+    cached = sys.modules.get(dotted_name)
+    # Check sys.modules[dotted_name] FIRST, but only honor entries that
+    # are "safe" (test stubs without __file__, or SC2Replay-Analyzer's
+    # own loaded copy). The real reveal copy is rejected so disk load
+    # runs even when reveal's relative import already populated this
+    # key. Doing this check before the internal cache lookup means that
+    # tests can monkeypatch.setitem(sys.modules, dotted_name, stub) and
+    # have it take effect even after a previous call populated the
+    # internal cache.
+    if cached is not None and _is_safe_cached_module(cached):
+        return cached
     cached_internal = sys.modules.get(internal_name)
     if cached_internal is not None:
         return cached_internal
-    cached_test_mock = sys.modules.get(dotted_name)
-    if cached_test_mock is not None:
-        return cached_test_mock
     parts = dotted_name.split(".")
     rel = Path(*parts[:-1]) / f"{parts[-1]}.py"
     for base in _candidate_bases():
@@ -190,6 +207,33 @@ def _load_sc2ra_module(dotted_name: str) -> Any:
     raise ImportError(
         f"SC2Replay-Analyzer module not found on disk: {dotted_name}",
     )
+
+
+def _is_safe_cached_module(mod: Any) -> bool:
+    """Return True iff ``mod`` is acceptable as a sc2ra module substitute.
+
+    Real reveal-sc2-opponent-main copies have ``__file__`` containing
+    that directory name and the wrong signature — those must be
+    rejected so disk load takes over. SimpleNamespace / MagicMock /
+    SC2Replay-Analyzer's own copy are all fine.
+
+    Compares against the directory name as a substring (case-insensitive
+    on Windows-style paths) rather than a strict prefix so editable
+    installs and PyInstaller's _MEIPASS extracts both match. The
+    matching is done in lowercase to be robust to case-insensitive
+    filesystem casing differences (Windows can return paths with
+    inconsistent casing depending on how they were resolved).
+    """
+    file_attr = getattr(mod, "__file__", None)
+    if not file_attr:
+        # Test stubs (SimpleNamespace, MagicMock, plain classes)
+        # don't have a __file__ — those are what we're trying to
+        # support for testing.
+        return True
+    lowered = str(file_attr).lower()
+    if "reveal-sc2-opponent-main" in lowered:
+        return False
+    return True
 
 
 class AnalyzerImportError(RuntimeError):

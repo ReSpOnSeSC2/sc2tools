@@ -10,6 +10,48 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Fixed (agent v0.5.2) — Macro breakdown now uploads on every replay again
+
+A regression introduced when the agent started pinning the macro
+extractor to ``SC2Replay-Analyzer/`` (v0.5+ surface) caused every
+recorded replay to ship without a ``macroBreakdown`` field. The SPA
+fell through to the ``Macro breakdown not available for this game
+yet`` empty state, so the macro card never populated for newly-uploaded
+games and the dashboard's Macro column showed em-dashes.
+
+Root cause: ``replay_pipeline._load_sc2ra_module`` honored a
+``sys.modules[dotted_name]`` entry whenever one was present, intending
+to support test stubs. But ``parse_replay_for_cloud`` calls
+``from core.sc2_replay_parser import parse_deep`` BEFORE
+``_compute_macro_breakdown``, and reveal-sc2-opponent-main's
+``sc2_replay_parser`` runs ``from .event_extractor import …`` which
+populates ``sys.modules['core.event_extractor']`` with reveal's older
+copy. The reveal copy's signature is ``(replay, my_pid)`` — no
+``opp_pid`` parameter — so the agent's three-arg call raised
+``TypeError`` before any extraction ran. The exception was caught and
+logged at WARNING (``extract_macro_events_my_failed: ...``), and
+``_compute_macro_breakdown`` returned ``(None, None)``. Since the
+warning is the only signal and the upload still succeeds without a
+breakdown, the regression was invisible from the user's
+side except for the empty macro card.
+
+The fix adds ``_is_safe_cached_module`` to distinguish a deliberate
+test stub (no ``__file__`` attribute) from the real reveal copy
+(``__file__`` containing ``reveal-sc2-opponent-main``). The loader
+now rejects reveal entries and falls through to disk load via
+``importlib.util.spec_from_file_location`` against
+``SC2Replay-Analyzer/``. Test stubs are still honored via the same
+sys.modules path. Three regression tests lock the behavior down:
+``test_load_sc2ra_module_skips_reveal_copy_pre_registered_in_sys_modules``,
+``test_load_sc2ra_module_honors_test_stubs_without_file``, and
+``test_load_sc2ra_module_uses_internal_cache_on_repeat_calls``.
+
+To get the breakdown for replays uploaded under v0.5.0–v0.5.1, open
+the agent app and click Resync. The agent will re-parse every replay
+on disk and re-upload it, this time including the
+``macroBreakdown``. Per-game ``Recompute now`` from the SPA also
+works once the user is on v0.5.2.
+
 ### Added (cloud v0.5.0) — Trends tab gains four enrichment charts + Map Intel modal + start-time build-order display
 
 The Trends tab previously answered exactly one question — "did I win
