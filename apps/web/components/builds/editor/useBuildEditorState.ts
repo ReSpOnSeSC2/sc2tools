@@ -53,6 +53,19 @@ interface BuildOrderApiResp {
   opp_events?: BuildOrderEvent[];
 }
 
+interface ReclassifyResponseSummary {
+  tagged?: number;
+  cleared?: number;
+  matched?: number;
+  scanned?: number;
+  ruleCount?: number;
+}
+
+interface SaveBuildResponse {
+  ok: boolean;
+  reclassify: ReclassifyResponseSummary | null;
+}
+
 /**
  * useBuildEditorState — owns draft state, debounced preview fetch,
  * inspect cache, toasts, and the save flow. Returns a single object
@@ -359,7 +372,7 @@ export function useBuildEditorState(
         schemaVersion: 3,
       };
       try {
-        await apiCall<void>(
+        const resp = await apiCall<SaveBuildResponse | null>(
           getToken,
           `/v1/custom-builds/${encodeURIComponent(slug)}`,
           {
@@ -375,11 +388,17 @@ export function useBuildEditorState(
           `Saved "${sanitised.payload.name}".`,
           { label: "View build", href: `/builds/${slug}` },
         );
-        if (andReclassify) {
-          pushToast(
-            "success",
-            "Reclassify will run on the agent next time it syncs.",
-          );
+        // Server now reclassifies cloud-side on every save so the stored
+        // game.myBuild stays in sync with the saved rules. Surface the
+        // counts when present (when perGame is wired) so the user knows
+        // their opponent profile / Recent games view will reflect the
+        // build name immediately. The `andReclassify` flag is preserved
+        // for backwards-compat with the "Save & Reclassify" button but no
+        // longer changes server behavior.
+        const summary = describeReclassifySummary(resp?.reclassify);
+        if (summary) pushToast("success", summary);
+        else if (andReclassify) {
+          pushToast("success", "Saved — no games matched yet.");
         }
         onSaved?.(slug, draft);
       } catch (err: unknown) {
@@ -424,6 +443,37 @@ export function useBuildEditorState(
     pushToast,
     dismissToast,
   };
+}
+
+/**
+ * Format the reclassify summary block from the PUT /custom-builds/:slug
+ * response into a one-line toast. Returns null when there's nothing
+ * worth saying (no tags moved AND no matches AND no rules), so the
+ * caller can fall back to a generic "saved" message.
+ */
+function describeReclassifySummary(
+  r: ReclassifyResponseSummary | null | undefined,
+): string | null {
+  if (!r) return null;
+  const tagged = r.tagged ?? 0;
+  const cleared = r.cleared ?? 0;
+  const matched = r.matched ?? 0;
+  if (tagged > 0 || cleared > 0) {
+    const parts: string[] = [];
+    if (tagged > 0) {
+      parts.push(`Tagged ${tagged} game${tagged === 1 ? "" : "s"}`);
+    }
+    if (cleared > 0) {
+      parts.push(
+        `cleared ${cleared} stale tag${cleared === 1 ? "" : "s"}`,
+      );
+    }
+    return parts.join(" · ");
+  }
+  if (matched > 0) {
+    return `Matched ${matched} game${matched === 1 ? "" : "s"} — already tagged.`;
+  }
+  return null;
 }
 
 function extractMessage(err: unknown): string | null {

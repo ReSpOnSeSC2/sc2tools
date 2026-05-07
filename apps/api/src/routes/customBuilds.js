@@ -293,7 +293,30 @@ function buildCustomBuildsRouter(deps) {
         auth.userId,
         /** @type {any} */ (validation.value),
       );
-      res.status(204).end();
+      // Cloud-side reclassify so `myBuild` on stored games stays in sync
+      // with the saved rules. Without this, the BuildDetail view (live
+      // rule eval) and the opponent profile / Recent games table (reads
+      // stored `myBuild`) drift apart — the user sees their build matched
+      // 31 games here but the recent-games column still shows the
+      // agent's old auto-classifier label. Skipped when perGame isn't
+      // wired (e.g. tests bootstrapping without it) so the save itself
+      // never fails on a missing dependency.
+      let reclassify = null;
+      if (deps.perGame) {
+        try {
+          reclassify = await deps.customBuilds.reclassify(auth.userId, slug, {
+            replace: true,
+          });
+        } catch (e) {
+          if (req.log) {
+            req.log.warn(
+              { err: e, slug, userId: auth.userId },
+              "custom_build_upsert_reclassify_failed",
+            );
+          }
+        }
+      }
+      res.status(200).json({ ok: true, reclassify });
     } catch (err) {
       next(err);
     }
