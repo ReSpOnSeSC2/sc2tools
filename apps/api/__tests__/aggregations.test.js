@@ -183,6 +183,80 @@ describe("services/aggregations", () => {
     expect(groupStage.$group._id.$dateTrunc.timezone).toBe("UTC");
   });
 
+  test("matchupTimeseries computes winRate per (bucket, race) row", async () => {
+    const games = buildGames([
+      () => [
+        { bucket: new Date("2026-04-01"), race: "P", wins: 3, losses: 1, total: 4 },
+        { bucket: new Date("2026-04-01"), race: "Z", wins: 1, losses: 3, total: 4 },
+        { bucket: new Date("2026-04-08"), race: "T", wins: 2, losses: 0, total: 2 },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.matchupTimeseries("u1", { interval: "week" }, {})
+    );
+    expect(out.interval).toBe("week");
+    expect(out.points).toHaveLength(3);
+    const pvP = out.points.find((p) => p.race === "P");
+    expect(pvP.winRate).toBeCloseTo(0.75);
+    const pvZ = out.points.find((p) => p.race === "Z");
+    expect(pvZ.winRate).toBeCloseTo(0.25);
+  });
+
+  test("dayHourHeatmap totals games and exposes timezone", async () => {
+    const games = buildGames([
+      () => [
+        { dow: 0, hour: 19, wins: 3, losses: 2, total: 5 },
+        { dow: 5, hour: 22, wins: 0, losses: 4, total: 4 },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.dayHourHeatmap("u1", { tz: "America/Los_Angeles" }, {})
+    );
+    expect(out.timezone).toBe("America/Los_Angeles");
+    expect(out.totalGames).toBe(9);
+    expect(out.cells).toHaveLength(2);
+    expect(out.cells[0].winRate).toBeCloseTo(3 / 5);
+    expect(out.cells[1].winRate).toBe(0);
+  });
+
+  test("lengthBuckets orders rows <8m → 25m+ and computes winRate + avgSec", async () => {
+    const games = buildGames([
+      () => [
+        { bucket: "25m+", wins: 1, losses: 1, total: 2, avgSec: 1800 },
+        { bucket: "<8m", wins: 4, losses: 1, total: 5, avgSec: 360 },
+        { bucket: "8–15m", wins: 3, losses: 2, total: 5, avgSec: 720 },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (await svc.lengthBuckets("u1", {}));
+    expect(out.buckets.map((b) => b.bucket)).toEqual([
+      "<8m",
+      "8–15m",
+      "25m+",
+    ]);
+    expect(out.buckets[0].winRate).toBeCloseTo(0.8);
+    expect(out.buckets[0].avgSec).toBe(360);
+  });
+
+  test("activityCalendar returns one row per day with computed winRate", async () => {
+    const games = buildGames([
+      () => [
+        { day: new Date("2026-04-01"), wins: 2, losses: 1, total: 3 },
+        { day: new Date("2026-04-02"), wins: 0, losses: 2, total: 2 },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.activityCalendar("u1", { tz: "UTC" }, {})
+    );
+    expect(out.timezone).toBe("UTC");
+    expect(out.days).toHaveLength(2);
+    expect(out.days[0].winRate).toBeCloseTo(2 / 3);
+    expect(out.days[1].winRate).toBe(0);
+  });
+
   test("gamesList honours offset + limit + search", async () => {
     const all = Array.from({ length: 5 }, (_, i) => ({
       id: `g${i}`,

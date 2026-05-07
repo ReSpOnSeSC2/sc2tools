@@ -2,6 +2,7 @@
 
 const { LIMITS } = require("../config/constants");
 const { gamesMatchStage } = require("../util/parseQuery");
+const trendsAgg = require("./trendsAggregations");
 
 const RACES_PLAYED = ["Protoss", "Terran", "Zerg"];
 const RACE_LETTER_TO_NAME = { P: "Protoss", T: "Terran", Z: "Zerg" };
@@ -461,6 +462,44 @@ class AggregationsService {
         ...r,
         winRate: r.total ? r.wins / r.total : 0,
       })),
+    };
+  }
+
+  // ---------------- v0.5+ Trends-tab aggregations ----------------
+  // Implementations live in ``./trendsAggregations.js`` so this file
+  // stays under the per-file size budget. Each method passes the same
+  // helper bundle every pipeline needs (gamesMatchStage / bucketSwitch /
+  // pickInterval / pickTimezone) so the helper module never needs to
+  // know about the singleton service.
+
+  /** @see ./trendsAggregations.js */
+  async matchupTimeseries(userId, opts, filters) {
+    return trendsAgg.matchupTimeseries(this._trendsDeps(), userId, opts, filters);
+  }
+
+  /** @see ./trendsAggregations.js */
+  async dayHourHeatmap(userId, opts, filters) {
+    return trendsAgg.dayHourHeatmap(this._trendsDeps(), userId, opts, filters);
+  }
+
+  /** @see ./trendsAggregations.js */
+  async lengthBuckets(userId, filters) {
+    return trendsAgg.lengthBuckets(this._trendsDeps(), userId, filters);
+  }
+
+  /** @see ./trendsAggregations.js */
+  async activityCalendar(userId, opts, filters) {
+    return trendsAgg.activityCalendar(this._trendsDeps(), userId, opts, filters);
+  }
+
+  /** @private */
+  _trendsDeps() {
+    return {
+      games: this.db.games,
+      gamesMatchStage,
+      bucketSwitch,
+      pickInterval,
+      pickTimezone,
     };
   }
 

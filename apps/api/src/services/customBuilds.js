@@ -4,7 +4,7 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { evaluateRules } = require("./buildRulesEvaluator");
 const { computeDossierExtras } = require("./buildDossier");
-const { parseBuildLogLines } = require("./perGameCompute");
+const { parseBuildLogLines, eventsToStartTime } = require("./perGameCompute");
 
 const STATS_GAME_SCAN_CAP = 1000;
 const RECENT_GAMES_LIMIT = 50;
@@ -448,13 +448,23 @@ class CustomBuildsService {
     // mirror how the rest of this file reaches for the games collection
     // — the typed surface in types.d.ts intentionally omits internals.
     const catalog = /** @type {any} */ (this.perGame).catalog || null;
-    const events = parseBuildLogLines(
-      Array.isArray(game.buildLog) ? game.buildLog : [],
-      catalog,
+    // Rules saved through the SaveAsBuild button / BuildEditorModal
+    // capture ``time_lt`` thresholds off the start-time timeline the
+    // user sees. Match against start-time events so what they save
+    // matches what they author. ``eventsToStartTime`` rewinds finish-
+    // time entries (units / morphs / upgrades) using the build-
+    // duration catalog; non-morph structures pass through unchanged.
+    const events = eventsToStartTime(
+      parseBuildLogLines(
+        Array.isArray(game.buildLog) ? game.buildLog : [],
+        catalog,
+      ),
     );
-    const oppEvents = parseBuildLogLines(
-      Array.isArray(game.oppBuildLog) ? game.oppBuildLog : [],
-      catalog,
+    const oppEvents = eventsToStartTime(
+      parseBuildLogLines(
+        Array.isArray(game.oppBuildLog) ? game.oppBuildLog : [],
+        catalog,
+      ),
     );
     if (events.length === 0 && oppEvents.length === 0) {
       return { gameId: game.gameId, matched: 0, chosen: null, ruleCount: 0 };

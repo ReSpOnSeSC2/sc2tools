@@ -50,13 +50,19 @@ type LayerKey = (typeof LAYERS)[number]["key"];
  * map minimap, and falls back to a clear empty state when the map has
  * no spatial extracts (the layer list still renders so the user can
  * see why nothing is shown).
+ *
+ * When `embedded` is true, the viewer renders bare (no outer Card)
+ * so a parent Modal can host the chrome. Otherwise it wraps itself
+ * in a Card for the legacy inline-on-page presentation.
  */
 export function MapIntelViewer({
   mapName,
   summary,
+  embedded = false,
 }: {
   mapName: string;
   summary: MapEntry | null;
+  embedded?: boolean;
 }) {
   const { filters, dbRev } = useFilters();
   const { getToken } = useAuth();
@@ -109,8 +115,8 @@ export function MapIntelViewer({
     }
   }, [getToken, recomputing]);
 
-  return (
-    <Card title={`${mapName} · heatmaps`}>
+  const body = (
+    <>
       {summary ? (
         <div className="-mt-2 mb-3 flex flex-wrap items-center gap-2 text-xs text-text-dim">
           <span>
@@ -201,8 +207,11 @@ export function MapIntelViewer({
         </span>
         <span className="font-mono">grid {grid}×{grid}</span>
       </div>
-    </Card>
+    </>
   );
+
+  if (embedded) return body;
+  return <Card title={`${mapName} · heatmaps`}>{body}</Card>;
 }
 
 function HeatmapOverlay({
