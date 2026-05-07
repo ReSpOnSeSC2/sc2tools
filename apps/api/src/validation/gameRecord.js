@@ -70,6 +70,16 @@ const GAME_SCHEMA = {
         top_3_leaks: { type: "array", maxItems: 10 },
         stats_events: { type: "array", maxItems: 5000 },
         opp_stats_events: { type: "array", maxItems: 5000 },
+        // unit_timeline arrives at the same cadence as stats_events
+        // (one entry per 30 s game-time bucket post-downsample). Each
+        // entry shape: { time, my: {Name: count}, opp: {Name: count} }.
+        // Caps match stats_events to keep the wire payload bounded.
+        unit_timeline: { type: "array", maxItems: 5000 },
+        // Per-player cumulative stats: { me, opponent } each carrying
+        // counters (units_produced, units_killed, etc.) plus the
+        // average APM/SPM merged from the apmCurve. Drives the SPA's
+        // Replay Player Unit Statistics table.
+        player_stats: { type: "object", additionalProperties: true },
       },
     },
     apmCurve: {

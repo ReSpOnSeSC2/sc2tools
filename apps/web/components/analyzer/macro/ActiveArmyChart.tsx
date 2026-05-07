@@ -1,33 +1,52 @@
 "use client";
 
-import { useId, useMemo } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { AlertCircle } from "lucide-react";
 import { formatGameClock, leakKey } from "@/lib/macro";
-import type { LeakItem, StatsEvent } from "./MacroBreakdownPanel.types";
+import type {
+  LeakItem,
+  StatsEvent,
+  UnitTimelineEntry,
+} from "./MacroBreakdownPanel.types";
+import {
+  PAD_LEFT,
+  PAD_TOP,
+  Y_TICK_FRACTIONS,
+  buildLayout,
+  nearestPoint,
+  type ChartLayout,
+  type SeriesPoint,
+} from "./activeArmyLayout";
 
 export interface ActiveArmyChartProps {
   /** Player samples (food_used, food_workers, …). */
   samples: StatsEvent[];
   /** Opponent samples. May be empty when not extracted. */
   oppSamples: StatsEvent[];
+  /** Optional unit-timeline (per-tick army composition). */
+  unitTimeline?: UnitTimelineEntry[];
   gameLengthSec?: number;
   /** Leak collection — drives vertical markers along the time axis. */
   leaks: LeakItem[];
   /** Stable id of the highlighted leak — receives an emphasised marker. */
   highlightedKey?: string | null;
+  /** Hovered game-time second — when set, the crosshair locks here. */
+  hoveredTime?: number | null;
+  /** Callback fired when the user moves the cursor over the plot area. */
+  onHoverTime?: (t: number | null) => void;
+  /** Display name of the local player (for the tooltip header). */
+  myName?: string | null;
+  /** Display name of the opponent (for the tooltip header). */
+  oppName?: string | null;
 }
-
-const VIEW_W = 720;
-const VIEW_H = 240;
-const PAD_LEFT = 44;
-const PAD_RIGHT = 44;
-const PAD_TOP = 16;
-const PAD_BOTTOM = 28;
-const ARMY_FOOD_MULT = 8;
-const ARMY_FLOOR = 8 * ARMY_FOOD_MULT;
-const WORKER_FLOOR = 12;
-const X_TICK_STEP_SEC = 60;
-const Y_TICK_FRACTIONS = [0, 0.25, 0.5, 0.75, 1];
 
 const COLOR_AXIS = "rgb(var(--text-dim))";
 const COLOR_GRID = "rgb(var(--border))";
@@ -36,50 +55,83 @@ const COLOR_OPP = "rgb(var(--danger))";
 const COLOR_HIGHLIGHT = "rgb(var(--accent-cyan))";
 const COLOR_LEAK = "rgb(var(--warning))";
 
-interface ChartLayout {
-  width: number;
-  height: number;
-  innerW: number;
-  innerH: number;
-  maxT: number;
-  armyMax: number;
-  workerMax: number;
-  xOf: (t: number) => number;
-  yArmy: (a: number) => number;
-  yWorker: (w: number) => number;
-  myArmy: string;
-  myWorker: string;
-  oppArmy: string;
-  oppWorker: string;
-  xTicks: number[];
-}
-
 /**
- * Active Army & Workers chart — SVG renderer.
+ * Active Army & Workers chart — interactive SVG renderer.
  *
- * Two solid army lines (food_used × 8 = army supply value) plus two
- * dashed worker lines, one per player, share the plot. Vertical
- * markers anchor leak events and the parent's highlighted leak — when
- * provided — paints in the cyan brand colour so the user can scrub
- * leak-list ↔ chart context. Samples missing → cyan empty state;
- * accessible <table> fallback lists leak timestamps for screen readers.
+ * Hover behaviour mirrors sc2replaystats: a vertical crosshair tracks
+ * the cursor, dots highlight each side's value at the hovered tick,
+ * and a floating tooltip lists army value (Σ minerals + gas of all
+ * non-worker units) and worker count for both players. The hovered
+ * time is also lifted to the parent so the unit-composition snapshot
+ * below the chart can stay in sync.
+ *
+ * Falls back gracefully when the agent payload omits
+ * ``unit_timeline`` (older replays): the army series is computed from
+ * ``food_used × 8`` and the composition snapshot is hidden by the
+ * parent. The chart still works, the tooltip just shows the same
+ * fallback number.
  */
 export function ActiveArmyChart({
   samples,
   oppSamples,
+  unitTimeline,
   gameLengthSec,
   leaks,
   highlightedKey,
+  hoveredTime = null,
+  onHoverTime,
+  myName,
+  oppName,
 }: ActiveArmyChartProps) {
   const chartId = useId();
+  const overlayRef = useRef<SVGRectElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerSize, setContainerSize] = useState<
+    { width: number; height: number } | null
+  >(null);
+
   const layout = useMemo(
-    () => buildLayout(samples, oppSamples, gameLengthSec),
-    [samples, oppSamples, gameLengthSec],
+    () => buildLayout(samples, oppSamples, gameLengthSec, unitTimeline),
+    [samples, oppSamples, gameLengthSec, unitTimeline],
   );
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      setContainerSize({ width, height });
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const handlePointerMove = useCallback(
+    (e: ReactPointerEvent<SVGRectElement>) => {
+      if (!layout || !onHoverTime) return;
+      const overlay = overlayRef.current;
+      if (!overlay) return;
+      const rect = overlay.getBoundingClientRect();
+      // Map CSS pixels back into the SVG viewBox coords. preserveAspect
+      // is "none" so the x scale is uniform.
+      const svgX = ((e.clientX - rect.left) / rect.width) * layout.width;
+      const t = layout.tOfX(svgX);
+      onHoverTime(Math.max(0, Math.min(layout.maxT, t)));
+    },
+    [layout, onHoverTime],
+  );
+
+  const handlePointerLeave = useCallback(() => {
+    if (onHoverTime) onHoverTime(null);
+  }, [onHoverTime]);
 
   if (!layout) {
     return <ChartEmptyState />;
   }
+
+  const hoverPoints = computeHoverPoints(layout, hoveredTime);
 
   return (
     <figure className="space-y-2" aria-labelledby={`${chartId}-title`}>
@@ -93,13 +145,16 @@ export function ActiveArmyChart({
         <Legend />
       </figcaption>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-bg-elevated">
+      <div
+        ref={containerRef}
+        className="relative overflow-x-auto rounded-lg border border-border bg-bg-elevated"
+      >
         <svg
           role="img"
-          aria-label="Army supply value and worker count over game time, both players overlaid"
+          aria-label="Army value (mineral + gas) and worker count over game time, both players overlaid. Hover for details."
           viewBox={`0 0 ${layout.width} ${layout.height}`}
           preserveAspectRatio="none"
-          className="block h-[200px] w-full min-w-[320px] sm:h-[240px] sm:min-w-[480px]"
+          className="block h-[220px] w-full min-w-[320px] sm:h-[260px] sm:min-w-[480px]"
         >
           <Grid layout={layout} />
           <XAxis layout={layout} />
@@ -109,13 +164,71 @@ export function ActiveArmyChart({
             highlightedKey={highlightedKey}
           />
           <Lines layout={layout} />
+          {hoverPoints ? (
+            <HoverCrosshair layout={layout} hover={hoverPoints} />
+          ) : null}
           <YAxisLabels layout={layout} />
+          <rect
+            ref={overlayRef}
+            x={layout.plotLeft}
+            y={layout.plotTop}
+            width={layout.innerW}
+            height={layout.innerH}
+            fill="transparent"
+            style={{ touchAction: "none", cursor: onHoverTime ? "crosshair" : "default" }}
+            onPointerMove={onHoverTime ? handlePointerMove : undefined}
+            onPointerLeave={onHoverTime ? handlePointerLeave : undefined}
+            onPointerDown={onHoverTime ? handlePointerMove : undefined}
+            aria-hidden
+          />
         </svg>
+        {hoverPoints && containerSize ? (
+          <ChartTooltip
+            layout={layout}
+            hover={hoverPoints}
+            container={containerSize}
+            myName={myName}
+            oppName={oppName}
+          />
+        ) : null}
       </div>
 
       <AccessibleLeakTable leaks={leaks} highlightedKey={highlightedKey} />
     </figure>
   );
+}
+
+interface HoverState {
+  t: number;
+  /** Pixel x in SVG viewBox space. */
+  xView: number;
+  my: SeriesPoint | null;
+  opp: SeriesPoint | null;
+}
+
+function computeHoverPoints(
+  layout: ChartLayout,
+  hoveredTime: number | null | undefined,
+): HoverState | null {
+  if (typeof hoveredTime !== "number" || !Number.isFinite(hoveredTime)) {
+    return null;
+  }
+  const my = nearestPoint(layout.mySeries, hoveredTime);
+  const opp = nearestPoint(layout.oppSeries, hoveredTime);
+  // Snap the crosshair to the nearest sample on EITHER side so the
+  // dots line up exactly with the rendered points instead of floating
+  // a few pixels off.
+  const candidates: number[] = [];
+  if (my) candidates.push(my.t);
+  if (opp) candidates.push(opp.t);
+  const t = candidates.length
+    ? candidates.reduce((best, cand) =>
+        Math.abs(cand - hoveredTime) < Math.abs(best - hoveredTime)
+          ? cand
+          : best
+      )
+    : hoveredTime;
+  return { t, xView: layout.xOf(t), my, opp };
 }
 
 function ChartEmptyState() {
@@ -183,9 +296,9 @@ function Grid({ layout }: { layout: ChartLayout }) {
         return (
           <line
             key={`grid-${f}`}
-            x1={PAD_LEFT}
+            x1={layout.plotLeft}
             y1={y}
-            x2={layout.width - PAD_RIGHT}
+            x2={layout.plotRight}
             y2={y}
             stroke={COLOR_GRID}
             strokeOpacity={0.6}
@@ -205,7 +318,7 @@ function YAxisLabels({ layout }: { layout: ChartLayout }) {
         return (
           <g key={`y-${f}`}>
             <text
-              x={PAD_LEFT - 6}
+              x={layout.plotLeft - 6}
               y={y + 3}
               textAnchor="end"
               fontSize="10"
@@ -214,7 +327,7 @@ function YAxisLabels({ layout }: { layout: ChartLayout }) {
               {Math.round(f * layout.armyMax)}
             </text>
             <text
-              x={layout.width - PAD_RIGHT + 6}
+              x={layout.plotRight + 6}
               y={y + 3}
               textAnchor="start"
               fontSize="10"
@@ -226,7 +339,7 @@ function YAxisLabels({ layout }: { layout: ChartLayout }) {
         );
       })}
       <text
-        x={PAD_LEFT - 6}
+        x={layout.plotLeft - 6}
         y={PAD_TOP - 4}
         textAnchor="end"
         fontSize="9"
@@ -235,7 +348,7 @@ function YAxisLabels({ layout }: { layout: ChartLayout }) {
         army
       </text>
       <text
-        x={layout.width - PAD_RIGHT + 6}
+        x={layout.plotRight + 6}
         y={PAD_TOP - 4}
         textAnchor="start"
         fontSize="9"
@@ -248,13 +361,13 @@ function YAxisLabels({ layout }: { layout: ChartLayout }) {
 }
 
 function XAxis({ layout }: { layout: ChartLayout }) {
-  const baseY = PAD_TOP + layout.innerH;
+  const baseY = layout.plotBottom;
   return (
     <g aria-hidden>
       <line
-        x1={PAD_LEFT}
+        x1={layout.plotLeft}
         y1={baseY}
-        x2={layout.width - PAD_RIGHT}
+        x2={layout.plotRight}
         y2={baseY}
         stroke={COLOR_GRID}
       />
@@ -324,6 +437,157 @@ function Lines({ layout }: { layout: ChartLayout }) {
   );
 }
 
+function HoverCrosshair({
+  layout,
+  hover,
+}: {
+  layout: ChartLayout;
+  hover: HoverState;
+}) {
+  return (
+    <g aria-hidden>
+      <line
+        x1={hover.xView}
+        y1={layout.plotTop}
+        x2={hover.xView}
+        y2={layout.plotBottom}
+        stroke={COLOR_HIGHLIGHT}
+        strokeWidth={1}
+        strokeOpacity={0.7}
+      />
+      {hover.my ? (
+        <>
+          <circle
+            cx={hover.xView}
+            cy={layout.yArmy(hover.my.army)}
+            r={3}
+            fill={COLOR_YOU}
+            stroke="white"
+            strokeWidth={1}
+          />
+          <circle
+            cx={hover.xView}
+            cy={layout.yWorker(hover.my.workers)}
+            r={2.5}
+            fill={COLOR_YOU}
+            stroke="white"
+            strokeWidth={0.8}
+          />
+        </>
+      ) : null}
+      {hover.opp ? (
+        <>
+          <circle
+            cx={hover.xView}
+            cy={layout.yArmy(hover.opp.army)}
+            r={3}
+            fill={COLOR_OPP}
+            stroke="white"
+            strokeWidth={1}
+          />
+          <circle
+            cx={hover.xView}
+            cy={layout.yWorker(hover.opp.workers)}
+            r={2.5}
+            fill={COLOR_OPP}
+            stroke="white"
+            strokeWidth={0.8}
+          />
+        </>
+      ) : null}
+    </g>
+  );
+}
+
+function ChartTooltip({
+  layout,
+  hover,
+  container,
+  myName,
+  oppName,
+}: {
+  layout: ChartLayout;
+  hover: HoverState;
+  container: { width: number; height: number };
+  myName?: string | null;
+  oppName?: string | null;
+}) {
+  // Map the SVG hover x back to a CSS pixel position inside the
+  // container so we can place the tooltip with absolute positioning.
+  // CSS positioning beats inline SVG <foreignObject> for legibility
+  // (clean wrapping, theme tokens, no scaled fonts).
+  const cssX = (hover.xView / layout.width) * container.width;
+  // Try to keep the tooltip on the cursor's right; flip when within
+  // 180 px of the right edge so it doesn't clip.
+  const TOOLTIP_W = 200;
+  const flip = cssX + TOOLTIP_W + 16 > container.width;
+  const left = flip ? Math.max(8, cssX - TOOLTIP_W - 12) : cssX + 12;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        left: `${left}px`,
+        top: `8px`,
+        width: `${TOOLTIP_W}px`,
+        pointerEvents: "none",
+      }}
+      className="absolute z-10 rounded-md border border-border bg-bg-elevated/95 p-2 text-[11px] text-text shadow-lg backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85"
+    >
+      <div className="mb-1 flex items-center justify-between gap-2 text-text-muted">
+        <span className="font-semibold uppercase tracking-wider">
+          {formatGameClock(hover.t)}
+        </span>
+        <span className="text-[10px]">army · workers</span>
+      </div>
+      <PlayerRow
+        color={COLOR_YOU}
+        name={myName?.trim() || "You"}
+        army={hover.my?.army}
+        workers={hover.my?.workers}
+      />
+      <PlayerRow
+        color={COLOR_OPP}
+        name={oppName?.trim() || "Opponent"}
+        army={hover.opp?.army}
+        workers={hover.opp?.workers}
+      />
+    </div>
+  );
+}
+
+function PlayerRow({
+  color,
+  name,
+  army,
+  workers,
+}: {
+  color: string;
+  name: string;
+  army?: number;
+  workers?: number;
+}) {
+  const armyTxt = typeof army === "number" ? Math.round(army).toLocaleString() : "—";
+  const workersTxt = typeof workers === "number" ? String(Math.round(workers)) : "—";
+  return (
+    <div className="flex items-center justify-between gap-2 py-0.5">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span
+          aria-hidden
+          className="h-2 w-2 flex-shrink-0 rounded-full"
+          style={{ background: color }}
+        />
+        <span className="truncate font-medium">{name}</span>
+      </span>
+      <span className="flex flex-shrink-0 items-baseline gap-1.5 tabular-nums">
+        <span>{armyTxt}</span>
+        <span className="text-text-dim">·</span>
+        <span className="text-text-muted">{workersTxt}</span>
+      </span>
+    </div>
+  );
+}
+
 function LeakMarkers({
   layout,
   leaks,
@@ -333,7 +597,6 @@ function LeakMarkers({
   leaks: LeakItem[];
   highlightedKey?: string | null;
 }) {
-  const baseY = PAD_TOP + layout.innerH;
   return (
     <g aria-hidden>
       {leaks.map((leak, idx) => {
@@ -347,9 +610,9 @@ function LeakMarkers({
           <g key={id}>
             <line
               x1={x}
-              y1={PAD_TOP}
+              y1={layout.plotTop}
               x2={x}
-              y2={baseY}
+              y2={layout.plotBottom}
               stroke={highlighted ? COLOR_HIGHLIGHT : COLOR_LEAK}
               strokeWidth={highlighted ? 1.5 : 1}
               strokeOpacity={highlighted ? 0.95 : 0.5}
@@ -357,7 +620,7 @@ function LeakMarkers({
             />
             <circle
               cx={x}
-              cy={PAD_TOP + 4}
+              cy={layout.plotTop + 4}
               r={highlighted ? 3.5 : 2.5}
               fill={highlighted ? COLOR_HIGHLIGHT : COLOR_LEAK}
               fillOpacity={highlighted ? 1 : 0.7}
@@ -406,84 +669,4 @@ function AccessibleLeakTable({
       </tbody>
     </table>
   );
-}
-
-function buildLayout(
-  mySamples: StatsEvent[],
-  oppSamples: StatsEvent[],
-  gameLengthSec: number | undefined,
-): ChartLayout | null {
-  const my = Array.isArray(mySamples) ? mySamples : [];
-  const opp = Array.isArray(oppSamples) ? oppSamples : [];
-  if (my.length === 0 && opp.length === 0) return null;
-
-  const all = my.concat(opp);
-  const observedT = all.reduce(
-    (m, s) => Math.max(m, Number(s.time) || 0),
-    0,
-  );
-  const maxT = Math.max(observedT, Number(gameLengthSec) || 0, 60);
-  const armyVals = all.map(
-    (s) => (Number(s.food_used) || 0) * ARMY_FOOD_MULT,
-  );
-  const workerVals = all.map((s) => Number(s.food_workers) || 0);
-  const armyMax = Math.max(
-    armyVals.length ? Math.max(...armyVals) : 0,
-    ARMY_FLOOR,
-  );
-  const workerMax = Math.max(
-    workerVals.length ? Math.max(...workerVals) : 0,
-    WORKER_FLOOR,
-  );
-
-  const innerW = VIEW_W - PAD_LEFT - PAD_RIGHT;
-  const innerH = VIEW_H - PAD_TOP - PAD_BOTTOM;
-  const xOf = (t: number) => PAD_LEFT + (t / maxT) * innerW;
-  const yArmy = (a: number) => PAD_TOP + (1 - a / armyMax) * innerH;
-  const yWorker = (w: number) => PAD_TOP + (1 - w / workerMax) * innerH;
-
-  const myProj = projectLines(my, xOf, yArmy, yWorker);
-  const oppProj = projectLines(opp, xOf, yArmy, yWorker);
-
-  const xTicks: number[] = [];
-  for (let t = 0; t <= maxT; t += X_TICK_STEP_SEC) xTicks.push(t);
-
-  return {
-    width: VIEW_W,
-    height: VIEW_H,
-    innerW,
-    innerH,
-    maxT,
-    armyMax,
-    workerMax,
-    xOf,
-    yArmy,
-    yWorker,
-    myArmy: myProj.army,
-    myWorker: myProj.worker,
-    oppArmy: oppProj.army,
-    oppWorker: oppProj.worker,
-    xTicks,
-  };
-}
-
-function projectLines(
-  samples: StatsEvent[],
-  xOf: (t: number) => number,
-  yArmy: (a: number) => number,
-  yWorker: (w: number) => number,
-): { army: string; worker: string } {
-  if (samples.length === 0) return { army: "", worker: "" };
-  let armyPath = "";
-  let workerPath = "";
-  for (let i = 0; i < samples.length; i++) {
-    const s = samples[i];
-    const t = Number(s.time) || 0;
-    const army = (Number(s.food_used) || 0) * ARMY_FOOD_MULT;
-    const workers = Number(s.food_workers) || 0;
-    const cmd = i === 0 ? "M" : "L";
-    armyPath += `${cmd}${xOf(t).toFixed(1)},${yArmy(army).toFixed(1)} `;
-    workerPath += `${cmd}${xOf(t).toFixed(1)},${yWorker(workers).toFixed(1)} `;
-  }
-  return { army: armyPath.trim(), worker: workerPath.trim() };
 }

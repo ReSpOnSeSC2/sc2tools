@@ -84,6 +84,13 @@ SKIP_BUILDINGS: Set[str] = {
     "CreepTumorBurrowed", "CreepTumorQueen", "ShieldBattery",
 }
 
+# Worker unit names — used to drive the cumulative ``workers_built``
+# counter on the player_stats summary. Mirrors the lowercased set in
+# ``apps/web/lib/sc2-units.ts``; MULEs are intentionally OUT because
+# they're temporary calldown helpers and inflate "workers built" past
+# the saturated worker line shown on the chart.
+WORKER_NAMES: Set[str] = {"Drone", "Probe", "SCV"}
+
 
 def _clean_building_name(raw_name: str) -> str:
     for prefix in ("Protoss", "Terran", "Zerg"):
@@ -616,6 +623,24 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
         # non-building, non-SKIP_UNITS army units are counted.
         "unit_timeline": [],
     }
+    # Per-player cumulative counters, populated during the tracker walk
+    # and emitted on ``out["player_stats"]`` so the SPA's Replay Player
+    # Unit Statistics table can render Units Produced / Killed / Lost /
+    # Structures Killed / Workers Built without re-walking the events.
+    # Keyed by pid; entries are zero-filled for both my_pid and opp_pid
+    # (when present) so the SPA never has to handle missing keys.
+    player_counters: Dict[int, Dict[str, int]] = {}
+    counted_pids = [p for p in (my_pid, opp_pid) if p is not None]
+    for _pid in counted_pids:
+        player_counters[_pid] = {
+            "units_produced": 0,
+            "units_killed": 0,
+            "units_lost": 0,
+            "workers_built": 0,
+            "structures_built": 0,
+            "structures_killed": 0,
+            "structures_lost": 0,
+        }
     # Track non-building unit lifetimes for my_pid AND opp_pid by unit_id.
     # Distinct from the buildings ``lifetimes`` dict above so nothing
     # cross-contaminates the macro engine's bases/production_buildings.
@@ -626,6 +651,12 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
 
     # Track building lifetimes by unit_id so morphs are followed naturally.
     lifetimes: Dict[int, Dict] = {}
+    # Mirror ``lifetimes`` for the opponent — only the death events are
+    # needed (so we can attribute "structures killed" to my_pid in 2-player
+    # games), but we record births/morphs as well so morph chains
+    # (Hatch→Lair→Hive, CC→OC→PF) resolve to the destroyed canonical
+    # name. Empty dict when ``opp_pid is None``.
+    opp_lifetimes: Dict[int, Dict] = {}
     # building_name_by_uid mirrors lifetimes for chrono target
     # naming: it captures the canonical name of EVERY building seen
     # for my_pid (including in-progress targets that have not fired
@@ -701,6 +732,65 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                             "pid": pid, "name": clean, "born": t, "died": None,
                         }
 
+                    # Cumulative counters. ``units_produced`` covers
+                    # army units (workers and noise units like Larva /
+                    # Broodling are in SKIP_UNITS so they don't inflate
+                    # the count). ``workers_built`` is its own branch
+                    # because the workers sit inside SKIP_UNITS. Only
+                    # UnitBornEvent fires the increment — UnitInitEvent
+                    # / UnitDoneEvent are the building completion paths.
+                    if (pid in player_counters
+                            and isinstance(event, UnitBornEvent)
+                            and clean not in KNOWN_BUILDINGS
+                            and clean not in SKIP_UNITS
+                            and not _skip_for_unit_timeline(clean)):
+                        player_counters[pid]["units_produced"] += 1
+                    if (pid in player_counters
+                            and isinstance(event, UnitBornEvent)
+                            and clean in WORKER_NAMES):
+                        player_counters[pid]["workers_built"] += 1
+
+                    # Mirror the building lifetime tracker for opp_pid so
+                    # we can attribute "structures killed" to a player on
+                    # UnitDiedEvent. Without this, every opp building
+                    # death is silently ignored — symptom: the SPA's
+                    # stats table always reads "0 structures killed".
+                    if (opp_pid is not None
+                            and pid == opp_pid
+                            and clean in KNOWN_BUILDINGS
+                            and uid is not None):
+                        is_completion = (
+                            isinstance(event, UnitDoneEvent)
+                            or (isinstance(event, UnitBornEvent)
+                                and clean in _BASE_TYPES)
+                        )
+                        if is_completion:
+                            entry = opp_lifetimes.get(uid)
+                            if entry is None:
+                                opp_lifetimes[uid] = {
+                                    "name": clean, "born": t, "died": None,
+                                }
+                            else:
+                                entry["born"] = min(entry.get("born", t), t)
+                                entry["name"] = clean
+
+                    # Increment ``structures_built`` for whichever pid
+                    # this is. UnitDoneEvent fires on completion for
+                    # P/T; for Z, drone-morph buildings complete on
+                    # UnitBornEvent. Match the same gate the my_pid
+                    # branch below uses so we're consistent across sides.
+                    if (pid in player_counters
+                            and clean in KNOWN_BUILDINGS
+                            and clean not in SKIP_BUILDINGS
+                            and uid is not None):
+                        is_completion = (
+                            isinstance(event, UnitDoneEvent)
+                            or (isinstance(event, UnitBornEvent)
+                                and clean in _BASE_TYPES)
+                        )
+                        if is_completion:
+                            player_counters[pid]["structures_built"] += 1
+
                     if pid != my_pid:
                         continue
                     if clean in KNOWN_BUILDINGS:
@@ -748,6 +838,14 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     if (pid == my_pid and uid in lifetimes
                             and clean in KNOWN_BUILDINGS):
                         lifetimes[uid]["name"] = clean
+                    # Mirror morph names for opp buildings so structure
+                    # kill attribution lands on the destroyed canonical
+                    # form (Hatch→Lair→Hive arrives as a sequence of
+                    # UnitTypeChangeEvents on the same uid).
+                    if (opp_pid is not None and pid == opp_pid
+                            and uid in opp_lifetimes
+                            and clean in KNOWN_BUILDINGS):
+                        opp_lifetimes[uid]["name"] = clean
                     # Mirror name into the chrono lookup so a
                     # chrono on (e.g.) a Hatchery-becoming-Lair
                     # records under "Lair" once the morph fires.
@@ -768,11 +866,48 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
 
                 if UnitDiedEvent is not None and isinstance(event, UnitDiedEvent):
                     uid = _resolve_unit_id(event)
+                    died_t = int(getattr(event, "second", 0))
+                    # Resolve who got the kill credit. sc2reader exposes
+                    # ``killing_player_id`` on UnitDiedEvent as of 1.7.x;
+                    # ``killer_pid`` is the deprecated alias and a useful
+                    # fallback. Both are 0 / None when the engine
+                    # couldn't attribute (self-destruct, neutral, etc.).
+                    killer_pid = (
+                        getattr(event, "killing_player_id", None)
+                        or getattr(event, "killer_pid", None)
+                    )
+                    if isinstance(killer_pid, int) and killer_pid == 0:
+                        killer_pid = None
                     if uid in lifetimes:
-                        lifetimes[uid]["died"] = int(getattr(event, "second", 0))
+                        lifetimes[uid]["died"] = died_t
+                        # The victim is a my_pid building. Credit the
+                        # opponent's "structures_killed" (or the
+                        # explicit killer if known) and increment
+                        # my_pid's "structures_lost".
+                        if my_pid in player_counters:
+                            player_counters[my_pid]["structures_lost"] += 1
+                        cred = killer_pid if killer_pid in player_counters \
+                            else opp_pid
+                        if cred in player_counters and cred != my_pid:
+                            player_counters[cred]["structures_killed"] += 1
+                    if uid in opp_lifetimes:
+                        opp_lifetimes[uid]["died"] = died_t
+                        if opp_pid in player_counters:
+                            player_counters[opp_pid]["structures_lost"] += 1
+                        cred = killer_pid if killer_pid in player_counters \
+                            else my_pid
+                        if cred in player_counters and cred != opp_pid:
+                            player_counters[cred]["structures_killed"] += 1
                     if uid in unit_lifetimes:
-                        unit_lifetimes[uid]["died"] = int(
-                            getattr(event, "second", 0))
+                        unit_lifetimes[uid]["died"] = died_t
+                        victim_pid = unit_lifetimes[uid].get("pid")
+                        if victim_pid in player_counters:
+                            player_counters[victim_pid]["units_lost"] += 1
+                        cred = killer_pid if killer_pid in player_counters else (
+                            my_pid if victim_pid == opp_pid else opp_pid
+                        )
+                        if cred in player_counters and cred != victim_pid:
+                            player_counters[cred]["units_killed"] += 1
                     continue
             except Exception:
                 # Swallow per-event errors and keep walking.
@@ -915,6 +1050,15 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     sample_times = [int(s.get("time", 0)) for s in out["stats_events"]]
     out["unit_timeline"] = _build_unit_timeline(
         unit_lifetimes, sample_times, my_pid, opp_pid, int(game_end or 0))
+
+    # Per-player cumulative summary. The SPA's Replay Player Unit
+    # Statistics table reads this directly. Keys mirror the field
+    # names sc2replaystats uses for the equivalent table — the SPA
+    # types (PlayerStats in MacroBreakdownPanel.types.ts) define the
+    # canonical wire schema. Empty dict when no counted pids.
+    out["player_stats"] = {
+        str(pid): dict(stats) for pid, stats in player_counters.items()
+    }
 
     return out
 

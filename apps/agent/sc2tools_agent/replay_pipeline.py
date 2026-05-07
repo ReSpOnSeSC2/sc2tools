@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 log = logging.getLogger(__name__)
 
@@ -377,6 +377,13 @@ def parse_replay_for_cloud(
 
     macro_breakdown, derived_macro_score = _compute_macro_breakdown(ctx)
     apm_curve = _compute_apm_curve(ctx)
+    # Backfill per-player APM/SPM averages on the macro_breakdown's
+    # player_stats so the SPA's Replay Player Unit Statistics table
+    # can render APM/SPM for BOTH sides without merging two payloads
+    # at render time. The slim-row apm/spm fields only carry my-side
+    # values; opp's averages have to come from apm_curve.
+    if macro_breakdown is not None and apm_curve is not None:
+        _merge_apm_into_player_stats(macro_breakdown, apm_curve)
     # Per-replay spatial extracts (battle/death/proxy/building points
     # in world coords + map bounds). The cloud rasterises these across
     # N games per map for the Map Intel heatmaps; without the upload
@@ -822,14 +829,28 @@ def _compute_macro_breakdown(
     # — about 12 kB / game saved, the single biggest knob in the
     # per-game payload. The macro_score above already ran against the
     # full stream so nothing scoring-side is affected.
+    my_stats_full = list(my_macro.get("stats_events") or [])
+    my_stats_ds = _downsample_stats_events(my_stats_full)
+    opp_stats_ds = _downsample_stats_events(opp_stats)
+    # Match unit_timeline against the downsampled my-stats sample times
+    # so the SPA's chart hover and unit-composition snapshot land on
+    # the SAME ticks as the army/worker lines. unit_timeline at the
+    # full 10 s cadence would unbalance the wire payload; the chart
+    # can't render finer than 30 s anyway.
+    unit_timeline = _downsample_unit_timeline(
+        list(my_macro.get("unit_timeline") or []),
+        kept_times=[int(s.get("time", 0)) for s in my_stats_ds],
+    )
     payload: Dict[str, Any] = {
         "raw": score.get("raw", {}) or {},
         "all_leaks": score.get("all_leaks", []) or [],
         "top_3_leaks": score.get("top_3_leaks", []) or [],
-        "stats_events": _downsample_stats_events(
-            list(my_macro.get("stats_events") or []),
+        "stats_events": my_stats_ds,
+        "opp_stats_events": opp_stats_ds,
+        "unit_timeline": unit_timeline,
+        "player_stats": _build_player_stats_summary(
+            ctx, my_macro, score.get("raw", {}) or {},
         ),
-        "opp_stats_events": _downsample_stats_events(opp_stats),
     }
     derived: Optional[float] = None
     if isinstance(macro_score_val, (int, float)):
@@ -871,6 +892,160 @@ def _downsample_stats_events(events: list) -> list:
         seen_buckets.add(bucket)
         out.append(ev)
     return out
+
+
+def _downsample_unit_timeline(
+    timeline: list, *, kept_times: List[int],
+) -> list:
+    """Keep only unit_timeline entries that align with kept_times.
+
+    The extractor builds unit_timeline at PlayerStatsEvent cadence
+    (~10 s); when we downsample stats_events to 30 s buckets the chart
+    hover would otherwise show unit composition at times that don't
+    correspond to any rendered army-line tick. Filtering to the SAME
+    sample times keeps the wire payload small AND keeps the hover
+    tooltip's time always landing on a rendered chart sample.
+
+    ``kept_times`` is the list of times surviving stats_events
+    downsampling. Empty input returns an empty list; entries whose
+    ``time`` is not in kept_times are dropped.
+    """
+    if not timeline or not kept_times:
+        return []
+    keep = set(int(t) for t in kept_times)
+    out: list = []
+    for entry in timeline:
+        try:
+            t = int(entry.get("time", 0))
+        except (TypeError, ValueError):
+            continue
+        if t in keep:
+            out.append(entry)
+    return out
+
+
+def _merge_apm_into_player_stats(
+    macro_breakdown: Dict[str, Any], apm_curve: Dict[str, Any],
+) -> None:
+    """Compute average APM/SPM per side from the apm_curve and write
+    them onto ``macro_breakdown["player_stats"]``.
+
+    Average is taken over windows that have any activity (apm or spm
+    > 0) so a long idle stretch at game end doesn't suppress the
+    headline number — same approach the SPA's APM/SPM chart uses for
+    its summary tooltip. Mutates ``macro_breakdown`` in place. Safe to
+    call when player_stats is missing — short-circuits cleanly.
+    """
+    stats = macro_breakdown.get("player_stats")
+    if not isinstance(stats, dict):
+        return
+    by_pid: Dict[int, Dict[str, float]] = {}
+    for player in apm_curve.get("players") or []:
+        pid = player.get("pid")
+        samples = player.get("samples") or []
+        active = [
+            s for s in samples
+            if (s.get("apm") or 0) > 0 or (s.get("spm") or 0) > 0
+        ]
+        if not active:
+            continue
+        avg_apm = sum(float(s.get("apm") or 0) for s in active) / len(active)
+        avg_spm = sum(float(s.get("spm") or 0) for s in active) / len(active)
+        by_pid[int(pid)] = {
+            "apm": round(avg_apm, 1),
+            "spm": round(avg_spm, 2),
+        }
+    for key in ("me", "opponent"):
+        rec = stats.get(key)
+        if not isinstance(rec, dict):
+            continue
+        pid = rec.get("pid")
+        if pid is None:
+            continue
+        merged = by_pid.get(int(pid))
+        if not merged:
+            continue
+        # Only overwrite when the slim-row value is missing — me.apm
+        # already holds the engine's authoritative number for me.
+        if rec.get("apm") is None:
+            rec["apm"] = merged["apm"]
+        if rec.get("spm") is None:
+            rec["spm"] = merged["spm"]
+
+
+def _build_player_stats_summary(
+    ctx: Any, my_macro: Dict[str, Any], raw: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Compose the per-player stats summary for the SPA stats table.
+
+    Merges three sources:
+      * ``my_macro["player_stats"]`` — cumulative born/died counters
+        the event extractor populated during its tracker walk.
+      * ``ctx.me`` / ``ctx.opponent`` — name, race, MMR (opp only),
+        APM/SPM (me only).
+      * ``raw`` — supply_blocked_seconds for me. Opp's supply-block
+        seconds are not currently scored (the macro engine only runs
+        on my_pid), so opp's value is left as ``None`` and the SPA
+        renders an em-dash rather than a misleading zero.
+
+    Returns a dict with two well-known top-level keys, ``me`` and
+    ``opponent`` — flat key-value records the SPA can spread directly
+    into the table row. Always returns the dict (never None) so the
+    schema validator sees a stable shape.
+    """
+    me = getattr(ctx, "me", None)
+    opp = getattr(ctx, "opponent", None)
+    me_pid = getattr(me, "pid", None) if me is not None else None
+    opp_pid = getattr(opp, "pid", None) if opp is not None else None
+    extractor = my_macro.get("player_stats") or {}
+
+    def _counters_for(pid: Optional[int]) -> Dict[str, int]:
+        if pid is None:
+            return {}
+        # extractor keys are stringified pids (JSON-friendly)
+        return dict(extractor.get(str(pid)) or {})
+
+    def _player_record(
+        player: Any, *, is_me: bool,
+    ) -> Optional[Dict[str, Any]]:
+        if player is None:
+            return None
+        pid = getattr(player, "pid", None)
+        record: Dict[str, Any] = {
+            "pid": pid,
+            "name": _sanitize_name(getattr(player, "name", "") or ""),
+            "race": getattr(player, "race", None) or None,
+            "is_me": bool(is_me),
+            "mmr": None,
+            "apm": None,
+            "spm": None,
+            "supply_blocked_seconds": None,
+        }
+        for src_attr, dst_key in (
+            ("mmr", "mmr"),
+            ("scaled_rating", "mmr"),
+            ("apm", "apm"),
+            ("spm", "spm"),
+            ("spq", "spq"),
+        ):
+            val = getattr(player, src_attr, None)
+            if val is None:
+                continue
+            try:
+                record[dst_key] = int(val) if dst_key == "mmr" else float(val)
+            except (TypeError, ValueError):
+                pass
+        if is_me:
+            sb = raw.get("supply_blocked_seconds")
+            if isinstance(sb, (int, float)):
+                record["supply_blocked_seconds"] = float(sb)
+        record.update(_counters_for(pid))
+        return record
+
+    return {
+        "me": _player_record(me, is_me=True),
+        "opponent": _player_record(opp, is_me=False),
+    }
 
 
 def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
