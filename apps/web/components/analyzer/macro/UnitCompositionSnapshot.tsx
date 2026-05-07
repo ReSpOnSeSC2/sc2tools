@@ -98,9 +98,10 @@ export function UnitCompositionSnapshot({
   if (!hasTimeline) {
     return (
       <p className="text-caption text-text-muted">
-        Unit-composition snapshots become available once your agent re-uploads
-        with the v0.5+ pipeline. Hover the chart above for army value;
-        composition appears here when fresh replays land.
+        Unit composition (worker pills + army units sorted by cost) appears
+        here when your agent re-uploads on the v0.5+ pipeline. The chart and
+        worker line above don&apos;t require v0.5+ — they fill in as soon as
+        any agent build syncs the game.
       </p>
     );
   }
