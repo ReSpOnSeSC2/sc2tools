@@ -182,7 +182,7 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
           streak.count > 0 && streak.kind
             ? streak.kind === "win"
               ? "Riding a win streak"
-              : "Keep at it — turning is part of the game"
+              : "Reset, review, re-queue"
             : "Tied or no recent games"
         }
         size="md"
