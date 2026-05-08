@@ -7,6 +7,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
+import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { AllGamesTable } from "./AllGamesTable";
 import type { ProfileGame } from "./Last5GamesTimeline";
 
@@ -50,7 +51,6 @@ type DrillFilter = { opp_strategy: string; build?: string };
 const LS_VIEW = "analyzer.strategies.view";
 const LS_MIN = "analyzer.strategies.minGames";
 const LS_BVS_VW = "analyzer.strategies.bvs.view";
-const MIN_STEPS = [1, 3, 5, 10, 20];
 
 function readLs<T>(key: string, fb: T): T {
   if (typeof window === "undefined") return fb;
@@ -69,39 +69,6 @@ function writeLs(key: string, v: unknown) {
   } catch {
     /* non-fatal */
   }
-}
-
-function MinGamesPicker({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (n: number) => void;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[11px] uppercase tracking-wider text-text-dim">
-        Min games
-      </span>
-      <div className="inline-flex overflow-hidden rounded border border-border">
-        {MIN_STEPS.map((n) => (
-          <button
-            key={n}
-            onClick={() => onChange(n)}
-            className={`px-2 py-1 text-xs tabular-nums transition ${
-              value === n
-                ? "bg-accent/20 text-accent"
-                : "text-text-muted hover:bg-bg-elevated"
-            }`}
-            title={`Hide rows with fewer than ${n} games`}
-            type="button"
-          >
-            {n}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 type Kpi = { label: string; value: string | null; sub?: string | null };

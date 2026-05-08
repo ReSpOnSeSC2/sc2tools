@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useApiPaginated } from "@/lib/useApiPaginated";
@@ -8,6 +8,28 @@ import { fmtAgo, pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import { Skeleton, EmptyState } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
+import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
+
+const LS_MIN_OPP = "analyzer.opponents.minGames";
+
+function readLs<T>(key: string, fb: T): T {
+  if (typeof window === "undefined") return fb;
+  try {
+    const v = window.localStorage.getItem(key);
+    return v == null ? fb : (JSON.parse(v) as T);
+  } catch {
+    return fb;
+  }
+}
+
+function writeLs(key: string, v: unknown) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(v));
+  } catch {
+    /* non-fatal */
+  }
+}
 
 type Opp = {
   pulseId: string;
@@ -41,11 +63,8 @@ export function OpponentsTab({
 }) {
   const { filters, dbRev } = useFilters();
   const [search, setSearch] = useState("");
-  // The input is a controlled string so the user can backspace through
-  // the existing value on mobile (and desktop) without it snapping back
-  // to "1" mid-edit. The numeric `minGames` derives from it.
-  const [minGamesText, setMinGamesText] = useState("1");
-  const minGames = Math.max(1, Number.parseInt(minGamesText, 10) || 1);
+  const [minGames, setMinGames] = useState<number>(() => readLs(LS_MIN_OPP, 1));
+  useEffect(() => writeLs(LS_MIN_OPP, minGames), [minGames]);
   const sort = useSort("lastPlayed", "desc");
 
   // We don't pass `limit` here — the paginator owns page size and
@@ -115,28 +134,7 @@ export function OpponentsTab({
           aria-label="Search opponents"
           className="input min-h-[44px] w-full sm:w-72"
         />
-        <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-wide text-text-dim">
-            Min games
-          </span>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={minGamesText}
-            onChange={(e) => {
-              const next = e.target.value.replace(/\D/g, "");
-              setMinGamesText(next);
-            }}
-            onBlur={() => {
-              if (!minGamesText || Number.parseInt(minGamesText, 10) < 1) {
-                setMinGamesText("1");
-              }
-            }}
-            aria-label="Minimum games"
-            className="input min-h-[44px] w-20"
-          />
-        </div>
+        <MinGamesPicker value={minGames} onChange={setMinGames} />
         <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
           <span className="text-xs text-text-dim">
             {items.length.toLocaleString()} of {normalised.length.toLocaleString()} shown
