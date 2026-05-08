@@ -307,22 +307,32 @@ class GamesService {
     let lastKnownToonHandle;
     /** @type {string|undefined} */
     let lastKnownMyToonHandle;
+    /** @type {string|undefined} */
+    let lastKnownMmrToonHandle;
     /** @type {Array<'win'|'loss'>} */
     const todayResults = [];
     for (const row of rows) {
       const date = row.date instanceof Date ? row.date : new Date(row.date);
       if (Number.isNaN(date.getTime())) continue;
       const my = Number(row.myMmr);
+      const myToon = row.myToonHandle;
       // Track the most recent known MMR across the whole window so the
       // session widget can render a meaningful number even on days
       // where the streamer hasn't queued yet. Rows are pre-sorted asc
-      // so the last assignment wins.
-      if (Number.isFinite(my)) lastKnownMmr = my;
+      // so the last assignment wins. Snap the row's myToonHandle alongside
+      // so the region label downstream matches the MMR source — without
+      // this, a multi-region streamer whose latest game is on NA but
+      // whose latest MMR-bearing game was on EU would see "NA <EU MMR>".
+      if (Number.isFinite(my)) {
+        lastKnownMmr = my;
+        if (typeof myToon === "string" && myToon.length > 0) {
+          lastKnownMmrToonHandle = myToon;
+        }
+      }
       const toon = row.opponent && row.opponent.toonHandle;
       if (typeof toon === "string" && toon.length > 0) {
         lastKnownToonHandle = toon;
       }
-      const myToon = row.myToonHandle;
       if (typeof myToon === "string" && myToon.length > 0) {
         lastKnownMyToonHandle = myToon;
       }
@@ -471,8 +481,12 @@ class GamesService {
     // profile from pinning to a stale account on the wrong ladder when
     // SC2Pulse's lastPlayed for that account happens to be more recent
     // than the streamer's current grind. Profile.region (what the user
-    // typed into Settings) is the next-best fallback. When neither is
-    // available we let SC2Pulse's global lastPlayed sort decide.
+    // typed into Settings) is the next-best fallback. As a last resort
+    // before letting SC2Pulse's global lastPlayed sort decide, we scan
+    // the user's pulseIds union for any toon-handle entry — that gives
+    // a cold-start lookup (right after API restart, no recent game seen
+    // yet) a region anchor instead of letting a long-stale KR account
+    // win on raw timestamp.
     /** @type {string|undefined} */
     let preferredRegion;
     if (lastKnownMyToonHandle) {
@@ -480,7 +494,16 @@ class GamesService {
       if (inferred) preferredRegion = inferred;
     }
     if (!preferredRegion && typeof profile.region === "string" && profile.region) {
-      preferredRegion = profile.region.toUpperCase();
+      preferredRegion = normaliseRegionLabel(profile.region);
+    }
+    if (!preferredRegion) {
+      for (const candidate of pulseIdsUnion) {
+        const inferred = regionFromToonHandle(candidate);
+        if (inferred) {
+          preferredRegion = inferred;
+          break;
+        }
+      }
     }
     // Tier-3 fallback: still no MMR after walking every game we have.
     // Hit SC2Pulse for the user's current 1v1 ladder rating with the
@@ -617,24 +640,54 @@ class GamesService {
       }
       if (count >= 2) out.streak = { kind: last, count };
     }
-    // Region resolution — explicit profile field wins, falls through to
-    // the SC2Pulse-derived region (when Tier-3 fired), then to the
-    // sticky-MMR-derived region the agent pinged with the rating, then
-    // to the toon handle byte (1=NA, 2=EU, 3=KR, 5=CN, 6=SEA). The
-    // session widget anchors its bottom-row layout on whatever we
-    // surface here.
-    if (typeof profile.region === "string" && profile.region) {
-      out.region = profile.region.toUpperCase();
-    }
-    if (out.region === undefined && pulseRegion) {
+    // Region resolution — walks from "most authoritative for the
+    // displayed MMR" down to "least authoritative" so the widget never
+    // paints a region label that contradicts the MMR source. Earlier
+    // versions put profile.region (the Settings dropdown) at the top,
+    // which let a stale "kr" preference paint over an obviously-NA
+    // play once SC2Pulse had already returned the NA team's rating —
+    // streamers saw "KR 5326" with their NA MMR. profile.region is
+    // still consulted, just as a fallback hint when no actual-play
+    // signal is available.
+    //
+    //   1. pulseRegion — when SC2Pulse fired (any pulse_* tier), this
+    //      IS the region of the team whose MMR we're displaying. The
+    //      MMR and region come back as a pair; splitting them lets the
+    //      widget lie.
+    //   2. lastKnownMmrToonHandle — when MMR came from a stored game,
+    //      the toon handle of THAT specific row is the source of truth.
+    //      A multi-region streamer's stored myMmr belongs to a specific
+    //      account, not "the most recent game" generically.
+    //   3. profile.lastKnownMmrRegion — when MMR came from the agent's
+    //      sticky-MMR ping, it stamped the region alongside.
+    //   4. lastKnownMyToonHandle — most recent game's region, even if
+    //      that row didn't carry MMR. Better than profile.region as a
+    //      fallback because it reflects current play, not a setting
+    //      typed in months ago.
+    //   5. profile.region — user's Settings dropdown. Final fallback.
+    //   6. lastKnownToonHandle — opponent's toon handle. Last resort,
+    //      since the opponent and streamer aren't always on the same
+    //      ladder (cross-region matchmaking, custom games).
+    if (pulseRegion) {
       out.region = pulseRegion;
+    }
+    if (out.region === undefined && lastKnownMmrToonHandle) {
+      const inferred = regionFromToonHandle(lastKnownMmrToonHandle);
+      if (inferred) out.region = inferred;
     }
     if (
       out.region === undefined &&
       typeof profile.lastKnownMmrRegion === "string" &&
       profile.lastKnownMmrRegion
     ) {
-      out.region = profile.lastKnownMmrRegion.toUpperCase();
+      out.region = normaliseRegionLabel(profile.lastKnownMmrRegion);
+    }
+    if (out.region === undefined && lastKnownMyToonHandle) {
+      const inferred = regionFromToonHandle(lastKnownMyToonHandle);
+      if (inferred) out.region = inferred;
+    }
+    if (out.region === undefined && typeof profile.region === "string" && profile.region) {
+      out.region = normaliseRegionLabel(profile.region);
     }
     if (out.region === undefined && lastKnownToonHandle) {
       const inferred = regionFromToonHandle(lastKnownToonHandle);
@@ -664,6 +717,27 @@ function regionFromToonHandle(toonHandle) {
     case "6": return "SEA";
     default: return null;
   }
+}
+
+/**
+ * Normalise a region string into the canonical Blizzard-region label
+ * (``NA`` / ``EU`` / ``KR`` / ``CN`` / ``SEA``) the rest of the session
+ * widget pipeline uses. The Settings dropdown stores ``us`` / ``eu`` /
+ * ``kr`` / ``cn`` (Battle.net subdomain convention), the agent ping
+ * stamps whatever the toon-handle inference returned, and SC2Pulse
+ * returns its own labels — without this mapping the widget can paint
+ * "US 5326" alongside an "NA"-derived MMR. Anything we don't recognise
+ * is upper-cased and returned as-is so a future region (or an upstream
+ * label we haven't enumerated yet) still renders something rather than
+ * vanishing.
+ *
+ * @param {string} raw
+ * @returns {string}
+ */
+function normaliseRegionLabel(raw) {
+  const upper = String(raw).trim().toUpperCase();
+  if (upper === "US") return "NA";
+  return upper;
 }
 
 /**
