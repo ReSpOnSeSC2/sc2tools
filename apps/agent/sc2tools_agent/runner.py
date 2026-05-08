@@ -283,17 +283,23 @@ def _run_headless(cfg: AgentConfig, log_dir: Path) -> int:
     heartbeat = Heartbeat(api)
 
     if state.device_token:
-        on_macro, on_opp = make_recompute_handlers(
+        on_macro, on_opp, on_full_resync = make_recompute_handlers(
             state_dir=cfg.state_dir,
             queue_resync_for_paths=lambda paths: _queue_replays_for_resync(
                 state, upload, paths, log,
             ),
+            # Same semantics as the GUI's Re-sync button: drop the
+            # uploaded cursor and have the watcher re-walk every replay
+            # folder so spatial extracts (and any other newly-added
+            # outputs) get backfilled on a fresh parse.
+            full_resync=lambda: _handle_resync(cfg, state, upload),
         )
         socket_client = SocketClient(
             base_url=cfg.api_base,
             device_token=state.device_token,
             on_recompute_games=on_macro,
             on_recompute_opp_build=on_opp,
+            on_full_resync=on_full_resync,
         )
 
     try:
@@ -536,17 +542,19 @@ def _gui_boot_worker(
 
         socket_client: Optional[SocketClient] = None
         if state.device_token:
-            on_macro, on_opp = make_recompute_handlers(
+            on_macro, on_opp, on_full_resync = make_recompute_handlers(
                 state_dir=cfg.state_dir,
                 queue_resync_for_paths=lambda paths: _queue_replays_for_resync(
                     state, upload, paths, log,
                 ),
+                full_resync=lambda: _handle_resync(cfg, state, upload),
             )
             socket_client = SocketClient(
                 base_url=cfg.api_base,
                 device_token=state.device_token,
                 on_recompute_games=on_macro,
                 on_recompute_opp_build=on_opp,
+                on_full_resync=on_full_resync,
             )
         cell.socket_client = socket_client
 
