@@ -100,6 +100,146 @@ get_active_build_definitions = _bd.get_active_build_definitions
 DEFAULT_TOLERANCE_SEC = 15
 DEFAULT_MIN_MATCH_SCORE = 0.6
 
+# v3 events flatten everything to ``Build<Bare>`` / ``Train<Bare>`` /
+# ``Research<Bare>`` / ``Morph<Bare>`` tokens. The hallucination filter
+# needs to recognise unit-flavoured tokens, look up the bare unit name
+# in UNIT_TECH_PREREQUISITES, and drop the event when its prereq isn't
+# present yet. Tokens that don't carry a recognised verb prefix are
+# stripped of "Build" only -- mirrors what the SPA writes today.
+_VERB_PREFIXES = ("Build", "Train", "Research", "Morph")
+_UNIT_TECH_PREREQUISITES = {
+    # Protoss Stargate path
+    "Phoenix": [["Stargate"]],
+    "Oracle": [["Stargate"]],
+    "VoidRay": [["Stargate"]],
+    "Carrier": [["Stargate", "FleetBeacon"]],
+    "Tempest": [["Stargate", "FleetBeacon"]],
+    "Mothership": [["Stargate", "FleetBeacon"]],
+    # Protoss Robotics path
+    "Immortal": [["RoboticsFacility"]],
+    "Observer": [["RoboticsFacility"]],
+    "WarpPrism": [["RoboticsFacility"]],
+    "Colossus": [["RoboticsFacility", "RoboticsBay"]],
+    "Disruptor": [["RoboticsFacility", "RoboticsBay"]],
+    # Protoss Templar path
+    "HighTemplar": [["TemplarArchive"]],
+    "DarkTemplar": [["DarkShrine"]],
+    "Archon": [["TemplarArchive"], ["DarkShrine"]],
+    # Zerg
+    "Zergling": [["SpawningPool"]],
+    "Queen": [["SpawningPool"]],
+    "Baneling": [["BanelingNest"]],
+    "Roach": [["RoachWarren"]],
+    "Ravager": [["RoachWarren"]],
+    "Hydralisk": [["HydraliskDen"]],
+    "Lurker": [["LurkerDen"]],
+    "LurkerMP": [["LurkerDen"]],
+    "Mutalisk": [["Spire"]],
+    "Corruptor": [["Spire"]],
+    "BroodLord": [["GreaterSpire"]],
+    "Infestor": [["InfestationPit"]],
+    "SwarmHostMP": [["InfestationPit"]],
+    "Viper": [["Hive"]],
+    "Ultralisk": [["UltraliskCavern"]],
+    # Terran
+    "Marine": [["Barracks"]],
+    "Reaper": [["Barracks"]],
+    "Marauder": [["Barracks"]],
+    "Ghost": [["Barracks", "GhostAcademy"]],
+    "Hellion": [["Factory"]],
+    "Hellbat": [["Factory", "Armory"]],
+    "Cyclone": [["Factory"]],
+    "WidowMine": [["Factory"]],
+    "SiegeTank": [["Factory"]],
+    "Thor": [["Factory", "Armory"]],
+    "Medivac": [["Starport"]],
+    "Liberator": [["Starport"]],
+    "Banshee": [["Starport"]],
+    "Raven": [["Starport"]],
+    "VikingFighter": [["Starport"]],
+    "Battlecruiser": [["Starport", "FusionCore"]],
+}
+
+
+def _strip_verb_prefix(token: str) -> str:
+    """Return the bare noun for a v3 verb-prefixed token.
+
+    Example:
+        >>> _strip_verb_prefix("BuildStargate")
+        'Stargate'
+        >>> _strip_verb_prefix("TrainPhoenix")
+        'Phoenix'
+        >>> _strip_verb_prefix("Stargate")
+        'Stargate'
+    """
+    for prefix in _VERB_PREFIXES:
+        if (
+            token.startswith(prefix)
+            and len(token) > len(prefix)
+            and token[len(prefix)].isupper()
+        ):
+            return token[len(prefix):]
+    return token
+
+
+def _earliest_build_times(events: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Earliest time we observe ``Build<X>`` for every structure name.
+
+    Used to test whether a unit's tech prerequisite was started by the
+    unit's own appearance time.
+    """
+    earliest: Dict[str, int] = {}
+    for ev in events:
+        what = ev.get("what")
+        if not isinstance(what, str) or not what.startswith("Build"):
+            continue
+        bare = what[len("Build"):]
+        t = ev.get("t")
+        if not isinstance(t, int):
+            continue
+        cur = earliest.get(bare)
+        if cur is None or t < cur:
+            earliest[bare] = t
+    return earliest
+
+
+def _drop_hallucinated_events(
+    events: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Filter unit events whose tech prerequisite wasn't started by the unit's time.
+
+    Sentry's Hallucination spawns illusory Phoenix / VoidRay / HT / Archon /
+    Immortal / Colossus / WarpPrism that show up in the event list as
+    real units. Build classification is only meaningful when the
+    prerequisite tech structure was actually built at some point before
+    the unit appeared, so drop those events here once before scoring
+    every candidate build.
+    """
+    if not events:
+        return events
+    earliest = _earliest_build_times(events)
+    kept: List[Dict[str, Any]] = []
+    for ev in events:
+        what = ev.get("what")
+        t = ev.get("t")
+        if not isinstance(what, str) or not isinstance(t, int):
+            kept.append(ev)
+            continue
+        bare = _strip_verb_prefix(what)
+        alternatives = _UNIT_TECH_PREREQUISITES.get(bare)
+        if not alternatives:
+            kept.append(ev)
+            continue
+        # An alternative passes when every required structure has an
+        # earliest Build<X> event at or before t.
+        ok = any(
+            all(earliest.get(req, 10 ** 9) <= t for req in req_set)
+            for req_set in alternatives
+        )
+        if ok:
+            kept.append(ev)
+    return kept
+
 
 def _emit(obj: Dict[str, Any]) -> None:
     """Write one JSON line to stdout and flush.
@@ -275,6 +415,9 @@ def _classify(
         True
     """
     defs = _filter_by_matchup(get_active_build_definitions(), race, vs_race)
+    # Drop Sentry hallucinations once before scoring every candidate
+    # so the scoring loop sees only "real" production events.
+    events = _drop_hallucinated_events(events)
     candidates = []
     for key, meta in defs.items():
         score = _score_build(events, meta)

@@ -197,7 +197,7 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvP",
     name: "PvP - AlphaStar (4 Adept/Oracle)",
     description:
-      "Detected if 4+ Adepts have been produced by 6:00 AND 1+ Oracle is on the field by 6:30 -- the AlphaStar 4-Adept / Oracle pressure opener.",
+      "Detected if a Stargate is built, 4+ Adepts have been produced by 6:00 AND 1+ Oracle is on the field by 6:30 -- the AlphaStar 4-Adept / Oracle pressure opener. Hallucinated Oracles from a Sentry do not count.",
   },
   {
     race: "Protoss",
@@ -218,7 +218,7 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvP",
     name: "PvP - Phoenix Style",
     description:
-      "Detected if 3+ Phoenix have been produced by 8:30 -- an air-control / Phoenix-heavy PvP style.",
+      "Detected if a Stargate is built and 3+ Phoenix have been produced by 8:30 -- an air-control / Phoenix-heavy PvP style. Hallucinated Phoenix from Sentries do not count.",
   },
   {
     race: "Protoss",
@@ -263,7 +263,7 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - 2 Base Templar (Reactive/Delayed 3rd)",
     description:
-      "Detected if a Templar Archives finishes BEFORE the third Nexus is taken AND the player has 4-6 Gateways by 7:30 -- a reactive 2-base High Templar / Storm timing with a delayed 3rd.",
+      "Detected if a Templar Archives is built (required for HighTemplar / Psionic Storm) AND it finishes BEFORE the third Nexus is taken AND the player has 4-6 Gateways by 7:30 -- a reactive 2-base High Templar / Storm timing with a delayed 3rd. A hallucinated High Templar is NOT enough; the Templar Archives must actually exist.",
   },
   {
     race: "Protoss",
@@ -312,7 +312,7 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - DT Drop",
     description:
-      "Detected if a Dark Shrine is built by 9:00 AND a Warp Prism is on the field by 10:00 -- a Dark Templar drop in PvT.",
+      "Detected if a Dark Shrine is built by 9:00 AND a Robotics Facility is up by 10:00 AND a Warp Prism is on the field by 10:00 -- a Dark Templar drop in PvT.",
   },
   {
     race: "Protoss",
@@ -326,14 +326,14 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - Phoenix Opener",
     description:
-      "Detected if 1+ Phoenix is on the field by 7:00 AND the player's second Gateway was built BEFORE the Robotics Facility -- a pure Phoenix opener.",
+      "Detected if a Stargate is built, 1+ real (non-hallucinated) Phoenix is on the field by 7:00, AND the player's second Gateway was built BEFORE the Robotics Facility -- a pure Phoenix opener. Hallucinated Phoenix from Sentries do NOT count.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - Phoenix into Robo",
     description:
-      "Detected if 1+ Phoenix is on the field by 7:00 AND a Robotics Facility is up by 8:00 -- a Phoenix opener that transitions into Robo tech.",
+      "Detected if a Stargate is built, 1+ real (non-hallucinated) Phoenix is on the field by 7:00, AND a Robotics Facility is up by 8:00 -- a Phoenix opener that transitions into Robo tech. A Sentry's hallucinated Phoenix does NOT trigger this build.",
   },
   {
     race: "Protoss",
@@ -364,42 +364,42 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - 2 Stargate Phoenix",
     description:
-      "Detected if 2+ Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00.",
+      "Detected if 2+ Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations).",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - 2 Stargate Void Ray",
     description:
-      "Detected if 2+ Stargates and 2+ Nexuses by 10:00, plus 4+ Void Rays produced by 10:00.",
+      "Detected if 2+ Stargates and 2+ Nexuses by 10:00, plus 4+ Void Rays produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations).",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - 3 Stargate Phoenix",
     description:
-      "Detected if 3+ Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00.",
+      "Detected if 3+ Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations).",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - 7 Gate Glaive/Immortal All-in",
     description:
-      "Detected if Glaives is researched by 8:30, 2+ Sentries and 1+ Immortal are produced by 8:30, and 6+ Gateways exist by 9:00 -- a heavy Glaive Adept / Immortal all-in.",
+      "Detected if a Robotics Facility is built, Glaives is researched by 8:30, 2+ Sentries and 1+ Immortal produced by 8:30, and 6+ Gateways exist by 9:00 -- a heavy Glaive Adept / Immortal all-in.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - AlphaStar Style (Oracle/Robo)",
     description:
-      "Detected if 2+ Oracles and a Robotics Facility and a Forge are all in place by 8:30, with 3+ Nexuses by 8:30 -- the AlphaStar Oracle / Robo / fast 3rd composition.",
+      "Detected if a Stargate is built, 2+ Oracles plus a Robotics Facility plus a Forge are all in place by 8:30, with 3+ Nexuses by 8:30 -- the AlphaStar Oracle / Robo / fast 3rd composition.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - Archon Drop",
     description:
-      "Detected if Stargate goes down before Twilight Council, a Templar Archives is up by 9:00, and 2+ Archons have been produced by 9:00 -- Stargate opener transitioning into Archon drops.",
+      "Detected if Stargate goes down before Twilight Council, a Templar Archives is up by 9:00, and 2+ Archons have been produced by 9:00 -- Stargate opener transitioning into Archon drops. Requires Templar Archives (or Dark Shrine for DT-Archon morph).",
   },
   {
     race: "Protoss",
@@ -413,14 +413,14 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Carrier Rush",
     description:
-      "Detected if at least 1 Carrier has been produced by 10:00 -- skytoss into Carriers.",
+      "Detected if a Stargate AND a Fleet Beacon are built and at least 1 Carrier has been produced by 10:00 -- skytoss into Carriers. Carriers without a Stargate + Fleet Beacon are treated as hallucinations.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - DT drop into Archon Drop",
     description:
-      "Detected if Twilight Council goes down before Dark Shrine, a Dark Shrine is up by 9:00, 3+ Dark Templar are produced by 9:00, and a Warp Prism is on the field by 9:00.",
+      "Detected if Twilight Council goes down before Dark Shrine, a Dark Shrine AND a Robotics Facility are up by 9:00, 3+ Dark Templar are produced by 9:00, and a Warp Prism is on the field by 9:00.",
   },
   {
     race: "Protoss",
@@ -434,7 +434,7 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Rail's Disruptor Drop",
     description:
-      "Detected if at least 1 Disruptor and at least 1 Warp Prism have both been produced by 8:00 -- an early Disruptor drop harass build.",
+      "Detected if a Robotics Facility AND a Robotics Bay are built and at least 1 Disruptor and 1 Warp Prism are produced by 8:00 -- an early Disruptor drop harass build.",
   },
   {
     race: "Protoss",
@@ -469,7 +469,7 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Tempest Rush",
     description:
-      "Detected if at least 1 Tempest has been produced by 10:00 -- long-range Tempest harass / siege.",
+      "Detected if a Stargate AND a Fleet Beacon are built and at least 1 Tempest has been produced by 10:00 -- long-range Tempest harass / siege.",
   },
   // ============================================================
   // Terran

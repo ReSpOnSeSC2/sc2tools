@@ -8,7 +8,7 @@ appropriate branch here.
 
 from typing import Dict, List
 
-from .base import BaseStrategyDetector
+from .base import BaseStrategyDetector, count_real_units
 from .definitions import candidate_signatures_for
 
 
@@ -93,7 +93,12 @@ class UserBuildDetector(BaseStrategyDetector):
             return any(b['name'] == name and b['time'] <= time_limit and self._is_proxy(b, main_loc, dist) for b in buildings)
 
         def count_units(name, time_limit=9999):
-            return sum(1 for u in units if u['name'] == name and u['time'] <= time_limit)
+            # Prereq-aware: a unit only counts toward classification when
+            # its tech-structure prerequisite was started before the
+            # unit appeared. Filters Sentry hallucinations (Phoenix /
+            # VoidRay / HighTemplar / Archon / Immortal / Colossus /
+            # WarpPrism) that would otherwise flag the wrong build.
+            return count_real_units(name, time_limit, units, buildings)
 
         def has_upgrade_substr(sub_name, time_limit=9999):
             return any(sub_name in u['name'] and u['time'] <= time_limit for u in upgrades)
@@ -118,9 +123,15 @@ class UserBuildDetector(BaseStrategyDetector):
             has_dark_shrine_10min = has_building("DarkShrine", 600)
             dt_count_10min        = count_units("DarkTemplar", 600)
 
-            if count_units("Carrier", 600) >= 1:
+            # Carrier / Tempest both require Stargate + Fleet Beacon.
+            # count_units already filters hallucinations, but the
+            # explicit head guard prevents a regression if count_units
+            # is ever swapped for a raw count.
+            if (has_building("Stargate", 600) and has_building("FleetBeacon", 600)
+                    and count_units("Carrier", 600) >= 1):
                 return "PvZ - Carrier Rush"
-            if count_units("Tempest", 600) >= 1:
+            if (has_building("Stargate", 600) and has_building("FleetBeacon", 600)
+                    and count_units("Tempest", 600) >= 1):
                 return "PvZ - Tempest Rush"
             if (sg_count_10min == 2
                     and nexus_count_10min >= 2
@@ -132,14 +143,21 @@ class UserBuildDetector(BaseStrategyDetector):
                 return "PvZ - 3 Stargate Phoenix"
             if sg_count_10min >= 2 and nexus_count_10min >= 2 and count_units("Phoenix", 600) >= 4:
                 return "PvZ - 2 Stargate Phoenix"
-            if count_units("Disruptor", 480) >= 1 and count_units("WarpPrism", 480) >= 1:
+            # Disruptor needs Robo + Robo Bay; Warp Prism needs Robo.
+            if (has_building("RoboticsFacility", 480) and has_building("RoboticsBay", 480)
+                    and count_units("Disruptor", 480) >= 1 and count_units("WarpPrism", 480) >= 1):
                 return "PvZ - Rail's Disruptor Drop"
 
-            if (count_units("Oracle", 510) >= 2 and has_building("RoboticsFacility", 510) and has_building("Forge", 510)
+            if (has_building("Stargate", 510) and count_units("Oracle", 510) >= 2
+                    and has_building("RoboticsFacility", 510) and has_building("Forge", 510)
                     and sum(1 for b in buildings if b['name'] == "Nexus" and b['time'] < 510) >= 3):
                 return "PvZ - AlphaStar Style (Oracle/Robo)"
 
-            if has_upgrade_substr("Glaive", 510) and count_units("Sentry", 510) >= 2 and count_units("Immortal", 510) >= 1 and gate_count_6min >= 6:
+            # 7 Gate Glaive/Immortal: Immortals require RoboticsFacility,
+            # Glaives requires Twilight Council (covered by upgrade).
+            if (has_upgrade_substr("Glaive", 510) and has_building("RoboticsFacility", 510)
+                    and count_units("Sentry", 510) >= 2 and count_units("Immortal", 510) >= 1
+                    and gate_count_6min >= 6):
                 return "PvZ - 7 Gate Glaive/Immortal All-in"
 
             if has_upgrade_substr("Blink", 480) and gate_count_530 >= 5:
@@ -152,7 +170,11 @@ class UserBuildDetector(BaseStrategyDetector):
                 return "PvZ - Stargate into Glaives"
             if sg_time < twilight_time and has_building("TemplarArchive", 540) and count_units("Archon", 540) >= 2:
                 return "PvZ - Archon Drop"
-            if twilight_time < building_time("DarkShrine") and has_building("DarkShrine", 540) and count_units("DarkTemplar", 540) >= 3 and count_units("WarpPrism", 540) >= 1:
+            # DT drop into Archon: needs Dark Shrine for the DTs and a
+            # Robotics Facility for the Warp Prism.
+            if (twilight_time < building_time("DarkShrine") and has_building("DarkShrine", 540)
+                    and has_building("RoboticsFacility", 540)
+                    and count_units("DarkTemplar", 540) >= 3 and count_units("WarpPrism", 540) >= 1):
                 return "PvZ - DT drop into Archon Drop"
             if sg_time < twilight_time and has_upgrade_substr("Blink", 600) and sum(1 for b in buildings if b['name'] == "Nexus" and b['time'] < 540) >= 3:
                 return "PvZ - Standard Blink Macro"
@@ -197,9 +219,12 @@ class UserBuildDetector(BaseStrategyDetector):
                 if gates_before_expand == 1 and first_unit in ("Stalker", "Adept", "Zealot"):
                     return "PvP - 1 Gate Expand"
 
-            if count_units("Adept", 360) >= 4 and count_units("Oracle", 390) >= 1:
+            # AlphaStar 4 Adept / Oracle: Oracle requires Stargate.
+            if (has_building("Stargate", 390) and count_units("Adept", 360) >= 4
+                    and count_units("Oracle", 390) >= 1):
                 return "PvP - AlphaStar (4 Adept/Oracle)"
-            if count_units("Stalker", 390) >= 3 and count_units("Oracle", 450) >= 1 and has_building("DarkShrine", 540):
+            if (has_building("Stargate", 450) and count_units("Stalker", 390) >= 3
+                    and count_units("Oracle", 450) >= 1 and has_building("DarkShrine", 540)):
                 return "PvP - 4 Stalker Oracle into DT"
 
             robo_time = building_time("RoboticsFacility")
@@ -207,7 +232,7 @@ class UserBuildDetector(BaseStrategyDetector):
             sec_nexus_time = nexus_times[1] if len(nexus_times) >= 2 else 9999
             if robo_time < twilight_time and twilight_time < sec_nexus_time:
                 return "PvP - Rail's Blink Stalker (Robo 1st)"
-            if count_units("Phoenix", 510) >= 3:
+            if has_building("Stargate", 510) and count_units("Phoenix", 510) >= 3:
                 return "PvP - Phoenix Style"
             if has_upgrade_substr("Blink", 540) and len(nexus_times) >= 2 and (2 <= gate_count_6min <= 4):
                 return "PvP - Blink Stalker Style"
@@ -231,9 +256,17 @@ class UserBuildDetector(BaseStrategyDetector):
 
             if has_proxy("Stargate", sec_nexus_time, 50):
                 return "PvT - Proxy Void Ray/Stargate"
-            if count_units("Phoenix", 420) >= 1 and has_building("RoboticsFacility", 480):
+            # Phoenix builds: require an actual Stargate. A Sentry can
+            # hallucinate Phoenix off Cyber + Twilight tech, so a 2-base
+            # Charge / Templar build will register a "Phoenix" event
+            # without any Stargate ever going down. count_units already
+            # filters hallucinations via the prereq table; the explicit
+            # has_building guard documents the intent and makes the
+            # rule robust to count_units regressions.
+            if (has_building("Stargate", 420) and count_units("Phoenix", 420) >= 1
+                    and has_building("RoboticsFacility", 480)):
                 return "PvT - Phoenix into Robo"
-            if count_units("Phoenix", 420) >= 1:
+            if has_building("Stargate", 420) and count_units("Phoenix", 420) >= 1:
                 gate_times = sorted([b['time'] for b in buildings if b['name'] == "Gateway"])
                 if len(gate_times) >= 2 and gate_times[1] < robo_time:
                     return "PvT - Phoenix Opener"
@@ -242,7 +275,15 @@ class UserBuildDetector(BaseStrategyDetector):
                 return "PvT - 7 Gate Blink All-in"
             if has_upgrade_substr("Charge", 540) and gate_count_730 >= 7 and len(nexus_times) < 3:
                 return "PvT - 8 Gate Charge All-in"
-            if ta_time < third_nexus_time and (4 <= gate_count_730 <= 6):
+            # 2 Base Templar requires an actual Templar Archives
+            # (HighTemplar / Storm). Without this guard, a replay where
+            # neither a Templar Archives nor a 3rd Nexus was ever built
+            # would compare 9999 < 9999 (False), but a replay where only
+            # the 3rd Nexus is missing would compare ta_time < 9999
+            # which is True even when ta_time itself is 9999 only when
+            # both are missing - so anchor explicitly to has_building.
+            if (has_building("TemplarArchive", 9999) and ta_time < third_nexus_time
+                    and (4 <= gate_count_730 <= 6)):
                 return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
             if has_upgrade_substr("Charge", 540) and len(nexus_times) >= 3:
                 return "PvT - Standard Charge Macro"
@@ -260,7 +301,10 @@ class UserBuildDetector(BaseStrategyDetector):
                     and has_building("RoboticsFacility", 480)):
                 return "PvT - 2 Gate Blink (Fast 3rd Nexus)"
 
-            if has_building("DarkShrine", 540) and count_units("WarpPrism", 600) >= 1:
+            # DT Drop: needs Dark Shrine for the DTs and Robotics
+            # Facility for the Warp Prism.
+            if (has_building("DarkShrine", 540) and has_building("RoboticsFacility", 600)
+                    and count_units("WarpPrism", 600) >= 1):
                 return "PvT - DT Drop"
             if has_building("RoboticsFacility", 390):
                 if robo_time < sg_time and robo_time < twilight_time:
