@@ -166,13 +166,79 @@ def _bootstrap(args: argparse.Namespace) -> tuple:
     # / .env / state all converge on one source of truth). Re-load
     # the config after promoting state into the env so the watcher
     # sees the user's chosen worker count on the very first sweep.
+    #
+    # Clamp at ``PARSE_CONCURRENCY_USEFUL_MAX`` here so a stale
+    # state file from before the v0.5.8 cap was introduced (e.g.
+    # the user had cranked the old uncapped slider to 32) doesn't
+    # silently spawn 32 workers that mostly idle waiting for
+    # uploads to drain. The clamp is intentionally NOT applied to
+    # the env var itself further down in load_config — env var is
+    # the documented escape hatch for power users on a self-hosted
+    # cloud API with a higher rate limit.
+    from .config import (
+        PARSE_CONCURRENCY_USEFUL_MAX,
+        UPLOAD_CONCURRENCY_USEFUL_MAX,
+        UPLOAD_BATCH_SIZE_USEFUL_MAX,
+    )
+    _bootstrap_log = logging.getLogger("sc2tools_agent")
     if (
         state.parse_concurrency_override
         and not os.environ.get("SC2TOOLS_PARSE_CONCURRENCY")
     ):
-        os.environ["SC2TOOLS_PARSE_CONCURRENCY"] = str(
-            state.parse_concurrency_override,
+        clamped = min(
+            int(state.parse_concurrency_override),
+            PARSE_CONCURRENCY_USEFUL_MAX,
         )
+        if clamped != state.parse_concurrency_override:
+            # ``log`` isn't module-level in this file; use the same
+            # logger name the rest of the agent does so the clamp
+            # message lands alongside ``agent_starting`` in agent.log.
+            _bootstrap_log.info(
+                "parse_concurrency_clamped from=%d to=%d "
+                "reason=above_useful_max",
+                state.parse_concurrency_override,
+                clamped,
+            )
+        os.environ["SC2TOOLS_PARSE_CONCURRENCY"] = str(clamped)
+        needs_reload = True
+    # Same promote-to-env path for the v0.5.8 upload-pipeline knobs.
+    # The clamp here doesn't apply to the env var if it's already
+    # set explicitly — that's the documented escape hatch for
+    # power users on a self-hosted cloud API with a higher rate
+    # limit. We only clamp the GUI/state value to keep it sane.
+    if (
+        state.upload_concurrency_override
+        and not os.environ.get("SC2TOOLS_UPLOAD_CONCURRENCY")
+    ):
+        clamped = min(
+            int(state.upload_concurrency_override),
+            UPLOAD_CONCURRENCY_USEFUL_MAX,
+        )
+        if clamped != state.upload_concurrency_override:
+            _bootstrap_log.info(
+                "upload_concurrency_clamped from=%d to=%d "
+                "reason=above_useful_max",
+                state.upload_concurrency_override,
+                clamped,
+            )
+        os.environ["SC2TOOLS_UPLOAD_CONCURRENCY"] = str(clamped)
+        needs_reload = True
+    if (
+        state.upload_batch_size_override
+        and not os.environ.get("SC2TOOLS_UPLOAD_BATCH_SIZE")
+    ):
+        clamped = min(
+            int(state.upload_batch_size_override),
+            UPLOAD_BATCH_SIZE_USEFUL_MAX,
+        )
+        if clamped != state.upload_batch_size_override:
+            _bootstrap_log.info(
+                "upload_batch_size_clamped from=%d to=%d "
+                "reason=above_useful_max",
+                state.upload_batch_size_override,
+                clamped,
+            )
+        os.environ["SC2TOOLS_UPLOAD_BATCH_SIZE"] = str(clamped)
         needs_reload = True
     if needs_reload:
         cfg = load_config()
@@ -377,9 +443,12 @@ def _run_with_gui(
         player_handle=read_player_handle_cache(cfg.state_dir) or "",
         # Show the EFFECTIVE concurrency the watcher will use this run,
         # which is the override-if-set otherwise the config default.
-        # cfg.parse_concurrency already incorporates env vars + state
-        # via _bootstrap, so it's the single source of truth.
+        # cfg.* already incorporates env vars + state via _bootstrap,
+        # so it's the single source of truth for what the agent will
+        # actually do this run.
         parse_concurrency=cfg.parse_concurrency,
+        upload_concurrency=cfg.upload_concurrency,
+        upload_batch_size=cfg.upload_batch_size,
         # Date-range filter — surface what the watcher will gate on so
         # the user sees their previously-saved filter immediately on
         # open. None / "all" means "no filter".
@@ -717,12 +786,56 @@ def _handle_save_settings(
         except OSError:
             log.exception("player_handle_cache_write_failed")
     if payload.parse_concurrency is not None:
-        # Clamp into the same range the spinbox enforces, so a malformed
-        # JSON edit can't slip a 0 / negative through. Stored on state
-        # so the next ``_bootstrap`` call promotes it into the env var
-        # before AgentConfig reads it.
+        # Clamp into [1, PARSE_CONCURRENCY_USEFUL_MAX] so a malformed
+        # JSON edit can't slip a 0 / negative through, AND so values
+        # above the useful ceiling (set when the v0.5.8 cap was
+        # introduced) get normalised on save instead of round-
+        # tripping through state and back into a misleading runtime
+        # config. Stored on state so the next ``_bootstrap`` call
+        # promotes it into the env var before AgentConfig reads it.
+        from .config import PARSE_CONCURRENCY_USEFUL_MAX
         n = int(payload.parse_concurrency)
-        state.parse_concurrency_override = max(1, min(32, n))
+        state.parse_concurrency_override = max(
+            1, min(PARSE_CONCURRENCY_USEFUL_MAX, n),
+        )
+    if payload.upload_concurrency is not None:
+        # Same clamp-on-save rationale as parse_concurrency above.
+        from .config import UPLOAD_CONCURRENCY_USEFUL_MAX
+        n = int(payload.upload_concurrency)
+        clamped_upload_conc = max(
+            1, min(UPLOAD_CONCURRENCY_USEFUL_MAX, n),
+        )
+        state.upload_concurrency_override = clamped_upload_conc
+        # Hot-swap the live upload queue so the user's button-group
+        # click takes effect immediately. ``set_concurrency`` is
+        # idempotent when the count already matches (so a re-click
+        # of the already-selected button is cheap), and stops/starts
+        # workers cleanly without losing in-flight jobs. ``cell.upload``
+        # is the runtime ``UploadQueue`` instance; in unit tests it
+        # may be a stub without ``set_concurrency`` — guard with
+        # ``hasattr`` so those tests don't have to mock it.
+        live_upload = getattr(cell, "upload", None)
+        if live_upload is not None and hasattr(live_upload, "set_concurrency"):
+            try:
+                live_upload.set_concurrency(clamped_upload_conc)
+            except Exception:
+                log.exception("upload_concurrency_hotswap_failed")
+    if payload.upload_batch_size is not None:
+        from .config import UPLOAD_BATCH_SIZE_USEFUL_MAX
+        n = int(payload.upload_batch_size)
+        clamped_upload_batch = max(
+            1, min(UPLOAD_BATCH_SIZE_USEFUL_MAX, n),
+        )
+        state.upload_batch_size_override = clamped_upload_batch
+        # Hot-swap the live upload queue's per-batch ceiling. Workers
+        # read ``self._cfg.upload_batch_size`` once at the top of
+        # ``_run`` so we mutate the cfg in place via ``replace``.
+        live_upload = getattr(cell, "upload", None)
+        if live_upload is not None and hasattr(live_upload, "set_batch_size"):
+            try:
+                live_upload.set_batch_size(clamped_upload_batch)
+            except Exception:
+                log.exception("upload_batch_size_hotswap_failed")
     filter_changed = False
     if payload.sync_filter_preset is not None:
         # Date-range filter. The watcher resolves this fresh every

@@ -42,6 +42,13 @@ from typing import Callable, Deque, List, Optional
 log = logging.getLogger(__name__)
 
 
+# Re-export the parse-pool-concurrency ceiling under the legacy
+# private name used inside this module. Authoritative definition
+# lives in ``config.py`` so the runner and GUI share a single
+# ceiling — see the comment block there for why 12.
+from ..config import PARSE_CONCURRENCY_USEFUL_MAX as _PARSE_CONCURRENCY_USEFUL_MAX  # noqa: E402
+
+
 def can_use_gui() -> bool:
     """Whether PySide6 + a usable display are available.
 
@@ -341,6 +348,8 @@ class SettingsPayload:
         "start_minimized",
         "player_handle",
         "parse_concurrency",
+        "upload_concurrency",
+        "upload_batch_size",
         "sync_filter_preset",
         "sync_filter_since",
         "sync_filter_until",
@@ -357,6 +366,8 @@ class SettingsPayload:
         start_minimized: Optional[bool] = None,
         player_handle: Optional[str] = None,
         parse_concurrency: Optional[int] = None,
+        upload_concurrency: Optional[int] = None,
+        upload_batch_size: Optional[int] = None,
         sync_filter_preset: Optional[str] = None,
         sync_filter_since: Optional[str] = None,
         sync_filter_until: Optional[str] = None,
@@ -380,6 +391,12 @@ class SettingsPayload:
         # How many parse threads the watcher's ThreadPoolExecutor runs.
         # ``None`` means "no change"; the runner's default is 4.
         self.parse_concurrency = parse_concurrency
+        # How many parallel HTTP upload workers drain the queue. ``None``
+        # means "no change"; the runner's default is 2 (v0.5.8+).
+        self.upload_concurrency = upload_concurrency
+        # How many games to pack into one ``POST /v1/games`` request.
+        # ``None`` means "no change"; the runner's default is 40 (v0.5.8+).
+        self.upload_batch_size = upload_batch_size
         # Date-range filter for the watcher. ``None`` means "no change";
         # ``"all"`` (or any unrecognised value) means "no filter". See
         # ``apps/agent/sc2tools_agent/sync_filter.py`` for the preset
@@ -1058,14 +1075,22 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             form.addRow("Player handle", self._handle_input)
 
-            # Parse concurrency: how many replays the watcher parses
-            # in parallel. Slider capped at the host's logical CPU
-            # count — beyond that the GIL prevents further speedup
-            # for sc2reader's mostly-Python work, so a higher cap
-            # would just mislead the user. Defaults to ``min(4, cpu)``
-            # so a 2-core laptop doesn't get oversubscribed and a
-            # 16-core workstation gets a sensible starting point.
-            cpu_max = max(1, os.cpu_count() or 4)
+            # Parse concurrency. Slider capped at the SMALLER of
+            # ``cpu_count`` and ``_PARSE_CONCURRENCY_USEFUL_MAX`` —
+            # not just ``cpu_count``. Why: the cloud's 120 req/min
+            # rate limit × 25-game upload batches caps total
+            # throughput at ~50 games/sec end-to-end. One parse
+            # worker delivers ~3-5 games/sec depending on replay
+            # length, so 8-12 workers already saturate the upload
+            # pipeline. Anything above that just queues parsed games
+            # in memory while the upload thread drains at the same
+            # rate. Capping the slider at the useful ceiling keeps
+            # the UI honest — moving it from 12 to 32 produces zero
+            # visible speedup, so we don't offer the option. Power
+            # users who self-host the cloud API with a higher rate
+            # limit can override via ``SC2TOOLS_PARSE_CONCURRENCY``.
+            cpu_count = max(1, os.cpu_count() or 4)
+            cpu_max = min(cpu_count, _PARSE_CONCURRENCY_USEFUL_MAX)
             default_workers = min(4, cpu_max)
             concurrency_block = QtWidgets.QWidget()
             concurrency_h = QtWidgets.QHBoxLayout(concurrency_block)
@@ -1077,26 +1102,31 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._concurrency_slider.setTickPosition(
                 QtWidgets.QSlider.TicksBelow,
             )
-            # Tick every core, but cap visible tick density at 16 on
-            # huge-core machines so the slider doesn't turn into a
-            # comb of pixel-thin marks the user can't read.
-            self._concurrency_slider.setTickInterval(
-                max(1, cpu_max // 16) if cpu_max > 16 else 1,
+            # Tick every step. The slider only goes up to ~12 now so
+            # we don't need the high-density compression we used to
+            # apply for 32-thread monsters.
+            self._concurrency_slider.setTickInterval(1)
+            cpu_hint = (
+                f"capped at {cpu_max} (your CPU has {cpu_count} threads "
+                f"but uploads max out around {cpu_max} parsers — more "
+                f"workers won't speed anything up)"
+                if cpu_count > cpu_max
+                else f"capped at your CPU's {cpu_max} threads"
             )
             self._concurrency_slider.setToolTip(
-                f"How many replays to parse and upload in parallel. "
-                f"Each worker uses one CPU thread for sc2reader plus "
-                f"one network connection. Raise to drain a big "
-                f"backfill faster; lower so the agent doesn't slow "
-                f"your game. Capped at your logical CPU count "
-                f"({cpu_max}). Takes effect on next agent restart.",
+                f"How many replays to parse in parallel. Each worker "
+                f"is a separate process and consumes one CPU thread "
+                f"plus ~150 MB of sc2reader state. The cloud upload "
+                f"pipeline tops out near 50 games/sec, so 8-12 parse "
+                f"workers already saturate it — {cpu_hint}. Takes "
+                f"effect on next agent restart."
             )
             self._concurrency_value_label = QtWidgets.QLabel()
             self._concurrency_value_label.setMinimumWidth(96)
 
             def _refresh_label(val: int) -> None:
                 self._concurrency_value_label.setText(
-                    f"{int(val)} / {cpu_max} cores",
+                    f"{int(val)} / {cpu_max} workers",
                 )
 
             self._concurrency_slider.valueChanged.connect(_refresh_label)
@@ -1104,6 +1134,186 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             concurrency_h.addWidget(self._concurrency_slider, 1)
             concurrency_h.addWidget(self._concurrency_value_label)
             form.addRow("Parse concurrency", concurrency_block)
+
+            # Upload concurrency. Replaces the older slider with a
+            # 1-or-2 button group: those are the only values worth
+            # offering on the production cloud. The 120 req/min rate
+            # limit means 1 worker uses ~half the budget and 2 uses
+            # the full budget on a typical home connection; 3+ would
+            # just produce 429 retries that settle at the same
+            # throughput, so there's no reason to expose them in the
+            # UI. Power users on a self-hosted API with a higher
+            # rate limit can still override via the
+            # ``SC2TOOLS_UPLOAD_CONCURRENCY`` env var.
+            #
+            # Click-to-apply: each button click immediately fires a
+            # save (no need to click "Save settings") AND hot-swaps
+            # the live upload queue's worker count via the runner's
+            # save handler. Takes effect on the next batch the
+            # agent issues, no restart required.
+            from ..config import (  # local: keeps test imports cheap
+                _DEFAULT_UPLOAD_CONCURRENCY,
+                UPLOAD_CONCURRENCY_USEFUL_MAX,
+                _DEFAULT_UPLOAD_BATCH_SIZE,
+                UPLOAD_BATCH_SIZE_USEFUL_MAX,
+            )
+            upload_conc_block = QtWidgets.QWidget()
+            upload_conc_h = QtWidgets.QHBoxLayout(upload_conc_block)
+            upload_conc_h.setContentsMargins(0, 0, 0, 0)
+            upload_conc_h.setSpacing(8)
+            self._upload_conc_group = QtWidgets.QButtonGroup(self)
+            self._upload_conc_group.setExclusive(True)
+            self._upload_conc_buttons: dict[int, QtWidgets.QPushButton] = {}
+            # Two buttons: 1 worker (safe) and 2 workers (max).
+            # If we ever want to ship a higher option, add it here
+            # — UPLOAD_CONCURRENCY_USEFUL_MAX is still 4 in
+            # config.py, but we deliberately only expose 1/2 in
+            # the UI because anything past 2 risks 429s on the
+            # production rate limit. The state and env var both
+            # accept higher; this is just a UI-side choice.
+            # Inline stylesheet for the toggle buttons. Inline (per-
+            # widget) instead of via the global QSS so the
+            # ``:checked`` selector reliably highlights — depending
+            # on QSS cascade order against the global QPushButton
+            # styling has bitten us before. The colors mirror the
+            # main-window's accent palette (``_ACCENT`` / ``_SUBTLE``)
+            # so the toggle group looks native.
+            _toggle_qss = (
+                "QPushButton {"
+                f" background: {_SUBTLE};"
+                f" color: {_TEXT_MUTED};"
+                f" border: 1px solid {_BORDER_STRONG};"
+                " border-radius: 6px;"
+                " padding: 6px 14px;"
+                " font-weight: 600;"
+                "}"
+                "QPushButton:hover {"
+                f" background: {_ELEVATED};"
+                f" color: {_TEXT};"
+                "}"
+                "QPushButton:checked {"
+                f" background: {_ACCENT};"
+                " color: white;"
+                f" border-color: {_ACCENT};"
+                "}"
+                "QPushButton:checked:hover {"
+                f" background: {_ACCENT_HOVER};"
+                f" border-color: {_ACCENT_HOVER};"
+                "}"
+            )
+            for n in (1, 2):
+                btn = QtWidgets.QPushButton(f"{n}")
+                btn.setCheckable(True)
+                btn.setMinimumWidth(56)
+                btn.setCursor(QtCore.Qt.PointingHandCursor)
+                btn.setStyleSheet(_toggle_qss)
+                btn.setToolTip(
+                    f"Use {n} parallel upload "
+                    f"worker{'' if n == 1 else 's'}. "
+                    + (
+                        "Conservative — uses ~half the cloud rate "
+                        "limit budget."
+                        if n == 1
+                        else "Recommended — saturates the 120 req/min "
+                             "rate limit without 429s on a typical "
+                             "home connection."
+                    )
+                )
+                self._upload_conc_group.addButton(btn, n)
+                upload_conc_h.addWidget(btn)
+                self._upload_conc_buttons[n] = btn
+            # Default selection — overridden in _populate_settings if
+            # state has an explicit override.
+            initial_default = max(
+                1, min(2, _DEFAULT_UPLOAD_CONCURRENCY),
+            )
+            self._upload_conc_buttons[initial_default].setChecked(True)
+            # Track the last value we saved so a no-op click (user
+            # clicks the already-selected button) skips the round-
+            # trip through _on_save_settings.
+            self._upload_conc_last_saved: int = initial_default
+            upload_conc_h.addStretch(1)
+            # Hint text trailing the buttons — explains the
+            # rate-limit reasoning so the user knows why we don't
+            # expose more options.
+            upload_conc_hint = QtWidgets.QLabel(
+                "More than 2 risks rate-limit retries. Click to "
+                "apply instantly — no restart needed."
+            )
+            upload_conc_hint.setWordWrap(True)
+            upload_conc_hint.setStyleSheet(
+                f"color: {_TEXT_DIM}; font-size: 10pt;"
+            )
+            upload_conc_h.addWidget(upload_conc_hint, 2)
+            form.addRow("Upload concurrency", upload_conc_block)
+
+            # Auto-save handler. Connected via ``buttonClicked``
+            # which fires for every click — including a re-click of
+            # the already-selected button — so we de-dupe on the
+            # ``_upload_conc_last_saved`` cache.
+            def _on_upload_conc_clicked(btn: QtWidgets.QAbstractButton) -> None:
+                if not btn.isChecked():
+                    # Defensive: an exclusive group never reports
+                    # the unchecked button via buttonClicked, but
+                    # this guard makes the contract explicit.
+                    return
+                n = self._upload_conc_group.id(btn)
+                if n == self._upload_conc_last_saved:
+                    return
+                self._upload_conc_last_saved = n
+                payload = SettingsPayload(upload_concurrency=n)
+                try:
+                    ui._on_save_settings(payload)
+                except Exception:  # noqa: BLE001
+                    log.exception("upload_concurrency_save_failed")
+
+            self._upload_conc_group.buttonClicked.connect(
+                _on_upload_conc_clicked,
+            )
+
+            # Upload batch size. How many games we cram into a single
+            # ``POST /v1/games``. Bigger batches = more throughput per
+            # rate-limit-budget unit; capped at
+            # ``UPLOAD_BATCH_SIZE_USEFUL_MAX`` (50) by the 5 MB body
+            # limit on long-Zerg-game outliers.
+            upload_batch_block = QtWidgets.QWidget()
+            upload_batch_h = QtWidgets.QHBoxLayout(upload_batch_block)
+            upload_batch_h.setContentsMargins(0, 0, 0, 0)
+            upload_batch_h.setSpacing(10)
+            self._upload_batch_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+            self._upload_batch_slider.setRange(1, UPLOAD_BATCH_SIZE_USEFUL_MAX)
+            self._upload_batch_slider.setValue(_DEFAULT_UPLOAD_BATCH_SIZE)
+            self._upload_batch_slider.setTickPosition(
+                QtWidgets.QSlider.TicksBelow,
+            )
+            # Sparser tick marks at 5-game intervals — 50 ticks would
+            # turn into a comb on the slider track.
+            self._upload_batch_slider.setTickInterval(5)
+            self._upload_batch_slider.setToolTip(
+                f"How many games to pack into one HTTP request. The "
+                f"cloud accepts {UPLOAD_BATCH_SIZE_USEFUL_MAX}-game "
+                f"batches up to 5 MB; long Zerg games with full "
+                f"build_logs run ~150 KB each, so the default of "
+                f"{_DEFAULT_UPLOAD_BATCH_SIZE} leaves margin for "
+                f"outliers. Bigger batches × the 120 req/min rate "
+                f"limit = more throughput. Takes effect on next "
+                f"agent restart."
+            )
+            self._upload_batch_value_label = QtWidgets.QLabel()
+            self._upload_batch_value_label.setMinimumWidth(96)
+
+            def _refresh_upload_batch_label(val: int) -> None:
+                self._upload_batch_value_label.setText(
+                    f"{int(val)} games / req",
+                )
+
+            self._upload_batch_slider.valueChanged.connect(
+                _refresh_upload_batch_label,
+            )
+            _refresh_upload_batch_label(_DEFAULT_UPLOAD_BATCH_SIZE)
+            upload_batch_h.addWidget(self._upload_batch_slider, 1)
+            upload_batch_h.addWidget(self._upload_batch_value_label)
+            form.addRow("Upload batch size", upload_batch_block)
 
             # Date-range sync filter — mirrors the website's filter bar
             # (apps/web/lib/datePresets.ts). Restricts which replays the
@@ -1409,6 +1619,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if preset == "custom":
                 since_iso = self._filter_since.date().toString("yyyy-MM-dd")
                 until_iso = self._filter_until.date().toString("yyyy-MM-dd")
+            # Upload concurrency comes from the QButtonGroup's
+            # ``checkedId()`` (1 or 2). Falls back to whatever we
+            # last saved if no button is checked — should never
+            # happen because the group is exclusive and we set a
+            # default in __init__, but defensive coding keeps Save
+            # Settings from blowing up if Qt ever returns -1.
+            checked_upload_conc = self._upload_conc_group.checkedId()
+            if checked_upload_conc <= 0:
+                checked_upload_conc = self._upload_conc_last_saved
             payload = SettingsPayload(
                 api_base=self._api_input.text().strip() or None,
                 log_level=self._log_combo.currentText(),
@@ -1418,6 +1637,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 start_minimized=self._minimized_check.isChecked(),
                 player_handle=self._handle_input.text().strip(),
                 parse_concurrency=int(self._concurrency_slider.value()),
+                upload_concurrency=checked_upload_conc,
+                upload_batch_size=int(self._upload_batch_slider.value()),
                 sync_filter_preset=preset,
                 sync_filter_since=since_iso,
                 sync_filter_until=until_iso,
@@ -1726,6 +1947,29 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                     min(self._concurrency_slider.maximum(), cur),
                 )
                 self._concurrency_slider.setValue(cur)
+            if initial.upload_concurrency:
+                # Map the persisted/effective value (which can be
+                # 1..UPLOAD_CONCURRENCY_USEFUL_MAX from the env var
+                # path) onto the UI's 1-or-2 button group. Anything
+                # >=2 lights the "2" button — we don't expose 3/4
+                # in the UI even when the env var pushes higher
+                # because the Settings tab is for typical users.
+                desired = int(initial.upload_concurrency)
+                ui_value = 1 if desired <= 1 else 2
+                btn = self._upload_conc_buttons.get(ui_value)
+                if btn is not None:
+                    btn.setChecked(True)
+                # Sync the no-op-click guard to the value we just
+                # painted so the user clicking that same button
+                # doesn't trigger a redundant save.
+                self._upload_conc_last_saved = ui_value
+            if initial.upload_batch_size:
+                cur = int(initial.upload_batch_size)
+                cur = max(
+                    self._upload_batch_slider.minimum(),
+                    min(self._upload_batch_slider.maximum(), cur),
+                )
+                self._upload_batch_slider.setValue(cur)
             if initial.log_level:
                 idx = self._log_combo.findText(
                     initial.log_level, QtCore.Qt.MatchFixedString,

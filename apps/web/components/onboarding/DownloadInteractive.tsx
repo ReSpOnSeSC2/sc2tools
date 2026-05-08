@@ -206,7 +206,7 @@ function SysReqCard({ os }: { os: DetectedOS }) {
   const diskBody =
     sizeBytes != null
       ? `~${formatBytes(sizeBytes)} for the installer (Python + Qt runtime bundled). The replay folder itself is untouched.`
-      : "~305 MB for the installer (Python + Qt runtime bundled). The replay folder itself is untouched.";
+      : "~217 MB for the installer (Python + Qt runtime bundled). The replay folder itself is untouched.";
 
   return (
     <div className="space-y-3 rounded-xl border border-border bg-bg-surface p-4 sm:p-5">

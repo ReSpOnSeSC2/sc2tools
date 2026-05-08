@@ -90,7 +90,30 @@ class AgentState:
     so users on weaker hardware can drop it to 1, and users with a
     big backfill on a strong CPU can raise it to 8 or 16. Persisted
     here (rather than only as an env var) so a GUI change survives
-    restarts without the user re-typing it."""
+    restarts without the user re-typing it.
+
+    Capped at ``PARSE_CONCURRENCY_USEFUL_MAX`` (12) on save and
+    on bootstrap-promote-to-env — past that ceiling the upload
+    pipeline becomes the bottleneck, so additional parsers just
+    sit idle. Users with a stale 32 from before the v0.5.8 cap
+    get auto-clamped on next agent boot."""
+
+    upload_concurrency_override: Optional[int] = None
+    """How many parallel upload worker threads drain the queue. None
+    = use the config default (2 in v0.5.8+). The Settings tab exposes
+    this; the slider caps at ``UPLOAD_CONCURRENCY_USEFUL_MAX`` (4)
+    because the cloud's 120 req/min rate limit means 4 workers ≈
+    full budget on a typical home connection — more would just
+    cause 429 retries that settle at the same average throughput.
+    Persisted here so the choice survives restarts."""
+
+    upload_batch_size_override: Optional[int] = None
+    """How many games to pack into one ``POST /v1/games`` request.
+    None = use the config default (40 in v0.5.8+). Bigger batches
+    deliver more games per rate-limit-budget unit; the practical
+    ceiling is the cloud's 5 MB body limit. Slider caps at
+    ``UPLOAD_BATCH_SIZE_USEFUL_MAX`` (50). Persisted here so the
+    choice survives restarts."""
 
     last_known_mmr: Optional[int] = None
     """Sticky cache of the most recently extracted streamer MMR.
@@ -193,6 +216,12 @@ def load_state(state_dir: Path) -> AgentState:
         start_minimized=bool(raw.get("start_minimized") or False),
         parse_concurrency_override=_coerce_int(
             raw.get("parse_concurrency_override"),
+        ),
+        upload_concurrency_override=_coerce_int(
+            raw.get("upload_concurrency_override"),
+        ),
+        upload_batch_size_override=_coerce_int(
+            raw.get("upload_batch_size_override"),
         ),
         last_known_mmr=_coerce_mmr(raw.get("last_known_mmr")),
         last_known_mmr_date_iso=_coerce_str(raw.get("last_known_mmr_date_iso")),

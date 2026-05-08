@@ -304,3 +304,69 @@ def test_dashboard_url_falls_back_to_dot_com() -> None:
         _dashboard_url_from_api("http://localhost:8080")
         == "http://localhost:3000"
     )
+
+
+# ---- v0.5.8 upload-pipeline overrides round-trip ---------------------
+
+
+def test_upload_concurrency_override_round_trips(tmp_path: Path) -> None:
+    """Settings-tab Upload concurrency saves to state and loads back
+    intact, exactly like ``parse_concurrency_override``."""
+    s = AgentState(
+        device_token="t",
+        upload_concurrency_override=3,
+    )
+    save_state(tmp_path, s)
+    loaded = load_state(tmp_path)
+    assert loaded.upload_concurrency_override == 3
+
+
+def test_upload_batch_size_override_round_trips(tmp_path: Path) -> None:
+    """Settings-tab Upload batch size persists across restart."""
+    s = AgentState(
+        device_token="t",
+        upload_batch_size_override=42,
+    )
+    save_state(tmp_path, s)
+    loaded = load_state(tmp_path)
+    assert loaded.upload_batch_size_override == 42
+
+
+def test_upload_overrides_default_to_none_when_missing_from_disk(
+    tmp_path: Path,
+) -> None:
+    """A state file written by v0.5.7 (before these fields existed)
+    must load cleanly in v0.5.8 with the new fields defaulting to
+    ``None`` — meaning ``cfg.upload_*`` falls back to the v0.5.8
+    default values from ``load_config``."""
+    raw = {
+        "device_token": "t",
+        "uploaded": {},
+        "parse_concurrency_override": 4,
+        # NO upload_concurrency_override / upload_batch_size_override
+    }
+    (tmp_path / "agent.json").write_text(json.dumps(raw))
+    loaded = load_state(tmp_path)
+    assert loaded.upload_concurrency_override is None
+    assert loaded.upload_batch_size_override is None
+    # Pre-existing field still respected.
+    assert loaded.parse_concurrency_override == 4
+
+
+def test_upload_overrides_garbage_inputs_load_as_none(
+    tmp_path: Path,
+) -> None:
+    """A hand-edited state file with non-integer junk in either field
+    must not crash ``load_state`` — `_coerce_int` returns ``None``
+    on anything that doesn't parse cleanly, and the agent falls
+    back to the config default."""
+    raw = {
+        "device_token": "t",
+        "uploaded": {},
+        "upload_concurrency_override": "not-a-number",
+        "upload_batch_size_override": [1, 2, 3],
+    }
+    (tmp_path / "agent.json").write_text(json.dumps(raw))
+    loaded = load_state(tmp_path)
+    assert loaded.upload_concurrency_override is None
+    assert loaded.upload_batch_size_override is None

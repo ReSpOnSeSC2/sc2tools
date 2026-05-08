@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..api_client import ApiClient
 from ..config import AgentConfig
@@ -24,6 +24,16 @@ from ..replay_pipeline import CloudGame
 from ..state import AgentState, save_state
 
 log = logging.getLogger(__name__)
+
+# Backpressure budget for ``UploadQueue.submit``. With a 32-worker
+# process-mode parse pool feeding into a single-threaded upload
+# worker, parses can outrun uploads by 5–10×. Blocking the parse
+# done-callback thread on a full queue is the right behaviour
+# (no data loss) but we cap the wait so a wedged upload worker
+# doesn't freeze the entire pipeline indefinitely. 5 minutes is
+# longer than any reasonable network blip but short enough that
+# a real outage is visible to the user via the resulting log line.
+_BACKPRESSURE_TIMEOUT_SEC = 300.0
 
 
 class _ServerRejectedError(Exception):
@@ -63,37 +73,192 @@ class UploadQueue:
         self._api = api
         self._q: queue.Queue[UploadJob] = queue.Queue(maxsize=1000)
         self._stop = threading.Event()
-        self._thread: Optional[threading.Thread] = None
+        # Upload workers. Pre-v0.5.8 there was a single thread; v0.5.8
+        # parallelises uploads to ``cfg.upload_concurrency`` threads so
+        # the cloud-side bottleneck stops gating the user's "synced"
+        # counter on a backfill. ApiClient is a frozen dataclass with
+        # no shared mutable state and uses module-level ``requests``
+        # calls under the hood, so concurrent invocations are safe.
+        # State writes ARE shared but each one happens under
+        # ``self._lock`` and ``save_state`` does an atomic
+        # write-fsync-rename — so 4 threads racing to record successful
+        # uploads serialise cleanly through the lock with no
+        # interleaved writes to the JSON file on disk.
+        self._threads: list[threading.Thread] = []
+        # Effective worker count, kept separate from ``cfg`` so it can
+        # be hot-swapped at runtime via ``set_concurrency()``. The
+        # GUI's Upload-concurrency button group flips this between
+        # 1 and 2 with no agent restart required.
+        self._worker_count: int = max(
+            1, getattr(cfg, "upload_concurrency", 1),
+        )
+        # Effective batch size, also runtime-mutable via
+        # ``set_batch_size()``. Workers re-read this at the top of
+        # every drain iteration so a Settings-tab change propagates
+        # to the next batch they assemble — no worker-restart
+        # ceremony needed for batch-size adjustments.
+        self._batch_size: int = max(
+            1, getattr(cfg, "upload_batch_size", 1),
+        )
         self._on_success = on_success or (lambda _p: None)
         self._on_failure = on_failure or (lambda _p, _e: None)
         self._lock = threading.Lock()
+        # Lifecycle lock for ``start`` / ``stop`` / ``set_concurrency``.
+        # Prevents two GUI button clicks racing into overlapping
+        # restart sequences (which would leak threads).
+        self._lifecycle_lock = threading.Lock()
         self._paused = bool(getattr(state, "paused", False))
         self._resync_requested = threading.Event()
 
     def start(self) -> None:
-        if self._thread and self._thread.is_alive():
-            return
-        self._stop.clear()
-        self._thread = threading.Thread(
-            target=self._run, name="sc2tools-upload", daemon=True,
-        )
-        self._thread.start()
+        with self._lifecycle_lock:
+            if any(t.is_alive() for t in self._threads):
+                return
+            self._stop.clear()
+            self._threads = []
+            # ``self._worker_count`` is validated to >=1 in __init__
+            # and again on each ``set_concurrency`` call, but
+            # belt-and-suspenders ``max(1, …)`` here so a corrupt
+            # state file can't ship 0 worker threads.
+            worker_count = max(1, self._worker_count)
+            for i in range(worker_count):
+                t = threading.Thread(
+                    target=self._run,
+                    name=f"sc2tools-upload-{i}",
+                    daemon=True,
+                )
+                t.start()
+                self._threads.append(t)
+            log.info("upload_workers_started count=%d", worker_count)
 
     def stop(self) -> None:
-        self._stop.set()
-        if self._thread:
-            self._thread.join(timeout=5)
+        with self._lifecycle_lock:
+            self._stop.set()
+            # Join in order; any thread already idle inside the
+            # ``q.get(timeout=1.0)`` will exit on its next iteration.
+            # A thread mid-upload finishes the in-flight request
+            # first so we never abandon a successful API write
+            # without recording it in state.uploaded.
+            for t in self._threads:
+                t.join(timeout=5)
+            self._threads = []
+
+    def set_concurrency(self, new_count: int) -> None:
+        """Hot-swap the worker count without losing in-flight uploads.
+
+        Triggered by the Settings tab's Upload-concurrency button
+        group (1 / 2) — a click should take effect immediately, not
+        require an agent restart.
+
+        Approach: stop the current workers (each one finishes its
+        in-flight HTTPS POST first because ``stop()`` joins with a
+        5-second timeout, plenty for a typical request), then
+        ``start()`` again with the new count. The internal
+        ``Queue`` of pending jobs is untouched across the swap, so
+        anything not yet picked up by an old worker gets drained by
+        the new ones. Anything picked up but not finished gets
+        recorded in ``state.uploaded`` by the worker before it
+        exits — no data loss.
+
+        No-op if the new count matches the current one. Brief gap
+        (typically <1 sec) where the queue isn't being drained,
+        but the parse-pool's ``put`` backpressure path handles
+        that automatically.
+        """
+        new_count = max(1, int(new_count))
+        with self._lifecycle_lock:
+            if new_count == self._worker_count and any(
+                t.is_alive() for t in self._threads
+            ):
+                # Already at the target count and running — nothing
+                # to do. Skipping the stop/start dance avoids a
+                # spurious queue-drain pause on a no-op click.
+                return
+            old_count = self._worker_count
+            self._worker_count = new_count
+        log.info(
+            "upload_concurrency_change from=%d to=%d", old_count, new_count,
+        )
+        # Order matters: ``stop()`` then ``start()``. Both take the
+        # ``_lifecycle_lock``; we released it above so they can each
+        # acquire it cleanly. The ``_worker_count`` mutation under
+        # the lock above is what governs how many threads ``start()``
+        # spawns next.
+        self.stop()
+        self.start()
+
+    def set_batch_size(self, new_size: int) -> None:
+        """Hot-swap the per-request batch size at runtime.
+
+        No worker restart needed: workers re-read ``self._batch_size``
+        at the top of every drain iteration (see ``_run`` above), so
+        the change takes effect on the next batch each worker
+        assembles — typically within 1–2 seconds.
+
+        Idempotent on no-op. Floor of 1; ceiling enforced by the
+        runner's save handler against ``UPLOAD_BATCH_SIZE_USEFUL_MAX``,
+        not here, so a hot-swap from a hand-edited override stays
+        within sensible bounds without this method needing to know
+        about server limits.
+        """
+        new_size = max(1, int(new_size))
+        if new_size == self._batch_size:
+            return
+        log.info(
+            "upload_batch_size_change from=%d to=%d",
+            self._batch_size, new_size,
+        )
+        # Single int assignment — no lock needed (Python dict / int
+        # writes are atomic at the bytecode level for single-stmt
+        # assignment, and the worker's ``max(1, self._batch_size)``
+        # is read inside its own iteration loop). Worst case the
+        # in-flight batch uses the OLD size and the next one uses
+        # the new size; that's the contract.
+        self._batch_size = new_size
 
     def submit(self, job: UploadJob) -> bool:
-        """Enqueue a job. Returns False if already uploaded or queue full."""
+        """Enqueue a job. Returns False if already uploaded.
+
+        Backpressure (added v0.5.8): when process-mode parse pools
+        produce parses faster than the cloud uploader drains them
+        (5–10× ratio is typical on a 32-worker pool), the bounded
+        ``Queue(maxsize=1000)`` would otherwise fill up and silently
+        drop incoming jobs via ``put_nowait``. Dropped jobs were not
+        marked ``state.uploaded`` so the next sweep would re-discover
+        them, re-parse them (wasted CPU), and drop them again — a
+        loop that could repeat indefinitely on a backfill of N>>1k
+        replays.
+
+        The fix: ``put`` with a generous timeout. Blocks the caller
+        (the parse-pool done-callback thread) until the upload worker
+        drains a slot. ``ProcessPoolExecutor`` gracefully accumulates
+        completed-but-not-yet-callback'd futures during the block, so
+        nothing is lost — parses just queue up in memory until the
+        upload thread catches up. The 5-minute timeout is a safety
+        net for a wedged upload thread (e.g. a hung HTTPS connection
+        the connection pool hasn't reaped yet); we'd rather log the
+        symptom and drop one job than block the entire pipeline
+        forever.
+        """
         if str(job.file_path) in self._state.uploaded:
             log.debug("dedupe_skip %s", job.file_path.name)
             return False
         try:
-            self._q.put_nowait(job)
+            self._q.put(job, timeout=_BACKPRESSURE_TIMEOUT_SEC)
             return True
         except queue.Full:
-            log.warning("upload_queue_full; dropping %s", job.file_path.name)
+            # Reached only when the upload thread has been
+            # unresponsive for the full timeout window. By the time
+            # we hit this branch the agent is in a degraded state —
+            # log loudly so support can correlate it with whatever
+            # network / API outage caused it.
+            log.error(
+                "upload_queue_blocked_for_%ds; dropping %s "
+                "(upload worker likely stuck — investigate API "
+                "connectivity or restart the agent)",
+                int(_BACKPRESSURE_TIMEOUT_SEC),
+                job.file_path.name,
+            )
             return False
 
     def pending_count(self) -> int:
@@ -128,51 +293,251 @@ class UploadQueue:
 
     # ---------------- internals ----------------
     def _run(self) -> None:
+        """Worker loop: drain a batch, post via ``upload_games_batch``.
+
+        Per-batch behaviour:
+
+          1. Block on ``q.get(timeout=1.0)`` for the first job. The 1
+             s timeout is short enough that ``stop()`` is responsive.
+          2. If paused, re-enqueue the first job and sleep — same
+             non-loss semantics the pre-batching worker had.
+          3. Greedy-drain up to ``cfg.upload_batch_size - 1`` more
+             ready jobs via ``q.get_nowait()`` (so we don't block
+             waiting for a full batch when only a few are ready).
+          4. POST the batch to ``/v1/games``. Per-game ``accepted`` /
+             ``rejected`` results are processed individually inside
+             ``_upload_batch`` so partial-success batches (some
+             games accept, some fail validation) work correctly.
+          5. Whole-batch transient failures (network, 429, timeout)
+             re-enqueue every job in the batch so nothing is lost.
+
+        Re-reads ``self._batch_size`` at the top of every iteration
+        (not just once at function entry) so a runtime ``set_batch_size``
+        call propagates to the next batch the worker assembles —
+        same hot-swap semantics as ``set_concurrency``.
+        """
         while not self._stop.is_set():
+            batch_cap = max(1, self._batch_size)
             try:
-                job = self._q.get(timeout=1.0)
+                first_job = self._q.get(timeout=1.0)
             except queue.Empty:
                 continue
             if self.is_paused():
                 # Re-enqueue and sleep; never lose work because we paused.
                 try:
-                    self._q.put_nowait(job)
+                    self._q.put_nowait(first_job)
                 except queue.Full:
                     log.error("upload_queue_full_during_pause; dropping")
                 self._q.task_done()
                 time.sleep(1.0)
                 continue
+            # Drain additional ready jobs into the batch — but DON'T
+            # block waiting for them. If the queue was empty after
+            # ``first_job`` we send a 1-element batch immediately
+            # rather than dawdling on the off-chance more arrive.
+            batch: List[UploadJob] = [first_job]
+            while len(batch) < batch_cap:
+                try:
+                    batch.append(self._q.get_nowait())
+                except queue.Empty:
+                    break
             try:
-                self._upload_one(job)
+                self._upload_batch(batch)
             except _ServerRejectedError as exc:
-                # Permanent rejection — schema/validator failure. Do
-                # NOT retry: the same payload would fail the same way
-                # forever and starve the queue (which is what filled
-                # the bounded queue and caused
-                # ``upload_queue_full_after_retry; dropping`` cascades
-                # before this branch existed).
-                log.error(
-                    "upload_rejected %s: %s",
-                    job.file_path.name, exc,
-                )
-                self._on_failure(job.file_path, exc)
-                path_str = str(job.file_path)
+                # Whole-batch envelope rejection (e.g. server returned
+                # a top-level error not per-game). Mark every job in
+                # the batch as rejected so we don't loop. Per-game
+                # rejections never reach this branch — they're handled
+                # individually inside ``_upload_batch`` via the
+                # ``rejected`` array of the response.
                 with self._lock:
-                    self._state.uploaded[path_str] = "rejected"
+                    for job in batch:
+                        log.error(
+                            "upload_rejected %s: %s",
+                            job.file_path.name, exc,
+                        )
+                        self._on_failure(job.file_path, exc)
+                        self._state.uploaded[str(job.file_path)] = "rejected"
                     save_state(self._cfg.state_dir, self._state)
             except Exception as exc:  # noqa: BLE001
-                log.warning("upload_failed %s: %s", job.file_path.name, exc)
-                self._on_failure(job.file_path, exc)
-                # Park briefly then retry the same job.
+                log.warning(
+                    "upload_batch_failed size=%d: %s",
+                    len(batch), exc,
+                )
+                for job in batch:
+                    self._on_failure(job.file_path, exc)
+                # Park briefly then retry the whole batch by
+                # re-enqueueing every job. The dedupe-on-submit gate
+                # in ``submit()`` prevents already-uploaded files from
+                # going around twice if a partial success was followed
+                # by a transient error mid-batch.
                 time.sleep(2.0)
-                try:
-                    self._q.put_nowait(job)
-                except queue.Full:
-                    log.error("upload_queue_full_after_retry; dropping")
+                for job in batch:
+                    try:
+                        self._q.put_nowait(job)
+                    except queue.Full:
+                        log.error(
+                            "upload_queue_full_after_retry; dropping %s",
+                            job.file_path.name,
+                        )
             finally:
-                self._q.task_done()
+                # ``task_done`` once per ``get`` regardless of outcome.
+                # Required for ``Queue.join()`` semantics; tests rely
+                # on it via the implicit accounting.
+                for _ in batch:
+                    self._q.task_done()
+
+    def _upload_batch(self, batch: List[UploadJob]) -> None:
+        """POST a batch of games as one HTTP request, then mirror the
+        per-game ``accepted`` / ``rejected`` arrays back into
+        ``state.uploaded``.
+
+        The cloud API at ``POST /v1/games`` accepts ``{games: [...]}``
+        and replies with the same per-game accept/reject envelope it
+        uses for single-game uploads. Per-game outcomes are handled
+        independently here — a 25-game batch where 23 succeed and 2
+        fail validation results in 23 ``ISO timestamp`` entries plus
+        2 ``"rejected"`` entries in ``state.uploaded``, all written
+        under one ``save_state`` call so the on-disk state file
+        reflects the whole batch atomically.
+        """
+        if not batch:
+            return
+        # Build payloads + a gameId→job lookup so we can map server
+        # responses back to the originating ``UploadJob``. Keyed off
+        # the server's authoritative gameId rather than file path
+        # because the response envelope only carries gameIds.
+        payloads: List[Dict[str, Any]] = []
+        by_id: Dict[str, UploadJob] = {}
+        for job in batch:
+            payload = job.game.to_payload()
+            payloads.append(payload)
+            gid = payload.get("gameId")
+            if isinstance(gid, str) and gid:
+                by_id[gid] = job
+        if len(by_id) < len(batch):
+            log.warning(
+                "upload_batch_missing_gameids count=%d expected=%d",
+                len(by_id), len(batch),
+            )
+        log.info("uploading_batch size=%d", len(batch))
+        # Single-item batches still go through the batch endpoint —
+        # the server's per-game response envelope is identical for
+        # 1-game and N-game batches, so this keeps the worker code
+        # path uniform. Tests that pin to ``upload_concurrency=1``
+        # and ``upload_batch_size=1`` to assert single-game behaviour
+        # see one ``upload_games_batch`` call with a 1-element list.
+        result = self._api.upload_games_batch(payloads)
+        accepted = result.get("accepted") or []
+        rejected = result.get("rejected") or []
+
+        accepted_jobs: List[UploadJob] = []
+        rejected_jobs: List[Tuple[UploadJob, str]] = []
+        with self._lock:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            for acc in accepted:
+                gid = acc.get("gameId") if isinstance(acc, dict) else None
+                job = by_id.get(gid) if isinstance(gid, str) else None
+                if not job:
+                    log.warning("upload_unmapped_accepted gameId=%r", gid)
+                    continue
+                path_str = str(job.file_path)
+                self._state.uploaded[path_str] = now_iso
+                # Reverse-index by gameId so the Socket.io recompute
+                # path can locate this replay's file in O(1) — same
+                # invariant maintained by the pre-batching path.
+                if isinstance(gid, str) and gid:
+                    self._state.path_by_game_id[gid] = path_str
+                accepted_jobs.append(job)
+            for rej in rejected:
+                gid = rej.get("gameId") if isinstance(rej, dict) else None
+                job = by_id.get(gid) if isinstance(gid, str) else None
+                if not job:
+                    log.warning("upload_unmapped_rejected gameId=%r", gid)
+                    continue
+                errs = rej.get("errors") if isinstance(rej, dict) else None
+                err_msg = "; ".join(str(e) for e in (errs or [])) or "unknown"
+                self._state.uploaded[str(job.file_path)] = "rejected"
+                rejected_jobs.append((job, err_msg))
+            if accepted_jobs or rejected_jobs:
+                save_state(self._cfg.state_dir, self._state)
+
+        # User-facing callbacks + the sticky-MMR push happen OUTSIDE
+        # the lock — they may take a network round-trip and we don't
+        # want to hold the state lock that long.
+        for job in accepted_jobs:
+            self._on_success(job.file_path)
+        for job, err_msg in rejected_jobs:
+            log.error("upload_rejected %s: %s", job.file_path.name, err_msg)
+            self._on_failure(job.file_path, _ServerRejectedError(err_msg))
+        # Sticky-MMR: pushing one MMR per accepted game would make
+        # N redundant API calls for the older entries (each would
+        # short-circuit on the date check after the newest had
+        # already updated state). Compute the newest dated job ONCE
+        # and only push for that.
+        self._push_last_mmr_for_newest(accepted_jobs)
+
+        # Sanity check: every batched gameId should appear in either
+        # accepted or rejected. A server that drops a game silently
+        # would otherwise leave the file in inflight purgatory —
+        # re-enqueue so the next sweep picks it up. This is a
+        # defensive belt-and-suspenders check; we've never observed
+        # the cloud API drop a game from the response.
+        seen = (
+            {a.get("gameId") for a in accepted if isinstance(a, dict)}
+            | {r.get("gameId") for r in rejected if isinstance(r, dict)}
+        )
+        for gid, job in by_id.items():
+            if gid in seen:
+                continue
+            log.warning(
+                "upload_unaccounted_game gameId=%s; re-enqueueing %s",
+                gid, job.file_path.name,
+            )
+            try:
+                self._q.put_nowait(job)
+            except queue.Full:
+                log.error(
+                    "upload_queue_full_unaccounted; dropping %s",
+                    job.file_path.name,
+                )
+
+    def _push_last_mmr_for_newest(self, jobs: List[UploadJob]) -> None:
+        """Run sticky-MMR push for the newest dated game in ``jobs``.
+
+        ``_maybe_push_last_mmr`` is correct when called per-job, but
+        running it for every accepted game in a batch is wasteful:
+        the second-and-later calls all short-circuit on the date
+        comparison once the first call has updated
+        ``state.last_known_mmr_date_iso``. Picking the newest up
+        front collapses N short-circuited checks (and possibly N-1
+        redundant API calls if a thread races) to a single
+        ``patch_last_mmr`` round-trip.
+        """
+        newest: Optional[UploadJob] = None
+        for job in jobs:
+            my_mmr = getattr(job.game, "my_mmr", None)
+            if not isinstance(my_mmr, int) or not (500 <= my_mmr <= 9999):
+                continue
+            game_date = getattr(job.game, "date_iso", None)
+            if not isinstance(game_date, str) or not game_date:
+                continue
+            if newest is None:
+                newest = job
+                continue
+            newest_date = getattr(newest.game, "date_iso", "")
+            if game_date > newest_date:
+                newest = job
+        if newest is not None:
+            self._maybe_push_last_mmr(newest)
 
     def _upload_one(self, job: UploadJob) -> None:
+        """Legacy single-game upload path. v0.5.8 routes everything
+        through ``_upload_batch`` (with size-1 batches when
+        ``upload_batch_size=1``); this method survives only for any
+        downstream caller that imports it directly. Internal callers
+        within the queue's own code go through ``_upload_batch``.
+        """
         log.info("uploading %s", job.file_path.name)
         result = self._api.upload_game(job.game.to_payload())
         accepted = bool((result.get("accepted") or [{}])[0].get("gameId"))

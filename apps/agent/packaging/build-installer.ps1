@@ -55,11 +55,11 @@ function Resolve-AgentVersion {
     if ($Version) { return $Version }
     $initPy = Join-Path $AgentRoot "sc2tools_agent\__init__.py"
     if (-not (Test-Path $initPy)) {
-        throw "Cannot find $initPy — provide -Version explicitly."
+        throw "Cannot find $initPy - provide -Version explicitly."
     }
     $line = Select-String -Path $initPy -Pattern '^__version__\s*=\s*"([^"]+)"' -ErrorAction Stop
     if (-not $line) {
-        throw "No __version__ in $initPy — provide -Version explicitly."
+        throw "No __version__ in $initPy - provide -Version explicitly."
     }
     return $line.Matches[0].Groups[1].Value
 }
@@ -107,10 +107,24 @@ Invoke-Step "Running PyInstaller" {
     }
 }
 
-$ExePath = Join-Path $DistDir "sc2tools-agent.exe"
-if (-not (Test-Path $ExePath)) {
-    throw "PyInstaller did not produce $ExePath — check the build log."
+# Locate the freshly-built exe. The spec file's ONE_FILE flag changes
+# the layout: one-folder mode (default) writes
+# dist\sc2tools-agent\sc2tools-agent.exe alongside an _internal\ deps
+# directory; one-file mode writes a single dist\sc2tools-agent.exe.
+# Probe both so this script keeps working under either build mode and
+# downstream paths (NSIS, signtool) get the right location.
+$ExePathFolder = Join-Path $DistDir "sc2tools-agent\sc2tools-agent.exe"
+$ExePathSingle = Join-Path $DistDir "sc2tools-agent.exe"
+if (Test-Path $ExePathFolder) {
+    $ExePath = $ExePathFolder
+    $BuildLayout = "one-folder"
+} elseif (Test-Path $ExePathSingle) {
+    $ExePath = $ExePathSingle
+    $BuildLayout = "one-file"
+} else {
+    throw "PyInstaller did not produce sc2tools-agent.exe in either layout (looked at $ExePathFolder and $ExePathSingle) - check the build log."
 }
+Write-Host "Build layout: $BuildLayout (exe at $ExePath)" -ForegroundColor DarkGray
 
 if ($Installer) {
     Invoke-Step "Locating makensis" {

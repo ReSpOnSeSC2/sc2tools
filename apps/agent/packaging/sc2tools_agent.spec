@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec for the SC2 Tools Agent.
 
-Builds a single Windows EXE that bundles:
+Builds a Windows distribution that bundles:
 
   * Python 3.12 runtime
   * sc2tools_agent (this package)
@@ -14,13 +14,26 @@ Build:
     cd apps/agent
     pyinstaller packaging/sc2tools_agent.spec
 
-Output:
-    apps/agent/dist/sc2tools-agent/sc2tools-agent.exe       (one-folder)
-    apps/agent/dist/sc2tools-agent.exe                       (one-file)
+Output (one-folder, default):
+    apps/agent/dist/sc2tools-agent/sc2tools-agent.exe
+    apps/agent/dist/sc2tools-agent/_internal/...
 
-We default to one-folder mode for faster startup; flip ONE_FILE to True
-for a single .exe (slower first-run because the runtime unpacks into
-%TEMP%, but easier to ship as a stand-alone download).
+Output (one-file, ONE_FILE=True):
+    apps/agent/dist/sc2tools-agent.exe
+
+We default to ONE-FOLDER mode (``ONE_FILE = False``). The reason is
+multiprocessing compatibility on Windows: with ``ONE_FILE=True`` every
+``ProcessPoolExecutor`` child re-launches the 319 MB self-extracting
+exe, each child re-extracts its own ``%TEMP%\\_MEI{random}\\`` folder,
+and N children spawn N simultaneous ~10 GB extractions. Antivirus
+scanning + disk I/O contention make children crash with
+``BrokenProcessPool('terminated abruptly')``, which is exactly the
+failure the v0.5.7 watcher was fighting. One-folder mode extracts
+once at install time and every spawn child loads from the existing
+folder — no per-child extraction, no antivirus thrash, no spawn
+crashes. Flip ONE_FILE to True only when shipping a stand-alone
+download (e.g. a portable archive) where the installer flow isn't
+acceptable.
 """
 
 # noqa: E501
@@ -36,7 +49,7 @@ from PyInstaller.utils.hooks import (  # type: ignore[import-not-found]
     collect_submodules,
 )
 
-ONE_FILE = True
+ONE_FILE = False
 
 HERE = Path.cwd()
 REPO_ROOT = HERE / ".." / ".."

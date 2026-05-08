@@ -127,6 +127,40 @@ def _ensure_analyzer_on_path() -> None:
 _ensure_analyzer_on_path()
 
 
+def bootstrap_analyzer_path() -> None:
+    """Public, idempotent entry point for re-bootstrapping the analyzer roots.
+
+    Identical behaviour to ``_ensure_analyzer_on_path`` — exposed under a
+    public name so the watcher's ``ProcessPoolExecutor`` workers can call
+    it as the FIRST thing they do on the child side.
+
+    Why this matters in process-pool mode (added v0.5.8):
+
+    On Windows, ``multiprocessing`` uses the ``spawn`` start method, which
+    re-runs ``__main__.py`` from scratch in the child. The child's
+    ``sys.path`` is NOT a copy of the parent's — it's whatever the
+    interpreter assembles at startup, plus whatever each imported module
+    appends. The parent's manual ``sys.path`` mutations (the
+    ``_ensure_analyzer_on_path`` call below) live ONLY in the parent.
+
+    Importing ``sc2tools_agent.replay_pipeline`` in the child re-runs the
+    module-scope call to ``_ensure_analyzer_on_path`` and that DOES
+    bootstrap the path inside the child. But that only works if the
+    child happens to import this module before doing anything that needs
+    the analyzer — and on PyInstaller's frozen exe, the import order is
+    not always what you'd expect (sc2reader's data-file lookups, for
+    instance, may run before the agent module load completes).
+
+    Calling ``bootstrap_analyzer_path()`` explicitly at the very top of
+    the worker function removes that ordering dependency. It's
+    idempotent (every call is a no-op if the paths are already on
+    ``sys.path``) and side-effect-only (mutates ``sys.path`` in place,
+    returns nothing), so callers can invoke it freely without worrying
+    about repeated work.
+    """
+    _ensure_analyzer_on_path()
+
+
 def _load_sc2ra_module(dotted_name: str) -> Any:
     """Load a module by dotted name explicitly from ``SC2Replay-Analyzer/``.
 

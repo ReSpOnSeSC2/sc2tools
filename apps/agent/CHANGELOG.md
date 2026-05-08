@@ -1,0 +1,106 @@
+# Changelog
+
+All notable changes to `@sc2tools/agent` go here. Newest first.
+
+## 0.5.8
+
+### Added
+- **Batch upload + multi-worker upload pipeline.** The watcher's parse
+  output now feeds into the cloud's batch endpoint
+  (`POST /v1/games {games: [...]}`) instead of one HTTP request per
+  game. Default batch size 25, default concurrency 1. With the
+  cloud's 120 req/min rate limit that's `1 worker × 2 req/sec ×
+  25 games/req = 50 games/sec sustained` — about 25× the v0.5.7
+  ceiling on the same rate-limit budget. Configurable via
+  `SC2TOOLS_UPLOAD_BATCH_SIZE` and `SC2TOOLS_UPLOAD_CONCURRENCY`
+  env vars. Per-game `accepted` / `rejected` arrays in the response
+  are mirrored back into `state.uploaded` independently, so a
+  partial-success batch (e.g. 23 accept + 2 schema-reject) marks
+  each game correctly.
+- **Backpressure on `UploadQueue.submit`.** Pre-v0.5.8 the bounded
+  queue silently dropped jobs when full. Process-mode parsers
+  produce 5–10× faster than the upload thread can drain, so
+  ~80% of replays were getting dropped + re-parsed on the next
+  sweep, looping indefinitely. The new behaviour blocks the parse
+  done-callback thread until the queue has space (5-min safety
+  timeout). No data loss.
+- **`Retry-After` honored on 429.** When the cloud rate-limits an
+  upload, the API client reads the `Retry-After` header (RFC 7231
+  integer-seconds form, with HTTP-date fallback) and sleeps that
+  long instead of falling through to the 0.5/1/2-second exponential
+  backoff. Clamped at 60 s so a buggy / hostile server can't hang
+  the agent indefinitely.
+- **`Pause` now stops the parser, not just uploads.** Pre-v0.5.8 the
+  watcher kept submitting parses in the background while paused;
+  process mode made that flood the log even after the user clicked
+  Pause expecting silence. Pause now short-circuits both the
+  periodic sweep and live watchdog file-create events.
+- **Process-pool parse mode is back, default-on, with three guardrails.**
+  The watcher's parse executor now picks `ProcessPoolExecutor` by default,
+  giving the user's `parse_concurrency` slider real CPU parallelism (≈5×
+  wall-clock speedup measured on a 12k-replay backfill — see
+  `README.md#parse-pool-modes` for the table). The v0.3.9 attempt at
+  this shipped enabled and crashed every PyInstaller-frozen child during
+  spawn with `BrokenProcessPool`; v0.3.10 disabled the feature entirely.
+  v0.5.8 re-enables it with:
+  1. `_parse_in_worker` calls `bootstrap_analyzer_path()` as the FIRST
+     thing it does on the child side, unconditionally re-bootstrapping
+     the analyzer roots onto the child's `sys.path`. This fixes the
+     direct cause of the v0.3.9 incident: the child importing
+     `core.sc2_replay_parser` before the parent's `sys.path` mutations
+     reached it.
+  2. A boot-time synthetic probe in `_probe_process_pool()` spawns one
+     child, asks it to import `core.sc2_replay_parser`, and waits 30 s
+     for an answer. On any failure the agent logs
+     `parse_pool_probe_failed err=<reason>` and falls back to
+     `ThreadPoolExecutor` for the rest of the session — no crash, no
+     stuck queue.
+  3. A runtime catch in `_submit_parse` swaps the live process pool for
+     a thread pool if `BrokenProcessPool` ever surfaces mid-session
+     (e.g., a worker OOM during an unusually long replay). The replay
+     re-submits transparently and the rest of the session continues
+     in threading mode.
+- New env var `SC2TOOLS_PARSE_USE_PROCESSES`: set to `0`, `false`,
+  `off`, or `no` (case-insensitive, whitespace-tolerant) to force
+  threading mode and skip the boot probe entirely. Anything else —
+  including unset — keeps process mode enabled.
+- New log line `parse_pool_mode=process|thread workers=N reason=…`
+  emitted exactly once at boot, plus a second one if the runtime
+  fallback triggers. Greppable triage signal for support.
+
+### Changed
+- `_on_worker_done` now takes the submitted path string as an explicit
+  second argument (captured in the `add_done_callback` closure) so the
+  inflight set is cleared even when `future.result()` raises. Without
+  this a worker crash would orphan the inflight entry and the replay
+  would never re-submit on a subsequent sweep. Threading-mode behaviour
+  is unchanged.
+- `ReplayWatcher.stop()` reads the live executor under `_executor_lock`
+  before shutting it down — the runtime fallback can swap it
+  mid-session and the previous read would have raced.
+
+### Fixed
+- Inflight-set leak when a parse worker raises before producing a
+  result tuple. Previously the `finally:` block in `_on_worker_done`
+  was unreachable because the early `return` in the `except`
+  branch ran first. Now the `finally:` runs unconditionally and uses
+  the captured submission path.
+
+### Migration notes
+- No state-file schema changes. State written by 0.5.7 loads
+  unchanged in 0.5.8.
+- The Settings tab's parse-concurrency slider now caps at
+  `min(cpu_count, 12)` instead of `cpu_count`. Beyond ~8-12
+  parse workers, additional workers just queue up parsed games
+  in memory while the upload pipeline drains at its rate-limited
+  ceiling — the cap keeps the slider honest. Users with a saved
+  `parse_concurrency_override > 12` (e.g. 32 from running the old
+  uncapped slider) get auto-clamped to 12 on next agent boot with
+  a `parse_concurrency_clamped from=N to=12` log line. Power
+  users on a self-hosted cloud API with a higher rate limit can
+  bypass the cap entirely via the `SC2TOOLS_PARSE_CONCURRENCY`
+  env var.
+- If you experience instability on the new default, set
+  `SC2TOOLS_PARSE_USE_PROCESSES=0` and please open an issue with the
+  `parse_pool_probe_failed` line from `agent.log` so we can debug
+  the underlying spawn issue on your install.
