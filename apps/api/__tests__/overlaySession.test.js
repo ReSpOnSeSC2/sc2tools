@@ -541,7 +541,13 @@ describe("services/games.todaySession", () => {
     expect(pulseMmr.getCurrentMmr).not.toHaveBeenCalled();
   });
 
-  test("profile region wins over the SC2Pulse-derived region", async () => {
+  test("SC2Pulse-derived region wins over a stale profile.region", async () => {
+    // Streamer once typed "kr" into Settings → Region (or migrated from
+    // a v0.5.x doc where it was set), but their actual play is on a
+    // pulse account SC2Pulse pins to EU. The widget MUST surface the
+    // region of the team whose MMR we're displaying — labelling 5343
+    // as "KR" when it's the EU team's rating is the bug streamers
+    // reported with the legacy chain that put profile.region first.
     await db.games.insertOne({
       userId: "u1",
       gameId: "g1",
@@ -558,7 +564,94 @@ describe("services/games.todaySession", () => {
     });
     const out = await svcWithPulse.todaySession("u1", "UTC");
     expect(out.mmrCurrent).toBe(5343);
-    expect(out.region).toBe("KR");
+    expect(out.region).toBe("EU");
+  });
+
+  test("stale profile.region cannot paint the wrong label over an obvious NA play", async () => {
+    // Regression: a streamer who never plays KR but has profile.region
+    // = "kr" stuck on their account from an earlier setting was seeing
+    // "KR <NA-MMR>" on the session widget. The SC2Pulse multi-id path
+    // correctly returns NA (preferredRegion is biased by the streamer's
+    // most recent myToonHandle), but the legacy region-resolver let
+    // profile.region win over pulseRegion. The widget must now follow
+    // the MMR source.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-na",
+      result: "Victory",
+      date: new Date(),
+      myToonHandle: "1-S2-1-267727", // NA byte
+    });
+    const pulseMmr = {
+      getCurrentMmrForAny: jest.fn(async (_ids, opts) => {
+        expect(opts).toEqual({ preferredRegion: "NA" });
+        return { mmr: 5326, region: "NA" };
+      }),
+    };
+    const svc2 = new GamesService(db, {
+      users: {
+        getProfile: async () => ({
+          pulseIds: ["1-S2-1-267727"],
+          region: "kr",
+        }),
+      },
+      pulseMmr,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(5326);
+    expect(out.region).toBe("NA");
+  });
+
+  test("region label matches the row that produced lastKnownMmr, not the most recent game", async () => {
+    // Multi-region streamer: yesterday's MMR-bearing game was on EU,
+    // today's game has no MMR but a NA myToonHandle. Today's mmrCurrent
+    // comes from the EU row via the games_window fallback, so the
+    // region label must be EU — not NA — or the widget paints "NA <EU
+    // MMR>".
+    const today = new Date();
+    const yesterday = new Date(today.getTime() - 30 * 60 * 60 * 1000);
+    await db.games.insertMany([
+      {
+        userId: "u1",
+        gameId: "g-eu-yesterday",
+        result: "Victory",
+        date: yesterday,
+        myMmr: 4900,
+        myToonHandle: "2-S2-1-555", // EU byte
+      },
+      {
+        userId: "u1",
+        gameId: "g-na-today",
+        result: "Defeat",
+        date: today,
+        myToonHandle: "1-S2-1-267727", // NA byte, no MMR
+      },
+    ]);
+    const out = await svc.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(4900);
+    expect(out.region).toBe("EU");
+  });
+
+  test("dropdown 'us' maps to the canonical 'NA' label", async () => {
+    // Settings dropdown stores Battle.net subdomain values ("us"/"eu"/
+    // "kr"/"cn"); the rest of the pipeline uses Blizzard region labels
+    // ("NA"/"EU"/"KR"/"CN"). Without normalisation the widget paints
+    // "US 5343" while every other source ("NA" from toon-handle, "NA"
+    // from SC2Pulse) reads as "NA". Streamers don't care — but the
+    // mismatch makes the chain look broken when a US-only setting
+    // sticks while every fallback has been exhausted.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-no-toon",
+      result: "Victory",
+      date: new Date(),
+      myMmr: 5100,
+    });
+    const svcWithUs = new GamesService(db, {
+      users: { getProfile: async () => ({ region: "us" }) },
+    });
+    const out = await svcWithUs.todaySession("u1", "UTC");
+    expect(out.region).toBe("NA");
   });
 
   test("Tier-3 toon-handle fallback fires when profile.pulseId is unset", async () => {
