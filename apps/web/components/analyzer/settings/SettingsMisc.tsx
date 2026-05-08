@@ -29,7 +29,6 @@ const DEFAULT_TABS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "battlefield", label: "Battlefield" },
   { value: "builds", label: "Builds" },
   { value: "ml", label: "ML insights" },
-  { value: "map-intel", label: "Map intel" },
 ];
 
 export function SettingsMisc() {

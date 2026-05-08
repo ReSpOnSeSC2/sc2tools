@@ -7,7 +7,11 @@ import {
   useState,
 } from "react";
 import { useApi } from "@/lib/clientApi";
-import { ActiveArmyChart, type HoverEvent } from "./ActiveArmyChart";
+import {
+  ActiveArmyChart,
+  type ActiveArmyLeakWindow,
+  type HoverEvent,
+} from "./ActiveArmyChart";
 import {
   CompositionSnapshot,
   type BuildOrderResponse,
@@ -24,6 +28,10 @@ export interface MacroChartSectionProps {
   unitTimeline?: UnitTimelineEntry[];
   gameLengthSec?: number;
   leaks: LeakItem[];
+  /** Time-span windows (supply blocks etc.) for the local player. */
+  leakWindows?: ActiveArmyLeakWindow[];
+  /** Time-span windows for the opponent. */
+  oppLeakWindows?: ActiveArmyLeakWindow[];
   highlightedKey?: string | null;
   myName?: string | null;
   oppName?: string | null;
@@ -76,6 +84,8 @@ export function MacroChartSection({
   unitTimeline,
   gameLengthSec,
   leaks,
+  leakWindows,
+  oppLeakWindows,
   highlightedKey,
   myName,
   oppName,
@@ -139,6 +149,8 @@ export function MacroChartSection({
         oppBuildEvents={buildOrder.data?.opp_events}
         gameLengthSec={gameLengthSec}
         leaks={leaks}
+        leakWindows={leakWindows}
+        oppLeakWindows={oppLeakWindows}
         highlightedKey={highlightedKey}
         hoveredTime={hover.time}
         onHover={handleHover}

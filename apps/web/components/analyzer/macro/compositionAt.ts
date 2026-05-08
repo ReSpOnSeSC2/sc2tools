@@ -46,6 +46,7 @@ export interface BuildEvent {
   name: string;
   display?: string;
   is_building?: boolean;
+  category?: string;
 }
 
 export type CompositionSource = "timeline" | "hybrid" | "build_order" | "empty";
@@ -68,21 +69,22 @@ export interface DerivedComposition {
  * Archon is a 2-parent morph (HighTemplar OR DarkTemplar — either
  * combination), so it's handled separately in ``applyMorph`` rather
  * than via this map.
+ *
+ * Lurker has both ``Lurker`` and ``LurkerMP`` canonical forms in
+ * sc2reader output depending on the data version. Both consume a
+ * Hydralisk; downstream sortedArmyComposition treats them as the same
+ * cost-tier unit. Hellbat ↔ Hellion is a stance toggle, not a morph;
+ * canonicalizeName strips the suffix so a stance flip is a no-op.
  */
 const UNIT_MORPH_PARENT: Record<string, string> = {
   // Zerg
   Lurker: "Hydralisk",
   LurkerMP: "Hydralisk",
-  LurkerMPBurrowed: "Hydralisk",
   Ravager: "Roach",
   Baneling: "Zergling",
   BroodLord: "Corruptor",
   Broodlord: "Corruptor",
   Overseer: "Overlord",
-  OverseerSiegeMode: "Overlord",
-  // Terran (Hellbat ↔ Hellion is a stance toggle, not a morph; we
-  // canonicalize the suffix away in ``canonicalizeName`` so both forms
-  // collapse onto the same name and a stance flip is a no-op.)
 };
 
 /** Templar units that combine into an Archon — preference order for
@@ -97,11 +99,21 @@ const ARCHON_PARENTS: ReadonlyArray<string> = ["DarkTemplar", "HighTemplar"];
  * This collapses transient stances onto a single canonical name so a
  * SiegeTank → SiegeTankSieged → SiegeTank cycle doesn't decrement and
  * re-increment the count.
+ *
+ * The list intentionally stays narrow: only stance/state suffixes that
+ * are NOT semantically distinct buildings are stripped. ``MP`` (multi-
+ * player tag), ``Rich`` (rich vespene), ``AG`` (air-to-ground Liberator),
+ * and ``AP`` (Thor anti-air mode) are preserved because users either
+ * read them as the canonical name (LurkerMP, RefineryRich) or rely on
+ * the AG/AP distinction to read combat posture from the chip.
  */
 export function canonicalizeName(name: string): string {
   if (!name) return "";
   const stripped = name
-    .replace(/(Burrowed|Sieged|Phasing|Flying|Lowered|Cocoon|Uprooted)$/i, "")
+    .replace(
+      /(Burrowed|Sieged|Phasing|Flying|Lowered|Cocoon|Uprooted|Phased)$/i,
+      "",
+    )
     .replace(/^Burrowed/i, "");
   return stripped || name;
 }
@@ -300,4 +312,120 @@ export function deriveUnitComposition(opts: {
     units: built,
     source: appliedAny ? "hybrid" : "build_order",
   };
+}
+
+/**
+ * Building morph map — when key X appears in the build log, it
+ * consumed one of the mapped building. Mirrors the agent's
+ * UnitTypeChangeEvent handling for structures: a Hatchery that became
+ * a Lair, then a Hive, should appear as "1 Hive" rather than
+ * "1 Hatchery + 1 Lair + 1 Hive". Bidirectional WarpGate ↔ Gateway
+ * is normalised by mapping WarpGate→Gateway here AND emitting the
+ * Gateway count when a WarpGate is built (i.e., WarpGate consumes a
+ * Gateway). Lurker Den name variants (LurkerDen / LurkerDenMP) are
+ * each independently the morphed form of HydraliskDen — sc2reader
+ * emits one or the other depending on data version.
+ */
+const BUILDING_MORPH_PARENT: Record<string, string> = {
+  Lair: "Hatchery",
+  Hive: "Lair",
+  GreaterSpire: "Spire",
+  LurkerDen: "HydraliskDen",
+  LurkerDenMP: "HydraliskDen",
+  OrbitalCommand: "CommandCenter",
+  PlanetaryFortress: "CommandCenter",
+  WarpGate: "Gateway",
+};
+
+/**
+ * Upgrade categories the build-order parser tags. The agent's catalog
+ * marks every research event with ``category: "upgrade"`` so we can
+ * filter the upgrade row from the build-event stream without a
+ * separate name list. Empty string is permitted — older payloads
+ * occasionally lack the field; in that case we conservatively skip.
+ */
+const UPGRADE_CATEGORY = "upgrade";
+
+/**
+ * Reduce a build-order timeline into ``{name: count}`` for buildings
+ * built up to and including ``t``. The agent's buildLog only records
+ * starts (no death events), but for the composition snapshot showing
+ * total-built-by-T is the right answer — sc2replaystats's overview
+ * shows the same cumulative summary.
+ *
+ * Names are canonicalised via ``canonicalizeName`` so stance suffixes
+ * (Flying / Lowered / Burrowed / Uprooted) collapse onto the base
+ * building. Morph chains consume the predecessor via
+ * ``BUILDING_MORPH_PARENT``.
+ */
+export function countBuildingsAt(
+  events: BuildEvent[] | undefined | null,
+  t: number,
+): Record<string, number> {
+  if (!Array.isArray(events) || events.length === 0) return {};
+  const counts: Record<string, number> = {};
+  for (const ev of events) {
+    if (!ev || !ev.is_building) continue;
+    const time = Number(ev.time) || 0;
+    if (time > t) break; // events are sorted ascending
+    const raw = ev.name || ev.display || "";
+    if (!raw) continue;
+    const canonical = canonicalizeName(raw);
+    if (!canonical) continue;
+    const prev = BUILDING_MORPH_PARENT[canonical];
+    if (prev && (counts[prev] || 0) > 0) {
+      counts[prev] = (counts[prev] || 0) - 1;
+      if (counts[prev] === 0) delete counts[prev];
+    }
+    counts[canonical] = (counts[canonical] || 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * Reduce a build-order timeline into ``{upgrade: 1}`` for every
+ * upgrade researched up to and including ``t``. Each upgrade only
+ * fires once per game so the count is effectively a presence flag —
+ * keeping it as a count map keeps the rendering helpers (chip + count
+ * pair) uniform with units and buildings.
+ */
+export function countUpgradesAt(
+  events: BuildEvent[] | undefined | null,
+  t: number,
+): Record<string, number> {
+  if (!Array.isArray(events) || events.length === 0) return {};
+  const counts: Record<string, number> = {};
+  for (const ev of events) {
+    if (!ev) continue;
+    if (ev.is_building) continue;
+    if ((ev.category || "").toLowerCase() !== UPGRADE_CATEGORY) continue;
+    const time = Number(ev.time) || 0;
+    if (time > t) break;
+    const raw = ev.name || ev.display || "";
+    if (!raw) continue;
+    counts[raw] = (counts[raw] || 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * Sort a ``{name: count}`` map by descending count, then by name asc.
+ * Used by the snapshot for both buildings and upgrades — the heaviest
+ * production line bubbles to the front, matching the chip ordering
+ * sc2replaystats uses for its overview row.
+ */
+export function sortByCountDesc(
+  counts: Record<string, number> | null | undefined,
+): Array<{ name: string; count: number }> {
+  if (!counts) return [];
+  const entries: Array<{ name: string; count: number }> = [];
+  for (const [name, count] of Object.entries(counts)) {
+    if (!count || count <= 0) continue;
+    entries.push({ name, count });
+  }
+  entries.sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    return a.name.localeCompare(b.name);
+  });
+  return entries;
 }

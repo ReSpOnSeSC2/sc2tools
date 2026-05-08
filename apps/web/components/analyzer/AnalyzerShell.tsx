@@ -6,7 +6,6 @@ import {
   ChevronDown,
   Layers,
   Map as MapIcon,
-  MapPin,
   Settings as SettingsIcon,
   Swords,
   TrendingUp,
@@ -22,7 +21,6 @@ import { BuildsTab } from "./BuildsTab";
 import { DashboardKpiStrip } from "./DashboardKpiStrip";
 import { DoctorBanner } from "./DoctorBanner";
 import { FilterBar } from "./FilterBar";
-import { MapIntelTab } from "./MapIntelTab";
 import { OpponentsTab } from "./OpponentsTab";
 import { ProfileView } from "./ProfileView";
 import { StrategiesTab } from "./StrategiesTab";
@@ -33,8 +31,7 @@ type TabId =
   | "strategies"
   | "trends"
   | "battlefield"
-  | "builds"
-  | "map-intel";
+  | "builds";
 
 type TabDef = {
   id: TabId;
@@ -49,7 +46,6 @@ const TABS: readonly TabDef[] = [
   { id: "trends", label: "Trends", icon: TrendingUp, description: "Win-rate trajectory across periods." },
   { id: "battlefield", label: "Maps", icon: MapIcon, description: "Maps and matchup performance." },
   { id: "builds", label: "Builds", icon: Layers, description: "Your builds, performance, and editor." },
-  { id: "map-intel", label: "Map intel", icon: MapPin, description: "Spatial heatmaps for known maps." },
 ] as const;
 
 export function AnalyzerShell({ totalGames }: { totalGames: number }) {
@@ -282,8 +278,6 @@ function TabPanel({
       return <BattlefieldTab />;
     case "builds":
       return <BuildsTab />;
-    case "map-intel":
-      return <MapIntelTab />;
     default: {
       const _exhaustive: never = tab;
       return _exhaustive;
