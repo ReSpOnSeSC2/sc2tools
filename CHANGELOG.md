@@ -15,6 +15,54 @@ workflow builds the Windows installer on each tag push and attaches the
 Released as `agent-v0.5.4` on GitHub. Installer:
 `SC2ToolsAgent-Setup-0.5.4.exe`.
 
+### Fixed (agent) — macro breakdown now ships even when the score engine fails
+
+A streamer reported the macro card going blank ("Macro breakdown not
+available") for a game that had clearly uploaded successfully. Root
+cause: any exception inside `analytics.macro_score.compute_macro_score`
+— a new race-specific leak rule, a divide-by-zero on a 30 s sub-game,
+an edge case the engine hasn't seen yet — bailed `_compute_macro_breakdown`
+entirely and returned `(None, None)`. The chart half of the breakdown
+only needs `stats_events` + `unit_timeline`, both of which had already
+been extracted successfully at that point, but the all-or-nothing
+fail-soft sent zero data over the wire and the SPA had nothing to
+render.
+
+The fail-soft now degrades gracefully. When the score engine raises,
+the agent logs `compute_macro_score_failed` at WARNING and ships a
+partial payload: `raw={}`, `all_leaks=[]`, `top_3_leaks=[]`, but a
+fully-populated `stats_events`, `opp_stats_events`, `unit_timeline`,
+and `player_stats`. The Active Army & Workers chart and the unit
+roster render unchanged; the headline score shows "—" rather than
+nothing-at-all. Locks the SPA's render-blocking dependency on the
+score-engine output.
+
+### Fixed (web) — Active Army chart no longer dives to zero on sparse unit_timeline samples
+
+A streamer's chart showed "you army" basically flat at 0 for the first
+10 minutes of a 17-minute game, then a single spike at the end — even
+though the in-game graph showed steady army value throughout. The unit
+roster below the chart was death-aware and correct, so the divergence
+came from the chart's series builder.
+
+Two bugs in `compositionAt.ts` produced the dive:
+
+1. ``derivedDeathsFromTimeline`` treated an empty per-side map at a
+   sample tick as "every alive unit died this tick" and generated
+   `cumulative-built` spurious deaths. When `unit_timeline` had legit
+   data gaps (one sparse sample mid-game), the chart's death
+   subtraction nuked the build-order cumulative count down to zero.
+2. ``deriveUnitComposition`` short-circuited on a populated-but-empty
+   timeline entry as if the player legitimately had no alive units —
+   it preferred the timeline's "0 alive" reading even when the
+   build-order cumulative said the player had clearly built units.
+
+The fix makes both functions defensive against extractor gaps: a
+populated→empty transition where *both* sides go empty in the same
+step is treated as a data gap, not a wipe (real wipes leave the
+opposing side's army intact). Genuine total wipes (one side empty,
+opponent's army still on the field) still register as deaths.
+
 ### Fixed (agent + cloud) — overlay session widget MMR now resolves automatically via SC2Pulse
 
 A streamer whose session-widget panel kept showing the bottom row as

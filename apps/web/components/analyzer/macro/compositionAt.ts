@@ -197,6 +197,16 @@ interface DeathEvent {
  * will also never be added to the build-order count past the death
  * window, so the net effect is correct.
  *
+ * Defensive against extraction gaps: when ``cur`` for the side under
+ * inspection is empty but the *opposite* side at the same tick still
+ * carries unit counts, the timeline fragment is treated as a data
+ * gap (extractor failed to populate this side that sample) rather
+ * than a wipe — without this, a single sparse sample at t=10:00
+ * would generate ``cumulative-built`` spurious deaths for every
+ * unit and the chart's army line would dive to zero. A genuine
+ * army wipe leaves both sides simultaneously empty, which we
+ * already short-circuit on.
+ *
  * Returns events sorted ascending by time so the consumer can early-
  * exit when scanning up to a target ``t``.
  */
@@ -212,6 +222,27 @@ export function derivedDeathsFromTimeline(
     if (!prevSide && !curSide) continue;
     const prev = prevSide || {};
     const cur = curSide || {};
+    const prevHasUnits = Object.keys(prev).length > 0;
+    const curHasUnits = Object.keys(cur).length > 0;
+    // Treat populated→empty as a data gap when the opposite side at the
+    // same tick is also empty AND was empty on the prev tick — i.e. the
+    // whole timeline entry is hollow rather than the side specifically
+    // being wiped. The agent's tracker walks both sides in lock-step,
+    // so a one-sided drop to zero is plausible (real wipe) but a
+    // both-sided drop to zero usually means the sample missed.
+    if (prevHasUnits && !curHasUnits) {
+      const prevOther =
+        side === "my" ? timeline[i - 1].opp : timeline[i - 1].my;
+      const curOther = side === "my" ? timeline[i].opp : timeline[i].my;
+      const prevOtherHasUnits =
+        prevOther && Object.keys(prevOther).length > 0;
+      const curOtherHasUnits =
+        curOther && Object.keys(curOther).length > 0;
+      if (prevOtherHasUnits && !curOtherHasUnits) {
+        // Both sides went empty in the same step — extractor gap.
+        continue;
+      }
+    }
     const seen = new Set<string>();
     for (const name of Object.keys(prev)) seen.add(name);
     for (const name of Object.keys(cur)) seen.add(name);
@@ -268,10 +299,17 @@ export function deriveUnitComposition(opts: {
 
   // Source 1: unit_timeline — preferred when it has populated data
   // for this side at the closest sample. An empty side-map at the
-  // closest sample doesn't mean "nothing alive"; it could mean the
-  // extractor never populated this side (older payloads omitted opp).
-  // Treat empty-but-have-other-side as "fall back" so the build order
-  // can still fill the roster.
+  // closest sample doesn't mean "nothing alive"; it could mean:
+  //   1. early game, before any unit was born (build_order also empty);
+  //   2. legitimate post-wipe moment;
+  //   3. extractor data gap on this specific sample.
+  // To distinguish (1) from (2)/(3) we compare against the build-order
+  // cumulative count up to t. When the player has built units already
+  // but the timeline says zero alive, we don't blindly trust the
+  // timeline — we fall through to the build-order + death-aware
+  // hybrid path so a single sparse sample can't pin the chart line at
+  // zero. (Pre-fix behaviour: the chart's "you army" series dipped to
+  // zero whenever a sample missed, despite a healthy build order.)
   if (hasTimeline) {
     const entry = nearestTimelineEntry(timeline, t);
     const composition = (side === "my" ? entry?.my : entry?.opp) || {};

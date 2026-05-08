@@ -670,6 +670,135 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     assert payload["macroScore"] == 78
 
 
+def test_parse_replay_for_cloud_ships_partial_macro_breakdown_on_score_failure(
+    monkeypatch, tmp_path,
+):
+    """compute_macro_score raises → macroBreakdown still ships.
+
+    Pre-fix behaviour: any exception inside compute_macro_score (a new
+    race-specific leak rule, a divide-by-zero on a 30 s sub-game, an
+    edge case the engine hasn't seen yet) bailed the entire breakdown
+    and the SPA showed "Macro breakdown not available". The chart half
+    of the breakdown only needs stats_events + unit_timeline — both of
+    which were already extracted successfully at that point — so the
+    fail-soft now ships a partial payload (no score, no leaks list,
+    full chart) rather than nothing.
+    """
+    import sys
+    from types import SimpleNamespace
+
+    me = SimpleNamespace(
+        pid=1, name="Me", race="Protoss", result="Win",
+        handle="1-S2-1-267727", mmr=4500, apm=180.0, spq=82.0,
+    )
+    opp = SimpleNamespace(
+        pid=2, name="Opp", race="Terran", result="Loss",
+        handle="1-S2-2-690921", mmr=4400, league_id=5,
+    )
+    fake_ctx = SimpleNamespace(
+        game_id="2026-05-07T21:24:29|Opp|Celestial Enclave LE|892",
+        date_iso="2026-05-07T21:24:29",
+        map_name="Celestial Enclave LE",
+        length_seconds=892,
+        is_ai_game=False,
+        me=me,
+        opponent=opp,
+        all_players=[me, opp],
+        my_events=[],
+        opp_events=[],
+        my_build="PvT - Phoenix into Robo",
+        opp_strategy="Terran - Widow Mine Drop",
+        build_log=["[0:00] Nexus", "[0:17] Pylon"],
+        early_build_log=["[0:00] Nexus"],
+        opp_build_log=[],
+        opp_early_build_log=[],
+        macro_score=None,
+        raw=object(),
+        file_path=str(tmp_path / "celestial.SC2Replay"),
+    )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "core.sc2_replay_parser",
+        SimpleNamespace(parse_deep=lambda _p, _h: fake_ctx),
+    )
+
+    def _fake_extract(_replay, _pid, _opp_pid=None):
+        return {
+            "stats_events": [
+                {"time": 0, "food_used": 12, "food_workers": 12,
+                 "food_made": 15, "minerals_current": 50,
+                 "vespene_current": 0, "minerals_collection_rate": 0,
+                 "vespene_collection_rate": 0},
+                {"time": 60, "food_used": 22, "food_workers": 18,
+                 "food_made": 23, "minerals_current": 250,
+                 "vespene_current": 100, "minerals_collection_rate": 800,
+                 "vespene_collection_rate": 50},
+            ],
+            "opp_stats_events": [
+                {"time": 0, "food_used": 12, "food_workers": 12},
+                {"time": 60, "food_used": 21, "food_workers": 17},
+            ],
+            "unit_timeline": [
+                {"time": 0, "my": {}, "opp": {}},
+                {"time": 60, "my": {"Phoenix": 2}, "opp": {"Marine": 6}},
+            ],
+            "player_stats": {},
+            "ability_events": [],
+            "production_buildings": [],
+            "bases": [],
+            "unit_births": [],
+            "game_length_sec": 892,
+        }
+
+    def _fake_compute_raises(_macro, _race, _length):
+        raise RuntimeError(
+            "imagine the race-specific leak engine hit a divide-by-zero",
+        )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "core.event_extractor",
+        SimpleNamespace(
+            extract_macro_events=_fake_extract,
+            build_log_lines=__import__(
+                "core.event_extractor", fromlist=["build_log_lines"],
+            ).build_log_lines,
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "analytics.macro_score",
+        SimpleNamespace(compute_macro_score=_fake_compute_raises),
+    )
+
+    from sc2tools_agent.replay_pipeline import parse_replay_for_cloud
+    fake_path = tmp_path / "celestial.SC2Replay"
+    fake_path.write_bytes(b"")
+    result = parse_replay_for_cloud(fake_path, player_handle="Me")
+    assert result is not None
+    payload = result.to_payload()
+
+    # macroBreakdown still present — the chart side renders.
+    assert "macroBreakdown" in payload, (
+        "compute_macro_score raised but macroBreakdown still must ship "
+        "with the chart's stats_events + unit_timeline so the SPA can "
+        "render the Active Army chart and roster. Pre-fix this returned "
+        "None and the SPA showed 'Macro breakdown not available'."
+    )
+    mb = payload["macroBreakdown"]
+    # Score-engine outputs degrade gracefully to empty dicts/lists.
+    assert mb["raw"] == {}
+    assert mb["all_leaks"] == []
+    assert mb["top_3_leaks"] == []
+    # Chart inputs survived intact — this is the load-bearing assert.
+    assert len(mb["stats_events"]) >= 1
+    assert len(mb["opp_stats_events"]) >= 1
+    assert len(mb["unit_timeline"]) >= 1
+    # No headline macroScore — the dossier shows "—" rather than 0.
+    assert "macroScore" not in payload
+
+
 def _minutes_in(line: str) -> int:
     """Pull the [m:ss] minute prefix out of a build-log line."""
     import re
