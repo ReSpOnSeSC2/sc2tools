@@ -10,6 +10,50 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+## [agent-v0.5.7] - 2026-05-08
+
+Released as `agent-v0.5.7` on GitHub. Installer:
+`SC2ToolsAgent-Setup-0.5.7.exe`.
+
+### Added (agent) — date-range sync filter (Settings → "Sync date range")
+
+Mirrors the website's filter bar (`apps/web/lib/datePresets.ts`) so
+the agent only uploads replays played within a chosen window. Vital
+for new installs on PCs with thousands of historical replays — a
+streamer scoping the filter to "Current season" no longer grinds
+through years of old games to hydrate today's stats.
+
+Modes:
+
+  * `All time` (default; matches v0.5.6 behaviour)
+  * `Current season` — auto-anchored to the in-progress ladder
+    season using the same approximation the web app uses
+  * `Season N` — last six seasons exposed as quick picks
+  * `Custom date range` — explicit since/until pickers
+
+Two-stage gating in the watcher:
+
+  1. **mtime pre-check** during the sweep walk. Files whose
+     filesystem mtime is well outside the window are skipped
+     without parsing — saves ~200ms per file × 12k replays during
+     a backfill. A 7-day slack window absorbs OneDrive sync
+     timestamps and the case where a user copies a backup of old
+     replays into the watched folder (mtime gets the copy time).
+  2. **Post-parse date check** against the authoritative
+     `cloud_game.date_iso`. Catches the false positives mtime let
+     through. Replays outside the window are recorded as
+     `"filtered"` in `state.uploaded` so the next sweep skips them
+     without re-parsing.
+
+Changing the filter triggers a sweep + drops every `"filtered"`
+entry from state so the previously-hidden replays get a fresh shot.
+`"skipped"` (parse failure / AI / corrupt), `"rejected"` (server
+schema rejection) and successful upload timestamps are NOT touched.
+
+Tag this commit as `agent-v0.5.7` after merge to trigger
+`.github/workflows/agent-installer.yml` and produce
+`SC2ToolsAgent-Setup-0.5.7.exe`.
+
 ## [agent-v0.5.6] - 2026-05-07
 
 Released as `agent-v0.5.6` on GitHub. Installer:

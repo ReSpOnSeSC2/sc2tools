@@ -227,6 +227,64 @@ def test_last_known_mmr_handles_missing_fields(tmp_path: Path) -> None:
     assert loaded.last_known_mmr_region is None
 
 
+# ---------------- Sync-filter fields ----------------------------------
+#
+# The watcher gates uploads through these. Round-trip tests pin down
+# both the persisted shape (so a downgrade after upgrade doesn't
+# silently lose the user's filter) and the load-time normalisation
+# (empty strings → None so a cleared field doesn't ship as a literal
+# empty string into SyncFilter).
+
+
+def test_sync_filter_round_trips(tmp_path: Path) -> None:
+    s = AgentState(
+        device_token="t",
+        sync_filter_preset="season:67",
+        sync_filter_since="2026-04-01",
+        sync_filter_until="2026-07-01",
+    )
+    save_state(tmp_path, s)
+    loaded = load_state(tmp_path)
+    assert loaded.sync_filter_preset == "season:67"
+    assert loaded.sync_filter_since == "2026-04-01"
+    assert loaded.sync_filter_until == "2026-07-01"
+
+
+def test_sync_filter_blank_strings_load_as_none(tmp_path: Path) -> None:
+    """The GUI saves an empty string when a non-custom preset is
+    chosen. Load should normalise that to None so SyncFilter doesn't
+    have to second-guess what an empty string means."""
+    (tmp_path / "agent.json").write_text(
+        json.dumps(
+            {
+                "device_token": "t",
+                "sync_filter_preset": "current_season",
+                "sync_filter_since": "",
+                "sync_filter_until": "   ",
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded = load_state(tmp_path)
+    assert loaded.sync_filter_preset == "current_season"
+    assert loaded.sync_filter_since is None
+    assert loaded.sync_filter_until is None
+
+
+def test_sync_filter_missing_fields_default_to_none(tmp_path: Path) -> None:
+    """Older state files (pre-v0.5.6) don't have any sync_filter
+    fields. Loading must not raise and the agent treats absence as
+    'no filter' — i.e. the legacy upload-everything behaviour."""
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"device_token": "t"}),
+        encoding="utf-8",
+    )
+    loaded = load_state(tmp_path)
+    assert loaded.sync_filter_preset is None
+    assert loaded.sync_filter_since is None
+    assert loaded.sync_filter_until is None
+
+
 def test_dashboard_url_falls_back_to_dot_com() -> None:
     """The default dashboard origin is sc2tools.com — not .app — and the
     runner must produce that fallback whenever no api.* hostname is in
