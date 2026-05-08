@@ -15,6 +15,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
+import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 
 type Row = {
   /** Matchup label ("vs P") or map name. The API returns this as `name`
@@ -32,7 +33,6 @@ type MapRow = Row;
 type MatchupRow = Row;
 
 const LS_MIN_MAPS = "analyzer.battlefield.maps.minGames";
-const MIN_STEPS = [1, 3, 5, 10, 20];
 
 function readLs<T>(key: string, fb: T): T {
   if (typeof window === "undefined") return fb;
@@ -51,38 +51,6 @@ function writeLs(key: string, v: unknown) {
   } catch {
     /* non-fatal */
   }
-}
-
-function MinGames({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (n: number) => void;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[11px] uppercase tracking-wider text-text-dim">
-        Min games
-      </span>
-      <div className="inline-flex overflow-hidden rounded border border-border">
-        {MIN_STEPS.map((n) => (
-          <button
-            key={n}
-            type="button"
-            onClick={() => onChange(n)}
-            className={`px-3 py-1.5 text-xs tabular-nums transition sm:px-2 sm:py-1 ${
-              value === n
-                ? "bg-accent/20 text-accent"
-                : "text-text-muted hover:bg-bg-elevated"
-            }`}
-          >
-            {n}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 function FormSparkline({ results }: { results?: ("win" | "loss")[] }) {
@@ -153,7 +121,7 @@ export function BattlefieldTab() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-end">
-        <MinGames value={minGames} onChange={setMinGames} />
+        <MinGamesPicker value={minGames} onChange={setMinGames} />
       </div>
 
       <MapDiagnostic />

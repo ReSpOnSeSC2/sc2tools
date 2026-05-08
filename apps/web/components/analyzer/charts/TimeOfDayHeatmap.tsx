@@ -24,15 +24,46 @@ type HeatmapResponse = {
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 // Aggregate hours into 4-hour blocks so 7 rows × 6 columns fits cleanly
-// on mobile without forcing horizontal scroll.
-const HOUR_BLOCKS: ReadonlyArray<{ start: number; end: number; label: string }> = [
-  { start: 0, end: 4, label: "12-4a" },
-  { start: 4, end: 8, label: "4-8a" },
-  { start: 8, end: 12, label: "8-12p" },
-  { start: 12, end: 16, label: "12-4p" },
-  { start: 16, end: 20, label: "4-8p" },
-  { start: 20, end: 24, label: "8-12a" },
+// on mobile. The bucket boundaries are stable; only the rendered label
+// is locale-aware (see formatHourBlock).
+const HOUR_BLOCKS: ReadonlyArray<{ start: number; end: number }> = [
+  { start: 0, end: 4 },
+  { start: 4, end: 8 },
+  { start: 8, end: 12 },
+  { start: 12, end: 16 },
+  { start: 16, end: 20 },
+  { start: 20, end: 24 },
 ];
+
+/**
+ * Format a 4-hour block boundary for the heatmap column header.
+ *
+ * 24-hour locales: zero-padded numeric range, e.g. "08 – 12".
+ * 12-hour locales: AM/PM with both ends spelled out when the boundary
+ * crosses noon or midnight (so "8 AM – 12 PM" can't be misread as
+ * "8 PM – midnight"). Uses an en-dash (U+2013) for the range, not a
+ * hyphen.
+ */
+function formatHourBlock(start: number, end: number, hour12: boolean): string {
+  if (!hour12) {
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${pad(start)} – ${pad(end)}`;
+  }
+  const meridiem = (h: number) => (h < 12 || h === 24 ? "AM" : "PM");
+  const display = (h: number) => {
+    const m = h % 12;
+    return m === 0 ? 12 : m;
+  };
+  const startMer = meridiem(start);
+  const endMer = meridiem(end);
+  // When both ends share a meridiem, only suffix the right side. When
+  // the block straddles noon or midnight, spell out both — that's the
+  // ambiguity the old "8-12p" labels created.
+  if (startMer === endMer) {
+    return `${display(start)} – ${display(end)} ${endMer}`;
+  }
+  return `${display(start)} ${startMer} – ${display(end)} ${endMer}`;
+}
 
 type CellAgg = {
   total: number;
@@ -52,6 +83,20 @@ type CellAgg = {
 export function TimeOfDayHeatmap() {
   const { filters, dbRev } = useFilters();
   const tz = useMemo(() => clientTimezone(), []);
+  // Detect once: a `false` value here means the user's locale prefers
+  // 24-hour clock (en-GB, de-DE, …); the labels switch to "08 – 12"
+  // form. `Intl.DateTimeFormat()` reflects browser/OS locale settings.
+  const hour12 = useMemo(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().hour12 ?? true;
+    } catch {
+      return true;
+    }
+  }, []);
+  const formattedBlocks = useMemo(
+    () => HOUR_BLOCKS.map((b) => formatHourBlock(b.start, b.end, hour12)),
+    [hour12],
+  );
   const params = useMemo(() => ({ ...filters, tz }), [filters, tz]);
   const { data, isLoading } = useApi<HeatmapResponse>(
     `/v1/timeseries/day-hour${filtersToQuery(params)}#${dbRev}`,
@@ -145,17 +190,39 @@ export function TimeOfDayHeatmap() {
       }
     >
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        Times shown in your local timezone ({data.timezone || "UTC"}).
+        {(() => {
+          const apiTz = data.timezone || "UTC";
+          if (apiTz === tz) {
+            return (
+              <>
+                Times in your local timezone (
+                <code className="rounded bg-bg-elevated px-1 py-0.5 font-mono text-[12px] text-text-muted">
+                  {apiTz}
+                </code>
+                ).
+              </>
+            );
+          }
+          return (
+            <>
+              Times in{" "}
+              <code className="rounded bg-bg-elevated px-1 py-0.5 font-mono text-[12px] text-text-muted">
+                {apiTz}
+              </code>{" "}
+              (the API converted from your filters).
+            </>
+          );
+        })()}
       </p>
       <div className="overflow-x-auto">
         <div className="inline-grid min-w-full" style={{ gridTemplateColumns: `auto repeat(${HOUR_BLOCKS.length}, minmax(0, 1fr))` }}>
           <div />
-          {HOUR_BLOCKS.map((b) => (
+          {formattedBlocks.map((label, blockIdx) => (
             <div
-              key={b.label}
-              className="px-1 pb-1 text-center text-[10px] uppercase tracking-wide text-text-dim"
+              key={blockIdx}
+              className="whitespace-nowrap px-1 pb-1 text-center text-[11px] tabular-nums tracking-wide text-text-dim"
             >
-              {b.label}
+              {label}
             </div>
           ))}
           {DAY_LABELS.map((day, dowIdx) => (
@@ -169,7 +236,7 @@ export function TimeOfDayHeatmap() {
                   cell={cell}
                   mode={mode}
                   maxTotal={maxTotal}
-                  label={`${day} · ${HOUR_BLOCKS[blockIdx].label}`}
+                  label={`${day} ${formattedBlocks[blockIdx]}`}
                 />
               ))}
             </div>
@@ -211,7 +278,7 @@ function HeatCell({
   const tooltipText =
     cell.total === 0
       ? `${label}: no games`
-      : `${label}: ${cell.wins}W-${cell.losses}L (${Math.round(wr * 100)}% WR)`;
+      : `${label} • ${cell.wins} W – ${cell.losses} L • ${Math.round(wr * 100)}% win rate`;
 
   return (
     <div
