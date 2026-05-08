@@ -94,8 +94,6 @@ export function OverlayClient({ token }: { token: string }) {
     setSessionVisible,
   });
 
-  const voice = useVoiceReadout(live, voicePrefs);
-
   // Single-widget mode (OBS users place each widget in its own
   // Browser Source). Read from URL search param, defaulting to "all".
   const singleWidget = useMemo<WidgetId | null>(() => {
@@ -104,6 +102,17 @@ export function OverlayClient({ token }: { token: string }) {
     if (!w) return null;
     return ALL_WIDGETS.includes(w as WidgetId) ? (w as WidgetId) : null;
   }, []);
+
+  // Voice readout is owned by exactly one Browser Source per stream so
+  // the streamer never hears the same scouting line twice. In all-in-one
+  // mode that's the unfiltered overlay; in single-widget mode it's the
+  // ``?w=scouting`` source. Any other ``?w=`` filter explicitly opts out
+  // — those are sibling Browser Sources that share the room.
+  const enableVoiceHere = singleWidget === null || singleWidget === "scouting";
+  const voice = useVoiceReadout(
+    enableVoiceHere ? live : null,
+    enableVoiceHere ? voicePrefs : null,
+  );
 
   function shouldShow(id: WidgetId): boolean {
     if (singleWidget && singleWidget !== id) return false;
