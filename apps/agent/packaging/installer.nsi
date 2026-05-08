@@ -60,7 +60,15 @@ Section "Install"
     nsExec::Exec 'taskkill /F /IM "${APP_EXECUTABLE}" /T'
 
     SetOutPath "$INSTDIR"
-    File "..\dist\${APP_EXECUTABLE}"
+    ; v0.5.8: switched the PyInstaller spec to one-folder mode so
+    ; multiprocessing children don't re-extract a 319 MB onefile bundle
+    ; per spawn (which was causing every parse worker to die with
+    ; BrokenProcessPool when parse_concurrency was high). The build now
+    ; emits dist\sc2tools-agent\<everything>; we copy the folder
+    ; contents recursively into $INSTDIR. The /r flag walks
+    ; subdirectories (including _internal\ which holds the bundled
+    ; Python runtime, Qt plugins, sc2reader data, analyzer source, etc.)
+    File /r "..\dist\sc2tools-agent\*.*"
 
     WriteRegStr HKCU "${APP_REG_KEY}" "InstallDir"     "$INSTDIR"
     WriteRegStr HKCU "${APP_REG_KEY}" "Version"         "${AGENT_VERSION}"
@@ -101,6 +109,15 @@ Section "Uninstall"
 
     Delete "$INSTDIR\${APP_EXECUTABLE}"
     Delete "$INSTDIR\Uninstall.exe"
+    ; v0.5.8: one-folder PyInstaller layout writes its bundled deps
+    ; under $INSTDIR\_internal\ (Python runtime, Qt plugins, sc2reader
+    ; data, analyzer source). Remove that subtree on uninstall.
+    ; CRITICAL: do NOT use ``RMDir /r "$INSTDIR"`` here — the user's
+    ; agent state lives next to the binary (data\, logs\, agent.json,
+    ; player_handle.json) and a wholesale removal would erase pairing
+    ; tokens and the dedupe cursor. Restrict deletion to the install-
+    ; managed _internal\ subtree only.
+    RMDir /r "$INSTDIR\_internal"
 
     DeleteRegKey HKCU "${APP_UNINST_KEY}"
     DeleteRegKey HKCU "${APP_REG_KEY}"

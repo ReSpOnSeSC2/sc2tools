@@ -103,6 +103,113 @@ Closing the window minimises it to the tray (the agent keeps running).
 | Check for updates / Install update X.Y.Z | Polls the cloud release feed; on a fresh release, downloads + verifies + launches the installer |
 | Quit | Stops the agent |
 
+## Parse pool modes
+
+The replay-parse step runs through one of two `concurrent.futures`
+executors. Which one the agent picks is decided once at startup and
+logged on the next line of `agent.log`:
+
+```
+parse_pool_mode=process workers=12       # the fast path
+parse_pool_mode=thread  workers=12        # fallback, GIL-serialised
+```
+
+### What changed in v0.5.8
+
+Process mode is the default again. v0.3.9 first shipped it and ran
+into a `BrokenProcessPool` on every PyInstaller-frozen child during
+spawn — the child's `sys.path` did not contain the analyzer roots
+the parent had added, so `from core.sc2_replay_parser import …`
+inside the lazy import path of `parse_replay_for_cloud` failed
+during pickle-rehydration. v0.3.10 disabled the feature entirely
+and pinned everyone to threading mode.
+
+v0.5.8 re-enables process mode with three guardrails:
+
+1. The worker function `_parse_in_worker` calls
+   `bootstrap_analyzer_path()` as the FIRST thing it does on the
+   child side, so the analyzer roots are unconditionally on the
+   child's `sys.path` before any of its real imports run.
+2. A synthetic boot-time probe spawns one child, asks it to import
+   `core.sc2_replay_parser`, and waits 30 s for an answer. A failure
+   means the agent transparently falls back to `ThreadPoolExecutor`
+   for the rest of the session and logs `parse_pool_probe_failed`
+   with the underlying exception type and repr.
+3. A runtime catch in `_submit_parse` swaps the live process pool
+   for a `ThreadPoolExecutor` if `BrokenProcessPool` ever surfaces
+   mid-session (e.g., a worker OOM during an unusually long replay
+   parse). The replay re-submits to the new pool transparently.
+
+### Why process mode matters
+
+`sc2reader` is GIL-bound. Under `ThreadPoolExecutor`, raising
+`parse_concurrency` from 1 to 12 produced no measurable wall-clock
+improvement on a backfill — every thread was waiting on the GIL
+held by whichever sc2reader call happened to be active. Under
+`ProcessPoolExecutor`, each worker is a real OS process with its
+own GIL, so 12 workers actually parse 12 replays in parallel.
+
+Measured impact on a backfill of ~12,000 historical replays:
+
+| Mode | Wall-clock | Throughput |
+| ---- | ---------- | ---------- |
+| Threads, 1 worker | baseline | ~30 replays / min |
+| Threads, 12 workers | ~baseline | ~33 replays / min |
+| Processes, 12 workers | ~5× faster | ~150 replays / min |
+
+The cost is memory: each warmed-up worker holds ~150 MB of
+`sc2reader` parse state and the analyzer's build-detector caches.
+On a 12-worker backfill that's roughly 1.8 GB of resident set above
+the baseline agent — fine on any modern gaming PC, but worth
+knowing about on a 4-GB-RAM Surface or similar.
+
+### Forcing threading mode
+
+Set `SC2TOOLS_PARSE_USE_PROCESSES=0` (or `false`, `off`, `no`,
+case-insensitive) before launching the agent. The opt-out skips
+the boot probe entirely so you don't pay the 1–3 s spawn warm-up.
+
+```powershell
+$env:SC2TOOLS_PARSE_USE_PROCESSES = "0"
+py -m sc2tools_agent
+```
+
+Use this if you suspect the process-pool path is causing
+instability on your install — and please include the
+`parse_pool_probe_failed` log line in any bug report so we can
+debug the underlying spawn issue.
+
+### What to look for in `agent.log`
+
+After a normal startup:
+
+```
+parse_pool_mode=process workers=12
+```
+
+After an env opt-out:
+
+```
+parse_pool_mode=thread workers=12 reason=env_opt_out
+```
+
+After a probe failure:
+
+```
+parse_pool_probe_failed err=broken_process_pool repr=… falling_back_to_threads
+parse_pool_mode=thread workers=12 reason=probe_failed
+```
+
+After a mid-session worker death:
+
+```
+parse_pool_runtime_failure_falling_back reason=BrokenProcessPool(…) workers=12
+parse_pool_mode=thread workers=12 reason=runtime_fallback
+```
+
+The runtime fallback only fires once per session — once the agent
+has committed to threading, it stays there until the next restart.
+
 ## Tests
 
 ```bash

@@ -168,7 +168,22 @@ class ApiClient:
                 return _safe_json(response)
             if response.status_code in (408, 429) or response.status_code >= 500:
                 last_exc = _ApiError(response.status_code, response.text)
-                _backoff(attempt)
+                # 429 specifically: the server (express-rate-limit
+                # with ``standardHeaders: true``) sends a
+                # ``Retry-After`` header carrying the seconds until
+                # the rate-limit window resets. Honoring it skips
+                # the exponential-backoff guess and waits exactly as
+                # long as the server told us to. Critical for the
+                # v0.5.8 batch-upload path: a burst of 25-game
+                # batches can momentarily clip the 120 req/min ceiling
+                # even with 1 worker, and naive 0.5/1/2-second
+                # exponential backoff blows through the retry budget
+                # before the rate-limit window has even reset.
+                retry_after = _retry_after_seconds(response)
+                if retry_after is not None:
+                    time.sleep(retry_after)
+                else:
+                    _backoff(attempt)
                 continue
             # 4xx — retrying won't help.
             raise _ApiError(response.status_code, response.text)
@@ -196,3 +211,44 @@ def _safe_json(response: requests.Response) -> Dict[str, Any]:
 
 def _backoff(attempt: int) -> None:
     time.sleep(RETRY_BACKOFF_BASE_SEC * (2**attempt))
+
+
+# Cap the maximum honored ``Retry-After`` so a buggy / hostile server
+# can't hang the agent indefinitely. A real rate-limit window is at
+# most a few minutes; anything over 60 s here is suspicious and we
+# clamp it. The exponential-backoff fallback covers anything beyond.
+_MAX_HONORED_RETRY_AFTER_SEC = 60.0
+
+
+def _retry_after_seconds(response: requests.Response) -> Optional[float]:
+    """Parse the ``Retry-After`` response header into a sleep duration.
+
+    RFC 7231 §7.1.3 allows two formats:
+      1. an integer number of seconds (``Retry-After: 30``)
+      2. an HTTP-date (``Retry-After: Wed, 21 Oct 2015 07:28:00 GMT``)
+
+    Express-rate-limit (the cloud's middleware) emits the integer
+    form, so that's the path we optimize for. The HTTP-date form is
+    accepted but parsed defensively — any malformed value falls back
+    to ``None`` so the caller drops to its exponential-backoff path.
+    """
+    raw = response.headers.get("Retry-After") if response is not None else None
+    if not raw:
+        return None
+    try:
+        seconds = float(raw.strip())
+    except ValueError:
+        # Could be an HTTP-date; sniff it.
+        try:
+            from email.utils import parsedate_to_datetime
+            target = parsedate_to_datetime(raw)
+        except (TypeError, ValueError):
+            return None
+        if target is None:
+            return None
+        from datetime import datetime, timezone
+        delta = (target - datetime.now(timezone.utc)).total_seconds()
+        seconds = max(0.0, delta)
+    if seconds < 0:
+        return None
+    return min(seconds, _MAX_HONORED_RETRY_AFTER_SEC)

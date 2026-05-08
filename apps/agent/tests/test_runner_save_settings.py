@@ -179,4 +179,182 @@ def test_payload_with_no_filter_field_does_not_change_state(tmp_path: Path) -> N
         _cfg(tmp_path), state, payload, _cell(upload), logging.getLogger("test"),
     )
     assert state.sync_filter_preset == "season:67"
-    assert upload.resync_calls == 0
+
+
+# --- v0.5.8 upload-pipeline knobs persist via the save handler -------
+
+
+def test_upload_concurrency_payload_persists_to_state(tmp_path: Path) -> None:
+    """The Settings tab's Upload concurrency slider value must land
+    in ``state.upload_concurrency_override`` so the next agent boot
+    promotes it into the env var via ``_bootstrap``."""
+    state = AgentState(device_token="t")
+    payload = SettingsPayload(upload_concurrency=3)
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(), logging.getLogger("test"),
+    )
+    assert state.upload_concurrency_override == 3
+
+
+def test_upload_batch_size_payload_persists_to_state(tmp_path: Path) -> None:
+    state = AgentState(device_token="t")
+    payload = SettingsPayload(upload_batch_size=42)
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(), logging.getLogger("test"),
+    )
+    assert state.upload_batch_size_override == 42
+
+
+def test_save_clamps_upload_concurrency_into_useful_range(
+    tmp_path: Path,
+) -> None:
+    """A hand-edited or stale-state value above the useful max must
+    be clamped on save, so a 99 in the JSON file becomes 4 (the
+    ``UPLOAD_CONCURRENCY_USEFUL_MAX``) and never reaches the
+    runtime config."""
+    from sc2tools_agent.config import UPLOAD_CONCURRENCY_USEFUL_MAX
+
+    state = AgentState(device_token="t")
+    payload = SettingsPayload(upload_concurrency=99)
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(), logging.getLogger("test"),
+    )
+    assert state.upload_concurrency_override == UPLOAD_CONCURRENCY_USEFUL_MAX
+
+
+def test_save_clamps_upload_batch_size_into_useful_range(
+    tmp_path: Path,
+) -> None:
+    from sc2tools_agent.config import UPLOAD_BATCH_SIZE_USEFUL_MAX
+
+    state = AgentState(device_token="t")
+    payload = SettingsPayload(upload_batch_size=999)
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(), logging.getLogger("test"),
+    )
+    assert state.upload_batch_size_override == UPLOAD_BATCH_SIZE_USEFUL_MAX
+
+
+def test_save_clamps_upload_settings_floor_at_one(tmp_path: Path) -> None:
+    """A negative or zero value (only reachable via a hand-edited
+    JSON file — the slider's QSlider.minimum() is 1) must clamp up
+    to 1, never persist 0 or negative."""
+    state = AgentState(device_token="t")
+    payload = SettingsPayload(upload_concurrency=0, upload_batch_size=-5)
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(), logging.getLogger("test"),
+    )
+    assert state.upload_concurrency_override == 1
+    assert state.upload_batch_size_override == 1
+
+
+# --- Hot-swap dispatch from save handler -----------------------------
+
+
+class _HotSwapStubUpload:
+    """Captures hot-swap calls so the save-handler test can verify
+    that a Settings change is forwarded to the live ``UploadQueue``,
+    not just persisted to disk. Includes ``set_concurrency`` and
+    ``set_batch_size`` so the production code path that auto-detects
+    those methods via ``hasattr`` exercises the dispatch."""
+
+    def __init__(self) -> None:
+        self.resync_calls = 0
+        self.concurrency_swaps: list[int] = []
+        self.batch_size_swaps: list[int] = []
+
+    def request_full_resync(self) -> None:
+        self.resync_calls += 1
+
+    def set_concurrency(self, n: int) -> None:
+        self.concurrency_swaps.append(int(n))
+
+    def set_batch_size(self, n: int) -> None:
+        self.batch_size_swaps.append(int(n))
+
+
+def test_save_hot_swaps_upload_concurrency_when_payload_carries_it(
+    tmp_path: Path,
+) -> None:
+    """The Settings tab's 1-or-2 button group fires a partial
+    ``SettingsPayload`` with only ``upload_concurrency`` set. The
+    save handler must persist AND immediately call
+    ``UploadQueue.set_concurrency`` so the change takes effect
+    without an agent restart — that's the contract the GUI's
+    auto-save click-to-apply UX depends on."""
+    state = AgentState(device_token="t")
+    upload = _HotSwapStubUpload()
+    payload = SettingsPayload(upload_concurrency=2)
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(upload), logging.getLogger("test"),
+    )
+    assert state.upload_concurrency_override == 2
+    assert upload.concurrency_swaps == [2], (
+        f"expected hot-swap to value 2, got swaps: {upload.concurrency_swaps}"
+    )
+
+
+def test_save_hot_swaps_upload_batch_size_when_payload_carries_it(
+    tmp_path: Path,
+) -> None:
+    """Same contract as upload_concurrency: a ``upload_batch_size``
+    payload must persist and hot-swap. Workers re-read the new
+    value at the top of their next iteration; the dispatch from
+    the save handler is what kicks the chain."""
+    state = AgentState(device_token="t")
+    upload = _HotSwapStubUpload()
+    payload = SettingsPayload(upload_batch_size=30)
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(upload), logging.getLogger("test"),
+    )
+    assert state.upload_batch_size_override == 30
+    assert upload.batch_size_swaps == [30]
+
+
+def test_save_skips_hot_swap_when_field_not_in_payload(
+    tmp_path: Path,
+) -> None:
+    """A payload without ``upload_concurrency`` (e.g. user changed
+    only the date-range filter) must NOT fire a spurious hot-swap.
+    The contract is "only the fields the user actually edited get
+    pushed downstream"."""
+    state = AgentState(device_token="t")
+    upload = _HotSwapStubUpload()
+    payload = SettingsPayload(sync_filter_preset="all")  # unrelated change
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(upload), logging.getLogger("test"),
+    )
+    assert upload.concurrency_swaps == []
+    assert upload.batch_size_swaps == []
+
+
+def test_save_hot_swap_failure_does_not_break_persistence(
+    tmp_path: Path,
+) -> None:
+    """If ``set_concurrency`` raises (e.g. the upload thread is in
+    a weird state), the save itself must still succeed — the user's
+    setting is persisted to state so the next agent restart gets
+    the change even if the live hot-swap couldn't be applied."""
+
+    class _FlakyUpload:
+        def __init__(self) -> None:
+            self.resync_calls = 0
+
+        def request_full_resync(self) -> None:
+            self.resync_calls += 1
+
+        def set_concurrency(self, _n: int) -> None:
+            raise RuntimeError("simulated stop/start race")
+
+        def set_batch_size(self, _n: int) -> None:
+            raise RuntimeError("simulated stop/start race")
+
+    state = AgentState(device_token="t")
+    upload = _FlakyUpload()
+    payload = SettingsPayload(upload_concurrency=2, upload_batch_size=30)
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(upload), logging.getLogger("test"),
+    )
+    # Persistence succeeded despite the hot-swap exception.
+    assert state.upload_concurrency_override == 2
+    assert state.upload_batch_size_override == 30

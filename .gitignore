@@ -75,6 +75,19 @@ reveal-sc2-opponent-main/stream-overlay-backend/overlay.config.json.broken-*
 /build/
 /dist/
 
+# Agent installer build artifacts. The PyInstaller pipeline at
+# apps/agent/packaging/build-installer.ps1 creates a self-contained
+# virtualenv under apps/agent/.build-venv/ (~700 MB), a PyInstaller
+# work cache at apps/agent/build/ (~300 MB), and the bundled exes +
+# NSIS installer at apps/agent/dist/ (~600 MB). All three combined
+# total 9k+ files which would otherwise show up as untracked in
+# `git status` and inflate any "PR size" diff your editor computes.
+# Rooted explicitly at apps/agent/ so they don't collide with the
+# repo-root /build/ /dist/ rules above.
+/apps/agent/.build-venv/
+/apps/agent/build/
+/apps/agent/dist/
+
 # Bootstrap downloads that build-installer.ps1 fetches into the
 # repo root if BUILD_DIR resolves there for any reason.
 /get-pip.py
