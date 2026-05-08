@@ -151,6 +151,9 @@ class UsersService {
    *   region?: string,
    *   preferredRace?: string,
    *   displayName?: string,
+   *   lastKnownMmr?: number,
+   *   lastKnownMmrAt?: string,
+   *   lastKnownMmrRegion?: string,
    * }>}
    */
   async getProfile(userId) {
@@ -164,11 +167,14 @@ class UsersService {
           region: 1,
           preferredRace: 1,
           displayName: 1,
+          lastKnownMmr: 1,
+          lastKnownMmrAt: 1,
+          lastKnownMmrRegion: 1,
         },
       },
     );
     if (!doc) return {};
-    /** @type {Record<string, string>} */
+    /** @type {Record<string, string|number>} */
     const out = {};
     for (const k of [
       "battleTag",
@@ -176,9 +182,17 @@ class UsersService {
       "region",
       "preferredRace",
       "displayName",
+      "lastKnownMmrAt",
+      "lastKnownMmrRegion",
     ]) {
       const v = doc[k];
       if (typeof v === "string" && v.length > 0) out[k] = v;
+    }
+    // ``lastKnownMmr`` is the only numeric field — surface it as a
+    // number so the session widget's tier-comparison code can use it
+    // without parsing.
+    if (typeof doc.lastKnownMmr === "number" && Number.isFinite(doc.lastKnownMmr)) {
+      out.lastKnownMmr = doc.lastKnownMmr;
     }
     return out;
   }
@@ -223,6 +237,11 @@ class UsersService {
    * stale entries. The profile is the only writable surface — we
    * never let the client touch userId/clerkUserId/createdAt.
    *
+   * The agent has its own narrower entry point for sticky-MMR pings
+   * (``patchLastKnownMmr``) — it never sends the user-editable fields
+   * (battleTag/pulseId/region/preferredRace/displayName), so the agent
+   * can't accidentally clear what the streamer typed into Settings.
+   *
    * @param {string} userId
    * @param {{
    *   battleTag?: string|null,
@@ -230,27 +249,51 @@ class UsersService {
    *   region?: string|null,
    *   preferredRace?: string|null,
    *   displayName?: string|null,
+   *   lastKnownMmr?: number|null,
+   *   lastKnownMmrAt?: string|null,
+   *   lastKnownMmrRegion?: string|null,
    * }} profile
    */
   async updateProfile(userId, profile) {
-    const FIELDS = [
+    const STRING_FIELDS = [
       "battleTag",
       "pulseId",
       "region",
       "preferredRace",
       "displayName",
+      "lastKnownMmrAt",
+      "lastKnownMmrRegion",
     ];
-    /** @type {Record<string, string>} */
+    /** @type {Record<string, any>} */
     const set = {};
     /** @type {Record<string, "">} */
     const unset = {};
-    for (const k of FIELDS) {
+    for (const k of STRING_FIELDS) {
       const raw = profile ? profile[/** @type {keyof typeof profile} */ (k)] : undefined;
       if (typeof raw === "string" && raw.trim().length > 0) {
         set[k] = raw.trim();
       } else {
         unset[k] = "";
       }
+    }
+    // ``lastKnownMmr`` is numeric. Treat null/missing as "clear", a
+    // valid integer in the [500, 9999] band as "set". Out-of-band
+    // values are dropped on the floor (never set, never unset) so a
+    // malformed agent ping can't clear a previously-good value.
+    if (profile && Object.prototype.hasOwnProperty.call(profile, "lastKnownMmr")) {
+      const raw = profile.lastKnownMmr;
+      if (raw === null) {
+        unset.lastKnownMmr = "";
+      } else if (
+        typeof raw === "number" &&
+        Number.isInteger(raw) &&
+        raw >= 500 &&
+        raw <= 9999
+      ) {
+        set.lastKnownMmr = raw;
+      }
+    } else {
+      unset.lastKnownMmr = "";
     }
     set.profileUpdatedAt = /** @type {any} */ (new Date());
     // Re-stamp the schema version on every write so a future bump of
@@ -262,6 +305,58 @@ class UsersService {
     if (Object.keys(unset).length > 0) update.$unset = unset;
     await this.db.users.updateOne({ userId }, update);
     return this.getProfile(userId);
+  }
+
+  /**
+   * Narrow agent-only entry for the sticky-MMR ping. Patches just the
+   * three ``lastKnownMmr*`` fields without touching the user-editable
+   * profile (battleTag/pulseId/region/...) — the agent must never be
+   * able to clobber what the streamer typed into Settings.
+   *
+   * Idempotent on a no-op: if ``mmr`` matches the stored value we
+   * skip the write entirely (saves a Mongo round-trip per replay
+   * during a 13k-replay backfill).
+   *
+   * @param {string} userId
+   * @param {{
+   *   mmr: number,
+   *   capturedAt?: string,
+   *   region?: string,
+   * }} update
+   * @returns {Promise<boolean>} true when the document was actually written.
+   */
+  async patchLastKnownMmr(userId, update) {
+    if (!update || typeof update !== "object") return false;
+    const mmr = Number(update.mmr);
+    if (!Number.isInteger(mmr) || mmr < 500 || mmr > 9999) return false;
+    /** @type {Record<string, any>} */
+    const set = { lastKnownMmr: mmr };
+    if (typeof update.capturedAt === "string" && update.capturedAt) {
+      set.lastKnownMmrAt = update.capturedAt.slice(0, 40);
+    } else {
+      set.lastKnownMmrAt = new Date().toISOString();
+    }
+    if (typeof update.region === "string" && update.region) {
+      set.lastKnownMmrRegion = update.region.slice(0, 8);
+    }
+    // Skip the write if nothing changed — most replays in a backfill
+    // produce the same MMR as the prior one, so the unconditional
+    // updateOne would generate ~13k pointless writes during a
+    // re-sync.
+    const existing = await this.db.users.findOne(
+      { userId },
+      { projection: { _id: 0, lastKnownMmr: 1, lastKnownMmrRegion: 1 } },
+    );
+    if (
+      existing &&
+      existing.lastKnownMmr === mmr &&
+      existing.lastKnownMmrRegion === set.lastKnownMmrRegion
+    ) {
+      return false;
+    }
+    stampVersion(set, COLLECTIONS.USERS);
+    await this.db.users.updateOne({ userId }, { $set: set });
+    return true;
   }
 }
 

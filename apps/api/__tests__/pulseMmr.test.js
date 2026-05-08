@@ -89,12 +89,18 @@ describe("services/pulseMmr", () => {
     const out = await svc.getCurrentMmrByToon("2-S2-1-99999");
     expect(out?.mmr).toBe(5100);
     expect(out?.region).toBe("EU");
-    // The decoded profile URL must include the region/realm/id parts of
-    // the toon handle so SC2Pulse picks the right account.
-    const searchUrl = fetchImpl.mock.calls
+    // The resolver tries the bare toon handle first (cheapest), then
+    // falls through to profile-URL forms. Either way, at least one
+    // /character/search call must carry enough of the toon's identity
+    // (region/realm/id) for SC2Pulse to pick the right account.
+    const searchUrls = fetchImpl.mock.calls
       .map((c) => String(c[0]))
-      .find((u) => u.includes("/character/search"));
-    expect(searchUrl).toMatch(/profile%2F2%2F1%2F99999/);
+      .filter((u) => u.includes("/character/search"));
+    expect(searchUrls.length).toBeGreaterThan(0);
+    const carriesIdentity = searchUrls.some(
+      (u) => u.includes("2-S2-1-99999") || /profile%2F2%2F1%2F99999/.test(u),
+    );
+    expect(carriesIdentity).toBe(true);
   });
 
   test("getCurrentMmrByToon caches the toon→characterId mapping", async () => {
@@ -242,5 +248,112 @@ describe("services/pulseMmr", () => {
     });
     const svc = new PulseMmrService({ fetchImpl });
     expect(await svc.getCurrentMmr("994428")).toBeNull();
+  });
+
+  test("getCurrentMmrByToon walks fallback term forms when the first misses", async () => {
+    // SC2Pulse only matches the streamer's toon handle on the
+    // ``starcraft2.blizzard.com`` form (e.g. because the bare handle
+    // wasn't indexed for this character yet). The resolver must keep
+    // trying the URL forms instead of giving up after the first miss.
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/character/search")) {
+        // The bare-handle form (term=1-S2-1-267727) returns nothing.
+        // The starcraft2.com URL also returns nothing. Only the legacy
+        // starcraft2.blizzard.com URL matches.
+        if (url.includes("starcraft2.blizzard.com")) {
+          return jsonResponse([{ character: { id: 452727 } }]);
+        }
+        return jsonResponse([]);
+      }
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      return jsonResponse([
+        { rating: 5343, lastPlayed: "2026-05-06T10:00:00Z" },
+      ]);
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrByToon("1-S2-1-267727");
+    expect(out?.mmr).toBe(5343);
+    // All three search URL forms should have been tried in order.
+    const searchUrls = fetchImpl.mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => u.includes("/character/search"));
+    expect(searchUrls.length).toBe(3);
+    expect(searchUrls[0]).toMatch(/term=1-S2-1-267727/);
+    expect(searchUrls[1]).toMatch(/starcraft2\.com/);
+    expect(searchUrls[2]).toMatch(/starcraft2\.blizzard\.com/);
+  });
+
+  test("getCurrentMmrByToon prefers the bare toon handle when SC2Pulse matches it", async () => {
+    // Happy path: SC2Pulse's TOON_HANDLE term type matches the bare
+    // handle directly, so we don't pay the cost of constructing or
+    // probing two profile URLs that won't be needed.
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/character/search")) {
+        return jsonResponse([{ character: { id: 452727 } }]);
+      }
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      return jsonResponse([
+        { rating: 4500, lastPlayed: "2026-05-01T10:00:00Z" },
+      ]);
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    await svc.getCurrentMmrByToon("1-S2-1-267727");
+    const searchUrls = fetchImpl.mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => u.includes("/character/search"));
+    // Exactly one /character/search call when the bare-handle form
+    // resolves on the first try — no extra round-trips.
+    expect(searchUrls).toHaveLength(1);
+    expect(searchUrls[0]).toMatch(/term=1-S2-1-267727/);
+  });
+
+  test("extractCharacterId handles the team-shaped members[] response", async () => {
+    // Some SC2Pulse responses come back wrapped in a team object with
+    // a ``members`` array — we have to dig into ``members[*].character``
+    // to find the canonical id.
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/character/search")) {
+        return jsonResponse([
+          {
+            members: [
+              { character: { id: 994428, battlenetId: 99999 } },
+            ],
+          },
+        ]);
+      }
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "EU" }]);
+      }
+      return jsonResponse([
+        { rating: 5050, lastPlayed: "2026-05-06T10:00:00Z" },
+      ]);
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrByToon("2-S2-1-99999");
+    expect(out?.mmr).toBe(5050);
+  });
+
+  test("extractCharacterId falls back to character.battlenetId when id is absent", async () => {
+    // Older Pulse responses occasionally omit the internal `id`
+    // and only ship the Blizzard-side `battlenetId`; that still
+    // lets us key the team scan, so accept it.
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/character/search")) {
+        return jsonResponse([{ character: { battlenetId: 994428 } }]);
+      }
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "EU" }]);
+      }
+      return jsonResponse([
+        { rating: 4900, lastPlayed: "2026-05-06T10:00:00Z" },
+      ]);
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrByToon("2-S2-1-99999");
+    expect(out?.mmr).toBe(4900);
   });
 });

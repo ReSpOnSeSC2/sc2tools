@@ -182,4 +182,98 @@ describe("/v1/me/profile", () => {
     expect(res.body.battleTag).toBe("AgentReads#0001");
     expect(res.body.region).toBe("us");
   });
+
+  test("POST /v1/me/last-mmr stores the sticky MMR + region", async () => {
+    const post = await withAuth(request(app).post("/v1/me/last-mmr"))
+      .send({
+        mmr: 4730,
+        capturedAt: "2026-05-07T10:00:00Z",
+        region: "NA",
+      })
+      .set("content-type", "application/json");
+    expect(post.status).toBe(200);
+    expect(post.body.ok).toBe(true);
+    expect(post.body.wrote).toBe(true);
+
+    const got = await withAuth(request(app).get("/v1/me/profile"));
+    expect(got.status).toBe(200);
+    expect(got.body.lastKnownMmr).toBe(4730);
+    expect(got.body.lastKnownMmrAt).toBe("2026-05-07T10:00:00Z");
+    expect(got.body.lastKnownMmrRegion).toBe("NA");
+  });
+
+  test("POST /v1/me/last-mmr is idempotent when the value hasn't changed", async () => {
+    // First push lands the value.
+    await withAuth(request(app).post("/v1/me/last-mmr"))
+      .send({ mmr: 4730, region: "NA" })
+      .set("content-type", "application/json");
+    // Second push with the same value should report wrote=false so an
+    // operator triaging a hot loop can tell the agent isn't grinding
+    // a Mongo write per replay during a backfill.
+    const second = await withAuth(request(app).post("/v1/me/last-mmr"))
+      .send({ mmr: 4730, region: "NA" })
+      .set("content-type", "application/json");
+    expect(second.status).toBe(200);
+    expect(second.body.wrote).toBe(false);
+  });
+
+  test("POST /v1/me/last-mmr rejects out-of-band MMR values", async () => {
+    // 7 = the Grandmaster league enum that pre-v0.5.5 leaked into
+    // `mmr` and made the overlay paint "7" as a rating. Reject it.
+    const tooLow = await withAuth(request(app).post("/v1/me/last-mmr"))
+      .send({ mmr: 7 })
+      .set("content-type", "application/json");
+    expect(tooLow.status).toBe(400);
+    expect(tooLow.body.error.code).toBe("invalid_mmr");
+
+    const tooHigh = await withAuth(request(app).post("/v1/me/last-mmr"))
+      .send({ mmr: 12345 })
+      .set("content-type", "application/json");
+    expect(tooHigh.status).toBe(400);
+    expect(tooHigh.body.error.code).toBe("invalid_mmr");
+
+    const notNumber = await withAuth(request(app).post("/v1/me/last-mmr"))
+      .send({ mmr: "high" })
+      .set("content-type", "application/json");
+    expect(notNumber.status).toBe(400);
+  });
+
+  test("POST /v1/me/last-mmr can't clobber the user-editable profile fields", async () => {
+    // The route accepts only `mmr`/`capturedAt`/`region` — extra
+    // fields like `battleTag` must be ignored, not persisted. This
+    // protects the streamer's typed-in Settings values from being
+    // wiped by an agent ping.
+    await withAuth(request(app).put("/v1/me/profile"))
+      .send({ battleTag: "PinnedTag#0001", region: "kr" })
+      .set("content-type", "application/json");
+
+    await withAuth(request(app).post("/v1/me/last-mmr"))
+      .send({ mmr: 4730, battleTag: "EvilTag#9999" })
+      .set("content-type", "application/json");
+
+    const got = await withAuth(request(app).get("/v1/me/profile"));
+    expect(got.body.battleTag).toBe("PinnedTag#0001");
+    expect(got.body.region).toBe("kr");
+    expect(got.body.lastKnownMmr).toBe(4730);
+  });
+
+  test("POST /v1/me/last-mmr requires auth", async () => {
+    const res = await request(app)
+      .post("/v1/me/last-mmr")
+      .send({ mmr: 4730 })
+      .set("content-type", "application/json");
+    expect(res.status).toBe(401);
+  });
+
+  test("PUT /v1/me/profile rejects out-of-band lastKnownMmr values", async () => {
+    // Settings UI doesn't currently expose lastKnownMmr, but the
+    // schema validator is the source of truth for what the route
+    // accepts. Lock down the bounds so a future client typo can't
+    // poison the cache.
+    const put = await withAuth(request(app).put("/v1/me/profile"))
+      .send({ lastKnownMmr: 5 })
+      .set("content-type", "application/json");
+    expect(put.status).toBe(400);
+    expect(put.body.error.code).toBe("invalid_profile");
+  });
 });

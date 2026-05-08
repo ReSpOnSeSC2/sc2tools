@@ -165,6 +165,68 @@ def test_string_in_list_field_is_tolerated(tmp_path: Path) -> None:
     assert loaded.replay_folders_override == ["/single/raw/string"]
 
 
+# ---------------- Sticky-MMR fields --------------------------------------
+#
+# The cloud session widget falls back to ``profile.lastKnownMmr`` when no
+# game in the user's history carries ``myMmr``. The agent persists what
+# it last pushed in AgentState so it can gate-keep older replays during
+# a backfill (no clobbering a recent MMR with a season-old one) and so a
+# brief offline period doesn't make us re-push the same value on the
+# next start.
+
+
+def test_last_known_mmr_round_trips(tmp_path: Path) -> None:
+    s = AgentState(
+        device_token="t",
+        last_known_mmr=4730,
+        last_known_mmr_date_iso="2026-05-07T10:00:00Z",
+        last_known_mmr_region="NA",
+    )
+    save_state(tmp_path, s)
+    loaded = load_state(tmp_path)
+    assert loaded.last_known_mmr == 4730
+    assert loaded.last_known_mmr_date_iso == "2026-05-07T10:00:00Z"
+    assert loaded.last_known_mmr_region == "NA"
+
+
+def test_last_known_mmr_rejects_garbage_and_out_of_range(tmp_path: Path) -> None:
+    """Hand-edited state file or a downgrade-after-corruption must not
+    re-inject a league-enum value (Bronze=0..GM=7) as a real rating —
+    the cloud schema would reject it anyway, so drop it on load."""
+    (tmp_path / "agent.json").write_text(
+        json.dumps(
+            {
+                "device_token": "t",
+                # 7 = Grandmaster league enum, the exact value that
+                # used to leak into the live overlay before the v0.3.x
+                # MMR floor was added.
+                "last_known_mmr": 7,
+                "last_known_mmr_region": "NA",
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded = load_state(tmp_path)
+    assert loaded.last_known_mmr is None
+    # A bogus MMR must not strand the region — region is a separate
+    # field. (We let it round-trip; the queue won't push without an
+    # MMR anyway.)
+    assert loaded.last_known_mmr_region == "NA"
+
+
+def test_last_known_mmr_handles_missing_fields(tmp_path: Path) -> None:
+    """Older state files have none of the sticky-MMR fields; loading
+    must not raise and the new fields default to None."""
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"device_token": "t"}),
+        encoding="utf-8",
+    )
+    loaded = load_state(tmp_path)
+    assert loaded.last_known_mmr is None
+    assert loaded.last_known_mmr_date_iso is None
+    assert loaded.last_known_mmr_region is None
+
+
 def test_dashboard_url_falls_back_to_dot_com() -> None:
     """The default dashboard origin is sc2tools.com — not .app — and the
     runner must produce that fallback whenever no api.* hostname is in

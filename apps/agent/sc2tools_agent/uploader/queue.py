@@ -193,3 +193,77 @@ class UploadQueue:
                 self._state.path_by_game_id[game_id] = path_str
             save_state(self._cfg.state_dir, self._state)
         self._on_success(job.file_path)
+        # Sticky-MMR ping. The session widget falls back to this
+        # profile field whenever no game in the user's cloud history
+        # carries ``myMmr`` (Tier-2 / Tier-3 / Tier-4 / Tier-5 of
+        # GamesService.todaySession), so a single failed-extraction
+        # window doesn't blank the overlay. We gate-keep on the GAME
+        # date — never push an older replay's MMR over a newer one,
+        # otherwise re-syncing 12k old replays would reset the sticky
+        # MMR to whatever the streamer's rating was three seasons ago.
+        self._maybe_push_last_mmr(job)
+
+    def _maybe_push_last_mmr(self, job: UploadJob) -> None:
+        """Push the streamer's MMR to the cloud profile if it's the most
+        recent we've seen.
+
+        Self-protective: silently no-ops when the game has no MMR, when
+        the in-memory state already reflects a more recent game, or
+        when the HTTP call fails. Failures must never block the upload
+        ack — the per-game upload itself has already succeeded.
+        """
+        my_mmr = getattr(job.game, "my_mmr", None)
+        if not isinstance(my_mmr, int) or not (500 <= my_mmr <= 9999):
+            return
+        game_date = getattr(job.game, "date_iso", None)
+        if not isinstance(game_date, str) or not game_date:
+            return
+        with self._lock:
+            stored_date = self._state.last_known_mmr_date_iso
+            if stored_date and stored_date >= game_date:
+                # Older replay than what we already pushed; skip the
+                # round-trip and the state churn. ISO-8601 strings sort
+                # lexicographically iff they share the same shape (UTC
+                # 'Z' suffix), which ``_to_iso`` in replay_pipeline.py
+                # guarantees on every CloudGame.
+                return
+        region = _region_from_toon_handle(getattr(job.game, "my_toon_handle", None))
+        try:
+            self._api.patch_last_mmr(
+                mmr=my_mmr,
+                captured_at=game_date,
+                region=region,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.debug("last_mmr_push_failed file=%s: %s", job.file_path.name, exc)
+            return
+        with self._lock:
+            self._state.last_known_mmr = my_mmr
+            self._state.last_known_mmr_date_iso = game_date
+            if region:
+                self._state.last_known_mmr_region = region
+            save_state(self._cfg.state_dir, self._state)
+        log.info(
+            "last_mmr_pushed mmr=%d region=%s game_date=%s",
+            my_mmr, region or "?", game_date,
+        )
+
+
+# Map the leading region byte of an SC2 toon handle to a short
+# Blizzard-region label. Mirrors ``regionFromToonHandle`` in
+# ``apps/api/src/services/games.js`` so the agent and cloud agree on
+# which label belongs to which numeric prefix.
+_TOON_HANDLE_REGION_BYTE = {
+    "1": "NA",
+    "2": "EU",
+    "3": "KR",
+    "5": "CN",
+    "6": "SEA",
+}
+
+
+def _region_from_toon_handle(handle: Optional[str]) -> Optional[str]:
+    if not isinstance(handle, str) or not handle:
+        return None
+    head = handle.split("-", 1)[0]
+    return _TOON_HANDLE_REGION_BYTE.get(head)

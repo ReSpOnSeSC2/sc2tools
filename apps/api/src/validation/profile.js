@@ -36,6 +36,30 @@ const PROFILE_SCHEMA = {
       type: ["string", "null"],
       maxLength: 80,
     },
+    // Sticky "last known MMR" — captured by the agent from each
+    // successfully-parsed replay and pinged to the cloud here. The
+    // session widget falls back to this when no game in the user's
+    // history carries `myMmr`, so streamers who haven't re-synced
+    // (and whose existing rows pre-date the v0.5.6 extraction fix)
+    // still see a number on the overlay until their next ranked
+    // game lands. Range mirrors the games-row schema so a pasted
+    // value can't poison the resolver. ``lastKnownMmrAt`` is an ISO
+    // 8601 timestamp; ``lastKnownMmrRegion`` is the short region
+    // label (NA/EU/KR/CN/SEA) the agent inferred from the toon
+    // handle byte at extraction time.
+    lastKnownMmr: {
+      type: ["integer", "null"],
+      minimum: 500,
+      maximum: 9999,
+    },
+    lastKnownMmrAt: {
+      type: ["string", "null"],
+      maxLength: 40,
+    },
+    lastKnownMmrRegion: {
+      type: ["string", "null"],
+      maxLength: 8,
+    },
   },
 };
 

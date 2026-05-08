@@ -10,6 +10,87 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+## [agent-v0.5.6] - 2026-05-07
+
+Released as `agent-v0.5.6` on GitHub. Installer:
+`SC2ToolsAgent-Setup-0.5.6.exe`.
+
+### Added (agent + api) — sticky "last known MMR" anchored on the user profile
+
+The cloud session widget now has a fourth fallback tier that survives
+even a games-collection wipe. The agent pings
+`POST /v1/me/last-mmr` on every successful upload that carries a
+fresh streamer MMR; the cloud stores it on the user profile as
+`lastKnownMmr` / `lastKnownMmrAt` / `lastKnownMmrRegion`, and
+`GamesService.todaySession` reads it as a tier between `games_anytime`
+and the SC2Pulse network calls. The new tier is cheaper than
+SC2Pulse (one user-row read, no HTTP) and covers the case where the
+streamer's whole game history pre-dates the v0.5.6 MMR-extraction
+fix — they see a real number on the overlay immediately on the next
+ranked replay parse, without waiting for a re-sync to backfill
+`myMmr` across every old row.
+
+The push is gate-kept on the GAME date so a backfill of older
+replays can't reset the sticky MMR to a season-old rating; the
+server further dedupes same-value writes to keep the Mongo write
+rate flat during a 12k-replay re-sync. The route is narrow on
+purpose — it accepts only `mmr` / `capturedAt` / `region`, never
+the user-editable profile fields — so the agent can't accidentally
+clobber what the streamer typed into Settings → Profile.
+
+### Fixed (agent + api) — session-widget MMR really populates this time
+
+The v0.5.5 patch claimed to fix the streamer's own MMR by preferring
+`me.scaled_rating` over `me.mmr`, but `me` in `replay_pipeline.py` is a
+`PlayerInfo` dataclass that surfaces only `mmr` (already prefers
+`scaled_rating` then `mmr` from the raw sc2reader player via
+`_get_player_mmr`). The added `getattr(me, "scaled_rating", None)` call
+always returned `None` and the codepath fell through to the original
+`me.mmr` — i.e. v0.5.5 was a behavioural no-op. Streamers kept seeing
+`NA — MMR` on the overlay (per a user-reported screenshot at
+`v0.5.5`, 18 lifetime games, 3 ranked today).
+
+This release fixes the actual problem in three places:
+
+- `apps/agent/sc2tools_agent/replay_pipeline.py` introduces
+  `_resolve_my_mmr(ctx, me)`, a layered fallback that first reads the
+  PlayerInfo wrapper, then falls back to walking `ctx.raw.players` and
+  reading `scaled_rating` / `mmr` directly off the matching raw
+  sc2reader player. This rescues the case where the analyzer silently
+  fell back from `load_level=4` to 3 on a problematic replay and left
+  `scaled_rating` unset on the wrapper. One INFO log line per parse
+  (`my_mmr_resolved` / `my_mmr_unresolved`) documents which source
+  supplied the value so a streamer can grep their agent log to see
+  exactly why the overlay says `—`.
+
+- `apps/api/src/services/pulseMmr.js` makes `_resolveCharacterIdFromToon`
+  walk a list of `term=` candidates instead of giving up after the
+  first miss. The bare toon handle (which SC2Pulse's `TOON_HANDLE`
+  term type matches directly) is tried first, then the `starcraft2.com`
+  profile URL (the current canonical Blizzard host), then the legacy
+  `starcraft2.blizzard.com` URL. The response parser now also accepts
+  `members[*].character`, `member.character`, and `character` shapes
+  for the canonical id (older Pulse responses occasionally omit `id`
+  and only ship `battlenetId`; that still keys the team scan fine).
+
+- `apps/api/src/services/games.js` `todaySession` tags every resolution
+  with a structured `mmrSource` (`games_today` / `games_window` /
+  `games_anytime` / `pulse_pulseid` / `pulse_toon` / `unresolved`) and
+  emits a single pino INFO line per resolve. An operator triaging a
+  stuck overlay can now grep `session_mmr_resolved` to see which tier
+  fired (or that nothing did).
+
+Net effect: streamers who never set their Pulse ID in Settings get
+their MMR back via the more permissive SC2Pulse `term=` fallback, AND
+new replay uploads carry the streamer's `myMmr` correctly so the
+cheaper games-row path fires first on the next session. Existing rows
+stay `myMmr`-less until a re-sync (or a future backfill) — but the
+SC2Pulse-by-toon fallback covers them in the meantime.
+
+Tag this commit as `agent-v0.5.6` after merge to trigger
+`.github/workflows/agent-installer.yml` and produce
+`SC2ToolsAgent-Setup-0.5.6.exe`.
+
 ## [agent-v0.5.5] - 2026-05-07
 
 Released as `agent-v0.5.5` on GitHub. Installer:

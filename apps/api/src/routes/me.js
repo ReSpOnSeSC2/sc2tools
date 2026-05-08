@@ -118,6 +118,48 @@ function buildMeRouter(deps) {
     }
   });
 
+  /**
+   * Narrow agent-only entry: ping the cloud with the most-recently-extracted
+   * MMR from a parsed replay so the session widget has a "last known"
+   * value to fall back to even when no game in the user's cloud history
+   * carries ``myMmr`` (e.g. existing rows uploaded by pre-v0.5.6 agents
+   * before the streamer's-own-MMR extraction was reliable).
+   *
+   * Why a separate route from PUT /me/profile: the agent must NEVER be
+   * able to clobber the user-editable fields the streamer typed into
+   * Settings (battleTag/pulseId/region/...). PATCH semantics on the
+   * full profile route would require validation acrobatics; a tiny
+   * focused route is cleaner and lets the validation schema reject
+   * any extra fields outright.
+   *
+   * Body: ``{ mmr: number, capturedAt?: string, region?: string }``.
+   * The service drops the request silently when ``mmr`` is outside the
+   * [500, 9999] band so a pasted-by-mistake league enum (Bronze=0..GM=7)
+   * can't poison the cache.
+   */
+  router.post("/me/last-mmr", deps.auth, async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const mmr = Number(body.mmr);
+      if (!Number.isInteger(mmr) || mmr < 500 || mmr > 9999) {
+        res.status(400).json({ error: { code: "invalid_mmr" } });
+        return;
+      }
+      /** @type {{mmr: number, capturedAt?: string, region?: string}} */
+      const update = { mmr };
+      if (typeof body.capturedAt === "string") {
+        update.capturedAt = body.capturedAt;
+      }
+      if (typeof body.region === "string") update.region = body.region;
+      const wrote = await deps.users.patchLastKnownMmr(auth.userId, update);
+      res.json({ ok: true, wrote });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Allowlist of preference types the client may read/write.
   const PREF_TYPES = new Set(["misc", "voice"]);
 
