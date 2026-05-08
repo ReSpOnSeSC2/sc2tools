@@ -263,14 +263,21 @@ export function useVoiceReadout(
     [gestureGranted, speak, log],
   );
 
-  // Cancel in-flight utterance when the *opponent* changes mid-flight.
-  // A new opponent reveal supersedes the old scouting line even if the
-  // old one is still mid-sentence.
+  // Cancel in-flight utterance when the *opponent* changes mid-flight,
+  // but ONLY when the new payload is a fresh pre-game reveal (no
+  // ``result`` set). A finished-game payload — historical replay sync,
+  // post-game match-result widget refresh — must not interrupt the
+  // current scouting line. The cloud emits one ``overlay:live`` per
+  // accepted game during ingest (see apps/api/src/routes/games.js), so
+  // a backfill of N games would otherwise cancel the in-flight readout
+  // N times in a row before it ever finished a sentence. Sync uploads
+  // always carry ``result``; a real pre-game opponent reveal does not.
   const lastOppRef = useRef<string | null>(null);
   useEffect(() => {
     const opp = (live?.oppName || "").trim().toLowerCase() || null;
-    if (lastOppRef.current && opp && opp !== lastOppRef.current) {
-      log("opponent changed:", lastOppRef.current, "→", opp);
+    const isFreshPreGame = !!opp && !live?.result;
+    if (lastOppRef.current && isFreshPreGame && opp !== lastOppRef.current) {
+      log("opponent changed (pre-game):", lastOppRef.current, "→", opp);
       try {
         window.speechSynthesis?.cancel();
       } catch {
@@ -281,8 +288,11 @@ export function useVoiceReadout(
       lastScoutingKey.current = null;
       lastMatchStartKey.current = null;
     }
-    if (opp) lastOppRef.current = opp;
-  }, [live?.oppName, log]);
+    // Only track pre-game opponents — a finished-game oppName landing
+    // here would clobber the legitimate pre-game opp we want to compare
+    // against on the *next* real reveal.
+    if (isFreshPreGame) lastOppRef.current = opp;
+  }, [live?.oppName, live?.result, log]);
 
   // Build + dispatch utterances whenever the live payload changes.
   useEffect(() => {
