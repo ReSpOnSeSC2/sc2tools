@@ -337,6 +337,157 @@ describe("services/pulseMmr", () => {
     expect(out?.mmr).toBe(5050);
   });
 
+  test("getCurrentMmrForAny batches every id into a single per-region team call", async () => {
+    // The streamer has three saved chips: a NA toon and two numeric
+    // SC2Pulse ids on EU. The session widget should pay one
+    // /character/search round-trip (only for the toon) and one
+    // /group/team call PER REGION carrying every numeric id — not three
+    // round-trips per region — so adding a tenth chip costs nothing.
+    /** @type {string[]} */
+    const groupTeamUrls = [];
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/character/search")) {
+        return jsonResponse([{ character: { id: 111111 } }]);
+      }
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([
+          { battlenetId: 60, region: "US" },
+          { battlenetId: 61, region: "EU" },
+        ]);
+      }
+      if (url.includes("/group/team")) {
+        groupTeamUrls.push(String(url));
+        // EU returns the more recently played team, so it should win.
+        if (url.includes("season=61")) {
+          return jsonResponse([
+            { rating: 5343, lastPlayed: "2026-05-08T00:00:00Z" },
+          ]);
+        }
+        return jsonResponse([
+          { rating: 4500, lastPlayed: "2026-04-15T00:00:00Z" },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrForAny([
+      "1-S2-1-267727",
+      "994428",
+      "8970877",
+    ]);
+    expect(out?.mmr).toBe(5343);
+    expect(out?.region).toBe("EU");
+    // One call per region. Each call carries all three numeric ids
+    // (toon-resolved 111111 + 994428 + 8970877) as repeated
+    // ``characterId`` query params.
+    expect(groupTeamUrls).toHaveLength(2);
+    for (const url of groupTeamUrls) {
+      expect(url).toMatch(/characterId=111111/);
+      expect(url).toMatch(/characterId=994428/);
+      expect(url).toMatch(/characterId=8970877/);
+    }
+  });
+
+  test("getCurrentMmrForAny picks the most-recently-played team across the union", async () => {
+    // Three pulse ids; SC2Pulse returns a team for each on different
+    // regions with different last-played dates. The streamer is
+    // currently grinding EU, so even though the NA team has higher MMR
+    // the resolver must pin to the EU team because it was played most
+    // recently — that's what the session widget anchors its region row
+    // against.
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([
+          { battlenetId: 60, region: "US" },
+          { battlenetId: 61, region: "EU" },
+        ]);
+      }
+      if (url.includes("/group/team")) {
+        if (url.includes("season=60")) {
+          // NA team — high rating but stale.
+          return jsonResponse([
+            { rating: 6000, lastPlayed: "2026-04-01T00:00:00Z" },
+          ]);
+        }
+        // EU team — current grind.
+        return jsonResponse([
+          { rating: 5200, lastPlayed: "2026-05-08T00:00:00Z" },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrForAny(["994428", "8970877"]);
+    expect(out?.mmr).toBe(5200);
+    expect(out?.region).toBe("EU");
+  });
+
+  test("getCurrentMmrForAny returns null on empty / nullish input without a network call", async () => {
+    const fetchImpl = jest.fn();
+    const svc = new PulseMmrService({ fetchImpl });
+    expect(await svc.getCurrentMmrForAny([])).toBeNull();
+    expect(await svc.getCurrentMmrForAny(null)).toBeNull();
+    expect(await svc.getCurrentMmrForAny(undefined)).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  test("getCurrentMmrForAny skips garbage entries and resolves the rest", async () => {
+    // Mixed valid/invalid input: a numeric id, a toon, a stray empty
+    // string, and a malformed handle. The valid two should still drive
+    // a successful resolve.
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/character/search")) {
+        return jsonResponse([{ character: { id: 222222 } }]);
+      }
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      return jsonResponse([
+        { rating: 4800, lastPlayed: "2026-05-01T00:00:00Z" },
+      ]);
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrForAny([
+      "994428",
+      "",
+      "not-a-handle",
+      "1-S2-1-99999",
+      null,
+    ]);
+    expect(out?.mmr).toBe(4800);
+  });
+
+  test("getCurrentMmrForAny returns null when nothing in the list normalises", async () => {
+    const fetchImpl = jest.fn();
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrForAny(["", "garbage", null]);
+    expect(out).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  test("getCurrentMmrForAny caches the joint lookup order-insensitively", async () => {
+    let teamCalls = 0;
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      if (url.includes("/group/team")) {
+        teamCalls += 1;
+        return jsonResponse([
+          { rating: 4800, lastPlayed: "2026-05-01T00:00:00Z" },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl, cacheTtlMs: 60_000 });
+    const a = await svc.getCurrentMmrForAny(["994428", "8970877"]);
+    // Reordered list — same logical set, must hit the cache.
+    const b = await svc.getCurrentMmrForAny(["8970877", "994428"]);
+    expect(a?.mmr).toBe(4800);
+    expect(b?.mmr).toBe(4800);
+    expect(teamCalls).toBe(1);
+  });
+
   test("extractCharacterId falls back to character.battlenetId when id is absent", async () => {
     // Older Pulse responses occasionally omit the internal `id`
     // and only ship the Blizzard-side `battlenetId`; that still

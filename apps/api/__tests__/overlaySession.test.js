@@ -260,6 +260,138 @@ describe("services/games.todaySession", () => {
     expect(out.region).toBe("NA");
   });
 
+  test("Tier-3 multi-pulse fallback batches every saved id into one resolve", async () => {
+    // The streamer has three saved chips on their profile (one toon and
+    // two numeric Pulse IDs). The session widget must hand the entire
+    // union to ``getCurrentMmrForAny`` in a single call so SC2Pulse can
+    // pick the team played most recently across all of them — not just
+    // try ``pulseIds[0]`` and give up.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-multi",
+      result: "Victory",
+      date: new Date(),
+      myToonHandle: "1-S2-1-267727",
+    });
+    /** @type {string[][]} */
+    const calls = [];
+    const pulseMmr = {
+      getCurrentMmrForAny: jest.fn(async (ids) => {
+        calls.push([...ids]);
+        return { mmr: 5343, region: "EU" };
+      }),
+    };
+    const traceLines = [];
+    const svc2 = new GamesService(db, {
+      users: {
+        getProfile: async () => ({
+          pulseIds: ["1-S2-1-267727", "994428", "8970877"],
+          pulseId: "1-S2-1-267727",
+        }),
+      },
+      pulseMmr,
+      logger: { info: (obj, msg) => traceLines.push({ obj, msg }) },
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(5343);
+    expect(out.region).toBe("EU");
+    expect(pulseMmr.getCurrentMmrForAny).toHaveBeenCalledTimes(1);
+    // Single call carries the dedup'd union: the toon (also forwarded
+    // from the recent game) only appears once, and both numeric ids are
+    // in the list.
+    expect(calls[0]).toEqual(
+      expect.arrayContaining(["1-S2-1-267727", "994428", "8970877"]),
+    );
+    // Order-insensitive: the toon shouldn't appear twice even though it
+    // came from both ``pulseIds`` and the ``myToonHandle`` on the game.
+    expect(calls[0].filter((id) => id === "1-S2-1-267727")).toHaveLength(1);
+    const trace = traceLines.find(
+      (l) => l.obj && l.obj.event === "session_mmr_resolved",
+    );
+    expect(trace?.obj.mmrSource).toBe("pulse_multi");
+    expect(trace?.obj.pulseIdsCount).toBe(3);
+  });
+
+  test("Tier-3 multi-pulse falls back to the auto-detected toon when nothing is saved", async () => {
+    // Streamer hasn't pasted anything into Settings → Profile, but the
+    // agent forwards ``myToonHandle`` on each replay. The session widget
+    // must still drive a multi-pulse resolve using just the auto-
+    // detected handle so MMR resolves on a fresh install.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-auto",
+      result: "Victory",
+      date: new Date(),
+      myToonHandle: "2-S2-1-99999",
+    });
+    const pulseMmr = {
+      getCurrentMmrForAny: jest.fn(async (ids) => {
+        expect(ids).toEqual(["2-S2-1-99999"]);
+        return { mmr: 5100, region: "EU" };
+      }),
+    };
+    const svc2 = new GamesService(db, {
+      users: { getProfile: async () => ({}) },
+      pulseMmr,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(5100);
+    expect(out.region).toBe("EU");
+    expect(pulseMmr.getCurrentMmrForAny).toHaveBeenCalledTimes(1);
+  });
+
+  test("Tier-3 multi-pulse is skipped when a stored myMmr is found", async () => {
+    // Cheaper tier still wins: a fresh game-row myMmr must short-circuit
+    // before the SC2Pulse round-trip, even with three saved chips.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-fresh",
+      result: "Victory",
+      date: new Date(),
+      myMmr: 4800,
+      myToonHandle: "1-S2-1-267727",
+    });
+    const pulseMmr = {
+      getCurrentMmrForAny: jest.fn(async () => {
+        throw new Error("should_not_be_called");
+      }),
+    };
+    const svc2 = new GamesService(db, {
+      users: {
+        getProfile: async () => ({
+          pulseIds: ["1-S2-1-267727", "994428"],
+        }),
+      },
+      pulseMmr,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(4800);
+    expect(pulseMmr.getCurrentMmrForAny).not.toHaveBeenCalled();
+  });
+
+  test("Tier-3 multi-pulse survives a thrown SC2Pulse error", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-throw",
+      result: "Victory",
+      date: new Date(),
+      myToonHandle: "2-S2-1-12345",
+    });
+    const svc2 = new GamesService(db, {
+      users: {
+        getProfile: async () => ({ pulseIds: ["994428"] }),
+      },
+      pulseMmr: {
+        getCurrentMmrForAny: async () => {
+          throw new Error("boom");
+        },
+      },
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBeUndefined();
+    expect(out.wins).toBe(1);
+  });
+
   test("Tier-3 SC2Pulse fallback fills mmrCurrent when no game carries myMmr", async () => {
     // Today's game with no myMmr; no historic myMmr either. The
     // PulseMmrService stub stands in for the SC2Pulse round-trip.

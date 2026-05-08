@@ -228,12 +228,112 @@ class PulseMmrService {
   }
 
   /**
-   * @private
-   * @param {string} pulseId
+   * Resolve current 1v1 MMR across an arbitrary list of pulse identifiers
+   * (mixed numeric SC2Pulse character ids and raw sc2reader toon handles).
+   * The list is what the streamer's profile stores under ``users.pulseIds``
+   * — multi-region accounts and historical toons all live in there, and
+   * the session widget needs to pick whichever team SC2Pulse says was
+   * played most recently across the union, not just the first id.
+   *
+   * Toon handles are resolved to numeric character ids via
+   * ``/character/search`` (cached). Numeric ids pass through as-is.
+   * The deduped numeric set is then fed to ``/group/team`` ONCE per
+   * region (SC2Pulse accepts repeated ``characterId`` query params), so
+   * adding a tenth pulse id to a profile costs zero extra round-trips
+   * — the fan-out is bounded by the number of regions, not the size of
+   * the id list.
+   *
+   * Returns ``null`` when:
+   *   - The list is empty or every entry failed to normalise.
+   *   - SC2Pulse returned no teams in any region for any id.
+   *   - The remote request failed and there's no usable cache entry.
+   *
+   * @param {Array<string|null|undefined>|null|undefined} ids
    * @returns {Promise<{mmr: number, region: string|null}|null>}
    */
-  async _fetchTeams(pulseId) {
+  async getCurrentMmrForAny(ids) {
+    if (!Array.isArray(ids) || ids.length === 0) return null;
+    /** @type {string[]} */
+    const numericIds = [];
+    const seen = new Set();
+    for (const raw of ids) {
+      if (typeof raw !== "string") continue;
+      const numeric = normalisePulseId(raw);
+      if (numeric) {
+        if (!seen.has(numeric)) {
+          seen.add(numeric);
+          numericIds.push(numeric);
+        }
+        continue;
+      }
+      const toon = normaliseToonHandle(raw);
+      if (!toon) continue;
+      // Reuse the toon→characterId memoisation so a 3-id profile
+      // doesn't spend three /character/search calls every overlay
+      // refresh once the mapping has been resolved once.
+      const resolved = await this._resolveCharacterIdFromToonCached(toon);
+      if (resolved && !seen.has(resolved)) {
+        seen.add(resolved);
+        numericIds.push(resolved);
+      }
+    }
+    if (numericIds.length === 0) return null;
+    // Cache the joint lookup under a key that's order-insensitive so the
+    // same profile resolves the same cache slot regardless of how the
+    // user reordered their chips in Settings.
+    const cacheKey = "any:" + numericIds.slice().sort().join(",");
+    const now = this.now();
+    const cached = this._cache.get(cacheKey);
+    if (cached && now - cached.fetchedAt < this.cacheTtlMs) {
+      return { mmr: cached.mmr, region: cached.region };
+    }
+    const fetched = await this._fetchTeams(numericIds);
+    if (fetched) {
+      this._cache.set(cacheKey, { ...fetched, fetchedAt: now });
+      return fetched;
+    }
+    // Stale-while-error: same contract as the single-id path. A network
+    // blip shouldn't strip a previously-good MMR off the overlay.
+    if (cached) return { mmr: cached.mmr, region: cached.region };
+    return null;
+  }
+
+  /**
+   * Resolve toon → characterId, memoising the mapping. Idempotent wrapper
+   * around ``_resolveCharacterIdFromToon`` so the multi-id path can call
+   * it for each toon entry without paying repeated /character/search
+   * round-trips on subsequent overlay ticks.
+   *
+   * @private
+   * @param {string} handle
+   * @returns {Promise<string|null>}
+   */
+  async _resolveCharacterIdFromToonCached(handle) {
+    const cacheKey = `toon:${handle}`;
+    const mapped = this._cache.get(cacheKey);
+    if (mapped && typeof mapped.characterId === "string") {
+      return mapped.characterId;
+    }
+    const characterId = await this._resolveCharacterIdFromToon(handle);
+    if (!characterId) return null;
+    this._cache.set(cacheKey, {
+      characterId,
+      mmr: 0,
+      region: null,
+      fetchedAt: this.now(),
+    });
+    return characterId;
+  }
+
+  /**
+   * @private
+   * @param {string|string[]} pulseIdOrIds
+   * @returns {Promise<{mmr: number, region: string|null}|null>}
+   */
+  async _fetchTeams(pulseIdOrIds) {
     if (!this.fetchImpl) return null;
+    const ids = Array.isArray(pulseIdOrIds) ? pulseIdOrIds : [pulseIdOrIds];
+    if (ids.length === 0) return null;
     // Probe per-region — SC2Pulse's /group/team returns nothing without
     // a season id, and seasons are scoped per region. The legacy SPA
     // walked every region's current season; we do the same so the
@@ -242,12 +342,19 @@ class PulseMmrService {
     if (seasons.size === 0) return null;
     /** @type {Array<{rating: number, lastPlayedMs: number, region: string|null}>} */
     const candidates = [];
+    // SC2Pulse's /group/team accepts repeated ``characterId`` query
+    // params and returns the union — one HTTP call per region carries
+    // every id in the streamer's profile, so multi-region accounts
+    // don't multiply the round-trip count.
+    const idsParam = ids
+      .map((id) => `characterId=${encodeURIComponent(id)}`)
+      .join("&");
     for (const [regionCode, seasonId] of seasons) {
       const url =
         `${PULSE_API_ROOT}/group/team` +
         `?season=${seasonId}` +
         `&queue=${PULSE_QUEUE}` +
-        `&characterId=${encodeURIComponent(pulseId)}`;
+        `&${idsParam}`;
       const teams = await this._getJson(url);
       if (!Array.isArray(teams)) continue;
       for (const team of teams) {

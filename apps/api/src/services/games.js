@@ -29,6 +29,10 @@ class GamesService {
    *       mmr: number,
    *       region: string | null,
    *     } | null>,
+   *     getCurrentMmrForAny?(ids: string[]): Promise<{
+   *       mmr: number,
+   *       region: string | null,
+   *     } | null>,
    *   },
    *   logger?: { info: (obj: Record<string, unknown>, msg: string) => void },
    * }} [opts]
@@ -347,12 +351,21 @@ class GamesService {
      *                         and the SC2Pulse network calls because
      *                         it's fast (one row read) and survives
      *                         the games collection being wiped.
-     *   ``pulse_pulseid`` / ``pulse_toon`` — SC2Pulse queried via the
-     *                         profile's ``pulseId`` or the streamer's
-     *                         ``myToonHandle`` from a recent game.
+     *   ``pulse_multi``     — SC2Pulse queried with the union of every
+     *                         id on the streamer's profile (``pulseIds``
+     *                         array + the legacy single-string ``pulseId``
+     *                         + the most recent game's ``myToonHandle``)
+     *                         in one batched call; the most-recently-
+     *                         played team across the union wins.
+     *   ``pulse_pulseid`` / ``pulse_toon`` — single-id legacy paths.
+     *                         Only fire when the injected pulseMmr
+     *                         service hasn't been upgraded to
+     *                         ``getCurrentMmrForAny`` (older unit-test
+     *                         stubs); production always takes the
+     *                         ``pulse_multi`` branch.
      *   ``unresolved``      — every tier missed; widget paints ``—``.
      *
-     * @type {'games_today'|'games_window'|'games_anytime'|'profile_sticky'|'pulse_pulseid'|'pulse_toon'|'unresolved'|'none'}
+     * @type {'games_today'|'games_window'|'games_anytime'|'profile_sticky'|'pulse_multi'|'pulse_pulseid'|'pulse_toon'|'unresolved'|'none'}
      */
     let mmrSource = mmrCurrent !== undefined ? "games_today" : "none";
     // Tier-1 fallback: today had games but none carried MMR — surface
@@ -394,6 +407,7 @@ class GamesService {
      * @type {{
      *   region?: string,
      *   pulseId?: string,
+     *   pulseIds?: string[],
      *   lastKnownMmr?: number,
      *   lastKnownMmrRegion?: string,
      * }}
@@ -425,15 +439,67 @@ class GamesService {
     }
     /** @type {string|undefined} */
     let pulseRegion;
+    // Build the union of every pulse identifier we know about for this
+    // user: every chip from ``users.pulseIds`` (multi-region accounts,
+    // historical toons), the legacy single-string ``pulseId`` field
+    // (mirrored to ``pulseIds[0]`` but kept for unmigrated docs), and
+    // the streamer's own ``myToonHandle`` from the most recent game
+    // (so a streamer who has zero saved chips still resolves).
+    /** @type {string[]} */
+    const pulseIdsUnion = [];
+    const pulseIdsSeen = new Set();
+    /** @type {(raw: unknown) => void} */
+    const pushPulseId = (raw) => {
+      if (typeof raw !== "string") return;
+      const trimmed = raw.trim();
+      if (!trimmed || pulseIdsSeen.has(trimmed)) return;
+      pulseIdsSeen.add(trimmed);
+      pulseIdsUnion.push(trimmed);
+    };
+    if (Array.isArray(profile.pulseIds)) {
+      for (const id of profile.pulseIds) pushPulseId(id);
+    }
+    pushPulseId(profile.pulseId);
+    pushPulseId(lastKnownMyToonHandle);
     // Tier-3 fallback: still no MMR after walking every game we have.
-    // Hit SC2Pulse for the user's current 1v1 ladder rating using the
-    // pulseId from their profile. Streamers whose ranked replays were
-    // uploaded before MMR extraction landed (or who play exclusively
-    // on a build that doesn't carry `scaled_rating`) get a real number
-    // on the overlay instead of a permanent "—".
+    // Hit SC2Pulse for the user's current 1v1 ladder rating with the
+    // FULL union of saved + auto-detected pulse ids in a single batched
+    // call. The service picks whichever team SC2Pulse says was played
+    // most recently across the entire union, so a multi-region streamer
+    // who pasted a NA toon first but is currently grinding EU still
+    // sees "EU 5343" on the overlay instead of stale numbers from the
+    // first id alone.
     if (
       mmrCurrent === undefined &&
       this.pulseMmr &&
+      typeof this.pulseMmr.getCurrentMmrForAny === "function" &&
+      pulseIdsUnion.length > 0
+    ) {
+      try {
+        const pulse = await this.pulseMmr.getCurrentMmrForAny(pulseIdsUnion);
+        if (pulse && Number.isFinite(pulse.mmr)) {
+          mmrCurrent = pulse.mmr;
+          mmrSource = "pulse_multi";
+          if (typeof pulse.region === "string" && pulse.region) {
+            pulseRegion = pulse.region;
+          }
+        }
+      } catch {
+        // SC2Pulse outages or transient timeouts are non-fatal — the
+        // PulseMmrService already swallows network errors and returns
+        // null; this catch is belt-and-braces against a thrown error
+        // bubbling out of an unfamiliar fetch implementation.
+      }
+    }
+    // Legacy single-id fallback: only fires when the injected pulseMmr
+    // service is a slim test stub that doesn't expose the new
+    // ``getCurrentMmrForAny`` API. Production always takes the multi-id
+    // branch above; this preserves the contract for older tests that
+    // mock just the single-id methods.
+    if (
+      mmrCurrent === undefined &&
+      this.pulseMmr &&
+      typeof this.pulseMmr.getCurrentMmrForAny !== "function" &&
       profile &&
       typeof profile.pulseId === "string" &&
       profile.pulseId
@@ -448,21 +514,13 @@ class GamesService {
           }
         }
       } catch {
-        // SC2Pulse outages or transient timeouts are non-fatal — the
-        // PulseMmrService already swallows network errors and returns
-        // null; this catch is belt-and-braces against a thrown error
-        // bubbling out of an unfamiliar fetch implementation.
+        // Best-effort — same fail-soft contract.
       }
     }
-    // Tier-3 fallback (continued): no profile.pulseId, OR the profile
-    // pulseId didn't resolve. Use the streamer's own raw toon_handle —
-    // forwarded by recent agent uploads on each game — to drive the
-    // SC2Pulse character search. This rescues streamers who never
-    // pasted a numeric pulseCharacterId into Settings (the common
-    // case: the field is empty on a fresh install).
     if (
       mmrCurrent === undefined &&
       this.pulseMmr &&
+      typeof this.pulseMmr.getCurrentMmrForAny !== "function" &&
       typeof this.pulseMmr.getCurrentMmrByToon === "function" &&
       lastKnownMyToonHandle
     ) {
@@ -500,6 +558,7 @@ class GamesService {
             mmrSource,
             mmrCurrent: mmrCurrent ?? null,
             hadPulseId: typeof profile.pulseId === "string" && !!profile.pulseId,
+            pulseIdsCount: pulseIdsUnion.length,
             hadMyToonHandle: !!lastKnownMyToonHandle,
             todayGames: games,
           },
