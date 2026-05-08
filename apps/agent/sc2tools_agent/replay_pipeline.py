@@ -605,23 +605,21 @@ def parse_replay_for_cloud(
         "yes" if spatial is not None else "no",
     )
 
-    # ``me.mmr`` comes from the replay's profile/init data block, which
-    # Blizzard populates inconsistently for the local player — it's
-    # frequently None on the recorder's own player even on ranked games.
-    # ``me.scaled_rating`` comes from the tracker-events stream, which
-    # broadcasts every player's displayed MMR symmetrically. Prefer
-    # ``scaled_rating`` (matches the opponent path's preference order)
-    # and fall back to ``mmr`` only if it's missing. Without this the
-    # session widget's myMmr-based fallbacks (Tier-1/Tier-2 in
-    # apps/api/src/services/games.js) come up empty for streamers and
-    # the overlay shows ``— MMR`` until they manually paste a Pulse ID.
-    my_mmr_raw = getattr(me, "scaled_rating", None)
-    if my_mmr_raw is None:
-        my_mmr_raw = getattr(me, "mmr", None)
-    try:
-        my_mmr = int(my_mmr_raw) if my_mmr_raw is not None else None
-    except (TypeError, ValueError):
-        my_mmr = None
+    # Resolve the streamer's MMR through a layered fallback so the
+    # session widget's Tier-1/Tier-2 fallbacks in
+    # ``apps/api/src/services/games.js`` actually have a number to
+    # pin to. The v0.5.5 attempt (`getattr(me, "scaled_rating", None)`)
+    # was a no-op — ``me`` is a ``PlayerInfo`` dataclass that only
+    # surfaces ``mmr``, never ``scaled_rating`` — so it always fell
+    # through to the original ``me.mmr`` path and the streamer kept
+    # seeing ``— MMR`` on the overlay. The new helper walks
+    # ``ctx.raw.players`` directly so we still get a value even when
+    # the analyzer silently fell back from load_level=4 to 3 (which
+    # leaves ``scaled_rating`` unset on the PlayerInfo wrapper). One
+    # INFO line per parse documents the resolution path so a streamer
+    # grepping their agent log can see exactly which source supplied
+    # (or didn't supply) their MMR.
+    my_mmr = _resolve_my_mmr(ctx, me, file_path=file_path)
 
     # Forward the raw toon_handle so the cloud session-widget MMR
     # fallback can resolve the streamer's current 1v1 ladder rating via
@@ -1515,6 +1513,116 @@ def _resolve_by_toon(
         elif opp is None:
             opp = p
     return me, opp
+
+
+# Floor used to reject league enums (Bronze=0..Grandmaster=7) and
+# obviously-bad reads. Real ladder ratings sit in the 1k–7k band, so
+# 500 is a safe lower bound that still admits the lowest Bronze MMRs.
+_MIN_PLAUSIBLE_MMR = 500
+
+
+def _resolve_my_mmr(
+    ctx: Any, me: Any, *, file_path: Path,
+) -> Optional[int]:
+    """Return the streamer's MMR for the cloud upload, or None.
+
+    Layered fallback so a single missing source doesn't blank the
+    session widget for a whole sync window:
+
+      1. ``PlayerInfo.mmr`` — already prefers ``scaled_rating`` then
+         ``mmr`` via ``core.sc2_replay_parser._get_player_mmr``. Cleanest
+         path; fires for every replay sc2reader parsed at load_level=4
+         where the local player carries the tracker-event MMR.
+      2. Raw sc2reader player object on ``ctx.raw.players``. The
+         analyzer's ``_load_replay`` falls back from level 4 → 3 → 2
+         when the higher load throws (some replays trip a sc2reader
+         bug at level 4); a level-3 parse leaves ``scaled_rating``
+         unset on the wrapper but may still surface ``mmr`` on the
+         raw object. Probe both attributes directly so the streamer
+         doesn't lose their MMR over a transient analyzer hiccup.
+
+    A single INFO log line documents which layer hit (or that none did)
+    so a streamer grepping their agent log can see exactly why the
+    overlay says ``—`` without flipping log_level=DEBUG.
+    """
+    # Layer 1: PlayerInfo wrapper.
+    cached = getattr(me, "mmr", None)
+    if isinstance(cached, (int, float)) and cached >= _MIN_PLAUSIBLE_MMR:
+        log.info(
+            "my_mmr_resolved file=%s source=PlayerInfo value=%d",
+            file_path.name, int(cached),
+        )
+        return int(cached)
+
+    # Layer 2: raw sc2reader player. Match by toon_handle (worldwide
+    # unique) first, falling back to pid (unique within a single replay)
+    # if the wrapper somehow lost the handle field.
+    raw_replay = getattr(ctx, "raw", None)
+    if raw_replay is None:
+        log.info(
+            "my_mmr_unresolved file=%s reason=no_raw_replay "
+            "playerinfo_mmr=%r",
+            file_path.name, cached,
+        )
+        return None
+    raw_match = _find_raw_player(
+        raw_replay,
+        handle=getattr(me, "handle", None),
+        pid=getattr(me, "pid", None),
+    )
+    if raw_match is None:
+        log.info(
+            "my_mmr_unresolved file=%s reason=raw_player_not_found "
+            "handle=%r pid=%r playerinfo_mmr=%r",
+            file_path.name,
+            getattr(me, "handle", None),
+            getattr(me, "pid", None),
+            cached,
+        )
+        return None
+    for attr in ("scaled_rating", "mmr"):
+        val = getattr(raw_match, attr, None)
+        if isinstance(val, (int, float)) and val >= _MIN_PLAUSIBLE_MMR:
+            log.info(
+                "my_mmr_resolved file=%s source=raw_player.%s value=%d",
+                file_path.name, attr, int(val),
+            )
+            return int(val)
+    log.info(
+        "my_mmr_unresolved file=%s reason=raw_attrs_unset "
+        "scaled_rating=%r raw_mmr=%r playerinfo_mmr=%r",
+        file_path.name,
+        getattr(raw_match, "scaled_rating", None),
+        getattr(raw_match, "mmr", None),
+        cached,
+    )
+    return None
+
+
+def _find_raw_player(
+    raw_replay: Any,
+    *,
+    handle: Optional[str],
+    pid: Optional[int],
+) -> Optional[Any]:
+    """Find the raw sc2reader player matching a PlayerInfo's identity.
+
+    Prefer ``toon_handle`` (worldwide-unique Battle.net character id)
+    over ``pid`` (unique within a single replay only). Returns the first
+    match, or None when ``raw_replay.players`` carries no player matching
+    either identifier.
+    """
+    players = getattr(raw_replay, "players", None) or []
+    if handle:
+        handle_str = str(handle)
+        for raw_player in players:
+            if str(getattr(raw_player, "toon_handle", "") or "") == handle_str:
+                return raw_player
+    if pid is not None:
+        for raw_player in players:
+            if getattr(raw_player, "pid", None) == pid:
+                return raw_player
+    return None
 
 
 def _result_str(player_result: Optional[str]) -> Optional[str]:

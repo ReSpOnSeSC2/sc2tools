@@ -92,6 +92,29 @@ class AgentState:
     here (rather than only as an env var) so a GUI change survives
     restarts without the user re-typing it."""
 
+    last_known_mmr: Optional[int] = None
+    """Sticky cache of the most recently extracted streamer MMR.
+    Pinged to the cloud profile via ``POST /v1/me/last-mmr`` after
+    every successful replay parse, so the session widget can fall
+    back to a real number even when no game in the user's cloud
+    history carries ``myMmr``. Survives restarts so a brief offline
+    period (or a re-sync of older replays) doesn't blank the value
+    we already paid an HTTP round-trip to set."""
+
+    last_known_mmr_date_iso: Optional[str] = None
+    """Game-date of the replay that produced ``last_known_mmr`` (ISO
+    string). Used to gate-keep the cloud ping during a backfill: we
+    only push when a newly-parsed replay is more recent than what
+    we already pushed, otherwise re-syncing 12k old replays would
+    reset the sticky MMR to whatever the streamer's rating was three
+    seasons ago."""
+
+    last_known_mmr_region: Optional[str] = None
+    """Short region label (NA/EU/KR/CN/SEA) inferred from the
+    streamer's toon-handle byte at extraction time. Pushed to the
+    cloud alongside ``last_known_mmr`` so the overlay's region label
+    stays accurate even when SC2Pulse is unreachable."""
+
     @property
     def is_paired(self) -> bool:
         return bool(self.device_token)
@@ -146,6 +169,9 @@ def load_state(state_dir: Path) -> AgentState:
         parse_concurrency_override=_coerce_int(
             raw.get("parse_concurrency_override"),
         ),
+        last_known_mmr=_coerce_mmr(raw.get("last_known_mmr")),
+        last_known_mmr_date_iso=_coerce_str(raw.get("last_known_mmr_date_iso")),
+        last_known_mmr_region=_coerce_str(raw.get("last_known_mmr_region")),
     )
 
 
@@ -166,6 +192,25 @@ def save_state(state_dir: Path, state: AgentState) -> None:
         except OSError:
             pass
         raise
+
+
+def _coerce_mmr(value: object) -> Optional[int]:
+    """Return ``value`` as a plausible MMR (500–9999) or None.
+
+    Defends against legacy/garbage entries written by older agent
+    versions or hand-edited state files. Mirrors the cloud profile's
+    [500, 9999] band so a state-loaded value the cloud would reject
+    is dropped here instead of repeatedly bouncing off the API.
+    """
+    if isinstance(value, bool):
+        return None
+    try:
+        n = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if 500 <= n <= 9999:
+        return n
+    return None
 
 
 def _coerce_int(value: object) -> Optional[int]:

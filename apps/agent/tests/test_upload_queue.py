@@ -15,10 +15,21 @@ from sc2tools_agent.uploader.queue import UploadJob, UploadQueue
 class _StubApi:
     def __init__(self) -> None:
         self.calls: List[Dict[str, Any]] = []
+        # Track MMR pings separately so tests can assert exactly when
+        # the sticky-MMR cloud ping fires (and what it carries).
+        self.mmr_calls: List[Dict[str, Any]] = []
 
     def upload_game(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         self.calls.append(payload)
         return {"accepted": [{"gameId": payload["gameId"], "created": True}]}
+
+    def patch_last_mmr(
+        self, *, mmr: int, captured_at=None, region=None,
+    ) -> Dict[str, Any]:
+        self.mmr_calls.append(
+            {"mmr": mmr, "captured_at": captured_at, "region": region},
+        )
+        return {"ok": True, "wrote": True}
 
 
 def _cfg(tmp_path: Path) -> AgentConfig:
@@ -31,12 +42,19 @@ def _cfg(tmp_path: Path) -> AgentConfig:
     )
 
 
-def _game(tmp_path: Path, name: str) -> UploadJob:
+def _game(
+    tmp_path: Path,
+    name: str,
+    *,
+    my_mmr: int | None = None,
+    my_toon_handle: str | None = None,
+    date_iso: str = "2026-04-01T00:00:00Z",
+) -> UploadJob:
     fp = tmp_path / name
     fp.write_bytes(b"")
     cloud = CloudGame(
         game_id=f"id-{name}",
-        date_iso="2026-04-01T00:00:00Z",
+        date_iso=date_iso,
         result="Victory",
         my_race="Protoss",
         my_build="P - Stargate",
@@ -50,6 +68,8 @@ def _game(tmp_path: Path, name: str) -> UploadJob:
         early_build_log=[],
         opp_early_build_log=[],
         opp_build_log=[],
+        my_mmr=my_mmr,
+        my_toon_handle=my_toon_handle,
     )
     return UploadJob(file_path=fp, game=cloud)
 
@@ -198,3 +218,123 @@ def test_transient_failure_still_retries(tmp_path: Path) -> None:
     # "rejected" (that label is reserved for permanent failures).
     only_key = next(iter(state.uploaded))
     assert state.uploaded[only_key] != "rejected"
+
+
+# -------------------------------------------------------------------------
+# Sticky-MMR ping. The session widget falls back to the cloud profile's
+# ``lastKnownMmr`` whenever no game in the user's history carries
+# ``myMmr`` — so the upload queue must ping it on each successful
+# upload that DOES carry a fresh MMR. Tests here lock down:
+#   - the happy path (push fires + state updates),
+#   - the no-MMR skip,
+#   - the older-replay-skip (no clobbering during a backfill),
+#   - the network-error fail-soft (MMR push must not break uploads).
+# -------------------------------------------------------------------------
+
+
+def test_successful_upload_pushes_last_mmr(tmp_path: Path) -> None:
+    state = AgentState(device_token="t")
+    api = _StubApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    job = _game(
+        tmp_path, "ranked.SC2Replay",
+        my_mmr=4730,
+        my_toon_handle="1-S2-1-267727",
+        date_iso="2026-05-07T10:00:00Z",
+    )
+    q.start()
+    try:
+        q.submit(job)
+        time.sleep(1.0)
+    finally:
+        q.stop()
+    assert len(api.mmr_calls) == 1
+    assert api.mmr_calls[0]["mmr"] == 4730
+    assert api.mmr_calls[0]["region"] == "NA"
+    assert api.mmr_calls[0]["captured_at"] == "2026-05-07T10:00:00Z"
+    # The state cache reflects what we pushed so a backfill of older
+    # replays after this point doesn't reset the cloud value.
+    assert state.last_known_mmr == 4730
+    assert state.last_known_mmr_date_iso == "2026-05-07T10:00:00Z"
+    assert state.last_known_mmr_region == "NA"
+
+
+def test_upload_without_mmr_does_not_ping(tmp_path: Path) -> None:
+    state = AgentState(device_token="t")
+    api = _StubApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    q.start()
+    try:
+        # Unranked / AI / customs all leave my_mmr=None on the CloudGame.
+        # The MMR ping must be a no-op for those — otherwise we'd
+        # overwrite a real ranked value with garbage.
+        q.submit(_game(tmp_path, "unranked.SC2Replay", my_mmr=None))
+        time.sleep(0.7)
+    finally:
+        q.stop()
+    assert api.mmr_calls == []
+    assert state.last_known_mmr is None
+
+
+def test_older_replay_does_not_overwrite_newer_sticky_mmr(tmp_path: Path) -> None:
+    # Pre-seed state as if a newer replay was already pushed. A
+    # subsequent backfill of an OLDER replay must NOT push its MMR —
+    # that would reset the sticky value to a season-old rating.
+    state = AgentState(
+        device_token="t",
+        last_known_mmr=5000,
+        last_known_mmr_date_iso="2026-05-07T10:00:00Z",
+        last_known_mmr_region="NA",
+    )
+    api = _StubApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    q.start()
+    try:
+        q.submit(
+            _game(
+                tmp_path, "old.SC2Replay",
+                my_mmr=4200,
+                my_toon_handle="1-S2-1-267727",
+                date_iso="2025-12-01T10:00:00Z",
+            ),
+        )
+        time.sleep(0.7)
+    finally:
+        q.stop()
+    # Game upload itself goes through; the MMR push is what's gated.
+    assert len(api.calls) == 1
+    assert api.mmr_calls == []
+    # State still reflects the newer value.
+    assert state.last_known_mmr == 5000
+
+
+def test_mmr_push_failure_does_not_break_upload(tmp_path: Path) -> None:
+    """A failing patch_last_mmr must not roll back the game upload."""
+
+    class _ApiThatFailsMmrPush(_StubApi):
+        def patch_last_mmr(self, **_kw):
+            raise RuntimeError("simulated network error on /v1/me/last-mmr")
+
+    state = AgentState(device_token="t")
+    api = _ApiThatFailsMmrPush()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    job = _game(
+        tmp_path, "ranked.SC2Replay",
+        my_mmr=4730,
+        my_toon_handle="1-S2-1-267727",
+        date_iso="2026-05-07T10:00:00Z",
+    )
+    q.start()
+    try:
+        q.submit(job)
+        time.sleep(0.7)
+    finally:
+        q.stop()
+    # The game itself uploaded successfully — that's the contract.
+    # The MMR push silently failing must not re-enqueue or mark the
+    # file as rejected.
+    assert len(api.calls) == 1
+    assert str(job.file_path) in state.uploaded
+    assert state.uploaded[str(job.file_path)] != "rejected"
+    # State stays unset because the push didn't succeed.
+    assert state.last_known_mmr is None

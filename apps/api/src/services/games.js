@@ -30,6 +30,7 @@ class GamesService {
    *       region: string | null,
    *     } | null>,
    *   },
+   *   logger?: { info: (obj: Record<string, unknown>, msg: string) => void },
    * }} [opts]
    */
   constructor(db, opts = {}) {
@@ -48,6 +49,14 @@ class GamesService {
     // entire history carries a usable myMmr. Unavailable in unit tests
     // where the network is mocked; falls through silently.
     this.pulseMmr = opts.pulseMmr || null;
+    // Optional pino-style logger so todaySession can emit a single
+    // structured trace line per resolution attempt. The session
+    // widget has five fallback tiers; without a per-tier line a
+    // streamer who sees "—" on the overlay can't tell whether the
+    // games-row scan missed, the toon-handle SC2Pulse search missed,
+    // or there's no profile.pulseId. Defaults to a no-op so unit
+    // tests don't have to plumb a logger through.
+    this.logger = opts.logger || null;
   }
 
   /**
@@ -287,10 +296,31 @@ class GamesService {
         mmrCurrent = my;
       }
     }
+    /**
+     * Resolution path — tagged so logs and tests can compare without
+     * scraping a free-text reason field.
+     *
+     *   ``games_today``     — earliest-good-MMR-of-today path hit.
+     *   ``games_window``    — 14-day in-memory fallback hit.
+     *   ``games_anytime``   — unbounded findOne fallback hit.
+     *   ``profile_sticky``  — agent's last-known-MMR ping on the user
+     *                         profile. Sits between ``games_anytime``
+     *                         and the SC2Pulse network calls because
+     *                         it's fast (one row read) and survives
+     *                         the games collection being wiped.
+     *   ``pulse_pulseid`` / ``pulse_toon`` — SC2Pulse queried via the
+     *                         profile's ``pulseId`` or the streamer's
+     *                         ``myToonHandle`` from a recent game.
+     *   ``unresolved``      — every tier missed; widget paints ``—``.
+     *
+     * @type {'games_today'|'games_window'|'games_anytime'|'profile_sticky'|'pulse_pulseid'|'pulse_toon'|'unresolved'|'none'}
+     */
+    let mmrSource = mmrCurrent !== undefined ? "games_today" : "none";
     // Tier-1 fallback: today had games but none carried MMR — surface
     // the most recent MMR from the 14-day window.
     if (mmrCurrent === undefined && lastKnownMmr !== undefined) {
       mmrCurrent = lastKnownMmr;
+      mmrSource = "games_window";
     }
     // Tier-2 fallback: nothing in the last 14 days carried MMR. Reach
     // back to the most recent game ever that did so the session widget
@@ -307,16 +337,28 @@ class GamesService {
           },
         );
         const m = newest ? Number(newest.myMmr) : NaN;
-        if (Number.isFinite(m)) mmrCurrent = m;
+        if (Number.isFinite(m)) {
+          mmrCurrent = m;
+          mmrSource = "games_anytime";
+        }
       } catch {
         // findOne failure is non-fatal — leave mmrCurrent undefined
         // and let the renderer fall back to its placeholder.
       }
     }
-    // Read the user profile up front so we can use both `region` and
-    // `pulseId` in the same flow — the Tier-3 SC2Pulse fallback below
-    // depends on `pulseId` being present.
-    /** @type {{ region?: string, pulseId?: string }} */
+    // Read the user profile up front so we can use ``region``,
+    // ``pulseId``, AND the agent-pinged ``lastKnownMmr`` in the same
+    // flow — the SC2Pulse fallbacks below depend on ``pulseId`` being
+    // present, and the sticky-MMR tier just below depends on
+    // ``lastKnownMmr``.
+    /**
+     * @type {{
+     *   region?: string,
+     *   pulseId?: string,
+     *   lastKnownMmr?: number,
+     *   lastKnownMmrRegion?: string,
+     * }}
+     */
     let profile = {};
     if (this.users) {
       try {
@@ -326,6 +368,21 @@ class GamesService {
         // session payload from emitting.
         profile = {};
       }
+    }
+    // Sticky-MMR tier: the agent pings a focused
+    // ``POST /v1/me/last-mmr`` on every successfully-parsed replay,
+    // so this profile field carries the most recent MMR even when
+    // the games collection has nothing usable (e.g. all 18 of a
+    // streamer's lifetime rows pre-date the v0.5.6 extraction fix).
+    // Cheaper than SC2Pulse (no network round-trip) so it sits
+    // before the pulse_* tiers in the fallback chain.
+    if (
+      mmrCurrent === undefined &&
+      typeof profile.lastKnownMmr === "number" &&
+      Number.isFinite(profile.lastKnownMmr)
+    ) {
+      mmrCurrent = profile.lastKnownMmr;
+      mmrSource = "profile_sticky";
     }
     /** @type {string|undefined} */
     let pulseRegion;
@@ -346,6 +403,7 @@ class GamesService {
         const pulse = await this.pulseMmr.getCurrentMmr(profile.pulseId);
         if (pulse && Number.isFinite(pulse.mmr)) {
           mmrCurrent = pulse.mmr;
+          mmrSource = "pulse_pulseid";
           if (typeof pulse.region === "string" && pulse.region) {
             pulseRegion = pulse.region;
           }
@@ -375,6 +433,7 @@ class GamesService {
         );
         if (pulse && Number.isFinite(pulse.mmr)) {
           mmrCurrent = pulse.mmr;
+          mmrSource = "pulse_toon";
           if (typeof pulse.region === "string" && pulse.region) {
             pulseRegion = pulse.region;
           }
@@ -383,6 +442,32 @@ class GamesService {
         // Same fail-soft contract as the profile-pulseId branch above —
         // a SC2Pulse hiccup must never block the session payload from
         // emitting.
+      }
+    }
+    if (mmrCurrent === undefined && mmrSource === "none") {
+      mmrSource = "unresolved";
+    }
+    // One INFO line per todaySession resolve so an operator (or a
+    // streamer who escalates) can grep the API log to see exactly why
+    // the session widget paints "—". The cardinality is bounded by
+    // (overlay sockets × ingest events × distinct timezones) so this
+    // shouldn't dominate the log volume on a healthy instance.
+    if (this.logger && typeof this.logger.info === "function") {
+      try {
+        this.logger.info(
+          {
+            event: "session_mmr_resolved",
+            userId,
+            mmrSource,
+            mmrCurrent: mmrCurrent ?? null,
+            hadPulseId: typeof profile.pulseId === "string" && !!profile.pulseId,
+            hadMyToonHandle: !!lastKnownMyToonHandle,
+            todayGames: games,
+          },
+          "session widget MMR resolution",
+        );
+      } catch {
+        // A misbehaving logger must never block the session emit.
       }
     }
     /**
@@ -410,14 +495,23 @@ class GamesService {
       if (count >= 2) out.streak = { kind: last, count };
     }
     // Region resolution — explicit profile field wins, falls through to
-    // the SC2Pulse-derived region (when Tier-3 fired), then to the toon
-    // handle byte (1=NA, 2=EU, 3=KR, 5=CN, 6=SEA). The session widget
-    // anchors its bottom-row layout on whatever we surface here.
+    // the SC2Pulse-derived region (when Tier-3 fired), then to the
+    // sticky-MMR-derived region the agent pinged with the rating, then
+    // to the toon handle byte (1=NA, 2=EU, 3=KR, 5=CN, 6=SEA). The
+    // session widget anchors its bottom-row layout on whatever we
+    // surface here.
     if (typeof profile.region === "string" && profile.region) {
       out.region = profile.region.toUpperCase();
     }
     if (out.region === undefined && pulseRegion) {
       out.region = pulseRegion;
+    }
+    if (
+      out.region === undefined &&
+      typeof profile.lastKnownMmrRegion === "string" &&
+      profile.lastKnownMmrRegion
+    ) {
+      out.region = profile.lastKnownMmrRegion.toUpperCase();
     }
     if (out.region === undefined && lastKnownToonHandle) {
       const inferred = regionFromToonHandle(lastKnownToonHandle);

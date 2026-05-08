@@ -79,6 +79,39 @@ class ApiClient:
             body={"token": token, "payload": payload},
         )
 
+    # ---------------- Sticky MMR ping ----------------
+    def patch_last_mmr(
+        self,
+        *,
+        mmr: int,
+        captured_at: Optional[str] = None,
+        region: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Ping the cloud with the most-recently-extracted streamer MMR.
+
+        Backs the session widget's ``profile_sticky`` fallback tier so
+        the overlay paints a real number even when no game in the
+        user's cloud history carries ``myMmr`` (e.g. all rows pre-date
+        the v0.5.6 extraction fix). The server's ``patchLastKnownMmr``
+        already deduplicates same-value writes, so calling this on
+        every successful upload is cheap.
+
+        ``mmr`` is bounds-checked here so we don't burn an HTTP
+        round-trip on a clearly-bogus value (the server would 400 it
+        anyway). The 500 floor matches the agent-side
+        ``_MIN_PLAUSIBLE_MMR`` in replay_pipeline.py.
+        """
+        if not self.device_token:
+            raise PermissionError("agent_not_paired")
+        if not isinstance(mmr, int) or not (500 <= mmr <= 9999):
+            raise ValueError(f"mmr out of range: {mmr!r}")
+        body: Dict[str, Any] = {"mmr": mmr}
+        if captured_at:
+            body["capturedAt"] = captured_at
+        if region:
+            body["region"] = region
+        return self._post("/v1/me/last-mmr", auth=True, body=body)
+
     # ---------------- internals ----------------
     def _get(
         self,

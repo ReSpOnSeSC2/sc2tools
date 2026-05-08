@@ -459,6 +459,230 @@ describe("services/games.todaySession", () => {
     expect(out.wins).toBe(1);
   });
 
+  test("emits a structured trace line on every resolve attempt", async () => {
+    // The streamer overlay paints "—" when MMR is unresolved; without
+    // a per-tier log line an operator can't tell which tier missed.
+    // Verify the logger is called with a tagged ``mmrSource`` so a
+    // stuck overlay can be triaged from the API logs alone.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-no-mmr",
+      result: "Victory",
+      date: new Date(),
+    });
+    const calls = [];
+    const logger = {
+      info: (obj, msg) => calls.push({ obj, msg }),
+    };
+    const svc2 = new GamesService(db, {
+      users: { getProfile: async () => ({}) },
+      pulseMmr: {
+        getCurrentMmr: async () => null,
+        getCurrentMmrByToon: async () => null,
+      },
+      logger,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBeUndefined();
+    const sessionLine = calls.find(
+      (c) => c.obj && c.obj.event === "session_mmr_resolved",
+    );
+    expect(sessionLine).toBeDefined();
+    expect(sessionLine.obj.mmrSource).toBe("unresolved");
+    expect(sessionLine.obj.userId).toBe("u1");
+    expect(sessionLine.obj.todayGames).toBe(1);
+  });
+
+  test("trace line tags the tier that produced the MMR (games_today)", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-now",
+      result: "Victory",
+      date: new Date(),
+      myMmr: 4242,
+    });
+    const calls = [];
+    const logger = {
+      info: (obj, msg) => calls.push({ obj, msg }),
+    };
+    const svc2 = new GamesService(db, { logger });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(4242);
+    const sessionLine = calls.find(
+      (c) => c.obj && c.obj.event === "session_mmr_resolved",
+    );
+    expect(sessionLine?.obj.mmrSource).toBe("games_today");
+    expect(sessionLine?.obj.mmrCurrent).toBe(4242);
+  });
+
+  test("trace line tags pulse_toon when SC2Pulse resolved via myToonHandle", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-toon",
+      result: "Victory",
+      date: new Date(),
+      myToonHandle: "2-S2-1-99999",
+    });
+    const calls = [];
+    const logger = {
+      info: (obj, msg) => calls.push({ obj, msg }),
+    };
+    const svc2 = new GamesService(db, {
+      users: { getProfile: async () => ({}) },
+      pulseMmr: {
+        getCurrentMmr: async () => null,
+        getCurrentMmrByToon: async () => ({ mmr: 5000, region: "EU" }),
+      },
+      logger,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(5000);
+    const sessionLine = calls.find(
+      (c) => c.obj && c.obj.event === "session_mmr_resolved",
+    );
+    expect(sessionLine?.obj.mmrSource).toBe("pulse_toon");
+    expect(sessionLine?.obj.hadMyToonHandle).toBe(true);
+  });
+
+  test("Tier-3 sticky-MMR fires from profile.lastKnownMmr when games have nothing", async () => {
+    // No game in the user's history carries myMmr, no profile.pulseId
+    // is set, no myToonHandle is on any row — the only signal is the
+    // sticky MMR the agent pinged on its last successful parse. The
+    // session widget must surface that value (and its region) instead
+    // of painting "—" forever.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-no-mmr",
+      result: "Victory",
+      date: new Date(),
+    });
+    const svc2 = new GamesService(db, {
+      users: {
+        getProfile: async () => ({
+          lastKnownMmr: 4730,
+          lastKnownMmrAt: "2026-05-07T10:00:00Z",
+          lastKnownMmrRegion: "NA",
+        }),
+      },
+      pulseMmr: {
+        getCurrentMmr: jest.fn(async () => null),
+        getCurrentMmrByToon: jest.fn(async () => null),
+      },
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(4730);
+    expect(out.region).toBe("NA");
+  });
+
+  test("sticky-MMR tier short-circuits before the SC2Pulse round-trips", async () => {
+    // Cheaper tier wins: a profile lastKnownMmr must skip both pulse
+    // calls. Otherwise every overlay refresh costs two SC2Pulse hits
+    // even when the cached value is good.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-no-mmr",
+      result: "Victory",
+      date: new Date(),
+      myToonHandle: "1-S2-1-267727",
+    });
+    const pulseMmr = {
+      getCurrentMmr: jest.fn(async () => {
+        throw new Error("should_not_be_called");
+      }),
+      getCurrentMmrByToon: jest.fn(async () => {
+        throw new Error("should_not_be_called");
+      }),
+    };
+    const svc2 = new GamesService(db, {
+      users: {
+        getProfile: async () => ({
+          pulseId: "994428",
+          lastKnownMmr: 4730,
+        }),
+      },
+      pulseMmr,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(4730);
+    expect(pulseMmr.getCurrentMmr).not.toHaveBeenCalled();
+    expect(pulseMmr.getCurrentMmrByToon).not.toHaveBeenCalled();
+  });
+
+  test("sticky-MMR is bypassed when a game-row myMmr is available", async () => {
+    // The cheapest tier still wins even with sticky MMR set: today's
+    // game myMmr is fresher and authoritative.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-fresh",
+      result: "Victory",
+      date: new Date(),
+      myMmr: 4900,
+    });
+    const calls = [];
+    const logger = { info: (obj, msg) => calls.push({ obj, msg }) };
+    const svc2 = new GamesService(db, {
+      users: {
+        getProfile: async () => ({ lastKnownMmr: 4730 }),
+      },
+      logger,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(4900);
+    const sessionLine = calls.find(
+      (c) => c.obj && c.obj.event === "session_mmr_resolved",
+    );
+    expect(sessionLine?.obj.mmrSource).toBe("games_today");
+  });
+
+  test("trace line tags profile_sticky when only the sticky tier hit", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-no-mmr",
+      result: "Victory",
+      date: new Date(),
+    });
+    const calls = [];
+    const logger = { info: (obj, msg) => calls.push({ obj, msg }) };
+    const svc2 = new GamesService(db, {
+      users: {
+        getProfile: async () => ({ lastKnownMmr: 4730 }),
+      },
+      pulseMmr: {
+        getCurrentMmr: async () => null,
+        getCurrentMmrByToon: async () => null,
+      },
+      logger,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(4730);
+    const sessionLine = calls.find(
+      (c) => c.obj && c.obj.event === "session_mmr_resolved",
+    );
+    expect(sessionLine?.obj.mmrSource).toBe("profile_sticky");
+  });
+
+  test("a misbehaving logger never blocks the session resolve", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-bad-logger",
+      result: "Victory",
+      date: new Date(),
+      myMmr: 4242,
+    });
+    const logger = {
+      info: () => {
+        throw new Error("logger blew up");
+      },
+    };
+    const svc2 = new GamesService(db, { logger });
+    // The aggregate must still return a well-formed payload — a
+    // logger failure is purely diagnostic and must not break the
+    // overlay resolve path.
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(4242);
+    expect(out.wins).toBe(1);
+  });
+
   test("populates streak / sessionStartedAt / region for the SPA-style session widget", async () => {
     const t0 = new Date(Date.now() - 25 * 60 * 1000);
     const t1 = new Date(t0.getTime() + 5 * 60 * 1000);

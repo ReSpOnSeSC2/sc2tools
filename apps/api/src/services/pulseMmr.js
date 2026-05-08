@@ -164,25 +164,65 @@ class PulseMmrService {
    * @private
    * @param {string} handle  e.g. ``"2-S2-1-267727"``
    * @returns {Promise<string|null>} canonical SC2Pulse character id
+   *
+   * SC2Pulse's ``/character/search`` accepts the ``term`` parameter in
+   * several shapes — name, BattleTag, ``[clan]`` tag, ``starcraft2.com``
+   * profile URL, ``starcraft2.blizzard.com`` profile URL, raw toon
+   * handle, or a numeric character id (per the published docs at
+   * sc2pulse.nephest.com/sc2/?type=blog&blog-id=1). Earlier versions of
+   * this resolver only tried the ``starcraft2.blizzard.com`` URL form
+   * and gave up if SC2Pulse's regex didn't match — which silently broke
+   * the session widget's MMR for streamers whose only signal was a
+   * ``myToonHandle`` on a recent game. Try the cheapest form first
+   * (the toon handle itself, which SC2Pulse accepts directly) and fall
+   * through to the URL forms only if the bare handle misses, so a
+   * regex tweak on either side of the API doesn't strand us again.
+   *
+   * The response is also defensive — SC2Pulse historically returned
+   * either ``[{character: {id}}]`` (shallow) or
+   * ``[{members: [{character: {id}}]}]`` (team-shaped). Accept either
+   * because both have appeared in production payloads.
    */
   async _resolveCharacterIdFromToon(handle) {
     const parsed = parseToonHandle(handle);
     if (!parsed) return null;
-    const profileUrl =
+    const candidates = [
+      // Bare toon handle. SC2Pulse's TOON_HANDLE term type matches this
+      // directly with no URL gymnastics. Cheapest happy path.
+      handle,
+      // starcraft2.com profile URL — Blizzard's current canonical
+      // profile host as of the SC2 web rebrand.
+      `https://starcraft2.com/en-us/profile/` +
+        `${parsed.region}/${parsed.realm}/${parsed.id}`,
+      // starcraft2.blizzard.com profile URL — the legacy form, still
+      // documented as accepted by SC2Pulse. Kept as the last fallback
+      // so a streamer whose only entry in the SC2Pulse cache happens
+      // to be the legacy URL still resolves.
       `https://starcraft2.blizzard.com/en-us/profile/` +
-      `${parsed.region}/${parsed.realm}/${parsed.id}`;
+        `${parsed.region}/${parsed.realm}/${parsed.id}`,
+    ];
+    for (const term of candidates) {
+      const id = await this._searchCharacterIdByTerm(term);
+      if (id) return id;
+    }
+    return null;
+  }
+
+  /**
+   * @private
+   * @param {string} term — exactly one ``term`` value to feed SC2Pulse.
+   * @returns {Promise<string|null>} canonical character id, or null on
+   *   miss / network failure / unparseable response.
+   */
+  async _searchCharacterIdByTerm(term) {
     const url =
       `${PULSE_API_ROOT}/character/search` +
-      `?term=${encodeURIComponent(profileUrl)}`;
+      `?term=${encodeURIComponent(term)}`;
     const hits = await this._getJson(url);
     if (!Array.isArray(hits)) return null;
     for (const hit of hits) {
-      const ch = hit && (hit.character || hit.member && hit.member.character);
-      const id = ch && (ch.id ?? ch.battlenetId);
-      if (id !== undefined && id !== null) {
-        const s = String(id).trim();
-        if (/^[0-9]{1,12}$/.test(s)) return s;
-      }
+      const id = extractCharacterId(hit);
+      if (id) return id;
     }
     return null;
   }
@@ -328,6 +368,68 @@ function normaliseToonHandle(raw) {
   if (!trimmed) return null;
   if (!/^[1-9]-S\d+-\d+-\d+$/i.test(trimmed)) return null;
   return trimmed;
+}
+
+/**
+ * Pluck the canonical SC2Pulse character id out of a ``/character/search``
+ * hit, regardless of which response shape SC2Pulse handed back. The
+ * endpoint has historically returned either:
+ *
+ *   - ``{character: {id, battlenetId, ...}, ...}`` — flat
+ *   - ``{members: [{character: {id, ...}}], ...}`` — team-shaped, when
+ *     the term matched via the ranked-team index instead of the
+ *     character-only index.
+ *
+ * We accept both so a future SC2Pulse refactor (or a search that
+ * happens to land on the team index) doesn't blank the session widget.
+ *
+ * @param {unknown} hit
+ * @returns {string|null}
+ */
+function extractCharacterId(hit) {
+  if (!hit || typeof hit !== "object") return null;
+  const obj = /** @type {any} */ (hit);
+  const direct = pickIdFromCharacter(obj.character);
+  if (direct) return direct;
+  // ``members`` (plural array) is the canonical team-shape response.
+  if (Array.isArray(obj.members)) {
+    for (const m of obj.members) {
+      if (!m || typeof m !== "object") continue;
+      const id = pickIdFromCharacter(m.character);
+      if (id) return id;
+    }
+  }
+  // ``member`` (singular object) has appeared in some Pulse responses
+  // and is exercised by an existing pulseMmr.test.js fixture; keep it
+  // for backwards compatibility so a Pulse fork or older deployment
+  // still resolves.
+  if (obj.member && typeof obj.member === "object") {
+    const id = pickIdFromCharacter(obj.member.character);
+    if (id) return id;
+  }
+  return null;
+}
+
+/**
+ * Read either ``character.id`` (SC2Pulse internal) or
+ * ``character.battlenetId`` (Blizzard-side bnid). The internal id is
+ * what every other SC2Pulse endpoint keys off, so prefer it; fall back
+ * to battlenetId only when the search response truncated ``id`` (rare
+ * but observed in older Pulse builds).
+ *
+ * @param {unknown} character
+ * @returns {string|null}
+ */
+function pickIdFromCharacter(character) {
+  if (!character || typeof character !== "object") return null;
+  const ch = /** @type {any} */ (character);
+  for (const key of ["id", "battlenetId"]) {
+    const raw = ch[key];
+    if (raw === undefined || raw === null) continue;
+    const s = String(raw).trim();
+    if (/^[0-9]{1,12}$/.test(s)) return s;
+  }
+  return null;
 }
 
 /**

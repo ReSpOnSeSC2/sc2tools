@@ -136,8 +136,17 @@ function makeServices(deps) {
   // the R2 swap a config change instead of a code change. It also
   // borrows UsersService so ``todaySession`` can stamp the streamer's
   // region onto the overlay's session widget, and PulseMmrService for
-  // the SC2Pulse MMR fallback when no game carries `myMmr`.
-  const games = new GamesService(deps.db, { gameDetails, users, pulseMmr });
+  // the SC2Pulse MMR fallback when no game carries `myMmr`. The pino
+  // logger comes through too so todaySession can emit one structured
+  // line per resolution attempt — without it, an operator can't tell
+  // which of the five fallback tiers is failing for a streamer who
+  // sees ``— MMR`` on the overlay.
+  const games = new GamesService(deps.db, {
+    gameDetails,
+    users,
+    pulseMmr,
+    logger: deps.logger,
+  });
   const pairings = new DevicePairingsService(deps.db);
   const overlayTokens = new OverlayTokensService(deps.db);
   // OverlayLiveService has no per-user state; constructed once and

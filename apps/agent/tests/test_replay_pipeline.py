@@ -258,6 +258,117 @@ def test_to_payload_omits_my_toon_handle_when_unset():
     assert "myToonHandle" not in payload
 
 
+# -------------------------------------------------------------------------
+# _resolve_my_mmr — streamer's MMR comes through Layer 1 (PlayerInfo.mmr)
+# OR Layer 2 (raw sc2reader player). v0.5.5 shipped a no-op fix that read
+# ``scaled_rating`` off the PlayerInfo dataclass (which doesn't carry it),
+# so the streamer's MMR stayed None whenever the analyzer fell back from
+# load_level=4 to 3 — the session widget then painted ``— MMR`` on the
+# overlay. Lock down both layers + the unresolved path so we don't
+# regress to that failure mode silently.
+# -------------------------------------------------------------------------
+
+
+def _make_pi(handle: str | None = "1-S2-1-267727", *, mmr=None, pid=1):
+    """PlayerInfo-shaped duck for these tests."""
+    return SimpleNamespace(handle=handle, pid=pid, mmr=mmr)
+
+
+def test_resolve_my_mmr_layer_1_uses_playerinfo_mmr_when_populated(tmp_path):
+    from sc2tools_agent.replay_pipeline import _resolve_my_mmr
+
+    # PlayerInfo.mmr already came from _get_player_mmr (which prefers
+    # scaled_rating then mmr from the raw player). When that's set, the
+    # raw replay never has to be touched.
+    me = _make_pi(mmr=4500)
+    ctx = SimpleNamespace(raw=None)
+    out = _resolve_my_mmr(ctx, me, file_path=tmp_path / "x.SC2Replay")
+    assert out == 4500
+
+
+def test_resolve_my_mmr_layer_2_reads_raw_player_scaled_rating(tmp_path):
+    from sc2tools_agent.replay_pipeline import _resolve_my_mmr
+
+    # PlayerInfo.mmr is None (the legacy v0.5.5 failure mode). The raw
+    # sc2reader player still carries scaled_rating from a partial load,
+    # and we must surface it so the session widget gets a number.
+    me = _make_pi(mmr=None)
+    raw_match = SimpleNamespace(
+        toon_handle="1-S2-1-267727", pid=1, scaled_rating=4321, mmr=None,
+    )
+    ctx = SimpleNamespace(raw=SimpleNamespace(players=[raw_match]))
+    out = _resolve_my_mmr(ctx, me, file_path=tmp_path / "x.SC2Replay")
+    assert out == 4321
+
+
+def test_resolve_my_mmr_layer_2_falls_back_to_raw_player_mmr(tmp_path):
+    from sc2tools_agent.replay_pipeline import _resolve_my_mmr
+
+    me = _make_pi(mmr=None)
+    raw_match = SimpleNamespace(
+        toon_handle="1-S2-1-267727", pid=1, scaled_rating=None, mmr=4100,
+    )
+    ctx = SimpleNamespace(raw=SimpleNamespace(players=[raw_match]))
+    out = _resolve_my_mmr(ctx, me, file_path=tmp_path / "x.SC2Replay")
+    assert out == 4100
+
+
+def test_resolve_my_mmr_matches_raw_player_by_pid_when_handle_missing(tmp_path):
+    from sc2tools_agent.replay_pipeline import _resolve_my_mmr
+
+    # If the PlayerInfo lost its handle (corrupt cache, observer-only
+    # frame), pid is still a unique key within a single replay. We must
+    # still find the right raw player.
+    me = _make_pi(handle=None, mmr=None, pid=1)
+    raw_match = SimpleNamespace(
+        toon_handle="1-S2-1-267727", pid=1, scaled_rating=4900, mmr=None,
+    )
+    other = SimpleNamespace(
+        toon_handle="1-S2-1-9999", pid=2, scaled_rating=3500, mmr=None,
+    )
+    ctx = SimpleNamespace(raw=SimpleNamespace(players=[other, raw_match]))
+    out = _resolve_my_mmr(ctx, me, file_path=tmp_path / "x.SC2Replay")
+    assert out == 4900
+
+
+def test_resolve_my_mmr_returns_none_when_nothing_usable(tmp_path):
+    from sc2tools_agent.replay_pipeline import _resolve_my_mmr
+
+    me = _make_pi(mmr=None)
+    raw_match = SimpleNamespace(
+        toon_handle="1-S2-1-267727", pid=1, scaled_rating=None, mmr=None,
+    )
+    ctx = SimpleNamespace(raw=SimpleNamespace(players=[raw_match]))
+    out = _resolve_my_mmr(ctx, me, file_path=tmp_path / "x.SC2Replay")
+    assert out is None
+
+
+def test_resolve_my_mmr_rejects_implausibly_low_values(tmp_path):
+    from sc2tools_agent.replay_pipeline import _resolve_my_mmr
+
+    # league enums (Bronze=0..Grandmaster=7) leak into ``mmr``/``scaled_rating``
+    # on some sc2reader builds; reject anything below the 500 floor so
+    # the overlay never paints "5" as a rating.
+    me = _make_pi(mmr=7)  # Grandmaster enum, not a real MMR
+    raw_match = SimpleNamespace(
+        toon_handle="1-S2-1-267727", pid=1, scaled_rating=3, mmr=7,
+    )
+    ctx = SimpleNamespace(raw=SimpleNamespace(players=[raw_match]))
+    out = _resolve_my_mmr(ctx, me, file_path=tmp_path / "x.SC2Replay")
+    assert out is None
+
+
+def test_resolve_my_mmr_returns_none_when_raw_replay_missing(tmp_path):
+    from sc2tools_agent.replay_pipeline import _resolve_my_mmr
+
+    # parse_deep occasionally leaves ctx.raw=None on a level-2 fallback —
+    # we still must return cleanly rather than throw.
+    me = _make_pi(mmr=None)
+    ctx = SimpleNamespace(raw=None)
+    out = _resolve_my_mmr(ctx, me, file_path=tmp_path / "x.SC2Replay")
+    assert out is None
+
+
 def test_to_payload_includes_macro_breakdown_and_apm_curve_when_set():
     breakdown = {
         "raw": {"sq": 75},
