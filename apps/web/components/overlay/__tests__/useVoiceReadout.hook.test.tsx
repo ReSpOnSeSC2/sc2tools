@@ -183,6 +183,61 @@ describe("useVoiceReadout (hook)", () => {
     expect(cap.speak).toHaveBeenCalledTimes(1);
   });
 
+  it("does NOT cancel in-flight scouting line when sync payload (result set) lands with a different opponent", () => {
+    // Reproduces the 13k-replay-backfill bug: while a Test scouting line
+    // is mid-sentence, the cloud emits one overlay:live per accepted
+    // game during ingest. Each carries a different oppName AND result.
+    // The previous code cancelled speech whenever oppName changed,
+    // regardless of result, so the streamer heard half a sentence
+    // before the next sync batch silenced it.
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const prefs = { enabled: true, events: { scouting: true } };
+    const { rerender } = render(
+      <Harness
+        live={{ oppName: "TestUser", oppRace: "Protoss" }}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    flush();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    cap.cancel.mockClear();
+    // Sync batch arrives with a different opponent AND a result. Must
+    // NOT cancel the in-flight scouting line.
+    rerender(
+      <Harness
+        live={{
+          oppName: "scarlett",
+          oppRace: "Protoss",
+          result: "loss",
+        }}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    flush();
+    expect(cap.cancel).not.toHaveBeenCalled();
+    // Same again — N sync batches in a row, none of them should
+    // interrupt.
+    rerender(
+      <Harness
+        live={{
+          oppName: "serral",
+          oppRace: "Zerg",
+          result: "win",
+        }}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    flush();
+    expect(cap.cancel).not.toHaveBeenCalled();
+    // No new utterance fired either — scouting line gated on !result,
+    // matchEnd off by default, cheese off by default.
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+  });
+
   it("cancels in-flight utterance when opponent changes mid-readout", () => {
     const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
     window.sessionStorage.setItem("sc2tools.voiceUnlocked", "1");
