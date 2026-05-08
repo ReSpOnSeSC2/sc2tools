@@ -10,6 +10,11 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+## [agent-v0.5.4] - 2026-05-07
+
+Released as `agent-v0.5.4` on GitHub. Installer:
+`SC2ToolsAgent-Setup-0.5.4.exe`.
+
 ### Fixed (agent + cloud) — overlay session widget MMR now resolves automatically via SC2Pulse
 
 A streamer whose session-widget panel kept showing the bottom row as
