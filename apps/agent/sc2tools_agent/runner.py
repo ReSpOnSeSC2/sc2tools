@@ -60,6 +60,7 @@ from .replay_finder import (
 )
 from .replay_pipeline import probe_analyzer
 from .state import AgentState, load_state, save_state
+from .sync_filter import SyncFilter
 from .ui import (
     ConsoleUI,
     GuiUI,
@@ -839,11 +840,11 @@ def _handle_save_settings(
     filter_changed = False
     if payload.sync_filter_preset is not None:
         # Date-range filter. The watcher resolves this fresh every
-        # sweep so a save takes effect on the next sweep cycle —
-        # plus we trigger an immediate resync below if the value
-        # actually changed (so a streamer who tightens the filter
-        # doesn't keep seeing yesterday's out-of-window replays
-        # parked in `Recent uploads` until the next sweep tick).
+        # sweep, but we ALSO trigger an immediate sweep + drain the
+        # already-queued uploads below if the value actually changed,
+        # so the user's "save = stop uploading right now" mental
+        # model is true to the millisecond rather than waiting for
+        # the next 10-second poll.
         new_preset = payload.sync_filter_preset.strip() or None
         new_since = (payload.sync_filter_since or "").strip() or None
         new_until = (payload.sync_filter_until or "").strip() or None
@@ -861,7 +862,8 @@ def _handle_save_settings(
             state.sync_filter_preset = new_preset
             state.sync_filter_since = new_since
             state.sync_filter_until = new_until
-    if payload.replay_folders is not None:
+    folders_changed = payload.replay_folders is not None
+    if folders_changed:
         # The Settings tab owns the full list — replace, don't merge.
         cleaned: list[str] = []
         seen: set[str] = set()
@@ -887,40 +889,121 @@ def _handle_save_settings(
                 payload.autostart_enabled,
             )
 
+    # Filter enforcement happens BEFORE ``save_state`` so the on-disk
+    # state matches the in-memory state after a Save click — without
+    # this, the agent's previous behaviour persisted the new filter
+    # but kept the old "filtered" markers, so an agent restart would
+    # reload them and never re-evaluate against the new window.
+    filter_apply_summary: Optional[dict] = None
+    resync_already_requested = False
+    if filter_changed:
+        new_filter = SyncFilter.from_state(
+            preset=state.sync_filter_preset,
+            since_iso=state.sync_filter_since,
+            until_iso=state.sync_filter_until,
+        )
+        # Step 1: drop "filtered" markers from the previous filter so
+        # the next sweep re-evaluates those replays against the new
+        # window. Don't touch "skipped" / "rejected" / real timestamp
+        # values — those are durable outcomes the filter change has
+        # no bearing on.
+        cleared_filtered = 0
+        for path_key in list(state.uploaded.keys()):
+            if state.uploaded.get(path_key) == "filtered":
+                del state.uploaded[path_key]
+                cleared_filtered += 1
+        # Step 2: drain the upload queue's already-parsed jobs that
+        # fall outside the new window. This is what stops the "I
+        # clicked Save and it kept uploading" complaint — without
+        # this, a queue depth of 5–100 would keep flying out for ~30
+        # seconds after the Save click before the watcher's filter
+        # caught up.
+        dropped_queued = 0
+        if cell.upload is not None and hasattr(
+            cell.upload, "drain_outside_filter",
+        ):
+            try:
+                dropped_queued = cell.upload.drain_outside_filter()
+            except Exception:  # noqa: BLE001
+                log.exception("drain_outside_filter_failed")
+        # Step 3: trigger an immediate watcher sweep so newly-eligible
+        # replays (the cleared "filtered" set) get picked up without
+        # waiting for the 10-second poll. ``request_full_resync`` is
+        # the existing flag the watcher reads at the top of
+        # ``_sweep_once``; always trigger on filter change, regardless
+        # of how many entries we cleared (otherwise a Save with zero
+        # cleared entries — typical when transitioning from "all" to
+        # "Current season" on a fresh-ish state — never wakes the
+        # watcher and the user waits the full poll interval).
+        if cell.upload is not None:
+            cell.upload.request_full_resync()
+            resync_already_requested = True
+        if cell.watcher is not None and hasattr(
+            cell.watcher, "request_immediate_sweep",
+        ):
+            try:
+                cell.watcher.request_immediate_sweep()
+            except Exception:  # noqa: BLE001
+                log.exception("request_immediate_sweep_failed")
+        filter_apply_summary = {
+            "cleared_filtered": cleared_filtered,
+            "dropped_queued": dropped_queued,
+            "active": int(new_filter.is_active()),
+        }
+        log.info(
+            "sync_filter_changed preset=%s since=%s until=%s "
+            "cleared=%d dropped_queued=%d",
+            state.sync_filter_preset, state.sync_filter_since,
+            state.sync_filter_until, cleared_filtered, dropped_queued,
+        )
+
+    # ATOMIC: every in-memory mutation for this user action is now
+    # complete. A single ``save_state`` commits the whole thing.
     save_state(cfg.state_dir, state)
 
-    if payload.replay_folders is not None:
+    if folders_changed:
         folders = [Path(p) for p in state.replay_folders_override]
         if cell.tray:
             cell.tray.set_replay_folders(folders)
         if cell.gui:
             cell.gui.set_replay_folders(folders)
-        # Force the live watcher to rediscover roots on its next sweep
-        # so the new list takes effect without a restart.
-        if cell.upload:
+        # Force the live watcher to rediscover roots on its next
+        # sweep so the new list takes effect without a restart. Skip
+        # if the filter branch above already requested it — the
+        # watcher only honours one resync per sweep cycle anyway and
+        # double-calling does no harm, but it logs noisily.
+        if cell.upload and not resync_already_requested:
             cell.upload.request_full_resync()
 
-    if filter_changed:
-        # Drop every "filtered" entry from state.uploaded so the next
-        # sweep re-evaluates them against the new window. We DON'T
-        # touch entries marked "skipped" / "rejected" / a timestamp:
-        # those represent durable parse / upload outcomes that the
-        # filter change has no bearing on. Without this, a streamer
-        # who widens the filter would keep seeing previously-filtered
-        # replays sit in state.uploaded forever and never get
-        # uploaded.
-        cleared = 0
-        for path_key in list(state.uploaded.keys()):
-            if state.uploaded.get(path_key) == "filtered":
-                del state.uploaded[path_key]
-                cleared += 1
-        if cleared > 0 and cell.upload:
-            cell.upload.request_full_resync()
-        log.info(
-            "sync_filter_changed preset=%s since=%s until=%s cleared=%d",
-            state.sync_filter_preset, state.sync_filter_since,
-            state.sync_filter_until, cleared,
-        )
+    # Surface the apply summary in the GUI's settings status bar so
+    # the user gets confirmation that the filter actually took effect
+    # — and how many in-flight uploads were dropped because of it.
+    status_msg = "Settings saved"
+    if filter_changed and filter_apply_summary is not None:
+        n_drop = filter_apply_summary["dropped_queued"]
+        n_clear = filter_apply_summary["cleared_filtered"]
+        preset_label = SyncFilter.from_state(
+            preset=state.sync_filter_preset,
+            since_iso=state.sync_filter_since,
+            until_iso=state.sync_filter_until,
+        ).short_label()
+        bits = [f"filter active: {preset_label}"]
+        if n_drop > 0:
+            bits.append(
+                f"{n_drop} queued upload"
+                f"{'s' if n_drop != 1 else ''} dropped",
+            )
+        if n_clear > 0:
+            bits.append(
+                f"{n_clear} previously filtered replay"
+                f"{'s' if n_clear != 1 else ''} re-eligible",
+            )
+        status_msg = "Settings saved — " + " · ".join(bits)
+    if cell.gui is not None and hasattr(cell.gui, "show_settings_status"):
+        try:
+            cell.gui.show_settings_status(status_msg)
+        except Exception:  # noqa: BLE001
+            log.exception("show_settings_status_failed")
 
     log.info(
         "settings_saved api_base=%s log_level=%s autostart=%s minimised=%s "

@@ -11,6 +11,7 @@ alphabetically-first map.
 from __future__ import annotations
 
 import os
+import threading
 import time
 from pathlib import Path
 from typing import List
@@ -96,3 +97,133 @@ def test_walk_replays_recurses_into_subdirs(tmp_path: Path) -> None:
     yielded_path, yielded_mtime = out[0]
     assert yielded_path == p
     assert isinstance(yielded_mtime, float)
+
+
+# --- v0.5.9 immediate-sweep entrypoint --------------------------
+
+
+def test_request_immediate_sweep_runs_off_thread(tmp_path: Path) -> None:
+    """``request_immediate_sweep`` must spawn a daemon thread that
+    runs ``_sweep_once`` once and returns control to the caller
+    immediately. Used by the runner after a filter Save so the
+    GUI thread isn't blocked on filesystem walks."""
+    from sc2tools_agent.config import AgentConfig
+    from sc2tools_agent.state import AgentState
+    from sc2tools_agent.watcher import ReplayWatcher
+
+    multiplayer = tmp_path / "Replays" / "Multiplayer"
+    multiplayer.mkdir(parents=True)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    cfg = AgentConfig(
+        api_base="http://localhost:0",
+        state_dir=state_dir,
+        replay_folder=multiplayer,
+        poll_interval_sec=10,
+        parse_concurrency=1,
+    )
+
+    class _StubUpload:
+        """Mimic the slice of UploadQueue the watcher's sweep touches."""
+
+        def __init__(self) -> None:
+            self._resync = False
+
+        def is_resync_requested(self) -> bool:
+            return self._resync
+
+        def acknowledge_resync(self) -> None:
+            self._resync = False
+
+        def submit(self, job) -> bool:
+            return True
+
+    state = AgentState(device_token="t")
+    watcher = ReplayWatcher(cfg=cfg, state=state, upload=_StubUpload())
+    # Replace _sweep_once so we can detect when it ran without
+    # exercising the parse pool. Using an Event lets the test block
+    # until the spawned thread finishes.
+    sweep_done = threading.Event()
+    sweep_count = {"value": 0}
+    original = watcher._sweep_once
+
+    def _instrumented() -> None:
+        sweep_count["value"] += 1
+        sweep_done.set()
+        # Don't actually run the original — it'd try to walk the
+        # parse pool. We just want to confirm the entrypoint fires.
+
+    watcher._sweep_once = _instrumented  # type: ignore[assignment]
+    try:
+        # The call itself must not block on the sweep — the contract
+        # is "schedule on a thread and return immediately".
+        t0 = time.perf_counter()
+        watcher.request_immediate_sweep()
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        assert elapsed_ms < 50, (
+            f"request_immediate_sweep took {elapsed_ms:.1f} ms — must "
+            "schedule on a thread and return synchronously"
+        )
+        # Wait for the spawned thread to actually run the sweep.
+        assert sweep_done.wait(timeout=2.0), (
+            "sweep thread never ran _sweep_once within 2 s"
+        )
+        assert sweep_count["value"] == 1
+    finally:
+        watcher._sweep_once = original  # type: ignore[assignment]
+        # Watcher's _sweep_loop / observer aren't running because we
+        # never called watcher.start(); nothing to clean up.
+
+
+def test_request_immediate_sweep_can_fire_repeatedly(
+    tmp_path: Path,
+) -> None:
+    """Multiple back-to-back Save clicks must each spawn their own
+    sweep — the second click shouldn't drop because the first thread
+    is still alive. Each thread is daemonised so they cleanly exit
+    when the agent shuts down."""
+    from sc2tools_agent.config import AgentConfig
+    from sc2tools_agent.state import AgentState
+    from sc2tools_agent.watcher import ReplayWatcher
+
+    multiplayer = tmp_path / "Replays" / "Multiplayer"
+    multiplayer.mkdir(parents=True)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    cfg = AgentConfig(
+        api_base="http://localhost:0",
+        state_dir=state_dir,
+        replay_folder=multiplayer,
+        poll_interval_sec=10,
+        parse_concurrency=1,
+    )
+
+    class _StubUpload:
+        def is_resync_requested(self) -> bool:
+            return False
+
+        def acknowledge_resync(self) -> None:
+            pass
+
+        def submit(self, job) -> bool:
+            return True
+
+    state = AgentState(device_token="t")
+    watcher = ReplayWatcher(cfg=cfg, state=state, upload=_StubUpload())
+    sweep_count_lock = threading.Lock()
+    sweep_count = {"value": 0}
+    all_done = threading.Event()
+    expected = 5
+
+    def _instrumented() -> None:
+        with sweep_count_lock:
+            sweep_count["value"] += 1
+            if sweep_count["value"] >= expected:
+                all_done.set()
+
+    watcher._sweep_once = _instrumented  # type: ignore[assignment]
+    for _ in range(expected):
+        watcher.request_immediate_sweep()
+    assert all_done.wait(timeout=2.0), (
+        f"only {sweep_count['value']} sweeps fired out of {expected}"
+    )

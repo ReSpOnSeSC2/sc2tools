@@ -351,6 +351,14 @@ class ReplayWatcher:
         # one would leak.
         self._executor_lock = threading.Lock()
         self._roots: list[Path] = []
+        # Guards swaps of ``self._roots``. Pre-v0.5.8 the periodic
+        # sweep was the only writer, so a plain assignment was safe
+        # under the GIL. ``request_immediate_sweep`` (added v0.5.8)
+        # spawns a parallel sweep thread that may also write
+        # ``self._roots`` if a resync is in flight, so we serialise
+        # writes (and the mutating discovery + acknowledge sequence)
+        # behind this lock to avoid double-listing the same root.
+        self._roots_lock = threading.Lock()
         # Throttle the systemic "analyzer not loadable" log so a stuck
         # bundle doesn't fill agent.log with thousands of identical
         # errors (one per replay × however many SC2 has on disk).
@@ -460,6 +468,32 @@ class ReplayWatcher:
             target=self._sweep_once, name="sc2tools-startup-sweep", daemon=True,
         ).start()
 
+    def request_immediate_sweep(self) -> None:
+        """Run one extra sweep RIGHT NOW on a daemon thread.
+
+        Called by the runner immediately after a filter Save so the
+        user doesn't have to wait up to ``poll_interval_sec`` for the
+        new filter to bite. The existing ``_sweep_loop`` keeps running
+        on its normal cadence — this method is purely additive.
+
+        We deliberately do NOT signal the existing loop's
+        ``Event.wait`` to wake it: that would wake it once, but the
+        next iteration would still wait the full poll interval. A
+        separate thread decouples the immediate sweep from the steady
+        cadence and matches the pattern already used at startup
+        (``sc2tools-startup-sweep``).
+
+        Safe to call multiple times — each call spawns its own thread
+        but ``_inflight`` + ``state.uploaded`` dedupe and the new
+        ``_roots_lock`` keep concurrent sweeps from doubling work or
+        racing on the roots list.
+        """
+        threading.Thread(
+            target=self._sweep_once,
+            name="sc2tools-immediate-sweep",
+            daemon=True,
+        ).start()
+
     def stop(self) -> None:
         self._stop.set()
         if self._observer:
@@ -560,11 +594,21 @@ class ReplayWatcher:
         # cleared by the runner before signalling, so keys that match
         # below would be re-enqueued anyway — but we still want fresh
         # roots in case the override changed since the agent started.
+        # Take ``_roots_lock`` so a concurrent
+        # ``request_immediate_sweep`` (v0.5.8+) doesn't race the
+        # periodic sweep into a duplicated rediscovery — the second
+        # to acquire the lock sees a fresh ``_roots`` and the matching
+        # ``acknowledge_resync`` already happened, so the second
+        # branch falls through cheaply.
         if self._upload.is_resync_requested():
-            self._roots = self._discover_roots()
-            self._upload.acknowledge_resync()
+            with self._roots_lock:
+                if self._upload.is_resync_requested():
+                    self._roots = self._discover_roots()
+                    self._upload.acknowledge_resync()
         if not self._roots:
-            self._roots = self._discover_roots()
+            with self._roots_lock:
+                if not self._roots:
+                    self._roots = self._discover_roots()
             if not self._roots:
                 return
         # Resolve the user's date-range filter once per sweep so the

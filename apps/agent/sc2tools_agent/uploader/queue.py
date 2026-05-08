@@ -22,6 +22,7 @@ from ..api_client import ApiClient
 from ..config import AgentConfig
 from ..replay_pipeline import CloudGame
 from ..state import AgentState, save_state
+from ..sync_filter import SyncFilter
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +48,16 @@ class _ServerRejectedError(Exception):
     drops new replays with ``upload_queue_full`` warnings, and never
     converges. Mark the file as permanently rejected in
     ``state.uploaded`` instead so future sweeps skip it.
+    """
+
+
+class _FilteredOutError(Exception):
+    """Job dropped at upload time because the active sync filter
+    excludes it. Distinct from a transport failure or a server-side
+    rejection — the user changed their date-range filter and we caught
+    the still-queued job before paying the network round-trip. Surfaced
+    via ``_on_failure`` so the GUI's Recent uploads feed shows the
+    drop instead of silently swallowing it.
     """
 
 
@@ -291,6 +302,84 @@ class UploadQueue:
     def acknowledge_resync(self) -> None:
         self._resync_requested.clear()
 
+    def drain_outside_filter(self) -> int:
+        """Drop every queued job whose game date_iso falls outside the
+        active sync filter, re-enqueueing the survivors in their
+        original submission order. Returns the number of jobs dropped.
+
+        Called by the runner immediately after a filter Save so
+        already-parsed jobs sitting in the queue at the moment of the
+        Save click don't sneak past the new window. Without this, a
+        queue depth of 5–100 (typical during a backfill or hot ladder
+        session) would keep flying out for ~30 seconds before the
+        watcher's filter started biting on fresh files.
+
+        No-op when the filter is fully open (preset is None / "all").
+        Persists ``state.uploaded`` once at the end if anything was
+        dropped — both so the next sweep skips re-parsing the dropped
+        files and so a crash mid-drop doesn't leak the change.
+        """
+        sync_filter = SyncFilter.from_state(
+            preset=getattr(self._state, "sync_filter_preset", None),
+            since_iso=getattr(self._state, "sync_filter_since", None),
+            until_iso=getattr(self._state, "sync_filter_until", None),
+        )
+        if not sync_filter.is_active():
+            return 0
+        keep: list[UploadJob] = []
+        dropped_jobs: list[UploadJob] = []
+        # Drain the entire queue sequentially so we can re-enqueue
+        # survivors in submission order. ``get_nowait`` raises
+        # ``queue.Empty`` when drained — that's the exit condition.
+        while True:
+            try:
+                job = self._q.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                date_iso = getattr(job.game, "date_iso", None)
+                if sync_filter.replay_in_range(date_iso):
+                    keep.append(job)
+                else:
+                    dropped_jobs.append(job)
+                    log.info(
+                        "queued_upload_dropped_by_filter %s date_iso=%s",
+                        job.file_path.name, date_iso,
+                    )
+            finally:
+                # ``Queue.task_done`` is mandatory for every ``get`` to
+                # keep the implicit ``Queue.join`` counter balanced.
+                self._q.task_done()
+        # Re-enqueue survivors. ``put_nowait`` is safe because we just
+        # drained the entire queue — capacity is guaranteed.
+        for job in keep:
+            try:
+                self._q.put_nowait(job)
+            except queue.Full:
+                # Defensive: shouldn't happen because we just emptied
+                # the queue. Log and swallow rather than abort.
+                log.error(
+                    "requeue_failed_after_drain %s", job.file_path.name,
+                )
+        if dropped_jobs:
+            label = sync_filter.short_label()
+            err = _FilteredOutError(f"Outside sync window {label}")
+            with self._lock:
+                for job in dropped_jobs:
+                    self._state.uploaded[str(job.file_path)] = "filtered"
+                save_state(self._cfg.state_dir, self._state)
+            # Mirror callbacks OUTSIDE the lock so a slow GUI handler
+            # doesn't hold up the next state mutation.
+            for job in dropped_jobs:
+                try:
+                    self._on_failure(job.file_path, err)
+                except Exception:  # noqa: BLE001
+                    log.exception(
+                        "drain_filter_on_failure_callback_failed %s",
+                        job.file_path.name,
+                    )
+        return len(dropped_jobs)
+
     # ---------------- internals ----------------
     def _run(self) -> None:
         """Worker loop: drain a batch, post via ``upload_games_batch``.
@@ -403,6 +492,58 @@ class UploadQueue:
         """
         if not batch:
             return
+        # Defense-in-depth filter check at the moment of upload. The
+        # watcher applies the filter post-parse, but if the user
+        # changed the filter between parse and upload (typical queue
+        # depth during a backfill is dozens), we'd otherwise ship
+        # out-of-window replays anyway. The runner's
+        # ``drain_outside_filter`` call on Save already empties most
+        # of the queue — this catches any straggler that beat the
+        # drain (worker had already pulled it from the queue and was
+        # mid-batch when the Save fired).
+        sync_filter = SyncFilter.from_state(
+            preset=getattr(self._state, "sync_filter_preset", None),
+            since_iso=getattr(self._state, "sync_filter_since", None),
+            until_iso=getattr(self._state, "sync_filter_until", None),
+        )
+        if sync_filter.is_active():
+            kept: List[UploadJob] = []
+            filtered_out: List[UploadJob] = []
+            for job in batch:
+                date_iso = getattr(job.game, "date_iso", None)
+                if sync_filter.replay_in_range(date_iso):
+                    kept.append(job)
+                else:
+                    filtered_out.append(job)
+            if filtered_out:
+                label = sync_filter.short_label()
+                err = _FilteredOutError(f"Outside sync window {label}")
+                with self._lock:
+                    for job in filtered_out:
+                        log.info(
+                            "upload_dropped_by_filter %s date_iso=%s "
+                            "filter=%s",
+                            job.file_path.name,
+                            getattr(job.game, "date_iso", None),
+                            label,
+                        )
+                        self._state.uploaded[str(job.file_path)] = (
+                            "filtered"
+                        )
+                    save_state(self._cfg.state_dir, self._state)
+                for job in filtered_out:
+                    try:
+                        self._on_failure(job.file_path, err)
+                    except Exception:  # noqa: BLE001
+                        log.exception(
+                            "filter_on_failure_callback_failed %s",
+                            job.file_path.name,
+                        )
+            if not kept:
+                # Nothing left in this batch worth shipping. Skip the
+                # network round-trip entirely.
+                return
+            batch = kept
         # Build payloads + a gameId→job lookup so we can map server
         # responses back to the originating ``UploadJob``. Keyed off
         # the server's authoritative gameId rather than file path
@@ -538,6 +679,34 @@ class UploadQueue:
         downstream caller that imports it directly. Internal callers
         within the queue's own code go through ``_upload_batch``.
         """
+        # Defense-in-depth: the watcher checks at parse time, but a
+        # filter change between parse and upload would otherwise let an
+        # out-of-window replay through. Keep the symmetric check on
+        # both real upload paths so importer-of-_upload_one code (and
+        # any future re-exports) gets the same guarantee.
+        sync_filter = SyncFilter.from_state(
+            preset=getattr(self._state, "sync_filter_preset", None),
+            since_iso=getattr(self._state, "sync_filter_since", None),
+            until_iso=getattr(self._state, "sync_filter_until", None),
+        )
+        date_iso = getattr(job.game, "date_iso", None)
+        if sync_filter.is_active() and not sync_filter.replay_in_range(
+            date_iso,
+        ):
+            label = sync_filter.short_label()
+            log.info(
+                "upload_dropped_by_filter %s date_iso=%s filter=%s",
+                job.file_path.name, date_iso, label,
+            )
+            path_str = str(job.file_path)
+            with self._lock:
+                self._state.uploaded[path_str] = "filtered"
+                save_state(self._cfg.state_dir, self._state)
+            self._on_failure(
+                job.file_path,
+                _FilteredOutError(f"Outside sync window {label}"),
+            )
+            return
         log.info("uploading %s", job.file_path.name)
         result = self._api.upload_game(job.game.to_payload())
         accepted = bool((result.get("accepted") or [{}])[0].get("gameId"))

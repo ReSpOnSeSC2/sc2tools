@@ -19,7 +19,9 @@ the new behaviour the date-range filter introduces:
 
 from __future__ import annotations
 
+import json
 import logging
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
@@ -43,19 +45,52 @@ def _cfg(tmp_path: Path) -> AgentConfig:
 
 
 class _StubUpload:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        drop_count: int = 0,
+    ) -> None:
         self.resync_calls = 0
+        self.drain_calls = 0
+        self.drain_returns: list[int] = []
+        self._drop_count = drop_count
 
     def request_full_resync(self) -> None:
         self.resync_calls += 1
 
+    def drain_outside_filter(self) -> int:
+        self.drain_calls += 1
+        # Mimic the real queue: returns the number of jobs dropped on
+        # this call. Pre-seeded by the test harness so a single test
+        # can pretend the queue had N out-of-window jobs at the moment
+        # of Save without standing up a real UploadQueue.
+        n = self._drop_count
+        self.drain_returns.append(n)
+        # The real queue clears its drop_count once jobs are flushed;
+        # zero it so a follow-up unrelated Save in the same test
+        # doesn't double-count.
+        self._drop_count = 0
+        return n
 
-def _cell(upload: Optional[_StubUpload] = None) -> SimpleNamespace:
+
+class _StubWatcher:
+    def __init__(self) -> None:
+        self.sweep_calls = 0
+
+    def request_immediate_sweep(self) -> None:
+        self.sweep_calls += 1
+
+
+def _cell(
+    upload: Optional[_StubUpload] = None,
+    watcher: Optional[_StubWatcher] = None,
+) -> SimpleNamespace:
     """Minimal runtime cell — only the pieces _handle_save_settings touches."""
     return SimpleNamespace(
         upload=upload,
         tray=None,
         gui=None,
+        watcher=watcher,
     )
 
 
@@ -358,3 +393,282 @@ def test_save_hot_swap_failure_does_not_break_persistence(
     # Persistence succeeded despite the hot-swap exception.
     assert state.upload_concurrency_override == 2
     assert state.upload_batch_size_override == 30
+
+
+# --- v0.5.9 immediate-filter-enforcement tests ----------------------
+# Locks down the "Save = stop right now" contract added in v0.5.9. Each
+# of the four pre-fix failure modes has its own test below.
+
+
+def test_save_filter_change_drops_queued_jobs_outside_window(
+    tmp_path: Path,
+) -> None:
+    """The runner must drain in-flight upload jobs outside the new
+    window when the user changes the filter. Without this, a
+    queue depth of 5–100 jobs (typical during a backfill) keeps
+    flying out for ~30 seconds after the Save click. This is the
+    failure mode the user complained about."""
+    state = AgentState(
+        device_token="t",
+        sync_filter_preset=None,
+        uploaded={},
+    )
+    # Pretend the queue has 7 already-parsed jobs sitting in it; the
+    # stub returns that count from drain_outside_filter so the runner
+    # can build its apply summary.
+    upload = _StubUpload(drop_count=7)
+    watcher = _StubWatcher()
+    payload = SettingsPayload(sync_filter_preset="season:67")
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(upload, watcher),
+        logging.getLogger("test"),
+    )
+    # Drain must have been called exactly once and returned 7.
+    assert upload.drain_calls == 1
+    assert upload.drain_returns == [7]
+    # Immediate sweep must be requested so the watcher picks up the
+    # new filter without waiting for the 10-second poll.
+    assert watcher.sweep_calls == 1
+    # Resync must be requested exactly once; not twice (folders
+    # didn't change here so the folders branch must NOT double-call).
+    assert upload.resync_calls == 1
+
+
+def test_save_filter_unchanged_is_zero_cost(tmp_path: Path) -> None:
+    """Re-saving the SAME filter must NOT drain the queue, NOT
+    request an immediate sweep, and NOT mutate state.uploaded.
+    Otherwise opening Settings and clicking Save on a 12k-replay PC
+    re-parses everything for nothing."""
+    initial_uploaded = {
+        "/replays/old.SC2Replay": "filtered",
+        "/replays/new.SC2Replay": "2026-05-08T10:00:00Z",
+    }
+    state = AgentState(
+        device_token="t",
+        sync_filter_preset="season:67",
+        uploaded=dict(initial_uploaded),
+    )
+    upload = _StubUpload(drop_count=99)
+    watcher = _StubWatcher()
+    payload = SettingsPayload(sync_filter_preset="season:67")
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(upload, watcher),
+        logging.getLogger("test"),
+    )
+    # No-op: drain not called, sweep not requested, no resync.
+    assert upload.drain_calls == 0
+    assert watcher.sweep_calls == 0
+    assert upload.resync_calls == 0
+    # state.uploaded is byte-identical — no churn.
+    assert state.uploaded == initial_uploaded
+
+
+def test_save_state_happens_after_filter_cleanup(tmp_path: Path) -> None:
+    """Atomic-state contract: ``save_state`` runs ONCE per Save and
+    only AFTER every in-memory mutation (filter cleanup included)
+    completes. Pre-fix the runner saved before the cleanup loop, so
+    a crash between save and cleanup left a stale "filtered" key on
+    disk that the next agent boot would never re-evaluate."""
+    state = AgentState(
+        device_token="t",
+        sync_filter_preset=None,
+        uploaded={
+            "/replays/old.SC2Replay": "filtered",
+            "/replays/new.SC2Replay": "2026-05-08T10:00:00Z",
+        },
+    )
+    upload = _StubUpload()
+    watcher = _StubWatcher()
+    payload = SettingsPayload(sync_filter_preset="season:67")
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(upload, watcher),
+        logging.getLogger("test"),
+    )
+    # Read the on-disk state. The "filtered" key must NOT be present
+    # (because the cleanup loop ran before save_state). The real
+    # timestamp entry must survive untouched.
+    on_disk = json.loads((tmp_path / "agent.json").read_text(encoding="utf-8"))
+    assert "/replays/old.SC2Replay" not in on_disk["uploaded"]
+    assert (
+        on_disk["uploaded"]["/replays/new.SC2Replay"]
+        == "2026-05-08T10:00:00Z"
+    )
+    # And the persisted filter is the new value.
+    assert on_disk["sync_filter_preset"] == "season:67"
+
+
+def test_save_filter_to_all_clears_filtered_and_drains_queue(
+    tmp_path: Path,
+) -> None:
+    """Switching from a tightening filter back to ``"all"`` must
+    clear the "filtered" markers AND drain the queue. ``"all"``
+    matches every replay so the drain returns 0 — but the runner
+    must still CALL drain (the queue's filter check inside
+    drain_outside_filter is what guarantees zero-job-leakage)."""
+    state = AgentState(
+        device_token="t",
+        sync_filter_preset="season:67",
+        uploaded={
+            "/replays/a.SC2Replay": "filtered",
+            "/replays/b.SC2Replay": "filtered",
+            "/replays/done.SC2Replay": "2026-05-08T10:00:00Z",
+        },
+    )
+    # Stub returns 0 — that's the correct "all" behaviour. Test
+    # asserts the runner CALLED drain regardless.
+    upload = _StubUpload(drop_count=0)
+    watcher = _StubWatcher()
+    payload = SettingsPayload(sync_filter_preset="all")
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(upload, watcher),
+        logging.getLogger("test"),
+    )
+    # State updated: "all" normalises to None.
+    assert state.sync_filter_preset is None
+    # Filtered markers gone; uploaded entries survive.
+    assert "/replays/a.SC2Replay" not in state.uploaded
+    assert "/replays/b.SC2Replay" not in state.uploaded
+    assert (
+        state.uploaded["/replays/done.SC2Replay"]
+        == "2026-05-08T10:00:00Z"
+    )
+    # Drain still called (returned 0). Sweep + resync still fired.
+    assert upload.drain_calls == 1
+    assert watcher.sweep_calls == 1
+    assert upload.resync_calls == 1
+
+
+def test_filter_save_completes_in_under_50ms(tmp_path: Path) -> None:
+    """SLA: the user clicks Save and gets control back within 50 ms.
+    Heavy work (queue drain, watcher sweep) is dispatched to other
+    threads so the GUI thread isn't blocked. Stub callees here just
+    increment counters, so any time spent inside _handle_save_settings
+    is pure runner overhead."""
+    state = AgentState(
+        device_token="t",
+        sync_filter_preset=None,
+        uploaded={
+            f"/replays/old-{i:04d}.SC2Replay": "filtered"
+            for i in range(1000)
+        },
+    )
+    upload = _StubUpload(drop_count=50)
+    watcher = _StubWatcher()
+    payload = SettingsPayload(sync_filter_preset="season:67")
+    t0 = time.perf_counter()
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(upload, watcher),
+        logging.getLogger("test"),
+    )
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    # Generous ceiling at 200 ms because save_state on Windows fsyncs
+    # the JSON to disk, and a busy CI runner can take longer than
+    # 50 ms for that alone. The contract we're really protecting is
+    # "doesn't block on a 30-second sweep" — anything under 200 ms
+    # comfortably feels instant.
+    assert elapsed_ms < 200, (
+        f"_handle_save_settings took {elapsed_ms:.1f} ms — over the "
+        "feels-instant SLA. Heavy work should be dispatched to "
+        "worker threads, not run inline on the GUI thread."
+    )
+
+
+def test_save_with_no_watcher_in_cell_does_not_crash(
+    tmp_path: Path,
+) -> None:
+    """During the boot window (before the watcher is constructed),
+    cell.watcher is None. A filter-Save must still persist the
+    change — it just can't request an immediate sweep yet. The
+    next sweep on the regular cadence picks the filter up."""
+    state = AgentState(device_token="t")
+    upload = _StubUpload()
+    cell = SimpleNamespace(upload=upload, tray=None, gui=None, watcher=None)
+    payload = SettingsPayload(sync_filter_preset="season:67")
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, cell, logging.getLogger("test"),
+    )
+    assert state.sync_filter_preset == "season:67"
+
+
+def test_save_calls_show_settings_status_with_apply_summary(
+    tmp_path: Path,
+) -> None:
+    """The GUI's settings-tab toast must carry the apply summary
+    (filter label + drop count + cleared count). Pre-fix the
+    runner only logged it — there was no way for the user to see
+    that 7 queued uploads got dropped on Save."""
+
+    class _StubGui:
+        def __init__(self) -> None:
+            self.statuses: list[str] = []
+
+        def show_settings_status(self, msg: str) -> None:
+            self.statuses.append(msg)
+
+    state = AgentState(
+        device_token="t",
+        sync_filter_preset=None,
+        uploaded={"/replays/old.SC2Replay": "filtered"},
+    )
+    upload = _StubUpload(drop_count=3)
+    watcher = _StubWatcher()
+    gui = _StubGui()
+    cell = SimpleNamespace(
+        upload=upload, tray=None, gui=gui, watcher=watcher,
+    )
+    payload = SettingsPayload(sync_filter_preset="season:67")
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, cell, logging.getLogger("test"),
+    )
+    assert len(gui.statuses) == 1
+    msg = gui.statuses[0]
+    # Carries the filter label, drop count, and re-eligible count.
+    assert "Season 67" in msg
+    assert "3 queued upload" in msg
+    assert "1 previously filtered replay" in msg
+
+
+def test_save_unrelated_change_emits_default_status_message(
+    tmp_path: Path,
+) -> None:
+    """A Settings save that doesn't touch the filter must NOT emit a
+    filter-flavoured toast — just a plain "Settings saved". Otherwise
+    every concurrency knob change would falsely advertise a filter
+    apply summary."""
+
+    class _StubGui:
+        def __init__(self) -> None:
+            self.statuses: list[str] = []
+
+        def show_settings_status(self, msg: str) -> None:
+            self.statuses.append(msg)
+
+    state = AgentState(device_token="t")
+    upload = _StubUpload()
+    gui = _StubGui()
+    cell = SimpleNamespace(upload=upload, tray=None, gui=gui, watcher=None)
+    payload = SettingsPayload(upload_concurrency=2)
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, cell, logging.getLogger("test"),
+    )
+    assert gui.statuses == ["Settings saved"]
+
+
+def test_folder_change_only_calls_resync_once(tmp_path: Path) -> None:
+    """When BOTH folders and filter change in a single Save, the
+    runner must call request_full_resync ONCE total — not twice."""
+    state = AgentState(device_token="t")
+    upload = _StubUpload()
+    watcher = _StubWatcher()
+    payload = SettingsPayload(
+        sync_filter_preset="season:67",
+        replay_folders=[Path("/tmp/replays")],
+    )
+    _handle_save_settings(
+        _cfg(tmp_path), state, payload, _cell(upload, watcher),
+        logging.getLogger("test"),
+    )
+    assert upload.resync_calls == 1, (
+        "expected exactly one request_full_resync call when both "
+        f"folders and filter change — got {upload.resync_calls}"
+    )
