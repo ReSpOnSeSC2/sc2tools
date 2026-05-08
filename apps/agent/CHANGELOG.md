@@ -2,6 +2,29 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.5.10
+
+### Fixed
+- **Build classification no longer flips on Sentry hallucinations.** A
+  Sentry's Hallucination ability spawns Phoenix / VoidRay / HighTemplar
+  / Archon / Immortal / Colossus / WarpPrism events that look identical
+  to real production in the replay event log. The classifier was
+  therefore mis-tagging 2-base Charge / Templar PvT games as
+  `PvT - Phoenix Opener` or `PvT - Phoenix into Robo` whenever the
+  opponent's Sentry tossed a single hallucinated Phoenix.
+  Every pre-built build now requires its tech-structure prerequisite
+  (Phoenix → Stargate, HighTemplar → Templar Archives,
+  Carrier/Tempest/Mothership → Stargate + Fleet Beacon,
+  Colossus/Disruptor → Robotics Facility + Robotics Bay, etc.). A unit
+  only counts toward classification when at least one prerequisite
+  alternative was *started* before the unit appeared. The structure
+  does not need to still be standing — a Stargate killed at 5:00 still
+  qualifies a Phoenix at 7:00, since the construction event lives in
+  the event log permanently.
+  Re-process affected replays after upgrading: re-import via the agent
+  to overwrite the stored `myBuild` value with the freshly-computed
+  classification.
+
 ## 0.5.9
 
 ### Fixed
