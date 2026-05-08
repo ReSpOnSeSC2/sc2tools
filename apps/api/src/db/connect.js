@@ -78,7 +78,7 @@ async function connect({ uri, dbName }) {
  * Hot queries we index for:
  *   - opponents browse:   {userId, pulseId}
  *   - games by date:      {userId, date}
- *   - games by opponent:  {userId, oppPulseId, date}
+ *   - games by opponent:  {opponent.pulseId, userId, date}
  *   - games dedupe:       {userId, gameId}  (unique)
  *   - device pairings:    {code} (unique, TTL)
  *   - device tokens:      {tokenHash} (unique)
@@ -94,7 +94,26 @@ async function ensureIndexes(ctx) {
 
   await ctx.games.createIndex({ userId: 1, gameId: 1 }, { unique: true });
   await ctx.games.createIndex({ userId: 1, date: -1 });
-  await ctx.games.createIndex({ userId: 1, oppPulseId: 1, date: -1 });
+  // Opponent lookup uses the nested ``opponent.pulseId`` path
+  // (services/overlayLive.js, services/community.js, services/gdpr.js,
+  // routes/games.js). Field order matches Atlas Performance Advisor
+  // recommendations sized against real query targeting metrics.
+  await ctx.games.createIndex({
+    "opponent.pulseId": 1,
+    userId: 1,
+    date: -1,
+  });
+  // Covers _recentGamesForOpponent in services/overlayLive.js, which
+  // filters on userId + opponent.pulseId + myRace + opponent.race with
+  // an optional $ne gameId. Runs on every overlay tick.
+  await ctx.games.createIndex({
+    myRace: 1,
+    "opponent.pulseId": 1,
+    "opponent.race": 1,
+    userId: 1,
+    date: -1,
+    gameId: 1,
+  });
 
   // Game-detail rows live in their own collection so the slim
   // ``games`` collection stays cheap to scan (Recent Games table,
