@@ -10,6 +10,89 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Fixed (agent v0.5.3 + cloud) — Map Intel "Request resync" actually backfills heatmaps now
+
+The Map Intel heatmap viewer's "Request resync" button on the website
+appeared to do nothing for users with substantial replay history — they
+saw "no spatial extracts on this map yet" indefinitely no matter how
+many times they clicked it, even with the desktop agent online. The
+modal showed counts like "239 games · 179W · 60L" with an empty
+heatmap underneath; toggling between My proxies / Opp. proxies /
+Battles / Death zones / Buildings layers showed the same empty state
+on every layer.
+
+Root cause: the cloud's resync flow was wired exclusively through the
+``macro:recompute_request`` socket event. That event carries a list of
+gameIds, and the agent translates each into a local replay path via
+``state.path_by_game_id`` — a reverse index added in agent v0.4.0.
+Anyone whose state file was written by an earlier agent had an empty
+``path_by_game_id``, every gameId resolved to zero local files, and
+the agent's ``make_recompute_handlers.on_macro`` callback silently
+returned without queueing anything for re-upload. Meanwhile the web
+UI cheerfully reported "Resync requested. If your desktop agent is
+online, heatmap data will refresh shortly." — a message that was
+simply never going to come true for those users.
+
+The wiring fix is a dedicated ``resync:request`` socket event:
+
+- The cloud now emits ``resync:request`` (in addition to
+  ``macro:recompute_request``) whenever ``/v1/macro/backfill/start``
+  is called with ``force: true``. A free-form ``reason`` string rides
+  along for diagnostics. Targeted recomputes (``force`` omitted /
+  false, used by per-game "Recompute now" buttons) still fire only
+  the per-game event so a single missing macroBreakdown doesn't
+  trigger a multi-thousand-replay walk.
+- The agent's ``SocketClient`` subscribes to ``resync:request`` and
+  invokes the same flow the GUI's "Re-sync" button does:
+  ``state.uploaded`` is cleared, ``upload.request_full_resync()`` is
+  called, and the watcher re-walks every replay folder. Each replay
+  re-parses with the latest extractor — including
+  ``_compute_spatial_extract`` — and re-uploads with
+  ``spatial.{map_bounds, my_proxies, opp_proxies, buildings,
+  battles, deaths}`` attached. SpatialService picks up the data on
+  the next read and the heatmaps populate.
+- ``make_recompute_handlers.on_macro`` also gained a belt-and-braces
+  fallback: when a bulk request (≥ 5 gameIds) resolves to zero local
+  paths, it triggers the same full-resync. This rescues any agent
+  that misses the new event entirely (e.g. a fork or a stale build).
+
+The web Map Intel viewer was polished in the same pass:
+
+- Per-layer empty-state copy. Each of the five heatmap layers
+  (proxies, opp proxies, battles, death zones, buildings) now shows
+  guidance specific to what that layer measures, instead of a
+  generic "play more games" line.
+- Auto-revalidation after a resync: the viewer polls
+  ``/v1/spatial/*`` on a 12 s cadence (capped at 12 ticks) so
+  newly-uploaded extracts surface without a page reload, then stops
+  the moment data lands.
+- A manual ``Refresh`` button alongside ``Request resync`` for users
+  who want to force a fetch.
+- When spatial data is already present, the action button changes
+  to ``Re-extract`` (ghost variant) so it doesn't read as redundant.
+- Heatmap rendering polish: SVG ``mix-blend-mode: screen`` for
+  warmer compositing on dark minimaps, opacity that scales with
+  cell intensity, a vignette ring on the canvas, and stable
+  per-layer gradient IDs (no more colour-hash collisions).
+- Error-tone banner (red border + bg) for failed requests vs
+  info-tone for success.
+
+To apply this fix, users must update the desktop agent — auto-update
+will deliver v0.5.3 within ~24 hours of release. After updating, click
+"Request resync" on any Map Intel map (or the GUI's "Re-sync" button
+directly) and the heatmaps will populate as the agent re-uploads each
+replay. Users still on v0.5.2 or earlier won't see heatmaps populate
+even after clicking "Request resync" because their agent doesn't
+subscribe to the new event.
+
+Tests: 6 new agent-side tests in ``test_socket_client.py`` lock down
+the happy path, the single-gameId no-fallback policy, the bulk
+fallback to full resync, the no-callable safety net, the explicit
+``resync:request`` handler, and exception swallowing inside the
+recompute callbacks. Two new API tests in ``perGameCompute.test.js``
+verify ``force=true`` emits BOTH events with the reason field and
+``force=false`` emits ONLY the per-game event.
+
 ### Fixed (agent v0.5.2) — Macro breakdown now uploads on every replay again
 
 A regression introduced when the agent started pinning the macro
