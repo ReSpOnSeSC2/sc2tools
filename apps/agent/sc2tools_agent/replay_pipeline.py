@@ -964,14 +964,24 @@ def _compute_macro_breakdown(
         int(my_macro.get("game_length_sec") or 0)
         or int(getattr(ctx, "length_seconds", 0) or 0)
     )
+    score: Dict[str, Any] = {}
     try:
         # Score on the FULL stats_events stream so leaks/SQ/penalty
         # accuracy is unaffected by the wire-level downsample below.
         score = compute_macro_score(my_macro, me.race, game_length)
     except Exception as exc:  # noqa: BLE001
+        # Don't bail here — the chart side of the breakdown only needs
+        # stats_events + unit_timeline, which we already extracted
+        # successfully. Returning None at this point would empty the
+        # entire macro card (chart, roster, leaks list) for any replay
+        # where the score engine hits an edge case (new race-specific
+        # leak rule, divide-by-zero on a 30 s sub-game, etc.). Log
+        # loudly so the cause stays grep-able and ship the partial
+        # payload — score and leaks default to "no data" gracefully on
+        # the SPA side.
         log.warning("compute_macro_score_failed: %s", exc)
-        return None, None
-    macro_score_val = score.get("macro_score")
+        score = {}
+    macro_score_val = score.get("macro_score") if isinstance(score, dict) else None
     # sc2reader's PlayerStatsEvent fires every ~10 s, which is finer
     # resolution than the SPA's resource/army charts can render
     # (typical chart widths give ~5–10 px per sample at 30 s, so the
@@ -992,15 +1002,18 @@ def _compute_macro_breakdown(
         list(my_macro.get("unit_timeline") or []),
         kept_times=[int(s.get("time", 0)) for s in my_stats_ds],
     )
+    score_raw = score.get("raw", {}) if isinstance(score, dict) else {}
+    score_all_leaks = score.get("all_leaks", []) if isinstance(score, dict) else []
+    score_top_leaks = score.get("top_3_leaks", []) if isinstance(score, dict) else []
     payload: Dict[str, Any] = {
-        "raw": score.get("raw", {}) or {},
-        "all_leaks": score.get("all_leaks", []) or [],
-        "top_3_leaks": score.get("top_3_leaks", []) or [],
+        "raw": score_raw or {},
+        "all_leaks": score_all_leaks or [],
+        "top_3_leaks": score_top_leaks or [],
         "stats_events": my_stats_ds,
         "opp_stats_events": opp_stats_ds,
         "unit_timeline": unit_timeline,
         "player_stats": _build_player_stats_summary(
-            ctx, my_macro, score.get("raw", {}) or {},
+            ctx, my_macro, score_raw or {},
         ),
     }
     derived: Optional[float] = None
