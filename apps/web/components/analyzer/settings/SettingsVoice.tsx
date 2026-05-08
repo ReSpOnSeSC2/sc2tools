@@ -15,30 +15,55 @@ import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
 import { usePublishDirty } from "./SettingsContext";
 
+/**
+ * Voice prefs persisted under ``preferences.voice``. Schema parity
+ * with `data/config.schema.json` (`config.voice`):
+ *   enabled         ↔ enabled
+ *   volume          ↔ volume
+ *   rate            ↔ rate
+ *   pitch           ↔ pitch
+ *   delayMs         ↔ delay_ms (canonicalised to camelCase here)
+ *   voice           ↔ preferred_voice
+ *   events.scouting — web addition; legacy SPA always spoke the
+ *                     scouting card.
+ */
 type VoicePrefs = {
   enabled: boolean;
   voice?: string;
   rate?: number;
   pitch?: number;
-  events?: { matchStart?: boolean; matchEnd?: boolean; cheese?: boolean };
+  volume?: number;
+  delayMs?: number;
+  events?: {
+    matchStart?: boolean;
+    matchEnd?: boolean;
+    cheese?: boolean;
+    scouting?: boolean;
+  };
 };
 
 const DEFAULT_PREFS: VoicePrefs = {
-  enabled: false,
+  enabled: true,
   rate: 1,
   pitch: 1,
-  events: {},
+  volume: 1,
+  delayMs: 300,
+  events: { scouting: true },
 };
 
-const EVENT_KEYS = ["matchStart", "matchEnd", "cheese"] as const;
+const EVENT_KEYS = ["scouting", "matchStart", "matchEnd", "cheese"] as const;
 const EVENT_LABELS: Record<(typeof EVENT_KEYS)[number], string> = {
+  scouting: "Scouting report (pre-game)",
   matchStart: "Match start",
   matchEnd: "Match end",
   cheese: "Cheese detected",
 };
-
-const TEST_PHRASE =
-  "Opponent detected. Protoss player TestUser, ranked Diamond, last matchup three wins to one.";
+const EVENT_DEFAULTS: Record<(typeof EVENT_KEYS)[number], boolean> = {
+  scouting: true,
+  matchStart: false,
+  matchEnd: false,
+  cheese: false,
+};
 
 export function SettingsVoice() {
   const { getToken } = useAuth();
@@ -58,17 +83,18 @@ export function SettingsVoice() {
 
   usePublishDirty("voice", dirty);
 
-  // Populate browser voice list
+  // Populate browser voice list. Chromium loads voices async — we have
+  // to listen for ``voiceschanged`` and re-read, otherwise the dropdown
+  // is empty on first paint.
   useEffect(() => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
-    const load = () => {
-      setVoices(window.speechSynthesis.getVoices());
-    };
+    const synth = window.speechSynthesis;
+    const load = () => setVoices(synth.getVoices());
     load();
-    window.speechSynthesis.addEventListener("voiceschanged", load);
+    synth.addEventListener("voiceschanged", load);
     return () => {
-      window.speechSynthesis.removeEventListener("voiceschanged", load);
-      window.speechSynthesis.cancel();
+      synth.removeEventListener("voiceschanged", load);
+      synth.cancel();
     };
   }, []);
 
@@ -105,18 +131,35 @@ export function SettingsVoice() {
       setPreviewing(false);
       return;
     }
-    const utt = new SpeechSynthesisUtterance(TEST_PHRASE);
-    utt.rate = draft.rate ?? 1;
-    utt.pitch = draft.pitch ?? 1;
+    // Mirror the live readout phrasing so the streamer hears exactly
+    // what the overlay will say. Keeps Settings → Test honest.
+    const utt = new SpeechSynthesisUtterance(buildPreviewPhrase());
+    utt.rate = clamp(draft.rate ?? 1, 0.5, 2);
+    utt.pitch = clamp(draft.pitch ?? 1, 0, 2);
+    utt.volume = clamp(draft.volume ?? 1, 0, 1);
     if (draft.voice) {
       const match = voices.find((v) => v.name === draft.voice);
-      if (match) utt.voice = match;
+      if (match) {
+        utt.voice = match;
+        utt.lang = match.lang || "en-US";
+      }
     }
     utt.onend = () => setPreviewing(false);
-    utt.onerror = () => setPreviewing(false);
+    utt.onerror = (ev) => {
+      setPreviewing(false);
+      const code = (ev as SpeechSynthesisErrorEvent).error;
+      if (code && code !== "interrupted" && code !== "canceled") {
+        toast.error("Voice preview failed", { description: code });
+      }
+    };
     utteranceRef.current = utt;
     setPreviewing(true);
-    window.speechSynthesis.speak(utt);
+    const delay = clamp(draft.delayMs ?? 0, 0, 5000);
+    if (delay > 0) {
+      window.setTimeout(() => window.speechSynthesis.speak(utt), delay);
+    } else {
+      window.speechSynthesis.speak(utt);
+    }
   }
 
   const groupedVoices = useMemo(() => groupVoices(voices), [voices]);
@@ -127,7 +170,7 @@ export function SettingsVoice() {
     <>
       <Section
         title="Voice readout"
-        description="Reads opponent name, race, and matchup record aloud through the OBS overlay's Web Speech API. Useful for streamers with low-vision viewers."
+        description="Reads the scouting report aloud through the OBS overlay's Web Speech API. Browsers require a one-time click to enable speech — the overlay shows a banner the first time."
       >
         <Card>
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-elevated px-3 py-2.5">
@@ -183,6 +226,26 @@ export function SettingsVoice() {
               value={draft.pitch ?? 1}
               onChange={(pitch) => setDraft((d) => ({ ...d, pitch }))}
             />
+            <RangeSlider
+              label="Volume"
+              min={0}
+              max={1}
+              step={0.05}
+              value={draft.volume ?? 1}
+              onChange={(volume) => setDraft((d) => ({ ...d, volume }))}
+            />
+            <RangeSlider
+              label="Delay before speaking"
+              suffix="ms"
+              min={0}
+              max={2000}
+              step={50}
+              value={draft.delayMs ?? 300}
+              decimals={0}
+              onChange={(delayMs) =>
+                setDraft((d) => ({ ...d, delayMs }))
+              }
+            />
             <div className="flex items-end">
               <PreviewButton previewing={previewing} onClick={preview} />
             </div>
@@ -192,7 +255,7 @@ export function SettingsVoice() {
             <legend className="text-caption font-medium uppercase tracking-wider text-text-dim">
               Events to announce
             </legend>
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {EVENT_KEYS.map((k) => (
                 <label
                   key={k}
@@ -200,7 +263,7 @@ export function SettingsVoice() {
                 >
                   <span className="text-caption text-text">{EVENT_LABELS[k]}</span>
                   <Toggle
-                    checked={!!draft.events?.[k]}
+                    checked={readEvent(draft.events?.[k], EVENT_DEFAULTS[k])}
                     onChange={(on) =>
                       setDraft((d) => ({
                         ...d,
@@ -272,6 +335,7 @@ function RangeSlider({
   max,
   step,
   suffix = "",
+  decimals = 1,
   onChange,
 }: {
   label: string;
@@ -280,6 +344,7 @@ function RangeSlider({
   max: number;
   step: number;
   suffix?: string;
+  decimals?: number;
   onChange: (next: number) => void;
 }) {
   return (
@@ -288,7 +353,7 @@ function RangeSlider({
         <span className="flex items-baseline justify-between gap-2">
           <span>{label}</span>
           <span className="font-mono text-caption text-text-muted">
-            {value.toFixed(1)}
+            {value.toFixed(decimals)}
             {suffix}
           </span>
         </span>
@@ -324,5 +389,23 @@ function groupVoices(
         k,
         vs.slice().sort((a, b) => a.name.localeCompare(b.name)),
       ]),
+  );
+}
+
+function readEvent(v: boolean | undefined, dflt: boolean): boolean {
+  return typeof v === "boolean" ? v : dflt;
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  if (!Number.isFinite(n)) return lo;
+  if (n < lo) return lo;
+  if (n > hi) return hi;
+  return n;
+}
+
+function buildPreviewPhrase(): string {
+  return (
+    "Facing TestUser, Protoss. You're 3 and 1 against them. "
+    + "Best answer is 3 Stargate Phoenix, 62 percent win rate."
   );
 }
