@@ -243,15 +243,27 @@ class PulseMmrService {
    * — the fan-out is bounded by the number of regions, not the size of
    * the id list.
    *
+   * When ``opts.preferredRegion`` is supplied, candidates from that
+   * region win over candidates from any other region, regardless of
+   * SC2Pulse's ``lastPlayed`` ordering. This stops a multi-region
+   * profile from pinning to a stale-but-recently-touched team in the
+   * wrong region: the streamer's most recent game tells us where they
+   * actually played, and SC2Pulse's idea of "most recent" can lag or
+   * point at an account the streamer no longer recognises. Within the
+   * preferred region the same lastPlayed-then-rating sort applies.
+   * Falls back to the unfiltered global sort when no candidate exists
+   * in the preferred region.
+   *
    * Returns ``null`` when:
    *   - The list is empty or every entry failed to normalise.
    *   - SC2Pulse returned no teams in any region for any id.
    *   - The remote request failed and there's no usable cache entry.
    *
    * @param {Array<string|null|undefined>|null|undefined} ids
+   * @param {{preferredRegion?: string}} [opts]
    * @returns {Promise<{mmr: number, region: string|null}|null>}
    */
-  async getCurrentMmrForAny(ids) {
+  async getCurrentMmrForAny(ids, opts = {}) {
     if (!Array.isArray(ids) || ids.length === 0) return null;
     /** @type {string[]} */
     const numericIds = [];
@@ -278,16 +290,25 @@ class PulseMmrService {
       }
     }
     if (numericIds.length === 0) return null;
+    const preferredRegion =
+      typeof opts.preferredRegion === "string" && opts.preferredRegion
+        ? opts.preferredRegion.toUpperCase()
+        : null;
     // Cache the joint lookup under a key that's order-insensitive so the
     // same profile resolves the same cache slot regardless of how the
-    // user reordered their chips in Settings.
-    const cacheKey = "any:" + numericIds.slice().sort().join(",");
+    // user reordered their chips in Settings. The preferred-region
+    // hint is part of the key — switching regions mid-day should pick
+    // up a fresh pick without waiting on the 5-minute TTL.
+    const cacheKey =
+      "any:" +
+      numericIds.slice().sort().join(",") +
+      (preferredRegion ? `:pref=${preferredRegion}` : "");
     const now = this.now();
     const cached = this._cache.get(cacheKey);
     if (cached && now - cached.fetchedAt < this.cacheTtlMs) {
       return { mmr: cached.mmr, region: cached.region };
     }
-    const fetched = await this._fetchTeams(numericIds);
+    const fetched = await this._fetchTeams(numericIds, { preferredRegion });
     if (fetched) {
       this._cache.set(cacheKey, { ...fetched, fetchedAt: now });
       return fetched;
@@ -328,9 +349,10 @@ class PulseMmrService {
   /**
    * @private
    * @param {string|string[]} pulseIdOrIds
+   * @param {{preferredRegion?: string|null}} [opts]
    * @returns {Promise<{mmr: number, region: string|null}|null>}
    */
-  async _fetchTeams(pulseIdOrIds) {
+  async _fetchTeams(pulseIdOrIds, opts = {}) {
     if (!this.fetchImpl) return null;
     const ids = Array.isArray(pulseIdOrIds) ? pulseIdOrIds : [pulseIdOrIds];
     if (ids.length === 0) return null;
@@ -366,6 +388,28 @@ class PulseMmrService {
       }
     }
     if (candidates.length === 0) return null;
+    // Region preference: if the caller pinned a region (from the
+    // streamer's most recent game), candidates from that region win
+    // over everything else. The user's last-played region is the
+    // strongest signal of "where they're currently grinding"; SC2Pulse's
+    // ``lastPlayed`` field can lag or point at a stale-but-touched
+    // account on a different ladder. Falls through to the global sort
+    // only when no team exists in the preferred region.
+    const preferredRegion =
+      typeof opts.preferredRegion === "string" && opts.preferredRegion
+        ? opts.preferredRegion.toUpperCase()
+        : null;
+    if (preferredRegion) {
+      const preferred = candidates.filter((c) => c.region === preferredRegion);
+      if (preferred.length > 0) {
+        preferred.sort(
+          (a, b) =>
+            b.lastPlayedMs - a.lastPlayedMs || b.rating - a.rating,
+        );
+        const best = preferred[0];
+        return { mmr: Math.round(best.rating), region: best.region };
+      }
+    }
     // Pick the team played most recently; tie-break on highest rating
     // so a streamer who hasn't queued today still sees their peak.
     candidates.sort(

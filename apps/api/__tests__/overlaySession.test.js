@@ -260,6 +260,105 @@ describe("services/games.todaySession", () => {
     expect(out.region).toBe("NA");
   });
 
+  test("Tier-3 multi-pulse pins to the region of the streamer's most recent game", async () => {
+    // The streamer's most recent replay was on NA (toon handle byte
+    // = "1"). Two of their three Pulse chips happen to resolve teams
+    // on KR/EU that SC2Pulse says were touched more recently — without
+    // a region hint the resolver would pick KR and the overlay would
+    // paint "KR 5377" even though the user is actively playing NA. The
+    // session widget must pass the inferred region through so the
+    // resolver pins to NA whenever a NA team exists.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-na",
+      result: "Victory",
+      date: new Date(),
+      myToonHandle: "1-S2-1-267727", // NA byte
+    });
+    /** @type {Array<{ids: string[], opts: any}>} */
+    const calls = [];
+    const pulseMmr = {
+      getCurrentMmrForAny: jest.fn(async (ids, opts) => {
+        calls.push({ ids: [...ids], opts });
+        return { mmr: 5100, region: "NA" };
+      }),
+    };
+    const svc2 = new GamesService(db, {
+      users: {
+        getProfile: async () => ({
+          pulseIds: ["1-S2-1-267727", "994428", "8970877"],
+        }),
+      },
+      pulseMmr,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(5100);
+    expect(out.region).toBe("NA");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].opts).toEqual({ preferredRegion: "NA" });
+  });
+
+  test("Tier-3 multi-pulse falls back to profile.region when no recent game", async () => {
+    // No myToonHandle on any game (e.g. the agent uploaded a backfill
+    // batch that pre-dates the toon-handle-forwarding fix). Profile.region
+    // is the next-best signal: if the user typed "EU" into Settings,
+    // SC2Pulse should bias to EU.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-old-no-toon",
+      result: "Victory",
+      date: new Date(),
+    });
+    /** @type {any[]} */
+    const calls = [];
+    const pulseMmr = {
+      getCurrentMmrForAny: jest.fn(async (ids, opts) => {
+        calls.push({ ids, opts });
+        return { mmr: 4900, region: "EU" };
+      }),
+    };
+    const svc2 = new GamesService(db, {
+      users: {
+        getProfile: async () => ({
+          pulseIds: ["994428"],
+          region: "EU",
+        }),
+      },
+      pulseMmr,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.region).toBe("EU");
+    expect(calls[0].opts).toEqual({ preferredRegion: "EU" });
+  });
+
+  test("Tier-3 multi-pulse omits preferredRegion when nothing useful is known", async () => {
+    // No myToonHandle, no profile.region. The resolver call must not
+    // carry a preferredRegion at all (passing ``undefined`` through
+    // would still match the falsy check inside the service, but the
+    // simpler contract here is "no opts arg" so the cache key stays
+    // stable for unhinted queries).
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-bare",
+      result: "Victory",
+      date: new Date(),
+    });
+    /** @type {any[]} */
+    const calls = [];
+    const pulseMmr = {
+      getCurrentMmrForAny: jest.fn(async (ids, opts) => {
+        calls.push({ ids, opts });
+        return { mmr: 5000, region: "NA" };
+      }),
+    };
+    const svc2 = new GamesService(db, {
+      users: { getProfile: async () => ({ pulseIds: ["994428"] }) },
+      pulseMmr,
+    });
+    await svc2.todaySession("u1", "UTC");
+    expect(calls[0].opts).toBeUndefined();
+  });
+
   test("Tier-3 multi-pulse fallback batches every saved id into one resolve", async () => {
     // The streamer has three saved chips on their profile (one toon and
     // two numeric Pulse IDs). The session widget must hand the entire

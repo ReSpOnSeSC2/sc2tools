@@ -465,6 +465,142 @@ describe("services/pulseMmr", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  test("getCurrentMmrForAny prefers the caller-supplied region over SC2Pulse's lastPlayed sort", async () => {
+    // The streamer's most recent replay was on NA, but their SC2Pulse
+    // chips include a numeric id whose KR team was touched yesterday.
+    // Without a preferred-region hint, SC2Pulse's globally-most-recent
+    // sort picks the KR team and the overlay paints "KR 5377" — wrong.
+    // With ``preferredRegion: "NA"`` the resolver pins to NA whenever a
+    // team exists there, regardless of the KR team being more recent
+    // by SC2Pulse's lastPlayed clock.
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([
+          { battlenetId: 60, region: "US" },
+          { battlenetId: 61, region: "KR" },
+        ]);
+      }
+      if (url.includes("/group/team")) {
+        if (url.includes("season=60")) {
+          // NA team — slightly older lastPlayed.
+          return jsonResponse([
+            { rating: 5100, lastPlayed: "2026-05-07T12:00:00Z" },
+          ]);
+        }
+        // KR team — more recent globally.
+        return jsonResponse([
+          { rating: 5377, lastPlayed: "2026-05-08T08:00:00Z" },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrForAny(
+      ["994428", "8970877"],
+      { preferredRegion: "NA" },
+    );
+    expect(out?.mmr).toBe(5100);
+    expect(out?.region).toBe("NA");
+  });
+
+  test("getCurrentMmrForAny falls back to global sort when the preferred region has no team", async () => {
+    // The streamer asked for NA but their chips only resolve teams on
+    // KR. We must still return SOMETHING — picking the global most-
+    // recent rather than going blank — so the overlay's MMR row stays
+    // populated even when the preferred-region hint misses.
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([
+          { battlenetId: 60, region: "US" },
+          { battlenetId: 61, region: "KR" },
+        ]);
+      }
+      if (url.includes("/group/team")) {
+        if (url.includes("season=60")) {
+          return jsonResponse([]); // no NA team
+        }
+        return jsonResponse([
+          { rating: 5377, lastPlayed: "2026-05-08T08:00:00Z" },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrForAny(
+      ["8970877"],
+      { preferredRegion: "NA" },
+    );
+    expect(out?.mmr).toBe(5377);
+    expect(out?.region).toBe("KR");
+  });
+
+  test("getCurrentMmrForAny picks most-recently-played within the preferred region", async () => {
+    // Multiple teams in the preferred region — pick the freshest one
+    // (e.g. a streamer who has both a 2v2 archive team and an active
+    // 1v1 team on NA shouldn't see the stale archive bubble up just
+    // because it's first in the response array).
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      if (url.includes("/group/team")) {
+        return jsonResponse([
+          { rating: 4800, lastPlayed: "2026-04-01T10:00:00Z" }, // stale
+          { rating: 5200, lastPlayed: "2026-05-08T10:00:00Z" }, // current
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrForAny(
+      ["994428"],
+      { preferredRegion: "NA" },
+    );
+    expect(out?.mmr).toBe(5200);
+    expect(out?.region).toBe("NA");
+  });
+
+  test("getCurrentMmrForAny preferred-region hint is part of the cache key", async () => {
+    // A streamer who actually flips region mid-day shouldn't keep
+    // seeing the prior region's MMR until the 5-minute TTL elapses.
+    // Different ``preferredRegion`` values must resolve to different
+    // cache slots so a fresh fetch happens on the flip.
+    let teamCalls = 0;
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([
+          { battlenetId: 60, region: "US" },
+          { battlenetId: 61, region: "EU" },
+        ]);
+      }
+      if (url.includes("/group/team")) {
+        teamCalls += 1;
+        if (url.includes("season=60")) {
+          return jsonResponse([
+            { rating: 5100, lastPlayed: "2026-05-07T12:00:00Z" },
+          ]);
+        }
+        return jsonResponse([
+          { rating: 5300, lastPlayed: "2026-05-08T08:00:00Z" },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl, cacheTtlMs: 60_000 });
+    const na = await svc.getCurrentMmrForAny(["994428"], {
+      preferredRegion: "NA",
+    });
+    const eu = await svc.getCurrentMmrForAny(["994428"], {
+      preferredRegion: "EU",
+    });
+    expect(na?.region).toBe("NA");
+    expect(eu?.region).toBe("EU");
+    // Two distinct cache slots → two team-call rounds (each round =
+    // 2 region probes). The first fill missed the cache; the second
+    // fill missed too because the cache key differs.
+    expect(teamCalls).toBe(4);
+  });
+
   test("getCurrentMmrForAny caches the joint lookup order-insensitively", async () => {
     let teamCalls = 0;
     const fetchImpl = jest.fn(async (url) => {
