@@ -52,6 +52,7 @@ from .replay_finder import (
 )
 from .replay_pipeline import AnalyzerImportError, parse_replay_for_cloud
 from .state import AgentState
+from .sync_filter import SyncFilter
 from .uploader.queue import UploadJob, UploadQueue
 
 log = logging.getLogger(__name__)
@@ -254,16 +255,43 @@ class ReplayWatcher:
             self._roots = self._discover_roots()
             if not self._roots:
                 return
+        # Resolve the user's date-range filter once per sweep so the
+        # mtime pre-check is a single object lookup per file rather
+        # than re-parsing the preset string for every replay during a
+        # 12k-replay backfill.
+        sync_filter = self._sync_filter()
         for root in self._roots:
-            for path in _walk_replays(root):
+            for path, mtime in _walk_replays(root):
                 key = str(path)
                 if key in self._state.uploaded:
+                    continue
+                if not sync_filter.mtime_in_range(mtime):
+                    # Pre-filter: file mtime is well outside the user's
+                    # window. Mark "filtered" so the next sweep skips
+                    # it without another stat call. The runner clears
+                    # these entries when the user changes the filter.
+                    self._state.uploaded[key] = "filtered"
                     continue
                 with self._inflight_lock:
                     if key in self._inflight:
                         continue
                     self._inflight.add(key)
                 self._submit_parse(path)
+
+    def _sync_filter(self) -> SyncFilter:
+        """Resolve the user's chosen date-range filter from state.
+
+        State carries free-text fields (``sync_filter_preset`` etc.)
+        because the GUI's combo box hands us a string. SyncFilter
+        validates and falls back to ``all`` on any malformed value so
+        a corrupt state file doesn't silently hide the streamer's
+        replays.
+        """
+        return SyncFilter.from_state(
+            preset=getattr(self._state, "sync_filter_preset", None),
+            since_iso=getattr(self._state, "sync_filter_since", None),
+            until_iso=getattr(self._state, "sync_filter_until", None),
+        )
 
     def _submit_parse(self, path: Path) -> None:
         """Hand a replay to the executor and wire up result handling.
@@ -311,6 +339,16 @@ class ReplayWatcher:
         path = Path(path_str)
         try:
             if kind == "game":
+                # Post-parse date-range check. The mtime pre-filter is
+                # cheap but lossy (file copy / OneDrive sync stamps the
+                # mtime, not the play time). The replay's actual date
+                # is authoritative — re-evaluate now that we have it.
+                sync_filter = self._sync_filter()
+                if not sync_filter.replay_in_range(
+                    getattr(payload, "date_iso", None),
+                ):
+                    self._state.uploaded[path_str] = "filtered"
+                    return
                 self._upload.submit(UploadJob(file_path=path, game=payload))
                 if self._analyzer_unavailable:
                     log.info("analyzer_recovered")
@@ -387,6 +425,17 @@ class ReplayWatcher:
                 # don't re-attempt every sweep.
                 self._state.uploaded[str(path)] = "skipped"
                 return
+            # Post-parse date-range check (authoritative; the mtime
+            # pre-filter only catches the obvious cases). Marking
+            # "filtered" — distinct from "skipped" — lets the runner
+            # clear just these entries when the user widens the
+            # filter, without re-parsing AI/corrupt files.
+            sync_filter = self._sync_filter()
+            if not sync_filter.replay_in_range(
+                getattr(game, "date_iso", None),
+            ):
+                self._state.uploaded[str(path)] = "filtered"
+                return
             self._upload.submit(UploadJob(file_path=path, game=game))
         finally:
             with self._inflight_lock:
@@ -421,8 +470,9 @@ class _Handler(FileSystemEventHandler):
         self._parent.on_replay_created(path)
 
 
-def _walk_replays(root: Path) -> Iterable[Path]:
-    """Yield every .SC2Replay under ``root``, newest first.
+def _walk_replays(root: Path) -> Iterable[tuple[Path, float]]:
+    """Yield ``(path, mtime_unix)`` for every .SC2Replay under ``root``,
+    newest first.
 
     Sorting by mtime-descending matters for UX during a backfill.
     A user with 12,000+ replays watching the dashboard sees their
@@ -433,6 +483,10 @@ def _walk_replays(root: Path) -> Iterable[Path]:
     sweep grinds through every "10000 Feet LE (N).SC2Replay" before
     touching any "Acid Plant" / "Old Republic" / etc., and the
     user (correctly) thinks the agent is map-filtering.
+
+    Yielding the mtime alongside the path saves the watcher's
+    date-range pre-filter a redundant ``stat()`` call per file —
+    over 12k replays that's ~1 s of saved I/O per sweep.
 
     We materialise the full list once per sweep — fine for tens of
     thousands of files (each ``Path`` is ~80 bytes, plus one stat
@@ -457,8 +511,8 @@ def _walk_replays(root: Path) -> Iterable[Path]:
     except OSError:
         return
     candidates.sort(key=lambda pair: pair[0], reverse=True)
-    for _, p in candidates:
-        yield p
+    for mtime, p in candidates:
+        yield (p, mtime)
 
 
 def _wait_for_file_ready(path: Path, timeout_sec: float) -> bool:

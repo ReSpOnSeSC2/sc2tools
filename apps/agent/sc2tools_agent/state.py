@@ -115,6 +115,31 @@ class AgentState:
     cloud alongside ``last_known_mmr`` so the overlay's region label
     stays accurate even when SC2Pulse is unreachable."""
 
+    sync_filter_preset: Optional[str] = None
+    """Date-range filter the watcher applies before uploading a parsed
+    replay. Mirrors the website's date presets so the agent and web
+    speak the same vocabulary:
+
+      * ``None`` / ``"all"``   — no filter (default)
+      * ``"current_season"``    — replays played this ladder season
+      * ``"season:67"``         — replays from a specific season number
+      * ``"custom"``            — bounded by ``sync_filter_since`` /
+                                  ``sync_filter_until``
+
+    Without a filter set, the agent uploads every parseable replay it
+    finds. With a filter, replays outside the window are marked
+    ``"filtered"`` in ``state.uploaded`` so future sweeps don't
+    re-parse them. The runner clears those entries when the filter
+    changes so the next sweep re-evaluates against the new window."""
+
+    sync_filter_since: Optional[str] = None
+    """Lower bound for ``sync_filter_preset="custom"`` (YYYY-MM-DD or
+    full ISO). Ignored for non-custom presets."""
+
+    sync_filter_until: Optional[str] = None
+    """Upper bound for ``sync_filter_preset="custom"`` (YYYY-MM-DD or
+    full ISO). Ignored for non-custom presets."""
+
     @property
     def is_paired(self) -> bool:
         return bool(self.device_token)
@@ -172,6 +197,9 @@ def load_state(state_dir: Path) -> AgentState:
         last_known_mmr=_coerce_mmr(raw.get("last_known_mmr")),
         last_known_mmr_date_iso=_coerce_str(raw.get("last_known_mmr_date_iso")),
         last_known_mmr_region=_coerce_str(raw.get("last_known_mmr_region")),
+        sync_filter_preset=_coerce_str(raw.get("sync_filter_preset")),
+        sync_filter_since=_coerce_str(raw.get("sync_filter_since")),
+        sync_filter_until=_coerce_str(raw.get("sync_filter_until")),
     )
 
 

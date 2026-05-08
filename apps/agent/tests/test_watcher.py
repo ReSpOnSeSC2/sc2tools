@@ -45,17 +45,22 @@ def test_walk_replays_yields_newest_first(tmp_path: Path) -> None:
     _touch(new_a, now - 60)
     _touch(new_b, now - 10)
 
-    out: List[Path] = list(_walk_replays(tmp_path))
+    out = list(_walk_replays(tmp_path))
     # Newest first: Old Republic, Acid Plant, then the year-old set.
-    assert out[0].name == "Old Republic LE (3).SC2Replay"
-    assert out[1].name == "Acid Plant LE (10).SC2Replay"
+    assert out[0][0].name == "Old Republic LE (3).SC2Replay"
+    assert out[1][0].name == "Acid Plant LE (10).SC2Replay"
     # The three "10000 Feet" entries trail at the back.
-    tail_names = {p.name for p in out[-3:]}
+    tail_names = {p.name for p, _mt in out[-3:]}
     assert tail_names == {
         "10000 Feet LE (1).SC2Replay",
         "10000 Feet LE (2).SC2Replay",
         "10000 Feet LE (3).SC2Replay",
     }
+    # Each yielded entry carries the mtime alongside the path so the
+    # date-range pre-filter doesn't pay a redundant stat() call.
+    for path, mtime in out:
+        assert isinstance(mtime, float)
+        assert mtime > 0
 
 
 def test_walk_replays_ignores_non_replay_files(tmp_path: Path) -> None:
@@ -68,7 +73,7 @@ def test_walk_replays_ignores_non_replay_files(tmp_path: Path) -> None:
     for p in (keep, drop_txt, drop_bak):
         p.write_bytes(b"")
 
-    out = [p.name for p in _walk_replays(tmp_path)]
+    out = [p.name for p, _mtime in _walk_replays(tmp_path)]
     assert out == ["X.SC2Replay"]
 
 
@@ -87,4 +92,7 @@ def test_walk_replays_recurses_into_subdirs(tmp_path: Path) -> None:
     _touch(p, time.time())
 
     out = list(_walk_replays(tmp_path))
-    assert out == [p]
+    assert len(out) == 1
+    yielded_path, yielded_mtime = out[0]
+    assert yielded_path == p
+    assert isinstance(yielded_mtime, float)

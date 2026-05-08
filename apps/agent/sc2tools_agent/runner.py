@@ -380,6 +380,12 @@ def _run_with_gui(
         # cfg.parse_concurrency already incorporates env vars + state
         # via _bootstrap, so it's the single source of truth.
         parse_concurrency=cfg.parse_concurrency,
+        # Date-range filter — surface what the watcher will gate on so
+        # the user sees their previously-saved filter immediately on
+        # open. None / "all" means "no filter".
+        sync_filter_preset=state.sync_filter_preset,
+        sync_filter_since=state.sync_filter_since,
+        sync_filter_until=state.sync_filter_until,
     )
 
     gui = GuiUI(
@@ -717,6 +723,31 @@ def _handle_save_settings(
         # before AgentConfig reads it.
         n = int(payload.parse_concurrency)
         state.parse_concurrency_override = max(1, min(32, n))
+    filter_changed = False
+    if payload.sync_filter_preset is not None:
+        # Date-range filter. The watcher resolves this fresh every
+        # sweep so a save takes effect on the next sweep cycle —
+        # plus we trigger an immediate resync below if the value
+        # actually changed (so a streamer who tightens the filter
+        # doesn't keep seeing yesterday's out-of-window replays
+        # parked in `Recent uploads` until the next sweep tick).
+        new_preset = payload.sync_filter_preset.strip() or None
+        new_since = (payload.sync_filter_since or "").strip() or None
+        new_until = (payload.sync_filter_until or "").strip() or None
+        # Treat "all" the same as None — the filter is fully open.
+        if new_preset == "all":
+            new_preset = None
+            new_since = None
+            new_until = None
+        if (
+            new_preset != state.sync_filter_preset
+            or new_since != state.sync_filter_since
+            or new_until != state.sync_filter_until
+        ):
+            filter_changed = True
+            state.sync_filter_preset = new_preset
+            state.sync_filter_since = new_since
+            state.sync_filter_until = new_until
     if payload.replay_folders is not None:
         # The Settings tab owns the full list — replace, don't merge.
         cleaned: list[str] = []
@@ -756,13 +787,37 @@ def _handle_save_settings(
         if cell.upload:
             cell.upload.request_full_resync()
 
+    if filter_changed:
+        # Drop every "filtered" entry from state.uploaded so the next
+        # sweep re-evaluates them against the new window. We DON'T
+        # touch entries marked "skipped" / "rejected" / a timestamp:
+        # those represent durable parse / upload outcomes that the
+        # filter change has no bearing on. Without this, a streamer
+        # who widens the filter would keep seeing previously-filtered
+        # replays sit in state.uploaded forever and never get
+        # uploaded.
+        cleared = 0
+        for path_key in list(state.uploaded.keys()):
+            if state.uploaded.get(path_key) == "filtered":
+                del state.uploaded[path_key]
+                cleared += 1
+        if cleared > 0 and cell.upload:
+            cell.upload.request_full_resync()
+        log.info(
+            "sync_filter_changed preset=%s since=%s until=%s cleared=%d",
+            state.sync_filter_preset, state.sync_filter_since,
+            state.sync_filter_until, cleared,
+        )
+
     log.info(
-        "settings_saved api_base=%s log_level=%s autostart=%s minimised=%s folders=%d",
+        "settings_saved api_base=%s log_level=%s autostart=%s minimised=%s "
+        "folders=%d filter=%s",
         bool(state.api_base_override),
         state.log_level_override,
         state.autostart_enabled,
         state.start_minimized,
         len(state.replay_folders_override),
+        state.sync_filter_preset or "all",
     )
 
 

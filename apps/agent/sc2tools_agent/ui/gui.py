@@ -341,6 +341,9 @@ class SettingsPayload:
         "start_minimized",
         "player_handle",
         "parse_concurrency",
+        "sync_filter_preset",
+        "sync_filter_since",
+        "sync_filter_until",
     )
 
     def __init__(
@@ -354,6 +357,9 @@ class SettingsPayload:
         start_minimized: Optional[bool] = None,
         player_handle: Optional[str] = None,
         parse_concurrency: Optional[int] = None,
+        sync_filter_preset: Optional[str] = None,
+        sync_filter_since: Optional[str] = None,
+        sync_filter_until: Optional[str] = None,
     ) -> None:
         self.api_base = api_base
         self.log_level = log_level
@@ -374,6 +380,13 @@ class SettingsPayload:
         # How many parse threads the watcher's ThreadPoolExecutor runs.
         # ``None`` means "no change"; the runner's default is 4.
         self.parse_concurrency = parse_concurrency
+        # Date-range filter for the watcher. ``None`` means "no change";
+        # ``"all"`` (or any unrecognised value) means "no filter". See
+        # ``apps/agent/sc2tools_agent/sync_filter.py`` for the preset
+        # vocabulary — same ids the website uses on its filter bar.
+        self.sync_filter_preset = sync_filter_preset
+        self.sync_filter_since = sync_filter_since
+        self.sync_filter_until = sync_filter_until
 
 
 # ---------------------------------------------------------------------
@@ -1092,6 +1105,71 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             concurrency_h.addWidget(self._concurrency_value_label)
             form.addRow("Parse concurrency", concurrency_block)
 
+            # Date-range sync filter — mirrors the website's filter bar
+            # (apps/web/lib/datePresets.ts). Restricts which replays the
+            # watcher uploads. New users on PCs with thousands of
+            # historical replays use this to scope the initial backfill
+            # to "Current season" or "Custom range" so they don't grind
+            # through years of old games to hydrate today's stats.
+            from .. import sync_filter as sf  # local import keeps tests cheap
+
+            filter_block = QtWidgets.QWidget()
+            filter_v = QtWidgets.QVBoxLayout(filter_block)
+            filter_v.setContentsMargins(0, 0, 0, 0)
+            filter_v.setSpacing(6)
+
+            self._filter_combo = QtWidgets.QComboBox()
+            cur = sf.current_season()
+            # Build the menu with the same vocabulary the website uses.
+            # Per-season entries cover the last six seasons — beyond
+            # that, "Custom range" is the right escape hatch.
+            self._filter_combo.addItem("All time", "all")
+            self._filter_combo.addItem(
+                f"Current season (Season {cur})", "current_season",
+            )
+            for n in range(cur, max(cur - 6, 0), -1):
+                self._filter_combo.addItem(f"Season {n}", f"season:{n}")
+            self._filter_combo.addItem("Custom date range…", "custom")
+            self._filter_combo.setToolTip(
+                "Restrict which replays get uploaded. The watcher still "
+                "watches every folder you've added — replays played "
+                "outside the chosen window are skipped, not deleted. "
+                "Existing cloud uploads are not removed when you change "
+                "this setting; the agent runs a fresh sweep on save."
+            )
+            filter_v.addWidget(self._filter_combo)
+
+            # Custom range row — visible only when "Custom" is picked.
+            self._filter_custom_row = QtWidgets.QWidget()
+            custom_h = QtWidgets.QHBoxLayout(self._filter_custom_row)
+            custom_h.setContentsMargins(0, 0, 0, 0)
+            custom_h.setSpacing(8)
+            custom_h.addWidget(QtWidgets.QLabel("From"))
+            self._filter_since = QtWidgets.QDateEdit()
+            self._filter_since.setCalendarPopup(True)
+            self._filter_since.setDisplayFormat("yyyy-MM-dd")
+            self._filter_since.setDate(QtCore.QDate.currentDate().addMonths(-1))
+            custom_h.addWidget(self._filter_since)
+            custom_h.addWidget(QtWidgets.QLabel("to"))
+            self._filter_until = QtWidgets.QDateEdit()
+            self._filter_until.setCalendarPopup(True)
+            self._filter_until.setDisplayFormat("yyyy-MM-dd")
+            self._filter_until.setDate(QtCore.QDate.currentDate())
+            custom_h.addWidget(self._filter_until)
+            custom_h.addStretch(1)
+            filter_v.addWidget(self._filter_custom_row)
+
+            def _toggle_custom_visibility() -> None:
+                is_custom = self._filter_combo.currentData() == "custom"
+                self._filter_custom_row.setVisible(is_custom)
+
+            self._filter_combo.currentIndexChanged.connect(
+                lambda _idx: _toggle_custom_visibility(),
+            )
+            _toggle_custom_visibility()
+
+            form.addRow("Sync date range", filter_block)
+
             self._log_combo = QtWidgets.QComboBox()
             self._log_combo.addItems(["INFO", "DEBUG", "WARNING", "ERROR"])
             form.addRow("Log level", self._log_combo)
@@ -1325,6 +1403,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 raw = self._folder_list.item(i).text().strip()
                 if raw:
                     folders.append(Path(raw))
+            preset = self._filter_combo.currentData() or "all"
+            since_iso: Optional[str] = None
+            until_iso: Optional[str] = None
+            if preset == "custom":
+                since_iso = self._filter_since.date().toString("yyyy-MM-dd")
+                until_iso = self._filter_until.date().toString("yyyy-MM-dd")
             payload = SettingsPayload(
                 api_base=self._api_input.text().strip() or None,
                 log_level=self._log_combo.currentText(),
@@ -1334,6 +1418,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 start_minimized=self._minimized_check.isChecked(),
                 player_handle=self._handle_input.text().strip(),
                 parse_concurrency=int(self._concurrency_slider.value()),
+                sync_filter_preset=preset,
+                sync_filter_since=since_iso,
+                sync_filter_until=until_iso,
             )
             try:
                 ui._on_save_settings(payload)
@@ -1663,6 +1750,30 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._minimized_check.setChecked(
                 bool(initial.start_minimized),
             )
+            # Date-range filter — match the saved preset id back to the
+            # combo entry. Unknown values silently fall through to "All
+            # time" (the same fallback SyncFilter applies on the agent
+            # side), so a state file from a newer agent build that has
+            # presets we don't know about doesn't crash the form.
+            preset = initial.sync_filter_preset or "all"
+            for idx in range(self._filter_combo.count()):
+                if self._filter_combo.itemData(idx) == preset:
+                    self._filter_combo.setCurrentIndex(idx)
+                    break
+            else:
+                self._filter_combo.setCurrentIndex(0)
+            if initial.sync_filter_since:
+                qd = QtCore.QDate.fromString(
+                    initial.sync_filter_since[:10], "yyyy-MM-dd",
+                )
+                if qd.isValid():
+                    self._filter_since.setDate(qd)
+            if initial.sync_filter_until:
+                qd = QtCore.QDate.fromString(
+                    initial.sync_filter_until[:10], "yyyy-MM-dd",
+                )
+                if qd.isValid():
+                    self._filter_until.setDate(qd)
 
         # ---- log tail ----
 
