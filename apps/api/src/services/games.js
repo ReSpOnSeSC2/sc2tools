@@ -177,6 +177,45 @@ class GamesService {
   }
 
   /**
+   * Distinct ``myToonHandle`` values across every game the user has
+   * uploaded — i.e. every SC2 ladder identity the agent has seen them
+   * play on. Used by the Settings → Profile UI to surface "auto-
+   * detected" pulse IDs the user can one-click add to their profile,
+   * and by the games-ingest path to backfill ``users.pulseIds``
+   * automatically.
+   *
+   * Sorted by most-recent-use first so the streamer's currently-active
+   * ladder identity is at the top of the suggestions list. Capped at
+   * ``limit`` (default 20) to match the user-doc array bound.
+   *
+   * @param {string} userId
+   * @param {number} [limit=20]
+   * @returns {Promise<string[]>}
+   */
+  async distinctMyToonHandles(userId, limit = 20) {
+    const pipeline = [
+      {
+        $match: {
+          userId,
+          myToonHandle: { $exists: true, $type: "string", $ne: "" },
+        },
+      },
+      {
+        $group: {
+          _id: "$myToonHandle",
+          lastSeen: { $max: "$date" },
+        },
+      },
+      { $sort: { lastSeen: -1 } },
+      { $limit: Math.max(1, Math.min(limit, 50)) },
+    ];
+    const rows = await this.db.games.aggregate(pipeline).toArray();
+    return rows
+      .map((r) => (typeof r._id === "string" ? r._id.trim() : ""))
+      .filter((s) => s.length > 0);
+  }
+
+  /**
    * Today's session aggregate — wins, losses, total game count, and an
    * MMR delta when the agent has populated ``myMmr`` on the game rows.
    *

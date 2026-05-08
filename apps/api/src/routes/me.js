@@ -94,11 +94,72 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const profile = await deps.users.getProfile(auth.userId);
-      res.json(profile);
+      // Decorate the response with auto-detected pulse IDs (the user's
+      // own toon handles, derived from the games they've already
+      // uploaded). The Settings UI renders these as one-click "add"
+      // suggestions so the streamer doesn't have to copy/paste handles
+      // by hand. Pure read-only — no DB write happens here; the actual
+      // backfill into ``users.pulseIds`` runs on the games ingest
+      // path and on demand via POST /v1/me/profile/pulse-ids/detect.
+      /** @type {string[]} */
+      let detectedPulseIds = [];
+      if (deps.games && typeof deps.games.distinctMyToonHandles === "function") {
+        try {
+          detectedPulseIds = await deps.games.distinctMyToonHandles(auth.userId);
+        } catch {
+          // Detection is decorative — a games-collection hiccup must
+          // never block the profile read.
+        }
+      }
+      // Fold out the IDs the user already has so the SPA can render
+      // detected/added states without a client-side diff.
+      const known = new Set(
+        Array.isArray(profile.pulseIds) ? profile.pulseIds : [],
+      );
+      const detectedNew = detectedPulseIds.filter((id) => !known.has(id));
+      res.json({ ...profile, detectedPulseIds: detectedNew });
     } catch (err) {
       next(err);
     }
   });
+
+  /**
+   * One-shot endpoint: copy every auto-detected pulse ID (distinct
+   * ``myToonHandle`` from the user's uploaded games) into the user's
+   * stored ``pulseIds`` array, deduped against what's already there.
+   * Returns the resulting profile.
+   *
+   * Used by the Settings UI's "Add all detected" button so the user
+   * can populate their list without typing.
+   */
+  router.post(
+    "/me/profile/pulse-ids/detect",
+    deps.auth,
+    async (req, res, next) => {
+      try {
+        const auth = req.auth;
+        if (!auth) throw new Error("auth_required");
+        if (!deps.games || typeof deps.games.distinctMyToonHandles !== "function") {
+          res.json(await deps.users.getProfile(auth.userId));
+          return;
+        }
+        const detected = await deps.games.distinctMyToonHandles(auth.userId);
+        let added = 0;
+        for (const id of detected) {
+          // ``addPulseId`` is idempotent and bound-checked so a doc
+          // with the array already at the cap silently no-ops. The
+          // sequential await is fine here because ``detected`` is
+          // capped at 20 and each call is a single Mongo round trip.
+          const wrote = await deps.users.addPulseId(auth.userId, id);
+          if (wrote) added += 1;
+        }
+        const profile = await deps.users.getProfile(auth.userId);
+        res.json({ ...profile, added });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   router.put("/me/profile", deps.auth, async (req, res, next) => {
     try {

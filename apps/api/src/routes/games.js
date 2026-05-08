@@ -20,6 +20,7 @@ const { validateGameRecord } = require("../validation/gameRecord");
  * @param {{
  *   games: import('../services/types').GamesService,
  *   opponents: import('../services/types').OpponentsService,
+ *   users?: { addPulseId: (userId: string, pulseId: string) => Promise<boolean> },
  *   customBuilds?: import('../services/types').CustomBuildsService,
  *   overlayLive?: import('../services/overlayLive').OverlayLiveService,
  *   overlayTokens?: import('../services/types').OverlayTokensService,
@@ -30,6 +31,15 @@ const { validateGameRecord } = require("../validation/gameRecord");
 function buildGamesRouter(deps) {
   const router = express.Router();
   router.use(deps.auth);
+  // Within a single batch the same myToonHandle will repeat for every
+  // game; track which ones we've already attempted to merge so a
+  // 200-replay Resync doesn't generate 200 ``users.findOne`` round
+  // trips for one toon. Reset per request.
+  /** @type {(req: import('express').Request) => Set<string>} */
+  const handlesSeenInRequest = (req) => {
+    if (!req._mergedToonHandles) req._mergedToonHandles = new Set();
+    return req._mergedToonHandles;
+  };
 
   router.get("/games", async (req, res, next) => {
     try {
@@ -165,6 +175,35 @@ function buildGamesRouter(deps) {
               leagueId: game.opponent.leagueId,
               playedAt: new Date(game.date),
             });
+          }
+        }
+        // Auto-detect: backfill the user's own toon handle into their
+        // ``pulseIds`` array. The agent forwards ``myToonHandle`` on
+        // every game from v0.5.x onward; before this hook the streamer
+        // had to manually paste their toon handle into Settings →
+        // Profile for the session widget's SC2Pulse fallback to work.
+        // Now we just copy the handle the moment we see it. Fail-soft:
+        // a write failure here must never reject the game ingest.
+        if (
+          deps.users &&
+          typeof deps.users.addPulseId === "function" &&
+          typeof game.myToonHandle === "string" &&
+          game.myToonHandle.trim()
+        ) {
+          const handle = game.myToonHandle.trim();
+          const seen = handlesSeenInRequest(req);
+          if (!seen.has(handle)) {
+            seen.add(handle);
+            try {
+              await deps.users.addPulseId(userId, handle);
+            } catch (err) {
+              if (req.log) {
+                req.log.warn(
+                  { err, userId, handle },
+                  "ingest_pulse_id_merge_failed",
+                );
+              }
+            }
           }
         }
         // Override the agent's built-in classifier when the user has a

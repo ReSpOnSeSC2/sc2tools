@@ -18,11 +18,25 @@ const PROFILE_SCHEMA = {
       type: ["string", "null"],
       maxLength: 80,
     },
-    // SC2Pulse character ids are numeric, but we keep this loose since
-    // the agent occasionally falls back to a toon handle (slash-separated).
+    // Legacy single Pulse ID. Kept as an accepted input for older
+    // clients (and the test suite); on write we fold it into
+    // ``pulseIds`` when the caller didn't already supply the array.
     pulseId: {
       type: ["string", "null"],
       maxLength: 64,
+    },
+    // Canonical list of the user's SC2Pulse identifiers — most accounts
+    // have multiple ladder regions / multiple toon handles, so this is
+    // an array. Each entry is a SC2Pulse numeric character id
+    // ("994428") or a sc2reader toon handle ("2-S2-1-267727"). Capped
+    // at 20 so a malformed client can't unbounded-grow the user doc.
+    pulseIds: {
+      type: ["array", "null"],
+      maxItems: 20,
+      items: {
+        type: "string",
+        maxLength: 64,
+      },
     },
     region: {
       type: ["string", "null"],

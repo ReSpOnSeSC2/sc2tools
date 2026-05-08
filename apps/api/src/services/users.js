@@ -144,10 +144,17 @@ class UsersService {
    * when no fields have been set, never null, so callers can spread
    * the result without a null check.
    *
+   * ``pulseIds`` is the canonical list. ``pulseId`` is mirrored from
+   * ``pulseIds[0]`` (or the legacy single-string field on docs that
+   * pre-date the migration) so existing read-paths — the session
+   * widget's MMR fallback, the agent's player-handle resolver — keep
+   * working without a separate backfill.
+   *
    * @param {string} userId
    * @returns {Promise<{
    *   battleTag?: string,
    *   pulseId?: string,
+   *   pulseIds?: string[],
    *   region?: string,
    *   preferredRace?: string,
    *   displayName?: string,
@@ -164,6 +171,7 @@ class UsersService {
           _id: 0,
           battleTag: 1,
           pulseId: 1,
+          pulseIds: 1,
           region: 1,
           preferredRace: 1,
           displayName: 1,
@@ -174,11 +182,10 @@ class UsersService {
       },
     );
     if (!doc) return {};
-    /** @type {Record<string, string|number>} */
+    /** @type {Record<string, string|number|string[]>} */
     const out = {};
     for (const k of [
       "battleTag",
-      "pulseId",
       "region",
       "preferredRace",
       "displayName",
@@ -188,6 +195,21 @@ class UsersService {
       const v = doc[k];
       if (typeof v === "string" && v.length > 0) out[k] = v;
     }
+    // Pulse IDs: prefer the array; fall back to the legacy single
+    // field. We always emit ``pulseId`` (the first entry) so callers
+    // that were written against the pre-migration shape still see a
+    // value.
+    const ids = normalisePulseIdList(
+      Array.isArray(doc.pulseIds)
+        ? doc.pulseIds
+        : typeof doc.pulseId === "string"
+          ? [doc.pulseId]
+          : [],
+    );
+    if (ids.length > 0) {
+      out.pulseIds = ids;
+      out.pulseId = ids[0];
+    }
     // ``lastKnownMmr`` is the only numeric field — surface it as a
     // number so the session widget's tier-comparison code can use it
     // without parsing.
@@ -195,6 +217,49 @@ class UsersService {
       out.lastKnownMmr = doc.lastKnownMmr;
     }
     return out;
+  }
+
+  /**
+   * Append a single pulse identifier (toon handle or numeric SC2Pulse
+   * character id) to the user's ``pulseIds`` array, dedup-aware. Used
+   * by the games ingest path to auto-populate the array as the agent
+   * forwards each replay's ``myToonHandle`` — streamers shouldn't have
+   * to paste their own toon handle into Settings for the session
+   * widget's SC2Pulse fallback to resolve their MMR.
+   *
+   * Idempotent: a no-op when the id is already present.
+   * Skips clobbering the user's typed-in single-string ``pulseId`` —
+   * if the array doesn't exist yet but the legacy field does, the
+   * legacy value is preserved as the first entry of the new array.
+   *
+   * @param {string} userId
+   * @param {string} pulseId
+   * @returns {Promise<boolean>} true when the array changed.
+   */
+  async addPulseId(userId, pulseId) {
+    if (typeof pulseId !== "string") return false;
+    const trimmed = pulseId.trim();
+    if (!trimmed || trimmed.length > 64) return false;
+    const doc = await this.db.users.findOne(
+      { userId },
+      { projection: { _id: 0, pulseIds: 1, pulseId: 1 } },
+    );
+    if (!doc) return false;
+    const current = normalisePulseIdList(
+      Array.isArray(doc.pulseIds)
+        ? doc.pulseIds
+        : typeof doc.pulseId === "string"
+          ? [doc.pulseId]
+          : [],
+    );
+    if (current.includes(trimmed)) return false;
+    if (current.length >= 20) return false;
+    const next = current.concat(trimmed);
+    /** @type {Record<string, any>} */
+    const set = { pulseIds: next, pulseId: next[0] };
+    stampVersion(set, COLLECTIONS.USERS);
+    await this.db.users.updateOne({ userId }, { $set: set });
+    return true;
   }
 
   /**
@@ -257,7 +322,6 @@ class UsersService {
   async updateProfile(userId, profile) {
     const STRING_FIELDS = [
       "battleTag",
-      "pulseId",
       "region",
       "preferredRace",
       "displayName",
@@ -276,6 +340,7 @@ class UsersService {
         unset[k] = "";
       }
     }
+    applyPulseIdsUpdate(profile, set, unset);
     // ``lastKnownMmr`` is numeric. Treat null/missing as "clear", a
     // valid integer in the [500, 9999] band as "set". Out-of-band
     // values are dropped on the floor (never set, never unset) so a
@@ -358,6 +423,63 @@ class UsersService {
     await this.db.users.updateOne({ userId }, { $set: set });
     return true;
   }
+}
+
+/**
+ * Resolve the next ``pulseIds`` array from a partial profile update,
+ * folding the legacy single-string ``pulseId`` field in when ``pulseIds``
+ * was not supplied. Mutates the caller's ``set``/``unset`` accumulators
+ * in place; mirrors the first id into the legacy ``pulseId`` field so
+ * unmigrated read-paths keep resolving.
+ *
+ * @param {Record<string, unknown> | null | undefined} profile
+ * @param {Record<string, any>} set
+ * @param {Record<string, "">} unset
+ */
+function applyPulseIdsUpdate(profile, set, unset) {
+  /** @type {string[]|null} */
+  let nextPulseIds = null;
+  if (profile && Object.prototype.hasOwnProperty.call(profile, "pulseIds")) {
+    const raw = profile.pulseIds;
+    if (Array.isArray(raw)) nextPulseIds = normalisePulseIdList(raw);
+    else if (raw === null) nextPulseIds = [];
+  } else if (profile && Object.prototype.hasOwnProperty.call(profile, "pulseId")) {
+    const raw = profile.pulseId;
+    nextPulseIds =
+      typeof raw === "string" && raw.trim() ? [raw.trim()] : [];
+  }
+  if (nextPulseIds === null) return;
+  if (nextPulseIds.length === 0) {
+    unset.pulseIds = "";
+    unset.pulseId = "";
+  } else {
+    set.pulseIds = nextPulseIds;
+    set.pulseId = nextPulseIds[0];
+  }
+}
+
+/**
+ * Trim, dedupe, and bound-check an array of pulse identifiers. Strings
+ * only; entries that survived after trimming and aren't already in the
+ * accumulator are kept in input order. Capped at 20 to match the
+ * profile schema's ``maxItems``.
+ *
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+function normalisePulseIdList(raw) {
+  if (!Array.isArray(raw)) return [];
+  /** @type {string[]} */
+  const out = [];
+  for (const entry of raw) {
+    if (typeof entry !== "string") continue;
+    const trimmed = entry.trim();
+    if (!trimmed || trimmed.length > 64) continue;
+    if (out.includes(trimmed)) continue;
+    out.push(trimmed);
+    if (out.length >= 20) break;
+  }
+  return out;
 }
 
 module.exports = { UsersService };
