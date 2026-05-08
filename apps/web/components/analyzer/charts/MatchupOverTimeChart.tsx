@@ -194,7 +194,7 @@ function MatchupPanel({
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}
-            margin={{ top: 4, right: 6, bottom: 0, left: -16 }}
+            margin={{ top: 4, right: 6, bottom: 0, left: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2533" />
             <XAxis
@@ -208,8 +208,9 @@ function MatchupPanel({
               stroke="#6b7280"
               fontSize={10}
               domain={[0, 100]}
-              tickFormatter={(v) => `${v}`}
-              width={28}
+              ticks={[0, 25, 50, 75, 100]}
+              tickFormatter={(v) => `${v}%`}
+              width={36}
             />
             <ReferenceLine y={50} stroke="#3a4252" strokeDasharray="2 4" />
             <Tooltip
@@ -228,7 +229,7 @@ function MatchupPanel({
               }}
             />
             <Line
-              type="monotone"
+              type="linear"
               dataKey="winRatePct"
               stroke={color}
               strokeWidth={2}

@@ -160,7 +160,7 @@ export function GameLengthWrChart() {
             </Bar>
             <Line
               yAxisId="wr"
-              type="monotone"
+              type="linear"
               dataKey="winRatePct"
               stroke="#7c8cff"
               strokeWidth={2.5}
