@@ -14,7 +14,7 @@ from typing import Dict, List
 
 from core.sc2_catalog import composition_summary
 
-from .base import BaseStrategyDetector
+from .base import BaseStrategyDetector, count_real_units
 
 
 # Composition-tag -> human-readable phrase used by `_composition_fallback`.
@@ -82,7 +82,10 @@ class OpponentStrategyDetector(BaseStrategyDetector):
             return any(b['name'] == name and b['time'] <= time_limit and self._is_proxy(b, main_loc, dist) for b in buildings)
 
         def count_units(name, time_limit=9999):
-            return sum(1 for u in units if u['name'] == name and u['time'] <= time_limit)
+            # Prereq-aware: hallucinations from a Sentry never count
+            # toward opponent strategy classification (e.g. a hallucinated
+            # Phoenix from a Sentry should not flag Skytoss).
+            return count_real_units(name, time_limit, units, buildings)
 
         def count_buildings(name, time_limit=9999):
             return sum(1 for b in buildings if b['name'] == name and b['time'] <= time_limit)

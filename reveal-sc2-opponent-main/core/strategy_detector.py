@@ -65,6 +65,150 @@ _COMPOSITION_PHRASES = {
 }
 
 
+# =========================================================
+# UNIT TECH PREREQUISITES (anti-hallucination guard)
+# =========================================================
+# Maps a unit name to a list of alternative requirement-sets. A unit
+# event is treated as "real" by build classification only when at least
+# one alternative is fully satisfied: every structure listed in that
+# alternative must have been STARTED before the unit's appearance time.
+# The structure does NOT need to still be standing -- a Stargate that
+# was killed at 5:00 still satisfies the Phoenix prerequisite at 7:00,
+# because the construction event remains in the event log permanently.
+#
+# Why we need this:
+#   A Sentry's Hallucination ability spawns illusory Phoenix / Void Ray /
+#   High Templar / Archon / Immortal / Colossus / Warp Prism units that
+#   show up in the replay events identically to real units. Without a
+#   prerequisite filter, a single Sentry hallucination would let us
+#   misclassify a 2-base Charge build as a Phoenix Opener, an Archon
+#   Drop, etc. The build is only that build if the relevant tech
+#   structure was actually built at some point.
+#
+# Keep this table in sync with the mirror in
+# SC2Replay-Analyzer/detectors/base.py.
+UNIT_TECH_PREREQUISITES: Dict[str, List[List[str]]] = {
+    # --- Protoss: Stargate path ---
+    "Phoenix":       [["Stargate"]],
+    "Oracle":        [["Stargate"]],
+    "VoidRay":       [["Stargate"]],
+    "Carrier":       [["Stargate", "FleetBeacon"]],
+    "Tempest":       [["Stargate", "FleetBeacon"]],
+    "Mothership":    [["Stargate", "FleetBeacon"]],
+    # --- Protoss: Robotics path ---
+    "Immortal":      [["RoboticsFacility"]],
+    "Observer":      [["RoboticsFacility"]],
+    "WarpPrism":     [["RoboticsFacility"]],
+    "Colossus":      [["RoboticsFacility", "RoboticsBay"]],
+    "Disruptor":     [["RoboticsFacility", "RoboticsBay"]],
+    # --- Protoss: Templar / Dark path ---
+    "HighTemplar":   [["TemplarArchive"]],
+    "DarkTemplar":   [["DarkShrine"]],
+    # Archon morphs from 2x HT, 2x DT, or 1 HT + 1 DT, so either tech
+    # structure is sufficient on its own.
+    "Archon":        [["TemplarArchive"], ["DarkShrine"]],
+    # --- Zerg ---
+    "Zergling":      [["SpawningPool"]],
+    "Queen":         [["SpawningPool"]],
+    "Baneling":      [["BanelingNest"]],
+    "Roach":         [["RoachWarren"]],
+    "Ravager":       [["RoachWarren"]],
+    "Hydralisk":     [["HydraliskDen"]],
+    "Lurker":        [["LurkerDen"]],
+    "LurkerMP":      [["LurkerDen"]],
+    "Mutalisk":      [["Spire"]],
+    "Corruptor":     [["Spire"]],
+    "BroodLord":     [["GreaterSpire"]],
+    "Infestor":      [["InfestationPit"]],
+    "SwarmHostMP":   [["InfestationPit"]],
+    "Viper":         [["Hive"]],
+    "Ultralisk":     [["UltraliskCavern"]],
+    # --- Terran ---
+    "Marine":        [["Barracks"]],
+    "Reaper":        [["Barracks"]],
+    "Marauder":      [["Barracks"]],
+    "Ghost":         [["Barracks", "GhostAcademy"]],
+    "Hellion":       [["Factory"]],
+    "Hellbat":       [["Factory", "Armory"]],
+    "Cyclone":       [["Factory"]],
+    "WidowMine":     [["Factory"]],
+    "SiegeTank":     [["Factory"]],
+    "Thor":          [["Factory", "Armory"]],
+    "Medivac":       [["Starport"]],
+    "Liberator":     [["Starport"]],
+    "Banshee":       [["Starport"]],
+    "Raven":         [["Starport"]],
+    "VikingFighter": [["Starport"]],
+    "Battlecruiser": [["Starport", "FusionCore"]],
+}
+
+
+def _structures_present_by(
+    names: List[str], buildings: List[Dict], by_time: float
+) -> bool:
+    """All `names` have at least one start event with time <= by_time."""
+    earliest: Dict[str, float] = {}
+    for b in buildings:
+        n = b.get("name")
+        t = b.get("time", float("inf"))
+        if n in names:
+            cur = earliest.get(n)
+            if cur is None or t < cur:
+                earliest[n] = t
+    return all(earliest.get(n, float("inf")) <= by_time for n in names)
+
+
+def unit_prereq_met(
+    unit_name: str, by_time: float, buildings: List[Dict]
+) -> bool:
+    """True if the tech prerequisite for `unit_name` was started by `by_time`.
+
+    A unit not registered in UNIT_TECH_PREREQUISITES is allowed
+    unconditionally (no known prereq -> trust the event).
+    """
+    alternatives = UNIT_TECH_PREREQUISITES.get(unit_name)
+    if not alternatives:
+        return True
+    return any(
+        _structures_present_by(req_set, buildings, by_time)
+        for req_set in alternatives
+    )
+
+
+def count_real_units(
+    unit_name: str,
+    time_limit: float,
+    units: List[Dict],
+    buildings: List[Dict],
+) -> int:
+    """Count `unit_name` events with time <= time_limit, excluding hallucinations.
+
+    A unit counts only when at least one prerequisite alternative for
+    that unit type is satisfied at the unit's own appearance time. This
+    is the function the build-classifier calls instead of a raw count to
+    keep Sentry hallucinations from triggering false positives.
+    """
+    alternatives = UNIT_TECH_PREREQUISITES.get(unit_name)
+    if not alternatives:
+        return sum(
+            1 for u in units
+            if u.get("name") == unit_name and u.get("time", 9999) <= time_limit
+        )
+    valid = 0
+    for u in units:
+        if u.get("name") != unit_name:
+            continue
+        t = u.get("time", 9999)
+        if t > time_limit:
+            continue
+        if any(
+            _structures_present_by(req_set, buildings, t)
+            for req_set in alternatives
+        ):
+            valid += 1
+    return valid
+
+
 def _composition_fallback_name(race: str, enemy_events: List[Dict]) -> str:
     """Derive a meaningful name from the dominant unit composition.
 
@@ -84,8 +228,31 @@ def _composition_fallback_name(race: str, enemy_events: List[Dict]) -> str:
 class BaseStrategyDetector:
     """Shared helpers used by both opponent and user detectors."""
 
+    # Re-exported as class attributes so subclasses and external callers
+    # have a single place to look without importing the module-level
+    # functions directly.
+    UNIT_TECH_PREREQUISITES = UNIT_TECH_PREREQUISITES
+
     def __init__(self, custom_builds: List[Dict]):
         self.custom_builds = custom_builds or []
+
+    # ---------- prereq-aware unit accounting ----------
+    @staticmethod
+    def _unit_prereq_met(
+        unit_name: str, by_time: float, buildings: List[Dict]
+    ) -> bool:
+        """See module-level :func:`unit_prereq_met`."""
+        return unit_prereq_met(unit_name, by_time, buildings)
+
+    @staticmethod
+    def _count_real_units(
+        unit_name: str,
+        time_limit: float,
+        units: List[Dict],
+        buildings: List[Dict],
+    ) -> int:
+        """See module-level :func:`count_real_units`."""
+        return count_real_units(unit_name, time_limit, units, buildings)
 
     # ---------- geometry ----------
     def _get_main_base_loc(self, buildings: List[Dict]) -> Tuple[float, float]:
@@ -165,6 +332,18 @@ class BaseStrategyDetector:
         function to return True, which let v3 rules slip through and made
         every PvZ build claim every PvZ game in the live pipeline.
         """
+        def _count_unit_events_with_prereq(name: str, time_lt: float) -> int:
+            """Count unit events for `name` <= time_lt, dropping hallucinations.
+
+            Names not in UNIT_TECH_PREREQUISITES are counted unconditionally.
+            """
+            if name in UNIT_TECH_PREREQUISITES:
+                return count_real_units(name, time_lt, units, buildings)
+            return sum(
+                1 for u in units
+                if u.get("name") == name and u.get("time", 9999) <= time_lt
+            )
+
         for rule in rules:
             rtype = rule.get("type")
             raw_name = rule.get("name")
@@ -179,17 +358,11 @@ class BaseStrategyDetector:
                 if count < rule.get("count", 1):
                     return False
             elif rtype == "unit":
-                count = sum(
-                    1 for u in units
-                    if u["name"] == raw_name and u["time"] <= time_lt
-                )
+                count = _count_unit_events_with_prereq(raw_name, time_lt)
                 if count < rule.get("count", 1):
                     return False
             elif rtype == "unit_max":
-                count = sum(
-                    1 for u in units
-                    if u["name"] == raw_name and u["time"] <= time_lt
-                )
+                count = _count_unit_events_with_prereq(raw_name, time_lt)
                 if count > rule.get("count", 999):
                     return False
             elif rtype == "upgrade":
@@ -217,9 +390,29 @@ class BaseStrategyDetector:
                 "count_min",
             ):
                 norm_name = self._normalize_rule_name(raw_name)
+                # v3 events flatten buildings + units + upgrades into one
+                # stream. For unit events whose tech prerequisite is
+                # known, drop hallucinated occurrences (events whose
+                # prerequisite structure was never started by the
+                # event's own time).
+                is_unit_with_prereq = norm_name in UNIT_TECH_PREREQUISITES
+
+                def _v3_event_passes(ev) -> bool:
+                    name_ok = ev.get("name") == norm_name
+                    if not name_ok:
+                        return False
+                    if is_unit_with_prereq and ev in units:
+                        if not unit_prereq_met(
+                            norm_name, ev.get("time", 9999), buildings,
+                        ):
+                            return False
+                    return True
+
+                merged_events = buildings + units + upgrades
                 count = sum(
-                    1 for ev in (buildings + units + upgrades)
-                    if ev.get("name") == norm_name and ev.get("time", 9999) < time_lt
+                    1 for ev in merged_events
+                    if _v3_event_passes(ev)
+                    and ev.get("time", 9999) < time_lt
                 )
                 target = rule.get("count", 1)
                 if rtype == "before":
@@ -227,9 +420,9 @@ class BaseStrategyDetector:
                     tol = rule.get("tol")
                     if isinstance(tol, (int, float)) and tol > 0:
                         if not any(
-                            ev.get("name") == norm_name
+                            _v3_event_passes(ev)
                             and abs(ev.get("time", 9999) - time_lt) <= tol
-                            for ev in (buildings + units + upgrades)
+                            for ev in merged_events
                         ):
                             return False
                     else:
@@ -286,7 +479,10 @@ class OpponentStrategyDetector(BaseStrategyDetector):
             )
 
         def count_units(name, time_limit=9999):
-            return sum(1 for u in units if u["name"] == name and u["time"] <= time_limit)
+            # Prereq-aware: hallucinations from Sentry never count toward
+            # opponent strategy classification (e.g. a hallucinated
+            # Phoenix from a Sentry should not flag Skytoss).
+            return count_real_units(name, time_limit, units, buildings)
 
         def count_buildings(name, time_limit=9999):
             return sum(1 for b in buildings if b["name"] == name and b["time"] <= time_limit)
@@ -418,7 +614,10 @@ class OpponentStrategyDetector(BaseStrategyDetector):
             if len(nexus_times_local) >= 2 and nexus_times_local[1] < 390:
                 return "Protoss - Standard Expand"
 
-            # Composition fallbacks
+            # Composition fallbacks. count_units is prereq-aware
+            # (`count_real_units`), so a Sentry hallucination of a
+            # Carrier / Colossus / High Templar / Archon never tips a
+            # game into the wrong fallback bucket here.
             if count_buildings("Stargate", 600) >= 2 or count_units("Carrier", 600) > 0:
                 return "Protoss - Skytoss Transition"
             if count_units("Colossus", 600) > 0 or count_units("Disruptor", 600) > 0:
@@ -572,7 +771,12 @@ class UserBuildDetector(BaseStrategyDetector):
             )
 
         def count_units(name, time_limit=9999):
-            return sum(1 for u in units if u["name"] == name and u["time"] <= time_limit)
+            # Prereq-aware: a unit only counts toward classification when
+            # its tech-structure prerequisite was started before the
+            # unit appeared. Filters Sentry hallucinations (Phoenix /
+            # VoidRay / HighTemplar / Archon / Immortal / Colossus /
+            # WarpPrism) that would otherwise flag the wrong build.
+            return count_real_units(name, time_limit, units, buildings)
 
         def has_upgrade_substr(sub_name, time_limit=9999):
             return any(sub_name in u["name"] and u["time"] <= time_limit for u in upgrades)
@@ -589,9 +793,20 @@ class UserBuildDetector(BaseStrategyDetector):
             sg_count_10min = sum(1 for b in buildings if b["name"] == "Stargate" and b["time"] < 600)
             nexus_count_10min = sum(1 for b in buildings if b["name"] == "Nexus" and b["time"] < 600)
 
-            if count_units("Carrier", 600) >= 1:
+            # Carrier / Tempest both require Stargate + Fleet Beacon.
+            # count_units already filters hallucinations, but document
+            # the prerequisite so a future refactor can't drop it.
+            if (
+                has_building("Stargate", 600)
+                and has_building("FleetBeacon", 600)
+                and count_units("Carrier", 600) >= 1
+            ):
                 return "PvZ - Carrier Rush"
-            if count_units("Tempest", 600) >= 1:
+            if (
+                has_building("Stargate", 600)
+                and has_building("FleetBeacon", 600)
+                and count_units("Tempest", 600) >= 1
+            ):
                 return "PvZ - Tempest Rush"
             if sg_count_10min >= 2 and nexus_count_10min >= 2 and count_units("VoidRay", 600) >= 4:
                 return "PvZ - 2 Stargate Void Ray"
@@ -599,19 +814,32 @@ class UserBuildDetector(BaseStrategyDetector):
                 return "PvZ - 3 Stargate Phoenix"
             if sg_count_10min >= 2 and nexus_count_10min >= 2 and count_units("Phoenix", 600) >= 4:
                 return "PvZ - 2 Stargate Phoenix"
-            if count_units("Disruptor", 480) >= 1 and count_units("WarpPrism", 480) >= 1:
+            # Rail's Disruptor Drop: Disruptor needs Robo + Robo Bay,
+            # Warp Prism needs Robo. Robo presence is implied by the
+            # prereq filter; spell it out for clarity.
+            if (
+                has_building("RoboticsFacility", 480)
+                and has_building("RoboticsBay", 480)
+                and count_units("Disruptor", 480) >= 1
+                and count_units("WarpPrism", 480) >= 1
+            ):
                 return "PvZ - Rail's Disruptor Drop"
 
+            # Oracle (Stargate) + Robo + Forge composition.
             if (
-                count_units("Oracle", 510) >= 2
+                has_building("Stargate", 510)
+                and count_units("Oracle", 510) >= 2
                 and has_building("RoboticsFacility", 510)
                 and has_building("Forge", 510)
                 and sum(1 for b in buildings if b["name"] == "Nexus" and b["time"] < 510) >= 3
             ):
                 return "PvZ - AlphaStar Style (Oracle/Robo)"
 
+            # 7 Gate Glaive/Immortal all-in: Immortals require Robotics
+            # Facility, Glaive research requires Twilight Council.
             if (
                 has_upgrade_substr("Glaive", 510)
+                and has_building("RoboticsFacility", 510)
                 and count_units("Sentry", 510) >= 2
                 and count_units("Immortal", 510) >= 1
                 and gate_count_6min >= 6
@@ -637,9 +865,12 @@ class UserBuildDetector(BaseStrategyDetector):
                 and count_units("Archon", 540) >= 2
             ):
                 return "PvZ - Archon Drop"
+            # DT drop into Archon: needs Dark Shrine for the DTs and a
+            # Robotics Facility for the Warp Prism.
             if (
                 twilight_time < building_time("DarkShrine")
                 and has_building("DarkShrine", 540)
+                and has_building("RoboticsFacility", 540)
                 and count_units("DarkTemplar", 540) >= 3
                 and count_units("WarpPrism", 540) >= 1
             ):
@@ -765,10 +996,18 @@ class UserBuildDetector(BaseStrategyDetector):
                 if gates_before_expand == 1 and first_unit in ("Stalker", "Adept", "Zealot"):
                     return "PvP - 1 Gate Expand"
 
-            if count_units("Adept", 360) >= 4 and count_units("Oracle", 390) >= 1:
+            # AlphaStar 4 Adept / Oracle requires both a Cyber Core path
+            # and a Stargate. The Oracle prereq is enforced by count_units
+            # but the explicit has_building guard documents the intent.
+            if (
+                has_building("Stargate", 390)
+                and count_units("Adept", 360) >= 4
+                and count_units("Oracle", 390) >= 1
+            ):
                 return "PvP - AlphaStar (4 Adept/Oracle)"
             if (
-                count_units("Stalker", 390) >= 3
+                has_building("Stargate", 450)
+                and count_units("Stalker", 390) >= 3
                 and count_units("Oracle", 450) >= 1
                 and has_building("DarkShrine", 540)
             ):
@@ -779,7 +1018,7 @@ class UserBuildDetector(BaseStrategyDetector):
             sec_nexus_time = nexus_times[1] if len(nexus_times) >= 2 else 9999
             if robo_time < twilight_time and twilight_time < sec_nexus_time:
                 return "PvP - Rail's Blink Stalker (Robo 1st)"
-            if count_units("Phoenix", 510) >= 3:
+            if has_building("Stargate", 510) and count_units("Phoenix", 510) >= 3:
                 return "PvP - Phoenix Style"
             if (
                 has_upgrade_substr("Blink", 540)
@@ -807,9 +1046,21 @@ class UserBuildDetector(BaseStrategyDetector):
 
             if has_proxy("Stargate", sec_nexus_time, 50):
                 return "PvT - Proxy Void Ray/Stargate"
-            if count_units("Phoenix", 420) >= 1 and has_building("RoboticsFacility", 480):
+            # Phoenix builds: require an actual Stargate. Sentry can
+            # hallucinate Phoenix off Cyber + Twilight tech, so a
+            # 2-base Charge / Templar build can register a "Phoenix"
+            # event without any Stargate ever going down. count_units
+            # already filters hallucinations via the prereq table, but
+            # the explicit guard makes the requirement self-documenting
+            # and prevents a regression if count_units is ever swapped
+            # for a raw count again.
+            if (
+                has_building("Stargate", 420)
+                and count_units("Phoenix", 420) >= 1
+                and has_building("RoboticsFacility", 480)
+            ):
                 return "PvT - Phoenix into Robo"
-            if count_units("Phoenix", 420) >= 1:
+            if has_building("Stargate", 420) and count_units("Phoenix", 420) >= 1:
                 gate_t = sorted([b["time"] for b in buildings if b["name"] == "Gateway"])
                 if len(gate_t) >= 2 and gate_t[1] < robo_time:
                     return "PvT - Phoenix Opener"
@@ -818,7 +1069,17 @@ class UserBuildDetector(BaseStrategyDetector):
                 return "PvT - 7 Gate Blink All-in"
             if has_upgrade_substr("Charge", 540) and gate_count_730 >= 7 and len(nexus_times) < 3:
                 return "PvT - 8 Gate Charge All-in"
-            if ta_time < third_nexus_time and (4 <= gate_count_730 <= 6):
+            # 2 Base Templar requires a Templar Archives: HT / Storm play
+            # is impossible without it. building_time returns 9999 when
+            # the structure was never built, so the < third_nexus_time
+            # comparison alone is not enough on a replay where the user
+            # never finished a 3rd Nexus -- both sides of the inequality
+            # could be infinity. Anchor the check to a real cutoff.
+            if (
+                has_building("TemplarArchive", 9999)
+                and ta_time < third_nexus_time
+                and (4 <= gate_count_730 <= 6)
+            ):
                 return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
             if has_upgrade_substr("Charge", 540) and len(nexus_times) >= 3:
                 return "PvT - Standard Charge Macro"
@@ -847,7 +1108,15 @@ class UserBuildDetector(BaseStrategyDetector):
             ):
                 return "PvT - 2 Gate Blink (Fast 3rd Nexus)"
 
-            if has_building("DarkShrine", 540) and count_units("WarpPrism", 600) >= 1:
+            # DT Drop: needs Dark Shrine for the DTs and Robotics
+            # Facility for the Warp Prism. count_units already enforces
+            # the Robo prereq for WarpPrism, but spelling it out keeps
+            # the rule self-contained.
+            if (
+                has_building("DarkShrine", 540)
+                and has_building("RoboticsFacility", 600)
+                and count_units("WarpPrism", 600) >= 1
+            ):
                 return "PvT - DT Drop"
             if has_building("RoboticsFacility", 390):
                 if robo_time < sg_time and robo_time < twilight_time:
