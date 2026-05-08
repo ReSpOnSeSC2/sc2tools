@@ -99,7 +99,7 @@ export function useVoiceReadout(
   prefs: VoicePrefs | null,
 ): VoiceReadout {
   const [gestureGranted, setGestureGranted] = useState<boolean>(() =>
-    readSessionUnlock(),
+    readPersistedUnlock(),
   );
   const [pendingUtterance, setPendingUtterance] = useState<string | null>(null);
 
@@ -219,9 +219,12 @@ export function useVoiceReadout(
         }
         if (code === "not-allowed") {
           // Browser revoked the unlock (e.g. session ended); restart
-          // the gesture flow on the next payload.
-          clearSessionUnlock();
+          // the gesture flow on the next payload. Re-queue the text
+          // we just tried so the next gesture replays it instead of
+          // dropping the line silently.
+          clearPersistedUnlock();
           setGestureGranted(false);
+          setPendingUtterance(sanitized);
         }
       };
       const delay = clamp(prefs?.delayMs ?? DEFAULTS.delayMs, 0, 5000);
@@ -343,18 +346,51 @@ export function useVoiceReadout(
 
   const onUserGesture = useCallback(() => {
     if (gestureGranted) return;
+    log("gesture granted");
     setGestureGranted(true);
-    persistSessionUnlock();
-    log("gesture granted, replaying queued utterance:", pendingUtterance);
-    if (pendingUtterance) {
-      const text = pendingUtterance;
-      setPendingUtterance(null);
-      // Speak after the gesture flips so the autoplay gate sees the
-      // user's click first. A microtask is enough — speak() reads
-      // `voicesRef.current` which is already populated.
-      window.setTimeout(() => speak(text), 0);
-    }
+    persistUnlock();
+  }, [gestureGranted, log]);
+
+  // Replay the queued utterance once the gesture flips to granted —
+  // whether the unlock came from the banner click, a document-wide
+  // gesture, or sessionStorage rehydration. Decoupling replay from the
+  // grant call lets all three sources share the same path.
+  useEffect(() => {
+    if (!gestureGranted) return;
+    if (!pendingUtterance) return;
+    const text = pendingUtterance;
+    setPendingUtterance(null);
+    log("replaying queued utterance:", text);
+    // Speak on a microtask so the gesture state flip lands first; the
+    // autoplay gate has to see the activation before the speak() call.
+    window.setTimeout(() => speak(text), 0);
   }, [gestureGranted, pendingUtterance, speak, log]);
+
+  // Document-wide gesture listener — mirrors the legacy SPA's
+  // `voice-readout.js` UX where ANY click / keydown / touch on the page
+  // unlocked speech. Without this the streamer has to find and click
+  // the small fixed-position banner specifically; with it, anywhere on
+  // the OBS Browser Source counts (right-click → Interact → click the
+  // overlay area). Listener is removed once the gesture is granted so
+  // we don't keep eavesdropping on every click for the rest of the
+  // session.
+  useEffect(() => {
+    if (!enabled || gestureGranted) return;
+    if (typeof document === "undefined") return;
+    const grant = () => {
+      log("document gesture detected");
+      setGestureGranted(true);
+      persistUnlock();
+    };
+    document.addEventListener("click", grant, { capture: true });
+    document.addEventListener("keydown", grant, { capture: true });
+    document.addEventListener("touchstart", grant, { capture: true });
+    return () => {
+      document.removeEventListener("click", grant, { capture: true });
+      document.removeEventListener("keydown", grant, { capture: true });
+      document.removeEventListener("touchstart", grant, { capture: true });
+    };
+  }, [enabled, gestureGranted, log]);
 
   // Cancel any in-flight utterance when the host unmounts so a
   // Browser Source refresh doesn't leave an orphaned voice queue.
@@ -371,11 +407,18 @@ export function useVoiceReadout(
 
   return useMemo<VoiceReadout>(
     () => ({
-      needsGesture: enabled && pendingUtterance !== null && !gestureGranted,
+      // Show the banner as soon as voice is configured but the unlock
+      // hasn't happened yet, so the streamer can pre-click during OBS
+      // setup instead of having to catch the banner inside the 22s
+      // scouting visibility window. A document-wide click also unlocks
+      // (see the gesture-listener effect above), but the banner stays
+      // as a visible affordance because OBS Browser Sources need
+      // Interact mode for clicks to register at all.
+      needsGesture: enabled && !gestureGranted,
       enabled,
       onUserGesture,
     }),
-    [enabled, pendingUtterance, gestureGranted, onUserGesture],
+    [enabled, gestureGranted, onUserGesture],
   );
 }
 
@@ -544,31 +587,56 @@ function normalizeRace(race: string | undefined): string {
   return "";
 }
 
-const SESSION_UNLOCK_KEY = "sc2tools.voiceUnlocked";
+const UNLOCK_STORAGE_KEY = "sc2tools.voiceUnlocked";
 
-function readSessionUnlock(): boolean {
+/**
+ * Read the persisted unlock flag. Prefers localStorage so the unlock
+ * survives an OBS Browser Source refresh / OBS restart; falls back to
+ * sessionStorage when localStorage is blocked (e.g. private mode).
+ *
+ * Without persistence the streamer would have to right-click → Interact
+ * → click the overlay every time OBS reloads the Source — exactly the
+ * paper cut the legacy SPA dodged with a one-time `attachGestureListeners`.
+ */
+function readPersistedUnlock(): boolean {
   if (typeof window === "undefined") return false;
   try {
-    return window.sessionStorage?.getItem(SESSION_UNLOCK_KEY) === "1";
+    if (window.localStorage?.getItem(UNLOCK_STORAGE_KEY) === "1") return true;
+  } catch {
+    /* localStorage blocked — try sessionStorage next */
+  }
+  try {
+    return window.sessionStorage?.getItem(UNLOCK_STORAGE_KEY) === "1";
   } catch {
     return false;
   }
 }
 
-function persistSessionUnlock(): void {
+function persistUnlock(): void {
   if (typeof window === "undefined") return;
   try {
-    window.sessionStorage?.setItem(SESSION_UNLOCK_KEY, "1");
+    window.localStorage?.setItem(UNLOCK_STORAGE_KEY, "1");
+    return;
   } catch {
-    /* storage may be denied (private mode) — fine, we still unlock for
-     * this tab via React state. */
+    /* localStorage blocked — fall back to sessionStorage */
+  }
+  try {
+    window.sessionStorage?.setItem(UNLOCK_STORAGE_KEY, "1");
+  } catch {
+    /* both blocked (private mode + storage denied) — fine, the React
+     * state unlock still works for this tab's lifetime. */
   }
 }
 
-function clearSessionUnlock(): void {
+function clearPersistedUnlock(): void {
   if (typeof window === "undefined") return;
   try {
-    window.sessionStorage?.removeItem(SESSION_UNLOCK_KEY);
+    window.localStorage?.removeItem(UNLOCK_STORAGE_KEY);
+  } catch {
+    /* best-effort */
+  }
+  try {
+    window.sessionStorage?.removeItem(UNLOCK_STORAGE_KEY);
   } catch {
     /* best-effort */
   }

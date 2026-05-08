@@ -65,6 +65,15 @@ function installSpeechSynthMock(): Capture {
 }
 
 function clearSessionUnlock() {
+  // The hook persists the gesture unlock in localStorage primary
+  // (so OBS Browser Source refreshes don't re-prompt), with sessionStorage
+  // as a fallback. Clear both so a previous test's gesture grant doesn't
+  // bleed into the next test's "no gesture yet" precondition.
+  try {
+    window.localStorage.removeItem("sc2tools.voiceUnlocked");
+  } catch {
+    /* ignore */
+  }
   try {
     window.sessionStorage.removeItem("sc2tools.voiceUnlocked");
   } catch {
@@ -227,6 +236,83 @@ describe("useVoiceReadout (hook)", () => {
     );
     flush();
     expect(cap.speak).not.toHaveBeenCalled();
+  });
+
+  it("needsGesture is true as soon as voice is enabled, even before any payload", () => {
+    // Per-widget OBS Browser Source for scouting opens the URL with no
+    // active payload. The streamer needs the gesture banner to appear
+    // immediately so they can click it during OBS setup — before the
+    // first scouting line fires inside the 22s visibility window.
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    render(
+      <Harness
+        live={null}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    expect(ref.needsGesture).toBe(true);
+    expect(cap.speak).not.toHaveBeenCalled();
+  });
+
+  it("document-wide click grants the gesture (mirrors legacy SPA UX)", () => {
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const live: LiveGamePayload = {
+      oppName: "Alice",
+      oppRace: "Zerg",
+      headToHead: { wins: 2, losses: 1 },
+    };
+    render(
+      <Harness
+        live={live}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+    expect(cap.speak).not.toHaveBeenCalled();
+    // ANY click on the document — not just the banner — should unlock
+    // speech. Streamers don't have to find the small banner element.
+    act(() => {
+      document.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    flush();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(cap.utterances[0]?.text).toContain("Facing Alice, Zerg.");
+  });
+
+  it("persists the unlock in localStorage so OBS Browser Source refreshes don't re-prompt", () => {
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, events: { scouting: true } };
+    const { unmount } = render(
+      <Harness
+        live={{ oppName: "Alice", oppRace: "Zerg" }}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    act(() => ref.onUserGesture());
+    flush();
+    // OBS reload simulated: tear down, then mount a fresh hook with no
+    // pre-set sessionStorage entry. localStorage must survive — that's
+    // the whole point of switching the primary store.
+    unmount();
+    expect(window.localStorage.getItem("sc2tools.voiceUnlocked")).toBe("1");
+    cap.speak.mockClear();
+    const ref2: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    render(
+      <Harness
+        live={{ oppName: "Bob", oppRace: "Terran" }}
+        prefs={prefs}
+        refOut={ref2}
+      />,
+    );
+    flush();
+    expect(ref2.needsGesture).toBe(false);
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(cap.utterances[cap.utterances.length - 1]?.text).toContain(
+      "Facing Bob",
+    );
   });
 
   it("queues until gesture, then replays the most recent payload", () => {
