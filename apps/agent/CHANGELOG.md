@@ -2,6 +2,62 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.5.9
+
+### Fixed
+- **Sync date range filter now takes effect IMMEDIATELY on Save.**
+  Previously, already-queued uploads continued to fly out for up to
+  ~30 seconds after a filter change, and watchdog FS events could slip
+  through during the watcher's 10-second poll window. The runner now
+  (a) drops queued uploads outside the new window via the new
+  `UploadQueue.drain_outside_filter()`, (b) triggers an immediate
+  watcher sweep via `ReplayWatcher.request_immediate_sweep()`,
+  (c) re-evaluates previously-filtered replays against the new window,
+  all before `save_state()` commits to disk so the on-disk state never
+  diverges from the in-memory state on a partial-Save crash. The
+  upload queue itself now re-checks the filter at the moment of the
+  network call as defense-in-depth, so a job that beat the runner's
+  drain (worker had already pulled it off the queue mid-batch) is
+  still skipped before paying the HTTPS round-trip.
+- The runner used to gate its post-Save `request_full_resync()` call
+  on `cleared_filtered > 0`. A user transitioning from "All time" to
+  "Current season" on a fresh-ish state has zero "filtered" entries
+  to clear, so the resync ping never fired and the watcher only
+  noticed the new filter ~10 seconds later on its next periodic
+  sweep. Now resync + immediate-sweep are unconditional on every
+  filter change.
+- `save_state` previously ran BEFORE the filtered-entries cleanup
+  loop, so the in-memory state and the disk state diverged for the
+  rest of the runner's lifetime. On agent restart the stale
+  "filtered" entries reloaded from disk and were never re-evaluated.
+  Now `save_state` runs ONCE per Save click, after every in-memory
+  mutation completes.
+
+### Added
+- `UploadQueue.drain_outside_filter() -> int` walks the queue and
+  drops every job whose `game.date_iso` falls outside the active
+  sync filter, returning the count dropped. Re-enqueues survivors in
+  their original submission order. Persists `state.uploaded` once
+  atomically if anything was dropped. Surfaces drops via the
+  existing `_on_failure` callback (with a new `_FilteredOutError`
+  sentinel exception) so the GUI's Recent uploads feed shows
+  filter-drops alongside transport / rejection failures.
+- `ReplayWatcher.request_immediate_sweep()` runs one extra sweep on
+  a daemon thread without waiting for the periodic poll. Spawns a
+  fresh thread per call; safe to call repeatedly because the
+  watcher's `_inflight` set + `state.uploaded` dedupe prevent
+  doubled work, and the new `_roots_lock` serialises concurrent
+  rediscovery passes.
+- `GuiUI.show_settings_status(msg)` lets the runner surface a
+  post-Save toast in the Settings tab. The runner uses it to show
+  the filter apply summary (active filter label, queued uploads
+  dropped, previously-filtered replays re-eligible). Auto-clears
+  after 5 seconds via a Qt single-shot timer.
+- The dashboard status card now displays the active filter chip
+  (e.g. "Watching for replays · Filter: Season 67"). Reads from a
+  tracked `_active_filter_label` set on Save (not the live combo
+  widget) so an in-progress edit never briefly mislabels the chip.
+
 ## 0.5.8
 
 ### Added

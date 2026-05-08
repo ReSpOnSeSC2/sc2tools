@@ -944,3 +944,190 @@ def test_size_one_batch_is_legacy_single_game_behaviour(
         f"got {len(api.batch_calls)} (sizes: {api.batch_calls})"
     )
     assert all(size == 1 for size in api.batch_calls)
+
+
+# --- v0.5.9 sync-filter enforcement on the upload queue ----------
+# Belt-and-suspenders: even when the runner's drain doesn't catch
+# everything (a worker had already picked the job out of the queue at
+# the moment of Save), the queue must re-check the filter at upload
+# time and skip the network round-trip.
+
+
+def test_upload_drops_job_outside_filter(tmp_path: Path) -> None:
+    """A queued job whose date_iso falls outside the active filter
+    must be dropped at upload time. The api MUST NOT see the call,
+    state.uploaded must be marked "filtered", and on_failure must be
+    invoked with a _FilteredOutError so the GUI's Recent uploads feed
+    surfaces the drop."""
+    from sc2tools_agent.uploader.queue import _FilteredOutError
+
+    state = AgentState(
+        device_token="t",
+        sync_filter_preset="season:67",
+    )
+    api = _StubApi()
+    failures: list[tuple[Path, Exception]] = []
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=1, upload_batch_size=1),
+        state=state, api=api,
+        on_failure=lambda p, e: failures.append((p, e)),
+    )
+    # Season 65 is well before Season 67's start, so the job must be
+    # dropped by the live filter check inside _upload_batch.
+    job = _game(
+        tmp_path, "out.SC2Replay",
+        date_iso="2025-09-01T10:00:00Z",
+    )
+    q.start()
+    try:
+        q.submit(job)
+        time.sleep(0.6)
+    finally:
+        q.stop()
+    # API must not see the call — the filter dropped it before the
+    # network round-trip.
+    assert api.calls == [], (
+        "out-of-window job reached the API; the per-batch filter "
+        "check failed"
+    )
+    # State marker is "filtered" so future sweeps skip the file.
+    assert state.uploaded[str(job.file_path)] == "filtered"
+    # Failure callback fired with a _FilteredOutError so the GUI's
+    # Recent uploads feed shows the drop, not silently swallows it.
+    assert len(failures) == 1
+    assert isinstance(failures[0][1], _FilteredOutError)
+
+
+def test_upload_passes_job_inside_filter(tmp_path: Path) -> None:
+    """Inverse: a job inside the active window must upload normally
+    despite the filter being set."""
+    from sc2tools_agent import sync_filter as sf
+
+    # Pin the filter to a season that contains the job's date.
+    state = AgentState(
+        device_token="t",
+        sync_filter_preset="season:67",
+    )
+    api = _StubApi()
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=1, upload_batch_size=1),
+        state=state, api=api,
+    )
+    # Season 67 starts 2026-04-01. Pick a date well inside.
+    inside = _game(
+        tmp_path, "inside.SC2Replay",
+        date_iso="2026-05-07T10:00:00Z",
+    )
+    q.start()
+    try:
+        q.submit(inside)
+        time.sleep(0.6)
+    finally:
+        q.stop()
+    assert len(api.calls) == 1
+    # Marker is a real ISO timestamp (not "filtered" / "rejected").
+    marker = state.uploaded[str(inside.file_path)]
+    assert marker not in ("filtered", "rejected", "skipped")
+    assert marker.startswith("2026-")
+    # Sanity: the SyncFilter would also accept this date, just
+    # double-checking the test setup matches the production filter.
+    f = sf.SyncFilter.from_state(
+        preset="season:67",
+        since_iso=None,
+        until_iso=None,
+    )
+    assert f.replay_in_range("2026-05-07T10:00:00Z")
+
+
+def test_drain_outside_filter_drops_only_matching(tmp_path: Path) -> None:
+    """drain_outside_filter must keep in-window jobs in the queue
+    in their original submission order, drop out-of-window jobs,
+    and persist the resulting state.uploaded marks atomically."""
+    state = AgentState(
+        device_token="t",
+        sync_filter_preset="season:67",
+    )
+    api = _StubApi()
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=1, upload_batch_size=1),
+        state=state, api=api,
+    )
+    # Submit 6 jobs, alternating in/out by date_iso. Submit BEFORE
+    # start so the worker can't drain anything before drain_outside_filter
+    # runs.
+    interleaved = [
+        ("a-in.SC2Replay", "2026-04-15T10:00:00Z"),    # in
+        ("b-out.SC2Replay", "2025-09-01T10:00:00Z"),   # out
+        ("c-in.SC2Replay", "2026-04-20T10:00:00Z"),    # in
+        ("d-out.SC2Replay", "2025-10-01T10:00:00Z"),   # out
+        ("e-in.SC2Replay", "2026-05-01T10:00:00Z"),    # in
+        ("f-out.SC2Replay", "2025-11-01T10:00:00Z"),   # out
+    ]
+    for name, iso in interleaved:
+        q.submit(_game(tmp_path, name, date_iso=iso))
+    dropped = q.drain_outside_filter()
+    assert dropped == 3
+    # The three out-of-window paths are marked "filtered" in state.
+    for name, iso in interleaved:
+        if "out" in name:
+            assert state.uploaded[str(tmp_path / name)] == "filtered"
+        else:
+            # In-window jobs aren't yet uploaded — they're still in
+            # the queue. Their state.uploaded entry must be untouched.
+            assert str(tmp_path / name) not in state.uploaded
+    # Order preserved: drain the queue manually and check the survivors.
+    survivors = []
+    while not q._q.empty():
+        survivors.append(q._q.get_nowait().file_path.name)
+        q._q.task_done()
+    assert survivors == [
+        "a-in.SC2Replay", "c-in.SC2Replay", "e-in.SC2Replay",
+    ]
+
+
+def test_drain_outside_filter_no_active_filter_is_noop(
+    tmp_path: Path,
+) -> None:
+    """``drain_outside_filter`` must do nothing when the filter is
+    fully open (preset is None / "all"). Otherwise a no-op Save click
+    would walk the queue for nothing."""
+    state = AgentState(
+        device_token="t",
+        sync_filter_preset=None,
+    )
+    api = _StubApi()
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=1, upload_batch_size=1),
+        state=state, api=api,
+    )
+    for i in range(3):
+        q.submit(_game(tmp_path, f"open-{i}.SC2Replay"))
+    dropped = q.drain_outside_filter()
+    assert dropped == 0
+    # All 3 still queued.
+    assert q.pending_count() == 3
+
+
+def test_drain_outside_filter_invokes_on_failure(tmp_path: Path) -> None:
+    """Every dropped job must fire on_failure so the GUI's Recent
+    uploads feed shows the drop. Without this the user sees their
+    queue-depth counter drop silently and assumes things uploaded."""
+    from sc2tools_agent.uploader.queue import _FilteredOutError
+
+    state = AgentState(
+        device_token="t",
+        sync_filter_preset="season:67",
+    )
+    api = _StubApi()
+    failures: list[tuple[Path, Exception]] = []
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=1, upload_batch_size=1),
+        state=state, api=api,
+        on_failure=lambda p, e: failures.append((p, e)),
+    )
+    q.submit(_game(tmp_path, "x.SC2Replay", date_iso="2025-09-01T10:00:00Z"))
+    q.submit(_game(tmp_path, "y.SC2Replay", date_iso="2025-08-15T10:00:00Z"))
+    dropped = q.drain_outside_filter()
+    assert dropped == 2
+    assert len(failures) == 2
+    assert all(isinstance(e, _FilteredOutError) for _p, e in failures)

@@ -508,6 +508,19 @@ class GuiUI:
         if self._signals:
             self._signals.foldersChanged.emit([str(p) for p in folders])
 
+    def show_settings_status(self, status: str) -> None:
+        """Surface a settings-tab status line and refresh the
+        dashboard's filter chip from the latest agent state.
+
+        Called by the runner after a Settings → Save click — for the
+        date-range filter we want the user to see (a) confirmation
+        that the change took effect immediately, and (b) the apply
+        summary (queued uploads dropped, previously-filtered replays
+        re-enabled). The toast self-dismisses after ~5 s.
+        """
+        if self._signals:
+            self._signals.settingsStatus.emit(str(status))
+
     # ---------------- lifecycle ----------------
 
     def run(self) -> int:
@@ -589,6 +602,7 @@ def _make_signals():
         pendingChanged = QtCore.Signal(int)
         updateAvailable = QtCore.Signal(str)
         foldersChanged = QtCore.Signal(list)
+        settingsStatus = QtCore.Signal(str)
         quitRequested = QtCore.Signal()
         showRequested = QtCore.Signal()
 
@@ -637,6 +651,17 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 maxlen=self.MAX_RECENT,
             )
             self._log_offset = 0
+            # Active sync-filter chip on the status card. Sourced from
+            # ``_initial_settings`` at boot and refreshed every time
+            # the user clicks Save; never read from the live combo
+            # widget so an in-progress edit (typing a custom date,
+            # hovering the dropdown) doesn't briefly mislabel the chip
+            # before the user presses Save.
+            self._active_filter_label = self._compute_filter_label(
+                preset=ui._initial_settings.sync_filter_preset,
+                since_iso=ui._initial_settings.sync_filter_since,
+                until_iso=ui._initial_settings.sync_filter_until,
+            )
 
             self._build_layout()
             self._wire_signals()
@@ -1476,6 +1501,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             signals.pendingChanged.connect(self._on_pending_changed)
             signals.updateAvailable.connect(self._on_update_available)
             signals.foldersChanged.connect(self._on_folders_changed)
+            signals.settingsStatus.connect(self._on_settings_status)
             signals.quitRequested.connect(self._on_quit_requested)
             signals.showRequested.connect(self._on_show_requested)
 
@@ -1532,6 +1558,19 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _on_folders_changed(self, folders: List[str]) -> None:
             ui._replay_folders = [Path(p) for p in folders]
             self._sync_folder_list_widget(folders)
+            self._refresh_status_card()
+
+        def _on_settings_status(self, status: str) -> None:
+            """Render the runner's post-Save toast in the Settings tab
+            and refresh the dashboard's status card so the filter chip
+            picks up the new state."""
+            self._settings_status.setText(status)
+            QtCore.QTimer.singleShot(
+                5000, lambda: self._settings_status.setText(""),
+            )
+            # Filter chip lives in ``_format_status_lines`` — repaint
+            # the status card so the user sees "Filter: Season 67"
+            # within the same tick as the toast.
             self._refresh_status_card()
 
         def _sync_folder_list_widget(self, folders: List[str]) -> None:
@@ -1645,6 +1684,22 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             try:
                 ui._on_save_settings(payload)
+                # Refresh the dashboard's filter chip immediately —
+                # the runner-side ``show_settings_status`` will also
+                # repaint, but updating now means the chip is correct
+                # the moment the toast appears. Treats ``"all"`` as a
+                # cleared filter so the chip disappears when the user
+                # widens the window.
+                self._active_filter_label = self._compute_filter_label(
+                    preset=None if preset == "all" else preset,
+                    since_iso=since_iso,
+                    until_iso=until_iso,
+                )
+                self._refresh_status_card()
+                # Default toast — the runner may overwrite this with
+                # a richer apply summary via ``show_settings_status``,
+                # but that signal arrives a few ms later so leave a
+                # baseline acknowledgement here too.
                 self._settings_status.setText(
                     "Saved · changes apply on next start",
                 )
@@ -1885,8 +1940,34 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             primary = "Watching for replays"
             if len(folders) > 1:
                 primary = f"Watching {len(folders)} replay folders"
+            # Append the active sync-filter chip when one is set.
+            # Empty / None ⇒ no filter narrowing, omit the chip
+            # entirely so the ALL-time case stays uncluttered.
+            if self._active_filter_label:
+                primary = f"{primary}  ·  Filter: {self._active_filter_label}"
             secondary = f"Folder: {folder_label}\nAPI: {ui._api_base}"
             return primary, secondary
+
+        def _compute_filter_label(
+            self,
+            *,
+            preset: Optional[str],
+            since_iso: Optional[str],
+            until_iso: Optional[str],
+        ) -> str:
+            """Resolve the user-friendly label for an active filter,
+            or an empty string when the filter is fully open. Imported
+            lazily so the GUI module stays cheap to import on a
+            no-Qt install."""
+            from .. import sync_filter as sf
+            f = sf.SyncFilter.from_state(
+                preset=preset,
+                since_iso=since_iso,
+                until_iso=until_iso,
+            )
+            if not f.is_active():
+                return ""
+            return f.short_label()
 
         def _refresh_pairing_card(self) -> None:
             # Hide the whole pairing card once we're paired so the
