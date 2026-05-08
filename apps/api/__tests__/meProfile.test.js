@@ -75,7 +75,10 @@ describe("/v1/me/profile", () => {
     await withAuth(request(app).get("/v1/me"));
     const res = await withAuth(request(app).get("/v1/me/profile"));
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({});
+    // ``detectedPulseIds`` is always emitted (empty when there are no
+    // games yet), so the empty-profile shape is decorated even with
+    // nothing saved.
+    expect(res.body).toEqual({ detectedPulseIds: [] });
   });
 
   test("requires auth", async () => {
@@ -95,11 +98,18 @@ describe("/v1/me/profile", () => {
       .send(payload)
       .set("content-type", "application/json");
     expect(put.status).toBe(200);
-    expect(put.body).toEqual(payload);
+    // PUT response is the persisted profile — legacy ``pulseId`` is
+    // mirrored from ``pulseIds[0]`` so single-string callers see what
+    // they sent. The array is decorated alongside.
+    expect(put.body).toEqual({ ...payload, pulseIds: ["9876543"] });
 
     const got = await withAuth(request(app).get("/v1/me/profile"));
     expect(got.status).toBe(200);
-    expect(got.body).toEqual(payload);
+    expect(got.body).toEqual({
+      ...payload,
+      pulseIds: ["9876543"],
+      detectedPulseIds: [],
+    });
   });
 
   test("schema-versions the underlying users doc", async () => {
@@ -275,5 +285,134 @@ describe("/v1/me/profile", () => {
       .set("content-type", "application/json");
     expect(put.status).toBe(400);
     expect(put.body.error.code).toBe("invalid_profile");
+  });
+
+  // ---- Multi-Pulse-ID support (v0.5.8) ----
+  // These tests live at the bottom because they mutate state in ways
+  // earlier tests didn't anticipate (the legacy tests assumed a
+  // single-string pulseId model). Adding them here keeps the existing
+  // ordering-dependent assertions intact while still exercising the
+  // new behaviour against a populated user doc.
+
+  test("PUT pulseIds[] persists the full list and mirrors pulseId from it", async () => {
+    const payload = {
+      battleTag: "MultiTag#0001",
+      pulseIds: ["9876543", "1-S2-1-267727", "2-S2-1-555555"],
+      region: "us",
+    };
+    const put = await withAuth(request(app).put("/v1/me/profile"))
+      .send(payload)
+      .set("content-type", "application/json");
+    expect(put.status).toBe(200);
+    expect(put.body.pulseIds).toEqual([
+      "9876543",
+      "1-S2-1-267727",
+      "2-S2-1-555555",
+    ]);
+    // Legacy single-string ``pulseId`` is mirrored from the first
+    // entry so unmigrated read-paths (the agent's player-handle
+    // fallback, the session widget's MMR fallback) keep resolving.
+    expect(put.body.pulseId).toBe("9876543");
+  });
+
+  test("PUT pulseIds[] dedupes and trims entries", async () => {
+    const put = await withAuth(request(app).put("/v1/me/profile"))
+      .send({
+        pulseIds: ["  994428  ", "994428", "1-S2-1-1", "  ", "1-S2-1-1"],
+      })
+      .set("content-type", "application/json");
+    expect(put.status).toBe(200);
+    expect(put.body.pulseIds).toEqual(["994428", "1-S2-1-1"]);
+  });
+
+  test("PUT pulseIds: [] clears both the array and the legacy single field", async () => {
+    // Seed something to clear.
+    await withAuth(request(app).put("/v1/me/profile"))
+      .send({ pulseIds: ["111", "222"] })
+      .set("content-type", "application/json");
+    const put = await withAuth(request(app).put("/v1/me/profile"))
+      .send({ pulseIds: [] })
+      .set("content-type", "application/json");
+    expect(put.status).toBe(200);
+    expect(put.body.pulseId).toBeUndefined();
+    expect(put.body.pulseIds).toBeUndefined();
+    const doc = await db.users.findOne({ clerkUserId: "clerk_user_a" });
+    expect(doc.pulseId).toBeUndefined();
+    expect(doc.pulseIds).toBeUndefined();
+  });
+
+  test("PUT rejects pulseIds with too many entries", async () => {
+    const tooMany = Array.from({ length: 21 }, (_, i) => String(i + 1));
+    const put = await withAuth(request(app).put("/v1/me/profile"))
+      .send({ pulseIds: tooMany })
+      .set("content-type", "application/json");
+    expect(put.status).toBe(400);
+    expect(put.body.error.code).toBe("invalid_profile");
+  });
+
+  test("GET /v1/me/profile surfaces auto-detected toon handles from games", async () => {
+    // Clear any stored pulseIds so detected ones aren't filtered out
+    // by the dedup-against-known step in the GET handler.
+    await withAuth(request(app).put("/v1/me/profile"))
+      .send({ pulseIds: [] })
+      .set("content-type", "application/json");
+    const userDoc = await db.users.findOne({ clerkUserId: "clerk_user_a" });
+    // Insert two games carrying distinct myToonHandles so the GET
+    // aggregation has something to surface. The actual ingest path
+    // also auto-merges these into pulseIds; here we bypass that to
+    // assert the detection-only branch.
+    await db.games.insertMany([
+      {
+        userId: userDoc.userId,
+        gameId: "g_aaaaa",
+        date: new Date("2026-05-01T00:00:00Z"),
+        myToonHandle: "1-S2-1-AAAAAA",
+      },
+      {
+        userId: userDoc.userId,
+        gameId: "g_bbbbb",
+        date: new Date("2026-05-02T00:00:00Z"),
+        myToonHandle: "2-S2-1-BBBBBB",
+      },
+      {
+        // Same handle as game A; should dedupe in the aggregation.
+        userId: userDoc.userId,
+        gameId: "g_ccccc",
+        date: new Date("2026-05-03T00:00:00Z"),
+        myToonHandle: "1-S2-1-AAAAAA",
+      },
+    ]);
+
+    const got = await withAuth(request(app).get("/v1/me/profile"));
+    expect(got.status).toBe(200);
+    // Sorted by lastSeen DESC, so the more-recent handle is first.
+    expect(got.body.detectedPulseIds).toEqual([
+      "1-S2-1-AAAAAA",
+      "2-S2-1-BBBBBB",
+    ]);
+  });
+
+  test("POST /v1/me/profile/pulse-ids/detect copies detected toons into the user's list", async () => {
+    // Carry over the games inserted by the previous test. Reset the
+    // user's stored array so we can observe the merge.
+    await withAuth(request(app).put("/v1/me/profile"))
+      .send({ pulseIds: [] })
+      .set("content-type", "application/json");
+
+    const post = await withAuth(
+      request(app).post("/v1/me/profile/pulse-ids/detect"),
+    );
+    expect(post.status).toBe(200);
+    expect(post.body.added).toBe(2);
+    expect(post.body.pulseIds).toEqual([
+      "1-S2-1-AAAAAA",
+      "2-S2-1-BBBBBB",
+    ]);
+
+    // Re-running is idempotent — added=0 once everything is merged.
+    const second = await withAuth(
+      request(app).post("/v1/me/profile/pulse-ids/detect"),
+    );
+    expect(second.body.added).toBe(0);
   });
 });
