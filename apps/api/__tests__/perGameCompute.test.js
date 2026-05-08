@@ -361,5 +361,77 @@ describe("services/perGameCompute", () => {
       expect(out.total).toBe(0);
       expect(out.status).toBe("done");
     });
+
+    test("force=true also emits the dedicated resync:request event", async () => {
+      // Map Intel's "Request resync" path. Per-game `macro:recompute_request`
+      // alone misses agents whose path_by_game_id index is empty (older
+      // state files), so the API piggy-backs a dedicated full-resync
+      // event whenever the caller passes force: true. Targeted recomputes
+      // (force omitted / false) deliberately don't fire it.
+      const docs = [{ gameId: "g1" }, { gameId: "g2" }];
+      const games = {
+        find: () => ({
+          sort: () => ({
+            limit: () => ({
+              toArray: () => Promise.resolve(docs),
+            }),
+            toArray: () => Promise.resolve(docs),
+          }),
+        }),
+      };
+      const macroJobs = {
+        async insertOne() {
+          return { insertedId: "abc123" };
+        },
+      };
+      const emitted = [];
+      const io = {
+        to: (room) => ({
+          emit: (event, payload) => emitted.push({ room, event, payload }),
+        }),
+      };
+      const svc = new MacroBackfillService({ games, macroJobs }, { io });
+      await svc.start("user-1", {
+        force: true,
+        reason: "map_intel_request_resync",
+      });
+      const events = emitted.map((e) => e.event);
+      expect(events).toContain("macro:recompute_request");
+      expect(events).toContain("resync:request");
+      const resyncEvt = emitted.find((e) => e.event === "resync:request");
+      expect(resyncEvt.room).toBe("user:user-1");
+      expect(resyncEvt.payload.reason).toBe("map_intel_request_resync");
+      expect(typeof resyncEvt.payload.jobId).toBe("string");
+    });
+
+    test("targeted recompute (force=false) does NOT emit resync:request", async () => {
+      const docs = [{ gameId: "g1" }];
+      const games = {
+        find: () => ({
+          sort: () => ({
+            limit: () => ({
+              toArray: () => Promise.resolve(docs),
+            }),
+            toArray: () => Promise.resolve(docs),
+          }),
+        }),
+      };
+      const macroJobs = {
+        async insertOne() {
+          return { insertedId: "abc123" };
+        },
+      };
+      const emitted = [];
+      const io = {
+        to: () => ({
+          emit: (event, payload) => emitted.push({ event, payload }),
+        }),
+      };
+      const svc = new MacroBackfillService({ games, macroJobs }, { io });
+      await svc.start("user-1");
+      const events = emitted.map((e) => e.event);
+      expect(events).toContain("macro:recompute_request");
+      expect(events).not.toContain("resync:request");
+    });
   });
 });

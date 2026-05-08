@@ -535,7 +535,7 @@ class MacroBackfillService {
 
   /**
    * @param {string} userId
-   * @param {{ limit?: number, force?: boolean }} [opts]
+   * @param {{ limit?: number, force?: boolean, reason?: string }} [opts]
    */
   async start(userId, opts = {}) {
     const force = !!opts.force;
@@ -571,6 +571,27 @@ class MacroBackfillService {
         jobId,
         gameIds,
       });
+      // When the user explicitly forces a backfill (e.g. clicked
+      // "Request resync" on a Map Intel surface to populate spatial
+      // extracts), ALSO emit the dedicated full-resync event. The
+      // per-game request only acts on the agent's path_by_game_id
+      // index — which is empty on agent state files written before
+      // v0.4 and so silently no-ops for users with older uploads.
+      // The full-resync event drops the agent's uploaded cursor and
+      // re-walks every watched replay folder, ensuring the next
+      // sweep re-uploads with the latest extracts attached. Targeted
+      // recomputes (force=false) still flow through the per-game
+      // path so a single missing macroBreakdown doesn't trigger a
+      // multi-thousand-replay walk.
+      if (force) {
+        this.io.to(`user:${userId}`).emit("resync:request", {
+          jobId,
+          reason:
+            typeof opts.reason === "string" && opts.reason
+              ? opts.reason
+              : "macro_backfill_force",
+        });
+      }
     }
     return { jobId, total: gameIds.length, status: job.status };
   }

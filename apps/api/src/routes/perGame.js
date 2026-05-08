@@ -171,6 +171,14 @@ function buildMacroBackfillRouter(deps) {
       const out = await deps.macroBackfill.start(userId, {
         limit: body.limit,
         force: !!body.force,
+        // Free-form telemetry tag — surfaces in the agent log
+        // (`full_resync_running reason=…`) so a future "why did the
+        // agent resync?" investigation can identify the trigger.
+        // Capped to a sane length to keep socket payloads small.
+        reason:
+          typeof body.reason === "string"
+            ? body.reason.slice(0, 64)
+            : undefined,
       });
       res.status(202).json({ ok: true, ...out });
     } catch (err) {
