@@ -23,17 +23,40 @@ describe("services/perGameCompute", () => {
         "[3:45] Stargate",
       ]);
       expect(events).toHaveLength(3);
+      // Pylon is recognised as a building via the local known-buildings
+      // fallback even with no catalog supplied — keeps the macro
+      // breakdown's Buildings roster populated for cold-start requests
+      // and deployments without the JSON catalog file on disk.
       expect(events[0]).toMatchObject({
         time: 83,
         time_display: "1:23",
         name: "Pylon",
         display: "Pylon",
         race: "Neutral",
-        category: "unknown",
+        category: "building",
         tier: 0,
-        is_building: false,
+        is_building: true,
       });
       expect(events.map((e) => e.name)).toEqual(["Pylon", "Stalker", "Stargate"]);
+    });
+
+    test("uses local known-buildings fallback when catalog is null", () => {
+      // Without the catalog file available, parseBuildLogLines used to
+      // tag every event with is_building: false. The new fallback set
+      // keeps the classification correct for the common buildings.
+      const events = parseBuildLogLines([
+        "[0:30] Stalker",
+        "[1:00] Pylon",
+        "[1:15] Hatchery",
+        "[1:30] CommandCenter",
+        "[2:00] WarpGate",
+      ]);
+      const byName = new Map(events.map((e) => [e.name, e]));
+      expect(byName.get("Stalker")?.is_building).toBe(false);
+      expect(byName.get("Pylon")?.is_building).toBe(true);
+      expect(byName.get("Hatchery")?.is_building).toBe(true);
+      expect(byName.get("CommandCenter")?.is_building).toBe(true);
+      expect(byName.get("WarpGate")?.is_building).toBe(true);
     });
 
     test("strips noise lines (Beacon, Reward, Spray)", () => {

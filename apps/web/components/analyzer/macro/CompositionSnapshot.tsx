@@ -10,7 +10,10 @@ import type {
 } from "./MacroBreakdownPanel.types";
 import { nearestPoint } from "./activeArmyLayout";
 import {
+  countBuildingsAt,
+  countUpgradesAt,
   deriveUnitComposition,
+  sortByCountDesc,
   type BuildEvent,
   type CompositionSource,
 } from "./compositionAt";
@@ -141,6 +144,14 @@ export function CompositionSnapshot({
     () => countBuildingsAt(buildOrderData?.opp_events ?? [], targetT),
     [buildOrderData, targetT],
   );
+  const myUpgrades = useMemo(
+    () => countUpgradesAt(buildOrderData?.events ?? [], targetT),
+    [buildOrderData, targetT],
+  );
+  const oppUpgrades = useMemo(
+    () => countUpgradesAt(buildOrderData?.opp_events ?? [], targetT),
+    [buildOrderData, targetT],
+  );
 
   const myArmyValue = computeArmyValue(myComposition.units);
   const oppArmyValue = computeArmyValue(oppComposition.units);
@@ -168,6 +179,8 @@ export function CompositionSnapshot({
     Object.keys(oppBuildings).length === 0 &&
     Object.keys(myComposition.units).length === 0 &&
     Object.keys(oppComposition.units).length === 0 &&
+    Object.keys(myUpgrades).length === 0 &&
+    Object.keys(oppUpgrades).length === 0 &&
     !buildOrderLoading;
 
   const buildOrderState: BuildOrderState = buildOrderLoading
@@ -209,6 +222,7 @@ export function CompositionSnapshot({
           workers={myWorkers}
           armyValue={myArmyValue}
           buildings={myBuildings}
+          upgrades={myUpgrades}
           time={snapshotTime}
           buildOrderState={buildOrderState}
         />
@@ -221,6 +235,7 @@ export function CompositionSnapshot({
           workers={oppWorkers}
           armyValue={oppArmyValue}
           buildings={oppBuildings}
+          upgrades={oppUpgrades}
           time={snapshotTime}
           buildOrderState={buildOrderState}
         />
@@ -240,6 +255,7 @@ function PlayerStrip({
   workers,
   armyValue,
   buildings,
+  upgrades,
   time,
   buildOrderState,
 }: {
@@ -251,6 +267,7 @@ function PlayerStrip({
   workers: number;
   armyValue: number;
   buildings: Record<string, number>;
+  upgrades: Record<string, number>;
   time: number;
   buildOrderState: BuildOrderState;
 }) {
@@ -259,8 +276,12 @@ function PlayerStrip({
     [composition],
   );
   const sortedBuildings = useMemo(
-    () => sortBuildings(buildings),
+    () => sortByCountDesc(buildings),
     [buildings],
+  );
+  const sortedUpgrades = useMemo(
+    () => sortByCountDesc(upgrades),
+    [upgrades],
   );
   const workerName = workerNameForRace(race);
   const accentClass =
@@ -347,6 +368,24 @@ function PlayerStrip({
             />
           ))}
         />
+        <RosterRow
+          label="Upgrades"
+          empty={
+            buildOrderState === "loading"
+              ? "Loading…"
+              : "No upgrades yet"
+          }
+          chips={sortedUpgrades.map(({ name: upgradeName, count }) => (
+            <UnitChip
+              key={upgradeName}
+              name={upgradeName}
+              kind="upgrade"
+              count={count}
+              fallback={upgradeName.slice(0, 2)}
+              tone="upgrade"
+            />
+          ))}
+        />
       </div>
     </section>
   );
@@ -422,15 +461,17 @@ function UnitChip({
   tone,
 }: {
   name: string;
-  kind: "unit" | "building";
+  kind: "unit" | "building" | "upgrade";
   count: number;
   fallback: string;
-  tone: "neutral" | "building";
+  tone: "neutral" | "building" | "upgrade";
 }) {
   const toneClass =
     tone === "building"
       ? "bg-bg-elevated/80 ring-1 ring-accent-cyan/30"
-      : "bg-bg-elevated";
+      : tone === "upgrade"
+        ? "bg-bg-elevated/80 ring-1 ring-accent/30"
+        : "bg-bg-elevated";
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded ${toneClass} px-2 py-1 text-[13px] tabular-nums text-text`}
@@ -467,64 +508,3 @@ function workersAt(samples: StatsEvent[], t: number): number {
   return nearest ? nearest.workers : 0;
 }
 
-/**
- * Reduce a build-order timeline into ``{name: count}`` for buildings
- * built up to and including ``t``. The agent's buildLog only records
- * starts (no death events), but for the composition snapshot showing
- * total-built-by-T is the right answer — sc2replaystats's overview
- * shows the same cumulative summary.
- *
- * We accept either ``my_pid`` or ``opp_pid`` lists (caller picks); the
- * canonical building name comes from the agent's catalog so morphs
- * (Hatch → Lair → Hive) appear as their final form when reached.
- */
-function countBuildingsAt(
-  events: BuildEvent[],
-  t: number,
-): Record<string, number> {
-  if (!Array.isArray(events) || events.length === 0) return {};
-  const counts: Record<string, number> = {};
-  // Track 1:1 morph chains so the destination building replaces
-  // its predecessor in the count rather than double-counting. Mirrors
-  // the agent's UnitTypeChangeEvent handling in event_extractor.py.
-  const morphMap: Record<string, string> = {
-    Lair: "Hatchery",
-    Hive: "Lair",
-    OrbitalCommand: "CommandCenter",
-    PlanetaryFortress: "CommandCenter",
-    GreaterSpire: "Spire",
-    LurkerDen: "HydraliskDen",
-    LurkerDenMP: "HydraliskDen",
-    WarpGate: "Gateway",
-  };
-  for (const ev of events) {
-    if (!ev || !ev.is_building) continue;
-    const time = Number(ev.time) || 0;
-    if (time > t) break; // events are sorted ascending
-    const name = ev.name || ev.display || "";
-    if (!name) continue;
-    const prev = morphMap[name];
-    if (prev && (counts[prev] || 0) > 0) {
-      counts[prev] = (counts[prev] || 0) - 1;
-      if (counts[prev] === 0) delete counts[prev];
-    }
-    counts[name] = (counts[name] || 0) + 1;
-  }
-  return counts;
-}
-
-/** Sort buildings by descending count, tiebreak by name. */
-function sortBuildings(
-  buildings: Record<string, number>,
-): Array<{ name: string; count: number }> {
-  const entries: Array<{ name: string; count: number }> = [];
-  for (const [name, count] of Object.entries(buildings || {})) {
-    if (!count || count <= 0) continue;
-    entries.push({ name, count });
-  }
-  entries.sort((a, b) => {
-    if (b.count !== a.count) return b.count - a.count;
-    return a.name.localeCompare(b.name);
-  });
-  return entries;
-}

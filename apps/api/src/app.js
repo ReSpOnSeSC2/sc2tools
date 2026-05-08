@@ -148,6 +148,14 @@ function makeServices(deps) {
   const streak = new StreakService(deps.db);
   const builds = new BuildsService(deps.db);
   const catalog = new CatalogService(deps.db);
+  // Eager-load the JSON catalog so the first build-order /
+  // macro-breakdown request after a cold start gets a populated
+  // ``isBuilding`` flag. Without this, the lookup hits the lazy load
+  // path and returns null for every name on the first request — every
+  // building then misclassifies as a unit and the Buildings roster
+  // reads empty. Failure is non-fatal: ``parseBuildLogLines`` falls
+  // through to the local KNOWN_BUILDING_NAMES set.
+  Promise.resolve(catalog.catalog()).catch(() => {});
   const perGame = new PerGameComputeService(deps.db, {
     catalog: catalog.catalogLookup(),
     gameDetails,

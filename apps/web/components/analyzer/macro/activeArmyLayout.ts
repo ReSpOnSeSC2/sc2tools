@@ -24,13 +24,17 @@ export const PAD_RIGHT = 44;
 export const PAD_TOP = 16;
 export const PAD_BOTTOM = 28;
 /**
- * Pre-unit-timeline fallback: convert ``food_used`` to a comparable
- * army-value scale by multiplying by 8. The number is empirical —
- * it lines an average mid-game army's supply count up with the
- * mineral+gas army value the unit-timeline path produces, so the
- * chart looks consistent across old (pre-v0.5) and new payloads.
+ * Pre-unit-timeline fallback: estimate army value from ``food_used`` /
+ * ``food_workers``. We use ``(food_used - food_workers) * 50`` because
+ * a typical mid-game ground unit costs ~50 mineral+gas per supply
+ * (Marine 50/1 → 50, Marauder 125/2 → 62, Stalker 175/2 → 87,
+ * Roach 100/2 → 50, Hydralisk 150/2 → 75), and subtracting workers
+ * isolates the fighting army. The previous heuristic
+ * (``food_used * 8``) inflated the line during the worker-saturation
+ * phase and clipped it during all-in pushes — the new formula tracks
+ * sc2replaystats's "Army value" curve much more closely.
  */
-export const FOOD_FALLBACK_MULT = 8;
+export const FOOD_FALLBACK_MULT = 50;
 export const ARMY_FLOOR = 200;
 export const WORKER_FLOOR = 12;
 export const X_TICK_STEP_SEC = 60;
@@ -107,9 +111,14 @@ export function buildSeries(
     });
     let army: number;
     if (derived.source === "empty") {
-      // Last-resort fallback: food*8 keeps the line continuous when
-      // no per-tick composition is available at all.
-      army = (Number(sample.food_used) || 0) * FOOD_FALLBACK_MULT;
+      // Last-resort fallback for slim payloads (pre-v0.5 agents that
+      // didn't ship ``unit_timeline`` or ``buildLog``): estimate army
+      // value from net fighting supply. Subtracting workers from
+      // ``food_used`` removes the saturation curve from the army line;
+      // 50 mineral+gas per supply matches the average ground composition.
+      const food = Number(sample.food_used) || 0;
+      const fighting = Math.max(0, food - workers);
+      army = fighting * FOOD_FALLBACK_MULT;
     } else {
       army = computeArmyValue(derived.units);
     }
@@ -139,14 +148,19 @@ export function buildLayout(
   const maxT = Math.max(observedT, Number(gameLengthSec) || 0, 60);
   const armyVals = allSeries.map((p) => p.army);
   const workerVals = allSeries.map((p) => p.workers);
-  const armyMax = Math.max(
+  const armyPeak = Math.max(
     armyVals.length ? Math.max(...armyVals) : 0,
     ARMY_FLOOR,
   );
-  const workerMax = Math.max(
+  const workerPeak = Math.max(
     workerVals.length ? Math.max(...workerVals) : 0,
     WORKER_FLOOR,
   );
+  // Round axis maxima up to a "nice" number so the four Y-tick labels
+  // read as round values (200/400/600/800 instead of 173/345/518/691).
+  // Matches sc2replaystats's chart calibration.
+  const armyMax = niceCeil(armyPeak);
+  const workerMax = niceCeil(workerPeak);
 
   const innerW = VIEW_W - PAD_LEFT - PAD_RIGHT;
   const innerH = VIEW_H - PAD_TOP - PAD_BOTTOM;
@@ -158,8 +172,12 @@ export function buildLayout(
     return ((clamped - PAD_LEFT) / innerW) * maxT;
   };
 
+  // X-tick density adapts to game length so labels never collide:
+  // ≤7 min → 60 s ticks; ≤15 min → 120 s; otherwise 180 s.
+  const xTickStep =
+    maxT > 900 ? 180 : maxT > 420 ? 120 : X_TICK_STEP_SEC;
   const xTicks: number[] = [];
-  for (let t = 0; t <= maxT; t += X_TICK_STEP_SEC) xTicks.push(t);
+  for (let t = 0; t <= maxT; t += xTickStep) xTicks.push(t);
 
   return {
     width: VIEW_W,
@@ -204,6 +222,37 @@ function pathFor(
 }
 
 /**
+ * Round a positive value up to the next "nice" axis maximum so the
+ * Y-tick labels read as round numbers. Picks from a 1-2-2.5-5
+ * sequence in each decade. Examples:
+ *   niceCeil(173) → 200; niceCeil(345) → 400 (closest 5 step is 500
+ *   but 4×100 keeps the four-tick grid clean for ~400-class peaks);
+ *   niceCeil(518) → 600; niceCeil(2487) → 2500.
+ *
+ * The returned value is always >= the input. Zero or negative inputs
+ * snap to the input unchanged (callers floor to ARMY_FLOOR before
+ * calling so this branch is unreachable in practice).
+ *
+ * Exported for unit tests.
+ */
+export function niceCeil(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return value;
+  const exponent = Math.floor(Math.log10(value));
+  const magnitude = 10 ** exponent;
+  const normalized = value / magnitude; // 1.0 ≤ x < 10
+  let nice: number;
+  if (normalized <= 1) nice = 1;
+  else if (normalized <= 2) nice = 2;
+  else if (normalized <= 2.5) nice = 2.5;
+  else if (normalized <= 4) nice = 4;
+  else if (normalized <= 5) nice = 5;
+  else if (normalized <= 6) nice = 6;
+  else if (normalized <= 8) nice = 8;
+  else nice = 10;
+  return nice * magnitude;
+}
+
+/**
  * Find the series point whose time is closest to ``t``. Returns
  * ``null`` for an empty series. Linear scan is fine — series length
  * caps at ~50 entries on a 25-minute game (one per 30 s).
@@ -225,20 +274,3 @@ export function nearestPoint(
   return best;
 }
 
-/** Find the unit_timeline entry whose time is closest to ``t``. */
-export function nearestTimelineEntry(
-  timeline: UnitTimelineEntry[] | undefined,
-  t: number,
-): UnitTimelineEntry | null {
-  if (!Array.isArray(timeline) || timeline.length === 0) return null;
-  let best = timeline[0];
-  let bestD = Math.abs((best.time || 0) - t);
-  for (let i = 1; i < timeline.length; i++) {
-    const d = Math.abs((timeline[i].time || 0) - t);
-    if (d < bestD) {
-      best = timeline[i];
-      bestD = d;
-    }
-  }
-  return best;
-}

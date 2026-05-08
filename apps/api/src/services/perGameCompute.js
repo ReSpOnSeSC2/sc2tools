@@ -5,6 +5,8 @@ const { stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
 const { toStartSeconds } = require("./buildDurations");
 
+const { KNOWN_BUILDING_NAMES, isKnownBuilding } = require("./knownBuildings");
+
 const BUILD_LOG_LINE_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
 const BUILD_LOG_NOISE_RE = /^(Beacon|Reward|Spray)/;
 
@@ -699,15 +701,23 @@ function parseBuildLogLines(lines, catalog) {
         entry = null;
       }
     }
+    // Buildings classification falls back to the local known-buildings
+    // set when the catalog file isn't loaded or doesn't recognise the
+    // name. Without this, the macro-breakdown Buildings roster reads
+    // empty for cold-start requests and for any deployment where the
+    // ``data/sc2_catalog.json`` file isn't on disk.
+    const isBuilding = entry && entry.isBuilding != null
+      ? !!entry.isBuilding
+      : isKnownBuilding(rawName);
     events.push({
       time: minutes * 60 + seconds,
       time_display: `${minutes}:${String(seconds).padStart(2, "0")}`,
       name: rawName,
       display: entry ? entry.display : rawName,
       race: entry ? entry.race : "Neutral",
-      category: entry ? entry.category : "unknown",
+      category: entry ? entry.category : (isBuilding ? "building" : "unknown"),
       tier: entry ? entry.tier : 0,
-      is_building: entry ? !!entry.isBuilding : false,
+      is_building: isBuilding,
       comp: entry ? entry.comp || null : null,
     });
   }
@@ -767,5 +777,9 @@ module.exports = {
   deriveEarlyBuildLog,
   readEarlyBuildLog,
   readOppEarlyBuildLog,
+  // Exported for tests + cross-service reuse — the macro/build flow
+  // wants the same fallback classification regardless of catalog state.
+  isKnownBuilding,
+  KNOWN_BUILDING_NAMES,
   EARLY_BUILD_LOG_CUTOFF_SEC,
 };
