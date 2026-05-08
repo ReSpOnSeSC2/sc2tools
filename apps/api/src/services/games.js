@@ -29,7 +29,10 @@ class GamesService {
    *       mmr: number,
    *       region: string | null,
    *     } | null>,
-   *     getCurrentMmrForAny?(ids: string[]): Promise<{
+   *     getCurrentMmrForAny?(
+   *       ids: string[],
+   *       opts?: { preferredRegion?: string },
+   *     ): Promise<{
    *       mmr: number,
    *       region: string | null,
    *     } | null>,
@@ -461,14 +464,33 @@ class GamesService {
     }
     pushPulseId(profile.pulseId);
     pushPulseId(lastKnownMyToonHandle);
+    // Pin SC2Pulse's region selection to wherever the streamer actually
+    // played most recently. The toon-handle byte from the most recent
+    // game (1=NA, 2=EU, 3=KR/TW, 5=CN, 6=SEA) is the strongest signal
+    // — it's "where the last replay landed" — and stops a multi-region
+    // profile from pinning to a stale account on the wrong ladder when
+    // SC2Pulse's lastPlayed for that account happens to be more recent
+    // than the streamer's current grind. Profile.region (what the user
+    // typed into Settings) is the next-best fallback. When neither is
+    // available we let SC2Pulse's global lastPlayed sort decide.
+    /** @type {string|undefined} */
+    let preferredRegion;
+    if (lastKnownMyToonHandle) {
+      const inferred = regionFromToonHandle(lastKnownMyToonHandle);
+      if (inferred) preferredRegion = inferred;
+    }
+    if (!preferredRegion && typeof profile.region === "string" && profile.region) {
+      preferredRegion = profile.region.toUpperCase();
+    }
     // Tier-3 fallback: still no MMR after walking every game we have.
     // Hit SC2Pulse for the user's current 1v1 ladder rating with the
     // FULL union of saved + auto-detected pulse ids in a single batched
     // call. The service picks whichever team SC2Pulse says was played
-    // most recently across the entire union, so a multi-region streamer
-    // who pasted a NA toon first but is currently grinding EU still
-    // sees "EU 5343" on the overlay instead of stale numbers from the
-    // first id alone.
+    // most recently across the entire union, biased to the streamer's
+    // last-played region — so a multi-region streamer who pasted a NA
+    // toon plus two stale numeric chips still sees "NA 5377" when their
+    // most recent replay was on NA, instead of "KR 5377" because some
+    // other Pulse account on KR was touched yesterday.
     if (
       mmrCurrent === undefined &&
       this.pulseMmr &&
@@ -476,7 +498,10 @@ class GamesService {
       pulseIdsUnion.length > 0
     ) {
       try {
-        const pulse = await this.pulseMmr.getCurrentMmrForAny(pulseIdsUnion);
+        const pulse = await this.pulseMmr.getCurrentMmrForAny(
+          pulseIdsUnion,
+          preferredRegion ? { preferredRegion } : undefined,
+        );
         if (pulse && Number.isFinite(pulse.mmr)) {
           mmrCurrent = pulse.mmr;
           mmrSource = "pulse_multi";
