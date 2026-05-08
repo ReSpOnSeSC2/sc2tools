@@ -605,7 +605,19 @@ def parse_replay_for_cloud(
         "yes" if spatial is not None else "no",
     )
 
-    my_mmr_raw = getattr(me, "mmr", None)
+    # ``me.mmr`` comes from the replay's profile/init data block, which
+    # Blizzard populates inconsistently for the local player — it's
+    # frequently None on the recorder's own player even on ranked games.
+    # ``me.scaled_rating`` comes from the tracker-events stream, which
+    # broadcasts every player's displayed MMR symmetrically. Prefer
+    # ``scaled_rating`` (matches the opponent path's preference order)
+    # and fall back to ``mmr`` only if it's missing. Without this the
+    # session widget's myMmr-based fallbacks (Tier-1/Tier-2 in
+    # apps/api/src/services/games.js) come up empty for streamers and
+    # the overlay shows ``— MMR`` until they manually paste a Pulse ID.
+    my_mmr_raw = getattr(me, "scaled_rating", None)
+    if my_mmr_raw is None:
+        my_mmr_raw = getattr(me, "mmr", None)
     try:
         my_mmr = int(my_mmr_raw) if my_mmr_raw is not None else None
     except (TypeError, ValueError):

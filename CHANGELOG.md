@@ -10,6 +10,36 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+## [agent-v0.5.5] - 2026-05-07
+
+Released as `agent-v0.5.5` on GitHub. Installer:
+`SC2ToolsAgent-Setup-0.5.5.exe`.
+
+### Fixed (agent) — streamer's own MMR now extracted from `scaled_rating`
+
+A streamer running a 13k-replay resync reported `NA — MMR` on the
+session widget despite agent v0.5.4 and a healthy backlog of ranked 1v1
+games landing in the cloud DB. Opponent MMR rendered everywhere
+correctly; only the streamer's own MMR was missing. Root cause was an
+asymmetry in `replay_pipeline.py`: the opponent extractor walked both
+`mmr` and `scaled_rating` on each `Player` (preferring the latter), but
+the local-player extractor read only `me.mmr`. Blizzard populates the
+profile/init-data block (where `mmr` lives) inconsistently for the
+recorder of the replay — it's frequently `None` for the local player
+even on ranked ladder games — while the tracker-events stream (where
+`scaled_rating` lives) carries every player's displayed MMR
+symmetrically. The result: every uploaded game shipped `myMmr=null`,
+both Tier-1 (today's games) and Tier-2 (any historical game with
+`myMmr`) fallbacks in the session resolver returned empty, and the
+overlay sat on `— MMR` forever for any streamer who hadn't manually
+pasted a Pulse ID into Settings → Profile.
+
+Fix is symmetric with the opponent path: prefer `scaled_rating`, fall
+back to `mmr` only if absent. New replays carry the streamer's MMR on
+upload, and the session widget populates from Tier-1 immediately on
+the first ranked game ingested after the agent upgrade. Existing rows
+in the DB stay `myMmr`-less until a re-upload (or a future backfill).
+
 ## [agent-v0.5.4] - 2026-05-07
 
 Released as `agent-v0.5.4` on GitHub. Installer:
