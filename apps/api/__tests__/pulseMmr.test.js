@@ -24,10 +24,39 @@ function failureResponse() {
 }
 
 describe("services/pulseMmr", () => {
-  test("returns null for non-numeric pulseIds (raw toon handles)", async () => {
+  test("getCurrentMmr falls through to the toon-handle path on non-numeric input", async () => {
+    // A streamer who pasted their raw toon handle into Settings →
+    // Profile → Pulse ID still gets a real number on the overlay; the
+    // numeric branch returns null and the service then runs the
+    // /character/search → /group/team round-trip via getCurrentMmrByToon.
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/character/search")) {
+        return jsonResponse([{ character: { id: 994428 } }]);
+      }
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "EU" }]);
+      }
+      return jsonResponse([
+        { rating: 5343, lastPlayed: "2026-05-01T10:00:00Z" },
+      ]);
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmr("2-S2-1-12345");
+    expect(out?.mmr).toBe(5343);
+    expect(out?.region).toBe("EU");
+    // /character/search must run; otherwise we'd be in the legacy
+    // numeric-only branch.
+    expect(
+      fetchImpl.mock.calls.some((c) =>
+        String(c[0]).includes("/character/search"),
+      ),
+    ).toBe(true);
+  });
+
+  test("returns null for malformed handles that match neither numeric id nor toon shape", async () => {
     const fetchImpl = jest.fn();
     const svc = new PulseMmrService({ fetchImpl });
-    expect(await svc.getCurrentMmr("2-S2-1-12345")).toBeNull();
+    expect(await svc.getCurrentMmr("not-a-handle")).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -37,6 +66,65 @@ describe("services/pulseMmr", () => {
     expect(await svc.getCurrentMmr(undefined)).toBeNull();
     expect(await svc.getCurrentMmr("")).toBeNull();
     expect(await svc.getCurrentMmr("   ")).toBeNull();
+  });
+
+  test("getCurrentMmrByToon resolves toon → characterId via /character/search", async () => {
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/character/search")) {
+        // SC2Pulse returns the canonical id under either `character.id`
+        // or `member.character.id` depending on which endpoint shape
+        // the user query hits — we accept both.
+        return jsonResponse([
+          { member: { character: { id: 994428 } } },
+        ]);
+      }
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "EU" }]);
+      }
+      return jsonResponse([
+        { rating: 5100, lastPlayed: "2026-05-04T10:00:00Z" },
+      ]);
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrByToon("2-S2-1-99999");
+    expect(out?.mmr).toBe(5100);
+    expect(out?.region).toBe("EU");
+    // The decoded profile URL must include the region/realm/id parts of
+    // the toon handle so SC2Pulse picks the right account.
+    const searchUrl = fetchImpl.mock.calls
+      .map((c) => String(c[0]))
+      .find((u) => u.includes("/character/search"));
+    expect(searchUrl).toMatch(/profile%2F2%2F1%2F99999/);
+  });
+
+  test("getCurrentMmrByToon caches the toon→characterId mapping", async () => {
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/character/search")) {
+        return jsonResponse([{ character: { id: 994428 } }]);
+      }
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "EU" }]);
+      }
+      return jsonResponse([
+        { rating: 5100, lastPlayed: "2026-05-04T10:00:00Z" },
+      ]);
+    });
+    const svc = new PulseMmrService({ fetchImpl, cacheTtlMs: 60_000 });
+    await svc.getCurrentMmrByToon("2-S2-1-99999");
+    await svc.getCurrentMmrByToon("2-S2-1-99999");
+    const searchCalls = fetchImpl.mock.calls.filter((c) =>
+      String(c[0]).includes("/character/search"),
+    ).length;
+    // Without caching this would be 2.
+    expect(searchCalls).toBe(1);
+  });
+
+  test("getCurrentMmrByToon rejects garbage handles without a network call", async () => {
+    const fetchImpl = jest.fn();
+    const svc = new PulseMmrService({ fetchImpl });
+    expect(await svc.getCurrentMmrByToon("nope")).toBeNull();
+    expect(await svc.getCurrentMmrByToon(null)).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   test("returns most recently played team's rating + region", async () => {

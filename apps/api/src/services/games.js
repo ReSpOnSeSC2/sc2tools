@@ -25,6 +25,10 @@ class GamesService {
    *       mmr: number,
    *       region: string | null,
    *     } | null>,
+   *     getCurrentMmrByToon?(toonHandle: string): Promise<{
+   *       mmr: number,
+   *       region: string | null,
+   *     } | null>,
    *   },
    * }} [opts]
    */
@@ -217,6 +221,11 @@ class GamesService {
             result: 1,
             date: 1,
             myMmr: 1,
+            // Streamer's own toon handle. Lets the Tier-3 SC2Pulse
+            // fallback resolve their CURRENT 1v1 ladder rating when no
+            // game in their history carries `myMmr` and they haven't
+            // pasted a numeric pulseId into Settings → Profile.
+            myToonHandle: 1,
             // ``opponent.toonHandle`` is "<region>-S<season>-<realm>-<id>".
             // The first segment (1=NA, 2=EU, 3=KR/TW, 5=CN, 6=SEA) is
             // a reliable region hint when the user profile hasn't been
@@ -241,6 +250,8 @@ class GamesService {
     let sessionStartedAt;
     /** @type {string|undefined} */
     let lastKnownToonHandle;
+    /** @type {string|undefined} */
+    let lastKnownMyToonHandle;
     /** @type {Array<'win'|'loss'>} */
     const todayResults = [];
     for (const row of rows) {
@@ -255,6 +266,10 @@ class GamesService {
       const toon = row.opponent && row.opponent.toonHandle;
       if (typeof toon === "string" && toon.length > 0) {
         lastKnownToonHandle = toon;
+      }
+      const myToon = row.myToonHandle;
+      if (typeof myToon === "string" && myToon.length > 0) {
+        lastKnownMyToonHandle = myToon;
       }
       if (formatDayKey(date, tz) !== todayKey) continue;
       games += 1;
@@ -340,6 +355,34 @@ class GamesService {
         // PulseMmrService already swallows network errors and returns
         // null; this catch is belt-and-braces against a thrown error
         // bubbling out of an unfamiliar fetch implementation.
+      }
+    }
+    // Tier-3 fallback (continued): no profile.pulseId, OR the profile
+    // pulseId didn't resolve. Use the streamer's own raw toon_handle —
+    // forwarded by recent agent uploads on each game — to drive the
+    // SC2Pulse character search. This rescues streamers who never
+    // pasted a numeric pulseCharacterId into Settings (the common
+    // case: the field is empty on a fresh install).
+    if (
+      mmrCurrent === undefined &&
+      this.pulseMmr &&
+      typeof this.pulseMmr.getCurrentMmrByToon === "function" &&
+      lastKnownMyToonHandle
+    ) {
+      try {
+        const pulse = await this.pulseMmr.getCurrentMmrByToon(
+          lastKnownMyToonHandle,
+        );
+        if (pulse && Number.isFinite(pulse.mmr)) {
+          mmrCurrent = pulse.mmr;
+          if (typeof pulse.region === "string" && pulse.region) {
+            pulseRegion = pulse.region;
+          }
+        }
+      } catch {
+        // Same fail-soft contract as the profile-pulseId branch above —
+        // a SC2Pulse hiccup must never block the session payload from
+        // emitting.
       }
     }
     /**

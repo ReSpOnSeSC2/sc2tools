@@ -37,10 +37,15 @@ const REGION_CODE_TO_LABEL = {
 };
 
 /**
+ * Cache entry shape. The team-scan path stores ``mmr`` + ``region``;
+ * the toon→characterId mapping path also stashes ``characterId`` so a
+ * follow-up call can skip the /character/search round-trip.
+ *
  * @typedef {{
  *   mmr: number,
  *   region: string | null,
  *   fetchedAt: number,
+ *   characterId?: string,
  * }} PulseMmrEntry
  */
 
@@ -79,7 +84,15 @@ class PulseMmrService {
    */
   async getCurrentMmr(pulseId) {
     const id = normalisePulseId(pulseId);
-    if (!id) return null;
+    if (!id) {
+      // Permissive fallback: a streamer who pasted their raw toon
+      // handle (``"2-S2-1-267727"``) into Settings → Profile → Pulse ID
+      // shouldn't see "EU —" forever. Treat it as a toon handle and run
+      // the SC2Pulse character search before giving up.
+      const handle = normaliseToonHandle(pulseId);
+      if (handle) return this.getCurrentMmrByToon(handle);
+      return null;
+    }
     const cached = this._cache.get(id);
     const now = this.now();
     if (cached && now - cached.fetchedAt < this.cacheTtlMs) {
@@ -94,6 +107,83 @@ class PulseMmrService {
     // Stale-while-error: a network blip shouldn't strip the streamer's
     // MMR off the overlay if we already had a value cached.
     if (cached) return { mmr: cached.mmr, region: cached.region };
+    return null;
+  }
+
+  /**
+   * Resolve current 1v1 MMR for a streamer who hasn't given us a
+   * canonical SC2Pulse character id, only their raw sc2reader
+   * ``toon_handle`` (e.g. ``"2-S2-1-267727"`` — region-season-realm-id).
+   *
+   * Two-step round-trip: SC2Pulse ``/character/search`` accepts the
+   * legacy battlenet account url that the toon handle decodes into
+   * (``starcraft2.blizzard.com/profile/<region>/<realm>/<id>``), and
+   * returns the canonical numeric character id. We then forward that
+   * to ``getCurrentMmr`` so the existing cache + per-region team scan
+   * applies. The intermediate handle→id mapping is cached separately
+   * so a re-resolve only costs the team scan, not another search.
+   *
+   * Returns null when:
+   *   - The handle isn't shaped like ``<region>-S<season>-<realm>-<id>``
+   *     so we can't build the search URL.
+   *   - SC2Pulse doesn't recognise the account.
+   *   - The character has no team in the active season for any region.
+   *
+   * @param {string|null|undefined} toonHandle
+   * @returns {Promise<{mmr: number, region: string|null}|null>}
+   */
+  async getCurrentMmrByToon(toonHandle) {
+    const handle = normaliseToonHandle(toonHandle);
+    if (!handle) return null;
+    const cacheKey = `toon:${handle}`;
+    const now = this.now();
+    const mappedId = this._cache.get(cacheKey);
+    if (mappedId && typeof mappedId.characterId === "string") {
+      // Cached toon→id mapping is still valid. Recurse into the numeric
+      // path so the same TTL-aware cache + stale-while-error semantics
+      // apply for the team scan.
+      const fresh = await this.getCurrentMmr(mappedId.characterId);
+      if (fresh) return fresh;
+    }
+    const characterId = await this._resolveCharacterIdFromToon(handle);
+    if (!characterId) return null;
+    // Persist the toon→id mapping so we don't re-hit /character/search
+    // on every session-widget tick. The numeric MMR cache has its own
+    // entry under ``characterId`` keyed by ``id``; this entry only
+    // memoises the cheap mapping side.
+    this._cache.set(cacheKey, {
+      characterId,
+      mmr: 0,
+      region: null,
+      fetchedAt: now,
+    });
+    return this.getCurrentMmr(characterId);
+  }
+
+  /**
+   * @private
+   * @param {string} handle  e.g. ``"2-S2-1-267727"``
+   * @returns {Promise<string|null>} canonical SC2Pulse character id
+   */
+  async _resolveCharacterIdFromToon(handle) {
+    const parsed = parseToonHandle(handle);
+    if (!parsed) return null;
+    const profileUrl =
+      `https://starcraft2.blizzard.com/en-us/profile/` +
+      `${parsed.region}/${parsed.realm}/${parsed.id}`;
+    const url =
+      `${PULSE_API_ROOT}/character/search` +
+      `?term=${encodeURIComponent(profileUrl)}`;
+    const hits = await this._getJson(url);
+    if (!Array.isArray(hits)) return null;
+    for (const hit of hits) {
+      const ch = hit && (hit.character || hit.member && hit.member.character);
+      const id = ch && (ch.id ?? ch.battlenetId);
+      if (id !== undefined && id !== null) {
+        const s = String(id).trim();
+        if (/^[0-9]{1,12}$/.test(s)) return s;
+      }
+    }
     return null;
   }
 
@@ -210,9 +300,8 @@ class PulseMmrService {
 
 /**
  * Accept only purely-numeric SC2Pulse character ids. Raw toon handles
- * like "2-S2-1-267727" need a separate `/character/search` resolution
- * step that we don't run from the session-widget path; the user can
- * paste their pulse id into the profile panel to opt in.
+ * like "2-S2-1-267727" go through ``getCurrentMmrByToon`` instead — the
+ * caller fans out automatically when this returns null.
  *
  * @param {unknown} raw
  * @returns {string|null}
@@ -223,6 +312,39 @@ function normalisePulseId(raw) {
   if (!trimmed) return null;
   if (!/^[0-9]{1,12}$/.test(trimmed)) return null;
   return trimmed;
+}
+
+/**
+ * Trim and shape-check a sc2reader toon handle. Returns the canonical
+ * lowercased form (``"<region>-S<season>-<realm>-<id>"``) when the
+ * shape matches, null otherwise.
+ *
+ * @param {unknown} raw
+ * @returns {string|null}
+ */
+function normaliseToonHandle(raw) {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (!/^[1-9]-S\d+-\d+-\d+$/i.test(trimmed)) return null;
+  return trimmed;
+}
+
+/**
+ * Decompose a toon handle into the parts SC2Pulse's ``/character/search``
+ * needs to identify a battle.net account. Returns null when the shape
+ * doesn't match — callers must already have run ``normaliseToonHandle``.
+ *
+ * @param {string} handle
+ * @returns {{region: string, realm: string, id: string}|null}
+ */
+function parseToonHandle(handle) {
+  // Shape: ``<region>-S<season>-<realm>-<id>``. We only need the
+  // region byte, the realm, and the bnid — season is irrelevant to
+  // the legacy profile URL.
+  const m = /^([1-9])-S\d+-(\d+)-(\d+)$/.exec(handle);
+  if (!m) return null;
+  return { region: m[1], realm: m[2], id: m[3] };
 }
 
 /**

@@ -322,6 +322,14 @@ class CloudGame:
     # to ``None`` so the dataclass stays backwards-compatible with test
     # fixtures that pre-date the field.
     my_mmr: Optional[int] = None
+    # The signed-in player's raw sc2reader toon_handle (e.g.
+    # ``"2-S2-1-267727"``). Surfaced so the cloud's session-widget MMR
+    # fallback can resolve the streamer's CURRENT 1v1 ladder rating via
+    # SC2Pulse without forcing them to paste their pulseId into Settings
+    # → Profile manually. Optional — pre-cutover replays lack the
+    # attribute, and the cloud Tier-3 fallback already handles its
+    # absence.
+    my_toon_handle: Optional[str] = None
     # Optional structured outputs the cloud uses to render the Activity
     # tab's per-game charts and the macro-breakdown drilldown. Computing
     # these requires a deep parse + extra event walks; we attach them
@@ -363,6 +371,8 @@ class CloudGame:
             out["spq"] = round(float(self.spq), 2)
         if self.my_mmr is not None:
             out["myMmr"] = int(self.my_mmr)
+        if self.my_toon_handle:
+            out["myToonHandle"] = str(self.my_toon_handle)
         if self.opponent:
             out["opponent"] = self.opponent
         if self.macro_breakdown is not None:
@@ -601,6 +611,17 @@ def parse_replay_for_cloud(
     except (TypeError, ValueError):
         my_mmr = None
 
+    # Forward the raw toon_handle so the cloud session-widget MMR
+    # fallback can resolve the streamer's current 1v1 ladder rating via
+    # SC2Pulse even when no game in their history carries `myMmr` and
+    # they haven't pasted a numeric pulseId into Settings → Profile.
+    my_toon_handle_raw = getattr(me, "handle", None)
+    my_toon_handle = (
+        str(my_toon_handle_raw).strip()
+        if my_toon_handle_raw not in (None, "")
+        else None
+    )
+
     return CloudGame(
         game_id=str(ctx.game_id),
         date_iso=_to_iso(ctx.date_iso),
@@ -613,6 +634,7 @@ def parse_replay_for_cloud(
         apm=getattr(me, "apm", None),
         spq=getattr(me, "spq", None),
         my_mmr=my_mmr,
+        my_toon_handle=my_toon_handle,
         opponent=opponent,
         build_log=my_build_log,
         early_build_log=early_build_log,

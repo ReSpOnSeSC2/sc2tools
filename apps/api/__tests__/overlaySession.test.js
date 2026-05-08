@@ -330,6 +330,115 @@ describe("services/games.todaySession", () => {
     expect(out.region).toBe("KR");
   });
 
+  test("Tier-3 toon-handle fallback fires when profile.pulseId is unset", async () => {
+    // The streamer hasn't pasted anything into Settings → Pulse ID, but
+    // the agent has been forwarding `myToonHandle` on each upload. The
+    // session widget falls through to that, hits SC2Pulse's character
+    // search to resolve the canonical id, then reads MMR.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-toon-fallback",
+      result: "Victory",
+      date: new Date(),
+      myToonHandle: "2-S2-1-99999",
+    });
+    const pulseMmr = {
+      // The profile-pulseId branch must NOT fire — pulseId is empty.
+      getCurrentMmr: jest.fn(async () => {
+        throw new Error("should_not_be_called");
+      }),
+      getCurrentMmrByToon: jest.fn(async (toon) => {
+        expect(toon).toBe("2-S2-1-99999");
+        return { mmr: 5343, region: "EU" };
+      }),
+    };
+    const svc2 = new GamesService(db, {
+      users: { getProfile: async () => ({}) },
+      pulseMmr,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(5343);
+    expect(out.region).toBe("EU");
+    expect(pulseMmr.getCurrentMmrByToon).toHaveBeenCalledTimes(1);
+    expect(pulseMmr.getCurrentMmr).not.toHaveBeenCalled();
+  });
+
+  test("Tier-3 toon-handle fallback fires when profile.pulseId fails to resolve", async () => {
+    // Profile has a stale pulseId that SC2Pulse can't resolve (e.g. the
+    // numeric id was wrong, or the account was renamed). We MUST still
+    // try the toon-handle path before giving up — otherwise streamers
+    // with a stale entry stay stuck on "—".
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-toon-rescue",
+      result: "Victory",
+      date: new Date(),
+      myToonHandle: "2-S2-1-77777",
+    });
+    const pulseMmr = {
+      getCurrentMmr: jest.fn(async () => null),
+      getCurrentMmrByToon: jest.fn(async () => ({ mmr: 4500, region: "EU" })),
+    };
+    const svc2 = new GamesService(db, {
+      users: { getProfile: async () => ({ pulseId: "994428" }) },
+      pulseMmr,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(4500);
+    expect(pulseMmr.getCurrentMmr).toHaveBeenCalledTimes(1);
+    expect(pulseMmr.getCurrentMmrByToon).toHaveBeenCalledTimes(1);
+  });
+
+  test("Tier-3 toon-handle fallback is skipped when stored myMmr is found", async () => {
+    // We must short-circuit at the cheapest tier — no SC2Pulse calls of
+    // any kind when the games already carry MMR.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g1",
+      result: "Victory",
+      date: new Date(),
+      myMmr: 4800,
+      myToonHandle: "2-S2-1-12345",
+    });
+    const pulseMmr = {
+      getCurrentMmr: jest.fn(async () => {
+        throw new Error("should_not_be_called");
+      }),
+      getCurrentMmrByToon: jest.fn(async () => {
+        throw new Error("should_not_be_called");
+      }),
+    };
+    const svc2 = new GamesService(db, {
+      users: { getProfile: async () => ({}) },
+      pulseMmr,
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBe(4800);
+    expect(pulseMmr.getCurrentMmr).not.toHaveBeenCalled();
+    expect(pulseMmr.getCurrentMmrByToon).not.toHaveBeenCalled();
+  });
+
+  test("Tier-3 toon-handle fallback survives a thrown error", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g1",
+      result: "Victory",
+      date: new Date(),
+      myToonHandle: "2-S2-1-99999",
+    });
+    const svc2 = new GamesService(db, {
+      users: { getProfile: async () => ({}) },
+      pulseMmr: {
+        getCurrentMmrByToon: async () => {
+          throw new Error("boom");
+        },
+      },
+    });
+    const out = await svc2.todaySession("u1", "UTC");
+    expect(out.mmrCurrent).toBeUndefined();
+    expect(out.wins).toBe(1);
+  });
+
   test("Tier-3 fallback survives a thrown SC2Pulse error", async () => {
     await db.games.insertOne({
       userId: "u1",

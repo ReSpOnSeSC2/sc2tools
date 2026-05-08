@@ -10,6 +10,56 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Fixed (agent + cloud) — overlay session widget MMR now resolves automatically via SC2Pulse
+
+A streamer whose session-widget panel kept showing the bottom row as
+``EU —`` (or ``NA —``) instead of their current ladder MMR fell into
+a coverage gap between the existing fallback tiers:
+
+1. ``games[].myMmr`` is the fastest path but `sc2reader` only fills it
+   for ranked replays where the engine surfaces ``scaled_rating``.
+   Streamers whose recent replays were uploaded before the v0.4.x MMR
+   extraction landed had every cloud row missing the field.
+2. Tier-3 (SC2Pulse) was added in v0.4.x but only fires when the user
+   has typed a **numeric** SC2Pulse character id into Settings →
+   Profile → Pulse ID. The hint ("Auto-detected by the agent on the
+   first sync") is aspirational — the agent reads the field but never
+   writes it. New users see "EU —" indefinitely.
+
+The fix forwards the streamer's own raw `toon_handle` (e.g.
+``"2-S2-1-267727"``) on each game upload — the agent already has it
+from the parsed replay's ``me.handle``. The cloud's `todaySession`
+aggregator tracks the most recent value across the 14-day window and,
+when neither stored MMR nor the profile's `pulseId` resolved, calls a
+new `PulseMmrService.getCurrentMmrByToon` that:
+
+- Decodes the toon handle into the legacy battle.net profile URL
+  (`https://starcraft2.blizzard.com/profile/<region>/<realm>/<id>`).
+- Hits SC2Pulse's `/character/search?term=<url>` to map it to the
+  canonical numeric character id.
+- Forwards that id to the existing `getCurrentMmr` so the per-region
+  team scan, 5-minute cache, and stale-while-error semantics all
+  apply unchanged.
+
+The toon→characterId mapping is cached process-wide so repeat session
+ticks pay only the team scan, not another search round-trip. The
+`getCurrentMmr` entry point also now accepts toon handles directly,
+which rescues users who pasted their raw handle into Pulse ID instead
+of the numeric id.
+
+`gameRecord.js` validation accepts the new optional `myToonHandle`
+field. Pre-cutover replays that lack the parser attribute still upload
+fine — the field is optional both on the agent dataclass and the
+cloud schema.
+
+Tests: 5 new pulseMmr.test.js cases (toon-handle fallback, character
+search response shapes, cache, garbage rejection), 4 new
+overlaySession.test.js cases (toon-handle Tier-3 fires when pulseId is
+unset, when pulseId fails to resolve, short-circuits when myMmr is
+present, survives a thrown error), 2 new test_replay_pipeline.py cases
+(payload includes/omits myToonHandle). All 390 API tests + 27 agent
+replay-pipeline tests pass.
+
 ### Fixed (agent v0.5.3 + cloud) — Map Intel "Request resync" actually backfills heatmaps now
 
 The Map Intel heatmap viewer's "Request resync" button on the website

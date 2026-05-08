@@ -29,6 +29,12 @@ const GAME_SCHEMA = {
     // surfaces this for ranked replays where sc2reader exposes it. The
     // overlay's session widget reads this to derive an MMR delta.
     myMmr: { type: "integer", minimum: 0, maximum: 9999 },
+    // Streamer's own raw sc2reader toon_handle (e.g. "2-S2-1-267727").
+    // Optional — earlier agent versions don't ship it. Used by the
+    // session widget's Tier-3 MMR fallback so the cloud can resolve the
+    // streamer's current 1v1 ladder rating via SC2Pulse without
+    // requiring them to paste a numeric pulseCharacterId into Settings.
+    myToonHandle: { type: "string", maxLength: 64 },
     opponent: {
       type: "object",
       additionalProperties: true,

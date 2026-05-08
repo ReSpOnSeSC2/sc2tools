@@ -241,6 +241,23 @@ def test_to_payload_omits_macro_breakdown_when_unset():
     assert "apmCurve" not in payload
 
 
+def test_to_payload_emits_my_toon_handle_when_set():
+    """The cloud session-widget Tier-3 MMR fallback resolves the
+    streamer's current 1v1 ladder rating from SC2Pulse using whatever
+    toon handle the agent forwarded. If we ever stop emitting
+    ``myToonHandle`` on the wire, the fallback can't fire and the
+    streamer's overlay shows ``EU —`` again."""
+    payload = _bare_cloud_game(my_toon_handle="2-S2-1-99999").to_payload()
+    assert payload["myToonHandle"] == "2-S2-1-99999"
+
+
+def test_to_payload_omits_my_toon_handle_when_unset():
+    """Pre-cutover replays (no `me.handle`) must still upload — the
+    field is optional both on the agent side and the cloud schema."""
+    payload = _bare_cloud_game().to_payload()
+    assert "myToonHandle" not in payload
+
+
 def test_to_payload_includes_macro_breakdown_and_apm_curve_when_set():
     breakdown = {
         "raw": {"sq": 75},
