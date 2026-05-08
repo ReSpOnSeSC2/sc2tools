@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
+  Area,
   Bar,
   Line,
+  ReferenceLine,
   XAxis,
   YAxis,
   Tooltip,
@@ -31,6 +33,28 @@ const LS_BUCKET = "analyzer.trends.bucket";
 const LS_ROLL = "analyzer.trends.rollingOn";
 const ROLL_N = 4;
 const MIN_PERIOD = 3;
+
+/**
+ * Resolved colour tokens for chart fills/strokes.
+ *
+ * Source of truth: apps/web/app/globals.css :root[data-theme="dark"].
+ * Recharts' SVG primitives (gradient stops, dot fills, cursor strokes)
+ * need concrete CSS colour strings, and the design system stores tokens
+ * as `--accent`/`--success`/etc. (no `--color-` prefix), so we mirror
+ * the dark-theme hex values here. Keep these in sync if globals.css
+ * changes.
+ */
+const COLOR = {
+  accent: "#7c8cff", // --accent
+  success: "#3ec07a", // --success
+  warning: "#e6b450", // --warning
+  danger: "#ff6b6b", // --danger
+  border: "#1f2533", // --border
+  borderStrong: "#2a3142", // --border-strong
+  textDim: "#6b7280", // --text-dim
+  bg: "#0b0d12", // --bg
+  bgSurface: "#11141b", // --bg-surface
+} as const;
 
 function readLs<T>(key: string, fb: T): T {
   if (typeof window === "undefined") return fb;
@@ -232,44 +256,123 @@ export function TrendsTab() {
               </ResponsiveContainer>
             </div>
           </Card>
-          <Card
-            title={
-              rolling ? `Win rate (orange = rolling ${ROLL_N})` : "Win rate"
-            }
-          >
-            <div className="h-64">
+          <Card title="Win rate">
+            {rolling && (
+              <p className="text-caption text-text-dim mb-2">
+                Solid = period · dashed = rolling {ROLL_N}-period average
+              </p>
+            )}
+            <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={enriched}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1f2533" />
-                  <XAxis dataKey="date" stroke="#6b7280" fontSize={11} />
+                  <defs>
+                    <linearGradient
+                      id="winRateFill"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor={COLOR.accent}
+                        stopOpacity={0.35}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor={COLOR.accent}
+                        stopOpacity={0}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="2 4"
+                    stroke={COLOR.border}
+                  />
+                  <XAxis
+                    dataKey="date"
+                    stroke={COLOR.textDim}
+                    fontSize={12}
+                    tickMargin={6}
+                    minTickGap={20}
+                  />
                   <YAxis
-                    stroke="#6b7280"
-                    fontSize={11}
+                    stroke={COLOR.textDim}
+                    fontSize={12}
                     domain={[0, 100]}
                     unit="%"
+                    ticks={[0, 25, 50, 75, 100]}
+                    tickMargin={4}
                   />
                   <Tooltip
                     contentStyle={{
-                      background: "#11141b",
-                      border: "1px solid #1f2533",
+                      background: COLOR.bgSurface,
+                      border: `1px solid ${COLOR.border}`,
                       borderRadius: 8,
                     }}
+                    cursor={{
+                      stroke: COLOR.accent,
+                      strokeWidth: 1,
+                      strokeDasharray: "3 3",
+                    }}
+                    formatter={(value: number, name: string) => {
+                      if (name === "rollingPct")
+                        return [`${value}%`, `Rolling WR (${ROLL_N})`];
+                      if (name === "winRatePct")
+                        return [`${value}%`, "Win rate"];
+                      return [value, name];
+                    }}
+                  />
+                  <ReferenceLine
+                    y={50}
+                    stroke={COLOR.borderStrong}
+                    strokeDasharray="2 4"
+                    strokeWidth={1}
+                    label={{
+                      value: "50%",
+                      position: "right",
+                      fill: COLOR.textDim,
+                      fontSize: 10,
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="winRatePct"
+                    stroke="none"
+                    fill="url(#winRateFill)"
+                    isAnimationActive={false}
+                    legendType="none"
+                    tooltipType="none"
                   />
                   <Line
                     type="monotone"
                     dataKey="winRatePct"
-                    stroke="#7c8cff"
-                    strokeWidth={2}
-                    dot={false}
+                    stroke={COLOR.accent}
+                    strokeWidth={2.5}
+                    dot={{ r: 3, strokeWidth: 0, fill: COLOR.accent }}
+                    activeDot={{
+                      r: 5,
+                      strokeWidth: 2,
+                      stroke: COLOR.bg,
+                      fill: COLOR.accent,
+                    }}
+                    isAnimationActive={false}
                   />
                   {rolling && (
                     <Line
                       type="monotone"
                       dataKey="rollingPct"
-                      stroke="#e6b450"
-                      strokeWidth={1.5}
-                      strokeDasharray="4 4"
-                      dot={false}
+                      stroke={COLOR.warning}
+                      strokeWidth={2}
+                      strokeDasharray="5 3"
+                      dot={{ r: 2.5, strokeWidth: 0, fill: COLOR.warning }}
+                      activeDot={{
+                        r: 4,
+                        strokeWidth: 2,
+                        stroke: COLOR.bg,
+                        fill: COLOR.warning,
+                      }}
+                      isAnimationActive={false}
                     />
                   )}
                 </ComposedChart>
