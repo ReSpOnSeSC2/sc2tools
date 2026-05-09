@@ -1,5 +1,22 @@
 // Shape of the live-payload the agent broadcasts to the overlay
 // socket room. Matches `apps/agent/sc2tools_agent/replay_pipeline.py`.
+//
+// Two distinct envelope shapes flow through this file:
+//
+//   * ``LiveGamePayload`` — the legacy/post-game shape. Built by the
+//     cloud's ``OverlayLiveService.buildFromGame`` from a finished
+//     game's replay-derived data and broadcast on the
+//     ``overlay:live`` Socket.io event.
+//   * ``LiveGameEnvelope`` — the pre-game / in-game shape. Emitted
+//     by the desktop agent (see
+//     ``apps/agent/sc2tools_agent/live/types.py#envelope_for``),
+//     POSTed to ``/v1/agent/live``, and fanned out by the cloud's
+//     ``LiveGameBroker`` on the ``overlay:liveGame`` Socket.io event
+//     (and the ``GET /v1/me/live`` SSE stream).
+//
+// They co-exist by design: when both have data for the same gameKey,
+// the post-game ``LiveGamePayload`` wins because it carries the
+// authoritative replay-derived fields (build, durationSec, etc.).
 
 export type LiveGamePayload = {
   /**
@@ -98,3 +115,105 @@ export type LiveGamePayload = {
   /** Rematch flag. */
   rematch?: { isRematch: boolean; lastResult?: "win" | "loss" } | null;
 };
+
+/**
+ * Lifecycle phase the agent's bridge currently considers the user to
+ * be in. Matches ``LiveLifecyclePhase`` in
+ * ``apps/agent/sc2tools_agent/live/types.py``.
+ */
+export type LiveGamePhase =
+  | "idle"
+  | "menu"
+  | "match_loading"
+  | "match_started"
+  | "match_in_progress"
+  | "match_ended";
+
+/**
+ * Single player entry inside the agent's envelope. Mirrors
+ * ``LivePlayer`` in the agent's types, post-``to_jsonable`` so values
+ * are plain JSON tokens.
+ */
+export interface LiveGameEnvelopePlayer {
+  name: string;
+  /** ``"user"`` (human) or ``"computer"`` (AI). */
+  type: string;
+  /** ``"Terran" | "Zerg" | "Protoss" | "random"`` and friends. */
+  race: string;
+  /** ``"Undecided" | "Victory" | "Defeat" | "Tie"``. */
+  result: string;
+  player_id?: number | null;
+}
+
+/**
+ * SC2Pulse-resolved opponent profile. Field names use snake_case
+ * because the agent serialises ``OpponentProfile`` via
+ * ``dataclasses.asdict`` which preserves the Python attribute names
+ * verbatim (no camelCase conversion). Mirror that here so consumers
+ * don't have to second-guess what the wire actually carries.
+ */
+export interface LiveGameEnvelopeProfile {
+  pulse_character_id?: number | null;
+  region?: string | null;
+  battle_tag?: string | null;
+  account_handle?: string | null;
+  mmr?: number | null;
+  league?: string | null;
+  league_tier?: number | null;
+  top_race?: string | null;
+  recent_games_count?: number | null;
+  /** 0..1 — the bridge's confidence the resolver picked the right candidate. */
+  confidence?: number;
+  alternatives?: string[];
+  resolved_at?: number;
+}
+
+/**
+ * Wire shape produced by the desktop agent's ``envelope_for()`` and
+ * enriched by ``LiveBridge`` with the resolved opponent profile.
+ *
+ * Stays intentionally flat so widgets can read fields without a
+ * schema lib. Every property is optional — partial-failure paths
+ * (Pulse 502, ambiguous name, the very first envelope at
+ * ``match_loading`` before Pulse responds) all flow through the same
+ * ``LiveGameEnvelope`` shape, just with fewer fields populated.
+ *
+ * **Privacy note (per spec):** the ``user`` block carries only the
+ * streamer's display name (no Pulse handle, no MMR). Opponent data
+ * lives under ``opponent`` and is the only Pulse-resolved field set
+ * on the envelope.
+ */
+export interface LiveGameEnvelope {
+  type: "liveGameState";
+  phase: LiveGamePhase;
+  /** Wall-clock timestamp the agent stamped on capture (seconds since epoch). */
+  capturedAt: number;
+  /**
+   * Wall-clock timestamp the cloud stamped on receipt
+   * (milliseconds since epoch). Set by ``routes/agentLive.js`` —
+   * useful for the dashboard's "Last seen Xs ago" indicator.
+   */
+  receivedAt?: number;
+  /** Stable per-game identifier — sorted player names + match-start ms. */
+  gameKey?: string;
+  /** Seconds elapsed in the SC2 client's in-game clock. */
+  displayTime?: number;
+  /** True when the user is watching a replay (the bridge ignores these). */
+  isReplay?: boolean;
+  /** Raw activeScreens list from /ui — diagnostics only. */
+  uiScreens?: string[];
+  /** Raw player list from /game. */
+  players?: LiveGameEnvelopePlayer[];
+  /**
+   * Bridge-derived opponent. Populated from the moment ``match_loading``
+   * fires; the ``profile`` sub-object lands a few hundred ms later
+   * once Pulse responds (or stays absent if Pulse is down).
+   */
+  opponent?: {
+    name?: string | null;
+    race?: string | null;
+    profile?: LiveGameEnvelopeProfile;
+  };
+  /** Streamer's own name — purely cosmetic, never used for auth. */
+  user?: { name?: string | null };
+}

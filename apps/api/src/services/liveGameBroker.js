@@ -3,7 +3,13 @@
 /**
  * In-memory pub/sub for the Live Game Bridge — fans out the agent's
  * outbound ``LiveGameState`` envelopes (see ``POST /v1/agent/live``)
- * to subscribed SSE clients (see ``GET /v1/me/live``).
+ * to two surfaces:
+ *
+ *   1. ``GET /v1/me/live`` Server-Sent Events subscribers (the user's
+ *      ``/app`` dashboard tab).
+ *   2. Socket.io ``overlay:<token>`` rooms (every active overlay token
+ *      the user has minted — drives the OBS / Streamlabs Browser
+ *      Source widgets at ``sc2tools.com/overlay/<token>/widget/<name>``).
  *
  * Keyed by ``userId`` so each user's web tabs only see their own
  * state. The agent's bearer token authenticates the POST and stamps
@@ -21,10 +27,23 @@
  * subscribe (the broker keeps a single snapshot per user) and live
  * deltas thereafter. No history queue, no replay buffer — the
  * agent's polling cadence makes catch-up irrelevant.
+ *
+ * Overlay fan-out is per-token (not per-user-room) on purpose: a
+ * streamer can mint multiple tokens (main scene / friend test) and
+ * we may eventually filter the envelope per-token (enabledWidgets).
+ * Today the same envelope goes to every active token, but the loop
+ * is already shaped for per-token policy.
  */
 
 class LiveGameBroker {
-  constructor() {
+  /**
+   * @param {{
+   *   io?: import('socket.io').Server,
+   *   overlayTokens?: import('./types').OverlayTokensService,
+   *   logger?: import('pino').Logger,
+   * }} [deps]
+   */
+  constructor(deps = {}) {
     /** @type {Map<string, Set<(env: object) => void>>} */
     this._subs = new Map();
     /** @type {Map<string, {envelope: object, ts: number}>} */
@@ -33,6 +52,19 @@ class LiveGameBroker {
     // user is plainly not in a live game and a stale envelope on
     // a fresh page-load would mislead the widget.
     this._maxAgeMs = 30 * 60 * 1000;
+    this._io = deps.io || null;
+    this._overlayTokens = deps.overlayTokens || null;
+    this._logger = deps.logger || null;
+    // Telemetry counters surfaced in `/v1/agent/live` logs and (later)
+    // a metrics endpoint. Per-process, not per-user — for a per-user
+    // health signal we use the freshness of `_latest`.
+    this.counters = {
+      published: 0,
+      sse_emit_ok: 0,
+      sse_emit_failed: 0,
+      overlay_emit_ok: 0,
+      overlay_emit_failed: 0,
+    };
   }
 
   /**
@@ -75,20 +107,95 @@ class LiveGameBroker {
    * subscriber callback is wrapped in try/catch so the agent's POST
    * response time isn't held hostage by a slow SSE writer.
    *
+   * Fan-out order:
+   *   1. SSE subscribers (synchronous — they're in-process callbacks)
+   *   2. Socket.io ``overlay:<token>`` rooms (async — token list
+   *      requires a Mongo round trip; fired-and-forgotten so the
+   *      agent's POST returns within ms)
+   *
+   * Either fan-out failing must not crash the other.
+   *
    * @param {string} userId
    * @param {object} envelope
    */
   publish(userId, envelope) {
     if (!userId || !envelope || typeof envelope !== "object") return;
     this._latest.set(userId, { envelope, ts: Date.now() });
+    this.counters.published += 1;
     const bucket = this._subs.get(userId);
-    if (!bucket) return;
-    for (const cb of bucket) {
+    if (bucket) {
+      for (const cb of bucket) {
+        try {
+          cb(envelope);
+          this.counters.sse_emit_ok += 1;
+        } catch (err) {
+          this.counters.sse_emit_failed += 1;
+          // ignore — the SSE route's heartbeat will eventually detect
+          // a dead writer and drop the subscription.
+        }
+      }
+    }
+    // Socket.io overlay fan-out runs after the SSE writes so the
+    // dashboard tab and the OBS Browser Source see the envelope at
+    // roughly the same wall-clock moment. We don't await — the agent
+    // gets its 200 immediately; per-token emit failures are logged
+    // by ``_fanOutToOverlayTokens`` itself.
+    if (this._io && this._overlayTokens) {
+      this._fanOutToOverlayTokens(userId, envelope).catch((err) => {
+        if (this._logger && typeof this._logger.warn === "function") {
+          this._logger.warn(
+            { err, userId },
+            "live_game_broker_overlay_fanout_failed",
+          );
+        }
+      });
+    }
+  }
+
+  /**
+   * Per-token Socket.io emit. Iterates the user's active overlay
+   * tokens and emits ``overlay:liveGame`` to each ``overlay:<token>``
+   * room. A single token's emit failure (Socket.io throws) doesn't
+   * stop the loop — the next active token still gets the envelope.
+   *
+   * @param {string} userId
+   * @param {object} envelope
+   */
+  async _fanOutToOverlayTokens(userId, envelope) {
+    if (!this._io || !this._overlayTokens || !userId) return;
+    let tokens;
+    try {
+      tokens = await this._overlayTokens.list(userId);
+    } catch (err) {
+      this.counters.overlay_emit_failed += 1;
+      if (this._logger && typeof this._logger.warn === "function") {
+        this._logger.warn(
+          { err, userId },
+          "live_game_broker_token_list_failed",
+        );
+      }
+      return;
+    }
+    if (!Array.isArray(tokens) || tokens.length === 0) return;
+    for (const t of tokens) {
+      if (!t || !t.token) continue;
+      // Mirror the post-game ``emitOverlayLive`` filter in
+      // routes/games.js — a leaked-then-revoked token must not still
+      // receive live data after revocation.
+      if (t.revokedAt) continue;
       try {
-        cb(envelope);
+        this._io
+          .to(`overlay:${t.token}`)
+          .emit("overlay:liveGame", envelope);
+        this.counters.overlay_emit_ok += 1;
       } catch (err) {
-        // ignore — the SSE route's heartbeat will eventually detect
-        // a dead writer and drop the subscription.
+        this.counters.overlay_emit_failed += 1;
+        if (this._logger && typeof this._logger.warn === "function") {
+          this._logger.warn(
+            { err, userId, token: t.token.slice(0, 6) + "…" },
+            "live_game_broker_overlay_emit_failed",
+          );
+        }
       }
     }
   }

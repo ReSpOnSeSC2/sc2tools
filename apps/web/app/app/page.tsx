@@ -5,6 +5,7 @@ import { AnalyzerShell } from "@/components/analyzer/AnalyzerShell";
 import { NoGamesYet } from "@/components/analyzer/EmptyStates";
 import { SyncStatus } from "@/components/SyncStatus";
 import { Card } from "@/components/ui/Card";
+import { LiveGamePanel } from "@/components/dashboard/LiveGamePanel";
 
 type Me = {
   userId: string;
@@ -49,6 +50,13 @@ export default async function AnalyzerHome() {
           Get the agent
         </Link>
       </header>
+
+      {/* Live game card. Hidden by default; mounts a per-user SSE
+          subscription and renders only while the desktop agent is
+          actively reporting a non-idle phase. Drops out automatically
+          ~30s after the last envelope so a stopped agent doesn't
+          leave a stale card pinned to the dashboard. */}
+      <LiveGamePanel />
 
       {noGames ? (
         <NoGamesYet />

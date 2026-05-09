@@ -17,15 +17,18 @@ uses, and the same pattern Discord Rich Presence / Steam friends
 activity / Spotify "Now Playing on web" / Twitch metadata all use:
 
 ```
-SC2 game ──► localhost:6119 ──► Desktop Agent ──► outbound HTTPS ──► Cloud API ──► SSE ──► /app tabs
-                (Blizzard)        (Python tray app)                  (Render)              (browser)
-                                            │
-                                            └─► outbound HTTP ─► localhost:3000 ─► Socket.io ─► OBS overlays
-                                                                  (overlay backend)
+                user's PC                                  cloud (Render/Vercel)              streamer's OBS / Streamlabs       streamer's web /app tab
+                ─────────                                  ───────────────────────────         ─────────────────────────────     ────────────────────────
+
+SC2 game ──► localhost:6119 ──► Desktop Agent ──► HTTPS ─► api.sc2tools.com /v1/agent/live ─┬─► Socket.io overlay:<token> ───► Browser Source widget
+                                (sc2tools-agent.exe)         (LiveGameBroker)                ├─► Socket.io overlay:<token> ───► Browser Source widget (more)
+                                                                                              └─► SSE /v1/me/live ─────────────► /app dashboard panel
 ```
 
 **Local agent reports outward; cloud broadcasts.** Internalize that
 before reading further — every later design decision falls out of it.
+The website never reaches into the user's PC; the user installs only
+the desktop agent, no Node.js, no terminal.
 
 ## 2. Sources of truth
 
@@ -92,82 +95,98 @@ Key behaviours:
 
 ## 4. Transports
 
-Two parallel transports subscribe to the bridge's output bus, each
-with independent retry / failure semantics. Failure of one does not
-block the other:
+### Cloud API (default, supported)
 
-### Local overlay backend
-
-`POST http://localhost:3000/api/agent/live` (added in
-[reveal-sc2-opponent-main/stream-overlay-backend/index.js](../reveal-sc2-opponent-main/stream-overlay-backend/index.js))
-re-broadcasts the envelope on the existing `overlay_event`
-Socket.io channel. The backend ALSO derives `opponentDetected` and
-`scoutingReport` events from the same payload so widgets that
-pre-date the new `liveGameState` handler still light up at
-MATCH_LOADING.
-
-Auth: optional shared secret via `SC2TOOLS_LIVE_AGENT_TOKEN` env
-var. When set, requests must carry a matching
-`X-SC2Tools-Agent-Token` header. When unset (default), accepts
-anonymous (matching the legacy posture for the localhost backend).
-
-Token-bucket rate limited to 4 msg/s per transport.
-
-### Cloud API
-
-`POST /v1/agent/live` (added in
+`POST /v1/agent/live` (in
 [apps/api/src/routes/agentLive.js](../apps/api/src/routes/agentLive.js))
 hands the envelope to an in-process `LiveGameBroker`
 ([apps/api/src/services/liveGameBroker.js](../apps/api/src/services/liveGameBroker.js))
-which fans it out over `GET /v1/me/live` Server-Sent Events to
-every web tab the user has open.
+which fans the envelope out to two surfaces:
 
-Auth: device-token Bearer (POST), Clerk session cookie (SSE GET).
+1. **Hosted overlay (Socket.io ``overlay:liveGame``).** Per-token
+   emit to every active overlay token belonging to the publishing
+   user. Each `sc2tools.com/overlay/<token>/widget/<name>` Browser
+   Source the streamer pasted into OBS receives the envelope and
+   updates its widget progressively (see §5).
+2. **Per-user SSE (``GET /v1/me/live``).** Streams envelopes to the
+   web dashboard so the `/app` tab can show a "live game in
+   progress" card (`apps/web/components/dashboard/LiveGamePanel.tsx`)
+   alongside whatever else the user is doing.
+
+Auth: device-token Bearer (POST), Clerk session (SSE).
 
 The broker keeps the latest envelope per user for up to 30 minutes
 so a tab opened mid-match shows widgets immediately rather than
 blanking until the next 1 Hz tick.
 
+### Local overlay backend (legacy, opt-in)
+
+`POST http://localhost:3000/api/agent/live` against the legacy
+self-hosted product
+([reveal-sc2-opponent-main/stream-overlay-backend](../reveal-sc2-opponent-main/stream-overlay-backend))
+re-broadcasts the envelope on a Socket.io channel for that product's
+own widgets. **This transport is OFF by default** in the cloud-shipped
+agent. Set the `SC2TOOLS_LOCAL_OVERLAY_URL` env var (e.g.
+`SC2TOOLS_LOCAL_OVERLAY_URL=http://localhost:3000`) to enable it. The
+runner then constructs an `OverlayBackendTransport` alongside the
+default `CloudTransport` and fans every envelope to both. Cloud-only
+installs ship zero traffic to localhost:3000.
+
+Both transports are token-bucket rate limited to 4 msg/s and lossy by
+design — the bridge fires payloads at ~1 Hz; if a single POST fails,
+we drop it and rely on the next poll's fresh data.
+
 ## 5. Widgets
 
-Widgets read `liveGameState` directly (handler in
-[reveal-sc2-opponent-main/stream-overlay-backend/public/_ov/app.js](../reveal-sc2-opponent-main/stream-overlay-backend/public/_ov/app.js))
-and ALSO continue to consume the legacy `opponentDetected` /
-`scoutingReport` events. The lifecycle phase drives display state:
+Hosted Browser Source widgets (`apps/web/app/overlay/[token]/widget/[name]`)
+listen on two Socket.io events:
+
+* `overlay:live` — post-game `LiveGamePayload`, derived by the cloud
+  from the replay-parsed game record. Carries head-to-head, recent
+  games, best-answer, cheese probability — the rich data only
+  available once a replay lands.
+* `overlay:liveGame` — pre/in-game `LiveGameEnvelope` from the agent,
+  fanned out by the broker. Carries opponent identity, race, optional
+  Pulse profile (MMR, league).
+
+When both are present for the same `gameKey` the post-game payload
+wins — it's authoritative and strictly carries more data.
+
+Lifecycle phase (`liveGame.phase`) drives display state:
 
 * `idle` / `menu` → hide opponent + scouting widgets
-* `match_loading` → render skeletons + opponent name + race
-* `match_started` → render full data
+* `match_loading` → render skeleton + opponent name + race
+* `match_started` → render full live data (incl. MMR once Pulse responds)
 * `match_in_progress` → tick the in-game clock
-* `match_ended` → render Victory/Defeat (replaced by replay-derived
-  data when the replay lands, ~30 s later)
+* `match_ended` → render Victory/Defeat cue (replaced by replay-derived
+  `overlay:live` payload ~30 s later)
 
-## 6. TTS reliability
+The widget visibility timer in
+[apps/web/components/OverlayWidgetClient.tsx](../apps/web/components/OverlayWidgetClient.tsx#L256)
+keeps opponent + scouting pinned for the whole match while a non-idle
+envelope is current, and falls back to the per-widget natural duration
+once the bridge clears.
 
-[reveal-sc2-opponent-main/stream-overlay-backend/public/_ov/voice-readout.js](../reveal-sc2-opponent-main/stream-overlay-backend/public/_ov/voice-readout.js)
-gained:
+## 6. Voice readout
 
-* **Persisted unlock.** First user gesture writes
-  `localStorage.sc2tools.voiceReadout.gestureUnlocked = '1'`. Subsequent
-  reloads of the overlay don't re-prompt.
-* **Silent-failure detection.** If `speak()` doesn't fire `onstart`
-  within 2 s, the engine ate the request — cancel + retry once.
-* **Diagnostics POSTs.** Failures POST to
-  `POST /api/voice/diagnostics` so a dashboard / agent telemetry
-  endpoint can surface "your overlay's voice readout is broken"
-  rather than the streamer hearing nothing and not knowing why.
-* **`?voice=test` query.** Speaks a one-shot diagnostic phrase on
-  load so streamers can validate audio without queueing a real
-  ladder match.
+[apps/web/components/overlay/useVoiceReadout.ts](../apps/web/components/overlay/useVoiceReadout.ts)
+fires the scouting / matchStart / matchEnd / cheese readouts. Two
+trigger sources:
 
-Settings → Voice
-([apps/web/components/analyzer/settings/SettingsVoice.tsx](../apps/web/components/analyzer/settings/SettingsVoice.tsx))
-gained:
+1. Post-game `LiveGamePayload` — full payload, fires the rich
+   scouting line (name, race, H2H, best answer, cheese hint).
+2. Pre-game `LiveGameEnvelope` — fires a trimmed scouting line (name,
+   race, MMR if known) the moment the agent reports MATCH_LOADING.
+   Suppressed when the post-game payload is present so the streamer
+   never hears two readouts for the same match.
 
-* The same silent-failure timer as the overlay so Settings → Test
-  reproduces the same failure mode the streamer sees in OBS.
-* An autoplay-blocked banner (with a Retry button) for the
-  `not-allowed` error code.
+Both paths share the per-trigger fingerprint dedup (`gameKey` for the
+live-envelope path), so a single match's 5+ envelope deltas only
+speak once.
+
+Persisted unlock (localStorage key `sc2tools.voiceUnlocked`) survives
+OBS Browser Source refreshes; without it the streamer would have to
+right-click → Interact → click each time OBS reloaded the source.
 
 ## 7. Observability
 
@@ -187,53 +206,80 @@ EWMA latency samples (`*_latency`) live alongside.
 `PeriodicMetricsLogger` dumps the snapshot to `agent.log` at INFO
 every 5 minutes — grep for `live_metrics` to see trends.
 
+The cloud's broker exposes per-publish counters on
+`liveGameBroker.counters`:
+
+| Counter | Meaning |
+|---|---|
+| `published` | Total `publish()` calls |
+| `sse_emit_ok` / `sse_emit_failed` | SSE subscriber callback outcomes |
+| `overlay_emit_ok` / `overlay_emit_failed` | Per-token Socket.io emit outcomes |
+
+`AgentStatusIndicator` in Settings → Overlay reads from the same SSE
+stream the dashboard does and renders green / grey based on whether
+a fresh envelope arrived in the last 10 / 60 s.
+
 ## 8. Failure modes (graceful degradation)
 
 | What's down | What still works |
 |---|---|
 | Source A (`localhost:6119`) | Existing `opponent.txt` legacy path. Bridge stays IDLE. |
-| Source B (Pulse) | Bridge emits opponent name + race from Source A. Scouting card shows "Looking up opponent…". |
-| Cloud API | OBS overlays keep working via the local Socket.io path. Web tabs go quiet until cloud recovers. |
-| Local overlay backend | Web tabs still get live data via cloud SSE. |
+| Source B (Pulse) | Bridge emits opponent name + race from Source A. Scouting card shows "Looking up opponent…", then "Profile lookup unavailable" once Pulse responded without an MMR row. |
+| Cloud API | OBS overlays go quiet (expected — same as a network outage). When cloud recovers, the next 1 Hz tick repopulates. |
+| Agent crashed / not running | `AgentStatusIndicator` flips to grey "Agent offline". OBS widgets still show the most recent post-game `overlay:live` payload until it ages out. |
+| Pulse timeout DURING the lookup | First emit (name + race) lands at T+50 ms; the Pulse-enriched re-emit never lands; widgets show "MMR unavailable" rather than spinning indefinitely. |
 
 ## 9. Manual smoke test
 
 The end-to-end test plan (run before merging anything that touches
 the bridge):
 
-1. Start the agent: `python -m sc2tools_agent --log-level=DEBUG`.
-2. Confirm `live_event phase=idle` then `phase=menu` in `agent.log`.
-3. Open SC2 → queue ladder → click Find Match.
-4. Within 2 s of the loading screen completing, the opponent widget
-   should show the opponent name + race (`live_event phase=match_loading`
-   in agent.log).
-5. Within 4 s the scouting card should show MMR + matchup record
-   (the second emit, triggered by the Pulse callback).
-6. Voice readout speaks a coherent phrase.
-7. Throughout the match, the opponent widget stays visible
-   (`live_emit phase=match_in_progress` lines tick once per second).
-8. After the match ends:
+1. Install the agent — fresh `.exe` install, sign in to sc2tools.com.
+2. Land on Settings → Overlay. Confirm `AgentStatusIndicator` flips
+   to green within 5 s of the agent boot.
+3. Copy the "Scouting widget" URL with the Copy button. Paste into
+   OBS → Add Browser Source → URL → OK. Widget appears blank (no
+   game yet).
+4. Open SC2 → click Find Match. Within 2 s of the loading screen
+   completing, the Scouting widget shows the opponent name + race
+   (`live_emit phase=match_loading` in agent.log).
+5. Within 4 s the scouting card shows MMR + matchup record (the
+   second emit, triggered by the Pulse callback).
+6. Voice readout speaks one coherent phrase.
+7. Throughout the match, the opponent + scouting widgets stay
+   visible (`live_emit phase=match_in_progress` lines tick once
+   per second).
+8. Open `sc2tools.com/app` in a separate browser tab during the
+   match. The dashboard's `LiveGamePanel` shows "Live game vs
+   <opponent> (<race>)" with the elapsed clock ticking. Card vanishes
+   ~30 s after the last envelope.
+9. After the match ends:
    * `live_emit phase=match_ended` with the player results.
-   * Within 30 s, the replay lands and the post-game `matchResult`
-     event fires, superseding the live record on the same `gameKey`.
+   * Within 30 s, the replay lands and the post-game `overlay:live`
+     payload fires, superseding the live record on the same
+     `gameKey`.
    * Web tabs transition cleanly from "live" to "post-game".
-
-For each scenario in section 8 of
-[docs/live-widgets-fix-prompt.md](./live-widgets-fix-prompt.md),
-capture a screen recording before opening the PR.
+10. Click "Send test event" next to "Scouting widget" in Settings →
+    Overlay. The OBS widget lights up with sample data for ~10 s
+    and auto-clears.
+11. Revoke the overlay token. Within 5 s, the OBS widget receives
+    no further events. Re-issue the token + update the OBS URL to
+    restore.
 
 ## 10. Privacy
 
 No screen pixels, no log files, no replay file contents leave the
 user's machine via the live bridge — only the structured
 `LiveGameState` JSON (opponent name, race, MMR, game time, lifecycle
-event). The Pulse lookup uses only the in-game opponent name; nothing
+phase). The Pulse lookup uses only the in-game opponent name; nothing
 about the user is sent.
 
-## 11. Known limitations / out-of-scope follow-ups
+The cloud's `overlay:liveGame` event carries opponent data only —
+the `user` block is intentionally limited to the streamer's display
+name (no Pulse handle, no own MMR) so a leaked overlay token can't
+exfiltrate the streamer's ladder identity.
 
-(Carried forward from
-[docs/live-widgets-fix-prompt.md](./live-widgets-fix-prompt.md) §9.)
+## 11. Known limitations / out-of-scope follow-ups
 
 * **OCR / UIA.** Considered + rejected. The localhost API gives us
   the same data structurally with zero CPU cost.
