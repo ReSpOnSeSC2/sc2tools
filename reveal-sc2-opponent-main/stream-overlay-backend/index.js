@@ -2071,6 +2071,143 @@ function streakMessage(streak) {
 // ------------------------------------------------------------------
 // SESSION API
 // ------------------------------------------------------------------
+// ------------------------------------------------------------------
+// LIVE GAME BRIDGE WEBHOOK (from sc2tools_agent.live, real-time path)
+// ------------------------------------------------------------------
+//
+// Replaces the legacy `opponent.txt` PowerShell scanner for the
+// pre-game / in-game widget population. The desktop agent's Live
+// Game Bridge polls Blizzard's localhost:6119 client API once per
+// second, fuses the result with SC2Pulse, and POSTs a typed
+// envelope here. We re-broadcast it on the existing `overlay_event`
+// channel so all current widgets receive it without any client-side
+// changes (they already speak the envelope vocabulary).
+//
+// Auth: optional shared secret via env `SC2TOOLS_LIVE_AGENT_TOKEN`.
+// When the env var is set, requests must carry a matching header
+// `X-SC2Tools-Agent-Token` -- this is what protects the localhost
+// surface from any other process spoofing live-game state. When the
+// env var is unset we accept anonymous requests (the legacy posture
+// for the localhost backend); operators who want to harden it set
+// the env var on both the agent and this backend.
+const LIVE_AGENT_TOKEN = (process.env.SC2TOOLS_LIVE_AGENT_TOKEN || '').trim();
+
+app.post('/api/agent/live', (req, res) => {
+    if (LIVE_AGENT_TOKEN) {
+        const provided = String(req.headers['x-sc2tools-agent-token'] || '').trim();
+        if (!provided || provided !== LIVE_AGENT_TOKEN) {
+            return res.status(401).json({ error: 'invalid_agent_token' });
+        }
+    }
+    const env = req.body || {};
+    if (!env || typeof env !== 'object' || Array.isArray(env)) {
+        return res.status(400).json({ error: 'invalid_envelope' });
+    }
+    // The agent's envelope already includes ``type: "liveGameState"``
+    // (see sc2tools_agent.live.types.envelope_for) so we re-emit it
+    // verbatim through the same fan-out path matchResult / scoutingReport
+    // / etc. travel down. Widgets handle the new ``phase`` discriminator
+    // alongside the existing ``type`` switch.
+    const phase = String(env.phase || '').trim();
+    const phasePayload = {
+        ...env,
+        // Stamp on the server-receive timestamp so widgets can detect
+        // a stale envelope (e.g. agent paused, came back) without
+        // having to trust the agent's clock.
+        receivedAt: Date.now(),
+    };
+    // Emit the typed liveGameState envelope.
+    emitEvent('liveGameState', phasePayload, { durationMs: 30000, priority: 6 });
+
+    // Map the bridge's payload onto the existing `opponentDetected` /
+    // `scoutingReport` events when there's enough data so the legacy
+    // widgets light up at MATCH_LOADING / MATCH_STARTED time without
+    // requiring a parallel widget-rewrite to consume `liveGameState`.
+    const opponent = env.opponent || {};
+    const profile = opponent.profile || {};
+    const oppName = opponent.name || null;
+    const oppRace = opponent.race || profile.top_race || null;
+    const oppMmr = Number.isFinite(profile.mmr) ? profile.mmr : null;
+    if ((phase === 'match_loading' || phase === 'match_started')
+        && (oppName || oppRace || oppMmr != null)) {
+        emitEvent('opponentDetected', {
+            text: oppName || '',
+            opponent: oppName,
+            mmr: oppMmr,
+            race: oppRace,
+            // No record/rematch yet -- the post-game replay parse will
+            // supersede this with the cloud-derived H2H stats.
+            record: null,
+        });
+        // Minimal scouting card so the voice readout has something to
+        // speak even before the post-game data lands. The widget's own
+        // ``scoutingReport`` handler tolerates missing fields.
+        emitEvent('scoutingReport', {
+            opponent: oppName,
+            race: oppRace,
+            mmr: oppMmr,
+            matchup: null,
+            record: null,
+            rival: null,
+            favoriteOpening: null,
+            bestAnswer: null,
+            cheese: null,
+            recentGames: [],
+            // Hint to consumers that this is the live-bridge's pre-game
+            // payload, not the post-game enriched version. Widgets and
+            // the readout can choose to phrase 'Looking up X' vs 'X has
+            // beaten you 3 times' based on this.
+            source: 'live_bridge',
+            phase,
+        });
+    }
+    return res.json({ ok: true, phase });
+});
+
+// ------------------------------------------------------------------
+// VOICE READOUT DIAGNOSTICS
+// ------------------------------------------------------------------
+// In-process counters of TTS failures the overlay's voice-readout.js
+// reports (autoplay block, silent failures, synth errors). Exposed
+// via GET so the dashboard / a curl-from-the-agent can pull a
+// summary without spinning up Sentry. The counters are bounded by
+// (event, code) so a runaway client can't OOM us.
+const VOICE_DIAG_MAX_KEYS = 64;
+const _voiceDiag = {
+    counts: new Map(), // key=`${event}:${code}` -> count
+    lastEventAt: 0,
+    lastSample: null,
+};
+function _bumpVoiceDiag(event, code) {
+    const key = String(event || 'unknown') + ':' + String(code || '');
+    if (_voiceDiag.counts.size >= VOICE_DIAG_MAX_KEYS && !_voiceDiag.counts.has(key)) {
+        return; // refuse new keys past the cap to bound memory.
+    }
+    _voiceDiag.counts.set(key, (_voiceDiag.counts.get(key) || 0) + 1);
+}
+app.post('/api/voice/diagnostics', (req, res) => {
+    const body = (req.body && typeof req.body === 'object' && !Array.isArray(req.body))
+        ? req.body
+        : null;
+    if (!body) {
+        return res.status(400).json({ error: 'invalid_body' });
+    }
+    _bumpVoiceDiag(body.event, body.code);
+    _voiceDiag.lastEventAt = Date.now();
+    _voiceDiag.lastSample = body;
+    return res.json({ ok: true });
+});
+app.get('/api/voice/diagnostics', (_req, res) => {
+    const summary = {};
+    for (const [k, v] of _voiceDiag.counts) summary[k] = v;
+    res.json({
+        ok: true,
+        lastEventAt: _voiceDiag.lastEventAt || null,
+        lastSample: _voiceDiag.lastSample,
+        counts: summary,
+    });
+});
+
 app.get('/api/session', (_req, res) => res.json(sessionSnapshot()));
 
 app.post('/api/session/reset', (_req, res) => {

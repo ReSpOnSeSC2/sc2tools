@@ -74,7 +74,9 @@ export function SettingsVoice() {
   const [saving, setSaving] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [previewing, setPreviewing] = useState(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const silentTimerRef = useRef<number | null>(null);
 
   const { draft, setDraft, dirty, reset, markSaved } = useDirtyForm<VoicePrefs>(
     data,
@@ -129,8 +131,13 @@ export function SettingsVoice() {
     if (previewing) {
       window.speechSynthesis.cancel();
       setPreviewing(false);
+      if (silentTimerRef.current !== null) {
+        window.clearTimeout(silentTimerRef.current);
+        silentTimerRef.current = null;
+      }
       return;
     }
+    setAutoplayBlocked(false);
     // Mirror the live readout phrasing so the streamer hears exactly
     // what the overlay will say. Keeps Settings → Test honest.
     const utt = new SpeechSynthesisUtterance(buildPreviewPhrase());
@@ -144,10 +151,37 @@ export function SettingsVoice() {
         utt.lang = match.lang || "en-US";
       }
     }
-    utt.onend = () => setPreviewing(false);
+    let started = false;
+    utt.onstart = () => {
+      started = true;
+      if (silentTimerRef.current !== null) {
+        window.clearTimeout(silentTimerRef.current);
+        silentTimerRef.current = null;
+      }
+    };
+    utt.onend = () => {
+      setPreviewing(false);
+      if (silentTimerRef.current !== null) {
+        window.clearTimeout(silentTimerRef.current);
+        silentTimerRef.current = null;
+      }
+    };
     utt.onerror = (ev) => {
       setPreviewing(false);
+      if (silentTimerRef.current !== null) {
+        window.clearTimeout(silentTimerRef.current);
+        silentTimerRef.current = null;
+      }
       const code = (ev as SpeechSynthesisErrorEvent).error;
+      if (code === "not-allowed") {
+        // Browser blocked the synthesizer for autoplay. The button
+        // press IS a user gesture, but some browsers (Safari) gate
+        // speech-synthesis specifically on a more-recent gesture
+        // and surface this code. Surface a clear unlock UX rather
+        // than a confusing toast.
+        setAutoplayBlocked(true);
+        return;
+      }
       if (code && code !== "interrupted" && code !== "canceled") {
         toast.error("Voice preview failed", { description: code });
       }
@@ -155,11 +189,22 @@ export function SettingsVoice() {
     utteranceRef.current = utt;
     setPreviewing(true);
     const delay = clamp(draft.delayMs ?? 0, 0, 5000);
-    if (delay > 0) {
-      window.setTimeout(() => window.speechSynthesis.speak(utt), delay);
-    } else {
+    const dispatch = () => {
       window.speechSynthesis.speak(utt);
-    }
+      // Silent-failure detection: if onstart hasn't fired in 2 s,
+      // the engine ate the request without telling us. This matches
+      // the overlay's voice-readout.js retry policy so Settings →
+      // Test reproduces the same diagnostic UX the streamer would
+      // see in OBS.
+      silentTimerRef.current = window.setTimeout(() => {
+        silentTimerRef.current = null;
+        if (started) return;
+        setPreviewing(false);
+        setAutoplayBlocked(true);
+      }, 2000);
+    };
+    if (delay > 0) window.setTimeout(dispatch, delay);
+    else dispatch();
   }
 
   const groupedVoices = useMemo(() => groupVoices(voices), [voices]);
@@ -250,6 +295,26 @@ export function SettingsVoice() {
               <PreviewButton previewing={previewing} onClick={preview} />
             </div>
           </div>
+
+          {autoplayBlocked ? (
+            <div
+              role="alert"
+              className="mt-4 rounded-lg border border-status-warn bg-status-warn-bg px-3 py-2 text-caption text-text"
+            >
+              <strong>Voice blocked by your browser.</strong>{" "}
+              Browsers gate the speech synthesizer behind a recent user
+              gesture.{" "}
+              <button
+                type="button"
+                className="underline underline-offset-2"
+                onClick={preview}
+              >
+                Retry now
+              </button>
+              {" "}— once this works in Settings, the OBS overlay's
+              banner only appears if it loads before your first click.
+            </div>
+          ) : null}
 
           <fieldset className="mt-6">
             <legend className="text-caption font-medium uppercase tracking-wider text-text-dim">
