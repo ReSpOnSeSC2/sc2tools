@@ -43,6 +43,47 @@
     var primed = false;
     var verbose = true;
 
+    // Persisted-unlock support: once the user has clicked the
+    // "click anywhere to enable voice" banner, we remember it in
+    // localStorage so subsequent reloads of the overlay (OBS reboots,
+    // browser refreshes) don't ask again. The unlock is per-browser-
+    // profile; OBS reuses the same Chromium profile by default so a
+    // streamer only ever gestures once.
+    var GESTURE_UNLOCK_KEY = 'sc2tools.voiceReadout.gestureUnlocked';
+    function loadPersistedGestureUnlock() {
+        try {
+            return window.localStorage
+                && window.localStorage.getItem(GESTURE_UNLOCK_KEY) === '1';
+        } catch (_) {
+            return false;
+        }
+    }
+    function savePersistedGestureUnlock() {
+        try {
+            if (window.localStorage) {
+                window.localStorage.setItem(GESTURE_UNLOCK_KEY, '1');
+            }
+        } catch (_) { /* ignore */ }
+    }
+
+    // Diagnostics POST: record TTS failures so the dashboard can
+    // surface a "your overlay's voice readout is broken" warning
+    // rather than the user hearing nothing and not knowing why.
+    var DIAG_URL = '/api/voice/diagnostics';
+    function postDiag(body) {
+        if (typeof fetch !== 'function') return;
+        try {
+            fetch(DIAG_URL, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(body || {}),
+                // Best-effort, never blocks; the overlay process is
+                // local so this completes in <10 ms or fails fast.
+                keepalive: true,
+            }).catch(function () { /* ignore */ });
+        } catch (_) { /* ignore */ }
+    }
+
     function info() {
         if (!verbose) return;
         var args = Array.prototype.slice.call(arguments);
@@ -190,7 +231,10 @@
         ].join('|');
     }
 
-    var gestureGranted = false;
+    var gestureGranted = loadPersistedGestureUnlock();
+    if (gestureGranted) {
+        info('persisted gesture unlock found; speech engine pre-armed');
+    }
     var pendingPayload = null;
 
     var BANNER_ID = 'voice-readout-gesture-banner';
@@ -226,7 +270,8 @@
     function onFirstGesture() {
         if (gestureGranted) return;
         gestureGranted = true;
-        info('user gesture detected; speech unblocked');
+        savePersistedGestureUnlock();
+        info('user gesture detected; speech unblocked (persisted)');
         document.removeEventListener('click', onFirstGesture, true);
         document.removeEventListener('keydown', onFirstGesture, true);
         document.removeEventListener('touchstart', onFirstGesture, true);
@@ -236,6 +281,16 @@
             pendingPayload = null;
             speakScoutingReport(p);
         }
+    }
+
+    // Public hook the SettingsVoice "Test voice" button can call to
+    // force-unlock without waiting for an in-overlay gesture (the
+    // settings page itself is the gesture source).
+    function unlockAudio() {
+        gestureGranted = true;
+        savePersistedGestureUnlock();
+        primeOnce();
+        hideGestureBanner();
     }
 
     function attachGestureListeners() {
@@ -259,10 +314,19 @@
         }
     }
 
+    // How long to wait after speak() before deciding the engine
+    // silently dropped the utterance. Real onstart fires within
+    // ~50–200 ms on Chromium; 2 s is a generous ceiling.
+    var SILENT_FAILURE_THRESHOLD_MS = 2000;
+
     function speakScoutingReport(payload) {
         info('speakScoutingReport called with', payload);
         if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
             warn('Web Speech API not available in this browser context');
+            postDiag({
+                event: 'tts_unavailable',
+                userAgent: (typeof navigator !== 'undefined' ? navigator.userAgent : ''),
+            });
             return;
         }
         var cfg = cachedConfig;
@@ -274,6 +338,7 @@
             info('gesture not granted yet; queueing payload and showing banner');
             pendingPayload = payload;
             showGestureBanner();
+            postDiag({ event: 'tts_blocked_gesture' });
             return;
         }
         var key = fingerprintPayload(payload);
@@ -295,29 +360,83 @@
         primeOnce();
         pendingTimer = setTimeout(function () {
             pendingTimer = null;
-            try {
-                var utter = new window.SpeechSynthesisUtterance(text);
-                applyVoiceSettings(utter, cfg);
-                utter.onstart = function () {
-                    info('utterance started speaking');
-                    lastSpokenKey = key;
-                };
-                utter.onend = function () { info('utterance finished'); };
-                utter.onerror = function (ev) {
-                    var code = ev && ev.error ? ev.error : 'unknown';
-                    warn('utterance error: ' + code);
-                    lastSpokenKey = null;
-                    if (code === 'not-allowed') {
-                        gestureGranted = false;
-                        attachGestureListeners();
-                        pendingPayload = payload;
-                        showGestureBanner();
-                    }
-                };
-                window.speechSynthesis.speak(utter);
-                info('speak() called');
-            } catch (e) { warn('speak() threw', e); }
+            _attemptSpeak(text, cfg, key, payload, /* attempt */ 1);
         }, cfg.delay_ms);
+    }
+
+    function _attemptSpeak(text, cfg, key, payload, attempt) {
+        var startedFiredAt = 0;
+        var silentTimer = null;
+        try {
+            var utter = new window.SpeechSynthesisUtterance(text);
+            applyVoiceSettings(utter, cfg);
+            utter.onstart = function () {
+                startedFiredAt = Date.now();
+                if (silentTimer) {
+                    clearTimeout(silentTimer);
+                    silentTimer = null;
+                }
+                info('utterance started speaking (attempt ' + attempt + ')');
+                lastSpokenKey = key;
+            };
+            utter.onend = function () { info('utterance finished'); };
+            utter.onerror = function (ev) {
+                if (silentTimer) {
+                    clearTimeout(silentTimer);
+                    silentTimer = null;
+                }
+                var code = ev && ev.error ? ev.error : 'unknown';
+                warn('utterance error: ' + code);
+                lastSpokenKey = null;
+                postDiag({
+                    event: 'tts_error',
+                    code: code,
+                    attempt: attempt,
+                });
+                if (code === 'not-allowed') {
+                    gestureGranted = false;
+                    attachGestureListeners();
+                    pendingPayload = payload;
+                    showGestureBanner();
+                    return;
+                }
+                // Other errors get a single retry — speechSynthesis
+                // intermittently fails with `synthesis-failed` /
+                // `network` on first call after long idle.
+                if (attempt === 1 && code !== 'canceled' && code !== 'interrupted') {
+                    info('retrying utterance after error: ' + code);
+                    setTimeout(function () {
+                        _attemptSpeak(text, cfg, key, payload, 2);
+                    }, 300);
+                }
+            };
+            window.speechSynthesis.speak(utter);
+            info('speak() called (attempt ' + attempt + ')');
+            // Silent-failure detection: if onstart doesn't fire within
+            // SILENT_FAILURE_THRESHOLD_MS, the engine ate our request
+            // without telling us. Cancel and retry once.
+            silentTimer = setTimeout(function () {
+                silentTimer = null;
+                if (startedFiredAt !== 0) return; // already started
+                warn('silent failure: speak() did not fire onstart within '
+                    + SILENT_FAILURE_THRESHOLD_MS + 'ms');
+                postDiag({
+                    event: 'tts_silent_failure',
+                    attempt: attempt,
+                });
+                try { window.speechSynthesis.cancel(); } catch (_) {}
+                if (attempt === 1) {
+                    _attemptSpeak(text, cfg, key, payload, 2);
+                }
+            }, SILENT_FAILURE_THRESHOLD_MS);
+        } catch (e) {
+            warn('speak() threw', e);
+            postDiag({
+                event: 'tts_throw',
+                error: String(e && e.message || e),
+                attempt: attempt,
+            });
+        }
     }
 
     function onConfigChanged(cb) {
@@ -374,9 +493,30 @@
             onConfigChanged: onConfigChanged,
             getConfig: getConfig,
             diag: diag,
+            unlockAudio: unlockAudio,
             get verbose() { return verbose; },
             set verbose(v) { verbose = !!v; }
         }
     });
+
+    // ?voice=test query string: speak a one-shot diagnostic phrase on
+    // load so streamers can validate the overlay's audio path without
+    // queueing a real ladder match.
+    try {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('voice') === 'test') {
+            // Defer slightly so config + voices have a chance to load.
+            setTimeout(function () {
+                speakScoutingReport({
+                    opponent: 'Voice readout test',
+                    race: 'Protoss',
+                    record: { wins: 1, losses: 0, total: 1, winRate: 100 },
+                    rival: null,
+                    cheese: null,
+                    bestAnswer: null,
+                });
+            }, 1000);
+        }
+    } catch (_) { /* ignore */ }
 
 })();

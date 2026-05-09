@@ -61,6 +61,30 @@ class ApiClient:
             raise PermissionError("agent_not_paired")
         return self._post("/v1/games", auth=True, body={"games": games})
 
+    # ---------------- Live game bridge ----------------
+    def push_agent_live(self, *, envelope: Dict[str, Any]) -> Dict[str, Any]:
+        """Push a single ``LiveGameState`` envelope to the cloud.
+
+        The cloud relays each envelope to the user's web tabs via
+        Server-Sent Events on ``GET /v1/me/live``. Auth is the same
+        device token as ``/v1/games``; the cloud derives the user
+        from the token, so the body never needs to carry user IDs.
+
+        Body shape (kept flat for SSE-friendly serialisation; see
+        ``sc2tools_agent.live.types.envelope_for``)::
+
+            { "type": "liveGameState", "phase": "match_loading",
+              "gameKey": "Opp|Me|1717000000000", "displayTime": 12.5,
+              "isReplay": false, "players": [...],
+              "opponent": {"name": ..., "race": ..., "profile": {...}},
+              "user": {"name": ...} }
+
+        Returns the cloud's response — usually ``{ok: true}``.
+        """
+        if not self.device_token:
+            raise PermissionError("agent_not_paired")
+        return self._post("/v1/agent/live", auth=True, body=envelope)
+
     # ---------------- Live overlay events ----------------
     def push_overlay_live(
         self, *, token: str, payload: Dict[str, Any],

@@ -44,6 +44,14 @@ from .crash_reporter import (
     shutdown as shutdown_crash_reporter,
 )
 from .heartbeat import Heartbeat
+from .live import EventBus, LiveBridge, LiveLifecycleEvent, PulseClient
+from .live.client_api import LiveClientPoller
+from .live.metrics import PeriodicMetricsLogger
+from .live.transport import (
+    CloudTransport,
+    FanOutTransport,
+    OverlayBackendTransport,
+)
 from .pairing import ensure_paired
 from .socket_client import SocketClient, make_recompute_handlers
 from .player_handle import (
@@ -108,8 +116,13 @@ def run_agent(argv: Optional[List[str]] = None) -> int:
 
     try:
         if use_gui:
-            return _run_with_gui(cfg, log_dir, start_minimized=args.start_minimized)
-        return _run_headless(cfg, log_dir)
+            return _run_with_gui(
+                cfg,
+                log_dir,
+                start_minimized=args.start_minimized,
+                no_live=args.no_live,
+            )
+        return _run_headless(cfg, log_dir, no_live=args.no_live)
     except Exception as exc:  # noqa: BLE001
         log.exception("agent_crashed_top_level")
         capture_exception(exc)
@@ -142,6 +155,16 @@ def _parse_args(argv: Optional[List[str]]) -> argparse.Namespace:
             "Start the GUI hidden - only the tray icon is visible. "
             "Set automatically by the Windows autostart entry so the "
             "agent doesn't pop a window on every login."
+        ),
+    )
+    parser.add_argument(
+        "--no-live",
+        action="store_true",
+        help=(
+            "Disable the Live Game Bridge (the LiveClientPoller that "
+            "talks to Blizzard's localhost SC2 client API). Off-switch "
+            "for diagnostics; the rest of the agent (replay watcher, "
+            "uploader, heartbeat, GUI) keeps working unchanged."
         ),
     )
     parser.add_argument(
@@ -254,7 +277,7 @@ def _bootstrap(args: argparse.Namespace) -> tuple:
 # ---------------- Execution paths ----------------
 
 
-def _run_headless(cfg: AgentConfig, log_dir: Path) -> int:
+def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> int:
     """Legacy path - console + tray. Identical to the 0.2.x runner."""
     log = logging.getLogger("sc2tools_agent")
     state = load_state(cfg.state_dir)
@@ -281,6 +304,9 @@ def _run_headless(cfg: AgentConfig, log_dir: Path) -> int:
     updater: Optional[Updater] = None
     heartbeat: Optional[Heartbeat] = None
     socket_client: Optional[SocketClient] = None
+    live_poller: Optional[LiveClientPoller] = None
+    live_bus: Optional[EventBus[LiveLifecycleEvent]] = None
+    live_bridge: Optional[LiveBridge] = None
 
     if can_use_tray():
         tray = TrayUI(
@@ -369,6 +395,24 @@ def _run_headless(cfg: AgentConfig, log_dir: Path) -> int:
             on_full_resync=on_full_resync,
         )
 
+    live_transport: Optional[FanOutTransport] = None
+    live_metrics_logger: Optional[PeriodicMetricsLogger] = None
+    if not no_live:
+        (
+            live_bus,
+            live_poller,
+            live_bridge,
+            live_transport,
+            live_metrics_logger,
+        ) = _build_live_bridge(
+            user_name_hint=read_player_handle_cache(cfg.state_dir),
+            log=log,
+            api=api,
+            device_token=state.device_token,
+        )
+    else:
+        log.info("live_bridge_disabled_via_flag")
+
     try:
         upload.start()
         watcher.start()
@@ -376,6 +420,13 @@ def _run_headless(cfg: AgentConfig, log_dir: Path) -> int:
         heartbeat.start()
         if socket_client is not None:
             socket_client.start()
+        if live_bridge is not None:
+            live_bridge.start()
+        if live_poller is not None:
+            live_poller.start()
+            log.info("live_poller_started base_url=http://localhost:6119")
+        if live_metrics_logger is not None:
+            live_metrics_logger.start()
         ui.on_status(
             "watching for replays" + (" (paused)" if state.paused else ""),
         )
@@ -389,6 +440,14 @@ def _run_headless(cfg: AgentConfig, log_dir: Path) -> int:
         return 1
     finally:
         log.info("agent_stopping")
+        if live_metrics_logger:
+            live_metrics_logger.stop()
+        if live_poller:
+            live_poller.stop()
+        if live_bridge:
+            live_bridge.stop()
+        if live_transport:
+            live_transport.shutdown()
         if socket_client:
             socket_client.stop()
         if heartbeat:
@@ -406,6 +465,7 @@ def _run_headless(cfg: AgentConfig, log_dir: Path) -> int:
 
 def _run_with_gui(
     cfg: AgentConfig, log_dir: Path, *, start_minimized: bool,
+    no_live: bool = False,
 ) -> int:
     """GUI path - Qt main loop on the main thread, agent on a worker."""
     log = logging.getLogger("sc2tools_agent")
@@ -521,6 +581,7 @@ def _run_with_gui(
             "ui": multiplex,
             "stop_event": stop_event,
             "log": log,
+            "no_live": no_live,
         },
         name="sc2tools-boot",
         daemon=True,
@@ -531,6 +592,14 @@ def _run_with_gui(
 
     log.info("agent_stopping rc=%s", rc)
     request_stop()
+    if getattr(cell, "live_metrics_logger", None):
+        cell.live_metrics_logger.stop()
+    if getattr(cell, "live_poller", None):
+        cell.live_poller.stop()
+    if getattr(cell, "live_bridge", None):
+        cell.live_bridge.stop()
+    if getattr(cell, "live_transport", None):
+        cell.live_transport.shutdown()
     if getattr(cell, "socket_client", None):
         cell.socket_client.stop()
     if cell.heartbeat:
@@ -555,6 +624,7 @@ def _gui_boot_worker(
     ui,
     stop_event: threading.Event,
     log: logging.Logger,
+    no_live: bool = False,
 ) -> None:
     """Run the agent's startup sequence outside the Qt thread."""
     try:
@@ -634,12 +704,45 @@ def _gui_boot_worker(
             )
         cell.socket_client = socket_client
 
+        if not no_live:
+            (
+                live_bus,
+                live_poller,
+                live_bridge,
+                live_transport,
+                live_metrics_logger,
+            ) = _build_live_bridge(
+                user_name_hint=read_player_handle_cache(cfg.state_dir),
+                log=log,
+                api=api,
+                device_token=state.device_token,
+            )
+            cell.live_bus = live_bus
+            cell.live_poller = live_poller
+            cell.live_bridge = live_bridge
+            cell.live_transport = live_transport
+            cell.live_metrics_logger = live_metrics_logger
+        else:
+            log.info("live_bridge_disabled_via_flag")
+            cell.live_bus = None
+            cell.live_poller = None
+            cell.live_bridge = None
+            cell.live_transport = None
+            cell.live_metrics_logger = None
+
         upload.start()
         watcher.start()
         updater.start()
         heartbeat.start()
         if socket_client is not None:
             socket_client.start()
+        if cell.live_bridge is not None:
+            cell.live_bridge.start()
+        if cell.live_poller is not None:
+            cell.live_poller.start()
+            log.info("live_poller_started base_url=http://localhost:6119")
+        if cell.live_metrics_logger is not None:
+            cell.live_metrics_logger.start()
         ui.on_status(
             "watching for replays" + (" (paused)" if state.paused else ""),
         )
@@ -1255,6 +1358,81 @@ def _running_frozen() -> bool:
     return getattr(sys, "frozen", False) is True
 
 
+def _build_live_bridge(
+    *,
+    user_name_hint: Optional[str],
+    log: logging.Logger,
+    api: Optional[ApiClient] = None,
+    overlay_base_url: str = "http://localhost:3000",
+    device_token: Optional[str] = None,
+) -> tuple[
+    EventBus[LiveLifecycleEvent],
+    LiveClientPoller,
+    LiveBridge,
+    Optional[FanOutTransport],
+    PeriodicMetricsLogger,
+]:
+    """Construct the Live Game Bridge stack: lifecycle bus + poller +
+    bridge (which fuses with Pulse and emits enriched envelopes on its
+    own output bus).
+
+    Phase 1 wired the lifecycle bus + poller. Phase 2 adds the bridge
+    + Pulse. Phase 3 will subscribe transports (Socket.io to the local
+    overlay backend + HTTPS POST to the cloud) on ``bridge.bus``.
+
+    The structured-log subscriber sits on the bridge's output bus so
+    operators see one grep-friendly line per emitted envelope (with
+    Pulse enrichment) rather than per raw lifecycle event.
+    """
+    lifecycle_bus: EventBus[LiveLifecycleEvent] = EventBus()
+    pulse = PulseClient()
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle_bus,
+        pulse=pulse,
+        user_name_hint=user_name_hint,
+    )
+
+    def _log_subscriber(payload: dict) -> None:
+        opp = payload.get("opponent") or {}
+        profile = opp.get("profile") or {}
+        log.info(
+            "live_emit phase=%s game_key=%s opp=%s race=%s "
+            "mmr=%s region=%s confidence=%s",
+            payload.get("phase", "-"),
+            payload.get("gameKey", "-"),
+            opp.get("name") or "-",
+            opp.get("race") or "-",
+            profile.get("mmr") if profile else "-",
+            profile.get("region") if profile else "-",
+            profile.get("confidence") if profile else "-",
+        )
+
+    bridge.bus.subscribe(_log_subscriber)
+
+    # Wire transports onto the bridge's output bus. Each transport
+    # runs independently — failure of one (overlay backend down,
+    # cloud unreachable) does not block the other from broadcasting.
+    transports: list = []
+    if api is not None and device_token:
+        transports.append(CloudTransport(api_client=api))
+    transports.append(
+        OverlayBackendTransport(
+            base_url=overlay_base_url,
+            device_token=device_token,
+        ),
+    )
+    fanout: Optional[FanOutTransport] = None
+    if transports:
+        fanout = FanOutTransport(*transports)
+        bridge.bus.subscribe(fanout.listener)
+
+    poller = LiveClientPoller(
+        bus=lifecycle_bus, user_name_hint=user_name_hint,
+    )
+    metrics_logger = PeriodicMetricsLogger()
+    return lifecycle_bus, poller, bridge, fanout, metrics_logger
+
+
 class _RuntimeCell:
     """Mutable container shared between the GUI thread and the boot
     worker. Kept as a plain class (no dataclass) so it never tries to
@@ -1270,6 +1448,11 @@ class _RuntimeCell:
         "updater",
         "heartbeat",
         "socket_client",
+        "live_bus",
+        "live_poller",
+        "live_bridge",
+        "live_transport",
+        "live_metrics_logger",
     )
 
     def __init__(self) -> None:
@@ -1282,6 +1465,11 @@ class _RuntimeCell:
         self.updater = None
         self.heartbeat = None
         self.socket_client = None
+        self.live_bus = None
+        self.live_poller = None
+        self.live_bridge = None
+        self.live_transport = None
+        self.live_metrics_logger = None
 
 
 class _Multiplexer:

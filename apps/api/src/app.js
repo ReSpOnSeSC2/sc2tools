@@ -26,6 +26,7 @@ const { CustomBuildsService } = require("./services/customBuilds");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { OverlayLiveService } = require("./services/overlayLive");
+const { LiveGameBroker } = require("./services/liveGameBroker");
 const { AggregationsService } = require("./services/aggregations");
 const { StreakService } = require("./services/streak");
 const { BuildsService } = require("./services/builds");
@@ -68,6 +69,10 @@ const { buildPublicReplayRouter } = require("./routes/publicReplay");
 const { buildSeasonsRouter } = require("./routes/seasons");
 const { buildClerkWebhookRouter } = require("./routes/clerkWebhook");
 const { buildAdminRouter } = require("./routes/admin");
+const {
+  buildAgentLiveRouter,
+  buildMeLiveRouter,
+} = require("./routes/agentLive");
 
 const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
 
@@ -153,6 +158,12 @@ function makeServices(deps) {
   // shared across requests. It pulls from the same ``games`` /
   // ``opponents`` collections every other read service touches.
   const overlayLive = new OverlayLiveService(deps.db);
+  // LiveGameBroker — in-process pub/sub for the agent → web SSE
+  // bridge. Constructed once at app boot so every agent POST shares
+  // the subscriber set with the user's web tabs. See
+  // ``services/liveGameBroker.js`` for the per-user fan-out + 30
+  // minute snapshot retention rationale.
+  const liveGameBroker = new LiveGameBroker();
   const aggregations = new AggregationsService(deps.db);
   const streak = new StreakService(deps.db);
   const builds = new BuildsService(deps.db);
@@ -190,6 +201,7 @@ function makeServices(deps) {
     pairings,
     overlayTokens,
     overlayLive,
+    liveGameBroker,
     aggregations,
     streak,
     builds,
@@ -435,6 +447,27 @@ function mountRoutes(app, deps, services, clerk) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMlRouter({ ml: services.ml, auth }),
+  );
+  // Live Game Bridge — agent POST + per-user SSE.
+  // Mounted late so the public/auth-flexible routers above keep
+  // their precedence; both endpoints here use the standard auth
+  // middleware (device tokens for the agent push, Clerk session
+  // for the web subscriber).
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildAgentLiveRouter({
+      broker: services.liveGameBroker,
+      auth,
+      logger: deps.logger,
+    }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildMeLiveRouter({
+      broker: services.liveGameBroker,
+      auth,
+      logger: deps.logger,
+    }),
   );
 }
 
