@@ -10,6 +10,55 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+## [agent-v0.5.11] - 2026-05-09
+
+Released as `agent-v0.5.11` on GitHub. Installer:
+`SC2ToolsAgent-Setup-0.5.11.exe`.
+
+### Fixed (agent + web) — Active Army chart no longer renders a phantom
+late-game opponent spike (PR #157)
+
+A streamer's Jagannatha LE PvZ replay (10/22/2020) showed the
+opponent army line stay near zero for ~13 minutes and then jump
+**vertically to ~9 200** in seconds — a number that didn't reflect
+actual gameplay. Worker counts and the Unit & Building Roster also
+disagreed with the chart's tooltip at the same hovered tick.
+
+Two layers of fix:
+
+  1. **Agent extracts `army_value` per stats sample.**
+     `SC2Replay-Analyzer/core/event_extractor.py` now writes
+     `minerals_used_active_forces + vespene_used_active_forces` (with
+     the legacy `*_used_current_army` fallback for older sc2reader
+     builds) onto every `PlayerStatsEvent` row in `stats_events` /
+     `opp_stats_events`. This is sc2reader's authoritative army
+     value — the same number the in-game Army graph and
+     sc2replaystats's Army Value chart show. Old uploads keep
+     working because the field is optional; once a user re-uploads
+     on this build the chart binds to it directly.
+
+  2. **SPA chart binds to `army_value` directly.** The previous
+     code reconstructed the army number via a fragile cascade
+     (`unit_timeline` → build-order cumulative + timeline-derived
+     deaths → `(food_used - food_workers) * 50`). When the
+     unit_timeline was empty for late-game samples (extractor edge
+     case, sparse downsample), the build-order fallback returned
+     the *cumulative ever built* count without subtracting deaths
+     — that's where the 9 200 came from. The SPA now prefers
+     `sample.army_value` and clamps the derived/heuristic paths to
+     `ARMY_FALLBACK_CAP` so neither can synthesise a vertical
+     spike. Tooltip and roster also share a single `SeriesPoint`
+     per hovered tick so they cannot disagree on army value, worker
+     count, or alive composition.
+
+Re-upload required for the most accurate readings: legacy uploads
+keep using the clamped derived path (no spike, but the absolute
+number stays an approximation).
+
+Tag this commit as `agent-v0.5.11` after merge to trigger
+`.github/workflows/agent-installer.yml` and produce
+`SC2ToolsAgent-Setup-0.5.11.exe`.
+
 ## [agent-v0.5.7] - 2026-05-08
 
 Released as `agent-v0.5.7` on GitHub. Installer:

@@ -2,6 +2,34 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.5.11
+
+### Fixed
+- **Active Army chart no longer renders a phantom late-game opponent
+  spike.** A streamer's Jagannatha LE PvZ replay (10/22/2020) showed
+  the opponent army line stay near zero for ~13 minutes and then
+  jump vertically to ~9 200 in seconds — a number that didn't
+  reflect actual gameplay. The cause was the SPA's army-value
+  reconstruction cascade falling through to a *cumulative
+  build-order count without death subtraction* whenever
+  `unit_timeline.opp` was sparse for late-game samples.
+
+  The agent now ships `army_value` per `PlayerStatsEvent` row in
+  `stats_events` / `opp_stats_events` — sourced from sc2reader's
+  `minerals_used_active_forces + vespene_used_active_forces`, the
+  same authoritative number the in-game Army graph and
+  sc2replaystats's Army Value chart show. The SPA chart now binds
+  the army line to this directly, removing the fragile cascade
+  entirely. Older sc2reader builds that expose
+  `*_used_current_army` instead are picked up by a fallback so
+  every install in the wild keeps emitting a valid number.
+
+  Re-import affected replays after upgrading to overwrite the
+  stored `macroBreakdown.stats_events` with the freshly-extracted
+  values; legacy uploads keep rendering via the SPA's clamped
+  derived path (no spike, but the absolute number stays an
+  approximation until re-uploaded).
+
 ## 0.5.10
 
 ### Fixed
