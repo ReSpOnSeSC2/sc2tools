@@ -65,6 +65,18 @@ export type AdminUserDetail = {
 export type RebuildResp = {
   userId: string;
   droppedRows: number;
+  // Returned alongside the rebuild after May-2026 — the admin
+  // tool now chains a SC2Pulse character-id backfill so the
+  // operator both rebuilds counters AND heals stuck-on-TOON
+  // opponent rows in a single click. Null when the cron is
+  // disabled or no rows needed healing; otherwise carries the
+  // counters the SPA renders next to "dropped N rows".
+  pulseBackfill?: {
+    scanned: number;
+    resolved: number;
+    updated: number;
+    skipped: number;
+  } | null;
 };
 
 export type WipeResp = {

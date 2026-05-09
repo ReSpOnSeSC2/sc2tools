@@ -6,6 +6,7 @@ import { useAuth } from "@clerk/nextjs";
 import { apiCall } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
 import { ConfirmInline } from "../components/AdminFragments";
+import { formatRebuildSummary } from "../components/format";
 import type { RebuildResp, WipeResp } from "../components/adminTypes";
 
 /**
@@ -120,7 +121,7 @@ function RebuildMyOpponentsTool() {
       {state.kind === "done" ? (
         <ResultLine
           tone="success"
-          message={`Rebuilt opponents for ${state.resp.userId} — dropped ${state.resp.droppedRows} rows.`}
+          message={formatRebuildSummary(state.resp)}
           onDismiss={() => setState({ kind: "idle" })}
         />
       ) : null}
@@ -217,7 +218,7 @@ function RebuildUserOpponentsTool() {
       {state.kind === "done" ? (
         <ResultLine
           tone="success"
-          message={`Rebuilt opponents for ${state.resp.userId} — dropped ${state.resp.droppedRows} rows.`}
+          message={formatRebuildSummary(state.resp)}
           onDismiss={() => setState({ kind: "idle" })}
         />
       ) : null}

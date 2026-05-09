@@ -58,6 +58,42 @@ export function compactNumber(n: number): string {
 }
 
 /**
+ * Compose the success line for a "Rebuild opponents" call. Pre-
+ * May-2026 the response only carried ``droppedRows``; the admin
+ * tool now ALSO chains a SC2Pulse character-id backfill so the
+ * summary surfaces the heal counters when any rows were touched.
+ *
+ * Returns a one-line string suitable for the existing
+ * ``ResultLine`` render path — no JSX, no DOM, easy to unit-test
+ * and easy to reuse from any of the three rebuild buttons (admin
+ * tools page rebuilds-me + targeted-user, plus the per-user detail
+ * page).
+ */
+export function formatRebuildSummary(resp: {
+  userId: string;
+  droppedRows: number;
+  pulseBackfill?: {
+    scanned: number;
+    resolved: number;
+    updated: number;
+    skipped: number;
+  } | null;
+}): string {
+  const head = `Rebuilt opponents for ${resp.userId} — dropped ${resp.droppedRows} rows.`;
+  const heal = resp.pulseBackfill;
+  if (!heal) return head;
+  // Hide the heal phrase entirely when nothing was touched —
+  // keeps the success line short on the common "nothing was
+  // stuck" path.
+  if (heal.scanned === 0 && heal.resolved === 0) return head;
+  const parts: string[] = [];
+  parts.push(`scanned ${heal.scanned}`);
+  parts.push(`resolved ${heal.resolved}`);
+  if (heal.skipped > 0) parts.push(`skipped ${heal.skipped}`);
+  return `${head} Pulse heal: ${parts.join(", ")}.`;
+}
+
+/**
  * Friendly seconds-to-duration. Used for the Health tab uptime row.
  */
 export function formatDuration(seconds: number): string {
