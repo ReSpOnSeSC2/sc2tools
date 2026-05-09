@@ -13,6 +13,7 @@ const { connect } = require("./db/connect");
 const { buildApp } = require("./app");
 const { attachSocketAuth } = require("./socket/auth");
 const { buildKeepaliveWorker } = require("./services/keepalive");
+const { buildPulseBackfillJob } = require("./jobs/pulseBackfillJob");
 const sentry = require("./util/sentry");
 
 async function main() {
@@ -41,6 +42,7 @@ async function main() {
     services: {
       overlayTokens: import('./services/types').OverlayTokensService,
       games: import('./services/types').GamesService,
+      opponents: import('./services/opponents').OpponentsService,
       [k: string]: unknown,
     },
   }} */ (buildApp({ db, logger, config, io }));
@@ -72,6 +74,17 @@ async function main() {
   });
   keepalive.start();
 
+  // Pulse-character-id backfill cron. Heals opponents rows whose
+  // first ingest happened during a transient SC2Pulse outage —
+  // see jobs/pulseBackfillJob.js for the lock + cycle policy.
+  // Soft-disabled via SC2TOOLS_PULSE_BACKFILL_DISABLED=1.
+  const pulseBackfill = buildPulseBackfillJob({
+    db,
+    opponents: services.opponents,
+    logger,
+  });
+  pulseBackfill.start();
+
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
@@ -81,6 +94,7 @@ async function main() {
     httpServer.close();
     io.close();
     await keepalive.stop();
+    await pulseBackfill.stop();
     await db.close();
     logger.info("shutdown_complete");
     process.exit(0);

@@ -54,7 +54,14 @@ const REGISTRY = Object.freeze({
   },
   [COLLECTIONS.OPPONENTS]: {
     collection: COLLECTIONS.OPPONENTS,
-    currentVersion: 1,
+    // v2 — May 2026 "stuck on TOON id" fix:
+    //   * coerce the literal "" stored in ``pulseCharacterId`` (the
+    //     value rejected by the API ingest schema, but historically
+    //     written by some early agent versions) to unset so the
+    //     backfill cron's "missing or empty" filter matches them;
+    //   * ensure ``pulseResolveAttemptedAt`` exists (Date|null) so
+    //     the same backfill filter has a consistent shape.
+    currentVersion: 2,
     versionKey: VERSION_KEY,
   },
   [COLLECTIONS.GAMES]: {

@@ -178,6 +178,34 @@ Render hosts the Express + MongoDB API.
    Other vars (`NODE_ENV`, `MONGODB_DB`, `LOG_LEVEL`, `RATE_LIMIT_PER_MINUTE`)
    already have sane defaults from `render.yaml`.
 
+   #### SC2Pulse identity-link knobs (optional)
+
+   These tune the cloud's "heal a stuck TOON id opponent" path —
+   the periodic backfill cron that re-resolves any opponent row
+   whose `pulseCharacterId` never landed at first ingest (typically
+   because `sc2pulse.nephest.com` was unreachable / rate-limited at
+   that moment). Defaults work for the typical deploy; touch them
+   only if your operational characteristics differ.
+
+   | Name                                       | Default | Purpose                                                                 |
+   | ------------------------------------------ | ------- | ----------------------------------------------------------------------- |
+   | `SC2TOOLS_PULSE_BACKFILL_DISABLED`         | unset   | Set to `1` to soft-disable the backfill cron entirely.                  |
+   | `SC2TOOLS_PULSE_BACKFILL_INTERVAL_SEC`     | `900`   | Cycle interval. Keep ≥ 60.                                              |
+   | `SC2TOOLS_PULSE_BACKFILL_USER_LIMIT`       | `25`    | Max stuck rows touched per user per cycle.                              |
+   | `SC2TOOLS_PULSE_BACKFILL_USERS_PER_TICK`   | `25`    | Max distinct users a single cycle walks.                                |
+   | `SC2TOOLS_API_PULSE_TIMEOUT_SEC`           | `8`     | Hard per-call timeout for the cloud-side SC2Pulse resolver (per HTTP request). |
+
+   The desktop **agent** also exposes a few SC2Pulse knobs that
+   matter for the same "stuck on TOON id" failure mode but live in
+   the agent's process (they don't ship to Render). Document them
+   in the user-facing release notes; for reference:
+
+   | Name                                       | Default | Purpose                                                                 |
+   | ------------------------------------------ | ------- | ----------------------------------------------------------------------- |
+   | `SC2TOOLS_PULSE_TIMEOUT_SEC`               | unset   | Single override applied to BOTH live + backfill resolver calls. `0` disables lookups. |
+   | `SC2TOOLS_PULSE_BACKFILL_TIMEOUT_SEC`      | `10`    | Wall-clock cap on the backfill (older replays) resolver call. Bumped from 4 s in May 2026. |
+   | `SC2TOOLS_PULSE_NEG_CACHE_SEC`             | `600`   | TTL on the in-process negative cache. `0` disables negative caching entirely. |
+
 5. Click **Save Changes**. Render redeploys with the new env vars
    (~2 min).
 6. Open the service URL Render gave you (e.g.

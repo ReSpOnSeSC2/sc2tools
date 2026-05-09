@@ -52,6 +52,14 @@ const GAME_SCHEMA = {
         // string) — e.g. "994428". This is what the UI shows in the
         // "Pulse ID" column and what links to sc2pulse.nephest.com.
         pulseCharacterId: { type: "string", pattern: "^[0-9]+$", maxLength: 32 },
+        // pulseLookupAttempted: true when the agent tried to resolve
+        // the toon → pulseCharacterId for this game, regardless of
+        // whether the lookup succeeded. Lets the API distinguish
+        // "agent didn't try" from "agent tried and Pulse said no",
+        // which the server-side backfill cron uses to decide whether
+        // to retry. v0.5.x agents always emit this when ``opp.handle``
+        // is present.
+        pulseLookupAttempted: { type: "boolean" },
         displayName: { type: "string", maxLength: 80 },
         race: { type: "string", maxLength: 24 },
         mmr: { type: "integer", minimum: 0, maximum: 9999 },

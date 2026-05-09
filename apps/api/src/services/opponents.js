@@ -66,6 +66,18 @@ class OpponentsService {
     this.db = db;
     this.pepper = pepper;
     this.gameDetails = opts.gameDetails || null;
+    // Optional pino logger. Used for the structured "pulseCharacterId
+    // upgraded" / "backfill cycle" lines. Falls back to a no-op
+    // shim so unit tests that construct the service without a logger
+    // (the bulk of the existing suite) keep working untouched.
+    this.logger = opts.logger || NOOP_LOGGER;
+    // Server-side SC2Pulse resolver — same toon → character-id
+    // contract as the agent's resolver, but invoked from the
+    // backfill cron (and any other cloud path that needs to recover
+    // a missing pulseCharacterId after the fact). Optional in unit
+    // tests that don't exercise backfill; ``backfillPulseCharacterId``
+    // throws if asked to run without one.
+    this.pulseResolver = opts.pulseResolver || null;
   }
 
   /**
@@ -318,6 +330,15 @@ class OpponentsService {
     const displayHash = hmac(this.pepper, game.displayName || "");
     const winInc = game.result === "Victory" ? 1 : 0;
     const lossInc = game.result === "Defeat" ? 1 : 0;
+    // Read the prior row first so we can log a structured change
+    // line when a fresh pulseCharacterId replaces a stale one. The
+    // single $setOnInsert/$set/$inc upsert below stays atomic — the
+    // pre-read is for telemetry only and a missing prior row is
+    // expected on the first encounter.
+    const prior = await this.db.opponents.findOne(
+      { userId, pulseId: game.pulseId },
+      { projection: { pulseCharacterId: 1 } },
+    );
     /** @type {Record<string, any>} */
     const setOnInsert = {
       userId,
@@ -336,17 +357,39 @@ class OpponentsService {
     if (typeof game.leagueId === "number") set.leagueId = game.leagueId;
     // Identity: persist the raw toon_handle (always present from
     // sc2reader) and the resolved sc2pulse.nephest.com character id
-    // when available. We never overwrite a known pulseCharacterId with
-    // an empty value — once resolved the row is sticky, so an offline
-    // catch-up scan after the first game doesn't blank the link.
+    // when available.
+    //
+    // Sticky semantics on pulseCharacterId:
+    //   * Never overwrite with an empty value — once resolved the
+    //     row stays linked, so an offline catch-up scan after the
+    //     first game doesn't blank the link.
+    //   * DO overwrite when the incoming non-empty value differs
+    //     from the stored one. SC2Pulse occasionally rotates the
+    //     canonical character id when an account is re-linked; we
+    //     trust the latest non-empty resolution and log the change
+    //     so the swap is auditable.
     if (typeof game.toonHandle === "string" && game.toonHandle.length > 0) {
       set.toonHandle = game.toonHandle;
     }
+    let pulseCharIdChange = null;
     if (
       typeof game.pulseCharacterId === "string"
       && game.pulseCharacterId.length > 0
     ) {
       set.pulseCharacterId = game.pulseCharacterId;
+      const before = prior && typeof prior.pulseCharacterId === "string"
+        ? prior.pulseCharacterId
+        : null;
+      if (before !== game.pulseCharacterId) {
+        pulseCharIdChange = { from: before, to: game.pulseCharacterId };
+      }
+    }
+    // Stamp the resolve-attempt timestamp whenever the agent (or any
+    // ingest source) tells us it tried. Used by the backfill cron's
+    // "skip rows attempted within window" guard so two services can
+    // coordinate without one starving the other of retries.
+    if (game.pulseLookupAttempted === true) {
+      set.pulseResolveAttemptedAt = new Date();
     }
     /** @type {Record<string, any>} */
     const inc = { gameCount: 1, wins: winInc, losses: lossInc };
@@ -359,6 +402,22 @@ class OpponentsService {
       { $setOnInsert: setOnInsert, $set: set, $inc: inc },
       { upsert: true },
     );
+    if (pulseCharIdChange) {
+      this.logger.info(
+        {
+          userId,
+          pulseId: game.pulseId,
+          from: pulseCharIdChange.from,
+          to: pulseCharIdChange.to,
+        },
+        "opponent_pulse_character_id_upgraded",
+      );
+    }
+    return {
+      upgraded: Boolean(pulseCharIdChange),
+      from: pulseCharIdChange ? pulseCharIdChange.from : null,
+      to: pulseCharIdChange ? pulseCharIdChange.to : null,
+    };
   }
 
   /**
@@ -387,6 +446,10 @@ class OpponentsService {
    */
   async refreshMetadata(userId, game) {
     if (!game.pulseId) throw new Error("pulseId required");
+    const prior = await this.db.opponents.findOne(
+      { userId, pulseId: game.pulseId },
+      { projection: { pulseCharacterId: 1 } },
+    );
     /** @type {Record<string, any>} */
     const set = {
       displayNameHash: hmac(this.pepper, game.displayName || ""),
@@ -400,23 +463,196 @@ class OpponentsService {
     if (typeof game.toonHandle === "string" && game.toonHandle.length > 0) {
       set.toonHandle = game.toonHandle;
     }
+    let pulseCharIdChange = null;
     if (
       typeof game.pulseCharacterId === "string"
       && game.pulseCharacterId.length > 0
     ) {
       set.pulseCharacterId = game.pulseCharacterId;
+      const before = prior && typeof prior.pulseCharacterId === "string"
+        ? prior.pulseCharacterId
+        : null;
+      if (before !== game.pulseCharacterId) {
+        pulseCharIdChange = { from: before, to: game.pulseCharacterId };
+      }
+    }
+    if (game.pulseLookupAttempted === true) {
+      set.pulseResolveAttemptedAt = new Date();
     }
     // updateOne (NOT upsert: true) — we only refresh rows that
     // already exist. If the opponent row is missing entirely, the
     // ingest path's ``created`` check already determined this was
     // not a new-game ingest and any earlier insert was lost; the
     // admin "Rebuild opponents" tool reconstructs from games.
-    await this.db.opponents.updateOne(
+    const res = await this.db.opponents.updateOne(
       { userId, pulseId: game.pulseId },
       { $set: set },
     );
+    if (pulseCharIdChange) {
+      this.logger.info(
+        {
+          userId,
+          pulseId: game.pulseId,
+          from: pulseCharIdChange.from,
+          to: pulseCharIdChange.to,
+        },
+        "opponent_pulse_character_id_upgraded",
+      );
+    }
+    return {
+      matched: res.matchedCount || 0,
+      modified: res.modifiedCount || 0,
+      upgraded: Boolean(pulseCharIdChange),
+    };
+  }
+
+  /**
+   * Find opponent rows belonging to ``userId`` whose
+   * ``pulseCharacterId`` is missing or empty AND whose
+   * ``toonHandle`` is set, then attempt to resolve each one against
+   * SC2Pulse. Successful resolutions are persisted; misses bump
+   * ``pulseResolveAttemptedAt`` so we don't re-hit Pulse on every
+   * subsequent tick.
+   *
+   * Two cooperating bounds:
+   *   * ``opts.limit`` (default 50) caps how many rows one cycle
+   *     touches, keeping a single backfill tick cheap.
+   *   * ``opts.maxAgeSec`` (default 6h) skips rows attempted within
+   *     that window — together with the per-row
+   *     ``pulseResolveAttemptedAt`` stamp this prevents the cron
+   *     from hammering SC2Pulse for an opponent that was just
+   *     probed (e.g. by the agent on a fresh upload).
+   *
+   * Returns counters so the caller (cron job, admin rebuild) can
+   * log a structured one-line summary.
+   *
+   * @param {string} userId
+   * @param {{
+   *   limit?: number,
+   *   maxAgeSec?: number,
+   *   force?: boolean,
+   * }} [opts]
+   * @returns {Promise<{
+   *   scanned: number,
+   *   resolved: number,
+   *   updated: number,
+   *   skipped: number,
+   * }>}
+   */
+  async backfillPulseCharacterId(userId, opts = {}) {
+    if (!userId) throw new Error("userId required");
+    if (!this.pulseResolver) {
+      throw new Error(
+        "OpponentsService.backfillPulseCharacterId requires a pulseResolver dependency",
+      );
+    }
+    const limit = clampLimit(opts.limit, 50);
+    const maxAgeSec = typeof opts.maxAgeSec === "number" && opts.maxAgeSec >= 0
+      ? opts.maxAgeSec
+      : 6 * 60 * 60;
+    const cutoff = new Date(Date.now() - maxAgeSec * 1000);
+    /** @type {Record<string, any>} */
+    const filter = {
+      userId,
+      $or: [
+        { pulseCharacterId: { $exists: false } },
+        { pulseCharacterId: "" },
+        { pulseCharacterId: null },
+      ],
+      toonHandle: { $type: "string", $ne: "" },
+    };
+    if (!opts.force) {
+      filter.$and = [
+        {
+          $or: [
+            { pulseResolveAttemptedAt: { $exists: false } },
+            { pulseResolveAttemptedAt: null },
+            { pulseResolveAttemptedAt: { $lt: cutoff } },
+          ],
+        },
+      ];
+    }
+    const rows = await this.db.opponents
+      .find(filter, {
+        projection: {
+          _id: 0,
+          pulseId: 1,
+          toonHandle: 1,
+          displayNameSample: 1,
+        },
+      })
+      .limit(limit)
+      .toArray();
+    let resolved = 0;
+    let updated = 0;
+    let skipped = 0;
+    for (const row of rows) {
+      const toon = typeof row.toonHandle === "string" ? row.toonHandle : "";
+      if (!toon) {
+        skipped += 1;
+        continue;
+      }
+      const displayName = typeof row.displayNameSample === "string"
+        ? row.displayNameSample
+        : "";
+      // Real outbound HTTP — no mocks, no synthetic ids. The
+      // resolver swallows transient errors and returns null on
+      // miss; all bookkeeping (positive/negative caching, retries,
+      // rate-limit backoff) lives there.
+      let pulseCharacterId = null;
+      try {
+        pulseCharacterId = await this.pulseResolver.resolve({
+          toonHandle: toon,
+          displayName,
+          forceRefresh: true,
+        });
+      } catch (err) {
+        this.logger.warn(
+          { err, userId, pulseId: row.pulseId, toonHandle: toon },
+          "opponent_pulse_backfill_resolver_failed",
+        );
+      }
+      const now = new Date();
+      const set = {
+        pulseResolveAttemptedAt: now,
+      };
+      if (typeof pulseCharacterId === "string" && pulseCharacterId.length > 0) {
+        set.pulseCharacterId = pulseCharacterId;
+        resolved += 1;
+      }
+      const res = await this.db.opponents.updateOne(
+        { userId, pulseId: row.pulseId },
+        { $set: set },
+      );
+      if (res.modifiedCount > 0) updated += 1;
+      if (typeof pulseCharacterId === "string" && pulseCharacterId.length > 0) {
+        this.logger.info(
+          {
+            userId,
+            pulseId: row.pulseId,
+            from: null,
+            to: pulseCharacterId,
+            source: "backfill",
+          },
+          "opponent_pulse_character_id_upgraded",
+        );
+      }
+    }
+    return { scanned: rows.length, resolved, updated, skipped };
   }
 }
+
+const NOOP_LOGGER = {
+  // Pino-shaped no-op logger so call sites can pass arbitrary log
+  // shapes without a runtime check.
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+  trace: () => {},
+  fatal: () => {},
+  child: () => NOOP_LOGGER,
+};
 
 /**
  * Mongo field paths cannot contain '.', '$', or null bytes. Strip.
