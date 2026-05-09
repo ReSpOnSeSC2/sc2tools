@@ -40,7 +40,7 @@ describe("AgentStatusIndicator", () => {
     expect(container.textContent).toContain("Agent offline");
   });
 
-  it("shows 'Agent connected' when a fresh non-idle envelope is set", () => {
+  it("shows 'Agent connected · in game' when a fresh non-idle envelope is set", () => {
     liveState.current = {
       live: {
         type: "liveGameState",
@@ -52,8 +52,7 @@ describe("AgentStatusIndicator", () => {
       connected: true,
     };
     const { container } = render(<AgentStatusIndicator />);
-    expect(container.textContent).toContain("Agent connected");
-    expect(container.textContent).not.toContain("no game");
+    expect(container.textContent).toContain("Agent connected · in game");
   });
 
   it("shows 'Agent connected · no game' when only a stale-but-recent idle envelope is set", () => {
@@ -67,6 +66,34 @@ describe("AgentStatusIndicator", () => {
     };
     const { container } = render(<AgentStatusIndicator />);
     expect(container.textContent).toContain("Agent connected · no game");
+  });
+
+  it("uses the success colour for both connected states (green-while-connected UX)", () => {
+    // Both `connected-live` and `connected-idle` should share the
+    // success tint — the streamer's mental model is binary, the
+    // in-game/no-game distinction is conveyed by the label.
+    liveState.current = {
+      live: null,
+      lastUpdatedAt: Date.now() - 5_000,
+      connected: true,
+    };
+    const { container, rerender } = render(<AgentStatusIndicator />);
+    const idleSpan = container.querySelector("span[role='status']");
+    expect(idleSpan?.className || "").toContain("text-success");
+
+    liveState.current = {
+      live: {
+        type: "liveGameState",
+        phase: "match_started",
+        capturedAt: Date.now() / 1000,
+        opponent: { name: "Maru" },
+      },
+      lastUpdatedAt: Date.now(),
+      connected: true,
+    };
+    rerender(<AgentStatusIndicator />);
+    const liveSpan = container.querySelector("span[role='status']");
+    expect(liveSpan?.className || "").toContain("text-success");
   });
 
   it("falls back to 'Agent offline' when even idle envelopes are too old", () => {
@@ -91,10 +118,10 @@ describe("AgentStatusIndicator", () => {
       connected: true,
     };
     const { container } = render(<AgentStatusIndicator />);
-    expect(container.textContent).toContain("Agent connected");
+    expect(container.textContent).toContain("Agent connected · in game");
     // Advance fake timer past the 10 s "fresh-live" threshold but
-    // still within the 60 s "any-recent" idle window. Status flips
-    // from "connected" to "connected · no game".
+    // still within the 60 s "any-recent" idle window. Label flips
+    // from "in game" to "no game" while colour stays green.
     act(() => {
       vi.advanceTimersByTime(7_000);
     });

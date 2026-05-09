@@ -1,6 +1,10 @@
 "use client";
 
-import type { LiveGameEnvelope, LiveGamePayload } from "../types";
+import type {
+  LiveGameEnvelope,
+  LiveGameEnvelopeProfile,
+  LiveGamePayload,
+} from "../types";
 import { Dim, WidgetShell } from "../WidgetShell";
 
 /**
@@ -433,16 +437,57 @@ function ScoutingPreGameCard({
               : "live"}
         </Dim>
       </div>
-      {profile && profile.confidence !== undefined && profile.confidence < 1 ? (
+      {showBestGuessHint(profile) ? (
         <div style={{ marginTop: 6, fontSize: 12, opacity: 0.55 }}>
           best guess
-          {Array.isArray(profile.alternatives) && profile.alternatives.length
-            ? ` — also: ${profile.alternatives.slice(0, 3).join(", ")}`
+          {meaningfulAlternatives(profile).length > 0
+            ? ` — also: ${meaningfulAlternatives(profile)
+                .slice(0, 3)
+                .join(", ")}`
             : null}
         </div>
       ) : null}
     </WidgetShell>
   );
+}
+
+/**
+ * Strip placeholder entries (empty strings, `?`, `? (?)`) the agent's
+ * Pulse stub surfaces when a name search returned nothing useful.
+ * Live tests with a casual ladder opponent yielded
+ * `alternatives: ["? (?)", "? (?)"]` which rendered as ugly noise on
+ * the scouting card; filtering keeps the card honest about "no
+ * disambiguation available" without showing literal question marks.
+ */
+function meaningfulAlternatives(
+  profile: LiveGameEnvelopeProfile | null | undefined,
+): string[] {
+  if (!profile || !Array.isArray(profile.alternatives)) return [];
+  return profile.alternatives
+    .map((s) => (typeof s === "string" ? s.trim() : ""))
+    .filter((s) => {
+      if (!s) return false;
+      if (s === "?") return false;
+      // Drop the agent's empty "? (?)" placeholder shape — that's a
+      // stub the bridge emits when Pulse returned no candidates with
+      // resolvable identity, not a real disambiguation hint.
+      if (/^\?\s*\(\s*\??\s*\)$/.test(s)) return false;
+      return true;
+    });
+}
+
+/**
+ * The "best guess" hint only adds value when (a) the bridge actually
+ * has lower-than-1 confidence in its primary pick, AND (b) there are
+ * meaningful alternatives the streamer could compare against. A
+ * confidence-only signal with no real alternatives is just noise.
+ */
+function showBestGuessHint(
+  profile: LiveGameEnvelopeProfile | null | undefined,
+): boolean {
+  if (!profile) return false;
+  if (profile.confidence === undefined || profile.confidence >= 1) return false;
+  return meaningfulAlternatives(profile).length > 0;
 }
 
 function formatRaceLong(race: string): string {
