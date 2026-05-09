@@ -207,9 +207,9 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
         visibleOut={out}
       />,
     );
-    // Almost time out, then a rematch loads.
+    // Mid-timer, before the natural 15 s opponent timer fires.
     act(() => {
-      vi.advanceTimersByTime(20_000);
+      vi.advanceTimersByTime(10_000);
     });
     expect(out.value).toBe(true);
     rerender(
@@ -224,7 +224,7 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
       />,
     );
     expect(out.value).toBe(true);
-    // Push way past the natural 22 s timer — opponent stays pinned
+    // Push way past the natural 15 s timer — opponent stays pinned
     // because the phase is active.
     act(() => {
       vi.advanceTimersByTime(60_000);
