@@ -70,31 +70,32 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
 export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
   // Opponent dossier — pinned visibly during the active phases of a
   // match (loading / started / in-progress, see `useWidgetVisibility`),
-  // then naturally hides 22s after `match_ended` so the streamer's
-  // scene clears for the next queue. The legacy 6-minute duration was
-  // a hack to bridge "queue-into-next-match" gaps, but the cloud now
-  // clears `live` on `match_loading` (see
-  // `useClearStalePostGameOnNewMatch`) so the dossier is replaced by
-  // the new opponent's data the moment SC2 reports the next loading
-  // screen. Six minutes was just leaving stale data on the OBS scene.
-  "opponent": 22 * 1000,
-  // Event chips — short, stream-friendly durations.
-  // Match-result chip ("VICTORY" / "DEFEAT" banner) trimmed from 15s
-  // to 8s on streamer feedback: the result is decisive enough at a
-  // glance that 15s read as lingering on a finished game; 8s lines up
-  // with the streak chip cadence.
-  "match-result": 8 * 1000,
-  "post-game": 16 * 1000,
+  // then naturally hides after `match_ended` so the streamer's scene
+  // clears for the next queue. The legacy 6-minute duration was a hack
+  // to bridge "queue-into-next-match" gaps, but the cloud now clears
+  // `live` on `match_loading` (see `useClearStalePostGameOnNewMatch`)
+  // so the dossier is replaced by the new opponent's data the moment
+  // SC2 reports the next loading screen.
+  "opponent": 15 * 1000,
+  // Post-game chips and panels — unified at 15 s on streamer request
+  // ("match result and scouting widget should both only stay 15 or
+  // 20 seconds"). Anything that fires off the post-game ``overlay:live``
+  // payload clears within 15 s of the result so the OBS scene is
+  // ready for the next queue. Previously these ranged from 8 to 22 s,
+  // which made the post-game wave feel uneven on stream — some
+  // widgets snapped away while others lingered.
+  "match-result": 15 * 1000,
+  "post-game": 15 * 1000,
   "mmr-delta": 10 * 1000,
   "streak": 8 * 1000,
-  "cheese": 18 * 1000,
+  "cheese": 15 * 1000,
   "rematch": 15 * 1000,
-  "rival": 16 * 1000,
+  "rival": 15 * 1000,
   "rank": 12 * 1000,
   "meta": 12 * 1000,
-  "fav-opening": 18 * 1000,
-  "best-answer": 18 * 1000,
-  "scouting": 22 * 1000,
+  "fav-opening": 15 * 1000,
+  "best-answer": 15 * 1000,
+  "scouting": 15 * 1000,
   // Persistent panels — HUDs that should stay on screen.
   "topbuilds": null,
   "session": null,
