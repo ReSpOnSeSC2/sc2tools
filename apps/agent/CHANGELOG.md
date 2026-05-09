@@ -1,6 +1,21 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
+## 0.6.1
+
+### Changed — Cloud-only default transport (PR #165)
+- The Live Game Bridge now ships **cloud-only by default**. The
+  `OverlayBackendTransport` (HTTP POST to `localhost:3000`) is no
+  longer constructed at boot — fresh installs send zero traffic to
+  the legacy local overlay backend.
+- New `SC2TOOLS_LOCAL_OVERLAY_URL` env var re-enables the legacy
+  transport for users running the self-hosted
+  `reveal-sc2-opponent-main/stream-overlay-backend` product. Set it
+  to e.g. `http://localhost:3000` to wire both transports.
+- Boot logs now report `live_transport_cloud_only=true` (default) or
+  `live_transport_local_overlay_enabled url=...` (opt-in) so you can
+  tell at a glance which path your install is using.
+.
 
 ## 0.6.0
 
