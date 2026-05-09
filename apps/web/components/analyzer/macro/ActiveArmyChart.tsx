@@ -10,16 +10,12 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { AlertCircle } from "lucide-react";
-import type {
-  LeakItem,
-  StatsEvent,
-  UnitTimelineEntry,
-} from "./MacroBreakdownPanel.types";
-import type { BuildEvent } from "./compositionAt";
+import type { LeakItem } from "./MacroBreakdownPanel.types";
 import {
   buildLayout,
-  nearestPoint,
+  nearestPriorPoint,
   type ChartLayout,
+  type SeriesPoint,
 } from "./activeArmyLayout";
 import {
   AccessibleLeakTable,
@@ -51,17 +47,18 @@ export type HoverEvent =
   | { type: "leave" };
 
 export interface ActiveArmyChartProps {
-  /** Player samples (food_used, food_workers, …). */
-  samples: StatsEvent[];
-  /** Opponent samples. May be empty when not extracted. */
-  oppSamples: StatsEvent[];
-  /** Optional unit-timeline (per-tick army composition). */
-  unitTimeline?: UnitTimelineEntry[];
-  /** Optional build-order events used to derive army composition when
-   *  the unit_timeline is sparse. Threaded through to ``buildLayout``
-   *  so the chart line agrees with the roster snapshot below. */
-  myBuildEvents?: BuildEvent[];
-  oppBuildEvents?: BuildEvent[];
+  /**
+   * Pre-built per-tick series for the local player. Each SeriesPoint
+   * carries army value, worker count, AND the alive unit composition
+   * at that tick. The parent (``MacroChartSection``) builds the
+   * series once and threads it to both this chart and the
+   * ``CompositionSnapshot`` roster, so the tooltip's army number and
+   * the roster header's "Army NNN" are guaranteed to come from the
+   * same SeriesPoint at the same hover time.
+   */
+  mySeries: SeriesPoint[];
+  /** Opponent series — may be empty when no opp samples were extracted. */
+  oppSeries: SeriesPoint[];
   gameLengthSec?: number;
   /** Leak collection — drives vertical markers along the time axis. */
   leaks: LeakItem[];
@@ -110,11 +107,8 @@ export interface ActiveArmyChartProps {
  * the per-layer SVG rendering.
  */
 export function ActiveArmyChart({
-  samples,
-  oppSamples,
-  unitTimeline,
-  myBuildEvents,
-  oppBuildEvents,
+  mySeries,
+  oppSeries,
   gameLengthSec,
   leaks,
   leakWindows,
@@ -133,16 +127,8 @@ export function ActiveArmyChart({
   >(null);
 
   const layout = useMemo(
-    () =>
-      buildLayout(
-        samples,
-        oppSamples,
-        gameLengthSec,
-        unitTimeline,
-        myBuildEvents,
-        oppBuildEvents,
-      ),
-    [samples, oppSamples, gameLengthSec, unitTimeline, myBuildEvents, oppBuildEvents],
+    () => buildLayout(mySeries, oppSeries, gameLengthSec),
+    [mySeries, oppSeries, gameLengthSec],
   );
 
   useEffect(() => {
@@ -312,18 +298,22 @@ function computeHoverPoints(
     return null;
   }
   const clamped = Math.max(0, Math.min(layout.maxT, hoveredTime));
-  const my = nearestPoint(layout.mySeries, clamped);
-  const opp = nearestPoint(layout.oppSeries, clamped);
-  // Snap the SAMPLE indicator to the nearest sample on either side so
-  // the dots and tooltip read true sample values; keep the vertical
+  // Use ``nearestPriorPoint`` so the tooltip never reads from a
+  // FUTURE sample. A hover at t=945 with samples at 930 and 960
+  // snaps to 930, not 960 — without this, the worker count and army
+  // number could leak post-hover state into the locked tooltip and
+  // diverge from the roster (which also uses nearestPriorPoint).
+  const my = nearestPriorPoint(layout.mySeries, clamped);
+  const opp = nearestPriorPoint(layout.oppSeries, clamped);
+  // Snap the SAMPLE indicator to whichever side has the LATER prior
+  // sample (so a hover that spans a my-only or opp-only tick still
+  // lands on the most-recently-rendered sample). Keep the vertical
   // crosshair at the exact cursor position so it tracks the mouse.
   const candidates: number[] = [];
   if (my) candidates.push(my.t);
   if (opp) candidates.push(opp.t);
   const t = candidates.length
-    ? candidates.reduce((best, cand) =>
-        Math.abs(cand - clamped) < Math.abs(best - clamped) ? cand : best,
-      )
+    ? candidates.reduce((best, cand) => (cand > best ? cand : best), 0)
     : clamped;
   return {
     t,

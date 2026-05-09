@@ -3,16 +3,12 @@
 import { useMemo } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { formatGameClock } from "@/lib/macro";
-import { computeArmyValue, sortedArmyComposition } from "@/lib/sc2-units";
-import type {
-  StatsEvent,
-  UnitTimelineEntry,
-} from "./MacroBreakdownPanel.types";
-import { nearestPoint } from "./activeArmyLayout";
+import { sortedArmyComposition } from "@/lib/sc2-units";
+import type { UnitTimelineEntry } from "./MacroBreakdownPanel.types";
+import { nearestPriorPoint, type SeriesPoint } from "./activeArmyLayout";
 import {
   countBuildingsAt,
   countUpgradesAt,
-  deriveUnitComposition,
   sortByCountDesc,
   type BuildEvent,
   type CompositionSource,
@@ -32,11 +28,21 @@ export interface BuildOrderResponse {
 }
 
 export interface CompositionSnapshotProps {
-  /** Player unit composition timeline (post-downsample wire payload). */
+  /**
+   * Pre-built per-tick series for the local player. Built once by the
+   * parent (``MacroChartSection``) and threaded to both the chart and
+   * this snapshot. Each SeriesPoint carries army value, worker count,
+   * AND the alive unit composition — so this panel reads the SAME
+   * numbers the chart's tooltip shows at the same hovered tick.
+   */
+  mySeries: SeriesPoint[];
+  oppSeries: SeriesPoint[];
+  /** Player unit composition timeline (post-downsample wire payload).
+   *  Used only to drive the "snapshot time" header (the closest
+   *  sample's game clock); the unit composition itself comes from
+   *  ``mySeries`` / ``oppSeries`` so the chart and the roster cannot
+   *  disagree. */
   unitTimeline?: UnitTimelineEntry[];
-  /** Player stats samples — supplies the worker count at each tick. */
-  mySamples: StatsEvent[];
-  oppSamples: StatsEvent[];
   /** Currently hovered game-time second. */
   hoveredTime?: number | null;
   /** Total game length, used for the "latest sample" fallback. */
@@ -80,9 +86,9 @@ const CHIP_ICON_PX = 22;
  * until the user actually looks at it.
  */
 export function CompositionSnapshot({
+  mySeries,
+  oppSeries,
   unitTimeline,
-  mySamples,
-  oppSamples,
   hoveredTime,
   gameLengthSec,
   myName,
@@ -93,48 +99,46 @@ export function CompositionSnapshot({
   buildOrderLoading,
   buildOrderError,
 }: CompositionSnapshotProps) {
-  const hasTimeline = Array.isArray(unitTimeline) && unitTimeline.length > 0;
+  const hasMySeries = Array.isArray(mySeries) && mySeries.length > 0;
+  const hasOppSeries = Array.isArray(oppSeries) && oppSeries.length > 0;
   const lastT = useMemo(() => {
-    if (hasTimeline) {
-      return Math.max(0, ...unitTimeline!.map((e) => Number(e.time) || 0));
-    }
-    return Number(gameLengthSec) || 0;
-  }, [hasTimeline, unitTimeline, gameLengthSec]);
+    let m = Number(gameLengthSec) || 0;
+    if (hasMySeries) m = Math.max(m, mySeries[mySeries.length - 1].t);
+    if (hasOppSeries) m = Math.max(m, oppSeries[oppSeries.length - 1].t);
+    return m;
+  }, [hasMySeries, hasOppSeries, mySeries, oppSeries, gameLengthSec]);
 
   const targetT =
     typeof hoveredTime === "number" && Number.isFinite(hoveredTime)
       ? hoveredTime
       : lastT;
 
-  const myWorkers = useMemo(
-    () => workersAt(mySamples, targetT),
-    [mySamples, targetT],
+  // Single source of truth: the chart's mySeries / oppSeries already
+  // resolved (army_value preferred, timeline / build-order fallback,
+  // composition map baked in). Reading via ``nearestPriorPoint`` gives
+  // us the SAME SeriesPoint the chart's tooltip reads, so the army
+  // header, the worker count, AND the unit chips below cannot disagree
+  // with what the tooltip shows at the hovered tick. Pre-fix, this
+  // panel re-derived composition itself with a slightly different
+  // time anchor (``hoveredTime`` raw vs the chart's nearest-sample
+  // snap) and a different fallback path (no army_value gate, no cap),
+  // which is how the 9 200-late-game spike ended up disagreeing with
+  // the roster's smaller running count.
+  const myPoint = useMemo(
+    () => nearestPriorPoint(mySeries, targetT),
+    [mySeries, targetT],
   );
-  const oppWorkers = useMemo(
-    () => workersAt(oppSamples, targetT),
-    [oppSamples, targetT],
+  const oppPoint = useMemo(
+    () => nearestPriorPoint(oppSeries, targetT),
+    [oppSeries, targetT],
   );
 
-  const myComposition = useMemo(
-    () =>
-      deriveUnitComposition({
-        timeline: unitTimeline,
-        buildEvents: buildOrderData?.events,
-        side: "my",
-        t: targetT,
-      }),
-    [unitTimeline, buildOrderData, targetT],
-  );
-  const oppComposition = useMemo(
-    () =>
-      deriveUnitComposition({
-        timeline: unitTimeline,
-        buildEvents: buildOrderData?.opp_events,
-        side: "opp",
-        t: targetT,
-      }),
-    [unitTimeline, buildOrderData, targetT],
-  );
+  const myComposition = pointComposition(myPoint);
+  const oppComposition = pointComposition(oppPoint);
+  const myWorkers = myPoint?.workers ?? 0;
+  const oppWorkers = oppPoint?.workers ?? 0;
+  const myArmyValue = myPoint?.army ?? 0;
+  const oppArmyValue = oppPoint?.army ?? 0;
 
   const myBuildings = useMemo(
     () => countBuildingsAt(buildOrderData?.events ?? [], targetT),
@@ -153,12 +157,18 @@ export function CompositionSnapshot({
     [buildOrderData, targetT],
   );
 
-  const myArmyValue = computeArmyValue(myComposition.units);
-  const oppArmyValue = computeArmyValue(oppComposition.units);
-
-  // Resolve the snapshot time to display in the header. unit_timeline
-  // entries snap to the agent's sample grid; without one, just use t.
+  const hasTimeline = Array.isArray(unitTimeline) && unitTimeline.length > 0;
+  // Header time: snap to whichever side has the later prior sample
+  // (matches the chart tooltip's snap rule) so "Hovering 16:30" reads
+  // the same on both. Falls back to the unit_timeline entry when the
+  // series is empty (slim payload that still has a timeline).
   const snapshotTime = useMemo(() => {
+    const candidates: number[] = [];
+    if (myPoint) candidates.push(myPoint.t);
+    if (oppPoint) candidates.push(oppPoint.t);
+    if (candidates.length > 0) {
+      return candidates.reduce((best, cand) => (cand > best ? cand : best), 0);
+    }
     if (!hasTimeline) return targetT;
     let best = unitTimeline![0].time || 0;
     let bestD = Math.abs(best - targetT);
@@ -171,14 +181,14 @@ export function CompositionSnapshot({
       }
     }
     return best;
-  }, [hasTimeline, unitTimeline, targetT]);
+  }, [myPoint, oppPoint, hasTimeline, unitTimeline, targetT]);
 
   const showHint =
     !hasTimeline &&
     Object.keys(myBuildings).length === 0 &&
     Object.keys(oppBuildings).length === 0 &&
-    Object.keys(myComposition.units).length === 0 &&
-    Object.keys(oppComposition.units).length === 0 &&
+    Object.keys(myComposition).length === 0 &&
+    Object.keys(oppComposition).length === 0 &&
     Object.keys(myUpgrades).length === 0 &&
     Object.keys(oppUpgrades).length === 0 &&
     !buildOrderLoading;
@@ -217,8 +227,8 @@ export function CompositionSnapshot({
           side="me"
           name={myName?.trim() || "You"}
           race={myRace || ""}
-          composition={myComposition.units}
-          unitSource={myComposition.source}
+          composition={myComposition}
+          unitSource={myPoint?.unitsSource ?? "empty"}
           workers={myWorkers}
           armyValue={myArmyValue}
           buildings={myBuildings}
@@ -230,8 +240,8 @@ export function CompositionSnapshot({
           side="opp"
           name={oppName?.trim() || "Opponent"}
           race={oppRace || ""}
-          composition={oppComposition.units}
-          unitSource={oppComposition.source}
+          composition={oppComposition}
+          unitSource={oppPoint?.unitsSource ?? "empty"}
           workers={oppWorkers}
           armyValue={oppArmyValue}
           buildings={oppBuildings}
@@ -496,15 +506,16 @@ function workerNameForRace(race: string): string {
   return "Probe";
 }
 
-/** Worker count at ``t`` from the closest stats_events sample. */
-function workersAt(samples: StatsEvent[], t: number): number {
-  if (!Array.isArray(samples) || samples.length === 0) return 0;
-  const series = samples.map((s) => ({
-    t: Math.round(Number(s.time) || 0),
-    army: 0,
-    workers: Number(s.food_workers) || 0,
-  }));
-  const nearest = nearestPoint(series, t);
-  return nearest ? nearest.workers : 0;
+/**
+ * Read the alive unit composition out of a SeriesPoint, returning a
+ * fresh empty object when the point is null. Returning an empty
+ * object (rather than null) keeps the downstream renderers
+ * branch-free.
+ */
+function pointComposition(
+  point: SeriesPoint | null,
+): Record<string, number> {
+  if (!point || !point.units) return {};
+  return point.units;
 }
 

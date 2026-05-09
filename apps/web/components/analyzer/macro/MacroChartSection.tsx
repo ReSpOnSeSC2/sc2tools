@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -21,6 +22,7 @@ import type {
   StatsEvent,
   UnitTimelineEntry,
 } from "./MacroBreakdownPanel.types";
+import { buildSeries } from "./activeArmyLayout";
 
 export interface MacroChartSectionProps {
   samples: StatsEvent[];
@@ -101,6 +103,35 @@ export function MacroChartSection({
     { revalidateOnFocus: false },
   );
 
+  // Build the per-tick series ONCE here and thread to both children.
+  // ActiveArmyChart turns it into the line geometry; CompositionSnapshot
+  // reads the same SeriesPoint (army value, worker count, alive units)
+  // at hover time via ``nearestPriorPoint`` — so the tooltip number,
+  // the roster header's "Army NNN", the worker count under the worker
+  // chip, AND the unit chips next to it ALL come from the same
+  // SeriesPoint at the same ``t``. Single source of truth: the chart
+  // and the roster mathematically cannot disagree at a hovered tick.
+  const mySeries = useMemo(
+    () =>
+      buildSeries(
+        samples,
+        unitTimeline,
+        "my",
+        buildOrder.data?.events,
+      ),
+    [samples, unitTimeline, buildOrder.data?.events],
+  );
+  const oppSeries = useMemo(
+    () =>
+      buildSeries(
+        oppSamples,
+        unitTimeline,
+        "opp",
+        buildOrder.data?.opp_events,
+      ),
+    [oppSamples, unitTimeline, buildOrder.data?.opp_events],
+  );
+
   const handleHover = useCallback((event: HoverEvent) => {
     setHover((prev) => {
       if (event.type === "tap") {
@@ -142,11 +173,8 @@ export function MacroChartSection({
   return (
     <div ref={containerRef} className="space-y-3">
       <ActiveArmyChart
-        samples={samples}
-        oppSamples={oppSamples}
-        unitTimeline={unitTimeline}
-        myBuildEvents={buildOrder.data?.events}
-        oppBuildEvents={buildOrder.data?.opp_events}
+        mySeries={mySeries}
+        oppSeries={oppSeries}
         gameLengthSec={gameLengthSec}
         leaks={leaks}
         leakWindows={leakWindows}
@@ -164,9 +192,9 @@ export function MacroChartSection({
         </p>
       ) : null}
       <CompositionSnapshot
+        mySeries={mySeries}
+        oppSeries={oppSeries}
         unitTimeline={unitTimeline}
-        mySamples={samples}
-        oppSamples={oppSamples}
         hoveredTime={hover.time}
         gameLengthSec={gameLengthSec}
         myName={myName}

@@ -29,6 +29,7 @@ import {
   type Race,
 } from "@/lib/race";
 import { ActiveArmyChart } from "@/components/analyzer/macro/ActiveArmyChart";
+import { buildSeries } from "@/components/analyzer/macro/activeArmyLayout";
 import type {
   LeakItem,
   MacroBreakdownData,
@@ -660,13 +661,20 @@ function MacroChartGroup({
   const effRace = computeEffectiveRace(myRace, data.raw);
   const chronoTargets = data.raw?.chrono_targets ?? [];
   const showChrono = effRace === "Protoss";
+  // PerGameInspector doesn't ship a hover-locked roster, so the
+  // build-order events / unit_timeline don't need to be threaded in
+  // for tooltip parity. Pass empty fallbacks; the chart still binds
+  // to the authoritative ``stats_events[i].army_value`` when the
+  // agent emitted it (v0.5.11+) and degrades gracefully otherwise.
+  const inspectorMySeries = buildSeries(samples, data.unit_timeline, "my");
+  const inspectorOppSeries = buildSeries(oppSamples, data.unit_timeline, "opp");
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <Card padded>
         <ActiveArmyChart
-          samples={samples}
-          oppSamples={oppSamples}
+          mySeries={inspectorMySeries}
+          oppSeries={inspectorOppSeries}
           gameLengthSec={data.game_length_sec}
           leaks={leaks}
           highlightedKey={null}
