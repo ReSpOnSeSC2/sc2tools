@@ -179,6 +179,45 @@ def test_zerglings_are_not_corrupted_to_ling():
     )
 
 
+def test_overlords_are_counted_in_opp_roster():
+    """sc2reader's ``minerals_used_active_forces`` (which the SPA
+    chart now binds to via the ``army_value`` field) INCLUDES Overlord
+    supply cost in the army value, and sc2replaystats's Army Value
+    chart matches that convention. Pre-bug-report, ``Overlord`` was
+    in ``SKIP_UNITS`` so the roster's Σ(unit_cost × count) drifted
+    ~100/Overlord below the chart's army number for every Zerg game.
+    Pinning Overlord presence here keeps chart and roster in sync.
+    """
+    out = _load_extractor()
+    opp_at_480 = _alive_at(out["unit_timeline"], 480, "opp")
+    assert opp_at_480.get("Overlord", 0) >= 1, (
+        f"Expected Overlord in opp roster at 8:00 (Zerg always has at "
+        f"least one Overlord by then); got {opp_at_480!r}. If this "
+        f"regressed, Overlord is back in SKIP_UNITS and the roster "
+        f"will under-count opp army by ~100/Overlord vs the chart."
+    )
+
+
+def test_ability_units_skipped_from_roster():
+    """KD8Charge / ForceField / OracleStasisTrap / DisruptorPhased are
+    abilities, not army units, but sc2reader emits them as
+    ``UnitBornEvent`` with a player pid. They have no cost-catalog
+    entry and would otherwise pollute the roster as broken-icon chips.
+    Audit pass over the 4 reference replays must not surface any of
+    these names in any timeline tick.
+    """
+    out = _load_extractor()
+    forbidden = {"KD8Charge", "ForceField", "OracleStasisTrap", "DisruptorPhased"}
+    for entry in out["unit_timeline"]:
+        for side in ("my", "opp"):
+            leaked = forbidden & set((entry.get(side) or {}).keys())
+            assert not leaked, (
+                f"Ability/projectile name(s) leaked into timeline at "
+                f"t={entry.get('time')}s ({side}): {sorted(leaked)}. "
+                f"Add to SKIP_UNITS in core/event_extractor.py."
+            )
+
+
 def test_clean_building_name_unit_tests():
     """Pin the prefix-strip rules independently of any replay.
 
