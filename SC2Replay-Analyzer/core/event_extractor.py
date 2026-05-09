@@ -820,6 +820,30 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                         pid = getattr(player, "pid", None) if player else None
                     if pid not in (my_pid, opp_pid):
                         continue
+                    # Active-forces value: minerals + vespene tied up in
+                    # currently-alive non-worker, non-building units. This is
+                    # sc2reader's canonical "army value" — the same number SC2
+                    # itself shows on the in-game Army graph and the one
+                    # sc2replaystats's Army Value chart reads. Surfacing it
+                    # here lets the SPA's Active Army chart bind directly to
+                    # the authoritative per-tick value rather than trying to
+                    # reconstruct it from unit_timeline + buildLog (a cascade
+                    # that under-counts when the timeline is sparse and
+                    # over-counts via cumulative build-order when the timeline
+                    # is empty — the latter is what produced the late-game
+                    # vertical spike to ~9 200 reported in the bug). Older
+                    # sc2reader builds expose ``*_used_current_army`` instead,
+                    # so we fall back to that name when the active-forces
+                    # one isn't present.
+                    army_minerals = getattr(
+                        event, "minerals_used_active_forces",
+                        getattr(event, "minerals_used_current_army", 0),
+                    )
+                    army_vespene = getattr(
+                        event, "vespene_used_active_forces",
+                        getattr(event, "vespene_used_current_army", 0),
+                    )
+                    army_value = int((army_minerals or 0) + (army_vespene or 0))
                     sample = {
                         "time": getattr(event, "second", 0),
                         "food_used": getattr(event, "food_used", 0),
@@ -843,6 +867,9 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                             getattr(event, "minerals_used_in_progress", 0),
                         "vespene_used_in_progress":
                             getattr(event, "vespene_used_in_progress", 0),
+                        # Σ minerals+gas of active (alive, non-worker)
+                        # forces — the chart's primary army-value source.
+                        "army_value": army_value,
                     }
                     if pid == my_pid:
                         out["stats_events"].append(sample)

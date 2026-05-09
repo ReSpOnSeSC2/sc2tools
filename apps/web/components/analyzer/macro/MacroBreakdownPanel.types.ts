@@ -74,6 +74,17 @@ export interface StatsEvent {
   /** Cost of units/buildings/upgrades still being built. */
   minerals_used_in_progress?: number;
   vespene_used_in_progress?: number;
+  /**
+   * Σ minerals+gas of currently-alive non-worker, non-building units.
+   * Sourced from sc2reader's ``minerals_used_active_forces`` +
+   * ``vespene_used_active_forces`` (the same number the in-game Army
+   * graph and sc2replaystats's Army Value chart show). When present,
+   * the Active Army chart binds the army line to this directly rather
+   * than reconstructing it from unit_timeline / buildLog. Only emitted
+   * by agent v0.5.11+; older payloads omit it and the chart falls back
+   * to the derived path.
+   */
+  army_value?: number;
 }
 
 export interface UnitTimelineEntry {

@@ -11,6 +11,7 @@ import { computeArmyValue } from "@/lib/sc2-units";
 import {
   deriveUnitComposition,
   type BuildEvent,
+  type CompositionSource,
 } from "./compositionAt";
 import type {
   StatsEvent,
@@ -24,21 +25,62 @@ export const PAD_RIGHT = 44;
 export const PAD_TOP = 16;
 export const PAD_BOTTOM = 28;
 /**
- * Pre-unit-timeline fallback: estimate army value from ``food_used`` /
- * ``food_workers``. We use ``(food_used - food_workers) * 50`` because
- * a typical mid-game ground unit costs ~50 mineral+gas per supply
- * (Marine 50/1 → 50, Marauder 125/2 → 62, Stalker 175/2 → 87,
- * Roach 100/2 → 50, Hydralisk 150/2 → 75), and subtracting workers
- * isolates the fighting army. The previous heuristic
- * (``food_used * 8``) inflated the line during the worker-saturation
- * phase and clipped it during all-in pushes — the new formula tracks
- * sc2replaystats's "Army value" curve much more closely.
+ * Last-resort fallback for slim payloads that ship neither
+ * ``army_value`` (agent v0.5.11+) nor ``unit_timeline`` / ``buildLog``
+ * we could derive composition from. Estimates army value from
+ * ``(food_used - food_workers) * 50`` — ~50 mineral+gas per supply is
+ * the average mid-game ground unit (Marine 50/1, Marauder 125/2,
+ * Stalker 175/2, Roach 100/2, Hydralisk 150/2). The result is heavily
+ * gated upstream: it only fires when ``armyFromValue`` and
+ * ``armyFromUnits`` both refused to provide a number, and it's clamped
+ * to ``ARMY_FALLBACK_CAP`` so a runaway sample (food_used > 200 due to
+ * sc2reader edge cases) can't synthesise a vertical spike like the
+ * 9 200-on-an-empty-timeline regression that motivated this refactor.
  */
 export const FOOD_FALLBACK_MULT = 50;
+/**
+ * Cap for the food-supply fallback. 200 supply × 50 = 10 000 is the
+ * theoretical max but real fighting supply rarely exceeds 180; the
+ * cap mostly exists to neuter sc2reader edge cases where ``food_used``
+ * spikes above 200 (the engine permits brief overflows during a wave
+ * of parallel Larva morphs).
+ */
+export const ARMY_FALLBACK_CAP = 9000;
 export const ARMY_FLOOR = 200;
 export const WORKER_FLOOR = 12;
 export const X_TICK_STEP_SEC = 60;
 export const Y_TICK_FRACTIONS = [0, 0.25, 0.5, 0.75, 1];
+
+/**
+ * Where the army number on a given sample came from. Surfaces in the
+ * roster's source badge so users know whether the line is reading
+ * sc2reader's authoritative number or a derived approximation.
+ *
+ *   - ``stats``       sc2reader's ``minerals_used_active_forces`` +
+ *                     ``vespene_used_active_forces`` from the sample.
+ *                     Always preferred when present.
+ *   - ``timeline``    Σ cost over the unit_timeline alive map at this
+ *                     tick. Preferred over the build-order path because
+ *                     it's death-aware.
+ *   - ``hybrid``      build-order cumulative count with timeline-derived
+ *                     death subtraction applied.
+ *   - ``build_order`` build-order cumulative count, no death info.
+ *                     CLAMPED to ``ARMY_FALLBACK_CAP`` — without
+ *                     timeline-derived deaths this is the runaway path
+ *                     that produced the late-game 9 200 regression.
+ *   - ``fallback``    food-supply heuristic, clamped to
+ *                     ``ARMY_FALLBACK_CAP``. Only fires when neither
+ *                     ``army_value`` nor any composition source is
+ *                     available — pre-v0.5 slim payloads.
+ *   - ``empty``       no data at all; army renders as 0 / "—".
+ */
+export type ArmySource =
+  | "stats"
+  | "timeline"
+  | "hybrid"
+  | "build_order"
+  | "fallback"
+  | "empty";
 
 export interface SeriesPoint {
   /** Game-time seconds. */
@@ -47,6 +89,16 @@ export interface SeriesPoint {
   army: number;
   /** Worker count. */
   workers: number;
+  /** Provenance of ``army`` for this sample — drives the source badge. */
+  armySource: ArmySource;
+  /**
+   * Alive non-worker, non-building unit composition at ``t``. Tooltip
+   * and roster both read this so they can never disagree on the unit
+   * list shown alongside the army number.
+   */
+  units: Record<string, number>;
+  /** Provenance of ``units`` (timeline / hybrid / build_order / empty). */
+  unitsSource: CompositionSource;
 }
 
 export interface ChartLayout {
@@ -78,19 +130,35 @@ export interface ChartLayout {
 }
 
 /**
- * Build a per-time series for one side. Army value is computed from
- * the SAME hybrid composition source the roster panel uses
- * (``deriveUnitComposition``): unit_timeline when populated for the
- * side, build-order-derived counts (with morphs + timeline deaths)
- * otherwise. This guarantees the chart line and the snapshot Army
- * total agree at every tick — previously the chart snapped strictly
- * on exact unit_timeline times and silently fell through to the
- * food*8 heuristic on misses, producing a number divergent from the
- * roster.
+ * Build a per-time series for one side. Each ``SeriesPoint`` carries
+ * the army number, worker count, AND the alive unit composition at
+ * the tick — the chart's tooltip, the chart line, and the roster
+ * panel all consume the same series via ``seriesAt`` so they cannot
+ * disagree on what was alive at hover time. Single source of truth.
  *
- * Falls back to ``food_used * 8`` only when neither timeline nor
- * build_order is available for this side, matching the legacy
- * behaviour for pre-v0.5 slim payloads.
+ * Army value resolution order, per sample:
+ *
+ *   1. ``sample.army_value`` — sc2reader's
+ *      ``minerals_used_active_forces`` + ``vespene_used_active_forces``,
+ *      emitted by agent v0.5.11+. This is the same number the in-game
+ *      Army graph and sc2replaystats's Army Value chart show, so
+ *      using it directly removes ALL of the fragility around the
+ *      timeline/build-order fallback cascade. ``armySource = "stats"``.
+ *
+ *   2. ``computeArmyValue(derived.units)`` — Σ cost over the alive
+ *      composition derived by ``deriveUnitComposition`` (timeline-
+ *      preferred, build-order + timeline-deaths fallback). Used when
+ *      ``army_value`` is missing from the wire payload (legacy
+ *      uploads). Clamped to ``ARMY_FALLBACK_CAP`` when the derivation
+ *      came from build-order without timeline-derived deaths — that's
+ *      the path that previously produced the 9 200-late-game spike,
+ *      because cumulative builds keep growing without death info.
+ *
+ *   3. Food-supply heuristic clamped to ``ARMY_FALLBACK_CAP`` —
+ *      ``(food_used - food_workers) * 50``. Only fires when both
+ *      ``army_value`` and a populated composition source are absent.
+ *
+ *   4. Zero with ``armySource = "empty"`` when nothing's available.
  */
 export function buildSeries(
   samples: StatsEvent[],
@@ -109,40 +177,81 @@ export function buildSeries(
       side,
       t,
     });
+    const stats = sampleArmyValue(sample);
     let army: number;
-    if (derived.source === "empty") {
-      // Last-resort fallback for slim payloads (pre-v0.5 agents that
-      // didn't ship ``unit_timeline`` or ``buildLog``): estimate army
-      // value from net fighting supply. Subtracting workers from
-      // ``food_used`` removes the saturation curve from the army line;
-      // 50 mineral+gas per supply matches the average ground composition.
+    let armySource: ArmySource;
+    if (stats != null) {
+      army = stats;
+      armySource = "stats";
+    } else if (derived.source === "timeline") {
+      army = computeArmyValue(derived.units);
+      armySource = "timeline";
+    } else if (derived.source === "hybrid") {
+      army = computeArmyValue(derived.units);
+      armySource = "hybrid";
+    } else if (derived.source === "build_order") {
+      // No timeline-derived deaths available — the cumulative count
+      // grows monotonically across the game. Clamp so an end-of-game
+      // sample on a heavy-production replay can't render as a
+      // vertical spike. The roster surfaces a "build order" badge
+      // for this case so users know the absolute number is upper-
+      // bounded rather than authoritative.
+      army = Math.min(ARMY_FALLBACK_CAP, computeArmyValue(derived.units));
+      armySource = "build_order";
+    } else {
+      // ``derived.source === "empty"`` — slim payload with no
+      // unit_timeline AND no buildLog. Last-resort food-supply
+      // heuristic, hard-capped so a runaway food_used reading can't
+      // produce a misleading spike.
       const food = Number(sample.food_used) || 0;
       const fighting = Math.max(0, food - workers);
-      army = fighting * FOOD_FALLBACK_MULT;
-    } else {
-      army = computeArmyValue(derived.units);
+      const heuristic = fighting * FOOD_FALLBACK_MULT;
+      army = Math.min(ARMY_FALLBACK_CAP, heuristic);
+      armySource = heuristic > 0 ? "fallback" : "empty";
     }
-    out.push({ t, army, workers });
+    out.push({
+      t,
+      army,
+      workers,
+      armySource,
+      units: derived.units,
+      unitsSource: derived.source,
+    });
   }
   return out;
 }
 
-/** Build the unified chart layout for a pair of (my, opp) series. */
-export function buildLayout(
-  mySamples: StatsEvent[],
-  oppSamples: StatsEvent[],
-  gameLengthSec: number | undefined,
-  unitTimeline: UnitTimelineEntry[] | undefined,
-  myBuildEvents?: BuildEvent[] | undefined,
-  oppBuildEvents?: BuildEvent[] | undefined,
-): ChartLayout | null {
-  const my = Array.isArray(mySamples) ? mySamples : [];
-  const opp = Array.isArray(oppSamples) ? oppSamples : [];
-  if (my.length === 0 && opp.length === 0) return null;
+/**
+ * Read the authoritative army value off a stats sample, or null when
+ * the agent didn't emit it (legacy payload). Negative values are
+ * treated as missing — sc2reader has been observed to surface -1 on
+ * the very first tick before its internal counters are warm.
+ */
+function sampleArmyValue(sample: StatsEvent): number | null {
+  const v = (sample as { army_value?: number }).army_value;
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 0) return null;
+  return v;
+}
 
-  const mySeries = buildSeries(my, unitTimeline, "my", myBuildEvents);
-  const oppSeries = buildSeries(opp, unitTimeline, "opp", oppBuildEvents);
-  const allSeries = mySeries.concat(oppSeries);
+/**
+ * Build the unified chart layout from a PRE-BUILT pair of series.
+ *
+ * Why the series come in pre-built rather than being constructed here:
+ * the roster panel beneath the chart needs the SAME SeriesPoint at
+ * hover time so the tooltip number and the roster header's "Army NNN"
+ * cannot diverge. The parent (``MacroChartSection``) builds the
+ * series once via ``buildSeries`` and threads the result to both
+ * children.
+ */
+export function buildLayout(
+  mySeries: SeriesPoint[],
+  oppSeries: SeriesPoint[],
+  gameLengthSec: number | undefined,
+): ChartLayout | null {
+  const myArr = Array.isArray(mySeries) ? mySeries : [];
+  const oppArr = Array.isArray(oppSeries) ? oppSeries : [];
+  if (myArr.length === 0 && oppArr.length === 0) return null;
+  const allSeries = myArr.concat(oppArr);
 
   const observedT = allSeries.reduce((m, p) => Math.max(m, p.t), 0);
   const maxT = Math.max(observedT, Number(gameLengthSec) || 0, 60);
@@ -195,13 +304,13 @@ export function buildLayout(
     yArmy,
     yWorker,
     tOfX,
-    myArmy: pathFor(mySeries, xOf, yArmy, "army"),
-    myWorker: pathFor(mySeries, xOf, yWorker, "workers"),
-    oppArmy: pathFor(oppSeries, xOf, yArmy, "army"),
-    oppWorker: pathFor(oppSeries, xOf, yWorker, "workers"),
+    myArmy: pathFor(myArr, xOf, yArmy, "army"),
+    myWorker: pathFor(myArr, xOf, yWorker, "workers"),
+    oppArmy: pathFor(oppArr, xOf, yArmy, "army"),
+    oppWorker: pathFor(oppArr, xOf, yWorker, "workers"),
     xTicks,
-    mySeries,
-    oppSeries,
+    mySeries: myArr,
+    oppSeries: oppArr,
   };
 }
 
@@ -272,5 +381,54 @@ export function nearestPoint(
     }
   }
   return best;
+}
+
+/**
+ * Find the latest series point with ``p.t <= t``. Used for hover-
+ * locked lookups so a hover at t=945 with samples at 930 and 960
+ * picks 930 — never 960. Without this, the roster's worker count
+ * and the chart's army number could "leak" future state into a past
+ * hover (e.g. show 52 workers at t=945 because the next sample at
+ * t=960 has 52 workers, even though only 50 had been built by 945).
+ *
+ * Returns the FIRST series point when ``t`` precedes every sample
+ * (so very-early hovers still get a non-null read), and the last
+ * point when ``t`` exceeds every sample (so end-of-game hovers
+ * snap to the final reading rather than going null).
+ */
+export function nearestPriorPoint(
+  series: SeriesPoint[],
+  t: number,
+): SeriesPoint | null {
+  if (!series || series.length === 0) return null;
+  let best: SeriesPoint | null = null;
+  for (let i = 0; i < series.length; i++) {
+    if (series[i].t <= t) {
+      best = series[i];
+    } else {
+      break; // series is ascending by t (buildSeries iterates samples in order)
+    }
+  }
+  // Pre-first-sample hover: return the first point so the UI never
+  // flashes empty. The user's hover time IS clamped >= 0 upstream so
+  // the only way this fires is when sample times start above 0.
+  return best ?? series[0];
+}
+
+/**
+ * Snapshot read at a hovered ``t``: pulls the same SeriesPoint for
+ * the chart tooltip AND the roster panel so they cannot disagree on
+ * army value, worker count, or alive composition. Both sides return
+ * a point (or null when the side's series is empty); callers render
+ * "—" for null.
+ */
+export function seriesAt(
+  layout: { mySeries: SeriesPoint[]; oppSeries: SeriesPoint[] },
+  t: number,
+): { my: SeriesPoint | null; opp: SeriesPoint | null } {
+  return {
+    my: nearestPriorPoint(layout.mySeries, t),
+    opp: nearestPriorPoint(layout.oppSeries, t),
+  };
 }
 
