@@ -183,6 +183,58 @@ describe("services/aggregations", () => {
     expect(groupStage.$group._id.$dateTrunc.timezone).toBe("UTC");
   });
 
+  test("timeseries widens the bucket so multi-year ranges aren't truncated", async () => {
+    // The min/max pre-query reports a 4-year span. With day buckets the
+    // 365-bucket cap would silently drop the oldest ~1100 days, which
+    // is what made the "All time" win-rate tile diverge from the
+    // lifetime-synced count. The service should escalate to week here.
+    let bucketingPipeline;
+    const games = buildGames([
+      () => [
+        { _id: null, minDate: new Date("2022-01-01"), maxDate: new Date("2026-01-01") },
+      ],
+      (pipeline) => {
+        bucketingPipeline = pipeline;
+        return [];
+      },
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.timeseries("u1", { interval: "day" }, {})
+    );
+    expect(out.interval).toBe("week");
+    const groupStage = bucketingPipeline.find((s) => s.$group);
+    expect(groupStage.$group._id.$dateTrunc.unit).toBe("week");
+  });
+
+  test("timeseries keeps the requested interval when the span fits the cap", async () => {
+    const games = buildGames([
+      () => [
+        { _id: null, minDate: new Date("2025-12-01"), maxDate: new Date("2026-01-01") },
+      ],
+      () => [],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.timeseries("u1", { interval: "day" }, {})
+    );
+    expect(out.interval).toBe("day");
+  });
+
+  test("timeseries escalates to month when even week buckets overflow", async () => {
+    const games = buildGames([
+      () => [
+        { _id: null, minDate: new Date("2010-01-01"), maxDate: new Date("2026-01-01") },
+      ],
+      () => [],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.timeseries("u1", { interval: "day" }, {})
+    );
+    expect(out.interval).toBe("month");
+  });
+
   test("matchupTimeseries computes winRate per (bucket, race) row", async () => {
     const games = buildGames([
       () => [
