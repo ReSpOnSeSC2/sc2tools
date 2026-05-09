@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { LiveGamePayload } from "./types";
+import type { LiveGameEnvelope, LiveGamePayload } from "./types";
 
 /**
  * Voice prefs payload. Mirrors the shape persisted by
@@ -97,6 +97,7 @@ export interface VoiceReadout {
 export function useVoiceReadout(
   live: LiveGamePayload | null,
   prefs: VoicePrefs | null,
+  liveGame?: LiveGameEnvelope | null,
 ): VoiceReadout {
   const [gestureGranted, setGestureGranted] = useState<boolean>(() =>
     readPersistedUnlock(),
@@ -354,6 +355,58 @@ export function useVoiceReadout(
     }
   }, [live, enabled, prefs, enqueueOrSpeak, log]);
 
+  // Pre-game / in-game readout, driven by the desktop agent's
+  // ``LiveGameEnvelope`` rather than the post-game ``LiveGamePayload``.
+  // Fires on the FIRST envelope of a new ``gameKey`` that carries an
+  // opponent name — typically the MATCH_LOADING phase, ~50 ms after
+  // the SC2 loading screen lands.
+  //
+  // Why we dedup by ``gameKey``: a single match goes through 5+
+  // envelope deltas (loading → started → in-progress ticks →
+  // ended) PLUS a Pulse-enrichment re-emit. Without the gameKey
+  // dedup the streamer would hear the scouting line twice — once
+  // from the partial payload and once from the enriched one.
+  //
+  // Why we don't fire from this path when ``live`` is set: the
+  // post-game payload has identical or stricter information, and
+  // letting both fire would speak twice for the same match. The
+  // ScoutingWidget consumes ``liveGame`` exclusively when ``live``
+  // is null; voice mirrors that priority.
+  useEffect(() => {
+    if (!enabled) return;
+    if (live) return; // post-game path owns the readout when present
+    if (!liveGame) return;
+    if (liveGame.phase === "idle" || liveGame.phase === "menu") return;
+    const oppName = liveGame.opponent?.name?.trim();
+    if (!oppName) return;
+    const events = prefs?.events || {};
+    const wantsScouting = events.scouting !== false;
+    const wantsMatchStart = !!events.matchStart;
+    if (!wantsScouting && !wantsMatchStart) return;
+    const gameKey = liveGame.gameKey || `live:${oppName}`;
+    const lines: string[] = [];
+    if (wantsScouting) {
+      const key = `LG|S|${gameKey}`;
+      if (key !== lastScoutingKey.current) {
+        lastScoutingKey.current = key;
+        const line = buildLiveGameScoutingLine(liveGame);
+        if (line) lines.push(line);
+      }
+    }
+    if (wantsMatchStart) {
+      const key = `LG|M|${gameKey}`;
+      if (key !== lastMatchStartKey.current) {
+        lastMatchStartKey.current = key;
+        lines.push("Match starting.");
+      }
+    }
+    const text = lines.join(" ").trim();
+    if (text) {
+      log("liveGame triggered readout:", JSON.stringify(text));
+      enqueueOrSpeak(text);
+    }
+  }, [liveGame, live, enabled, prefs, enqueueOrSpeak, log]);
+
   const onUserGesture = useCallback(() => {
     if (gestureGranted) return;
     log("gesture granted");
@@ -494,6 +547,28 @@ export function buildMatchEndLine(live: LiveGamePayload): string {
     return `${word}. ${sign} ${Math.abs(delta)} MMR.`;
   }
   return `${word}.`;
+}
+
+/**
+ * Pre-game scouting line built from the desktop agent's
+ * ``LiveGameEnvelope``. Strictly less data than
+ * ``buildScoutingLine(live)`` — no head-to-head, no best-answer (the
+ * cloud doesn't run those derivations pre-game). Just identity +
+ * Pulse profile when available.
+ */
+export function buildLiveGameScoutingLine(env: LiveGameEnvelope): string {
+  const name = sanitizeForSpeech(env.opponent?.name);
+  const race = normalizeRace(env.opponent?.race ?? undefined);
+  const profile = env.opponent?.profile;
+  const parts: string[] = [];
+  if (name && race) parts.push(`Facing ${name}, ${race}.`);
+  else if (name) parts.push(`Facing ${name}.`);
+  else if (race) parts.push(`Facing a ${race} opponent.`);
+  else parts.push("Facing an unknown opponent.");
+  if (profile && typeof profile.mmr === "number" && profile.mmr > 0) {
+    parts.push(`${profile.mmr} MMR.`);
+  }
+  return parts.filter(Boolean).join(" ");
 }
 
 export function buildCheeseLine(live: LiveGamePayload): string {

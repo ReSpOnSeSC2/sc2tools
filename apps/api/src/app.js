@@ -159,11 +159,20 @@ function makeServices(deps) {
   // ``opponents`` collections every other read service touches.
   const overlayLive = new OverlayLiveService(deps.db);
   // LiveGameBroker — in-process pub/sub for the agent → web SSE
-  // bridge. Constructed once at app boot so every agent POST shares
-  // the subscriber set with the user's web tabs. See
-  // ``services/liveGameBroker.js`` for the per-user fan-out + 30
+  // bridge AND the agent → OBS overlay Socket.io fan-out.
+  // Constructed once at app boot so every agent POST shares the
+  // subscriber set with the user's web tabs. The broker also fans
+  // each envelope out to every ``overlay:<token>`` room belonging to
+  // the publishing user as ``overlay:liveGame`` — that's how the
+  // hosted Browser Source widgets (OverlayWidgetClient) see pre-game
+  // state without the agent having a Socket.io client of its own.
+  // See ``services/liveGameBroker.js`` for the per-user fan-out + 30
   // minute snapshot retention rationale.
-  const liveGameBroker = new LiveGameBroker();
+  const liveGameBroker = new LiveGameBroker({
+    io: deps.io,
+    overlayTokens,
+    logger: deps.logger,
+  });
   const aggregations = new AggregationsService(deps.db);
   const streak = new StreakService(deps.db);
   const builds = new BuildsService(deps.db);

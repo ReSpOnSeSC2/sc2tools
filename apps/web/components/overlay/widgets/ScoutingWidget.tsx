@@ -1,6 +1,6 @@
 "use client";
 
-import type { LiveGamePayload } from "../types";
+import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 import { Dim, WidgetShell } from "../WidgetShell";
 
 /**
@@ -20,9 +20,32 @@ import { Dim, WidgetShell } from "../WidgetShell";
  * Sized 600px wide on the bottom-center slot — matches the screenshot
  * the streamer uses on stream and leaves the top of the screen free for
  * the OBS scene's main UI.
+ *
+ * Two payload sources, in priority order:
+ *
+ *   1. ``live`` (post-game ``LiveGamePayload``) — full LAST GAMES list,
+ *      best-answer, cheese probability, head-to-head. Authoritative
+ *      whenever it's set.
+ *   2. ``liveGame`` (pre-game ``LiveGameEnvelope``) — opponent name,
+ *      race, optional Pulse profile (MMR, league). Used to render a
+ *      reduced-fidelity scouting card from the loading screen onward
+ *      so the streamer's overlay doesn't sit blank pre-replay.
+ *
+ * The post-game payload wins by design — it carries strictly more
+ * data than the live envelope. When only the live envelope is present
+ * we render the trimmed pre-game variant (no LAST GAMES, no best-
+ * answer; just the opponent's identity and basic Pulse info).
  */
-export function ScoutingWidget({ live }: { live: LiveGamePayload | null }) {
-  if (!live) return null;
+export function ScoutingWidget({
+  live,
+  liveGame,
+}: {
+  live: LiveGamePayload | null;
+  liveGame?: LiveGameEnvelope | null;
+}) {
+  if (!live) {
+    return <ScoutingPreGameCard liveGame={liveGame ?? null} />;
+  }
 
   const wins = live.headToHead?.wins ?? 0;
   const losses = live.headToHead?.losses ?? 0;
@@ -319,6 +342,116 @@ function FooterRow({
       </div>
     </div>
   );
+}
+
+/**
+ * Pre-game scouting card — fed by the desktop agent's
+ * ``LiveGameEnvelope`` (Socket.io ``overlay:liveGame``). Carries less
+ * data than the post-game card (no recent games, no best-answer; the
+ * cloud's ``OverlayLiveService`` doesn't run pre-game) but enough that
+ * the streamer's OBS scene shows the opponent's identity and Pulse
+ * info from the loading screen onward.
+ *
+ * Rendering rules:
+ *   * No envelope or ``idle``/``menu`` phase → render nothing.
+ *   * Envelope without an ``opponent.name`` (very brief gap between
+ *     MATCH_LOADING and the first /game response) → render a slim
+ *     skeleton placeholder so the panel reserves its slot in OBS.
+ *   * Envelope with name, no profile yet → name + race only.
+ *   * Envelope with profile → name + race + MMR + league (when set).
+ */
+function ScoutingPreGameCard({
+  liveGame,
+}: {
+  liveGame: LiveGameEnvelope | null;
+}) {
+  if (!liveGame) return null;
+  if (liveGame.phase === "idle" || liveGame.phase === "menu") return null;
+  const oppName = liveGame.opponent?.name || null;
+  const oppRace = liveGame.opponent?.race || null;
+  const profile = liveGame.opponent?.profile || null;
+  const mmr =
+    profile && typeof profile.mmr === "number" && profile.mmr > 0
+      ? profile.mmr
+      : null;
+  const league = profile?.league || null;
+
+  const headlineRight =
+    mmr !== null
+      ? `${mmr} MMR${league ? ` · ${league}` : ""}`
+      : profile
+        ? "Profile lookup unavailable"
+        : "Looking up opponent…";
+
+  return (
+    <WidgetShell slot="bottom-center" accent="cyan" halo visible width={600}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: 16,
+          marginBottom: 4,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 36,
+            fontWeight: 800,
+            letterSpacing: "-0.02em",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            minWidth: 0,
+          }}
+        >
+          {oppName || "Opponent loading…"}
+        </span>
+        <span
+          style={{
+            fontSize: 14,
+            opacity: 0.85,
+            fontVariantNumeric: "tabular-nums",
+            flexShrink: 0,
+          }}
+        >
+          {headlineRight}
+        </span>
+      </div>
+      <div
+        style={{
+          fontSize: 13,
+          opacity: 0.7,
+          marginTop: 4,
+        }}
+      >
+        <Dim>
+          {liveGame.phase === "match_ended"
+            ? "match over — replay parsing"
+            : oppRace
+              ? `live · ${formatRaceLong(oppRace)}`
+              : "live"}
+        </Dim>
+      </div>
+      {profile && profile.confidence !== undefined && profile.confidence < 1 ? (
+        <div style={{ marginTop: 6, fontSize: 12, opacity: 0.55 }}>
+          best guess
+          {Array.isArray(profile.alternatives) && profile.alternatives.length
+            ? ` — also: ${profile.alternatives.slice(0, 3).join(", ")}`
+            : null}
+        </div>
+      ) : null}
+    </WidgetShell>
+  );
+}
+
+function formatRaceLong(race: string): string {
+  const r = race.trim().toLowerCase();
+  if (r === "terran") return "Terran";
+  if (r === "zerg") return "Zerg";
+  if (r === "protoss") return "Protoss";
+  if (r === "random") return "Random";
+  return race;
 }
 
 function formatRival(live: LiveGamePayload): string | null {

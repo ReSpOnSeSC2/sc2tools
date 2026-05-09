@@ -1,24 +1,29 @@
 """Transport layer for the Live Game Bridge.
 
-Two independent transports run in parallel; failure of one does not
-block the other:
+The supported default is **cloud-only**: the agent POSTs each envelope
+to ``/v1/agent/live`` and the cloud's ``LiveGameBroker`` fans it out
+to every ``overlay:<token>`` Socket.io room belonging to the user
+(driving the hosted ``sc2tools.com/overlay/<token>/widget/<name>``
+Browser Sources) plus the per-user SSE stream the dashboard listens
+on.
 
-1. **Local overlay backend** — HTTP POST to ``http://localhost:3000/
-   api/agent/live`` so the OBS overlay's existing Socket.io fan-out
-   path can re-broadcast a ``liveGameState`` envelope to every
-   connected widget. We use HTTP rather than Socket.io client because:
+Two transport classes are exported here:
 
-   * The overlay backend already exposes Express routes under
-     ``/api/*`` — adding one more is one route handler.
-   * The agent already uses ``requests`` everywhere; spinning up a
-     second long-lived Socket.io client adds 50 KB of code and a
-     second reconnect loop for zero benefit on localhost.
-   * Localhost HTTP latency is sub-millisecond. The "live" feel
-     comes from the 1 Hz poll cadence, not transport choice.
+1. **CloudTransport** (default) — HTTPS POST to ``/v1/agent/live``
+   using the existing device-token Bearer auth. Used by every
+   production install.
 
-2. **Cloud API** — HTTPS POST to ``/v1/agent/live`` using the existing
-   device-token Bearer auth. The cloud relays each envelope to the
-   user's web tabs via Server-Sent Events.
+2. **OverlayBackendTransport** (opt-in) — HTTP POST to a local URL
+   (default-shaped at ``http://localhost:3000/api/agent/live``) so
+   the legacy self-hosted
+   ``reveal-sc2-opponent-main/stream-overlay-backend`` product can
+   re-broadcast ``liveGameState`` to its own Socket.io clients. NOT
+   wired by default — the runner only constructs it when
+   ``SC2TOOLS_LOCAL_OVERLAY_URL`` is set or
+   ``_build_live_bridge(overlay_base_url=...)`` is passed an explicit
+   URL. The cloud product (sc2tools.com) does not depend on this
+   path, and a default-cloud install ships zero traffic to
+   localhost:3000.
 
 Both transports are lossy by design — the bridge fires payloads at
 ~1 Hz; if a single POST fails (network blip, overlay backend not

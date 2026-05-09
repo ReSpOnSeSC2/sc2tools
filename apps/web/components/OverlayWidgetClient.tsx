@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { API_BASE } from "@/lib/clientApi";
-import type { LiveGamePayload } from "@/components/overlay/types";
+import type {
+  LiveGameEnvelope,
+  LiveGamePayload,
+} from "@/components/overlay/types";
 import { clientTimezone } from "@/lib/timeseries";
 import {
   resolveWidgetDurationMs,
@@ -65,6 +68,7 @@ export function OverlayWidgetClient({
   widget: string;
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
+  const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [enabled, setEnabled] = useState<boolean>(true);
   const [visible, setVisible] = useState<boolean>(false);
@@ -74,11 +78,18 @@ export function OverlayWidgetClient({
     token,
     widget,
     setLive,
+    setLiveGame,
     setSession,
     setEnabled,
     setVoicePrefs,
   );
-  useWidgetVisibility(widget as WidgetId, live, session, setVisible);
+  useWidgetVisibility(
+    widget as WidgetId,
+    live,
+    liveGame,
+    session,
+    setVisible,
+  );
 
   // Voice readout is only run from the scouting widget when each
   // widget is its own Browser Source — otherwise every Source would
@@ -90,6 +101,11 @@ export function OverlayWidgetClient({
   const voice = useVoiceReadout(
     enableVoiceHere ? live : null,
     enableVoiceHere ? voicePrefs : null,
+    // Pass the agent's pre-game envelope as a secondary trigger so the
+    // scouting readout fires the moment the loading screen lands —
+    // before the post-game replay-derived ``LiveGamePayload`` would
+    // have been able to fire it minutes later.
+    enableVoiceHere ? liveGame : null,
   );
 
   if (!enabled || !visible) {
@@ -126,7 +142,12 @@ export function OverlayWidgetClient({
           transform: none !important;
         }
       `}</style>
-      <WidgetRenderer widget={widget as WidgetId} live={live} session={session} />
+      <WidgetRenderer
+        widget={widget as WidgetId}
+        live={live}
+        liveGame={liveGame}
+        session={session}
+      />
       {voice.needsGesture ? (
         <VoiceGestureBanner onClick={voice.onUserGesture} />
       ) : null}
@@ -137,15 +158,22 @@ export function OverlayWidgetClient({
 function WidgetRenderer({
   widget,
   live,
+  liveGame,
   session,
 }: {
   widget: WidgetId;
   live: LiveGamePayload | null;
+  liveGame: LiveGameEnvelope | null;
   session: SessionSummary | null;
 }) {
   switch (widget) {
     case "opponent":
-      return <OpponentWidget live={live} />;
+      // Opponent widget is the primary surface for the agent's pre-game
+      // envelope — render it from ``liveGame`` when no post-game data
+      // has landed yet, so the streamer's OBS scene shows the opponent
+      // identity from the loading screen onward instead of staying blank
+      // until the replay parses ~30 s after the match ends.
+      return <OpponentWidget live={live} liveGame={liveGame} />;
     case "match-result":
       return <MatchResultWidget live={live} />;
     case "post-game":
@@ -171,7 +199,9 @@ function WidgetRenderer({
     case "best-answer":
       return <BestAnswerWidget live={live} />;
     case "scouting":
-      return <ScoutingWidget live={live} />;
+      // Scouting widget — same priority rule as opponent: post-game
+      // payload is authoritative, fall back to the agent's envelope.
+      return <ScoutingWidget live={live} liveGame={liveGame} />;
     case "session":
       return <SessionWidget live={live} session={session} />;
     default:
@@ -189,6 +219,7 @@ function useOverlayWidgetSocket(
   token: string,
   widget: string,
   setLive: (msg: LiveGamePayload | null) => void,
+  setLiveGame: (msg: LiveGameEnvelope | null) => void,
   setSession: (msg: SessionSummary | null) => void,
   setEnabled: (on: boolean) => void,
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
@@ -207,6 +238,22 @@ function useOverlayWidgetSocket(
       reconnectionDelayMax: 5000,
     });
     socket.on("overlay:live", (msg: LiveGamePayload) => setLive(msg));
+    // Pre-game / in-game envelope from the desktop agent, fanned out
+    // by the cloud's LiveGameBroker. Each envelope is a delta carrying
+    // the same gameKey through MATCH_LOADING → MATCH_STARTED →
+    // MATCH_IN_PROGRESS → MATCH_ENDED, with the opponent profile
+    // sub-object filling in once Pulse responds.
+    socket.on("overlay:liveGame", (msg: LiveGameEnvelope) => {
+      if (!msg || typeof msg !== "object") return;
+      // IDLE/MENU phases mean "no game" — clear the local cache so
+      // widgets that had been showing pre-game data vanish on the
+      // next render.
+      if (msg.phase === "idle" || msg.phase === "menu") {
+        setLiveGame(null);
+        return;
+      }
+      setLiveGame(msg);
+    });
     socket.on(
       "overlay:config",
       (msg: { enabledWidgets?: string[]; voicePrefs?: VoicePrefs }) => {
@@ -234,6 +281,7 @@ function useOverlayWidgetSocket(
             setSession(null);
           } else {
             setLive(null);
+            setLiveGame(null);
           }
         }
       },
@@ -241,7 +289,15 @@ function useOverlayWidgetSocket(
     return () => {
       socket.disconnect();
     };
-  }, [token, widget, setLive, setSession, setEnabled, setVoicePrefs]);
+  }, [
+    token,
+    widget,
+    setLive,
+    setLiveGame,
+    setSession,
+    setEnabled,
+    setVoicePrefs,
+  ]);
 }
 
 /**
@@ -250,24 +306,51 @@ function useOverlayWidgetSocket(
  * the dedicated `overlay:session` event, every other widget reads
  * from the merged `overlay:live` payload — and each payload's
  * `isTest` flag picks production vs. test durations.
+ *
+ * Pre/in-game envelope handling (``liveGame``):
+ *   The opponent and scouting widgets get a second source of
+ *   visibility — the agent's pre-game ``overlay:liveGame`` envelope.
+ *   When the bridge is reporting any of the active phases (loading,
+ *   started, in-progress, ended), we treat the widget as visible AND
+ *   suppress the auto-hide timer. That way the opponent dossier stays
+ *   pinned through a 20-minute match instead of timing out at the
+ *   default 6-minute opponent duration. As soon as the bridge flips
+ *   back to ``idle`` / ``menu`` (game over, no fresh post-game payload
+ *   either) the timer resumes its natural behavior off whatever data
+ *   the cloud last sent.
  */
 function useWidgetVisibility(
   widget: WidgetId,
   live: LiveGamePayload | null,
+  liveGame: LiveGameEnvelope | null,
   session: SessionSummary | null,
   setVisible: (visible: boolean) => void,
 ) {
   const timerRef = useRef<number | null>(null);
+
+  // Widgets that participate in the agent's pre-game flow keep a
+  // second source of visibility ("the bridge says we're in a match").
+  // Other widgets continue to derive visibility purely from the
+  // post-game ``overlay:live`` payload.
+  const consumesLiveGame = widget === "opponent" || widget === "scouting";
+  const inLiveMatch =
+    consumesLiveGame
+    && liveGame
+    && liveGame.phase !== "idle"
+    && liveGame.phase !== "menu";
+
   const sourceForWidget = widget === "session" ? session : live;
   const isTest = Boolean(
     widget === "session" ? session?.isTest : live?.isTest,
   );
+  const hasAnySource = Boolean(sourceForWidget) || Boolean(inLiveMatch);
 
   useEffect(() => {
-    // Source cleared (e.g. after the streamer cancelled a Test fire) —
-    // hide immediately and drop the pending visibility timer so a
-    // stale tick can't flip the widget back on.
-    if (!sourceForWidget) {
+    // No source at all (e.g. after the streamer cancelled a Test fire
+    // AND the bridge has cleared back to idle) — hide immediately and
+    // drop the pending visibility timer so a stale tick can't flip the
+    // widget back on.
+    if (!hasAnySource) {
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -280,13 +363,20 @@ function useWidgetVisibility(
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    // While the bridge says we're in an active match, suppress the
+    // auto-hide timer entirely — the streamer wants the dossier
+    // pinned for the duration of the game, however long it runs.
+    // The next ``idle`` / ``menu`` envelope clears ``liveGame`` and
+    // this effect re-runs to install the natural timer (if a stale
+    // post-game payload is still cached) or hide outright.
+    if (inLiveMatch) return;
     const duration = resolveWidgetDurationMs(widget, isTest);
     if (duration === null) return;
     timerRef.current = window.setTimeout(() => {
       setVisible(false);
       timerRef.current = null;
     }, duration);
-  }, [widget, sourceForWidget, isTest, setVisible]);
+  }, [widget, hasAnySource, inLiveMatch, isTest, setVisible]);
 
   useEffect(
     () => () => {

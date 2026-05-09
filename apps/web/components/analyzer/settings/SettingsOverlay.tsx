@@ -24,6 +24,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { fmtAgo } from "@/lib/format";
 import { TEST_DURATION_MS } from "@/components/overlay/widgetLifecycle";
+import { AgentStatusIndicator } from "./AgentStatusIndicator";
 
 /**
  * Settings · Overlay tab.
@@ -459,6 +460,15 @@ function ActiveTokenHeader({
         {`${token.token.slice(0, 6)}…${token.token.slice(-4)}`}
       </Badge>
       <span className="ml-auto flex items-center gap-3">
+        {/*
+          Real-time agent indicator. Drives off the same SSE stream
+          the dashboard uses, so green/grey here matches what the
+          streamer would see from the /app dashboard's LiveGamePanel.
+          ``token.lastSeenAt`` continues to surface OBS-side
+          connectivity (when did this overlay token's Browser Source
+          last open a socket?) — distinct from "is the agent emitting?"
+        */}
+        <AgentStatusIndicator />
         <span className="text-caption text-text-muted">
           {token.lastSeenAt
             ? `Seen ${fmtAgo(token.lastSeenAt)}`

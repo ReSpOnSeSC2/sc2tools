@@ -1363,7 +1363,7 @@ def _build_live_bridge(
     user_name_hint: Optional[str],
     log: logging.Logger,
     api: Optional[ApiClient] = None,
-    overlay_base_url: str = "http://localhost:3000",
+    overlay_base_url: Optional[str] = None,
     device_token: Optional[str] = None,
 ) -> tuple[
     EventBus[LiveLifecycleEvent],
@@ -1376,9 +1376,27 @@ def _build_live_bridge(
     bridge (which fuses with Pulse and emits enriched envelopes on its
     own output bus).
 
-    Phase 1 wired the lifecycle bus + poller. Phase 2 adds the bridge
-    + Pulse. Phase 3 will subscribe transports (Socket.io to the local
-    overlay backend + HTTPS POST to the cloud) on ``bridge.bus``.
+    Default transports
+    ------------------
+
+    Cloud-only by default. The agent POSTs every envelope to
+    ``/v1/agent/live`` and the cloud's ``LiveGameBroker`` fans it out
+    to (a) every ``overlay:<token>`` Socket.io room belonging to this
+    user — driving the OBS Browser Source widgets at
+    ``sc2tools.com/overlay/<token>/widget/<name>`` — and (b) the
+    user's web tabs via the ``GET /v1/me/live`` SSE stream.
+
+    The legacy "local overlay backend" path (POST to
+    ``http://localhost:3000/api/agent/live``) is preserved for the
+    self-hosted ``reveal-sc2-opponent-main/stream-overlay-backend``
+    product but is OFF by default. Set the
+    ``SC2TOOLS_LOCAL_OVERLAY_URL`` env var (or pass an explicit
+    ``overlay_base_url``) to enable it. With nothing set the agent
+    sends zero traffic to localhost:3000 — the default install ships
+    pure cloud.
+
+    Logging
+    -------
 
     The structured-log subscriber sits on the bridge's output bus so
     operators see one grep-friendly line per emitted envelope (with
@@ -1409,18 +1427,33 @@ def _build_live_bridge(
 
     bridge.bus.subscribe(_log_subscriber)
 
+    # Resolve the legacy local-overlay URL: explicit arg wins, then
+    # env var, then nothing (cloud-only — the supported default).
+    effective_overlay_url = overlay_base_url
+    if not effective_overlay_url:
+        env_url = os.environ.get("SC2TOOLS_LOCAL_OVERLAY_URL", "").strip()
+        if env_url:
+            effective_overlay_url = env_url
+
     # Wire transports onto the bridge's output bus. Each transport
     # runs independently — failure of one (overlay backend down,
     # cloud unreachable) does not block the other from broadcasting.
     transports: list = []
     if api is not None and device_token:
         transports.append(CloudTransport(api_client=api))
-    transports.append(
-        OverlayBackendTransport(
-            base_url=overlay_base_url,
-            device_token=device_token,
-        ),
-    )
+    if effective_overlay_url:
+        transports.append(
+            OverlayBackendTransport(
+                base_url=effective_overlay_url,
+                device_token=device_token,
+            ),
+        )
+        log.info(
+            "live_transport_local_overlay_enabled url=%s",
+            effective_overlay_url,
+        )
+    else:
+        log.info("live_transport_cloud_only=true")
     fanout: Optional[FanOutTransport] = None
     if transports:
         fanout = FanOutTransport(*transports)
