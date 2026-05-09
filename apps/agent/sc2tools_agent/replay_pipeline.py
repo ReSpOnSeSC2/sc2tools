@@ -559,15 +559,21 @@ def parse_replay_for_cloud(
     # Identity: keep the in-replay toon_handle as the storage key
     # (`pulseId`) so the existing per-opponent record stays stable even
     # when SC2Pulse is offline or the lookup misses. Always emit the
-    # raw toon under `toonHandle`. Best-effort resolve to the canonical
-    # SC2Pulse character id and emit it as `pulseCharacterId` — that's
-    # the value the UI links to on sc2pulse.nephest.com.
+    # raw toon under `toonHandle`. Always attempt the SC2Pulse lookup
+    # when we have a handle — the agent has no opinion on whether the
+    # cloud already knows this opponent; the server is authoritative
+    # on whether to overwrite the stored pulseCharacterId. Emit
+    # ``pulseLookupAttempted`` so the API/cron can distinguish "agent
+    # didn't try" from "agent tried and Pulse said no".
     if opp.handle:
         opponent["toonHandle"] = str(opp.handle)
         opponent["pulseId"] = str(opp.handle)
-    pulse_character_id = _resolve_pulse_character_id(opp, file_path=file_path)
-    if pulse_character_id is not None:
-        opponent["pulseCharacterId"] = pulse_character_id
+        pulse_character_id = _resolve_pulse_character_id(opp, file_path=file_path)
+        opponent["pulseLookupAttempted"] = True
+        if pulse_character_id is not None:
+            opponent["pulseCharacterId"] = pulse_character_id
+    else:
+        opponent["pulseLookupAttempted"] = False
     if getattr(ctx, "opp_strategy", None):
         opponent["strategy"] = str(ctx.opp_strategy)
 
@@ -1467,10 +1473,20 @@ def _pulse_timeout_for(file_path: Optional[Path]) -> float:
     """Return the wall-clock cap to apply to one sc2pulse call.
 
     Logic:
-      * env override (``SC2TOOLS_PULSE_TIMEOUT_SEC``) wins when set
+      * env override ``SC2TOOLS_PULSE_TIMEOUT_SEC`` (single value
+        applied to BOTH live and backfill) wins when set
       * else, if the replay is recent (mtime within 30 min), 30 s
         — full live-game budget
-      * else 4 s — backfill cap
+      * else either ``SC2TOOLS_PULSE_BACKFILL_TIMEOUT_SEC`` (env
+        override for the older-replay branch) or the default
+        backfill cap (10 s).
+
+    The backfill default was bumped from 4 s to 10 s in May 2026:
+    the previous 4 s cap was tight enough that a legitimate-but-slow
+    SC2Pulse response (the API regularly takes 6–8 s under load)
+    registered as a miss on every catch-up scan, which together with
+    the in-process negative cache meant opponents never got their
+    pulseCharacterId resolved even when the player WAS resolvable.
 
     Negative / non-numeric env values fall through to the tiered
     behaviour. ``0`` disables lookups entirely.
@@ -1490,7 +1506,15 @@ def _pulse_timeout_for(file_path: Optional[Path]) -> float:
                 return 30.0
         except OSError:
             pass
-    return 4.0
+    backfill_raw = os.environ.get("SC2TOOLS_PULSE_BACKFILL_TIMEOUT_SEC", "").strip()
+    if backfill_raw:
+        try:
+            n = float(backfill_raw)
+            if n >= 0:
+                return n
+        except ValueError:
+            pass
+    return 10.0
 
 
 def _read_player_handle(state_dir: Optional[Path] = None) -> Optional[str]:

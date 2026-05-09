@@ -29,6 +29,22 @@ const { validateGameRecord } = require("../validation/gameRecord");
  * }} deps
  */
 function buildGamesRouter(deps) {
+  // Fail loudly at boot if the OpponentsService doesn't expose
+  // ``refreshMetadata``. The earlier "fail-soft" guard quietly skipped
+  // the metadata refresh on every re-upload when the method was
+  // missing, which is exactly how a stuck "TOON id" opponent (one
+  // whose pulseCharacterId never landed on the first ingest) would
+  // never get healed by a subsequent re-upload that DID carry the
+  // resolved id. We'd rather find out at deploy time than at
+  // 3-am-this-streamer-can't-link-to-nephest time.
+  if (
+    !deps.opponents
+    || typeof deps.opponents.refreshMetadata !== "function"
+  ) {
+    throw new Error(
+      "buildGamesRouter: deps.opponents.refreshMetadata is required",
+    );
+  }
   const router = express.Router();
   router.use(deps.auth);
   // Within a single batch the same myToonHandle will repeat for every
@@ -134,8 +150,8 @@ function buildGamesRouter(deps) {
           continue;
         }
         if (game.opponent && game.opponent.pulseId) {
-          // Only update the opponent doc when this is a brand-new
-          // game (created === true). Re-uploads of an existing
+          // Only bump counters on a brand-new ``games`` row
+          // (``created === true``). Re-uploads of an existing
           // gameId would otherwise double-count: ``recordGame``
           // does $inc on gameCount/wins/losses/openings.<X> and
           // doesn't dedupe on gameId, so a Resync — which clears
@@ -145,36 +161,71 @@ function buildGamesRouter(deps) {
           // was re-uploaded. The slim ``games`` row dedupes on
           // ``(userId, gameId)`` so the actual game-count truth
           // always lives there; the opponent counter is just a
-          // cached aggregate, and we only bump it when the
-          // canonical row was actually inserted.
-          if (created) {
-            await deps.opponents.recordGame(userId, {
-              pulseId: game.opponent.pulseId,
-              toonHandle: game.opponent.toonHandle,
-              pulseCharacterId: game.opponent.pulseCharacterId,
-              displayName: game.opponent.displayName || "",
-              race: game.opponent.race || "U",
-              mmr: game.opponent.mmr,
-              leagueId: game.opponent.leagueId,
-              result: game.result,
-              opening: game.opponent.opening,
-              playedAt: new Date(game.date),
-            });
-          } else if (deps.opponents.refreshMetadata) {
-            // Existing game re-upload: still refresh the per-opponent
-            // metadata that legitimately drifts between encounters
-            // (display name, MMR, league, lastSeen, identity-link
-            // resolution) without touching any counter.
-            await deps.opponents.refreshMetadata(userId, {
-              pulseId: game.opponent.pulseId,
-              toonHandle: game.opponent.toonHandle,
-              pulseCharacterId: game.opponent.pulseCharacterId,
-              displayName: game.opponent.displayName || "",
-              race: game.opponent.race || "U",
-              mmr: game.opponent.mmr,
-              leagueId: game.opponent.leagueId,
-              playedAt: new Date(game.date),
-            });
+          // cached aggregate.
+          //
+          // refreshMetadata runs on EVERY ingest (created or not).
+          // It $sets fields that legitimately drift between
+          // encounters (displayName, mmr, leagueId, toonHandle,
+          // pulseCharacterId) without touching counters. Running
+          // it on the created path too is harmless — the same
+          // values were just $set by recordGame — and it ensures
+          // a re-upload that finally carries a freshly-resolved
+          // pulseCharacterId always lands it on the row, fixing
+          // the "stuck on TOON id" failure mode for opponents
+          // whose first ingest happened during a transient
+          // SC2Pulse outage.
+          const opponentPayload = {
+            pulseId: game.opponent.pulseId,
+            toonHandle: game.opponent.toonHandle,
+            pulseCharacterId: game.opponent.pulseCharacterId,
+            pulseLookupAttempted: game.opponent.pulseLookupAttempted === true,
+            displayName: game.opponent.displayName || "",
+            race: game.opponent.race || "U",
+            mmr: game.opponent.mmr,
+            leagueId: game.opponent.leagueId,
+            playedAt: new Date(game.date),
+          };
+          let recordResult = null;
+          let refreshResult = null;
+          try {
+            if (created) {
+              recordResult = await deps.opponents.recordGame(userId, {
+                ...opponentPayload,
+                result: game.result,
+                opening: game.opponent.opening,
+              });
+            } else {
+              refreshResult = await deps.opponents.refreshMetadata(
+                userId,
+                opponentPayload,
+              );
+            }
+          } catch (err) {
+            // Metadata writes are advisory — never fail the ingest
+            // over them. The slim ``games`` row already landed; a
+            // future ingest or the backfill cron will heal the
+            // opponents collection.
+            if (req.log) {
+              req.log.warn(
+                { err, gameId: game.gameId, userId, pulseId: game.opponent.pulseId },
+                "ingest_opponent_metadata_failed",
+              );
+            }
+          }
+          const upgraded = Boolean(
+            (recordResult && recordResult.upgraded)
+            || (refreshResult && refreshResult.upgraded),
+          );
+          if (upgraded && req.log) {
+            req.log.info(
+              {
+                userId,
+                pulseId: game.opponent.pulseId,
+                gameId: game.gameId,
+                created,
+              },
+              "ingest_opponent_pulse_character_id_upgraded",
+            );
           }
         }
         // Auto-detect: backfill the user's own toon handle into their

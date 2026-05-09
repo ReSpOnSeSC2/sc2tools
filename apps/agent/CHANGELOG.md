@@ -2,6 +2,44 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.6.3
+
+### Fixed — opponents stuck on `1-S2-1-XXXXX TOON` instead of upgrading to a Pulse character id
+- The in-process SC2Pulse resolver used to cache misses **forever**.
+  An opponent whose first replay landed during a transient
+  sc2pulse.nephest.com outage (or hit the agent's tight 4 s
+  backfill timeout) was permanently blackholed for the rest of
+  the agent process — every subsequent replay against the same
+  opponent short-circuited on the cached miss, so the cloud
+  never received a `pulseCharacterId` and the Opponents tab kept
+  rendering them as the raw toon handle with the dim "TOON"
+  badge. Negative-cache entries now expire after 10 minutes
+  (env override `SC2TOOLS_PULSE_NEG_CACHE_SEC`); the next replay
+  past the TTL re-probes Pulse from cold.
+- The backfill (older-replays) wall-clock cap was bumped from
+  4 s to 10 s. Pulse routinely answers in 6–8 s under load; the
+  old budget was tight enough that legitimate-but-slow responses
+  registered as misses on every catch-up scan, which combined
+  with the now-fixed unbounded negative cache to permanently
+  prevent resolution. New env override
+  `SC2TOOLS_PULSE_BACKFILL_TIMEOUT_SEC` for operators who want
+  to tune the cap without touching the live-game budget.
+- Every replay with a parsed `opp.handle` now emits an explicit
+  `pulseLookupAttempted: true` bit on the opponent payload, so
+  the cloud can distinguish "agent didn't try" from "agent tried
+  and Pulse said no" — feeds the new cloud-side backfill cron's
+  freshness window.
+- Resolver gained a `force_refresh` keyword the cloud-side
+  recovery path uses to bypass both caches; agent paths default
+  to `force_refresh=False` so the local positive cache still
+  short-circuits the common case.
+
+User-visible effect: opponents that previously rendered as
+`1-S2-1-437579 TOON` on sc2tools.com/app eventually flip to a
+clickable nephest character link, either on the next replay
+upload or within one cloud backfill cycle (whichever comes
+first), without the user needing to take any action.
+
 ## 0.6.2
 
 ### Fixed — SC2Pulse search response parsing

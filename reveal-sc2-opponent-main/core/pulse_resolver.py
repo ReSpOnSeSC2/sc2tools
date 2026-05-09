@@ -78,15 +78,44 @@ USER_AGENT = "sc2tools-pulse-resolver"
 # The first segment of an sc2reader toon_handle is the same code.
 REGION_CODE_TO_NAME: Dict[int, str] = {1: "US", 2: "EU", 3: "KR", 5: "CN"}
 
-# Module-level cache: toon -> pulse_id (or empty string for "looked up,
-# no match"). Negative caching avoids re-querying for unknown opponents
-# on every replay.
+# Module-level positive cache: toon -> pulse_id. A confirmed Pulse
+# character id never changes, so positive entries live for the
+# process lifetime.
 _RESOLVE_CACHE: Dict[str, str] = {}
+# Module-level negative cache: toon -> wall-clock expiry (epoch
+# seconds). A confirmed-absent lookup is held for at most
+# ``DEFAULT_NEG_CACHE_SEC`` (env override
+# ``SC2TOOLS_PULSE_NEG_CACHE_SEC``) so a player who appears on
+# SC2Pulse a few minutes after their first ranked game (the common
+# case for new accounts and recovered outages) gets retried instead
+# of being permanently blackholed for the rest of the process
+# lifetime. The previous behaviour cached misses forever and was the
+# root of the "stuck on TOON id" bug for opponents whose first
+# encounter happened during a transient sc2pulse miss.
+_NEG_CACHE: Dict[str, float] = {}
+DEFAULT_NEG_CACHE_SEC = 600  # 10 minutes
 # Per-region season-id cache. Seasons roll over once a quarter, so
 # caching for the process lifetime is fine and saves one heavy
 # /season/list/all round-trip per replay during catch-up scans.
 _SEASON_CACHE: Dict[int, int] = {}
 _CACHE_LOCK = threading.Lock()
+
+
+def _neg_cache_ttl_sec() -> float:
+    """Wall-clock TTL applied to a negative-cache entry.
+
+    Sourced from ``SC2TOOLS_PULSE_NEG_CACHE_SEC`` when set to a
+    non-negative number; otherwise ``DEFAULT_NEG_CACHE_SEC``.
+    """
+    raw = os.environ.get("SC2TOOLS_PULSE_NEG_CACHE_SEC", "").strip()
+    if raw:
+        try:
+            n = float(raw)
+            if n >= 0:
+                return n
+        except ValueError:
+            pass
+    return float(DEFAULT_NEG_CACHE_SEC)
 
 # Default JSON fetcher; overridable for tests.
 JsonFetcher = Callable[[str], Optional[Any]]
@@ -250,24 +279,67 @@ def _confirm_by_bnid(
     return False
 
 
-def _cache_get(toon: str) -> Optional[str]:
+def _positive_cache_get(toon: str) -> Optional[str]:
+    """Return a confirmed Pulse character id for ``toon`` if cached."""
     with _CACHE_LOCK:
         return _RESOLVE_CACHE.get(toon)
 
 
-def _cache_put(toon: str, value: str) -> None:
+def _positive_cache_put(toon: str, value: str) -> None:
+    """Cache a confirmed Pulse character id for the process lifetime.
+
+    Confirmed positives don't change for a given toon — SC2Pulse uses
+    the toon's bnid as the disambiguation key — so we hold them
+    forever.
+    """
     with _CACHE_LOCK:
         _RESOLVE_CACHE[toon] = value
+        # A fresh positive supersedes any stale negative entry. Without
+        # this, a toon that was unknown ten minutes ago and just got
+        # its first ranked game would still be served from the negative
+        # cache until the TTL expired.
+        _NEG_CACHE.pop(toon, None)
+
+
+def _negative_cache_get(toon: str, *, now: Optional[float] = None) -> bool:
+    """True iff ``toon`` is currently in the negative cache and unexpired.
+
+    Expired entries are removed lazily so a future probe re-attempts
+    the lookup instead of being short-circuited by stale state.
+    """
+    when = now if now is not None else time.time()
+    with _CACHE_LOCK:
+        expiry = _NEG_CACHE.get(toon)
+        if expiry is None:
+            return False
+        if expiry <= when:
+            _NEG_CACHE.pop(toon, None)
+            return False
+        return True
+
+
+def _negative_cache_put(toon: str, *, now: Optional[float] = None) -> None:
+    """Mark ``toon`` as a confirmed-absent lookup until the TTL elapses."""
+    ttl = _neg_cache_ttl_sec()
+    if ttl <= 0:
+        # TTL of 0 disables negative caching entirely — useful for
+        # operators who want every miss to re-probe.
+        return
+    when = now if now is not None else time.time()
+    with _CACHE_LOCK:
+        _NEG_CACHE[toon] = when + ttl
 
 
 def clear_cache() -> None:
     """Drop all memoized lookup entries (test hook).
 
-    Clears both the toon -> pulse_id cache and the per-region season
-    cache so tests can exercise cold-path behaviour deterministically.
+    Clears the positive cache, the negative cache, and the per-region
+    season cache so tests can exercise cold-path behaviour
+    deterministically.
     """
     with _CACHE_LOCK:
         _RESOLVE_CACHE.clear()
+        _NEG_CACHE.clear()
         _SEASON_CACHE.clear()
 
 
@@ -276,6 +348,7 @@ def resolve_pulse_id_by_toon(
     opp_name: Optional[str],
     *,
     fetch_json: JsonFetcher = _default_fetch_json,
+    force_refresh: bool = False,
 ) -> Optional[str]:
     """Return the SC2Pulse character ID for the player behind ``toon``.
 
@@ -286,6 +359,14 @@ def resolve_pulse_id_by_toon(
             For barcodes pass the raw barcode (it'll match other
             barcodes; the bnid filter still picks the right one).
         fetch_json: Override for tests. Returns parsed JSON or None.
+        force_refresh: When True, bypass both the positive and
+            negative caches and force a fresh lookup. Callers (the
+            cloud backfill job, an operator-triggered refresh) use
+            this to recover from a stale negative cache when they
+            already know the prior opponents row lacks a
+            ``pulseCharacterId``. A successful resolution still
+            updates the positive cache, so subsequent in-process
+            lookups are fast.
 
     Returns:
         Numeric SC2Pulse character ID as a string, or ``None`` if the
@@ -299,19 +380,23 @@ def resolve_pulse_id_by_toon(
     parsed = parse_toon_handle(toon)
     if not parsed:
         return None
-    cached = _cache_get(toon)
-    if cached is not None:
-        return cached or None
+    if not force_refresh:
+        cached = _positive_cache_get(toon)
+        if cached:
+            return cached
+        if _negative_cache_get(toon):
+            # TTL'd miss — next call after expiry re-probes naturally.
+            return None
     region, _realm, bnid = parsed
     name_for_search = (opp_name or "").strip()
     if not name_for_search:
-        _cache_put(toon, "")
+        _negative_cache_put(toon)
         return None
 
     season_id = _latest_season_for_region(region, fetch_json)
     if season_id is None:
-        # Don't poison the cache on a transient outage -- next replay
-        # gets another shot.
+        # Don't poison either cache on a transient outage -- next
+        # replay gets another shot immediately.
         return None
 
     candidates = _search_candidates(
@@ -321,7 +406,7 @@ def resolve_pulse_id_by_toon(
         fetch_json=fetch_json,
     )
     if not candidates:
-        _cache_put(toon, "")
+        _negative_cache_put(toon)
         return None
 
     for cid in candidates:
@@ -336,17 +421,21 @@ def resolve_pulse_id_by_toon(
             fetch_json=fetch_json,
         ):
             resolved = str(cid_int)
-            _cache_put(toon, resolved)
+            _positive_cache_put(toon, resolved)
             print(
                 f"[pulse_resolver] resolved {_hash_name(name_for_search)} "
                 f"region={region} bnid={bnid} -> pulse_id {resolved}"
             )
             return resolved
 
-    # No candidate matched bnid. Cache the negative result so we don't
-    # re-search every replay for the same toon -- common with smurfs
-    # who haven't played enough ranked games to be in SC2Pulse yet.
-    _cache_put(toon, "")
+    # No candidate matched bnid. Cache the negative result with a TTL
+    # so we don't re-search every replay for the same toon (common
+    # with smurfs who haven't played enough ranked games to be in
+    # SC2Pulse yet) BUT also don't blackhole the toon forever -- the
+    # next process-lifetime probe after the TTL expires gets a fresh
+    # shot at SC2Pulse, and the cloud backfill job can still force a
+    # refresh via ``force_refresh=True``.
+    _negative_cache_put(toon)
     return None
 
 

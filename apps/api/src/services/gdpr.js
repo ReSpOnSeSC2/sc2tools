@@ -37,9 +37,20 @@ const USER_SCOPED_COLLECTIONS = [
 class GdprService {
   /**
    * @param {import('../db/connect').DbContext} db
+   * @param {{
+   *   opponents?: import('./opponents').OpponentsService,
+   *   logger?: import('pino').Logger,
+   * }} [opts]
+   *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
+   *   chain a pulse-character-id backfill so the admin "Rebuild
+   *   opponents" action both rebuilds counters AND heals missing
+   *   pulse ids in one shot. Optional in unit tests that only
+   *   exercise export/delete.
    */
-  constructor(db) {
+  constructor(db, opts = {}) {
     this.db = db;
+    this.opponents = (opts && opts.opponents) || null;
+    this.logger = (opts && opts.logger) || null;
   }
 
   /**
@@ -241,6 +252,9 @@ class GdprService {
           wins: b.wins,
           losses: b.losses,
           openings: b.openings,
+          // v2: every fresh row carries the resolve-attempt slot,
+          // so the backfill cron's filter shape is uniform.
+          pulseResolveAttemptedAt: null,
         };
         if (b.mmr !== undefined) doc.mmr = b.mmr;
         if (b.leagueId !== undefined) doc.leagueId = b.leagueId;
@@ -252,6 +266,54 @@ class GdprService {
       await this.db.opponents.insertMany(docs, { ordered: false });
     }
     return dropped.deletedCount || 0;
+  }
+
+  /**
+   * Public companion of ``rebuildOpponentsForUser`` that ALSO
+   * heals missing pulseCharacterIds before returning. Wraps the
+   * raw rebuild in a single call the admin tool can use without
+   * having to thread the OpponentsService through itself.
+   *
+   * The pulse backfill is best-effort: a transient SC2Pulse
+   * outage just means the heal step skipped. Counters were
+   * already rebuilt; the periodic backfill cron will pick the
+   * survivors up next cycle.
+   *
+   * @param {string} userId
+   * @param {{ backfillLimit?: number }} [opts]
+   * @returns {Promise<{
+   *   droppedRows: number,
+   *   pulseBackfill: {
+   *     scanned: number,
+   *     resolved: number,
+   *     updated: number,
+   *     skipped: number,
+   *   } | null,
+   * }>}
+   */
+  async rebuildOpponentsAndHealForUser(userId, opts = {}) {
+    const droppedRows = await this.rebuildOpponentsForUser(userId);
+    let pulseBackfill = null;
+    if (this.opponents
+      && typeof this.opponents.backfillPulseCharacterId === "function") {
+      try {
+        pulseBackfill = await this.opponents.backfillPulseCharacterId(userId, {
+          limit: typeof opts.backfillLimit === "number" ? opts.backfillLimit : 500,
+          // The admin tool explicitly asked for a heal — bypass the
+          // "skip rows attempted within the last 6h" guard so the
+          // operator sees a fresh result rather than a stale stamp.
+          force: true,
+        });
+      } catch (err) {
+        if (this.logger) {
+          this.logger.warn(
+            { err, userId },
+            "rebuild_opponents_pulse_backfill_failed",
+          );
+        }
+      }
+    }
+    return { droppedRows, pulseBackfill };
   }
 
   /**

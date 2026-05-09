@@ -323,17 +323,35 @@ class AdminService {
   }
 
   /**
-   * Drop every opponent row for one user and re-derive from games.
-   * Wraps GdprService.rebuildOpponentsForUser; the AdminService method
-   * exists so the route layer doesn't have to reach across services.
+   * Drop every opponent row for one user, re-derive from games,
+   * THEN heal any rows whose ``pulseCharacterId`` is missing by
+   * resolving against SC2Pulse. Wraps the combined GDPR helper so
+   * the route layer doesn't have to reach across services.
+   *
+   * Returns the rebuild count and the pulse-backfill summary so
+   * the admin UI can render "dropped N rows · resolved M pulse
+   * ids" in one shot.
    *
    * @param {string} userId
-   * @returns {Promise<{ userId: string, droppedRows: number }>}
+   * @returns {Promise<{
+   *   userId: string,
+   *   droppedRows: number,
+   *   pulseBackfill: {
+   *     scanned: number,
+   *     resolved: number,
+   *     updated: number,
+   *     skipped: number,
+   *   } | null,
+   * }>}
    */
   async rebuildOpponentsForUser(userId) {
     if (!userId) throw new Error("userId required");
-    const droppedRows = await this.gdpr.rebuildOpponentsForUser(userId);
-    return { userId, droppedRows };
+    const result = await this.gdpr.rebuildOpponentsAndHealForUser(userId);
+    return {
+      userId,
+      droppedRows: result.droppedRows,
+      pulseBackfill: result.pulseBackfill,
+    };
   }
 
   /**

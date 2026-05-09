@@ -44,6 +44,8 @@ const { CommunityService } = require("./services/community");
 const { SeasonsService } = require("./services/seasons");
 const { PulseMmrService } = require("./services/pulseMmr");
 const { AdminService } = require("./services/admin");
+const { buildPulseResolver } = require("./services/pulseResolver");
+const { loadAllMigrations } = require("./db/migrations");
 
 const { buildHealthRouter } = require("./routes/health");
 const { buildMeRouter } = require("./routes/me");
@@ -92,6 +94,12 @@ const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
  * @returns {{app: import('express').Express, services: object}}
  */
 function buildApp(deps) {
+  // Register schema migrations BEFORE any service touches Mongo so
+  // a v1 opponents doc loaded during boot already knows how to roll
+  // forward. ``loadAllMigrations`` is idempotent — repeated boots
+  // (or test harnesses calling buildApp many times in one process)
+  // skip duplicate registrations.
+  loadAllMigrations();
   const services = makeServices(deps);
   const clerk = deps.config.clerkSecretKey
     ? buildClerkClient({
@@ -127,10 +135,16 @@ function makeServices(deps) {
     },
   });
   const gameDetails = new GameDetailsService(gameDetailsStore);
+  // Cloud-side SC2Pulse resolver — drives the backfill cron's
+  // recovery path for opponents whose pulseCharacterId never landed
+  // on first ingest (typically because sc2pulse.nephest.com was
+  // unreachable / rate-limited at that moment). Built once and
+  // shared so the in-process LRU cache survives across requests.
+  const pulseResolver = buildPulseResolver({ logger: deps.logger });
   const opponents = new OpponentsService(
     deps.db,
     deps.config.serverPepper,
-    { gameDetails },
+    { gameDetails, logger: deps.logger, pulseResolver },
   );
   // PulseMmrService — Tier-3 fallback for the session widget when no
   // game in the user's history carries a usable myMmr. Constructed
@@ -203,7 +217,10 @@ function makeServices(deps) {
   const spatial = new SpatialService(deps.db);
   const ml = new MLService(deps.db, { io: deps.io, gameDetails });
   const agentVersion = new AgentVersionService(deps.db);
-  const gdpr = new GdprService(deps.db);
+  const gdpr = new GdprService(deps.db, {
+    opponents,
+    logger: deps.logger,
+  });
   const community = new CommunityService(deps.db);
   const seasons = new SeasonsService();
   // AdminService composes db + gdpr; deliberately near the bottom so
