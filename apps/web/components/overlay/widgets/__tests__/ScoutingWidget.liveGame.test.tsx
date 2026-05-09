@@ -147,7 +147,7 @@ describe("ScoutingWidget — live envelope path", () => {
     expect(container.textContent).not.toContain("Profile lookup unavailable");
   });
 
-  it("shows alternatives when the bridge's confidence < 1", () => {
+  it("shows alternatives when the bridge's confidence < 1 AND there are real alternatives", () => {
     const env = envelope({
       phase: "match_started",
       opponent: {
@@ -165,5 +165,79 @@ describe("ScoutingWidget — live envelope path", () => {
     );
     expect(container.textContent).toContain("best guess");
     expect(container.textContent).toContain("Maru#1234");
+  });
+
+  it("hides the 'best guess' line when alternatives are agent-stub placeholders ('? (?)' etc)", () => {
+    // Reproduces a real ladder match where SC2Pulse returned no
+    // matches for an unranked opponent; the agent's bridge surfaced a
+    // low-confidence stub with `alternatives: ["? (?)", "? (?)"]`.
+    // Rendering those literal placeholder strings on the OBS scene
+    // looks broken to viewers — filter them out so the card simply
+    // omits the disambiguation line.
+    const env = envelope({
+      phase: "match_started",
+      opponent: {
+        name: "Negod",
+        race: "Terran",
+        profile: {
+          confidence: 0.1,
+          alternatives: ["? (?)", "? (?)"],
+        },
+      },
+    });
+    const { container } = render(
+      <ScoutingWidget live={null} liveGame={env} />,
+    );
+    expect(container.textContent).not.toContain("best guess");
+    expect(container.textContent).not.toContain("? (?)");
+    // The widget is still rendered with the rest of the card —
+    // headline + 'Profile lookup unavailable'.
+    expect(container.textContent).toContain("Negod");
+    expect(container.textContent).toContain("Profile lookup unavailable");
+  });
+
+  it("filters bare '?' entries from the alternatives list while keeping real ones", () => {
+    const env = envelope({
+      phase: "match_started",
+      opponent: {
+        name: "Maru",
+        race: "Terran",
+        profile: {
+          confidence: 0.6,
+          alternatives: ["?", "Maru#1234", " ", "? (?)"],
+        },
+      },
+    });
+    const { container } = render(
+      <ScoutingWidget live={null} liveGame={env} />,
+    );
+    expect(container.textContent).toContain("best guess");
+    expect(container.textContent).toContain("Maru#1234");
+    expect(container.textContent).not.toContain("? (?)");
+    // The bare '?' from the alternatives list must not leak through
+    // — with two placeholders adjacent, an unfiltered join would
+    // render '?, Maru#1234'.
+    const text = container.textContent || "";
+    const altMatches = text.match(/also: (.*?)$/m)?.[1] || "";
+    expect(altMatches).not.toMatch(/(^|, )\?(,|$)/);
+  });
+
+  it("hides 'best guess' entirely when confidence is < 1 but there are no alternatives at all", () => {
+    // Confidence-only signal with no real alternatives is just noise.
+    const env = envelope({
+      phase: "match_started",
+      opponent: {
+        name: "Negod",
+        race: "Terran",
+        profile: {
+          confidence: 0.1,
+          alternatives: [],
+        },
+      },
+    });
+    const { container } = render(
+      <ScoutingWidget live={null} liveGame={env} />,
+    );
+    expect(container.textContent).not.toContain("best guess");
   });
 });

@@ -17,11 +17,15 @@ import { useLiveGame } from "@/lib/useLiveGame";
  *
  * Heuristic:
  *   * If a non-idle envelope has arrived in the last 10 s → green
- *     "Agent connected".
+ *     "Agent connected · in game". Tells the streamer their match
+ *     is being captured AND surfaced to widgets.
  *   * If an idle/menu envelope has arrived in the last 60 s → green
- *     "Agent connected — no game". The bridge still reports phase
+ *     "Agent connected · no game". The bridge still reports phase
  *     transitions in menu, so this proves the connection is alive.
- *   * Otherwise → grey "Agent offline".
+ *     Streamers asked for a single "is the agent working?" tell —
+ *     both connected states share the green tone so the indicator
+ *     stays green when they're sitting in the menu picking a build.
+ *   * Otherwise → dim "Agent offline".
  *
  * Re-evaluated once a second so the indicator flips promptly without
  * holding the rest of the page hostage on a setState.
@@ -37,15 +41,14 @@ export function AgentStatusIndicator({
   className?: string;
 }) {
   const status = useAgentStatus();
+  // Both connected states share the green tone — the streamer's
+  // mental model is binary ("agent is talking to the cloud or it
+  // isn't"); the in-game-vs-menu distinction lives in the label.
   const tone =
-    status === "connected-live"
-      ? "text-success"
-      : status === "connected-idle"
-        ? "text-text-muted"
-        : "text-text-dim";
+    status === "offline" ? "text-text-dim" : "text-success";
   const label =
     status === "connected-live"
-      ? "Agent connected"
+      ? "Agent connected · in game"
       : status === "connected-idle"
         ? "Agent connected · no game"
         : "Agent offline";
@@ -62,11 +65,9 @@ export function AgentStatusIndicator({
         className="inline-flex h-2 w-2 rounded-full"
         style={{
           background:
-            status === "connected-live"
-              ? "var(--color-success, #3ec07a)"
-              : status === "connected-idle"
-                ? "var(--color-text-muted, #9aa3b2)"
-                : "var(--color-text-dim, #5b6473)",
+            status === "offline"
+              ? "var(--color-text-dim, #5b6473)"
+              : "var(--color-success, #3ec07a)",
         }}
         aria-hidden
       />
