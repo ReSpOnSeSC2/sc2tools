@@ -351,16 +351,26 @@ export function useClearStalePostGameOnNewMatch(
  * Pre/in-game envelope handling (``liveGame``):
  *   The opponent and scouting widgets get a second source of
  *   visibility — the agent's pre-game ``overlay:liveGame`` envelope.
- *   When the bridge is reporting any of the active phases (loading,
- *   started, in-progress, ended), we treat the widget as visible AND
- *   suppress the auto-hide timer. That way the opponent dossier stays
- *   pinned through a 20-minute match instead of timing out at the
- *   default 6-minute opponent duration. As soon as the bridge flips
- *   back to ``idle`` / ``menu`` (game over, no fresh post-game payload
- *   either) the timer resumes its natural behavior off whatever data
- *   the cloud last sent.
+ *   While the bridge is reporting an ACTIVE match phase
+ *   (``match_loading`` / ``match_started`` / ``match_in_progress``),
+ *   the widget stays pinned and the auto-hide timer is suppressed —
+ *   that's how the opponent dossier survives a 20-minute match instead
+ *   of timing out at the per-widget natural duration.
+ *
+ *   Once the bridge flips to ``match_ended`` (SC2 reported a result)
+ *   we DROP the suppression and let the natural per-widget timer run.
+ *   Real-stream repro: a streamer can sit on the SC2 score screen for
+ *   30 s – several minutes after a game; under the prior "any non-idle
+ *   phase suppresses the timer" rule, the scouting widget would stay
+ *   pinned that whole time. Letting ``match_ended`` use the natural
+ *   22 s scouting timer lines up with the post-game card the cloud
+ *   ships when the replay parses (typically within ~30 s of game end).
+ *
+ *   ``idle`` / ``menu`` envelopes are also handled by the socket layer
+ *   clearing ``liveGame`` to null entirely, so the widget falls through
+ *   to whatever ``live`` has cached and uses its natural timer.
  */
-function useWidgetVisibility(
+export function useWidgetVisibility(
   widget: WidgetId,
   live: LiveGamePayload | null,
   liveGame: LiveGameEnvelope | null,
@@ -374,11 +384,17 @@ function useWidgetVisibility(
   // Other widgets continue to derive visibility purely from the
   // post-game ``overlay:live`` payload.
   const consumesLiveGame = widget === "opponent" || widget === "scouting";
+  // Suppress the auto-hide timer only during the ACTIVE phases of a
+  // match. ``match_ended`` deliberately falls through to the natural
+  // per-widget timer so the widget clears within ~22s (scouting) or
+  // ~6 min (opponent) of the result, instead of staying pinned for
+  // however long the streamer sits on the score screen.
   const inLiveMatch =
     consumesLiveGame
     && liveGame
-    && liveGame.phase !== "idle"
-    && liveGame.phase !== "menu";
+    && (liveGame.phase === "match_loading"
+      || liveGame.phase === "match_started"
+      || liveGame.phase === "match_in_progress");
 
   const sourceForWidget = widget === "session" ? session : live;
   const isTest = Boolean(
