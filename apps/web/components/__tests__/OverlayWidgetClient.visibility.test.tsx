@@ -71,34 +71,56 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
     vi.useRealTimers();
   });
 
-  it("scouting widget stays visible during active phases (timer suppressed)", () => {
+  it("scouting widget AUTO-HIDES on its 22 s timer even mid-match (does NOT pin)", () => {
+    // Streamer feedback: the giant pre-game intel dossier sitting on
+    // the OBS scene through 15 minutes of gameplay was overwhelming.
+    // Scouting fades on its natural 22 s timer; opponent (smaller) is
+    // the one that pins through the match for viewer context.
     const out = { value: false };
-    const { rerender } = render(
+    render(
       <VisibilityProbe
         widget="scouting"
-        live={liveOf()}
+        live={null}
         liveGame={envelope({ phase: "match_started" })}
         visibleOut={out}
       />,
     );
     expect(out.value).toBe(true);
-    // Push past the natural 22 s scouting timer — widget must stay
-    // visible because the bridge reports an active phase.
     act(() => {
-      vi.advanceTimersByTime(25_000);
+      vi.advanceTimersByTime(23_000);
+    });
+    expect(out.value).toBe(false);
+  });
+
+  it("opponent widget DOES pin through active phases (suppresses the timer)", () => {
+    // The opponent widget is the small "name + race + MMR" identity
+    // chip — small footprint, useful viewer context, fine to pin.
+    const out = { value: false };
+    const { rerender } = render(
+      <VisibilityProbe
+        widget="opponent"
+        live={null}
+        liveGame={envelope({ phase: "match_started" })}
+        visibleOut={out}
+      />,
+    );
+    expect(out.value).toBe(true);
+    // Way past 22 s scouting natural timer + opponent's own 22 s —
+    // pinned because phase is active.
+    act(() => {
+      vi.advanceTimersByTime(60_000);
     });
     expect(out.value).toBe(true);
-    // Same on match_in_progress — still active.
     rerender(
       <VisibilityProbe
-        widget="scouting"
-        live={liveOf()}
+        widget="opponent"
+        live={null}
         liveGame={envelope({ phase: "match_in_progress" })}
         visibleOut={out}
       />,
     );
     act(() => {
-      vi.advanceTimersByTime(60_000);
+      vi.advanceTimersByTime(120_000);
     });
     expect(out.value).toBe(true);
   });
@@ -143,11 +165,11 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
     expect(out.value).toBe(false);
   });
 
-  it("transitioning from match_in_progress to match_ended re-arms the timer", () => {
+  it("opponent widget: transitioning from match_in_progress to match_ended re-arms the timer", () => {
     const out = { value: false };
     const { rerender } = render(
       <VisibilityProbe
-        widget="scouting"
+        widget="opponent"
         live={liveOf()}
         liveGame={envelope({ phase: "match_in_progress" })}
         visibleOut={out}
@@ -162,7 +184,7 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
     // Game ends — timer arms for the natural 22 s.
     rerender(
       <VisibilityProbe
-        widget="scouting"
+        widget="opponent"
         live={liveOf()}
         liveGame={envelope({ phase: "match_ended" })}
         visibleOut={out}
@@ -175,11 +197,11 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
     expect(out.value).toBe(false);
   });
 
-  it("transitioning from match_ended back to match_loading (rematch) re-pins immediately", () => {
+  it("opponent widget: transitioning from match_ended back to match_loading (rematch) re-pins immediately", () => {
     const out = { value: false };
     const { rerender } = render(
       <VisibilityProbe
-        widget="scouting"
+        widget="opponent"
         live={liveOf()}
         liveGame={envelope({ phase: "match_ended" })}
         visibleOut={out}
@@ -192,7 +214,7 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
     expect(out.value).toBe(true);
     rerender(
       <VisibilityProbe
-        widget="scouting"
+        widget="opponent"
         live={null}
         liveGame={envelope({
           phase: "match_loading",
@@ -202,8 +224,8 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
       />,
     );
     expect(out.value).toBe(true);
-    // Push way past the natural 22 s timer — staying pinned because
-    // active phase.
+    // Push way past the natural 22 s timer — opponent stays pinned
+    // because the phase is active.
     act(() => {
       vi.advanceTimersByTime(60_000);
     });
