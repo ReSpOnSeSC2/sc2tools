@@ -83,6 +83,7 @@ export function OverlayWidgetClient({
     setEnabled,
     setVoicePrefs,
   );
+  useClearStalePostGameOnNewMatch(liveGame, live, setLive);
   useWidgetVisibility(
     widget as WidgetId,
     live,
@@ -298,6 +299,46 @@ function useOverlayWidgetSocket(
     setEnabled,
     setVoicePrefs,
   ]);
+}
+
+/**
+ * Clear the cached post-game ``LiveGamePayload`` (``live``) the moment
+ * the bridge reports a NEW match starting. The post-game payload is
+ * authoritative for the *previous* game (replay-derived match-result,
+ * mmr-delta, h2h, etc); once SC2 reports `match_loading` for the next
+ * game, every widget reading from ``live`` would otherwise sit on
+ * stale data — opponent name from the previous loss, the previous
+ * game's MMR delta, etc — until that 6-minute opponent timer expired
+ * or the new game's replay parsed (~match-length minutes later).
+ *
+ * Real-stream repro: streamer queues immediately after a loss → the
+ * Opponent widget keeps showing "Negod 0W-1L 0%" while
+ * ``match_loading`` for "Invader" lands on the live envelope. This
+ * effect clears ``live`` so the live-envelope render path takes over
+ * for every widget at once.
+ *
+ * We trigger on ``match_loading`` specifically because:
+ *   * ``match_started`` / ``match_in_progress`` arrive after we've
+ *     already passed through ``match_loading`` (clearing happens once,
+ *     idempotent).
+ *   * ``match_ended`` is the just-finished game — at that moment the
+ *     post-game payload is correct or about to arrive; clearing here
+ *     would race the replay-parse fan-out.
+ *   * ``idle`` / ``menu`` are non-game phases — let the post-game
+ *     payload age out via its natural visibility timer instead of
+ *     yanking it the moment the streamer alt-tabs to the menu.
+ */
+export function useClearStalePostGameOnNewMatch(
+  liveGame: LiveGameEnvelope | null,
+  live: LiveGamePayload | null,
+  setLive: (next: LiveGamePayload | null) => void,
+) {
+  useEffect(() => {
+    if (!liveGame) return;
+    if (liveGame.phase !== "match_loading") return;
+    if (!live) return;
+    setLive(null);
+  }, [liveGame, live, setLive]);
 }
 
 /**
