@@ -17,5 +17,5 @@ the existing SC2Replay-Analyzer/ package — the agent imports them so we
 never duplicate parsing logic. See ``replay_pipeline.py``.
 """
 
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 

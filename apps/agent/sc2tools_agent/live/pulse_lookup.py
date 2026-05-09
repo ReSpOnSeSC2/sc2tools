@@ -73,6 +73,13 @@ _RACE_CANONICAL = {
     "protoss": "Protoss",
     "terran": "Terran",
     "random": "Random",
+    # The agent's lifecycle layer sometimes ships truncated forms
+    # ("Terr", "Prot", "Zerg", "Rand") because the SC2 client reports
+    # them that way in some locales. Map the prefixes too so the race
+    # tiebreaker still works.
+    "terr": "Terran",
+    "prot": "Protoss",
+    "rand": "Random",
 }
 
 
@@ -109,6 +116,64 @@ def _candidate_top_race(member: Dict[str, Any]) -> Optional[str]:
     }
     best = max(counts.items(), key=lambda kv: kv[1])
     return best[0] if best[1] > 0 else None
+
+
+def _pick_hit_character(hit: Dict[str, Any]) -> Dict[str, Any]:
+    """Locate the ``character`` sub-object inside one
+    ``/character/search`` hit.
+
+    SC2Pulse's response shape varies — for live ladder names it nests
+    the character under ``hit.members[0].character`` (newer servers)
+    or ``hit.members.character`` (older servers); for some legacy
+    responses the character is at ``hit.character`` directly.
+    Mirror the legacy ``stream-overlay-backend/routes/onboarding.js``
+    ``pickHitCharacter`` helper, which has been battle-tested in
+    production against the same Pulse instance.
+
+    Without this helper the lookup misses every modern shape — the
+    agent only checked ``hit.character``, got an empty dict, the name
+    didn't match, no candidates scored above zero, and every opponent
+    got reported as ``confidence=0.0 mmr=None``. The user-visible
+    symptom was "Profile lookup unavailable" on every opponent.
+    """
+    if not isinstance(hit, dict):
+        return {}
+    ch = hit.get("character")
+    if isinstance(ch, dict):
+        return ch
+    members = hit.get("members")
+    if isinstance(members, list) and members:
+        first = members[0]
+        if isinstance(first, dict):
+            inner = first.get("character")
+            if isinstance(inner, dict):
+                return inner
+    if isinstance(members, dict):
+        inner = members.get("character")
+        if isinstance(inner, dict):
+            return inner
+    return {}
+
+
+def _pick_hit_member(hit: Dict[str, Any]) -> Dict[str, Any]:
+    """Locate the ``member`` (race-counts carrier) inside one
+    ``/character/search`` hit.
+
+    Race counts (``zergGamesPlayed`` etc) live on the team-member
+    object, which Pulse places either at ``hit.members[0]``,
+    ``hit.members``, or — on the oldest legacy responses — directly
+    on the hit dict.
+    """
+    if not isinstance(hit, dict):
+        return {}
+    members = hit.get("members")
+    if isinstance(members, list) and members:
+        first = members[0]
+        if isinstance(first, dict):
+            return first
+    if isinstance(members, dict):
+        return members
+    return hit
 
 
 def _split_battletag(account_handle: Optional[str]) -> Optional[str]:
@@ -354,7 +419,7 @@ class PulseClient:
     def _fetch_team_for(
         self, candidate: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
-        ch = candidate.get("character") or {}
+        ch = _pick_hit_character(candidate)
         cid = ch.get("id")
         if not isinstance(cid, int):
             try:
@@ -481,7 +546,9 @@ class PulseClient:
         target_race = _canon_race(race)
         scored: List[Tuple[float, Dict[str, Any]]] = []
         for c in candidates:
-            ch = (c.get("character") or {}) if isinstance(c, dict) else {}
+            if not isinstance(c, dict):
+                continue
+            ch = _pick_hit_character(c)
             cand_name = _split_battletag(ch.get("name"))
             score = 0.0
             # Name
@@ -495,11 +562,11 @@ class PulseClient:
             if target_region_code is not None:
                 if ch.get("region") == target_region_code:
                     score += 0.3
-            # Race — Pulse returns the candidate's per-race counts on
-            # the top-level dict, not the character object. The
-            # ``members`` array carries them in /group/team responses
-            # but ``/character/search`` flattens them onto the parent.
-            top_race = _candidate_top_race(c if isinstance(c, dict) else {})
+            # Race — race counts live on the team-member object, which
+            # Pulse nests under ``members[0]`` (newer responses) or
+            # ``members`` (older). Helper handles both shapes.
+            member = _pick_hit_member(c)
+            top_race = _candidate_top_race(member)
             if target_race and top_race and top_race == target_race:
                 score += 0.2
             if score > 0:
@@ -530,7 +597,7 @@ class PulseClient:
         return max(0.2, round(base, 2))
 
     def _candidate_label(self, candidate: Dict[str, Any]) -> str:
-        ch = candidate.get("character") or {}
+        ch = _pick_hit_character(candidate)
         name = _split_battletag(ch.get("name")) or "?"
         region = PULSE_REGION_CODE_TO_LABEL.get(ch.get("region"), "?")
         return f"{name} ({region})"
@@ -546,7 +613,7 @@ class PulseClient:
         confidence: float,
         alternatives: List[str],
     ) -> OpponentProfile:
-        ch = candidate.get("character") or {}
+        ch = _pick_hit_character(candidate)
         cand_region = PULSE_REGION_CODE_TO_LABEL.get(ch.get("region"))
         # Display name from the candidate (preferred — has the right
         # discriminator), fall back to the in-game name from the
@@ -562,7 +629,12 @@ class PulseClient:
         mmr: Optional[int] = None
         league: Optional[str] = None
         league_tier: Optional[int] = None
-        top_race: Optional[str] = _candidate_top_race(candidate) or _canon_race(race)
+        # Race counts may live on the candidate-level member, not the
+        # candidate dict itself — pick from wherever Pulse parked them.
+        candidate_member = _pick_hit_member(candidate)
+        top_race: Optional[str] = (
+            _candidate_top_race(candidate_member) or _canon_race(race)
+        )
         if team is not None:
             try:
                 mmr = int(team.get("rating")) if team.get("rating") is not None else None

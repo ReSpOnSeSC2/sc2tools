@@ -367,3 +367,228 @@ def test_defaults_match_expected_values() -> None:
     legacy overlay expect."""
     assert DEFAULT_API_ROOT == "https://sc2pulse.nephest.com/sc2/api"
     assert DEFAULT_QUEUE == "LOTV_1V1"
+
+
+# -------------- Pulse response shape variants (regression: every live
+# lookup returned mmr=None confidence=0.0 because the parser only
+# checked hit.character; modern Pulse nests it under hit.members[0]).
+
+
+def test_resolve_handles_members_array_character_shape() -> None:
+    """SC2Pulse modern shape: candidate's character lives at
+    ``hit.members[0].character`` and race counts are on ``members[0]``.
+
+    This is the shape every live ladder match was hitting in
+    production — without ``_pick_hit_character``/``_pick_hit_member``
+    the agent reported ``confidence=0.0 mmr=None`` for every opponent.
+    """
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 56}]))
+    session.queue(
+        "/character/search",
+        _ok([
+            {
+                # No top-level `character` — character lives under members[0]
+                "members": [
+                    {
+                        "character": {
+                            "id": 7777,
+                            "name": "JustChadding#5642",
+                            "region": 1,  # US
+                        },
+                        "zergGamesPlayed": 0,
+                        "protossGamesPlayed": 0,
+                        "terranGamesPlayed": 220,
+                        "randomGamesPlayed": 0,
+                    }
+                ],
+            }
+        ]),
+    )
+    session.queue(
+        "/group/team",
+        _ok([
+            {
+                "rating": 4500,
+                "league": 5,  # Master
+                "tier": 1,
+                "wins": 120,
+                "losses": 80,
+                "members": [{
+                    "zergGamesPlayed": 0,
+                    "protossGamesPlayed": 0,
+                    "terranGamesPlayed": 200,
+                    "randomGamesPlayed": 0,
+                }],
+            }
+        ]),
+    )
+    client = _make_client(session)
+    profile = client.resolve(name="JustChadding", region="US", race="Terran")
+    assert isinstance(profile, OpponentProfile)
+    assert profile.name == "JustChadding"
+    assert profile.mmr == 4500
+    assert profile.region == "US"
+    assert profile.league == "Master"
+    assert profile.top_race == "Terran"
+    assert profile.confidence > 0.5
+
+
+def test_resolve_handles_members_object_character_shape() -> None:
+    """Older Pulse shape: ``hit.members.character`` (single member, not
+    an array). Both shapes must work."""
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 56}]))
+    session.queue(
+        "/character/search",
+        _ok([
+            {
+                "members": {
+                    "character": {
+                        "id": 1234,
+                        "name": "Negod#9876",
+                        "region": 1,
+                    },
+                    "zergGamesPlayed": 0,
+                    "protossGamesPlayed": 0,
+                    "terranGamesPlayed": 50,
+                    "randomGamesPlayed": 0,
+                },
+            }
+        ]),
+    )
+    session.queue(
+        "/group/team",
+        _ok([{"rating": 3200, "league": 4, "tier": 2, "wins": 10, "losses": 5}]),
+    )
+    client = _make_client(session)
+    profile = client.resolve(name="Negod", region="US", race="Terran")
+    assert profile is not None
+    assert profile.mmr == 3200
+    assert profile.name == "Negod"
+    assert profile.league == "Diamond"
+    assert profile.top_race == "Terran"
+
+
+def test_resolve_handles_truncated_race_hint_terr_prot() -> None:
+    """The agent's bridge sometimes ships ``race="Terr"`` /
+    ``race="Prot"`` (SC2 client truncation). The race tiebreaker must
+    still work — pre-fix it dropped the candidate's race-bonus score
+    entirely because ``_canon_race("Terr")`` returned None."""
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 56}]))
+    session.queue(
+        "/character/search",
+        _ok([
+            # Two candidates with same name. Terran-heavy one should
+            # win because the race hint is "Terr".
+            {
+                "members": [{
+                    "character": {
+                        "id": 1, "name": "Maru#1111", "region": 1,
+                    },
+                    "zergGamesPlayed": 0,
+                    "protossGamesPlayed": 0,
+                    "terranGamesPlayed": 500,
+                    "randomGamesPlayed": 0,
+                }],
+            },
+            {
+                "members": [{
+                    "character": {
+                        "id": 2, "name": "Maru#2222", "region": 1,
+                    },
+                    "zergGamesPlayed": 100,
+                    "protossGamesPlayed": 0,
+                    "terranGamesPlayed": 0,
+                    "randomGamesPlayed": 0,
+                }],
+            },
+        ]),
+    )
+    session.queue(
+        "/group/team",
+        _ok([{"rating": 6000, "league": 6}]),
+    )
+    client = _make_client(session)
+    profile = client.resolve(name="Maru", region="US", race="Terr")
+    assert profile is not None
+    # Higher score = id=1 (terran-heavy + matching truncated race hint)
+    assert profile.pulse_character_id == 1
+    assert profile.mmr == 6000
+    assert profile.league == "Grandmaster"
+
+
+def test_resolve_handles_top_level_character_shape_legacy() -> None:
+    """Legacy shape with character at top level — must continue to
+    work so we don't regress old responses."""
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 56}]))
+    session.queue(
+        "/character/search",
+        _ok([
+            {
+                "character": {
+                    "id": 4242,
+                    "name": "LegacyShape#0001",
+                    "region": 2,  # EU
+                },
+                "zergGamesPlayed": 30,
+                "protossGamesPlayed": 0,
+                "terranGamesPlayed": 0,
+                "randomGamesPlayed": 0,
+            }
+        ]),
+    )
+    session.queue("/group/team", _ok([{"rating": 4000, "league": 4}]))
+    client = _make_client(session)
+    profile = client.resolve(name="LegacyShape", region="EU", race="Zerg")
+    assert profile is not None
+    assert profile.mmr == 4000
+    assert profile.region == "EU"
+
+
+def test_candidate_label_uses_picked_character_for_modern_shape() -> None:
+    """Disambiguation hint (rendered as 'best guess — also: …') must
+    surface the real battletag, not '? (?)'. The user-visible bug was
+    'best guess — also: ? (?), ? (?)' on every match because the
+    label helper read ``hit.character`` (empty in modern shape)."""
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 56}]))
+    # Two candidates that score identically so the bridge picks one
+    # but renders the other as an alternative.
+    session.queue(
+        "/character/search",
+        _ok([
+            {
+                "members": [{
+                    "character": {
+                        "id": 1, "name": "Player#1111", "region": 1,
+                    },
+                    "terranGamesPlayed": 100,
+                }],
+            },
+            {
+                "members": [{
+                    "character": {
+                        "id": 2, "name": "Player#2222", "region": 1,
+                    },
+                    "terranGamesPlayed": 100,
+                }],
+            },
+        ]),
+    )
+    session.queue("/group/team", _ok([{"rating": 5000, "league": 5}]))
+    client = _make_client(session)
+    profile = client.resolve(name="Player", region="US", race="Terran")
+    assert profile is not None
+    # The picked candidate's name should be a real battletag-derived
+    # display name, not "?".
+    assert profile.name in ("Player",)
+    # The alternative label should show the OTHER candidate, with a
+    # real name and region (not "? (?)").
+    assert profile.alternatives, "expected at least one alternative"
+    label = profile.alternatives[0]
+    assert label != "? (?)"
+    assert "(US)" in label
+    assert "Player" in label

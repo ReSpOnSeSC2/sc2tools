@@ -1,6 +1,36 @@
 # Changelog
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
+
+## 0.6.2
+
+### Fixed — SC2Pulse search response parsing
+- **The Live Game Bridge was reporting `confidence=0.0 mmr=None` for
+  every opponent** because the agent only looked for the
+  `character` sub-object at one location in the SC2Pulse
+  `/character/search` response. Modern Pulse responses nest the
+  character under `hit.members[0].character` (newer servers) or
+  `hit.members.character` (older), so `ch.get("name")` returned None,
+  no candidate scored above zero, and every lookup fell into the
+  low-confidence stub branch.
+  Mirroring the legacy `stream-overlay-backend` `pickHitCharacter`
+  helper, we now check all four locations — `hit.character`,
+  `hit.members[0].character`, `hit.members.character`, and the hit
+  itself — so the agent picks the candidate from whichever shape
+  Pulse returns. Race counts are sourced from the analogous member
+  object so the race tiebreaker also fires correctly.
+- The race normalizer now accepts the truncated forms (`Terr`,
+  `Prot`, `Rand`, `Zerg`) the SC2 client occasionally reports in
+  some locales. Previously these silently dropped the race-bonus
+  score during candidate disambiguation.
+
+User-visible effect: opponents who play ranked 1v1 now resolve to a
+real MMR + league pre-game in the OBS overlay, instead of every
+match showing "Profile lookup unavailable". Streamers who sit on
+unranked or fresh accounts that genuinely don't have ladder rows
+still see the honest "Profile lookup unavailable" — that case is
+unchanged.
+
 ## 0.6.1
 
 ### Changed — Cloud-only default transport (PR #165)
