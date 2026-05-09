@@ -1,7 +1,25 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.6.0
+
+### Added — Live Game Bridge (PR #163)
+- New `sc2tools_agent.live` module: polls Blizzard's localhost SC2
+  client API at 1 Hz, fuses with SC2Pulse for opponent profile data,
+  and pushes outbound to both the local overlay backend (HTTP) and
+  the cloud (HTTP). The opponent and scouting widgets now populate
+  BEFORE the game starts and persist throughout the match — no more
+  "widgets only appear after the replay uploads" gap. See
+  `docs/live-game-bridge.md` for the architecture reference.
+- New `--no-live` flag to disable the bridge for diagnostics. Replay
+  watcher / uploader / heartbeat / GUI all keep working unchanged.
+- Voice readout reliability fixes: persisted browser-unlock so the
+  user only gestures once per profile; silent-failure detection +
+  retry; structured diagnostics POSTs to a new
+  `/api/voice/diagnostics` endpoint on the overlay backend.
+- New `LiveMetrics` singleton + 5-minute periodic dump to agent.log
+  for per-source success rates and EWMA latencies.
 ## 0.5.13
 
 ### Note on the version jump (0.5.10 → 0.5.13)
@@ -266,3 +284,4 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   `SC2TOOLS_PARSE_USE_PROCESSES=0` and please open an issue with the
   `parse_pool_probe_failed` line from `agent.log` so we can debug
   the underlying spawn issue on your install.
+
