@@ -232,10 +232,56 @@ def _start_time(name: str, recorded_sec: int, kind: str) -> int:
 
 
 def _clean_building_name(raw_name: str) -> str:
+    """Strip a race prefix from a sc2reader unit-type emit name.
+
+    Older sc2reader versions emitted names like ``"ProtossNexus"`` /
+    ``"TerranBarracks"`` / ``"ZergHatchery"``; current versions (1.8.x)
+    drop the prefix. We accept both forms by stripping a race prefix
+    ONLY when the next character is uppercase — i.e. at a CamelCase
+    boundary that signals the prefix was actually a separate token,
+    not the start of an organic unit name.
+
+    Pre-fix this used ``raw_name.replace(prefix, "")`` which is a
+    global substring replace — that corrupted ``"Zergling"`` into
+    ``"ling"`` (``Zerg`` is the literal first four characters of the
+    unit) and ``"SprayZerg"`` into ``"Spray"``. The corrupted name
+    fell out of every downstream lookup (KNOWN_BUILDINGS, SKIP_UNITS,
+    the SPA's cost catalog, the icon registry), so the macro-
+    breakdown roster showed ``"li"`` chips with zero army-value
+    contribution for every Zergling the opponent built — visible in
+    the ``20260508__PReSpOnSe_VS_ZSquirtuoz`` replay's bug report
+    ("opponent unit count is way off"). The CamelCase-boundary
+    check preserves ``"Zergling"`` and ``"SprayZerg"`` while still
+    converting legacy ``"ZergHatchery"`` → ``"Hatchery"``.
+
+    Stance suffixes (Burrowed / Sieged / Phasing / Lowered / etc.)
+    are NOT stripped here — the matching variants are either
+    enumerated in ``SKIP_BUILDINGS`` / ``SKIP_UNITS`` (so the
+    extractor can drop them) or canonicalised on the SPA side via
+    ``canonicalizeName`` in ``compositionAt.ts``. The pre-fix
+    ``replace("Lower", "")`` likewise corrupted ``"SupplyDepotLowered"``
+    into ``"SupplyDepoted"`` (which then missed the SKIP_BUILDINGS
+    check), so the function is now strictly prefix-only.
+
+    Examples:
+        >>> _clean_building_name("ProtossNexus")
+        'Nexus'
+        >>> _clean_building_name("ZergHatchery")
+        'Hatchery'
+        >>> _clean_building_name("Zergling")
+        'Zergling'
+        >>> _clean_building_name("SprayZerg")
+        'SprayZerg'
+        >>> _clean_building_name("SupplyDepotLowered")
+        'SupplyDepotLowered'
+    """
+    if not raw_name:
+        return raw_name
     for prefix in ("Protoss", "Terran", "Zerg"):
-        raw_name = raw_name.replace(prefix, "")
-    for suffix in ("Lower", "Upper"):
-        raw_name = raw_name.replace(suffix, "")
+        if (raw_name.startswith(prefix)
+                and len(raw_name) > len(prefix)
+                and raw_name[len(prefix)].isupper()):
+            return raw_name[len(prefix):].strip()
     return raw_name.strip()
 
 
@@ -789,6 +835,22 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     # Distinct from the buildings ``lifetimes`` dict above so nothing
     # cross-contaminates the macro engine's bases/production_buildings.
     unit_lifetimes: Dict[int, Dict] = {}
+    # Set of unit_ids whose first-completion event we've already
+    # recorded. Needed because non-building units fire EITHER
+    # UnitBornEvent (Gateway-trained, larva-morph) OR
+    # UnitInitEvent → UnitDoneEvent (warp-in via WarpGate, Robotics
+    # warp-prism rebuild) — never both — and we want to track BOTH
+    # paths in unit_lifetimes / units_produced / unit_births. Without
+    # the dedup set, on the rare chance sc2reader fires both for the
+    # same uid we'd double-count or overwrite the born timestamp.
+    # Pre-fix bug: ``unit_lifetimes`` only listened to UnitBornEvent,
+    # so every Adept / Stalker / Sentry / Templar warped via WarpGate
+    # was silently dropped from the unit_timeline AND from the SPA's
+    # roster — visible in the bug report as "I built 9 Adepts and
+    # they aren't showing up at all" (replay
+    # 20260508__PReSpOnSe_VS_ZSquirtuoz.SC2Replay: 49 Adept
+    # UnitInit/Done firings, 0 UnitBornEvent firings).
+    completion_recorded_uids: Set[int] = set()
     gl = getattr(replay, "game_length", None)
     game_end = gl.seconds if gl is not None and hasattr(gl, "seconds") else 0
     out["game_length_sec"] = game_end
@@ -887,35 +949,43 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     uid = _resolve_unit_id(event)
 
                     # Track non-building, non-skip units for BOTH pids so
-                    # the unit_timeline can render both armies. Only
-                    # UnitBornEvent counts for non-building units (Init/Done
-                    # don't repeat for unit production). Beacons and the
-                    # burrowed widow-mine variant are filtered out — see
-                    # _skip_for_unit_timeline() for the rationale.
-                    if (pid in (my_pid, opp_pid)
-                            and pid is not None
-                            and clean not in KNOWN_BUILDINGS
-                            and clean not in SKIP_UNITS
-                            and not _skip_for_unit_timeline(clean)
-                            and isinstance(event, UnitBornEvent)
-                            and uid is not None):
+                    # the unit_timeline can render both armies. We accept
+                    # EITHER UnitBornEvent (Gateway-trained units,
+                    # larva-morph, terran trained units) OR UnitDoneEvent
+                    # (warp-in completion via WarpGate — Adept, Stalker,
+                    # Sentry, Zealot, Templar all use this path) as the
+                    # canonical "alive" tick. Pre-fix this gate only
+                    # listened to UnitBornEvent, which silently dropped
+                    # every WarpGate-warped unit from the timeline (49
+                    # Adepts → 0 alive on the reference replay). The
+                    # completion_recorded_uids dedup ensures the rare
+                    # case where sc2reader fires both events for the
+                    # same uid doesn't overwrite the earlier birth
+                    # timestamp or double-count units_produced.
+                    is_unit_completion = (
+                        isinstance(event, (UnitBornEvent, UnitDoneEvent))
+                        and pid in (my_pid, opp_pid)
+                        and pid is not None
+                        and clean not in KNOWN_BUILDINGS
+                        and clean not in SKIP_UNITS
+                        and not _skip_for_unit_timeline(clean)
+                        and uid is not None
+                        and uid not in completion_recorded_uids
+                    )
+                    if is_unit_completion:
+                        completion_recorded_uids.add(uid)
                         unit_lifetimes[uid] = {
                             "pid": pid, "name": clean, "born": t, "died": None,
                         }
+                        if pid in player_counters:
+                            player_counters[pid]["units_produced"] += 1
 
-                    # Cumulative counters. ``units_produced`` covers
-                    # army units (workers and noise units like Larva /
-                    # Broodling are in SKIP_UNITS so they don't inflate
-                    # the count). ``workers_built`` is its own branch
-                    # because the workers sit inside SKIP_UNITS. Only
-                    # UnitBornEvent fires the increment — UnitInitEvent
-                    # / UnitDoneEvent are the building completion paths.
-                    if (pid in player_counters
-                            and isinstance(event, UnitBornEvent)
-                            and clean not in KNOWN_BUILDINGS
-                            and clean not in SKIP_UNITS
-                            and not _skip_for_unit_timeline(clean)):
-                        player_counters[pid]["units_produced"] += 1
+                    # Workers (Probe/SCV/Drone) are produced via Nexus /
+                    # CommandCenter / Larva-morph and ALWAYS fire
+                    # UnitBornEvent — there's no warp-in path for them,
+                    # so we don't broaden this gate. Keeping the strict
+                    # check avoids the edge case where a Nexus rebuild
+                    # could double-count a probe via UnitDoneEvent.
                     if (pid in player_counters
                             and isinstance(event, UnitBornEvent)
                             and clean in WORKER_NAMES):
@@ -989,8 +1059,14 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                                 entry["born"] = min(entry.get("born", t), t)
                                 entry["name"] = clean
                     else:
-                        if (clean not in SKIP_UNITS
-                                and isinstance(event, UnitBornEvent)):
+                        # ``unit_births`` powers the idle-production
+                        # heuristics. We only append when we ALSO
+                        # recorded the lifetime (``is_unit_completion``
+                        # above) so the two stay in lock-step — that
+                        # gate already handles the UnitBornEvent /
+                        # UnitDoneEvent split for warp-ins and dedups
+                        # via completion_recorded_uids.
+                        if is_unit_completion:
                             out["unit_births"].append({
                                 "name": clean, "time": t, "unit_id": uid,
                             })
