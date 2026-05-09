@@ -240,4 +240,116 @@ describe("ScoutingWidget — live envelope path", () => {
     );
     expect(container.textContent).not.toContain("best guess");
   });
+
+  it("renders the rich pre-game card (LAST GAMES, RIVAL, H2H, best-answer) when streamerHistory is set", () => {
+    // Cloud-side enrichment populated streamerHistory with the full
+    // post-game-shaped payload. The widget should render the same
+    // rich JSX as the post-game branch — that's the whole point of
+    // the enrichment layer.
+    const env = envelope({
+      phase: "match_started",
+      opponent: { name: "Future", race: "Terran" },
+      streamerHistory: {
+        oppName: "Future",
+        oppRace: "Terran",
+        myRace: "Protoss",
+        matchup: "PvT",
+        headToHead: { wins: 3, losses: 5 },
+        rival: {
+          name: "Future",
+          headToHead: { wins: 3, losses: 5 },
+        },
+        recentGames: [
+          {
+            result: "Win",
+            lengthText: "20:39",
+            map: "Ghost River LE",
+            myBuild: "PvT - Phoenix into Robo",
+            oppBuild: "Banshee Rush",
+          },
+          {
+            result: "Loss",
+            lengthText: "8:14",
+            map: "Lightshade LE",
+            myBuild: "PvT - Macro Transition (Unclassified)",
+            oppBuild: "1-1-1 Standard",
+          },
+        ],
+        bestAnswer: {
+          build: "PvT - Phoenix into Robo",
+          winRate: 0.66,
+          total: 9,
+        },
+        cheeseProbability: 0.55,
+      },
+    });
+    const { container } = render(
+      <ScoutingWidget live={null} liveGame={env} />,
+    );
+    // Header carries the H2H summary the user asked for ("3W-5L 38%").
+    expect(container.textContent).toContain("Future");
+    expect(container.textContent).toContain("3W-5L");
+    expect(container.textContent).toContain("38%");
+    // RIVAL/FAMILIAR tag with prior result.
+    expect(container.textContent).toMatch(/RIVAL|FAMILIAR/);
+    // LAST GAMES list with build labels.
+    expect(container.textContent).toContain("LAST GAMES");
+    expect(container.textContent).toContain("20:39");
+    expect(container.textContent).toContain("Ghost River LE");
+    expect(container.textContent).toContain("PvT - Phoenix into Robo");
+    expect(container.textContent).toContain("Banshee Rush");
+    // Best-answer + cheese rows.
+    expect(container.textContent).toContain("YOUR BEST ANSWER");
+    expect(container.textContent).toContain("66%");
+    expect(container.textContent).toContain("CHEESE");
+  });
+
+  it("post-game `live` still wins over streamerHistory on the same envelope", () => {
+    // The cloud's post-game payload is authoritative — it carries
+    // result/duration/mmrDelta the live envelope doesn't. When both
+    // are set the post-game wins.
+    const post: LiveGamePayload = {
+      oppName: "Future",
+      oppRace: "Terran",
+      headToHead: { wins: 5, losses: 1 },
+      recentGames: [
+        {
+          result: "Win",
+          lengthText: "12:00",
+          map: "Tourmaline LE",
+          myBuild: "PvT - Disruptor Drop",
+        },
+      ],
+    };
+    const env = envelope({
+      phase: "match_ended",
+      opponent: { name: "Future", race: "Terran" },
+      streamerHistory: {
+        oppName: "Future",
+        headToHead: { wins: 999, losses: 999 }, // bogus — must not appear
+      },
+    });
+    const { container } = render(<ScoutingWidget live={post} liveGame={env} />);
+    expect(container.textContent).toContain("5W-1L");
+    expect(container.textContent).not.toContain("999");
+    expect(container.textContent).toContain("Disruptor Drop");
+  });
+
+  it("falls back to thin pre-game card when streamerHistory hasn't arrived yet", () => {
+    // Brief window between the agent's POST and the cloud's
+    // enrichment completing — render the placeholder so the panel
+    // reserves its slot.
+    const env = envelope({
+      phase: "match_loading",
+      opponent: { name: "Reynor", race: "Zerg" },
+    });
+    const { container } = render(
+      <ScoutingWidget live={null} liveGame={env} />,
+    );
+    expect(container.textContent).toContain("Reynor");
+    expect(container.textContent).toContain("Looking up opponent…");
+    // Rich-card markers must NOT appear yet.
+    expect(container.textContent).not.toContain("LAST GAMES");
+    expect(container.textContent).not.toContain("RIVAL");
+  });
 });

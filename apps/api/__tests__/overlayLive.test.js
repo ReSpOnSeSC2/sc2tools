@@ -442,6 +442,338 @@ describe("services/overlayLive.buildFromGame", () => {
   });
 });
 
+describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () => {
+  let mongo;
+  let db;
+  let svc;
+
+  beforeAll(async () => {
+    mongo = await MongoMemoryServer.create();
+    db = await connect({
+      uri: mongo.getUri(),
+      dbName: "sc2tools_test_overlay_pregame",
+    });
+    svc = new OverlayLiveService(db);
+  });
+
+  afterEach(async () => {
+    await db.games.deleteMany({});
+    await db.opponents.deleteMany({});
+    svc.clearEnrichmentCache();
+  });
+
+  afterAll(async () => {
+    if (db) await db.close();
+    if (mongo) await mongo.stop();
+  });
+
+  test("returns the same opponent-context fields as buildFromGame, sans result/duration", async () => {
+    // Streamer's history with this opponent: 4-2 record, multiple
+    // openings, one prior game in the same matchup.
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "pulse-future",
+      displayName: "Future",
+      gameCount: 6,
+      wins: 4,
+      losses: 2,
+      lastSeen: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      openings: { "1-1-1 Standard": 4, "Banshee Rush": 1, Macro: 1 },
+    });
+    const now = Date.now();
+    await db.games.insertMany([
+      {
+        userId: "u1",
+        gameId: "h-1",
+        result: "Defeat",
+        myRace: "Protoss",
+        myBuild: "PvT - Strange's 1 Gate Expand",
+        map: "Lightshade LE",
+        durationSec: 494,
+        date: new Date(now - 4000),
+        opponent: {
+          race: "Terran",
+          pulseId: "pulse-future",
+          displayName: "Future",
+          strategy: "1-1-1 Standard",
+        },
+      },
+      {
+        userId: "u1",
+        gameId: "h-2",
+        result: "Victory",
+        myRace: "Protoss",
+        myBuild: "PvT - Phoenix into Robo",
+        map: "Ghost River LE",
+        durationSec: 1239,
+        date: new Date(now - 2000),
+        opponent: {
+          race: "Terran",
+          pulseId: "pulse-future",
+          displayName: "Future",
+          strategy: "Banshee Rush",
+        },
+      },
+    ]);
+    const p = await svc.buildFromOpponentName(
+      "u1",
+      "Future",
+      "Terran",
+      "pulse-future",
+      "Protoss",
+    );
+    expect(p).toBeTruthy();
+    expect(p.oppName).toBe("Future");
+    expect(p.oppRace).toBe("Terran");
+    expect(p.myRace).toBe("Protoss");
+    expect(p.matchup).toBe("PvT");
+    expect(p.headToHead).toEqual({ wins: 4, losses: 2 });
+    expect(p.rival).toBeTruthy();
+    expect(p.rival.headToHead).toEqual({ wins: 4, losses: 2 });
+    expect(p.rematch).toBeTruthy();
+    expect(p.rematch.isRematch).toBe(true);
+    // Pre-game has no lastResult on the rematch flag — we haven't
+    // played the current match yet.
+    expect(p.rematch.lastResult).toBeUndefined();
+    expect(p.favOpening.name).toBe("1-1-1 Standard");
+    expect(p.predictedStrategies[0].name).toBe("1-1-1 Standard");
+    expect(p.scouting[0].label).toBe("1-1-1 Standard");
+    expect(p.recentGames).toHaveLength(2);
+    expect(p.recentGames[0].result).toBe("Win");
+    expect(p.recentGames[0].myBuild).toBe("PvT - Phoenix into Robo");
+    expect(p.recentGames[0].oppBuild).toBe("Banshee Rush");
+    // Result-specific fields are absent — they only land post-game.
+    expect(p.result).toBeUndefined();
+    expect(p.durationSec).toBeUndefined();
+    expect(p.mmrDelta).toBeUndefined();
+    expect(p.map).toBeUndefined();
+  });
+
+  test("falls back to displayName when no pulseId is provided (agent v0.6.0 / pre-Pulse)", async () => {
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "p1",
+      displayName: "Foe",
+      gameCount: 5,
+      wins: 3,
+      losses: 2,
+      lastSeen: new Date(),
+      openings: { Macro: 5 },
+    });
+    const p = await svc.buildFromOpponentName(
+      "u1",
+      "Foe",
+      "Zerg",
+      null,
+      "Protoss",
+    );
+    expect(p).toBeTruthy();
+    expect(p.headToHead).toEqual({ wins: 3, losses: 2 });
+  });
+
+  test("when displayName matches multiple opponents, picks the one with the most encounters", async () => {
+    await db.opponents.insertMany([
+      {
+        userId: "u1",
+        pulseId: "p-na",
+        displayName: "Twins",
+        gameCount: 1,
+        wins: 0,
+        losses: 1,
+        lastSeen: new Date(),
+        openings: {},
+      },
+      {
+        userId: "u1",
+        pulseId: "p-eu",
+        displayName: "Twins",
+        gameCount: 8,
+        wins: 5,
+        losses: 3,
+        lastSeen: new Date(),
+        openings: { Macro: 8 },
+      },
+    ]);
+    const p = await svc.buildFromOpponentName(
+      "u1",
+      "Twins",
+      "Zerg",
+      null,
+      "Protoss",
+    );
+    expect(p.headToHead).toEqual({ wins: 5, losses: 3 });
+  });
+
+  test("returns minimal payload for an unknown opponent (no opponents row, no history)", async () => {
+    const p = await svc.buildFromOpponentName(
+      "u1",
+      "FreshAccount",
+      "Terran",
+      null,
+      "Protoss",
+    );
+    expect(p).toBeTruthy();
+    expect(p.oppName).toBe("FreshAccount");
+    expect(p.matchup).toBe("PvT");
+    expect(p.headToHead).toBeUndefined();
+    expect(p.rival).toBeUndefined();
+    expect(p.recentGames).toBeUndefined();
+  });
+
+  test("returns null when called without a name", async () => {
+    expect(await svc.buildFromOpponentName("u1", "")).toBeNull();
+    expect(await svc.buildFromOpponentName("", "Foo")).toBeNull();
+  });
+});
+
+describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
+  let mongo;
+  let db;
+  let svc;
+
+  beforeAll(async () => {
+    mongo = await MongoMemoryServer.create();
+    db = await connect({
+      uri: mongo.getUri(),
+      dbName: "sc2tools_test_overlay_enrich",
+    });
+    svc = new OverlayLiveService(db);
+  });
+
+  afterEach(async () => {
+    await db.games.deleteMany({});
+    await db.opponents.deleteMany({});
+    svc.clearEnrichmentCache();
+  });
+
+  afterAll(async () => {
+    if (db) await db.close();
+    if (mongo) await mongo.stop();
+  });
+
+  function envelope(extra = {}) {
+    return {
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: 1,
+      gameKey: "k",
+      players: [
+        { name: "ReSpOnSe", type: "user", race: "Protoss", result: "Undecided" },
+        { name: "Future", type: "user", race: "Terran", result: "Undecided" },
+      ],
+      user: { name: "ReSpOnSe" },
+      opponent: { name: "Future", race: "Terran" },
+      ...extra,
+    };
+  }
+
+  test("merges streamerHistory into the envelope when the cloud has history", async () => {
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "pulse-future",
+      displayName: "Future",
+      gameCount: 4,
+      wins: 1,
+      losses: 3,
+      lastSeen: new Date(),
+      openings: { "Banshee Rush": 4 },
+    });
+    const env = envelope();
+    const out = await svc.enrichEnvelope("u1", env);
+    expect(out).not.toBe(env);
+    expect(out.streamerHistory).toBeTruthy();
+    expect(out.streamerHistory.headToHead).toEqual({ wins: 1, losses: 3 });
+    expect(out.streamerHistory.matchup).toBe("PvT");
+    // Original envelope fields are preserved.
+    expect(out.opponent).toEqual(env.opponent);
+    expect(out.user).toEqual(env.user);
+    expect(out.gameKey).toBe("k");
+  });
+
+  test("returns the original envelope unchanged when there's no opponent name", async () => {
+    const env = envelope({ opponent: undefined });
+    const out = await svc.enrichEnvelope("u1", env);
+    expect(out).toBe(env);
+  });
+
+  test("returns the original envelope when the opponent has no history (unknown)", async () => {
+    // No opponents row inserted — buildFromOpponentName returns a
+    // minimal payload with just the matchup; the wrapper should still
+    // attach it under streamerHistory because the matchup label IS
+    // useful pre-game.
+    const env = envelope();
+    const out = await svc.enrichEnvelope("u1", env);
+    expect(out.streamerHistory).toBeTruthy();
+    expect(out.streamerHistory.matchup).toBe("PvT");
+    expect(out.streamerHistory.headToHead).toBeUndefined();
+  });
+
+  test("caches per (userId, oppName, oppRace, myRace) so a 1 Hz envelope cadence is cheap", async () => {
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "p",
+      displayName: "Future",
+      gameCount: 4,
+      wins: 1,
+      losses: 3,
+      lastSeen: new Date(),
+      openings: { Macro: 4 },
+    });
+    const spy = jest.spyOn(svc, "buildFromOpponentName");
+    const a = await svc.enrichEnvelope("u1", envelope());
+    expect(spy).toHaveBeenCalledTimes(1);
+    const b = await svc.enrichEnvelope("u1", envelope({ capturedAt: 2 }));
+    // Same (userId, oppName, oppRace, myRace) — cache hit, no new
+    // aggregation call.
+    expect(spy).toHaveBeenCalledTimes(1);
+    // Both envelopes carry the same streamerHistory block.
+    expect(b.streamerHistory.headToHead).toEqual(a.streamerHistory.headToHead);
+    spy.mockRestore();
+  });
+
+  test("does not cross userIds — alice's enrichment doesn't leak to bob", async () => {
+    await db.opponents.insertOne({
+      userId: "alice",
+      pulseId: "p-future-a",
+      displayName: "Future",
+      gameCount: 5,
+      wins: 5,
+      losses: 0,
+      lastSeen: new Date(),
+      openings: { Macro: 5 },
+    });
+    await db.opponents.insertOne({
+      userId: "bob",
+      pulseId: "p-future-b",
+      displayName: "Future",
+      gameCount: 5,
+      wins: 0,
+      losses: 5,
+      lastSeen: new Date(),
+      openings: { Macro: 5 },
+    });
+    const aliceOut = await svc.enrichEnvelope("alice", envelope());
+    const bobOut = await svc.enrichEnvelope("bob", envelope());
+    expect(aliceOut.streamerHistory.headToHead).toEqual({ wins: 5, losses: 0 });
+    expect(bobOut.streamerHistory.headToHead).toEqual({ wins: 0, losses: 5 });
+  });
+
+  test("returns the envelope unchanged when buildFromOpponentName throws", async () => {
+    const orig = svc.buildFromOpponentName.bind(svc);
+    svc.buildFromOpponentName = async () => {
+      throw new Error("mongo blip");
+    };
+    try {
+      const env = envelope();
+      const out = await svc.enrichEnvelope("u1", env);
+      // Cached as null on failure; envelope passes through unchanged.
+      expect(out).toBe(env);
+    } finally {
+      svc.buildFromOpponentName = orig;
+    }
+  });
+});
+
 describe("POST /v1/overlay-events/test", () => {
   let mongo;
   let db;

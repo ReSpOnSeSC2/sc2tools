@@ -216,4 +216,37 @@ export interface LiveGameEnvelope {
   };
   /** Streamer's own name — purely cosmetic, never used for auth. */
   user?: { name?: string | null };
+  /**
+   * Cloud-side enrichment: the streamer's history with this opponent,
+   * pulled from the cloud's games + opponents collections by the
+   * ``LiveGameBroker``'s enrich hook before fan-out. Carries the same
+   * fields the post-game ``LiveGamePayload`` does for the relevant
+   * "who is this opponent and what's our shared history" widgets —
+   * head-to-head, recent games (with build labels), RIVAL/FAMILIAR
+   * tier, best-answer, cheese probability, predicted strategies.
+   *
+   * Result-specific fields (``result``, ``durationSec``, ``mmrDelta``,
+   * ``map``) are deliberately absent — those only land post-game when
+   * the replay parses.
+   */
+  streamerHistory?: Pick<
+    LiveGamePayload,
+    | "myRace"
+    | "oppRace"
+    | "oppName"
+    | "matchup"
+    | "headToHead"
+    | "streak"
+    | "cheeseProbability"
+    | "predictedStrategies"
+    | "topBuilds"
+    | "bestAnswer"
+    | "favOpening"
+    | "scouting"
+    | "recentGames"
+    | "rank"
+    | "meta"
+    | "rival"
+    | "rematch"
+  >;
 }
