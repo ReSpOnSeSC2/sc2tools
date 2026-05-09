@@ -103,6 +103,22 @@ async function ensureIndexes(ctx) {
     userId: 1,
     date: -1,
   });
+  // Cross-toon opponent merge. The H2H lookup, opponent profile, and
+  // public k-anon aggregate query games by either ``pulseId`` (raw
+  // toon handle) OR ``pulseCharacterId`` (canonical SC2Pulse id) so
+  // a Battle.net rebind that rotated the toon doesn't drop the
+  // pre-rebind games out of the result. The pulseId branch hits the
+  // index above; this index serves the pulseCharacterId branch.
+  // Sparse so unresolved rows (the common case for opponents the
+  // backfill cron hasn't reached yet) don't cost storage.
+  await ctx.games.createIndex(
+    {
+      "opponent.pulseCharacterId": 1,
+      userId: 1,
+      date: -1,
+    },
+    { sparse: true },
+  );
   // Covers _recentGamesForOpponent in services/overlayLive.js, which
   // filters on userId + opponent.pulseId + myRace + opponent.race with
   // an optional $ne gameId. Runs on every overlay tick.
