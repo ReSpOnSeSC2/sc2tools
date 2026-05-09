@@ -121,7 +121,12 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
     expect(out.value).toBe(false);
   });
 
-  it("opponent widget AUTO-HIDES on its 6-min natural timer in match_ended", () => {
+  it("opponent widget AUTO-HIDES on its 22 s natural timer in match_ended", () => {
+    // Reduced from 6 min — the 6-min hack was meant to bridge
+    // queue-into-next-match gaps, but now we clear ``live`` on
+    // ``match_loading`` so the dossier swaps to the new opponent
+    // automatically. 22 s parity with scouting clears the OBS scene
+    // promptly when the streamer steps away after a game.
     const out = { value: false };
     render(
       <VisibilityProbe
@@ -133,7 +138,7 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
     );
     expect(out.value).toBe(true);
     act(() => {
-      vi.advanceTimersByTime(6 * 60 * 1000 + 1000);
+      vi.advanceTimersByTime(23_000);
     });
     expect(out.value).toBe(false);
   });
