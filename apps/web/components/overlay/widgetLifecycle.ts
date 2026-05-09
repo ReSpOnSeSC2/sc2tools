@@ -68,24 +68,32 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
  * cadence.
  */
 export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
-  // Pre-game dossier — persists through the queue-into-next-match
-  // wait so a streamer doesn't lose context mid-game. Cleared after
-  // a long idle gap so a streamer who stops playing doesn't return
-  // to a stale opponent pinned to their scene.
-  "opponent": 6 * 60 * 1000,
-  // Event chips — short, stream-friendly durations.
+  // Opponent dossier — pinned visibly during the active phases of a
+  // match (loading / started / in-progress, see `useWidgetVisibility`),
+  // then naturally hides after `match_ended` so the streamer's scene
+  // clears for the next queue. The legacy 6-minute duration was a hack
+  // to bridge "queue-into-next-match" gaps, but the cloud now clears
+  // `live` on `match_loading` (see `useClearStalePostGameOnNewMatch`)
+  // so the dossier is replaced by the new opponent's data the moment
+  // SC2 reports the next loading screen.
+  "opponent": 15 * 1000,
+  // Event chips — match-result and scouting both at 15 s on streamer
+  // request after the live ladder test felt like the post-game
+  // widgets were lingering. 15 s is long enough for viewers to read
+  // but punchy enough that the scene clears before the next match
+  // queue.
   "match-result": 15 * 1000,
-  "post-game": 16 * 1000,
+  "post-game": 15 * 1000,
   "mmr-delta": 10 * 1000,
   "streak": 8 * 1000,
-  "cheese": 18 * 1000,
+  "cheese": 15 * 1000,
   "rematch": 15 * 1000,
-  "rival": 16 * 1000,
+  "rival": 15 * 1000,
   "rank": 12 * 1000,
   "meta": 12 * 1000,
-  "fav-opening": 18 * 1000,
-  "best-answer": 18 * 1000,
-  "scouting": 22 * 1000,
+  "fav-opening": 15 * 1000,
+  "best-answer": 15 * 1000,
+  "scouting": 15 * 1000,
   // Persistent panels — HUDs that should stay on screen.
   "topbuilds": null,
   "session": null,

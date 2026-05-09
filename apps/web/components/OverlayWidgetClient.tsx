@@ -360,7 +360,7 @@ export function useClearStalePostGameOnNewMatch(
  *   either) the timer resumes its natural behavior off whatever data
  *   the cloud last sent.
  */
-function useWidgetVisibility(
+export function useWidgetVisibility(
   widget: WidgetId,
   live: LiveGamePayload | null,
   liveGame: LiveGameEnvelope | null,
@@ -369,22 +369,38 @@ function useWidgetVisibility(
 ) {
   const timerRef = useRef<number | null>(null);
 
-  // Widgets that participate in the agent's pre-game flow keep a
+  // Widgets that participate in the agent's pre-game flow get a
   // second source of visibility ("the bridge says we're in a match").
   // Other widgets continue to derive visibility purely from the
   // post-game ``overlay:live`` payload.
   const consumesLiveGame = widget === "opponent" || widget === "scouting";
-  const inLiveMatch =
-    consumesLiveGame
-    && liveGame
-    && liveGame.phase !== "idle"
-    && liveGame.phase !== "menu";
+  // Active match phases — used to count the live envelope as a
+  // render source. ``match_ended`` deliberately drops out so the
+  // widget falls through to the post-game ``live`` payload (or hides
+  // naturally). Streamers sit on the SC2 score screen for 30 s –
+  // several minutes after a game; under the prior "any non-idle
+  // phase counts as active" rule, the scouting widget would stay
+  // pinned that whole time.
+  const isActivePhase =
+    !!liveGame
+    && (liveGame.phase === "match_loading"
+      || liveGame.phase === "match_started"
+      || liveGame.phase === "match_in_progress");
+  const liveGameActive = consumesLiveGame && isActivePhase;
+  // Pin only the OPPONENT widget visible through gameplay so viewers
+  // see who their streamer is playing for the whole match. Scouting
+  // (the giant intel dossier) deliberately is NOT pinned — it uses
+  // the natural 15 s timer so the OBS scene clears after a brief
+  // pre-game flash rather than dominating the screen for 15 minutes
+  // of gameplay. Streamer feedback: "scouting stays on the screen
+  // way too long".
+  const pinThroughMatch = widget === "opponent" && isActivePhase;
 
   const sourceForWidget = widget === "session" ? session : live;
   const isTest = Boolean(
     widget === "session" ? session?.isTest : live?.isTest,
   );
-  const hasAnySource = Boolean(sourceForWidget) || Boolean(inLiveMatch);
+  const hasAnySource = Boolean(sourceForWidget) || Boolean(liveGameActive);
 
   useEffect(() => {
     // No source at all (e.g. after the streamer cancelled a Test fire
@@ -404,20 +420,17 @@ function useWidgetVisibility(
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    // While the bridge says we're in an active match, suppress the
-    // auto-hide timer entirely — the streamer wants the dossier
-    // pinned for the duration of the game, however long it runs.
-    // The next ``idle`` / ``menu`` envelope clears ``liveGame`` and
-    // this effect re-runs to install the natural timer (if a stale
-    // post-game payload is still cached) or hide outright.
-    if (inLiveMatch) return;
+    // Only the opponent widget pins through active gameplay; every
+    // other widget (including the scouting dossier) uses its natural
+    // timer.
+    if (pinThroughMatch) return;
     const duration = resolveWidgetDurationMs(widget, isTest);
     if (duration === null) return;
     timerRef.current = window.setTimeout(() => {
       setVisible(false);
       timerRef.current = null;
     }, duration);
-  }, [widget, hasAnySource, inLiveMatch, isTest, setVisible]);
+  }, [widget, hasAnySource, pinThroughMatch, isTest, setVisible]);
 
   useEffect(
     () => () => {
