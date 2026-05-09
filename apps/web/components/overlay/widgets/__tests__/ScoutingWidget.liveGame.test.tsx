@@ -304,13 +304,16 @@ describe("ScoutingWidget — live envelope path", () => {
     expect(container.textContent).toContain("CHEESE");
   });
 
-  it("post-game `live` still wins over streamerHistory on the same envelope", () => {
-    // The cloud's post-game payload is authoritative — it carries
-    // result/duration/mmrDelta the live envelope doesn't. When both
-    // are set the post-game wins.
+  it("hides entirely on a real post-game payload (live.result set, no isTest)", () => {
+    // Streamer ask: scouting is a PRE-GAME widget. Once the just-
+    // finished match's post-game payload arrives, the match-result /
+    // post-game / mmr-delta widgets handle the wrap-up — scouting
+    // gets out of the way.
     const post: LiveGamePayload = {
       oppName: "Future",
       oppRace: "Terran",
+      result: "loss",
+      durationSec: 720,
       headToHead: { wins: 5, losses: 1 },
       recentGames: [
         {
@@ -324,14 +327,37 @@ describe("ScoutingWidget — live envelope path", () => {
     const env = envelope({
       phase: "match_ended",
       opponent: { name: "Future", race: "Terran" },
-      streamerHistory: {
-        oppName: "Future",
-        headToHead: { wins: 999, losses: 999 }, // bogus — must not appear
-      },
     });
     const { container } = render(<ScoutingWidget live={post} liveGame={env} />);
+    // Nothing rendered — the result widgets own the post-game scene.
+    expect(container.textContent || "").toBe("");
+  });
+
+  it("renders test fires (live.isTest) so the streamer can preview the layout", () => {
+    // Test fires from Settings → Overlay → Test pass through `live`
+    // with isTest=true. Those should still render so the streamer
+    // can verify their OBS layout without queueing a real match.
+    const test: LiveGamePayload = {
+      isTest: true,
+      oppName: "Future",
+      oppRace: "Terran",
+      result: "win",
+      headToHead: { wins: 5, losses: 1 },
+      recentGames: [
+        {
+          result: "Win",
+          lengthText: "12:00",
+          map: "Tourmaline LE",
+          myBuild: "PvT - Disruptor Drop",
+        },
+      ],
+    };
+    const { container } = render(
+      <ScoutingWidget live={test} liveGame={null} />,
+    );
+    expect(container.textContent).toContain("Future");
     expect(container.textContent).toContain("5W-1L");
-    expect(container.textContent).not.toContain("999");
+    expect(container.textContent).toContain("LAST GAMES");
     expect(container.textContent).toContain("Disruptor Drop");
   });
 

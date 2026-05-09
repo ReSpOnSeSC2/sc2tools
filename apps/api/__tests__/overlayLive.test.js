@@ -772,6 +772,72 @@ describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
       svc.buildFromOpponentName = orig;
     }
   });
+
+  test("invalidateEnrichmentForOpponent flushes every variant for that (user, opp) pair", async () => {
+    // Seed the cache with a few entries — same opponent across two
+    // matchups, plus an unrelated opponent that must NOT be flushed.
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "p-future",
+      displayName: "Future",
+      gameCount: 3,
+      wins: 1,
+      losses: 2,
+      lastSeen: new Date(),
+      openings: { Macro: 3 },
+    });
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "p-other",
+      displayName: "OtherPlayer",
+      gameCount: 5,
+      wins: 5,
+      losses: 0,
+      lastSeen: new Date(),
+      openings: { Macro: 5 },
+    });
+    // Prime cache: Future / Terran / Protoss
+    await svc.enrichEnvelope("u1", envelope());
+    // Prime cache: same opp, different myRace (different cache key)
+    await svc.enrichEnvelope("u1", envelope({
+      players: [
+        { name: "ReSpOnSe", type: "user", race: "Zerg", result: "Undecided" },
+        { name: "Future", type: "user", race: "Terran", result: "Undecided" },
+      ],
+    }));
+    // Prime cache: unrelated opponent
+    await svc.enrichEnvelope("u1", envelope({
+      opponent: { name: "OtherPlayer", race: "Zerg" },
+    }));
+    expect(svc._enrichmentCache.size).toBe(3);
+
+    svc.invalidateEnrichmentForOpponent("u1", "Future");
+
+    // Both Future entries flushed; OtherPlayer remains.
+    expect(svc._enrichmentCache.size).toBe(1);
+    const remainingKeys = Array.from(svc._enrichmentCache.keys());
+    expect(remainingKeys[0]).toContain("otherplayer");
+  });
+
+  test("invalidate is case-insensitive on the opponent name", async () => {
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "p1",
+      displayName: "Future",
+      gameCount: 3,
+      wins: 1,
+      losses: 2,
+      lastSeen: new Date(),
+      openings: {},
+    });
+    await svc.enrichEnvelope("u1", envelope());
+    expect(svc._enrichmentCache.size).toBe(1);
+    // Uppercase invalidate matches the cache (which is keyed by the
+    // lowercased name) — handles agents that report a different
+    // capitalisation than the displayName stored in the opponents row.
+    svc.invalidateEnrichmentForOpponent("u1", "FUTURE");
+    expect(svc._enrichmentCache.size).toBe(0);
+  });
 });
 
 describe("POST /v1/overlay-events/test", () => {
