@@ -48,11 +48,23 @@ export function ScoutingWidget({
   live: LiveGamePayload | null;
   liveGame?: LiveGameEnvelope | null;
 }) {
-  // Build the effective payload to render. The cloud-enriched live
-  // envelope carries the same rich fields as the post-game payload,
-  // so we can reuse the post-game JSX for both — avoiding two
-  // visually-different "scouting" cards depending on which path
-  // populated the data.
+  // Scouting is a PRE-GAME widget. Once the just-finished match's
+  // post-game payload arrives (``live.result`` set), we suppress the
+  // card entirely — the match-result / post-game / mmr-delta widgets
+  // handle the just-finished match. Streamer feedback was that the
+  // scouting card firing twice (once pre-game, once post-game)
+  // pulled focus from the result widgets and felt redundant.
+  //
+  // Test fires (``live.isTest``) still render so the streamer can
+  // preview the layout from Settings → Overlay → Test.
+  const isRealPostGame = !!live && !!live.result && !live.isTest;
+  if (isRealPostGame) {
+    return null;
+  }
+
+  // Build the effective payload to render. Test fires pass through
+  // ``live`` as the source; real pre-game flows use the cloud-
+  // enriched ``liveGame.streamerHistory`` (same shape).
   const effective = chooseScoutingPayload(live, liveGame);
   if (!effective) {
     return <ScoutingPreGameCard liveGame={liveGame ?? null} />;

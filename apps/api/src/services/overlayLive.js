@@ -692,6 +692,29 @@ class OverlayLiveService {
   }
 
   /**
+   * Drop cached enrichment for one (userId, opponent) pair so the
+   * NEXT pre-game scouting card includes the freshly-uploaded game
+   * in its LAST GAMES list. Called from the games ingest path right
+   * after a successful upsert — without this, a rematch against the
+   * same opponent within the 5-minute cache window would render
+   * scouting data missing the most recent encounter.
+   *
+   * Drops every cached entry whose key starts with the
+   * ``${userId}|${oppName.toLowerCase()}|`` prefix so the variant
+   * keys (different myRace / oppRace) all flush together.
+   *
+   * @param {string} userId
+   * @param {string} opponentName
+   */
+  invalidateEnrichmentForOpponent(userId, opponentName) {
+    if (!userId || !opponentName) return;
+    const prefix = `${userId}|${opponentName.toLowerCase()}|`;
+    for (const key of Array.from(this._enrichmentCache.keys())) {
+      if (key.startsWith(prefix)) this._enrichmentCache.delete(key);
+    }
+  }
+
+  /**
    * Synthetic full / per-widget payload for the Settings → Overlay
    * Test button. Implementation lives in ``overlayLiveSamples`` to
    * keep this file focused on production derivation logic; the static

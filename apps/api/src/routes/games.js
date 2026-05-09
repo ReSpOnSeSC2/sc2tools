@@ -276,6 +276,32 @@ function buildGamesRouter(deps) {
               }
             });
           }
+          // Invalidate the pre-game scouting cache for every opponent
+          // touched by this ingest. Without this, a rematch against the
+          // same opponent inside the 5-minute enrichment cache window
+          // would render its LAST GAMES list missing the just-uploaded
+          // encounter. Per accepted game (not just the last) so a
+          // batch upload also clears every opponent it touched.
+          if (typeof deps.overlayLive.invalidateEnrichmentForOpponent === "function") {
+            const seen = new Set();
+            for (const g of incoming) {
+              const name = g?.opponent?.displayName;
+              if (typeof name !== "string" || !name) continue;
+              const key = name.toLowerCase();
+              if (seen.has(key)) continue;
+              seen.add(key);
+              try {
+                deps.overlayLive.invalidateEnrichmentForOpponent(userId, name);
+              } catch (err) {
+                if (req.log) {
+                  req.log.warn(
+                    { err, userId, name },
+                    "overlay_enrichment_invalidate_failed",
+                  );
+                }
+              }
+            }
+          }
         }
       }
       res.status(202).json({ accepted, rejected });
