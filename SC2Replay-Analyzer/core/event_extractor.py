@@ -74,10 +74,33 @@ SKIP_UNITS: Set[str] = {
     "MULE", "Larva", "LocustMP", "Probe", "SCV", "Drone", "Egg", "BroodlingEscort",
     "Broodling", "Changeling", "ChangelingMarine", "ChangelingMarineShield",
     "ChangelingZergling", "ChangelingZealot", "InfestedTerran", "AutoTurret",
-    "PointDefenseDrone", "Interceptor", "AdeptPhaseShift", "Overlord",
+    "PointDefenseDrone", "Interceptor", "AdeptPhaseShift",
     "OverseerCocoon", "BanelingCocoon", "RavagerCocoon", "LurkerCocoon",
     "TransportOverlordCocoon",
+    # Ability/projectile "units" sc2reader emits as UnitBornEvent on
+    # cast — they own a player pid but they're not real army units and
+    # would otherwise show up as broken-icon chips with 0 mineral
+    # contribution in the macro-breakdown roster. Audit of 4 reference
+    # replays (Adept warp-in PvZ + 2× PvT + ZvP) surfaced these as the
+    # only owned-unit names that aren't in any cost-catalog entry that
+    # makes sense:
+    #   - KD8Charge       Reaper KD8 ability grenade
+    #   - ForceField      Sentry's Force Field cast
+    #   - OracleStasisTrap   Oracle's Stasis Ward placeable
+    #   - DisruptorPhased    Disruptor's Purification Nova projectile
+    "KD8Charge", "ForceField", "OracleStasisTrap", "DisruptorPhased",
 }
+# Note: Overlord and OverlordTransport are intentionally NOT in
+# SKIP_UNITS. sc2reader's authoritative ``minerals_used_active_forces``
+# / ``vespene_used_active_forces`` (which the SPA chart now binds to
+# via the ``army_value`` field) DOES include Overlord supply cost in
+# the army value, and sc2replaystats's Army Value chart matches that
+# convention. Excluding them here would mean the roster's
+# Σ(unit_cost × count) drifted ~100/Overlord below the chart's army
+# number for every Zerg game — a stable but visible inconsistency.
+# Tracking them keeps chart and roster in sync. The SPA can
+# optionally surface a separate "supply" subgroup if the Overlord
+# chips clutter the army roster too aggressively.
 
 SKIP_BUILDINGS: Set[str] = {
     "SupplyDepot", "SupplyDepotLowered", "CreepTumor",
@@ -1109,6 +1132,43 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                             and clean not in SKIP_UNITS
                             and not _skip_for_unit_timeline(clean)):
                         unit_lifetimes[uid]["name"] = clean
+                    # Morph-only birth: when the parent uid was never
+                    # added to unit_lifetimes (because the parent's name
+                    # was in SKIP_UNITS) but the morph target IS army-
+                    # relevant, ADD the morphed unit as a fresh entry.
+                    # Defended against:
+                    #   1. uid was a building (already in ``lifetimes`` /
+                    #      ``opp_lifetimes``).
+                    #   2. The morphed name ends in a known building-
+                    #      stance suffix — ``SporeCrawlerUprooted`` /
+                    #      ``SpineCrawlerUprooted`` / ``BarracksFlying`` /
+                    #      ``CommandCenterFlying`` etc. aren't in
+                    #      KNOWN_BUILDINGS but they ARE the airborne
+                    #      form of a building and shouldn't show up as
+                    #      a unit chip.
+                    #   3. uid was already counted via the
+                    #      UnitBorn/UnitDone path (completion_recorded_uids).
+                    # We use the TypeChange's ``second`` as the born time
+                    # (the morph completion); the original parent's birth
+                    # time isn't really meaningful for the morphed unit.
+                    elif (uid is not None
+                            and uid not in unit_lifetimes
+                            and uid not in lifetimes
+                            and uid not in opp_lifetimes
+                            and uid not in completion_recorded_uids
+                            and pid in (my_pid, opp_pid)
+                            and pid is not None
+                            and clean not in KNOWN_BUILDINGS
+                            and clean not in SKIP_UNITS
+                            and not _skip_for_unit_timeline(clean)
+                            and not clean.endswith(
+                                ("Uprooted", "Flying", "Lowered"))):
+                        completion_recorded_uids.add(uid)
+                        morph_t = int(getattr(event, "second", 0))
+                        unit_lifetimes[uid] = {
+                            "pid": pid, "name": clean, "born": morph_t,
+                            "died": None,
+                        }
                     continue
 
                 if UnitDiedEvent is not None and isinstance(event, UnitDiedEvent):
