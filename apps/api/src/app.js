@@ -166,12 +166,20 @@ function makeServices(deps) {
   // the publishing user as ``overlay:liveGame`` — that's how the
   // hosted Browser Source widgets (OverlayWidgetClient) see pre-game
   // state without the agent having a Socket.io client of its own.
-  // See ``services/liveGameBroker.js`` for the per-user fan-out + 30
-  // minute snapshot retention rationale.
+  //
+  // The ``enrich`` hook lets the cloud add ``streamerHistory`` (H2H
+  // / RIVAL tag / recent games / best-answer) to the envelope before
+  // fan-out — see ``OverlayLiveService.enrichEnvelope`` for the
+  // per-(user, opponent) cache and the rest of the rationale.
+  // Without enrichment the scouting widget pre-game can only show
+  // the opponent's identity + Pulse MMR; with it, the pre-game card
+  // matches the post-game one.
   const liveGameBroker = new LiveGameBroker({
     io: deps.io,
     overlayTokens,
     logger: deps.logger,
+    enrich: (userId, envelope) =>
+      overlayLive.enrichEnvelope(userId, envelope),
   });
   const aggregations = new AggregationsService(deps.db);
   const streak = new StreakService(deps.db);

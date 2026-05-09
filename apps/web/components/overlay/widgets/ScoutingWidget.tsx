@@ -25,20 +25,21 @@ import { Dim, WidgetShell } from "../WidgetShell";
  * the streamer uses on stream and leaves the top of the screen free for
  * the OBS scene's main UI.
  *
- * Two payload sources, in priority order:
+ * Three payload sources, in priority order:
  *
  *   1. ``live`` (post-game ``LiveGamePayload``) — full LAST GAMES list,
  *      best-answer, cheese probability, head-to-head. Authoritative
  *      whenever it's set.
- *   2. ``liveGame`` (pre-game ``LiveGameEnvelope``) — opponent name,
- *      race, optional Pulse profile (MMR, league). Used to render a
- *      reduced-fidelity scouting card from the loading screen onward
- *      so the streamer's overlay doesn't sit blank pre-replay.
- *
- * The post-game payload wins by design — it carries strictly more
- * data than the live envelope. When only the live envelope is present
- * we render the trimmed pre-game variant (no LAST GAMES, no best-
- * answer; just the opponent's identity and basic Pulse info).
+ *   2. ``liveGame.streamerHistory`` (pre-game cloud-enriched) — same
+ *      shape as the post-game payload, merged from the streamer's
+ *      game history by ``OverlayLiveService.enrichEnvelope``. Lets
+ *      the pre-game card render the SAME rich data (RIVAL tag, LAST
+ *      GAMES, H2H, best-answer) that previously only landed
+ *      post-game.
+ *   3. ``liveGame`` without enrichment yet — a brief window between
+ *      the agent's POST and the cloud's enrichment completing.
+ *      Renders the thin pre-game placeholder so the panel reserves
+ *      its slot without showing stale or blank content.
  */
 export function ScoutingWidget({
   live,
@@ -47,24 +48,31 @@ export function ScoutingWidget({
   live: LiveGamePayload | null;
   liveGame?: LiveGameEnvelope | null;
 }) {
-  if (!live) {
+  // Build the effective payload to render. The cloud-enriched live
+  // envelope carries the same rich fields as the post-game payload,
+  // so we can reuse the post-game JSX for both — avoiding two
+  // visually-different "scouting" cards depending on which path
+  // populated the data.
+  const effective = chooseScoutingPayload(live, liveGame);
+  if (!effective) {
     return <ScoutingPreGameCard liveGame={liveGame ?? null} />;
   }
 
-  const wins = live.headToHead?.wins ?? 0;
-  const losses = live.headToHead?.losses ?? 0;
+  const wins = effective.headToHead?.wins ?? 0;
+  const losses = effective.headToHead?.losses ?? 0;
   const totalH2H = wins + losses;
   const winRatePct =
     totalH2H > 0 ? Math.round((wins / totalH2H) * 100) : null;
 
-  const rivalNote = formatRival(live);
-  const recentGames = (live.recentGames || []).slice(0, 5);
-  const bestAnswer = live.bestAnswer || null;
+  const rivalNote = formatRival(effective);
+  const recentGames = (effective.recentGames || []).slice(0, 5);
+  const bestAnswer = effective.bestAnswer || null;
   const cheeseHigh =
-    typeof live.cheeseProbability === "number" && live.cheeseProbability >= 0.4;
+    typeof effective.cheeseProbability === "number"
+    && effective.cheeseProbability >= 0.4;
 
   const hasAnyContent =
-    Boolean(live.oppName)
+    Boolean(effective.oppName)
     || totalH2H > 0
     || recentGames.length > 0
     || bestAnswer != null
@@ -95,7 +103,7 @@ export function ScoutingWidget({
             minWidth: 0,
           }}
         >
-          {live.oppName || "Unknown opponent"}
+          {effective.oppName || "Unknown opponent"}
         </span>
         <span
           style={{
@@ -178,7 +186,8 @@ export function ScoutingWidget({
       {cheeseHigh ? (
         <FooterRow label="CHEESE">
           <span style={{ color: "#d16ba5", fontWeight: 700 }}>
-            scout natural early — {Math.round((live.cheeseProbability || 0) * 100)}% likely
+            scout natural early —{" "}
+            {Math.round((effective.cheeseProbability || 0) * 100)}% likely
           </span>
         </FooterRow>
       ) : null}
@@ -346,6 +355,41 @@ function FooterRow({
       </div>
     </div>
   );
+}
+
+/**
+ * Pick the highest-fidelity scouting payload available. Returns:
+ *   - the post-game ``live`` payload when set (authoritative)
+ *   - a synthesised payload from ``liveGame.streamerHistory`` when
+ *     the cloud has enriched the envelope (renders the same rich
+ *     card pre-game)
+ *   - ``null`` when neither is available (caller falls through to the
+ *     thin pre-game placeholder)
+ *
+ * The cloud-enriched ``streamerHistory`` already mirrors the
+ * post-game payload's shape, so we just merge in the envelope's
+ * opponent identity (which is the freshest signal — Pulse may have
+ * resolved a more accurate display name) and pass it through the
+ * same renderer.
+ */
+function chooseScoutingPayload(
+  live: LiveGamePayload | null,
+  liveGame: LiveGameEnvelope | null | undefined,
+): LiveGamePayload | null {
+  if (live) return live;
+  if (!liveGame) return null;
+  if (liveGame.phase === "idle" || liveGame.phase === "menu") return null;
+  const history = liveGame.streamerHistory;
+  if (!history) return null;
+  // Envelope opponent identity overrides the cached history's name —
+  // the agent's display name is the freshest signal during gameplay.
+  const oppName = liveGame.opponent?.name?.trim() || history.oppName;
+  const oppRace = liveGame.opponent?.race?.trim() || history.oppRace;
+  return {
+    ...history,
+    oppName,
+    oppRace,
+  };
 }
 
 /**

@@ -77,6 +77,45 @@ function leagueFromMmr(mmr) {
   return { league: "Bronze", tier: 3 };
 }
 
+/**
+ * Pull the streamer's own race out of the agent's envelope. The
+ * envelope carries one entry per player on ``players[]``; the
+ * streamer's row has ``type === "user"`` AND
+ * ``name === envelope.user.name`` (the explicit "you" hint the
+ * bridge writes from the player handle cache). Falls back to picking
+ * the player whose name matches the user when both players are
+ * marked ``user`` in 1v1.
+ *
+ * @param {object} envelope
+ * @returns {string | null}
+ */
+function pickStreamerRace(envelope) {
+  if (!envelope || typeof envelope !== "object") return null;
+  const players = Array.isArray(envelope.players) ? envelope.players : [];
+  if (players.length === 0) return null;
+  const userName = envelope.user && typeof envelope.user.name === "string"
+    ? envelope.user.name.trim().toLowerCase()
+    : "";
+  for (const p of players) {
+    if (!p || typeof p !== "object") continue;
+    if (p.type !== "user") continue;
+    const pName = typeof p.name === "string" ? p.name.trim().toLowerCase() : "";
+    if (userName && pName === userName) {
+      return typeof p.race === "string" ? p.race : null;
+    }
+  }
+  // Fallback: first ``user`` player. In a 1v1 ladder game with no
+  // user_name hint set this is at best a 50/50; the matchup-scoped
+  // queries it powers will simply yield nothing if the guess is
+  // wrong, which is acceptable.
+  for (const p of players) {
+    if (p && p.type === "user" && typeof p.race === "string") {
+      return p.race;
+    }
+  }
+  return null;
+}
+
 function bucketResult(raw) {
   if (!raw) return null;
   const s = String(raw).toLowerCase();
@@ -159,6 +198,20 @@ class OverlayLiveService {
   constructor(db, services = {}) {
     this.db = db;
     this.opponents = services.opponents || null;
+    /**
+     * Per-(userId, oppName, oppRace) cache for live-envelope
+     * enrichment. The agent fires envelopes at 1 Hz during a match;
+     * caching lets the broker emit the rich card on every tick
+     * without re-running the Mongo aggregation pipeline.
+     *
+     * 5-minute TTL — long enough to survive a typical match, short
+     * enough that a streamer who steps away and comes back doesn't
+     * see stale H2H if they played the same opponent twice in a row.
+     * @type {Map<string, {payload: object|null, ts: number}>}
+     */
+    this._enrichmentCache = new Map();
+    this._enrichmentTtlMs = 5 * 60 * 1000;
+    this._enrichmentMax = 256;
   }
 
   /**
@@ -364,6 +417,278 @@ class OverlayLiveService {
     }
 
     return payload;
+  }
+
+  /**
+   * Build a pre-game ``LiveGamePayload``-shaped object from just an
+   * opponent identity (name + race + optional Pulse character ID).
+   * The cloud has the streamer's full game history; we use it to fill
+   * in the SAME contextual fields the post-game card carries
+   * (head-to-head, RIVAL/FAMILIAR, last-games list, best answer,
+   * cheese probability, predicted strategies, top builds, meta) so
+   * the scouting widget renders the rich pre-game dossier instead of
+   * just "Looking up opponent…".
+   *
+   * Result-specific fields (``result``, ``durationSec``,
+   * ``mmrDelta``, ``map``) are NOT populated — those only land
+   * post-game when the replay parses. The ``map`` field can be set
+   * by the agent later if Blizzard's local API ever exposes it pre-
+   * game; today the loading screen has it but the SC2 client doesn't
+   * surface it.
+   *
+   * @param {string} userId
+   * @param {string} opponentName
+   * @param {string} [opponentRace]
+   * @param {number|null} [opponentPulseId]
+   * @param {string} [myRace]
+   * @returns {Promise<object|null>}
+   */
+  async buildFromOpponentName(
+    userId,
+    opponentName,
+    opponentRace,
+    opponentPulseId,
+    myRace,
+  ) {
+    if (!userId || !opponentName) return null;
+    /** @type {Record<string, any>} */
+    const payload = { oppName: opponentName };
+    if (opponentRace) payload.oppRace = opponentRace;
+    if (myRace) payload.myRace = myRace;
+    const matchup = matchupLabel(myRace, opponentRace);
+    if (matchup) payload.matchup = matchup;
+
+    // Find the opponents row. Prefer pulseId (stable across BattleTag
+    // renames); fall back to displayName when the agent hasn't
+    // resolved a Pulse ID yet — best-effort, picks the row with the
+    // most encounters if multiple opponents share the same display
+    // name.
+    const projection = {
+      _id: 0,
+      pulseId: 1,
+      displayName: 1,
+      gameCount: 1,
+      wins: 1,
+      losses: 1,
+      lastSeen: 1,
+      openings: 1,
+    };
+    /** @type {Record<string, any>|null} */
+    let oppRow = null;
+    if (opponentPulseId) {
+      oppRow = await this.db.opponents
+        .findOne({ userId, pulseId: String(opponentPulseId) }, { projection })
+        .catch(() => null);
+    }
+    if (!oppRow) {
+      const filter = /** @type {any} */ ({ userId, displayName: opponentName });
+      const candidates = await this.db.opponents
+        .find(filter, { projection })
+        .toArray()
+        .catch(() => []);
+      if (candidates.length > 0) {
+        candidates.sort(
+          (a, b) => (Number(b.gameCount) || 0) - (Number(a.gameCount) || 0),
+        );
+        oppRow = candidates[0];
+      }
+    }
+
+    if (oppRow) {
+      const wins = Number(oppRow.wins) || 0;
+      const losses = Number(oppRow.losses) || 0;
+      payload.headToHead = { wins, losses };
+      const games = Number(oppRow.gameCount) || wins + losses;
+      // Same RIVAL / FAMILIAR threshold as buildFromGame (3+ prior
+      // encounters) so the pre-game card flags repeat opponents the
+      // same way the post-game card does.
+      if (games >= 3) {
+        payload.rival = {
+          name: oppRow.displayName || opponentName,
+          headToHead: { wins, losses },
+        };
+      }
+      const lastSeen = oppRow.lastSeen
+        ? new Date(oppRow.lastSeen).getTime()
+        : null;
+      // Pre-game rematch flag: same opponent within 24 h, prior
+      // encounters >= 2. ``lastResult`` is unknown pre-game (we
+      // haven't played the current match yet) so the widget renders
+      // a generic "rematch" without the win/loss shading.
+      if (
+        lastSeen !== null
+        && games >= 2
+        && Date.now() - lastSeen <= 24 * 60 * 60 * 1000
+      ) {
+        payload.rematch = { isRematch: true };
+      }
+      const openings = oppRow.openings && typeof oppRow.openings === "object"
+        ? oppRow.openings
+        : null;
+      if (openings) {
+        const entries = Object.entries(openings).filter(
+          ([, v]) => Number.isFinite(Number(v)) && Number(v) > 0,
+        );
+        if (entries.length > 0) {
+          entries.sort((a, b) => Number(b[1]) - Number(a[1]));
+          const [name, count] = entries[0];
+          const total = entries.reduce((acc, [, v]) => acc + Number(v), 0);
+          payload.favOpening = {
+            name,
+            share: total > 0 ? Number(count) / total : 0,
+            samples: Number(count),
+          };
+        }
+        const total = Object.values(openings).reduce(
+          (acc, v) => acc + Number(v || 0),
+          0,
+        );
+        if (total > 0) {
+          const preds = Object.entries(openings)
+            .map(([name, v]) => ({ name, weight: Number(v) / total }))
+            .sort((a, b) => b.weight - a.weight)
+            .slice(0, 3);
+          if (preds.length > 0) payload.predictedStrategies = preds;
+          payload.scouting = preds.map((p) => ({
+            label: p.name,
+            confidence: p.weight,
+          }));
+        }
+      }
+      // Cheese probability — derived from the opponent's most-played
+      // opening if it matches the cheese keyword list. Pre-game we
+      // don't know what THIS match's strategy will be, so the
+      // probability reflects "they tend to bring this on the ladder".
+      if (payload.favOpening?.name) {
+        const cp = cheeseProbability(payload.favOpening.name);
+        if (cp >= 0.4) payload.cheeseProbability = cp;
+      }
+    }
+
+    // Streak — global, not opponent-specific.
+    const streak = await this._computeStreak(userId);
+    if (streak) payload.streak = streak;
+
+    // Last N games against this opponent in this matchup. Same shape
+    // as the post-game card's ``recentGames`` list — the widget can
+    // render the row builder unchanged.
+    const opp = {
+      pulseId: opponentPulseId ? String(opponentPulseId) : undefined,
+      displayName: oppRow?.displayName || opponentName,
+      race: opponentRace,
+    };
+    const recent = await this._recentGamesForOpponent(
+      userId,
+      opp,
+      myRace,
+      opponentRace,
+      // No exclude — every prior match counts pre-game.
+      undefined,
+    );
+    if (recent.length > 0) payload.recentGames = recent;
+
+    // Best answer vs the opponent's most-likely opening.
+    const favOpeningStrategy = payload.favOpening?.name;
+    if (favOpeningStrategy && myRace && opponentRace) {
+      const ans = await this._bestAnswerVsStrategy(
+        userId,
+        myRace,
+        opponentRace,
+        favOpeningStrategy,
+      );
+      if (ans) payload.bestAnswer = ans;
+    }
+
+    // Top builds the streamer has used in this matchup.
+    if (matchup) {
+      const top = await this._topBuildsForMatchup(userId, myRace, opponentRace);
+      if (top.length > 0) payload.topBuilds = top;
+    }
+
+    // Matchup meta (top opening shares).
+    if (matchup) {
+      const meta = await this._metaForMatchup(userId, myRace, opponentRace);
+      if (meta && meta.length > 0) payload.meta = { matchup, topBuilds: meta };
+    }
+
+    return payload;
+  }
+
+  /**
+   * Enrich an inbound ``LiveGameState`` envelope with
+   * ``streamerHistory`` — the H2H, recent games, RIVAL/FAMILIAR tag
+   * the post-game card carries. Called by the LiveGameBroker before
+   * it fans the envelope out to overlay sockets and SSE.
+   *
+   * Cached per (userId, oppName, oppRace) for 5 minutes so the
+   * 1 Hz envelope cadence doesn't re-hit Mongo for every tick of the
+   * same match. The first envelope of a new opponent is a cache miss
+   * (~50 ms aggregation); every subsequent tick is a cache hit
+   * (microseconds).
+   *
+   * Returns the original envelope when there's nothing to enrich
+   * (no opponent name / unknown opponent / no history).
+   *
+   * @param {string} userId
+   * @param {object} envelope
+   * @returns {Promise<object>}
+   */
+  async enrichEnvelope(userId, envelope) {
+    if (!userId || !envelope || typeof envelope !== "object") return envelope;
+    const opp = envelope.opponent;
+    if (!opp || typeof opp !== "object") return envelope;
+    const name = typeof opp.name === "string" ? opp.name.trim() : "";
+    if (!name) return envelope;
+    const race = typeof opp.race === "string" ? opp.race.trim() : "";
+    const profile = opp.profile && typeof opp.profile === "object" ? opp.profile : null;
+    const pulseId = profile && Number.isFinite(Number(profile.pulse_character_id))
+      ? Number(profile.pulse_character_id)
+      : null;
+    // The agent's envelope carries the streamer's display name on
+    // ``user.name`` and the player race on ``players[].race`` for the
+    // ``user`` player. The streamer's race is what ``buildFromOppName``
+    // needs for matchup-scoped queries.
+    const myRace = pickStreamerRace(envelope);
+
+    const key = `${userId}|${name.toLowerCase()}|${race.toLowerCase()}|${myRace || ""}`;
+    const now = Date.now();
+    const hit = this._enrichmentCache.get(key);
+    if (hit && now - hit.ts < this._enrichmentTtlMs) {
+      // LRU touch.
+      this._enrichmentCache.delete(key);
+      this._enrichmentCache.set(key, hit);
+      if (!hit.payload) return envelope;
+      return { ...envelope, streamerHistory: hit.payload };
+    }
+
+    let history = null;
+    try {
+      history = await this.buildFromOpponentName(
+        userId,
+        name,
+        race || undefined,
+        pulseId,
+        myRace || undefined,
+      );
+    } catch {
+      // Best-effort enrichment — never block the broker on a Mongo blip.
+      history = null;
+    }
+    // Cache even null results so a Pulse-miss / unknown-opponent case
+    // doesn't repeatedly hit the aggregation.
+    this._enrichmentCache.set(key, { payload: history || null, ts: now });
+    if (this._enrichmentCache.size > this._enrichmentMax) {
+      // Drop the oldest entry (Map iteration order is insertion order).
+      const oldest = this._enrichmentCache.keys().next().value;
+      if (oldest !== undefined) this._enrichmentCache.delete(oldest);
+    }
+    if (!history) return envelope;
+    return { ...envelope, streamerHistory: history };
+  }
+
+  /** Test helper: drop the per-user enrichment cache. */
+  clearEnrichmentCache() {
+    this._enrichmentCache.clear();
   }
 
   /**

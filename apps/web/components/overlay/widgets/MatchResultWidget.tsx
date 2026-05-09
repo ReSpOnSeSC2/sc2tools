@@ -1,9 +1,20 @@
 "use client";
 
 import type { LiveGamePayload } from "../types";
-import { Dim, RaceIcon, WidgetFooter, WidgetHeader, WidgetShell } from "../WidgetShell";
+import { WidgetShell } from "../WidgetShell";
 
-export function MatchResultWidget({ live }: { live: LiveGamePayload | null }) {
+/**
+ * Match-result chip — minimal "VICTORY" / "DEFEAT" banner with the
+ * map name underneath. Streamer feedback was that the previous
+ * version (matchup label, race icons, duration) competed too much
+ * with the dossier widgets that fire alongside it; the result chip
+ * should be a punchy stand-alone banner.
+ */
+export function MatchResultWidget({
+  live,
+}: {
+  live: LiveGamePayload | null;
+}) {
   if (!live || !live.result) return null;
   const win = live.result === "win";
   return (
@@ -12,41 +23,46 @@ export function MatchResultWidget({ live }: { live: LiveGamePayload | null }) {
       accent={win ? "green" : "red"}
       halo
       visible
-      width={480}
+      width={420}
     >
-      <WidgetHeader>
-        <span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
-          <RaceIcon race={live.myRace} size={24} />
-          <span style={{ fontSize: 14, opacity: 0.7, fontVariantNumeric: "tabular-nums" }}>
-            {live.matchup || `${live.myRace || "?"}v${live.oppRace || "?"}`}
-          </span>
-          <RaceIcon race={live.oppRace} size={24} />
-        </span>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 6,
+          padding: "4px 0",
+        }}
+      >
         <span
           style={{
-            fontSize: 22,
+            fontSize: 36,
             fontWeight: 800,
-            letterSpacing: 1.5,
+            letterSpacing: 2,
             color: win ? "#3ec07a" : "#ff6b6b",
             textShadow: win
-              ? "0 0 14px rgba(62,192,122,0.45)"
-              : "0 0 14px rgba(255,107,107,0.45)",
+              ? "0 0 18px rgba(62,192,122,0.55)"
+              : "0 0 18px rgba(255,107,107,0.55)",
           }}
         >
           {win ? "VICTORY" : "DEFEAT"}
         </span>
-      </WidgetHeader>
-      <WidgetFooter>
-        <span>{live.map || "—"}</span>
-        <Dim>{fmtDur(live.durationSec)}</Dim>
-      </WidgetFooter>
+        {live.map ? (
+          <span
+            style={{
+              fontSize: 14,
+              opacity: 0.75,
+              letterSpacing: "0.02em",
+              maxWidth: "100%",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {live.map}
+          </span>
+        ) : null}
+      </div>
     </WidgetShell>
   );
-}
-
-function fmtDur(s?: number): string {
-  if (!s) return "";
-  const m = Math.floor(s / 60);
-  const r = Math.round(s % 60);
-  return `${m}:${r.toString().padStart(2, "0")}`;
 }

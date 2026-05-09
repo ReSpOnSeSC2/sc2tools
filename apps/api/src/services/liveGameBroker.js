@@ -41,6 +41,7 @@ class LiveGameBroker {
    *   io?: import('socket.io').Server,
    *   overlayTokens?: import('./types').OverlayTokensService,
    *   logger?: import('pino').Logger,
+   *   enrich?: (userId: string, envelope: object) => Promise<object>,
    * }} [deps]
    */
   constructor(deps = {}) {
@@ -55,6 +56,7 @@ class LiveGameBroker {
     this._io = deps.io || null;
     this._overlayTokens = deps.overlayTokens || null;
     this._logger = deps.logger || null;
+    this._enrich = typeof deps.enrich === "function" ? deps.enrich : null;
     // Telemetry counters surfaced in `/v1/agent/live` logs and (later)
     // a metrics endpoint. Per-process, not per-user — for a per-user
     // health signal we use the freshness of `_latest`.
@@ -64,6 +66,8 @@ class LiveGameBroker {
       sse_emit_failed: 0,
       overlay_emit_ok: 0,
       overlay_emit_failed: 0,
+      enrich_ok: 0,
+      enrich_failed: 0,
     };
   }
 
@@ -120,8 +124,51 @@ class LiveGameBroker {
    */
   publish(userId, envelope) {
     if (!userId || !envelope || typeof envelope !== "object") return;
-    this._latest.set(userId, { envelope, ts: Date.now() });
     this.counters.published += 1;
+    // First fan-out: the partial envelope as-is. Streamers see the
+    // basic opponent identity (name + race + Pulse MMR) within ms of
+    // the agent's POST.
+    this._broadcast(userId, envelope);
+    // If an enricher is wired, run it asynchronously and fan out the
+    // enriched envelope when ready. The first envelope of a new
+    // opponent pays one Mongo aggregation (~50 ms cold); every
+    // subsequent envelope of the same match hits the per-(userId,
+    // oppName, oppRace) cache and resolves in microseconds. The
+    // enriched re-emit follows the same shape — clients see two
+    // updates in quick succession, the second carrying the
+    // ``streamerHistory`` block. Mirrors the agent bridge's
+    // partial-then-Pulse-enriched pattern.
+    if (this._enrich) {
+      Promise.resolve(this._enrich(userId, envelope))
+        .then((enriched) => {
+          if (!enriched || enriched === envelope) return;
+          if (typeof enriched !== "object") return;
+          this.counters.enrich_ok += 1;
+          this._broadcast(userId, enriched);
+        })
+        .catch((err) => {
+          this.counters.enrich_failed += 1;
+          if (this._logger && typeof this._logger.warn === "function") {
+            this._logger.warn(
+              { err, userId },
+              "live_game_broker_enrich_failed",
+            );
+          }
+        });
+    }
+  }
+
+  /**
+   * Internal: one fan-out pass. Updates the latest snapshot, fires
+   * SSE callbacks, and kicks off Socket.io overlay emit. Called once
+   * for the partial envelope and (optionally) again for the enriched
+   * one.
+   *
+   * @param {string} userId
+   * @param {object} envelope
+   */
+  _broadcast(userId, envelope) {
+    this._latest.set(userId, { envelope, ts: Date.now() });
     const bucket = this._subs.get(userId);
     if (bucket) {
       for (const cb of bucket) {
