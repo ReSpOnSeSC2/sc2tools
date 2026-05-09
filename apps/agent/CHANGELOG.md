@@ -2,6 +2,89 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.5.13
+
+### Note on the version jump (0.5.10 → 0.5.13)
+- `agent-v0.5.11` and `agent-v0.5.12` were tagged but the on-disk
+  ``__version__`` bump never landed. The installer filename came from
+  the tag (correct) but the binary inside reported itself as 0.5.10
+  in heartbeats / crash reports / the updater, putting users in a
+  soft update loop. v0.5.13 is the first release where the on-disk
+  ``__version__`` matches the tag again.
+
+### Fixed (originally targeted at v0.5.11; PR #157)
+- **Active Army chart no longer renders a phantom late-game opponent
+  spike.** A streamer's PvZ replay showed the opponent army line
+  stay near zero for ~13 minutes and then jump vertically to ~9 200
+  in seconds — caused by the SPA reconstructing the army value via
+  a fragile cascade (``unit_timeline`` → build-order cumulative +
+  timeline-derived deaths → food-supply heuristic) that fell through
+  to the cumulative count without applying any deaths whenever the
+  timeline was sparse for one side. The agent now ships
+  ``army_value`` per ``PlayerStatsEvent`` row (sc2reader's
+  authoritative ``minerals_used_active_forces +
+  vespene_used_active_forces``) and the SPA chart binds to it
+  directly. The derived/heuristic paths are now hard-clamped to
+  ``ARMY_FALLBACK_CAP`` so neither can synthesise a vertical spike
+  even on legacy uploads.
+
+### Fixed (originally targeted at v0.5.12; PR #159)
+- **WarpGate-warped units no longer dropped from the SPA's roster.**
+  ``extract_macro_events`` populated ``unit_lifetimes`` only on
+  ``UnitBornEvent``, but WarpGate-warped units (Adept, Stalker,
+  Sentry, Zealot, Templar) emit ``UnitInitEvent`` + ``UnitDoneEvent``
+  and never fire ``UnitBornEvent``. The reference replay had 41
+  Adepts warped via WarpGate — every one was missing from the
+  composition snapshot. The extractor now accepts EITHER
+  ``UnitBornEvent`` OR ``UnitDoneEvent`` as the canonical "alive"
+  tick for non-building units, deduped by uid.
+- **``_clean_building_name`` no longer corrupts ``"Zergling"``.**
+  The helper used a global ``raw_name.replace("Zerg", "")`` —
+  ``"Zergling"`` literally starts with the substring ``"Zerg"`` so
+  the prefix was eaten and the name became ``"ling"``, falling
+  out of every downstream lookup. Same bug corrupted
+  ``"SprayZerg"`` → ``"Spray"`` and ``"SupplyDepotLowered"`` →
+  ``"SupplyDepoted"``. The prefix-strip now requires a CamelCase
+  boundary; ``"Zergling"`` and ``"SprayZerg"`` preserved while
+  legacy ``"ZergHatchery"`` still folds to ``"Hatchery"``.
+
+### Fixed (PR #160)
+- **Overlords are now counted in the alive roster.** sc2reader's
+  ``army_value`` (which the SPA chart binds to) includes Overlord
+  supply cost and so does sc2replaystats's Army Value chart.
+  Pre-fix, ``Overlord`` was in ``SKIP_UNITS`` so the roster's
+  Σ(unit_cost × count) drifted ~100/Overlord below the chart's
+  army number for every Zerg game. Removing the skip makes chart
+  and roster agree.
+- **Overseer (and any morph-from-supply unit) now appears.** With
+  Overlord tracked, the existing UnitTypeChange rename path handles
+  Overlord → OverlordCocoon → Overseer automatically. A
+  defence-in-depth ``elif`` was added so any future morph chain
+  whose parent is in SKIP_UNITS but whose target is army-relevant
+  surfaces in the timeline.
+- **Ability/projectile "units" skipped from the roster.** Reaper
+  ``KD8Charge``, Sentry ``ForceField``, Oracle ``OracleStasisTrap``,
+  and Disruptor ``DisruptorPhased`` (Purification Nova projectile)
+  all fire ``UnitBornEvent`` with a player pid but have no
+  meaningful cost-catalog entry. Added all four to ``SKIP_UNITS``
+  so they no longer pollute the Macro Breakdown roster as
+  broken-icon chips.
+- **Building stance forms (``SporeCrawlerUprooted``,
+  ``CommandCenterFlying``, etc.) can't leak in via morph creation.**
+  The new morph-creation handler in the UnitTypeChange branch now
+  rejects names ending in ``Uprooted`` / ``Flying`` / ``Lowered``
+  AND any uid already in the building-lifetimes tracker, so the
+  airborne/uprooted form of a building can't show up as a "unit".
+
+### Re-import note
+- Re-import (or click Recompute on the Macro Breakdown panel) on any
+  replay extracted by an earlier agent to pick up the new
+  ``army_value`` field, the alive-Adept tracking, and the corrected
+  Zergling / Overlord / Overseer roster contents. Legacy uploads
+  keep rendering through the SPA's clamped derived path — no
+  vertical spike, but the absolute army number stays an
+  approximation until re-uploaded.
+
 ## 0.5.10
 
 ### Fixed

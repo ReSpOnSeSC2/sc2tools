@@ -10,6 +10,130 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+## [agent-v0.5.13] - 2026-05-09
+
+Released as `agent-v0.5.13` on GitHub. Installer:
+`SC2ToolsAgent-Setup-0.5.13.exe`.
+
+### Why the version jumps from 0.5.10 to 0.5.13
+
+`agent-v0.5.11` and `agent-v0.5.12` were tagged but the corresponding
+``__version__`` bump in ``apps/agent/sc2tools_agent/__init__.py``
+never landed on ``main``. The installer filename derives from the tag
+(workflow's "Resolve version" step) so the artifacts published as
+0.5.11 / 0.5.12 had the right names — but the binaries inside still
+reported themselves as 0.5.10 in heartbeats, crash reports, and the
+updater's "what version am I on" check, putting users in a soft
+update loop. v0.5.13 is the first release in this stream where the
+on-disk ``__version__`` matches the tag, so the agent and the cloud
+finally agree on the running version.
+
+### Fixed (web + agent) — Active Army chart no longer renders a phantom
+late-game opponent spike (PR #157, originally targeted at v0.5.11)
+
+A streamer's Jagannatha LE PvZ replay (10/22/2020) showed the
+opponent army line stay near zero for ~13 minutes and then jump
+**vertically to ~9 200** in seconds — a number that didn't reflect
+actual gameplay. Worker counts and the Unit & Building Roster also
+disagreed with the chart's tooltip at the same hovered tick.
+
+The chart's army value was being reconstructed in the SPA via a
+fragile cascade (``unit_timeline`` → build-order cumulative +
+timeline-derived deaths → ``(food_used - food_workers) * 50``
+heuristic). When ``unit_timeline.opp`` was empty for late-game
+samples the path fell through to the build-order cumulative count
+WITHOUT applying any deaths, yielding the *total ever built* on the
+opp side as the army number for that one sample.
+
+Now:
+
+  1. The agent emits ``army_value`` per ``PlayerStatsEvent`` row in
+     ``stats_events`` / ``opp_stats_events`` (sc2reader's
+     ``minerals_used_active_forces + vespene_used_active_forces``,
+     the same number the in-game Army graph and sc2replaystats's
+     Army Value chart use), with a ``*_used_current_army`` legacy
+     fallback for older sc2reader builds.
+  2. The SPA chart binds the army line to ``army_value`` directly.
+     The build-order and food-supply paths that used to produce the
+     spike are now hard-clamped to ``ARMY_FALLBACK_CAP`` (9 000) so
+     neither can synthesise a vertical line.
+  3. Tooltip and roster share a single ``SeriesPoint`` per hovered
+     tick so they cannot disagree on army value, worker count, or
+     alive composition.
+
+### Fixed (extractor) — WarpGate warp-ins no longer dropped from the
+roster (PR #159, originally targeted at v0.5.12)
+
+A streamer's PvZ replay (Tourmaline LE, 2026-05-08) had 41 Adepts
+warped in via WarpGate — every one was missing from the SPA's
+"Unit & Building Roster" because ``extract_macro_events`` populated
+``unit_lifetimes`` only on ``UnitBornEvent``. WarpGate-warped units
+(Adept, Stalker, Sentry, Zealot, Templar) emit ``UnitInitEvent``
+(warp-in start) + ``UnitDoneEvent`` (warp-in complete) and NEVER
+fire ``UnitBornEvent``. The extractor now accepts EITHER event as
+the canonical "alive" tick, deduped by uid so the rare case where
+sc2reader fires both can't double-count.
+
+Same PR fixed ``_clean_building_name`` corrupting ``"Zergling"`` to
+``"ling"`` (the helper used a global ``raw_name.replace("Zerg", "")``;
+"Zergling" literally starts with the substring "Zerg" so the prefix
+was eaten mid-name). The corrupted name fell out of every downstream
+lookup so opp's roster showed ``"li"``-fallback chips with zero
+mineral contribution for every Zergling. The prefix-strip now
+requires a CamelCase boundary — ``"Zergling"`` and ``"SprayZerg"``
+preserved, legacy ``"ZergHatchery"`` still folds to ``"Hatchery"``.
+
+### Fixed (extractor) — Overlords + Overseer + ability-cast cleanup
+(PR #160)
+
+Audit pass over 3 additional reference replays (PvT × 2, ZvP)
+surfaced four more unit-tracking edge cases on top of the warp-in
+work:
+
+  1. **Overlords now count.** sc2reader's ``army_value`` includes
+     Overlord supply cost, and so does sc2replaystats's Army Value
+     chart. Pre-fix, ``Overlord`` was in ``SKIP_UNITS`` so the
+     roster's Σ(unit_cost × count) drifted ~100/Overlord below the
+     chart's army number for every Zerg game (~1 400 mineral+gas
+     gap on the ZvP audit replay). Removing the skip makes the
+     chart and the derived roster sum agree.
+  2. **Overseer (and any morph-from-supply unit) now appears.**
+     With Overlord tracked, the existing UnitTypeChange rename path
+     handles Overlord → OverlordCocoon → Overseer automatically.
+     A defence-in-depth ``elif`` was added that creates a fresh
+     ``unit_lifetimes`` entry on a UnitTypeChange when the uid was
+     never tracked AND the new name is army-relevant.
+  3. **Ability/projectile names skipped.** Reaper KD8Charge,
+     Sentry ForceField, Oracle StasisTrap, and Disruptor Phased
+     Nova all fire ``UnitBornEvent`` with a player pid but have no
+     meaningful cost-catalog entry. Added all four to ``SKIP_UNITS``.
+  4. **Building stance forms can't leak through morph creation.**
+     The ZvP audit caught ``SporeCrawlerUprooted`` showing up as a
+     "unit" chip. The new morph-creation handler in the
+     UnitTypeChange branch is now gated against ``lifetimes`` /
+     ``opp_lifetimes`` membership AND against the ``Uprooted`` /
+     ``Flying`` / ``Lowered`` suffix family.
+
+### Re-import note
+
+Previously-uploaded replays will keep using the on-disk
+``unit_timeline`` until they're re-extracted. Re-import (or click
+Recompute on the Macro Breakdown panel) for the full fix:
+
+  - chart's army number switches from the derived cascade to
+    sc2reader's authoritative ``army_value``;
+  - roster picks up Adepts / other warp-in units;
+  - opp Zerglings / Overseers / Overlords show with correct chips
+    and cost contributions.
+
+The SPA's clamped derived path means even on legacy uploads the
+chart will not produce a 9 200-style vertical spike — the number
+just stays an approximation.
+
+Tag this commit as ``agent-v0.5.13`` after merge to trigger
+``.github/workflows/agent-installer.yml`` and produce
+``SC2ToolsAgent-Setup-0.5.13.exe``.
+
 ## [agent-v0.5.7] - 2026-05-08
 
 Released as `agent-v0.5.7` on GitHub. Installer:
