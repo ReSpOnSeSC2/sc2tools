@@ -392,15 +392,9 @@ function BreakdownBody({
       </div>
 
       <section
-        aria-labelledby="chart-heading"
+        aria-label="Active Army & Workers"
         className="space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-4"
       >
-        <h3
-          id="chart-heading"
-          className="text-caption font-semibold uppercase tracking-wider text-text-muted"
-        >
-          Active Army &amp; Workers
-        </h3>
         {samplesMissing ? (
           <ChartSamplesMissingHint />
         ) : (
