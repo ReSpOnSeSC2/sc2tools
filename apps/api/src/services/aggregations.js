@@ -365,9 +365,14 @@ class AggregationsService {
    * @param {object} filters
    */
   async _timeseriesOnce(userId, opts, filters) {
-    const interval = pickInterval(opts && opts.interval);
+    const requestedInterval = pickInterval(opts && opts.interval);
     const timezone = pickTimezone(opts && opts.tz);
     const match = gamesMatchStage(userId, filters);
+    // Pick a coarser bucket when the matched data would overflow the
+    // bucket cap. Otherwise the "All time" KPI tile silently dropped
+    // games older than the last ~365 days from the win-rate denominator
+    // even though `/v1/me` still counted them as synced.
+    const interval = await this._fitInterval(match, requestedInterval);
     const rows = await this.db.games
       .aggregate([
         { $match: match },
@@ -410,6 +415,54 @@ class AggregationsService {
         winRate: r.total ? r.wins / r.total : 0,
       })),
     };
+  }
+
+  /**
+   * Widen the requested bucket interval when the matched range spans
+   * more day-buckets than the response cap can hold. The cap exists to
+   * keep the trends-chart payload bounded, but blindly truncating
+   * leaves the "All time" win-rate tile inconsistent with the lifetime
+   * total-games count. Escalating instead — day → week → month —
+   * preserves every game while still respecting the cap.
+   *
+   * @private
+   * @param {Record<string, any>} match
+   * @param {'day' | 'week' | 'month'} requested
+   */
+  async _fitInterval(match, requested) {
+    if (requested === "month") return "month";
+    const cap = LIMITS.TIMESERIES_MAX_BUCKETS;
+    const rows = await this.db.games
+      .aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            minDate: { $min: "$date" },
+            maxDate: { $max: "$date" },
+          },
+        },
+      ])
+      .toArray();
+    const extremes = rows && rows[0];
+    if (!extremes || !extremes.minDate || !extremes.maxDate) return requested;
+    const min = extremes.minDate instanceof Date
+      ? extremes.minDate
+      : new Date(extremes.minDate);
+    const max = extremes.maxDate instanceof Date
+      ? extremes.maxDate
+      : new Date(extremes.maxDate);
+    if (Number.isNaN(min.getTime()) || Number.isNaN(max.getTime())) {
+      return requested;
+    }
+    const spanDays = (max.getTime() - min.getTime()) / 86400000;
+    if (requested === "day") {
+      if (spanDays / 7 > cap) return "month";
+      if (spanDays > cap) return "week";
+      return "day";
+    }
+    if (spanDays / 7 > cap) return "month";
+    return "week";
   }
 
   // ---------------- v0.5+ Trends-tab aggregations ----------------
