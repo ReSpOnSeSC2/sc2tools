@@ -68,13 +68,22 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
  * cadence.
  */
 export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
-  // Pre-game dossier — persists through the queue-into-next-match
-  // wait so a streamer doesn't lose context mid-game. Cleared after
-  // a long idle gap so a streamer who stops playing doesn't return
-  // to a stale opponent pinned to their scene.
-  "opponent": 6 * 60 * 1000,
+  // Opponent dossier — pinned visibly during the active phases of a
+  // match (loading / started / in-progress, see `useWidgetVisibility`),
+  // then naturally hides 22s after `match_ended` so the streamer's
+  // scene clears for the next queue. The legacy 6-minute duration was
+  // a hack to bridge "queue-into-next-match" gaps, but the cloud now
+  // clears `live` on `match_loading` (see
+  // `useClearStalePostGameOnNewMatch`) so the dossier is replaced by
+  // the new opponent's data the moment SC2 reports the next loading
+  // screen. Six minutes was just leaving stale data on the OBS scene.
+  "opponent": 22 * 1000,
   // Event chips — short, stream-friendly durations.
-  "match-result": 15 * 1000,
+  // Match-result chip ("VICTORY" / "DEFEAT" banner) trimmed from 15s
+  // to 8s on streamer feedback: the result is decisive enough at a
+  // glance that 15s read as lingering on a finished game; 8s lines up
+  // with the streak chip cadence.
+  "match-result": 8 * 1000,
   "post-game": 16 * 1000,
   "mmr-delta": 10 * 1000,
   "streak": 8 * 1000,
