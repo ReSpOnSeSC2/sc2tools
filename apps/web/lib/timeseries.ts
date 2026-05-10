@@ -77,6 +77,40 @@ export function todayKeyIn(timeZone: string): string {
 }
 
 /**
+ * Instant of midnight at the start of the user's local "today" in the
+ * supplied IANA timezone. Used as a `since=` filter on `/v1/timeseries`
+ * when the caller only cares about today's bucket — without it, a user
+ * with a multi-year history triggers `_fitInterval` on the server and
+ * day buckets get widened to week, which then never match `todayKeyIn`.
+ *
+ * @param now optional clock injection for tests
+ */
+export function startOfTodayInTz(timeZone: string, now: Date = new Date()): Date {
+  // Read the wall-clock time-of-day in the user's tz, then subtract it
+  // from `now`. This sidesteps having to construct an ISO string in a
+  // non-local zone (which JS doesn't natively support).
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string): number => {
+    const part = parts.find((p) => p.type === type);
+    return part ? Number(part.value) : 0;
+  };
+  // `en-US` reports midnight as `24` for the `hour` field on some
+  // engines; clamp to keep the math right.
+  const hour = get("hour") % 24;
+  const minute = get("minute");
+  const second = get("second");
+  const elapsedMs =
+    hour * 3_600_000 + minute * 60_000 + second * 1_000 + now.getMilliseconds();
+  return new Date(now.getTime() - elapsedMs);
+}
+
+/**
  * Normalise a `/v1/timeseries` response into the flat `Period[]` shape
  * the existing UI consumers expect. Tolerant of `undefined`, malformed
  * payloads, or the legacy array shape (returned as-is).

@@ -10,6 +10,14 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Fixed
+
+- **Analyzer dashboard**: "Games today" no longer flips to 0 once UTC
+  rolls past midnight in zones west of UTC. The card scopes its
+  `/v1/timeseries` request to today's local-tz window via `since=`, so
+  the server's day-bucket cap can't widen the response to weekly
+  buckets that never match `todayKeyIn(tz)` on the client.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

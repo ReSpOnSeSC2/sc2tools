@@ -10,6 +10,7 @@ import { pct1, wrColor } from "@/lib/format";
 import {
   apiToPeriods,
   clientTimezone,
+  startOfTodayInTz,
   todayKeyIn,
   type ApiTimeseriesResponse,
   type Period,
@@ -101,8 +102,22 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
   // dedicated /v1/streak endpoint that walks games one-by-one (the
   // day-bucketed series can't represent streak correctly because a
   // single mixed day collapses the count to 0).
+  //
+  // Scope the query to today's local-tz window via `since`. Without it,
+  // a user with a multi-year history matches the full lifetime range,
+  // which makes the server's `_fitInterval` widen `day` → `week` to
+  // stay under the bucket cap. Weekly buckets are keyed by start-of-week
+  // and never match `todayKeyIn(tz)`, so "Games today" silently flips
+  // to 0 once UTC rolls over even though games exist in the user's
+  // local today. Filtering to today keeps the matched span < 24h, which
+  // pins the interval at `day` and produces a single bucket that lines
+  // up with `todayKeyIn`.
+  const globalSeriesQuery = useMemo(() => {
+    const since = startOfTodayInTz(tz).toISOString();
+    return `interval=day&tz=${encodeURIComponent(tz)}&since=${encodeURIComponent(since)}`;
+  }, [tz]);
   const globalSeries = useApi<ApiTimeseriesResponse>(
-    `/v1/timeseries?interval=day&tz=${encodeURIComponent(tz)}`,
+    `/v1/timeseries?${globalSeriesQuery}`,
   );
   const gamesToday = useMemo(
     () => computeGamesToday(apiToPeriods(globalSeries.data, tz), tz),
