@@ -166,12 +166,20 @@ async function lengthBuckets(deps, userId, filters) {
       { $addFields: { _bucket: deps.bucketSwitch() } },
       {
         $addFields: {
+          // Eight finer-grained buckets: short games (cheese, all-ins,
+          // GG-outs) are split from "first push" 6-9m timing wars, and
+          // the long-game tail is split into 15-20 / 20-25 / 25m+ so
+          // the macro-vs-late-macro signal isn't crushed into one bar.
           _len: {
             $switch: {
               branches: [
-                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 8 * 60] }, then: "<8m" },
-                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 15 * 60] }, then: "8–15m" },
-                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 25 * 60] }, then: "15–25m" },
+                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 3 * 60] }, then: "0–3m" },
+                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 6 * 60] }, then: "3–6m" },
+                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 9 * 60] }, then: "6–9m" },
+                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 12 * 60] }, then: "9–12m" },
+                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 15 * 60] }, then: "12–15m" },
+                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 20 * 60] }, then: "15–20m" },
+                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 25 * 60] }, then: "20–25m" },
               ],
               default: "25m+",
             },
@@ -199,7 +207,16 @@ async function lengthBuckets(deps, userId, filters) {
       },
     ])
     .toArray();
-  const order = { "<8m": 0, "8–15m": 1, "15–25m": 2, "25m+": 3 };
+  const order = {
+    "0–3m": 0,
+    "3–6m": 1,
+    "6–9m": 2,
+    "9–12m": 3,
+    "12–15m": 4,
+    "15–20m": 5,
+    "20–25m": 6,
+    "25m+": 7,
+  };
   rows.sort((a, b) => (order[a.bucket] ?? 99) - (order[b.bucket] ?? 99));
   return {
     buckets: rows.map((r) => ({
@@ -231,7 +248,12 @@ async function activityCalendar(deps, userId, opts, filters) {
           total: { $sum: 1 },
         },
       },
-      { $sort: { _id: 1 } },
+      // Sort newest-first so the limit truncates ancient history, not
+      // the recent days the calendar actually paints. With the legacy
+      // ascending sort, accounts with > ~2 years of daily activity
+      // had every visible cell fall outside the kept window and
+      // rendered as an all-grey grid even with thousands of games.
+      { $sort: { _id: -1 } },
       { $limit: LIMITS.TIMESERIES_MAX_BUCKETS * 2 },
       {
         $project: {

@@ -273,23 +273,27 @@ describe("services/aggregations", () => {
     expect(out.cells[1].winRate).toBe(0);
   });
 
-  test("lengthBuckets orders rows <8m → 25m+ and computes winRate + avgSec", async () => {
+  test("lengthBuckets orders rows 0–3m → 25m+ and computes winRate + avgSec", async () => {
     const games = buildGames([
       () => [
         { bucket: "25m+", wins: 1, losses: 1, total: 2, avgSec: 1800 },
-        { bucket: "<8m", wins: 4, losses: 1, total: 5, avgSec: 360 },
-        { bucket: "8–15m", wins: 3, losses: 2, total: 5, avgSec: 720 },
+        { bucket: "0–3m", wins: 4, losses: 1, total: 5, avgSec: 90 },
+        { bucket: "12–15m", wins: 3, losses: 2, total: 5, avgSec: 780 },
+        { bucket: "6–9m", wins: 2, losses: 1, total: 3, avgSec: 450 },
+        { bucket: "20–25m", wins: 1, losses: 0, total: 1, avgSec: 1380 },
       ],
     ]);
     const svc = new AggregationsService({ games });
     const out = /** @type {any} */ (await svc.lengthBuckets("u1", {}));
     expect(out.buckets.map((b) => b.bucket)).toEqual([
-      "<8m",
-      "8–15m",
+      "0–3m",
+      "6–9m",
+      "12–15m",
+      "20–25m",
       "25m+",
     ]);
     expect(out.buckets[0].winRate).toBeCloseTo(0.8);
-    expect(out.buckets[0].avgSec).toBe(360);
+    expect(out.buckets[0].avgSec).toBe(90);
   });
 
   test("activityCalendar returns one row per day with computed winRate", async () => {
