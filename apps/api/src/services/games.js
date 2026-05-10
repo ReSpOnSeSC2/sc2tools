@@ -239,6 +239,12 @@ class GamesService {
    * skew or unrecognised TZ the widget still ticks rather than going
    * blank.
    *
+   * Within today, an additional 4-hour-inactivity rule narrows the
+   * active session to the streamer's most recent play burst — see the
+   * gap walk below. This prevents the W-L card showing yesterday's
+   * late-evening grind when the streamer wakes up and re-checks the
+   * overlay before queueing again.
+   *
    * The pre-filter trims the candidate set to a 48-hour window before
    * the per-row timezone math runs. 48h is a strict superset of "today
    * in any IANA TZ" (max ±14h offset = 28h diff between two TZ
@@ -312,6 +318,20 @@ class GamesService {
     let lastKnownMmrToonHandle;
     /** @type {Array<'win'|'loss'>} */
     const todayResults = [];
+    /**
+     * Today's games, in chronological order, captured as a list before
+     * the W-L roll-up. We can't accumulate stats inline because the
+     * 4-hour-inactivity reset below has to look at the LAST game's
+     * timestamp to decide whether the active session is empty (streamer
+     * walked away) or runs back through earlier games (continuous
+     * grind). The lastKnownMmr / toon-handle fallbacks below still need
+     * a single pass over the full 14-day window though, so the loop
+     * itself stays — we just drop today's matches into ``todayGames``
+     * instead of folding them into wins/losses immediately.
+     *
+     * @type {Array<{ ts: Date, result: string, myMmr: number }>}
+     */
+    const todayGames = [];
     for (const row of rows) {
       const date = row.date instanceof Date ? row.date : new Date(row.date);
       if (Number.isNaN(date.getTime())) continue;
@@ -338,9 +358,42 @@ class GamesService {
         lastKnownMyToonHandle = myToon;
       }
       if (formatDayKey(date, tz) !== todayKey) continue;
+      todayGames.push({ ts: date, result: String(row.result || ""), myMmr: my });
+    }
+    // 4-hour-inactivity reset. The active session is the most recent
+    // contiguous run of today's games where no game-to-game gap exceeds
+    // INACTIVITY_THRESHOLD_MS. If the streamer's most recent game is
+    // itself older than the threshold the active session is empty —
+    // the widget should not keep showing late-evening W-L past dawn
+    // when the streamer has clearly stepped away. A within-day break
+    // (e.g. morning warm-up, 5h pause, afternoon grind) splits the
+    // same way: only the post-break games count.
+    //
+    // A "session" in streamer parlance is a play burst, not a
+    // calendar-day total. We still scope the input to today's day key
+    // so a streamer who started at 11:55 PM and crossed midnight gets
+    // a fresh session-start at midnight (the toggle point most
+    // streamers expect for their daily MMR delta) — the gap walk just
+    // narrows that further when there's a long pause inside today.
+    const INACTIVITY_THRESHOLD_MS = 4 * 60 * 60 * 1000;
+    let activeStart = todayGames.length;
+    if (todayGames.length > 0) {
+      const lastTs = todayGames[todayGames.length - 1].ts.getTime();
+      if (Date.now() - lastTs <= INACTIVITY_THRESHOLD_MS) {
+        activeStart = todayGames.length - 1;
+        for (let i = todayGames.length - 2; i >= 0; i -= 1) {
+          const gap =
+            todayGames[i + 1].ts.getTime() - todayGames[i].ts.getTime();
+          if (gap > INACTIVITY_THRESHOLD_MS) break;
+          activeStart = i;
+        }
+      }
+    }
+    for (let i = activeStart; i < todayGames.length; i += 1) {
+      const g = todayGames[i];
       games += 1;
-      if (sessionStartedAt === undefined) sessionStartedAt = date.toISOString();
-      const r = String(row.result || "").toLowerCase();
+      if (sessionStartedAt === undefined) sessionStartedAt = g.ts.toISOString();
+      const r = g.result.toLowerCase();
       if (r === "victory" || r === "win") {
         wins += 1;
         todayResults.push("win");
@@ -348,9 +401,9 @@ class GamesService {
         losses += 1;
         todayResults.push("loss");
       }
-      if (Number.isFinite(my)) {
-        if (mmrStart === undefined) mmrStart = my;
-        mmrCurrent = my;
+      if (Number.isFinite(g.myMmr)) {
+        if (mmrStart === undefined) mmrStart = g.myMmr;
+        mmrCurrent = g.myMmr;
       }
     }
     /**
