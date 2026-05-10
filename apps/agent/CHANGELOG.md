@@ -2,6 +2,41 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.6.4
+
+### Fixed — Live bridge resets and re-announces match identity on server / region switch
+- `LiveBridge` now tracks the streamer's own toon-handle region byte
+  via the new `set_user_toon_handle()` setter. Whenever the leading
+  byte changes (NA → EU, EU → KR, etc.) the bridge:
+  - drops `_current` so the prior server's per-match context can't
+    bleed into the new server (a still-in-flight Pulse callback for
+    the old match would otherwise merge into the new one and
+    poison its `streamerHistory`);
+  - prepends a synthetic `MENU` + `MATCH_LOADING` envelope pair to
+    the next active-phase event so cloud overlay clients clear stale
+    state and the new gameKey-change effect fires on the
+    Browser-Source side, even when the SC2 client jumps from
+    `MATCH_ENDED` straight to `MATCH_IN_PROGRESS`.
+- The synthetic prelude carries `synthetic: true` for telemetry.
+  Both envelopes are tagged with the new match's `gameKey` so the
+  cloud's enrichment cache and the overlay widget renderer treat
+  the post-switch match as a brand-new identity.
+- A real `IDLE` / `MENU` event still serves as a transition
+  boundary — the bridge clears the pending-transition flag so a
+  natural main-menu return doesn't double-fire the prelude.
+- Region detection lives in a new shared
+  `sc2tools_agent.live.region.region_from_toon_handle` helper so
+  the live bridge and the existing uploader agree on the byte →
+  label mapping (NA / EU / KR / CN / SEA).
+
+User-visible effect: streamers who switch SC2 servers mid-stream
+no longer see the prior server's opponent dossier (Opponent +
+Scouting widgets) frozen on their OBS scene through the next
+match. Widgets refresh automatically on the new server's first
+queue, matching the behaviour the cloud-side fix in
+[apps#185](https://github.com/ReSpOnSeSC2/sc2tools/pull/185)
+already implemented for the post-game `overlay:live` payload.
+
 ## 0.6.3
 
 ### Fixed — opponents stuck on `1-S2-1-XXXXX TOON` instead of upgrading to a Pulse character id
