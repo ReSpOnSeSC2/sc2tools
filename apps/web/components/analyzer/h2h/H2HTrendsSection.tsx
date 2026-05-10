@@ -45,7 +45,8 @@ const LS_ROLLING = "analyzer.h2h.rolling";
 const LS_SPLIT = "analyzer.h2h.split";
 const LS_MATRIX = "analyzer.h2h.matrixSize";
 
-const ROLLING_OPTIONS = [3, 5, 10, 20] as const;
+const ROLLING_OPTIONS = [1, 3, 5, 10, 20] as const;
+type RollingOption = (typeof ROLLING_OPTIONS)[number];
 const HASH_PREFIX = "#h2h=";
 
 function readLs<T>(key: string, fallback: T): T {
@@ -102,7 +103,7 @@ export function H2HTrendsSection({
   );
   const [rollingWindow, setRollingWindow] = useState<number>(() => {
     const stored = readLs<number>(LS_ROLLING, 5);
-    return ROLLING_OPTIONS.includes(stored as 3 | 5 | 10 | 20) ? stored : 5;
+    return ROLLING_OPTIONS.includes(stored as RollingOption) ? stored : 5;
   });
   const [split, setSplit] = useState<SplitMode>(() => {
     const v = readLs<string>(LS_SPLIT, "halves");
@@ -158,14 +159,14 @@ export function H2HTrendsSection({
   // there's enough data.
   const allowedRolling = useMemo(
     () =>
-      ROLLING_OPTIONS.filter((n) => n <= Math.max(2, Math.min(20, decidedCount))),
+      ROLLING_OPTIONS.filter((n) => n <= Math.max(1, Math.min(20, decidedCount))),
     [decidedCount],
   );
   const effectiveRolling = useMemo(() => {
-    if (allowedRolling.includes(rollingWindow as 3 | 5 | 10 | 20)) {
+    if (allowedRolling.includes(rollingWindow as RollingOption)) {
       return rollingWindow;
     }
-    return allowedRolling.length > 0 ? allowedRolling[allowedRolling.length - 1] : 3;
+    return allowedRolling.length > 0 ? allowedRolling[allowedRolling.length - 1] : 1;
   }, [allowedRolling, rollingWindow]);
 
   const isTimelineView = view === "timeline";
