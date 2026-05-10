@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
@@ -16,6 +17,9 @@ import { PredictedStrategiesList } from "./PredictedStrategiesList";
 import type { Prediction } from "./PredictedStrategiesList";
 import { StrategyTendencyChart } from "./StrategyTendencyChart";
 import type { StrategyEntry } from "./StrategyTendencyChart";
+import { H2HTrendsSection } from "./h2h/H2HTrendsSection";
+import type { BuildMatchupSelection } from "./h2h/BuildMatrix";
+import { gameOutcome } from "@/lib/h2hSeries";
 
 type OpponentProfileResp = {
   pulseId?: string;
@@ -78,28 +82,59 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   const { data, isLoading } = useApi<OpponentProfileResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}`,
   );
+  // Lifted filter state — clicking a row label in the H2H "Maps"
+  // view, or a cell in the "Builds" matrix, narrows the All-games
+  // table and the by-map / by-strategy summary cards below it. The
+  // chips inside the H2H header surface the active filter and clear
+  // it on tap.
+  const [selectedMap, setSelectedMap] = useState<string | null>(null);
+  const [selectedBuildMatchup, setSelectedBuildMatchup] =
+    useState<BuildMatchupSelection | null>(null);
+  const [pendingGameId, setPendingGameId] = useState<string | null>(null);
+  const [pendingGameSeq, setPendingGameSeq] = useState<number>(0);
+
+  const games: ProfileGame[] = useMemo(() => data?.games || [], [data?.games]);
+  const filteredGames = useMemo(() => {
+    if (!selectedMap && !selectedBuildMatchup) return games;
+    return games.filter((g) => {
+      if (selectedMap && (g.map || "") !== selectedMap) return false;
+      if (selectedBuildMatchup) {
+        if ((g.my_build || "") !== selectedBuildMatchup.myBuild) return false;
+        if ((g.opp_strategy || "") !== selectedBuildMatchup.oppStrategy) return false;
+      }
+      return true;
+    });
+  }, [games, selectedMap, selectedBuildMatchup]);
+
   if (isLoading) return <Skeleton rows={6} />;
   if (!data) return <EmptyState title="Opponent not found" sub={pulseId} />;
-  const t = data.totals || { wins: 0, losses: 0, total: 0, winRate: 0 };
+  const filterActive = !!selectedMap || !!selectedBuildMatchup;
+  const t = filterActive
+    ? totalsFromGames(filteredGames)
+    : data.totals || { wins: 0, losses: 0, total: 0, winRate: 0 };
   const publicHref = `/community/opponents/${encodeURIComponent(pulseId)}`;
-  const byMap = Object.entries(data.byMap || {})
-    .map(([name, v]) => ({
-      name,
-      wins: v.wins,
-      losses: v.losses,
-      total: v.wins + v.losses,
-      winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
-    }))
-    .sort((a, b) => b.total - a.total);
-  const byStrategy = Object.entries(data.byStrategy || {})
-    .map(([name, v]) => ({
-      name,
-      wins: v.wins,
-      losses: v.losses,
-      total: v.wins + v.losses,
-      winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
-    }))
-    .sort((a, b) => b.total - a.total);
+  const byMap = filterActive
+    ? rollUpByMap(filteredGames)
+    : Object.entries(data.byMap || {})
+        .map(([name, v]) => ({
+          name,
+          wins: v.wins,
+          losses: v.losses,
+          total: v.wins + v.losses,
+          winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
+        }))
+        .sort((a, b) => b.total - a.total);
+  const byStrategy = filterActive
+    ? rollUpByStrategy(filteredGames)
+    : Object.entries(data.byStrategy || {})
+        .map(([name, v]) => ({
+          name,
+          wins: v.wins,
+          losses: v.losses,
+          total: v.wins + v.losses,
+          winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
+        }))
+        .sort((a, b) => b.total - a.total);
   const medianTimings = data.medianTimingsLegacy || {};
   const medianTimingsOrder =
     data.medianTimingsOrder && data.medianTimingsOrder.length
@@ -107,7 +142,11 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
       : Object.keys(medianTimings);
   const matchupTimings = data.matchupTimingsLegacy || {};
   const matchupCounts = data.matchupCounts || {};
-  const games = data.games || [];
+  const opponentName = data.name || data.pulseId || pulseId;
+  const handleSelectGame = (id: string) => {
+    setPendingGameId(id);
+    setPendingGameSeq((n) => n + 1);
+  };
 
   return (
     <div className="space-y-5">
@@ -199,6 +238,17 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         </Card>
       </div>
 
+      <H2HTrendsSection
+        games={games}
+        oppRace={data.oppRaceModal}
+        opponentName={opponentName}
+        selectedMap={selectedMap}
+        onSelectMap={setSelectedMap}
+        selectedBuildMatchup={selectedBuildMatchup}
+        onSelectBuildMatchup={setSelectedBuildMatchup}
+        onSelectGame={handleSelectGame}
+      />
+
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card
           title={`Median key timings${data.matchupLabel ? ` — ${data.matchupLabel}` : ""}`}
@@ -209,7 +259,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
             matchupLabel={data.matchupLabel || ""}
             matchupCounts={matchupCounts}
             matchupTimings={matchupTimings}
-            opponentName={data.name || data.pulseId || pulseId}
+            opponentName={opponentName}
           />
           <p className="mt-2 text-[10px] text-text-dim">
             Opponent-tech cards come from the agent-uploaded opponent build
@@ -223,11 +273,94 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         </Card>
       </div>
 
-      <Card title={`All games (${games.length}) · newest first`}>
-        <AllGamesTable games={games} />
+      <Card
+        title={
+          filterActive
+            ? `All games (${filteredGames.length} of ${games.length}) · newest first`
+            : `All games (${games.length}) · newest first`
+        }
+      >
+        <AllGamesTable
+          games={filteredGames}
+          targetGameId={pendingGameId}
+          targetGameSeq={pendingGameSeq}
+        />
       </Card>
     </div>
   );
+}
+
+function rollUpByMap(games: ProfileGame[]): Array<{
+  name: string;
+  wins: number;
+  losses: number;
+  total: number;
+  winRate: number;
+}> {
+  const acc = new Map<string, { wins: number; losses: number }>();
+  for (const g of games) {
+    const o = gameOutcome(g);
+    if (o === "U") continue;
+    const name = (g.map || "—").trim() || "—";
+    const cur = acc.get(name) || { wins: 0, losses: 0 };
+    if (o === "W") cur.wins++;
+    else cur.losses++;
+    acc.set(name, cur);
+  }
+  return Array.from(acc.entries())
+    .map(([name, v]) => ({
+      name,
+      wins: v.wins,
+      losses: v.losses,
+      total: v.wins + v.losses,
+      winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
+function rollUpByStrategy(games: ProfileGame[]): Array<{
+  name: string;
+  wins: number;
+  losses: number;
+  total: number;
+  winRate: number;
+}> {
+  const acc = new Map<string, { wins: number; losses: number }>();
+  for (const g of games) {
+    const o = gameOutcome(g);
+    if (o === "U") continue;
+    const name = (g.opp_strategy || "—").trim() || "—";
+    const cur = acc.get(name) || { wins: 0, losses: 0 };
+    if (o === "W") cur.wins++;
+    else cur.losses++;
+    acc.set(name, cur);
+  }
+  return Array.from(acc.entries())
+    .map(([name, v]) => ({
+      name,
+      wins: v.wins,
+      losses: v.losses,
+      total: v.wins + v.losses,
+      winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
+function totalsFromGames(games: ProfileGame[]): {
+  wins: number;
+  losses: number;
+  total: number;
+  winRate: number;
+} {
+  let wins = 0;
+  let losses = 0;
+  for (const g of games) {
+    const o = gameOutcome(g);
+    if (o === "W") wins++;
+    else if (o === "L") losses++;
+  }
+  const total = wins + losses;
+  return { wins, losses, total, winRate: total > 0 ? wins / total : 0 };
 }
 
 function buildProfileQuery(since: string | undefined, until: string | undefined): string {
