@@ -21,7 +21,7 @@ const baseDataset: ArcadeDataset = {
 };
 
 describe("Stock Market: build universe + price math", () => {
-  test("universe is the union of own + eligible community builds (joined by name)", () => {
+  test("universe is the union of own + eligible community + all authored custom builds", () => {
     const dataset: ArcadeDataset = {
       ...baseDataset,
       builds: [{ name: "Reaper FE", total: 12, wins: 8, losses: 4, winRate: 0.67 }],
@@ -29,12 +29,35 @@ describe("Stock Market: build universe + price math", () => {
         { slug: "reaper-fe", title: "Reaper FE", race: "T", votes: 12 },
         { slug: "stargate-opener", title: "Stargate Opener", race: "P", votes: 9 }, // never played
       ],
-      customBuilds: [{ slug: "my-special", name: "Reaper FE", race: "T", vsRace: "Z" }],
+      customBuilds: [
+        { slug: "my-special", name: "Reaper FE", race: "T", vsRace: "Z" },
+        // Authored custom build the user has never played — must still
+        // enter the universe (untradeable until 3 plays accrue).
+        { slug: "wip-build", name: "Triple Stargate Experiment", race: "P", vsRace: "X" },
+      ],
     };
     const u = buildUniverse(dataset);
-    // "Reaper FE" comes through once via /v1/builds; not duplicated by community
-    // or custom. "Stargate Opener" is excluded because the user never played it.
-    expect(u.map((b) => b.name)).toEqual(["Reaper FE"]);
+    const names = u.map((b) => b.name).sort();
+    expect(names).toContain("Reaper FE");
+    expect(names).toContain("Triple Stargate Experiment");
+    // "Stargate Opener" is excluded because the user never played it AND
+    // never authored it.
+    expect(names).not.toContain("Stargate Opener");
+    // No name duplication across own/community/custom.
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  test("brand-new authored custom build enters universe with totalPlays=0", () => {
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      customBuilds: [
+        { slug: "fresh", name: "Brand New Build", race: "Z", vsRace: "X" },
+      ],
+    };
+    const u = buildUniverse(dataset);
+    expect(u).toHaveLength(1);
+    expect(u[0].totalPlays).toBe(0);
+    expect(u[0].source).toBe("custom");
   });
 
   test("rolling14DayWr returns null below 3 plays in window", () => {
@@ -61,6 +84,32 @@ describe("Stock Market: build universe + price math", () => {
       ],
     };
     expect(rolling14DayWr("X", dataset, now)).toBeCloseTo(2 / 3, 5);
+  });
+
+  test("matchup-agnostic build priced from games across multiple opponent races (vsRace='X')", () => {
+    // The custom build "Universal" was authored with vsRace="X", meaning
+    // it should be priced from wins/losses across any opponent race.
+    const now = new Date("2026-05-10T00:00:00Z");
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      customBuilds: [
+        { slug: "uni", name: "Universal", race: "Z", vsRace: "X" },
+      ],
+      games: [
+        { gameId: "1", date: "2026-05-09T00:00:00Z", result: "Win", myBuild: "Universal", oppRace: "T" },
+        { gameId: "2", date: "2026-05-09T00:00:00Z", result: "Win", myBuild: "Universal", oppRace: "P" },
+        { gameId: "3", date: "2026-05-09T00:00:00Z", result: "Win", myBuild: "Universal", oppRace: "Z" },
+        { gameId: "4", date: "2026-05-09T00:00:00Z", result: "Loss", myBuild: "Universal", oppRace: "T" },
+      ],
+    };
+    // 3 wins + 1 loss = 0.75 — naïvely counts all races.
+    expect(rolling14DayWr("Universal", dataset, now)).toBeCloseTo(0.75, 5);
+    const u = buildUniverse(dataset);
+    // Universe contains the authored custom build (zero plays from
+    // /v1/builds, but it must still surface).
+    const uni = u.find((b) => b.name === "Universal");
+    expect(uni).toBeDefined();
+    expect(uni!.source).toBe("custom");
   });
 
   test("attack/defense/foil derivations are within bounds and sensible", () => {

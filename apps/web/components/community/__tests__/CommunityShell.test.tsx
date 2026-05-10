@@ -10,13 +10,18 @@ vi.mock("next/navigation", () => ({
 describe("CommunityShell", () => {
   afterEach(() => cleanup());
 
-  test("renders both tabs (Community Builds + Leaderboard)", () => {
+  test("renders both tabs (Community + Leaderboard)", () => {
     render(
       <CommunityShell active="builds">
         <div>builds-body</div>
       </CommunityShell>,
     );
-    expect(screen.getByRole("tab", { name: /community builds/i })).toBeTruthy();
+    // Community tab label is "Community" (not "Community Builds"); use an
+    // exact match so the regex doesn't accidentally also catch a stray
+    // "Community Builds" if one returns.
+    expect(
+      screen.getByRole("tab", { name: (name) => name.trim() === "Community" }),
+    ).toBeTruthy();
     expect(screen.getByRole("tab", { name: /leaderboard/i })).toBeTruthy();
     expect(screen.getByText("builds-body")).toBeTruthy();
   });

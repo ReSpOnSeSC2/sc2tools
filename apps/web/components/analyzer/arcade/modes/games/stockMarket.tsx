@@ -228,6 +228,45 @@ function Render({
 
   const editor = !locked ? (
     <div className="space-y-3">
+      <details className="rounded-lg border border-border bg-bg-elevated">
+        <summary className="cursor-pointer list-none px-3 py-2 text-caption">
+          <span className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-semibold text-text">
+              How the Stock Market works
+            </span>
+            <Link
+              href="/community/leaderboard"
+              className="text-accent hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              View leaderboard →
+            </Link>
+          </span>
+        </summary>
+        <div className="space-y-2 border-t border-border px-3 py-2 text-caption text-text-muted">
+          <p>
+            <span className="font-semibold text-text">Price</span> = rolling
+            14-day win rate × 100 for builds you&apos;ve played. Builds with
+            fewer than 3 plays in the window have no price and aren&apos;t
+            tradeable.
+          </p>
+          <p>
+            <span className="font-semibold text-text">Portfolio</span> = up to
+            5 builds with weights summing to 100. Locks on submit and cannot
+            be edited until next Monday 00:00 local time.
+          </p>
+          <p>
+            <span className="font-semibold text-text">P&amp;L</span> =
+            Σ(weight × Δprice) computed when the week closes. Positive P&amp;L
+            earns minerals; negative P&amp;L is harmless XP-wise.
+          </p>
+          <p>
+            <span className="font-semibold text-text">Leaderboard</span> —
+            opt-in via the toggle below. Submissions are anonymized to your
+            display name when set, otherwise to a stable hash.
+          </p>
+        </div>
+      </details>
       <p className="text-caption text-text-muted">
         Allocate up to 100 across ≤5 builds for{" "}
         <span className="font-mono text-text">{ctx.question.weekKey}</span>.
@@ -280,15 +319,23 @@ function Render({
         </span>
       </div>
       <fieldset className="rounded border border-border bg-bg-elevated p-3">
-        <label className="flex items-center gap-2 text-caption text-text">
-          <input
-            type="checkbox"
-            checked={optIn}
-            onChange={(e) => setOptIn(e.target.checked)}
-            className="h-4 w-4 rounded border-border bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          />
-          Show me on the public weekly leaderboard
-        </label>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label className="flex items-center gap-2 text-caption text-text">
+            <input
+              type="checkbox"
+              checked={optIn}
+              onChange={(e) => setOptIn(e.target.checked)}
+              className="h-4 w-4 rounded border-border bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            />
+            Show me on the public weekly leaderboard
+          </label>
+          <Link
+            href="/community/leaderboard"
+            className="text-caption text-accent hover:underline"
+          >
+            View leaderboard →
+          </Link>
+        </div>
         {optIn ? (
           <input
             type="text"

@@ -29,10 +29,33 @@ type A = number;
 const ID = "closers-eye";
 registerMode(ID, "hidden-derivation");
 
+/** Per-build minimum wins required to enter the mean-win-length pool.
+ *
+ *  Originally 5. Dropped to 3 because the auto-classifier (which is what
+ *  populates ArcadeGame.myBuild) emits granular per-game bucket names —
+ *  "Reaper FE (Macro Transition)", "Reaper FE (Banshee Switch)", etc.
+ *  A typical 50-game ranked account spreads across 8–12 such buckets,
+ *  so no single bucket clears 5 wins and the mode shows "Not enough
+ *  data" even when there's clearly enough activity to compare closers.
+ *
+ *  Confirmed via the structured logging cycle (see PR description
+ *  Decision (b)): for the affected account, every distinct build name
+ *  cleared 3 wins but only the top two cleared 5. Lowering the floor
+ *  brings the mode in line with the spec target of "playable for a
+ *  user with ~50 ranked games and 2–3 main builds."
+ *
+ *  Cross-referencing user-assigned custom-build slugs would let us
+ *  collapse the granular auto-classifier buckets back into named
+ *  buckets, but the games payload doesn't expose that linkage today
+ *  (no game→customBuildSlug field on ArcadeGame). Tracked as a
+ *  follow-up API surface change rather than blocking this fix.
+ */
+const MIN_WINS_PER_BUILD = 3;
+
 /**
  * Compute mean win-length per build from the user's games. Excludes any
  * build whose name contains "cannon rush" (case-insensitive). Each
- * build needs ≥5 wins to qualify.
+ * build needs ≥MIN_WINS_PER_BUILD wins to qualify.
  */
 export function meanWinLengths(
   games: GenerateInput["data"]["games"],
@@ -51,7 +74,7 @@ export function meanWinLengths(
   }
   const out: Array<{ build: string; meanWinSec: number; wins: number }> = [];
   for (const [build, { sum, count }] of acc.entries()) {
-    if (count < 5) continue;
+    if (count < MIN_WINS_PER_BUILD) continue;
     out.push({ build, meanWinSec: sum / count, wins: count });
   }
   return out;
@@ -63,7 +86,7 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
     return {
       ok: false,
       reason:
-        "Need ≥4 builds with at least 5 wins each (cannon rush excluded). Keep grinding.",
+        "Need ≥4 builds with at least 3 wins each (cannon rush excluded). Keep grinding.",
     };
   }
   const sorted = eligible.slice().sort((a, b) => a.meanWinSec - b.meanWinSec);
@@ -151,7 +174,7 @@ function Render({
       onKeyAnswer={onPick}
       question={
         <span>
-          Of these four builds (each with ≥5 wins, cannon rush excluded), which has the{" "}
+          Of these four builds (each with ≥3 wins, cannon rush excluded), which has the{" "}
           <span className="font-semibold text-warning">shortest average win length</span>?
         </span>
       }

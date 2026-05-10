@@ -10,34 +10,30 @@
 // SC2Pulse on every request, with a stale-while-error policy: if a
 // refresh fails we keep serving the previous payload.
 
+const { LadderMapPoolService, FALLBACK_POOL } = require("./ladderMapPool");
+
 const PULSE_API_ROOT = "https://sc2pulse.nephest.com/sc2/api";
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const REQUEST_TIMEOUT_MS = 8000;
 
-// Current 1v1 ladder map pool. SC2Pulse does not expose the active pool
-// per season; Blizzard rotates it on a multi-month cadence and we mirror
-// the latest Battle.net 1v1 ranked set here. Treated as the catalog of
-// names Bingo: Ladder Edition is allowed to draw map-bound objectives
-// from. Update as the pool rotates — single additive surface so callers
-// don't have to special-case "no pool".
-const CURRENT_LADDER_MAP_POOL = Object.freeze([
-  "Equilibrium",
-  "Goldenaura",
-  "Hard Lead",
-  "Oceanborn",
-  "Site Delta",
-  "El Dorado",
-  "Whispers of Gold",
-  "Pylon Overgrowth",
-  "Frostline",
-]);
-
 class SeasonsService {
+  /**
+   * @param {{
+   *   fetchImpl?: typeof globalThis.fetch,
+   *   now?: () => number,
+   *   ladderMapPool?: LadderMapPoolService,
+   * }} [opts]
+   */
   constructor(opts = {}) {
     this.fetchImpl = opts.fetchImpl || globalThis.fetch;
     this.now = opts.now || (() => Date.now());
     /** @type {{ items: SeasonEntry[], fetchedAt: number } | null} */
     this._cache = null;
+    // Composition over inheritance — the map-pool catalog is its own
+    // service so the refresh cron can reach it without coupling to
+    // season-list concerns.
+    this.ladderMapPool =
+      opts.ladderMapPool || new LadderMapPoolService();
   }
 
   /**
@@ -49,32 +45,49 @@ class SeasonsService {
    */
   async list() {
     const now = this.now();
+    // Map pool is fetched in parallel with the season catalog so a slow
+    // Liquipedia response doesn't add latency to a cached seasons read.
+    const mapPoolPromise = this._safeMapPool();
+    let payload;
     if (
       this._cache
       && now - this._cache.fetchedAt < CACHE_TTL_MS
       && this._cache.items.length > 0
     ) {
-      return this._respond(this._cache.items, this._cache.fetchedAt, "pulse");
+      payload = this._respondBase(this._cache.items, this._cache.fetchedAt, "pulse");
+    } else {
+      const items = await this._fetchFromPulse();
+      if (items && items.length > 0) {
+        this._cache = { items, fetchedAt: now };
+        payload = this._respondBase(items, now, "pulse");
+      } else if (this._cache && this._cache.items.length > 0) {
+        // Stale-while-error: serve previous payload.
+        payload = this._respondBase(this._cache.items, this._cache.fetchedAt, "pulse");
+      } else {
+        payload = {
+          items: [],
+          current: null,
+          source: "fallback",
+          fetchedAt: null,
+        };
+      }
     }
-    const items = await this._fetchFromPulse();
-    if (items && items.length > 0) {
-      this._cache = { items, fetchedAt: now };
-      return this._respond(items, now, "pulse");
-    }
-    if (this._cache && this._cache.items.length > 0) {
-      // Stale-while-error: serve previous payload.
-      return this._respond(this._cache.items, this._cache.fetchedAt, "pulse");
-    }
-    return {
-      items: [],
-      current: null,
-      source: "fallback",
-      fetchedAt: null,
-      mapPool: CURRENT_LADDER_MAP_POOL.slice(),
-    };
+    const mapPool = await mapPoolPromise;
+    return { ...payload, mapPool };
   }
 
-  _respond(items, fetchedAt, source) {
+  /** @returns {Promise<string[]>} */
+  async _safeMapPool() {
+    try {
+      const res = await this.ladderMapPool.get();
+      if (Array.isArray(res.maps) && res.maps.length > 0) return res.maps;
+    } catch {
+      // Fallthrough to baked constant.
+    }
+    return FALLBACK_POOL.slice();
+  }
+
+  _respondBase(items, fetchedAt, source) {
     const current = items.reduce(
       (best, s) => (best == null || s.battlenetId > best ? s.battlenetId : best),
       /** @type {number | null} */ (null),
@@ -87,7 +100,6 @@ class SeasonsService {
       current,
       source,
       fetchedAt,
-      mapPool: CURRENT_LADDER_MAP_POOL.slice(),
     };
   }
 

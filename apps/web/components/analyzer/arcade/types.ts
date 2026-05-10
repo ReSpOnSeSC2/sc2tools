@@ -150,12 +150,30 @@ export interface ArcadeGame {
 }
 
 export interface ArcadeOpponent {
+  /** Stable id used as the React key and in question payloads. */
   pulseId: string;
+  /** Canonical numeric sc2pulse character id, when resolved at ingest. */
+  pulseCharacterId?: string | null;
+  /** Raw display name from the source row (may be a smurf barcode). */
   name: string;
+  /** Resolved sc2pulse display name; preferred over `name` when present. */
+  displayName?: string | null;
   wins: number;
   losses: number;
   games: number;
-  winRate: number;
+  /**
+   * The USER's win rate against this opponent (wins / (wins+losses)).
+   * "userWinRate" — disambiguated from the opponent's perspective.
+   * Modes phrased as "WR vs you" must rank by opponentWinRate (below),
+   * not this field.
+   */
+  userWinRate: number;
+  /**
+   * The OPPONENT's win rate against the user. Always 1 - userWinRate
+   * when total > 0, 0 otherwise. Pre-computed so modes that prompt
+   * "WR against you" don't have to remember to invert.
+   */
+  opponentWinRate: number;
   lastPlayed: string | null;
 }
 
