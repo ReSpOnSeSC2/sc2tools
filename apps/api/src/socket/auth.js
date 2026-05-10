@@ -3,6 +3,12 @@
 const { verifyToken } = require("@clerk/backend");
 const { sha256 } = require("../util/hash");
 
+/** Min interval (ms) between accepted ``overlay:resync`` requests on
+ * one socket. Tighter than 2 s would let a misbehaving client trigger
+ * a Mongo aggregation per tick; looser would feel laggy when the
+ * streamer manually refreshes. The 2 s figure is the spec floor. */
+const RESYNC_MIN_INTERVAL_MS = 2000;
+
 /**
  * Authenticate Socket.io connections. Three flavours of caller:
  *
@@ -21,6 +27,36 @@ const { sha256 } = require("../util/hash");
  *    `opp_build_order:recompute_request`) reach the right machine
  *    without requiring the agent to poll.
  *
+ * **Overlay events emitted by this module:**
+ *
+ *   * ``overlay:config`` — per-token enabled-widgets + voice prefs
+ *     (one-shot on connect / resync).
+ *   * ``overlay:session`` — today's W-L aggregate (one-shot on
+ *     connect / set_timezone / resync).
+ *   * ``overlay:liveGame`` — replayed once on overlay connect /
+ *     resync from ``LiveGameBroker.replayLatestForOverlay``;
+ *     prepended by a ``synthetic: true`` ``match_loading`` prelude
+ *     when the cached envelope is past the loading screen so the
+ *     client's gameKey-change effect always has a chance to fire.
+ *   * ``overlay:live`` — replayed once on overlay connect / resync
+ *     from ``LiveGameBroker.latestOverlayLive`` (the post-game
+ *     payload built by ``OverlayLiveService.buildFromGame``).
+ *   * ``overlay:heartbeat`` — reply to a client-initiated
+ *     ``overlay:heartbeat`` ping. Carries
+ *     ``{ gameKey: string|null, ts: number }`` so the client can
+ *     detect a disagreement (different gameKey or ``ts`` drift) and
+ *     trigger an ``overlay:resync``. Idempotent.
+ *
+ * **Overlay events received by this module:**
+ *
+ *   * ``overlay:set_timezone`` — late-binding tz from
+ *     ``Intl.DateTimeFormat`` once the page renders.
+ *   * ``overlay:resync`` — client-driven re-emit request. Fired on
+ *     reconnect or when the heartbeat reveals a gameKey drift.
+ *     Rate-limited to once per 2 s per socket.
+ *   * ``overlay:heartbeat`` — periodic 30 s ping from the client.
+ *     The cloud responds with the broker's current gameKey.
+ *
  * @param {import('socket.io').Server} io
  * @param {{
  *   secretKey: string,
@@ -33,6 +69,12 @@ const { sha256 } = require("../util/hash");
  *     mmrStart?: number, mmrCurrent?: number,
  *   }>,
  *   resolveVoicePrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
+ *   resolveLiveSnapshot?: (userId: string) => {
+ *     prelude?: object|null,
+ *     envelope?: object|null,
+ *     overlayLive?: object|null,
+ *     gameKey?: string|null,
+ *   } | null,
  * }} opts
  */
 function attachSocketAuth(io, opts) {
@@ -160,6 +202,18 @@ function attachSocketAuth(io, opts) {
           })
           .catch(() => {});
       }
+      // Replay the latest live state to the freshly-connected overlay.
+      // Without this, a Browser Source that reconnects mid-match
+      // (transient network blip; OBS scene swap; Streamlabs page
+      // refresh) would sit on a blank panel until the agent's next
+      // poll tick — up to 1 s for in-progress, indefinitely for the
+      // post-game ``overlay:live`` payload (which only emits on
+      // ingest). The synthetic prelude in ``replayLatestForOverlay``
+      // ensures the gameKey-change effect on the client fires even
+      // when the original ``match_loading`` event was missed.
+      if (u && opts.resolveLiveSnapshot) {
+        replayOverlayLiveSnapshot(socket, opts.resolveLiveSnapshot, u);
+      }
       // Allow OBS to refresh its tz late (e.g. after detecting it via
       // ``Intl.DateTimeFormat().resolvedOptions().timeZone`` on first
       // render). We honour it for the very next session emission.
@@ -184,6 +238,53 @@ function attachSocketAuth(io, opts) {
           }
         },
       );
+      // Client-driven resync. Fired on socket reconnect, on Browser
+      // Source page reload, or when the heartbeat reveals a gameKey
+      // drift. Rate-limited so a misbehaving client can't trigger a
+      // Mongo aggregation per tick.
+      socket.on("overlay:resync", () => {
+        const now = Date.now();
+        const last =
+          typeof socket.data.lastResyncMs === "number"
+            ? socket.data.lastResyncMs
+            : 0;
+        if (now - last < RESYNC_MIN_INTERVAL_MS) return;
+        socket.data.lastResyncMs = now;
+        const userId = socket.data.overlayUserId;
+        if (!userId) return;
+        if (opts.resolveSession) {
+          opts
+            .resolveSession(userId, socket.data.timezone)
+            .then((session) => {
+              if (session) socket.emit("overlay:session", session);
+            })
+            .catch(() => {});
+        }
+        if (opts.resolveLiveSnapshot) {
+          replayOverlayLiveSnapshot(socket, opts.resolveLiveSnapshot, userId);
+        }
+      });
+      // 30-second heartbeat the client uses to detect when its cached
+      // gameKey has drifted from the cloud's view (e.g. Streamlabs
+      // held the page from getting fresh socket events). The reply is
+      // unconditional so a client can't be left wondering whether its
+      // ping landed; the client compares its own ``liveGame.gameKey``
+      // against the reply and triggers a resync on mismatch.
+      socket.on("overlay:heartbeat", () => {
+        const userId = socket.data.overlayUserId;
+        let gameKey = null;
+        if (userId && opts.resolveLiveSnapshot) {
+          try {
+            const snap = opts.resolveLiveSnapshot(userId);
+            gameKey = snap && typeof snap.gameKey === "string"
+              ? snap.gameKey
+              : null;
+          } catch {
+            gameKey = null;
+          }
+        }
+        socket.emit("overlay:heartbeat", { gameKey, ts: Date.now() });
+      });
       return;
     }
     if (socket.data.kind === "device") {
@@ -204,4 +305,58 @@ function attachSocketAuth(io, opts) {
   });
 }
 
-module.exports = { attachSocketAuth };
+/**
+ * Pull the broker's latest snapshot for ``userId`` and replay each
+ * non-null piece to the supplied socket. Order matters:
+ *
+ *   1. ``overlay:liveGame`` synthetic prelude — clears stale ``live``
+ *      via the gameKey-change effect.
+ *   2. ``overlay:liveGame`` cached envelope — the agent's most recent
+ *      pre/in-game state.
+ *   3. ``overlay:live`` cached post-game payload — the most recent
+ *      replay-derived dossier (when one exists).
+ *
+ * Synchronous (the resolver returns the broker's in-memory snapshot)
+ * so a slow Mongo path can't starve the connect / resync flow.
+ *
+ * @param {{emit: (event: string, payload: unknown) => unknown}} socket
+ * @param {(userId: string) => {
+ *   prelude?: object|null,
+ *   envelope?: object|null,
+ *   overlayLive?: object|null,
+ *   gameKey?: string|null,
+ * }|null} resolveLiveSnapshot
+ * @param {string} userId
+ */
+function replayOverlayLiveSnapshot(socket, resolveLiveSnapshot, userId) {
+  let snap;
+  try {
+    snap = resolveLiveSnapshot(userId) || null;
+  } catch {
+    snap = null;
+  }
+  if (!snap) return;
+  if (snap.prelude) {
+    try {
+      socket.emit("overlay:liveGame", snap.prelude);
+    } catch {
+      /* defensive — emit must not crash the connect loop */
+    }
+  }
+  if (snap.envelope) {
+    try {
+      socket.emit("overlay:liveGame", snap.envelope);
+    } catch {
+      /* defensive — see above */
+    }
+  }
+  if (snap.overlayLive) {
+    try {
+      socket.emit("overlay:live", snap.overlayLive);
+    } catch {
+      /* defensive — see above */
+    }
+  }
+}
+
+module.exports = { attachSocketAuth, RESYNC_MIN_INTERVAL_MS };

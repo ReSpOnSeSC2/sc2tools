@@ -34,9 +34,11 @@ from typing import Any, Callable, Dict, List, Optional
 from .event_bus import EventBus
 from .metrics import METRICS
 from .pulse_lookup import PulseClient
+from .region import region_from_toon_handle
 from .types import (
     LiveLifecycleEvent,
     LiveLifecyclePhase,
+    LiveUIState,
     OpponentProfile,
     envelope_for,
     to_jsonable,
@@ -95,6 +97,7 @@ class LiveBridge:
         lifecycle_bus: EventBus[LiveLifecycleEvent],
         pulse: PulseClient,
         user_name_hint: Optional[str] = None,
+        user_toon_handle: Optional[str] = None,
         max_worker_threads: int = 2,
     ) -> None:
         self._lifecycle_bus = lifecycle_bus
@@ -106,6 +109,19 @@ class LiveBridge:
         )
         self._lock = threading.RLock()
         self._current: Optional[_GameContext] = None
+        # Streamer's own toon handle (``<region>-S2-<realm>-<bnid>``)
+        # and the region byte derived from it. Used to detect server
+        # transitions (NA → EU → KR) so the bridge can force a
+        # synthetic MENU + MATCH_LOADING prelude on the next match
+        # rather than emitting MATCH_IN_PROGRESS straight from a stale
+        # context. Without this the overlay would carry the prior
+        # server's opponent into the new match until the streamer
+        # manually refreshed the Browser Source.
+        self._user_toon_handle: Optional[str] = user_toon_handle
+        self._user_region: Optional[str] = region_from_toon_handle(
+            user_toon_handle,
+        )
+        self._pending_server_transition: bool = False
         # Output bus: transports subscribe here.
         self.bus: EventBus[Dict[str, Any]] = EventBus()
         self._unsubscribe_lifecycle: Optional[Callable[[], None]] = None
@@ -133,6 +149,57 @@ class LiveBridge:
             if self._current is not None:
                 self._current.user_name = name
 
+    def set_user_toon_handle(self, handle: Optional[str]) -> None:
+        """Update the streamer's toon handle and react to a server /
+        region transition.
+
+        Called by ``runner.py`` when the player_handle resolves
+        (cloud profile / cache / auto-detect) AND on each subsequent
+        upload that ships a fresh ``myToonHandle`` — that's where a
+        switch from NA to EU first surfaces in the agent's
+        observable state, since the local SC2 ``/game`` API never
+        exposes toon handles.
+
+        Behaviour:
+
+        * First call (no prior handle) → just record the handle and
+          its region byte; nothing to transition from.
+        * Subsequent call with the same region → record the new
+          handle but otherwise idle.
+        * Subsequent call where the region byte differs from the
+          tracked one → flag ``_pending_server_transition``, drop
+          ``_current`` so the prior server's per-match context can't
+          bleed into the new server, and let the next active-phase
+          event emit a synthetic ``MENU`` + ``MATCH_LOADING`` prelude
+          before the inbound event.
+
+        ``handle=None`` clears the tracked handle without flagging
+        a transition (a logout / replay-folder reset isn't a server
+        switch).
+        """
+        with self._lock:
+            self._user_toon_handle = handle or None
+            new_region = region_from_toon_handle(handle)
+            if (
+                self._user_region is not None
+                and new_region is not None
+                and new_region != self._user_region
+            ):
+                # Real server transition. Drop the per-match context
+                # so any in-flight Pulse callback from the prior
+                # server's match can't merge into a fresh one.
+                METRICS.incr("bridge.server_transition_detected")
+                self._user_region = new_region
+                self._pending_server_transition = True
+                self._current = None
+            elif new_region is not None:
+                self._user_region = new_region
+
+    def current_user_region(self) -> Optional[str]:
+        """Diagnostics — last-observed region byte. Test helper."""
+        with self._lock:
+            return self._user_region
+
     # ------------------------------------------------------------------
     # Lifecycle handler — runs on the poller's thread
     # ------------------------------------------------------------------
@@ -154,6 +221,11 @@ class LiveBridge:
         if phase in (LiveLifecyclePhase.IDLE, LiveLifecyclePhase.MENU):
             with self._lock:
                 self._current = None
+                # IDLE / MENU is the natural transition boundary —
+                # the streamer reached the main menu mid-server-
+                # switch and the synthetic prelude isn't needed
+                # because the real MENU already cleared the client.
+                self._pending_server_transition = False
             self._publish(envelope_for(event))
             return
 
@@ -166,12 +238,56 @@ class LiveBridge:
             LiveLifecyclePhase.MATCH_STARTED,
             LiveLifecyclePhase.MATCH_IN_PROGRESS,
         ):
+            self._maybe_emit_server_transition_prelude(event)
             self._on_match_active(event)
             return
 
         if phase == LiveLifecyclePhase.MATCH_ENDED:
             self._on_match_ended(event)
             return
+
+    def _maybe_emit_server_transition_prelude(
+        self,
+        event: LiveLifecycleEvent,
+    ) -> None:
+        """When a server / region switch was just observed, prepend a
+        synthetic ``MENU`` + ``MATCH_LOADING`` pair to the inbound
+        active-phase event so the overlay clients (and the cloud
+        broker's enrichment cache) treat this as a brand-new match.
+
+        Idempotent — clears the flag after emitting once. The
+        ``MATCH_LOADING`` prelude carries the inbound event's
+        ``game_key`` so the client's gameKey-change effect fires
+        against the correct identity.
+        """
+        with self._lock:
+            if not self._pending_server_transition:
+                return
+            self._pending_server_transition = False
+            game_key = event.game_key
+        # Synthetic MENU — clears any liveGame state on the clients
+        # without going through the IDLE branch (which would drop the
+        # capturedAt continuity the clients use for staleness checks).
+        menu_event = LiveLifecycleEvent(
+            phase=LiveLifecyclePhase.MENU,
+            ui_state=LiveUIState(active_screens=["ScreenHome"]),
+        )
+        menu_payload = envelope_for(menu_event)
+        menu_payload["synthetic"] = True
+        self._publish(menu_payload)
+        if event.phase == LiveLifecyclePhase.MATCH_LOADING:
+            # The inbound event itself is already MATCH_LOADING — no
+            # need to inject a duplicate prelude on top.
+            return
+        loading_event = LiveLifecycleEvent(
+            phase=LiveLifecyclePhase.MATCH_LOADING,
+            ui_state=LiveUIState(active_screens=["ScreenLoading"]),
+            game_state=event.game_state,
+            game_key=game_key,
+        )
+        loading_payload = envelope_for(loading_event)
+        loading_payload["synthetic"] = True
+        self._publish(loading_payload)
 
     def _on_match_active(self, event: LiveLifecycleEvent) -> None:
         if event.game_state is None or not event.game_key:

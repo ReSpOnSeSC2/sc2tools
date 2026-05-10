@@ -1,28 +1,33 @@
-import { describe, expect, it, vi } from "vitest";
-import { act, render } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { render } from "@testing-library/react";
 import { useState } from "react";
-import { useClearStalePostGameOnNewMatch } from "../OverlayWidgetClient";
+import { useClearStalePostGameOnGameKeyChange } from "../OverlayWidgetClient";
 import type {
   LiveGameEnvelope,
   LiveGamePayload,
 } from "../overlay/types";
 
 /**
- * Regression test for a real ladder-stream report: the post-game
+ * Regression test for the real ladder-stream report: the post-game
  * ``LiveGamePayload`` (e.g. "Negod 0W-1L 0%") was sticking on the
  * Opponent + Scouting widgets across into the next match because
  * those widgets prioritise ``live`` over the agent's pre-game
  * envelope and nothing was clearing the cached ``live`` when a new
  * match started.
  *
- * Fix shape: at the ``OverlayWidgetClient`` level, when the bridge
- * reports ``match_loading`` (= the new match's loading screen), drop
- * the cached ``live``. The post-game ``overlay:live`` event will
- * repopulate it after this game's replay parses minutes later.
+ * The original fix was a phase-keyed hook that fired only on
+ * ``match_loading``. That worked for the happy path but missed
+ * three failure modes: a fast loading screen the agent's poll
+ * didn't observe, a server / region switch that went MENU → match
+ * without a fresh ``match_loading`` event, and a Browser Source
+ * reconnect mid-match where the cached envelope had already
+ * advanced past loading.
  *
- * We test the hook directly rather than spinning up the full client
- * (which constructs a real socket.io connection) — the hook is the
- * load-bearing piece of the fix.
+ * The new hook compares ``liveGame.gameKey`` against
+ * ``live.gameKey`` directly — any mismatch means a new match is in
+ * play and the stale post-game payload must drop. We test the hook
+ * directly (not the full client) because the gameKey comparison is
+ * the load-bearing piece.
  */
 
 function Harness({
@@ -35,7 +40,7 @@ function Harness({
   out: { live: LiveGamePayload | null };
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(initialLive);
-  useClearStalePostGameOnNewMatch(liveGame, live, setLive);
+  useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
   out.live = live;
   return null;
 }
@@ -49,21 +54,19 @@ function envelope(extra: Partial<LiveGameEnvelope> = {}): LiveGameEnvelope {
   };
 }
 
-describe("useClearStalePostGameOnNewMatch", () => {
-  it("clears the cached post-game payload on the FIRST match_loading envelope", () => {
+describe("useClearStalePostGameOnGameKeyChange", () => {
+  it("clears the cached post-game payload when the live envelope's gameKey differs from live's", () => {
     const out: { live: LiveGamePayload | null } = { live: null };
     const initialLive: LiveGamePayload = {
       oppName: "Negod",
       oppRace: "Terran",
       result: "loss",
-      headToHead: { wins: 0, losses: 1 },
+      gameKey: "previous-match",
     };
     const { rerender } = render(
       <Harness liveGame={null} initialLive={initialLive} out={out} />,
     );
-    // Initial state: live is set (post-game payload from previous game).
     expect(out.live).toEqual(initialLive);
-    // New match's loading screen lands.
     rerender(
       <Harness
         liveGame={envelope({
@@ -78,21 +81,52 @@ describe("useClearStalePostGameOnNewMatch", () => {
     expect(out.live).toBeNull();
   });
 
-  it("does NOT clear on match_ended — the post-game payload is correct or about to arrive", () => {
-    const out: { live: LiveGamePayload | null } = { live: null };
+  it("fires for ANY phase as long as gameKey changed (not just match_loading)", () => {
+    // The whole point of switching from phase-keyed to gameKey-keyed:
+    // a fast loading screen can mean the first envelope we see for
+    // the new match is ``match_in_progress`` or ``match_started``.
+    // The old hook would have missed it; the new one must clear.
     const initialLive: LiveGamePayload = {
       oppName: "Negod",
-      oppRace: "Terran",
+      gameKey: "previous-match",
+    };
+    for (const phase of [
+      "match_started",
+      "match_in_progress",
+      "match_ended",
+    ] as const) {
+      const out: { live: LiveGamePayload | null } = { live: null };
+      const { rerender } = render(
+        <Harness liveGame={null} initialLive={initialLive} out={out} />,
+      );
+      expect(out.live).toEqual(initialLive);
+      rerender(
+        <Harness
+          liveGame={envelope({ phase, gameKey: "new-match" })}
+          initialLive={initialLive}
+          out={out}
+        />,
+      );
+      expect(out.live).toBeNull();
+    }
+  });
+
+  it("does NOT clear when gameKeys MATCH (a continuing match's tick must not yank live)", () => {
+    const initialLive: LiveGamePayload = {
+      oppName: "Negod",
+      gameKey: "same-match",
       result: "loss",
     };
+    const out: { live: LiveGamePayload | null } = { live: null };
     const { rerender } = render(
       <Harness liveGame={null} initialLive={initialLive} out={out} />,
     );
+    expect(out.live).toEqual(initialLive);
     rerender(
       <Harness
         liveGame={envelope({
-          phase: "match_ended",
-          opponent: { name: "Negod", race: "Terran" },
+          phase: "match_in_progress",
+          gameKey: "same-match",
         })}
         initialLive={initialLive}
         out={out}
@@ -101,23 +135,18 @@ describe("useClearStalePostGameOnNewMatch", () => {
     expect(out.live).toEqual(initialLive);
   });
 
-  it("does NOT clear on idle / menu — let the natural visibility timer age out the post-game payload", () => {
+  it("does NOT clear when ``live`` has no gameKey (no signal — leave it alone)", () => {
+    const initialLive: LiveGamePayload = { oppName: "LegacyEntry" };
     const out: { live: LiveGamePayload | null } = { live: null };
-    const initialLive: LiveGamePayload = { oppName: "Negod" };
     const { rerender } = render(
       <Harness liveGame={null} initialLive={initialLive} out={out} />,
     );
     rerender(
       <Harness
-        liveGame={envelope({ phase: "idle" })}
-        initialLive={initialLive}
-        out={out}
-      />,
-    );
-    expect(out.live).toEqual(initialLive);
-    rerender(
-      <Harness
-        liveGame={envelope({ phase: "menu" })}
+        liveGame={envelope({
+          phase: "match_loading",
+          gameKey: "new-match",
+        })}
         initialLive={initialLive}
         out={out}
       />,
@@ -125,68 +154,34 @@ describe("useClearStalePostGameOnNewMatch", () => {
     expect(out.live).toEqual(initialLive);
   });
 
-  it("is a no-op when there's no cached post-game payload (idempotent)", () => {
+  it("does NOT clear when ``liveGame`` has no gameKey (legacy envelope)", () => {
+    const initialLive: LiveGamePayload = {
+      oppName: "Foe",
+      gameKey: "current",
+    };
     const out: { live: LiveGamePayload | null } = { live: null };
     const { rerender } = render(
+      <Harness liveGame={null} initialLive={initialLive} out={out} />,
+    );
+    rerender(
       <Harness
         liveGame={envelope({ phase: "match_loading" })}
-        initialLive={null}
+        initialLive={initialLive}
         out={out}
       />,
     );
-    expect(out.live).toBeNull();
-    // Subsequent envelopes (still match_loading or transitioning to
-    // match_started) shouldn't loop or thrash.
-    rerender(
-      <Harness
-        liveGame={envelope({ phase: "match_started" })}
-        initialLive={null}
-        out={out}
-      />,
-    );
-    expect(out.live).toBeNull();
+    expect(out.live).toEqual(initialLive);
   });
 
-  it("does not re-clear on subsequent match_loading re-emits within the same match", () => {
-    // The agent's bridge can re-emit MATCH_LOADING (e.g. agent
-    // restart mid-loading-screen). The hook should be idempotent —
-    // a second match_loading after live has been cleared once is a
-    // no-op.
+  it("is a no-op when there's no cached ``live`` payload", () => {
     const out: { live: LiveGamePayload | null } = { live: null };
-    const initialLive: LiveGamePayload = { oppName: "Negod" };
-    const setLiveCalls: Array<LiveGamePayload | null> = [];
-    function ProbingHarness({ liveGame }: { liveGame: LiveGameEnvelope | null }) {
-      const [live, setLive] = useState<LiveGamePayload | null>(initialLive);
-      const wrappedSet = (v: LiveGamePayload | null) => {
-        setLiveCalls.push(v);
-        setLive(v);
-      };
-      useClearStalePostGameOnNewMatch(liveGame, live, wrappedSet);
-      out.live = live;
-      return null;
-    }
-    const { rerender } = render(<ProbingHarness liveGame={null} />);
-    rerender(
-      <ProbingHarness
-        liveGame={envelope({
-          phase: "match_loading",
-          opponent: { name: "Invader" },
-        })}
+    render(
+      <Harness
+        liveGame={envelope({ phase: "match_loading", gameKey: "k" })}
+        initialLive={null}
+        out={out}
       />,
     );
     expect(out.live).toBeNull();
-    expect(setLiveCalls).toHaveLength(1);
-    rerender(
-      <ProbingHarness
-        liveGame={envelope({
-          phase: "match_loading",
-          opponent: { name: "Invader" },
-          capturedAt: 1,
-        })}
-      />,
-    );
-    // No second clear call — the hook should be idempotent on
-    // already-null `live`.
-    expect(setLiveCalls).toHaveLength(1);
   });
 });

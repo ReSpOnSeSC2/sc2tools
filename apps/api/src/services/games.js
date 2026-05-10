@@ -3,6 +3,7 @@
 const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
+const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 
 /**
  * Games service. One document per (userId, gameId). Idempotent on
@@ -694,28 +695,6 @@ class GamesService {
       if (inferred) out.region = inferred;
     }
     return out;
-  }
-}
-
-/**
- * Map the leading region byte of an SC2 toon handle to a short
- * Blizzard-region label. Returns ``null`` for unknown region ids so
- * the caller can leave ``region`` undefined (the renderer treats that
- * as "no region available").
- *
- * @param {string} toonHandle
- * @returns {string|null}
- */
-function regionFromToonHandle(toonHandle) {
-  if (typeof toonHandle !== "string") return null;
-  const head = toonHandle.split("-")[0];
-  switch (head) {
-    case "1": return "NA";
-    case "2": return "EU";
-    case "3": return "KR";
-    case "5": return "CN";
-    case "6": return "SEA";
-    default: return null;
   }
 }
 

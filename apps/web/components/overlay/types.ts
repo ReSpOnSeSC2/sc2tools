@@ -27,6 +27,18 @@ export type LiveGamePayload = {
    * scene.
    */
   isTest?: boolean;
+  /**
+   * Stable per-game identifier — same value the agent's pre-game
+   * envelope carries on ``LiveGameEnvelope.gameKey``. The cloud
+   * stamps it on every post-game payload it derives so the overlay
+   * client can detect "live envelope's gameKey just changed → drop
+   * cached post-game data" via
+   * ``useClearStalePostGameOnGameKeyChange``. The fall-back when no
+   * agent envelope was observed (agent offline at game-start, batch
+   * historical re-upload) is the cloud's own ``gameId`` — still
+   * unique per game, just not name-derivable.
+   */
+  gameKey?: string;
   /** Player race ("Terran", "Zerg", "Protoss", "Random"). */
   myRace?: string;
   /** Opponent race. */
@@ -196,6 +208,17 @@ export interface LiveGameEnvelope {
   receivedAt?: number;
   /** Stable per-game identifier — sorted player names + match-start ms. */
   gameKey?: string;
+  /**
+   * ``true`` when this envelope was synthesised by the cloud rather
+   * than the agent's poll loop. The ``LiveGameBroker`` emits a
+   * synthetic ``match_loading`` prelude on overlay
+   * connect / ``overlay:resync`` when the cached state is past the
+   * loading screen, so the client's gameKey-change effect always has
+   * a chance to clear stale ``live`` even when the original
+   * loading event was lost to a disconnect or page reload.
+   * Telemetry-only — widgets render the same regardless.
+   */
+  synthetic?: boolean;
   /** Seconds elapsed in the SC2 client's in-game clock. */
   displayTime?: number;
   /** True when the user is watching a replay (the bridge ignores these). */

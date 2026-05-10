@@ -83,7 +83,7 @@ export function OverlayWidgetClient({
     setEnabled,
     setVoicePrefs,
   );
-  useClearStalePostGameOnNewMatch(liveGame, live, setLive);
+  useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
   useWidgetVisibility(
     widget as WidgetId,
     live,
@@ -225,6 +225,18 @@ function useOverlayWidgetSocket(
   setEnabled: (on: boolean) => void,
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
 ) {
+  // The latest gameKey we've observed in either ``live`` or
+  // ``liveGame``. Used by the heartbeat reply handler to decide
+  // whether the cloud's view has drifted from ours and a resync is
+  // warranted. Living in a ref keeps the socket effect's dependency
+  // list tiny — re-establishing the connection on every state tick
+  // would defeat the resilience gains the resync flow provides.
+  const gameKeyRef = useRef<string | null>(null);
+  // Mirror the latest live envelope's gameKey for the
+  // ``match_ended``-different-key clear branch. We can't read state
+  // synchronously inside the socket handler so a ref is the simplest
+  // way to get the previous value without re-binding the listener.
+  const liveGameKeyRef = useRef<string | null>(null);
   useEffect(() => {
     const socket: Socket = io(API_BASE, {
       // The OBS Browser Source carries no Clerk session; the token IS
@@ -238,7 +250,12 @@ function useOverlayWidgetSocket(
       reconnectionDelay: 500,
       reconnectionDelayMax: 5000,
     });
-    socket.on("overlay:live", (msg: LiveGamePayload) => setLive(msg));
+    socket.on("overlay:live", (msg: LiveGamePayload) => {
+      setLive(msg);
+      if (msg && typeof msg.gameKey === "string") {
+        gameKeyRef.current = msg.gameKey;
+      }
+    });
     // Pre-game / in-game envelope from the desktop agent, fanned out
     // by the cloud's LiveGameBroker. Each envelope is a delta carrying
     // the same gameKey through MATCH_LOADING → MATCH_STARTED →
@@ -251,7 +268,28 @@ function useOverlayWidgetSocket(
       // next render.
       if (msg.phase === "idle" || msg.phase === "menu") {
         setLiveGame(null);
+        liveGameKeyRef.current = null;
         return;
+      }
+      // ``match_ended`` with a NEW gameKey means the previous match's
+      // post-game ``live`` is stale — drop it so the next match's
+      // post-game payload arrives onto a clean slate. The gameKey-
+      // change effect handles the loading-screen path; this handles
+      // the (rare but real) case of two ``match_ended`` events
+      // arriving back-to-back without a ``match_loading`` between
+      // them, e.g. a Browser Source that reconnected mid-score-screen
+      // for the previous match and then immediately saw the new one.
+      if (
+        msg.phase === "match_ended"
+        && typeof msg.gameKey === "string"
+        && liveGameKeyRef.current
+        && liveGameKeyRef.current !== msg.gameKey
+      ) {
+        setLive(null);
+      }
+      if (typeof msg.gameKey === "string") {
+        liveGameKeyRef.current = msg.gameKey;
+        gameKeyRef.current = msg.gameKey;
       }
       setLiveGame(msg);
     });
@@ -283,11 +321,57 @@ function useOverlayWidgetSocket(
           } else {
             setLive(null);
             setLiveGame(null);
+            gameKeyRef.current = null;
+            liveGameKeyRef.current = null;
           }
         }
       },
     );
+    // Reconnect resync. After a transient network drop, OBS / SLOBS
+    // socket.io clients auto-reconnect — but the cloud's broker would
+    // only replay its single cached envelope. That's enough on the
+    // happy path, but in practice the freshly-reconnected client also
+    // wants the latest ``overlay:session`` and a synthetic
+    // ``match_loading`` prelude (so the gameKey-change effect fires
+    // when ``match_loading`` was the missed event). The cloud's
+    // ``overlay:resync`` handler emits all three current snapshots in
+    // one round-trip; rate-limited cloud-side to once per 2 s per
+    // socket so a flapping connection can't pound the aggregations.
+    socket.on("connect", () => {
+      // ``connect`` fires for every successful (re-)connection,
+      // including the first. The handler is safe to call on first
+      // connect too — the cloud's resync emits the same data the
+      // initial connect replay would, just slightly later.
+      socket.emit("overlay:resync");
+    });
+    socket.on("reconnect", () => {
+      // Some socket.io versions emit ``reconnect`` instead of
+      // ``connect`` on a re-establishment; bind both to be safe.
+      socket.emit("overlay:resync");
+    });
+    // Heartbeat. The cloud responds with ``{gameKey, ts}``; if the
+    // gameKey doesn't match our latest, trigger a resync. This catches
+    // the Streamlabs-cache-held-page failure mode where the socket
+    // looks alive but somehow no recent envelope ever reached us
+    // (their internal proxy sometimes delays event delivery while the
+    // page is backgrounded). 30 s is gentle enough to be invisible
+    // and tight enough that a rolled-back state recovers within one
+    // game cycle.
+    const heartbeatInterval = window.setInterval(() => {
+      socket.emit("overlay:heartbeat");
+    }, 30_000);
+    socket.on(
+      "overlay:heartbeat",
+      (reply: { gameKey?: string | null } | undefined) => {
+        const cloudKey =
+          reply && typeof reply.gameKey === "string" ? reply.gameKey : null;
+        if (cloudKey && cloudKey !== gameKeyRef.current) {
+          socket.emit("overlay:resync");
+        }
+      },
+    );
     return () => {
+      window.clearInterval(heartbeatInterval);
       socket.disconnect();
     };
   }, [
@@ -302,41 +386,58 @@ function useOverlayWidgetSocket(
 }
 
 /**
- * Clear the cached post-game ``LiveGamePayload`` (``live``) the moment
- * the bridge reports a NEW match starting. The post-game payload is
- * authoritative for the *previous* game (replay-derived match-result,
- * mmr-delta, h2h, etc); once SC2 reports `match_loading` for the next
- * game, every widget reading from ``live`` would otherwise sit on
- * stale data — opponent name from the previous loss, the previous
- * game's MMR delta, etc — until that 6-minute opponent timer expired
- * or the new game's replay parsed (~match-length minutes later).
+ * Clear the cached post-game ``LiveGamePayload`` (``live``) when the
+ * agent's pre/in-game envelope reports a DIFFERENT gameKey than the
+ * one ``live`` carries. This is the gameKey-aware successor to the
+ * older ``match_loading``-only effect, which only fired on a single
+ * lifecycle phase and missed three real failure modes:
+ *
+ *   1. **Fast loading screen.** SC2's loading screen can finish
+ *      before the agent's poll observes ``ScreenLoading``. The bridge
+ *      then jumps straight from MATCH_ENDED → MATCH_IN_PROGRESS for
+ *      the next game; the old hook never fired and the previous
+ *      opponent stayed pinned to the Opponent widget.
+ *   2. **Server / region switch.** Switching NA → EU goes through
+ *      MENU (which clears ``liveGame``), but the post-game ``live``
+ *      from the last NA match lingers because no ``match_loading``
+ *      fires until the new EU match starts.
+ *   3. **Reconnect mid-match.** The Browser Source reconnects after
+ *      a transient drop and the broker's cached envelope is already
+ *      ``match_in_progress`` — the original ``match_loading`` was
+ *      lost. The cloud emits a synthetic ``match_loading`` prelude
+ *      (see ``LiveGameBroker.replayLatestForOverlay``) for backward
+ *      compat, but the gameKey-change effect catches the mismatch
+ *      directly without depending on that prelude.
  *
  * Real-stream repro: streamer queues immediately after a loss → the
  * Opponent widget keeps showing "Negod 0W-1L 0%" while
- * ``match_loading`` for "Invader" lands on the live envelope. This
- * effect clears ``live`` so the live-envelope render path takes over
- * for every widget at once.
+ * ``match_loading`` for "Invader" lands on the live envelope. The
+ * gameKey on the new envelope (Invader|Streamer|<ms>) differs from
+ * the old ``live.gameKey`` (Negod|Streamer|<older ms>), so this
+ * effect clears ``live`` and the live-envelope render path takes
+ * over for every widget at once.
  *
- * We trigger on ``match_loading`` specifically because:
- *   * ``match_started`` / ``match_in_progress`` arrive after we've
- *     already passed through ``match_loading`` (clearing happens once,
- *     idempotent).
- *   * ``match_ended`` is the just-finished game — at that moment the
- *     post-game payload is correct or about to arrive; clearing here
- *     would race the replay-parse fan-out.
- *   * ``idle`` / ``menu`` are non-game phases — let the post-game
- *     payload age out via its natural visibility timer instead of
- *     yanking it the moment the streamer alt-tabs to the menu.
+ * We deliberately compare gameKeys, not phases — the agent's gameKey
+ * is the authoritative "is this a new match?" signal. ``idle`` /
+ * ``menu`` envelopes are handled by the socket layer clearing
+ * ``liveGame`` to null so they never reach this hook.
  */
-export function useClearStalePostGameOnNewMatch(
+export function useClearStalePostGameOnGameKeyChange(
   liveGame: LiveGameEnvelope | null,
   live: LiveGamePayload | null,
   setLive: (next: LiveGamePayload | null) => void,
 ) {
   useEffect(() => {
-    if (!liveGame) return;
-    if (liveGame.phase !== "match_loading") return;
-    if (!live) return;
+    if (!liveGame || !live) return;
+    const lgKey = liveGame.gameKey;
+    const liveKey = live.gameKey;
+    // No gameKey on either side → no signal, do nothing. The
+    // backwards-compat path (cloud running an older derivation that
+    // never stamped gameKey) was never observed in practice; we leave
+    // ``live`` alone rather than risk yanking it on every envelope
+    // tick of an active match.
+    if (typeof lgKey !== "string" || typeof liveKey !== "string") return;
+    if (lgKey === liveKey) return;
     setLive(null);
   }, [liveGame, live, setLive]);
 }

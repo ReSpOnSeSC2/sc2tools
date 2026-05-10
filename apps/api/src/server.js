@@ -58,6 +58,28 @@ async function main() {
       services.games.todaySession(userId, timezone),
     resolveVoicePrefs: (userId) =>
       /** @type {any} */ (services).users.getPreferences(userId, "voice"),
+    // Synchronous broker-snapshot accessor used by the overlay
+    // connect-replay path AND the ``overlay:resync`` /
+    // ``overlay:heartbeat`` handlers. Returns the latest
+    // ``overlay:liveGame`` envelope (with synthetic prelude when the
+    // cached state is past the loading screen), the latest cached
+    // ``overlay:live`` post-game payload, and the broker's current
+    // gameKey for heartbeat-driven drift detection. Fully in-memory
+    // — no Mongo round-trip on the connect path.
+    resolveLiveSnapshot: (userId) => {
+      const broker =
+        /** @type {any} */ (services).liveGameBroker;
+      if (!broker) return null;
+      const replay = broker.replayLatestForOverlay(userId);
+      const overlayLive = broker.latestOverlayLive(userId);
+      const gameKey = broker.currentGameKey(userId);
+      return {
+        prelude: replay.prelude,
+        envelope: replay.envelope,
+        overlayLive,
+        gameKey,
+      };
+    },
   });
 
   httpServer.listen(config.port, () => {
