@@ -25,29 +25,24 @@ interface ApiOpp {
   lastSeen?: string | null;
 }
 
+/** /v1/opponents response — wrapped page with items[]. */
+interface ApiOppPage {
+  items: ApiOpp[];
+  nextBefore?: string | null;
+}
+
 interface ApiGamesPage {
   items: ArcadeGame[];
   nextBefore?: string | null;
 }
 
-interface ApiBuilds {
-  items?: ArcadeBuild[];
-  builds?: ArcadeBuild[];
-}
-
-interface ApiMatchups {
-  matchups?: Array<{ matchup: string; wins: number; losses: number; total: number; winRate: number }>;
-}
-
-interface ApiMaps {
-  maps?: Array<{ map: string; wins: number; losses: number; total: number; winRate: number }>;
-}
-
 interface ApiSummary {
-  totalGames?: number;
-  wins?: number;
-  losses?: number;
-  winRate?: number;
+  totals?: {
+    wins?: number;
+    losses?: number;
+    total?: number;
+    winRate?: number;
+  };
 }
 
 interface ApiCustomBuilds {
@@ -55,7 +50,13 @@ interface ApiCustomBuilds {
 }
 
 interface ApiCommunityBuilds {
-  items: Array<{ slug: string; title: string; matchup?: string; votes: number; build?: { race?: string } }>;
+  items: Array<{
+    slug: string;
+    title: string;
+    matchup?: string;
+    votes: number;
+    build?: { race?: string };
+  }>;
 }
 
 interface ApiSeasons {
@@ -63,30 +64,40 @@ interface ApiSeasons {
 }
 
 /**
- * useArcadeData — fans out the small bundle of GETs every Arcade
- * surface needs and folds them into a single ArcadeDataset. SWR keeps
- * each request memoised so QuickPlay → Today → Collection navigation
+ * useArcadeData — fans out the bundle of GETs every Arcade surface
+ * needs and folds them into a single ArcadeDataset. SWR keeps each
+ * request memoised so QuickPlay → Today → Collection navigation
  * doesn't refetch.
  *
- * Modes never call useApi themselves; they consume this dataset via
- * generate(). Keeps the data dependencies explicit and the picker
- * cheap.
+ * Every consumer of an array-shaped field is guarded by
+ * `Array.isArray()`: the analyzer SPA spans many API versions and a
+ * future shape change should NOT crash the whole Arcade tab. Empty
+ * dataset surfaces empty-state cards in each mode; that's the
+ * intended graceful-degradation path.
  */
 export function useArcadeData(): {
   data: ArcadeDataset | null;
   loading: boolean;
   error: string | null;
 } {
-  const opp = useApi<ApiOpp[]>("/v1/opponents?limit=500");
-  // /v1/games (paginated). One page is enough for active-streak / session
-  // analysis; the picker can request more pages on a cold profile.
+  // /v1/opponents returns { items, nextBefore }, not a bare array.
+  const opp = useApi<ApiOppPage>("/v1/opponents?limit=500");
+  // /v1/games returns { items, nextBefore }.
   const gamesA = useApi<ApiGamesPage>("/v1/games?limit=200");
-  const builds = useApi<ApiBuilds>("/v1/builds");
-  const matchups = useApi<ApiMatchups>("/v1/matchups");
-  const maps = useApi<ApiMaps>("/v1/maps");
+  // /v1/builds, /v1/matchups, /v1/maps return bare arrays.
+  const builds = useApi<ArcadeBuild[]>("/v1/builds");
+  const matchups = useApi<
+    Array<{ matchup: string; wins: number; losses: number; total: number; winRate: number }>
+  >("/v1/matchups");
+  const maps = useApi<
+    Array<{ map: string; wins: number; losses: number; total: number; winRate: number }>
+  >("/v1/maps");
+  // /v1/summary returns { totals: { wins, losses, total, winRate }, ... }.
   const summary = useApi<ApiSummary>("/v1/summary");
   const custom = useApi<ApiCustomBuilds>("/v1/custom-builds");
-  const community = useApi<ApiCommunityBuilds>("/v1/community/builds?limit=100&sort=top");
+  const community = useApi<ApiCommunityBuilds>(
+    "/v1/community/builds?limit=100&sort=top",
+  );
   const seasons = useApi<ApiSeasons>("/v1/seasons");
 
   const loading =
@@ -114,7 +125,8 @@ export function useArcadeData(): {
 
   const data = useMemo<ArcadeDataset | null>(() => {
     if (loading || error) return null;
-    const opps: ArcadeOpponent[] = (opp.data ?? []).map((o) => ({
+    const oppRaw = Array.isArray(opp.data?.items) ? opp.data!.items : [];
+    const opps: ArcadeOpponent[] = oppRaw.map((o) => ({
       pulseId: o.pulseId,
       name: o.name || o.displayNameSample || "(unknown)",
       wins: o.wins,
@@ -125,39 +137,46 @@ export function useArcadeData(): {
         (o.wins + o.losses > 0 ? o.wins / (o.wins + o.losses) : 0),
       lastPlayed: o.lastPlayed || o.lastSeen || null,
     }));
-    const buildsList: ArcadeBuild[] =
-      (builds.data?.items as ArcadeBuild[]) ||
-      (builds.data?.builds as ArcadeBuild[]) ||
-      [];
-    const summaryOut: ArcadeSummary | null = summary.data
+    const buildsList: ArcadeBuild[] = Array.isArray(builds.data)
+      ? builds.data
+      : [];
+    const summaryOut: ArcadeSummary | null = summary.data?.totals
       ? {
-          totalGames: summary.data.totalGames ?? 0,
-          wins: summary.data.wins ?? 0,
-          losses: summary.data.losses ?? 0,
-          winRate: summary.data.winRate ?? 0,
+          totalGames: summary.data.totals.total ?? 0,
+          wins: summary.data.totals.wins ?? 0,
+          losses: summary.data.totals.losses ?? 0,
+          winRate: summary.data.totals.winRate ?? 0,
         }
       : null;
-    const customList: ArcadeCustomBuild[] = (custom.data?.items ?? []).map(
-      (c) => ({ slug: c.slug, name: c.name, race: c.race, vsRace: c.vsRace }),
-    );
-    const communityList: ArcadeCommunityBuild[] =
-      (community.data?.items ?? []).map((c) => ({
-        slug: c.slug,
-        title: c.title,
-        matchup: c.matchup,
-        votes: c.votes,
-        race: c.build?.race,
-      }));
+    const customList: ArcadeCustomBuild[] = Array.isArray(custom.data?.items)
+      ? custom.data!.items.map((c) => ({
+          slug: c.slug,
+          name: c.name,
+          race: c.race,
+          vsRace: c.vsRace,
+        }))
+      : [];
+    const communityList: ArcadeCommunityBuild[] = Array.isArray(
+      community.data?.items,
+    )
+      ? community.data!.items.map((c) => ({
+          slug: c.slug,
+          title: c.title,
+          matchup: c.matchup,
+          votes: c.votes,
+          race: c.build?.race,
+        }))
+      : [];
     return {
-      games: gamesA.data?.items ?? [],
+      games: Array.isArray(gamesA.data?.items) ? gamesA.data!.items : [],
       opponents: opps,
       builds: buildsList,
       customBuilds: customList,
       communityBuilds: communityList,
-      matchups: matchups.data?.matchups ?? [],
-      maps: maps.data?.maps ?? [],
+      matchups: Array.isArray(matchups.data) ? matchups.data : [],
+      maps: Array.isArray(maps.data) ? maps.data : [],
       summary: summaryOut,
-      mapPool: seasons.data?.mapPool ?? [],
+      mapPool: Array.isArray(seasons.data?.mapPool) ? seasons.data!.mapPool : [],
     };
   }, [
     loading,
