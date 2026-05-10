@@ -401,21 +401,46 @@ class CommunityService {
    * @param {string} pulseId
    */
   async aggregateOpponent(pulseId) {
+    // Discover the canonical SC2Pulse character id for this toon
+    // handle from any opponents row that's seen it. If a player
+    // ever rebound their Battle.net account, two distinct toon
+    // handles may both map to the same pulseCharacterId; we want
+    // the cross-toon games to appear in the public aggregate so
+    // the k-anonymous profile reflects the same player's full
+    // public footprint. ``distinct`` returns at most one id per
+    // input toon — opponents.pulseId is unique-per-user, so we
+    // grab any user's row and read its character id off.
+    const charIdRow = await this.db.opponents.findOne(
+      {
+        pulseId,
+        pulseCharacterId: { $type: "string", $ne: "" },
+      },
+      { projection: { pulseCharacterId: 1 } },
+    );
+    const pulseCharacterId = charIdRow && typeof charIdRow.pulseCharacterId === "string"
+      ? charIdRow.pulseCharacterId
+      : null;
+    /** @type {Record<string, any>} */
+    const filter = pulseCharacterId
+      ? {
+          $or: [
+            { "opponent.pulseId": pulseId },
+            { "opponent.pulseCharacterId": pulseCharacterId },
+          ],
+        }
+      : { "opponent.pulseId": pulseId };
     const games = await this.db.games
-      .find(
-        { "opponent.pulseId": pulseId },
-        {
-          projection: {
-            userId: 1,
-            result: 1,
-            map: 1,
-            "opponent.race": 1,
-            "opponent.strategy": 1,
-            "opponent.opening": 1,
-            _id: 0,
-          },
+      .find(filter, {
+        projection: {
+          userId: 1,
+          result: 1,
+          map: 1,
+          "opponent.race": 1,
+          "opponent.strategy": 1,
+          "opponent.opening": 1,
+          _id: 0,
         },
-      )
+      })
       .toArray();
     const distinctUsers = new Set(games.map((g) => g.userId));
     if (distinctUsers.size < K_ANONYMITY_THRESHOLD) {

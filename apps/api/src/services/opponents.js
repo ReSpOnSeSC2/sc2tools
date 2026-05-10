@@ -4,6 +4,7 @@ const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { hmac } = require("../util/hash");
 const { expectedVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
+const { opponentGamesFilter } = require("../util/opponentIdentity");
 const TimingCatalog = require("./timingCatalog");
 const Dna = require("./dnaTimings");
 
@@ -241,11 +242,23 @@ class OpponentsService {
       { projection: { _id: 0 } },
     );
     if (!doc) return null;
+    // Match games against either identity field. The opponents row
+    // stores the canonical SC2Pulse character id; if a player ever
+    // rebound their Battle.net (rotating the toon_handle while
+    // keeping the SC2Pulse character identity), pre-rebind games
+    // would otherwise drop out of this profile because they carry
+    // the OLD pulseId. Falls back to pulseId-only when the row
+    // hasn't been resolved yet (the backfill cron will heal it on
+    // its next cycle).
+    const idsFilter = opponentGamesFilter({
+      pulseId,
+      pulseCharacterId: doc.pulseCharacterId,
+    });
+    const gamesFilter = idsFilter
+      ? { userId, ...idsFilter }
+      : { userId, "opponent.pulseId": pulseId };
     const rawGames = await this.db.games
-      .find(
-        { userId, "opponent.pulseId": pulseId },
-        { projection: PROFILE_GAME_PROJECTION },
-      )
+      .find(gamesFilter, { projection: PROFILE_GAME_PROJECTION })
       .sort({ date: -1 })
       .toArray();
     // dnaTimings reads ``buildLog`` / ``oppBuildLog`` off each game
@@ -277,6 +290,12 @@ class OpponentsService {
     }
     const allGames = rawGames.map(serializeGameForProfile);
     const filteredGames = filterGamesByDate(allGames, opts.since, opts.until);
+    // Cross-toon merge surfacing: if the rawGames span multiple toon
+    // handles (the Battle.net rebind case), expose the merged set so
+    // the SPA can render a "merged across N toons" disclosure chip
+    // without needing a second round-trip. Single-toon profiles
+    // omit this field entirely so the UI shows nothing extra.
+    const mergedToonHandles = collectMergedToonHandles(rawGames, doc);
     const aggregates = aggregateByMapAndStrategy(filteredGames);
     const totals = computeTotals(filteredGames, doc);
     const dna = computeDnaFields(filteredGames);
@@ -289,6 +308,7 @@ class OpponentsService {
     return {
       ...doc,
       name: doc.displayNameSample || "",
+      mergedToonHandles,
       totals,
       byMap: aggregates.byMap,
       byStrategy: aggregates.byStrategy,
@@ -875,6 +895,42 @@ function projectMedianTimings(legacy) {
     };
   }
   return out;
+}
+
+/**
+ * Distinct toon handles observed in this opponent's merged games
+ * set. Includes the profile doc's own ``toonHandle`` even when zero
+ * games are present so the SPA never shows a blank chip on a
+ * brand-new opponent. Returns ``[]`` (never ``null``) for a single-
+ * toon profile so the UI can branch on ``> 1``.
+ *
+ * @param {Array<{opponent?: {toonHandle?: string, pulseId?: string}}>} rawGames
+ * @param {{toonHandle?: string, pulseId?: string}} doc
+ * @returns {string[]}
+ */
+function collectMergedToonHandles(rawGames, doc) {
+  const seen = new Set();
+  const ordered = [];
+  /** @param {string|undefined} v */
+  const consider = (v) => {
+    if (typeof v !== "string") return;
+    const t = v.trim();
+    if (!t || seen.has(t)) return;
+    seen.add(t);
+    ordered.push(t);
+  };
+  // Profile doc first so the "primary" toon stays at the head of
+  // the list when the SPA renders the disclosure tooltip.
+  if (doc) {
+    consider(doc.toonHandle);
+    consider(doc.pulseId);
+  }
+  for (const g of rawGames) {
+    if (!g || !g.opponent) continue;
+    consider(g.opponent.toonHandle);
+    consider(g.opponent.pulseId);
+  }
+  return ordered;
 }
 
 function projectMatchupTimings(legacy) {

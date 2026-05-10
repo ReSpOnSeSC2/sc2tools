@@ -21,6 +21,12 @@ type OpponentProfileResp = {
   pulseId?: string;
   pulseCharacterId?: string | null;
   toonHandle?: string | null;
+  // Distinct toon handles whose games merged into this profile.
+  // The API merges by canonical SC2Pulse character id when one is
+  // resolved, which surfaces pre-rebind games against a player
+  // whose Battle.net rotated. Length > 1 → render the disclosure
+  // chip; absent / length ≤ 1 → render nothing extra.
+  mergedToonHandles?: string[] | null;
   name?: string;
   displayNameSample?: string;
   totals?: { wins: number; losses: number; total: number; winRate: number };
@@ -107,7 +113,10 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-h2 font-semibold">{data.name || "unnamed"}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-h2 font-semibold">{data.name || "unnamed"}</h1>
+            <MergedToonsChip handles={data.mergedToonHandles} />
+          </div>
           <ProfilePulseLine
             pulseCharacterId={data.pulseCharacterId}
             toonHandle={data.toonHandle}
@@ -227,6 +236,44 @@ function buildProfileQuery(since: string | undefined, until: string | undefined)
   if (until) usp.set("until", until);
   const q = usp.toString();
   return q ? `?${q}` : "";
+}
+
+/**
+ * Disclosure chip rendered in the profile header when the opponent's
+ * games were merged across more than one toon_handle (the rare
+ * Battle.net rebind case where SC2Pulse keeps the same canonical
+ * character id but the in-replay toon rotates). The chip's
+ * native ``title`` attribute lists every merged toon so the user
+ * can hover/long-press for the full set without us shipping a
+ * dedicated tooltip primitive. Hidden entirely on the single-toon
+ * common case so existing profiles look identical.
+ *
+ * Touch-target: the chip itself is non-interactive (no link / no
+ * tap action), so the 44 px minimum-touch rule from the rest of the
+ * SPA doesn't apply — it's an inline disclosure, sized to read
+ * comfortably alongside the h1 on both mobile and desktop without
+ * crowding the stat strip.
+ */
+function MergedToonsChip({
+  handles,
+}: {
+  handles?: string[] | null;
+}) {
+  if (!handles || handles.length <= 1) return null;
+  const summary = `Merged across ${handles.length} toons`;
+  // Native title on a span — browsers / screen readers surface it
+  // as the accessible description. Mobile users get the same on
+  // long-press in most browsers; we don't need a custom tooltip.
+  return (
+    <span
+      role="note"
+      aria-label={`${summary}: ${handles.join(", ")}`}
+      title={`Same SC2Pulse character across:\n${handles.join("\n")}`}
+      className="inline-flex items-center rounded-full border border-accent-cyan/40 bg-accent-cyan/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-accent-cyan"
+    >
+      {summary}
+    </span>
+  );
 }
 
 /**

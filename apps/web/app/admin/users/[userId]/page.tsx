@@ -6,7 +6,11 @@ import { useAuth } from "@clerk/nextjs";
 
 import { apiCall, useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
-import { compactNumber, timeSince } from "../../components/format";
+import {
+  compactNumber,
+  formatRebuildSummary,
+  timeSince,
+} from "../../components/format";
 import {
   ConfirmInline,
   ForbiddenCard,
@@ -232,9 +236,7 @@ function RebuildOpponentsAction({
         <p className="mt-3 text-caption text-text-muted">Rebuilding…</p>
       ) : null}
       {state.kind === "done" ? (
-        <p className="mt-3 text-caption text-success">
-          Rebuilt — dropped {state.resp.droppedRows} rows.
-        </p>
+        <RebuildSummary resp={state.resp} />
       ) : null}
       {state.kind === "error" ? (
         <p className="mt-3 text-caption text-danger">
@@ -326,5 +328,31 @@ function WipeGamesAction({
         </p>
       ) : null}
     </Card>
+  );
+}
+
+/**
+ * Two-line summary for the "Rebuild opponents" action: the
+ * single-line headline (rebuilt N rows) plus an optional muted
+ * second line breaking down the chained Pulse-id heal counters.
+ * Mobile- and desktop-friendly: the second line wraps naturally
+ * inside the Card's content column without forcing a layout.
+ */
+function RebuildSummary({ resp }: { resp: RebuildResp }) {
+  const summary = formatRebuildSummary(resp);
+  const heal = resp.pulseBackfill;
+  const showDetail =
+    !!heal && (heal.scanned > 0 || heal.resolved > 0 || heal.updated > 0);
+  return (
+    <div className="mt-3 space-y-1">
+      <p className="text-caption text-success">{summary}</p>
+      {showDetail ? (
+        <p className="text-caption text-text-muted">
+          Pulse heal — scanned {heal!.scanned}, resolved {heal!.resolved}
+          , updated {heal!.updated}
+          {heal!.skipped > 0 ? `, skipped ${heal!.skipped}` : ""}.
+        </p>
+      ) : null}
+    </div>
   );
 }

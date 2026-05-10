@@ -1,6 +1,7 @@
 "use strict";
 
 const { buildSamplePayload } = require("./overlayLiveSamples");
+const { attachOpponentIdsToFilter } = require("../util/opponentIdentity");
 
 /**
  * OverlayLiveService — derives the cloud's authoritative
@@ -825,12 +826,22 @@ class OverlayLiveService {
     if (!opp) return [];
     /** @type {Record<string, any>} */
     const filter = { userId };
-    if (opp.pulseId) {
-      filter["opponent.pulseId"] = opp.pulseId;
-    } else if (opp.displayName) {
-      filter["opponent.displayName"] = opp.displayName;
-    } else {
-      return [];
+    // Identity-precedence: pulseId / pulseCharacterId (either field
+    // matches; the cross-toon merge case wins back games whose
+    // toon_handle rotated after a Battle.net rebind) → displayName
+    // fallback. We do NOT mix display name with the identity branch
+    // — display names collide constantly between barcodes and would
+    // poison the result set with someone else's games.
+    const attached = attachOpponentIdsToFilter(filter, {
+      pulseId: opp.pulseId,
+      pulseCharacterId: opp.pulseCharacterId,
+    });
+    if (!attached) {
+      if (opp.displayName) {
+        filter["opponent.displayName"] = opp.displayName;
+      } else {
+        return [];
+      }
     }
     if (excludeGameId) filter.gameId = { $ne: excludeGameId };
     if (myRace) {
