@@ -18,8 +18,18 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { wrColor } from "@/lib/format";
 
+type LengthBucket =
+  | "0–3m"
+  | "3–6m"
+  | "6–9m"
+  | "9–12m"
+  | "12–15m"
+  | "15–20m"
+  | "20–25m"
+  | "25m+";
+
 type LengthBucketRow = {
-  bucket: "<8m" | "8–15m" | "15–25m" | "25m+";
+  bucket: LengthBucket;
   wins: number;
   losses: number;
   total: number;
@@ -31,7 +41,16 @@ type LengthBucketResponse = {
   buckets: LengthBucketRow[];
 };
 
-const ORDER: LengthBucketRow["bucket"][] = ["<8m", "8–15m", "15–25m", "25m+"];
+const ORDER: LengthBucket[] = [
+  "0–3m",
+  "3–6m",
+  "6–9m",
+  "9–12m",
+  "12–15m",
+  "15–20m",
+  "20–25m",
+  "25m+",
+];
 
 /**
  * WR by game-length bucket — surfaces patterns like "I coinflip in
@@ -60,7 +79,10 @@ export function GameLengthWrChart() {
           wins: row.wins,
           losses: row.losses,
           total: row.total,
-          winRatePct: Math.round(row.winRate * 100),
+          // null (not 0) for empty buckets so the WR line skips them
+          // instead of nosediving to 0% and pretending we lost games
+          // we never played.
+          winRatePct: Math.round(row.winRate * 100) as number | null,
           color: wrColor(row.winRate, row.total),
         };
       }
@@ -69,7 +91,7 @@ export function GameLengthWrChart() {
         wins: 0,
         losses: 0,
         total: 0,
-        winRatePct: 0,
+        winRatePct: null as number | null,
         color: "#3a4252",
       };
     });
@@ -103,9 +125,15 @@ export function GameLengthWrChart() {
       </p>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={rows} margin={{ top: 8, right: 24, bottom: 0, left: -8 }}>
+          <ComposedChart data={rows} margin={{ top: 8, right: 24, bottom: 4, left: -8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2533" />
-            <XAxis dataKey="bucket" stroke="#6b7280" fontSize={11} />
+            <XAxis
+              dataKey="bucket"
+              stroke="#6b7280"
+              fontSize={10}
+              tickMargin={4}
+              interval={0}
+            />
             <YAxis
               yAxisId="games"
               stroke="#6b7280"
@@ -170,19 +198,20 @@ export function GameLengthWrChart() {
               stroke="#7c8cff"
               strokeWidth={2.5}
               dot={{ r: 3, fill: "#7c8cff" }}
+              connectNulls
               isAnimationActive={false}
             />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8">
         {rows.map((r) => (
           <div
             key={r.bucket}
-            className="rounded border border-border bg-bg-elevated/50 px-3 py-2"
+            className="rounded border border-border bg-bg-elevated/50 px-2.5 py-2"
           >
-            <div className="flex items-baseline justify-between">
-              <span className="text-caption font-semibold text-text">
+            <div className="flex items-baseline justify-between gap-1">
+              <span className="text-[11px] font-semibold text-text">
                 {r.bucket}
               </span>
               <span
@@ -192,7 +221,7 @@ export function GameLengthWrChart() {
                 {r.total > 0 ? `${r.winRatePct}%` : "—"}
               </span>
             </div>
-            <div className="mt-0.5 text-[11px] tabular-nums text-text-dim">
+            <div className="mt-0.5 text-[10px] tabular-nums text-text-dim">
               {r.total > 0
                 ? `${r.wins}W · ${r.losses}L · ${r.total} games`
                 : "no games"}
