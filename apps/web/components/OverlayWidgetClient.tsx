@@ -508,6 +508,23 @@ export function useWidgetVisibility(
     widget === "session" ? session?.isTest : live?.isTest,
   );
   const hasAnySource = Boolean(sourceForWidget) || Boolean(liveGameActive);
+  // Identity of the current match. When this changes between renders
+  // we MUST re-arm the visibility timer even if ``hasAnySource`` is
+  // unchanged: the scouting widget's natural 15 s timer expires
+  // mid-match and leaves ``visible=false``; on the next match's
+  // ``match_loading`` envelope the boolean ``hasAnySource`` stays
+  // ``true`` (post-game ``live`` and the new ``liveGame`` overlap for
+  // a moment around the gameKey-clear effect) so without a fresh
+  // identity dependency the effect would never re-fire and the
+  // streamer's scouting card would stay hidden until they refresh
+  // the OBS Browser Source — exactly the bug we hit.
+  //
+  // Prefer the live envelope's gameKey because it's the freshest signal
+  // mid-match; fall back to the post-game payload's gameKey when we
+  // only have the latter (replay-only path). ``null`` covers the brief
+  // window between page boot and the first envelope where neither
+  // identity is known.
+  const currentGameKey = liveGame?.gameKey ?? live?.gameKey ?? null;
 
   useEffect(() => {
     // No source at all (e.g. after the streamer cancelled a Test fire
@@ -539,7 +556,7 @@ export function useWidgetVisibility(
       setVisible(false);
       timerRef.current = null;
     }, duration);
-  }, [widget, hasAnySource, pinThroughMatch, isTest, setVisible]);
+  }, [widget, hasAnySource, pinThroughMatch, isTest, currentGameKey, setVisible]);
 
   useEffect(
     () => () => {

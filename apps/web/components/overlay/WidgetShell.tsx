@@ -1,7 +1,8 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
-import { Icon } from "@/components/ui/Icon";
+import { useState, type CSSProperties, type ReactNode } from "react";
+import { coerceRace } from "@/lib/race";
+import { resolveRaceIcon } from "@/lib/sc2-icons";
 
 type Slot =
   | "top-center"
@@ -212,12 +213,21 @@ export function Dim({ children }: { children: ReactNode }) {
 }
 
 /**
- * RaceIcon — uses the SC2 race SVG when available, falls back to a
- * race-letter chip if the asset is missing or fails to load.
+ * RaceIcon — renders the SC2 race SVG inline via a plain ``<img>`` tag.
  *
- * The Icon primitive ships its own missing-asset fallback (text chip),
- * so widgets stay readable on a stripped Browser Source profile that
- * hasn't loaded /icons/sc2/ yet.
+ * Earlier revisions delegated to the shared ``Icon`` primitive (which
+ * uses ``next/image`` with ``loading="lazy"`` by default). In OBS
+ * Browser Source's CEF environment lazy-loaded images sometimes never
+ * fire — the page can be rendered offscreen / hidden when OBS is
+ * minimised — and the streamer would see only the letter fallback chip
+ * for the entire match. Skipping ``next/image`` and forcing
+ * ``loading="eager"`` makes the icon render the moment the SVG bytes
+ * land, which is what we want here: a tiny race glyph whose load
+ * latency is dwarfed by the surrounding widget chrome.
+ *
+ * The text-chip fallback is kept as a graceful degradation path for
+ * truly missing or unrecognised race strings — but the happy path now
+ * always shows the icon.
  */
 export function RaceIcon({
   race,
@@ -226,30 +236,14 @@ export function RaceIcon({
   race?: string;
   size?: number;
 }) {
+  const [errored, setErrored] = useState(false);
   const r = (race || "").charAt(0).toUpperCase();
   const colour = RACE_COLOR[r] || RACE_COLOR.R;
-
-  if (!race) {
-    return (
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: size,
-          height: size,
-          borderRadius: 5,
-          background: `${colour}22`,
-          color: colour,
-          fontSize: Math.max(10, size - 10),
-          fontWeight: 700,
-        }}
-        aria-label="Unknown race"
-      >
-        ?
-      </span>
-    );
-  }
+  // Resolve to a canonical race name so the SVG path lookup works for
+  // every shape the agent might emit: "Protoss", "P", "protoss", etc.
+  const canonical = race ? coerceRace(race) : null;
+  const src = canonical ? resolveRaceIcon(canonical) : null;
+  const innerSize = Math.max(12, size - 6);
 
   return (
     <span
@@ -262,16 +256,41 @@ export function RaceIcon({
         borderRadius: 5,
         background: `${colour}22`,
         padding: 2,
+        flexShrink: 0,
       }}
-      aria-label={`Race ${r || "?"}`}
+      aria-label={canonical ? `Race ${canonical}` : "Unknown race"}
     >
-      <Icon
-        name={race}
-        kind="race"
-        size={Math.max(12, size - 6)}
-        decorative
-        fallback={r || "?"}
-      />
+      {src && !errored ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt=""
+          width={innerSize}
+          height={innerSize}
+          loading="eager"
+          decoding="sync"
+          draggable={false}
+          onError={() => setErrored(true)}
+          style={{
+            width: innerSize,
+            height: innerSize,
+            objectFit: "contain",
+            display: "block",
+          }}
+        />
+      ) : (
+        <span
+          aria-hidden
+          style={{
+            color: colour,
+            fontSize: Math.max(10, size - 10),
+            fontWeight: 700,
+            lineHeight: 1,
+          }}
+        >
+          {r || "?"}
+        </span>
+      )}
     </span>
   );
 }

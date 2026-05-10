@@ -231,4 +231,62 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
     });
     expect(out.value).toBe(true);
   });
+
+  /**
+   * Regression: streamer reported having to refresh the scouting
+   * Browser Source every game for it to render at the start of the next
+   * match. Root cause: ``hasAnySource`` is a boolean that stays ``true``
+   * as the cloud transitions from ``post-game live for game N`` →
+   * ``live envelope for game N+1`` (they overlap for a few ms around
+   * the gameKey-clear effect). With only the boolean in the deps list
+   * the visibility effect never re-fired after the natural 15 s
+   * scouting timer expired during game N, so game N+1's loading screen
+   * never re-armed the timer and the widget stayed hidden until the
+   * page was reloaded.
+   */
+  it(
+    "scouting widget re-arms its timer on a NEW gameKey even when " +
+      "hasAnySource never went false (game N → game N+1 transition)",
+    () => {
+      const out = { value: false };
+      // Game N: post-game payload landed; scouting widget timed out.
+      const { rerender } = render(
+        <VisibilityProbe
+          widget="scouting"
+          live={liveOf({ gameKey: "game-N", result: "loss" })}
+          liveGame={envelope({ phase: "match_ended", gameKey: "game-N" })}
+          visibleOut={out}
+        />,
+      );
+      expect(out.value).toBe(true);
+      // 15 s scouting natural timer expires — widget hides while live
+      // is still set.
+      act(() => {
+        vi.advanceTimersByTime(20_000);
+      });
+      expect(out.value).toBe(false);
+      // Game N+1 starts. The cloud broker fans out the new envelope;
+      // a moment later the gameKey-change effect clears the post-game
+      // ``live`` for game N. We model both states the production
+      // OverlayWidgetClient transiently sits in.
+      rerender(
+        <VisibilityProbe
+          widget="scouting"
+          // ``live`` cleared by useClearStalePostGameOnGameKeyChange.
+          live={null}
+          liveGame={envelope({
+            phase: "match_loading",
+            gameKey: "game-N+1",
+            opponent: { name: "FreshOpponent" },
+          })}
+          visibleOut={out}
+        />,
+      );
+      // Without the gameKey dependency the timer never re-armed and
+      // this assertion failed (``out.value`` stayed false). With the
+      // fix the visibility effect re-fires on the new gameKey and the
+      // widget is visible again for the new match's loading screen.
+      expect(out.value).toBe(true);
+    },
+  );
 });
