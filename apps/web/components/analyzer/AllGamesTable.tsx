@@ -73,7 +73,9 @@ export function AllGamesTable({
   targetGameSeq?: number;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const mobileListRef = useRef<HTMLUListElement>(null);
   const sort = useSort(SORT_COLS.date, "desc");
 
   const sortedGames = useMemo(() => {
@@ -84,12 +86,16 @@ export function AllGamesTable({
   }, [games, sort]);
 
   useEffect(() => {
-    if (!targetGameId || !tableRef.current) return;
+    if (!targetGameId) return;
     setExpandedId(targetGameId);
-    const root = tableRef.current;
-    const sel = root.querySelector(
-      `[data-game-row-id="${cssEscape(targetGameId)}"]`,
-    ) as HTMLElement | null;
+    setHighlightId(targetGameId);
+    const sel =
+      (tableRef.current?.querySelector(
+        `[data-game-row-id="${cssEscape(targetGameId)}"]`,
+      ) as HTMLElement | null) ||
+      (mobileListRef.current?.querySelector(
+        `[data-game-row-id="${cssEscape(targetGameId)}"]`,
+      ) as HTMLElement | null);
     if (sel) {
       try {
         sel.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -97,6 +103,8 @@ export function AllGamesTable({
         sel.scrollIntoView();
       }
     }
+    const t = window.setTimeout(() => setHighlightId(null), 2000);
+    return () => window.clearTimeout(t);
   }, [targetGameId, targetGameSeq]);
 
   if (!games || games.length === 0) {
@@ -131,6 +139,7 @@ export function AllGamesTable({
                 key={g.id || `_idx_${i}`}
                 game={g}
                 expanded={!!g.id && expandedId === g.id}
+                highlighted={!!g.id && highlightId === g.id}
                 onToggle={() => toggle(g.id)}
               />
             ))}
@@ -138,12 +147,13 @@ export function AllGamesTable({
         </table>
       </div>
 
-      <ul className="space-y-2 md:hidden">
+      <ul ref={mobileListRef} className="space-y-2 md:hidden">
         {sortedGames.map((g, i) => (
           <GameMobileCard
             key={g.id || `_idx_${i}`}
             game={g}
             expanded={!!g.id && expandedId === g.id}
+            highlighted={!!g.id && highlightId === g.id}
             onToggle={() => toggle(g.id)}
           />
         ))}
@@ -155,10 +165,12 @@ export function AllGamesTable({
 function GameRow({
   game,
   expanded,
+  highlighted,
   onToggle,
 }: {
   game: GameRowData;
   expanded: boolean;
+  highlighted: boolean;
   onToggle: () => void;
 }) {
   const expandable = !!game.id;
@@ -173,6 +185,7 @@ function GameRow({
           "border-t border-border transition-colors",
           expandable ? "cursor-pointer hover:bg-bg-elevated/60" : "",
           expanded ? "bg-bg-elevated/40" : "",
+          highlighted ? "ring-2 ring-accent ring-offset-1 ring-offset-bg" : "",
         ]
           .filter(Boolean)
           .join(" ")}
@@ -288,10 +301,12 @@ function panelHeaderMetaFromGame(game: GameRowData): PanelHeaderMeta {
 function GameMobileCard({
   game,
   expanded,
+  highlighted,
   onToggle,
 }: {
   game: GameRowData;
   expanded: boolean;
+  highlighted: boolean;
   onToggle: () => void;
 }) {
   const expandable = !!game.id;
@@ -300,9 +315,11 @@ function GameMobileCard({
 
   return (
     <li
+      data-game-row-id={game.id || ""}
       className={[
         "rounded-lg border border-border bg-bg-surface transition-colors",
         expanded ? "border-border-strong" : "",
+        highlighted ? "ring-2 ring-accent ring-offset-1 ring-offset-bg" : "",
       ]
         .filter(Boolean)
         .join(" ")}
