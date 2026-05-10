@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
+import { wrRamp } from "@/lib/format";
 import { clientTimezone } from "@/lib/timeseries";
 
 type HeatmapCell = {
@@ -263,10 +264,12 @@ function HeatCell({
   const vol = maxTotal ? cell.total / maxTotal : 0;
   const empty = cell.total === 0;
 
-  // Win-rate mode: hue ramps red→amber→green, intensity scales with
-  // sample size so a 1-0 cell doesn't blare out at the same intensity
-  // as a 50-game cell.
-  const wrIntensity = empty ? 0 : 0.25 + Math.min(1, vol * 1.5) * 0.55;
+  // Win-rate mode: hue ramps red→amber→green via the shared severe
+  // ramp (30% = deep red, 65% = deep green). Intensity stays a volume
+  // dial so a 1-0 cell doesn't blare at full saturation, but the floor
+  // is high enough that low-volume cells still read as clearly tinted
+  // instead of washing out to "dirty cream" against the light theme.
+  const wrIntensity = empty ? 0 : 0.65 + Math.min(1, vol * 1.5) * 0.35;
   const volIntensity = empty ? 0 : 0.18 + vol * 0.7;
 
   const background = empty
@@ -347,24 +350,9 @@ function Legend({
 }
 
 function wrColor(rate: number, intensity: number): string {
-  // Two-stop ramp: red (0%) → amber (50%) → green (100%).
-  let r: number;
-  let g: number;
-  let b: number;
-  if (rate <= 0.5) {
-    const t = Math.max(0, rate / 0.5);
-    r = lerp(255, 230, t);
-    g = lerp(107, 180, t);
-    b = lerp(107, 80, t);
-  } else {
-    const t = Math.min(1, (rate - 0.5) / 0.5);
-    r = lerp(230, 62, t);
-    g = lerp(180, 192, t);
-    b = lerp(80, 122, t);
-  }
-  return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${intensity.toFixed(3)})`;
-}
-
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
+  // Severe ramp clamped at 30%/65%: two-stop gradient through amber
+  // so a 50/50 cell can't be mistaken for a winning cell. See
+  // `wrRamp` in lib/format.ts.
+  const [r, g, b] = wrRamp(rate);
+  return `rgba(${r}, ${g}, ${b}, ${intensity.toFixed(3)})`;
 }

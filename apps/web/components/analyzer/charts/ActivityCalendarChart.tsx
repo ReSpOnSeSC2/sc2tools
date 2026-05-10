@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
+import { wrRamp } from "@/lib/format";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
 
 type ActivityDay = {
@@ -19,7 +20,10 @@ type ActivityResponse = {
   days: ActivityDay[];
 };
 
-const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""] as const;
+// Row 0 is Monday (mondayBasedDow); show labels on alternating rows
+// starting at Mon so the labels actually line up with the cells they
+// describe instead of slipping a row late.
+const DAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", ""] as const;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
@@ -135,7 +139,10 @@ export function ActivityCalendarChart({
 function CalendarCell({ cell }: { cell: CalCell }) {
   const empty = cell.total === 0;
   const wr = empty ? 0 : cell.wins / cell.total;
-  const intensity = empty ? 0 : 0.25 + Math.min(1, cell.total / 6) * 0.6;
+  // Volume → opacity, but keep the floor high enough that a 1-game day
+  // still reads as clearly tinted instead of "almost empty grey". Caps
+  // at 6 games so a 50-game day doesn't dwarf its neighbours.
+  const intensity = empty ? 0 : 0.55 + Math.min(1, cell.total / 6) * 0.45;
   const background = empty
     ? "rgba(31, 37, 51, 0.55)"
     : wrFill(wr, intensity);
@@ -162,15 +169,15 @@ function Legend() {
       />
       <span
         className="h-3 w-3 rounded-[3px]"
-        style={{ background: wrFill(0.3, 0.5) }}
+        style={{ background: wrFill(0.25, 0.85) }}
       />
       <span
         className="h-3 w-3 rounded-[3px]"
-        style={{ background: wrFill(0.5, 0.7) }}
+        style={{ background: wrFill(0.5, 0.9) }}
       />
       <span
         className="h-3 w-3 rounded-[3px]"
-        style={{ background: wrFill(0.7, 0.85) }}
+        style={{ background: wrFill(0.7, 1) }}
       />
       <span>→ More wins</span>
     </div>
@@ -243,23 +250,6 @@ function mondayBasedDow(date: Date, timeZone: string): number {
 }
 
 function wrFill(rate: number, intensity: number): string {
-  let r: number;
-  let g: number;
-  let b: number;
-  if (rate <= 0.5) {
-    const t = Math.max(0, rate / 0.5);
-    r = lerp(255, 230, t);
-    g = lerp(107, 180, t);
-    b = lerp(107, 80, t);
-  } else {
-    const t = Math.min(1, (rate - 0.5) / 0.5);
-    r = lerp(230, 62, t);
-    g = lerp(180, 192, t);
-    b = lerp(80, 122, t);
-  }
-  return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${intensity.toFixed(3)})`;
-}
-
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
+  const [r, g, b] = wrRamp(rate);
+  return `rgba(${r}, ${g}, ${b}, ${intensity.toFixed(3)})`;
 }
