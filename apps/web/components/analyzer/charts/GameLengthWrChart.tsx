@@ -125,14 +125,17 @@ export function GameLengthWrChart() {
       </p>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={rows} margin={{ top: 8, right: 24, bottom: 4, left: -8 }}>
+          <ComposedChart data={rows} margin={{ top: 8, right: 24, bottom: 12, left: -8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2533" />
             <XAxis
               dataKey="bucket"
               stroke="#6b7280"
               fontSize={10}
-              tickMargin={4}
+              tickMargin={6}
               interval={0}
+              angle={-32}
+              textAnchor="end"
+              height={42}
             />
             <YAxis
               yAxisId="games"

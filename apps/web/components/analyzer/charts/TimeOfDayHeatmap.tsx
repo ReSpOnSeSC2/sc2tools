@@ -39,31 +39,28 @@ const HOUR_BLOCKS: ReadonlyArray<{ start: number; end: number }> = [
 /**
  * Format a 4-hour block boundary for the heatmap column header.
  *
- * 24-hour locales: zero-padded numeric range, e.g. "08 – 12".
- * 12-hour locales: AM/PM with both ends spelled out when the boundary
- * crosses noon or midnight (so "8 AM – 12 PM" can't be misread as
- * "8 PM – midnight"). Uses an en-dash (U+2013) for the range, not a
- * hyphen.
+ * 24-hour locales: zero-padded numeric range, e.g. "08–12".
+ * 12-hour locales: compact a/p meridiem so six columns fit on a phone
+ * without overlapping. Both ends are suffixed when the block straddles
+ * noon or midnight so "8a–12p" can't be misread as "8p–midnight"; when
+ * both ends share a meridiem only the right side is suffixed.
  */
 function formatHourBlock(start: number, end: number, hour12: boolean): string {
   if (!hour12) {
     const pad = (n: number) => n.toString().padStart(2, "0");
-    return `${pad(start)} – ${pad(end)}`;
+    return `${pad(start)}–${pad(end)}`;
   }
-  const meridiem = (h: number) => (h < 12 || h === 24 ? "AM" : "PM");
+  const meridiem = (h: number) => (h < 12 || h === 24 ? "a" : "p");
   const display = (h: number) => {
     const m = h % 12;
     return m === 0 ? 12 : m;
   };
   const startMer = meridiem(start);
   const endMer = meridiem(end);
-  // When both ends share a meridiem, only suffix the right side. When
-  // the block straddles noon or midnight, spell out both — that's the
-  // ambiguity the old "8-12p" labels created.
   if (startMer === endMer) {
-    return `${display(start)} – ${display(end)} ${endMer}`;
+    return `${display(start)}–${display(end)}${endMer}`;
   }
-  return `${display(start)} ${startMer} – ${display(end)} ${endMer}`;
+  return `${display(start)}${startMer}–${display(end)}${endMer}`;
 }
 
 type CellAgg = {

@@ -22,8 +22,9 @@ type ActivityResponse = {
 
 // Row 0 is Monday (mondayBasedDow); show labels on alternating rows
 // starting at Mon so the labels actually line up with the cells they
-// describe instead of slipping a row late.
-const DAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", ""] as const;
+// describe instead of slipping a row late. Sun is labelled too — it
+// anchors the bottom of the column for users orienting on weekends.
+const DAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", "Sun"] as const;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
@@ -57,6 +58,22 @@ export function ActivityCalendarChart({
     }
     return buildCalendar(dayMap, weeks, tz);
   }, [data, tz, weeks]);
+
+  // Column-aligned month markers for the x-axis: each week shows its
+  // month label only when the month flipped from the previous column,
+  // so the row reads like a sparse calendar header (Jan ... Feb ...).
+  const monthMarkers = useMemo(() => {
+    let prevMonth = -1;
+    return calendar.weeks.map((week) => {
+      const firstCell = week.find((c) => c !== null);
+      if (!firstCell) return "";
+      const date = new Date(`${firstCell.date}T12:00:00`);
+      const month = date.getMonth();
+      if (month === prevMonth) return "";
+      prevMonth = month;
+      return date.toLocaleString(undefined, { month: "short" });
+    });
+  }, [calendar]);
 
   const totalGames = (data?.days || []).reduce(
     (acc, d) => acc + (d.total || 0),
@@ -93,7 +110,7 @@ export function ActivityCalendarChart({
   return (
     <Card title="Activity calendar">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        {headline} · cell colour = win-rate, saturation = games played.
+        {headline} · y = day of week, x = week (older → newer) · cell colour = win-rate, saturation = games played.
       </p>
       <div className="overflow-x-auto pb-1">
         <div className="flex gap-2">
@@ -101,6 +118,9 @@ export function ActivityCalendarChart({
             className="flex flex-col text-[9px] uppercase tracking-wide text-text-dim"
             aria-hidden
           >
+            {/* Spacer so day labels line up with the cell rows below the
+                month-label row. */}
+            <div className="h-3" style={{ marginBottom: 2 }} />
             {DAY_LABELS.map((label, i) => (
               <div
                 key={i}
@@ -111,23 +131,40 @@ export function ActivityCalendarChart({
               </div>
             ))}
           </div>
-          <div className="flex">
-            {calendar.weeks.map((week, wi) => (
-              <div key={wi} className="flex flex-col">
-                {week.map((cell, di) =>
-                  cell ? (
-                    <CalendarCell key={`${wi}-${di}`} cell={cell} />
-                  ) : (
-                    <div
-                      key={`${wi}-${di}`}
-                      className="h-3.5 w-3.5"
-                      style={{ marginRight: 2, marginBottom: 2 }}
-                      aria-hidden
-                    />
-                  ),
-                )}
-              </div>
-            ))}
+          <div className="flex flex-col">
+            <div
+              className="flex text-[9px] uppercase tracking-wide text-text-dim"
+              style={{ height: 12, marginBottom: 2 }}
+              aria-hidden
+            >
+              {monthMarkers.map((label, wi) => (
+                <div
+                  key={wi}
+                  className="whitespace-nowrap"
+                  style={{ width: 14, marginRight: 2 }}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+            <div className="flex">
+              {calendar.weeks.map((week, wi) => (
+                <div key={wi} className="flex flex-col">
+                  {week.map((cell, di) =>
+                    cell ? (
+                      <CalendarCell key={`${wi}-${di}`} cell={cell} />
+                    ) : (
+                      <div
+                        key={`${wi}-${di}`}
+                        className="h-3.5 w-3.5"
+                        style={{ marginRight: 2, marginBottom: 2 }}
+                        aria-hidden
+                      />
+                    ),
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
