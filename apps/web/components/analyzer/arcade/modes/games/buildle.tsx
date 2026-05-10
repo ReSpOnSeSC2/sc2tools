@@ -18,12 +18,13 @@ registerMode(ID, "generative");
 
 export type BuildleAxis = "race" | "techPath" | "openingUnit" | "firstAggression";
 
+export type BuildleClueState = "match" | "near" | "miss";
+
 export type BuildleClue = {
   axis: BuildleAxis;
   guessVal: string;
   truthVal: string;
-  /** "match" | "near" | "miss". */
-  state: "match" | "miss";
+  state: BuildleClueState;
 };
 
 type Q = {
@@ -64,24 +65,35 @@ export function deriveTechPath(name: string, race?: string): BuildleFeatures["te
   return "hybrid";
 }
 
-const OPENING_KEYWORDS: Array<{ re: RegExp; unit: string }> = [
-  { re: /reaper/i, unit: "Reaper" },
-  { re: /hellion/i, unit: "Hellion" },
-  { re: /marine/i, unit: "Marine" },
-  { re: /marauder/i, unit: "Marauder" },
-  { re: /banshee/i, unit: "Banshee" },
-  { re: /widow|mine/i, unit: "Widow Mine" },
-  { re: /zergling|ling/i, unit: "Zergling" },
-  { re: /roach/i, unit: "Roach" },
-  { re: /baneling/i, unit: "Baneling" },
-  { re: /mutalisk|muta/i, unit: "Mutalisk" },
-  { re: /hydralisk|hydra/i, unit: "Hydralisk" },
-  { re: /zealot/i, unit: "Zealot" },
-  { re: /stalker/i, unit: "Stalker" },
-  { re: /adept/i, unit: "Adept" },
-  { re: /void ?ray/i, unit: "Void Ray" },
-  { re: /oracle/i, unit: "Oracle" },
+/** Role buckets — adjacency for the "near" clue state on openingUnit. */
+export type OpeningRole = "light" | "armored" | "caster";
+
+const OPENING_KEYWORDS: Array<{ re: RegExp; unit: string; race: "T" | "Z" | "P"; role: OpeningRole }> = [
+  { re: /reaper/i, unit: "Reaper", race: "T", role: "light" },
+  { re: /hellion/i, unit: "Hellion", race: "T", role: "light" },
+  { re: /marine/i, unit: "Marine", race: "T", role: "light" },
+  { re: /marauder/i, unit: "Marauder", race: "T", role: "armored" },
+  { re: /banshee/i, unit: "Banshee", race: "T", role: "armored" },
+  { re: /widow|mine/i, unit: "Widow Mine", race: "T", role: "armored" },
+  { re: /zergling|ling/i, unit: "Zergling", race: "Z", role: "light" },
+  { re: /roach/i, unit: "Roach", race: "Z", role: "armored" },
+  { re: /baneling/i, unit: "Baneling", race: "Z", role: "light" },
+  { re: /mutalisk|muta/i, unit: "Mutalisk", race: "Z", role: "armored" },
+  { re: /hydralisk|hydra/i, unit: "Hydralisk", race: "Z", role: "armored" },
+  { re: /zealot/i, unit: "Zealot", race: "P", role: "light" },
+  { re: /stalker/i, unit: "Stalker", race: "P", role: "armored" },
+  { re: /adept/i, unit: "Adept", race: "P", role: "light" },
+  { re: /void ?ray/i, unit: "Void Ray", race: "P", role: "armored" },
+  { re: /oracle/i, unit: "Oracle", race: "P", role: "caster" },
 ];
+
+/** Lookup unit → { race, role }. Used by "near" semantics on openingUnit. */
+export function openingMeta(unit: string): { race: "T" | "Z" | "P"; role: OpeningRole } | null {
+  for (const k of OPENING_KEYWORDS) {
+    if (k.unit === unit) return { race: k.race, role: k.role };
+  }
+  return null;
+}
 
 export function deriveOpeningUnit(name: string, race?: string): string {
   for (const k of OPENING_KEYWORDS) if (k.re.test(name)) return k.unit;
@@ -109,6 +121,52 @@ export function deriveFeatures(name: string, race?: string): BuildleFeatures {
   };
 }
 
+/**
+ * Tech-path adjacency. Builds in the same family count as "near" even
+ * when they differ. Pairs (a, b) appear unordered — checked both ways.
+ */
+const TECH_ADJACENCY: ReadonlyArray<readonly [BuildleFeatures["techPath"], BuildleFeatures["techPath"]]> = [
+  ["mech", "ground"],
+  ["bio", "ground"],
+  ["air", "hybrid"],
+];
+
+function techsAreAdjacent(
+  a: BuildleFeatures["techPath"],
+  b: BuildleFeatures["techPath"],
+): boolean {
+  for (const [x, y] of TECH_ADJACENCY) {
+    if ((a === x && b === y) || (a === y && b === x)) return true;
+  }
+  return false;
+}
+
+/**
+ * First-aggression timing adjacency. Adjacent windows are "near"
+ * (a 5-minute timing guess vs a 4-minute truth still landed close).
+ */
+const TIMING_ORDER: ReadonlyArray<BuildleFeatures["firstAggression"]> = [
+  "<4 min",
+  "4–6 min",
+  "6–9 min",
+  "9+ min",
+];
+
+function timingsAreAdjacent(
+  a: BuildleFeatures["firstAggression"],
+  b: BuildleFeatures["firstAggression"],
+): boolean {
+  const i = TIMING_ORDER.indexOf(a);
+  const j = TIMING_ORDER.indexOf(b);
+  if (i < 0 || j < 0) return false;
+  return Math.abs(i - j) === 1;
+}
+
+/**
+ * Score a single axis. "match" if identical; "near" if same family
+ * (tech), same race + role bucket (opening unit), or adjacent timing
+ * (first aggression); "miss" otherwise. Race never goes near.
+ */
 export function clueFor(
   axis: BuildleAxis,
   guess: BuildleFeatures,
@@ -116,12 +174,20 @@ export function clueFor(
 ): BuildleClue {
   const guessVal = String(guess[axis]);
   const truthVal = String(truth[axis]);
-  return {
-    axis,
-    guessVal,
-    truthVal,
-    state: guessVal === truthVal ? "match" : "miss",
-  };
+  if (guessVal === truthVal) {
+    return { axis, guessVal, truthVal, state: "match" };
+  }
+  let state: BuildleClueState = "miss";
+  if (axis === "techPath") {
+    if (techsAreAdjacent(guess.techPath, truth.techPath)) state = "near";
+  } else if (axis === "firstAggression") {
+    if (timingsAreAdjacent(guess.firstAggression, truth.firstAggression)) state = "near";
+  } else if (axis === "openingUnit") {
+    const a = openingMeta(guess.openingUnit);
+    const b = openingMeta(truth.openingUnit);
+    if (a && b && a.race === b.race && a.role === b.role) state = "near";
+  }
+  return { axis, guessVal, truthVal, state };
 }
 
 /* ──────────── generator + render ──────────── */
@@ -264,6 +330,36 @@ function Render({
       isDaily={ctx.isDaily}
       body={
         <div className="space-y-3">
+          <p className="text-caption text-text-muted">
+            Guess the build. Each guess scores you across{" "}
+            <span className="text-text">Race</span>,{" "}
+            <span className="text-text">Tech path</span>,{" "}
+            <span className="text-text">Opening unit</span>, and{" "}
+            <span className="text-text">First aggression timing</span>.
+          </p>
+          <div
+            className="flex flex-wrap items-center gap-3 rounded border border-border bg-bg-elevated p-2 text-caption"
+            aria-label="Clue legend"
+          >
+            <span className="flex items-center gap-1.5">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-success/30 text-[10px] font-mono uppercase">
+                ●
+              </span>
+              <span className="text-text">Exact match</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-warning/30 text-[10px] font-mono uppercase">
+                ●
+              </span>
+              <span className="text-text">Same family / adjacent timing</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-bg-surface text-[10px] font-mono uppercase text-text-dim">
+                ●
+              </span>
+              <span className="text-text">Not in this build</span>
+            </span>
+          </div>
           <ul className="space-y-1.5" aria-label="Buildle guesses">
             {lines.map((row, i) => (
               <li key={`${row.guess}-${i}`} className="space-y-1 rounded border border-border bg-bg-surface p-2">
@@ -281,9 +377,12 @@ function Render({
                         "inline-flex h-7 flex-1 items-center justify-center rounded text-[10px] font-mono uppercase tracking-wider",
                         c.state === "match"
                           ? "bg-success/30 text-text"
-                          : "bg-bg-elevated text-text-dim",
+                          : c.state === "near"
+                            ? "bg-warning/30 text-text"
+                            : "bg-bg-elevated text-text-dim",
                       ].join(" ")}
-                      title={`${ctx.question.axisLabels[c.axis]}: ${c.guessVal}`}
+                      title={`${ctx.question.axisLabels[c.axis]} — your guess: ${c.guessVal}, ${c.state === "match" ? "exact match" : c.state === "near" ? "close" : "miss"}`}
+                      aria-label={`${ctx.question.axisLabels[c.axis]} — your guess: ${c.guessVal}, ${c.state}`}
                     >
                       {ctx.question.axisLabels[c.axis][0]}
                     </span>
@@ -346,7 +445,12 @@ export function buildleEmoji(
   for (const g of guesses) {
     const f = deriveFeatures(g, candidates.includes(g) ? undefined : undefined);
     const row = axes
-      .map((a) => (clueFor(a, f, features).state === "match" ? "🟩" : "⬜"))
+      .map((a) => {
+        const state = clueFor(a, f, features).state;
+        if (state === "match") return "🟩";
+        if (state === "near") return "🟨";
+        return "⬜";
+      })
       .join("");
     lines.push(row);
   }
