@@ -13,6 +13,7 @@ const { connect } = require("./db/connect");
 const { buildApp } = require("./app");
 const { attachSocketAuth } = require("./socket/auth");
 const { buildKeepaliveWorker } = require("./services/keepalive");
+const { buildSessionRefresher } = require("./services/sessionRefresher");
 const { buildPulseBackfillJob } = require("./jobs/pulseBackfillJob");
 const sentry = require("./util/sentry");
 
@@ -107,6 +108,23 @@ async function main() {
   });
   pulseBackfill.start();
 
+  // Periodic re-emit of ``overlay:session`` to every connected overlay
+  // socket. The session aggregate has a 4-hour-inactivity reset baked
+  // into ``GamesService.todaySession``, but that reset only takes
+  // effect when somebody re-asks the service. Without this worker the
+  // widget would keep showing yesterday's late-evening W-L until the
+  // next game ingest — which is exactly when the streamer no longer
+  // needs the reset. A 5-minute cadence keeps Mongo load bounded
+  // (per-tick cache prevents fan-out per overlay) and gives the widget
+  // ≤5 min latency between the inactivity threshold tripping and the
+  // card resetting on screen.
+  const sessionRefresher = buildSessionRefresher({
+    io,
+    games: services.games,
+    logger,
+  });
+  sessionRefresher.start();
+
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
@@ -117,6 +135,7 @@ async function main() {
     io.close();
     await keepalive.stop();
     await pulseBackfill.stop();
+    await sessionRefresher.stop();
     await db.close();
     logger.info("shutdown_complete");
     process.exit(0);
