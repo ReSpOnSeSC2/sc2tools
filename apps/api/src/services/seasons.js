@@ -14,6 +14,24 @@ const PULSE_API_ROOT = "https://sc2pulse.nephest.com/sc2/api";
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const REQUEST_TIMEOUT_MS = 8000;
 
+// Current 1v1 ladder map pool. SC2Pulse does not expose the active pool
+// per season; Blizzard rotates it on a multi-month cadence and we mirror
+// the latest Battle.net 1v1 ranked set here. Treated as the catalog of
+// names Bingo: Ladder Edition is allowed to draw map-bound objectives
+// from. Update as the pool rotates — single additive surface so callers
+// don't have to special-case "no pool".
+const CURRENT_LADDER_MAP_POOL = Object.freeze([
+  "Equilibrium",
+  "Goldenaura",
+  "Hard Lead",
+  "Oceanborn",
+  "Site Delta",
+  "El Dorado",
+  "Whispers of Gold",
+  "Pylon Overgrowth",
+  "Frostline",
+]);
+
 class SeasonsService {
   constructor(opts = {}) {
     this.fetchImpl = opts.fetchImpl || globalThis.fetch;
@@ -47,7 +65,13 @@ class SeasonsService {
       // Stale-while-error: serve previous payload.
       return this._respond(this._cache.items, this._cache.fetchedAt, "pulse");
     }
-    return { items: [], current: null, source: "fallback", fetchedAt: null };
+    return {
+      items: [],
+      current: null,
+      source: "fallback",
+      fetchedAt: null,
+      mapPool: CURRENT_LADDER_MAP_POOL.slice(),
+    };
   }
 
   _respond(items, fetchedAt, source) {
@@ -58,7 +82,13 @@ class SeasonsService {
     // Roll up by season number across regions for the SPA. Each
     // distinct `number` is one logical season; pick the earliest start
     // and latest end across all regions for that number.
-    return { items, current, source, fetchedAt };
+    return {
+      items,
+      current,
+      source,
+      fetchedAt,
+      mapPool: CURRENT_LADDER_MAP_POOL.slice(),
+    };
   }
 
   async _fetchFromPulse() {

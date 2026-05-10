@@ -42,6 +42,7 @@ const { AgentVersionService } = require("./services/agentVersion");
 const { GdprService } = require("./services/gdpr");
 const { CommunityService } = require("./services/community");
 const { SeasonsService } = require("./services/seasons");
+const { ArcadeService } = require("./services/arcade");
 const { PulseMmrService } = require("./services/pulseMmr");
 const { AdminService } = require("./services/admin");
 const { buildPulseResolver } = require("./services/pulseResolver");
@@ -71,6 +72,7 @@ const { buildPublicReplayRouter } = require("./routes/publicReplay");
 const { buildSeasonsRouter } = require("./routes/seasons");
 const { buildClerkWebhookRouter } = require("./routes/clerkWebhook");
 const { buildAdminRouter } = require("./routes/admin");
+const { buildArcadeRouter } = require("./routes/arcade");
 const {
   buildAgentLiveRouter,
   buildMeLiveRouter,
@@ -223,6 +225,7 @@ function makeServices(deps) {
   });
   const community = new CommunityService(deps.db);
   const seasons = new SeasonsService();
+  const arcade = new ArcadeService(deps.db, { games });
   // AdminService composes db + gdpr; deliberately near the bottom so
   // its dependencies are already constructed.
   const admin = new AdminService({ db: deps.db, gdpr });
@@ -249,6 +252,7 @@ function makeServices(deps) {
     gdpr,
     community,
     seasons,
+    arcade,
     admin,
   };
 }
@@ -482,6 +486,10 @@ function mountRoutes(app, deps, services, clerk) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMlRouter({ ml: services.ml, auth }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildArcadeRouter({ arcade: services.arcade, auth }),
   );
   // Live Game Bridge — agent POST + per-user SSE.
   // Mounted late so the public/auth-flexible routers above keep
