@@ -46,19 +46,24 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
       reason: "We need at least 3 winning streaks ended by losses to play this round.",
     };
   }
-  const longestRunLen = runs.reduce((m, r) => Math.max(m, r.length), 0);
-  if (longestRunLen < 2) {
+  // A run can be the "answer" only if at least two strictly shorter runs
+  // exist as fillers — otherwise the candidate set wouldn't have a unique
+  // longest. Picking the answer at random from this pool (rather than
+  // always forcing the all-time max) is what keeps the same opponent from
+  // appearing every round.
+  const eligibleAnswers = runs.filter(
+    (r) => runs.filter((other) => other.length < r.length).length >= 2,
+  );
+  if (eligibleAnswers.length === 0) {
     return {
       ok: false,
-      reason: "No multi-win streaks yet. Play a couple back-to-back wins.",
+      reason: "Not enough variety in streak lengths yet — keep playing.",
     };
   }
-  // Force-include the longest, sample 2 others.
-  const sortedDesc = runs.slice().sort((a, b) => b.length - a.length);
-  const longest = sortedDesc[0];
-  const others = sortedDesc.slice(1);
-  const filler = pickN(others, 2, input.rng);
-  const sample = shuffle([longest, ...filler], input.rng);
+  const answer = pickN(eligibleAnswers, 1, input.rng)[0];
+  const shorter = runs.filter((r) => r.length < answer.length);
+  const filler = pickN(shorter, 2, input.rng);
+  const sample = shuffle([answer, ...filler], input.rng);
   // Lookup the opponent name on the ending loss.
   const byId = new Map(chrono.map((g) => [g.gameId, g]));
   const candidates = sample.map((r) => ({
@@ -69,7 +74,7 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
     opponentName:
       byId.get(r.endedById)?.opponent?.displayName || "(unknown opponent)",
   }));
-  const correctIndex = candidates.findIndex((c) => c.endedById === longest.endedById);
+  const correctIndex = candidates.findIndex((c) => c.endedById === answer.endedById);
   return { ok: true, minDataMet: true, question: { candidates, correctIndex } };
 }
 
