@@ -153,9 +153,14 @@ export function GameLengthWrChart() {
                 return [value, name];
               }}
             />
-            <Bar yAxisId="games" dataKey="total" radius={[4, 4, 0, 0]}>
+            <Bar
+              yAxisId="games"
+              dataKey="total"
+              radius={[4, 4, 0, 0]}
+              minPointSize={3}
+            >
               {rows.map((r) => (
-                <Cell key={r.bucket} fill={r.color} fillOpacity={0.55} />
+                <Cell key={r.bucket} fill={r.color} fillOpacity={0.85} />
               ))}
             </Bar>
             <Line
