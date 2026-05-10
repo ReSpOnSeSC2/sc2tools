@@ -20,6 +20,18 @@
 const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const MIN_INTERVAL_MS = 60 * 60 * 1000; // 1 h floor — Liquipedia is rate-sensitive
 
+/** @param {{ ladderMapPool: any, logger: any, res: any }} args */
+function logRefreshOutcome({ logger, res }) {
+  if (res.added.length > 0 || res.removed.length > 0) {
+    logger.info(
+      { added: res.added, removed: res.removed, count: res.maps.length },
+      "ladderMapPool_diff",
+    );
+  } else {
+    logger.info({ count: res.maps.length }, "ladderMapPool_unchanged");
+  }
+}
+
 /**
  * @param {{
  *   ladderMapPool: import('../services/ladderMapPool').LadderMapPoolService,
@@ -46,7 +58,6 @@ function buildLadderMapPoolRefreshJob(deps) {
   // Default true: a fresh container should hit Liquipedia once on boot
   // so we don't rely on a 24h delay to get past the bundled seed file.
   const runOnStart = deps.runOnStart !== false;
-
   /** @type {NodeJS.Timeout | null} */
   let timer = null;
   let started = false;
@@ -58,14 +69,7 @@ function buildLadderMapPoolRefreshJob(deps) {
     inflight = (async () => {
       try {
         const res = await deps.ladderMapPool.refresh({ force: true });
-        if (res.added.length > 0 || res.removed.length > 0) {
-          logger.info(
-            { added: res.added, removed: res.removed, count: res.maps.length },
-            "ladderMapPool_diff",
-          );
-        } else {
-          logger.info({ count: res.maps.length }, "ladderMapPool_unchanged");
-        }
+        logRefreshOutcome({ ladderMapPool: deps.ladderMapPool, logger, res });
       } catch (err) {
         logger.warn(
           { err: err && err.message ? err.message : String(err) },
@@ -79,38 +83,25 @@ function buildLadderMapPoolRefreshJob(deps) {
   }
 
   return {
-    /** Start the periodic refresh. No-op when disabled or already started. */
     start() {
       if (disabled || started) return;
       started = true;
       logger.info({ intervalMs: interval, runOnStart }, "ladderMapPoolRefresh_started");
-      if (runOnStart) {
-        tick().catch(() => {});
-      }
+      if (runOnStart) tick().catch(() => {});
       timer = setInterval(() => {
         tick().catch(() => {});
       }, interval);
-      // Don't keep the process alive solely for this timer; matches the
-      // pattern other long-running jobs use.
       if (timer && typeof timer.unref === "function") timer.unref();
     },
-    /** Stop the refresh worker. Resolves when any in-flight tick settles. */
     async stop() {
       if (timer) clearInterval(timer);
       timer = null;
       started = false;
       if (inflight) {
-        try {
-          await inflight;
-        } catch {
-          // best-effort
-        }
+        try { await inflight; } catch { /* best-effort */ }
       }
     },
-    /** For tests: run one tick immediately. */
-    async runOnce() {
-      await tick();
-    },
+    async runOnce() { await tick(); },
   };
 }
 
