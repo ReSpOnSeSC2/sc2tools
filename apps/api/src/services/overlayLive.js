@@ -2,6 +2,7 @@
 
 const { buildSamplePayload } = require("./overlayLiveSamples");
 const { attachOpponentIdsToFilter } = require("../util/opponentIdentity");
+const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 
 /**
  * OverlayLiveService — derives the cloud's authoritative
@@ -115,6 +116,72 @@ function pickStreamerRace(envelope) {
     }
   }
   return null;
+}
+
+/**
+ * Pick the canonical Blizzard-region label for an envelope's
+ * opponent. Precedence: the agent's ``opponent.toonHandle`` leading
+ * region byte (most reliable — Battle.net itself stamps that byte),
+ * then ``profile.region`` from the Pulse lookup, then ``null``.
+ *
+ * Used as part of the enrichment cache key when no Pulse character id
+ * is available, so two opponents with identical display names on
+ * different servers don't collide and cross-pollinate scouting data.
+ *
+ * @param {Record<string, any>} opp
+ * @param {Record<string, any>|null} profile
+ * @returns {string|null}
+ */
+function pickEnvelopeRegion(opp, profile) {
+  if (opp && typeof opp.toonHandle === "string") {
+    const inferred = regionFromToonHandle(opp.toonHandle);
+    if (inferred) return inferred;
+  }
+  if (profile && typeof profile.region === "string" && profile.region) {
+    // SC2Pulse labels NA as ``US``; the rest of the cloud session-
+    // widget pipeline canonicalises to ``NA``. Mirror that here so a
+    // single opponent's region is consistent regardless of which
+    // identity branch fired first (toonHandle inference vs. Pulse
+    // profile) — without this an envelope that arrives toonHandle-
+    // first would key under ``NA`` and a follow-up envelope that
+    // arrives Pulse-first would key under ``US``, splitting the
+    // cache and double-fetching the aggregation.
+    const upper = profile.region.trim().toUpperCase();
+    return upper === "US" ? "NA" : upper;
+  }
+  return null;
+}
+
+/**
+ * Compose the enrichment cache key. The two-scheme split lives here
+ * so the writer (``enrichEnvelope``) and the invalidator
+ * (``invalidateEnrichmentForOpponent``) agree on the prefix shape:
+ *
+ *   * ``${userId}|pulse:<pulse_character_id>|<myRace>`` — preferred,
+ *     globally unique per Battle.net character.
+ *   * ``${userId}|name:<lcname>|region:<NA|EU|...|?>|<lcoppRace>|<myRace>``
+ *     — fallback when no Pulse id is available; region prevents a
+ *     cross-server display-name collision (NA "Maru" vs EU "Maru").
+ *
+ * The unknown-region sentinel ``?`` keeps the key length stable
+ * across servers so the LRU eviction order stays sensible.
+ *
+ * @param {{
+ *   userId: string,
+ *   pulseCharacterId: number|null,
+ *   name: string,
+ *   race: string,
+ *   region: string|null,
+ *   myRace: string|null,
+ * }} parts
+ * @returns {string}
+ */
+function buildEnrichmentKey(parts) {
+  if (parts.pulseCharacterId !== null) {
+    return `${parts.userId}|pulse:${parts.pulseCharacterId}|${parts.myRace || ""}`;
+  }
+  const region = parts.region || "?";
+  return `${parts.userId}|name:${parts.name.toLowerCase()}|region:${region}|${parts.race.toLowerCase()}|${parts.myRace || ""}`;
 }
 
 function bucketResult(raw) {
@@ -621,11 +688,24 @@ class OverlayLiveService {
    * the post-game card carries. Called by the LiveGameBroker before
    * it fans the envelope out to overlay sockets and SSE.
    *
-   * Cached per (userId, oppName, oppRace) for 5 minutes so the
-   * 1 Hz envelope cadence doesn't re-hit Mongo for every tick of the
-   * same match. The first envelope of a new opponent is a cache miss
-   * (~50 ms aggregation); every subsequent tick is a cache hit
-   * (microseconds).
+   * Cached for 5 minutes so the 1 Hz envelope cadence doesn't re-hit
+   * Mongo for every tick of the same match. The first envelope of a
+   * new opponent is a cache miss (~50 ms aggregation); every
+   * subsequent tick is a cache hit (microseconds).
+   *
+   * **Cache key precedence** — region-aware so a streamer who
+   * switches NA → EU and runs into another "Maru" doesn't see the
+   * NA Maru's H2H bleed through:
+   *
+   *   1. ``${userId}|pulse:<pulse_character_id>|<myRace>`` when the
+   *      Pulse profile carries a numeric ``pulse_character_id`` —
+   *      globally unique, immune to display-name collisions.
+   *   2. ``${userId}|name:<lcname>|region:<NA|EU|KR|CN|SEA|?>|<oppRace>|<myRace>``
+   *      otherwise. Region is derived from the agent's
+   *      ``opponent.toonHandle`` (preferred — Battle.net's own region
+   *      byte) or falls back to ``profile.region`` from the Pulse
+   *      lookup; we use ``"?"`` as the last resort so cross-region
+   *      collisions still poison less than the prior region-less key.
    *
    * Returns the original envelope when there's nothing to enrich
    * (no opponent name / unknown opponent / no history).
@@ -642,16 +722,31 @@ class OverlayLiveService {
     if (!name) return envelope;
     const race = typeof opp.race === "string" ? opp.race.trim() : "";
     const profile = opp.profile && typeof opp.profile === "object" ? opp.profile : null;
-    const pulseId = profile && Number.isFinite(Number(profile.pulse_character_id))
-      ? Number(profile.pulse_character_id)
-      : null;
+    // Guard against ``Number(null) === 0`` collapsing every
+    // missing-id envelope into the same cache slot. Only treat the
+    // Pulse id as present when the field was non-null AND the
+    // numeric coercion produced a finite value.
+    const rawPcid = profile ? profile.pulse_character_id : null;
+    const pulseCharacterId =
+      rawPcid !== null && rawPcid !== undefined
+        && Number.isFinite(Number(rawPcid))
+        ? Number(rawPcid)
+        : null;
     // The agent's envelope carries the streamer's display name on
     // ``user.name`` and the player race on ``players[].race`` for the
     // ``user`` player. The streamer's race is what ``buildFromOppName``
     // needs for matchup-scoped queries.
     const myRace = pickStreamerRace(envelope);
+    const region = pickEnvelopeRegion(opp, profile);
 
-    const key = `${userId}|${name.toLowerCase()}|${race.toLowerCase()}|${myRace || ""}`;
+    const key = buildEnrichmentKey({
+      userId,
+      pulseCharacterId,
+      name,
+      race,
+      region,
+      myRace,
+    });
     const now = Date.now();
     const hit = this._enrichmentCache.get(key);
     if (hit && now - hit.ts < this._enrichmentTtlMs) {
@@ -668,7 +763,7 @@ class OverlayLiveService {
         userId,
         name,
         race || undefined,
-        pulseId,
+        pulseCharacterId,
         myRace || undefined,
       );
     } catch {
@@ -700,18 +795,37 @@ class OverlayLiveService {
    * same opponent within the 5-minute cache window would render
    * scouting data missing the most recent encounter.
    *
-   * Drops every cached entry whose key starts with the
-   * ``${userId}|${oppName.toLowerCase()}|`` prefix so the variant
-   * keys (different myRace / oppRace) all flush together.
+   * Drops every entry that matches the (userId, name) prefix under
+   * the region-keyed scheme AND any entry under the pulse-id scheme
+   * when ``pulseCharacterId`` is supplied — so a server-switch
+   * rematch against the same opponent flushes both schemes.
    *
    * @param {string} userId
    * @param {string} opponentName
+   * @param {string|number|null} [pulseCharacterId] optional Pulse
+   *   character id from the just-ingested game's
+   *   ``opponent.pulseCharacterId``. When present, also flushes the
+   *   pulse-keyed entries so a streamer who's already on the new
+   *   region sees the freshly-uploaded encounter on the next tick.
    */
-  invalidateEnrichmentForOpponent(userId, opponentName) {
+  invalidateEnrichmentForOpponent(userId, opponentName, pulseCharacterId) {
     if (!userId || !opponentName) return;
-    const prefix = `${userId}|${opponentName.toLowerCase()}|`;
+    const namePrefix = `${userId}|name:${opponentName.toLowerCase()}|`;
+    const pcid =
+      pulseCharacterId !== undefined
+        && pulseCharacterId !== null
+        && Number.isFinite(Number(pulseCharacterId))
+        ? Number(pulseCharacterId)
+        : null;
+    const pulsePrefix = pcid !== null ? `${userId}|pulse:${pcid}|` : null;
     for (const key of Array.from(this._enrichmentCache.keys())) {
-      if (key.startsWith(prefix)) this._enrichmentCache.delete(key);
+      if (key.startsWith(namePrefix)) {
+        this._enrichmentCache.delete(key);
+        continue;
+      }
+      if (pulsePrefix !== null && key.startsWith(pulsePrefix)) {
+        this._enrichmentCache.delete(key);
+      }
     }
   }
 

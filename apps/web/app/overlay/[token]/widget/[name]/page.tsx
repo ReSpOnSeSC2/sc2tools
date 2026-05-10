@@ -5,6 +5,21 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * Force per-request rendering so Streamlabs / OBS / Cloudflare can't
+ * hold an old build's HTML in cache and starve the live socket
+ * subscription of a fresh boot. Pairs with the page-level
+ * ``revalidate = 0`` to disable Next.js's full-route cache for this
+ * route entirely — the same ``cache: "no-store"`` semantic the prompt
+ * calls out for any fetch the overlay would issue at boot.
+ */
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+// Disable any inadvertent fetch-cache hits inside server-component
+// data loads. The widget page doesn't fetch today, but pinning this
+// here means a future addition can't silently regress.
+export const fetchCache = "force-no-store";
+
 const VALID_WIDGETS = new Set([
   "opponent",
   "match-result",

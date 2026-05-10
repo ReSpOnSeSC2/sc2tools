@@ -33,6 +33,25 @@
  * we may eventually filter the envelope per-token (enabledWidgets).
  * Today the same envelope goes to every active token, but the loop
  * is already shaped for per-token policy.
+ *
+ * **Events emitted to overlay rooms:**
+ *
+ *   * ``overlay:liveGame`` — primary fan-out of every published
+ *     envelope. Carries the full ``LiveGameEnvelope`` shape
+ *     (``phase`` / ``gameKey`` / ``opponent`` / optional
+ *     ``streamerHistory``). Idempotent on ``gameKey`` — emitted at
+ *     1 Hz cadence per the agent's poll loop.
+ *   * ``overlay:liveGame`` (synthetic prelude) — emitted on overlay
+ *     subscribe / resync when the latest cached envelope is past
+ *     ``match_loading`` (i.e. ``match_started`` / ``match_in_progress``
+ *     / ``match_ended``). Carries ``phase: "match_loading"``,
+ *     ``synthetic: true``, and the cached envelope's ``gameKey``.
+ *     Trigger condition: a fresh subscriber whose Browser Source
+ *     either reconnected mid-match or refreshed the page after
+ *     ``match_loading`` had already passed. Without it, the client's
+ *     ``useClearStalePostGameOnGameKeyChange`` effect wouldn't see
+ *     the new gameKey and might keep showing the previous opponent.
+ *     Idempotent: emitted at most once per resync.
  */
 
 class LiveGameBroker {
@@ -49,6 +68,26 @@ class LiveGameBroker {
     this._subs = new Map();
     /** @type {Map<string, {envelope: object, ts: number}>} */
     this._latest = new Map();
+    // Per-user cache of the most recent ``overlay:live`` payload
+    // (post-game derivation from ``OverlayLiveService.buildFromGame``).
+    // The ingest path stamps it after fan-out so an
+    // ``overlay:resync`` from a reconnected Browser Source can replay
+    // it without a Mongo round-trip. Distinct from ``_latest`` (which
+    // holds the agent's ``LiveGameEnvelope``) because the two events
+    // use different shapes and different cadences.
+    /** @type {Map<string, {payload: object, ts: number}>} */
+    this._latestOverlayLive = new Map();
+    // Per-user "current" gameKey. The publish path stamps it whenever
+    // an envelope arrives carrying a gameKey; the enrich callback
+    // checks against it before broadcasting the enriched envelope so
+    // a slow Pulse / Mongo lookup from the PREVIOUS match can't
+    // overwrite the new envelope's ``streamerHistory``. Real-stream
+    // repro: streamer queues immediately after a loss, the previous
+    // match's enrichment finishes 800 ms later and clobbers the new
+    // opponent's freshly-derived ``recentGames`` list with rows from
+    // the last opponent.
+    /** @type {Map<string, string>} */
+    this._currentGameKey = new Map();
     // Keep latest envelopes for at most 30 minutes — beyond that a
     // user is plainly not in a live game and a stale envelope on
     // a fresh page-load would mislead the widget.
@@ -68,6 +107,8 @@ class LiveGameBroker {
       overlay_emit_failed: 0,
       enrich_ok: 0,
       enrich_failed: 0,
+      enrich_stale_dropped: 0,
+      synthetic_prelude_emitted: 0,
     };
   }
 
@@ -88,12 +129,27 @@ class LiveGameBroker {
       this._subs.set(userId, bucket);
     }
     bucket.add(cb);
-    // Replay the latest snapshot if it's fresh enough.
-    const cached = this._latest.get(userId);
-    if (cached && Date.now() - cached.ts < this._maxAgeMs) {
+    // Replay the latest snapshot if it's fresh enough. When the cached
+    // envelope is past the loading screen, prepend a synthetic
+    // ``match_loading`` carrying the same gameKey so a freshly-
+    // connected client (which would otherwise have missed the original
+    // loading event) can use the gameKey-change effect to clear stale
+    // ``live`` state. Mirrors the overlay-socket connect-replay path
+    // so the SSE-driven dashboard widget stays consistent with the
+    // OBS Browser Source.
+    const replay = this.replayLatestForOverlay(userId);
+    if (replay.prelude) {
+      this.counters.synthetic_prelude_emitted += 1;
       try {
-        cb(cached.envelope);
-      } catch (err) {
+        cb(replay.prelude);
+      } catch {
+        /* see envelope replay catch below */
+      }
+    }
+    if (replay.envelope) {
+      try {
+        cb(replay.envelope);
+      } catch {
         // Swallow — a buggy subscriber must not break others.
       }
     }
@@ -125,6 +181,17 @@ class LiveGameBroker {
   publish(userId, envelope) {
     if (!userId || !envelope || typeof envelope !== "object") return;
     this.counters.published += 1;
+    // Stamp the publish-time gameKey BEFORE the partial broadcast so
+    // the enrich callback (which fires on the same envelope) sees the
+    // up-to-date "current" key. A new key implicitly invalidates any
+    // pending enrichment promise still in flight for the previous
+    // gameKey.
+    const incomingKey = typeof envelope.gameKey === "string"
+      ? envelope.gameKey
+      : null;
+    if (incomingKey) {
+      this._currentGameKey.set(userId, incomingKey);
+    }
     // First fan-out: the partial envelope as-is. Streamers see the
     // basic opponent identity (name + race + Pulse MMR) within ms of
     // the agent's POST.
@@ -139,10 +206,28 @@ class LiveGameBroker {
     // ``streamerHistory`` block. Mirrors the agent bridge's
     // partial-then-Pulse-enriched pattern.
     if (this._enrich) {
+      const enrichmentForKey = incomingKey;
       Promise.resolve(this._enrich(userId, envelope))
         .then((enriched) => {
           if (!enriched || enriched === envelope) return;
           if (typeof enriched !== "object") return;
+          // GameKey staleness guard: if a NEW envelope landed for this
+          // user mid-flight (different gameKey), drop the enriched
+          // payload rather than fan out stale ``streamerHistory`` over
+          // the new opponent's already-broadcast partial envelope.
+          if (enrichmentForKey) {
+            const currentKey = this._currentGameKey.get(userId) || null;
+            if (currentKey && currentKey !== enrichmentForKey) {
+              this.counters.enrich_stale_dropped += 1;
+              if (this._logger && typeof this._logger.debug === "function") {
+                this._logger.debug(
+                  { userId, droppedKey: enrichmentForKey, currentKey },
+                  "live_game_broker_enrich_stale_dropped",
+                );
+              }
+              return;
+            }
+          }
           this.counters.enrich_ok += 1;
           this._broadcast(userId, enriched);
         })
@@ -175,7 +260,7 @@ class LiveGameBroker {
         try {
           cb(envelope);
           this.counters.sse_emit_ok += 1;
-        } catch (err) {
+        } catch {
           this.counters.sse_emit_failed += 1;
           // ignore — the SSE route's heartbeat will eventually detect
           // a dead writer and drop the subscription.
@@ -256,9 +341,102 @@ class LiveGameBroker {
     if (!hit) return null;
     if (Date.now() - hit.ts > this._maxAgeMs) {
       this._latest.delete(userId);
+      this._currentGameKey.delete(userId);
       return null;
     }
     return hit.envelope;
+  }
+
+  /**
+   * Return the gameKey the broker considers "current" for ``userId``.
+   * Tracks the latest publish that carried a gameKey so the heartbeat
+   * responder and the enrichment staleness guard share one source of
+   * truth.
+   *
+   * @param {string} userId
+   * @returns {string|null}
+   */
+  currentGameKey(userId) {
+    if (!userId) return null;
+    const latest = this.latest(userId);
+    if (!latest) return null;
+    return this._currentGameKey.get(userId) || null;
+  }
+
+  /**
+   * Return the snapshot the overlay socket should replay on connect /
+   * resync. When the latest cached envelope is past ``match_loading``
+   * (i.e. ``match_started`` / ``match_in_progress`` / ``match_ended``),
+   * a synthetic ``match_loading`` prelude carrying the same gameKey is
+   * emitted FIRST so the client's gameKey-change effect always fires —
+   * even if the original ``match_loading`` event was lost to the
+   * disconnect or to a Streamlabs page refresh after the loading
+   * screen had already passed.
+   *
+   * The prelude carries ``synthetic: true`` so client-side telemetry
+   * can distinguish it from a real loading event without affecting
+   * widget rendering (the prelude exists purely to clear stale
+   * ``live`` state on the client).
+   *
+   * @param {string} userId
+   * @returns {{
+   *   prelude: object|null,
+   *   envelope: object|null,
+   * }}
+   */
+  replayLatestForOverlay(userId) {
+    const envelope = this.latest(userId);
+    if (!envelope) return { prelude: null, envelope: null };
+    const phase = typeof envelope.phase === "string" ? envelope.phase : null;
+    const gameKey = typeof envelope.gameKey === "string" ? envelope.gameKey : null;
+    const needsPrelude =
+      gameKey
+      && (phase === "match_started"
+        || phase === "match_in_progress"
+        || phase === "match_ended");
+    if (!needsPrelude) {
+      return { prelude: null, envelope };
+    }
+    const prelude = {
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: envelope.capturedAt || Date.now() / 1000,
+      gameKey,
+      synthetic: true,
+    };
+    return { prelude, envelope };
+  }
+
+  /**
+   * Cache the most recent ``overlay:live`` payload (the post-game
+   * derivation from ``OverlayLiveService.buildFromGame``) so an
+   * ``overlay:resync`` request can replay it without re-running the
+   * full Mongo aggregation. Called from the games ingest path right
+   * after the per-token broadcast.
+   *
+   * The payload shape mirrors ``LiveGamePayload`` exactly — we don't
+   * normalise here, the renderer already handles partials.
+   *
+   * @param {string} userId
+   * @param {object} payload
+   */
+  setLatestOverlayLive(userId, payload) {
+    if (!userId || !payload || typeof payload !== "object") return;
+    this._latestOverlayLive.set(userId, { payload, ts: Date.now() });
+  }
+
+  /**
+   * @param {string} userId
+   * @returns {object|null}
+   */
+  latestOverlayLive(userId) {
+    const hit = this._latestOverlayLive.get(userId);
+    if (!hit) return null;
+    if (Date.now() - hit.ts > this._maxAgeMs) {
+      this._latestOverlayLive.delete(userId);
+      return null;
+    }
+    return hit.payload;
   }
 
   subscriberCount(userId) {
@@ -269,6 +447,8 @@ class LiveGameBroker {
   clear() {
     this._subs.clear();
     this._latest.clear();
+    this._latestOverlayLive.clear();
+    this._currentGameKey.clear();
   }
 }
 

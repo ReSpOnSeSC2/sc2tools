@@ -15,7 +15,12 @@ const { validateGameRecord } = require("../validation/gameRecord");
  *     session-record widget ticks immediately;
  *   - ``overlay:live`` to the user's overlay tokens with a derived
  *     ``LiveGamePayload`` so every other widget renders the new game
- *     without the agent needing its own socket connection.
+ *     without the agent needing its own socket connection. The
+ *     payload is stamped with ``gameKey`` (taken from the broker's
+ *     latest envelope when it correlates by opponent name, falling
+ *     back to ``game.gameId``) so the overlay client's
+ *     ``useClearStalePostGameOnGameKeyChange`` effect can detect a
+ *     match transition and drop stale ``live`` state.
  *
  * @param {{
  *   games: import('../services/types').GamesService,
@@ -24,6 +29,7 @@ const { validateGameRecord } = require("../validation/gameRecord");
  *   customBuilds?: import('../services/types').CustomBuildsService,
  *   overlayLive?: import('../services/overlayLive').OverlayLiveService,
  *   overlayTokens?: import('../services/types').OverlayTokensService,
+ *   liveGameBroker?: import('../services/liveGameBroker').LiveGameBroker,
  *   io?: import('socket.io').Server,
  *   auth: import('express').RequestHandler,
  * }} deps
@@ -318,6 +324,7 @@ function buildGamesRouter(deps) {
               deps.overlayTokens,
               userId,
               lastGame,
+              deps.liveGameBroker || null,
             ).catch((err) => {
               if (req.log) {
                 req.log.warn(
@@ -333,6 +340,13 @@ function buildGamesRouter(deps) {
           // would render its LAST GAMES list missing the just-uploaded
           // encounter. Per accepted game (not just the last) so a
           // batch upload also clears every opponent it touched.
+          //
+          // We pass the opponent's ``pulseCharacterId`` (when available)
+          // so the region-aware cache flushes BOTH the
+          // ``pulse:<pcid>`` and the name-keyed entries together — a
+          // streamer who switched servers and re-faced the same
+          // opponent gets their freshly-uploaded encounter reflected on
+          // the very next envelope tick on either keying scheme.
           if (typeof deps.overlayLive.invalidateEnrichmentForOpponent === "function") {
             const seen = new Set();
             for (const g of incoming) {
@@ -341,8 +355,13 @@ function buildGamesRouter(deps) {
               const key = name.toLowerCase();
               if (seen.has(key)) continue;
               seen.add(key);
+              const pcid = g?.opponent?.pulseCharacterId;
               try {
-                deps.overlayLive.invalidateEnrichmentForOpponent(userId, name);
+                deps.overlayLive.invalidateEnrichmentForOpponent(
+                  userId,
+                  name,
+                  pcid,
+                );
               } catch (err) {
                 if (req.log) {
                   req.log.warn(
@@ -426,16 +445,48 @@ async function emitSessionUpdate(io, games, userId) {
  * after logging at the route layer; the next game's emit is
  * independent.
  *
+ * The payload is stamped with a ``gameKey`` field so the overlay
+ * client can correlate against the agent's pre-game envelope:
+ *
+ *   * If the broker's latest envelope is for the SAME opponent we
+ *     just ingested, reuse its ``gameKey`` — that way the post-game
+ *     payload carries exactly the key the loading screen showed and
+ *     the client treats them as one match.
+ *   * Otherwise (agent offline at game-start, or a mismatched
+ *     opponent because the agent missed the live phase entirely),
+ *     fall back to ``game.gameId`` — still unique per game, just not
+ *     name-derivable.
+ *
  * @param {import('socket.io').Server} io
  * @param {import('../services/overlayLive').OverlayLiveService} overlayLive
  * @param {import('../services/types').OverlayTokensService} overlayTokens
  * @param {string} userId
  * @param {Record<string, any>} game
+ * @param {import('../services/liveGameBroker').LiveGameBroker|null} broker
  */
-async function emitOverlayLive(io, overlayLive, overlayTokens, userId, game) {
+async function emitOverlayLive(
+  io,
+  overlayLive,
+  overlayTokens,
+  userId,
+  game,
+  broker,
+) {
   if (!io || !overlayLive || !overlayTokens || !userId || !game) return;
   const payload = await overlayLive.buildFromGame(userId, game);
   if (!payload) return;
+  payload.gameKey = pickGameKey(broker, userId, game, payload);
+  // Cache the post-game payload on the broker so an
+  // ``overlay:resync`` from a reconnected Browser Source can replay
+  // it without re-running the full Mongo aggregation. Best-effort —
+  // a missing broker just skips the cache.
+  if (broker && typeof broker.setLatestOverlayLive === "function") {
+    try {
+      broker.setLatestOverlayLive(userId, payload);
+    } catch {
+      /* caching is advisory; never break the fan-out */
+    }
+  }
   // ``list`` returns *all* tokens for the user (active + revoked).
   // Filter the revoked ones out so a leaked-then-revoked token can't
   // still receive live data after revocation.
@@ -445,6 +496,45 @@ async function emitOverlayLive(io, overlayLive, overlayTokens, userId, game) {
     if (t.revokedAt) continue;
     io.to(`overlay:${t.token}`).emit("overlay:live", payload);
   }
+}
+
+/**
+ * Pick the gameKey to stamp on a freshly-derived ``overlay:live``
+ * payload. Prefers the broker's current envelope key when the
+ * envelope's opponent matches the ingested game's opponent (the
+ * common case — agent ran through the whole match). Falls back to
+ * ``game.gameId`` so every payload always carries SOME gameKey.
+ *
+ * @param {import('../services/liveGameBroker').LiveGameBroker|null} broker
+ * @param {string} userId
+ * @param {Record<string, any>} game
+ * @param {Record<string, any>} payload
+ * @returns {string}
+ */
+function pickGameKey(broker, userId, game, payload) {
+  if (broker && typeof broker.latest === "function") {
+    try {
+      const latest = broker.latest(userId);
+      const latestKey =
+        latest && typeof latest.gameKey === "string" ? latest.gameKey : null;
+      const latestOppName =
+        latest
+        && latest.opponent
+        && typeof latest.opponent.name === "string"
+          ? latest.opponent.name.trim().toLowerCase()
+          : null;
+      const ingestOppName =
+        payload && typeof payload.oppName === "string"
+          ? payload.oppName.trim().toLowerCase()
+          : null;
+      if (latestKey && latestOppName && ingestOppName === latestOppName) {
+        return latestKey;
+      }
+    } catch {
+      /* fall through to gameId */
+    }
+  }
+  return String(game.gameId);
 }
 
 /** @param {unknown} raw @returns {number|undefined} */

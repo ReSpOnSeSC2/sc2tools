@@ -422,6 +422,7 @@ function mountRoutes(app, deps, services, clerk) {
       customBuilds: services.customBuilds,
       overlayLive: services.overlayLive,
       overlayTokens: services.overlayTokens,
+      liveGameBroker: services.liveGameBroker,
       io: deps.io,
       auth,
     }),
