@@ -15,6 +15,7 @@ const { attachSocketAuth } = require("./socket/auth");
 const { buildKeepaliveWorker } = require("./services/keepalive");
 const { buildSessionRefresher } = require("./services/sessionRefresher");
 const { buildPulseBackfillJob } = require("./jobs/pulseBackfillJob");
+const { buildLadderMapPoolRefreshJob } = require("./jobs/ladderMapPoolRefreshJob");
 const sentry = require("./util/sentry");
 
 async function main() {
@@ -125,6 +126,16 @@ async function main() {
   });
   sessionRefresher.start();
 
+  // Ladder map pool refresh. Keeps /v1/seasons.mapPool aligned with
+  // Blizzard's ladder rotations by re-fetching from Liquipedia every
+  // 24h (configurable, soft-disable via env). Runs once on start so a
+  // fresh container doesn't rely on the bundled seed for very long.
+  const ladderMapPoolRefresh = buildLadderMapPoolRefreshJob({
+    ladderMapPool: /** @type {any} */ (services).seasons.ladderMapPool,
+    logger,
+  });
+  ladderMapPoolRefresh.start();
+
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
@@ -136,6 +147,7 @@ async function main() {
     await keepalive.stop();
     await pulseBackfill.stop();
     await sessionRefresher.stop();
+    await ladderMapPoolRefresh.stop();
     await db.close();
     logger.info("shutdown_complete");
     process.exit(0);

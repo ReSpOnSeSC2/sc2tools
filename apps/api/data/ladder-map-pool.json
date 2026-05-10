@@ -1,0 +1,16 @@
+{
+  "maps": [
+    "Equilibrium",
+    "Goldenaura",
+    "Hard Lead",
+    "Oceanborn",
+    "Site Delta",
+    "El Dorado",
+    "Whispers of Gold",
+    "Pylon Overgrowth",
+    "Frostline"
+  ],
+  "fetchedAt": null,
+  "schemaVersion": 1,
+  "note": "Seed file shipped with the repo. The LadderMapPoolService overwrites this atomically once a live Liquipedia fetch succeeds; on cold starts without network it serves as the persisted last-good list."
+}
