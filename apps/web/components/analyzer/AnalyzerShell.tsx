@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ChevronDown,
+  Gamepad2,
   Layers,
   Map as MapIcon,
   Settings as SettingsIcon,
@@ -16,6 +17,7 @@ import { AnalyzerProvider } from "@/components/AnalyzerProvider";
 import { Modal } from "@/components/ui/Modal";
 import { Section } from "@/components/ui/Section";
 import { Tabs } from "@/components/ui/Tabs";
+import { ArcadeTab } from "./ArcadeTab";
 import { BattlefieldTab } from "./BattlefieldTab";
 import { BuildsTab } from "./BuildsTab";
 import { DashboardKpiStrip } from "./DashboardKpiStrip";
@@ -31,7 +33,8 @@ type TabId =
   | "strategies"
   | "trends"
   | "battlefield"
-  | "builds";
+  | "builds"
+  | "arcade";
 
 type TabDef = {
   id: TabId;
@@ -46,6 +49,7 @@ const TABS: readonly TabDef[] = [
   { id: "trends", label: "Trends", icon: TrendingUp, description: "Win-rate trajectory across periods." },
   { id: "battlefield", label: "Maps", icon: MapIcon, description: "Maps and matchup performance." },
   { id: "builds", label: "Builds", icon: Layers, description: "Your builds, performance, and editor." },
+  { id: "arcade", label: "Arcade", icon: Gamepad2, description: "Quizzes and games that go deeper than the charts." },
 ] as const;
 
 export function AnalyzerShell({ totalGames }: { totalGames: number }) {
@@ -278,6 +282,8 @@ function TabPanel({
       return <BattlefieldTab />;
     case "builds":
       return <BuildsTab />;
+    case "arcade":
+      return <ArcadeTab />;
     default: {
       const _exhaustive: never = tab;
       return _exhaustive;

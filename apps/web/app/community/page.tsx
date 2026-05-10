@@ -7,6 +7,7 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { CommunityBuildCard } from "@/components/community/CommunityBuildCard";
 import { CommunityFilterBar } from "@/components/community/CommunityFilterBar";
+import { CommunityShell } from "@/components/community/CommunityShell";
 import {
   COMMUNITY_SORTS,
   type CommunityBuildListResponse,
@@ -14,13 +15,13 @@ import {
 } from "@/components/community/types";
 
 export const metadata = {
-  title: "Community builds — SC2 Tools",
+  title: "Community — SC2 Tools",
   description:
-    "Player-published StarCraft II build orders, ranked by community votes. Filter by matchup, sort by top, new, or controversial, and save any build to your private library.",
+    "Player-published StarCraft II build orders + the Stock Market weekly P&L leaderboard. Filter by matchup, sort by top, new, or controversial, and save any build to your private library.",
   openGraph: {
-    title: "Community builds — SC2 Tools",
+    title: "Community — SC2 Tools",
     description:
-      "Player-published StarCraft II build orders, ranked by community votes.",
+      "Player-published StarCraft II build orders + the Stock Market weekly P&L leaderboard.",
     images: [{ url: "/banner.png", width: 2000, height: 800 }],
   },
 };
@@ -72,8 +73,8 @@ export default async function CommunityPage({
             Community
           </span>
         }
-        title="Community builds"
-        description="Builds published by SC2 Tools players. Vote, save to your private library, or publish your own."
+        title="Community"
+        description="Player-published builds and the weekly Stock Market leaderboard. Vote, save to your private library, or publish your own."
         actions={
           <Link
             href="/builds"
@@ -87,6 +88,7 @@ export default async function CommunityPage({
 
       <Banner variant="divider" />
 
+      <CommunityShell active="builds">
       <CommunityFilterBar
         initialMatchup={matchup}
         initialSort={sort}
@@ -148,6 +150,7 @@ export default async function CommunityPage({
           />
         </>
       )}
+      </CommunityShell>
     </div>
   );
 }
