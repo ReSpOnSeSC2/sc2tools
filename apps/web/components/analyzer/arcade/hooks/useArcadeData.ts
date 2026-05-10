@@ -35,9 +35,36 @@ interface ApiOppPage {
   nextBefore?: string | null;
 }
 
+/**
+ * The wire shape of /v1/games is a Mongo-document projection produced
+ * by the agent — see apps/api/src/validation/gameRecord.js. The agent
+ * canonicalised on camelCase (`durationSec`, `macroScore`) and nests
+ * the opponent race under `opponent.race`, but historic SPA code
+ * standardised on `duration` / `macro_score` / `oppRace` (the
+ * ArcadeGame type). We normalise on read so the arcade modes don't
+ * have to know about either naming.
+ */
+interface ApiGame extends ArcadeGame {
+  durationSec?: number;
+  macroScore?: number | null;
+}
+
 interface ApiGamesPage {
-  items: ArcadeGame[];
+  items: ApiGame[];
   nextBefore?: string | null;
+}
+
+export function normaliseGame(g: ApiGame): ArcadeGame {
+  const duration =
+    typeof g.duration === "number" ? g.duration : g.durationSec;
+  const macroScore =
+    typeof g.macro_score === "number"
+      ? g.macro_score
+      : typeof g.macroScore === "number"
+        ? g.macroScore
+        : null;
+  const oppRace = g.oppRace || g.opponent?.race || undefined;
+  return { ...g, duration, macro_score: macroScore, oppRace };
 }
 
 interface ApiSummary {
@@ -179,7 +206,9 @@ export function useArcadeData(): {
         }))
       : [];
     return {
-      games: Array.isArray(gamesA.data?.items) ? gamesA.data!.items : [],
+      games: Array.isArray(gamesA.data?.items)
+        ? gamesA.data!.items.map(normaliseGame)
+        : [],
       opponents: opps,
       builds: buildsList,
       customBuilds: customList,
