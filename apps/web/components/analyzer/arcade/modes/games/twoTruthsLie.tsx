@@ -73,10 +73,20 @@ interface FactCandidate {
   detail: string;
 }
 
-function buildFactPool(data: ArcadeDataset): FactCandidate[] {
+/** A string is "displayable" when it survives templating without
+ *  producing the literal "undefined" or an empty box. Treat null,
+ *  empty strings, and pure-whitespace strings as missing. */
+function isDisplayableString(v: unknown): v is string {
+  return typeof v === "string" && v.trim().length > 0;
+}
+
+export function buildFactPool(data: ArcadeDataset): FactCandidate[] {
   const out: FactCandidate[] = [];
   // Fact 1: top-played build's WR is higher than overall WR.
-  const topBuild = data.builds.slice().sort((a, b) => b.total - a.total)[0];
+  const topBuild = data.builds
+    .slice()
+    .filter((b) => isDisplayableString(b.name))
+    .sort((a, b) => b.total - a.total)[0];
   if (topBuild && data.summary && topBuild.total >= 5) {
     const diff = topBuild.winRate - data.summary.winRate;
     out.push({
@@ -102,6 +112,8 @@ function buildFactPool(data: ArcadeDataset): FactCandidate[] {
       entries.sort((a, b) => b[1].wr - a[1].wr);
       const top = entries[0][0];
       const bottom = entries[entries.length - 1][0];
+      // wrPerOppRace already excludes anything but P/T/Z; both keys are
+      // always real race letters.
       out.push({
         truthText: `In games under 12 minutes, you do better vs ${fullRace(top)} than vs ${fullRace(bottom)}.`,
         lieText: `In games under 12 minutes, you do better vs ${fullRace(bottom)} than vs ${fullRace(top)}.`,
@@ -110,16 +122,26 @@ function buildFactPool(data: ArcadeDataset): FactCandidate[] {
     }
   }
   // Fact 3: best-map WR vs worst-map WR (≥ 4 games each).
-  const maps = data.maps.filter((m) => m.total >= 4);
+  // /v1/maps occasionally returns rows with a null/empty `map` field
+  // (matchmaking quirk on certain expired co-op maps) — those rows
+  // make their way into the claim text as the literal string
+  // "undefined" without a name filter here.
+  const maps = data.maps.filter(
+    (m) => isDisplayableString(m.map) && m.total >= 4,
+  );
   if (maps.length >= 2) {
     const sortedMaps = maps.slice().sort((a, b) => b.winRate - a.winRate);
     const best = sortedMaps[0];
     const worst = sortedMaps[sortedMaps.length - 1];
-    out.push({
-      truthText: `You have a higher WR on ${best.map} than on ${worst.map}.`,
-      lieText: `You have a higher WR on ${worst.map} than on ${best.map}.`,
-      detail: `${best.map} ${pct1(best.winRate)} (${best.total}g), ${worst.map} ${pct1(worst.winRate)} (${worst.total}g).`,
-    });
+    // Filter out the degenerate (best === worst) case when the filtered
+    // pool collapses to one logical map after dedupe.
+    if (best.map !== worst.map) {
+      out.push({
+        truthText: `You have a higher WR on ${best.map} than on ${worst.map}.`,
+        lieText: `You have a higher WR on ${worst.map} than on ${best.map}.`,
+        detail: `${best.map} ${pct1(best.winRate)} (${best.total}g), ${worst.map} ${pct1(worst.winRate)} (${worst.total}g).`,
+      });
+    }
   }
   // Fact 4: matchup × time-of-day (late vs early). Cross-axis bonus.
   const hourBuckets = bucketByHour(data.games);
