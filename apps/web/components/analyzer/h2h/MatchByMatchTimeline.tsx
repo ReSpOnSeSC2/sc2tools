@@ -5,7 +5,6 @@ import {
   Area,
   Bar,
   CartesianGrid,
-  Cell,
   ComposedChart,
   Line,
   ReferenceLine,
@@ -43,6 +42,12 @@ const BUCKET_LABEL: Record<Bucket, string> = {
   day: "Daily",
   week: "Weekly",
   month: "Monthly",
+};
+
+const BUCKET_NOUN: Record<Bucket, string> = {
+  day: "day",
+  week: "week",
+  month: "month",
 };
 
 /**
@@ -249,9 +254,10 @@ export function MatchByMatchTimeline({
 
       <PeriodicBars
         data={periodSeries}
+        bucket={bucket}
         bucketLabel={BUCKET_LABEL[bucket]}
+        bucketNoun={BUCKET_NOUN[bucket]}
         showYear={showYearOnTicks}
-        accent={accent}
       />
 
       {activePoint ? (
@@ -321,14 +327,16 @@ function TimelineHeader({
 
 function PeriodicBars({
   data,
+  bucket,
   bucketLabel,
+  bucketNoun,
   showYear,
-  accent,
 }: {
   data: PeriodPoint[];
+  bucket: Bucket;
   bucketLabel: string;
+  bucketNoun: string;
   showYear: boolean;
-  accent: string;
 }) {
   if (data.length === 0) {
     return (
@@ -337,15 +345,19 @@ function PeriodicBars({
       </div>
     );
   }
+  // Y-axis upper bound is the busiest bucket — keeps tall bars from
+  // dominating early/sparse buckets, but never less than 2 so a single
+  // 1-game bucket renders with visible height.
+  const yMax = Math.max(2, ...data.map((p) => p.total));
   return (
     <div className="rounded-lg border border-border bg-bg-elevated/40 p-2">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-1 text-caption">
         <span className="font-semibold text-text">
-          {bucketLabel} win rate
+          Games per {bucketNoun}
         </span>
         <span className="text-text-dim">
-          {data.length} bucket{data.length === 1 ? "" : "s"} · faint background
-          bar shows volume
+          {data.length} {bucketLabel.toLowerCase()} bucket
+          {data.length === 1 ? "" : "s"} · wins (green) stacked on losses (red)
         </span>
       </div>
       <div className="h-32 sm:h-36">
@@ -360,61 +372,37 @@ function PeriodicBars({
               dataKey="date"
               stroke="#6b7280"
               fontSize={10}
-              tickFormatter={(v) => formatBucketTick(v, showYear)}
+              tickFormatter={(v) => formatBucketTick(v, bucket, showYear)}
               minTickGap={28}
               tickMargin={4}
             />
             <YAxis
-              yAxisId="wr"
               stroke="#6b7280"
               fontSize={10}
-              domain={[0, 100]}
-              ticks={[0, 50, 100]}
-              tickFormatter={(v) => `${v}%`}
-              width={32}
-            />
-            <YAxis
-              yAxisId="vol"
-              orientation="right"
-              stroke="#6b7280"
-              fontSize={10}
-              tickFormatter={() => ""}
-              width={4}
-            />
-            <ReferenceLine
-              yAxisId="wr"
-              y={50}
-              stroke="#3a4252"
-              strokeDasharray="2 4"
+              allowDecimals={false}
+              domain={[0, yMax]}
+              width={28}
             />
             <Tooltip
               content={(props) => (
                 <PeriodTooltip {...props} bucketLabel={bucketLabel} />
               )}
-              cursor={{ fill: `${accent}10` }}
+              cursor={{ fill: "rgba(124, 140, 255, 0.06)" }}
             />
             <Bar
-              yAxisId="vol"
-              dataKey="total"
-              fill={accent}
-              fillOpacity={0.12}
+              dataKey="losses"
+              stackId="games"
+              fill="#ff6b6b"
               isAnimationActive={false}
-              legendType="none"
-              radius={[2, 2, 0, 0]}
+              radius={[0, 0, 0, 0]}
             />
             <Bar
-              yAxisId="wr"
-              dataKey="winRatePct"
+              dataKey="wins"
+              stackId="games"
+              fill="#3ec07a"
               isAnimationActive={false}
               radius={[3, 3, 0, 0]}
-            >
-              {data.map((p) => (
-                <Cell
-                  key={p.date}
-                  fill={wrColor(p.winRatePct / 100, p.total)}
-                />
-              ))}
-            </Bar>
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -502,14 +490,23 @@ const MONTHS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ] as const;
 
-function formatBucketTick(value: string, showYear: boolean): string {
+function formatBucketTick(
+  value: string,
+  bucket: Bucket,
+  showYear: boolean,
+): string {
   if (!value || value.length < 10) return value;
   const [y, m, d] = value.split("-");
   const monthIdx = Number.parseInt(m, 10) - 1;
   const dayN = Number.parseInt(d, 10);
   if (Number.isNaN(monthIdx) || monthIdx < 0 || monthIdx > 11) return value;
   const month = MONTHS[monthIdx];
-  if (showYear) return `${month} '${y.slice(2)}`;
+  // Month buckets: one tick per month — `Mon` or `Mon 'YY` is enough.
+  // Day/Week buckets: same month repeats, so always show day-of-month.
+  if (bucket === "month") {
+    return showYear ? `${month} '${y.slice(2)}` : month;
+  }
+  if (showYear) return `${month} ${dayN} '${y.slice(2)}`;
   return `${month} ${dayN}`;
 }
 
