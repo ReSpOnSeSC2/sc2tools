@@ -141,7 +141,7 @@ class GamesService {
    * @param {{limit?: number, before?: Date, oppPulseId?: string}} [opts]
    */
   async list(userId, opts = {}) {
-    const limit = clampLimit(opts.limit, LIMITS.GAMES_PAGE_SIZE);
+    const limit = clampLimit(opts.limit, LIMITS.GAMES_LIST_DEFAULT);
     /** @type {Record<string, any>} */
     const filter = { userId };
     if (opts.oppPulseId) filter.oppPulseId = opts.oppPulseId;
@@ -810,11 +810,23 @@ function formatDayKey(value, timezone) {
   return fmt.format(d);
 }
 
-/** @param {unknown} raw @param {number} fallback @returns {number} */
+/**
+ * Clamp a caller-supplied `limit`. Falls back to `fallback` when the
+ * input is missing or invalid; otherwise caps at `LIMITS.GAMES_LIST_MAX`
+ * (much larger than the historic page-size fallback) so callers with
+ * thousands of replays — e.g. the arcade modes that aggregate over a
+ * user's full corpus — can request enough rows to compute meaningful
+ * histograms in one round-trip.
+ *
+ * @param {unknown} raw
+ * @param {number} fallback
+ * @returns {number}
+ */
 function clampLimit(raw, fallback) {
   const n = typeof raw === "number" ? raw : Number.parseInt(String(raw), 10);
   if (!Number.isFinite(n) || n <= 0) return fallback;
-  return Math.min(n, fallback);
+  const ceiling = LIMITS.GAMES_LIST_MAX || fallback;
+  return Math.min(n, ceiling);
 }
 
 module.exports = { GamesService };

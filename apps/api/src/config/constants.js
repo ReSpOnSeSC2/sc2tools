@@ -48,7 +48,7 @@ const COLLECTIONS = Object.freeze({
 const LIMITS = Object.freeze({
   REQUEST_BODY_BYTES: 5 * 1024 * 1024,
   GAMES_PAGE_SIZE: 100,
-  GAMES_LIST_MAX: 10000,
+  GAMES_LIST_MAX: 20000,
   GAMES_LIST_DEFAULT: 2000,
   OPPONENTS_PAGE_SIZE: 100,
   // The analyzer SPA can request up to this many opponents in one

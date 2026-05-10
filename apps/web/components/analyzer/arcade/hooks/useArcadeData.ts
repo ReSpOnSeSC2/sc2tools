@@ -113,8 +113,11 @@ export function useArcadeData(): {
 } {
   // /v1/opponents returns { items, nextBefore }, not a bare array.
   const opp = useApi<ApiOppPage>("/v1/opponents?limit=500");
-  // /v1/games returns { items, nextBefore }.
-  const gamesA = useApi<ApiGamesPage>("/v1/games?limit=200");
+  // /v1/games returns { items, nextBefore }. Request the full corpus
+  // up to the server-side GAMES_LIST_MAX ceiling (20 000) — arcade
+  // modes aggregate histograms over the user's full history, and a
+  // 200-row window was effectively useless for prolific users.
+  const gamesA = useApi<ApiGamesPage>("/v1/games?limit=20000");
   // /v1/builds, /v1/matchups, /v1/maps return bare arrays.
   const builds = useApi<ArcadeBuild[]>("/v1/builds");
   const matchups = useApi<
