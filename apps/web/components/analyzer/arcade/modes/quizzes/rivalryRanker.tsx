@@ -224,9 +224,9 @@ function RivalryRankerRender({
       revealed={ctx.revealed}
       question={
         <span>
-          Drag (or use the ↑/↓ buttons) to order from{" "}
-          <span className="font-semibold text-warning">highest</span> to lowest WR vs you
-          (toughest first).
+          Rank these rivals from your{" "}
+          <span className="font-semibold text-warning">toughest</span> matchup (#1) to
+          your easiest (#4). Drag, or use the ↑/↓ buttons.
         </span>
       }
       answers={
@@ -253,12 +253,6 @@ function RivalryRankerRender({
                 >
                   <span className="font-mono tabular-nums text-text-dim">#{i + 1}</span>
                   <span className="flex-1 truncate text-body text-text">{displayNameFor(c)}</span>
-                  <span
-                    className="font-mono tabular-nums text-caption"
-                    style={{ color: wrColor(c.opponentWinRate, c.games) }}
-                  >
-                    {pct1(c.opponentWinRate)}
-                  </span>
                   <span className="text-caption text-text-dim">{c.games} g</span>
                   <button
                     type="button"
