@@ -93,7 +93,14 @@ export function ModeRunner({
       setAnswered(a);
       setScoreResult(result);
       const fresh = answered === null;
-      if (fresh && (mode.kind === "quiz" || (mode.kind === "game" && result.outcome === "correct"))) {
+      // Record every fresh attempt across quizzes AND games — including
+      // wrong/partial outcomes. Previously games only recorded on
+      // outcome==="correct", which left attempts/correct counters at 0
+      // for the entire "My Stats → Per-mode records" surface for any
+      // user who ever lost a round of Buildle/Bingo/Stock Market. The
+      // attempts counter must climb on every fresh submission so the
+      // surface shows real activity, not just perfect runs.
+      if (fresh) {
         recordPlay({
           modeId: mode.id,
           tz: seed.tz,
