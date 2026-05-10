@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { pct1, wrColor } from "@/lib/format";
+import { isBarcodeName } from "@/lib/sc2pulse";
 import { QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
 import { pickN, registerMode } from "../../ArcadeEngine";
@@ -14,10 +15,27 @@ import type {
   ScoreResult,
 } from "../../types";
 
+type Candidate = Pick<
+  ArcadeOpponent,
+  | "pulseId"
+  | "pulseCharacterId"
+  | "name"
+  | "displayName"
+  | "wins"
+  | "losses"
+  | "games"
+  | "userWinRate"
+  | "opponentWinRate"
+>;
+
 type Q = {
   /** Source set in stable id order. */
-  candidates: Array<Pick<ArcadeOpponent, "pulseId" | "name" | "winRate" | "wins" | "losses" | "games">>;
-  /** True ranking — pulseIds in highest-WR-first order. */
+  candidates: Candidate[];
+  /**
+   * True ranking — pulseIds ordered from highest opponent-WR-against-the-
+   * user (i.e. toughest matchup) down to easiest. The prompt asks the
+   * user to rank "WR vs you", which is the opponent's perspective.
+   */
   truth: string[];
 };
 
@@ -26,18 +44,43 @@ type A = string[]; // user's ordering of pulseIds
 const ID = "rivalry-ranker";
 registerMode(ID, "multi-entity");
 
+function displayNameFor(c: Pick<Candidate, "name" | "displayName">): string {
+  const resolved = c.displayName?.trim();
+  if (resolved && resolved.length > 0) return resolved;
+  return c.name;
+}
+
+function eligibleForCandidatePool(o: ArcadeOpponent): boolean {
+  if (o.games < 4) return false;
+  const hasResolvedId =
+    typeof o.pulseCharacterId === "string" && o.pulseCharacterId.trim().length > 0;
+  if (hasResolvedId) return true;
+  return !isBarcodeName(o.name);
+}
+
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
-  const eligible = input.data.opponents.filter((o) => o.games >= 4);
+  const eligible = input.data.opponents.filter(eligibleForCandidatePool);
   if (eligible.length < 4) {
     return {
       ok: false,
       reason: "Need ≥4 opponents you've played at least 4 times each.",
     };
   }
-  const sample = pickN(eligible, 4, input.rng);
+  const sample = pickN(eligible, 4, input.rng).map<Candidate>((o) => ({
+    pulseId: o.pulseId,
+    pulseCharacterId: o.pulseCharacterId,
+    name: o.name,
+    displayName: o.displayName,
+    wins: o.wins,
+    losses: o.losses,
+    games: o.games,
+    userWinRate: o.userWinRate,
+    opponentWinRate: o.opponentWinRate,
+  }));
+  // Toughest first: descending opponentWinRate (= ascending userWinRate).
   const truth = sample
     .slice()
-    .sort((a, b) => b.winRate - a.winRate)
+    .sort((a, b) => b.opponentWinRate - a.opponentWinRate)
     .map((o) => o.pulseId);
   return { ok: true, minDataMet: true, question: { candidates: sample, truth } };
 }
@@ -69,7 +112,7 @@ function score(q: Q, a: A): ScoreResult {
     outcome,
     note:
       outcome === "correct"
-        ? "Perfect order."
+        ? "Your toughest matchup of the four is at #1."
         : `${totalDistance} position${totalDistance === 1 ? "" : "s"} off.`,
   };
 }
@@ -82,7 +125,7 @@ export const rivalryRanker: Mode<Q, A> = {
   ttp: "medium",
   depthTag: "multi-entity",
   title: "Rivalry Ranker",
-  blurb: "Drag four rivals into the right WR order. Arrow keys work too.",
+  blurb: "Drag four rivals into the right WR order — toughest first.",
   generate,
   score,
   render: (ctx) => <RivalryRankerRender ctx={ctx} />,
@@ -156,13 +199,14 @@ function RivalryRankerRender({
             >
               <span>
                 <span className="mr-2 font-mono tabular-nums text-text-dim">#{i + 1}</span>
-                <span className="text-text">{c.name}</span>
+                <span className="text-text">{displayNameFor(c)}</span>
               </span>
               <span
                 className="font-mono tabular-nums"
-                style={{ color: wrColor(c.winRate, c.games) }}
+                style={{ color: wrColor(c.opponentWinRate, c.games) }}
               >
-                {pct1(c.winRate)}
+                {pct1(c.opponentWinRate)}{" "}
+                <span className="text-text-dim">({c.losses}-{c.wins})</span>
               </span>
             </li>
           );
@@ -181,7 +225,8 @@ function RivalryRankerRender({
       question={
         <span>
           Drag (or use the ↑/↓ buttons) to order from{" "}
-          <span className="font-semibold text-warning">highest</span> to lowest WR vs you.
+          <span className="font-semibold text-warning">highest</span> to lowest WR vs you
+          (toughest first).
         </span>
       }
       answers={
@@ -207,11 +252,17 @@ function RivalryRankerRender({
                   className="flex items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2"
                 >
                   <span className="font-mono tabular-nums text-text-dim">#{i + 1}</span>
-                  <span className="flex-1 truncate text-body text-text">{c.name}</span>
+                  <span className="flex-1 truncate text-body text-text">{displayNameFor(c)}</span>
+                  <span
+                    className="font-mono tabular-nums text-caption"
+                    style={{ color: wrColor(c.opponentWinRate, c.games) }}
+                  >
+                    {pct1(c.opponentWinRate)}
+                  </span>
                   <span className="text-caption text-text-dim">{c.games} g</span>
                   <button
                     type="button"
-                    aria-label={`Move ${c.name} up`}
+                    aria-label={`Move ${displayNameFor(c)} up`}
                     onClick={() => move(i, i - 1)}
                     disabled={ctx.revealed || i === 0}
                     className="inline-flex h-9 w-9 items-center justify-center rounded border border-border bg-bg-elevated text-text disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -220,7 +271,7 @@ function RivalryRankerRender({
                   </button>
                   <button
                     type="button"
-                    aria-label={`Move ${c.name} down`}
+                    aria-label={`Move ${displayNameFor(c)} down`}
                     onClick={() => move(i, i + 1)}
                     disabled={ctx.revealed || i === order.length - 1}
                     className="inline-flex h-9 w-9 items-center justify-center rounded border border-border bg-bg-elevated text-text disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"

@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from "react";
 import { pct1, wrColor } from "@/lib/format";
+import { isBarcodeName } from "@/lib/sc2pulse";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
 import { pickN, registerMode } from "../../ArcadeEngine";
@@ -13,9 +14,22 @@ import type {
   ScoreResult,
 } from "../../types";
 
+type Candidate = Pick<
+  ArcadeOpponent,
+  | "pulseId"
+  | "pulseCharacterId"
+  | "name"
+  | "displayName"
+  | "wins"
+  | "losses"
+  | "games"
+  | "userWinRate"
+  | "opponentWinRate"
+>;
+
 type Q = {
-  candidates: Array<Pick<ArcadeOpponent, "pulseId" | "name" | "wins" | "losses" | "games" | "winRate">>;
-  /** Index in candidates with the highest WR vs the user. */
+  candidates: Candidate[];
+  /** Index in candidates with the highest OPPONENT WR vs the user. */
   correctIndex: number;
 };
 
@@ -24,8 +38,30 @@ type A = number;
 const ID = "opponent-bracket-pick";
 registerMode(ID, "multi-entity");
 
+/** Display name for a candidate — resolved sc2pulse name beats raw. */
+function displayNameFor(c: Pick<Candidate, "name" | "displayName">): string {
+  const resolved = c.displayName?.trim();
+  if (resolved && resolved.length > 0) return resolved;
+  return c.name;
+}
+
+/**
+ * Eligible-opponent filter: drop entries that are unresolved barcodes
+ * (smurf-name masking). Barcodes whose pulseCharacterId is set still
+ * get through because we can show their resolved displayName instead
+ * of the masked raw name.
+ */
+function eligibleForCandidatePool(o: ArcadeOpponent): boolean {
+  if (o.games < 3) return false;
+  const hasResolvedId =
+    typeof o.pulseCharacterId === "string" && o.pulseCharacterId.trim().length > 0;
+  if (hasResolvedId) return true;
+  // No resolved id => keep only if the raw name reads as a human handle.
+  return !isBarcodeName(o.name);
+}
+
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
-  const eligible = input.data.opponents.filter((o) => o.games >= 3);
+  const eligible = input.data.opponents.filter(eligibleForCandidatePool);
   if (eligible.length < 4) {
     return {
       ok: false,
@@ -33,10 +69,24 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
       cta: { label: "Play more games", href: "/" },
     };
   }
-  const sample = pickN(eligible, 4, input.rng);
+  const sample = pickN(eligible, 4, input.rng).map<Candidate>((o) => ({
+    pulseId: o.pulseId,
+    pulseCharacterId: o.pulseCharacterId,
+    name: o.name,
+    displayName: o.displayName,
+    wins: o.wins,
+    losses: o.losses,
+    games: o.games,
+    userWinRate: o.userWinRate,
+    opponentWinRate: o.opponentWinRate,
+  }));
+  // The opponent with the HIGHEST opponentWinRate is the one who beats
+  // the user most often — that is the right answer when the prompt is
+  // "highest WR against you". Equivalently: the opponent whose
+  // userWinRate is lowest.
   let bestIdx = 0;
   for (let i = 1; i < sample.length; i++) {
-    if (sample[i].winRate > sample[bestIdx].winRate) bestIdx = i;
+    if (sample[i].opponentWinRate > sample[bestIdx].opponentWinRate) bestIdx = i;
   }
   return {
     ok: true,
@@ -47,13 +97,14 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
 
 function score(q: Q, a: A): ScoreResult {
   const correct = a === q.correctIndex;
+  const c = q.candidates[q.correctIndex];
   return {
     raw: correct ? 1 : 0,
     xp: correct ? 10 : 0,
     outcome: correct ? "correct" : "wrong",
     note: correct
-      ? "You spotted the highest-WR opponent in the bracket."
-      : `Their WR was ${pct1(q.candidates[q.correctIndex].winRate)} (${q.candidates[q.correctIndex].wins}-${q.candidates[q.correctIndex].losses}).`,
+      ? "You spotted the opponent who beats you most often."
+      : `Their WR vs you was ${pct1(c.opponentWinRate)} (${c.losses}-${c.wins}).`,
   };
 }
 
@@ -65,7 +116,7 @@ export const opponentBracketPick: Mode<Q, A> = {
   ttp: "fast",
   depthTag: "multi-entity",
   title: "Opponent Bracket Pick",
-  blurb: "Four opponents enter, one has the worst record against you. Pick them.",
+  blurb: "Four opponents enter, one has the BEST record against you. Pick them.",
   generate,
   score,
   render: (ctx) => <OpponentBracketRender ctx={ctx} />,
@@ -94,13 +145,13 @@ function OpponentBracketRender({
             key={c.pulseId}
             className="flex items-center justify-between rounded border border-border bg-bg-surface px-2 py-1"
           >
-            <span className="truncate text-text">{c.name}</span>
+            <span className="truncate text-text">{displayNameFor(c)}</span>
             <span
               className="font-mono tabular-nums"
-              style={{ color: wrColor(c.winRate, c.games) }}
+              style={{ color: wrColor(c.opponentWinRate, c.games) }}
             >
-              {pct1(c.winRate)}{" "}
-              <span className="text-text-dim">({c.wins}-{c.losses})</span>
+              {pct1(c.opponentWinRate)}{" "}
+              <span className="text-text-dim">({c.losses}-{c.wins})</span>
               {i === ctx.question.correctIndex ? (
                 <span className="ml-1 rounded bg-success/15 px-1.5 text-success">★</span>
               ) : null}
@@ -143,7 +194,7 @@ function OpponentBracketRender({
           disabled={ctx.revealed}
         >
           <span className="flex flex-col">
-            <span className="truncate text-body font-medium text-text">{c.name}</span>
+            <span className="truncate text-body font-medium text-text">{displayNameFor(c)}</span>
             <span className="text-caption text-text-dim">{c.games} games played</span>
           </span>
         </QuizAnswerButton>

@@ -14,6 +14,10 @@ import type {
 
 interface ApiOpp {
   pulseId: string;
+  /** Canonical sc2pulse numeric character id; populated post-ingest. */
+  pulseCharacterId?: string | null;
+  /** Resolved sc2pulse display name; overrides barcode `name`. */
+  displayName?: string | null;
   name?: string;
   displayNameSample?: string;
   wins: number;
@@ -126,17 +130,24 @@ export function useArcadeData(): {
   const data = useMemo<ArcadeDataset | null>(() => {
     if (loading || error) return null;
     const oppRaw = Array.isArray(opp.data?.items) ? opp.data!.items : [];
-    const opps: ArcadeOpponent[] = oppRaw.map((o) => ({
-      pulseId: o.pulseId,
-      name: o.name || o.displayNameSample || "(unknown)",
-      wins: o.wins,
-      losses: o.losses,
-      games: o.games ?? o.gameCount ?? o.wins + o.losses,
-      winRate:
+    const opps: ArcadeOpponent[] = oppRaw.map((o) => {
+      const total = o.wins + o.losses;
+      const userWr =
         o.winRate ??
-        (o.wins + o.losses > 0 ? o.wins / (o.wins + o.losses) : 0),
-      lastPlayed: o.lastPlayed || o.lastSeen || null,
-    }));
+        (total > 0 ? o.wins / total : 0);
+      return {
+        pulseId: o.pulseId,
+        pulseCharacterId: o.pulseCharacterId ?? null,
+        name: o.name || o.displayNameSample || "(unknown)",
+        displayName: o.displayName ?? null,
+        wins: o.wins,
+        losses: o.losses,
+        games: o.games ?? o.gameCount ?? total,
+        userWinRate: userWr,
+        opponentWinRate: total > 0 ? 1 - userWr : 0,
+        lastPlayed: o.lastPlayed || o.lastSeen || null,
+      };
+    });
     const buildsList: ArcadeBuild[] = Array.isArray(builds.data)
       ? builds.data
       : [];

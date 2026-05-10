@@ -69,10 +69,10 @@ describe("Active Streak Hunter generate", () => {
       ...baseDataset,
       games,
       opponents: [
-        { pulseId: "hot", name: "Hot", wins: 3, losses: 0, games: 3, winRate: 1, lastPlayed: null },
-        { pulseId: "cold", name: "Cold", wins: 1, losses: 1, games: 2, winRate: 0.5, lastPlayed: null },
-        { pulseId: "middle", name: "Middle", wins: 2, losses: 1, games: 3, winRate: 0.67, lastPlayed: null },
-        { pulseId: "low", name: "Low", wins: 1, losses: 1, games: 2, winRate: 0.5, lastPlayed: null },
+        { pulseId: "hot", name: "Hot", wins: 3, losses: 0, games: 3, userWinRate: 1, opponentWinRate: 0, lastPlayed: null },
+        { pulseId: "cold", name: "Cold", wins: 1, losses: 1, games: 2, userWinRate: 0.5, opponentWinRate: 0.5, lastPlayed: null },
+        { pulseId: "middle", name: "Middle", wins: 2, losses: 1, games: 3, userWinRate: 0.67, opponentWinRate: 0.33, lastPlayed: null },
+        { pulseId: "low", name: "Low", wins: 1, losses: 1, games: 2, userWinRate: 0.5, opponentWinRate: 0.5, lastPlayed: null },
       ],
     };
     const result = await generateActiveStreakHunter({

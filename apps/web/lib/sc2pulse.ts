@@ -49,3 +49,33 @@ function clean(v: string | null | undefined): string | null {
   const t = v.trim();
   return t.length > 0 ? t : null;
 }
+
+/**
+ * "Barcode" detector — display names composed entirely of zero-width-
+ * similar glyphs (`I`, `l`, `1`, `i`, `|`, plus unicode lookalikes
+ * commonly used for smurf identity masking on the SC2 ladder).
+ *
+ * Returns true when the trimmed name is non-empty AND every character
+ * matches the barcode glyph set. Returns false for any name containing
+ * at least one "real" alphanumeric the human eye distinguishes.
+ *
+ * Arcade modes that surface opponents by name use this to drop unresolved
+ * barcodes from the candidate pool — a quiz comparing four
+ * indistinguishable strings is broken UX.
+ */
+export function isBarcodeName(name: string | null | undefined): boolean {
+  if (typeof name !== "string") return false;
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return false;
+  // Allowed glyph set: ASCII I, l, 1, i, | plus full-width / Greek-iota
+  // / fullwidth-l lookalikes. The Unicode flag lets us match the
+  // codepoints directly. If every codepoint is in the set, it's a barcode.
+  // I I  l l  1 1  i i  | |
+  // Ⅰ Ⅰ (Roman numeral one)  Ι Ι (Greek capital iota)
+  // Ｉ Ｉ (fullwidth capital I)  ｌ ｌ (fullwidth lowercase L)
+  // ｉ ｉ (fullwidth lowercase I)  １ １ (fullwidth digit one)
+  // ｜ ｜ (fullwidth vertical bar)
+  return /^[Il1i|ⅠΙＩｌｉ１｜]+$/u.test(
+    trimmed,
+  );
+}
