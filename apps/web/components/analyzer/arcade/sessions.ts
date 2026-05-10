@@ -36,9 +36,10 @@ export function buildUniverse(data: ArcadeDataset): UnifiedBuild[] {
       source: "own",
     });
   }
-  // Community + custom additions: only include when the user has played
-  // a build with a matching title at least once. We dedupe by build name
-  // to keep the universe focused.
+  // Community additions: only include when the user has played a build
+  // with a matching title at least once (community builds are external
+  // references — surfacing untouched ones in the user's portfolio
+  // universe is noise).
   const playedNames = new Set(data.builds.map((b) => b.name.toLowerCase()));
   for (const c of data.communityBuilds) {
     const key = c.title.toLowerCase();
@@ -56,9 +57,12 @@ export function buildUniverse(data: ArcadeDataset): UnifiedBuild[] {
       source: "community",
     });
   }
+  // Custom builds: every build the user has AUTHORED enters the
+  // universe — even at zero plays. Untradeable until they accumulate
+  // ≥3 plays in the rolling 14-day window (rolling14DayWr returns
+  // null below that floor), which the Stock Market UI surfaces as
+  // a missing price.
   for (const cb of data.customBuilds) {
-    const key = cb.name.toLowerCase();
-    if (!playedNames.has(key)) continue;
     const own = byName.get(cb.name);
     if (own) continue;
     byName.set(cb.name, {
@@ -79,6 +83,10 @@ export function buildUniverse(data: ArcadeDataset): UnifiedBuild[] {
  * Rolling-14-day WR for a given build name, computed from the user's
  * games. Returns null if the build has fewer than 3 plays in the window
  * — those builds are excluded from Stock Market price quotes.
+ *
+ * Matchup-agnostic builds (custom builds with `vsRace === "X"`) match
+ * games against any opponent race, since the user's authored build
+ * doesn't restrict which matchup it should be priced over.
  */
 export function rolling14DayWr(
   name: string,
