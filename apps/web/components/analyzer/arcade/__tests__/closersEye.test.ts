@@ -38,10 +38,35 @@ describe("Closer's Eye — meanWinLengths", () => {
     expect(out.find((b) => /cannon rush/i.test(b.build))).toBeUndefined();
     expect(out.find((b) => b.build === "Reaper FE")?.wins).toBe(6);
   });
-  test("requires ≥5 wins", () => {
+  test("requires ≥3 wins (lowered from 5 to play with realistic build spreads)", () => {
     const games: ArcadeGame[] = [];
-    for (let i = 0; i < 4; i++) games.push(game("ThinBuild", "Win", 500, i));
+    for (let i = 0; i < 2; i++) games.push(game("TooThin", "Win", 500, i));
     expect(meanWinLengths(games).length).toBe(0);
+    const enough: ArcadeGame[] = [];
+    for (let i = 0; i < 3; i++) enough.push(game("Goldilocks", "Win", 500, i));
+    expect(meanWinLengths(enough).length).toBe(1);
+  });
+
+  test("playable on a ~50-game account spread across 4 builds with 3 wins each", async () => {
+    const games: ArcadeGame[] = [];
+    const builds = ["Reaper FE", "Mech Macro", "Bio Drop", "Air Switch"];
+    let i = 0;
+    for (const b of builds) {
+      // 3 wins + 2 losses per build = 20 games total (still a thin sample).
+      for (let k = 0; k < 3; k++) games.push(game(b, "Win", 540 + k * 30, i++));
+      for (let k = 0; k < 2; k++) games.push(game(b, "Loss", 720, i++));
+    }
+    // Pad with 30 more games across various builds so the dataset
+    // resembles ~50 ranked games total — none of which break the
+    // 4-distinct-builds requirement.
+    for (let k = 0; k < 30; k++) games.push(game(`Junk Bucket ${k % 8}`, "Win", 600, i++));
+    const result = await closersEye.generate({
+      rng: mulberry32(7),
+      daySeed: "2026-05-10",
+      tz: "UTC",
+      data: { ...baseDataset, games },
+    });
+    expect(result.ok).toBe(true);
   });
   test("computes mean win duration only over wins", () => {
     const games: ArcadeGame[] = [];
