@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { pct1, wrColor } from "@/lib/format";
 import { QuizCard } from "../../shells/QuizCard";
@@ -98,6 +98,12 @@ function RivalryRankerRender({
     [ctx.question.candidates],
   );
   const [order, setOrder] = useState<string[]>(initial);
+  // Daily-rollover safety: a new question reference (e.g. mid-session
+  // day flip) must reset the user's draft order so we never operate on
+  // a stale pulseId from a previous round.
+  useEffect(() => {
+    setOrder(initial);
+  }, [initial]);
   const draggingRef = useRef<string | null>(null);
 
   const move = (from: number, to: number) => {
@@ -121,8 +127,9 @@ function RivalryRankerRender({
     ctx.onAnswer(order);
   };
 
-  const truthMap = new Map(
-    ctx.question.candidates.map((c) => [c.pulseId, c]),
+  const truthMap = useMemo(
+    () => new Map(ctx.question.candidates.map((c) => [c.pulseId, c])),
+    [ctx.question.candidates],
   );
 
   const reveal = ctx.score ? (
@@ -132,7 +139,16 @@ function RivalryRankerRender({
       </p>
       <ol className="space-y-1">
         {ctx.question.truth.map((pid, i) => {
-          const c = truthMap.get(pid)!;
+          const c = truthMap.get(pid);
+          if (!c) {
+            // Defensive: candidates and truth are built from the same
+            // sample, so a missing id means the question payload itself
+            // is malformed. Render nothing for the row and warn once.
+            if (typeof console !== "undefined") {
+              console.warn(`[rivalry-ranker] truth pulseId not in candidates: ${pid}`);
+            }
+            return null;
+          }
           return (
             <li
               key={pid}
@@ -172,7 +188,13 @@ function RivalryRankerRender({
         <div className="space-y-2">
           <ul className="space-y-2" aria-label="Rivalry ranker">
             {order.map((pid, i) => {
-              const c = truthMap.get(pid)!;
+              const c = truthMap.get(pid);
+              if (!c) {
+                // Drop unknown ids from the editor; the daily-rollover
+                // useEffect will reseed `order` from the new candidate
+                // set on the next tick.
+                return null;
+              }
               return (
                 <li
                   key={pid}
