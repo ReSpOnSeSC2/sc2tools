@@ -214,7 +214,90 @@ class OpponentsService {
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
     const nextBefore = hasMore ? page[page.length - 1].lastPlayed : null;
+    // Backfill identity fields the games-aggregation can't see.
+    //
+    // ``_listFiltered`` aggregates from the games collection because
+    // the cumulative counters on the opponents collection don't apply
+    // inside a filter window. The aggregation pulls
+    // ``pulseCharacterId`` / ``toonHandle`` off the embedded opponent
+    // sub-doc on the most recent game (``$last``) — but those fields
+    // are only stamped onto a games row at the moment of upload.
+    //
+    // The May-2026 backfill cron heals the opponents COLLECTION row
+    // for stuck-on-TOON opponents by writing the canonical
+    // pulseCharacterId there directly; it does NOT rewrite historical
+    // games rows (we keep games immutable). For an opponent whose
+    // games all pre-date the heal, ``$last`` returns null even
+    // though the opponents row holds the canonical id, so the SPA
+    // table cell falls back to the toon-handle "TOON" badge while
+    // the profile (which reads the opponents row directly) renders
+    // the link. Confusing.
+    //
+    // Patch the gap with a single batched ``find`` against the
+    // opponents collection: for every row whose aggregation produced
+    // null, splice in the canonical value if the row has it. Sticky-
+    // empty semantics preserved: a non-null aggregation value is
+    // never overwritten — the games rows are still the authority on
+    // the most-recent observed identity.
+    await this._fillIdentityFromOpponents(userId, page);
     return { items: page, nextBefore };
+  }
+
+  /**
+   * In-place fill of missing ``pulseCharacterId`` / ``toonHandle`` on
+   * an aggregation result page. One ``find`` round-trip regardless of
+   * page size (uses the existing ``{ userId, pulseId }`` unique index
+   * for an index scan).
+   *
+   * No-op when every row already carries both fields. Safe on an
+   * empty page.
+   *
+   * @private
+   * @param {string} userId
+   * @param {Array<{
+   *   pulseId: string,
+   *   pulseCharacterId?: string|null,
+   *   toonHandle?: string|null,
+   * }>} rows
+   */
+  async _fillIdentityFromOpponents(userId, rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const needIds = [];
+    for (const r of rows) {
+      if (!r || typeof r.pulseId !== "string") continue;
+      const missingChar = !r.pulseCharacterId;
+      const missingToon = !r.toonHandle;
+      if (missingChar || missingToon) needIds.push(r.pulseId);
+    }
+    if (needIds.length === 0) return;
+    const opponentsCursor = this.db.opponents.find(
+      { userId, pulseId: { $in: needIds } },
+      { projection: { _id: 0, pulseId: 1, pulseCharacterId: 1, toonHandle: 1 } },
+    );
+    /** @type {Map<string, {pulseCharacterId?: string, toonHandle?: string}>} */
+    const byPulseId = new Map();
+    for await (const doc of opponentsCursor) {
+      if (typeof doc.pulseId !== "string") continue;
+      byPulseId.set(doc.pulseId, {
+        pulseCharacterId: typeof doc.pulseCharacterId === "string"
+          ? doc.pulseCharacterId
+          : undefined,
+        toonHandle: typeof doc.toonHandle === "string"
+          ? doc.toonHandle
+          : undefined,
+      });
+    }
+    for (const r of rows) {
+      if (!r || typeof r.pulseId !== "string") continue;
+      const opp = byPulseId.get(r.pulseId);
+      if (!opp) continue;
+      if (!r.pulseCharacterId && opp.pulseCharacterId) {
+        r.pulseCharacterId = opp.pulseCharacterId;
+      }
+      if (!r.toonHandle && opp.toonHandle) {
+        r.toonHandle = opp.toonHandle;
+      }
+    }
   }
 
   /**
