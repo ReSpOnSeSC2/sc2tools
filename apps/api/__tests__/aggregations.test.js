@@ -235,6 +235,51 @@ describe("services/aggregations", () => {
     expect(out.interval).toBe("month");
   });
 
+  test("timeseries stays at day resolution when filtered to today's window", async () => {
+    // The dashboard's "Games today" card scopes the global timeseries
+    // to a `since=<start of today in tz>` filter so a multi-year
+    // history can't trigger `_fitInterval` to widen `day` → `week`.
+    // With span < 24h the response must remain day-bucketed; otherwise
+    // the bucket key won't match `todayKeyIn(tz)` on the client and the
+    // card silently flips to 0 once UTC rolls over.
+    let bucketingPipeline;
+    const games = buildGames([
+      () => [
+        {
+          _id: null,
+          // Both extremes fall inside the user's local 2026-05-09.
+          minDate: new Date("2026-05-09T17:00:00Z"),
+          maxDate: new Date("2026-05-10T02:30:00Z"),
+        },
+      ],
+      (pipeline) => {
+        bucketingPipeline = pipeline;
+        return [
+          {
+            bucket: new Date("2026-05-09T05:00:00Z"),
+            wins: 3,
+            losses: 1,
+            total: 4,
+          },
+        ];
+      },
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.timeseries(
+        "u1",
+        { interval: "day", tz: "America/Chicago" },
+        { since: new Date("2026-05-09T05:00:00Z") },
+      )
+    );
+    expect(out.interval).toBe("day");
+    expect(out.points).toHaveLength(1);
+    expect(out.points[0].total).toBe(4);
+    const groupStage = bucketingPipeline.find((s) => s.$group);
+    expect(groupStage.$group._id.$dateTrunc.unit).toBe("day");
+    expect(groupStage.$group._id.$dateTrunc.timezone).toBe("America/Chicago");
+  });
+
   test("matchupTimeseries computes winRate per (bucket, race) row", async () => {
     const games = buildGames([
       () => [
