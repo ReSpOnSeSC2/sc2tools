@@ -133,8 +133,14 @@ export function useArcadeData(): {
   // /v1/summary returns { totals: { wins, losses, total, winRate }, ... }.
   const summary = useApi<ApiSummary>("/v1/summary");
   const custom = useApi<ApiCustomBuilds>("/v1/custom-builds");
+  // Arcade-universe endpoint: balanced top-N-per-matchup so the Stock
+  // Market spans every matchup (PvP/PvT/PvZ/TvP/TvT/TvZ/ZvP/ZvT/ZvZ +
+  // unclassified). The default `?sort=top` over /v1/community/builds
+  // collapses to whichever race dominates vote counts — Protoss-heavy
+  // communities would crowd Zerg/Terran builds out of the top 100
+  // entirely, hiding the entire ZvX/TvX side of the market.
   const community = useApi<ApiCommunityBuilds>(
-    "/v1/community/builds?limit=100&sort=top",
+    "/v1/community/arcade-universe?perMatchup=12",
   );
   const seasons = useApi<ApiSeasons>("/v1/seasons");
 

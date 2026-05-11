@@ -141,6 +141,53 @@ describe("community + gdpr integration", () => {
       expect(missed.status).toBe(200);
       expect(missed.body.items.length).toBe(0);
     });
+
+    test("arcade-universe returns top-N from every matchup, not just top-by-votes globally", async () => {
+      // Seed many high-vote PvX builds + a smaller number of ZvX / TvX
+      // builds. The global-top-N path crowds Z/T out; the universe path
+      // must surface at least one from each populated matchup so the
+      // Stock Market spans the full meta, not just the dominant race.
+      const seed = async (userSlug, title, matchup, votes) => {
+        await services.customBuilds.upsert("u_a", {
+          slug: userSlug,
+          name: title,
+          matchup,
+          steps: [{ supply: 14, time: "0:18", action: "Pylon" }],
+        });
+        const r = await request(app)
+          .post("/v1/community/builds")
+          .set("authorization", "Bearer user-a")
+          .send({ slug: userSlug, title, description: matchup });
+        expect(r.status).toBe(201);
+        // Stamp votes directly so we don't have to script vote casts.
+        await db.communityBuilds.updateOne(
+          { slug: r.body.slug },
+          { $set: { votes } },
+        );
+      };
+      // 15 PvX builds with high vote counts
+      for (let i = 0; i < 15; i++) {
+        await seed(`pvx-flood-${i}`, `PvX Flood ${i}`, "PvT", 1000 - i);
+      }
+      // One ZvP, one TvZ — both with low votes so they'd lose any global
+      // top-100 sort
+      await seed("zvp-rare", "ZvP Spire Rush", "ZvP", 1);
+      await seed("tvz-rare", "TvZ Hellbat Drop", "TvZ", 2);
+
+      const res = await request(app).get(
+        "/v1/community/arcade-universe?perMatchup=3",
+      );
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.items)).toBe(true);
+      const matchups = new Set(res.body.items.map((b) => b.matchup));
+      expect(matchups.has("PvT")).toBe(true);
+      expect(matchups.has("ZvP")).toBe(true);
+      expect(matchups.has("TvZ")).toBe(true);
+      // PvT bucket must be capped at perMatchup=3 — it would otherwise
+      // dominate the response.
+      const pvtCount = res.body.items.filter((b) => b.matchup === "PvT").length;
+      expect(pvtCount).toBe(3);
+    });
   });
 
   describe("public author profile (Phase 10)", () => {
