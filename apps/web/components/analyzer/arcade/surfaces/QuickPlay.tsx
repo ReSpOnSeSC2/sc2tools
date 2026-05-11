@@ -100,7 +100,7 @@ export function QuickPlaySurface() {
                 onClick={() => setOpenId(m.id)}
                 className="flex h-full w-full flex-col items-start gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-md bg-bg-elevated text-accent-cyan">
+                <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-bg-elevated text-accent-cyan">
                   {IconFor(m.id)}
                 </span>
                 <span className="text-body font-semibold text-text">{m.title}</span>
