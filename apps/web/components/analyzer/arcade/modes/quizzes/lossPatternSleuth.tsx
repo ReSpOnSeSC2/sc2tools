@@ -85,20 +85,22 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
   };
 }
 
-function score(q: Q, a: A): ScoreResult {
-  const correct = a === q.correctIndex;
-  return {
-    raw: correct ? 1 : 0,
-    xp: correct ? 14 : 0,
-    outcome: correct ? "correct" : "wrong",
-  };
-}
-
 const FULL_RACE: Record<Q["raceLetter"], string> = {
   P: "Protoss",
   T: "Terran",
   Z: "Zerg",
 };
+
+function score(q: Q, a: A): ScoreResult {
+  const correct = a === q.correctIndex;
+  const top = q.candidates[q.correctIndex];
+  return {
+    raw: correct ? 1 : 0,
+    xp: correct ? 14 : 0,
+    outcome: correct ? "correct" : "wrong",
+    note: `After losing to ${FULL_RACE[q.raceLetter]}: ${top.build} (${top.count}×).`,
+  };
+}
 
 export const lossPatternSleuth: Mode<Q, A> = {
   id: ID,

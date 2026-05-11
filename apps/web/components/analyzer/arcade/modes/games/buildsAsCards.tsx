@@ -68,8 +68,13 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
   return { ok: true, minDataMet: true, question: { cards } };
 }
 
-function score(): ScoreResult {
-  return { raw: 1, xp: 0, outcome: "correct" };
+function score(q: Q): ScoreResult {
+  return {
+    raw: 1,
+    xp: 0,
+    outcome: "correct",
+    note: `Binder: ${q.cards.length} build card${q.cards.length === 1 ? "" : "s"}.`,
+  };
 }
 
 export const buildsAsCards: Mode<Q, A> = {

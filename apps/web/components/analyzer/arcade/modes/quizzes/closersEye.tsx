@@ -103,10 +103,12 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
 
 function score(q: Q, a: A): ScoreResult {
   const correct = a === q.correctIndex;
+  const closer = q.candidates[q.correctIndex];
   return {
     raw: correct ? 1 : 0,
     xp: correct ? 14 : 0,
     outcome: correct ? "correct" : "wrong",
+    note: `Closer: ${closer.build} at ${fmtMinutes(closer.meanWinSec)} avg.`,
   };
 }
 

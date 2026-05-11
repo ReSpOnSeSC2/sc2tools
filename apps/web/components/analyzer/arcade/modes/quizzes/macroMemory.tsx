@@ -64,10 +64,12 @@ function matchupOf(my?: string, opp?: string): string {
 
 function score(q: Q, a: A): ScoreResult {
   const correct = a === q.correctIndex;
+  const best = q.candidates[q.correctIndex];
   return {
     raw: correct ? 1 : 0,
     xp: correct ? 12 : 0,
     outcome: correct ? "correct" : "wrong",
+    note: `Cleanest macro: ${best.matchupLetter} vs ${best.opponentName} (${best.macroScore}).`,
   };
 }
 
