@@ -2,14 +2,22 @@
 //
 // Build universe = the user's own played builds (from /v1/builds) PLUS
 // every community build returned by /v1/community/builds PLUS every
-// custom build the user has authored. We deliberately do NOT filter
-// community builds down to "ones the user has already played" — for a
+// custom build the user has authored PLUS every entry from the bundled
+// BUILD_DEFINITIONS catalog (the same 101 strategy definitions surfaced
+// on /definitions). We deliberately do NOT filter community builds or
+// catalog entries down to "ones the user has already played" — for a
 // Protoss main, that filter collapsed the universe to Protoss-only,
-// even though Stock Market is meant to be a speculation surface
-// across every matchup. Untraded builds (no recent plays) still
-// surface in the universe; the Stock Market UI labels them "no price
-// yet" and disables their allocation input.
+// even though Stock Market is meant to be a speculation surface across
+// every matchup. Untraded builds (no recent plays) still surface in
+// the universe; the Stock Market UI labels them "no price yet" and
+// disables their allocation input.
+//
+// The catalog source guarantees Z/T coverage even when the user
+// hasn't played those matchups and the community has zero published
+// builds for them — every analyzer-detectable strategy is a betting
+// option.
 
+import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
 import type { ArcadeBuild, ArcadeDataset } from "./types";
 
 export interface UnifiedBuild {
@@ -21,8 +29,14 @@ export interface UnifiedBuild {
   wins: number;
   losses: number;
   winRate: number;
-  /** Source: "own" if it lives in /v1/builds; "community" otherwise. */
-  source: "own" | "community" | "custom";
+  /**
+   * Provenance of the build entry:
+   *   own       — user has played it (from /v1/builds)
+   *   community — published community build (/v1/community/arcade-universe)
+   *   custom    — user-authored private build (/v1/custom-builds)
+   *   catalog   — bundled BUILD_DEFINITIONS strategy definition
+   */
+  source: "own" | "community" | "custom" | "catalog";
 }
 
 /**
@@ -41,7 +55,21 @@ export function isUnclassifiedSentinel(name: string): boolean {
   return /^Unclassified\s*-\s*/i.test(name);
 }
 
-export function buildUniverse(data: ArcadeDataset): UnifiedBuild[] {
+/**
+ * Build the universe of builds for an Arcade surface.
+ *
+ * `opts.includeCatalog` (default true) controls whether the bundled
+ * BUILD_DEFINITIONS catalog seeds the universe. Stock Market wants
+ * this on so the bet surface spans the full meta even when the user
+ * has no Z/T plays. Builds-as-Cards wants it OFF — that mode is a
+ * collection of builds the user has actually engaged with, and catalog
+ * stubs with zero plays would dilute the binder.
+ */
+export function buildUniverse(
+  data: ArcadeDataset,
+  opts: { includeCatalog?: boolean } = {},
+): UnifiedBuild[] {
+  const includeCatalog = opts.includeCatalog !== false;
   const byName = new Map<string, UnifiedBuild>();
   for (const b of data.builds) {
     if (!b.name) continue;
@@ -97,6 +125,31 @@ export function buildUniverse(data: ArcadeDataset): UnifiedBuild[] {
       winRate: 0,
       source: "custom",
     });
+  }
+  // Bundled catalog (BUILD_DEFINITIONS): every analyzer-detectable
+  // strategy enters the universe regardless of whether the user has
+  // played it, the community has published it, or the user has
+  // authored a custom variant. This is the only path that guarantees
+  // Z/T coverage for a Protoss main with no Z/T plays and a
+  // Protoss-heavy community feed. Catalog entries with a name that
+  // collides with own/community/custom inherit that source's price;
+  // de-novo catalog rows surface as "no price yet" (untradeable)
+  // until plays accumulate.
+  if (includeCatalog) {
+    for (const def of BUILD_DEFINITIONS) {
+      if (!def.name || isUnclassifiedSentinel(def.name)) continue;
+      if (byName.has(def.name)) continue;
+      byName.set(def.name, {
+        id: `catalog:${def.id}`,
+        name: def.name,
+        race: def.race,
+        totalPlays: 0,
+        wins: 0,
+        losses: 0,
+        winRate: 0,
+        source: "catalog",
+      });
+    }
   }
   return Array.from(byName.values());
 }

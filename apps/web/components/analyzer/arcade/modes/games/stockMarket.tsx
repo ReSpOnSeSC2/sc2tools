@@ -27,7 +27,7 @@ type Quote = {
   race?: string;
   /** Price = WR × 100, 0..100; null if not enough plays. */
   price: number | null;
-  source: "own" | "community" | "custom";
+  source: "own" | "community" | "custom" | "catalog";
 };
 
 type Q = {
