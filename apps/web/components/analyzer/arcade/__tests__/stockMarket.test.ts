@@ -4,6 +4,7 @@ import {
   buildUniverse,
   defenseFor,
   isFoil,
+  isUnclassifiedSentinel,
   rolling14DayWr,
 } from "../sessions";
 import type { ArcadeDataset } from "../types";
@@ -51,6 +52,56 @@ describe("Stock Market: build universe + price math", () => {
     const stargate = u.find((b) => b.name === "Stargate Opener")!;
     expect(stargate.source).toBe("community");
     expect(stargate.totalPlays).toBe(0);
+  });
+
+  test("drops 'Unclassified - <Race>' placeholder builds from every source", () => {
+    // Python detectors/user.py emits "Unclassified - <Race>" as a
+    // sentinel when no signature in the registry matches the replay.
+    // These are not real builds — they're a "couldn't classify" stub
+    // and must NOT appear in the Stock Market.
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      builds: [
+        { name: "Unclassified - Protoss", total: 30, wins: 20, losses: 10, winRate: 0.67 },
+        { name: "Unclassified - BW Protoss", total: 5, wins: 3, losses: 2, winRate: 0.6 },
+        { name: "Unclassified - Terran", total: 4, wins: 1, losses: 3, winRate: 0.25 },
+        { name: "Unclassified - Zerg", total: 3, wins: 0, losses: 3, winRate: 0 },
+        // Partial classifications are kept — they carry matchup info.
+        { name: "PvT - Macro Transition (Unclassified)", total: 8, wins: 5, losses: 3, winRate: 0.625 },
+      ],
+      communityBuilds: [
+        { slug: "junk", title: "Unclassified - Protoss", race: "P", votes: 1 },
+        { slug: "real", title: "Phoenix Opener", race: "P", votes: 5 },
+      ],
+      customBuilds: [
+        { slug: "stub", name: "Unclassified - Zerg", race: "Z", vsRace: "X" },
+        { slug: "real-custom", name: "My Special Cheese", race: "T", vsRace: "P" },
+      ],
+    };
+    const u = buildUniverse(dataset);
+    const names = u.map((b) => b.name);
+    expect(names).not.toContain("Unclassified - Protoss");
+    expect(names).not.toContain("Unclassified - BW Protoss");
+    expect(names).not.toContain("Unclassified - Terran");
+    expect(names).not.toContain("Unclassified - Zerg");
+    // Partial classifications survive the filter.
+    expect(names).toContain("PvT - Macro Transition (Unclassified)");
+    expect(names).toContain("Phoenix Opener");
+    expect(names).toContain("My Special Cheese");
+  });
+
+  test("isUnclassifiedSentinel matches the Python emitter format", () => {
+    expect(isUnclassifiedSentinel("Unclassified - Protoss")).toBe(true);
+    expect(isUnclassifiedSentinel("Unclassified - BW Protoss")).toBe(true);
+    expect(isUnclassifiedSentinel("Unclassified - Terran")).toBe(true);
+    expect(isUnclassifiedSentinel("Unclassified - Zerg")).toBe(true);
+    // Hyphen-spacing tolerance: detector emits "X - Y" but past versions
+    // may have used "X-Y".
+    expect(isUnclassifiedSentinel("Unclassified-Protoss")).toBe(true);
+    // Partial-classification suffix is NOT a sentinel.
+    expect(isUnclassifiedSentinel("PvT - Macro Transition (Unclassified)")).toBe(false);
+    expect(isUnclassifiedSentinel("Reaper FE")).toBe(false);
+    expect(isUnclassifiedSentinel("")).toBe(false);
   });
 
   test("brand-new authored custom build enters universe with totalPlays=0", () => {
