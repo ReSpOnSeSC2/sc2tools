@@ -148,6 +148,15 @@ function buildEnrichmentKey(parts) {
  * new opponent is a cache miss (~50 ms aggregation); every
  * subsequent tick is a cache hit (microseconds).
  *
+ * When ``isFirstForGameKey`` is true the cache lookup is SKIPPED and
+ * Mongo is queried directly — the result still gets cached for later
+ * ticks of the same match. This is the post-2026-05-11 fix for the
+ * "previous match's invalidate hadn't landed yet" race: the loading-
+ * screen envelope for game N+1 used to hit a cache entry written
+ * before game N was counted, and the voice readout spoke stale H2H
+ * (e.g. "You're 2 and 0 against them" when the actual record was
+ * already 1-6). Always-fresh on match start guarantees correctness.
+ *
  * Returns the original envelope when there's nothing to enrich (no
  * opponent name / unknown opponent / no history).
  *
@@ -159,9 +168,19 @@ function buildEnrichmentKey(parts) {
  * @param {number} maxSize
  * @param {string} userId
  * @param {object} envelope
+ * @param {boolean} [isFirstForGameKey=false] when true, bypass the
+ *   cache lookup and force a fresh Mongo query.
  * @returns {Promise<object>}
  */
-async function enrichEnvelope(service, cache, ttlMs, maxSize, userId, envelope) {
+async function enrichEnvelope(
+  service,
+  cache,
+  ttlMs,
+  maxSize,
+  userId,
+  envelope,
+  isFirstForGameKey = false,
+) {
   if (!userId || !envelope || typeof envelope !== "object") return envelope;
   const opp = envelope.opponent;
   if (!opp || typeof opp !== "object") return envelope;
@@ -204,7 +223,10 @@ async function enrichEnvelope(service, cache, ttlMs, maxSize, userId, envelope) 
     myRace,
   });
   const now = Date.now();
-  const hit = cache.get(key);
+  // First envelope of a new gameKey skips the cache check — every
+  // other tick uses it. The result is still cached below so the
+  // remaining 1 Hz ticks of this match stay cheap.
+  const hit = isFirstForGameKey ? null : cache.get(key);
   if (hit && now - hit.ts < ttlMs) {
     // LRU touch.
     cache.delete(key);

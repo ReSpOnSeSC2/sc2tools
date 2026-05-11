@@ -454,6 +454,21 @@ export function useVoiceReadout(
     if (entry.spoken) return;
 
     const hasEnrichment = !!liveGame.streamerHistory;
+    // MMR readiness — we wait for at least one usable MMR source to
+    // land before speaking, so the readout never drops the slot
+    // silently when Pulse is just a few hundred ms late. The 900 ms
+    // fallback below still fires the line if MMR never arrives.
+    const profileMmrCandidate = liveGame.opponent?.profile?.mmr;
+    const profileMmrReady =
+      typeof profileMmrCandidate === "number"
+      && Number.isFinite(profileMmrCandidate)
+      && profileMmrCandidate > 0;
+    const storedMmrCandidate = liveGame.streamerHistory?.oppMmr;
+    const storedMmrReady =
+      typeof storedMmrCandidate === "number"
+      && Number.isFinite(storedMmrCandidate)
+      && storedMmrCandidate > 0;
+    const hasMmr = profileMmrReady || storedMmrReady;
 
     const fireUtterance = () => {
       // The latest envelope captured in the closure may be stale by
@@ -483,9 +498,13 @@ export function useVoiceReadout(
       }
     };
 
-    if (hasEnrichment) {
-      // Cloud's enrichment has landed — speak now, cancel any pending
-      // fallback timer.
+    if (hasEnrichment && hasMmr) {
+      // Cloud's enrichment AND a usable MMR have landed — speak now,
+      // cancel any pending fallback timer. Waiting for both prevents
+      // the "MMR slot silently dropped" failure mode where the voice
+      // fires the instant ``streamerHistory`` lands but Pulse hasn't
+      // responded yet, even though Pulse is typically only ~50–300 ms
+      // behind.
       if (entry.timer !== null) {
         window.clearTimeout(entry.timer);
         entry.timer = null;
@@ -494,8 +513,10 @@ export function useVoiceReadout(
       return;
     }
 
-    // Enrichment hasn't landed yet. Arm a fallback timer (once per
-    // gameKey) so a Pulse / Mongo blip can't gag the readout forever.
+    // Either enrichment or a usable MMR is still missing. Arm the
+    // 900 ms fallback timer once per gameKey so a Pulse outage / Mongo
+    // blip can't gag the readout forever — we fire with whatever data
+    // we have by the deadline.
     if (entry.timer === null) {
       entry.timer = window.setTimeout(() => {
         const slot = states.get(gameKey);

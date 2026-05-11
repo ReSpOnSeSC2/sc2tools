@@ -127,6 +127,22 @@ class OverlayLiveService {
     this._enrichmentCache = new Map();
     this._enrichmentTtlMs = 5 * 60 * 1000;
     this._enrichmentMax = 256;
+    /**
+     * Per-user "most recently enriched gameKey". The voice-readout
+     * bug we hit at 2026-05-11 happened when a new match's loading-
+     * screen envelope arrived BEFORE the previous match's post-game
+     * ingest had a chance to call ``invalidateEnrichmentForOpponent``.
+     * The cache returned stale H2H from before the prior match was
+     * counted, the voice spoke it, and only later envelopes (after
+     * Pulse responded and the post-game invalidate ran) saw fresh
+     * data — which the visual card then rendered.
+     *
+     * Fix: bypass the cache on the FIRST envelope of any new
+     * ``gameKey`` (always hit Mongo). Subsequent ticks of the same
+     * match still use the cache, so the 1-Hz cadence stays cheap.
+     * @type {Map<string, string>}
+     */
+    this._lastEnrichedGameKey = new Map();
   }
 
   /**
@@ -642,14 +658,27 @@ class OverlayLiveService {
    * Enrich an inbound ``LiveGameState`` envelope with
    * ``streamerHistory``. Thin delegator to ``overlayLiveEnrichment.js``
    * so the class API stays unchanged while the heavy lifting lives in
-   * a sibling module. See that module for cache-key precedence rules
-   * and the partial-then-enriched fan-out contract with the broker.
+   * a sibling module.
+   *
+   * Detects the FIRST envelope of any new ``gameKey`` and forces a
+   * cache-bypass for that single call, so a streamer who queues
+   * immediately after a prior game sees their freshly-updated H2H
+   * even when the prior match's invalidate hasn't landed yet. The
+   * subsequent 1 Hz ticks of the same match still use the cache.
    *
    * @param {string} userId
    * @param {object} envelope
    * @returns {Promise<object>}
    */
   async enrichEnvelope(userId, envelope) {
+    const gameKey = envelope && typeof envelope.gameKey === "string"
+      ? envelope.gameKey
+      : null;
+    const lastKey = userId ? this._lastEnrichedGameKey.get(userId) : null;
+    const isFirstForGameKey = gameKey !== null && gameKey !== lastKey;
+    if (userId && gameKey !== null) {
+      this._lastEnrichedGameKey.set(userId, gameKey);
+    }
     return enrichEnvelopeImpl(
       this,
       this._enrichmentCache,
@@ -657,12 +686,14 @@ class OverlayLiveService {
       this._enrichmentMax,
       userId,
       envelope,
+      isFirstForGameKey,
     );
   }
 
   /** Test helper: drop the per-user enrichment cache. */
   clearEnrichmentCache() {
     this._enrichmentCache.clear();
+    this._lastEnrichedGameKey.clear();
   }
 
   /**

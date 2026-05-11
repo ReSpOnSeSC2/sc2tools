@@ -126,12 +126,88 @@ describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
     const a = await svc.enrichEnvelope("u1", envelope());
     expect(spy).toHaveBeenCalledTimes(1);
     const b = await svc.enrichEnvelope("u1", envelope({ capturedAt: 2 }));
-    // Same (userId, oppName, oppRace, myRace) — cache hit, no new
-    // aggregation call.
+    // Same gameKey (cache key matches lastEnrichedGameKey for this
+    // userId), same (userId, oppName, oppRace, myRace) — cache hit, no
+    // new aggregation call.
     expect(spy).toHaveBeenCalledTimes(1);
     // Both envelopes carry the same streamerHistory block.
     expect(b.streamerHistory.headToHead).toEqual(a.streamerHistory.headToHead);
     spy.mockRestore();
+  });
+
+  test("bypasses the cache for the FIRST envelope of every new gameKey (anti-stale guard)", async () => {
+    // The 2026-05-11 incident: a new match's loading-screen envelope
+    // arrived BEFORE the previous match's post-game ingest had a
+    // chance to call ``invalidateEnrichmentForOpponent``. The cache
+    // returned stale H2H (2 wins / 0 losses from before the prior
+    // games were counted), the voice spoke it, and only later
+    // envelopes saw fresh data — which the visual card then rendered.
+    //
+    // Fix: every first envelope of a new ``gameKey`` skips the cache
+    // and queries Mongo directly, even when a stale entry exists.
+    // Subsequent ticks of the same gameKey still use the cache.
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "1-S2-1-future-toon",
+      displayNameSample: "Future",
+      displayNameHash: "hash",
+      race: "Terran",
+      gameCount: 4,
+      wins: 1,
+      losses: 3,
+      lastSeen: new Date(),
+      openings: { Macro: 4 },
+    });
+    const spy = jest.spyOn(svc, "buildFromOpponentName");
+    // Game 1 — fresh cache, one DB hit.
+    await svc.enrichEnvelope("u1", envelope({ gameKey: "game-1" }));
+    expect(spy).toHaveBeenCalledTimes(1);
+    // Same gameKey, second envelope tick — cache hit, NO new DB call.
+    await svc.enrichEnvelope("u1", envelope({ gameKey: "game-1", capturedAt: 2 }));
+    expect(spy).toHaveBeenCalledTimes(1);
+    // New gameKey (next match) — MUST hit the DB even though the cache
+    // still has a valid entry for the (userId, opp) pair. This is the
+    // anti-stale guarantee.
+    await svc.enrichEnvelope("u1", envelope({ gameKey: "game-2" }));
+    expect(spy).toHaveBeenCalledTimes(2);
+    // Same new gameKey, second tick — cache hit again.
+    await svc.enrichEnvelope("u1", envelope({ gameKey: "game-2", capturedAt: 3 }));
+    expect(spy).toHaveBeenCalledTimes(2);
+    spy.mockRestore();
+  });
+
+  test("returns the fresh row after a mid-cache opponents-row update on gameKey change", async () => {
+    // End-to-end of the bug: stale entry sits in the cache, the
+    // opponents row gets updated (mimicking a game ingest that lost
+    // the race to invalidate), and the next match's loading-screen
+    // envelope arrives with a new gameKey. The new envelope MUST see
+    // the fresh row data, not the stale cached value.
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "1-S2-1-future-toon",
+      displayNameSample: "Future",
+      displayNameHash: "hash",
+      race: "Terran",
+      gameCount: 2,
+      wins: 2,
+      losses: 0,
+      lastSeen: new Date(),
+      openings: { Macro: 2 },
+    });
+    // Game 1 — caches 2W-0L.
+    const a = await svc.enrichEnvelope("u1", envelope({ gameKey: "game-1" }));
+    expect(a.streamerHistory.headToHead).toEqual({ wins: 2, losses: 0 });
+    // Opponents row updates (real game ingest would have invalidated;
+    // here we simulate the race where invalidate hasn't fired yet by
+    // skipping it entirely).
+    await db.opponents.updateOne(
+      { userId: "u1", pulseId: "1-S2-1-future-toon" },
+      { $set: { wins: 1, losses: 6, gameCount: 7 } },
+    );
+    // New match, new gameKey — cache STILL has the stale 2-0 entry,
+    // but the bypass forces a fresh Mongo read.
+    const b = await svc.enrichEnvelope("u1", envelope({ gameKey: "game-2" }));
+    expect(b.streamerHistory.headToHead).toEqual({ wins: 1, losses: 6 });
   });
 
   test("does not cross userIds — alice's enrichment doesn't leak to bob", async () => {
