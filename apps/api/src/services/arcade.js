@@ -51,20 +51,26 @@ class ArcadeService {
   }
 
   /**
-   * Resolve every objective on an active card against the user's games
-   * since ``card.startedAt``. Each objective declares a ``predicate``
-   * key + ``params``; the predicate registry below is the source of
-   * truth for what can appear on a card.
+   * Resolve every cell on an active card against the user's games since
+   * ``card.startedAt``. Each cell declares a ``predicate`` key +
+   * ``params``; the predicate registry below is the source of truth
+   * for what can appear on a card.
+   *
+   * The field is named ``cells`` to match the client (BingoState.cells
+   * in apps/web/components/analyzer/arcade/types.ts). A prior version
+   * read ``card.objectives``, which the client never sends — so the
+   * resolver returned an empty array on every call and Bingo cells
+   * never ticked.
    *
    * @param {string} userId
    * @param {{
    *   startedAt: string,
-   *   objectives: Array<{ id: string, predicate: string, params?: any }>,
+   *   cells: Array<{ id: string, predicate: string, params?: any }>,
    * }} card
    * @returns {Promise<{ resolved: Array<{ id: string, ticked: boolean, gameId?: string }> }>}
    */
   async resolveQuests(userId, card) {
-    if (!card || !Array.isArray(card.objectives)) {
+    if (!card || !Array.isArray(card.cells)) {
       return { resolved: [] };
     }
     const start = parseIso(card.startedAt) || new Date(0);
@@ -78,17 +84,17 @@ class ArcadeService {
       .toArray();
     /** @type {Array<{ id: string, ticked: boolean, gameId?: string }>} */
     const resolved = [];
-    for (const obj of card.objectives) {
-      const predicate = PREDICATES[obj.predicate];
+    for (const cell of card.cells) {
+      const predicate = PREDICATES[cell.predicate];
       if (!predicate) {
-        resolved.push({ id: obj.id, ticked: false });
+        resolved.push({ id: cell.id, ticked: false });
         continue;
       }
-      const hit = predicate(games, obj.params || {});
+      const hit = predicate(games, cell.params || {});
       if (hit) {
-        resolved.push({ id: obj.id, ticked: true, gameId: hit });
+        resolved.push({ id: cell.id, ticked: true, gameId: hit });
       } else {
-        resolved.push({ id: obj.id, ticked: false });
+        resolved.push({ id: cell.id, ticked: false });
       }
     }
     return { resolved };
