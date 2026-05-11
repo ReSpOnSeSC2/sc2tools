@@ -64,7 +64,31 @@ export function normaliseGame(g: ApiGame): ArcadeGame {
         ? g.macroScore
         : null;
   const oppRace = g.oppRace || g.opponent?.race || undefined;
-  return { ...g, duration, macro_score: macroScore, oppRace };
+  // The agent persists opponent strategy + pulseId nested under
+  // `opponent.{strategy,pulseId}` (see apps/agent/.../replay_pipeline.py
+  // line ~570-578). Historic SPA code reads them as top-level
+  // `opp_strategy` / `oppPulseId` — Buildle's opponent-opener question
+  // and every per-opponent lookup (timesPlayed, careerWR) need these.
+  // Without the lift, oppOpener returns null for every game and the
+  // case-file generator falls through to "couldn't build today".
+  const oppStrategy =
+    g.opp_strategy ??
+    (g.opponent && typeof g.opponent === "object"
+      ? ((g.opponent as { strategy?: string | null }).strategy ?? null)
+      : null);
+  const oppPulseId =
+    g.oppPulseId ??
+    (g.opponent && typeof g.opponent === "object"
+      ? ((g.opponent as { pulseId?: string }).pulseId ?? undefined)
+      : undefined);
+  return {
+    ...g,
+    duration,
+    macro_score: macroScore,
+    oppRace,
+    opp_strategy: oppStrategy,
+    oppPulseId,
+  };
 }
 
 interface ApiSummary {

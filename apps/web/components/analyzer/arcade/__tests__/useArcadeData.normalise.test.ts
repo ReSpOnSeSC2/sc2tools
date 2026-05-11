@@ -82,4 +82,56 @@ describe("useArcadeData — normaliseGame", () => {
     });
     expect(g.macro_score).toBeNull();
   });
+
+  test("lifts opponent.strategy onto top-level opp_strategy", () => {
+    // The agent persists strategy nested under `opponent.strategy`; arcade
+    // modes (especially Buildle's oppOpener question) read `opp_strategy`
+    // at the top level. Without this lift every Buildle game with a
+    // resolved opponent strategy fails to qualify and today's case file
+    // falls through to "couldn't build".
+    const g = normaliseGame({
+      gameId: "g1",
+      date: "2026-05-10T12:00:00Z",
+      result: "Victory",
+      opponent: {
+        displayName: "Bob",
+        race: "Zerg",
+        strategy: "Zergling Baneling all-in",
+      } as never,
+    });
+    expect(g.opp_strategy).toBe("Zergling Baneling all-in");
+  });
+
+  test("prefers top-level opp_strategy over opponent.strategy when both present", () => {
+    const g = normaliseGame({
+      gameId: "g1",
+      date: "2026-05-10T12:00:00Z",
+      result: "Victory",
+      opp_strategy: "Roach push",
+      opponent: { strategy: "Mutalisk" } as never,
+    });
+    expect(g.opp_strategy).toBe("Roach push");
+  });
+
+  test("lifts opponent.pulseId onto top-level oppPulseId", () => {
+    // Buildle's per-opponent questions (timesPlayed, careerWR) join games
+    // against the opponents collection by `oppPulseId`. Without the lift
+    // the per-opponent question types collapse with no candidate games.
+    const g = normaliseGame({
+      gameId: "g1",
+      date: "2026-05-10T12:00:00Z",
+      result: "Victory",
+      opponent: { pulseId: "1-S2-1-12345" } as never,
+    });
+    expect(g.oppPulseId).toBe("1-S2-1-12345");
+  });
+
+  test("opp_strategy is null when neither top-level nor nested field is set", () => {
+    const g = normaliseGame({
+      gameId: "g1",
+      date: "2026-05-10T12:00:00Z",
+      result: "Victory",
+    });
+    expect(g.opp_strategy).toBeNull();
+  });
 });
