@@ -90,6 +90,43 @@ describe("Stock Market: build universe + price math", () => {
     expect(names).toContain("My Special Cheese");
   });
 
+  test("BUILD_DEFINITIONS catalog seeds the universe with every analyzer-detectable strategy", () => {
+    // The bundled catalog at apps/web/lib/build-definitions.ts has 101
+    // entries spanning every race and matchup. A Protoss main with no
+    // Z/T plays and no Z/T community/custom builds must still see Z/T
+    // rows in the Stock Market — that's the whole point of folding the
+    // catalog in. We don't pin the exact set here (the catalog evolves
+    // with the analyzer rule set); instead we assert representation
+    // from each race.
+    const u = buildUniverse(baseDataset);
+    expect(u.length).toBeGreaterThan(50);
+    const hasProtoss = u.some((b) => b.race === "Protoss" && b.source === "catalog");
+    const hasTerran = u.some((b) => b.race === "Terran" && b.source === "catalog");
+    const hasZerg = u.some((b) => b.race === "Zerg" && b.source === "catalog");
+    expect(hasProtoss).toBe(true);
+    expect(hasTerran).toBe(true);
+    expect(hasZerg).toBe(true);
+  });
+
+  test("catalog source defers to own / community / custom when names collide", () => {
+    // If the user has already played "Protoss - 4 Gate Rush" (a real
+    // catalog entry), the universe row must carry their actual win
+    // rate and source=own — not get overwritten by the catalog's
+    // zero-play stub.
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      builds: [
+        { name: "Protoss - 4 Gate Rush", total: 25, wins: 18, losses: 7, winRate: 0.72 },
+      ],
+    };
+    const u = buildUniverse(dataset);
+    const row = u.find((b) => b.name === "Protoss - 4 Gate Rush");
+    expect(row).toBeDefined();
+    expect(row!.source).toBe("own");
+    expect(row!.totalPlays).toBe(25);
+    expect(row!.winRate).toBeCloseTo(0.72, 5);
+  });
+
   test("isUnclassifiedSentinel matches the Python emitter format", () => {
     expect(isUnclassifiedSentinel("Unclassified - Protoss")).toBe(true);
     expect(isUnclassifiedSentinel("Unclassified - BW Protoss")).toBe(true);
@@ -112,9 +149,13 @@ describe("Stock Market: build universe + price math", () => {
       ],
     };
     const u = buildUniverse(dataset);
-    expect(u).toHaveLength(1);
-    expect(u[0].totalPlays).toBe(0);
-    expect(u[0].source).toBe("custom");
+    // The universe now also contains BUILD_DEFINITIONS catalog entries
+    // (~101 rows) — assert the custom build is present rather than
+    // pinning total length to 1.
+    const row = u.find((b) => b.name === "Brand New Build");
+    expect(row).toBeDefined();
+    expect(row!.totalPlays).toBe(0);
+    expect(row!.source).toBe("custom");
   });
 
   test("rolling14DayWr returns null below 3 plays in window", () => {

@@ -43,7 +43,11 @@ type Q = {
 type A = { browsed: true };
 
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
-  const universe = buildUniverse(input.data);
+  // includeCatalog: false — this mode is a collection of builds the
+  // user has actually engaged with (played / community / authored).
+  // Catalog stubs with zero plays would dilute the binder with rows
+  // that always render as bronze rarity with attack=0.
+  const universe = buildUniverse(input.data, { includeCatalog: false });
   if (universe.length === 0) {
     return {
       ok: false,
