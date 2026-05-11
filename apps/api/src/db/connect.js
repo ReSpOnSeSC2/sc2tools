@@ -24,6 +24,7 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   communityBuilds: import('mongodb').Collection,
  *   communityReports: import('mongodb').Collection,
  *   userBackups: import('mongodb').Collection,
+ *   arcadeLeaderboard: import('mongodb').Collection,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -65,6 +66,7 @@ async function connect({ uri, dbName }) {
     communityBuilds: db.collection(COLLECTIONS.COMMUNITY_BUILDS),
     communityReports: db.collection(COLLECTIONS.COMMUNITY_REPORTS),
     userBackups: db.collection(COLLECTIONS.USER_BACKUPS),
+    arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -190,6 +192,16 @@ async function ensureIndexes(ctx) {
 
   await ctx.userBackups.createIndex({ userId: 1, createdAt: -1 });
   await ctx.userBackups.createIndex({ id: 1 }, { unique: true });
+
+  // Arcade Stock Market weekly P&L leaderboard. One row per
+  // (userId, weekKey) — upserted via the opt-in submit endpoint — and
+  // listed per-week sorted by pnlPct desc with updatedAt as the
+  // stable tie-breaker.
+  await ctx.arcadeLeaderboard.createIndex(
+    { userId: 1, weekKey: 1 },
+    { unique: true },
+  );
+  await ctx.arcadeLeaderboard.createIndex({ weekKey: 1, pnlPct: -1, updatedAt: 1 });
 }
 
 module.exports = { connect, ensureIndexes };

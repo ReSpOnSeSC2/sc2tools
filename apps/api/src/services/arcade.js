@@ -21,7 +21,7 @@ const { stampVersion } = require("../db/schemaVersioning");
  *      is only written when the user explicitly submits.
  */
 
-const ARCADE_LEADERBOARD = "arcade_leaderboard";
+const ARCADE_LEADERBOARD = COLLECTIONS.ARCADE_LEADERBOARD;
 
 class ArcadeService {
   /**
@@ -121,7 +121,7 @@ class ArcadeService {
       displayName: display,
       updatedAt: now,
     };
-    stampVersion(doc, "arcade_leaderboard");
+    stampVersion(doc, ARCADE_LEADERBOARD);
     await this._coll().updateOne(
       { userId, weekKey },
       { $set: doc, $setOnInsert: { createdAt: now } },
@@ -313,6 +313,3 @@ function parseIso(s) {
 }
 
 module.exports = { ArcadeService, PREDICATES, ARCADE_LEADERBOARD };
-// Suppress an unused-collection-name warning if the collection is
-// touched lazily elsewhere — re-export keeps it discoverable.
-void COLLECTIONS;
