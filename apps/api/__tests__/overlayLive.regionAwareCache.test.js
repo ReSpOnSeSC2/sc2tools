@@ -81,7 +81,7 @@ describe("OverlayLiveService — region-aware enrichment cache", () => {
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "1-S2-1-1111", // NA toon handle
-      displayName: "Maru",
+      displayNameSample: "Maru",
       gameCount: 6,
       wins: 5,
       losses: 1,
@@ -91,7 +91,7 @@ describe("OverlayLiveService — region-aware enrichment cache", () => {
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "2-S2-1-2222", // EU toon handle
-      displayName: "Maru",
+      displayNameSample: "Maru",
       gameCount: 4,
       wins: 0,
       losses: 4,
@@ -129,7 +129,7 @@ describe("OverlayLiveService — region-aware enrichment cache", () => {
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "pulseA",
-      displayName: "Maru",
+      displayNameSample: "Maru",
       gameCount: 5,
       wins: 4,
       losses: 1,
@@ -158,7 +158,7 @@ describe("OverlayLiveService — region-aware enrichment cache", () => {
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "pulse-na",
-      displayName: "Maru",
+      displayNameSample: "Maru",
       gameCount: 2,
       wins: 1,
       losses: 1,
@@ -168,7 +168,7 @@ describe("OverlayLiveService — region-aware enrichment cache", () => {
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "pulse-eu",
-      displayName: "Maru",
+      displayNameSample: "Maru",
       gameCount: 2,
       wins: 0,
       losses: 2,
@@ -192,7 +192,7 @@ describe("OverlayLiveService — region-aware enrichment cache", () => {
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "pulse-1",
-      displayName: "Maru",
+      displayNameSample: "Maru",
       gameCount: 1,
       wins: 1,
       losses: 0,
@@ -216,7 +216,7 @@ describe("OverlayLiveService — region-aware enrichment cache", () => {
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "pulse-1",
-      displayName: "Maru",
+      displayNameSample: "Maru",
       gameCount: 1,
       wins: 1,
       losses: 0,
@@ -246,7 +246,7 @@ describe("OverlayLiveService — region-aware enrichment cache", () => {
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "p",
-      displayName: "Future",
+      displayNameSample: "Future",
       gameCount: 3,
       wins: 2,
       losses: 1,
@@ -267,7 +267,7 @@ describe("OverlayLiveService — region-aware enrichment cache", () => {
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "p",
-      displayName: "Maru",
+      displayNameSample: "Maru",
       gameCount: 3,
       wins: 1,
       losses: 2,
