@@ -29,8 +29,22 @@ export function useArcadeState() {
   const { getToken, isSignedIn, isLoaded } = useAuth();
   const [state, setState] = useState<ArcadeState>(ARCADE_STATE_DEFAULT);
   const [hydrated, setHydrated] = useState(false);
+  // Ref mirror of `hydrated` for the synchronous `update` path —
+  // setState batching means reading `hydrated` from the closure
+  // would still see `false` for the first batch of mutations after
+  // hydrate completes.
+  const hydratedRef = useRef(false);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingState = useRef<ArcadeState | null>(null);
+  // Mutations that consumers issue BEFORE hydrate completes are
+  // queued, not applied. The hydrate effect drains the queue on top
+  // of the freshly-fetched remote state. Without this, a mount-time
+  // seed effect (e.g. buildle's "init today's case-file entry",
+  // bingo's "init this week's card") races the GET — the debounced
+  // flush then PUTs the pre-hydrate state (default merged with one
+  // sub-key) back to the server, wiping every other field of the
+  // user's real saved progress.
+  const queuedMutators = useRef<Array<(s: ArcadeState) => ArcadeState>>([]);
 
   const flushNow = useCallback(async (next: ArcadeState) => {
     if (!isSignedIn) return;
@@ -47,27 +61,56 @@ export function useArcadeState() {
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) {
+      hydratedRef.current = true;
       setHydrated(true);
       return;
     }
     let cancelled = false;
     (async () => {
+      let next: ArcadeState = ARCADE_STATE_DEFAULT;
       try {
         const remote = await apiCall<Partial<ArcadeState>>(getToken, PREF_PATH);
         if (cancelled) return;
         if (remote && typeof remote === "object" && Object.keys(remote).length > 0) {
-          setState({ ...ARCADE_STATE_DEFAULT, ...remote } as ArcadeState);
+          next = { ...ARCADE_STATE_DEFAULT, ...remote } as ArcadeState;
         }
       } catch {
-        // Treat any read error as "no state yet" — user keeps default.
-      } finally {
-        if (!cancelled) setHydrated(true);
+        // Treat any read error as "no state yet" — user keeps default,
+        // but we still apply any queued mutations so the session isn't
+        // silently dropped.
+      }
+      if (cancelled) return;
+      // Drain the pre-hydrate mutation queue. Mutators must be
+      // idempotent against already-populated targets (buildle/bingo
+      // seeds check the existing entry before overwriting) so a
+      // queued seed doesn't clobber the hydrated copy.
+      const queue = queuedMutators.current;
+      queuedMutators.current = [];
+      let final = next;
+      for (const m of queue) final = m(final);
+      final = {
+        ...final,
+        xp: { total: final.xp.total, level: levelForXp(final.xp.total) },
+      };
+      setState(final);
+      hydratedRef.current = true;
+      setHydrated(true);
+      // If any consumer queued a real mutation, persist the merged
+      // post-hydrate state. We piggyback on the debounce so a
+      // rapid-fire pre-hydrate sequence collapses into one PUT.
+      if (queue.length > 0) {
+        pendingState.current = final;
+        if (flushTimer.current) clearTimeout(flushTimer.current);
+        flushTimer.current = setTimeout(() => {
+          flushTimer.current = null;
+          void flushNow(final);
+        }, FLUSH_DEBOUNCE_MS);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [getToken, isLoaded, isSignedIn]);
+  }, [getToken, isLoaded, isSignedIn, flushNow]);
 
   useEffect(() => {
     return () => {
@@ -80,6 +123,12 @@ export function useArcadeState() {
 
   const update = useCallback(
     (mut: (prev: ArcadeState) => ArcadeState) => {
+      if (!hydratedRef.current) {
+        // Defer until hydrate completes. The hydrate effect applies
+        // queued mutators on top of the remote state, then flushes.
+        queuedMutators.current.push(mut);
+        return;
+      }
       setState((prev) => {
         const next = mut(prev);
         // Recompute level off raw xp on every write so it never drifts.

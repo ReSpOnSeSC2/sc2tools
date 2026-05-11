@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall } from "@/lib/clientApi";
 import { pct1, wrColor } from "@/lib/format";
@@ -107,7 +107,7 @@ function Render({
 }: {
   ctx: Parameters<Mode<Q, A>["render"]>[0];
 }) {
-  const { state, update } = useArcadeState();
+  const { state, update, hydrated } = useArcadeState();
   const { getToken } = useAuth();
   // Render every quote (tradeable + untradeable) so the user sees the
   // full universe across all matchups. Untradeable rows are visually
@@ -138,6 +138,21 @@ function Render({
   });
   const [optIn, setOptIn] = useState(state.leaderboardOptIn);
   const [name, setName] = useState(state.leaderboardDisplayName);
+
+  // useArcadeState hydrates asynchronously — the useState initializers
+  // above capture pre-hydrate defaults (optIn=false, name=""). Once
+  // the real saved state lands, mirror it into the draft form fields
+  // so a returning user sees their previous opt-in choice and display
+  // name without having to re-toggle. Guarded by `hydrated` so we
+  // sync exactly once on transition; subsequent user edits are not
+  // overwritten on re-render.
+  const syncedFromHydrateRef = useRef(false);
+  useEffect(() => {
+    if (!hydrated || syncedFromHydrateRef.current) return;
+    syncedFromHydrateRef.current = true;
+    setOptIn(state.leaderboardOptIn);
+    setName(state.leaderboardDisplayName);
+  }, [hydrated, state.leaderboardOptIn, state.leaderboardDisplayName]);
 
   const totalAlloc = Object.values(picks).reduce((s, v) => s + v, 0);
   const slotsUsed = Object.keys(picks).filter((k) => picks[k] > 0).length;

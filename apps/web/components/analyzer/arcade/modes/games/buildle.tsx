@@ -674,22 +674,39 @@ function Render({
 
   // First mount of the day: seed the day's record so reloads see the
   // same state. We don't set pickedIndex until the user picks.
+  //
+  // Idempotency note: this effect can fire BEFORE useArcadeState has
+  // hydrated from the server (state.buildleByDay is empty by default),
+  // so the mutator queue inside useArcadeState may replay it on top of
+  // hydrated state. Inside the mutator we re-check the *actual* prev
+  // state and bail when the slot already matches today's question —
+  // otherwise we'd clobber a saved pickedIndex with -1.
   useEffect(() => {
     if (!isFreshDay) return;
-    update((prev) => ({
-      ...prev,
-      buildleByDay: {
-        ...prev.buildleByDay,
-        [dayKey]: {
-          gameId: ctx.question.gameId,
-          questionType: ctx.question.questionType,
-          options: ctx.question.options,
-          correctIndex: ctx.question.correctIndex,
-          pickedIndex: -1,
-          correct: false,
+    update((prev) => {
+      const existing = prev.buildleByDay[dayKey];
+      if (
+        existing &&
+        existing.gameId === ctx.question.gameId &&
+        existing.questionType === ctx.question.questionType
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        buildleByDay: {
+          ...prev.buildleByDay,
+          [dayKey]: {
+            gameId: ctx.question.gameId,
+            questionType: ctx.question.questionType,
+            options: ctx.question.options,
+            correctIndex: ctx.question.correctIndex,
+            pickedIndex: -1,
+            correct: false,
+          },
         },
-      },
-    }));
+      };
+    });
   }, [
     isFreshDay,
     dayKey,
