@@ -161,7 +161,10 @@ describe("useVoiceReadout (hook)", () => {
     expect(cap.speak).toHaveBeenCalledTimes(1);
     const text = cap.utterances[0]?.text || "";
     expect(text).toContain("Facing Alice, Zerg.");
-    expect(text).toContain("You're 2 and 1 against them.");
+    // Post-game ``buildScoutingLine`` now mirrors the live builder —
+    // H2H carries the win-% clause and the line ends with "Good luck."
+    expect(text).toContain("You're 2 and 1 against them, 67 percent win rate.");
+    expect(text.trim().endsWith("Good luck.")).toBe(true);
   });
 
   it("does not re-speak the same opponent on duplicate payload", () => {

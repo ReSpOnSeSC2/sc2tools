@@ -37,11 +37,13 @@ describe("buildScoutingLine", () => {
     );
   });
 
-  it("includes head-to-head when wins/losses populated", () => {
+  it("includes head-to-head with win-% when wins/losses populated", () => {
+    // Mirrors the live builder's phrasing exactly so a Settings → Overlay
+    // → Test click plays the same sentence as a real match-start readout.
     const out = buildScoutingLine(
       base({ headToHead: { wins: 3, losses: 1 } }),
     );
-    expect(out).toContain("You're 3 and 1 against them.");
+    expect(out).toContain("You're 3 and 1 against them, 75 percent win rate.");
   });
 
   it("says 'first meeting' when H2H exists but is empty", () => {
@@ -67,58 +69,56 @@ describe("buildScoutingLine", () => {
     expect(out).not.toContain("undefined");
   });
 
-  it("includes bestAnswer with win-rate when set", () => {
+  it("speaks the opponent's MMR when oppMmr is set", () => {
+    const out = buildScoutingLine(base({ oppMmr: 4250 }));
+    expect(out).toContain("4250 MMR.");
+  });
+
+  it("omits the MMR clause cleanly when oppMmr is 0 or missing", () => {
+    // Never say "0 MMR" or "unknown MMR" — drop the slot silently.
+    expect(buildScoutingLine(base({ oppMmr: 0 }))).not.toMatch(/MMR/);
+    expect(buildScoutingLine(base())).not.toMatch(/MMR/);
+  });
+
+  it("always ends with 'Good luck.'", () => {
+    expect(buildScoutingLine(base()).trim().endsWith("Good luck.")).toBe(true);
+    expect(
+      buildScoutingLine(base({ headToHead: { wins: 5, losses: 2 } }))
+        .trim()
+        .endsWith("Good luck."),
+    ).toBe(true);
+  });
+
+  it("produces the full spec sentence end-to-end", () => {
+    // Same shape as the live readout: name, race, MMR, H2H with win-%,
+    // and "Good luck." The Settings → Overlay → Test path uses this
+    // builder, so the test fire stays in lockstep with what streamers
+    // actually hear in OBS at match start.
     const out = buildScoutingLine(
-      base({ bestAnswer: { build: "3 Stargate Phoenix", winRate: 0.62, total: 8 } }),
+      base({
+        oppName: "Maru",
+        oppRace: "Terran",
+        oppMmr: 6720,
+        headToHead: { wins: 3, losses: 1 },
+      }),
     );
-    expect(out).toContain("Best answer is 3 Stargate Phoenix");
-    expect(out).toContain("62 percent win rate");
+    expect(out).toContain("Facing Maru, Terran.");
+    expect(out).toContain("6720 MMR.");
+    expect(out).toContain("You're 3 and 1 against them, 75 percent win rate.");
+    expect(out.trim().endsWith("Good luck.")).toBe(true);
   });
 
-  it("drops the win-rate clause when zero", () => {
+  it("no longer speaks the best-answer or cheese clauses", () => {
+    // Those clauses stay on the visual scouting card. Keeping the
+    // voice line concise matches the streamer-stated spec and the
+    // live-envelope readout.
     const out = buildScoutingLine(
-      base({ bestAnswer: { build: "Stargate", winRate: 0, total: 0 } }),
+      base({
+        bestAnswer: { build: "3 Stargate Phoenix", winRate: 0.62, total: 8 },
+        cheeseProbability: 0.85,
+      }),
     );
-    expect(out).toContain("Best answer is Stargate.");
-    expect(out).not.toContain("0 percent");
-  });
-
-  it("truncates long build strings on a word boundary", () => {
-    const longBuild = "Three base macro into stargate phoenix into archon drop midgame";
-    const out = buildScoutingLine(
-      base({ bestAnswer: { build: longBuild, winRate: 0.5, total: 4 } }),
-    );
-    // Truncation kicks in around 60 chars; the original string is longer
-    // than that so it must NOT be in the output verbatim.
-    expect(out).not.toContain(longBuild);
-    expect(out).toContain("Best answer is");
-    // No mid-word truncation: every word in the spoken build should be
-    // fully present in the original.
-    const clause = out.split("Best answer is ")[1] ?? "";
-    const spoken = clause.split(",")[0]?.replace(/\.$/, "") || "";
-    for (const word of spoken.split(/\s+/).filter(Boolean)) {
-      expect(longBuild).toContain(word);
-    }
-  });
-
-  it("phrases cheese as 'high cheese risk' when ≥0.7", () => {
-    const out = buildScoutingLine(base({ cheeseProbability: 0.85 }));
-    expect(out.toLowerCase()).toContain("high cheese risk");
-  });
-
-  it("phrases cheese as 'possible cheese' when ≥0.4 and <0.7", () => {
-    const out = buildScoutingLine(base({ cheeseProbability: 0.5 }));
-    expect(out.toLowerCase()).toContain("possible cheese");
-  });
-
-  it("omits cheese phrasing under threshold", () => {
-    const out = buildScoutingLine(base({ cheeseProbability: 0.1 }));
-    expect(out.toLowerCase()).not.toContain("cheese");
-  });
-
-  it("omits cheese phrasing when cheeseProbability is null/NaN", () => {
-    // @ts-expect-error — exercising malformed payload
-    const out = buildScoutingLine(base({ cheeseProbability: null }));
+    expect(out.toLowerCase()).not.toContain("best answer");
     expect(out.toLowerCase()).not.toContain("cheese");
   });
 });
