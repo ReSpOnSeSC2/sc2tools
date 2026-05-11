@@ -10,8 +10,35 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Changed
+
+- **Arcade · Bingo: Ladder Edition**: card overhaul. The per-map
+  "Win on …" cells are gone; the candidate pool is now built from
+  ~50 deduplicated objectives covering races, race + time combos
+  (e.g. "Win as Zerg in under 8 min", "Win vs Terran in 20+ min"),
+  win streaks (3 / 5 in a row), volume goals (play 10, win 10),
+  macro thresholds (70+ / 80+ / 90+, plus "win with macro under 40"),
+  APM thresholds, MMR matchups (close-mirror, +200 upset), build-name
+  keyword matches against `myBuild` (Cannon Rush, Proxy, All-in, DT
+  Rush, Reaper, …), opponent-strategy defends (cheese / proxy /
+  all-in / rush), unit-built objectives (Mothership, Battlecruiser,
+  Brood Lord, 20+ Marines, etc.) and "beat-the-X" mirrors. Race-
+  specific candidates are gated on races the user has actually
+  played in the last 30 days so cells stay winnable. Cards persisted
+  under the previous schema auto-regenerate on load instead of
+  waiting for the Monday rollover.
+
 ### Fixed
 
+- **Arcade · Bingo: Ladder Edition**: cells were not ticking for
+  satisfied objectives in production. Root cause was a pair of
+  field-name mismatches in the resolver: predicates read
+  `g.duration` / `g.macro_score`, but the raw Mongo rows use the
+  canonical `durationSec` / `macroScore` (only the client-side
+  `normaliseGame` lifts them to the legacy aliases). The resolver
+  now reads both shapes, and `macro_above` is inclusive at the
+  threshold (`>=`, not `>`), so a macro score of exactly 70 ticks
+  the "Hit macro score 70+" cell.
 - **Analyzer dashboard**: "Games today" no longer flips to 0 once UTC
   rolls past midnight in zones west of UTC. The card scopes its
   `/v1/timeseries` request to today's local-tz window via `since=`, so
