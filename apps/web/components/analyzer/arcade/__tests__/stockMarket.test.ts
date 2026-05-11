@@ -21,18 +21,20 @@ const baseDataset: ArcadeDataset = {
 };
 
 describe("Stock Market: build universe + price math", () => {
-  test("universe is the union of own + eligible community + all authored custom builds", () => {
+  test("universe is the union of own + ALL community + all authored custom builds", () => {
     const dataset: ArcadeDataset = {
       ...baseDataset,
       builds: [{ name: "Reaper FE", total: 12, wins: 8, losses: 4, winRate: 0.67 }],
       communityBuilds: [
         { slug: "reaper-fe", title: "Reaper FE", race: "T", votes: 12 },
-        { slug: "stargate-opener", title: "Stargate Opener", race: "P", votes: 9 }, // never played
+        // Cross-race community build the user has never played — used
+        // to be filtered out, now surfaces (untradeable) so Stock
+        // Market spans every matchup, not just the user's own race.
+        { slug: "stargate-opener", title: "Stargate Opener", race: "P", votes: 9 },
+        { slug: "zergling-rush", title: "Zergling Rush", race: "Z", votes: 4 },
       ],
       customBuilds: [
         { slug: "my-special", name: "Reaper FE", race: "T", vsRace: "Z" },
-        // Authored custom build the user has never played — must still
-        // enter the universe (untradeable until 3 plays accrue).
         { slug: "wip-build", name: "Triple Stargate Experiment", race: "P", vsRace: "X" },
       ],
     };
@@ -40,11 +42,15 @@ describe("Stock Market: build universe + price math", () => {
     const names = u.map((b) => b.name).sort();
     expect(names).toContain("Reaper FE");
     expect(names).toContain("Triple Stargate Experiment");
-    // "Stargate Opener" is excluded because the user never played it AND
-    // never authored it.
-    expect(names).not.toContain("Stargate Opener");
-    // No name duplication across own/community/custom.
+    expect(names).toContain("Stargate Opener");
+    expect(names).toContain("Zergling Rush");
     expect(new Set(names).size).toBe(names.length);
+    // Cross-race community builds enter as `community` source with
+    // zero plays — the UI surfaces them as "no price yet" and disables
+    // the allocation input until the user actually plays them.
+    const stargate = u.find((b) => b.name === "Stargate Opener")!;
+    expect(stargate.source).toBe("community");
+    expect(stargate.totalPlays).toBe(0);
   });
 
   test("brand-new authored custom build enters universe with totalPlays=0", () => {

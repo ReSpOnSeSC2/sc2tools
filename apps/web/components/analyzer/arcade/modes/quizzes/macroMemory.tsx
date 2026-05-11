@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { fmtDate } from "@/lib/format";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
@@ -121,12 +120,6 @@ function Render({
           </li>
         ))}
       </ul>
-      <Link
-        href={`/?game=${encodeURIComponent(ctx.question.candidates[ctx.question.correctIndex].gameId)}`}
-        className="inline-flex min-h-[36px] items-center text-caption text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        Open winning game →
-      </Link>
     </div>
   ) : null;
 

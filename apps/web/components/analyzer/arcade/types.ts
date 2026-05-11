@@ -126,7 +126,19 @@ export interface ArcadeDataset {
   builds: ArcadeBuild[];
   customBuilds: ArcadeCustomBuild[];
   communityBuilds: ArcadeCommunityBuild[];
-  matchups: Array<{ matchup: string; wins: number; losses: number; total: number; winRate: number }>;
+  // /v1/matchups rows. The API returns ``{ name: "vs P" | "vs T" | "vs Z"
+  // | "vs Unknown" }`` (see apps/api/src/services/aggregations.js
+  // ``matchupFacet``) — ``oppRace`` is the parsed race letter that
+  // useArcadeData lifts off ``name`` so quiz modes don't have to know
+  // about the wire format.
+  matchups: Array<{
+    name: string;
+    oppRace: "P" | "T" | "Z" | null;
+    wins: number;
+    losses: number;
+    total: number;
+    winRate: number;
+  }>;
   maps: Array<{ map: string; wins: number; losses: number; total: number; winRate: number }>;
   summary: ArcadeSummary | null;
   mapPool: string[];

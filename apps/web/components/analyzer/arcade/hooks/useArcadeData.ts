@@ -120,8 +120,12 @@ export function useArcadeData(): {
   const gamesA = useApi<ApiGamesPage>("/v1/games?limit=20000");
   // /v1/builds, /v1/matchups, /v1/maps return bare arrays.
   const builds = useApi<ArcadeBuild[]>("/v1/builds");
+  // /v1/matchups returns rows of shape `{ name: "vs P", wins, losses,
+  // total }` (see apps/api/src/services/aggregations.js matchupFacet).
+  // The SPA's `ArcadeDataset.matchups` type uses `name` + `oppRace`;
+  // we normalise the wire rows on read.
   const matchups = useApi<
-    Array<{ matchup: string; wins: number; losses: number; total: number; winRate: number }>
+    Array<{ name: string; wins: number; losses: number; total: number; winRate?: number }>
   >("/v1/matchups");
   const maps = useApi<
     Array<{ map: string; wins: number; losses: number; total: number; winRate: number }>
@@ -216,7 +220,34 @@ export function useArcadeData(): {
       builds: buildsList,
       customBuilds: customList,
       communityBuilds: communityList,
-      matchups: Array.isArray(matchups.data) ? matchups.data : [],
+      matchups: Array.isArray(matchups.data)
+        ? matchups.data.map((m) => {
+            // API names are "vs P" / "vs T" / "vs Z" / "vs Unknown".
+            // Pull the race letter off position 3 ("vs <X>") and only
+            // tag P/T/Z; everything else is null (e.g. "vs Unknown",
+            // legacy "Random" payloads).
+            const letter = m.name?.startsWith("vs ")
+              ? m.name.charAt(3).toUpperCase()
+              : "";
+            const oppRace =
+              letter === "P" || letter === "T" || letter === "Z"
+                ? (letter as "P" | "T" | "Z")
+                : null;
+            return {
+              name: m.name,
+              oppRace,
+              wins: m.wins ?? 0,
+              losses: m.losses ?? 0,
+              total: m.total ?? 0,
+              winRate:
+                typeof m.winRate === "number"
+                  ? m.winRate
+                  : m.total
+                    ? (m.wins ?? 0) / m.total
+                    : 0,
+            };
+          })
+        : [],
       maps: Array.isArray(maps.data) ? maps.data : [],
       summary: summaryOut,
       mapPool: Array.isArray(seasons.data?.mapPool) ? seasons.data!.mapPool : [],

@@ -1,10 +1,14 @@
 // Pure helpers shared by Stock Market + Builds-as-Cards.
 //
 // Build universe = the user's own played builds (from /v1/builds) PLUS
-// any community/custom build the user has actually played at least once
-// (cross-referenced by name). This is the single source of truth so
-// Stock Market price math and the Higher-or-Lower stack agree on what
-// counts as "a build the user owns."
+// every community build returned by /v1/community/builds PLUS every
+// custom build the user has authored. We deliberately do NOT filter
+// community builds down to "ones the user has already played" — for a
+// Protoss main, that filter collapsed the universe to Protoss-only,
+// even though Stock Market is meant to be a speculation surface
+// across every matchup. Untraded builds (no recent plays) still
+// surface in the universe; the Stock Market UI labels them "no price
+// yet" and disables their allocation input.
 
 import type { ArcadeBuild, ArcadeDataset } from "./types";
 
@@ -36,14 +40,13 @@ export function buildUniverse(data: ArcadeDataset): UnifiedBuild[] {
       source: "own",
     });
   }
-  // Community additions: only include when the user has played a build
-  // with a matching title at least once (community builds are external
-  // references — surfacing untouched ones in the user's portfolio
-  // universe is noise).
-  const playedNames = new Set(data.builds.map((b) => b.name.toLowerCase()));
+  // Community additions: every community build enters the universe so
+  // the Stock Market shows builds across all matchups, not just the
+  // ones the user has already played. The Stock Market UI handles the
+  // "no recent plays" case by disabling allocation for those rows
+  // (rolling14DayWr returns null when there are fewer than 3 plays in
+  // the 14-day window).
   for (const c of data.communityBuilds) {
-    const key = c.title.toLowerCase();
-    if (!playedNames.has(key)) continue;
     const own = byName.get(c.title);
     if (own) continue; // already in universe via /v1/builds
     byName.set(c.title, {
