@@ -98,11 +98,15 @@ function Render({
     [ctx.question.cards, state.unlockedCards],
   );
 
-  // Auto-unlock cards as soon as the user opens the binder. The unlock
-  // is single-pass; cards already in state are no-ops.
+  // Auto-unlock cards the user has actually played. Catalog stubs and
+  // community/custom builds that the user has never run land in the
+  // binder with plays=0 — those stay locked so the completion counter
+  // ("X / total") reflects real engagement instead of jumping to 100%
+  // the moment the binder opens. The unlock is single-pass; cards
+  // already in state are no-ops.
   useEffect(() => {
     for (const c of ctx.question.cards) {
-      unlockCard(c.slug);
+      if (c.plays > 0) unlockCard(c.slug);
     }
   }, [ctx.question.cards, unlockCard]);
 
@@ -121,24 +125,44 @@ function Render({
       isDaily={ctx.isDaily}
       body={
         <div className="space-y-3">
+          <p className="text-caption text-text-muted">
+            ATK = win rate × 100. DEF = mean win length (minutes,
+            clamped 1–60). Rarity tracks total plays: bronze 1–4,
+            silver 5–14, gold 15–49, mythic 50+. Foil at ≥10 wins.
+            Builds you haven&apos;t played yet appear locked.
+          </p>
           <CardBinder
             cards={ctx.question.cards}
-            renderCardFace={(c) => (
-              <span className="flex flex-col items-center gap-1.5">
-                <Icon
-                  name={raceIconName(coerceRace(c.race))}
-                  kind="race"
-                  size={28}
-                  decorative
-                />
-                <span className="line-clamp-2 text-center text-caption font-medium text-text">
-                  {c.name}
+            renderCardFace={(c) => {
+              const played = c.plays > 0;
+              return (
+                <span
+                  className={[
+                    "flex flex-col items-center gap-1.5",
+                    played ? "" : "opacity-40 grayscale",
+                  ].join(" ")}
+                >
+                  <Icon
+                    name={raceIconName(coerceRace(c.race))}
+                    kind="race"
+                    size={28}
+                    decorative
+                  />
+                  <span className="line-clamp-2 text-center text-caption font-medium text-text">
+                    {c.name}
+                  </span>
+                  {played ? (
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-text-dim">
+                      ATK {c.attack} · DEF {c.defense}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-text-dim">
+                      Not played yet
+                    </span>
+                  )}
                 </span>
-                <span className="font-mono text-[10px] uppercase tracking-wider text-text-dim">
-                  ATK {c.attack} · DEF {c.defense}
-                </span>
-              </span>
-            )}
+              );
+            }}
           />
         </div>
       }
