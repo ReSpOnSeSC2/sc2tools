@@ -218,6 +218,65 @@ class CommunityService {
   }
 
   /**
+   * Balanced "top-N per matchup" listing used by the Arcade Stock
+   * Market to build a universe of builds that spans every matchup.
+   * The default `listPublic` (sort=top, global) skews to whichever
+   * race dominates vote counts — for a Protoss-heavy community that
+   * collapses the universe to PvX, hiding ZvX/TvX entirely. This
+   * method groups by matchup and keeps the top `perMatchup` builds in
+   * each bucket so every matchup gets representation.
+   *
+   * One Mongo aggregation, served by the
+   * `{matchup, removed, votes: -1}` index. The empty-string matchup
+   * (legacy unclassified rows) gets its own bucket so those builds
+   * still surface.
+   *
+   * @param {{ perMatchup?: number, totalCap?: number }} [opts]
+   * @returns {Promise<{ items: object[] }>}
+   */
+  async listArcadeUniverse(opts = {}) {
+    const perMatchup = Math.min(Math.max(1, Number(opts.perMatchup) || 12), 50);
+    const totalCap = Math.min(Math.max(1, Number(opts.totalCap) || 200), 500);
+    const items = await this.db.communityBuilds
+      .aggregate([
+        { $match: { removed: false } },
+        { $sort: { votes: -1, publishedAt: -1 } },
+        {
+          $group: {
+            _id: { $ifNull: ["$matchup", ""] },
+            items: {
+              $push: {
+                slug: "$slug",
+                ownerUserId: "$ownerUserId",
+                title: "$title",
+                description: "$description",
+                matchup: "$matchup",
+                authorName: "$authorName",
+                votes: "$votes",
+                publishedAt: "$publishedAt",
+                updatedAt: "$updatedAt",
+                build: "$build",
+              },
+            },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            matchup: "$_id",
+            items: { $slice: ["$items", perMatchup] },
+          },
+        },
+        { $unwind: "$items" },
+        { $replaceRoot: { newRoot: "$items" } },
+        { $sort: { matchup: 1, votes: -1, publishedAt: -1 } },
+        { $limit: totalCap },
+      ])
+      .toArray();
+    return { items };
+  }
+
+  /**
    * @param {Record<string, any>} filter
    * @param {{limit: number, offset: number}} page
    */

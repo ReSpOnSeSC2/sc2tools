@@ -9,6 +9,8 @@ const express = require("express");
  *   GET /community/builds              — list published builds
  *                                        (matchup, sort, q, limit, offset)
  *   GET /community/builds/:slug        — detail
+ *   GET /community/arcade-universe     — balanced top-N-per-matchup list
+ *                                        used by the Arcade Stock Market
  *   GET /community/authors/:userId     — public author profile
  *   GET /community/opponents/:pulseId  — k-anonymous aggregate
  *
@@ -54,6 +56,24 @@ function buildCommunityRouter(deps) {
         offset,
         sort,
         search: search || undefined,
+      });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/community/arcade-universe", async (req, res, next) => {
+    try {
+      const perMatchup = req.query.perMatchup
+        ? Number.parseInt(String(req.query.perMatchup), 10)
+        : undefined;
+      const totalCap = req.query.totalCap
+        ? Number.parseInt(String(req.query.totalCap), 10)
+        : undefined;
+      const result = await deps.community.listArcadeUniverse({
+        perMatchup,
+        totalCap,
       });
       res.json(result);
     } catch (err) {
