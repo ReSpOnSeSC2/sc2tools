@@ -1,32 +1,26 @@
 "use client";
 
-import { useMemo } from "react";
-import { Card } from "@/components/ui/Card";
-import { useDailySeed } from "../hooks/useDailySeed";
+import { Card, EmptyState } from "@/components/ui/Card";
+import { useArcadeData } from "../hooks/useArcadeData";
 import { useArcadeState } from "../hooks/useArcadeState";
-import { ALL_MODES, GAMES, QUIZZES } from "../modes";
+import { useEligibleDailyPicks } from "../hooks/useEligibleDailyPicks";
 import { ModeRunner } from "../ModeRunner";
 import { StreakHUD } from "../hud/StreakHUD";
 import { XpBar } from "../hud/XpBar";
 import { MascotCorner } from "../hud/MascotCorner";
+import { DailyEmptyState } from "./DailyEmptyState";
 
 /**
  * Today — the daily landing surface. Picks one quiz + one game from
- * the 16-mode catalog deterministically by daily seed, so every device
- * sees the same daily pair for the signed-in user.
+ * the 16-mode catalog deterministically by daily seed, restricted to
+ * modes whose generate() proves it can build a round from the user's
+ * real data today. Falls back to a unified warm-up card per kind
+ * when no mode is eligible — never leaks a per-mode reason up here.
  */
 export function TodaySurface() {
-  const seed = useDailySeed();
+  const { data: dataset } = useArcadeData();
+  const picks = useEligibleDailyPicks(dataset);
   const { state } = useArcadeState();
-  const dailyQuiz = useMemo(
-    () => QUIZZES[Math.floor(seed.rng() * QUIZZES.length)] ?? ALL_MODES[0],
-    [seed.rng],
-  );
-  // Re-roll the rng once so the second pick is independent.
-  const dailyGame = useMemo(() => {
-    const r = seed.rng();
-    return GAMES[Math.floor(r * GAMES.length)] ?? GAMES[0];
-  }, [seed.rng]);
 
   return (
     <div className="relative space-y-5">
@@ -44,14 +38,30 @@ export function TodaySurface() {
         <h2 className="text-caption font-semibold uppercase tracking-wider text-text-muted">
           Daily Drop · Quiz
         </h2>
-        <ModeRunner mode={dailyQuiz} isDaily />
+        {picks.quiz ? (
+          <ModeRunner mode={picks.quiz} isDaily forceMode />
+        ) : picks.probing ? (
+          <Card>
+            <EmptyState title="Building round…" sub="Picking today's quiz from your data." />
+          </Card>
+        ) : (
+          <DailyEmptyState kind="quiz" />
+        )}
       </section>
 
       <section aria-label="Daily Run" className="space-y-2">
         <h2 className="text-caption font-semibold uppercase tracking-wider text-text-muted">
           Daily Run · Game
         </h2>
-        <ModeRunner mode={dailyGame} isDaily />
+        {picks.game ? (
+          <ModeRunner mode={picks.game} isDaily forceMode />
+        ) : picks.probing ? (
+          <Card>
+            <EmptyState title="Building round…" sub="Picking today's game from your data." />
+          </Card>
+        ) : (
+          <DailyEmptyState kind="game" />
+        )}
       </section>
 
       <MascotCorner skin={state.cosmetics.mascotSkin} played={!!state.streak.lastPlayedDay} />

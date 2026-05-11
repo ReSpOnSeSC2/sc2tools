@@ -17,6 +17,7 @@ import type { AnyMode } from "./modes";
 import { mulberry32 } from "./ArcadeEngine";
 import { shareCard } from "./ShareCard";
 import { buildleEmoji } from "./modes/games/buildle";
+import { DailyEmptyState } from "./surfaces/DailyEmptyState";
 
 /**
  * ModeRunner — one shared host that:
@@ -34,11 +35,21 @@ export function ModeRunner({
   mode,
   isDaily,
   onPlayedFresh,
+  forceMode = false,
 }: {
   mode: AnyMode;
   isDaily: boolean;
   /** Called the first time the user answers in this mount; surfaces use this to advance Today's Daily Drop. */
   onPlayedFresh?: () => void;
+  /**
+   * When true (paired with `isDaily`), the upstream picker has already
+   * verified that `mode.generate(input)` will return ok:true today.
+   * If it nevertheless returns ok:false we render the unified
+   * DailyEmptyState instead of leaking the per-mode reason. Other
+   * call sites (QuickPlay, Collection) leave this false to preserve
+   * the existing per-mode "Not enough data yet" UI.
+   */
+  forceMode?: boolean;
 }) {
   const seed = useDailySeed();
   const { data, loading, error } = useArcadeData();
@@ -189,6 +200,16 @@ export function ModeRunner({
     );
   }
   if (!question.ok) {
+    if (forceMode && isDaily) {
+      // Safety net — the upstream daily picker probed every mode with this
+      // same dataset + seed, so a non-ok here means the gate and the probe
+      // disagree (e.g. a race condition between probe + render or a mode
+      // bug). Show the unified warm-up card instead of leaking the
+      // per-mode reason as the day's headline.
+      // eslint-disable-next-line no-console
+      console.warn("[arcade] eligibility/generate mismatch", mode.id);
+      return <DailyEmptyState kind={mode.kind === "quiz" ? "quiz" : "game"} />;
+    }
     return (
       <Card>
         <EmptyState title="Not enough data yet" sub={question.reason} />
