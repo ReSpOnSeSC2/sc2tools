@@ -326,6 +326,6 @@ export const ARCADE_STATE_DEFAULT: ArcadeState = Object.freeze({
   bingo: null,
   buildleByDay: {},
   cosmetics: { mascotSkin: "default", cardBackTheme: "default" },
-  leaderboardOptIn: false,
+  leaderboardOptIn: true,
   leaderboardDisplayName: "",
 }) as ArcadeState;
