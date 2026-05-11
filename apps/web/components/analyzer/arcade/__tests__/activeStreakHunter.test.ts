@@ -91,9 +91,32 @@ describe("Active Streak Hunter generate", () => {
 });
 
 describe("Active Streak Hunter score", () => {
-  test("correct only when index matches", () => {
-    const q = { candidates: [], correctIndex: 2 } as Parameters<typeof activeStreakHunter.score>[0];
-    expect(activeStreakHunter.score(q, 2).outcome).toBe("correct");
+  const cand = (pulseId: string, activeStreak: number) => ({
+    pulseId,
+    name: pulseId,
+    activeStreak,
+    games: Math.max(activeStreak, 1),
+  });
+
+  test("correct when the picked candidate has the max streak", () => {
+    const q = {
+      candidates: [cand("a", 1), cand("b", 5), cand("c", 2), cand("d", 0)],
+      correctIndex: 1,
+    } as Parameters<typeof activeStreakHunter.score>[0];
+    expect(activeStreakHunter.score(q, 1).outcome).toBe("correct");
     expect(activeStreakHunter.score(q, 0).outcome).toBe("wrong");
+  });
+
+  test("ties are all correct — picking any leader counts", () => {
+    // Three rivals on a 3-game active streak, one on 1. The user
+    // can't disambiguate, so any of the three tied indexes scores.
+    const q = {
+      candidates: [cand("a", 3), cand("b", 3), cand("c", 3), cand("d", 1)],
+      correctIndex: 0,
+    } as Parameters<typeof activeStreakHunter.score>[0];
+    expect(activeStreakHunter.score(q, 0).outcome).toBe("correct");
+    expect(activeStreakHunter.score(q, 1).outcome).toBe("correct");
+    expect(activeStreakHunter.score(q, 2).outcome).toBe("correct");
+    expect(activeStreakHunter.score(q, 3).outcome).toBe("wrong");
   });
 });

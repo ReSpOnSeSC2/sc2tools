@@ -105,8 +105,23 @@ export function groupByOpponent(games: ArcadeGame[]): Map<string, ArcadeGame[]> 
   return out;
 }
 
+/**
+ * Multiple opponents can be tied for the longest active win streak —
+ * e.g. three rivals each riding a fresh 1-game win. The question text
+ * ("which opponent is on their longest active streak") is satisfied by
+ * any of them, so accept any candidate whose streak matches the max
+ * shown to the user. Without this, the user could pick a factually-
+ * correct tied rival and be told they were wrong.
+ */
+function maxStreak(q: Q): number {
+  let m = -1;
+  for (const c of q.candidates) if (c.activeStreak > m) m = c.activeStreak;
+  return m;
+}
+
 function score(q: Q, a: A): ScoreResult {
-  const correct = a === q.correctIndex;
+  const picked = q.candidates[a];
+  const correct = !!picked && picked.activeStreak === maxStreak(q);
   return {
     raw: correct ? 1 : 0,
     xp: correct ? 12 : 0,
@@ -140,15 +155,27 @@ function Render({
     ctx.onAnswer(i);
   };
 
+  const maxAmongShown = ctx.question.candidates.reduce(
+    (m, c) => (c.activeStreak > m ? c.activeStreak : m),
+    -1,
+  );
+  const leaders = ctx.question.candidates.filter(
+    (c) => c.activeStreak === maxAmongShown,
+  );
+  const failCopy =
+    leaders.length === 1
+      ? `It was ${leaders[0].name} on ${leaders[0].activeStreak} straight.`
+      : `${leaders.length} rivals are tied on ${maxAmongShown} straight — any of them counts.`;
+
   const reveal = ctx.score ? (
     <div className="space-y-2 text-caption">
       <p className={ctx.score.outcome === "correct" ? "text-success" : "text-warning"}>
         {ctx.score.outcome === "correct"
           ? "Sharp eye — you spotted the active streak."
-          : `It was ${ctx.question.candidates[ctx.question.correctIndex].name} on ${ctx.question.candidates[ctx.question.correctIndex].activeStreak} straight.`}
+          : failCopy}
       </p>
       <ul className="space-y-1">
-        {ctx.question.candidates.map((c, i) => (
+        {ctx.question.candidates.map((c) => (
           <li
             key={c.pulseId}
             className="flex items-center justify-between rounded border border-border bg-bg-surface px-2 py-1 text-text"
@@ -159,7 +186,7 @@ function Render({
                 {c.activeStreak}W
               </span>{" "}
               <span className="text-text-dim">({c.games} games)</span>
-              {i === ctx.question.correctIndex ? (
+              {c.activeStreak === maxAmongShown ? (
                 <span className="ml-1 rounded bg-success/15 px-1.5 text-success">★</span>
               ) : null}
             </span>
@@ -191,7 +218,7 @@ function Render({
           selected={picked === i}
           correct={
             ctx.revealed
-              ? i === ctx.question.correctIndex
+              ? c.activeStreak === maxAmongShown
                 ? true
                 : picked === i
                   ? false
