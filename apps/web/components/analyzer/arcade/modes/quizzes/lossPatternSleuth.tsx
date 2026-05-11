@@ -27,14 +27,13 @@ export function pickRaceWithLosses(
   matchups: GenerateInput["data"]["matchups"],
   rng: () => number,
 ): "P" | "T" | "Z" | null {
-  // Reduce matchup buckets ("PvT", "ZvP", "TvZ", ...) to losses-vs each
-  // race so we can find one the user has lost ≥10 times to.
+  // Roll up losses by opponent race so we can find one the user has
+  // lost ≥10 times to. `oppRace` is already parsed off the API's
+  // `name: "vs <R>"` rows by useArcadeData — see types.ts.
   const lossesByRace: Record<"P" | "T" | "Z", number> = { P: 0, T: 0, Z: 0 };
   for (const m of matchups) {
-    if (typeof m.matchup !== "string" || m.matchup.length < 3) continue;
-    const op = m.matchup.charAt(2).toUpperCase();
-    if (op === "P" || op === "T" || op === "Z") {
-      lossesByRace[op] += m.losses;
+    if (m.oppRace === "P" || m.oppRace === "T" || m.oppRace === "Z") {
+      lossesByRace[m.oppRace] += m.losses;
     }
   }
   const eligible = (Object.keys(lossesByRace) as Array<"P" | "T" | "Z">).filter(

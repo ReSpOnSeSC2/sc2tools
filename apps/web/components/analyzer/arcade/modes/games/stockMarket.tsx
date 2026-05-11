@@ -63,10 +63,10 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
     source: b.source,
   }));
   const tradeable = quotes.filter((q) => q.price !== null);
-  if (tradeable.length < 5) {
+  if (tradeable.length < 1) {
     return {
       ok: false,
-      reason: "Most builds lack a recent price (need ≥3 plays in 14 days).",
+      reason: "Need at least one build with a recent price (≥3 plays in 14 days).",
     };
   }
   return { ok: true, minDataMet: true, question: { weekKey: wk, quotes, locked: null } };
@@ -109,8 +109,22 @@ function Render({
 }) {
   const { state, update } = useArcadeState();
   const { getToken } = useAuth();
-  const tradeable = useMemo(
-    () => ctx.question.quotes.filter((q) => q.price !== null),
+  // Render every quote (tradeable + untradeable) so the user sees the
+  // full universe across all matchups. Untradeable rows are visually
+  // labelled and the allocation input is disabled — they're stalls
+  // for "we know this build exists, you just haven't played it 3+
+  // times in the last 14 days yet."
+  const sortedQuotes = useMemo(
+    () =>
+      ctx.question.quotes
+        .slice()
+        .sort((a, b) => {
+          // Tradeable first, then by descending price within each group.
+          const aT = a.price !== null ? 1 : 0;
+          const bT = b.price !== null ? 1 : 0;
+          if (aT !== bT) return bT - aT;
+          return (b.price ?? 0) - (a.price ?? 0);
+        }),
     [ctx.question.quotes],
   );
   const locked = state.stockMarket && state.stockMarket.weekKey === ctx.question.weekKey
@@ -272,38 +286,58 @@ function Render({
         <span className="font-mono text-text">{ctx.question.weekKey}</span>.
       </p>
       <ul className="space-y-1">
-        {tradeable.map((q) => (
-          <li
-            key={q.id}
-            className="flex items-center gap-2 rounded border border-border bg-bg-surface px-2 py-2"
-          >
-            <span className="min-w-0 flex-1 truncate text-text">
-              {q.name}
-              {q.source !== "own" ? (
-                <span className="ml-1 rounded bg-accent/15 px-1 text-[10px] uppercase tracking-wider text-accent">
-                  {q.source}
-                </span>
-              ) : null}
-            </span>
-            <span
-              className="font-mono tabular-nums text-caption"
-              style={{ color: wrColor((q.price ?? 0) / 100, 5) }}
+        {sortedQuotes.map((q) => {
+          const tradeable = q.price !== null;
+          return (
+            <li
+              key={q.id}
+              className={[
+                "flex items-center gap-2 rounded border px-2 py-2",
+                tradeable
+                  ? "border-border bg-bg-surface"
+                  : "border-border bg-bg-surface/40",
+              ].join(" ")}
             >
-              {q.price}
-            </span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={100}
-              value={picks[q.id] ?? 0}
-              aria-label={`Allocation for ${q.name}`}
-              onChange={(e) => setPick(q.id, Number(e.target.value))}
-              className="h-9 w-20 rounded border border-border bg-bg-elevated px-2 text-right font-mono tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            />
-            <span className="text-caption text-text-dim">%</span>
-          </li>
-        ))}
+              <span
+                className={[
+                  "min-w-0 flex-1 truncate",
+                  tradeable ? "text-text" : "text-text-muted",
+                ].join(" ")}
+              >
+                {q.name}
+                {q.source !== "own" ? (
+                  <span className="ml-1 rounded bg-accent/15 px-1 text-[10px] uppercase tracking-wider text-accent">
+                    {q.source}
+                  </span>
+                ) : null}
+              </span>
+              {tradeable ? (
+                <span
+                  className="font-mono tabular-nums text-caption"
+                  style={{ color: wrColor((q.price ?? 0) / 100, 5) }}
+                >
+                  {q.price}
+                </span>
+              ) : (
+                <span className="text-[10px] uppercase tracking-wider text-text-dim">
+                  no price yet
+                </span>
+              )}
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={100}
+                value={picks[q.id] ?? 0}
+                aria-label={`Allocation for ${q.name}`}
+                onChange={(e) => setPick(q.id, Number(e.target.value))}
+                disabled={!tradeable}
+                className="h-9 w-20 rounded border border-border bg-bg-elevated px-2 text-right font-mono tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
+              />
+              <span className="text-caption text-text-dim">%</span>
+            </li>
+          );
+        })}
       </ul>
       <div className="flex flex-wrap items-center gap-3 text-caption">
         <span className="text-text-muted">
