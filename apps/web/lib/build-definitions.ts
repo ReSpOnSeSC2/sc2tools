@@ -781,7 +781,12 @@ export function filterDefinitions(
   return defs.filter((d) => {
     if (race !== "All" && d.race !== race) return false;
     if (matchup !== "All" && matchup !== null) {
-      if (d.matchup !== matchup) return false;
+      // `matchup: null` on a definition means "applies to every matchup
+      // for this race" (see the type comment above), so a generic rule
+      // like "Protoss - 4 Gate Rush" must surface under PvP, PvT, and
+      // PvZ. Without this branch every Terran/Zerg entry (all `null`)
+      // would vanish whenever the user picked TvT/TvZ/.../ZvZ.
+      if (d.matchup !== null && d.matchup !== matchup) return false;
     }
     if (!q) return true;
     return (
