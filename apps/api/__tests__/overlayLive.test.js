@@ -469,11 +469,17 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
 
   test("returns the same opponent-context fields as buildFromGame, sans result/duration", async () => {
     // Streamer's history with this opponent: 4-2 record, multiple
-    // openings, one prior game in the same matchup.
+    // openings, one prior game in the same matchup. The opponents row
+    // matches production shape — pulseId is the toon_handle, the
+    // SC2Pulse character id lives on pulseCharacterId, and the plain-
+    // text name is on displayNameSample.
     await db.opponents.insertOne({
       userId: "u1",
-      pulseId: "pulse-future",
-      displayName: "Future",
+      pulseId: "1-S2-1-future-toon",
+      pulseCharacterId: "111000",
+      displayNameSample: "Future",
+      displayNameHash: "hash",
+      race: "Terran",
       gameCount: 6,
       wins: 4,
       losses: 2,
@@ -493,7 +499,8 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
         date: new Date(now - 4000),
         opponent: {
           race: "Terran",
-          pulseId: "pulse-future",
+          pulseId: "1-S2-1-future-toon",
+          pulseCharacterId: "111000",
           displayName: "Future",
           strategy: "1-1-1 Standard",
         },
@@ -509,7 +516,8 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
         date: new Date(now - 2000),
         opponent: {
           race: "Terran",
-          pulseId: "pulse-future",
+          pulseId: "1-S2-1-future-toon",
+          pulseCharacterId: "111000",
           displayName: "Future",
           strategy: "Banshee Rush",
         },
@@ -519,8 +527,9 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
       "u1",
       "Future",
       "Terran",
-      "pulse-future",
+      111000,
       "Protoss",
+      "1-S2-1-future-toon",
     );
     expect(p).toBeTruthy();
     expect(p.oppName).toBe("Future");
@@ -549,11 +558,13 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
     expect(p.map).toBeUndefined();
   });
 
-  test("falls back to displayName when no pulseId is provided (agent v0.6.0 / pre-Pulse)", async () => {
+  test("falls back to displayNameSample when no pulse identifiers are provided (agent v0.6.0 / pre-Pulse)", async () => {
     await db.opponents.insertOne({
       userId: "u1",
-      pulseId: "p1",
-      displayName: "Foe",
+      pulseId: "1-S2-1-foe-toon",
+      displayNameSample: "Foe",
+      displayNameHash: "hash",
+      race: "Zerg",
       gameCount: 5,
       wins: 3,
       losses: 2,
@@ -571,12 +582,20 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
     expect(p.headToHead).toEqual({ wins: 3, losses: 2 });
   });
 
-  test("when displayName matches multiple opponents, picks the one with the most encounters", async () => {
+  test("when displayNameSample matches multiple opponents, picks the race-matching row (then highest gameCount)", async () => {
+    // Two rows share the displayNameSample "Twins" but on different
+    // races — the race filter is what prevents the higher-gameCount
+    // Zerg row from masking the (still-relevant) Terran one when we
+    // happen to be scouting against the Terran twin. Within a single
+    // race the gameCount tie-break still applies (see the third test
+    // below for a same-race assertion).
     await db.opponents.insertMany([
       {
         userId: "u1",
-        pulseId: "p-na",
-        displayName: "Twins",
+        pulseId: "1-S2-1-twin-zerg",
+        displayNameSample: "Twins",
+        displayNameHash: "h1",
+        race: "Zerg",
         gameCount: 1,
         wins: 0,
         losses: 1,
@@ -585,8 +604,10 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
       },
       {
         userId: "u1",
-        pulseId: "p-eu",
-        displayName: "Twins",
+        pulseId: "1-S2-1-twin-zerg-2",
+        displayNameSample: "Twins",
+        displayNameHash: "h2",
+        race: "Zerg",
         gameCount: 8,
         wins: 5,
         losses: 3,
@@ -618,6 +639,119 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
     expect(p.headToHead).toBeUndefined();
     expect(p.rival).toBeUndefined();
     expect(p.recentGames).toBeUndefined();
+  });
+
+  // Smoking-gun case from the 2026-05-11 incident: streamer queues into
+  // "THEBLOB" (pulse_character_id 340473252, toon_handle
+  // 1-S2-1-12236275). Four prior games are in the streamer's history;
+  // the opponents row is correctly populated. Before the lookup fix the
+  // pre-game scouting card rendered "first meeting" because Tier A
+  // queried the wrong field (pulseId, which stores the toon_handle) and
+  // the displayName fallback queried a field that doesn't exist on the
+  // opponents schema. This test asserts the new Tier A pulse-character-
+  // id lookup actually fires and finds the H2H.
+  test("resolves H2H by pulse_character_id even when opponents.pulseId stores the toon_handle", async () => {
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "1-S2-1-12236275",
+      pulseCharacterId: "340473252",
+      displayNameSample: "THEBLOB",
+      displayNameHash: "hash",
+      race: "Protoss",
+      wins: 3,
+      losses: 1,
+      gameCount: 4,
+      lastSeen: new Date(),
+      openings: {},
+    });
+    const p = await svc.buildFromOpponentName(
+      "u1",
+      "THEBLOB",
+      "Protoss",
+      340473252,
+      "Protoss",
+      // toon_handle deliberately omitted — Tier A should still resolve
+      // because pulseCharacterId alone is enough.
+      undefined,
+    );
+    expect(p).toBeTruthy();
+    expect(p.headToHead).toEqual({ wins: 3, losses: 1 });
+  });
+
+  test("falls back to toon_handle when pulse_character_id is unresolved (Tier B)", async () => {
+    // Same row as the smoking-gun case, but the SC2Pulse resolver
+    // hasn't backfilled pulseCharacterId yet — only the toon_handle
+    // (persisted under ``pulseId``) is present on the row. Tier B
+    // should still pick it up using the toon_handle that arrived on
+    // the live envelope.
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "1-S2-1-12236275",
+      displayNameSample: "THEBLOB",
+      displayNameHash: "hash",
+      race: "Protoss",
+      wins: 3,
+      losses: 1,
+      gameCount: 4,
+      lastSeen: new Date(),
+      openings: {},
+    });
+    const p = await svc.buildFromOpponentName(
+      "u1",
+      "THEBLOB",
+      "Protoss",
+      null,
+      "Protoss",
+      "1-S2-1-12236275",
+    );
+    expect(p).toBeTruthy();
+    expect(p.headToHead).toEqual({ wins: 3, losses: 1 });
+  });
+
+  test("race disambiguates display-name collisions in the Tier C fallback", async () => {
+    // Two rows share the displayNameSample "Twins" but on different
+    // races. Pre-fix the higher-gameCount row would always win even
+    // when the streamer was scouting against the OTHER twin — race
+    // is a meaningful disambiguator the prior fallback didn't apply.
+    await db.opponents.insertMany([
+      {
+        userId: "u1",
+        pulseId: "1-S2-1-twin-zerg",
+        displayNameSample: "Twins",
+        displayNameHash: "h1",
+        race: "Zerg",
+        gameCount: 12,
+        wins: 7,
+        losses: 5,
+        lastSeen: new Date(),
+        openings: {},
+      },
+      {
+        userId: "u1",
+        pulseId: "1-S2-1-twin-terran",
+        displayNameSample: "Twins",
+        displayNameHash: "h2",
+        race: "Terran",
+        gameCount: 4,
+        wins: 1,
+        losses: 3,
+        lastSeen: new Date(),
+        openings: {},
+      },
+    ]);
+    // Scouting against the Terran twin — even though the Zerg twin has
+    // far more games, race matching must pick the Terran row.
+    const p = await svc.buildFromOpponentName(
+      "u1",
+      "Twins",
+      "Terran",
+      null,
+      "Protoss",
+      // No toon_handle either — Tier C is the only one that can
+      // resolve here.
+      null,
+    );
+    expect(p.headToHead).toEqual({ wins: 1, losses: 3 });
   });
 
   test("returns null when called without a name", async () => {
@@ -670,8 +804,10 @@ describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
   test("merges streamerHistory into the envelope when the cloud has history", async () => {
     await db.opponents.insertOne({
       userId: "u1",
-      pulseId: "pulse-future",
-      displayName: "Future",
+      pulseId: "1-S2-1-future-toon",
+      displayNameSample: "Future",
+      displayNameHash: "hash",
+      race: "Terran",
       gameCount: 4,
       wins: 1,
       losses: 3,
@@ -711,8 +847,10 @@ describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
   test("caches per (userId, oppName, oppRace, myRace) so a 1 Hz envelope cadence is cheap", async () => {
     await db.opponents.insertOne({
       userId: "u1",
-      pulseId: "p",
-      displayName: "Future",
+      pulseId: "1-S2-1-future-toon",
+      displayNameSample: "Future",
+      displayNameHash: "hash",
+      race: "Terran",
       gameCount: 4,
       wins: 1,
       losses: 3,
@@ -734,8 +872,10 @@ describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
   test("does not cross userIds — alice's enrichment doesn't leak to bob", async () => {
     await db.opponents.insertOne({
       userId: "alice",
-      pulseId: "p-future-a",
-      displayName: "Future",
+      pulseId: "1-S2-1-future-a",
+      displayNameSample: "Future",
+      displayNameHash: "ha",
+      race: "Terran",
       gameCount: 5,
       wins: 5,
       losses: 0,
@@ -744,8 +884,10 @@ describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
     });
     await db.opponents.insertOne({
       userId: "bob",
-      pulseId: "p-future-b",
-      displayName: "Future",
+      pulseId: "1-S2-1-future-b",
+      displayNameSample: "Future",
+      displayNameHash: "hb",
+      race: "Terran",
       gameCount: 5,
       wins: 0,
       losses: 5,
@@ -778,8 +920,10 @@ describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
     // matchups, plus an unrelated opponent that must NOT be flushed.
     await db.opponents.insertOne({
       userId: "u1",
-      pulseId: "p-future",
-      displayName: "Future",
+      pulseId: "1-S2-1-future-toon",
+      displayNameSample: "Future",
+      displayNameHash: "hf",
+      race: "Terran",
       gameCount: 3,
       wins: 1,
       losses: 2,
@@ -788,8 +932,10 @@ describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
     });
     await db.opponents.insertOne({
       userId: "u1",
-      pulseId: "p-other",
-      displayName: "OtherPlayer",
+      pulseId: "1-S2-1-other-toon",
+      displayNameSample: "OtherPlayer",
+      displayNameHash: "ho",
+      race: "Zerg",
       gameCount: 5,
       wins: 5,
       losses: 0,
@@ -822,8 +968,10 @@ describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
   test("invalidate is case-insensitive on the opponent name", async () => {
     await db.opponents.insertOne({
       userId: "u1",
-      pulseId: "p1",
-      displayName: "Future",
+      pulseId: "1-S2-1-future-toon",
+      displayNameSample: "Future",
+      displayNameHash: "hash",
+      race: "Terran",
       gameCount: 3,
       wins: 1,
       losses: 2,

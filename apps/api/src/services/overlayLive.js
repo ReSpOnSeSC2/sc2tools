@@ -489,13 +489,13 @@ class OverlayLiveService {
 
   /**
    * Build a pre-game ``LiveGamePayload``-shaped object from just an
-   * opponent identity (name + race + optional Pulse character ID).
-   * The cloud has the streamer's full game history; we use it to fill
-   * in the SAME contextual fields the post-game card carries
-   * (head-to-head, RIVAL/FAMILIAR, last-games list, best answer,
-   * cheese probability, predicted strategies, top builds, meta) so
-   * the scouting widget renders the rich pre-game dossier instead of
-   * just "Looking up opponent…".
+   * opponent identity (name + race + optional Pulse character ID +
+   * optional toon_handle). The cloud has the streamer's full game
+   * history; we use it to fill in the SAME contextual fields the
+   * post-game card carries (head-to-head, RIVAL/FAMILIAR, last-games
+   * list, best answer, cheese probability, predicted strategies, top
+   * builds, meta) so the scouting widget renders the rich pre-game
+   * dossier instead of just "Looking up opponent…".
    *
    * Result-specific fields (``result``, ``durationSec``,
    * ``mmrDelta``, ``map``) are NOT populated — those only land
@@ -504,19 +504,48 @@ class OverlayLiveService {
    * game; today the loading screen has it but the SC2 client doesn't
    * surface it.
    *
+   * **Three-tier opponent-row lookup.** The opponents collection
+   * stores TWO identity fields (see ``util/opponentIdentity.js``):
+   * ``pulseId`` is the raw sc2reader toon_handle, ``pulseCharacterId``
+   * is the canonical SC2Pulse numeric id. Display name lives under
+   * ``displayNameSample`` (HMAC under ``displayNameHash``). We try
+   * each identifier in order of stability:
+   *
+   *   * Tier A — by ``pulseCharacterId``: most stable, survives the
+   *     rare Battle.net rebind that rotates the toon_handle while
+   *     keeping the Pulse character identity stable.
+   *   * Tier B — by ``pulseId`` (toon_handle): covers opponents
+   *     whose row pre-dates SC2Pulse resolution, or whose
+   *     ``pulseCharacterId`` hasn't been backfilled yet.
+   *   * Tier C — by ``displayNameSample`` with race disambiguation:
+   *     last-resort match when neither identifier is supplied (legacy
+   *     pre-Pulse agents) or known. Race ties pick the row with the
+   *     largest ``gameCount``.
+   *
    * @param {string} userId
    * @param {string} opponentName
    * @param {string} [opponentRace]
-   * @param {number|null} [opponentPulseId]
+   * @param {string|number|null} [opponentPulseCharacterId] numeric
+   *   SC2Pulse character id from the live envelope's
+   *   ``opponent.profile.pulse_character_id``. May arrive as a number
+   *   (JSON wire) or string — stringified before the Mongo query
+   *   because the opponents collection persists it as a string.
    * @param {string} [myRace]
+   * @param {string|null} [opponentToonHandle] raw sc2reader
+   *   ``toon_handle`` (``region-S2-realm-bnid``) from the live
+   *   envelope's ``opponent.toonHandle``. Used for Tier B when no
+   *   Pulse character id is available, OR as a strict equality fall-
+   *   back when Tier A misses (e.g. pulseCharacterId hasn't been
+   *   backfilled on this opponent's row yet).
    * @returns {Promise<object|null>}
    */
   async buildFromOpponentName(
     userId,
     opponentName,
     opponentRace,
-    opponentPulseId,
+    opponentPulseCharacterId,
     myRace,
+    opponentToonHandle,
   ) {
     if (!userId || !opponentName) return null;
     /** @type {Record<string, any>} */
@@ -526,15 +555,19 @@ class OverlayLiveService {
     const matchup = matchupLabel(myRace, opponentRace);
     if (matchup) payload.matchup = matchup;
 
-    // Find the opponents row. Prefer pulseId (stable across BattleTag
-    // renames); fall back to displayName when the agent hasn't
-    // resolved a Pulse ID yet — best-effort, picks the row with the
-    // most encounters if multiple opponents share the same display
-    // name.
+    // Three-tier opponent-row lookup — see JSDoc above for the order
+    // and rationale. The projection covers the union of every field
+    // the three tiers (and the downstream payload derivation) actually
+    // read: identity (pulseId / pulseCharacterId), display
+    // (displayNameSample), counters (gameCount, wins, losses), recency
+    // (lastSeen), strategy mix (openings), and race (used to break
+    // display-name collisions in Tier C).
     const projection = {
       _id: 0,
       pulseId: 1,
-      displayName: 1,
+      pulseCharacterId: 1,
+      displayNameSample: 1,
+      race: 1,
       gameCount: 1,
       wins: 1,
       losses: 1,
@@ -543,22 +576,62 @@ class OverlayLiveService {
     };
     /** @type {Record<string, any>|null} */
     let oppRow = null;
-    if (opponentPulseId) {
+    // Tier A — by SC2Pulse character id (stringified; the field is
+    // persisted as a string per OpponentsService.recordGame, but the
+    // envelope value arrives as a number from the JSON wire).
+    const pcidString =
+      opponentPulseCharacterId !== undefined
+      && opponentPulseCharacterId !== null
+      && String(opponentPulseCharacterId).length > 0
+        ? String(opponentPulseCharacterId)
+        : null;
+    if (pcidString) {
       oppRow = await this.db.opponents
-        .findOne({ userId, pulseId: String(opponentPulseId) }, { projection })
+        .findOne(
+          { userId, pulseCharacterId: pcidString },
+          { projection },
+        )
         .catch(() => null);
+      if (oppRow) oppRow.matchedBy = "pulse_character_id";
     }
+    // Tier B — by toon_handle (legacy ``pulseId`` field). Covers
+    // opponents whose row pre-dates SC2Pulse resolution OR whose
+    // ``pulseCharacterId`` hasn't been backfilled yet by the resolver
+    // cron.
+    if (!oppRow && typeof opponentToonHandle === "string" && opponentToonHandle.length > 0) {
+      oppRow = await this.db.opponents
+        .findOne(
+          { userId, pulseId: opponentToonHandle },
+          { projection },
+        )
+        .catch(() => null);
+      if (oppRow) oppRow.matchedBy = "toon_handle";
+    }
+    // Tier C — by displayNameSample + race disambiguation. Last-resort
+    // for legacy pre-Pulse agents and the unresolved-identity case;
+    // race breaks the common display-name collision (multiple
+    // barcodes / players sharing a name across races).
     if (!oppRow) {
-      const filter = /** @type {any} */ ({ userId, displayName: opponentName });
       const candidates = await this.db.opponents
-        .find(filter, { projection })
+        .find({ userId, displayNameSample: opponentName }, { projection })
         .toArray()
         .catch(() => []);
       if (candidates.length > 0) {
-        candidates.sort(
+        const oppInitial = opponentRace
+          ? String(opponentRace).charAt(0).toUpperCase()
+          : null;
+        const raceMatches = oppInitial
+          ? candidates.filter((c) => {
+              const r = typeof c.race === "string" ? c.race.charAt(0).toUpperCase() : "";
+              return r === oppInitial;
+            })
+          : [];
+        const pool = raceMatches.length > 0 ? raceMatches : candidates;
+        pool.sort(
           (a, b) => (Number(b.gameCount) || 0) - (Number(a.gameCount) || 0),
         );
-        oppRow = candidates[0];
+        oppRow = pool[0];
+        if (oppRow) oppRow.matchedBy = "display_name";
       }
     }
 
@@ -572,7 +645,7 @@ class OverlayLiveService {
       // same way the post-game card does.
       if (games >= 3) {
         payload.rival = {
-          name: oppRow.displayName || opponentName,
+          name: oppRow.displayNameSample || opponentName,
           headToHead: { wins, losses },
         };
       }
@@ -639,10 +712,17 @@ class OverlayLiveService {
 
     // Last N games against this opponent in this matchup. Same shape
     // as the post-game card's ``recentGames`` list — the widget can
-    // render the row builder unchanged.
+    // render the row builder unchanged. We prefer the matched
+    // ``oppRow``'s identity fields over the envelope-supplied ones
+    // because (a) the row is authoritative (the agent writes it
+    // game-by-game) and (b) Tier C may have matched a row whose
+    // identity differs from what arrived on the envelope — in which
+    // case the row's identifiers are the ones the user's games are
+    // stamped with.
     const opp = {
-      pulseId: opponentPulseId ? String(opponentPulseId) : undefined,
-      displayName: oppRow?.displayName || opponentName,
+      pulseId: oppRow?.pulseId || opponentToonHandle || undefined,
+      pulseCharacterId: oppRow?.pulseCharacterId || pcidString || undefined,
+      displayName: oppRow?.displayNameSample || opponentName,
       race: opponentRace,
     };
     const recent = await this._recentGamesForOpponent(
@@ -732,6 +812,15 @@ class OverlayLiveService {
         && Number.isFinite(Number(rawPcid))
         ? Number(rawPcid)
         : null;
+    // Pull the raw toon_handle off the envelope so ``buildFromOpponentName``
+    // can use it as the Tier B fallback when no Pulse character id was
+    // resolved (or the opponents row has the toon_handle but no
+    // ``pulseCharacterId`` yet). The agent stamps ``opp.toonHandle`` in
+    // ``replay_pipeline._build_opponent``.
+    const toonHandle =
+      opp && typeof opp.toonHandle === "string" && opp.toonHandle.length > 0
+        ? opp.toonHandle
+        : null;
     // The agent's envelope carries the streamer's display name on
     // ``user.name`` and the player race on ``players[].race`` for the
     // ``user`` player. The streamer's race is what ``buildFromOppName``
@@ -765,6 +854,7 @@ class OverlayLiveService {
         race || undefined,
         pulseCharacterId,
         myRace || undefined,
+        toonHandle,
       );
     } catch {
       // Best-effort enrichment — never block the broker on a Mongo blip.
