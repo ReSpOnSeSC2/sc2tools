@@ -40,8 +40,19 @@ function withTitle(label: string, body: ReactNode): ReactNode {
 const opponentBracketPick = () =>
   withTitle("Bracket pick", (
     <>
-      <path d="M3 5h6v3M3 16h6v3M15 5h6v3M15 16h6v3" />
-      <path d="M9 6.5h4v11h4M9 17.5h4" />
+      {/* Final Four layout: 4 team rails → 2 semifinals → 1 final → champion. */}
+      {/* Four team rails on the left. */}
+      <path d="M2 4h5M2 8h5M2 16h5M2 20h5" />
+      {/* Two semifinal vertical connectors joining each pair of teams. */}
+      <path d="M7 4v4M7 16v4" />
+      {/* Semifinal winners advance rightward toward the final. */}
+      <path d="M7 6h6M7 18h6" />
+      {/* Final vertical connector joining both semifinal winners. */}
+      <path d="M13 6v12" />
+      {/* Champion rail. */}
+      <path d="M13 12h6" />
+      {/* Champion marker (filled dot so it reads as a "winner" pip). */}
+      <circle cx="20.5" cy="12" r="1.5" fill="currentColor" stroke="none" />
     </>
   ));
 
