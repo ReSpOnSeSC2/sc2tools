@@ -339,13 +339,22 @@ function Render({
                 </span>
               )}
               <input
-                type="number"
+                type="text"
                 inputMode="numeric"
-                min={0}
-                max={100}
-                value={picks[q.id] ?? 0}
+                pattern="[0-9]*"
+                maxLength={3}
+                value={picks[q.id] ? String(picks[q.id]) : ""}
+                placeholder="0"
                 aria-label={`Allocation for ${q.name}`}
-                onChange={(e) => setPick(q.id, Number(e.target.value))}
+                onChange={(e) => {
+                  // Strip non-digits and leading zeros so typing "4" into a
+                  // field that previously displayed "0" yields "4", not "04"
+                  // or "040". Empty input clears the pick.
+                  const digits = e.target.value.replace(/\D/g, "");
+                  const trimmed = digits.replace(/^0+/, "");
+                  setPick(q.id, trimmed === "" ? 0 : Number(trimmed));
+                }}
+                onFocus={(e) => e.currentTarget.select()}
                 disabled={!tradeable}
                 className="h-9 w-20 rounded border border-border bg-bg-elevated px-2 text-right font-mono tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
               />

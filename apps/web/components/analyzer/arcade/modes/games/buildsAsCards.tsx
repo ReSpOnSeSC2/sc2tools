@@ -43,11 +43,12 @@ type Q = {
 type A = { browsed: true };
 
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
-  // includeCatalog: false — this mode is a collection of builds the
-  // user has actually engaged with (played / community / authored).
-  // Catalog stubs with zero plays would dilute the binder with rows
-  // that always render as bronze rarity with attack=0.
-  const universe = buildUniverse(input.data, { includeCatalog: false });
+  // Pull from the same universe Stock Market does — own + community +
+  // custom + the bundled BUILD_DEFINITIONS catalog — so the binder
+  // surfaces every analyzer-detectable strategy, not just the ones the
+  // user has personally engaged with. Catalog stubs with zero plays
+  // render as bronze rarity with attack=0 until the user plays them.
+  const universe = buildUniverse(input.data, { includeCatalog: true });
   if (universe.length === 0) {
     return {
       ok: false,
