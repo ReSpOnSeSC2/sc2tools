@@ -12,70 +12,46 @@ import type { LiveGameEnvelope, LiveGamePayload } from "./types";
  */
 
 /* ============================================================
- * Post-game (replay-derived) scouting / match-end / cheese builders.
+ * Public builders.
+ *
+ * Both scouting builders produce the same sentence shape:
+ *
+ *   ``Facing <Name>, <Race>. <N> MMR. <H2H clause>. Good luck.``
+ *
+ * They differ only in which payload they read from. The shared layout
+ * lives in ``composeScoutingSentence`` so the post-game (Test fire)
+ * and live-envelope (real match start) readouts cannot drift apart.
  * ============================================================ */
 
 /**
- * Scouting line for the post-game ``LiveGamePayload`` shape. Mirrors
- * ``buildLiveGameScoutingLine`` exactly so the Settings → Overlay →
- * Test button (which fires a sample ``LiveGamePayload``) plays the
- * same sentence streamers hear at real match start: name, race, MMR,
- * H2H with win-% (or "First meeting."), and a closing "Good luck.".
- *
- * Best-answer and cheese clauses are deliberately not spoken — they
- * live on the visual scouting card. Keeping the voice line concise
- * matches the streamer-stated spec and the live-envelope readout.
+ * Scouting line for the post-game ``LiveGamePayload`` shape. Used by
+ * the Settings → Overlay → Test fire and by any other code path that
+ * emits an ``overlay:live`` payload without a ``result`` set.
  */
 export function buildScoutingLine(live: LiveGamePayload): string {
-  const parts: string[] = [];
-  const name = sanitizeForSpeech(live.oppName);
-  const race = normalizeRace(live.oppRace);
+  return composeScoutingSentence({
+    name: live.oppName,
+    race: live.oppRace,
+    mmr: extractPositiveMmr(live.oppMmr),
+    headToHead: live.headToHead,
+  });
+}
 
-  if (name && race) parts.push(`Facing ${name}, ${race}.`);
-  else if (name) parts.push(`Facing ${name}.`);
-  else if (race) parts.push(`Facing a ${race} opponent.`);
-  else parts.push("Facing an unknown opponent.");
-
-  // MMR clause: only speak when we have a finite positive value.
-  // Never say "0 MMR" or "unknown MMR" — drop the clause silently.
-  const mmr =
-    typeof live.oppMmr === "number" && Number.isFinite(live.oppMmr) && live.oppMmr > 0
-      ? live.oppMmr
-      : null;
-  if (mmr !== null) {
-    parts.push(`${mmr} MMR.`);
-  }
-
-  // H2H + win-%, matching the live builder's phrasing exactly.
-  const r = live.headToHead;
-  if (r) {
-    const wins = Number(r.wins);
-    const losses = Number(r.losses);
-    if (
-      Number.isFinite(wins)
-      && Number.isFinite(losses)
-      && (wins > 0 || losses > 0)
-    ) {
-      const total = wins + losses;
-      const pct = total > 0 ? Math.round((wins / total) * 100) : 0;
-      parts.push(
-        `You're ${wins} and ${losses} against them, ${pct} percent win rate.`,
-      );
-    } else if (
-      Number.isFinite(wins)
-      && Number.isFinite(losses)
-      && wins === 0
-      && losses === 0
-    ) {
-      parts.push("First meeting.");
-    }
-    // Malformed counts (non-numeric) — omit the clause silently rather
-    // than mis-read "first meeting" against an opponent we may
-    // actually have history with.
-  }
-
-  parts.push("Good luck.");
-  return parts.filter(Boolean).join(" ");
+/**
+ * Scouting line for the agent's live ``LiveGameEnvelope`` — what
+ * streamers hear at real ladder match start. MMR is preferred from
+ * the SC2Pulse profile (current rating) and falls back to the cloud's
+ * saved last-game MMR so a Pulse outage doesn't silence the slot.
+ */
+export function buildLiveGameScoutingLine(env: LiveGameEnvelope): string {
+  return composeScoutingSentence({
+    name: env.opponent?.name,
+    race: env.opponent?.race,
+    mmr:
+      extractPositiveMmr(env.opponent?.profile?.mmr)
+      ?? extractPositiveMmr(env.streamerHistory?.oppMmr),
+    headToHead: env.streamerHistory?.headToHead,
+  });
 }
 
 export function buildMatchEndLine(live: LiveGamePayload): string {
@@ -100,95 +76,18 @@ export function buildCheeseLine(live: LiveGamePayload): string {
   return "Cheese warning.";
 }
 
-/* ============================================================
- * Pre-game live-envelope scouting builder.
- * ============================================================ */
-
 /**
- * Pre-game scouting line built from the desktop agent's
- * ``LiveGameEnvelope``. Output order, every clause separated by a
- * single space:
- *
- *   1. ``Facing <Name>, <Race>.`` — drops the race clause when no
- *      recognisable race is supplied (single-letter T/Z/P/R variants
- *      and lower-case forms are normalised); falls back to "Facing an
- *      unknown opponent." when even the name is missing.
- *   2. ``<N> MMR.`` — preferred from ``opponent.profile.mmr`` (the
- *      current Pulse rating), falling back to
- *      ``streamerHistory.oppMmr`` (the cloud's last-game stamp).
- *      Omitted when neither has a usable value — never speaks "0 MMR".
- *   3. Head-to-head:
- *      - ``You're <W> and <L> against them, <pct> percent win rate.``
- *        when ``streamerHistory.headToHead`` is present with at least
- *        one prior encounter.
- *      - ``First meeting.`` when ``streamerHistory.headToHead`` is
- *        present but ``wins + losses === 0`` — the cloud's "confirmed
- *        no prior meetings" signal.
- *      - Omitted silently when ``streamerHistory.headToHead`` is
- *        absent (enrichment hasn't landed yet); the hook's 900 ms
- *        timeout still ensures the streamer hears the rest of the
- *        line.
- *   4. ``Good luck.`` — always last, on every utterance the builder
- *      produces.
+ * True when the live envelope has at least one usable MMR source —
+ * SC2Pulse profile rating OR the cloud's saved last-game MMR. The
+ * voice hook waits for this before firing so the spoken line doesn't
+ * silently drop the MMR clause when Pulse is a few hundred ms behind
+ * the cloud's enrichment.
  */
-export function buildLiveGameScoutingLine(env: LiveGameEnvelope): string {
-  const name = sanitizeForSpeech(env.opponent?.name);
-  const race = normalizeRace(env.opponent?.race ?? undefined);
-  const profile = env.opponent?.profile;
-  const history = env.streamerHistory;
-
-  const pulseMmr =
-    profile && typeof profile.mmr === "number" && profile.mmr > 0
-      ? profile.mmr
-      : null;
-  const storedMmr =
-    typeof history?.oppMmr === "number" && history.oppMmr > 0
-      ? history.oppMmr
-      : null;
-  // SC2Pulse's current rating wins; the cloud's saved last-game MMR is
-  // the fallback so a Pulse outage doesn't silence the slot.
-  const mmr = pulseMmr !== null ? pulseMmr : storedMmr;
-
-  const parts: string[] = [];
-  if (name && race) parts.push(`Facing ${name}, ${race}.`);
-  else if (name) parts.push(`Facing ${name}.`);
-  else if (race) parts.push(`Facing a ${race} opponent.`);
-  else parts.push("Facing an unknown opponent.");
-
-  if (mmr !== null) {
-    parts.push(`${mmr} MMR.`);
-  }
-
-  const h2h = history?.headToHead;
-  if (h2h) {
-    const wins = Number(h2h.wins);
-    const losses = Number(h2h.losses);
-    if (
-      Number.isFinite(wins)
-      && Number.isFinite(losses)
-      && (wins > 0 || losses > 0)
-    ) {
-      const total = wins + losses;
-      const pct = total > 0 ? Math.round((wins / total) * 100) : 0;
-      parts.push(
-        `You're ${wins} and ${losses} against them, ${pct} percent win rate.`,
-      );
-    } else if (
-      Number.isFinite(wins)
-      && Number.isFinite(losses)
-      && wins === 0
-      && losses === 0
-    ) {
-      // Cloud confirmed: brand-new opponent.
-      parts.push("First meeting.");
-    }
-    // Else: malformed counts — omit the clause silently rather than
-    // mis-read "first meeting" against an opponent we may actually
-    // have history with.
-  }
-
-  parts.push("Good luck.");
-  return parts.filter(Boolean).join(" ");
+export function isLiveGameMmrReady(env: LiveGameEnvelope): boolean {
+  return (
+    extractPositiveMmr(env.opponent?.profile?.mmr) !== null
+    || extractPositiveMmr(env.streamerHistory?.oppMmr) !== null
+  );
 }
 
 /* ============================================================
@@ -239,7 +138,7 @@ export function cheeseFingerprint(live: LiveGamePayload): string {
 }
 
 /* ============================================================
- * Shared helpers.
+ * Shared sanitisers.
  * ============================================================ */
 
 /**
@@ -250,16 +149,15 @@ export function cheeseFingerprint(live: LiveGamePayload): string {
 export function sanitizeForSpeech(input: string | undefined | null): string {
   if (input == null) return "";
   let s = String(input);
-  // Markdown link [text](url) → text
+  // Markdown link [text](url) → text.
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
-  // Inline markdown markers
+  // Inline markdown markers.
   s = s.replace(/[*_`~>#]/g, " ");
   // Strip emoji + the joiners/variation selectors that escort them.
   // Web Speech engines either skip these silently or pronounce the
   // CLDR name ("smiling face with smiling eyes"), neither of which we
   // want in a scouting readout.
-  s = s.replace(/[\p{Extended_Pictographic}\u200D\uFE0F]/gu, "");
-  // Collapse whitespace and trim.
+  s = s.replace(/[\p{Extended_Pictographic}‍️]/gu, "");
   return s.replace(/\s+/g, " ").trim();
 }
 
@@ -277,7 +175,86 @@ export function normalizeRace(race: string | undefined | null): string {
   if (r === "zerg" || r === "z") return "Zerg";
   if (r === "protoss" || r === "p") return "Protoss";
   if (r === "random" || r === "r") return "random race";
-  // Anything else (empty / "unknown" / agent ambiguity) — drop the race.
   return "";
 }
 
+/* ============================================================
+ * Internals — sentence composition.
+ *
+ * Sharing one composer keeps the post-game and live-envelope readouts
+ * structurally identical: same clauses, same order, same fallback
+ * behaviour. The Settings → Overlay → Test fire and a real match
+ * start cannot drift apart unintentionally.
+ * ============================================================ */
+
+interface ScoutingParts {
+  name: string | null | undefined;
+  race: string | null | undefined;
+  mmr: number | null;
+  headToHead: { wins: number; losses: number } | null | undefined;
+}
+
+/**
+ * Compose the canonical scouting sentence from its four parts. Every
+ * utterance ends with ``Good luck.``; intermediate clauses are
+ * omitted silently when their input is missing or malformed.
+ */
+function composeScoutingSentence(parts: ScoutingParts): string {
+  const segments = [formatFacingClause(parts.name, parts.race)];
+  const mmr = formatMmrClause(parts.mmr);
+  if (mmr) segments.push(mmr);
+  const h2h = formatH2hClause(parts.headToHead);
+  if (h2h) segments.push(h2h);
+  segments.push("Good luck.");
+  return segments.join(" ");
+}
+
+function formatFacingClause(
+  rawName: string | null | undefined,
+  rawRace: string | null | undefined,
+): string {
+  const name = sanitizeForSpeech(rawName);
+  const race = normalizeRace(rawRace);
+  if (name && race) return `Facing ${name}, ${race}.`;
+  if (name) return `Facing ${name}.`;
+  if (race) return `Facing a ${race} opponent.`;
+  return "Facing an unknown opponent.";
+}
+
+function formatMmrClause(mmr: number | null): string | null {
+  return mmr === null ? null : `${mmr} MMR.`;
+}
+
+/**
+ * Format the H2H clause. Three branches:
+ *
+ *   - At least one prior encounter → ``You're W and L against them,
+ *     <pct> percent win rate.``
+ *   - Zero-zero (cloud's confirmed first-meeting signal) →
+ *     ``First meeting.``
+ *   - ``headToHead`` absent or malformed → ``null`` (caller omits
+ *     the clause silently rather than mis-read "first meeting"
+ *     against an opponent we may actually have history with).
+ */
+function formatH2hClause(
+  h2h: { wins: number; losses: number } | null | undefined,
+): string | null {
+  if (!h2h) return null;
+  const wins = Number(h2h.wins);
+  const losses = Number(h2h.losses);
+  if (!Number.isFinite(wins) || !Number.isFinite(losses)) return null;
+  if (wins > 0 || losses > 0) {
+    const pct = Math.round((wins / (wins + losses)) * 100);
+    return `You're ${wins} and ${losses} against them, ${pct} percent win rate.`;
+  }
+  if (wins === 0 && losses === 0) return "First meeting.";
+  return null;
+}
+
+/**
+ * Return ``mmr`` when it's a finite positive number, else ``null``.
+ * "0 MMR" or "NaN MMR" is never a useful readout — drop the clause.
+ */
+function extractPositiveMmr(mmr: number | null | undefined): number | null {
+  return typeof mmr === "number" && Number.isFinite(mmr) && mmr > 0 ? mmr : null;
+}
