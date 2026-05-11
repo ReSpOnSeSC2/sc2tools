@@ -3,9 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { GameStage } from "../../shells/GameStage";
 import { IconFor } from "../../icons";
-import { registerMode } from "../../ArcadeEngine";
+import {
+  fnv1a,
+  mulberry32,
+  outcome,
+  registerMode,
+  shuffle,
+  todayKey,
+} from "../../ArcadeEngine";
 import { useArcadeState } from "../../hooks/useArcadeState";
 import type {
+  ArcadeGame,
+  ArcadeOpponent,
   BuildleProgress,
   GenerateInput,
   GenerateResult,
@@ -16,218 +25,590 @@ import type {
 const ID = "buildle";
 registerMode(ID, "generative");
 
-export type BuildleAxis = "race" | "techPath" | "openingUnit" | "firstAggression";
+/* ──────────── question rotation ──────────── */
 
-export type BuildleClueState = "match" | "near" | "miss";
+/**
+ * The 9-day rotation. Each calendar day rolls to exactly one type via
+ * day-of-year mod 9, so two devices on the same date see the same
+ * question type for the user.
+ */
+export type BuildleQuestionType =
+  | "duration"
+  | "result"
+  | "datePlayed"
+  | "timeOfDay"
+  | "oppOpener"
+  | "yourBuild"
+  | "timesPlayedOpponent"
+  | "careerWrVsOpponent"
+  | "streakGoingIn";
 
-export type BuildleClue = {
-  axis: BuildleAxis;
-  guessVal: string;
-  truthVal: string;
-  state: BuildleClueState;
-};
-
-type Q = {
-  buildName: string;
-  candidates: string[];
-  features: BuildleFeatures;
-  /** UI label for each axis. */
-  axisLabels: Record<BuildleAxis, string>;
-};
-
-type A = string;
-
-const MAX_GUESSES = 6;
-
-export interface BuildleFeatures {
-  race: string;
-  techPath: "mech" | "bio" | "air" | "ground" | "hybrid";
-  openingUnit: string;
-  firstAggression: "<4 min" | "4–6 min" | "6–9 min" | "9+ min";
-}
-
-/* ──────────── feature derivation (pure) ──────────── */
-
-const TECH_BUCKETS: Array<{ keyword: RegExp; bucket: BuildleFeatures["techPath"] }> = [
-  { keyword: /\b(mech|tank|cyclone|hellbat|thor|battlecruiser)\b/i, bucket: "mech" },
-  { keyword: /\b(bio|marine|marauder|ghost|stim)\b/i, bucket: "bio" },
-  { keyword: /(\bair\b|sky|\bcarrier\b|carriers|tempest|broodlord|mutalisk|banshee|\bbc\b)/i, bucket: "air" },
-  { keyword: /\b(roach|ling|zerg ground|zealot|stalker|immortal|hellion)\b/i, bucket: "ground" },
+export const ROTATION: ReadonlyArray<BuildleQuestionType> = [
+  "duration",
+  "result",
+  "datePlayed",
+  "timeOfDay",
+  "oppOpener",
+  "yourBuild",
+  "timesPlayedOpponent",
+  "careerWrVsOpponent",
+  "streakGoingIn",
 ];
 
-export function deriveTechPath(name: string, race?: string): BuildleFeatures["techPath"] {
-  for (const t of TECH_BUCKETS) {
-    if (t.keyword.test(name)) return t.bucket;
+/** Display label for each question type — used in the title, hint, and share text. */
+export const QUESTION_LABEL: Record<BuildleQuestionType, string> = {
+  duration: "Game duration",
+  result: "Win or Loss",
+  datePlayed: "When did you play this?",
+  timeOfDay: "Time of day",
+  oppOpener: "Opponent's opener",
+  yourBuild: "Your build",
+  timesPlayedOpponent: "Times played this opponent",
+  careerWrVsOpponent: "Career WR vs this opponent",
+  streakGoingIn: "Streak going in",
+};
+
+/** Day-of-year (UTC) for an ISO yyyy-mm-dd string. */
+export function dayOfYear(daySeed: string): number {
+  if (!daySeed) return 0;
+  const t = new Date(`${daySeed}T00:00:00Z`).getTime();
+  if (!Number.isFinite(t)) return 0;
+  const start = new Date(`${daySeed.slice(0, 4)}-01-01T00:00:00Z`).getTime();
+  return Math.floor((t - start) / 86_400_000);
+}
+
+/** Question type for a given calendar day. */
+export function questionTypeForDay(daySeed: string): BuildleQuestionType {
+  if (!daySeed) return ROTATION[0];
+  return ROTATION[dayOfYear(daySeed) % ROTATION.length];
+}
+
+/* ──────────── bucketing (pure, fully testable) ──────────── */
+
+export const DURATION_BUCKETS = ["Under 5 min", "5–10 min", "10–15 min", "15+ min"] as const;
+export type DurationBucket = (typeof DURATION_BUCKETS)[number];
+
+export function durationBucket(seconds: number): DurationBucket {
+  const m = seconds / 60;
+  if (m < 5) return "Under 5 min";
+  if (m < 10) return "5–10 min";
+  if (m < 15) return "10–15 min";
+  return "15+ min";
+}
+
+export const RESULT_BUCKETS = ["Win", "Loss"] as const;
+export type ResultBucket = (typeof RESULT_BUCKETS)[number];
+
+export function resultBucket(result: string): ResultBucket | null {
+  const o = outcome({ result });
+  if (o === "W") return "Win";
+  if (o === "L") return "Loss";
+  return null;
+}
+
+export const AGE_BUCKETS = [
+  "Last 30 days",
+  "1–3 months ago",
+  "3–6 months ago",
+  "6–12 months ago",
+] as const;
+export type AgeBucket = (typeof AGE_BUCKETS)[number];
+
+/** Bucket for "how long ago" (ms diff between now and the game). */
+export function ageBucket(gameDate: string, now: Date): AgeBucket | null {
+  const t = new Date(gameDate).getTime();
+  if (!Number.isFinite(t)) return null;
+  const days = Math.floor((now.getTime() - t) / 86_400_000);
+  if (days < 0) return null;
+  if (days <= 30) return "Last 30 days";
+  if (days <= 90) return "1–3 months ago";
+  if (days <= 180) return "3–6 months ago";
+  if (days <= 365) return "6–12 months ago";
+  return null;
+}
+
+export const TIME_OF_DAY_BUCKETS = ["Morning", "Afternoon", "Evening", "Night"] as const;
+export type TimeOfDayBucket = (typeof TIME_OF_DAY_BUCKETS)[number];
+
+/** Local-clock buckets. 6a–12p morning, 12p–6p afternoon, 6p–12a evening, 12a–6a night. */
+export function timeOfDayBucket(gameDate: string): TimeOfDayBucket | null {
+  const d = new Date(gameDate);
+  if (Number.isNaN(d.getTime())) return null;
+  const h = d.getHours();
+  if (h >= 6 && h < 12) return "Morning";
+  if (h >= 12 && h < 18) return "Afternoon";
+  if (h >= 18 && h < 24) return "Evening";
+  return "Night";
+}
+
+export const TIMES_PLAYED_BUCKETS = ["1st time", "2–5", "6–15", "16+"] as const;
+export type TimesPlayedBucket = (typeof TIMES_PLAYED_BUCKETS)[number];
+
+export function timesPlayedBucket(count: number): TimesPlayedBucket {
+  if (count <= 1) return "1st time";
+  if (count <= 5) return "2–5";
+  if (count <= 15) return "6–15";
+  return "16+";
+}
+
+export const WR_BUCKETS = ["0–25%", "25–50%", "50–75%", "75–100%"] as const;
+export type WrBucket = (typeof WR_BUCKETS)[number];
+
+export function wrBucket(wr: number): WrBucket {
+  if (wr < 0.25) return "0–25%";
+  if (wr < 0.5) return "25–50%";
+  if (wr < 0.75) return "50–75%";
+  return "75–100%";
+}
+
+export const STREAK_BUCKETS = [
+  "3+ win streak",
+  "1–2 wins",
+  "1–2 losses",
+  "3+ loss streak",
+] as const;
+export type StreakBucket = (typeof STREAK_BUCKETS)[number];
+
+/** Positive = wins in a row going in, negative = losses in a row. 0 = neutral. */
+export function streakBucket(signed: number): StreakBucket {
+  if (signed >= 3) return "3+ win streak";
+  if (signed >= 1) return "1–2 wins";
+  if (signed >= -2 && signed <= -1) return "1–2 losses";
+  if (signed <= -3) return "3+ loss streak";
+  // 0 → treat as "1–2 losses" boundary fallback so the bucket is always defined.
+  return "1–2 losses";
+}
+
+/**
+ * Walk backwards from a game's index. Count Ws contiguously (positive
+ * streak) or Ls contiguously (negative). Undecided games are skipped.
+ * Returns 0 only when no decided games precede.
+ */
+export function streakGoingIntoGame(gamesAsc: ArcadeGame[], idx: number): number {
+  let signed = 0;
+  let direction: "W" | "L" | null = null;
+  for (let i = idx - 1; i >= 0; i--) {
+    const o = outcome(gamesAsc[i]);
+    if (o === "U") continue;
+    if (direction === null) {
+      direction = o;
+      signed = o === "W" ? 1 : -1;
+      continue;
+    }
+    if (o !== direction) break;
+    signed += direction === "W" ? 1 : -1;
   }
-  if (race === "Z") return "ground";
-  if (race === "T") return "bio";
-  if (race === "P") return "ground";
-  return "hybrid";
+  return signed;
 }
 
-/** Role buckets — adjacency for the "near" clue state on openingUnit. */
-export type OpeningRole = "light" | "armored" | "caster";
+/* ──────────── opener bucketing ──────────── */
 
-const OPENING_KEYWORDS: Array<{ re: RegExp; unit: string; race: "T" | "Z" | "P"; role: OpeningRole }> = [
-  { re: /reaper/i, unit: "Reaper", race: "T", role: "light" },
-  { re: /hellion/i, unit: "Hellion", race: "T", role: "light" },
-  { re: /marine/i, unit: "Marine", race: "T", role: "light" },
-  { re: /marauder/i, unit: "Marauder", race: "T", role: "armored" },
-  { re: /banshee/i, unit: "Banshee", race: "T", role: "armored" },
-  { re: /widow|mine/i, unit: "Widow Mine", race: "T", role: "armored" },
-  { re: /zergling|ling/i, unit: "Zergling", race: "Z", role: "light" },
-  { re: /roach/i, unit: "Roach", race: "Z", role: "armored" },
-  { re: /baneling/i, unit: "Baneling", race: "Z", role: "light" },
-  { re: /mutalisk|muta/i, unit: "Mutalisk", race: "Z", role: "armored" },
-  { re: /hydralisk|hydra/i, unit: "Hydralisk", race: "Z", role: "armored" },
-  { re: /zealot/i, unit: "Zealot", race: "P", role: "light" },
-  { re: /stalker/i, unit: "Stalker", race: "P", role: "armored" },
-  { re: /adept/i, unit: "Adept", race: "P", role: "light" },
-  { re: /void ?ray/i, unit: "Void Ray", race: "P", role: "armored" },
-  { re: /oracle/i, unit: "Oracle", race: "P", role: "caster" },
+/**
+ * Race-aware buckets for the opp_strategy string. We project the raw
+ * label onto a small fixed set of openers so options are mutually
+ * exclusive and recognisable, and so similar phrasings collapse to the
+ * same bucket ("ling-bane all-in" and "zergling baneling rush" both
+ * land on "Ling-Bane all-in").
+ */
+const OPP_OPENERS: ReadonlyArray<{ re: RegExp; label: string; race?: "T" | "Z" | "P" }> = [
+  // Zerg
+  { re: /\bling[\s-]?bane|\bzergling\b.*\bbaneling\b|baneling.*ling/i, label: "Ling-Bane all-in", race: "Z" },
+  { re: /\b12[\s-]?pool|\bpool\s*first|6[\s-]?pool/i, label: "Pool-first", race: "Z" },
+  { re: /\broach\b/i, label: "Roach push", race: "Z" },
+  { re: /\bmuta|mutalisk/i, label: "Mutalisk", race: "Z" },
+  { re: /\bnydus|nidus/i, label: "Nydus", race: "Z" },
+  { re: /\bhydra|hydralisk/i, label: "Hydra timing", race: "Z" },
+  { re: /\bhatch[\s-]?first|3[\s-]?hatch/i, label: "Hatch-first macro", race: "Z" },
+  // Terran
+  { re: /\breaper\b/i, label: "Reaper expand", race: "T" },
+  { re: /\bhellion|hellbat/i, label: "Hellion harass", race: "T" },
+  { re: /\bbio\b|\bmarine\b/i, label: "Bio timing", race: "T" },
+  { re: /\bmech\b|\btank\b|\bcyclone\b/i, label: "Mech", race: "T" },
+  { re: /\bbanshee\b/i, label: "Banshee opener", race: "T" },
+  { re: /\bproxy\b/i, label: "Proxy", race: "T" },
+  // Protoss
+  { re: /\boracle\b/i, label: "Oracle harass", race: "P" },
+  { re: /\badept\b/i, label: "Adept pressure", race: "P" },
+  { re: /\bzealot\b/i, label: "Zealot pressure", race: "P" },
+  { re: /\bstalker\b/i, label: "Stalker timing", race: "P" },
+  { re: /\bvoid[\s-]?ray|tempest|carrier|skytoss/i, label: "Skytoss", race: "P" },
+  { re: /\bcannon[\s-]?rush/i, label: "Cannon rush", race: "P" },
+  // Cross-race
+  { re: /\bcheese|all[\s-]?in/i, label: "All-in" },
+  { re: /\bmacro|fast[\s-]?expand|three[\s-]?base|3[\s-]?base/i, label: "Macro game" },
 ];
 
-/** Lookup unit → { race, role }. Used by "near" semantics on openingUnit. */
-export function openingMeta(unit: string): { race: "T" | "Z" | "P"; role: OpeningRole } | null {
-  for (const k of OPENING_KEYWORDS) {
-    if (k.unit === unit) return { race: k.race, role: k.role };
+export function opponentOpenerBucket(strategy: string | null | undefined): string | null {
+  if (!strategy) return null;
+  for (const o of OPP_OPENERS) {
+    if (o.re.test(strategy)) return o.label;
   }
   return null;
 }
 
-export function deriveOpeningUnit(name: string, race?: string): string {
-  for (const k of OPENING_KEYWORDS) if (k.re.test(name)) return k.unit;
-  if (race === "Z") return "Zergling";
-  if (race === "T") return "Marine";
-  if (race === "P") return "Zealot";
-  return "Worker";
+/** All bucket labels that fit a given race — used for distractor selection. */
+export function openersForRace(race: "T" | "Z" | "P"): string[] {
+  return OPP_OPENERS.filter((o) => !o.race || o.race === race).map((o) => o.label);
 }
 
-export function deriveFirstAggression(name: string): BuildleFeatures["firstAggression"] {
-  // Two-base timings ARE all-ins, but they hit at 4–6 min — checked
-  // first so the broader cheese pattern doesn't claim them.
-  if (/(\b2[-\s]?base|\btwo[-\s]?base|\btiming|\bdrop\b)/i.test(name)) return "4–6 min";
-  if (/\b(rush|cheese|all[- ]?in|allin|proxy|cannon rush)\b/i.test(name)) return "<4 min";
-  if (/\b(macro|fast expand|three[-\s]?base|3[-\s]?base)\b/i.test(name)) return "9+ min";
-  return "6–9 min";
+/* ──────────── question payload ──────────── */
+
+export interface CaseFileFact {
+  /** Stable key — used to dedupe and to skip the hidden one. */
+  key: string;
+  label: string;
+  value: string;
+  /** Optional tonal hint for UI styling. */
+  tone?: "default" | "muted";
 }
 
-export function deriveFeatures(name: string, race?: string): BuildleFeatures {
+interface Q {
+  gameId: string;
+  questionType: BuildleQuestionType;
+  /** Short prompt shown above the buttons. */
+  prompt: string;
+  /** Which fact key is hidden — used to redact the case file. */
+  hiddenKey: string;
+  /** Buttons, in render order. */
+  options: string[];
+  /** Index in `options` of the correct answer. */
+  correctIndex: number;
+  /** The full case file. Render skips the hidden one. */
+  caseFile: CaseFileFact[];
+}
+
+type A = number; // index of picked option
+
+/* ──────────── helpers ──────────── */
+
+function normaliseRace(r: string | undefined | null): "T" | "Z" | "P" | null {
+  const c = String(r || "").charAt(0).toUpperCase();
+  if (c === "T" || c === "Z" || c === "P") return c;
+  return null;
+}
+
+function raceLabel(r: string | undefined | null): string {
+  const n = normaliseRace(r);
+  if (n === "T") return "Terran";
+  if (n === "Z") return "Zerg";
+  if (n === "P") return "Protoss";
+  return "Random";
+}
+
+function formatDuration(seconds: number | undefined): string {
+  if (!seconds || !Number.isFinite(seconds)) return "—";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatDateLong(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function buildCaseFile(
+  g: ArcadeGame,
+  opp: ArcadeOpponent | undefined,
+  hiddenKey: string,
+): CaseFileFact[] {
+  const facts: CaseFileFact[] = [];
+  facts.push({
+    key: "opponent",
+    label: "Opponent",
+    value: opp?.displayName || opp?.name || g.opponent?.displayName || "Unknown",
+  });
+  facts.push({
+    key: "date",
+    label: "Date played",
+    value: formatDateLong(g.date),
+  });
+  facts.push({
+    key: "matchup",
+    label: "Matchup",
+    value: `${raceLabel(g.myRace)} vs ${raceLabel(g.oppRace)}`,
+  });
+  if (g.map) {
+    facts.push({ key: "map", label: "Map", value: g.map });
+  }
+  facts.push({
+    key: "duration",
+    label: "Duration",
+    value: formatDuration(g.duration),
+  });
+  facts.push({
+    key: "result",
+    label: "Result",
+    value: outcome(g) === "W" ? "Win" : outcome(g) === "L" ? "Loss" : "Undecided",
+  });
+  if (g.myBuild) {
+    facts.push({ key: "yourBuild", label: "Your build", value: g.myBuild });
+  }
+  if (g.opp_strategy) {
+    facts.push({ key: "oppOpener", label: "Opponent opener", value: g.opp_strategy });
+  }
+  return facts.filter((f) => f.key !== hiddenKey);
+}
+
+/**
+ * Race-appropriate distractor build labels for the "Your build" round.
+ * We pull from the user's own most-played builds in this matchup so
+ * the choices feel personal rather than generic.
+ */
+function buildOptionsForMatchup(
+  builds: GenerateInput["data"]["builds"],
+  truth: string,
+  myRace: "T" | "Z" | "P" | null,
+  rng: () => number,
+): string[] {
+  const candidates = builds
+    .filter((b) => b.name !== truth)
+    .filter((b) => !myRace || normaliseRace(b.race) === myRace)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 8);
+  const distractors = shuffle(
+    candidates.map((b) => b.name),
+    rng,
+  ).slice(0, 3);
+  return shuffle([truth, ...distractors], rng);
+}
+
+/* ──────────── per-question generators ──────────── */
+
+interface QSpec {
+  prompt: string;
+  hiddenKey: string;
+  options: string[];
+  correct: string;
+}
+
+function generateDuration(g: ArcadeGame): QSpec | null {
+  if (!g.duration) return null;
+  const correct = durationBucket(g.duration);
   return {
-    race: (race || "?").charAt(0).toUpperCase(),
-    techPath: deriveTechPath(name, race?.charAt(0).toUpperCase()),
-    openingUnit: deriveOpeningUnit(name, race?.charAt(0).toUpperCase()),
-    firstAggression: deriveFirstAggression(name),
+    prompt: "How long did this game last?",
+    hiddenKey: "duration",
+    options: [...DURATION_BUCKETS],
+    correct,
   };
 }
 
-/**
- * Tech-path adjacency. Builds in the same family count as "near" even
- * when they differ. Pairs (a, b) appear unordered — checked both ways.
- */
-const TECH_ADJACENCY: ReadonlyArray<readonly [BuildleFeatures["techPath"], BuildleFeatures["techPath"]]> = [
-  ["mech", "ground"],
-  ["bio", "ground"],
-  ["air", "hybrid"],
-];
-
-function techsAreAdjacent(
-  a: BuildleFeatures["techPath"],
-  b: BuildleFeatures["techPath"],
-): boolean {
-  for (const [x, y] of TECH_ADJACENCY) {
-    if ((a === x && b === y) || (a === y && b === x)) return true;
-  }
-  return false;
+function generateResult(g: ArcadeGame): QSpec | null {
+  const b = resultBucket(g.result);
+  if (!b) return null;
+  return {
+    prompt: "Did you win or lose this game?",
+    hiddenKey: "result",
+    options: [...RESULT_BUCKETS],
+    correct: b,
+  };
 }
 
-/**
- * First-aggression timing adjacency. Adjacent windows are "near"
- * (a 5-minute timing guess vs a 4-minute truth still landed close).
- */
-const TIMING_ORDER: ReadonlyArray<BuildleFeatures["firstAggression"]> = [
-  "<4 min",
-  "4–6 min",
-  "6–9 min",
-  "9+ min",
-];
-
-function timingsAreAdjacent(
-  a: BuildleFeatures["firstAggression"],
-  b: BuildleFeatures["firstAggression"],
-): boolean {
-  const i = TIMING_ORDER.indexOf(a);
-  const j = TIMING_ORDER.indexOf(b);
-  if (i < 0 || j < 0) return false;
-  return Math.abs(i - j) === 1;
+function generateDate(g: ArcadeGame, now: Date): QSpec | null {
+  const b = ageBucket(g.date, now);
+  if (!b) return null;
+  return {
+    prompt: "When did you play this?",
+    hiddenKey: "date",
+    options: [...AGE_BUCKETS],
+    correct: b,
+  };
 }
 
-/**
- * Score a single axis. "match" if identical; "near" if same family
- * (tech), same race + role bucket (opening unit), or adjacent timing
- * (first aggression); "miss" otherwise. Race never goes near.
- */
-export function clueFor(
-  axis: BuildleAxis,
-  guess: BuildleFeatures,
-  truth: BuildleFeatures,
-): BuildleClue {
-  const guessVal = String(guess[axis]);
-  const truthVal = String(truth[axis]);
-  if (guessVal === truthVal) {
-    return { axis, guessVal, truthVal, state: "match" };
-  }
-  let state: BuildleClueState = "miss";
-  if (axis === "techPath") {
-    if (techsAreAdjacent(guess.techPath, truth.techPath)) state = "near";
-  } else if (axis === "firstAggression") {
-    if (timingsAreAdjacent(guess.firstAggression, truth.firstAggression)) state = "near";
-  } else if (axis === "openingUnit") {
-    const a = openingMeta(guess.openingUnit);
-    const b = openingMeta(truth.openingUnit);
-    if (a && b && a.race === b.race && a.role === b.role) state = "near";
-  }
-  return { axis, guessVal, truthVal, state };
+function generateTimeOfDay(g: ArcadeGame): QSpec | null {
+  const b = timeOfDayBucket(g.date);
+  if (!b) return null;
+  return {
+    prompt: "What time of day was this?",
+    hiddenKey: "date",
+    options: [...TIME_OF_DAY_BUCKETS],
+    correct: b,
+  };
 }
 
-/* ──────────── generator + render ──────────── */
+function generateOppOpener(g: ArcadeGame, rng: () => number): QSpec | null {
+  const truth = opponentOpenerBucket(g.opp_strategy);
+  if (!truth) return null;
+  const oppRace = normaliseRace(g.oppRace);
+  const pool = oppRace ? openersForRace(oppRace) : OPP_OPENERS.map((o) => o.label);
+  const distractors = shuffle(
+    pool.filter((l) => l !== truth),
+    rng,
+  ).slice(0, 3);
+  return {
+    prompt: "What did your opponent open with?",
+    hiddenKey: "oppOpener",
+    options: shuffle([truth, ...distractors], rng),
+    correct: truth,
+  };
+}
+
+function generateYourBuild(
+  g: ArcadeGame,
+  data: GenerateInput["data"],
+  rng: () => number,
+): QSpec | null {
+  if (!g.myBuild) return null;
+  const myRace = normaliseRace(g.myRace);
+  const opts = buildOptionsForMatchup(data.builds, g.myBuild, myRace, rng);
+  if (opts.length < 2 || !opts.includes(g.myBuild)) return null;
+  return {
+    prompt: "Which of your builds did you play here?",
+    hiddenKey: "yourBuild",
+    options: opts,
+    correct: g.myBuild,
+  };
+}
+
+function generateTimesPlayed(
+  g: ArcadeGame,
+  opp: ArcadeOpponent | undefined,
+): QSpec | null {
+  if (!opp || !opp.games) return null;
+  const b = timesPlayedBucket(opp.games);
+  return {
+    prompt: "How many times had you played this opponent (total, all-time)?",
+    hiddenKey: "opponent",
+    options: [...TIMES_PLAYED_BUCKETS],
+    correct: b,
+  };
+}
+
+function generateCareerWr(g: ArcadeGame, opp: ArcadeOpponent | undefined): QSpec | null {
+  if (!opp || !opp.games || opp.games < 3) return null;
+  const b = wrBucket(opp.userWinRate);
+  return {
+    prompt: "What's your all-time win rate vs this opponent?",
+    hiddenKey: "opponent",
+    options: [...WR_BUCKETS],
+    correct: b,
+  };
+}
+
+function generateStreakGoingIn(
+  g: ArcadeGame,
+  gamesAsc: ArcadeGame[],
+  idx: number,
+): QSpec | null {
+  if (idx < 1) return null;
+  const signed = streakGoingIntoGame(gamesAsc, idx);
+  if (signed === 0) return null;
+  const b = streakBucket(signed);
+  return {
+    prompt: "What streak were you on going into this game?",
+    hiddenKey: "result",
+    options: [...STREAK_BUCKETS],
+    correct: b,
+  };
+}
+
+/** Dispatch per-question generation. Returns null if the game is unsuitable. */
+function buildQuestion(
+  type: BuildleQuestionType,
+  g: ArcadeGame,
+  gamesAsc: ArcadeGame[],
+  idx: number,
+  data: GenerateInput["data"],
+  opp: ArcadeOpponent | undefined,
+  rng: () => number,
+  now: Date,
+): QSpec | null {
+  switch (type) {
+    case "duration":
+      return generateDuration(g);
+    case "result":
+      return generateResult(g);
+    case "datePlayed":
+      return generateDate(g, now);
+    case "timeOfDay":
+      return generateTimeOfDay(g);
+    case "oppOpener":
+      return generateOppOpener(g, rng);
+    case "yourBuild":
+      return generateYourBuild(g, data, rng);
+    case "timesPlayedOpponent":
+      return generateTimesPlayed(g, opp);
+    case "careerWrVsOpponent":
+      return generateCareerWr(g, opp);
+    case "streakGoingIn":
+      return generateStreakGoingIn(g, gamesAsc, idx);
+  }
+}
+
+/* ──────────── generator ──────────── */
 
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
-  const eligible = input.data.builds.filter((b) => b.total >= 3);
-  if (eligible.length < 4) {
+  if (input.data.games.length < 10) {
+    return { ok: false, reason: "Need ≥10 games before we can build a case file." };
+  }
+  const now = new Date();
+  // Sort once, oldest → newest. Used both for selection and for the
+  // streak-going-in question.
+  const gamesAsc = [...input.data.games].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+  // Exclude games younger than ~24 hours so today's session isn't the
+  // mystery (no chance to forget yet).
+  const cutoff = now.getTime() - 24 * 60 * 60 * 1000;
+  const eligible: Array<{ idx: number; game: ArcadeGame }> = [];
+  for (let i = 0; i < gamesAsc.length; i++) {
+    const g = gamesAsc[i];
+    const t = new Date(g.date).getTime();
+    if (Number.isFinite(t) && t < cutoff) eligible.push({ idx: i, game: g });
+  }
+  if (eligible.length < 5) {
     return {
       ok: false,
-      reason: "Need ≥4 builds with at least 3 plays to play Buildle.",
+      reason: "Need ≥5 games at least a day old. Play some more ladder games and come back.",
     };
   }
-  // Deterministic pick: most-played builds, ranked, then chosen by daily seed.
-  const sorted = eligible
-    .slice()
-    .sort((a, b) => b.total - a.total)
-    .slice(0, Math.min(eligible.length, 12));
-  const idx = Math.floor(input.rng() * sorted.length);
-  const pick = sorted[idx];
-  const candidates = sorted.map((b) => b.name);
-  const features = deriveFeatures(pick.name, pick.race);
-  return {
-    ok: true,
-    minDataMet: true,
-    question: {
-      buildName: pick.name,
-      candidates,
-      features,
-      axisLabels: {
-        race: "Race",
-        techPath: "Tech path",
-        openingUnit: "Opening unit",
-        firstAggression: "First aggression",
+
+  const type = questionTypeForDay(input.daySeed || todayKey(now, input.tz));
+  const oppById = new Map<string, ArcadeOpponent>();
+  for (const o of input.data.opponents) oppById.set(o.pulseId, o);
+
+  // Build a per-day candidate list that can actually answer today's
+  // question. We try every eligible game in a deterministic seeded
+  // order; the first that yields a valid QSpec wins.
+  const ordered = shuffle(eligible, input.rng);
+  for (const { idx, game } of ordered) {
+    const opp = game.oppPulseId ? oppById.get(game.oppPulseId) : undefined;
+    // Fresh RNG per attempt so distractor draws don't drift with the
+    // skip count.
+    const localRng = mulberry32(fnv1a(`${input.daySeed}::${game.gameId}`));
+    const spec = buildQuestion(type, game, gamesAsc, idx, input.data, opp, localRng, now);
+    if (!spec) continue;
+    const correctIndex = spec.options.indexOf(spec.correct);
+    if (correctIndex < 0) continue;
+    return {
+      ok: true,
+      minDataMet: true,
+      question: {
+        gameId: game.gameId,
+        questionType: type,
+        prompt: spec.prompt,
+        hiddenKey: spec.hiddenKey,
+        options: spec.options,
+        correctIndex,
+        caseFile: buildCaseFile(game, opp, spec.hiddenKey),
       },
-    },
+    };
+  }
+
+  return {
+    ok: false,
+    reason:
+      "We couldn't build today's case file from your data. Try again tomorrow when the rotation moves on.",
   };
 }
 
 function score(q: Q, a: A): ScoreResult {
-  const correct = a === q.buildName;
+  const correct = a === q.correctIndex;
   return {
     raw: correct ? 1 : 0,
     xp: correct ? 18 : 0,
@@ -243,11 +624,35 @@ export const buildle: Mode<Q, A> = {
   ttp: "fast",
   depthTag: "generative",
   title: "Buildle",
-  blurb: "Daily build of the day. Six guesses, four-axis clues, share like Wordle.",
+  blurb:
+    "Daily case file from your real games. One fact is hidden — pick the right bucket.",
   generate,
   score,
   render: (ctx) => <Render ctx={ctx} />,
 };
+
+/* ──────────── share ──────────── */
+
+/**
+ * Build the share string for Buildle. Replaces the old Wordle-style
+ * emoji grid — there's a single binary outcome per day now, so the
+ * share is a one-liner that names the day's question type.
+ */
+export function buildleShareText(
+  progress: BuildleProgress | undefined,
+  daySeed: string,
+): string {
+  const dayLabel = daySeed || new Date().toISOString().slice(0, 10);
+  if (!progress || progress.pickedIndex < 0) {
+    return `Buildle · ${dayLabel} · not played yet`;
+  }
+  const type = progress.questionType as BuildleQuestionType;
+  const label = QUESTION_LABEL[type] || "Daily";
+  const stamp = progress.correct ? "✅" : "❌";
+  return `Buildle · ${dayLabel} · ${label} ${stamp}`;
+}
+
+/* ──────────── render ──────────── */
 
 function Render({
   ctx,
@@ -257,172 +662,130 @@ function Render({
   const { state, update } = useArcadeState();
   const dayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const stored: BuildleProgress | undefined = state.buildleByDay[dayKey];
-  const guesses = stored?.guesses ?? [];
-  const solved = stored?.solved ?? false;
+  // If yesterday's case file is still in the store but today rolled to
+  // a different question type / game, treat the day as fresh.
+  const isFreshDay =
+    !stored ||
+    stored.gameId !== ctx.question.gameId ||
+    stored.questionType !== ctx.question.questionType;
+  const picked = isFreshDay ? -1 : stored.pickedIndex ?? -1;
+  const answered = picked >= 0;
+  const correct = answered ? picked === ctx.question.correctIndex : false;
 
-  const [pick, setPick] = useState<string>("");
-
+  // First mount of the day: seed the day's record so reloads see the
+  // same state. We don't set pickedIndex until the user picks.
   useEffect(() => {
-    if (!stored) {
-      update((prev) => ({
-        ...prev,
-        buildleByDay: {
-          ...prev.buildleByDay,
-          [dayKey]: { buildName: ctx.question.buildName, guesses: [], solved: false },
+    if (!isFreshDay) return;
+    update((prev) => ({
+      ...prev,
+      buildleByDay: {
+        ...prev.buildleByDay,
+        [dayKey]: {
+          gameId: ctx.question.gameId,
+          questionType: ctx.question.questionType,
+          options: ctx.question.options,
+          correctIndex: ctx.question.correctIndex,
+          pickedIndex: -1,
+          correct: false,
         },
-      }));
-    }
-  }, [stored, ctx.question.buildName, dayKey, update]);
+      },
+    }));
+  }, [
+    isFreshDay,
+    dayKey,
+    ctx.question.gameId,
+    ctx.question.questionType,
+    ctx.question.options,
+    ctx.question.correctIndex,
+    update,
+  ]);
 
-  const submitGuess = (guess: string) => {
-    if (!guess || guesses.length >= MAX_GUESSES || solved) return;
-    update((prev) => {
-      const cur = prev.buildleByDay[dayKey] ?? {
-        buildName: ctx.question.buildName,
-        guesses: [],
-        solved: false,
-      };
-      const nextGuesses = [...cur.guesses, guess];
-      const nextSolved = guess === ctx.question.buildName;
-      return {
-        ...prev,
-        buildleByDay: {
-          ...prev.buildleByDay,
-          [dayKey]: {
-            buildName: ctx.question.buildName,
-            guesses: nextGuesses,
-            solved: nextSolved,
-          },
+  const pick = (index: number) => {
+    if (answered) return;
+    const isCorrect = index === ctx.question.correctIndex;
+    update((prev) => ({
+      ...prev,
+      buildleByDay: {
+        ...prev.buildleByDay,
+        [dayKey]: {
+          gameId: ctx.question.gameId,
+          questionType: ctx.question.questionType,
+          options: ctx.question.options,
+          correctIndex: ctx.question.correctIndex,
+          pickedIndex: index,
+          correct: isCorrect,
         },
-      };
-    });
-    if (guess === ctx.question.buildName) {
-      ctx.onAnswer(guess);
-    } else if (guesses.length + 1 >= MAX_GUESSES) {
-      ctx.onAnswer(guess); // exhausted attempts; reveal truth
-    }
-    setPick("");
+      },
+    }));
+    ctx.onAnswer(index);
   };
 
-  const lines = guesses.map((g) => {
-    const guessFeat = deriveFeatures(g, ctx.question.candidates.includes(g) ? undefined : undefined);
-    const cluesByAxis: BuildleAxis[] = ["race", "techPath", "openingUnit", "firstAggression"];
-    return {
-      guess: g,
-      clues: cluesByAxis.map((axis) =>
-        clueFor(axis, guessFeat, ctx.question.features),
-      ),
-    };
-  });
-
-  const finished = solved || guesses.length >= MAX_GUESSES;
-  const remaining = MAX_GUESSES - guesses.length;
+  const questionLabel = QUESTION_LABEL[ctx.question.questionType];
 
   return (
     <GameStage
       icon={IconFor(ID)}
       title={buildle.title}
-      depthLabel="Generative: 4-axis daily clue puzzle"
+      depthLabel={`Daily case file · ${questionLabel}`}
       hud={{
-        score: solved ? `solved in ${guesses.length}` : `${guesses.length} / ${MAX_GUESSES}`,
-        hint: finished ? "Card complete — comes back tomorrow" : `${remaining} guesses left`,
+        score: answered ? (correct ? "✓ correct" : "✗ wrong") : "—",
+        hint: answered
+          ? "Sealed for today — comes back tomorrow."
+          : "One pick. No partial credit.",
       }}
       isDaily={ctx.isDaily}
       body={
-        <div className="space-y-3">
-          <p className="text-caption text-text-muted">
-            Guess the build. Each guess scores you across{" "}
-            <span className="text-text">Race</span>,{" "}
-            <span className="text-text">Tech path</span>,{" "}
-            <span className="text-text">Opening unit</span>, and{" "}
-            <span className="text-text">First aggression timing</span>.
-          </p>
-          <div
-            className="flex flex-wrap items-center gap-3 rounded border border-border bg-bg-elevated p-2 text-caption"
-            aria-label="Clue legend"
-          >
-            <span className="flex items-center gap-1.5">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-success/30 text-[10px] font-mono uppercase">
-                ●
-              </span>
-              <span className="text-text">Exact match</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-warning/30 text-[10px] font-mono uppercase">
-                ●
-              </span>
-              <span className="text-text">Same family / adjacent timing</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-bg-surface text-[10px] font-mono uppercase text-text-dim">
-                ●
-              </span>
-              <span className="text-text">Not in this build</span>
-            </span>
-          </div>
-          <ul className="space-y-1.5" aria-label="Buildle guesses">
-            {lines.map((row, i) => (
-              <li key={`${row.guess}-${i}`} className="space-y-1 rounded border border-border bg-bg-surface p-2">
-                <div className="flex items-center justify-between text-caption">
-                  <span className="truncate font-medium text-text">{row.guess}</span>
-                  {row.guess === ctx.question.buildName ? (
-                    <span className="rounded bg-success/15 px-1.5 text-success">Solved</span>
-                  ) : null}
-                </div>
-                <div className="flex gap-1">
-                  {row.clues.map((c) => (
-                    <span
-                      key={c.axis}
-                      className={[
-                        "inline-flex h-7 flex-1 items-center justify-center rounded text-[10px] font-mono uppercase tracking-wider",
-                        c.state === "match"
-                          ? "bg-success/30 text-text"
-                          : c.state === "near"
-                            ? "bg-warning/30 text-text"
-                            : "bg-bg-elevated text-text-dim",
-                      ].join(" ")}
-                      title={`${ctx.question.axisLabels[c.axis]} — your guess: ${c.guessVal}, ${c.state === "match" ? "exact match" : c.state === "near" ? "close" : "miss"}`}
-                      aria-label={`${ctx.question.axisLabels[c.axis]} — your guess: ${c.guessVal}, ${c.state}`}
-                    >
-                      {ctx.question.axisLabels[c.axis][0]}
-                    </span>
-                  ))}
-                </div>
-              </li>
-            ))}
-          </ul>
-          {!finished ? (
-            <div className="flex gap-2">
-              <select
-                aria-label="Guess a build"
-                value={pick}
-                onChange={(e) => setPick(e.target.value)}
-                className="h-11 flex-1 rounded border border-border bg-bg-elevated px-2 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                <option value="">— pick a build —</option>
-                {ctx.question.candidates
-                  .filter((c) => !guesses.includes(c))
-                  .map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => submitGuess(pick)}
-                disabled={!pick}
-                className="inline-flex min-h-[44px] items-center rounded-md bg-accent px-4 text-caption font-semibold uppercase tracking-wider text-bg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-              >
-                Guess
-              </button>
+        <div className="space-y-4">
+          <CaseFile
+            facts={ctx.question.caseFile}
+            hiddenLabel={questionLabel}
+            revealed={
+              answered ? ctx.question.options[ctx.question.correctIndex] : null
+            }
+          />
+          <div className="space-y-2">
+            <p className="text-caption text-text-muted">{ctx.question.prompt}</p>
+            <div
+              className={[
+                "grid gap-2",
+                ctx.question.options.length === 2 ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4",
+              ].join(" ")}
+              role="group"
+              aria-label="Answer options"
+            >
+              {ctx.question.options.map((opt, i) => {
+                const isPick = i === picked;
+                const isRight = i === ctx.question.correctIndex;
+                const tone = !answered
+                  ? "bg-bg-surface text-text hover:bg-bg-elevated"
+                  : isRight
+                    ? "bg-success/25 text-text border-success/50"
+                    : isPick
+                      ? "bg-danger/25 text-text border-danger/50"
+                      : "bg-bg-surface text-text-dim";
+                return (
+                  <button
+                    key={`${opt}-${i}`}
+                    type="button"
+                    onClick={() => pick(i)}
+                    disabled={answered}
+                    className={[
+                      "inline-flex min-h-[44px] items-center justify-center rounded-md border border-border px-3 text-caption font-semibold uppercase tracking-wider focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default",
+                      tone,
+                    ].join(" ")}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
             </div>
-          ) : null}
-          {finished && !solved ? (
-            <p className="text-caption text-warning">
-              The build was{" "}
-              <span className="font-semibold text-text">{ctx.question.buildName}</span>.
-            </p>
+          </div>
+          {answered ? (
+            <Reveal
+              correct={correct}
+              truth={ctx.question.options[ctx.question.correctIndex]}
+              questionLabel={questionLabel}
+            />
           ) : null}
         </div>
       }
@@ -430,30 +793,80 @@ function Render({
   );
 }
 
-/**
- * Build the Wordle-style emoji grid for sharing. Pure — pulled out so
- * a test can lock the format.
- */
-export function buildleEmoji(
-  guesses: string[],
-  truth: string,
-  features: BuildleFeatures,
-  candidates: string[],
-): string {
-  const axes: BuildleAxis[] = ["race", "techPath", "openingUnit", "firstAggression"];
-  const lines: string[] = [];
-  for (const g of guesses) {
-    const f = deriveFeatures(g, candidates.includes(g) ? undefined : undefined);
-    const row = axes
-      .map((a) => {
-        const state = clueFor(a, f, features).state;
-        if (state === "match") return "🟩";
-        if (state === "near") return "🟨";
-        return "⬜";
-      })
-      .join("");
-    lines.push(row);
-  }
-  const header = `Buildle ${guesses.includes(truth) ? guesses.indexOf(truth) + 1 : "X"}/${MAX_GUESSES}`;
-  return `${header}\n${lines.join("\n")}`;
+function CaseFile({
+  facts,
+  hiddenLabel,
+  revealed,
+}: {
+  facts: CaseFileFact[];
+  hiddenLabel: string;
+  revealed: string | null;
+}) {
+  return (
+    <section
+      aria-label="Case file"
+      className="rounded-md border border-border bg-bg-elevated p-3"
+    >
+      <header className="mb-2 flex items-center justify-between">
+        <span className="text-caption font-mono uppercase tracking-wider text-text-dim">
+          Case file
+        </span>
+        <span className="rounded-full bg-bg-surface px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider text-text-dim">
+          1 fact redacted
+        </span>
+      </header>
+      <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2">
+        {facts.map((f) => (
+          <div
+            key={f.key}
+            className="flex items-baseline justify-between gap-2 border-b border-border/40 py-1 last:border-b-0"
+          >
+            <dt className="text-caption uppercase tracking-wider text-text-dim">
+              {f.label}
+            </dt>
+            <dd className="truncate text-caption font-mono tabular-nums text-text">
+              {f.value}
+            </dd>
+          </div>
+        ))}
+        <div className="col-span-full mt-1 flex items-baseline justify-between gap-2 rounded border border-warning/40 bg-warning/10 px-2 py-1.5">
+          <dt className="text-caption uppercase tracking-wider text-warning">
+            {hiddenLabel}
+          </dt>
+          <dd className="font-mono tabular-nums text-body text-warning">
+            {revealed ?? "███"}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+function Reveal({
+  correct,
+  truth,
+  questionLabel,
+}: {
+  correct: boolean;
+  truth: string;
+  questionLabel: string;
+}) {
+  return (
+    <div
+      className={[
+        "rounded-md border p-3 text-caption",
+        correct
+          ? "border-success/40 bg-success/10 text-success"
+          : "border-warning/40 bg-warning/10 text-warning",
+      ].join(" ")}
+      role="status"
+      aria-live="polite"
+    >
+      <p>
+        <span className="font-semibold text-text">{questionLabel}:</span>{" "}
+        <span className="font-mono text-text">{truth}</span>
+        {correct ? " — nice." : " — sealed for the day."}
+      </p>
+    </div>
+  );
 }

@@ -287,10 +287,31 @@ export interface BingoCell {
   gameId?: string;
 }
 
+/**
+ * Buildle daily progress.
+ *
+ * The day's mystery is a single real game from the user's history. One
+ * fact about that game is hidden; the user picks from 2–4 plausible
+ * buckets, all correct-or-wrong (no partial credit). Each entry is a
+ * sealed record of which option was offered, which was picked, and
+ * whether it matched — locked once for the day.
+ */
 export interface BuildleProgress {
-  buildName: string;
-  guesses: string[];
-  solved: boolean;
+  /** The gameId of the case file we asked about. */
+  gameId: string;
+  /** Rotation slot for the day (see BuildleQuestionType in buildle.tsx). */
+  questionType: string;
+  /** Buttons shown to the user, in the order they were rendered. */
+  options: string[];
+  /** Index in `options` of the correct answer. */
+  correctIndex: number;
+  /**
+   * Index in `options` the user picked. -1 (or undefined on legacy
+   * rows) means the user hasn't answered yet today.
+   */
+  pickedIndex: number;
+  /** Whether the pick matched the correct answer. */
+  correct: boolean;
 }
 
 export const ARCADE_STATE_DEFAULT: ArcadeState = Object.freeze({
