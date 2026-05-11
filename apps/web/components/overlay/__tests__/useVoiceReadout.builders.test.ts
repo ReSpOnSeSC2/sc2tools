@@ -3,10 +3,11 @@ import {
   buildScoutingLine,
   buildMatchEndLine,
   buildCheeseLine,
+  buildLiveGameScoutingLine,
   sanitizeForSpeech,
 } from "../useVoiceReadout.builders";
 import { normalizeRace } from "../useVoiceReadout.builders";
-import type { LiveGamePayload } from "../types";
+import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 
 const base = (extra: Partial<LiveGamePayload> = {}): LiveGamePayload => ({
   oppName: "TestUser",
@@ -218,5 +219,184 @@ describe("normalizeRace", () => {
     expect(normalizeRace(null)).toBe("");
     expect(normalizeRace("unknown")).toBe("");
     expect(normalizeRace("???")).toBe("");
+  });
+});
+
+describe("buildLiveGameScoutingLine", () => {
+  const envBase = (
+    extra: Partial<LiveGameEnvelope> = {},
+  ): LiveGameEnvelope => ({
+    type: "liveGameState",
+    phase: "match_loading",
+    capturedAt: 0,
+    ...extra,
+  });
+
+  it("speaks name + race + Good luck when both are set", () => {
+    const out = buildLiveGameScoutingLine(
+      envBase({ opponent: { name: "Serral", race: "Zerg" } }),
+    );
+    expect(out).toContain("Facing Serral, Zerg.");
+    expect(out).toContain("Good luck.");
+  });
+
+  it("appends MMR when the bridge's profile carries it", () => {
+    expect(
+      buildLiveGameScoutingLine(
+        envBase({
+          opponent: { name: "Serral", race: "Zerg", profile: { mmr: 7100 } },
+        }),
+      ),
+    ).toContain("7100 MMR.");
+  });
+
+  it("falls back to 'unknown opponent' when neither name nor race is set", () => {
+    expect(buildLiveGameScoutingLine(envBase())).toContain(
+      "Facing an unknown opponent.",
+    );
+  });
+
+  it("normalises single-letter race variants from the agent", () => {
+    // Agent occasionally emits ``T`` / ``Z`` / ``P`` / ``R`` rather
+    // than the full race word; the readout must map to the canonical
+    // form so the streamer hears "Facing Maru, Terran." not "Facing
+    // Maru." with the race silently dropped.
+    expect(
+      buildLiveGameScoutingLine(
+        envBase({ opponent: { name: "Maru", race: "T" } }),
+      ),
+    ).toContain("Facing Maru, Terran.");
+    expect(
+      buildLiveGameScoutingLine(
+        envBase({ opponent: { name: "Serral", race: "z" } }),
+      ),
+    ).toContain("Facing Serral, Zerg.");
+    expect(
+      buildLiveGameScoutingLine(
+        envBase({ opponent: { name: "Stats", race: "P" } }),
+      ),
+    ).toContain("Facing Stats, Protoss.");
+  });
+
+  it("announces head-to-head record and win percentage when streamerHistory carries them", () => {
+    // Mirrors the THEBLOB-style case: pre-game card has the cloud's
+    // enrichment attached. The voice line must include the record
+    // (the agent's match-loading utterance previously read only the
+    // name) and the win % the streamer asked for at match start.
+    const out = buildLiveGameScoutingLine(
+      envBase({
+        opponent: { name: "THEBLOB", race: "Protoss" },
+        streamerHistory: {
+          oppName: "THEBLOB",
+          oppRace: "Protoss",
+          matchup: "PvP",
+          headToHead: { wins: 3, losses: 1 },
+        },
+      }),
+    );
+    expect(out).toContain("Facing THEBLOB, Protoss.");
+    // 3 + 1 = 4; 3/4 = 75% win rate.
+    expect(out).toContain("You're 3 and 1 against them, 75 percent win rate.");
+    expect(out).toContain("Good luck.");
+  });
+
+  it("says 'First meeting.' when streamerHistory confirms an empty record", () => {
+    const out = buildLiveGameScoutingLine(
+      envBase({
+        opponent: { name: "FreshAccount", race: "Terran" },
+        streamerHistory: {
+          oppName: "FreshAccount",
+          oppRace: "Terran",
+          matchup: "PvT",
+          headToHead: { wins: 0, losses: 0 },
+        },
+      }),
+    );
+    expect(out).toContain("First meeting.");
+    expect(out).not.toMatch(/percent win rate/);
+    expect(out).toContain("Good luck.");
+  });
+
+  it("stays silent on H2H when streamerHistory has not landed yet (no false 'first meeting')", () => {
+    // Envelope arrived before the cloud's enrichment hook ran — we
+    // can't tell whether this is a first meeting or a repeat
+    // opponent, so the utterance must omit the H2H clause rather
+    // than claim "first meeting" and risk lying.
+    const out = buildLiveGameScoutingLine(
+      envBase({ opponent: { name: "Maybe", race: "Zerg" } }),
+    );
+    expect(out).not.toMatch(/First meeting/);
+    expect(out).not.toMatch(/against them/);
+    expect(out).toContain("Good luck.");
+  });
+
+  it("prefers SC2Pulse's current MMR over the cloud's saved last-game MMR", () => {
+    // Pulse is the authoritative "current season rating" source —
+    // when it has a value the spoken line uses it, even if the
+    // cloud's opponents row carries an older saved value from the
+    // last encounter.
+    const out = buildLiveGameScoutingLine(
+      envBase({
+        opponent: {
+          name: "THEBLOB",
+          race: "Protoss",
+          profile: { mmr: 4480 }, // current Pulse rating
+        },
+        streamerHistory: {
+          oppName: "THEBLOB",
+          oppRace: "Protoss",
+          matchup: "PvP",
+          oppMmr: 4327, // saved at end of last game
+          headToHead: { wins: 3, losses: 1 },
+        },
+      }),
+    );
+    expect(out).toContain("4480 MMR.");
+    expect(out).not.toContain("4327 MMR.");
+  });
+
+  it("falls back to the saved last-game MMR when Pulse has no usable rating", () => {
+    // THEBLOB-style case: Pulse returned a profile but no MMR
+    // (insufficient season games / off-ladder activity). The voice
+    // line should still announce the saved last-game MMR rather
+    // than going silent on the MMR slot.
+    const out = buildLiveGameScoutingLine(
+      envBase({
+        opponent: {
+          name: "THEBLOB",
+          race: "Protoss",
+          profile: { mmr: 0 }, // Pulse returned nothing usable
+        },
+        streamerHistory: {
+          oppName: "THEBLOB",
+          oppRace: "Protoss",
+          matchup: "PvP",
+          oppMmr: 4327,
+          headToHead: { wins: 3, losses: 1 },
+        },
+      }),
+    );
+    expect(out).toContain("4327 MMR.");
+  });
+
+  it("omits the MMR clause cleanly when neither Pulse nor saved MMR is available", () => {
+    // First-meeting + Pulse-down case: no profile MMR, no saved
+    // history MMR. Never say "0 MMR" or "unknown MMR" — just skip
+    // the clause and keep the rest of the sentence intact.
+    const out = buildLiveGameScoutingLine(
+      envBase({
+        opponent: { name: "Stranger", race: "Zerg" },
+        streamerHistory: {
+          oppName: "Stranger",
+          oppRace: "Zerg",
+          matchup: "PvZ",
+          headToHead: { wins: 0, losses: 0 },
+        },
+      }),
+    );
+    expect(out).toContain("Facing Stranger, Zerg.");
+    expect(out).not.toMatch(/MMR/);
+    expect(out).toContain("First meeting.");
+    expect(out).toContain("Good luck.");
   });
 });
