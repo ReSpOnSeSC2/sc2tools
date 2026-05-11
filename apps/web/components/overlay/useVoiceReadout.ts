@@ -7,12 +7,18 @@ import {
   buildMatchEndLine,
   buildCheeseLine,
   buildLiveGameScoutingLine,
-  sanitizeForSpeech,
-  scoutingFingerprint,
+  cheeseFingerprint,
+  isLiveGameMmrReady,
   matchEndFingerprint,
   matchStartFingerprint,
-  cheeseFingerprint,
+  sanitizeForSpeech,
+  scoutingFingerprint,
 } from "./useVoiceReadout.builders";
+import {
+  clearPersistedUnlock,
+  persistUnlock,
+  readPersistedUnlock,
+} from "./useVoiceReadout.gesture";
 
 // Re-export builders so existing call sites (and the unit tests) can
 // keep importing from this module without breaking on the file split.
@@ -110,6 +116,35 @@ interface LiveGameUtterState {
   timer: number | null;
 }
 
+type LiveGameStates = Map<string, LiveGameUtterState>;
+
+/**
+ * Drop every per-gameKey entry and cancel any pending fallback
+ * timers. Shared by the idle/menu reset branch and the unmount
+ * cleanup effect.
+ */
+function clearAllLiveGameTimers(states: LiveGameStates): void {
+  for (const entry of states.values()) {
+    if (entry.timer !== null) window.clearTimeout(entry.timer);
+  }
+  states.clear();
+}
+
+/**
+ * Per-trigger dedupe primitive — returns ``true`` when ``key`` is
+ * fresh (and stamps it on ``ref``), ``false`` when it matches the
+ * previously-spoken fingerprint. Lets each trigger (scouting,
+ * matchStart, matchEnd, cheese) collapse to a one-line guard.
+ */
+function consumeFingerprint(
+  ref: { current: string | null },
+  key: string,
+): boolean {
+  if (!key || key === ref.current) return false;
+  ref.current = key;
+  return true;
+}
+
 /**
  * Voice readout hook for the OBS overlay clients. Watches the live
  * payload, decides whether anything should be spoken (per the user's
@@ -160,7 +195,7 @@ export function useVoiceReadout(
   // plus a Pulse-enriched re-emit; we speak at most once per gameKey
   // AFTER enrichment lands (or after a short timeout, whichever fires
   // first).
-  const liveGameStates = useRef<Map<string, LiveGameUtterState>>(new Map());
+  const liveGameStates = useRef<LiveGameStates>(new Map());
 
   const enabled = !!prefs && prefs.enabled !== false;
   const debug = useDebugFlag(prefs?.debug);
@@ -352,51 +387,38 @@ export function useVoiceReadout(
     const wantsScouting = events.scouting !== false; // default-on
     const lines: string[] = [];
 
-    // Pre-game scouting card. Fires whenever an opponent name is
+    // Pre-game scouting card fires whenever an opponent name is
     // present without a result — that's the "match starting / about
     // to start" window in the live payload.
     const hasOpp = !!live.oppName && !live.result;
     if (hasOpp) {
-      if (wantsScouting) {
-        const key = scoutingFingerprint(live);
-        if (key && key !== lastScoutingKey.current) {
-          lastScoutingKey.current = key;
-          const line = buildScoutingLine(live);
-          if (line) lines.push(line);
-        } else {
-          log("scouting suppressed (duplicate fingerprint)", key);
-        }
+      if (wantsScouting && consumeFingerprint(lastScoutingKey, scoutingFingerprint(live))) {
+        const line = buildScoutingLine(live);
+        if (line) lines.push(line);
       }
-      if (events.matchStart) {
-        const key = matchStartFingerprint(live);
-        if (key && key !== lastMatchStartKey.current) {
-          lastMatchStartKey.current = key;
-          lines.push("Match starting.");
-        }
+      if (events.matchStart && consumeFingerprint(lastMatchStartKey, matchStartFingerprint(live))) {
+        lines.push("Match starting.");
       }
     }
 
-    if (events.matchEnd && live.result) {
-      const key = matchEndFingerprint(live);
-      if (key && key !== lastMatchEndKey.current) {
-        lastMatchEndKey.current = key;
-        lines.push(buildMatchEndLine(live));
-      }
+    if (
+      events.matchEnd
+      && live.result
+      && consumeFingerprint(lastMatchEndKey, matchEndFingerprint(live))
+    ) {
+      lines.push(buildMatchEndLine(live));
     }
 
     if (
       events.cheese
       && typeof live.cheeseProbability === "number"
       && live.cheeseProbability >= 0.4
+      && consumeFingerprint(lastCheeseKey, cheeseFingerprint(live))
     ) {
-      const key = cheeseFingerprint(live);
-      if (key && key !== lastCheeseKey.current) {
-        lastCheeseKey.current = key;
-        lines.push(buildCheeseLine(live));
-      }
+      lines.push(buildCheeseLine(live));
     }
 
-    const text = lines.filter(Boolean).join(" ").trim();
+    const text = lines.join(" ").trim();
     if (text) {
       log("payload triggered readout:", JSON.stringify(text));
       enqueueOrSpeak(text);
@@ -429,13 +451,9 @@ export function useVoiceReadout(
     const states = liveGameStates.current;
     if (!liveGame) return;
     if (liveGame.phase === "idle" || liveGame.phase === "menu") {
-      // Drop ALL per-gameKey state — the bridge has cleared back to
-      // menu, so the next match-loading envelope starts fresh and
-      // gets its own readout.
-      for (const entry of states.values()) {
-        if (entry.timer !== null) window.clearTimeout(entry.timer);
-      }
-      states.clear();
+      // Bridge cleared back to menu — drop all per-gameKey state so
+      // the next match-loading envelope starts fresh.
+      clearAllLiveGameTimers(states);
       return;
     }
     const oppName = liveGame.opponent?.name?.trim();
@@ -453,22 +471,15 @@ export function useVoiceReadout(
     }
     if (entry.spoken) return;
 
+    // We wait for BOTH the cloud's enrichment (``streamerHistory``)
+    // AND at least one usable MMR source before firing. Without that
+    // the voice can speak the moment ``streamerHistory`` lands while
+    // Pulse is still a few hundred ms behind, silently dropping the
+    // MMR clause from the readout. The 900 ms fallback timer below
+    // still fires the line with whatever data we have if the readiness
+    // signals never both arrive.
     const hasEnrichment = !!liveGame.streamerHistory;
-    // MMR readiness — we wait for at least one usable MMR source to
-    // land before speaking, so the readout never drops the slot
-    // silently when Pulse is just a few hundred ms late. The 900 ms
-    // fallback below still fires the line if MMR never arrives.
-    const profileMmrCandidate = liveGame.opponent?.profile?.mmr;
-    const profileMmrReady =
-      typeof profileMmrCandidate === "number"
-      && Number.isFinite(profileMmrCandidate)
-      && profileMmrCandidate > 0;
-    const storedMmrCandidate = liveGame.streamerHistory?.oppMmr;
-    const storedMmrReady =
-      typeof storedMmrCandidate === "number"
-      && Number.isFinite(storedMmrCandidate)
-      && storedMmrCandidate > 0;
-    const hasMmr = profileMmrReady || storedMmrReady;
+    const hasMmr = isLiveGameMmrReady(liveGame);
 
     const fireUtterance = () => {
       // The latest envelope captured in the closure may be stale by
@@ -499,12 +510,8 @@ export function useVoiceReadout(
     };
 
     if (hasEnrichment && hasMmr) {
-      // Cloud's enrichment AND a usable MMR have landed — speak now,
-      // cancel any pending fallback timer. Waiting for both prevents
-      // the "MMR slot silently dropped" failure mode where the voice
-      // fires the instant ``streamerHistory`` lands but Pulse hasn't
-      // responded yet, even though Pulse is typically only ~50–300 ms
-      // behind.
+      // Both readiness signals landed — speak now and cancel the
+      // pending fallback timer.
       if (entry.timer !== null) {
         window.clearTimeout(entry.timer);
         entry.timer = null;
@@ -513,10 +520,10 @@ export function useVoiceReadout(
       return;
     }
 
-    // Either enrichment or a usable MMR is still missing. Arm the
-    // 900 ms fallback timer once per gameKey so a Pulse outage / Mongo
-    // blip can't gag the readout forever — we fire with whatever data
-    // we have by the deadline.
+    // One or both signals still pending. Arm the 900 ms fallback
+    // timer once per gameKey so a Pulse outage / Mongo blip can't
+    // gag the readout forever — we fire with whatever data we have
+    // by the deadline.
     if (entry.timer === null) {
       entry.timer = window.setTimeout(() => {
         const slot = states.get(gameKey);
@@ -531,12 +538,7 @@ export function useVoiceReadout(
   // hook instance.
   useEffect(() => {
     const states = liveGameStates.current;
-    return () => {
-      for (const entry of states.values()) {
-        if (entry.timer !== null) window.clearTimeout(entry.timer);
-      }
-      states.clear();
-    };
+    return () => clearAllLiveGameTimers(states);
   }, []);
 
   const onUserGesture = useCallback(() => {
@@ -618,7 +620,7 @@ export function useVoiceReadout(
 }
 
 /* ============================================================
- * Internals — gesture persistence + debug flag.
+ * Internals.
  * ============================================================ */
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -626,61 +628,6 @@ function clamp(n: number, lo: number, hi: number): number {
   if (n < lo) return lo;
   if (n > hi) return hi;
   return n;
-}
-
-const UNLOCK_STORAGE_KEY = "sc2tools.voiceUnlocked";
-
-/**
- * Read the persisted unlock flag. Prefers localStorage so the unlock
- * survives an OBS Browser Source refresh / OBS restart; falls back to
- * sessionStorage when localStorage is blocked (e.g. private mode).
- *
- * Without persistence the streamer would have to right-click → Interact
- * → click the overlay every time OBS reloads the Source — exactly the
- * paper cut the legacy SPA dodged with a one-time `attachGestureListeners`.
- */
-function readPersistedUnlock(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    if (window.localStorage?.getItem(UNLOCK_STORAGE_KEY) === "1") return true;
-  } catch {
-    /* localStorage blocked — try sessionStorage next */
-  }
-  try {
-    return window.sessionStorage?.getItem(UNLOCK_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function persistUnlock(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage?.setItem(UNLOCK_STORAGE_KEY, "1");
-    return;
-  } catch {
-    /* localStorage blocked — fall back to sessionStorage */
-  }
-  try {
-    window.sessionStorage?.setItem(UNLOCK_STORAGE_KEY, "1");
-  } catch {
-    /* both blocked (private mode + storage denied) — fine, the React
-     * state unlock still works for this tab's lifetime. */
-  }
-}
-
-function clearPersistedUnlock(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage?.removeItem(UNLOCK_STORAGE_KEY);
-  } catch {
-    /* best-effort */
-  }
-  try {
-    window.sessionStorage?.removeItem(UNLOCK_STORAGE_KEY);
-  } catch {
-    /* best-effort */
-  }
 }
 
 function useDebugFlag(prefDebug: boolean | undefined): boolean {
