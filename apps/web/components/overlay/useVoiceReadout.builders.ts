@@ -11,12 +11,21 @@ import type { LiveGameEnvelope, LiveGamePayload } from "./types";
  * callers (and the tests) can keep importing from the original module.
  */
 
-export const MAX_BEST_ANSWER_LEN = 60;
-
 /* ============================================================
  * Post-game (replay-derived) scouting / match-end / cheese builders.
  * ============================================================ */
 
+/**
+ * Scouting line for the post-game ``LiveGamePayload`` shape. Mirrors
+ * ``buildLiveGameScoutingLine`` exactly so the Settings → Overlay →
+ * Test button (which fires a sample ``LiveGamePayload``) plays the
+ * same sentence streamers hear at real match start: name, race, MMR,
+ * H2H with win-% (or "First meeting."), and a closing "Good luck.".
+ *
+ * Best-answer and cheese clauses are deliberately not spoken — they
+ * live on the visual scouting card. Keeping the voice line concise
+ * matches the streamer-stated spec and the live-envelope readout.
+ */
 export function buildScoutingLine(live: LiveGamePayload): string {
   const parts: string[] = [];
   const name = sanitizeForSpeech(live.oppName);
@@ -27,35 +36,45 @@ export function buildScoutingLine(live: LiveGamePayload): string {
   else if (race) parts.push(`Facing a ${race} opponent.`);
   else parts.push("Facing an unknown opponent.");
 
+  // MMR clause: only speak when we have a finite positive value.
+  // Never say "0 MMR" or "unknown MMR" — drop the clause silently.
+  const mmr =
+    typeof live.oppMmr === "number" && Number.isFinite(live.oppMmr) && live.oppMmr > 0
+      ? live.oppMmr
+      : null;
+  if (mmr !== null) {
+    parts.push(`${mmr} MMR.`);
+  }
+
+  // H2H + win-%, matching the live builder's phrasing exactly.
   const r = live.headToHead;
-  const wins = Number(r?.wins);
-  const losses = Number(r?.losses);
-  if (Number.isFinite(wins) && Number.isFinite(losses) && (wins > 0 || losses > 0)) {
-    parts.push(`You're ${wins} and ${losses} against them.`);
-  } else if (r) {
-    parts.push("First meeting.");
-  }
-
-  const a = live.bestAnswer;
-  if (a && a.build) {
-    const build = truncate(sanitizeForSpeech(a.build), MAX_BEST_ANSWER_LEN);
-    const wr = Number(a.winRate);
-    if (build) {
-      if (Number.isFinite(wr) && wr > 0) {
-        const pct = Math.round(wr * 100);
-        parts.push(`Best answer is ${build}, ${pct} percent win rate.`);
-      } else {
-        parts.push(`Best answer is ${build}.`);
-      }
+  if (r) {
+    const wins = Number(r.wins);
+    const losses = Number(r.losses);
+    if (
+      Number.isFinite(wins)
+      && Number.isFinite(losses)
+      && (wins > 0 || losses > 0)
+    ) {
+      const total = wins + losses;
+      const pct = total > 0 ? Math.round((wins / total) * 100) : 0;
+      parts.push(
+        `You're ${wins} and ${losses} against them, ${pct} percent win rate.`,
+      );
+    } else if (
+      Number.isFinite(wins)
+      && Number.isFinite(losses)
+      && wins === 0
+      && losses === 0
+    ) {
+      parts.push("First meeting.");
     }
+    // Malformed counts (non-numeric) — omit the clause silently rather
+    // than mis-read "first meeting" against an opponent we may
+    // actually have history with.
   }
 
-  const cheese = Number(live.cheeseProbability);
-  if (Number.isFinite(cheese)) {
-    if (cheese >= 0.7) parts.push("High cheese risk — scout early.");
-    else if (cheese >= 0.4) parts.push("Possible cheese — scout the natural.");
-  }
-
+  parts.push("Good luck.");
   return parts.filter(Boolean).join(" ");
 }
 
@@ -262,12 +281,3 @@ export function normalizeRace(race: string | undefined | null): string {
   return "";
 }
 
-export function truncate(s: string, max: number): string {
-  if (!s) return "";
-  if (s.length <= max) return s;
-  // Trim on a word boundary when possible so the TTS doesn't read a
-  // partial word.
-  const cut = s.slice(0, max);
-  const lastSpace = cut.lastIndexOf(" ");
-  return lastSpace > max - 16 ? cut.slice(0, lastSpace) : cut;
-}
