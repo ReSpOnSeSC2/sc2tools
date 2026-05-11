@@ -551,22 +551,58 @@ export function buildMatchEndLine(live: LiveGamePayload): string {
 
 /**
  * Pre-game scouting line built from the desktop agent's
- * ``LiveGameEnvelope``. Strictly less data than
- * ``buildScoutingLine(live)`` — no head-to-head, no best-answer (the
- * cloud doesn't run those derivations pre-game). Just identity +
- * Pulse profile when available.
+ * ``LiveGameEnvelope``. Carries identity + Pulse profile MMR + the
+ * cloud-derived head-to-head record (and a spoken win-percentage when
+ * the sample is non-trivial) from the enrichment hook the broker
+ * attached as ``env.streamerHistory`` before fan-out. Falls back to
+ * "First meeting" when the cloud confirmed an empty history, and stays
+ * silent on H2H when the enrichment hasn't landed yet (rather than
+ * lying about a first meeting that may not be one).
  */
 export function buildLiveGameScoutingLine(env: LiveGameEnvelope): string {
   const name = sanitizeForSpeech(env.opponent?.name);
   const race = normalizeRace(env.opponent?.race ?? undefined);
   const profile = env.opponent?.profile;
+  const history = env.streamerHistory;
+  const pulseMmr =
+    profile && typeof profile.mmr === "number" && profile.mmr > 0
+      ? profile.mmr
+      : null;
+  const storedMmr =
+    typeof history?.oppMmr === "number" && history.oppMmr > 0
+      ? history.oppMmr
+      : null;
+  // Mirror the OpponentWidget's MMR precedence so the spoken value
+  // matches what the streamer sees on the overlay card: SC2Pulse's
+  // current rating wins, with the cloud's saved last-game MMR as the
+  // fallback when Pulse has nothing to offer.
+  const mmr = pulseMmr !== null ? pulseMmr : storedMmr;
   const parts: string[] = [];
   if (name && race) parts.push(`Facing ${name}, ${race}.`);
   else if (name) parts.push(`Facing ${name}.`);
   else if (race) parts.push(`Facing a ${race} opponent.`);
   else parts.push("Facing an unknown opponent.");
-  if (profile && typeof profile.mmr === "number" && profile.mmr > 0) {
-    parts.push(`${profile.mmr} MMR.`);
+  if (mmr !== null) {
+    parts.push(`${mmr} MMR.`);
+  }
+  // Head-to-head + win-percentage from the cloud enrichment. Match the
+  // post-game ``buildScoutingLine`` phrasing for ``You're X and Y``
+  // and add an explicit win-rate clause — the streamer asked for the
+  // record AND the win-% to be announced at match start. Skip silently
+  // when ``streamerHistory`` is absent (the enrichment hook hasn't
+  // attached yet) so we don't claim "first meeting" for an opponent
+  // we may know about.
+  const h2h = history?.headToHead;
+  if (h2h) {
+    const wins = Number(h2h.wins);
+    const losses = Number(h2h.losses);
+    if (Number.isFinite(wins) && Number.isFinite(losses) && (wins > 0 || losses > 0)) {
+      const total = wins + losses;
+      const pct = total > 0 ? Math.round((wins / total) * 100) : 0;
+      parts.push(`You're ${wins} and ${losses} against them, ${pct} percent win rate.`);
+    } else {
+      parts.push("First meeting.");
+    }
   }
   return parts.filter(Boolean).join(" ");
 }
