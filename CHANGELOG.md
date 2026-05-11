@@ -17,6 +17,12 @@ workflow builds the Windows installer on each tag push and attaches the
   `/v1/timeseries` request to today's local-tz window via `since=`, so
   the server's day-bucket cap can't widen the response to weekly
   buckets that never match `todayKeyIn(tz)` on the client.
+- **Win rate by game length**: bucket-summary cards no longer break the
+  bucket label at the en-dash (e.g. `0–3m` wrapping to two lines with
+  the win-rate percentage floating beside the first half). The header
+  spans are now `whitespace-nowrap` with `flex-wrap`, and the 8-column
+  dense layout is gated on `2xl` (≥1536px) instead of `xl`, so each
+  card has comfortable room on standard desktop widths.
 
 ## [agent-v0.5.13] - 2026-05-09
 

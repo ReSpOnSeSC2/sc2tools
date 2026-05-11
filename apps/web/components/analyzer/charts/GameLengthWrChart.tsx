@@ -207,18 +207,18 @@ export function GameLengthWrChart() {
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8">
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 2xl:grid-cols-8">
         {rows.map((r) => (
           <div
             key={r.bucket}
             className="rounded border border-border bg-bg-elevated/50 px-2.5 py-2"
           >
-            <div className="flex items-baseline justify-between gap-1">
-              <span className="text-[11px] font-semibold text-text">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-1.5 gap-y-0.5">
+              <span className="whitespace-nowrap text-[11px] font-semibold text-text">
                 {r.bucket}
               </span>
               <span
-                className="text-sm font-semibold tabular-nums"
+                className="whitespace-nowrap text-sm font-semibold tabular-nums"
                 style={{ color: r.color }}
               >
                 {r.total > 0 ? `${r.winRatePct}%` : "—"}
