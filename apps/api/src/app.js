@@ -225,7 +225,7 @@ function makeServices(deps) {
   });
   const community = new CommunityService(deps.db);
   const seasons = new SeasonsService();
-  const arcade = new ArcadeService(deps.db, { games });
+  const arcade = new ArcadeService(deps.db, { games, gameDetails });
   // AdminService composes db + gdpr; deliberately near the bottom so
   // its dependencies are already constructed.
   const admin = new AdminService({ db: deps.db, gdpr });
