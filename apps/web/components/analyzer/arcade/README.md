@@ -45,7 +45,7 @@ Sixteen modes, exactly. The catalog is locked: a mode is added only by replacing
 |---|---|---|
 | `stock-market` | generative | Allocate 100 across ≤5 builds for the week; weekly P&L = Σ(weight × Δprice). Opt-in leaderboard renders in **Community → Leaderboard** |
 | `bingo-ladder` | forward | 5×5 forward objectives auto-resolved against the next 7 days of ingested games. Map-bound objectives draw from `/v1/seasons` `mapPool` |
-| `buildle` | generative | Daily build of the day, 6 guesses, 4-axis clues, Wordle-style emoji share |
+| `buildle` | generative | Daily case file from a real game in your history. One fact is redacted (duration, result, when, time-of-day, opp opener, your build, times played opponent, career WR vs opponent, or streak going in — 9-day rotation). One pick from 2–4 buckets, correct or wrong, sealed for the day |
 | `two-truths-lie` | cross-axis | Three multi-axis claims about you — pick the lie |
 | `higher-or-lower` | multi-entity | Card-stack guess on next build's WR. 3 lives, persisted personal-best |
 | `builds-as-cards` | generative | Collection: every played build → card with rarity/attack/defense/foil derived from totals |

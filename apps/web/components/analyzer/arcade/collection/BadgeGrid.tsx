@@ -6,7 +6,7 @@ const BADGES = [
   { id: "streak-hunter", title: "Streak Hunter", desc: "Active Streak Hunter perfect 5-day run." },
   { id: "veto-sleuth", title: "Veto Sleuth", desc: "3 Streak Veto correct in a row." },
   { id: "tycoon", title: "Tycoon", desc: "Stock Market 5-week green streak." },
-  { id: "buildle-brain", title: "Buildle Brain", desc: "Solve Buildle in ≤3 guesses." },
+  { id: "buildle-brain", title: "Buildle Brain", desc: "Crack 5 Buildle dailies in a row." },
   { id: "closer", title: "Closer", desc: "Closer's Eye perfect 5-day run." },
   { id: "detective", title: "Detective", desc: "Loss-Pattern Sleuth perfect 5-day run." },
 ] as const;

@@ -16,7 +16,7 @@ import type {
 import type { AnyMode } from "./modes";
 import { mulberry32 } from "./ArcadeEngine";
 import { shareCard } from "./ShareCard";
-import { buildleEmoji } from "./modes/games/buildle";
+import { buildleShareText } from "./modes/games/buildle";
 import { DailyEmptyState } from "./surfaces/DailyEmptyState";
 
 /**
@@ -123,12 +123,22 @@ export function ModeRunner({
         // Mode-specific badge pickers (kept simple — perfect-day badges
         // require external streak math beyond the scope of one round).
         if (mode.id === "buildle" && result.outcome === "correct") {
-          // Resolve via state read inside mutator; recordPlay already bumped XP.
-          // Buildle Brain: solve in ≤3 guesses (state.buildleByDay carries history).
-          const today = state.buildleByDay[seed.day];
-          if (today && today.guesses.length <= 3 && today.solved) {
-            earnBadge("buildle-brain");
+          // Buildle Brain: 5 correct Daily case files in a row, counting
+          // today. The current day's record hasn't flushed yet, so
+          // we treat today as correct (we're in this branch) and walk
+          // the prior 4 calendar days in state.buildleByDay.
+          let consecutive = 1;
+          const todayDate = new Date(`${seed.day}T00:00:00Z`);
+          if (!Number.isNaN(todayDate.getTime())) {
+            for (let i = 1; i < 5; i++) {
+              const d = new Date(todayDate);
+              d.setUTCDate(d.getUTCDate() - i);
+              const key = d.toISOString().slice(0, 10);
+              if (state.buildleByDay[key]?.correct) consecutive += 1;
+              else break;
+            }
           }
+          if (consecutive >= 5) earnBadge("buildle-brain");
         }
       }
     },
@@ -153,18 +163,11 @@ export function ModeRunner({
   const handleShare = useCallback(async () => {
     if (!question || !question.ok) return;
     if (mode.id === "buildle") {
-      // Wordle-style emoji grid, copied to the clipboard.
+      // Single-question daily — share is a one-line summary.
       const today = state.buildleByDay[seed.day];
-      if (!today) return;
-      const grid = buildleEmoji(
-        today.guesses,
-        today.buildName,
-        // Re-derive features from the question's known truth.
-        (question.question as { features: import("./modes/games/buildle").BuildleFeatures }).features,
-        (question.question as { candidates: string[] }).candidates,
-      );
+      const text = buildleShareText(today, seed.day);
       try {
-        await navigator.clipboard.writeText(grid);
+        await navigator.clipboard.writeText(text);
       } catch {
         // ignore
       }
