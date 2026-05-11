@@ -25,10 +25,27 @@ export interface UnifiedBuild {
   source: "own" | "community" | "custom";
 }
 
+/**
+ * "Unclassified - <Race>" is a sentinel name the Python build detector
+ * emits when no signature in the registry matches the replay — it's a
+ * placeholder, not a real build. We drop it from every Arcade surface
+ * (Stock Market universe, Builds-as-Cards) so users don't see
+ * "Unclassified - Protoss" / "Unclassified - Zerg" rows pretending to
+ * be tradeable assets. Partial classifications like
+ * "PvT - Macro Transition (Unclassified)" still carry matchup info
+ * and ARE kept — only the bare race-level fallback is suppressed.
+ *
+ * See SC2Replay-Analyzer/detectors/user.py — the only emitter.
+ */
+export function isUnclassifiedSentinel(name: string): boolean {
+  return /^Unclassified\s*-\s*/i.test(name);
+}
+
 export function buildUniverse(data: ArcadeDataset): UnifiedBuild[] {
   const byName = new Map<string, UnifiedBuild>();
   for (const b of data.builds) {
     if (!b.name) continue;
+    if (isUnclassifiedSentinel(b.name)) continue;
     byName.set(b.name, {
       id: `own:${b.name}`,
       name: b.name,
@@ -47,6 +64,7 @@ export function buildUniverse(data: ArcadeDataset): UnifiedBuild[] {
   // (rolling14DayWr returns null when there are fewer than 3 plays in
   // the 14-day window).
   for (const c of data.communityBuilds) {
+    if (!c.title || isUnclassifiedSentinel(c.title)) continue;
     const own = byName.get(c.title);
     if (own) continue; // already in universe via /v1/builds
     byName.set(c.title, {
@@ -66,6 +84,7 @@ export function buildUniverse(data: ArcadeDataset): UnifiedBuild[] {
   // null below that floor), which the Stock Market UI surfaces as
   // a missing price.
   for (const cb of data.customBuilds) {
+    if (!cb.name || isUnclassifiedSentinel(cb.name)) continue;
     const own = byName.get(cb.name);
     if (own) continue;
     byName.set(cb.name, {
