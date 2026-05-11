@@ -212,22 +212,22 @@ const SVG_REGISTRY: Record<string, () => ReactNode> = {
  * keep the set in sync with what's actually on disk.
  */
 export const CUSTOM_ICON_MODES = new Set<string>([
-  // "opponent-bracket-pick",
-  // "rivalry-ranker",
-  // "active-streak-hunter",
-  // "streak-veto",
-  // "first-game-of-day",
-  // "streak-after-loss",
-  // "comeback-count",
-  // "loss-pattern-sleuth",
-  // "closers-eye",
-  // "macro-memory",
-  // "stock-market",
-  // "bingo-ladder",
-  // "buildle",
-  // "two-truths-lie",
-  // "higher-or-lower",
-  // "builds-as-cards",
+  "opponent-bracket-pick",
+  "rivalry-ranker",
+  "active-streak-hunter",
+  "streak-veto",
+  "first-game-of-day",
+  "streak-after-loss",
+  "comeback-count",
+  "loss-pattern-sleuth",
+  "closers-eye",
+  "macro-memory",
+  "stock-market",
+  "bingo-ladder",
+  "buildle",
+  "two-truths-lie",
+  "higher-or-lower",
+  "builds-as-cards",
 ]);
 
 const TITLES: Record<string, string> = {
