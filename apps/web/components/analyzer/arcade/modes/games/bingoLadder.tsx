@@ -137,9 +137,14 @@ function fullRace(letter: string): string {
   return letter;
 }
 
-function score(): ScoreResult {
+function score(q: Q): ScoreResult {
   // Engine awards XP per ticked cell on resolve, not at submit-time.
-  return { raw: 0, xp: 0, outcome: "correct" };
+  return {
+    raw: 0,
+    xp: 0,
+    outcome: "correct",
+    note: `Bingo card · Week ${q.weekKey}`,
+  };
 }
 
 export const bingoLadder: Mode<Q, A> = {

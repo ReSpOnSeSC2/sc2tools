@@ -39,6 +39,7 @@ function score(_q: Q, a: A): ScoreResult {
     raw: a.chain >= 8 ? 1 : a.chain / 8,
     xp: Math.min(40, a.chain * 4),
     outcome: a.chain >= 8 ? "correct" : a.chain > 0 ? "partial" : "wrong",
+    note: `Chain: ${a.chain} build${a.chain === 1 ? "" : "s"}.`,
   };
 }
 

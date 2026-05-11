@@ -225,10 +225,12 @@ function fullRace(letter: string): string {
 
 function score(q: Q, a: A): ScoreResult {
   const correct = a === q.lieIndex;
+  const lie = q.claims[q.lieIndex];
   return {
     raw: correct ? 1 : 0,
     xp: correct ? 16 : 0,
     outcome: correct ? "correct" : "wrong",
+    note: `The lie: "${lie.text}"`,
   };
 }
 

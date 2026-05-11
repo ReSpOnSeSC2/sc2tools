@@ -121,11 +121,18 @@ function maxStreak(q: Q): number {
 
 function score(q: Q, a: A): ScoreResult {
   const picked = q.candidates[a];
-  const correct = !!picked && picked.activeStreak === maxStreak(q);
+  const max = maxStreak(q);
+  const correct = !!picked && picked.activeStreak === max;
+  const leaders = q.candidates.filter((c) => c.activeStreak === max);
+  const note =
+    leaders.length === 1
+      ? `Top active streak: ${leaders[0].name} on ${leaders[0].activeStreak}W.`
+      : `${leaders.length} rivals tied on ${max}W.`;
   return {
     raw: correct ? 1 : 0,
     xp: correct ? 12 : 0,
     outcome: correct ? "correct" : "wrong",
+    note,
   };
 }
 

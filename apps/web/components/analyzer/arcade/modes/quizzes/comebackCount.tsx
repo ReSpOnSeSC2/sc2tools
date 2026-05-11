@@ -75,6 +75,7 @@ function score(q: Q, a: A): ScoreResult {
     raw: correct ? 1 : 0,
     xp: correct ? 12 : 0,
     outcome: correct ? "correct" : "wrong",
+    note: `${q.count} comeback session${q.count === 1 ? "" : "s"} (${q.truth}).`,
   };
 }
 

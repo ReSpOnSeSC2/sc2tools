@@ -79,6 +79,7 @@ function score(q: Q, a: A): ScoreResult {
     raw: correct ? 1 : 0,
     xp: correct ? 10 : 0,
     outcome: correct ? "correct" : "wrong",
+    note: `First-game WR ${pct1(q.firstGameWr)} vs overall ${pct1(q.overallWr)}.`,
   };
 }
 
