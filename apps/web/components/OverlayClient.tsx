@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { API_BASE } from "@/lib/clientApi";
-import type { LiveGamePayload } from "@/components/overlay/types";
+import type {
+  LiveGameEnvelope,
+  LiveGamePayload,
+} from "@/components/overlay/types";
 import { clientTimezone } from "@/lib/timeseries";
 import {
   ALL_WIDGETS,
@@ -14,6 +17,7 @@ import {
   useVoiceReadout,
   type VoicePrefs,
 } from "@/components/overlay/useVoiceReadout";
+import { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useClearStalePostGameOnGameKeyChange";
 import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
 import {
   OpponentWidget,
@@ -58,6 +62,7 @@ import {
  */
 export function OverlayClient({ token }: { token: string }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
+  const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [enabled, setEnabled] = useState<Set<WidgetId>>(
     () => new Set(ALL_WIDGETS),
@@ -73,6 +78,7 @@ export function OverlayClient({ token }: { token: string }) {
   // closure has no dependencies that need tracking.
   const onClear = useCallback(() => {
     setLive(null);
+    setLiveGame(null);
     setSession(null);
     setVisibleLive(new Set());
     setSessionVisible(false);
@@ -81,11 +87,18 @@ export function OverlayClient({ token }: { token: string }) {
   useOverlaySocket(
     token,
     setLive,
+    setLiveGame,
     setSession,
     setEnabled,
     setVoicePrefs,
     onClear,
   );
+
+  // Mirror the per-widget client's stale-clear behaviour so the
+  // all-in-one overlay also drops a stale post-game ``live`` payload
+  // when the agent's envelope reports a new gameKey. Shared hook keeps
+  // the two clients in lockstep.
+  useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
 
   useWidgetTimers({
     live,
@@ -112,6 +125,13 @@ export function OverlayClient({ token }: { token: string }) {
   const voice = useVoiceReadout(
     enableVoiceHere ? live : null,
     enableVoiceHere ? voicePrefs : null,
+    // Plumb the agent's pre-game envelope so the voice line fires the
+    // moment the SC2 loading screen lands, not minutes later when the
+    // replay-derived ``live`` payload finally arrives. Mirrors the
+    // per-widget ``OverlayWidgetClient`` so the streamer gets the same
+    // readout whether they wired the all-in-one URL or the dedicated
+    // scouting Browser Source.
+    enableVoiceHere ? liveGame : null,
   );
 
   function shouldShow(id: WidgetId): boolean {
@@ -139,7 +159,9 @@ export function OverlayClient({ token }: { token: string }) {
       {shouldShow("topbuilds") && <TopBuildsWidget live={live} />}
       {shouldShow("fav-opening") && <FavOpeningWidget live={live} />}
       {shouldShow("best-answer") && <BestAnswerWidget live={live} />}
-      {shouldShow("scouting") && <ScoutingWidget live={live} />}
+      {shouldShow("scouting") && (
+        <ScoutingWidget live={live} liveGame={liveGame} />
+      )}
       {shouldShow("session") && (
         <SessionWidget live={live} session={session} />
       )}
@@ -151,14 +173,26 @@ export function OverlayClient({ token }: { token: string }) {
 }
 
 /**
- * Subscribe to the overlay socket and push the three event streams
- * into the supplied React state setters. The setters are guaranteed
- * stable by React, so the effect's dependency on them never causes a
- * reconnect.
+ * Subscribe to the overlay socket and push the event streams into the
+ * supplied React state setters. The setters are guaranteed stable by
+ * React, so the effect's dependency on them never causes a reconnect.
+ *
+ * Four channels:
+ *
+ *   * ``overlay:live`` — post-game payload derived from the
+ *     freshly-uploaded replay (``LiveGamePayload``).
+ *   * ``overlay:liveGame`` — pre/in-game envelope fanned out by the
+ *     cloud's ``LiveGameBroker`` (``LiveGameEnvelope``). Plumbed
+ *     through so the voice readout + scouting widget can fire on the
+ *     loading screen instead of waiting for the replay parse minutes
+ *     later.
+ *   * ``overlay:session`` — today's session aggregate.
+ *   * ``overlay:config`` — enabled widgets + voice prefs snapshot.
  */
 function useOverlaySocket(
   token: string,
   setLive: (msg: LiveGamePayload | null) => void,
+  setLiveGame: (msg: LiveGameEnvelope | null) => void,
   setSession: (msg: SessionSummary | null) => void,
   setEnabled: (next: Set<WidgetId>) => void,
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
@@ -178,6 +212,16 @@ function useOverlaySocket(
       reconnectionDelayMax: 5000,
     });
     socket.on("overlay:live", (msg: LiveGamePayload) => setLive(msg));
+    socket.on("overlay:liveGame", (msg: LiveGameEnvelope) => {
+      if (!msg || typeof msg !== "object") return;
+      // IDLE/MENU phases mean "no game" — clear so the widgets and
+      // voice readout's per-gameKey state reset for the next match.
+      if (msg.phase === "idle" || msg.phase === "menu") {
+        setLiveGame(null);
+        return;
+      }
+      setLiveGame(msg);
+    });
     socket.on("overlay:session", (msg: SessionSummary) => {
       if (msg && typeof msg === "object") setSession(msg);
     });
@@ -199,7 +243,15 @@ function useOverlaySocket(
     return () => {
       socket.disconnect();
     };
-  }, [token, setLive, setSession, setEnabled, setVoicePrefs, onClear]);
+  }, [
+    token,
+    setLive,
+    setLiveGame,
+    setSession,
+    setEnabled,
+    setVoicePrefs,
+    onClear,
+  ]);
 }
 
 /**

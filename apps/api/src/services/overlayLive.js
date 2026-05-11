@@ -1,8 +1,13 @@
 "use strict";
 
 const { buildSamplePayload } = require("./overlayLiveSamples");
-const { attachOpponentIdsToFilter } = require("../util/opponentIdentity");
-const { regionFromToonHandle } = require("../util/regionFromToonHandle");
+const {
+  enrichEnvelope: enrichEnvelopeImpl,
+  invalidateEnrichmentForOpponent: invalidateEnrichmentForOpponentImpl,
+} = require("./overlayLiveEnrichment");
+const aggregations = require("./overlayLiveAggregations");
+
+const { bucketResult } = aggregations;
 
 /**
  * OverlayLiveService — derives the cloud's authoritative
@@ -77,164 +82,6 @@ function leagueFromMmr(mmr) {
   if (mmr >= 900) return { league: "Silver", tier: 3 };
   if (mmr >= 600) return { league: "Bronze", tier: 1 };
   return { league: "Bronze", tier: 3 };
-}
-
-/**
- * Pull the streamer's own race out of the agent's envelope. The
- * envelope carries one entry per player on ``players[]``; the
- * streamer's row has ``type === "user"`` AND
- * ``name === envelope.user.name`` (the explicit "you" hint the
- * bridge writes from the player handle cache). Falls back to picking
- * the player whose name matches the user when both players are
- * marked ``user`` in 1v1.
- *
- * @param {object} envelope
- * @returns {string | null}
- */
-function pickStreamerRace(envelope) {
-  if (!envelope || typeof envelope !== "object") return null;
-  const players = Array.isArray(envelope.players) ? envelope.players : [];
-  if (players.length === 0) return null;
-  const userName = envelope.user && typeof envelope.user.name === "string"
-    ? envelope.user.name.trim().toLowerCase()
-    : "";
-  for (const p of players) {
-    if (!p || typeof p !== "object") continue;
-    if (p.type !== "user") continue;
-    const pName = typeof p.name === "string" ? p.name.trim().toLowerCase() : "";
-    if (userName && pName === userName) {
-      return typeof p.race === "string" ? p.race : null;
-    }
-  }
-  // Fallback: first ``user`` player. In a 1v1 ladder game with no
-  // user_name hint set this is at best a 50/50; the matchup-scoped
-  // queries it powers will simply yield nothing if the guess is
-  // wrong, which is acceptable.
-  for (const p of players) {
-    if (p && p.type === "user" && typeof p.race === "string") {
-      return p.race;
-    }
-  }
-  return null;
-}
-
-/**
- * Pick the canonical Blizzard-region label for an envelope's
- * opponent. Precedence: the agent's ``opponent.toonHandle`` leading
- * region byte (most reliable — Battle.net itself stamps that byte),
- * then ``profile.region`` from the Pulse lookup, then ``null``.
- *
- * Used as part of the enrichment cache key when no Pulse character id
- * is available, so two opponents with identical display names on
- * different servers don't collide and cross-pollinate scouting data.
- *
- * @param {Record<string, any>} opp
- * @param {Record<string, any>|null} profile
- * @returns {string|null}
- */
-function pickEnvelopeRegion(opp, profile) {
-  if (opp && typeof opp.toonHandle === "string") {
-    const inferred = regionFromToonHandle(opp.toonHandle);
-    if (inferred) return inferred;
-  }
-  if (profile && typeof profile.region === "string" && profile.region) {
-    // SC2Pulse labels NA as ``US``; the rest of the cloud session-
-    // widget pipeline canonicalises to ``NA``. Mirror that here so a
-    // single opponent's region is consistent regardless of which
-    // identity branch fired first (toonHandle inference vs. Pulse
-    // profile) — without this an envelope that arrives toonHandle-
-    // first would key under ``NA`` and a follow-up envelope that
-    // arrives Pulse-first would key under ``US``, splitting the
-    // cache and double-fetching the aggregation.
-    const upper = profile.region.trim().toUpperCase();
-    return upper === "US" ? "NA" : upper;
-  }
-  return null;
-}
-
-/**
- * Compose the enrichment cache key. The two-scheme split lives here
- * so the writer (``enrichEnvelope``) and the invalidator
- * (``invalidateEnrichmentForOpponent``) agree on the prefix shape:
- *
- *   * ``${userId}|pulse:<pulse_character_id>|<myRace>`` — preferred,
- *     globally unique per Battle.net character.
- *   * ``${userId}|name:<lcname>|region:<NA|EU|...|?>|<lcoppRace>|<myRace>``
- *     — fallback when no Pulse id is available; region prevents a
- *     cross-server display-name collision (NA "Maru" vs EU "Maru").
- *
- * The unknown-region sentinel ``?`` keeps the key length stable
- * across servers so the LRU eviction order stays sensible.
- *
- * @param {{
- *   userId: string,
- *   pulseCharacterId: number|null,
- *   name: string,
- *   race: string,
- *   region: string|null,
- *   myRace: string|null,
- * }} parts
- * @returns {string}
- */
-function buildEnrichmentKey(parts) {
-  if (parts.pulseCharacterId !== null) {
-    return `${parts.userId}|pulse:${parts.pulseCharacterId}|${parts.myRace || ""}`;
-  }
-  const region = parts.region || "?";
-  return `${parts.userId}|name:${parts.name.toLowerCase()}|region:${region}|${parts.race.toLowerCase()}|${parts.myRace || ""}`;
-}
-
-function bucketResult(raw) {
-  if (!raw) return null;
-  const s = String(raw).toLowerCase();
-  if (s === "win" || s === "victory") return "win";
-  if (s === "loss" || s === "defeat") return "loss";
-  return null;
-}
-
-/**
- * Format a duration in seconds as `m:ss`. Matches the SPA's
- * `formatMatchDuration` for the scouting card's recent-games list.
- *
- * @param {number} sec
- * @returns {string}
- */
-function formatLengthText(sec) {
-  const n = Number(sec);
-  if (!Number.isFinite(n) || n <= 0) return "—";
-  const m = Math.floor(n / 60);
-  const s = Math.round(n % 60).toString().padStart(2, "0");
-  return `${m}:${s}`;
-}
-
-/**
- * Title-case an internal result tag for the scouting widget's chip
- * text. The SPA stored "Win" / "Loss" / "Tie" — we map the cloud's
- * "Victory" / "Defeat" to those so the widget can stay rendering-only.
- *
- * @param {string|undefined|null} raw
- * @returns {"Win"|"Loss"|"Tie"|null}
- */
-function chipResult(raw) {
-  if (!raw) return null;
-  const s = String(raw).toLowerCase();
-  if (s === "win" || s === "victory") return "Win";
-  if (s === "loss" || s === "defeat") return "Loss";
-  if (s === "tie") return "Tie";
-  return null;
-}
-
-/**
- * Escape user-controlled chars before splicing into a regex anchor.
- * Race initials never carry regex metachars in practice but the
- * defensive helper keeps the lookup safe if the agent ever uploads a
- * non-canonical race string.
- *
- * @param {string} s
- * @returns {string}
- */
-function escapeRegex(s) {
-  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function matchupLabel(myRace, oppRace) {
@@ -724,6 +571,15 @@ class OverlayLiveService {
         const cp = cheeseProbability(payload.favOpening.name);
         if (cp >= 0.4) payload.cheeseProbability = cp;
       }
+    } else {
+      // No opponents row matched any of the three identity tiers —
+      // the cloud has never seen this player before. Stamp an explicit
+      // zero-zero ``headToHead`` so the renderer (and the voice
+      // readout) can distinguish "confirmed first meeting" from
+      // "enrichment hasn't landed yet" (in which case ``headToHead``
+      // is simply absent). The voice readout uses this signal to say
+      // "First meeting." rather than staying silent on the H2H slot.
+      payload.headToHead = { wins: 0, losses: 0 };
     }
 
     // Streak — global, not opponent-specific.
@@ -784,112 +640,24 @@ class OverlayLiveService {
 
   /**
    * Enrich an inbound ``LiveGameState`` envelope with
-   * ``streamerHistory`` — the H2H, recent games, RIVAL/FAMILIAR tag
-   * the post-game card carries. Called by the LiveGameBroker before
-   * it fans the envelope out to overlay sockets and SSE.
-   *
-   * Cached for 5 minutes so the 1 Hz envelope cadence doesn't re-hit
-   * Mongo for every tick of the same match. The first envelope of a
-   * new opponent is a cache miss (~50 ms aggregation); every
-   * subsequent tick is a cache hit (microseconds).
-   *
-   * **Cache key precedence** — region-aware so a streamer who
-   * switches NA → EU and runs into another "Maru" doesn't see the
-   * NA Maru's H2H bleed through:
-   *
-   *   1. ``${userId}|pulse:<pulse_character_id>|<myRace>`` when the
-   *      Pulse profile carries a numeric ``pulse_character_id`` —
-   *      globally unique, immune to display-name collisions.
-   *   2. ``${userId}|name:<lcname>|region:<NA|EU|KR|CN|SEA|?>|<oppRace>|<myRace>``
-   *      otherwise. Region is derived from the agent's
-   *      ``opponent.toonHandle`` (preferred — Battle.net's own region
-   *      byte) or falls back to ``profile.region`` from the Pulse
-   *      lookup; we use ``"?"`` as the last resort so cross-region
-   *      collisions still poison less than the prior region-less key.
-   *
-   * Returns the original envelope when there's nothing to enrich
-   * (no opponent name / unknown opponent / no history).
+   * ``streamerHistory``. Thin delegator to ``overlayLiveEnrichment.js``
+   * so the class API stays unchanged while the heavy lifting lives in
+   * a sibling module. See that module for cache-key precedence rules
+   * and the partial-then-enriched fan-out contract with the broker.
    *
    * @param {string} userId
    * @param {object} envelope
    * @returns {Promise<object>}
    */
   async enrichEnvelope(userId, envelope) {
-    if (!userId || !envelope || typeof envelope !== "object") return envelope;
-    const opp = envelope.opponent;
-    if (!opp || typeof opp !== "object") return envelope;
-    const name = typeof opp.name === "string" ? opp.name.trim() : "";
-    if (!name) return envelope;
-    const race = typeof opp.race === "string" ? opp.race.trim() : "";
-    const profile = opp.profile && typeof opp.profile === "object" ? opp.profile : null;
-    // Guard against ``Number(null) === 0`` collapsing every
-    // missing-id envelope into the same cache slot. Only treat the
-    // Pulse id as present when the field was non-null AND the
-    // numeric coercion produced a finite value.
-    const rawPcid = profile ? profile.pulse_character_id : null;
-    const pulseCharacterId =
-      rawPcid !== null && rawPcid !== undefined
-        && Number.isFinite(Number(rawPcid))
-        ? Number(rawPcid)
-        : null;
-    // Pull the raw toon_handle off the envelope so ``buildFromOpponentName``
-    // can use it as the Tier B fallback when no Pulse character id was
-    // resolved (or the opponents row has the toon_handle but no
-    // ``pulseCharacterId`` yet). The agent stamps ``opp.toonHandle`` in
-    // ``replay_pipeline._build_opponent``.
-    const toonHandle =
-      opp && typeof opp.toonHandle === "string" && opp.toonHandle.length > 0
-        ? opp.toonHandle
-        : null;
-    // The agent's envelope carries the streamer's display name on
-    // ``user.name`` and the player race on ``players[].race`` for the
-    // ``user`` player. The streamer's race is what ``buildFromOppName``
-    // needs for matchup-scoped queries.
-    const myRace = pickStreamerRace(envelope);
-    const region = pickEnvelopeRegion(opp, profile);
-
-    const key = buildEnrichmentKey({
+    return enrichEnvelopeImpl(
+      this,
+      this._enrichmentCache,
+      this._enrichmentTtlMs,
+      this._enrichmentMax,
       userId,
-      pulseCharacterId,
-      name,
-      race,
-      region,
-      myRace,
-    });
-    const now = Date.now();
-    const hit = this._enrichmentCache.get(key);
-    if (hit && now - hit.ts < this._enrichmentTtlMs) {
-      // LRU touch.
-      this._enrichmentCache.delete(key);
-      this._enrichmentCache.set(key, hit);
-      if (!hit.payload) return envelope;
-      return { ...envelope, streamerHistory: hit.payload };
-    }
-
-    let history = null;
-    try {
-      history = await this.buildFromOpponentName(
-        userId,
-        name,
-        race || undefined,
-        pulseCharacterId,
-        myRace || undefined,
-        toonHandle,
-      );
-    } catch {
-      // Best-effort enrichment — never block the broker on a Mongo blip.
-      history = null;
-    }
-    // Cache even null results so a Pulse-miss / unknown-opponent case
-    // doesn't repeatedly hit the aggregation.
-    this._enrichmentCache.set(key, { payload: history || null, ts: now });
-    if (this._enrichmentCache.size > this._enrichmentMax) {
-      // Drop the oldest entry (Map iteration order is insertion order).
-      const oldest = this._enrichmentCache.keys().next().value;
-      if (oldest !== undefined) this._enrichmentCache.delete(oldest);
-    }
-    if (!history) return envelope;
-    return { ...envelope, streamerHistory: history };
+      envelope,
+    );
   }
 
   /** Test helper: drop the per-user enrichment cache. */
@@ -898,45 +666,22 @@ class OverlayLiveService {
   }
 
   /**
-   * Drop cached enrichment for one (userId, opponent) pair so the
-   * NEXT pre-game scouting card includes the freshly-uploaded game
-   * in its LAST GAMES list. Called from the games ingest path right
-   * after a successful upsert — without this, a rematch against the
-   * same opponent within the 5-minute cache window would render
-   * scouting data missing the most recent encounter.
-   *
-   * Drops every entry that matches the (userId, name) prefix under
-   * the region-keyed scheme AND any entry under the pulse-id scheme
-   * when ``pulseCharacterId`` is supplied — so a server-switch
-   * rematch against the same opponent flushes both schemes.
+   * Drop cached enrichment for one (userId, opponent) pair after a
+   * fresh game upload so the next pre-game card includes the new
+   * encounter. Thin delegator — implementation lives in
+   * ``overlayLiveEnrichment.js``.
    *
    * @param {string} userId
    * @param {string} opponentName
-   * @param {string|number|null} [pulseCharacterId] optional Pulse
-   *   character id from the just-ingested game's
-   *   ``opponent.pulseCharacterId``. When present, also flushes the
-   *   pulse-keyed entries so a streamer who's already on the new
-   *   region sees the freshly-uploaded encounter on the next tick.
+   * @param {string|number|null} [pulseCharacterId]
    */
   invalidateEnrichmentForOpponent(userId, opponentName, pulseCharacterId) {
-    if (!userId || !opponentName) return;
-    const namePrefix = `${userId}|name:${opponentName.toLowerCase()}|`;
-    const pcid =
-      pulseCharacterId !== undefined
-        && pulseCharacterId !== null
-        && Number.isFinite(Number(pulseCharacterId))
-        ? Number(pulseCharacterId)
-        : null;
-    const pulsePrefix = pcid !== null ? `${userId}|pulse:${pcid}|` : null;
-    for (const key of Array.from(this._enrichmentCache.keys())) {
-      if (key.startsWith(namePrefix)) {
-        this._enrichmentCache.delete(key);
-        continue;
-      }
-      if (pulsePrefix !== null && key.startsWith(pulsePrefix)) {
-        this._enrichmentCache.delete(key);
-      }
-    }
+    invalidateEnrichmentForOpponentImpl(
+      this._enrichmentCache,
+      userId,
+      opponentName,
+      pulseCharacterId,
+    );
   }
 
   /**
@@ -953,374 +698,54 @@ class OverlayLiveService {
     return buildSamplePayload(widget);
   }
 
-  /**
-   * Walk the most recent games and report the current win/loss run.
-   * Returns null when the streak count is below 3 — the widget hides
-   * itself anyway, no point pushing a payload it'll discard.
-   *
-   * @param {string} userId
-   * @returns {Promise<{kind: 'win'|'loss', count: number} | null>}
-   */
-  async _computeStreak(userId) {
-    const recent = await this.db.games
-      .find({ userId }, { projection: { _id: 0, result: 1, date: 1 } })
-      .sort({ date: -1 })
-      .limit(20)
-      .toArray()
-      .catch(() => []);
-    if (recent.length === 0) return null;
-    /** @type {'win'|'loss'|null} */
-    let kind = null;
-    let count = 0;
-    for (const r of recent) {
-      const b = bucketResult(r.result);
-      if (!b) continue;
-      if (kind === null) {
-        kind = b;
-        count = 1;
-        continue;
-      }
-      if (b !== kind) break;
-      count += 1;
-    }
-    if (kind && count >= 3) return { kind, count };
-    return null;
+  /* ============================================================
+   * Private aggregation helpers — thin delegators to
+   * ``overlayLiveAggregations.js``. The class methods stay as the
+   * public surface so the rest of the service code (``buildFromGame``
+   * / ``buildFromOpponentName``) doesn't need to know about the
+   * extraction.
+   * ============================================================ */
+
+  _computeStreak(userId) {
+    return aggregations.computeStreak(this.db.games, userId);
   }
 
-  /**
-   * Find the most recently dated game (other than ``excludeGameId``)
-   * for this user that carries a numeric ``myMmr``. Used to compute the
-   * MMR delta for the just-uploaded game.
-   *
-   * @param {string} userId
-   * @param {string} [excludeGameId]
-   * @param {Date|string} [beforeDate]
-   * @returns {Promise<number|null>}
-   */
-  async _previousGameMmr(userId, excludeGameId, beforeDate) {
-    /** @type {Record<string, any>} */
-    const filter = {
+  _previousGameMmr(userId, excludeGameId, beforeDate) {
+    return aggregations.previousGameMmr(
+      this.db.games,
       userId,
-      myMmr: { $type: "number" },
-    };
-    if (excludeGameId) filter.gameId = { $ne: excludeGameId };
-    if (beforeDate) {
-      const d = beforeDate instanceof Date ? beforeDate : new Date(beforeDate);
-      if (!Number.isNaN(d.getTime())) filter.date = { $lte: d };
-    }
-    const prev = await this.db.games
-      .find(filter, { projection: { _id: 0, myMmr: 1, date: 1 } })
-      .sort({ date: -1 })
-      .limit(1)
-      .toArray()
-      .catch(() => []);
-    if (prev.length === 0) return null;
-    const m = Number(prev[0].myMmr);
-    return Number.isFinite(m) ? m : null;
+      excludeGameId,
+      beforeDate,
+    );
   }
 
-  /**
-   * Last N games against this opponent in this matchup, newest first.
-   * Excludes the just-uploaded game so the scouting widget shows
-   * *prior* meetings — the current game is what the streamer is about
-   * to play, surfaced through the match-result/post-game widgets.
-   *
-   * Match precedence: pulseId (when the agent supplied one — most
-   * stable, survives BattleTag renames) → displayName fallback. We
-   * filter to the same `myRace`/`oppRace` matchup so a streamer who
-   * once ZvT'd the opponent doesn't see those rows during a current
-   * PvZ.
-   *
-   * @param {string} userId
-   * @param {Record<string, any>} opp
-   * @param {string|undefined} myRace
-   * @param {string|undefined} oppRace
-   * @param {string|undefined} excludeGameId
-   * @returns {Promise<Array<{
-   *   result: 'Win'|'Loss'|'Tie',
-   *   lengthText: string,
-   *   map?: string,
-   *   myBuild?: string,
-   *   oppBuild?: string,
-   *   oppRace?: string,
-   *   date?: string,
-   * }>>}
-   */
-  async _recentGamesForOpponent(userId, opp, myRace, oppRace, excludeGameId) {
-    if (!opp) return [];
-    /** @type {Record<string, any>} */
-    const filter = { userId };
-    // Identity-precedence: pulseId / pulseCharacterId (either field
-    // matches; the cross-toon merge case wins back games whose
-    // toon_handle rotated after a Battle.net rebind) → displayName
-    // fallback. We do NOT mix display name with the identity branch
-    // — display names collide constantly between barcodes and would
-    // poison the result set with someone else's games.
-    const attached = attachOpponentIdsToFilter(filter, {
-      pulseId: opp.pulseId,
-      pulseCharacterId: opp.pulseCharacterId,
-    });
-    if (!attached) {
-      if (opp.displayName) {
-        filter["opponent.displayName"] = opp.displayName;
-      } else {
-        return [];
-      }
-    }
-    if (excludeGameId) filter.gameId = { $ne: excludeGameId };
-    if (myRace) {
-      filter.myRace = { $regex: `^${escapeRegex(String(myRace).charAt(0))}`, $options: "i" };
-    }
-    if (oppRace) {
-      filter["opponent.race"] = {
-        $regex: `^${escapeRegex(String(oppRace).charAt(0))}`,
-        $options: "i",
-      };
-    }
-    const rows = await this.db.games
-      .find(filter, {
-        projection: {
-          _id: 0,
-          result: 1,
-          durationSec: 1,
-          map: 1,
-          myBuild: 1,
-          "opponent.strategy": 1,
-          "opponent.race": 1,
-          date: 1,
-        },
-      })
-      .sort({ date: -1 })
-      .limit(5)
-      .toArray()
-      .catch(() => []);
-    /** @type {Array<{result: 'Win'|'Loss'|'Tie', lengthText: string, map?: string, myBuild?: string, oppBuild?: string, oppRace?: string, date?: string}>} */
-    const out = [];
-    for (const r of rows) {
-      const chip = chipResult(r.result);
-      if (!chip) continue;
-      /** @type {{result: 'Win'|'Loss'|'Tie', lengthText: string, map?: string, myBuild?: string, oppBuild?: string, oppRace?: string, date?: string}} */
-      const row = {
-        result: chip,
-        lengthText: formatLengthText(Number(r.durationSec) || 0),
-      };
-      if (r.map) row.map = String(r.map);
-      if (r.myBuild) row.myBuild = String(r.myBuild);
-      if (r.opponent && r.opponent.strategy) row.oppBuild = String(r.opponent.strategy);
-      if (r.opponent && r.opponent.race) row.oppRace = String(r.opponent.race);
-      if (r.date instanceof Date) row.date = r.date.toISOString();
-      else if (typeof r.date === "string") row.date = r.date;
-      out.push(row);
-    }
-    return out;
+  _recentGamesForOpponent(userId, opp, myRace, oppRace, excludeGameId) {
+    return aggregations.recentGamesForOpponent(
+      this.db.games,
+      userId,
+      opp,
+      myRace,
+      oppRace,
+      excludeGameId,
+    );
   }
 
-  /**
-   * Top ``myBuild`` rows for a matchup, sorted by total games. Returns
-   * up to 3 rows to match the widget's column budget. Ignores rows
-   * with no ``myBuild`` so the panel doesn't surface "Unknown" at the
-   * top of the list.
-   *
-   * @param {string} userId
-   * @param {string} myRace
-   * @param {string} oppRace
-   * @returns {Promise<Array<{name: string, total: number, winRate: number}>>}
-   */
-  async _topBuildsForMatchup(userId, myRace, oppRace) {
-    if (!myRace || !oppRace) return [];
-    const myInitial = String(myRace).charAt(0).toUpperCase();
-    const oppInitial = String(oppRace).charAt(0).toUpperCase();
-    /** @type {any[]} */
-    const pipeline = [
-      {
-        $match: {
-          userId,
-          myBuild: { $type: "string", $ne: "" },
-          $expr: {
-            $and: [
-              {
-                $eq: [
-                  { $toUpper: { $substrCP: ["$myRace", 0, 1] } },
-                  myInitial,
-                ],
-              },
-              {
-                $eq: [
-                  { $toUpper: { $substrCP: ["$opponent.race", 0, 1] } },
-                  oppInitial,
-                ],
-              },
-            ],
-          },
-        },
-      },
-      {
-        $group: {
-          _id: "$myBuild",
-          wins: {
-            $sum: {
-              $cond: [
-                {
-                  $in: [
-                    { $toLower: { $ifNull: ["$result", ""] } },
-                    ["victory", "win"],
-                  ],
-                },
-                1,
-                0,
-              ],
-            },
-          },
-          total: { $sum: 1 },
-        },
-      },
-      // ``$sort`` then ``$limit`` is intentional: a streamer with a
-      // long matchup history could have dozens of distinct myBuilds,
-      // and the panel only renders the top 3.
-      { $sort: { total: -1 } },
-      { $limit: 3 },
-    ];
-    const rows = await this.db.games
-      .aggregate(pipeline)
-      .toArray()
-      .catch(() => []);
-    return rows.map((r) => ({
-      name: String(r._id),
-      total: r.total || 0,
-      winRate: r.total > 0 ? (r.wins || 0) / r.total : 0,
-    }));
+  _topBuildsForMatchup(userId, myRace, oppRace) {
+    return aggregations.topBuildsForMatchup(this.db.games, userId, myRace, oppRace);
   }
 
-  /**
-   * Streamer's best ``myBuild`` against a specific opponent strategy
-   * inside a matchup. Used by the "Best Answer" widget.
-   *
-   * @param {string} userId
-   * @param {string} myRace
-   * @param {string} oppRace
-   * @param {string} strategy
-   * @returns {Promise<{build: string, winRate: number, total: number} | null>}
-   */
-  async _bestAnswerVsStrategy(userId, myRace, oppRace, strategy) {
-    if (!strategy) return null;
-    const myInitial = String(myRace).charAt(0).toUpperCase();
-    const oppInitial = String(oppRace).charAt(0).toUpperCase();
-    /** @type {any[]} */
-    const pipeline = [
-      {
-        $match: {
-          userId,
-          myBuild: { $type: "string", $ne: "" },
-          "opponent.strategy": strategy,
-          $expr: {
-            $and: [
-              {
-                $eq: [
-                  { $toUpper: { $substrCP: ["$myRace", 0, 1] } },
-                  myInitial,
-                ],
-              },
-              {
-                $eq: [
-                  { $toUpper: { $substrCP: ["$opponent.race", 0, 1] } },
-                  oppInitial,
-                ],
-              },
-            ],
-          },
-        },
-      },
-      {
-        $group: {
-          _id: "$myBuild",
-          wins: {
-            $sum: {
-              $cond: [
-                {
-                  $in: [
-                    { $toLower: { $ifNull: ["$result", ""] } },
-                    ["victory", "win"],
-                  ],
-                },
-                1,
-                0,
-              ],
-            },
-          },
-          total: { $sum: 1 },
-        },
-      },
-      // The 3-game floor protects against the "100% in a 1-game sample"
-      // noise that would otherwise put a flukey opener at the top.
-      { $match: { total: { $gte: 3 } } },
-      { $sort: { wins: -1, total: -1 } },
-      { $limit: 1 },
-    ];
-    const rows = await this.db.games
-      .aggregate(pipeline)
-      .toArray()
-      .catch(() => []);
-    if (rows.length === 0) return null;
-    const r = rows[0];
-    return {
-      build: String(r._id),
-      total: r.total || 0,
-      winRate: r.total > 0 ? (r.wins || 0) / r.total : 0,
-    };
+  _bestAnswerVsStrategy(userId, myRace, oppRace, strategy) {
+    return aggregations.bestAnswerVsStrategy(
+      this.db.games,
+      userId,
+      myRace,
+      oppRace,
+      strategy,
+    );
   }
 
-  /**
-   * Top opening shares (by share-of-encounters) the streamer has seen
-   * from opponents in this matchup. Used by the "Meta snapshot" widget.
-   *
-   * @param {string} userId
-   * @param {string} myRace
-   * @param {string} oppRace
-   * @returns {Promise<Array<{name: string, share: number}>>}
-   */
-  async _metaForMatchup(userId, myRace, oppRace) {
-    if (!myRace || !oppRace) return [];
-    const myInitial = String(myRace).charAt(0).toUpperCase();
-    const oppInitial = String(oppRace).charAt(0).toUpperCase();
-    /** @type {any[]} */
-    const pipeline = [
-      {
-        $match: {
-          userId,
-          "opponent.strategy": { $type: "string", $ne: "" },
-          $expr: {
-            $and: [
-              {
-                $eq: [
-                  { $toUpper: { $substrCP: ["$myRace", 0, 1] } },
-                  myInitial,
-                ],
-              },
-              {
-                $eq: [
-                  { $toUpper: { $substrCP: ["$opponent.race", 0, 1] } },
-                  oppInitial,
-                ],
-              },
-            ],
-          },
-        },
-      },
-      { $group: { _id: "$opponent.strategy", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 5 },
-    ];
-    const rows = await this.db.games
-      .aggregate(pipeline)
-      .toArray()
-      .catch(() => []);
-    if (rows.length === 0) return [];
-    const total = rows.reduce((acc, r) => acc + (r.count || 0), 0);
-    if (total === 0) return [];
-    return rows.map((r) => ({
-      name: String(r._id),
-      share: (r.count || 0) / total,
-    }));
+  _metaForMatchup(userId, myRace, oppRace) {
+    return aggregations.metaForMatchup(this.db.games, userId, myRace, oppRace);
   }
 }
 

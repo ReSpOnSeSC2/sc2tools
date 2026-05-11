@@ -4,7 +4,8 @@ import {
   buildMatchEndLine,
   buildCheeseLine,
   sanitizeForSpeech,
-} from "../useVoiceReadout";
+} from "../useVoiceReadout.builders";
+import { normalizeRace } from "../useVoiceReadout.builders";
 import type { LiveGamePayload } from "../types";
 
 const base = (extra: Partial<LiveGamePayload> = {}): LiveGamePayload => ({
@@ -178,5 +179,44 @@ describe("sanitizeForSpeech", () => {
 
   it("collapses whitespace", () => {
     expect(sanitizeForSpeech("  a   \n b  ")).toBe("a b");
+  });
+});
+
+describe("normalizeRace", () => {
+  it("returns the canonical race for full-word inputs (case-insensitive)", () => {
+    expect(normalizeRace("Terran")).toBe("Terran");
+    expect(normalizeRace("terran")).toBe("Terran");
+    expect(normalizeRace("TERRAN")).toBe("Terran");
+    expect(normalizeRace("Zerg")).toBe("Zerg");
+    expect(normalizeRace("Protoss")).toBe("Protoss");
+  });
+
+  it("accepts single-letter agent variants (T/Z/P/R)", () => {
+    // The agent occasionally emits the single-letter form when the
+    // SC2 client's locale doesn't surface the full race string. The
+    // voice readout needs the canonical word; without this mapping
+    // the race clause would be silently dropped and the streamer
+    // would hear "Facing <Name>." instead of "Facing <Name>, Terran."
+    expect(normalizeRace("T")).toBe("Terran");
+    expect(normalizeRace("t")).toBe("Terran");
+    expect(normalizeRace("Z")).toBe("Zerg");
+    expect(normalizeRace("z")).toBe("Zerg");
+    expect(normalizeRace("P")).toBe("Protoss");
+    expect(normalizeRace("p")).toBe("Protoss");
+    expect(normalizeRace("R")).toBe("random race");
+    expect(normalizeRace("r")).toBe("random race");
+  });
+
+  it("maps Random to 'random race'", () => {
+    expect(normalizeRace("Random")).toBe("random race");
+    expect(normalizeRace("random")).toBe("random race");
+  });
+
+  it("returns the empty string for unknown / missing inputs", () => {
+    expect(normalizeRace("")).toBe("");
+    expect(normalizeRace(undefined)).toBe("");
+    expect(normalizeRace(null)).toBe("");
+    expect(normalizeRace("unknown")).toBe("");
+    expect(normalizeRace("???")).toBe("");
   });
 });
