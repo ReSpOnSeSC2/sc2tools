@@ -31,7 +31,7 @@ export function CommunityShell({
       <Tabs value={active} onValueChange={onChange}>
         <Tabs.List ariaLabel="Community sections">
           <Tabs.Trigger value="builds">Community</Tabs.Trigger>
-          <Tabs.Trigger value="leaderboard">Leaderboard</Tabs.Trigger>
+          <Tabs.Trigger value="leaderboard">Stock Market Leaderboard</Tabs.Trigger>
         </Tabs.List>
       </Tabs>
       {children}

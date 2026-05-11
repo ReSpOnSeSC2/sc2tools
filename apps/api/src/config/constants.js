@@ -43,6 +43,7 @@ const COLLECTIONS = Object.freeze({
   COMMUNITY_BUILDS: "community_builds",
   COMMUNITY_REPORTS: "community_reports",
   USER_BACKUPS: "user_backups",
+  ARCADE_LEADERBOARD: "arcade_leaderboard",
 });
 
 const LIMITS = Object.freeze({
