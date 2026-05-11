@@ -7,11 +7,13 @@ import {
   CheckCircle2,
   Cloud,
   Download,
+  Gamepad2,
   Heart,
   Library,
   Map,
   Mic2,
   Shield,
+  Sparkles,
   Swords,
   Tv,
   Wand2,
@@ -43,6 +45,7 @@ export default function LandingPage() {
       <AgentDownloadSection />
       <PillarsSection />
       <HowItWorksSection />
+      <ArcadeSection />
       <HeroHeadlineSection />
       <DonateBanner />
       <FinalCtaSection />
@@ -419,6 +422,131 @@ function HowItWorksSection() {
         </ol>
       </div>
     </Section>
+  );
+}
+
+/* =============================================================== */
+/* ARCADE — quizzes/games generated from the user's real replays    */
+/* =============================================================== */
+
+interface ArcadeTile {
+  /** Path under /public for the mode's PNG icon. */
+  iconSrc: string;
+  title: string;
+  body: string;
+}
+
+const ARCADE_TILES: ReadonlyArray<ArcadeTile> = [
+  {
+    iconSrc: "/arcade/icons/buildle.png",
+    title: "Buildle",
+    body: "Daily case file. One real game, one hidden fact, one shot to crack it.",
+  },
+  {
+    iconSrc: "/arcade/icons/closers-eye.png",
+    title: "Closer's Eye",
+    body: "Which of your builds closes wins the fastest? Mean win-length, blind.",
+  },
+  {
+    iconSrc: "/arcade/icons/two-truths-lie.png",
+    title: "Two Truths & a Lie",
+    body: "Two real facts about your play, one fake. Spot the lie.",
+  },
+  {
+    iconSrc: "/arcade/icons/bingo-ladder.png",
+    title: "Bingo: Ladder Edition",
+    body: "A 5×5 of forward objectives. Your next-7-day games tick the cells.",
+  },
+  {
+    iconSrc: "/arcade/icons/stock-market.png",
+    title: "Stock Market",
+    body: "Lock in a build portfolio. Weekly P&L feeds the leaderboard.",
+  },
+];
+
+function ArcadeSection() {
+  return (
+    <section className="relative mx-auto max-w-6xl space-y-6">
+      <header className="space-y-3 text-center">
+        <Badge
+          variant="cyan"
+          iconLeft={<Sparkles className="h-3.5 w-3.5" aria-hidden />}
+        >
+          New · Arcade
+        </Badge>
+        <h2 className="text-h1 font-bold tracking-tight text-text md:text-display-lg">
+          Your ladder data,{" "}
+          <span className="text-accent-cyan">playable</span>
+        </h2>
+        <p className="mx-auto max-w-2xl text-body-lg text-text-muted">
+          Thirteen modes — quizzes, games, weekly bingo — all generated from
+          your real replays. Daily drop, XP, shareable score cards.
+        </p>
+      </header>
+      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {ARCADE_TILES.map((tile) => (
+          <ArcadeTileCard key={tile.title} {...tile} />
+        ))}
+        <ArcadeMoreCard />
+      </ul>
+      <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+        <CtaLink
+          href="/sign-up"
+          iconLeft={<Gamepad2 className="h-5 w-5" aria-hidden />}
+          iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}
+        >
+          Sign in to play
+        </CtaLink>
+      </div>
+    </section>
+  );
+}
+
+function ArcadeTileCard({ iconSrc, title, body }: ArcadeTile) {
+  return (
+    <li className="h-full">
+      <Card variant="feature" padded={false} className="h-full">
+        <div className="flex h-full flex-col gap-3 p-5">
+          <div
+            aria-hidden
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-accent-cyan/30 bg-accent-cyan/10"
+          >
+            <Image
+              src={iconSrc}
+              alt=""
+              width={28}
+              height={28}
+              className="h-7 w-7"
+              unoptimized
+            />
+          </div>
+          <h3 className="text-h4 font-semibold text-text">{title}</h3>
+          <p className="text-body text-text-muted">{body}</p>
+        </div>
+      </Card>
+    </li>
+  );
+}
+
+function ArcadeMoreCard() {
+  return (
+    <li className="h-full">
+      <Card variant="feature" padded={false} className="h-full">
+        <div className="flex h-full flex-col gap-3 p-5">
+          <div
+            aria-hidden
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
+          >
+            <Gamepad2 className="h-5 w-5" />
+          </div>
+          <h3 className="text-h4 font-semibold text-text">+8 more modes</h3>
+          <p className="text-body text-text-muted">
+            Streaks, macro memory, rivalries, comebacks, build cards… Quick
+            Play any of them, or chase the Daily Drop.
+          </p>
+        </div>
+      </Card>
+    </li>
   );
 }
 
