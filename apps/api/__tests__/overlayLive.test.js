@@ -754,6 +754,63 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
     expect(p.headToHead).toEqual({ wins: 1, losses: 3 });
   });
 
+  test("surfaces last-observed MMR from the opponents row as oppMmr", async () => {
+    // Bug companion to the THEBLOB H2H fix: SC2Pulse's live profile
+    // lookup returns no MMR for some accounts (no current season
+    // games, account migrated, etc.), so the pre-game card fell to
+    // "MMR unavailable" even when the cloud had a fresh MMR stamped
+    // on the opponents row from prior encounters. The pre-game path
+    // must now surface that stored MMR under ``oppMmr`` (same field
+    // the post-game card uses) so the renderer can prefer it over
+    // the missing Pulse value.
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "1-S2-1-12236275",
+      pulseCharacterId: "340473252",
+      displayNameSample: "THEBLOB",
+      displayNameHash: "hash",
+      race: "Protoss",
+      mmr: 4327,
+      wins: 3,
+      losses: 1,
+      gameCount: 4,
+      lastSeen: new Date(),
+      openings: {},
+    });
+    const p = await svc.buildFromOpponentName(
+      "u1",
+      "THEBLOB",
+      "Protoss",
+      340473252,
+      "Protoss",
+    );
+    expect(p.oppMmr).toBe(4327);
+  });
+
+  test("omits oppMmr when the opponents row has no stored MMR", async () => {
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "1-S2-1-12236275",
+      pulseCharacterId: "340473252",
+      displayNameSample: "THEBLOB",
+      displayNameHash: "hash",
+      race: "Protoss",
+      wins: 1,
+      losses: 0,
+      gameCount: 1,
+      lastSeen: new Date(),
+      openings: {},
+    });
+    const p = await svc.buildFromOpponentName(
+      "u1",
+      "THEBLOB",
+      "Protoss",
+      340473252,
+      "Protoss",
+    );
+    expect(p.oppMmr).toBeUndefined();
+  });
+
   test("returns null when called without a name", async () => {
     expect(await svc.buildFromOpponentName("u1", "")).toBeNull();
     expect(await svc.buildFromOpponentName("", "Foo")).toBeNull();

@@ -351,4 +351,109 @@ describe("buildLiveGameScoutingLine", () => {
       }),
     ).toContain("Facing an unknown opponent.");
   });
+
+  it("announces head-to-head record and win percentage when streamerHistory carries them", () => {
+    // Mirrors the THEBLOB-style case: pre-game card has the cloud's
+    // enrichment attached. The voice line must include the record
+    // (the agent's match-loading utterance previously read only the
+    // name) and the win % the streamer asked for at match start.
+    const out = buildLiveGameScoutingLine({
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: 0,
+      opponent: { name: "THEBLOB", race: "Protoss" },
+      streamerHistory: {
+        oppName: "THEBLOB",
+        oppRace: "Protoss",
+        matchup: "PvP",
+        headToHead: { wins: 3, losses: 1 },
+      },
+    });
+    expect(out).toContain("Facing THEBLOB, Protoss.");
+    // 3 + 1 = 4; 3/4 = 75% win rate.
+    expect(out).toContain("You're 3 and 1 against them, 75 percent win rate.");
+  });
+
+  it("says 'First meeting.' when streamerHistory confirms an empty record", () => {
+    const out = buildLiveGameScoutingLine({
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: 0,
+      opponent: { name: "FreshAccount", race: "Terran" },
+      streamerHistory: {
+        oppName: "FreshAccount",
+        oppRace: "Terran",
+        matchup: "PvT",
+        headToHead: { wins: 0, losses: 0 },
+      },
+    });
+    expect(out).toContain("First meeting.");
+    expect(out).not.toMatch(/percent win rate/);
+  });
+
+  it("stays silent on H2H when streamerHistory has not landed yet (no false 'first meeting')", () => {
+    // Envelope arrived before the cloud's enrichment hook ran — we
+    // can't tell whether this is a first meeting or a repeat
+    // opponent, so the utterance must omit the H2H clause rather
+    // than claim "first meeting" and risk lying.
+    const out = buildLiveGameScoutingLine({
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: 0,
+      opponent: { name: "Maybe", race: "Zerg" },
+    });
+    expect(out).not.toMatch(/First meeting/);
+    expect(out).not.toMatch(/against them/);
+  });
+
+  it("prefers SC2Pulse's current MMR over the cloud's saved last-game MMR", () => {
+    // Pulse is the authoritative "current season rating" source —
+    // when it has a value the spoken line uses it, even if the
+    // cloud's opponents row carries an older saved value from the
+    // last encounter.
+    const out = buildLiveGameScoutingLine({
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: 0,
+      opponent: {
+        name: "THEBLOB",
+        race: "Protoss",
+        profile: { mmr: 4480 }, // current Pulse rating
+      },
+      streamerHistory: {
+        oppName: "THEBLOB",
+        oppRace: "Protoss",
+        matchup: "PvP",
+        oppMmr: 4327, // saved at end of last game
+        headToHead: { wins: 3, losses: 1 },
+      },
+    });
+    expect(out).toContain("4480 MMR.");
+    expect(out).not.toContain("4327 MMR.");
+  });
+
+  it("falls back to the saved last-game MMR when Pulse has no usable rating", () => {
+    // THEBLOB-style case: Pulse returned a profile but no MMR
+    // (insufficient season games / off-ladder activity). The voice
+    // line should still announce the saved last-game MMR rather
+    // than going silent on the MMR slot.
+    const out = buildLiveGameScoutingLine({
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: 0,
+      opponent: {
+        name: "THEBLOB",
+        race: "Protoss",
+        profile: { mmr: 0 }, // Pulse returned nothing usable
+      },
+      streamerHistory: {
+        oppName: "THEBLOB",
+        oppRace: "Protoss",
+        matchup: "PvP",
+        oppMmr: 4327,
+        headToHead: { wins: 3, losses: 1 },
+      },
+    });
+    expect(out).toContain("4327 MMR.");
+  });
 });

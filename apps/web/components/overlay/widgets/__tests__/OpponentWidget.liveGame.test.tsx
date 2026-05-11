@@ -115,6 +115,64 @@ describe("OpponentWidget — live envelope path", () => {
     expect(container.textContent).toContain("MMR unavailable");
   });
 
+  it("uses the cloud-derived oppMmr from streamerHistory when Pulse has none", () => {
+    // THEBLOB-style regression: Pulse returned a profile with no MMR
+    // (the typical "MMR unavailable" path). The cloud's enrichment
+    // attached an opponents-row-derived ``streamerHistory.oppMmr``
+    // carrying the value the agent stamped at the last encounter —
+    // when Pulse can't surface a current rating the widget falls
+    // back to that saved value so the streamer doesn't see "MMR
+    // unavailable" against an opponent we already have a rating for.
+    const env = envelope({
+      phase: "match_started",
+      opponent: {
+        name: "THEBLOB",
+        race: "Protoss",
+        profile: { confidence: 1 },
+      },
+      streamerHistory: {
+        oppName: "THEBLOB",
+        oppRace: "Protoss",
+        matchup: "PvP",
+        oppMmr: 4327,
+        headToHead: { wins: 3, losses: 1 },
+      },
+    });
+    const { container } = render(
+      <OpponentWidget live={null} liveGame={env} />,
+    );
+    expect(container.textContent).toContain("4327 MMR");
+    expect(container.textContent).not.toContain("MMR unavailable");
+  });
+
+  it("prefers SC2Pulse's current MMR over the saved last-game MMR when both are present", () => {
+    // Pulse is the authoritative current-rating source; the saved
+    // last-game value is only a fallback. When Pulse has a fresh
+    // reading the widget must render it, not the older stored
+    // number — otherwise the streamer would see a rating from days
+    // ago instead of the opponent's actual current MMR.
+    const env = envelope({
+      phase: "match_started",
+      opponent: {
+        name: "THEBLOB",
+        race: "Protoss",
+        profile: { mmr: 4480 },
+      },
+      streamerHistory: {
+        oppName: "THEBLOB",
+        oppRace: "Protoss",
+        matchup: "PvP",
+        oppMmr: 4327,
+        headToHead: { wins: 3, losses: 1 },
+      },
+    });
+    const { container } = render(
+      <OpponentWidget live={null} liveGame={env} />,
+    );
+    expect(container.textContent).toContain("4480 MMR");
+    expect(container.textContent).not.toContain("4327 MMR");
+  });
+
   it("hides when the bridge transitions back to idle even if a stale envelope was rendered", () => {
     const live = envelope({
       phase: "match_started",

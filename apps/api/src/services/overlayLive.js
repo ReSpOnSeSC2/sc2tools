@@ -560,14 +560,22 @@ class OverlayLiveService {
     // the three tiers (and the downstream payload derivation) actually
     // read: identity (pulseId / pulseCharacterId), display
     // (displayNameSample), counters (gameCount, wins, losses), recency
-    // (lastSeen), strategy mix (openings), and race (used to break
-    // display-name collisions in Tier C).
+    // (lastSeen), strategy mix (openings), race (used to break
+    // display-name collisions in Tier C), and the last-observed
+    // ``mmr`` so the scouting widget can show a record even when
+    // SC2Pulse's live profile lookup hasn't returned a current MMR
+    // (e.g. the opponent hasn't played enough ranked games this season
+    // for Pulse to expose one). The post-game card already surfaces
+    // this from the freshly-uploaded game; here we backstop the pre-
+    // game card so it doesn't fall to "MMR unavailable" against a
+    // repeat opponent whose stored MMR we already know.
     const projection = {
       _id: 0,
       pulseId: 1,
       pulseCharacterId: 1,
       displayNameSample: 1,
       race: 1,
+      mmr: 1,
       gameCount: 1,
       wins: 1,
       losses: 1,
@@ -639,6 +647,18 @@ class OverlayLiveService {
       const wins = Number(oppRow.wins) || 0;
       const losses = Number(oppRow.losses) || 0;
       payload.headToHead = { wins, losses };
+      // Last-observed MMR from the opponents row. The post-game card
+      // surfaces ``oppMmr`` from the just-uploaded game; pre-game we
+      // fall back to the most recent value the agent stamped on this
+      // opponent during a prior encounter. Renderer prefers this over
+      // ``profile.mmr`` when both are present because the stored row
+      // is the value Battle.net itself reported in their last match,
+      // whereas SC2Pulse's profile MMR can lag (or be null entirely
+      // when the player hasn't logged enough season games for Pulse
+      // to publish one).
+      if (Number.isFinite(Number(oppRow.mmr))) {
+        payload.oppMmr = Number(oppRow.mmr);
+      }
       const games = Number(oppRow.gameCount) || wins + losses;
       // Same RIVAL / FAMILIAR threshold as buildFromGame (3+ prior
       // encounters) so the pre-game card flags repeat opponents the

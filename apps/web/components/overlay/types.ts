@@ -257,6 +257,7 @@ export interface LiveGameEnvelope {
     | "myRace"
     | "oppRace"
     | "oppName"
+    | "oppMmr"
     | "matchup"
     | "headToHead"
     | "streak"
