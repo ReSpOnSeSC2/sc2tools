@@ -211,25 +211,13 @@ const SVG_REGISTRY: Record<string, () => ReactNode> = {
  * you drop a PNG; remove it (or delete the PNG) to revert to the
  * bundled SVG. Entries with no matching file render a broken image —
  * keep the set in sync with what's actually on disk.
+ *
+ * Intentionally empty: the 256px palette PNGs (bf004d2) ship with
+ * sparse / off-centre / baked-background artwork for several modes,
+ * so we render the SVG fallback for all 16 ids until replacement
+ * PNGs land. Re-add ids here as new artwork comes in.
  */
-export const CUSTOM_ICON_MODES = new Set<string>([
-  "opponent-bracket-pick",
-  "rivalry-ranker",
-  "active-streak-hunter",
-  "streak-veto",
-  "first-game-of-day",
-  "streak-after-loss",
-  "comeback-count",
-  "loss-pattern-sleuth",
-  "closers-eye",
-  "macro-memory",
-  "stock-market",
-  "bingo-ladder",
-  "buildle",
-  "two-truths-lie",
-  "higher-or-lower",
-  "builds-as-cards",
-]);
+export const CUSTOM_ICON_MODES = new Set<string>([]);
 
 const TITLES: Record<string, string> = {
   "opponent-bracket-pick": "Opponent Bracket Pick",
