@@ -2,6 +2,27 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LiveGameEnvelope, LiveGamePayload } from "./types";
+import {
+  buildScoutingLine,
+  buildMatchEndLine,
+  buildCheeseLine,
+  buildLiveGameScoutingLine,
+  sanitizeForSpeech,
+  scoutingFingerprint,
+  matchEndFingerprint,
+  matchStartFingerprint,
+  cheeseFingerprint,
+} from "./useVoiceReadout.builders";
+
+// Re-export builders so existing call sites (and the unit tests) can
+// keep importing from this module without breaking on the file split.
+export {
+  buildScoutingLine,
+  buildMatchEndLine,
+  buildCheeseLine,
+  buildLiveGameScoutingLine,
+  sanitizeForSpeech,
+} from "./useVoiceReadout.builders";
 
 /**
  * Voice prefs payload. Mirrors the shape persisted by
@@ -54,6 +75,17 @@ const DEFAULTS = {
 };
 
 /**
+ * Window the hook waits for cloud enrichment to land on a fresh
+ * ``liveGame`` envelope before speaking the fallback line. Calibrated
+ * against the broker's partial-then-enriched fan-out: the partial
+ * arrives synchronously, the Mongo aggregation that produces
+ * ``streamerHistory`` typically lands within 50–300 ms. 900 ms gives
+ * enrichment plenty of headroom while still firing the readout well
+ * within the streamer's loading-screen attention budget.
+ */
+const LIVE_GAME_ENRICHMENT_WAIT_MS = 900;
+
+/**
  * Public surface of `useVoiceReadout`. Consumers render the gesture
  * banner when ``needsGesture`` is true; clicking it (or anywhere else)
  * fires ``onUserGesture`` which unblocks queued speech.
@@ -65,6 +97,17 @@ export interface VoiceReadout {
   enabled: boolean;
   /** Mark gesture granted — consumer wires this to a click handler. */
   onUserGesture: () => void;
+}
+
+/**
+ * Per-gameKey state for the live-envelope readout. Tracks whether the
+ * spoken line has already fired for this match AND any pending timer
+ * that's waiting for cloud enrichment to land. Stored in a ref so the
+ * hook doesn't re-render on every state transition.
+ */
+interface LiveGameUtterState {
+  spoken: boolean;
+  timer: number | null;
 }
 
 /**
@@ -111,6 +154,13 @@ export function useVoiceReadout(
   const lastMatchEndKey = useRef<string | null>(null);
   const lastCheeseKey = useRef<string | null>(null);
   const lastMatchStartKey = useRef<string | null>(null);
+
+  // Per-gameKey state for the live-envelope readout. A single match
+  // produces 5+ envelope deltas (loading → started → in-progress → ended)
+  // plus a Pulse-enriched re-emit; we speak at most once per gameKey
+  // AFTER enrichment lands (or after a short timeout, whichever fires
+  // first).
+  const liveGameStates = useRef<Map<string, LiveGameUtterState>>(new Map());
 
   const enabled = !!prefs && prefs.enabled !== false;
   const debug = useDebugFlag(prefs?.debug);
@@ -357,55 +407,116 @@ export function useVoiceReadout(
 
   // Pre-game / in-game readout, driven by the desktop agent's
   // ``LiveGameEnvelope`` rather than the post-game ``LiveGamePayload``.
-  // Fires on the FIRST envelope of a new ``gameKey`` that carries an
-  // opponent name — typically the MATCH_LOADING phase, ~50 ms after
-  // the SC2 loading screen lands.
+  // Speaks at most once per ``gameKey`` AFTER enrichment lands — or
+  // after a short timeout if enrichment hasn't arrived yet — so the
+  // streamer never hears half a sentence and never hears the readout
+  // twice for the same match.
   //
-  // Why we dedup by ``gameKey``: a single match goes through 5+
-  // envelope deltas (loading → started → in-progress ticks →
-  // ended) PLUS a Pulse-enrichment re-emit. Without the gameKey
-  // dedup the streamer would hear the scouting line twice — once
-  // from the partial payload and once from the enriched one.
+  // Why the timeout exists: the broker's partial-then-enriched fan-out
+  // is normally fast (<300 ms), but a Pulse / Mongo blip could leave a
+  // partial envelope without any enriched re-emit. The 900 ms fallback
+  // means the readout still fires (with whatever data we have) instead
+  // of going silent for the streamer.
   //
-  // Why we don't fire from this path when ``live`` is set: the
-  // post-game payload has identical or stricter information, and
-  // letting both fire would speak twice for the same match. The
-  // ScoutingWidget consumes ``liveGame`` exclusively when ``live``
-  // is null; voice mirrors that priority.
+  // Why we don't fire from this path when ``live`` is set: the post-
+  // game payload has identical or stricter information, and letting
+  // both fire would speak twice for the same match. The ScoutingWidget
+  // consumes ``liveGame`` exclusively when ``live`` is null; voice
+  // mirrors that priority.
   useEffect(() => {
     if (!enabled) return;
     if (live) return; // post-game path owns the readout when present
+    const states = liveGameStates.current;
     if (!liveGame) return;
-    if (liveGame.phase === "idle" || liveGame.phase === "menu") return;
+    if (liveGame.phase === "idle" || liveGame.phase === "menu") {
+      // Drop ALL per-gameKey state — the bridge has cleared back to
+      // menu, so the next match-loading envelope starts fresh and
+      // gets its own readout.
+      for (const entry of states.values()) {
+        if (entry.timer !== null) window.clearTimeout(entry.timer);
+      }
+      states.clear();
+      return;
+    }
     const oppName = liveGame.opponent?.name?.trim();
     if (!oppName) return;
     const events = prefs?.events || {};
     const wantsScouting = events.scouting !== false;
     const wantsMatchStart = !!events.matchStart;
     if (!wantsScouting && !wantsMatchStart) return;
+
     const gameKey = liveGame.gameKey || `live:${oppName}`;
-    const lines: string[] = [];
-    if (wantsScouting) {
-      const key = `LG|S|${gameKey}`;
-      if (key !== lastScoutingKey.current) {
-        lastScoutingKey.current = key;
+    let entry = states.get(gameKey);
+    if (!entry) {
+      entry = { spoken: false, timer: null };
+      states.set(gameKey, entry);
+    }
+    if (entry.spoken) return;
+
+    const hasEnrichment = !!liveGame.streamerHistory;
+
+    const fireUtterance = () => {
+      // The latest envelope captured in the closure may be stale by
+      // the time the timer fires, but the hook's render cycle keeps
+      // the latest envelope reachable through ``liveGameStates``; we
+      // re-read ``liveGame`` via the closure here intentionally —
+      // it's the snapshot at the moment we decided to speak. The next
+      // render will recompute and either match (no-op, already
+      // spoken) or detect a new gameKey.
+      const slot = states.get(gameKey);
+      if (!slot || slot.spoken) return;
+      slot.spoken = true;
+      if (slot.timer !== null) {
+        window.clearTimeout(slot.timer);
+        slot.timer = null;
+      }
+      const lines: string[] = [];
+      if (wantsScouting) {
         const line = buildLiveGameScoutingLine(liveGame);
         if (line) lines.push(line);
       }
-    }
-    if (wantsMatchStart) {
-      const key = `LG|M|${gameKey}`;
-      if (key !== lastMatchStartKey.current) {
-        lastMatchStartKey.current = key;
-        lines.push("Match starting.");
+      if (wantsMatchStart) lines.push("Match starting.");
+      const text = lines.join(" ").trim();
+      if (text) {
+        log("liveGame triggered readout:", JSON.stringify(text));
+        enqueueOrSpeak(text);
       }
+    };
+
+    if (hasEnrichment) {
+      // Cloud's enrichment has landed — speak now, cancel any pending
+      // fallback timer.
+      if (entry.timer !== null) {
+        window.clearTimeout(entry.timer);
+        entry.timer = null;
+      }
+      fireUtterance();
+      return;
     }
-    const text = lines.join(" ").trim();
-    if (text) {
-      log("liveGame triggered readout:", JSON.stringify(text));
-      enqueueOrSpeak(text);
+
+    // Enrichment hasn't landed yet. Arm a fallback timer (once per
+    // gameKey) so a Pulse / Mongo blip can't gag the readout forever.
+    if (entry.timer === null) {
+      entry.timer = window.setTimeout(() => {
+        const slot = states.get(gameKey);
+        if (slot) slot.timer = null;
+        fireUtterance();
+      }, LIVE_GAME_ENRICHMENT_WAIT_MS);
     }
   }, [liveGame, live, enabled, prefs, enqueueOrSpeak, log]);
+
+  // Drain pending live-game timers on unmount so a Browser Source
+  // refresh doesn't leave orphaned setTimeouts attached to a torn-down
+  // hook instance.
+  useEffect(() => {
+    const states = liveGameStates.current;
+    return () => {
+      for (const entry of states.values()) {
+        if (entry.timer !== null) window.clearTimeout(entry.timer);
+      }
+      states.clear();
+    };
+  }, []);
 
   const onUserGesture = useCallback(() => {
     if (gestureGranted) return;
@@ -486,226 +597,14 @@ export function useVoiceReadout(
 }
 
 /* ============================================================
- * Utterance builders — small, deterministic, easy to test.
- * Exported (named) for unit tests.
+ * Internals — gesture persistence + debug flag.
  * ============================================================ */
-
-const MAX_BEST_ANSWER_LEN = 60;
-
-export function buildScoutingLine(live: LiveGamePayload): string {
-  const parts: string[] = [];
-  const name = sanitizeForSpeech(live.oppName);
-  const race = normalizeRace(live.oppRace);
-
-  if (name && race) parts.push(`Facing ${name}, ${race}.`);
-  else if (name) parts.push(`Facing ${name}.`);
-  else if (race) parts.push(`Facing a ${race} opponent.`);
-  else parts.push("Facing an unknown opponent.");
-
-  const r = live.headToHead;
-  const wins = Number(r?.wins);
-  const losses = Number(r?.losses);
-  if (Number.isFinite(wins) && Number.isFinite(losses) && (wins > 0 || losses > 0)) {
-    parts.push(`You're ${wins} and ${losses} against them.`);
-  } else if (r) {
-    parts.push("First meeting.");
-  }
-
-  const a = live.bestAnswer;
-  if (a && a.build) {
-    const build = truncate(sanitizeForSpeech(a.build), MAX_BEST_ANSWER_LEN);
-    const wr = Number(a.winRate);
-    if (build) {
-      if (Number.isFinite(wr) && wr > 0) {
-        const pct = Math.round(wr * 100);
-        parts.push(`Best answer is ${build}, ${pct} percent win rate.`);
-      } else {
-        parts.push(`Best answer is ${build}.`);
-      }
-    }
-  }
-
-  const cheese = Number(live.cheeseProbability);
-  if (Number.isFinite(cheese)) {
-    if (cheese >= 0.7) parts.push("High cheese risk — scout early.");
-    else if (cheese >= 0.4) parts.push("Possible cheese — scout the natural.");
-  }
-
-  return parts.filter(Boolean).join(" ");
-}
-
-export function buildMatchEndLine(live: LiveGamePayload): string {
-  const word =
-    live.result === "win"
-      ? "Victory"
-      : live.result === "loss"
-        ? "Defeat"
-        : "Match over";
-  const delta = Number(live.mmrDelta);
-  if (Number.isFinite(delta) && delta !== 0) {
-    const sign = delta > 0 ? "plus" : "minus";
-    return `${word}. ${sign} ${Math.abs(delta)} MMR.`;
-  }
-  return `${word}.`;
-}
-
-/**
- * Pre-game scouting line built from the desktop agent's
- * ``LiveGameEnvelope``. Carries identity + Pulse profile MMR + the
- * cloud-derived head-to-head record (and a spoken win-percentage when
- * the sample is non-trivial) from the enrichment hook the broker
- * attached as ``env.streamerHistory`` before fan-out. Falls back to
- * "First meeting" when the cloud confirmed an empty history, and stays
- * silent on H2H when the enrichment hasn't landed yet (rather than
- * lying about a first meeting that may not be one).
- */
-export function buildLiveGameScoutingLine(env: LiveGameEnvelope): string {
-  const name = sanitizeForSpeech(env.opponent?.name);
-  const race = normalizeRace(env.opponent?.race ?? undefined);
-  const profile = env.opponent?.profile;
-  const history = env.streamerHistory;
-  const pulseMmr =
-    profile && typeof profile.mmr === "number" && profile.mmr > 0
-      ? profile.mmr
-      : null;
-  const storedMmr =
-    typeof history?.oppMmr === "number" && history.oppMmr > 0
-      ? history.oppMmr
-      : null;
-  // Mirror the OpponentWidget's MMR precedence so the spoken value
-  // matches what the streamer sees on the overlay card: SC2Pulse's
-  // current rating wins, with the cloud's saved last-game MMR as the
-  // fallback when Pulse has nothing to offer.
-  const mmr = pulseMmr !== null ? pulseMmr : storedMmr;
-  const parts: string[] = [];
-  if (name && race) parts.push(`Facing ${name}, ${race}.`);
-  else if (name) parts.push(`Facing ${name}.`);
-  else if (race) parts.push(`Facing a ${race} opponent.`);
-  else parts.push("Facing an unknown opponent.");
-  if (mmr !== null) {
-    parts.push(`${mmr} MMR.`);
-  }
-  // Head-to-head + win-percentage from the cloud enrichment. Match the
-  // post-game ``buildScoutingLine`` phrasing for ``You're X and Y``
-  // and add an explicit win-rate clause — the streamer asked for the
-  // record AND the win-% to be announced at match start. Skip silently
-  // when ``streamerHistory`` is absent (the enrichment hook hasn't
-  // attached yet) so we don't claim "first meeting" for an opponent
-  // we may know about.
-  const h2h = history?.headToHead;
-  if (h2h) {
-    const wins = Number(h2h.wins);
-    const losses = Number(h2h.losses);
-    if (Number.isFinite(wins) && Number.isFinite(losses) && (wins > 0 || losses > 0)) {
-      const total = wins + losses;
-      const pct = total > 0 ? Math.round((wins / total) * 100) : 0;
-      parts.push(`You're ${wins} and ${losses} against them, ${pct} percent win rate.`);
-    } else {
-      parts.push("First meeting.");
-    }
-  }
-  return parts.filter(Boolean).join(" ");
-}
-
-export function buildCheeseLine(live: LiveGamePayload): string {
-  const cheese = Number(live.cheeseProbability);
-  if (!Number.isFinite(cheese)) return "Cheese warning.";
-  if (cheese >= 0.7) return "High cheese risk.";
-  return "Cheese warning.";
-}
-
-/* ============================================================
- * Internals.
- * ============================================================ */
-
-function scoutingFingerprint(live: LiveGamePayload): string {
-  return [
-    "S",
-    (live.oppName || "").toLowerCase(),
-    normalizeRace(live.oppRace) || "",
-    live.headToHead?.wins ?? "",
-    live.headToHead?.losses ?? "",
-    live.bestAnswer?.build || "",
-    live.isTest ? "T" : "",
-  ].join("|");
-}
-
-function matchEndFingerprint(live: LiveGamePayload): string {
-  return [
-    "E",
-    (live.oppName || "").toLowerCase(),
-    live.result ?? "",
-    live.mmrDelta ?? "",
-    live.isTest ? "T" : "",
-  ].join("|");
-}
-
-function matchStartFingerprint(live: LiveGamePayload): string {
-  return [
-    "M",
-    (live.oppName || "").toLowerCase(),
-    live.headToHead?.wins ?? "",
-    live.headToHead?.losses ?? "",
-    live.isTest ? "T" : "",
-  ].join("|");
-}
-
-function cheeseFingerprint(live: LiveGamePayload): string {
-  return [
-    "C",
-    (live.oppName || "").toLowerCase(),
-    Math.round(((live.cheeseProbability ?? 0) as number) * 10),
-    live.isTest ? "T" : "",
-  ].join("|");
-}
 
 function clamp(n: number, lo: number, hi: number): number {
   if (!Number.isFinite(n)) return lo;
   if (n < lo) return lo;
   if (n > hi) return hi;
   return n;
-}
-
-function truncate(s: string, max: number): string {
-  if (!s) return "";
-  if (s.length <= max) return s;
-  // Trim on a word boundary when possible so the TTS doesn't read a
-  // partial word.
-  const cut = s.slice(0, max);
-  const lastSpace = cut.lastIndexOf(" ");
-  return lastSpace > max - 16 ? cut.slice(0, lastSpace) : cut;
-}
-
-/**
- * Strip emojis, markdown punctuation, and other characters Web Speech
- * either skips or pronounces awkwardly. Defensive — payloads can carry
- * arbitrary build-name strings.
- */
-export function sanitizeForSpeech(input: string | undefined | null): string {
-  if (input == null) return "";
-  let s = String(input);
-  // Markdown link [text](url) → text
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
-  // Inline markdown markers
-  s = s.replace(/[*_`~>#]/g, " ");
-  // Strip emoji + the joiners/variation selectors that escort them.
-  // Web Speech engines either skip these silently or pronounce the
-  // CLDR name ("smiling face with smiling eyes"), neither of which we
-  // want in a scouting readout.
-  s = s.replace(/[\p{Extended_Pictographic}\u200D\uFE0F]/gu, "");
-  // Collapse whitespace and trim.
-  return s.replace(/\s+/g, " ").trim();
-}
-
-function normalizeRace(race: string | undefined): string {
-  if (!race) return "";
-  const r = race.trim().toLowerCase();
-  if (r === "terran" || r === "zerg" || r === "protoss") {
-    return r.charAt(0).toUpperCase() + r.slice(1);
-  }
-  if (r === "random") return "random race";
-  // Anything else (empty / "unknown" / agent ambiguity) — drop the race.
-  return "";
 }
 
 const UNLOCK_STORAGE_KEY = "sc2tools.voiceUnlocked";

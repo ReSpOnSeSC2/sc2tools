@@ -468,9 +468,17 @@ function clamp(n: number, lo: number, hi: number): number {
   return n;
 }
 
+/**
+ * Sample sentence used by Settings → Voice → Test voice. Must mirror
+ * the shape ``buildLiveGameScoutingLine`` produces in production so the
+ * streamer hears in Settings exactly what they'll hear in OBS at match
+ * start: name, race, MMR, H2H with win-%, and a trailing "Good luck."
+ *
+ * Sample-only — never substituted into the real readout pipeline.
+ */
 function buildPreviewPhrase(): string {
   return (
-    "Facing TestUser, Protoss. You're 3 and 1 against them. "
-    + "Best answer is 3 Stargate Phoenix, 62 percent win rate."
+    "Facing Maru, Terran. 6720 MMR. "
+    + "You're 3 and 1 against them, 75 percent win rate. Good luck."
   );
 }

@@ -176,14 +176,22 @@ describe("<SettingsVoice />", () => {
     vi.useRealTimers();
   });
 
-  it("Test voice button calls speechSynthesis.speak with the preview phrase", () => {
+  it("Test voice button calls speechSynthesis.speak with a phrase matching the live readout shape", () => {
+    // The preview phrase must mirror what ``buildLiveGameScoutingLine``
+    // produces at match start so the streamer hears in Settings exactly
+    // what they'll hear in OBS: name, race, MMR, H2H with win-%, and a
+    // trailing "Good luck."
     render(<SettingsVoice />);
     const btn = screen.getByRole("button", { name: /test voice/i });
     act(() => {
       fireEvent.click(btn);
     });
     expect(speech.speak).toHaveBeenCalledTimes(1);
-    expect(speech.utterances[0].text).toMatch(/Facing TestUser/);
+    const text = speech.utterances[0].text;
+    expect(text).toMatch(/Facing \w+, (Terran|Zerg|Protoss)\./);
+    expect(text).toMatch(/\d+ MMR\./);
+    expect(text).toMatch(/You're \d+ and \d+ against them, \d+ percent win rate\./);
+    expect(text.trim().endsWith("Good luck.")).toBe(true);
   });
 
   it("shows the autoplay-blocked banner when speak fires onerror with not-allowed", () => {
