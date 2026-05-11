@@ -43,7 +43,7 @@ export function GameStage({
     <Card variant="elevated" padded={false} className="overflow-hidden">
       <header className="flex items-center justify-between gap-3 border-b border-border bg-bg-elevated px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-bg-surface text-accent-cyan">
+          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-bg-surface text-accent-cyan">
             {icon}
           </span>
           <div className="min-w-0">

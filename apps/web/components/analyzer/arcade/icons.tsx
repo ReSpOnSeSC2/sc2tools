@@ -15,14 +15,15 @@
 import type { ReactNode } from "react";
 
 const ICON_PROPS = {
-  width: 22,
-  height: 22,
+  width: "80%",
+  height: "80%",
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
   strokeWidth: 1.6,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
+  preserveAspectRatio: "xMidYMid meet" as const,
 } as const;
 
 function withTitle(label: string, body: ReactNode): ReactNode {
@@ -262,7 +263,7 @@ export function IconFor(modeId: string): ReactNode {
         src={`/arcade/icons/${modeId}.png`}
         alt={alt}
         loading="lazy"
-        className="h-full max-h-7 w-auto object-contain"
+        className="block h-full w-full object-contain"
       />
     );
   }
