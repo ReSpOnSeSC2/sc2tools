@@ -169,17 +169,29 @@ function Render({
   }, [state.bingo, ctx.question.weekKey]);
 
   // Initialise the persisted card if missing for this week.
+  //
+  // Idempotency note: this effect may fire BEFORE useArcadeState has
+  // hydrated from the server (state.bingo is null by default), so the
+  // mutator queue in useArcadeState may replay this on top of a real
+  // hydrated card. The inner check on `prev.bingo` preserves the
+  // saved card (including ticked cells) instead of seeding a fresh
+  // one with everything unticked.
   useEffect(() => {
     if (card) return;
-    update((prev) => ({
-      ...prev,
-      bingo: {
-        startedAt: new Date().toISOString(),
-        weekKey: ctx.question.weekKey,
-        rerolled: false,
-        cells: ctx.question.cells,
-      },
-    }));
+    update((prev) => {
+      if (prev.bingo && prev.bingo.weekKey === ctx.question.weekKey) {
+        return prev;
+      }
+      return {
+        ...prev,
+        bingo: {
+          startedAt: new Date().toISOString(),
+          weekKey: ctx.question.weekKey,
+          rerolled: false,
+          cells: ctx.question.cells,
+        },
+      };
+    });
   }, [card, ctx.question, update]);
 
   // Re-resolve on every mount.
