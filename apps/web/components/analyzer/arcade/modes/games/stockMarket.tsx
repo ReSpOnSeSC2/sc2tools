@@ -39,6 +39,21 @@ type Q = {
 
 type A = { picks: Array<{ id: string; alloc: number }>; submitToLeaderboard: boolean };
 
+/**
+ * Per-pick % return on entry price — the standard portfolio math.
+ * Returns a number in basis-points-of-WR terms, e.g. +0.333 means the
+ * pick gained 33.3% on its entry price (a price-30 build at 40).
+ * Used both for locked-view display and for the end-of-week P&L
+ * computation. Distinct from raw Δprice: a 5-point gain on a price-90
+ * build (+5.6% return) ranks differently from a 5-point gain on a
+ * price-30 build (+16.7% return) — that's what makes the price column
+ * matter strategically rather than cosmetically.
+ */
+function pctReturn(entryPrice: number, currentPrice: number): number {
+  if (entryPrice <= 0) return 0;
+  return (currentPrice - entryPrice) / entryPrice;
+}
+
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
   const universe = buildUniverse(input.data);
   if (universe.length < 5) {
@@ -139,8 +154,10 @@ function Render({
   const [optIn, setOptIn] = useState(state.leaderboardOptIn);
   const [name, setName] = useState(state.leaderboardDisplayName);
 
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   // useArcadeState hydrates asynchronously — the useState initializers
-  // above capture pre-hydrate defaults (optIn=false, name=""). Once
+  // above capture pre-hydrate defaults (optIn=true, name=""). Once
   // the real saved state lands, mirror it into the draft form fields
   // so a returning user sees their previous opt-in choice and display
   // name without having to re-toggle. Guarded by `hydrated` so we
@@ -194,6 +211,12 @@ function Render({
     }));
     ctx.onAnswer({ picks: portfolioPicks.map((p) => ({ id: p.slug, alloc: p.alloc })), submitToLeaderboard: optIn });
     if (optIn) {
+      // Surface failures inline instead of swallowing them — silently
+      // catching meant users whose POST 401'd or got rate-limited saw
+      // their portfolio "lock" without ever entering the leaderboard,
+      // with no way to tell. Lock is already persisted by the update()
+      // above, so a leaderboard POST failure leaves the portfolio
+      // safe locally; we just tell the user it didn't post publicly.
       try {
         await apiCall(getToken, "/v1/arcade/leaderboard", {
           method: "POST",
@@ -203,8 +226,13 @@ function Render({
             displayName: name,
           }),
         });
-      } catch {
-        // best-effort; user keeps local pick.
+        setSubmitError(null);
+      } catch (err) {
+        setSubmitError(
+          err instanceof Error
+            ? `Couldn't post to leaderboard: ${err.message}. Your portfolio is still locked locally.`
+            : "Couldn't post to leaderboard. Your portfolio is still locked locally.",
+        );
       }
     }
   };
@@ -215,10 +243,25 @@ function Render({
         Portfolio locked for{" "}
         <span className="font-mono text-text">{ctx.question.weekKey}</span>. P&amp;L tallies when the week closes.
       </p>
+      {submitError ? (
+        <p
+          role="alert"
+          className="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-caption text-danger"
+        >
+          {submitError}
+        </p>
+      ) : null}
       <ul className="space-y-1">
         {locked.picks.map((p) => {
           const cur = ctx.question.quotes.find((q) => q.id === p.slug);
-          const delta = cur && cur.price !== null ? cur.price - p.entryPrice : null;
+          // Per-pick % return drives P&L: a 5-point gain on a price-30
+          // entry is +16.7%, the same 5-point gain on a price-90 entry
+          // is +5.6%. Display the % return so the user sees why the
+          // price column matters strategically.
+          const ret =
+            cur && cur.price !== null && p.entryPrice > 0
+              ? pctReturn(p.entryPrice, cur.price)
+              : null;
           return (
             <li
               key={p.slug}
@@ -227,18 +270,18 @@ function Render({
               <span className="truncate text-text">{cur?.name || p.slug}</span>
               <span className="font-mono tabular-nums text-text-dim">
                 {p.alloc}% @ {p.entryPrice}{" "}
-                {delta !== null ? (
+                {ret !== null ? (
                   <span
                     className={
-                      delta > 0
+                      ret > 0
                         ? "text-success"
-                        : delta < 0
+                        : ret < 0
                           ? "text-danger"
                           : "text-text-dim"
                     }
                   >
-                    ({delta > 0 ? "+" : ""}
-                    {delta})
+                    ({ret > 0 ? "+" : ""}
+                    {(ret * 100).toFixed(1)}%)
                   </span>
                 ) : null}
               </span>
@@ -285,20 +328,25 @@ function Render({
             be edited until next Monday 00:00 local time.
           </p>
           <p>
-            <span className="font-semibold text-text">P&amp;L</span> =
-            Σ(weight × Δprice) computed when the week closes. Positive P&amp;L
-            earns minerals; negative P&amp;L is harmless XP-wise.
+            <span className="font-semibold text-text">P&amp;L</span> = Σ(weight
+            × % return), where % return = Δprice ÷ entry price. So a 5-point
+            gain on a price-30 build is worth +16.7% on that share; the same
+            5-point gain on a price-90 build is worth +5.6%. Low-price builds
+            offer bigger swings both ways; high-price builds are tighter.
+            That&apos;s the price column doing strategic work — pick stable
+            blue-chips or volatile underdogs.
           </p>
           <p>
             <span className="font-semibold text-text">Leaderboard</span> —
-            opt-in via the toggle below. Submissions are anonymized to your
-            display name when set, otherwise to a stable hash.
+            on by default; untick to keep the lock private. Submissions
+            anonymize to your display name when set, otherwise a stable hash.
           </p>
         </div>
       </details>
       <p className="text-caption text-text-muted">
         Allocate up to 100 across ≤5 builds for{" "}
         <span className="font-mono text-text">{ctx.question.weekKey}</span>.
+        P&amp;L is weighted by % return on each build&apos;s entry price.
       </p>
       <ul className="space-y-1">
         {sortedQuotes.map((q) => {
@@ -376,16 +424,25 @@ function Render({
           Total {totalAlloc} / 100
         </span>
       </div>
-      <fieldset className="rounded border border-border bg-bg-elevated p-3">
+      <fieldset
+        className={[
+          "rounded-lg border p-3",
+          optIn
+            ? "border-accent/60 bg-accent/10"
+            : "border-border bg-bg-elevated",
+        ].join(" ")}
+      >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <label className="flex items-center gap-2 text-caption text-text">
+          <label className="flex items-center gap-2 text-body font-semibold text-text">
             <input
               type="checkbox"
               checked={optIn}
               onChange={(e) => setOptIn(e.target.checked)}
-              className="h-4 w-4 rounded border-border bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="h-5 w-5 rounded border-border bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
-            Show me on the public weekly leaderboard
+            {optIn
+              ? "Posting to public weekly leaderboard"
+              : "Locking privately — not on leaderboard"}
           </label>
           <Link
             href="/community/leaderboard"
@@ -394,6 +451,11 @@ function Render({
             View leaderboard →
           </Link>
         </div>
+        <p className="mt-1 pl-7 text-caption text-text-muted">
+          {optIn
+            ? "On by default. Untick if you want this week's portfolio to stay private."
+            : "Tick the box to enter the public weekly P&L ranking."}
+        </p>
         {optIn ? (
           <input
             type="text"
@@ -428,7 +490,7 @@ function Render({
             disabled={totalAlloc !== 100 || slotsUsed === 0 || slotsUsed > 5}
             className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md bg-accent px-4 text-caption font-semibold uppercase tracking-wider text-bg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
-            Lock portfolio
+            {optIn ? "Lock & post to leaderboard" : "Lock portfolio (private)"}
           </button>
         ) : null
       }

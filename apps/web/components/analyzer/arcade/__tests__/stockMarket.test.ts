@@ -225,7 +225,14 @@ describe("Stock Market: build universe + price math", () => {
   });
 });
 
-/** Pure portfolio P&L helper — replicates the reveal math the surface uses. */
+/**
+ * Pure portfolio P&L helper — replicates the reveal math the surface
+ * uses. P&L per pick is the weighted % return on entry price, NOT the
+ * raw Δprice: a 5-point gain on a price-30 entry contributes more than
+ * the same 5-point gain on a price-90 entry. That's what makes price a
+ * strategic variable rather than a cosmetic label. Result is in
+ * percentage points (e.g. +12.5 means the portfolio gained 12.5%).
+ */
 export function portfolioPnl(
   picks: Array<{ slug: string; alloc: number; entryPrice: number }>,
   pricesNow: Record<string, number>,
@@ -234,25 +241,50 @@ export function portfolioPnl(
   for (const p of picks) {
     const cur = pricesNow[p.slug];
     if (typeof cur !== "number") continue;
-    pnl += (p.alloc / 100) * (cur - p.entryPrice);
+    if (p.entryPrice <= 0) continue;
+    const ret = (cur - p.entryPrice) / p.entryPrice;
+    pnl += p.alloc * ret;
   }
   return pnl;
 }
 
 describe("Stock Market portfolio P&L", () => {
-  test("adds weighted Δprice across picks", () => {
+  test("weights % return on entry price, not raw Δprice", () => {
+    // Two picks with the same raw Δprice (+5) but different entry
+    // prices yield different P&L: the low-price entry has a higher
+    // % return, so it contributes more.
+    const pnl = portfolioPnl(
+      [
+        { slug: "cheap", alloc: 50, entryPrice: 30 },
+        { slug: "premium", alloc: 50, entryPrice: 90 },
+      ],
+      { cheap: 35, premium: 95 },
+    );
+    // 50 × (5/30) + 50 × (5/90) ≈ 8.333 + 2.778 ≈ 11.111
+    expect(pnl).toBeCloseTo(11.111, 3);
+  });
+  test("offsetting returns net out", () => {
     const pnl = portfolioPnl(
       [
         { slug: "A", alloc: 50, entryPrice: 50 },
-        { slug: "B", alloc: 50, entryPrice: 60 },
+        { slug: "B", alloc: 50, entryPrice: 50 },
       ],
-      { A: 60, B: 50 },
+      { A: 60, B: 40 },
     );
-    expect(pnl).toBe(0); // +5 - 5 = 0
+    // 50 × (10/50) + 50 × (-10/50) = 10 + (-10) = 0
+    expect(pnl).toBe(0);
   });
   test("missing prices are skipped, not zeroed", () => {
     expect(
       portfolioPnl([{ slug: "A", alloc: 100, entryPrice: 50 }], {}),
+    ).toBe(0);
+  });
+  test("zero or invalid entry price is skipped (avoid divide-by-zero)", () => {
+    expect(
+      portfolioPnl(
+        [{ slug: "A", alloc: 100, entryPrice: 0 }],
+        { A: 50 },
+      ),
     ).toBe(0);
   });
 });
