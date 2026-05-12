@@ -34,20 +34,43 @@ import type {
  *
  * The new mode looks at HISTORICAL longest streaks in either
  * direction (≥3-game runs anywhere in the chronology, not just the
- * trailing run), and each round picks one of two questions:
+ * trailing run), and each round picks one of FOUR phrasings so the
+ * user sees real variety across the question text AND the metric:
  *
- *   • "their-longest-vs-you" — pick the rival with the longest
- *     historical win streak against you (= your longest L-streak vs
- *     them).
- *   • "your-longest-vs-them" — pick the rival you've beaten the
- *     most consecutive times.
+ *   • "their-win"  — "Which had the longest WIN streak against you?"
+ *                    metric = the user's longest L-streak per opp
+ *                    (= the opponent's longest W run vs the user)
+ *   • "their-loss" — "Which had the longest LOSS streak against you?"
+ *                    metric = the user's longest W-streak per opp
+ *                    (= the opponent's longest L run vs the user)
+ *   • "your-win"   — "Which did YOU have the longest WIN streak against?"
+ *                    metric = the user's longest W-streak per opp
+ *   • "your-loss"  — "Which did YOU have the longest LOSS streak against?"
+ *                    metric = the user's longest L-streak per opp
+ *
+ * Note: their-win == your-loss in terms of metric (longestLoss), and
+ * their-loss == your-win in terms of metric (longestWin). The
+ * underlying answer pool collapses to two, but four phrasings keep
+ * the question feeling varied round to round.
  *
  * Eligibility gate: ≥20 distinct opponents must carry a 3+ game
  * streak in at least one direction; below that we report
  * "Need more streak data" so the user knows the mode isn't broken,
  * it just doesn't have enough signal yet.
  */
-type StreakVariant = "their-longest-vs-you" | "your-longest-vs-them";
+export type StreakVariant =
+  | "their-win"
+  | "their-loss"
+  | "your-win"
+  | "your-loss";
+
+/** All four variants — exported so tests can iterate exhaustively. */
+export const STREAK_VARIANTS: StreakVariant[] = [
+  "their-win",
+  "their-loss",
+  "your-win",
+  "your-loss",
+];
 
 type Candidate = {
   pulseId: string;
@@ -77,6 +100,42 @@ const STREAK_FLOOR = 3;
 /** Minimum number of streak-bearing opponents before the mode unlocks. */
 const MIN_STREAK_OPPONENTS = 20;
 
+/**
+ * Which per-candidate field a variant ranks by. their-win and
+ * your-loss both look at the user's longest L-streak (= opponent's
+ * longest W run); their-loss and your-win both look at the user's
+ * longest W-streak.
+ */
+function metricKeyFor(variant: StreakVariant): "longestWin" | "longestLoss" {
+  switch (variant) {
+    case "their-win":
+    case "your-loss":
+      return "longestLoss";
+    case "their-loss":
+    case "your-win":
+      return "longestWin";
+  }
+}
+
+function metricValue(c: Candidate, variant: StreakVariant): number {
+  return c[metricKeyFor(variant)];
+}
+
+/** Outcome letter shown next to the streak count in the reveal. */
+function metricLetter(variant: StreakVariant): "W" | "L" {
+  // The letter reflects whose outcome is being counted in the
+  // question text: "their WIN streak" / "your WIN streak" → "W";
+  // "their LOSS streak" / "your LOSS streak" → "L".
+  switch (variant) {
+    case "their-win":
+    case "your-win":
+      return "W";
+    case "their-loss":
+    case "your-loss":
+      return "L";
+  }
+}
+
 export async function generateStreakHunter(
   input: GenerateInput,
 ): Promise<GenerateResult<Q>> {
@@ -102,27 +161,23 @@ export async function generateStreakHunter(
       reason: `Need more streak data — ${withStreak.length} of ${all.length} opponents have a ${STREAK_FLOOR}-game streak so far. (Need ≥${MIN_STREAK_OPPONENTS}.)`,
     };
   }
-  // Try both variants in shuffled order. The pool for "their" is
-  // opponents who have at one point beaten you ≥3 in a row; the pool
-  // for "your" is opponents you've beaten ≥3 in a row. If a variant
-  // doesn't have 4 candidates in its pool we fall through to the
-  // other one rather than emitting a degenerate sample.
-  const variants: StreakVariant[] = shuffle(
-    ["their-longest-vs-you", "your-longest-vs-them"],
-    input.rng,
-  );
+  // Try variants in shuffled order. Each variant's pool is the
+  // subset of withStreak that has ≥3 in the relevant direction; if
+  // a variant doesn't have 4 candidates in its pool we fall through
+  // to the next rather than emitting a degenerate sample.
+  const variants = shuffle(STREAK_VARIANTS, input.rng);
   for (const variant of variants) {
-    const pool = withStreak.filter((c) =>
-      variant === "their-longest-vs-you"
-        ? c.longestLoss >= STREAK_FLOOR
-        : c.longestWin >= STREAK_FLOOR,
-    );
+    const key = metricKeyFor(variant);
+    const pool = withStreak.filter((c) => c[key] >= STREAK_FLOOR);
     if (pool.length < 4) continue;
     const sample = shuffle(pool, input.rng).slice(0, 4);
-    const metric = (c: Candidate) =>
-      variant === "their-longest-vs-you" ? c.longestLoss : c.longestWin;
-    const maxInSample = sample.reduce((m, c) => Math.max(m, metric(c)), 0);
-    const correctIndex = sample.findIndex((c) => metric(c) === maxInSample);
+    const maxInSample = sample.reduce(
+      (m, c) => Math.max(m, metricValue(c, variant)),
+      0,
+    );
+    const correctIndex = sample.findIndex(
+      (c) => metricValue(c, variant) === maxInSample,
+    );
     return {
       ok: true,
       minDataMet: true,
@@ -154,14 +209,10 @@ export function groupByOpponent(games: ArcadeGame[]): Map<string, ArcadeGame[]> 
   return out;
 }
 
-function metricFor(q: Q, c: Candidate): number {
-  return q.variant === "their-longest-vs-you" ? c.longestLoss : c.longestWin;
-}
-
 function maxMetric(q: Q): number {
   let m = 0;
   for (const c of q.candidates) {
-    const v = metricFor(q, c);
+    const v = metricValue(c, q.variant);
     if (v > m) m = v;
   }
   return m;
@@ -170,16 +221,19 @@ function maxMetric(q: Q): number {
 function score(q: Q, a: A): ScoreResult {
   const picked = q.candidates[a];
   const max = maxMetric(q);
-  const correct = !!picked && metricFor(q, picked) === max;
-  const leaders = q.candidates.filter((c) => metricFor(q, c) === max);
-  const label =
-    q.variant === "their-longest-vs-you"
-      ? `${max} straight against you`
-      : `${max} straight by you`;
+  const correct = !!picked && metricValue(picked, q.variant) === max;
+  const leaders = q.candidates.filter(
+    (c) => metricValue(c, q.variant) === max,
+  );
+  const letter = metricLetter(q.variant);
+  const tail =
+    q.variant === "their-win" || q.variant === "their-loss"
+      ? `against you`
+      : `against them`;
   const note =
     leaders.length === 1
-      ? `Top streak: ${leaders[0].name} — ${label}.`
-      : `${leaders.length} rivals tied on ${label}.`;
+      ? `Top streak: ${leaders[0].name} — ${max}${letter} ${tail}.`
+      : `${leaders.length} rivals tied on ${max}${letter} ${tail}.`;
   return {
     raw: correct ? 1 : 0,
     xp: correct ? 12 : 0,
@@ -203,20 +257,38 @@ export const activeStreakHunter: Mode<Q, A> = {
 };
 
 function questionFor(variant: StreakVariant) {
-  if (variant === "your-longest-vs-them") {
+  if (variant === "their-win") {
     return (
       <span>
-        One of these rivals is the player you&apos;ve had your{" "}
+        Which of these opponents had the{" "}
         <span className="font-semibold text-warning">longest win streak</span>{" "}
-        against. Which?
+        against you?
+      </span>
+    );
+  }
+  if (variant === "their-loss") {
+    return (
+      <span>
+        Which of these opponents had the{" "}
+        <span className="font-semibold text-warning">longest loss streak</span>{" "}
+        against you?
+      </span>
+    );
+  }
+  if (variant === "your-win") {
+    return (
+      <span>
+        Which of these opponents did you have the{" "}
+        <span className="font-semibold text-warning">longest win streak</span>{" "}
+        against?
       </span>
     );
   }
   return (
     <span>
-      One of these rivals once put together their{" "}
-      <span className="font-semibold text-warning">longest win streak</span>{" "}
-      against you. Which?
+      Which of these opponents did you have the{" "}
+      <span className="font-semibold text-warning">longest loss streak</span>{" "}
+      against?
     </span>
   );
 }
@@ -233,19 +305,18 @@ function Render({
     ctx.onAnswer(i);
   };
 
-  const metric = (c: Candidate) =>
-    ctx.question.variant === "their-longest-vs-you" ? c.longestLoss : c.longestWin;
+  const variant = ctx.question.variant;
+  const letter = metricLetter(variant);
+  const m = (c: Candidate) => metricValue(c, variant);
   const maxAmongShown = ctx.question.candidates.reduce(
-    (m, c) => (metric(c) > m ? metric(c) : m),
+    (best, c) => (m(c) > best ? m(c) : best),
     0,
   );
-  const leaders = ctx.question.candidates.filter(
-    (c) => metric(c) === maxAmongShown,
-  );
+  const leaders = ctx.question.candidates.filter((c) => m(c) === maxAmongShown);
   const failCopy =
     leaders.length === 1
-      ? `It was ${leaders[0].name} on ${maxAmongShown} straight.`
-      : `${leaders.length} rivals are tied on ${maxAmongShown} straight — any of them counts.`;
+      ? `It was ${leaders[0].name} on ${maxAmongShown}${letter} straight.`
+      : `${leaders.length} rivals are tied on ${maxAmongShown}${letter} straight — any of them counts.`;
 
   const reveal = ctx.score ? (
     <div className="space-y-2 text-caption">
@@ -262,11 +333,11 @@ function Render({
           >
             <span className="truncate">{c.name}</span>
             <span className="font-mono tabular-nums">
-              <span className={metric(c) > 0 ? "text-warning" : "text-text-dim"}>
-                {metric(c)}W
+              <span className={m(c) > 0 ? "text-warning" : "text-text-dim"}>
+                {m(c)}{letter}
               </span>{" "}
               <span className="text-text-dim">({c.games} games)</span>
-              {metric(c) === maxAmongShown ? (
+              {m(c) === maxAmongShown ? (
                 <span className="ml-1 rounded bg-success/15 px-1.5 text-success">★</span>
               ) : null}
             </span>
@@ -284,7 +355,7 @@ function Render({
       isDaily={ctx.isDaily}
       revealed={ctx.revealed}
       onKeyAnswer={onPick}
-      question={questionFor(ctx.question.variant)}
+      question={questionFor(variant)}
       answers={ctx.question.candidates.map((c, i) => (
         <QuizAnswerButton
           key={c.pulseId}
@@ -292,7 +363,7 @@ function Render({
           selected={picked === i}
           correct={
             ctx.revealed
-              ? metric(c) === maxAmongShown
+              ? m(c) === maxAmongShown
                 ? true
                 : picked === i
                   ? false
