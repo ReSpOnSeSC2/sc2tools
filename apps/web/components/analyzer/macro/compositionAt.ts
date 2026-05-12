@@ -94,27 +94,113 @@ const UNIT_MORPH_PARENT: Record<string, string> = {
 const ARCHON_PARENTS: ReadonlyArray<string> = ["DarkTemplar", "HighTemplar"];
 
 /**
- * Strip morphological/stance suffixes the tracker emits but the unit
- * catalog doesn't enumerate (Burrowed, Sieged, Phasing, Lowered…).
- * This collapses transient stances onto a single canonical name so a
- * SiegeTank → SiegeTankSieged → SiegeTank cycle doesn't decrement and
- * re-increment the count.
+ * sc2reader emits a dozen variants per unit type (sieged tank, burrowed
+ * roach, warp-in cocoon, MP suffix on Wings/HotS data, AG/AP posture
+ * tags, Tank stance on Hellbat, etc). The agent canonicalises these
+ * via ``_UNIT_NAME_ALIASES`` in
+ * ``reveal-sc2-opponent-main/core/event_extractor.py`` before they
+ * reach the unit_timeline — but the build-log strings (``[m:ss] Name``
+ * lines parsed by the API) get the cleaned-but-NOT-aliased raw names.
+ * Without the same alias map on the frontend, the roster would render
+ * a single unit type as two chips: one with the correct icon (the
+ * "Infestor" born-event entries) and one as a text-fallback "IN"
+ * chip (the "InfestorBurrowed" / "InfestorMP" entries) — exactly the
+ * "10 show as IN, 1 with correct icon" symptom reported on this fix.
  *
- * The list intentionally stays narrow: only stance/state suffixes that
- * are NOT semantically distinct buildings are stripped. ``MP`` (multi-
- * player tag), ``Rich`` (rich vespene), ``AG`` (air-to-ground Liberator),
- * and ``AP`` (Thor anti-air mode) are preserved because users either
- * read them as the canonical name (LurkerMP, RefineryRich) or rely on
- * the AG/AP distinction to read combat posture from the chip.
+ * Keep the map in sync with the agent's ``_UNIT_NAME_ALIASES``. When
+ * sc2reader gains a new variant for a future SC2 patch, add it here
+ * AND in the agent. The frontend list MUST be at least as broad as
+ * the agent's so cold-cache replays (where the agent canonicalised
+ * unit_timeline but the build_log carries raw names) still render one
+ * chip per unit.
+ *
+ * Suffixes ``MP``, ``Rich``, ``AG``, ``AP`` that the OLD regex
+ * implementation preserved are now folded — the SC2 community reads
+ * the unit by its base name regardless of posture/data-version, and
+ * the AG/AP combat-posture distinction is too subtle to justify a
+ * separate chip on the macro-breakdown roster.
+ */
+const UNIT_NAME_ALIASES: Record<string, string> = {
+  // Terran combat-posture / stance variants
+  SiegeTankSieged: "SiegeTank",
+  VikingFighter: "Viking",
+  VikingAssault: "Viking",
+  HellionTank: "Hellbat",
+  ThorAP: "Thor",
+  ThorAA: "Thor",
+  WidowMineBurrowed: "WidowMine",
+  LiberatorAG: "Liberator",
+
+  // Protoss warp-in cocoon variants and stance toggles
+  WarpPrismPhasing: "WarpPrism",
+  ZealotWarp: "Zealot",
+  StalkerWarp: "Stalker",
+  SentryWarp: "Sentry",
+  AdeptWarp: "Adept",
+  DarkTemplarWarp: "DarkTemplar",
+  HighTemplarWarp: "HighTemplar",
+  ImmortalWarp: "Immortal",
+  ColossusWarp: "Colossus",
+  ObserverSiegeMode: "Observer",
+
+  // Zerg burrow / MP / cocoon variants
+  BanelingMP: "Baneling",
+  BanelingBurrowed: "Baneling",
+  BanelingCocoon: "Baneling",
+  RoachBurrowed: "Roach",
+  RoachMP: "Roach",
+  ZerglingBurrowed: "Zergling",
+  HydraliskBurrowed: "Hydralisk",
+  InfestorBurrowed: "Infestor",
+  LurkerMP: "Lurker",
+  LurkerMPBurrowed: "Lurker",
+  LurkerBurrowed: "Lurker",
+  RavagerBurrowed: "Ravager",
+  RavagerCocoon: "Ravager",
+  SwarmHostMP: "SwarmHost",
+  SwarmHostMPBurrowed: "SwarmHost",
+  QueenBurrowed: "Queen",
+  BroodLordCocoon: "BroodLord",
+  Broodlord: "BroodLord",
+  OverseerSiegeMode: "Overseer",
+  OverseerCocoon: "Overseer",
+  OverlordTransport: "Overlord",
+  OverlordTransportCocoon: "Overlord",
+  TransportOverlordCocoon: "Overlord",
+};
+
+/**
+ * Strip stance suffixes the alias map doesn't enumerate, then look up
+ * in the alias table. The regex catches sc2reader variants we haven't
+ * explicitly tabulated (future patches occasionally add a new burrow
+ * variant); the table catches everything sc2reader actually emits
+ * today.
+ *
+ * Resolution order:
+ *   1. Direct alias hit  (``InfestorBurrowed`` → ``Infestor``)
+ *   2. Regex stance/state suffix strip
+ *      (``WhateverPhasing`` → ``Whatever``)
+ *   3. Pass-through  (already canonical, e.g. ``Stalker``)
+ *
+ * Steps 2 + 3 are run AFTER alias lookup so a canonical name that
+ * happens to end in one of the regex tokens (none in the current
+ * catalog) won't be silently mangled.
  */
 export function canonicalizeName(name: string): string {
   if (!name) return "";
+  const direct = UNIT_NAME_ALIASES[name];
+  if (direct) return direct;
   const stripped = name
     .replace(
       /(Burrowed|Sieged|Phasing|Flying|Lowered|Cocoon|Uprooted|Phased)$/i,
       "",
     )
     .replace(/^Burrowed/i, "");
+  // Second pass through the alias map after suffix strip — catches
+  // e.g. ``ImmortalWarpPhasing`` (hypothetical sc2reader variant)
+  // → strip ``Phasing`` → ``ImmortalWarp`` → alias to ``Immortal``.
+  const aliased = UNIT_NAME_ALIASES[stripped];
+  if (aliased) return aliased;
   return stripped || name;
 }
 

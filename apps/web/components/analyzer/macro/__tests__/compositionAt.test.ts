@@ -121,22 +121,81 @@ describe("buildOrderUnitsAt — cumulative-built semantics", () => {
   });
 });
 
-describe("canonicalizeName — stance/state suffix stripping", () => {
-  it("strips known stance suffixes", () => {
-    expect(canonicalizeName("SiegeTankSieged")).toBe("SiegeTank");
-    expect(canonicalizeName("WarpPrismPhasing")).toBe("WarpPrism");
+describe("canonicalizeName — sc2reader variant collapsing", () => {
+  it("strips well-known stance suffixes (legacy regex path)", () => {
     expect(canonicalizeName("BurrowedRoach")).toBe("Roach");
-    expect(canonicalizeName("LurkerMPBurrowed")).toBe("LurkerMP");
+    expect(canonicalizeName("Stalker")).toBe("Stalker");
   });
 
-  it("preserves semantically-distinct suffixes", () => {
-    // MP is a data-version tag (LurkerMP, SwarmHostMP), not a stance —
-    // keeping it lets the morph map and the cost catalog both resolve.
-    expect(canonicalizeName("LurkerMP")).toBe("LurkerMP");
-    expect(canonicalizeName("SwarmHostMP")).toBe("SwarmHostMP");
-    // LiberatorAG / ThorAP encode combat posture the user reads from
-    // the chip; preserved.
-    expect(canonicalizeName("LiberatorAG")).toBe("LiberatorAG");
+  it("folds Terran combat-posture / stance variants onto the canonical name", () => {
+    expect(canonicalizeName("SiegeTankSieged")).toBe("SiegeTank");
+    expect(canonicalizeName("VikingFighter")).toBe("Viking");
+    expect(canonicalizeName("VikingAssault")).toBe("Viking");
+    expect(canonicalizeName("HellionTank")).toBe("Hellbat");
+    expect(canonicalizeName("ThorAP")).toBe("Thor");
+    expect(canonicalizeName("ThorAA")).toBe("Thor");
+    expect(canonicalizeName("LiberatorAG")).toBe("Liberator");
+    expect(canonicalizeName("WidowMineBurrowed")).toBe("WidowMine");
+  });
+
+  it("folds Protoss warp-in cocoons + stance toggles onto the canonical unit", () => {
+    expect(canonicalizeName("ZealotWarp")).toBe("Zealot");
+    expect(canonicalizeName("StalkerWarp")).toBe("Stalker");
+    expect(canonicalizeName("AdeptWarp")).toBe("Adept");
+    expect(canonicalizeName("SentryWarp")).toBe("Sentry");
+    expect(canonicalizeName("DarkTemplarWarp")).toBe("DarkTemplar");
+    expect(canonicalizeName("HighTemplarWarp")).toBe("HighTemplar");
+    expect(canonicalizeName("ImmortalWarp")).toBe("Immortal");
+    expect(canonicalizeName("ColossusWarp")).toBe("Colossus");
+    expect(canonicalizeName("ObserverSiegeMode")).toBe("Observer");
+    expect(canonicalizeName("WarpPrismPhasing")).toBe("WarpPrism");
+  });
+
+  it("folds Zerg burrow + MP + cocoon variants onto the canonical unit", () => {
+    // MP is a Wings/HotS data-version tag, not a stance — same unit on
+    // current LotV replays. Folding lets one chip + one icon represent
+    // the Lurker line across all replay generations.
+    expect(canonicalizeName("LurkerMP")).toBe("Lurker");
+    expect(canonicalizeName("LurkerMPBurrowed")).toBe("Lurker");
+    expect(canonicalizeName("LurkerBurrowed")).toBe("Lurker");
+    expect(canonicalizeName("SwarmHostMP")).toBe("SwarmHost");
+    expect(canonicalizeName("SwarmHostMPBurrowed")).toBe("SwarmHost");
+    expect(canonicalizeName("BanelingMP")).toBe("Baneling");
+    expect(canonicalizeName("BanelingBurrowed")).toBe("Baneling");
+    expect(canonicalizeName("BanelingCocoon")).toBe("Baneling");
+    expect(canonicalizeName("RoachBurrowed")).toBe("Roach");
+    expect(canonicalizeName("RoachMP")).toBe("Roach");
+    expect(canonicalizeName("ZerglingBurrowed")).toBe("Zergling");
+    expect(canonicalizeName("HydraliskBurrowed")).toBe("Hydralisk");
+    expect(canonicalizeName("InfestorBurrowed")).toBe("Infestor");
+    expect(canonicalizeName("RavagerBurrowed")).toBe("Ravager");
+    expect(canonicalizeName("RavagerCocoon")).toBe("Ravager");
+    expect(canonicalizeName("QueenBurrowed")).toBe("Queen");
+    expect(canonicalizeName("BroodLordCocoon")).toBe("BroodLord");
+    expect(canonicalizeName("Broodlord")).toBe("BroodLord");
+    expect(canonicalizeName("OverseerSiegeMode")).toBe("Overseer");
+    expect(canonicalizeName("OverseerCocoon")).toBe("Overseer");
+    expect(canonicalizeName("OverlordTransport")).toBe("Overlord");
+    expect(canonicalizeName("OverlordTransportCocoon")).toBe("Overlord");
+  });
+
+  it("regression: an 11-Immortal opener can't split into Immortal + ImmortalWarp chips", () => {
+    // The reported bug: 11 Immortals built, 1 showing with the correct
+    // icon (UnitDoneEvent → name "Immortal") and 10 showing as a text-
+    // fallback "Im" chip (UnitInitEvent → name "ImmortalWarp"). After
+    // canonicalisation both source names collapse into a single
+    // ``Immortal`` bucket so the count chip reads 11 ×.
+    const events: BuildEvent[] = [
+      { time: 240, name: "Immortal", is_building: false },
+      ...Array.from({ length: 10 }, (_, i) => ({
+        time: 250 + i * 30,
+        name: "ImmortalWarp",
+        is_building: false,
+      })),
+    ];
+    const out = buildOrderUnitsAt(events, 9999);
+    expect(out.Immortal).toBe(11);
+    expect(out.ImmortalWarp).toBeUndefined();
   });
 
   it("handles empty / falsy input safely", () => {
