@@ -225,6 +225,14 @@ export function useVoiceReadout(
   // AFTER enrichment lands (or after a short timeout, whichever fires
   // first).
   const liveGameStates = useRef<LiveGameStates>(new Map());
+  // Most recent ``gameKey`` we processed in the live-envelope effect.
+  // Used to detect match transitions so we can clear stale per-gameKey
+  // state AND the post-game fingerprint refs — without this, an old
+  // ``entry.spoken = true`` from game N can block game N+1 (most
+  // visibly when the agent's ``gameKey`` collides on a rematch against
+  // the same opponent, where the fallback ``live:${oppName}`` key
+  // produces a hash collision and the hook silently skips the readout).
+  const lastLiveGameKeyRef = useRef<string | null>(null);
 
   const enabled = !!prefs && prefs.enabled !== false;
   const debug = useDebugFlag(prefs?.debug);
@@ -456,6 +464,48 @@ export function useVoiceReadout(
     }
   }, [live, enabled, prefs, enqueueOrSpeak, log]);
 
+  // Live-envelope match transitions: wipe per-gameKey state AND the
+  // post-game fingerprint refs whenever the bridge clears OR the
+  // current envelope's ``gameKey`` flips to a fresh match. Without the
+  // wipe, an old ``entry.spoken = true`` from game N can silence game
+  // N+1's scouting line — most visibly when ``OverlayClient`` has
+  // collapsed an idle/menu envelope to a ``null`` liveGame (so the in-
+  // effect ``phase`` check below is unreachable in production), and
+  // even more reliably on rematches against the same opponent where
+  // the agent's envelope lacks a ``gameKey`` and the fallback
+  // ``live:${oppName}`` key collides.
+  //
+  // Why we ALWAYS clear when liveGame transitions to null (rather than
+  // only after we've seen a real match): the fallback-key rematch path
+  // never lets us record a non-null prevKey, so the only reliable
+  // "we just finished a match" signal we have left is the bridge
+  // clearing. Clearing on every null transition is cheap and correct
+  // — the map either has stale entries (clear is right) or is empty
+  // (clear is a no-op).
+  useEffect(() => {
+    const states = liveGameStates.current;
+    const wipe = () => {
+      clearAllLiveGameTimers(states);
+      lastScoutingKey.current = null;
+      lastMatchStartKey.current = null;
+      lastMatchEndKey.current = null;
+      lastCheeseKey.current = null;
+    };
+    if (!liveGame) {
+      wipe();
+      lastLiveGameKeyRef.current = null;
+      return;
+    }
+    const lgKey = liveGame.gameKey ?? null;
+    const prevKey = lastLiveGameKeyRef.current;
+    if (lgKey !== null && prevKey !== null && lgKey !== prevKey) {
+      // gameKey flipped — old entries are stale even if the bridge
+      // never sent a null envelope in between (fast loading screen).
+      wipe();
+    }
+    if (lgKey !== null) lastLiveGameKeyRef.current = lgKey;
+  }, [liveGame]);
+
   // Pre-game / in-game readout, driven by the desktop agent's
   // ``LiveGameEnvelope`` rather than the post-game ``LiveGamePayload``.
   // Speaks at most once per ``gameKey`` AFTER enrichment lands — or
@@ -497,6 +547,12 @@ export function useVoiceReadout(
     const gameKey = liveGame.gameKey || `live:${oppName}`;
     let entry = states.get(gameKey);
     if (!entry) {
+      // First envelope for this gameKey. Any OTHER entries in the map
+      // are from previous matches we never got a transition signal for
+      // (e.g., agent crashed mid-game, broker dropped the IDLE
+      // envelope) — wipe them so they can't somehow shadow this one
+      // and so the map stays bounded across a long stream session.
+      if (states.size > 0) clearAllLiveGameTimers(states);
       entry = { spoken: false, timer: null };
       states.set(gameKey, entry);
     }
