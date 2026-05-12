@@ -345,6 +345,54 @@ export function pickN<T>(items: readonly T[], n: number, rng: () => number): T[]
   return shuffle(items, rng).slice(0, Math.min(n, items.length));
 }
 
+/**
+ * Build a 4-option quiz slate (1 correct + 3 distractors) for a
+ * "which of these is best on metric X?" question.
+ *
+ * The earlier implementation in the two affected quizzes hard-coded the
+ * globally best candidate as the correct answer and sampled distractors
+ * from the rest. On a given dataset the correct answer was therefore
+ * invariant across rounds — distractors rotated, but a returning player
+ * saw the same build flagged correct over and over.
+ *
+ * This helper instead picks the correct answer uniformly at random from
+ * the candidates that have at least 3 strictly-worse-scoring peers, and
+ * samples 3 distractors from that strictly-worse pool. The slate's
+ * question framing stays well-defined ("of these four, the correct one
+ * strictly beats the other three") while the correct answer varies
+ * between rounds.
+ *
+ * `score` must return higher = better. Returns null when no candidate
+ * has ≥3 strictly-worse peers (e.g. all four tied at the top).
+ */
+export function pickQuizSlate<T>(
+  candidates: readonly T[],
+  score: (t: T) => number,
+  rng: () => number,
+): { correct: T; distractors: T[] } | null {
+  if (candidates.length < 4) return null;
+  const scores = candidates.map(score);
+  const validIdx: number[] = [];
+  for (let k = 0; k < candidates.length; k++) {
+    let worse = 0;
+    for (let i = 0; i < candidates.length; i++) {
+      if (i !== k && scores[i] < scores[k]) {
+        worse += 1;
+        if (worse >= 3) break;
+      }
+    }
+    if (worse >= 3) validIdx.push(k);
+  }
+  if (!validIdx.length) return null;
+  const correctK = validIdx[Math.floor(rng() * validIdx.length)];
+  const correctScore = scores[correctK];
+  const worsePool = candidates.filter(
+    (_, i) => i !== correctK && scores[i] < correctScore,
+  );
+  const distractors = pickN(worsePool, 3, rng);
+  return { correct: candidates[correctK], distractors };
+}
+
 /* ──────────── XP / level math ──────────── */
 
 /** XP curve: level up every 100 + 50 * (level - 1) XP. */

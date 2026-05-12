@@ -7,7 +7,7 @@ import { IconFor } from "../../icons";
 import {
   isCannonRush,
   outcome,
-  pickN,
+  pickQuizSlate,
   registerMode,
   shuffle,
 } from "../../ArcadeEngine";
@@ -89,11 +89,17 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
         "Need ≥4 builds with at least 3 wins each (cannon rush excluded). Keep grinding.",
     };
   }
-  const sorted = eligible.slice().sort((a, b) => a.meanWinSec - b.meanWinSec);
-  const fastest = sorted[0];
-  const fillers = pickN(sorted.slice(1), 3, input.rng);
-  const sample = shuffle([fastest, ...fillers], input.rng);
-  const correctIndex = sample.findIndex((c) => c.build === fastest.build);
+  // Lower mean win-length = better closer, so score is negated.
+  const slate = pickQuizSlate(eligible, (e) => -e.meanWinSec, input.rng);
+  if (!slate) {
+    return {
+      ok: false,
+      reason:
+        "Builds are too tightly bunched on win-length to ask a clean question yet.",
+    };
+  }
+  const sample = shuffle([slate.correct, ...slate.distractors], input.rng);
+  const correctIndex = sample.findIndex((c) => c.build === slate.correct.build);
   return {
     ok: true,
     minDataMet: true,

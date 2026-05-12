@@ -49,17 +49,24 @@ describe("Closer's Eye — meanWinLengths", () => {
 
   test("playable on a ~50-game account spread across 4 builds with 3 wins each", async () => {
     const games: ArcadeGame[] = [];
-    const builds = ["Reaper FE", "Mech Macro", "Bio Drop", "Air Switch"];
+    // Each build gets its own win-length tier so the mean is distinct;
+    // otherwise the slate has no strict winner and generate refuses.
+    const builds: Array<[string, number]> = [
+      ["Reaper FE", 480],
+      ["Mech Macro", 600],
+      ["Bio Drop", 720],
+      ["Air Switch", 840],
+    ];
     let i = 0;
-    for (const b of builds) {
+    for (const [b, base] of builds) {
       // 3 wins + 2 losses per build = 20 games total (still a thin sample).
-      for (let k = 0; k < 3; k++) games.push(game(b, "Win", 540 + k * 30, i++));
+      for (let k = 0; k < 3; k++) games.push(game(b, "Win", base + k * 30, i++));
       for (let k = 0; k < 2; k++) games.push(game(b, "Loss", 720, i++));
     }
     // Pad with 30 more games across various builds so the dataset
     // resembles ~50 ranked games total — none of which break the
     // 4-distinct-builds requirement.
-    for (let k = 0; k < 30; k++) games.push(game(`Junk Bucket ${k % 8}`, "Win", 600, i++));
+    for (let k = 0; k < 30; k++) games.push(game(`Junk Bucket ${k % 8}`, "Win", 1200 + k, i++));
     const result = await closersEye.generate({
       rng: mulberry32(7),
       daySeed: "2026-05-10",
@@ -100,5 +107,76 @@ describe("Closer's Eye generate (depth + thin-data)", () => {
     };
     expect(closersEye.score(q, 2).outcome).toBe("correct");
     expect(closersEye.score(q, 1).outcome).toBe("wrong");
+  });
+
+  test("correct answer varies across rngs — not pinned to the globally fastest build", async () => {
+    // 6 builds with distinct mean win-lengths. Three of them (the
+    // three fastest) can be valid "correct" answers because each
+    // dominates ≥3 slower peers.
+    const games: ArcadeGame[] = [];
+    const builds: Array<[string, number]> = [
+      ["Reaper FE", 420],
+      ["Mech Macro", 480],
+      ["Bio Drop", 540],
+      ["Air Switch", 600],
+      ["Ravager Bust", 660],
+      ["Late Skytoss", 720],
+    ];
+    let i = 0;
+    for (const [b, base] of builds) {
+      for (let k = 0; k < 4; k++) games.push(game(b, "Win", base + k, i++));
+    }
+    const dataset: ArcadeDataset = { ...baseDataset, games };
+    const corrects = new Set<string>();
+    for (let seed = 1; seed <= 200; seed++) {
+      const r = await closersEye.generate({
+        rng: mulberry32(seed),
+        daySeed: `seed-${seed}`,
+        tz: "UTC",
+        data: dataset,
+      });
+      if (r.ok) {
+        corrects.add(r.question.candidates[r.question.correctIndex].build);
+      }
+    }
+    // Should see more than just the absolute fastest as the correct
+    // answer — that's the bug this regression test guards.
+    expect(corrects.size).toBeGreaterThanOrEqual(3);
+    expect(corrects.has("Reaper FE")).toBe(true);
+    expect(corrects.has("Mech Macro")).toBe(true);
+    expect(corrects.has("Bio Drop")).toBe(true);
+  });
+
+  test("the displayed correct candidate strictly beats every distractor", async () => {
+    const games: ArcadeGame[] = [];
+    const builds: Array<[string, number]> = [
+      ["X1", 420],
+      ["X2", 510],
+      ["X3", 600],
+      ["X4", 690],
+      ["X5", 780],
+    ];
+    let i = 0;
+    for (const [b, base] of builds) {
+      for (let k = 0; k < 3; k++) games.push(game(b, "Win", base + k, i++));
+    }
+    const dataset: ArcadeDataset = { ...baseDataset, games };
+    for (let seed = 1; seed <= 40; seed++) {
+      const r = await closersEye.generate({
+        rng: mulberry32(seed),
+        daySeed: `seed-${seed}`,
+        tz: "UTC",
+        data: dataset,
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) continue;
+      const correct = r.question.candidates[r.question.correctIndex];
+      for (let j = 0; j < r.question.candidates.length; j++) {
+        if (j === r.question.correctIndex) continue;
+        expect(r.question.candidates[j].meanWinSec).toBeGreaterThan(
+          correct.meanWinSec,
+        );
+      }
+    }
   });
 });

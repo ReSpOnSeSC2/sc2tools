@@ -12,6 +12,7 @@ import {
   levelForXp,
   mulberry32,
   pickN,
+  pickQuizSlate,
   sessionize,
   shuffle,
   streakVetoRuns,
@@ -267,6 +268,65 @@ describe("shuffle / pickN with seeded RNG", () => {
   test("pickN returns at most n items", () => {
     const out = pickN([1, 2, 3], 5, mulberry32(1));
     expect(out.length).toBe(3);
+  });
+});
+
+describe("pickQuizSlate", () => {
+  const C = (build: string, score: number) => ({ build, score });
+  const candidates = [
+    C("a", 10),
+    C("b", 7),
+    C("c", 4),
+    C("d", 3),
+    C("e", 1),
+    C("f", 0),
+  ];
+
+  test("returns null with fewer than 4 candidates", () => {
+    expect(
+      pickQuizSlate([C("a", 5), C("b", 4), C("c", 3)], (c) => c.score, mulberry32(1)),
+    ).toBeNull();
+  });
+
+  test("returns null when no candidate has ≥3 strictly-worse peers (all tied)", () => {
+    const tied = [C("a", 1), C("b", 1), C("c", 1), C("d", 1)];
+    expect(pickQuizSlate(tied, (c) => c.score, mulberry32(1))).toBeNull();
+  });
+
+  test("correct strictly beats every distractor on the supplied metric", () => {
+    for (let seed = 1; seed <= 50; seed++) {
+      const slate = pickQuizSlate(candidates, (c) => c.score, mulberry32(seed));
+      expect(slate).not.toBeNull();
+      if (!slate) continue;
+      expect(slate.distractors.length).toBe(3);
+      for (const d of slate.distractors) {
+        expect(d.score).toBeLessThan(slate.correct.score);
+      }
+    }
+  });
+
+  test("correct answer varies across rngs — not pinned to the global best", () => {
+    const corrects = new Set<string>();
+    for (let seed = 1; seed <= 200; seed++) {
+      const slate = pickQuizSlate(candidates, (c) => c.score, mulberry32(seed));
+      if (slate) corrects.add(slate.correct.build);
+    }
+    // The pool admits 3 valid correct positions (a/b/c — d/e/f can't
+    // dominate 3 strictly-worse peers). Across 200 seeds we should
+    // see all three.
+    expect(corrects.has("a")).toBe(true);
+    expect(corrects.has("b")).toBe(true);
+    expect(corrects.has("c")).toBe(true);
+    expect(corrects.has("d")).toBe(false);
+  });
+
+  test("deterministic for a fixed seed", () => {
+    const s1 = pickQuizSlate(candidates, (c) => c.score, mulberry32(99));
+    const s2 = pickQuizSlate(candidates, (c) => c.score, mulberry32(99));
+    expect(s1?.correct.build).toBe(s2?.correct.build);
+    expect(s1?.distractors.map((d) => d.build)).toEqual(
+      s2?.distractors.map((d) => d.build),
+    );
   });
 });
 
