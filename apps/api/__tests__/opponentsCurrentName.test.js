@@ -170,31 +170,34 @@ describe("OpponentsService current-name invariant", () => {
     });
   });
 
-  describe("_listFiltered overlays canonical name from opponents row", () => {
-    test("filtered list shows the row's displayNameSample, not the aggregation's $last", async () => {
-      const userId = "u_list";
-      // Insert the opponents row with the canonical "current" name.
+  describe("list() self-heals displayNameSample from games", () => {
+    /**
+     * Seed the bug state: opponents row has the OLD name ("foruGeoff")
+     * but games show the player has since renamed to "RekcOr". Used by
+     * both filtered and unfiltered list tests below.
+     */
+    async function seedBugState(userId) {
       await db.opponents.insertOne({
         userId,
         pulseId: baseGame.pulseId,
         toonHandle: baseGame.toonHandle,
         pulseCharacterId: "8636008",
-        displayNameSample: "RekcOr",
+        // The stale-row scenario: row holds the OLD name. Production
+        // rows that pre-date the write guard are stuck here until the
+        // backfill migration runs — the self-healing read path must
+        // produce the right answer regardless.
+        displayNameSample: "foruGeoff",
         race: "P",
         gameCount: 2,
         wins: 1,
         losses: 1,
         firstSeen: new Date("2024-11-01"),
-        lastSeen: new Date("2026-04-18"),
+        lastSeen: new Date("2024-11-01"),
       });
-      // Games carry the OLDER displayName "foruGeoff" (historical
-      // record of what the player was called at the time). The
-      // aggregation's ``$last`` would surface "foruGeoff" if we
-      // trusted it.
       await db.games.insertMany([
         {
           userId,
-          gameId: "g1",
+          gameId: "g_old",
           date: new Date("2024-11-01"),
           result: "Victory",
           myRace: "Protoss",
@@ -209,7 +212,7 @@ describe("OpponentsService current-name invariant", () => {
         },
         {
           userId,
-          gameId: "g2",
+          gameId: "g_new",
           date: new Date("2026-04-18"),
           result: "Defeat",
           myRace: "Protoss",
@@ -218,11 +221,40 @@ describe("OpponentsService current-name invariant", () => {
           opponent: {
             pulseId: baseGame.pulseId,
             toonHandle: baseGame.toonHandle,
-            displayName: "foruGeoff",
+            displayName: "RekcOr",
             race: "Protoss",
           },
         },
       ]);
+    }
+
+    test("unfiltered list shows the latest-by-date name from games, not the stale row value", async () => {
+      const userId = "u_unfiltered";
+      await seedBugState(userId);
+      const out = await opponents.list(userId);
+      expect(out.items.length).toBe(1);
+      expect(out.items[0].displayNameSample).toBe("RekcOr");
+    });
+
+    test("filtered list shows the latest-by-date name from games, even when the filter window excludes the latest game", async () => {
+      const userId = "u_filtered_outside_window";
+      await seedBugState(userId);
+      // Filter window covers ONLY the old game (2024). The displayed
+      // name still reflects the absolute latest game by date (rule i:
+      // identity is not a windowed stat).
+      const out = await opponents.list(userId, {
+        filters: {
+          since: new Date("2024-01-01"),
+          until: new Date("2025-01-01"),
+        },
+      });
+      expect(out.items.length).toBe(1);
+      expect(out.items[0].displayNameSample).toBe("RekcOr");
+    });
+
+    test("filtered list works in the original bug scenario (filter window spans both games)", async () => {
+      const userId = "u_filtered_spans";
+      await seedBugState(userId);
       const out = await opponents.list(userId, {
         filters: {
           since: new Date("2020-01-01"),
@@ -230,9 +262,25 @@ describe("OpponentsService current-name invariant", () => {
         },
       });
       expect(out.items.length).toBe(1);
-      // The fix: the row's canonical displayNameSample wins over the
-      // games-aggregation's $last value.
       expect(out.items[0].displayNameSample).toBe("RekcOr");
+    });
+
+    test("falls back to the row's displayNameSample when the opponent has no games with a non-empty displayName", async () => {
+      const userId = "u_fallback";
+      await db.opponents.insertOne({
+        userId,
+        pulseId: baseGame.pulseId,
+        toonHandle: baseGame.toonHandle,
+        displayNameSample: "OnlyRowSample",
+        race: "P",
+        gameCount: 0,
+        wins: 0,
+        losses: 0,
+        firstSeen: new Date(),
+        lastSeen: new Date(),
+      });
+      const out = await opponents.list(userId);
+      expect(out.items[0].displayNameSample).toBe("OnlyRowSample");
     });
   });
 

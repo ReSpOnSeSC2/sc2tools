@@ -118,6 +118,15 @@ class OpponentsService {
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
     const nextBefore = hasMore ? page[page.length - 1].lastSeen : null;
+    // Self-heal ``displayNameSample`` from the games collection. The
+    // row's stored value is whatever the most recent ingest wrote —
+    // which the May-2026 write guard now keeps in sync, but rows
+    // that pre-date the guard are still stale until the backfill
+    // migration runs. Recomputing from games at read time means the
+    // list shows the right name regardless of migration state. One
+    // batched aggregation per page (uses the
+    // ``{opponent.pulseId, userId, date}`` index).
+    await this._overlayLatestNameFromGames(userId, page);
     return { items: page, nextBefore };
   }
 
@@ -214,55 +223,50 @@ class OpponentsService {
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
     const nextBefore = hasMore ? page[page.length - 1].lastPlayed : null;
-    // Overlay canonical fields the games-aggregation can't reliably
-    // compute on its own. Two distinct concerns, one round-trip:
+    // Two overlays:
     //
     // (1) Identity fields (``pulseCharacterId`` / ``toonHandle``) —
-    //     fill-if-missing. The aggregation pulls these off the
-    //     embedded opponent sub-doc on the most recent game
-    //     (``$last``), but those fields are only stamped onto a games
-    //     row at the moment of upload. The May-2026 backfill cron
-    //     heals the opponents COLLECTION row for stuck-on-TOON
-    //     opponents by writing the canonical pulseCharacterId there
-    //     directly; it does NOT rewrite historical games rows (we
-    //     keep games immutable). For an opponent whose games all
-    //     pre-date the heal, ``$last`` returns null even though the
-    //     opponents row holds the canonical id. We splice the
-    //     canonical value in only when the aggregation produced null.
+    //     fill-if-missing from the opponents row. The aggregation
+    //     pulls these off the embedded opponent sub-doc on the most
+    //     recent game (``$last``), but those fields are only stamped
+    //     onto a games row at the moment of upload. The May-2026
+    //     backfill cron heals the opponents COLLECTION row for
+    //     stuck-on-TOON opponents by writing the canonical
+    //     pulseCharacterId there directly; it does NOT rewrite
+    //     historical games rows (we keep games immutable). For an
+    //     opponent whose games all pre-date the heal, ``$last``
+    //     returns null even though the opponents row holds the
+    //     canonical id — splice the row's value in when the
+    //     aggregation produced null.
     //
-    // (2) ``displayNameSample`` — ALWAYS overlay. The aggregation
-    //     uses ``$last`` over an unsorted ``$group`` input, so the
-    //     value is non-deterministic — and even if it were
-    //     deterministic-by-storage-order, it would still be scoped to
-    //     the FILTER WINDOW, not the player's globally-most-recent
-    //     name. The opponents row's ``displayNameSample`` is
-    //     maintained by ``recordGame`` / ``refreshMetadata`` as the
-    //     displayName of the max-date game we've ever ingested for
-    //     this (userId, pulseId). That's the canonical "what is this
-    //     player CURRENTLY called" — use it regardless of what the
-    //     aggregation produced.
+    // (2) ``displayNameSample`` — recompute from games. The
+    //     aggregation's ``$last`` is unsorted (non-deterministic) and
+    //     scoped to the FILTER WINDOW; trusting the opponents row
+    //     would work post-migration but is stale for rows that
+    //     pre-date the write guard. Computing the global-latest name
+    //     from games at read time is self-healing and applies rule
+    //     (i): the displayed name is an identity label, not a
+    //     windowed stat — always the player's most-recent name
+    //     across all history.
     await this._overlayFromOpponents(userId, page);
+    await this._overlayLatestNameFromGames(userId, page);
     return { items: page, nextBefore };
   }
 
   /**
-   * In-place overlay of canonical fields from the opponents
+   * In-place fill of missing identity fields from the opponents
    * collection onto an aggregation result page. One ``find``
    * round-trip regardless of page size (uses the existing
    * ``{ userId, pulseId }`` unique index for an index scan).
    *
-   * Two semantics:
-   *   * ``pulseCharacterId`` / ``toonHandle``: fill-if-missing. We
-   *     trust the games-rows when they carry the value, and only
-   *     splice from the opponents row when the games aggregation
-   *     produced null.
-   *   * ``displayNameSample``: always-overlay. The opponents row is
-   *     the source of truth for "current name" — see the write
-   *     guard in ``recordGame``.
+   * ``pulseCharacterId`` / ``toonHandle`` are fill-if-missing. We
+   * trust the games-rows when they carry the value, and only splice
+   * from the opponents row when the games aggregation produced
+   * null. Never overwrites a non-null aggregation value — games rows
+   * remain the authority on the most-recent observed identity.
    *
-   * Safe on an empty page. Runs unconditionally even when no
-   * identity fill is needed, because the displayNameSample overlay
-   * is always required for the filtered-list path.
+   * No-op when every row already carries both fields. Safe on an
+   * empty page.
    *
    * @private
    * @param {string} userId
@@ -270,31 +274,23 @@ class OpponentsService {
    *   pulseId: string,
    *   pulseCharacterId?: string|null,
    *   toonHandle?: string|null,
-   *   displayNameSample?: string,
    * }>} rows
    */
   async _overlayFromOpponents(userId, rows) {
     if (!Array.isArray(rows) || rows.length === 0) return;
-    const pulseIds = [];
+    const needIds = [];
     for (const r of rows) {
-      if (r && typeof r.pulseId === "string" && r.pulseId.length > 0) {
-        pulseIds.push(r.pulseId);
-      }
+      if (!r || typeof r.pulseId !== "string") continue;
+      const missingChar = !r.pulseCharacterId;
+      const missingToon = !r.toonHandle;
+      if (missingChar || missingToon) needIds.push(r.pulseId);
     }
-    if (pulseIds.length === 0) return;
+    if (needIds.length === 0) return;
     const opponentsCursor = this.db.opponents.find(
-      { userId, pulseId: { $in: pulseIds } },
-      {
-        projection: {
-          _id: 0,
-          pulseId: 1,
-          pulseCharacterId: 1,
-          toonHandle: 1,
-          displayNameSample: 1,
-        },
-      },
+      { userId, pulseId: { $in: needIds } },
+      { projection: { _id: 0, pulseId: 1, pulseCharacterId: 1, toonHandle: 1 } },
     );
-    /** @type {Map<string, {pulseCharacterId?: string, toonHandle?: string, displayNameSample?: string}>} */
+    /** @type {Map<string, {pulseCharacterId?: string, toonHandle?: string}>} */
     const byPulseId = new Map();
     for await (const doc of opponentsCursor) {
       if (typeof doc.pulseId !== "string") continue;
@@ -305,25 +301,85 @@ class OpponentsService {
         toonHandle: typeof doc.toonHandle === "string"
           ? doc.toonHandle
           : undefined,
-        displayNameSample: typeof doc.displayNameSample === "string"
-          ? doc.displayNameSample
-          : undefined,
       });
     }
     for (const r of rows) {
       if (!r || typeof r.pulseId !== "string") continue;
       const opp = byPulseId.get(r.pulseId);
       if (!opp) continue;
-      // Fill-if-missing: identity fields.
       if (!r.pulseCharacterId && opp.pulseCharacterId) {
         r.pulseCharacterId = opp.pulseCharacterId;
       }
       if (!r.toonHandle && opp.toonHandle) {
         r.toonHandle = opp.toonHandle;
       }
-      // Always-overlay: canonical current name.
-      if (typeof opp.displayNameSample === "string" && opp.displayNameSample.length > 0) {
-        r.displayNameSample = opp.displayNameSample;
+    }
+  }
+
+  /**
+   * In-place overlay of ``displayNameSample`` with the displayName
+   * of each opponent's globally-most-recent game by date. Source of
+   * truth: the games collection (immutable, dated, definitive).
+   *
+   * Why "from games" instead of "from the opponents row":
+   *   * The row's ``displayNameSample`` is maintained by
+   *     ``recordGame`` / ``refreshMetadata``, but rows that pre-date
+   *     the May-2026 write guard hold stale values until the
+   *     ``2026-05-12-heal-opponent-current-name`` migration runs.
+   *     Computing from games at read time is self-healing and
+   *     makes the migration purely an optimization.
+   *   * Rule (i): the displayed name is an identity label, not a
+   *     windowed stat. Always the player's MOST-RECENT name across
+   *     all history, regardless of any active date filter.
+   *
+   * One aggregation per page. Uses the
+   * ``{opponent.pulseId, userId, date}`` index for the sort. Games
+   * with empty/null ``opponent.displayName`` are excluded so a
+   * stray bad row doesn't blank the latest valid name.
+   *
+   * Safe on an empty page.
+   *
+   * @private
+   * @param {string} userId
+   * @param {Array<{pulseId: string, displayNameSample?: string}>} rows
+   */
+  async _overlayLatestNameFromGames(userId, rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const pulseIds = [];
+    for (const r of rows) {
+      if (r && typeof r.pulseId === "string" && r.pulseId.length > 0) {
+        pulseIds.push(r.pulseId);
+      }
+    }
+    if (pulseIds.length === 0) return;
+    const cursor = this.db.games.aggregate([
+      {
+        $match: {
+          userId,
+          "opponent.pulseId": { $in: pulseIds },
+          "opponent.displayName": { $type: "string", $ne: "" },
+        },
+      },
+      { $sort: { date: -1 } },
+      {
+        $group: {
+          _id: "$opponent.pulseId",
+          latestName: { $first: "$opponent.displayName" },
+        },
+      },
+    ]);
+    /** @type {Map<string, string>} */
+    const byPulseId = new Map();
+    for await (const doc of cursor) {
+      if (typeof doc._id === "string" && typeof doc.latestName === "string") {
+        byPulseId.set(doc._id, doc.latestName);
+      }
+    }
+    for (const r of rows) {
+      if (!r || typeof r.pulseId !== "string") continue;
+      const latest = byPulseId.get(r.pulseId);
+      if (typeof latest === "string" && latest.length > 0) {
+        r.displayNameSample = latest;
       }
     }
   }
