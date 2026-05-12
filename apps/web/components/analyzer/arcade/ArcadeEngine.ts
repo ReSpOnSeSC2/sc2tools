@@ -113,6 +113,24 @@ export function activeWinStreak(gamesAsc: Array<Pick<ArcadeGame, "result">>): nu
 }
 
 /**
+ * Active LOSS streak from the user's POV — i.e., the opponent's
+ * current active WIN streak against the user. Mirrors
+ * activeWinStreak but counts consecutive Ls. Useful when the surface
+ * is phrased from the opponent's perspective ("this rival is on an
+ * N-game streak against you"), where calling activeWinStreak would
+ * silently invert the framing.
+ */
+export function activeLossStreak(gamesAsc: Array<Pick<ArcadeGame, "result">>): number {
+  let streak = 0;
+  for (let i = gamesAsc.length - 1; i >= 0; i--) {
+    const o = outcome(gamesAsc[i]);
+    if (o === "L") streak += 1;
+    else if (o === "W") return streak;
+  }
+  return streak;
+}
+
+/**
  * Find every maximal winning-streak run in a chronologically-sorted
  * games list, plus the loss that ended it (if any). Returns the runs
  * with their length, the start/end gameId, and the ending loss gameId.

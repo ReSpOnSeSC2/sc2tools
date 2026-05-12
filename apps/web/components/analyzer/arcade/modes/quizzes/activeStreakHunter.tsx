@@ -4,7 +4,7 @@ import { useState } from "react";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
 import {
-  activeWinStreak,
+  activeLossStreak,
   pickN,
   registerMode,
   shuffle,
@@ -36,10 +36,19 @@ registerMode(ID, "temporal");
 
 /**
  * Walk the user's full games list once, group by oppPulseId in
- * chronological order, and compute each opponent's CURRENT active win
- * streak (consecutive Ws starting from the most-recent game backward;
- * 0 if the most-recent game was a loss). Then pick 4 opponents — one
- * of which has the true longest streak — and ask the user to spot it.
+ * chronological order, and compute each opponent's CURRENT active
+ * win streak AGAINST the user (i.e., the user's current active loss
+ * streak vs that opponent; 0 if the most-recent game was a user win).
+ * Then pick 4 opponents — one of which has the true longest streak —
+ * and ask the user to spot it.
+ *
+ * Earlier revisions called `activeWinStreak` here, which returns the
+ * USER's W-streak. The question and reveal text both frame the streak
+ * from the opponent's side ("this rival is on an N-game win streak
+ * against you"), so the previous code silently inverted the framing
+ * — a rival the user was beating 12-in-a-row was shown as the
+ * answer. Use `activeLossStreak` so the displayed "12W" is the
+ * opponent's wins, matching the question wording.
  */
 export async function generateActiveStreakHunter(
   input: GenerateInput,
@@ -57,7 +66,7 @@ export async function generateActiveStreakHunter(
     eligible.push({
       pulseId: opp.pulseId,
       name: opp.name,
-      activeStreak: activeWinStreak(games),
+      activeStreak: activeLossStreak(games),
       games: games.length,
     });
   }

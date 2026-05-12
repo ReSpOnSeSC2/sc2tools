@@ -54,24 +54,27 @@ describe("Active Streak Hunter generate", () => {
     expect(result.ok).toBe(false);
   });
   test("the leader has the longest active streak in the candidates", async () => {
-    // Four opponents, leader has a 3-game active win streak.
+    // Four opponents from the OPPONENT'S point of view (= user losses).
+    // "hot" has won the user's last 3 games in a row — the longest
+    // active win streak against the user, which is what the mode now
+    // asks about.
     const games: ArcadeGame[] = [
-      ...[0, 1, 2].map((i) => g("hot", "Win", i + 10)),
-      g("cold", "Loss", 5),
-      g("cold", "Win", 6),
-      g("middle", "Win", 7),
-      g("middle", "Loss", 8),
-      g("middle", "Win", 9),
-      g("low", "Win", 1),
-      g("low", "Loss", 2),
+      ...[0, 1, 2].map((i) => g("hot", "Loss", i + 10)),
+      g("cold", "Win", 5),
+      g("cold", "Loss", 6),
+      g("middle", "Loss", 7),
+      g("middle", "Win", 8),
+      g("middle", "Loss", 9),
+      g("low", "Loss", 1),
+      g("low", "Win", 2),
     ];
     const dataset: ArcadeDataset = {
       ...baseDataset,
       games,
       opponents: [
-        { pulseId: "hot", name: "Hot", wins: 3, losses: 0, games: 3, userWinRate: 1, opponentWinRate: 0, lastPlayed: null },
+        { pulseId: "hot", name: "Hot", wins: 0, losses: 3, games: 3, userWinRate: 0, opponentWinRate: 1, lastPlayed: null },
         { pulseId: "cold", name: "Cold", wins: 1, losses: 1, games: 2, userWinRate: 0.5, opponentWinRate: 0.5, lastPlayed: null },
-        { pulseId: "middle", name: "Middle", wins: 2, losses: 1, games: 3, userWinRate: 0.67, opponentWinRate: 0.33, lastPlayed: null },
+        { pulseId: "middle", name: "Middle", wins: 1, losses: 2, games: 3, userWinRate: 0.33, opponentWinRate: 0.67, lastPlayed: null },
         { pulseId: "low", name: "Low", wins: 1, losses: 1, games: 2, userWinRate: 0.5, opponentWinRate: 0.5, lastPlayed: null },
       ],
     };

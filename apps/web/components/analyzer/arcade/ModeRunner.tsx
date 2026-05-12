@@ -17,6 +17,7 @@ import type { AnyMode } from "./modes";
 import { mulberry32 } from "./ArcadeEngine";
 import { shareCard } from "./ShareCard";
 import { buildleShareText } from "./modes/games/buildle";
+import { twoTruthsLieShareLines } from "./modes/games/twoTruthsLie";
 import { DailyEmptyState } from "./surfaces/DailyEmptyState";
 
 /**
@@ -173,9 +174,26 @@ export function ModeRunner({
       }
       return;
     }
+    // Per-mode share bodies. The default (scoreResult.note) is a
+    // single line, which loses context for modes whose reveal has
+    // multiple parts. TT&L is the obvious one — the score note is
+    // just the lie text, but the on-screen reveal shows all three
+    // claims with TRUE/LIE labels, which is what people actually
+    // want to share.
+    let lines: string[];
+    if (mode.id === "two-truths-lie") {
+      lines = twoTruthsLieShareLines(
+        question.question as Parameters<typeof twoTruthsLieShareLines>[0],
+        scoreResult?.outcome === "correct",
+      );
+    } else if (scoreResult?.note) {
+      lines = [scoreResult.note];
+    } else {
+      lines = ["I just played in Arcade."];
+    }
     await shareCard({
       title: mode.title,
-      lines: scoreResult?.note ? [scoreResult.note] : ["I just played in Arcade."],
+      lines,
       tag: `Arcade · ${isDaily ? "Daily" : "Quick Play"}`,
       tone: scoreResult?.outcome === "correct" ? "wins" : "neutral",
     });

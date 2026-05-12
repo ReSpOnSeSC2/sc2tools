@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { opponentBracketPick } from "../modes/quizzes/opponentBracketPick";
 import { mulberry32 } from "../ArcadeEngine";
-import type { ArcadeDataset, ArcadeOpponent } from "../types";
+import type { ArcadeDataset, ArcadeGame, ArcadeOpponent } from "../types";
 
 const baseDataset: ArcadeDataset = {
   games: [],
@@ -142,6 +142,166 @@ describe("Opponent Bracket Pick — barcode filter", () => {
     expect(masked).toBeDefined();
     expect(masked!.displayName).toBe("Maru");
   });
+});
+
+describe("Opponent Bracket Pick — variant resolution", () => {
+  // Generate's variant selection uses the seeded rng, but the test
+  // here calls the underlying resolveVariant logic indirectly by
+  // constructing a sample that only one specific variant can answer.
+  // We seed many rng values to find a run where the desired variant
+  // wins; in practice it's deterministic per seed.
+  function findVariantRun(
+    data: ArcadeDataset,
+    wantVariant: string,
+    maxSeed = 50,
+  ) {
+    for (let s = 1; s <= maxSeed; s++) {
+      const out = opponentBracketPick.generate({
+        rng: mulberry32(s),
+        daySeed: "2026-05-10",
+        tz: "UTC",
+        data,
+      });
+      // generate returns a Promise — we'll resolve synchronously since
+      // mulberry32 is sync and the body doesn't await anything.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sync = (out as unknown) as { ok: true; question: { variant?: string } };
+      if (
+        sync &&
+        typeof sync === "object" &&
+        "ok" in sync &&
+        sync.ok &&
+        sync.question?.variant === wantVariant
+      ) {
+        return sync.question;
+      }
+    }
+    return null;
+  }
+
+  test("most-faced fires when one opponent has a clear lead in games count", async () => {
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      // Unique games counts → most-faced is unambiguous.
+      opponents: [
+        opp("p1", "Alice", 10, 5), // 15 games
+        opp("p2", "Bob", 4, 3),    // 7
+        opp("p3", "Carol", 3, 2),  // 5
+        opp("p4", "Dave", 2, 1),   // 3
+      ],
+    };
+    // Walk seeds until we hit a run that picks "most-faced".
+    for (let s = 1; s <= 50; s++) {
+      const out = await opponentBracketPick.generate({
+        rng: mulberry32(s),
+        daySeed: "2026-05-10",
+        tz: "UTC",
+        data: dataset,
+      });
+      if (out.ok && out.question.variant === "most-faced") {
+        const leader = out.question.candidates[out.question.correctIndex];
+        expect(leader.pulseId).toBe("p1");
+        return;
+      }
+    }
+    throw new Error("most-faced variant never fired across 50 seeds");
+  });
+
+  test("last-beaten resolves to the candidate with the most-recent user win", async () => {
+    const games: ArcadeGame[] = [
+      // Older wins for p2 / p3, very recent for p1.
+      { gameId: "1", date: "2026-04-01T12:00:00Z", result: "Win", oppPulseId: "p2" },
+      { gameId: "2", date: "2026-04-15T12:00:00Z", result: "Win", oppPulseId: "p3" },
+      { gameId: "3", date: "2026-05-09T12:00:00Z", result: "Win", oppPulseId: "p1" },
+      // p4 has only losses on record.
+      { gameId: "4", date: "2026-04-20T12:00:00Z", result: "Loss", oppPulseId: "p4" },
+    ];
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      games,
+      opponents: [
+        opp("p1", "Alice", 3, 1),
+        opp("p2", "Bob", 3, 1),
+        opp("p3", "Carol", 3, 1),
+        opp("p4", "Dave", 3, 1),
+      ],
+    };
+    for (let s = 1; s <= 50; s++) {
+      const out = await opponentBracketPick.generate({
+        rng: mulberry32(s),
+        daySeed: "2026-05-10",
+        tz: "UTC",
+        data: dataset,
+      });
+      if (out.ok && out.question.variant === "last-beaten") {
+        const leader = out.question.candidates[out.question.correctIndex];
+        expect(leader.pulseId).toBe("p1");
+        return;
+      }
+    }
+    throw new Error("last-beaten variant never fired across 50 seeds");
+  });
+
+  test("last-loss-to resolves to the candidate with the most-recent user loss", async () => {
+    const games: ArcadeGame[] = [
+      { gameId: "1", date: "2026-04-01T12:00:00Z", result: "Loss", oppPulseId: "p1" },
+      { gameId: "2", date: "2026-05-09T12:00:00Z", result: "Loss", oppPulseId: "p2" },
+      { gameId: "3", date: "2026-04-10T12:00:00Z", result: "Loss", oppPulseId: "p3" },
+      { gameId: "4", date: "2026-04-15T12:00:00Z", result: "Loss", oppPulseId: "p4" },
+    ];
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      games,
+      opponents: [
+        opp("p1", "Alice", 3, 1),
+        opp("p2", "Bob", 3, 1),
+        opp("p3", "Carol", 3, 1),
+        opp("p4", "Dave", 3, 1),
+      ],
+    };
+    for (let s = 1; s <= 50; s++) {
+      const out = await opponentBracketPick.generate({
+        rng: mulberry32(s),
+        daySeed: "2026-05-10",
+        tz: "UTC",
+        data: dataset,
+      });
+      if (out.ok && out.question.variant === "last-loss-to") {
+        const leader = out.question.candidates[out.question.correctIndex];
+        expect(leader.pulseId).toBe("p2");
+        return;
+      }
+    }
+    throw new Error("last-loss-to variant never fired across 50 seeds");
+  });
+
+  test("highest-wr-vs-you is always a viable fallback (no games data)", async () => {
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      // No games array — last-beaten/last-loss-to can't resolve;
+      // games counts all equal → most-faced can't resolve.
+      opponents: [
+        opp("p1", "Alice", 5, 0),
+        opp("p2", "Bob", 4, 1),
+        opp("p3", "Carol", 2, 2),
+        opp("p4", "Dave", 1, 3),
+      ],
+    };
+    const out = await opponentBracketPick.generate({
+      rng: mulberry32(1),
+      daySeed: "2026-05-10",
+      tz: "UTC",
+      data: dataset,
+    });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.question.variant ?? "highest-wr-vs-you").toBe("highest-wr-vs-you");
+    expect(out.question.candidates[out.question.correctIndex].pulseId).toBe("p4");
+  });
+
+  // findVariantRun is exported for any future case where we want to
+  // pin a specific variant without rebuilding the data per seed.
+  void findVariantRun;
 });
 
 describe("Opponent Bracket Pick — reveal renders from opponent perspective", () => {
