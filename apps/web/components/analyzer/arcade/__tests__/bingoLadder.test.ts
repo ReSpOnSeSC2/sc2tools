@@ -114,6 +114,66 @@ describe("bingoLadder card generation", () => {
     }
   });
 
+  test("no card cell mints the retired Expand-opener win predicate", () => {
+    // ``win_build_contains`` with keyword "Expand" was retired in the
+    // May-2026 follow-up overhaul — the agent's strategy classifier
+    // has no stable label for "expand opener", so the cell was
+    // unwinnable on every card it appeared on. The predicate itself
+    // is still alive (Cannon Rush / Proxy / All-in / etc.), so we
+    // assert by inspecting the params.
+    for (let seed = 0; seed < 30; seed += 1) {
+      const cells = buildCard(
+        {
+          rng: mulberry32(seed),
+          daySeed: "2026-05-11",
+          tz: "UTC",
+          data: datasetForRaces(["Protoss", "Zerg", "Terran"]),
+        },
+        "2026-W19",
+        new Set(["P", "Z", "T"]),
+      );
+      for (const c of cells) {
+        if (c.predicate !== "win_build_contains") continue;
+        const kw = String(c.params.keyword || "").toLowerCase();
+        expect(kw).not.toBe("expand");
+        expect(c.label.toLowerCase()).not.toMatch(/expand opener/);
+      }
+    }
+  });
+
+  test("built_n_of_unit_week candidates are minted for races the user plays", () => {
+    // The "build N this week" objectives are race-specific (the
+    // candidate list gates on racePool) — a pure Protoss player
+    // should never see a "build 100 Marines this week" cell. We
+    // sweep enough seeds to make a missing race assertion
+    // statistically informative.
+    const seenForProtoss = new Set<string>();
+    for (let seed = 0; seed < 30; seed += 1) {
+      const cells = buildCard(
+        {
+          rng: mulberry32(seed),
+          daySeed: "2026-05-11",
+          tz: "UTC",
+          data: datasetForRaces(["Protoss"]),
+        },
+        "2026-W19",
+        new Set(["P"]),
+      );
+      for (const c of cells) {
+        if (c.predicate !== "built_n_of_unit_week") continue;
+        seenForProtoss.add(String(c.params.unit));
+      }
+    }
+    // A Protoss-only player must not see Marine / Roach cells.
+    expect(seenForProtoss.has("Marine")).toBe(false);
+    expect(seenForProtoss.has("Roach")).toBe(false);
+    // They SHOULD see Protoss-only cells across enough seeds.
+    const protossOnly = ["Zealot", "Stalker", "Immortal"].filter((u) =>
+      seenForProtoss.has(u),
+    );
+    expect(protossOnly.length).toBeGreaterThan(0);
+  });
+
   test("vs-race candidates cover all three races, regardless of what the user plays", () => {
     // The user can't choose their opponent's race, so "vs Z/T/P"
     // candidates are always in the pool. We test by exhausting the
@@ -229,5 +289,43 @@ describe("bingoLadder legacy card detection", () => {
         cells: [],
       }),
     ).toBe(false);
+  });
+
+  test("isLegacyCard flags cards minted with the retired Expand-opener keyword", () => {
+    // The predicate ``win_build_contains`` is still alive (Cannon Rush
+    // / Proxy / All-in / etc.) — only the "Expand" keyword variant is
+    // retired. Without the (predicate, paramKey) check, every card
+    // carrying any win_build_contains cell would reset every Monday
+    // morning, which would be a worse UX than the original bug.
+    const expanded: BingoState = {
+      startedAt: new Date().toISOString(),
+      weekKey: "2026-W19",
+      rerolled: false,
+      cells: [
+        {
+          id: "a",
+          predicate: "win_build_contains",
+          params: { keyword: "Expand" },
+          label: "Win with an Expand opener",
+          ticked: false,
+        },
+      ],
+    };
+    expect(isLegacyCard(expanded)).toBe(true);
+    // A card with a different win_build_contains keyword must NOT be
+    // flagged legacy.
+    const cannon: BingoState = {
+      ...expanded,
+      cells: [
+        {
+          id: "a",
+          predicate: "win_build_contains",
+          params: { keyword: "Cannon Rush" },
+          label: "Win with a Cannon Rush",
+          ticked: false,
+        },
+      ],
+    };
+    expect(isLegacyCard(cannon)).toBe(false);
   });
 });

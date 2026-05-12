@@ -415,6 +415,29 @@ describe("Bingo PREDICATES", () => {
       ),
     ).toBe("g");
   });
+
+  test("built_n_of_unit_week sums across wins AND losses in the window", () => {
+    // A losing game that builds 3 Marines plus a winning game that
+    // builds 2 more should tick a "Build 5+ Marines this week"
+    // objective — won_built_n_of_unit only counts the winning game in
+    // isolation, which is the regression this predicate is meant to
+    // fix.
+    const games = [
+      l({ gameId: "g1", buildLog: ["[2:00] Marine", "[2:30] Marine", "[3:00] Marine"] }),
+      w({ gameId: "g2", buildLog: ["[2:00] Marine", "[2:30] Marine"] }),
+    ];
+    expect(
+      PREDICATES.built_n_of_unit_week(games, { unit: "Marine", count: 5 }),
+    ).toBe("g2");
+    // Threshold one above the running total → no tick, no throw.
+    expect(
+      PREDICATES.built_n_of_unit_week(games, { unit: "Marine", count: 6 }),
+    ).toBe(null);
+    // Empty unit needle is a no-op, not a tick on every game.
+    expect(
+      PREDICATES.built_n_of_unit_week(games, { unit: "", count: 1 }),
+    ).toBe(null);
+  });
 });
 
 describe("ArcadeService.resolveQuests card shape", () => {
@@ -562,5 +585,133 @@ describe("ArcadeService.resolveQuests card shape", () => {
       { id: "c1", ticked: true, gameId: "g1" },
       { id: "c2", ticked: false },
     ]);
+  });
+});
+
+describe("ArcadeService.unitStats", () => {
+  /**
+   * @param {any[]} games
+   * @param {Map<string, any>|null} [detailsMap]
+   */
+  const makeService = (games, detailsMap = null) => {
+    const fakeColl = /** @type {any} */ ({
+      find: () => ({
+        sort: () => ({
+          limit: () => ({
+            toArray: async () => games,
+          }),
+        }),
+      }),
+    });
+    /** @type {any} */
+    const deps = { games: null };
+    if (detailsMap) {
+      deps.gameDetails = {
+        findMany: async () => detailsMap,
+      };
+    }
+    return new ArcadeService(
+      /** @type {any} */ ({ games: fakeColl }),
+      deps,
+    );
+  };
+
+  test("aggregates buildLog unit counts and units_lost across games", async () => {
+    const svc = makeService(
+      [w({ gameId: "g1" }), w({ gameId: "g2" })],
+      new Map([
+        [
+          "g1",
+          {
+            buildLog: ["[2:00] Marine", "[2:10] Marine", "[3:00] Marauder"],
+            macroBreakdown: { player_stats: { me: { units_lost: 12 } } },
+          },
+        ],
+        [
+          "g2",
+          {
+            buildLog: ["[2:00] Marine", "[3:30] Reaper"],
+            macroBreakdown: { player_stats: { me: { units_lost: 8 } } },
+          },
+        ],
+      ]),
+    );
+    const out = await svc.unitStats("user1");
+    expect(out.scannedGames).toBe(2);
+    expect(out.builtByUnit.Marine).toBe(3);
+    expect(out.builtByUnit.Marauder).toBe(1);
+    expect(out.builtByUnit.Reaper).toBe(1);
+    expect(out.totalUnitsLost).toBe(20);
+    expect(out.lostGames).toBe(2);
+  });
+
+  test("filters out structure names so they don't dominate the histogram", async () => {
+    // Without the structure filter, Pylons and SCVs would always be
+    // the most-built "unit" and the trivia would be deathly boring.
+    const svc = makeService(
+      [w({ gameId: "g1" })],
+      new Map([
+        [
+          "g1",
+          {
+            buildLog: [
+              "[0:20] Pylon",
+              "[0:25] Pylon",
+              "[2:00] Zealot",
+              "[2:30] Zealot",
+            ],
+          },
+        ],
+      ]),
+    );
+    const out = await svc.unitStats("user1");
+    expect(out.builtByUnit.Zealot).toBe(2);
+    expect(out.builtByUnit.Pylon).toBeUndefined();
+  });
+
+  test("degrades gracefully when gameDetails is missing", async () => {
+    const svc = makeService([w({ gameId: "g1" })]);
+    const out = await svc.unitStats("user1");
+    expect(out.scannedGames).toBe(1);
+    expect(out.builtByUnit).toEqual({});
+    expect(out.totalUnitsLost).toBe(0);
+  });
+
+  test("degrades gracefully when the heavy store throws", async () => {
+    const fakeColl = /** @type {any} */ ({
+      find: () => ({
+        sort: () => ({
+          limit: () => ({
+            toArray: async () => [w({ gameId: "g1" })],
+          }),
+        }),
+      }),
+    });
+    const svc = new ArcadeService(
+      /** @type {any} */ ({ games: fakeColl }),
+      /** @type {any} */ ({
+        games: null,
+        gameDetails: {
+          findMany: async () => {
+            throw new Error("simulated heavy-store outage");
+          },
+        },
+      }),
+    );
+    const out = await svc.unitStats("user1");
+    expect(out.scannedGames).toBe(1);
+    expect(out.builtByUnit).toEqual({});
+    expect(out.totalUnitsLost).toBe(0);
+  });
+
+  test("returns the all-zeros payload for a user with no games", async () => {
+    const svc = makeService([]);
+    const out = await svc.unitStats("user1");
+    expect(out).toEqual({
+      scannedGames: 0,
+      builtByUnit: {},
+      totalUnitsLost: 0,
+      lostGames: 0,
+    });
   });
 });

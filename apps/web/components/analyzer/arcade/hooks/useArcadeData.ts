@@ -10,6 +10,7 @@ import type {
   ArcadeGame,
   ArcadeOpponent,
   ArcadeSummary,
+  ArcadeUnitStats,
 } from "../types";
 
 interface ApiOpp {
@@ -167,6 +168,12 @@ export function useArcadeData(): {
     "/v1/community/arcade-universe?perMatchup=12",
   );
   const seasons = useApi<ApiSeasons>("/v1/seasons");
+  // /v1/arcade/unit-stats — bounded aggregate over the user's recent
+  // game_details. Powers the unit-trivia quiz; missing it just means
+  // that quiz stays in its empty state, so don't gate ``loading`` on
+  // it (other modes don't need it and shouldn't block on the heavy
+  // round-trip).
+  const unitStats = useApi<ArcadeUnitStats>("/v1/arcade/unit-stats");
 
   const loading =
     opp.isLoading ||
@@ -281,6 +288,19 @@ export function useArcadeData(): {
       maps: Array.isArray(maps.data) ? maps.data : [],
       summary: summaryOut,
       mapPool: Array.isArray(seasons.data?.mapPool) ? seasons.data!.mapPool : [],
+      unitStats:
+        unitStats.data && typeof unitStats.data === "object"
+          ? {
+              scannedGames: Number(unitStats.data.scannedGames) || 0,
+              builtByUnit:
+                unitStats.data.builtByUnit &&
+                typeof unitStats.data.builtByUnit === "object"
+                  ? unitStats.data.builtByUnit
+                  : {},
+              totalUnitsLost: Number(unitStats.data.totalUnitsLost) || 0,
+              lostGames: Number(unitStats.data.lostGames) || 0,
+            }
+          : null,
     };
   }, [
     loading,
@@ -294,6 +314,7 @@ export function useArcadeData(): {
     custom.data,
     community.data,
     seasons.data,
+    unitStats.data,
   ]);
 
   return { data, loading, error };

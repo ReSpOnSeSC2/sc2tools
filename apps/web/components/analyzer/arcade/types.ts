@@ -142,6 +142,30 @@ export interface ArcadeDataset {
   maps: Array<{ map: string; wins: number; losses: number; total: number; winRate: number }>;
   summary: ArcadeSummary | null;
   mapPool: string[];
+  /**
+   * Per-unit aggregate over the user's recent games (server-bounded
+   * to the most recent ~1000). Populated lazily by useArcadeData via
+   * /v1/arcade/unit-stats; null while the request is still in flight
+   * or if the call fails. Trivia modes that need this gate on the
+   * field being non-null and on ``scannedGames`` being above their
+   * own minimum (typically 25 games).
+   *
+   * Optional on the type so fixtures in other quiz tests (which don't
+   * exercise the trivia) don't have to be touched — readers always
+   * coalesce to null when absent.
+   */
+  unitStats?: ArcadeUnitStats | null;
+}
+
+export interface ArcadeUnitStats {
+  /** How many games the server scanned to compute this aggregate. */
+  scannedGames: number;
+  /** Map: SC2 unit name → number of buildLog entries across scanned games. */
+  builtByUnit: Record<string, number>;
+  /** Σ of macroBreakdown.player_stats.me.units_lost across scanned games. */
+  totalUnitsLost: number;
+  /** Number of scanned games that contributed a units_lost figure. */
+  lostGames: number;
 }
 
 export interface ArcadeGame {

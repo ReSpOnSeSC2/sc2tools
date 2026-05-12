@@ -123,6 +123,18 @@ const closersEye = () =>
     </>
   ));
 
+const unitProfile = () =>
+  withTitle("Unit profile", (
+    <>
+      {/* Three stacked unit silhouettes — small, medium, large — with
+          a count tally to the right to read as "fleet size". */}
+      <path d="M4 18l3-3 3 3M4 18v2" />
+      <path d="M9 14l4-4 4 4M9 14v6" />
+      <path d="M14 9l5-5 5 5M14 9v11" opacity="0.4" />
+      <path d="M3 21h18" opacity="0.55" />
+    </>
+  ));
+
 const macroMemory = () =>
   withTitle("Macro memory", (
     <>
@@ -206,6 +218,7 @@ const SVG_REGISTRY: Record<string, () => ReactNode> = {
   "loss-pattern-sleuth": lossPatternSleuth,
   "closers-eye": closersEye,
   "macro-memory": macroMemory,
+  "unit-profile": unitProfile,
   "stock-market": stockMarket,
   "bingo-ladder": bingoLadder,
   "buildle": buildle,
@@ -241,6 +254,7 @@ const TITLES: Record<string, string> = {
   "loss-pattern-sleuth": "Loss-Pattern Sleuth",
   "closers-eye": "Closer's Eye",
   "macro-memory": "Macro Memory",
+  "unit-profile": "Unit Profile",
   "stock-market": "Stock Market",
   "bingo-ladder": "Bingo: Ladder Edition",
   "buildle": "Buildle",
