@@ -105,6 +105,43 @@ export function raceIconName(r: Race): string {
   return r.toLowerCase();
 }
 
+/**
+ * Infer the owning race from a build name when the data layer didn't
+ * supply one. Handles three naming conventions emitted by the analyzer
+ * detectors and the bundled BUILD_DEFINITIONS catalog:
+ *
+ *   "PvP - 1 Gate Expand"     → "Protoss"  (matchup prefix — owning race is the left letter)
+ *   "Protoss - 4 Gate Rush"   → "Protoss"  (explicit race prefix)
+ *   "Unclassified - Zerg"     → "Zerg"     (race suffix on sentinel rows)
+ *
+ * Returns null when no race can be deduced; callers decide whether to
+ * fall back to "Random" (which renders as a generic dice icon) or hide
+ * the race chrome entirely.
+ */
+export function inferRaceFromBuildName(name: string): Race | null {
+  if (typeof name !== "string") return null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const matchup = /^([PpTtZz])v[PpTtZzXxRr]\b/.exec(trimmed);
+  if (matchup) {
+    switch (matchup[1].toUpperCase()) {
+      case "P":
+        return "Protoss";
+      case "T":
+        return "Terran";
+      case "Z":
+        return "Zerg";
+    }
+  }
+  if (/^Protoss\b/i.test(trimmed)) return "Protoss";
+  if (/^Terran\b/i.test(trimmed)) return "Terran";
+  if (/^Zerg\b/i.test(trimmed)) return "Zerg";
+  if (/-\s*Protoss\b/i.test(trimmed)) return "Protoss";
+  if (/-\s*Terran\b/i.test(trimmed)) return "Terran";
+  if (/-\s*Zerg\b/i.test(trimmed)) return "Zerg";
+  return null;
+}
+
 export const RACE_ICON_KIND: IconKind = "race";
 
 /**
