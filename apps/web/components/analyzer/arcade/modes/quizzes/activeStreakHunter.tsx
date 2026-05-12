@@ -5,7 +5,6 @@ import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
 import {
   activeLossStreak,
-  pickN,
   registerMode,
   shuffle,
 } from "../../ArcadeEngine";
@@ -62,7 +61,15 @@ export async function generateActiveStreakHunter(
   }> = [];
   for (const opp of input.data.opponents) {
     const games = byOpp.get(opp.pulseId);
-    if (!games || games.length < 2) continue;
+    // ≥1 game qualifies. The previous ≥2 floor collapsed the eligible
+    // pool to whoever the user had multiple recorded matches against
+    // — typically a handful of rivals — and combined with the
+    // force-include-leader logic below, made the same opponent the
+    // correct answer every round. Including 1-game opponents (whose
+    // "active streak" is just W or L from that one game) puts dozens
+    // more candidates in rotation so each round samples a different
+    // four.
+    if (!games || games.length < 1) continue;
     eligible.push({
       pulseId: opp.pulseId,
       name: opp.name,
@@ -79,15 +86,27 @@ export async function generateActiveStreakHunter(
       reason: "Not enough opponents with recent active streaks. Play a few more matches.",
     };
   }
-  // Force-include the leader so the question is winnable; sample the
-  // remaining 3 from the rest.
-  const leader = eligible.reduce((best, e) =>
-    e.activeStreak > best.activeStreak ? e : best,
+  // Sample 4 from the eligible pool without privileging the global
+  // leader — the question text ("ONE of these opponents is on their
+  // longest active win streak") asks about the sample's leader, not
+  // the all-time leader, so each round should produce a different
+  // sample (and therefore a different correct answer). Only force a
+  // nonzero candidate into the sample when the random draw would
+  // otherwise leave the question unwinnable.
+  const shuffled = shuffle(eligible, input.rng);
+  let sample = shuffled.slice(0, 4);
+  if (!sample.some((e) => e.activeStreak > 0)) {
+    const pick = nonZero[Math.floor(input.rng() * nonZero.length)];
+    const filler = shuffled
+      .filter((e) => e.pulseId !== pick.pulseId)
+      .slice(0, 3);
+    sample = shuffle([pick, ...filler], input.rng);
+  }
+  const maxInSample = sample.reduce(
+    (m, e) => (e.activeStreak > m ? e.activeStreak : m),
+    -1,
   );
-  const others = eligible.filter((e) => e.pulseId !== leader.pulseId);
-  const filler = pickN(others, 3, input.rng);
-  const sample = shuffle([leader, ...filler], input.rng);
-  const correctIndex = sample.findIndex((s) => s.pulseId === leader.pulseId);
+  const correctIndex = sample.findIndex((s) => s.activeStreak === maxInSample);
   return {
     ok: true,
     minDataMet: true,
