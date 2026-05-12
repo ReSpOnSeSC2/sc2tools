@@ -89,7 +89,7 @@ function AgentDownloadSection() {
     <section className="relative">
       <div className="relative mx-auto max-w-3xl space-y-4 text-center">
         <p className="mx-auto max-w-2xl text-body-lg text-text-muted">
-          Sign in, install a 450&nbsp;MB agent, and every replay you finish
+          Sign in, install a 219&nbsp;MB agent, and every replay you finish
           surfaces an opponent dossier, build classifier, and live OBS
           overlay — across every device.
         </p>
@@ -377,7 +377,7 @@ const STEPS: ReadonlyArray<Step> = [
   {
     num: "01",
     title: "Install the agent",
-    body: "Download the 450 MB installer and pair it with your account in 90 seconds.",
+    body: "Download the 219 MB installer and pair it with your account in 90 seconds.",
   },
   {
     num: "02",
