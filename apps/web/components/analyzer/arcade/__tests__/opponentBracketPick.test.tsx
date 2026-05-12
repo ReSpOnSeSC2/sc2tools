@@ -269,6 +269,106 @@ describe("Opponent Bracket Pick — variant resolution", () => {
     expect(out.question.variant ?? "highest-wr-vs-you").toBe("highest-wr-vs-you");
     expect(out.question.candidates[out.question.correctIndex].pulseId).toBe("p4");
   });
+
+  test("broke-their-streak resolves to the opponent whose run the user snapped", async () => {
+    // p2 had a 4-game streak against the user (LLLL) then the user
+    // broke it (W). p1 had a 2-streak — below the 3-game floor.
+    // p3 / p4 never strung wins together. p2 should win the
+    // broke-their-streak variant.
+    const games: ArcadeGame[] = [
+      // p1: L L W → 2-game L-streak broken
+      { gameId: "p1a", date: "2026-04-01T12:00:00Z", result: "Loss", oppPulseId: "p1" },
+      { gameId: "p1b", date: "2026-04-02T12:00:00Z", result: "Loss", oppPulseId: "p1" },
+      { gameId: "p1c", date: "2026-04-03T12:00:00Z", result: "Win", oppPulseId: "p1" },
+      // p2: L L L L W → 4-game streak broken
+      { gameId: "p2a", date: "2026-04-01T12:00:00Z", result: "Loss", oppPulseId: "p2" },
+      { gameId: "p2b", date: "2026-04-02T12:00:00Z", result: "Loss", oppPulseId: "p2" },
+      { gameId: "p2c", date: "2026-04-03T12:00:00Z", result: "Loss", oppPulseId: "p2" },
+      { gameId: "p2d", date: "2026-04-04T12:00:00Z", result: "Loss", oppPulseId: "p2" },
+      { gameId: "p2e", date: "2026-04-05T12:00:00Z", result: "Win", oppPulseId: "p2" },
+      // p3: W W (no losses)
+      { gameId: "p3a", date: "2026-04-01T12:00:00Z", result: "Win", oppPulseId: "p3" },
+      { gameId: "p3b", date: "2026-04-02T12:00:00Z", result: "Win", oppPulseId: "p3" },
+      { gameId: "p3c", date: "2026-04-03T12:00:00Z", result: "Win", oppPulseId: "p3" },
+      // p4: W L W L (no run of ≥3)
+      { gameId: "p4a", date: "2026-04-01T12:00:00Z", result: "Win", oppPulseId: "p4" },
+      { gameId: "p4b", date: "2026-04-02T12:00:00Z", result: "Loss", oppPulseId: "p4" },
+      { gameId: "p4c", date: "2026-04-03T12:00:00Z", result: "Win", oppPulseId: "p4" },
+    ];
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      games,
+      opponents: [
+        opp("p1", "Alice", 1, 2),
+        opp("p2", "Bob", 1, 4),
+        opp("p3", "Carol", 3, 0),
+        opp("p4", "Dave", 2, 1),
+      ],
+    };
+    for (let s = 1; s <= 80; s++) {
+      const out = await opponentBracketPick.generate({
+        rng: mulberry32(s),
+        daySeed: "2026-05-10",
+        tz: "UTC",
+        data: dataset,
+      });
+      if (out.ok && out.question.variant === "broke-their-streak") {
+        const leader = out.question.candidates[out.question.correctIndex];
+        expect(leader.pulseId).toBe("p2");
+        return;
+      }
+    }
+    throw new Error("broke-their-streak variant never fired across 80 seeds");
+  });
+
+  test("they-broke-yours resolves to the opponent who snapped the user's longest run", async () => {
+    const games: ArcadeGame[] = [
+      // p1: W W L → 2-game W-streak broken
+      { gameId: "p1a", date: "2026-04-01T12:00:00Z", result: "Win", oppPulseId: "p1" },
+      { gameId: "p1b", date: "2026-04-02T12:00:00Z", result: "Win", oppPulseId: "p1" },
+      { gameId: "p1c", date: "2026-04-03T12:00:00Z", result: "Loss", oppPulseId: "p1" },
+      // p2: W W W W W L → 5-game W-streak broken by p2 ← the leader
+      { gameId: "p2a", date: "2026-04-01T12:00:00Z", result: "Win", oppPulseId: "p2" },
+      { gameId: "p2b", date: "2026-04-02T12:00:00Z", result: "Win", oppPulseId: "p2" },
+      { gameId: "p2c", date: "2026-04-03T12:00:00Z", result: "Win", oppPulseId: "p2" },
+      { gameId: "p2d", date: "2026-04-04T12:00:00Z", result: "Win", oppPulseId: "p2" },
+      { gameId: "p2e", date: "2026-04-05T12:00:00Z", result: "Win", oppPulseId: "p2" },
+      { gameId: "p2f", date: "2026-04-06T12:00:00Z", result: "Loss", oppPulseId: "p2" },
+      // p3: all losses (no W-run)
+      { gameId: "p3a", date: "2026-04-01T12:00:00Z", result: "Loss", oppPulseId: "p3" },
+      { gameId: "p3b", date: "2026-04-02T12:00:00Z", result: "Loss", oppPulseId: "p3" },
+      { gameId: "p3c", date: "2026-04-03T12:00:00Z", result: "Loss", oppPulseId: "p3" },
+      // p4: W L W L
+      { gameId: "p4a", date: "2026-04-01T12:00:00Z", result: "Win", oppPulseId: "p4" },
+      { gameId: "p4b", date: "2026-04-02T12:00:00Z", result: "Loss", oppPulseId: "p4" },
+      { gameId: "p4c", date: "2026-04-03T12:00:00Z", result: "Win", oppPulseId: "p4" },
+      { gameId: "p4d", date: "2026-04-04T12:00:00Z", result: "Loss", oppPulseId: "p4" },
+    ];
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      games,
+      opponents: [
+        opp("p1", "Alice", 2, 1),
+        opp("p2", "Bob", 5, 1),
+        opp("p3", "Carol", 0, 3),
+        opp("p4", "Dave", 2, 2),
+      ],
+    };
+    for (let s = 1; s <= 80; s++) {
+      const out = await opponentBracketPick.generate({
+        rng: mulberry32(s),
+        daySeed: "2026-05-10",
+        tz: "UTC",
+        data: dataset,
+      });
+      if (out.ok && out.question.variant === "they-broke-yours") {
+        const leader = out.question.candidates[out.question.correctIndex];
+        expect(leader.pulseId).toBe("p2");
+        return;
+      }
+    }
+    throw new Error("they-broke-yours variant never fired across 80 seeds");
+  });
 });
 
 describe("Opponent Bracket Pick — reveal renders from opponent perspective", () => {
@@ -346,5 +446,49 @@ describe("Opponent Bracket Pick — reveal renders from opponent perspective", (
     // ninja's reveal row shows opp perspective: 75.0% (3-1).
     expect(screen.getByText(/75\.0%/)).toBeTruthy();
     expect(screen.getByText(/\(3-1\)/)).toBeTruthy();
+  });
+
+  test("answer buttons no longer show a games-played subtitle", () => {
+    // The "most-faced" variant asks which opponent the user has
+    // played the most — surfacing the games count under each name
+    // would give away that variant's answer pre-answer.
+    const candidates = [
+      {
+        pulseId: "p_a",
+        pulseCharacterId: null,
+        name: "Aaron",
+        displayName: null,
+        wins: 3,
+        losses: 0,
+        games: 3,
+        userWinRate: 1,
+        opponentWinRate: 0,
+      },
+      {
+        pulseId: "p_b",
+        pulseCharacterId: null,
+        name: "Beth",
+        displayName: null,
+        wins: 5,
+        losses: 5,
+        games: 10,
+        userWinRate: 0.5,
+        opponentWinRate: 0.5,
+      },
+    ];
+    const question = { candidates, correctIndex: 1 };
+    render(
+      opponentBracketPick.render({
+        question,
+        answer: null,
+        onAnswer: () => undefined,
+        score: null,
+        revealed: false,
+        isDaily: false,
+      }) as React.ReactElement,
+    );
+    expect(screen.queryByText(/games played/i)).toBeNull();
+    expect(screen.getByText(/Aaron/)).toBeTruthy();
+    expect(screen.getByText(/Beth/)).toBeTruthy();
   });
 });

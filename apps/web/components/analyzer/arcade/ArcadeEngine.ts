@@ -131,12 +131,98 @@ export function activeLossStreak(gamesAsc: Array<Pick<ArcadeGame, "result">>): n
 }
 
 /**
+ * Longest historical W-streak anywhere in a chronologically-sorted
+ * games list. Unlike activeWinStreak, this looks at the whole
+ * history rather than just the trailing run, so a player who once
+ * won 7 in a row and then lost will still register a 7-streak.
+ */
+export function longestWinStreak(gamesAsc: Array<Pick<ArcadeGame, "result">>): number {
+  let max = 0;
+  let cur = 0;
+  for (const g of gamesAsc) {
+    const o = outcome(g);
+    if (o === "W") {
+      cur += 1;
+      if (cur > max) max = cur;
+    } else if (o === "L") {
+      cur = 0;
+    }
+  }
+  return max;
+}
+
+/**
+ * Longest historical L-streak — equivalent to the opponent's longest
+ * historical W-streak from the user's perspective.
+ */
+export function longestLossStreak(gamesAsc: Array<Pick<ArcadeGame, "result">>): number {
+  let max = 0;
+  let cur = 0;
+  for (const g of gamesAsc) {
+    const o = outcome(g);
+    if (o === "L") {
+      cur += 1;
+      if (cur > max) max = cur;
+    } else if (o === "W") {
+      cur = 0;
+    }
+  }
+  return max;
+}
+
+/**
+ * Longest L-streak that was BROKEN by a subsequent W (the run is
+ * counted only if a W follows it; a trailing L-streak with no
+ * terminating W is not "broken" yet and is excluded). From the
+ * user's perspective: how long was the opponent's biggest win streak
+ * against you that you eventually snapped.
+ */
+export function longestBrokenLossStreak(
+  gamesAsc: Array<Pick<ArcadeGame, "result">>,
+): number {
+  let max = 0;
+  let run = 0;
+  for (const g of gamesAsc) {
+    const o = outcome(g);
+    if (o === "L") {
+      run += 1;
+    } else if (o === "W") {
+      if (run > max) max = run;
+      run = 0;
+    }
+  }
+  return max;
+}
+
+/**
+ * Longest W-streak that was BROKEN by a subsequent L. From the
+ * user's perspective: how long was your biggest win streak against
+ * an opponent that they eventually snapped.
+ */
+export function longestBrokenWinStreak(
+  gamesAsc: Array<Pick<ArcadeGame, "result">>,
+): number {
+  let max = 0;
+  let run = 0;
+  for (const g of gamesAsc) {
+    const o = outcome(g);
+    if (o === "W") {
+      run += 1;
+    } else if (o === "L") {
+      if (run > max) max = run;
+      run = 0;
+    }
+  }
+  return max;
+}
+
+/**
  * Find every maximal winning-streak run in a chronologically-sorted
  * games list, plus the loss that ended it (if any). Returns the runs
  * with their length, the start/end gameId, and the ending loss gameId.
- * The final run is included only if it ended in a loss; an active
- * win streak (no terminating loss) is excluded — that's the
- * Active Streak Hunter mode's job.
+ * The final run is included only if it ended in a loss; a trailing
+ * unterminated run is excluded — historical/active streak views use
+ * longestWinStreak / activeWinStreak instead.
  */
 export interface StreakRun {
   startId: string;

@@ -3,6 +3,10 @@ import {
   activeLossStreak,
   activeWinStreak,
   dailySeed,
+  longestBrokenLossStreak,
+  longestBrokenWinStreak,
+  longestLossStreak,
+  longestWinStreak,
   fnv1a,
   isCannonRush,
   levelForXp,
@@ -112,6 +116,87 @@ describe("activeLossStreak", () => {
     const seq = [{ result: "Win" }, { result: "Win" }, { result: "Loss" }];
     expect(activeWinStreak(seq) > 0 && activeLossStreak(seq) > 0).toBe(false);
     expect(activeLossStreak(seq)).toBe(1);
+  });
+});
+
+describe("longestWinStreak / longestLossStreak", () => {
+  test("longestWinStreak returns 0 on empty list", () => {
+    expect(longestWinStreak([])).toBe(0);
+  });
+  test("longestWinStreak walks the whole history, not just the trailing run", () => {
+    // 4-W run early, then losses, then 2-W run at the end. The
+    // *active* trailing W-streak is 2 but historical longest is 4.
+    expect(
+      longestWinStreak([
+        { result: "Win" },
+        { result: "Win" },
+        { result: "Win" },
+        { result: "Win" },
+        { result: "Loss" },
+        { result: "Loss" },
+        { result: "Win" },
+        { result: "Win" },
+      ]),
+    ).toBe(4);
+  });
+  test("longestLossStreak mirrors longestWinStreak for the opposite outcome", () => {
+    expect(
+      longestLossStreak([
+        { result: "Loss" },
+        { result: "Loss" },
+        { result: "Loss" },
+        { result: "Win" },
+        { result: "Loss" },
+      ]),
+    ).toBe(3);
+  });
+  test("undecided games reset neither streak (they're skipped)", () => {
+    expect(
+      longestWinStreak([
+        { result: "Win" },
+        { result: "Tie" },
+        { result: "Win" },
+        { result: "Loss" },
+      ]),
+    ).toBe(2);
+  });
+});
+
+describe("longestBrokenLossStreak / longestBrokenWinStreak", () => {
+  test("counts the run only when a terminator follows it", () => {
+    // 3-L run terminated by a W → broken length 3. Trailing 2-L run
+    // never gets terminated in the sample → excluded.
+    expect(
+      longestBrokenLossStreak([
+        { result: "Loss" },
+        { result: "Loss" },
+        { result: "Loss" },
+        { result: "Win" },
+        { result: "Loss" },
+        { result: "Loss" },
+      ]),
+    ).toBe(3);
+  });
+  test("longestBrokenWinStreak captures the largest W-run snapped by an L", () => {
+    expect(
+      longestBrokenWinStreak([
+        { result: "Win" },
+        { result: "Win" },
+        { result: "Loss" },
+        { result: "Win" },
+        { result: "Win" },
+        { result: "Win" },
+        { result: "Win" },
+        { result: "Loss" },
+        { result: "Win" },
+      ]),
+    ).toBe(4);
+  });
+  test("returns 0 when no run is ever broken", () => {
+    // 3 W's, never terminated.
+    expect(
+      longestBrokenWinStreak([{ result: "Win" }, { result: "Win" }, { result: "Win" }]),
+    ).toBe(0);
   });
 });
 
