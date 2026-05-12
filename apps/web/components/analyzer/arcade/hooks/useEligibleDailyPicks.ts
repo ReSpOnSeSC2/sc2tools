@@ -13,9 +13,9 @@ import { useDailySeed } from "./useDailySeed";
  *
  * The previous Today picker used the daily RNG to index the full
  * 10-mode quiz catalog blindly. When the seed landed on a mode whose
- * generate() returned ok:false (e.g. Active Streak Hunter without ≥4
- * opponents on an active win streak), the surface rendered an empty
- * card. This hook fixes that by asking every mode whether it can build
+ * generate() returned ok:false (e.g. Streak Hunter without enough
+ * streak-bearing opponents in the user's history), the surface
+ * rendered an empty card. This hook fixes that by asking every mode whether it can build
  * a round today and only picking from the survivors. Probes hit the
  * same generate() the runner will call, so eligibility is exact rather
  * than heuristic.

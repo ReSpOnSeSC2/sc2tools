@@ -11,7 +11,7 @@ net — it renders any time a mode id isn't in the set or the PNG fails to load.
 |---|---|
 | `opponent-bracket-pick.png` | Opponent Bracket Pick |
 | `rivalry-ranker.png` | Rivalry Ranker |
-| `active-streak-hunter.png` | Active Streak Hunter |
+| `active-streak-hunter.png` | Streak Hunter |
 | `streak-veto.png` | Streak Veto |
 | `first-game-of-day.png` | First-Game-of-Day |
 | `streak-after-loss.png` | Streak-after-Loss |

@@ -3,7 +3,7 @@
 import { Trophy } from "lucide-react";
 
 const BADGES = [
-  { id: "streak-hunter", title: "Streak Hunter", desc: "Active Streak Hunter perfect 5-day run." },
+  { id: "streak-hunter", title: "Streak Hunter", desc: "Streak Hunter perfect 5-day run." },
   { id: "veto-sleuth", title: "Veto Sleuth", desc: "3 Streak Veto correct in a row." },
   { id: "tycoon", title: "Tycoon", desc: "Stock Market 5-week green streak." },
   { id: "buildle-brain", title: "Buildle Brain", desc: "Crack 5 Buildle dailies in a row." },

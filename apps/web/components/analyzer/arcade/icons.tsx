@@ -233,7 +233,7 @@ export const CUSTOM_ICON_MODES = new Set<string>([]);
 const TITLES: Record<string, string> = {
   "opponent-bracket-pick": "Opponent Bracket Pick",
   "rivalry-ranker": "Rivalry Ranker",
-  "active-streak-hunter": "Active Streak Hunter",
+  "active-streak-hunter": "Streak Hunter",
   "streak-veto": "Streak Veto",
   "first-game-of-day": "First-Game-of-Day",
   "streak-after-loss": "Streak-after-Loss",

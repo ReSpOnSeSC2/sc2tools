@@ -5,7 +5,13 @@ import { pct1, wrColor } from "@/lib/format";
 import { isBarcodeName } from "@/lib/sc2pulse";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
-import { outcome, pickN, registerMode } from "../../ArcadeEngine";
+import {
+  longestBrokenLossStreak,
+  longestBrokenWinStreak,
+  outcome,
+  pickN,
+  registerMode,
+} from "../../ArcadeEngine";
 import type {
   ArcadeGame,
   ArcadeOpponent,
@@ -31,14 +37,20 @@ type Candidate = Pick<
 /**
  * Variant axes — each one is a different question the mode can ask
  * about the same opponent set. The default ("highest-wr-vs-you")
- * matches the pre-variant behavior; the new ones add trivia depth
- * (most-faced rival, who you last beat, who last beat you).
+ * matches the pre-variant behavior; the others add trivia depth
+ * (most-faced rival, who you last beat / lost to, and streak-broker
+ * variants that surface meaningful turning points in your history).
  */
 export type OpponentBracketVariant =
   | "highest-wr-vs-you"
   | "most-faced"
   | "last-beaten"
-  | "last-loss-to";
+  | "last-loss-to"
+  | "broke-their-streak"
+  | "they-broke-yours";
+
+/** Streak runs shorter than this aren't interesting enough to anchor a question. */
+const BROKEN_STREAK_FLOOR = 3;
 
 type Q = {
   variant?: OpponentBracketVariant;
@@ -104,8 +116,9 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
   // cycles deterministically across days but Quick Play feels varied.
   const order = shuffleVariants(input.rng);
   const lastGameByOpp = lastGameDates(input.data.games);
+  const brokenByOpp = brokenStreakLengths(input.data.games);
   for (const variant of order) {
-    const resolved = resolveVariant(variant, sample, lastGameByOpp);
+    const resolved = resolveVariant(variant, sample, lastGameByOpp, brokenByOpp);
     if (resolved) {
       return {
         ok: true,
@@ -136,12 +149,16 @@ function score(q: Q, a: A): ScoreResult {
     "most-faced": "You named the opponent you've faced the most.",
     "last-beaten": "You named the opponent you most recently beat.",
     "last-loss-to": "You named the opponent who most recently beat you.",
+    "broke-their-streak": "You named the rival whose run against you you snapped.",
+    "they-broke-yours": "You named the rival who snapped your run against them.",
   };
   const missNote: Record<OpponentBracketVariant, string> = {
     "highest-wr-vs-you": `Their WR vs you was ${pct1(c.opponentWinRate)} (${c.losses}-${c.wins}).`,
     "most-faced": `It was ${displayNameFor(c)} with ${c.games} games played.`,
     "last-beaten": `It was ${displayNameFor(c)} — your most recent win.`,
     "last-loss-to": `It was ${displayNameFor(c)} — your most recent loss.`,
+    "broke-their-streak": `It was ${displayNameFor(c)} — you ended their longest run against you.`,
+    "they-broke-yours": `It was ${displayNameFor(c)} — they ended your longest run against them.`,
   };
   return {
     raw: correct ? 1 : 0,
@@ -181,6 +198,35 @@ function lastGameDates(games: ArcadeGame[]): LastDates {
 }
 
 /**
+ * Per-opponent longest broken streak in either direction. "Broken"
+ * means the run was followed by an opposing outcome — a 5-game L
+ * streak that the user eventually snapped with a W counts; a still-
+ * active L-streak with no terminating W doesn't. Used by the
+ * "broke-their-streak" and "they-broke-yours" variants.
+ */
+type BrokenStreaks = Map<string, { brokenLoss: number; brokenWin: number }>;
+
+function brokenStreakLengths(games: ArcadeGame[]): BrokenStreaks {
+  const grouped = new Map<string, ArcadeGame[]>();
+  for (const g of games) {
+    if (!g.oppPulseId) continue;
+    if (!grouped.has(g.oppPulseId)) grouped.set(g.oppPulseId, []);
+    grouped.get(g.oppPulseId)!.push(g);
+  }
+  const out: BrokenStreaks = new Map();
+  for (const [pid, list] of grouped) {
+    const asc = list
+      .slice()
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    out.set(pid, {
+      brokenLoss: longestBrokenLossStreak(asc),
+      brokenWin: longestBrokenWinStreak(asc),
+    });
+  }
+  return out;
+}
+
+/**
  * Try to resolve a variant against this sample. Returns null if the
  * variant can't produce an unambiguous answer (e.g. nobody has any
  * recorded wins for "last-beaten"). Returns the correctIndex and
@@ -190,6 +236,7 @@ function resolveVariant(
   variant: OpponentBracketVariant,
   sample: Candidate[],
   lastDates: LastDates,
+  brokenStreaks: BrokenStreaks,
 ): { correctIndex: number; metrics: string[] } | null {
   if (variant === "highest-wr-vs-you") {
     let best = 0;
@@ -240,6 +287,29 @@ function resolveVariant(
       ),
     };
   }
+  if (variant === "broke-their-streak" || variant === "they-broke-yours") {
+    const key = variant === "broke-their-streak" ? "brokenLoss" : "brokenWin";
+    const values = sample.map(
+      (c) => brokenStreaks.get(c.pulseId)?.[key] ?? 0,
+    );
+    const max = values.reduce((m, v) => (v > m ? v : m), 0);
+    // Need a meaningful broken streak (≥3) AND a clear leader.
+    if (max < BROKEN_STREAK_FLOOR) return null;
+    const tiedAtMax = values.filter((v) => v === max).length;
+    if (tiedAtMax > 1) return null;
+    const best = values.indexOf(max);
+    const verb = variant === "broke-their-streak" ? "you broke" : "they broke";
+    return {
+      correctIndex: best,
+      metrics: values.map((v) =>
+        v >= BROKEN_STREAK_FLOOR
+          ? `${v}-game streak ${verb}`
+          : v > 0
+            ? `${v}-game run`
+            : "no run on record",
+      ),
+    };
+  }
   return null;
 }
 
@@ -249,6 +319,8 @@ function shuffleVariants(rng: () => number): OpponentBracketVariant[] {
     "most-faced",
     "last-beaten",
     "last-loss-to",
+    "broke-their-streak",
+    "they-broke-yours",
   ];
   const out = all.slice();
   for (let i = out.length - 1; i > 0; i--) {
@@ -307,6 +379,22 @@ function questionFor(variant: OpponentBracketVariant): React.ReactNode {
       <Fragment>
         Four opponents from your history. Which one
         <span className="font-semibold text-warning"> most recently beat you</span>?
+      </Fragment>
+    );
+  }
+  if (variant === "broke-their-streak") {
+    return (
+      <Fragment>
+        Four opponents from your history. Which one had the
+        <span className="font-semibold text-warning"> longest streak against you that you broke</span>?
+      </Fragment>
+    );
+  }
+  if (variant === "they-broke-yours") {
+    return (
+      <Fragment>
+        Four opponents from your history. Which one
+        <span className="font-semibold text-warning"> broke your longest streak against them</span>?
       </Fragment>
     );
   }
@@ -406,9 +494,12 @@ function OpponentBracketRender({
           onClick={() => onPick(i)}
           disabled={ctx.revealed}
         >
-          <span className="flex flex-col">
-            <span className="truncate text-body font-medium text-text">{displayNameFor(c)}</span>
-            <span className="text-caption text-text-dim">{c.games} games played</span>
+          {/* No subtitle: the games-played count would directly give
+              away the "most-faced" variant's answer, so the button
+              shows only the opponent's display name. All per-candidate
+              metrics surface in the reveal after answering. */}
+          <span className="truncate text-body font-medium text-text">
+            {displayNameFor(c)}
           </span>
         </QuizAnswerButton>
       ))}
