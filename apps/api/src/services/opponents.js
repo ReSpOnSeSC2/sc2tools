@@ -214,43 +214,55 @@ class OpponentsService {
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
     const nextBefore = hasMore ? page[page.length - 1].lastPlayed : null;
-    // Backfill identity fields the games-aggregation can't see.
+    // Overlay canonical fields the games-aggregation can't reliably
+    // compute on its own. Two distinct concerns, one round-trip:
     //
-    // ``_listFiltered`` aggregates from the games collection because
-    // the cumulative counters on the opponents collection don't apply
-    // inside a filter window. The aggregation pulls
-    // ``pulseCharacterId`` / ``toonHandle`` off the embedded opponent
-    // sub-doc on the most recent game (``$last``) — but those fields
-    // are only stamped onto a games row at the moment of upload.
+    // (1) Identity fields (``pulseCharacterId`` / ``toonHandle``) —
+    //     fill-if-missing. The aggregation pulls these off the
+    //     embedded opponent sub-doc on the most recent game
+    //     (``$last``), but those fields are only stamped onto a games
+    //     row at the moment of upload. The May-2026 backfill cron
+    //     heals the opponents COLLECTION row for stuck-on-TOON
+    //     opponents by writing the canonical pulseCharacterId there
+    //     directly; it does NOT rewrite historical games rows (we
+    //     keep games immutable). For an opponent whose games all
+    //     pre-date the heal, ``$last`` returns null even though the
+    //     opponents row holds the canonical id. We splice the
+    //     canonical value in only when the aggregation produced null.
     //
-    // The May-2026 backfill cron heals the opponents COLLECTION row
-    // for stuck-on-TOON opponents by writing the canonical
-    // pulseCharacterId there directly; it does NOT rewrite historical
-    // games rows (we keep games immutable). For an opponent whose
-    // games all pre-date the heal, ``$last`` returns null even
-    // though the opponents row holds the canonical id, so the SPA
-    // table cell falls back to the toon-handle "TOON" badge while
-    // the profile (which reads the opponents row directly) renders
-    // the link. Confusing.
-    //
-    // Patch the gap with a single batched ``find`` against the
-    // opponents collection: for every row whose aggregation produced
-    // null, splice in the canonical value if the row has it. Sticky-
-    // empty semantics preserved: a non-null aggregation value is
-    // never overwritten — the games rows are still the authority on
-    // the most-recent observed identity.
-    await this._fillIdentityFromOpponents(userId, page);
+    // (2) ``displayNameSample`` — ALWAYS overlay. The aggregation
+    //     uses ``$last`` over an unsorted ``$group`` input, so the
+    //     value is non-deterministic — and even if it were
+    //     deterministic-by-storage-order, it would still be scoped to
+    //     the FILTER WINDOW, not the player's globally-most-recent
+    //     name. The opponents row's ``displayNameSample`` is
+    //     maintained by ``recordGame`` / ``refreshMetadata`` as the
+    //     displayName of the max-date game we've ever ingested for
+    //     this (userId, pulseId). That's the canonical "what is this
+    //     player CURRENTLY called" — use it regardless of what the
+    //     aggregation produced.
+    await this._overlayFromOpponents(userId, page);
     return { items: page, nextBefore };
   }
 
   /**
-   * In-place fill of missing ``pulseCharacterId`` / ``toonHandle`` on
-   * an aggregation result page. One ``find`` round-trip regardless of
-   * page size (uses the existing ``{ userId, pulseId }`` unique index
-   * for an index scan).
+   * In-place overlay of canonical fields from the opponents
+   * collection onto an aggregation result page. One ``find``
+   * round-trip regardless of page size (uses the existing
+   * ``{ userId, pulseId }`` unique index for an index scan).
    *
-   * No-op when every row already carries both fields. Safe on an
-   * empty page.
+   * Two semantics:
+   *   * ``pulseCharacterId`` / ``toonHandle``: fill-if-missing. We
+   *     trust the games-rows when they carry the value, and only
+   *     splice from the opponents row when the games aggregation
+   *     produced null.
+   *   * ``displayNameSample``: always-overlay. The opponents row is
+   *     the source of truth for "current name" — see the write
+   *     guard in ``recordGame``.
+   *
+   * Safe on an empty page. Runs unconditionally even when no
+   * identity fill is needed, because the displayNameSample overlay
+   * is always required for the filtered-list path.
    *
    * @private
    * @param {string} userId
@@ -258,23 +270,31 @@ class OpponentsService {
    *   pulseId: string,
    *   pulseCharacterId?: string|null,
    *   toonHandle?: string|null,
+   *   displayNameSample?: string,
    * }>} rows
    */
-  async _fillIdentityFromOpponents(userId, rows) {
+  async _overlayFromOpponents(userId, rows) {
     if (!Array.isArray(rows) || rows.length === 0) return;
-    const needIds = [];
+    const pulseIds = [];
     for (const r of rows) {
-      if (!r || typeof r.pulseId !== "string") continue;
-      const missingChar = !r.pulseCharacterId;
-      const missingToon = !r.toonHandle;
-      if (missingChar || missingToon) needIds.push(r.pulseId);
+      if (r && typeof r.pulseId === "string" && r.pulseId.length > 0) {
+        pulseIds.push(r.pulseId);
+      }
     }
-    if (needIds.length === 0) return;
+    if (pulseIds.length === 0) return;
     const opponentsCursor = this.db.opponents.find(
-      { userId, pulseId: { $in: needIds } },
-      { projection: { _id: 0, pulseId: 1, pulseCharacterId: 1, toonHandle: 1 } },
+      { userId, pulseId: { $in: pulseIds } },
+      {
+        projection: {
+          _id: 0,
+          pulseId: 1,
+          pulseCharacterId: 1,
+          toonHandle: 1,
+          displayNameSample: 1,
+        },
+      },
     );
-    /** @type {Map<string, {pulseCharacterId?: string, toonHandle?: string}>} */
+    /** @type {Map<string, {pulseCharacterId?: string, toonHandle?: string, displayNameSample?: string}>} */
     const byPulseId = new Map();
     for await (const doc of opponentsCursor) {
       if (typeof doc.pulseId !== "string") continue;
@@ -285,17 +305,25 @@ class OpponentsService {
         toonHandle: typeof doc.toonHandle === "string"
           ? doc.toonHandle
           : undefined,
+        displayNameSample: typeof doc.displayNameSample === "string"
+          ? doc.displayNameSample
+          : undefined,
       });
     }
     for (const r of rows) {
       if (!r || typeof r.pulseId !== "string") continue;
       const opp = byPulseId.get(r.pulseId);
       if (!opp) continue;
+      // Fill-if-missing: identity fields.
       if (!r.pulseCharacterId && opp.pulseCharacterId) {
         r.pulseCharacterId = opp.pulseCharacterId;
       }
       if (!r.toonHandle && opp.toonHandle) {
         r.toonHandle = opp.toonHandle;
+      }
+      // Always-overlay: canonical current name.
+      if (typeof opp.displayNameSample === "string" && opp.displayNameSample.length > 0) {
+        r.displayNameSample = opp.displayNameSample;
       }
     }
   }
@@ -373,6 +401,31 @@ class OpponentsService {
     }
     const allGames = rawGames.map(serializeGameForProfile);
     const filteredGames = filterGamesByDate(allGames, opts.since, opts.until);
+    // Authoritative current name. ``rawGames`` is sorted by date desc
+    // and is NOT filtered by ``opts.since`` / ``opts.until`` — so
+    // ``[0]`` is the absolute most-recent game we've ingested for
+    // this opponent across all history. Its ``opponent.displayName``
+    // is therefore the canonical "what is this player currently
+    // called". This is rule (i) from the design discussion: the
+    // profile heading is an identity label, never a windowed stat —
+    // it should read the same regardless of the filter the user has
+    // active.
+    //
+    // Falls back to ``doc.displayNameSample`` when this opponent has
+    // no games on record (shouldn't happen in practice — the row
+    // exists because games created it — but defensive against the
+    // admin "Rebuild opponents" path leaving an empty row mid-cycle).
+    // The fallback also makes this read self-healing: even before the
+    // backfill migration runs, the profile picks the right name from
+    // the games on every load.
+    const latestGameName = rawGames.length > 0
+      && rawGames[0]
+      && rawGames[0].opponent
+      && typeof rawGames[0].opponent.displayName === "string"
+      && rawGames[0].opponent.displayName.length > 0
+      ? rawGames[0].opponent.displayName
+      : null;
+    const authoritativeName = latestGameName || doc.displayNameSample || "";
     // Cross-toon merge surfacing: if the rawGames span multiple toon
     // handles (the Battle.net rebind case), expose the merged set so
     // the SPA can render a "merged across N toons" disclosure chip
@@ -390,7 +443,11 @@ class OpponentsService {
     const matchupTimings = projectMatchupTimings(matchupTimingsLegacy);
     return {
       ...doc,
-      name: doc.displayNameSample || "",
+      // Overlay the row's displayNameSample with the authoritative
+      // latest-game name so downstream consumers that read either
+      // field see the same value.
+      displayNameSample: authoritativeName || doc.displayNameSample || "",
+      name: authoritativeName,
       mergedToonHandles,
       totals,
       byMap: aggregates.byMap,
@@ -433,15 +490,37 @@ class OpponentsService {
     const displayHash = hmac(this.pepper, game.displayName || "");
     const winInc = game.result === "Victory" ? 1 : 0;
     const lossInc = game.result === "Defeat" ? 1 : 0;
-    // Read the prior row first so we can log a structured change
-    // line when a fresh pulseCharacterId replaces a stale one. The
-    // single $setOnInsert/$set/$inc upsert below stays atomic — the
-    // pre-read is for telemetry only and a missing prior row is
-    // expected on the first encounter.
+    // Read the prior row first so we can (a) log a structured change
+    // line when a fresh pulseCharacterId replaces a stale one and
+    // (b) decide whether this incoming game is the most-recent-by-date
+    // we've ever seen for this opponent (see the displayNameSample
+    // guard below). The single $setOnInsert/$set/$inc upsert below
+    // stays atomic — the pre-read is advisory only and a missing
+    // prior row is expected on the first encounter.
     const prior = await this.db.opponents.findOne(
       { userId, pulseId: game.pulseId },
-      { projection: { pulseCharacterId: 1 } },
+      { projection: { pulseCharacterId: 1, lastSeen: 1 } },
     );
+    // displayNameSample / displayNameHash / lastSeen track the
+    // CURRENT name (and CURRENT activity timestamp) for this
+    // opponent. Definition: "displayName / playedAt of the
+    // max-date game we've ingested for this (userId, pulseId)".
+    //
+    // Out-of-order uploads (agent backfilling old replays, user
+    // dragging in an archive folder) must NOT overwrite these
+    // fields with the older game's data — otherwise the Opponents
+    // tab heading flips to a stale historical name (the bug this
+    // guard fixes). We compare playedAt against the existing
+    // lastSeen on the row; if the incoming game is older, we
+    // suppress all three fields and keep what the row already
+    // stores.
+    //
+    // First-ever ingest (no prior row): treat as the latest by
+    // definition — there's nothing newer to preserve.
+    const priorLastSeen = prior && prior.lastSeen instanceof Date
+      ? prior.lastSeen
+      : null;
+    const isLatestByDate = !priorLastSeen || game.playedAt >= priorLastSeen;
     /** @type {Record<string, any>} */
     const setOnInsert = {
       userId,
@@ -450,12 +529,14 @@ class OpponentsService {
     };
     /** @type {Record<string, any>} */
     const set = {
-      displayNameHash: displayHash,
-      displayNameSample: game.displayName || "",
       race: game.race,
-      lastSeen: game.playedAt,
       _schemaVersion: OPPONENTS_VERSION,
     };
+    if (isLatestByDate) {
+      set.displayNameHash = displayHash;
+      set.displayNameSample = game.displayName || "";
+      set.lastSeen = game.playedAt;
+    }
     if (typeof game.mmr === "number") set.mmr = game.mmr;
     if (typeof game.leagueId === "number") set.leagueId = game.leagueId;
     // Identity: persist the raw toon_handle (always present from
@@ -551,16 +632,26 @@ class OpponentsService {
     if (!game.pulseId) throw new Error("pulseId required");
     const prior = await this.db.opponents.findOne(
       { userId, pulseId: game.pulseId },
-      { projection: { pulseCharacterId: 1 } },
+      { projection: { pulseCharacterId: 1, lastSeen: 1 } },
     );
+    // Same guard as recordGame: displayNameSample / displayNameHash /
+    // lastSeen reflect the most-recent-by-date game, NOT the most
+    // recent UPLOAD. Re-uploads of older replays must not flip the
+    // Opponents tab heading to a stale historical name.
+    const priorLastSeen = prior && prior.lastSeen instanceof Date
+      ? prior.lastSeen
+      : null;
+    const isLatestByDate = !priorLastSeen || game.playedAt >= priorLastSeen;
     /** @type {Record<string, any>} */
     const set = {
-      displayNameHash: hmac(this.pepper, game.displayName || ""),
-      displayNameSample: game.displayName || "",
       race: game.race,
-      lastSeen: game.playedAt,
       _schemaVersion: OPPONENTS_VERSION,
     };
+    if (isLatestByDate) {
+      set.displayNameHash = hmac(this.pepper, game.displayName || "");
+      set.displayNameSample = game.displayName || "";
+      set.lastSeen = game.playedAt;
+    }
     if (typeof game.mmr === "number") set.mmr = game.mmr;
     if (typeof game.leagueId === "number") set.leagueId = game.leagueId;
     if (typeof game.toonHandle === "string" && game.toonHandle.length > 0) {
