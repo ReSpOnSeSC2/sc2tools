@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
-import { outcome, pickN, registerMode, shuffle } from "../../ArcadeEngine";
+import { outcome, pickQuizSlate, registerMode, shuffle } from "../../ArcadeEngine";
 import type {
   GenerateInput,
   GenerateResult,
@@ -65,19 +65,26 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
     if (!build) continue;
     counts[build] = (counts[build] || 0) + 1;
   }
-  const sorted = Object.entries(counts)
-    .map(([build, count]) => ({ build, count }))
-    .sort((a, b) => b.count - a.count);
-  if (sorted.length < 4 || sorted[0].count === 0) {
+  const candidates = Object.entries(counts).map(([build, count]) => ({
+    build,
+    count,
+  }));
+  if (candidates.length < 4) {
     return {
       ok: false,
       reason: "Not enough labelled next-builds after losing to that race yet.",
     };
   }
-  const top = sorted[0];
-  const others = pickN(sorted.slice(1), 3, input.rng);
-  const sample = shuffle([top, ...others], input.rng);
-  const correctIndex = sample.findIndex((s) => s.build === top.build);
+  const slate = pickQuizSlate(candidates, (c) => c.count, input.rng);
+  if (!slate) {
+    return {
+      ok: false,
+      reason:
+        "Your post-loss next-build counts are too tightly clustered to ask a clean question yet.",
+    };
+  }
+  const sample = shuffle([slate.correct, ...slate.distractors], input.rng);
+  const correctIndex = sample.findIndex((s) => s.build === slate.correct.build);
   return {
     ok: true,
     minDataMet: true,
@@ -131,7 +138,7 @@ function Render({
   const reveal = ctx.score ? (
     <div className="space-y-2 text-caption text-text">
       <p className={ctx.score.outcome === "correct" ? "text-success" : "text-warning"}>
-        After losing to {FULL_RACE[ctx.question.raceLetter]}, you reached for{" "}
+        After losing to {FULL_RACE[ctx.question.raceLetter]}, of these four you reached for{" "}
         <span className="font-semibold">
           {ctx.question.candidates[ctx.question.correctIndex].build}
         </span>{" "}
@@ -165,7 +172,7 @@ function Render({
       question={
         <span>
           After losing to a <span className="font-semibold">{FULL_RACE[ctx.question.raceLetter]}</span>,
-          which build do you reach for most often the next game?
+          which of these four builds did you reach for most often the next game?
         </span>
       }
       answers={ctx.question.candidates.map((c, i) => (
