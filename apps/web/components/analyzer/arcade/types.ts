@@ -265,7 +265,24 @@ export interface ModeRecord {
 export interface StockMarketState {
   weekKey: string; // "YYYY-Www"
   lockedAt: string;
-  picks: Array<{ slug: string; alloc: number; entryPrice: number }>;
+  picks: Array<{
+    slug: string;
+    alloc: number;
+    entryPrice: number;
+    /**
+     * Total plays for this build at the moment the portfolio locked.
+     * Drives the volatility multiplier on P&L: a brand-new build
+     * (plays ≤ 7) gets the max amplification (2.0×), a heavily-played
+     * build (plays ≥ 53) gets the min damping (0.75×). Captured at
+     * lock time so the multiplier is deterministic for the week even
+     * if the user plays the build heavily during the window.
+     *
+     * Optional for back-compat: portfolios locked before the volatility
+     * model existed have no `entryPlays` and are treated as vol = 1.0
+     * (neutral) on reveal.
+     */
+    entryPlays?: number;
+  }>;
   /** When the user already submitted P&L to the leaderboard for this week. */
   submittedPnl?: number;
 }

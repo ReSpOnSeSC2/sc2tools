@@ -28,6 +28,12 @@ type Quote = {
   /** Price = WR × 100, 0..100; null if not enough plays. */
   price: number | null;
   source: "own" | "community" | "custom" | "catalog";
+  /**
+   * Total times the user has played this build. Feeds the volatility
+   * multiplier — fewer plays = more sample noise = wider P&L swings.
+   * Zero for community/custom/catalog rows the user hasn't run yet.
+   */
+  plays: number;
 };
 
 type Q = {
@@ -54,6 +60,47 @@ function pctReturn(entryPrice: number, currentPrice: number): number {
   return (currentPrice - entryPrice) / entryPrice;
 }
 
+/**
+ * Anchor point for the play-volume volatility curve. A build played
+ * this many times sits at the neutral 1.0× multiplier; fewer plays
+ * amplify P&L, more plays damp it. Picked so that "you've played
+ * about a month's worth of ladder" feels like the baseline.
+ */
+const VOL_BASELINE_PLAYS = 30;
+/** Floor and ceiling on the multiplier so a single-play build can't dominate the portfolio. */
+const VOL_MIN = 0.75;
+const VOL_MAX = 2.0;
+
+/**
+ * Play-volume volatility multiplier on per-pick P&L. Layers on top of
+ * the % return calculation so the price column AND the play-count
+ * column both shape risk/reward:
+ *
+ *   pnl_per_pick = alloc × pctReturn(entry, now) × volatility(plays)
+ *
+ * Modelled on the standard error of a proportion (~ 1/√n): few plays
+ * = high sample noise = wider realised swings, both up and down.
+ * Anchored at VOL_BASELINE_PLAYS = 30 → 1.0×, with a √(BASELINE/n)
+ * curve bounded by VOL_MIN..VOL_MAX so a single-play build (raw 5.5×)
+ * doesn't trivially dominate optimal strategy and a 1000-play veteran
+ * still has a non-zero floor.
+ *
+ * Sample table (rounded):
+ *   plays   1   2   5   8  10  20  30  50 100 1000
+ *   vol  2.00 2.00 2.00 1.94 1.73 1.22 1.00 0.77 0.75 0.75
+ *
+ * Strategic effect: a brand-new build is 2× more volatile than your
+ * baseline; a 100-play veteran is 0.75×. Cheap unplayed underdogs
+ * stack TWO multipliers (low price → high % return per Δprice, low
+ * plays → wide variance); expensive veterans get TWO dampeners. Real
+ * risk/reward axis with two independent levers.
+ */
+function volatility(plays: number): number {
+  const n = Math.max(1, plays);
+  const raw = Math.sqrt(VOL_BASELINE_PLAYS / n);
+  return Math.max(VOL_MIN, Math.min(VOL_MAX, raw));
+}
+
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
   const universe = buildUniverse(input.data);
   if (universe.length < 5) {
@@ -76,6 +123,11 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
             return wr === null ? null : Math.round(wr * 100);
           })(),
     source: b.source,
+    // Play count drives the volatility multiplier. UnifiedBuild keeps
+    // totalPlays at 0 for community/custom/catalog rows the user
+    // hasn't run — those land at the max (2.0×) volatility because
+    // sample size is effectively zero.
+    plays: b.totalPlays,
   }));
   const tradeable = quotes.filter((q) => q.price !== null);
   if (tradeable.length < 1) {
@@ -192,7 +244,16 @@ function Render({
       .filter(([, v]) => v > 0)
       .map(([id, alloc]) => {
         const q = ctx.question.quotes.find((quote) => quote.id === id)!;
-        return { slug: id, alloc, entryPrice: q.price ?? 0 };
+        return {
+          slug: id,
+          alloc,
+          entryPrice: q.price ?? 0,
+          // Snapshot play count at lock time so the volatility
+          // multiplier is fixed for the week — playing the build
+          // heavily during the open window doesn't retroactively
+          // shrink your variance bonus.
+          entryPlays: q.plays,
+        };
       });
     const valid = portfolioPicks.length > 0 && portfolioPicks.length <= 5 && totalAlloc === 100;
     if (!valid) {
@@ -254,14 +315,20 @@ function Render({
       <ul className="space-y-1">
         {locked.picks.map((p) => {
           const cur = ctx.question.quotes.find((q) => q.id === p.slug);
-          // Per-pick % return drives P&L: a 5-point gain on a price-30
-          // entry is +16.7%, the same 5-point gain on a price-90 entry
-          // is +5.6%. Display the % return so the user sees why the
-          // price column matters strategically.
+          // Per-pick P&L = % return × volatility(entryPlays). The
+          // % return makes price matter (low-price builds have more
+          // headroom per Δprice); the volatility multiplier makes
+          // play count matter (fewer plays = wider variance).
+          // entryPlays is optional for back-compat with portfolios
+          // locked before the volatility model existed — those use
+          // the neutral 1.0× multiplier.
           const ret =
             cur && cur.price !== null && p.entryPrice > 0
               ? pctReturn(p.entryPrice, cur.price)
               : null;
+          const vol =
+            typeof p.entryPlays === "number" ? volatility(p.entryPlays) : 1.0;
+          const adjusted = ret !== null ? ret * vol : null;
           return (
             <li
               key={p.slug}
@@ -269,19 +336,24 @@ function Render({
             >
               <span className="truncate text-text">{cur?.name || p.slug}</span>
               <span className="font-mono tabular-nums text-text-dim">
-                {p.alloc}% @ {p.entryPrice}{" "}
-                {ret !== null ? (
+                {p.alloc}% @ {p.entryPrice}
+                {typeof p.entryPlays === "number" ? (
+                  <span className="ml-1 text-[10px] uppercase tracking-wider text-text-dim">
+                    × {vol.toFixed(2)} vol
+                  </span>
+                ) : null}{" "}
+                {adjusted !== null ? (
                   <span
                     className={
-                      ret > 0
+                      adjusted > 0
                         ? "text-success"
-                        : ret < 0
+                        : adjusted < 0
                           ? "text-danger"
                           : "text-text-dim"
                     }
                   >
-                    ({ret > 0 ? "+" : ""}
-                    {(ret * 100).toFixed(1)}%)
+                    ({adjusted > 0 ? "+" : ""}
+                    {(adjusted * 100).toFixed(1)}%)
                   </span>
                 ) : null}
               </span>
@@ -329,12 +401,22 @@ function Render({
           </p>
           <p>
             <span className="font-semibold text-text">P&amp;L</span> = Σ(weight
-            × % return), where % return = Δprice ÷ entry price. So a 5-point
-            gain on a price-30 build is worth +16.7% on that share; the same
-            5-point gain on a price-90 build is worth +5.6%. Low-price builds
-            offer bigger swings both ways; high-price builds are tighter.
-            That&apos;s the price column doing strategic work — pick stable
-            blue-chips or volatile underdogs.
+            × % return × volatility), where % return = Δprice ÷ entry price
+            and volatility scales with how often you&apos;ve played the build.
+            A 5-point gain on a price-30 build is worth +16.7% on that share;
+            the same 5-point gain on a price-90 build is worth +5.6%.
+            Low-price builds offer bigger swings; high-price builds are
+            tighter.
+          </p>
+          <p>
+            <span className="font-semibold text-text">Volatility</span>{" "}
+            (× multiplier on each pick&apos;s return) tracks the law of large
+            numbers — fewer plays mean wider sample variance, so few-play
+            builds amplify both wins and losses. Anchored at ~30 plays =
+            1.0×, capped between 0.75× (heavily-played veterans, ~50+ plays)
+            and 2.0× (brand-new or rarely-played builds, ≤7 plays). Two
+            independent levers: <em>price</em> drives % return per Δprice,
+            <em> plays</em> drives the variance multiplier on top of it.
           </p>
           <p>
             <span className="font-semibold text-text">Leaderboard</span> —
@@ -386,6 +468,20 @@ function Render({
                   no price yet
                 </span>
               )}
+              <span
+                className="font-mono tabular-nums text-[10px] uppercase tracking-wider"
+                title={`${q.plays} plays → ${volatility(q.plays).toFixed(2)}× P&L volatility`}
+                style={{
+                  color:
+                    volatility(q.plays) > 1.25
+                      ? "var(--warning, #f5a524)"
+                      : volatility(q.plays) < 0.85
+                        ? "var(--text-dim, #71717a)"
+                        : "var(--text-muted, #a1a1aa)",
+                }}
+              >
+                {volatility(q.plays).toFixed(2)}×
+              </span>
               <input
                 type="text"
                 inputMode="numeric"
