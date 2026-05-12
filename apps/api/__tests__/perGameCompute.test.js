@@ -59,6 +59,52 @@ describe("services/perGameCompute", () => {
       expect(byName.get("WarpGate")?.is_building).toBe(true);
     });
 
+    test("tags upgrade events with category=upgrade via the catalog-independent fallback", () => {
+      // Without the catalog JSON on disk, ``parseBuildLogLines`` used
+      // to set ``category: "unknown"`` for every research event — the
+      // macro-breakdown Upgrades chip row, the BuildOrderTimeline
+      // upgrade tier, the Save-as-Build flow, and the custom-build
+      // editor all key on ``category === "upgrade"`` and dropped them.
+      // The new known-upgrade fallback restores the tagging end-to-end.
+      const events = parseBuildLogLines([
+        "[0:30] Stalker",            // unit, category=unknown is OK
+        "[1:00] WarpGateResearch",   // upgrade
+        "[2:30] BlinkTech",          // upgrade
+        "[3:00] AdeptPiercingAttack",// upgrade
+        "[4:00] ProtossGroundWeaponsLevel1",// upgrade
+        "[5:00] Charge",             // upgrade
+        "[1:30] CyberneticsCore",    // building
+      ]);
+      const byName = new Map(events.map((e) => [e.name, e]));
+      expect(byName.get("WarpGateResearch")?.category).toBe("upgrade");
+      expect(byName.get("WarpGateResearch")?.is_building).toBe(false);
+      expect(byName.get("BlinkTech")?.category).toBe("upgrade");
+      expect(byName.get("AdeptPiercingAttack")?.category).toBe("upgrade");
+      expect(byName.get("ProtossGroundWeaponsLevel1")?.category).toBe("upgrade");
+      expect(byName.get("Charge")?.category).toBe("upgrade");
+      // Buildings and units stay correctly classified — upgrade fallback
+      // never overrides a positive building match.
+      expect(byName.get("CyberneticsCore")?.is_building).toBe(true);
+      expect(byName.get("CyberneticsCore")?.category).toBe("building");
+      expect(byName.get("Stalker")?.is_building).toBe(false);
+    });
+
+    test("upgrade fallback recognises Terran and Zerg research names", () => {
+      const events = parseBuildLogLines([
+        "[3:00] Stimpack",
+        "[3:30] ShieldWall",
+        "[4:00] PunisherGrenades",
+        "[5:00] ZerglingMovementSpeed",
+        "[6:00] CentrifugalHooks",
+        "[7:00] GlialReconstitution",
+        "[8:00] NeuralParasite",
+      ]);
+      for (const ev of events) {
+        expect(ev.category).toBe("upgrade");
+        expect(ev.is_building).toBe(false);
+      }
+    });
+
     test("strips noise lines (Beacon, Reward, Spray)", () => {
       const events = parseBuildLogLines([
         "[0:00] Beacon (Place)",

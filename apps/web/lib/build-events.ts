@@ -224,6 +224,13 @@ function inferKindFromPath(path: string): IconKind | null {
  * to the canonical icon name + kind. Returns null when nothing in
  * the keyword list matches and the normalized name isn't a known
  * icon key on its own.
+ *
+ * IMPORTANT: ``iconName`` is the SYNONYM-resolved canonical key from
+ * the icon registry, NOT the normalized input. So ``"BlinkTech"`` →
+ * iconName ``"blink"`` (because ``blinktech`` is aliased to the
+ * ``blink`` PNG), not ``"blinktech"``. Downstream callers
+ * reconstruct the path as ``/icons/sc2/<dir>/<iconName>.png`` so
+ * preserving the input would 404 every time a SYNONYM fires.
  */
 function matchName(rawName: string): NameMatch | null {
   if (!rawName) return null;
@@ -231,7 +238,14 @@ function matchName(rawName: string): NameMatch | null {
   const direct = getIconPath(normalized);
   if (direct) {
     const kind = inferKindFromPath(direct);
-    if (kind) return { iconName: normalized, iconKind: kind };
+    if (kind) {
+      // ``direct`` is "/icons/sc2/<dir>/<key>.png" — the key is what
+      // ``getIconPath`` actually wrote, which is the SYNONYM target
+      // when one fired, or the normalized input otherwise.
+      const filename = direct.slice(direct.lastIndexOf("/") + 1);
+      const resolvedKey = filename.replace(/\.[^.]+$/, "");
+      return { iconName: resolvedKey, iconKind: kind };
+    }
   }
   const haystack = rawName.toLowerCase();
   for (const entry of NAME_KEYWORDS) {

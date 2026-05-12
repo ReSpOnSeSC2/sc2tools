@@ -65,4 +65,90 @@ function isKnownBuilding(name) {
   return stripped !== name && KNOWN_BUILDING_NAMES.has(stripped);
 }
 
-module.exports = { KNOWN_BUILDING_NAMES, isKnownBuilding };
+/**
+ * Canonical set of upgrade names emitted by sc2reader's
+ * ``upgrade_type_name`` field. Mirrors
+ * ``reveal-sc2-opponent-main/core/sc2_catalog.py`` (the agent's
+ * source-of-truth). Used as the deterministic fallback for
+ * ``parseBuildLogLines`` when the JSON catalog isn't loaded — without
+ * it, every upgrade event was tagged ``category: "unknown"`` and the
+ * downstream UI (Upgrades chip row, BuildOrderTimeline, Save as Build,
+ * Custom Build Editor) all silently dropped upgrade events from their
+ * filters keyed on ``category === "upgrade"``.
+ */
+const KNOWN_UPGRADE_NAMES = new Set([
+  // Protoss
+  "WarpGateResearch", "Charge", "BlinkTech",
+  "AdeptPiercingAttack", "PsiStormTech", "DarkTemplarBlinkUpgrade",
+  "ExtendedThermalLance", "GraviticDrive", "ObserverGraviticBooster",
+  "PhoenixRangeUpgrade", "VoidRaySpeedUpgrade",
+  "TempestGroundAttackUpgrade", "InterceptorGravitonCatapult",
+  "ProtossGroundWeaponsLevel1", "ProtossGroundWeaponsLevel2",
+  "ProtossGroundWeaponsLevel3",
+  "ProtossGroundArmorsLevel1", "ProtossGroundArmorsLevel2",
+  "ProtossGroundArmorsLevel3",
+  "ProtossShieldsLevel1", "ProtossShieldsLevel2", "ProtossShieldsLevel3",
+  "ProtossAirWeaponsLevel1", "ProtossAirWeaponsLevel2",
+  "ProtossAirWeaponsLevel3",
+  "ProtossAirArmorsLevel1", "ProtossAirArmorsLevel2",
+  "ProtossAirArmorsLevel3",
+  // Terran
+  "Stimpack", "ShieldWall", "PunisherGrenades",
+  "HiSecAutoTracking", "TerranBuildingArmor", "DrillClaws",
+  "CycloneLockOnDamageUpgrade", "HighCapacityBarrels", "SmartServos",
+  "BansheeCloak", "BansheeSpeed", "RavenCorvidReactor",
+  "EnhancedShockwaves", "MedivacCaduceusReactor",
+  "MedivacIncreaseSpeedBoost", "LiberatorAGRangeUpgrade",
+  "YamatoCannon", "BattlecruiserEnableSpecializations",
+  "PersonalCloaking", "MoebiusReactor",
+  "TerranInfantryWeaponsLevel1", "TerranInfantryWeaponsLevel2",
+  "TerranInfantryWeaponsLevel3",
+  "TerranInfantryArmorsLevel1", "TerranInfantryArmorsLevel2",
+  "TerranInfantryArmorsLevel3",
+  "TerranVehicleWeaponsLevel1", "TerranVehicleWeaponsLevel2",
+  "TerranVehicleWeaponsLevel3",
+  "TerranVehicleAndShipArmorsLevel1", "TerranVehicleAndShipArmorsLevel2",
+  "TerranVehicleAndShipArmorsLevel3",
+  "TerranShipWeaponsLevel1", "TerranShipWeaponsLevel2",
+  "TerranShipWeaponsLevel3",
+  // Zerg
+  "Burrow", "PneumatizedCarapace", "OverlordSpeed",
+  "ZerglingMetabolicBoost", "ZerglingMovementSpeed",
+  "ZerglingAdrenalGlands", "Zerglingattackspeed",
+  "CentrifugalHooks", "CentrificalHooks",
+  "GlialReconstitution", "TunnelingClaws",
+  "EvolveMuscularAugments", "EvolveGroovedSpines",
+  "LurkerRange", "DiggingClaws",
+  "AnabolicSynthesis", "ChitinousPlating",
+  "InfestorEnergyUpgrade", "NeuralParasite",
+  "ZergMissileWeaponsLevel1", "ZergMissileWeaponsLevel2",
+  "ZergMissileWeaponsLevel3",
+  "ZergMeleeWeaponsLevel1", "ZergMeleeWeaponsLevel2",
+  "ZergMeleeWeaponsLevel3",
+  "ZergGroundArmorsLevel1", "ZergGroundArmorsLevel2",
+  "ZergGroundArmorsLevel3",
+  "ZergFlyerWeaponsLevel1", "ZergFlyerWeaponsLevel2",
+  "ZergFlyerWeaponsLevel3",
+  "ZergFlyerArmorsLevel1", "ZergFlyerArmorsLevel2",
+  "ZergFlyerArmorsLevel3",
+]);
+
+/**
+ * @param {string | null | undefined} name
+ * @returns {boolean}
+ */
+function isKnownUpgrade(name) {
+  if (!name) return false;
+  if (KNOWN_UPGRADE_NAMES.has(name)) return true;
+  // Some replay versions emit the leading-cap form ("Zerglingattackspeed");
+  // try a Pascal-Case fold of the first character for those edge cases.
+  const recase = name.charAt(0).toUpperCase() + name.slice(1);
+  return recase !== name && KNOWN_UPGRADE_NAMES.has(recase);
+}
+
+module.exports = {
+  KNOWN_BUILDING_NAMES,
+  isKnownBuilding,
+  KNOWN_UPGRADE_NAMES,
+  isKnownUpgrade,
+};
