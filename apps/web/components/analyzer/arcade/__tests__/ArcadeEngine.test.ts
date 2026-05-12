@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  activeLossStreak,
   activeWinStreak,
   dailySeed,
   fnv1a,
@@ -88,6 +89,29 @@ describe("activeWinStreak", () => {
         { result: "Win" },
       ]),
     ).toBe(2);
+  });
+});
+
+describe("activeLossStreak", () => {
+  test("returns 0 on empty list", () => {
+    expect(activeLossStreak([])).toBe(0);
+  });
+  test("counts trailing losses (= opponent's active wins)", () => {
+    expect(
+      activeLossStreak([{ result: "Win" }, { result: "Loss" }, { result: "Loss" }]),
+    ).toBe(2);
+  });
+  test("returns 0 when most recent decided game is a win", () => {
+    expect(
+      activeLossStreak([{ result: "Loss" }, { result: "Loss" }, { result: "Win" }]),
+    ).toBe(0);
+  });
+  test("is the mirror of activeWinStreak", () => {
+    // Same chronological game list — exactly one of the two helpers
+    // should ever return >0, never both.
+    const seq = [{ result: "Win" }, { result: "Win" }, { result: "Loss" }];
+    expect(activeWinStreak(seq) > 0 && activeLossStreak(seq) > 0).toBe(false);
+    expect(activeLossStreak(seq)).toBe(1);
   });
 });
 
