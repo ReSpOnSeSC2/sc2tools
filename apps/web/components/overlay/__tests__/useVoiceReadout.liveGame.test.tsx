@@ -605,6 +605,197 @@ describe("useVoiceReadout — live envelope path", () => {
     expect(cap.speak).toHaveBeenCalledTimes(1);
   });
 
+  it("clears per-gameKey state when liveGame goes to null (production flow — OverlayClient collapses idle/menu to null)", () => {
+    // 2026-05-12 follow-up bug: streamer reported needing to refresh
+    // the OBS Browser Source between matches for the voice to fire on
+    // game 2. Root cause: ``OverlayClient`` converts phase=idle/menu
+    // envelopes to ``setLiveGame(null)`` before they reach this hook,
+    // so the in-effect ``phase === "idle" / "menu"`` cleanup branch
+    // was unreachable in production. The per-gameKey state map leaked
+    // forever; if anything caused the next match's effective key to
+    // collide with a prior entry (most visibly the
+    // ``live:${oppName}`` fallback on a rematch), ``entry.spoken =
+    // true`` silenced the readout.
+    //
+    // Fix: a dedicated transition-watcher effect clears the per-key
+    // state AND the post-game fingerprint refs when ``liveGame``
+    // becomes null after a real match.
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const first = envelope({
+      gameKey: "match-1",
+      opponent: { name: "Cure", race: "Terran" },
+      streamerHistory: {
+        oppName: "Cure",
+        oppRace: "Terran",
+        matchup: "PvT",
+        headToHead: { wins: 0, losses: 0 },
+      },
+    });
+    const second = envelope({
+      gameKey: "match-2",
+      opponent: { name: "Reynor", race: "Zerg" },
+      streamerHistory: {
+        oppName: "Reynor",
+        oppRace: "Zerg",
+        matchup: "PvZ",
+        headToHead: { wins: 0, losses: 0 },
+      },
+    });
+    const { rerender } = render(
+      <Harness
+        live={null}
+        liveGame={first}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    // Production: OverlayClient sets liveGame to null on idle/menu.
+    // The hook never sees a phase=idle envelope.
+    rerender(
+      <Harness
+        live={null}
+        liveGame={null}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+    // No new utterance from the null transition.
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    // Game 2 starts.
+    rerender(
+      <Harness
+        live={null}
+        liveGame={second}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+    expect(cap.speak).toHaveBeenCalledTimes(2);
+    expect(cap.utterances[1]?.text).toContain("Reynor");
+  });
+
+  it("speaks on game N+1 when the bridge skips idle (fast loading screen — gameKey changes directly)", () => {
+    // SC2's loading screen can finish before the agent's poll observes
+    // ``ScreenLoading``; the bridge then jumps straight from
+    // MATCH_ENDED → MATCH_LOADING for the next game without an IDLE
+    // envelope. The voice readout must still fire on the new gameKey.
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const first = envelope({
+      gameKey: "match-1",
+      opponent: { name: "Cure", race: "Terran" },
+      streamerHistory: {
+        oppName: "Cure",
+        oppRace: "Terran",
+        matchup: "PvT",
+        headToHead: { wins: 0, losses: 0 },
+      },
+    });
+    const second = envelope({
+      gameKey: "match-2",
+      opponent: { name: "Reynor", race: "Zerg" },
+      streamerHistory: {
+        oppName: "Reynor",
+        oppRace: "Zerg",
+        matchup: "PvZ",
+        headToHead: { wins: 0, losses: 0 },
+      },
+    });
+    const { rerender } = render(
+      <Harness
+        live={null}
+        liveGame={first}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    // Straight to game 2 — no null in between.
+    rerender(
+      <Harness
+        live={null}
+        liveGame={second}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+    expect(cap.speak).toHaveBeenCalledTimes(2);
+    expect(cap.utterances[1]?.text).toContain("Reynor");
+  });
+
+  it("speaks on a rematch against the same opponent (fallback gameKey collision regression)", () => {
+    // 2026-05-12 follow-up: when the agent's envelope lacks a
+    // ``gameKey`` (older agent build / partial envelope), the hook
+    // falls back to ``live:${oppName}``. Two consecutive matches
+    // against the same opponent would collide on that key, marking
+    // the second match's entry as already-spoken. The transition
+    // watcher AND the in-effect "new gameKey → wipe stale entries"
+    // guard fix this by treating any liveGame=null in between (or a
+    // gameKey change) as a state reset.
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const matchOne = envelope({
+      // No gameKey — forces the ``live:${oppName}`` fallback.
+      gameKey: undefined,
+      opponent: { name: "Maru", race: "Terran" },
+      streamerHistory: {
+        oppName: "Maru",
+        oppRace: "Terran",
+        matchup: "PvT",
+        headToHead: { wins: 0, losses: 0 },
+      },
+    });
+    const matchTwo = envelope({
+      gameKey: undefined,
+      opponent: { name: "Maru", race: "Terran" },
+      streamerHistory: {
+        oppName: "Maru",
+        oppRace: "Terran",
+        matchup: "PvT",
+        headToHead: { wins: 1, losses: 0 },
+      },
+    });
+    const { rerender } = render(
+      <Harness
+        live={null}
+        liveGame={matchOne}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    // Bridge clears between matches (production: idle/menu → null).
+    rerender(
+      <Harness
+        live={null}
+        liveGame={null}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+    // Rematch — same opponent, same fallback key.
+    rerender(
+      <Harness
+        live={null}
+        liveGame={matchTwo}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+    expect(cap.speak).toHaveBeenCalledTimes(2);
+    expect(cap.utterances[1]?.text).toContain("You're 1 and 0 against them");
+  });
+
   it("speaks twice across two distinct games (different gameKey)", () => {
     window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
     const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
