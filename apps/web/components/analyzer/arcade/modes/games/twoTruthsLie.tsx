@@ -381,9 +381,12 @@ function factHighVsLowMmrOpponents(
   for (const g of data.games) {
     const o = outcome(g);
     if (o === "U") continue;
-    const me = Number(g.myMmr);
-    const opp = Number(g.oppMmr);
-    if (!Number.isFinite(me) || !Number.isFinite(opp)) continue;
+    // The wire format uses 0 as a sentinel for "MMR not available
+    // for this game" (early replays, unranked matches). Treat 0 the
+    // same as missing so the bucket reflects real ranked comparisons.
+    const me = typeof g.myMmr === "number" ? g.myMmr : 0;
+    const opp = typeof g.oppMmr === "number" ? g.oppMmr : 0;
+    if (me <= 0 || opp <= 0) continue;
     if (opp > me) {
       if (o === "W") hiW++;
       else hiL++;

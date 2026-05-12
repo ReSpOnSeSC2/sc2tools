@@ -145,39 +145,10 @@ describe("Opponent Bracket Pick — barcode filter", () => {
 });
 
 describe("Opponent Bracket Pick — variant resolution", () => {
-  // Generate's variant selection uses the seeded rng, but the test
-  // here calls the underlying resolveVariant logic indirectly by
-  // constructing a sample that only one specific variant can answer.
-  // We seed many rng values to find a run where the desired variant
-  // wins; in practice it's deterministic per seed.
-  function findVariantRun(
-    data: ArcadeDataset,
-    wantVariant: string,
-    maxSeed = 50,
-  ) {
-    for (let s = 1; s <= maxSeed; s++) {
-      const out = opponentBracketPick.generate({
-        rng: mulberry32(s),
-        daySeed: "2026-05-10",
-        tz: "UTC",
-        data,
-      });
-      // generate returns a Promise — we'll resolve synchronously since
-      // mulberry32 is sync and the body doesn't await anything.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sync = (out as unknown) as { ok: true; question: { variant?: string } };
-      if (
-        sync &&
-        typeof sync === "object" &&
-        "ok" in sync &&
-        sync.ok &&
-        sync.question?.variant === wantVariant
-      ) {
-        return sync.question;
-      }
-    }
-    return null;
-  }
+  // Generate picks its variant from a seeded rng, so each test walks
+  // a small range of seeds until it lands on a run that exercises the
+  // variant under test. With four variants in the pool, hitting any
+  // given one inside 50 seeds is effectively guaranteed.
 
   test("most-faced fires when one opponent has a clear lead in games count", async () => {
     const dataset: ArcadeDataset = {
@@ -298,10 +269,6 @@ describe("Opponent Bracket Pick — variant resolution", () => {
     expect(out.question.variant ?? "highest-wr-vs-you").toBe("highest-wr-vs-you");
     expect(out.question.candidates[out.question.correctIndex].pulseId).toBe("p4");
   });
-
-  // findVariantRun is exported for any future case where we want to
-  // pin a specific variant without rebuilding the data per seed.
-  void findVariantRun;
 });
 
 describe("Opponent Bracket Pick — reveal renders from opponent perspective", () => {
