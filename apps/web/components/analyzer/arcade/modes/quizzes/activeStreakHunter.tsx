@@ -136,6 +136,21 @@ function metricLetter(variant: StreakVariant): "W" | "L" {
   }
 }
 
+/** Trailing prepositional phrase used in score-note copy. */
+function streakDirectionTail(variant: StreakVariant): "against you" | "against them" {
+  // "their-*" frames the streak from the opponent's perspective
+  // (against the user); "your-*" frames it from the user's
+  // perspective (against the opponent).
+  switch (variant) {
+    case "their-win":
+    case "their-loss":
+      return "against you";
+    case "your-win":
+    case "your-loss":
+      return "against them";
+  }
+}
+
 export async function generateStreakHunter(
   input: GenerateInput,
 ): Promise<GenerateResult<Q>> {
@@ -226,10 +241,7 @@ function score(q: Q, a: A): ScoreResult {
     (c) => metricValue(c, q.variant) === max,
   );
   const letter = metricLetter(q.variant);
-  const tail =
-    q.variant === "their-win" || q.variant === "their-loss"
-      ? `against you`
-      : `against them`;
+  const tail = streakDirectionTail(q.variant);
   const note =
     leaders.length === 1
       ? `Top streak: ${leaders[0].name} — ${max}${letter} ${tail}.`
@@ -256,41 +268,47 @@ export const activeStreakHunter: Mode<Q, A> = {
   render: (ctx) => <Render ctx={ctx} />,
 };
 
-function questionFor(variant: StreakVariant) {
-  if (variant === "their-win") {
-    return (
-      <span>
-        Which of these opponents had the{" "}
-        <span className="font-semibold text-warning">longest win streak</span>{" "}
-        against you?
-      </span>
-    );
+/**
+ * Per-variant question copy. The switch is exhaustive over
+ * StreakVariant — adding a fifth variant without extending this
+ * function would fail typecheck (the return type is omitted so TS
+ * infers a union and would catch the missing branch).
+ */
+function questionFor(variant: StreakVariant): React.ReactNode {
+  switch (variant) {
+    case "their-win":
+      return (
+        <span>
+          Which of these opponents had the{" "}
+          <span className="font-semibold text-warning">longest win streak</span>{" "}
+          against you?
+        </span>
+      );
+    case "their-loss":
+      return (
+        <span>
+          Which of these opponents had the{" "}
+          <span className="font-semibold text-warning">longest loss streak</span>{" "}
+          against you?
+        </span>
+      );
+    case "your-win":
+      return (
+        <span>
+          Which of these opponents did you have the{" "}
+          <span className="font-semibold text-warning">longest win streak</span>{" "}
+          against?
+        </span>
+      );
+    case "your-loss":
+      return (
+        <span>
+          Which of these opponents did you have the{" "}
+          <span className="font-semibold text-warning">longest loss streak</span>{" "}
+          against?
+        </span>
+      );
   }
-  if (variant === "their-loss") {
-    return (
-      <span>
-        Which of these opponents had the{" "}
-        <span className="font-semibold text-warning">longest loss streak</span>{" "}
-        against you?
-      </span>
-    );
-  }
-  if (variant === "your-win") {
-    return (
-      <span>
-        Which of these opponents did you have the{" "}
-        <span className="font-semibold text-warning">longest win streak</span>{" "}
-        against?
-      </span>
-    );
-  }
-  return (
-    <span>
-      Which of these opponents did you have the{" "}
-      <span className="font-semibold text-warning">longest loss streak</span>{" "}
-      against?
-    </span>
-  );
 }
 
 function Render({
