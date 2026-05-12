@@ -46,6 +46,21 @@ const LEGACY_PREDICATES = new Set([
   "win_on_map",
 ]);
 
+/**
+ * Specific (predicate, paramKey) pairs retired even though the
+ * predicate itself is still alive. Used to drop "Win with an Expand
+ * opener" cells minted under the old card schema: the underlying
+ * predicate ``win_build_contains`` is still in use for Cannon Rush /
+ * Proxy / All-in / etc., but the resolver has no reliable way to
+ * decide whether a given game's myBuild string represents an
+ * "expand opener" — the agent's strategy classifier doesn't emit a
+ * stable label for that. A persisted card carrying the cell is
+ * dropped so it regenerates with a winnable objective.
+ */
+const LEGACY_PARAM_KEYS: ReadonlyArray<[string, string]> = [
+  ["win_build_contains", "expand"],
+];
+
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
   const wk = weekKey(new Date(), input.tz);
   // Determine eligible races: ones the user actually played in the
@@ -326,12 +341,6 @@ function buildCard(
     params: { keyword: "Macro" },
     label: "Win with a Macro build",
   });
-  push({
-    key: "win_build:expand",
-    predicate: "win_build_contains",
-    params: { keyword: "Expand" },
-    label: "Win with an Expand opener",
-  });
   // Race-specific build keywords — only winnable if the user plays
   // that race, so gate on racePool.
   if (racePool.includes("P")) {
@@ -488,6 +497,73 @@ function buildCard(
     });
   }
 
+  // ── Week-long unit-volume objectives (HEAVY: needs buildLog) ─
+  // Unlike won_built_n_of_unit (which fires off a single winning
+  // game), these count across every game in the week's window — wins
+  // and losses both. The intent is "build N of this unit before the
+  // week ends" — a forward-looking volume goal that the user can
+  // chip at game-by-game even if they're losing.
+  if (racePool.includes("P")) {
+    push({
+      key: "built_n_of_unit_week:Zealot:40",
+      predicate: "built_n_of_unit_week",
+      params: { unit: "Zealot", count: 40 },
+      label: "Build 40+ Zealots this week",
+    });
+    push({
+      key: "built_n_of_unit_week:Stalker:50",
+      predicate: "built_n_of_unit_week",
+      params: { unit: "Stalker", count: 50 },
+      label: "Build 50+ Stalkers this week",
+    });
+    push({
+      key: "built_n_of_unit_week:Immortal:15",
+      predicate: "built_n_of_unit_week",
+      params: { unit: "Immortal", count: 15 },
+      label: "Build 15+ Immortals this week",
+    });
+  }
+  if (racePool.includes("T")) {
+    push({
+      key: "built_n_of_unit_week:Marine:100",
+      predicate: "built_n_of_unit_week",
+      params: { unit: "Marine", count: 100 },
+      label: "Build 100+ Marines this week",
+    });
+    push({
+      key: "built_n_of_unit_week:Marauder:30",
+      predicate: "built_n_of_unit_week",
+      params: { unit: "Marauder", count: 30 },
+      label: "Build 30+ Marauders this week",
+    });
+    push({
+      key: "built_n_of_unit_week:SiegeTank:15",
+      predicate: "built_n_of_unit_week",
+      params: { unit: "Siege Tank", count: 15 },
+      label: "Build 15+ Siege Tanks this week",
+    });
+  }
+  if (racePool.includes("Z")) {
+    push({
+      key: "built_n_of_unit_week:Zergling:150",
+      predicate: "built_n_of_unit_week",
+      params: { unit: "Zergling", count: 150 },
+      label: "Build 150+ Zerglings this week",
+    });
+    push({
+      key: "built_n_of_unit_week:Roach:40",
+      predicate: "built_n_of_unit_week",
+      params: { unit: "Roach", count: 40 },
+      label: "Build 40+ Roaches this week",
+    });
+    push({
+      key: "built_n_of_unit_week:Hydralisk:30",
+      predicate: "built_n_of_unit_week",
+      params: { unit: "Hydralisk", count: 30 },
+      label: "Build 30+ Hydralisks this week",
+    });
+  }
+
   // ── Opponent unit-seen objectives ───────────────────────────
   // "Beat a Mothership / Battlecruiser / etc." — versus everyone.
   push({
@@ -550,7 +626,19 @@ function fullRace(letter: string): string {
 function isLegacyCard(state: BingoState | null): boolean {
   if (!state) return false;
   if (!Array.isArray(state.cells) || state.cells.length === 0) return false;
-  return state.cells.some((c) => LEGACY_PREDICATES.has(c.predicate));
+  return state.cells.some((c) => {
+    if (LEGACY_PREDICATES.has(c.predicate)) return true;
+    for (const [pred, paramSub] of LEGACY_PARAM_KEYS) {
+      if (c.predicate !== pred) continue;
+      const p = c.params || {};
+      for (const v of Object.values(p)) {
+        if (typeof v === "string" && v.toLowerCase().includes(paramSub)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  });
 }
 
 function score(q: Q): ScoreResult {
@@ -581,6 +669,7 @@ export const __test = {
   buildCard,
   isLegacyCard,
   LEGACY_PREDICATES,
+  LEGACY_PARAM_KEYS,
 };
 
 function Render({

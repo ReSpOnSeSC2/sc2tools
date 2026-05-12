@@ -197,6 +197,90 @@ class ArcadeService {
   }
 
   /**
+   * Aggregate unit-built counts and total units-lost across the user's
+   * recent games. Powers two trivia quizzes ("which unit have you
+   * built the most of" / "how many units have you lost"). Heavy data
+   * lives in game_details; this method bulk-loads details for the
+   * most recent ``UNIT_STATS_SCAN_CAP`` games and folds them into a
+   * compact aggregate. No DB write — the route is read-only and
+   * recomputed on demand.
+   *
+   * Bounded by ``UNIT_STATS_SCAN_CAP`` so a 30 000-game corpus doesn't
+   * pull tens of MB of buildLogs into RAM per request. The cap is
+   * communicated back to the client via ``scannedGames`` so the trivia
+   * reveal can say "of your last N games".
+   *
+   * @param {string} userId
+   * @returns {Promise<{
+   *   scannedGames: number,
+   *   builtByUnit: Record<string, number>,
+   *   totalUnitsLost: number,
+   *   lostGames: number,
+   * }>}
+   */
+  async unitStats(userId) {
+    const empty = {
+      scannedGames: 0,
+      builtByUnit: /** @type {Record<string, number>} */ ({}),
+      totalUnitsLost: 0,
+      lostGames: 0,
+    };
+    if (!userId) return empty;
+    const games = await this.db.games
+      .find(
+        { userId },
+        { projection: { _id: 0, gameId: 1, date: 1 } },
+      )
+      .sort({ date: -1 })
+      .limit(UNIT_STATS_SCAN_CAP)
+      .toArray();
+    if (!games.length) return empty;
+    if (!this.gameDetails) {
+      return { ...empty, scannedGames: games.length };
+    }
+    const ids = games.map((g) => String(g.gameId));
+    let detailsMap;
+    try {
+      detailsMap = await this.gameDetails.findMany(userId, ids);
+    } catch {
+      // Heavy-store outage → return slim-row-only aggregate so the
+      // trivia can still render an empty-state message rather than
+      // crashing the route.
+      return { ...empty, scannedGames: games.length };
+    }
+    /** @type {Record<string, number>} */
+    const builtByUnit = {};
+    let totalUnitsLost = 0;
+    let lostGames = 0;
+    for (const id of ids) {
+      const blob = detailsMap.get(id);
+      if (!blob) continue;
+      if (Array.isArray(blob.buildLog)) {
+        for (const line of blob.buildLog) {
+          const name = extractBuildLogName(line);
+          if (!name) continue;
+          if (isStructureName(name)) continue;
+          builtByUnit[name] = (builtByUnit[name] || 0) + 1;
+        }
+      }
+      const me =
+        blob.macroBreakdown &&
+        blob.macroBreakdown.player_stats &&
+        blob.macroBreakdown.player_stats.me;
+      if (me && Number.isFinite(Number(me.units_lost))) {
+        totalUnitsLost += Number(me.units_lost);
+        lostGames += 1;
+      }
+    }
+    return {
+      scannedGames: games.length,
+      builtByUnit,
+      totalUnitsLost,
+      lostGames,
+    };
+  }
+
+  /**
    * List the top N rows for a given weekKey. Anonymises rows whose
    * displayName is empty and assigns rank by sorted P&L. Returns at
    * most ``limit`` rows; the underlying collection is capped here, not
@@ -247,6 +331,85 @@ const HEAVY_FIELDS = Object.freeze([
 ]);
 
 /**
+ * Maximum number of recent games to scan when computing the
+ * arcade-trivia unit aggregate. Bounded so a prolific user's request
+ * doesn't blow up the heavy-store fetch — the trivia is a "fun
+ * stat about your recent history" surface, not a forensic
+ * career-spanning report.
+ */
+const UNIT_STATS_SCAN_CAP = 1000;
+
+/**
+ * Parse the unit/structure name out of one buildLog entry. The agent
+ * emits lines like ``"[5:30] Marine"`` or structured objects like
+ * ``{ time, name, ... }``. We accept both shapes — string form goes
+ * through a regex; object form reads the ``name`` (or ``display``)
+ * key directly. Returns an empty string when the line is unparseable.
+ *
+ * @param {unknown} line
+ * @returns {string}
+ */
+function extractBuildLogName(line) {
+  if (line && typeof line === "object") {
+    const o = /** @type {any} */ (line);
+    if (typeof o.name === "string" && o.name) return o.name;
+    if (typeof o.display === "string" && o.display) return o.display;
+    return "";
+  }
+  const s = String(line || "");
+  if (!s) return "";
+  const m = /^\s*\[\d+:\d+\]\s*(.+?)\s*$/.exec(s);
+  if (m) return m[1];
+  return s.trim();
+}
+
+/**
+ * Heuristic: is this name a structure (building) rather than a
+ * trainable unit? The "most-built unit" trivia is more interesting
+ * when scoped to combat / worker units, since otherwise Pylons /
+ * SCVs would always dominate. We use a small allowlist of common
+ * structure suffixes; the catalog-based classifier is server-only
+ * elsewhere (services/perGameCompute.js), but trivia doesn't need
+ * its precision — a false positive just keeps a wider unit list.
+ *
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isStructureName(name) {
+  if (!name) return false;
+  if (STRUCTURE_NAMES.has(name)) return true;
+  return false;
+}
+
+const STRUCTURE_NAMES = new Set([
+  // Protoss
+  "Nexus", "Pylon", "Gateway", "WarpGate", "Warp Gate", "Forge",
+  "PhotonCannon", "Photon Cannon", "Assimilator", "CyberneticsCore",
+  "Cybernetics Core", "TwilightCouncil", "Twilight Council",
+  "RoboticsFacility", "Robotics Facility", "RoboticsBay", "Robotics Bay",
+  "Stargate", "FleetBeacon", "Fleet Beacon", "TemplarArchives",
+  "Templar Archives", "DarkShrine", "Dark Shrine", "ShieldBattery",
+  "Shield Battery", "ShieldBatteries",
+  // Terran
+  "CommandCenter", "Command Center", "OrbitalCommand", "Orbital Command",
+  "PlanetaryFortress", "Planetary Fortress", "SupplyDepot", "Supply Depot",
+  "Refinery", "Barracks", "Factory", "Starport", "EngineeringBay",
+  "Engineering Bay", "Bunker", "MissileTurret", "Missile Turret",
+  "SensorTower", "Sensor Tower", "Armory", "GhostAcademy",
+  "Ghost Academy", "FusionCore", "Fusion Core", "Reactor", "TechLab",
+  "Tech Lab",
+  // Zerg
+  "Hatchery", "Lair", "Hive", "SpawningPool", "Spawning Pool",
+  "EvolutionChamber", "Evolution Chamber", "SporeCrawler", "Spore Crawler",
+  "SpineCrawler", "Spine Crawler", "Extractor", "RoachWarren",
+  "Roach Warren", "BanelingNest", "Baneling Nest", "HydraliskDen",
+  "Hydralisk Den", "LurkerDen", "Lurker Den", "InfestationPit",
+  "Infestation Pit", "Spire", "GreaterSpire", "Greater Spire",
+  "NydusNetwork", "Nydus Network", "NydusWorm", "Nydus Worm",
+  "UltraliskCavern", "Ultralisk Cavern", "CreepTumor", "Creep Tumor",
+]);
+
+/**
  * Predicates that depend on game_details fields. resolveQuests checks
  * this set to decide whether to bulk-load the heavy store. Add a
  * predicate here AND below in PREDICATES.
@@ -255,6 +418,7 @@ const HEAVY_PREDICATES = new Set([
   "won_with_unit",
   "won_built_n_of_unit",
   "won_built_opp_unit_seen",
+  "built_n_of_unit_week",
 ]);
 
 /* ──────────────── Slim-row field helpers ──────────────── */
@@ -668,6 +832,21 @@ const PREDICATES = {
         (g) => isWin(g) && buildLogCount(g.buildLog, needle) >= need,
       ),
     );
+  },
+  /** Built ≥ params.count of params.unit across the entire window —
+   *  wins AND losses count. Returns the gameId of the game on which
+   *  the running total first crossed the threshold so the reveal can
+   *  link to it. Empty needle / zero target return null. */
+  built_n_of_unit_week: (games, params) => {
+    const needle = String(params.unit || "").toLowerCase().trim();
+    const need = Math.max(1, Number(params.count) || 1);
+    if (!needle) return null;
+    let running = 0;
+    for (const g of games) {
+      running += buildLogCount(g.buildLog, needle);
+      if (running >= need) return String(g.gameId);
+    }
+    return null;
   },
   /** Won a game where the OPPONENT's build-log contained a unit
    *  (e.g. "saw a Mothership and still won"). */

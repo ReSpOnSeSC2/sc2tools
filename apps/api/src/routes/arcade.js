@@ -39,6 +39,16 @@ function buildArcadeRouter(deps) {
     }
   });
 
+  router.get("/arcade/unit-stats", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const out = await deps.arcade.unitStats(userId);
+      res.json(out);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/arcade/leaderboard", async (req, res, next) => {
     try {
       requireAuth(req); // auth required so we don't expose handles publicly

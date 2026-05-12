@@ -22,6 +22,7 @@ import { comebackCount } from "./quizzes/comebackCount";
 import { lossPatternSleuth } from "./quizzes/lossPatternSleuth";
 import { closersEye } from "./quizzes/closersEye";
 import { macroMemory } from "./quizzes/macroMemory";
+import { unitProfile } from "./quizzes/unitProfile";
 
 import { stockMarket } from "./games/stockMarket";
 import { bingoLadder } from "./games/bingoLadder";
@@ -41,6 +42,7 @@ export const QUIZZES: AnyMode[] = [
   lossPatternSleuth,
   closersEye,
   macroMemory,
+  unitProfile,
 ] as unknown as AnyMode[];
 
 export const GAMES: AnyMode[] = [
