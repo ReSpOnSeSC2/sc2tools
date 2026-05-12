@@ -127,6 +127,66 @@ describe("Stock Market: build universe + price math", () => {
     expect(row!.winRate).toBeCloseTo(0.72, 5);
   });
 
+  test("own builds inherit race from the catalog when /v1/builds omits it", () => {
+    // /v1/builds aggregates over myBuild and never projects a race
+    // field (apps/api/src/services/builds.js). For builds whose name
+    // matches a catalog entry, the universe row must backfill race from
+    // the catalog so the Builds-as-Cards binder renders the correct
+    // race icon instead of the random/dice fallback.
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      builds: [
+        { name: "PvP - 1 Gate Expand", total: 12, wins: 7, losses: 5, winRate: 0.58 },
+        { name: "PvZ - Carrier Rush", total: 4, wins: 3, losses: 1, winRate: 0.75 },
+        { name: "PvT - Phoenix into Robo", total: 9, wins: 6, losses: 3, winRate: 0.67 },
+      ],
+    };
+    const u = buildUniverse(dataset);
+    expect(u.find((b) => b.name === "PvP - 1 Gate Expand")?.race).toBe("Protoss");
+    expect(u.find((b) => b.name === "PvZ - Carrier Rush")?.race).toBe("Protoss");
+    expect(u.find((b) => b.name === "PvT - Phoenix into Robo")?.race).toBe("Protoss");
+  });
+
+  test("own builds infer race from matchup prefix when not in the catalog", () => {
+    // Custom / detector names that aren't in BUILD_DEFINITIONS (e.g.
+    // partial classifications, user-renamed entries) still expose a
+    // matchup prefix. Inferring from the prefix is the last line of
+    // defense before falling through to Random.
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      builds: [
+        { name: "PvT - Macro Transition (Unclassified)", total: 8, wins: 5, losses: 3, winRate: 0.625 },
+        { name: "TvZ - Mech Nonsense", total: 3, wins: 1, losses: 2, winRate: 0.33 },
+        { name: "ZvP - Roach Ravager All-in", total: 6, wins: 4, losses: 2, winRate: 0.67 },
+      ],
+    };
+    const u = buildUniverse(dataset);
+    expect(u.find((b) => b.name === "PvT - Macro Transition (Unclassified)")?.race).toBe("Protoss");
+    expect(u.find((b) => b.name === "TvZ - Mech Nonsense")?.race).toBe("Terran");
+    expect(u.find((b) => b.name === "ZvP - Roach Ravager All-in")?.race).toBe("Zerg");
+  });
+
+  test("supplied race is never overridden by catalog or name inference", () => {
+    // Community + custom rows that DO carry a race field must keep it
+    // — `resolveRace` is a fallback, not an override. Verifies we
+    // don't, e.g., silently rewrite a user-authored cross-race custom
+    // build.
+    const dataset: ArcadeDataset = {
+      ...baseDataset,
+      communityBuilds: [
+        // Force a deliberate mismatch: name suggests Zerg, race says Terran.
+        // `resolveRace` must trust the supplied race.
+        { slug: "weird", title: "ZvP - Definitely Terran Somehow", race: "T", votes: 1 },
+      ],
+      customBuilds: [
+        { slug: "mine", name: "PvP - 1 Gate Expand", race: "Z", vsRace: "P" },
+      ],
+    };
+    const u = buildUniverse(dataset);
+    expect(u.find((b) => b.name === "ZvP - Definitely Terran Somehow")?.race).toBe("T");
+    expect(u.find((b) => b.name === "PvP - 1 Gate Expand")?.race).toBe("Z");
+  });
+
   test("isUnclassifiedSentinel matches the Python emitter format", () => {
     expect(isUnclassifiedSentinel("Unclassified - Protoss")).toBe(true);
     expect(isUnclassifiedSentinel("Unclassified - BW Protoss")).toBe(true);

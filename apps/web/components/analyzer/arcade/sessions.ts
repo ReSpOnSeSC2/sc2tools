@@ -18,7 +18,33 @@
 // option.
 
 import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
+import { inferRaceFromBuildName } from "@/lib/race";
 import type { ArcadeBuild, ArcadeDataset } from "./types";
+
+/**
+ * name → owning race lookup, precomputed from the bundled catalog so
+ * `/v1/builds` rows (which never carry race — see
+ * apps/api/src/services/builds.js, where the aggregation only projects
+ * name/wins/losses/total) can inherit the canonical race when their
+ * name matches a catalog entry.
+ */
+const CATALOG_RACE_BY_NAME: ReadonlyMap<string, string> = new Map(
+  BUILD_DEFINITIONS.filter((d) => d.name && d.race).map((d) => [d.name, d.race]),
+);
+
+/**
+ * Best-effort race assignment for a universe row. Trusts the source
+ * field when present, then falls back to the catalog lookup, then to
+ * structural inference off the build name (PvX → Protoss, etc.).
+ * Returns undefined only when every signal fails, in which case the
+ * card renders as Random.
+ */
+function resolveRace(name: string, supplied: string | undefined): string | undefined {
+  if (typeof supplied === "string" && supplied.trim()) return supplied;
+  const fromCatalog = CATALOG_RACE_BY_NAME.get(name);
+  if (fromCatalog) return fromCatalog;
+  return inferRaceFromBuildName(name) ?? undefined;
+}
 
 export interface UnifiedBuild {
   /** Stable id used in the portfolio + leaderboard JSON. */
@@ -77,7 +103,7 @@ export function buildUniverse(
     byName.set(b.name, {
       id: `own:${b.name}`,
       name: b.name,
-      race: b.race,
+      race: resolveRace(b.name, b.race),
       totalPlays: b.total,
       wins: b.wins,
       losses: b.losses,
@@ -98,7 +124,7 @@ export function buildUniverse(
     byName.set(c.title, {
       id: `community:${c.slug}`,
       name: c.title,
-      race: c.race,
+      race: resolveRace(c.title, c.race),
       totalPlays: 0,
       wins: 0,
       losses: 0,
@@ -118,7 +144,7 @@ export function buildUniverse(
     byName.set(cb.name, {
       id: `custom:${cb.slug}`,
       name: cb.name,
-      race: cb.race,
+      race: resolveRace(cb.name, cb.race),
       totalPlays: 0,
       wins: 0,
       losses: 0,
