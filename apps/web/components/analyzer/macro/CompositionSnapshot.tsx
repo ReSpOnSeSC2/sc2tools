@@ -7,10 +7,8 @@ import { sortedArmyComposition } from "@/lib/sc2-units";
 import type { UnitTimelineEntry } from "./MacroBreakdownPanel.types";
 import { nearestPriorPoint, type SeriesPoint } from "./activeArmyLayout";
 import {
-  buildOrderUnitsAt,
   countBuildingsAt,
   countUpgradesAt,
-  nearestTimelineEntry,
   sortByCountDesc,
   type BuildEvent,
   type CompositionSource,
@@ -71,21 +69,16 @@ const CHIP_ICON_PX = 22;
  * desc), and the buildings count built so far. As the user hovers
  * the chart above, every count snaps to the matching tick.
  *
- * Data sources:
- *   - Unit roster: cumulative units BUILT up to the hovered time,
- *     derived from the build-order stream with morph adjustments
- *     (Hydralisk→Lurker, 2× Templar→Archon, etc.). Matches the
- *     Buildings/Upgrades treatment so the whole roster reads as a
- *     production summary — what the player MACRO'd, not what survived.
- *     Falls back to ``unit_timeline`` alive counts only when no
- *     build-order data is available (legacy slim payloads).
- *   - Worker count: ``stats_events.food_workers`` at the same tick
- *     (alive — workers are constantly replaced, so cumulative built
- *     would be misleading vs. the in-game worker count).
+ * Data sources (see ``compositionAt.ts`` for the resolution order):
+ *   - Unit roster: prefers ``unit_timeline`` (death-aware) when
+ *     populated; falls back to a build-order-derived cumulative count
+ *     with morph adjustments and timeline-derived death subtraction.
+ *   - Worker count: ``stats_events.food_workers`` at the same tick.
  *   - Building count: per-game ``buildLog`` parsed by the API into
  *     ``events`` / ``opp_events`` — filtered on ``is_building`` and
  *     counted cumulatively (with morph collapse) up to the hovered
- *     time.
+ *     time. The build-order endpoint is the same call that powers the
+ *     unit fallback above, so both sources hit a single SWR cache.
  *
  * The build-order fetch is gated on ``gameId``; when null, the
  * roster falls back to whatever ``unit_timeline`` carries. We fetch
@@ -120,10 +113,17 @@ export function CompositionSnapshot({
       ? hoveredTime
       : lastT;
 
-  // Army value + worker count come from the chart's pre-built series
-  // (``nearestPriorPoint`` snaps to the latest sample at-or-before the
-  // hovered tick, matching the chart tooltip's read so the "Army NNN"
-  // header in this panel can never disagree with the tooltip above).
+  // Single source of truth: the chart's mySeries / oppSeries already
+  // resolved (army_value preferred, timeline / build-order fallback,
+  // composition map baked in). Reading via ``nearestPriorPoint`` gives
+  // us the SAME SeriesPoint the chart's tooltip reads, so the army
+  // header, the worker count, AND the unit chips below cannot disagree
+  // with what the tooltip shows at the hovered tick. Pre-fix, this
+  // panel re-derived composition itself with a slightly different
+  // time anchor (``hoveredTime`` raw vs the chart's nearest-sample
+  // snap) and a different fallback path (no army_value gate, no cap),
+  // which is how the 9 200-late-game spike ended up disagreeing with
+  // the roster's smaller running count.
   const myPoint = useMemo(
     () => nearestPriorPoint(mySeries, targetT),
     [mySeries, targetT],
@@ -133,58 +133,12 @@ export function CompositionSnapshot({
     [oppSeries, targetT],
   );
 
+  const myComposition = pointComposition(myPoint);
+  const oppComposition = pointComposition(oppPoint);
   const myWorkers = myPoint?.workers ?? 0;
   const oppWorkers = oppPoint?.workers ?? 0;
   const myArmyValue = myPoint?.army ?? 0;
   const oppArmyValue = oppPoint?.army ?? 0;
-
-  // Units roster: cumulative units built up to ``targetT`` — same
-  // semantics as the Buildings / Upgrades rows so the panel reads as a
-  // unified production summary. This is what users mean by "macro
-  // breakdown": how many of each unit did they MAKE, not how many are
-  // alive at this tick. Previously the roster read alive counts off
-  // ``unit_timeline``, which caused a Protoss player who built 11
-  // Immortals but lost 10 to fights to see "Immortal × 1" — surprising
-  // for a row labelled UNITS on a panel labelled MACRO BREAKDOWN.
-  // Build order has every construction event, so cumulative-by-name
-  // (with morph adjustments — Hydralisk→Lurker, Templar→Archon) is
-  // exact for both single-parent and 2-parent morphs.
-  const hasBuildOrder = Array.isArray(buildOrderData?.events)
-    || Array.isArray(buildOrderData?.opp_events);
-  const myUnitsBuilt = useMemo(
-    () => buildOrderUnitsAt(buildOrderData?.events ?? [], targetT),
-    [buildOrderData, targetT],
-  );
-  const oppUnitsBuilt = useMemo(
-    () => buildOrderUnitsAt(buildOrderData?.opp_events ?? [], targetT),
-    [buildOrderData, targetT],
-  );
-
-  // Slim payload fallback: when the build-order endpoint hasn't loaded
-  // (or this game's blob never carried a buildLog), the only data we
-  // have on units is the death-aware ``unit_timeline``. Surface it as
-  // a stop-gap so the roster isn't empty — the "alive only" badge
-  // tells the user why the count may look low vs. their memory of the
-  // game.
-  const timelineFallback = useMemo(() => {
-    if (hasBuildOrder) return null;
-    if (!Array.isArray(unitTimeline) || unitTimeline.length === 0) return null;
-    const entry = nearestTimelineEntry(unitTimeline, targetT);
-    if (!entry) return null;
-    return {
-      my: { ...(entry.my || {}) },
-      opp: { ...(entry.opp || {}) },
-    };
-  }, [hasBuildOrder, unitTimeline, targetT]);
-
-  const myComposition = timelineFallback?.my ?? myUnitsBuilt;
-  const oppComposition = timelineFallback?.opp ?? oppUnitsBuilt;
-  const myUnitsSource: CompositionSource = hasBuildOrder
-    ? "build_order"
-    : timelineFallback
-      ? "timeline"
-      : "empty";
-  const oppUnitsSource: CompositionSource = myUnitsSource;
 
   const myBuildings = useMemo(
     () => countBuildingsAt(buildOrderData?.events ?? [], targetT),
@@ -274,7 +228,7 @@ export function CompositionSnapshot({
           name={myName?.trim() || "You"}
           race={myRace || ""}
           composition={myComposition}
-          unitSource={myUnitsSource}
+          unitSource={myPoint?.unitsSource ?? "empty"}
           workers={myWorkers}
           armyValue={myArmyValue}
           buildings={myBuildings}
@@ -287,7 +241,7 @@ export function CompositionSnapshot({
           name={oppName?.trim() || "Opponent"}
           race={oppRace || ""}
           composition={oppComposition}
-          unitSource={oppUnitsSource}
+          unitSource={oppPoint?.unitsSource ?? "empty"}
           workers={oppWorkers}
           armyValue={oppArmyValue}
           buildings={oppBuildings}
@@ -458,12 +412,9 @@ function RosterRow({
   empty: string;
   /**
    * When provided, surfaces a small badge next to the row label that
-   * tells the user how the unit numbers were derived. The default
-   * (``build_order``) is cumulative built — same as Buildings /
-   * Upgrades — so we omit the badge to keep the row clean. The
-   * ``timeline`` fallback (no build-order data on disk) shows alive
-   * counts and gets an explicit "alive only" badge so users know why
-   * the counts may look low vs. what they remember producing.
+   * tells the user how the data was derived. ``hybrid`` and
+   * ``build_order`` mean we filled in from the build order — the chip
+   * count may include units whose deaths the timeline didn't capture.
    */
   source?: CompositionSource;
 }) {
@@ -473,7 +424,7 @@ function RosterRow({
         <span className="text-[10px] uppercase tracking-wider text-text-dim">
           {label}
         </span>
-        {source && source !== "build_order" && source !== "empty" ? (
+        {source && source !== "timeline" && source !== "empty" ? (
           <SourceBadge source={source} />
         ) : null}
       </div>
@@ -489,16 +440,6 @@ function RosterRow({
 }
 
 function SourceBadge({ source }: { source: CompositionSource }) {
-  if (source === "timeline") {
-    return (
-      <span
-        className="rounded bg-bg-elevated px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-warning"
-        title="Build-order data isn't available for this game, so these counts are alive-only (units that died are missing). Click Recompute to ask your desktop agent for a full re-upload."
-      >
-        alive only
-      </span>
-    );
-  }
   if (source === "hybrid") {
     return (
       <span
@@ -506,6 +447,16 @@ function SourceBadge({ source }: { source: CompositionSource }) {
         title="Counts come from the build order; deaths are derived from the unit timeline. Most accurate when the v0.5+ agent has uploaded both."
       >
         build order + deaths
+      </span>
+    );
+  }
+  if (source === "build_order") {
+    return (
+      <span
+        className="rounded bg-bg-elevated px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-warning"
+        title="Counts come from the build order. Per-tick deaths aren't tracked for this game — re-upload via your v0.5+ agent for death-aware accuracy."
+      >
+        build order
       </span>
     );
   }
@@ -555,4 +506,16 @@ function workerNameForRace(race: string): string {
   return "Probe";
 }
 
+/**
+ * Read the alive unit composition out of a SeriesPoint, returning a
+ * fresh empty object when the point is null. Returning an empty
+ * object (rather than null) keeps the downstream renderers
+ * branch-free.
+ */
+function pointComposition(
+  point: SeriesPoint | null,
+): Record<string, number> {
+  if (!point || !point.units) return {};
+  return point.units;
+}
 

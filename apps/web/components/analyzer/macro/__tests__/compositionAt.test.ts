@@ -243,14 +243,15 @@ describe("countUpgradesAt — Upgrades row", () => {
   });
 });
 
-describe("deriveUnitComposition — used by chart's army-value fallback path", () => {
+describe("deriveUnitComposition — chart's army-value fallback + roster source", () => {
   /*
-   * deriveUnitComposition powers the chart's army-value LINE when
-   * sc2reader's authoritative ``army_value`` is missing. It still
-   * needs alive-aware (timeline-preferred, build-order + deaths
-   * hybrid) semantics — the LINE must drop when units die. Only the
-   * Units ROSTER below the chart switched to cumulative-built; this
-   * function stays as it was, and the test below locks that down.
+   * deriveUnitComposition powers BOTH the chart's army-value line
+   * (when sc2reader's ``army_value`` isn't on the wire) AND the unit
+   * roster below the chart. It needs alive-aware (timeline-preferred,
+   * build-order + deaths hybrid) semantics so the chip count and the
+   * chart line agree: a Protoss that built 11 Immortals and lost 10
+   * reads as 1 alive on both surfaces, and the chart line correctly
+   * dips as the 10 die.
    */
   it("prefers timeline when populated for the side under inspection", () => {
     const timeline: UnitTimelineEntry[] = [
@@ -271,6 +272,30 @@ describe("deriveUnitComposition — used by chart's army-value fallback path", (
     });
     expect(out.source).toBe("timeline");
     expect(out.units).toEqual({ Stalker: 3, Immortal: 1 });
+  });
+
+  it("folds variants emitted by older agent versions on the timeline path", () => {
+    // Pre-v0.5 agents uploaded unit_timeline before
+    // ``_canonical_unit_name`` was applied — so an old payload could
+    // carry both ``Infestor: 1`` and ``InfestorBurrowed: 9``. The
+    // roster should render a single ``Infestor × 10`` chip with the
+    // correct icon, not two chips (one icon, one ``IN`` text fallback).
+    const timeline: UnitTimelineEntry[] = [
+      { time: 0, my: {}, opp: {} },
+      {
+        time: 60,
+        my: { Infestor: 1, InfestorBurrowed: 9, RoachBurrowed: 5, Roach: 3 },
+        opp: {},
+      },
+    ];
+    const out = deriveUnitComposition({
+      timeline,
+      buildEvents: undefined,
+      side: "my",
+      t: 60,
+    });
+    expect(out.source).toBe("timeline");
+    expect(out.units).toEqual({ Infestor: 10, Roach: 8 });
   });
 
   it("falls through to build_order when the timeline side is empty AND build-order has events", () => {

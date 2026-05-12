@@ -204,6 +204,25 @@ export function canonicalizeName(name: string): string {
   return stripped || name;
 }
 
+/**
+ * Sum ``composition`` into a fresh map keyed by canonical names —
+ * collapses ``Infestor`` + ``InfestorBurrowed`` (and similar variant
+ * pairs older agent versions emitted on the unit_timeline) onto one
+ * bucket so the roster shows a single chip with the correct icon.
+ * Modern agents (v0.5+) canonicalise on their side; this is purely
+ * defence in depth for cold-cached older payloads.
+ */
+function folded(composition: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [name, count] of Object.entries(composition)) {
+    if (!count || count <= 0) continue;
+    const canonical = canonicalizeName(name);
+    if (!canonical) continue;
+    out[canonical] = (out[canonical] || 0) + count;
+  }
+  return out;
+}
+
 /** Mutate ``counts`` to apply the morph rule for ``name`` (consume one
  * parent if present). Returns the canonical name to credit. */
 function applyMorph(counts: Record<string, number>, name: string): string {
@@ -400,7 +419,16 @@ export function deriveUnitComposition(opts: {
     const entry = nearestTimelineEntry(timeline, t);
     const composition = (side === "my" ? entry?.my : entry?.opp) || {};
     if (Object.keys(composition).length > 0) {
-      return { units: { ...composition }, source: "timeline" };
+      // Fold variants emitted by older agent versions (e.g. v0.5.0,
+      // which uploaded unit_timeline before the agent's
+      // ``_canonical_unit_name`` step was wired into the timeline
+      // pass). Without this, an older payload that carries
+      // ``InfestorBurrowed: 9`` + ``Infestor: 1`` would render two
+      // chips for the same unit — the canonical name with the icon
+      // (1) and a text-fallback ``IN`` chip (9). Current agents emit
+      // canonicalised names already, so on fresh uploads this is a
+      // no-op identity transform.
+      return { units: folded(composition), source: "timeline" };
     }
   }
 
