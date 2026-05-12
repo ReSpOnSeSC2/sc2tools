@@ -42,8 +42,44 @@ const UNITS = [
 ] as const;
 
 const UPGRADES = [
+  // Legacy short aliases — kept for backwards compat with existing
+  // strategy overrides and KEYWORDS entries. These resolve to the
+  // same PNG as their canonical long-form counterparts (e.g. `blink`
+  // and `blinktech` both render the Protoss Blink icon).
   "blink", "charge", "cloak", "combatshield", "concussive", "glaive",
   "speed", "stim",
+  // Protoss multiplayer upgrades (sc2reader canonical names where
+  // possible, display-derived short names otherwise).
+  "warpgateresearch", "resonatingglaives", "psistorm", "shadowstride",
+  "extendedthermallance", "graviticdrive", "graviticboosters",
+  "anionpulsecrystals", "fluxvanes", "tectonicdestabilizers",
+  "protossgroundweapons1", "protossgroundweapons2", "protossgroundweapons3",
+  "protossgroundarmor1", "protossgroundarmor2", "protossgroundarmor3",
+  "protossshields1", "protossshields2", "protossshields3",
+  "protossairweapons1", "protossairweapons2", "protossairweapons3",
+  "protossairarmor1", "protossairarmor2", "protossairarmor3",
+  // Terran multiplayer upgrades.
+  "hisecautotracking", "neosteelarmor", "drillingclaws",
+  "magfieldaccelerator", "infernalpreigniter", "smartservos",
+  "hyperflightrotors", "corvidreactor", "enhancedshockwaves",
+  "caduceusreactor", "rapidreignition", "advancedballistics",
+  "yamatocannon", "weaponrefit", "personalcloak",
+  "terraninfantryweapons1", "terraninfantryweapons2", "terraninfantryweapons3",
+  "terraninfantryarmor1", "terraninfantryarmor2", "terraninfantryarmor3",
+  "terranvehicleweapons1", "terranvehicleweapons2", "terranvehicleweapons3",
+  "terranvehiclearmor1", "terranvehiclearmor2", "terranvehiclearmor3",
+  "terranshipweapons1", "terranshipweapons2", "terranshipweapons3",
+  // Zerg multiplayer upgrades.
+  "burrow", "pneumatizedcarapace", "metabolicboost", "adrenalglands",
+  "centrifugalhooks", "glialreconstitution", "tunnelingclaws",
+  "muscularaugments", "groovedspines", "seismicspines", "adaptivetalons",
+  "anabolicsynthesis", "chitinousplating", "pathogenglands", "neuralparasite",
+  "frenzy", "microbialshroud",
+  "zergmissileattacks1", "zergmissileattacks2", "zergmissileattacks3",
+  "zergmeleeattacks1", "zergmeleeattacks2", "zergmeleeattacks3",
+  "zerggroundcarapace1", "zerggroundcarapace2", "zerggroundcarapace3",
+  "zergflyerattacks1", "zergflyerattacks2", "zergflyerattacks3",
+  "zergflyercarapace1", "zergflyercarapace2", "zergflyercarapace3",
 ] as const;
 
 const RACES_SVG = ["protoss", "random", "terran", "zerg"] as const;
@@ -82,7 +118,15 @@ const UPGRADE_SET = new Set(UPGRADES as readonly string[]);
 const RACE_SET = new Set(RACES_SVG as readonly string[]);
 const LEAGUE_SET = new Set(LEAGUES_SVG as readonly string[]);
 
-/** Synonym map — normalized name → canonical icon key. */
+/** Synonym map — normalized name → canonical icon key.
+ *
+ * Upgrade entries cover the sc2reader ``upgrade_type_name`` form (key
+ * after ``normalizeIconName``) AND the human-readable display form
+ * agents sometimes emit. So all of "BlinkTech", "Blink Tech", and
+ * "Blink" resolve to the same PNG. Display names that contain a
+ * non-alpha character (e.g. "+1", "Anion Pulse-Crystals") still
+ * normalise cleanly because ``normalizeIconName`` strips them.
+ */
 const SYNONYMS: Record<string, { kind: IconKind; key: string }> = {
   // race shorthand
   z: { kind: "race", key: "zerg" },
@@ -114,6 +158,93 @@ const SYNONYMS: Record<string, { kind: IconKind; key: string }> = {
   orbital: { kind: "building", key: "orbitalcommand" },
   planetary: { kind: "building", key: "planetaryfortress" },
   nydus: { kind: "building", key: "nydusnetwork" },
+  // ---- Protoss upgrades ----
+  blinktech: { kind: "upgrade", key: "blink" },
+  psistormtech: { kind: "upgrade", key: "psistorm" },
+  psionicstorm: { kind: "upgrade", key: "psistorm" },
+  adeptpiercingattack: { kind: "upgrade", key: "resonatingglaives" },
+  darktemplarblinkupgrade: { kind: "upgrade", key: "shadowstride" },
+  observergraviticbooster: { kind: "upgrade", key: "graviticboosters" },
+  phoenixrangeupgrade: { kind: "upgrade", key: "anionpulsecrystals" },
+  voidrayspeedupgrade: { kind: "upgrade", key: "fluxvanes" },
+  tempestgroundattackupgrade: { kind: "upgrade", key: "tectonicdestabilizers" },
+  // Protoss ground/air/shield arrays (sc2reader keys → file keys).
+  protossgroundweaponslevel1: { kind: "upgrade", key: "protossgroundweapons1" },
+  protossgroundweaponslevel2: { kind: "upgrade", key: "protossgroundweapons2" },
+  protossgroundweaponslevel3: { kind: "upgrade", key: "protossgroundweapons3" },
+  protossgroundarmorslevel1: { kind: "upgrade", key: "protossgroundarmor1" },
+  protossgroundarmorslevel2: { kind: "upgrade", key: "protossgroundarmor2" },
+  protossgroundarmorslevel3: { kind: "upgrade", key: "protossgroundarmor3" },
+  protossshieldslevel1: { kind: "upgrade", key: "protossshields1" },
+  protossshieldslevel2: { kind: "upgrade", key: "protossshields2" },
+  protossshieldslevel3: { kind: "upgrade", key: "protossshields3" },
+  protossairweaponslevel1: { kind: "upgrade", key: "protossairweapons1" },
+  protossairweaponslevel2: { kind: "upgrade", key: "protossairweapons2" },
+  protossairweaponslevel3: { kind: "upgrade", key: "protossairweapons3" },
+  protossairarmorslevel1: { kind: "upgrade", key: "protossairarmor1" },
+  protossairarmorslevel2: { kind: "upgrade", key: "protossairarmor2" },
+  protossairarmorslevel3: { kind: "upgrade", key: "protossairarmor3" },
+  // ---- Terran upgrades ----
+  stimpack: { kind: "upgrade", key: "stim" },
+  shieldwall: { kind: "upgrade", key: "combatshield" },
+  punishergrenades: { kind: "upgrade", key: "concussive" },
+  concussiveshells: { kind: "upgrade", key: "concussive" },
+  terranbuildingarmor: { kind: "upgrade", key: "neosteelarmor" },
+  drillclaws: { kind: "upgrade", key: "drillingclaws" },
+  cyclonelockondamageupgrade: { kind: "upgrade", key: "magfieldaccelerator" },
+  highcapacitybarrels: { kind: "upgrade", key: "infernalpreigniter" },
+  bansheecloak: { kind: "upgrade", key: "cloak" },
+  cloakingfield: { kind: "upgrade", key: "cloak" },
+  bansheespeed: { kind: "upgrade", key: "hyperflightrotors" },
+  ravencorvidreactor: { kind: "upgrade", key: "corvidreactor" },
+  medivaccaduceusreactor: { kind: "upgrade", key: "caduceusreactor" },
+  medivacincreasespeedboost: { kind: "upgrade", key: "rapidreignition" },
+  liberatoragrangeupgrade: { kind: "upgrade", key: "advancedballistics" },
+  battlecruiserenablespecializations: { kind: "upgrade", key: "weaponrefit" },
+  personalcloaking: { kind: "upgrade", key: "personalcloak" },
+  // Terran ground/air arrays
+  terraninfantryweaponslevel1: { kind: "upgrade", key: "terraninfantryweapons1" },
+  terraninfantryweaponslevel2: { kind: "upgrade", key: "terraninfantryweapons2" },
+  terraninfantryweaponslevel3: { kind: "upgrade", key: "terraninfantryweapons3" },
+  terraninfantryarmorslevel1: { kind: "upgrade", key: "terraninfantryarmor1" },
+  terraninfantryarmorslevel2: { kind: "upgrade", key: "terraninfantryarmor2" },
+  terraninfantryarmorslevel3: { kind: "upgrade", key: "terraninfantryarmor3" },
+  terranvehicleweaponslevel1: { kind: "upgrade", key: "terranvehicleweapons1" },
+  terranvehicleweaponslevel2: { kind: "upgrade", key: "terranvehicleweapons2" },
+  terranvehicleweaponslevel3: { kind: "upgrade", key: "terranvehicleweapons3" },
+  terranvehicleandshiparmorslevel1: { kind: "upgrade", key: "terranvehiclearmor1" },
+  terranvehicleandshiparmorslevel2: { kind: "upgrade", key: "terranvehiclearmor2" },
+  terranvehicleandshiparmorslevel3: { kind: "upgrade", key: "terranvehiclearmor3" },
+  terranshipweaponslevel1: { kind: "upgrade", key: "terranshipweapons1" },
+  terranshipweaponslevel2: { kind: "upgrade", key: "terranshipweapons2" },
+  terranshipweaponslevel3: { kind: "upgrade", key: "terranshipweapons3" },
+  // ---- Zerg upgrades ----
+  overlordspeed: { kind: "upgrade", key: "pneumatizedcarapace" },
+  zerglingmetabolicboost: { kind: "upgrade", key: "metabolicboost" },
+  zerglingmovementspeed: { kind: "upgrade", key: "metabolicboost" },
+  zerglingadrenalglands: { kind: "upgrade", key: "adrenalglands" },
+  zerglingattackspeed: { kind: "upgrade", key: "adrenalglands" },
+  centrificalhooks: { kind: "upgrade", key: "centrifugalhooks" },
+  evolvemuscularaugments: { kind: "upgrade", key: "muscularaugments" },
+  evolvegroovedspines: { kind: "upgrade", key: "groovedspines" },
+  lurkerrange: { kind: "upgrade", key: "seismicspines" },
+  diggingclaws: { kind: "upgrade", key: "adaptivetalons" },
+  infestorenergyupgrade: { kind: "upgrade", key: "pathogenglands" },
+  zergmissileweaponslevel1: { kind: "upgrade", key: "zergmissileattacks1" },
+  zergmissileweaponslevel2: { kind: "upgrade", key: "zergmissileattacks2" },
+  zergmissileweaponslevel3: { kind: "upgrade", key: "zergmissileattacks3" },
+  zergmeleeweaponslevel1: { kind: "upgrade", key: "zergmeleeattacks1" },
+  zergmeleeweaponslevel2: { kind: "upgrade", key: "zergmeleeattacks2" },
+  zergmeleeweaponslevel3: { kind: "upgrade", key: "zergmeleeattacks3" },
+  zerggroundarmorslevel1: { kind: "upgrade", key: "zerggroundcarapace1" },
+  zerggroundarmorslevel2: { kind: "upgrade", key: "zerggroundcarapace2" },
+  zerggroundarmorslevel3: { kind: "upgrade", key: "zerggroundcarapace3" },
+  zergflyerweaponslevel1: { kind: "upgrade", key: "zergflyerattacks1" },
+  zergflyerweaponslevel2: { kind: "upgrade", key: "zergflyerattacks2" },
+  zergflyerweaponslevel3: { kind: "upgrade", key: "zergflyerattacks3" },
+  zergflyerarmorslevel1: { kind: "upgrade", key: "zergflyercarapace1" },
+  zergflyerarmorslevel2: { kind: "upgrade", key: "zergflyercarapace2" },
+  zergflyerarmorslevel3: { kind: "upgrade", key: "zergflyercarapace3" },
 };
 
 function lookupKind(normalized: string, hint?: IconKind):

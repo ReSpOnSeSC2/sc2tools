@@ -5,7 +5,11 @@ const { stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
 const { toStartSeconds } = require("./buildDurations");
 
-const { KNOWN_BUILDING_NAMES, isKnownBuilding } = require("./knownBuildings");
+const {
+  KNOWN_BUILDING_NAMES,
+  isKnownBuilding,
+  isKnownUpgrade,
+} = require("./knownBuildings");
 
 const BUILD_LOG_LINE_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
 const BUILD_LOG_NOISE_RE = /^(Beacon|Reward|Spray)/;
@@ -709,13 +713,24 @@ function parseBuildLogLines(lines, catalog) {
     const isBuilding = entry && entry.isBuilding != null
       ? !!entry.isBuilding
       : isKnownBuilding(rawName);
+    // Upgrades fall back to the same catalog-independent path so the
+    // macro-breakdown Upgrades chip row, the BuildOrderTimeline upgrade
+    // tier, the "Save as new build order" flow, and the custom-build
+    // editor all see ``category: "upgrade"`` on every research event —
+    // even when the catalog JSON is absent. Without this, every upgrade
+    // event got tagged ``category: "unknown"`` and the downstream
+    // ``ev.category === "upgrade"`` filters silently dropped them.
+    const isUpgradeFallback = !isBuilding && isKnownUpgrade(rawName);
+    const category = entry
+      ? entry.category
+      : (isBuilding ? "building" : (isUpgradeFallback ? "upgrade" : "unknown"));
     events.push({
       time: minutes * 60 + seconds,
       time_display: `${minutes}:${String(seconds).padStart(2, "0")}`,
       name: rawName,
       display: entry ? entry.display : rawName,
       race: entry ? entry.race : "Neutral",
-      category: entry ? entry.category : (isBuilding ? "building" : "unknown"),
+      category,
       tier: entry ? entry.tier : 0,
       is_building: isBuilding,
       comp: entry ? entry.comp || null : null,
