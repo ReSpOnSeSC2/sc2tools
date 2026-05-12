@@ -81,15 +81,44 @@ const DEFAULTS = {
 };
 
 /**
- * Window the hook waits for cloud enrichment to land on a fresh
- * ``liveGame`` envelope before speaking the fallback line. Calibrated
- * against the broker's partial-then-enriched fan-out: the partial
- * arrives synchronously, the Mongo aggregation that produces
- * ``streamerHistory`` typically lands within 50–300 ms. 900 ms gives
- * enrichment plenty of headroom while still firing the readout well
- * within the streamer's loading-screen attention budget.
+ * Per-readiness-signal fallback windows. The hook waits for cloud
+ * enrichment AND a usable MMR source before firing the live-envelope
+ * scouting line; these constants cap how long it'll wait for each
+ * signal before falling back to whatever data is in hand.
+ *
+ * **Why two windows, not one.** The two signals have different
+ * latency profiles AND different consequences for the spoken line:
+ *
+ *   * ``streamerHistory`` (cloud's Mongo aggregation) — produces the
+ *     H2H / "First meeting." clause. For repeat opponents on a warm
+ *     cache the partial-then-enriched fan-out lands within 50–300 ms,
+ *     but for first-meeting opponents on a cold path the three-tier
+ *     identity lookup (``pulse_character_id`` → ``toon_handle`` →
+ *     display name) PLUS four sequential games-collection
+ *     aggregations (streak / recentGames / topBuilds / meta) can
+ *     realistically take 1.8–2.5 s on Atlas — and Atlas GC pauses,
+ *     pool contention, or a Render container cold start under load
+ *     push that past 3 s. A streamer hitting a brand-new opponent
+ *     should still hear "First meeting." — silently dropping the
+ *     clause is a regression the 900 ms ceiling caused in practice
+ *     (2026-05-12 stream repro). 5 s gives ~2× headroom over the
+ *     realistic worst-case cold path while still firing well within
+ *     SC2's 10–30 s loading-screen attention budget.
+ *   * MMR (``opponent.profile.mmr`` from SC2Pulse, or saved last-game
+ *     MMR from ``streamerHistory.oppMmr``) — bounded by the agent's
+ *     Pulse HTTP timeout, ~900 ms in the worst case. A longer wait
+ *     for MMR doesn't buy us anything because Pulse either responded
+ *     by then or it's down for this match.
+ *
+ * Selection rule in the effect: if ``streamerHistory`` is missing,
+ * use the enrichment window (longer). If ``streamerHistory`` is
+ * present but MMR isn't, use the MMR window (shorter). When both are
+ * missing the longer window applies — once enrichment arrives the
+ * existing timer continues, so worst case we wait the enrichment
+ * window even if MMR could have shortened the wait.
  */
-const LIVE_GAME_ENRICHMENT_WAIT_MS = 900;
+const ENRICHMENT_FALLBACK_WAIT_MS = 5000;
+const MMR_FALLBACK_WAIT_MS = 900;
 
 /**
  * Public surface of `useVoiceReadout`. Consumers render the gesture
@@ -430,15 +459,17 @@ export function useVoiceReadout(
   // Pre-game / in-game readout, driven by the desktop agent's
   // ``LiveGameEnvelope`` rather than the post-game ``LiveGamePayload``.
   // Speaks at most once per ``gameKey`` AFTER enrichment lands — or
-  // after a short timeout if enrichment hasn't arrived yet — so the
-  // streamer never hears half a sentence and never hears the readout
-  // twice for the same match.
+  // after the relevant fallback timeout if enrichment hasn't arrived
+  // yet — so the streamer never hears half a sentence and never hears
+  // the readout twice for the same match.
   //
-  // Why the timeout exists: the broker's partial-then-enriched fan-out
-  // is normally fast (<300 ms), but a Pulse / Mongo blip could leave a
-  // partial envelope without any enriched re-emit. The 900 ms fallback
-  // means the readout still fires (with whatever data we have) instead
-  // of going silent for the streamer.
+  // Why the timeouts exist: the broker's partial-then-enriched fan-out
+  // is normally fast (<300 ms), but a Pulse / Mongo blip — or a first-
+  // meeting cold path that forces the full three-tier opponents lookup
+  // — could leave the readout waiting on data that never lands. The
+  // per-signal fallback windows (``ENRICHMENT_FALLBACK_WAIT_MS`` /
+  // ``MMR_FALLBACK_WAIT_MS``) cap that wait so the readout still fires
+  // with whatever data we have instead of going silent.
   //
   // Why we don't fire from this path when ``live`` is set: the post-
   // game payload has identical or stricter information, and letting
@@ -475,9 +506,9 @@ export function useVoiceReadout(
     // AND at least one usable MMR source before firing. Without that
     // the voice can speak the moment ``streamerHistory`` lands while
     // Pulse is still a few hundred ms behind, silently dropping the
-    // MMR clause from the readout. The 900 ms fallback timer below
-    // still fires the line with whatever data we have if the readiness
-    // signals never both arrive.
+    // MMR clause from the readout. The per-signal fallback timers
+    // below still fire the line with whatever data we have if the
+    // readiness signals never both arrive.
     const hasEnrichment = !!liveGame.streamerHistory;
     const hasMmr = isLiveGameMmrReady(liveGame);
 
@@ -520,16 +551,25 @@ export function useVoiceReadout(
       return;
     }
 
-    // One or both signals still pending. Arm the 900 ms fallback
-    // timer once per gameKey so a Pulse outage / Mongo blip can't
-    // gag the readout forever — we fire with whatever data we have
-    // by the deadline.
+    // One or both signals still pending. Arm a fallback timer once
+    // per gameKey so a Pulse outage / Mongo blip / first-meeting cold
+    // path can't gag the readout forever — we fire with whatever
+    // data we have by the deadline. The window depends on WHICH
+    // signal is missing: enrichment (cloud Mongo) gets a longer
+    // window than MMR (Pulse HTTP), because the cloud's three-tier
+    // opponents lookup for a brand-new opponent can legitimately
+    // exceed a second — and silently dropping "First meeting." /
+    // the H2H clause on a fresh opponent is the regression we hit
+    // pre-fix (2026-05-12 stream repro).
+    const waitMs = hasEnrichment
+      ? MMR_FALLBACK_WAIT_MS
+      : ENRICHMENT_FALLBACK_WAIT_MS;
     if (entry.timer === null) {
       entry.timer = window.setTimeout(() => {
         const slot = states.get(gameKey);
         if (slot) slot.timer = null;
         fireUtterance();
-      }, LIVE_GAME_ENRICHMENT_WAIT_MS);
+      }, waitMs);
     }
   }, [liveGame, live, enabled, prefs, enqueueOrSpeak, log]);
 

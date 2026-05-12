@@ -128,12 +128,24 @@ describe("useVoiceReadout — live envelope path", () => {
     vi.useRealTimers();
   });
   function flush() {
-    // Advance enough to cover the 900 ms enrichment fallback PLUS the
-    // 300 ms default speak delay, with margin — but well short of the
-    // 8 s keep-alive interval that ``useVoiceReadout`` registers, so
-    // ``runAllTimers`` doesn't loop into it forever.
+    // Advance enough to cover the 900 ms MMR fallback PLUS the 300 ms
+    // default speak delay, with margin — but well short of the 8 s
+    // keep-alive interval that ``useVoiceReadout`` registers, so
+    // ``runAllTimers`` doesn't loop into it forever. Tests that need
+    // the longer 3 s enrichment fallback advance the clock explicitly
+    // before calling ``flush``.
     act(() => {
       vi.advanceTimersByTime(2000);
+    });
+  }
+
+  function flushEnrichmentFallback() {
+    // Covers the 5 s enrichment fallback PLUS the 300 ms speak delay,
+    // for tests that exercise the streamerHistory-never-arrives path.
+    // Stays well under the 8 s keep-alive interval so ``runAllTimers``
+    // doesn't loop forever.
+    act(() => {
+      vi.advanceTimersByTime(6000);
     });
   }
 
@@ -173,7 +185,8 @@ describe("useVoiceReadout — live envelope path", () => {
         refOut={ref}
       />,
     );
-    // Advance only a little — well short of the 900 ms fallback window.
+    // Advance only a little — well short of the enrichment fallback
+    // window so the partial-only line can't have fired yet.
     act(() => {
       vi.advanceTimersByTime(100);
     });
@@ -302,11 +315,16 @@ describe("useVoiceReadout — live envelope path", () => {
     expect(text).toContain("Good luck.");
   });
 
-  it("speaks the fallback line after 900 ms when enrichment never arrives", () => {
+  it("speaks the fallback line after the enrichment window when streamerHistory never arrives", () => {
     // Pulse outage / Mongo blip: the partial lands but no enriched
-    // re-emit ever follows. The hook's 900 ms fallback fires the
+    // re-emit ever follows. The hook's enrichment fallback fires the
     // readout with whatever data is in hand rather than gagging the
-    // streamer for the rest of the match.
+    // streamer for the rest of the match. The window is the longer
+    // ``ENRICHMENT_FALLBACK_WAIT_MS`` (5 s) because the cloud's
+    // first-meeting opponents cold path (three-tier identity miss +
+    // four sequential aggregations) realistically takes 1.8–2.5 s and
+    // can exceed 3 s under load — we'd rather wait than silently drop
+    // the H2H clause for a brand-new opponent.
     window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
     const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
     const partial = envelope({
@@ -325,13 +343,17 @@ describe("useVoiceReadout — live envelope path", () => {
         refOut={ref}
       />,
     );
-    // Just before the fallback window — must not have spoken yet.
+    // Just before the enrichment fallback window — must not have
+    // spoken yet. (Note: the OLD 900 ms ceiling would have fired here,
+    // dropping the H2H clause; the new 5 s window keeps the line
+    // pending so a slow enrichment still gets a chance.)
     act(() => {
-      vi.advanceTimersByTime(800);
+      vi.advanceTimersByTime(4800);
     });
     expect(cap.speak).not.toHaveBeenCalled();
-    // After the fallback window — speech fires with the partial data.
-    flush();
+    // After the enrichment fallback window — speech fires with the
+    // partial data.
+    flushEnrichmentFallback();
     expect(cap.speak).toHaveBeenCalledTimes(1);
     const text = cap.utterances[0]?.text || "";
     expect(text).toContain("Facing Cure, Terran.");
@@ -339,6 +361,76 @@ describe("useVoiceReadout — live envelope path", () => {
     // No H2H clause because enrichment never landed.
     expect(text).not.toMatch(/against them/);
     expect(text).not.toMatch(/First meeting/);
+    expect(text).toContain("Good luck.");
+  });
+
+  it("announces 'First meeting.' when enrichment is slow but eventually arrives with 0-0 H2H (first-meeting cold path)", () => {
+    // 2026-05-12 stream repro: streamer's first match against a brand-
+    // new opponent. Partial envelope arrives with the agent's Pulse-
+    // resolved MMR right away, but the cloud's first-meeting Mongo
+    // path (three-tier lookup → 0-0 stamp → recent-games / streak /
+    // top-builds / meta aggregations) takes >1 s. Pre-fix the 900 ms
+    // fallback fired first and the voice spoke "Facing X, Race. NNN
+    // MMR. Good luck." with the "First meeting." clause silently
+    // dropped — defeating the whole point of the cloud's explicit
+    // 0-0 signal. Post-fix the longer enrichment window holds the
+    // readout until streamerHistory lands.
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const partial = envelope({
+      gameKey: "cold-1",
+      opponent: {
+        name: "BrandNew",
+        race: "Zerg",
+        profile: { mmr: 4200 }, // MMR resolved fast
+      },
+      // streamerHistory absent — cloud aggregation still in flight.
+    });
+    const enriched = envelope({
+      gameKey: "cold-1",
+      phase: "match_started",
+      opponent: {
+        name: "BrandNew",
+        race: "Zerg",
+        profile: { mmr: 4200 },
+      },
+      streamerHistory: {
+        oppName: "BrandNew",
+        oppRace: "Zerg",
+        matchup: "PvZ",
+        headToHead: { wins: 0, losses: 0 },
+      },
+    });
+    const { rerender } = render(
+      <Harness
+        live={null}
+        liveGame={partial}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    // Past the OLD 900 ms ceiling, well short of the new 3 s window.
+    // Voice MUST NOT have spoken yet — silently dropping "First
+    // meeting." is the regression we're fixing.
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(cap.speak).not.toHaveBeenCalled();
+    // Cloud enrichment finally lands at ~2 s.
+    rerender(
+      <Harness
+        live={null}
+        liveGame={enriched}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    const text = cap.utterances[0]?.text || "";
+    expect(text).toContain("Facing BrandNew, Zerg.");
+    expect(text).toContain("4200 MMR.");
+    expect(text).toContain("First meeting.");
     expect(text).toContain("Good luck.");
   });
 
@@ -408,10 +500,11 @@ describe("useVoiceReadout — live envelope path", () => {
   });
 
   it("does NOT speak again when an enriched envelope replaces a partial for the same gameKey AFTER the line already played", () => {
-    // First the partial arrives → 900 ms timer fires → speech plays
-    // (without the H2H clause). The broker's enriched re-emit then
-    // lands for the SAME gameKey. The hook must not speak a second
-    // time — duplicate utterance for one match is the original bug.
+    // First the partial arrives → enrichment fallback fires → speech
+    // plays (without the H2H clause). The broker's enriched re-emit
+    // then lands for the SAME gameKey. The hook must not speak a
+    // second time — duplicate utterance for one match is the original
+    // bug.
     window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
     const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
     const partial = envelope({
@@ -441,8 +534,10 @@ describe("useVoiceReadout — live envelope path", () => {
         refOut={ref}
       />,
     );
-    // Fallback window fires — speech plays once with the partial.
-    flush();
+    // Enrichment fallback fires — speech plays once with the partial.
+    // (Neither streamerHistory nor MMR ever arrived before the timer,
+    // so this is the worst-case 3 s wait.)
+    flushEnrichmentFallback();
     expect(cap.speak).toHaveBeenCalledTimes(1);
     // Enriched re-emit for the same gameKey lands LATE.
     rerender(

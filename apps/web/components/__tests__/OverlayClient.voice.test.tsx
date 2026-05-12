@@ -172,8 +172,10 @@ describe("OverlayClient — voice readout on the all-in-one URL", () => {
     });
 
     // Flush the hook's delay timer so synth.speak actually fires.
-    // 2 s covers the 900 ms enrichment fallback + 300 ms speak delay
-    // chain with margin, while staying short of the hook's 8 s keep-
+    // Both readiness signals (streamerHistory + MMR) are already
+    // present on the envelope, so the hook fires immediately — we
+    // only need to cover the 300 ms default speak delay. 2 s gives
+    // plenty of margin while staying short of the hook's 8 s keep-
     // alive interval so the fake-timer loop terminates cleanly.
     act(() => {
       vi.advanceTimersByTime(2000);
@@ -215,8 +217,10 @@ describe("OverlayClient — voice readout on the all-in-one URL", () => {
         },
       });
     });
-    // 2 s covers the 900 ms enrichment fallback + 300 ms speak delay
-    // chain with margin, while staying short of the hook's 8 s keep-
+    // Both readiness signals (streamerHistory + MMR) are already
+    // present on the envelope, so the hook fires immediately — we
+    // only need to cover the 300 ms default speak delay. 2 s gives
+    // plenty of margin while staying short of the hook's 8 s keep-
     // alive interval so the fake-timer loop terminates cleanly.
     act(() => {
       vi.advanceTimersByTime(2000);
