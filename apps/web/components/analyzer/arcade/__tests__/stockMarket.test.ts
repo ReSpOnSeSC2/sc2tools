@@ -226,15 +226,32 @@ describe("Stock Market: build universe + price math", () => {
 });
 
 /**
+ * Play-volume volatility multiplier. Mirrors `volatility()` in
+ * stockMarket.tsx — keep these in sync. Modelled on the standard
+ * error of a proportion (~ 1/√n) so few-play builds amplify P&L
+ * (high sample noise = wide variance) and heavily-played builds
+ * damp it. Anchored at 30 plays = 1.0×, bounded 0.75×..2.0×.
+ */
+const VOL_BASELINE_PLAYS = 30;
+const VOL_MIN = 0.75;
+const VOL_MAX = 2.0;
+export function volatility(plays: number): number {
+  const n = Math.max(1, plays);
+  const raw = Math.sqrt(VOL_BASELINE_PLAYS / n);
+  return Math.max(VOL_MIN, Math.min(VOL_MAX, raw));
+}
+
+/**
  * Pure portfolio P&L helper — replicates the reveal math the surface
- * uses. P&L per pick is the weighted % return on entry price, NOT the
- * raw Δprice: a 5-point gain on a price-30 entry contributes more than
- * the same 5-point gain on a price-90 entry. That's what makes price a
- * strategic variable rather than a cosmetic label. Result is in
- * percentage points (e.g. +12.5 means the portfolio gained 12.5%).
+ * uses. P&L per pick = weight × % return on entry price × volatility
+ * multiplier on entry plays. Two independent levers: low-price builds
+ * amplify % return per Δprice, low-play builds amplify the variance
+ * multiplier on top of that. `entryPlays` is optional for back-compat
+ * with portfolios locked before the volatility model — those default
+ * to vol = 1.0 (neutral). Result is in percentage points.
  */
 export function portfolioPnl(
-  picks: Array<{ slug: string; alloc: number; entryPrice: number }>,
+  picks: Array<{ slug: string; alloc: number; entryPrice: number; entryPlays?: number }>,
   pricesNow: Record<string, number>,
 ): number {
   let pnl = 0;
@@ -243,7 +260,8 @@ export function portfolioPnl(
     if (typeof cur !== "number") continue;
     if (p.entryPrice <= 0) continue;
     const ret = (cur - p.entryPrice) / p.entryPrice;
-    pnl += p.alloc * ret;
+    const vol = typeof p.entryPlays === "number" ? volatility(p.entryPlays) : 1.0;
+    pnl += p.alloc * ret * vol;
   }
   return pnl;
 }
@@ -286,5 +304,59 @@ describe("Stock Market portfolio P&L", () => {
         { A: 50 },
       ),
     ).toBe(0);
+  });
+  test("missing entryPlays defaults to neutral 1.0× volatility (back-compat)", () => {
+    // Portfolios locked before the volatility model existed have no
+    // entryPlays. They must still compute P&L the same as the prior
+    // % return formula — no surprise multiplier on legacy data.
+    const pnl = portfolioPnl(
+      [{ slug: "A", alloc: 100, entryPrice: 50 }],
+      { A: 60 },
+    );
+    expect(pnl).toBeCloseTo(20, 5); // 100 × (10/50) × 1.0 = 20
+  });
+});
+
+describe("Stock Market volatility curve", () => {
+  test("anchored at baseline plays = 1.0× neutral", () => {
+    expect(volatility(30)).toBeCloseTo(1.0, 5);
+  });
+  test("clamps low play counts to the 2.0× ceiling", () => {
+    // Raw √(30/1) ≈ 5.48 — clamped to MAX so a single-play build
+    // can't trivially dominate optimal strategy.
+    expect(volatility(0)).toBe(2.0);
+    expect(volatility(1)).toBe(2.0);
+    expect(volatility(5)).toBe(2.0);
+    expect(volatility(7)).toBe(2.0);
+  });
+  test("decays smoothly through the mid-range", () => {
+    expect(volatility(10)).toBeCloseTo(Math.sqrt(3), 3);
+    expect(volatility(20)).toBeCloseTo(Math.sqrt(1.5), 3);
+  });
+  test("clamps high play counts to the 0.75× floor", () => {
+    // Raw √(30/100) ≈ 0.55 — clamped to MIN so heavily-played
+    // veterans still carry some volatility (vol > 0).
+    expect(volatility(100)).toBe(0.75);
+    expect(volatility(1000)).toBe(0.75);
+  });
+
+  test("low-play + low-price stacks both multipliers vs high-play + high-price", () => {
+    // Same alloc, same Δprice. The "underdog" (cheap, brand-new) gets
+    // amplified by both the % return (low denominator) and the
+    // volatility multiplier (high variance). The "veteran blue chip"
+    // (expensive, heavily played) gets dampened by both.
+    const underdog = portfolioPnl(
+      [{ slug: "X", alloc: 50, entryPrice: 30, entryPlays: 2 }],
+      { X: 35 }, // +5 raw
+    );
+    const veteran = portfolioPnl(
+      [{ slug: "X", alloc: 50, entryPrice: 90, entryPlays: 200 }],
+      { X: 95 }, // +5 raw
+    );
+    // underdog: 50 × (5/30) × 2.0 ≈ 16.67
+    // veteran:  50 × (5/90) × 0.75 ≈ 2.08
+    expect(underdog).toBeCloseTo(16.667, 2);
+    expect(veteran).toBeCloseTo(2.083, 2);
+    expect(underdog).toBeGreaterThan(veteran * 5);
   });
 });
