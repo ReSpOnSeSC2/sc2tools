@@ -616,12 +616,18 @@ export function countUpgradesAt(
     }
     nonTieredCounts[raw] = (nonTieredCounts[raw] || 0) + 1;
   }
-  // Second pass: assemble the output map, emitting one entry per
-  // tiered family (the highest-tier name we saw) plus every non-
-  // tiered upgrade with its accumulated count.
+  // Second pass: assemble the output map. For each tiered family we
+  // emit ONE entry using the highest-tier name we saw, with the chip
+  // ``count`` set to that tier — so a +2 Ground Weapons player reads
+  // as "Ground Weapons × 2", not "× 1" (a literal build-event count
+  // is always 1 after the tier collapse and means nothing to a
+  // viewer expecting the upgrade level). The sortByCountDesc sort
+  // for the chip row naturally surfaces +3 ahead of +2 ahead of +1.
+  // Non-tiered upgrades keep their real count — Stim, Charge, Burrow
+  // etc. only fire once per game so it's always 1 anyway.
   const counts: Record<string, number> = { ...nonTieredCounts };
-  for (const { name } of tieredByFamily.values()) {
-    counts[name] = (counts[name] || 0) + 1;
+  for (const { name, tier } of tieredByFamily.values()) {
+    counts[name] = tier;
   }
   return counts;
 }

@@ -246,8 +246,9 @@ describe("countUpgradesAt — Upgrades row", () => {
     // A player who researched +1 then +2 Ground Weapons should NOT see
     // two chips — the +2 chip is enough because it implies the +1
     // baseline (and matches the in-game vocabulary of "we're on +2").
-    // Tested across all races and all the upgrade families so the
-    // collapse fires universally.
+    // The chip ``count`` is the tier number itself so the user reads
+    // "Ground Weapons × 2", not "× 1". Tested across all races and
+    // all the upgrade families so the collapse fires universally.
     const events: BuildEvent[] = [
       { time: 240, name: "ProtossGroundWeaponsLevel1", is_building: false, category: "upgrade" },
       { time: 480, name: "ProtossGroundWeaponsLevel2", is_building: false, category: "upgrade" },
@@ -260,16 +261,16 @@ describe("countUpgradesAt — Upgrades row", () => {
       { time: 1000, name: "Charge", is_building: false, category: "upgrade" },
     ];
     const out = countUpgradesAt(events, 9999);
-    // Only highest tier per family.
-    expect(out.ProtossGroundWeaponsLevel2).toBe(1);
+    // Highest tier per family, chip count = tier number.
+    expect(out.ProtossGroundWeaponsLevel2).toBe(2);
     expect(out.ProtossGroundWeaponsLevel1).toBeUndefined();
-    expect(out.ProtossGroundArmorLevel1).toBe(1); // singleton, kept
-    expect(out.TerranInfantryWeaponsLevel3).toBe(1);
+    expect(out.ProtossGroundArmorLevel1).toBe(1); // tier 1, displays as 1
+    expect(out.TerranInfantryWeaponsLevel3).toBe(3);
     expect(out.TerranInfantryWeaponsLevel1).toBeUndefined();
     expect(out.TerranInfantryWeaponsLevel2).toBeUndefined();
-    expect(out.ZergMeleeAttacksLevel2).toBe(1);
+    expect(out.ZergMeleeAttacksLevel2).toBe(2);
     expect(out.ZergMeleeAttacksLevel1).toBeUndefined();
-    // Non-tiered upgrade unaffected.
+    // Non-tiered upgrade unaffected — Charge fires once per game.
     expect(out.Charge).toBe(1);
   });
 
@@ -283,7 +284,7 @@ describe("countUpgradesAt — Upgrades row", () => {
       { time: 480, name: "ProtossGroundArmorsLevel2", is_building: false, category: "upgrade" },
     ];
     const out = countUpgradesAt(events, 9999);
-    expect(out.ProtossGroundArmorsLevel2).toBe(1);
+    expect(out.ProtossGroundArmorsLevel2).toBe(2);
     expect(out.ProtossGroundArmorLevel1).toBeUndefined();
   });
 
@@ -295,9 +296,9 @@ describe("countUpgradesAt — Upgrades row", () => {
       { time: 400, name: "ZergGroundCarapaceLevel2", is_building: false, category: "upgrade" },
     ];
     const out = countUpgradesAt(events, 9999);
-    expect(out.ZergMissileAttacksLevel2).toBe(1);
+    expect(out.ZergMissileAttacksLevel2).toBe(2);
     expect(out.ZergMissileWeaponsLevel1).toBeUndefined();
-    expect(out.ZergGroundCarapaceLevel2).toBe(1);
+    expect(out.ZergGroundCarapaceLevel2).toBe(2);
     expect(out.ZergGroundArmorsLevel1).toBeUndefined();
   });
 
@@ -313,8 +314,8 @@ describe("countUpgradesAt — Upgrades row", () => {
       { time: 300, name: "TerranShipArmorsLevel3", is_building: false, category: "upgrade" },
     ];
     const out = countUpgradesAt(events, 9999);
-    // All three name the same family; +3 wins.
-    expect(out.TerranShipArmorsLevel3).toBe(1);
+    // All three name the same family; +3 wins, chip count = 3.
+    expect(out.TerranShipArmorsLevel3).toBe(3);
     expect(out.TerranVehicleAndShipArmorsLevel1).toBeUndefined();
     expect(out.TerranVehicleArmorsLevel2).toBeUndefined();
   });
@@ -327,20 +328,22 @@ describe("countUpgradesAt — Upgrades row", () => {
       { time: 480, name: "ProtossGroundWeaponsLevel2", is_building: false, category: "upgrade" },
       { time: 720, name: "ProtossGroundWeaponsLevel3", is_building: false, category: "upgrade" },
     ];
-    // At t=400 only +1 has happened.
+    // At t=400 only +1 has happened — chip count is 1.
     const a = countUpgradesAt(events, 400);
     expect(a.ProtossGroundWeaponsLevel1).toBe(1);
     expect(a.ProtossGroundWeaponsLevel2).toBeUndefined();
     expect(a.ProtossGroundWeaponsLevel3).toBeUndefined();
-    // At t=500 +1 and +2 have happened — only +2 shows.
+    // At t=500 +1 and +2 have happened — only +2 shows, count is 2.
     const b = countUpgradesAt(events, 500);
-    expect(b.ProtossGroundWeaponsLevel2).toBe(1);
+    expect(b.ProtossGroundWeaponsLevel2).toBe(2);
     expect(b.ProtossGroundWeaponsLevel1).toBeUndefined();
   });
 
   it("keeps families with the same suffix distinct (Weapons ≠ Armor)", () => {
     // Sanity-check: the collapse must not merge across different
-    // upgrade lines that happen to share a level number.
+    // upgrade lines that happen to share a level number. Every family
+    // ends up with chip count = 2 because that's the tier each
+    // family reached.
     const events: BuildEvent[] = [
       { time: 240, name: "ProtossGroundWeaponsLevel2", is_building: false, category: "upgrade" },
       { time: 300, name: "ProtossGroundArmorLevel2", is_building: false, category: "upgrade" },
@@ -350,6 +353,44 @@ describe("countUpgradesAt — Upgrades row", () => {
     ];
     const out = countUpgradesAt(events, 9999);
     expect(Object.keys(out).length).toBe(5);
+    expect(out.ProtossGroundWeaponsLevel2).toBe(2);
+    expect(out.ProtossGroundArmorLevel2).toBe(2);
+    expect(out.ProtossShieldsLevel2).toBe(2);
+    expect(out.ProtossAirWeaponsLevel2).toBe(2);
+    expect(out.ProtossAirArmorLevel2).toBe(2);
+  });
+
+  it("chip count for tiered upgrades is the TIER number, not the build-event count", () => {
+    // This is the explicit lock for the UX rule: a +2 upgrade reads
+    // as "× 2" on the chip, a +3 as "× 3". Without this the chip
+    // showed "× 1" for everything past tier 1 (literal build count
+    // after the tier collapse) — confusing because "× 1" reads as
+    // "you only got +1" even when the player is on +3.
+    const cases: Array<{ tier: number; raw: string }> = [
+      { tier: 1, raw: "ProtossShieldsLevel1" },
+      { tier: 2, raw: "ProtossShieldsLevel2" },
+      { tier: 3, raw: "ProtossShieldsLevel3" },
+      { tier: 2, raw: "TerranInfantryArmorsLevel2" },
+      { tier: 3, raw: "ZergFlyerCarapaceLevel3" },
+    ];
+    for (const { tier, raw } of cases) {
+      const events: BuildEvent[] = [
+        { time: 100 + tier * 100, name: raw, is_building: false, category: "upgrade" },
+      ];
+      // Also seed with earlier-tier events to confirm the collapse
+      // doesn't accidentally aggregate them.
+      for (let t = 1; t < tier; t++) {
+        const earlier = raw.replace(/Level[1-3]$/, `Level${t}`);
+        events.unshift({
+          time: t * 100,
+          name: earlier,
+          is_building: false,
+          category: "upgrade",
+        });
+      }
+      const out = countUpgradesAt(events, 9999);
+      expect(out[raw]).toBe(tier);
+    }
   });
 });
 
