@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import {
+  useLocalStoragePositiveInt,
+  useLocalStorageState,
+} from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
@@ -52,23 +56,14 @@ const LS_VIEW = "analyzer.strategies.view";
 const LS_MIN = "analyzer.strategies.minGames";
 const LS_BVS_VW = "analyzer.strategies.bvs.view";
 
-function readLs<T>(key: string, fb: T): T {
-  if (typeof window === "undefined") return fb;
-  try {
-    const v = window.localStorage.getItem(key);
-    return v == null ? fb : (JSON.parse(v) as T);
-  } catch {
-    return fb;
-  }
-}
+type StratView = "opp" | "bvs";
+type BvsView = "heatmap" | "table";
 
-function writeLs(key: string, v: unknown) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(v));
-  } catch {
-    /* non-fatal */
-  }
+function isStratView(raw: unknown): raw is StratView {
+  return raw === "opp" || raw === "bvs";
+}
+function isBvsView(raw: unknown): raw is BvsView {
+  return raw === "heatmap" || raw === "table";
 }
 
 type Kpi = { label: string; value: string | null; sub?: string | null };
@@ -119,9 +114,8 @@ function ByOppStrategyView({
 }) {
   const { filters, dbRev } = useFilters();
   const [search, setSearch] = useState("");
-  const [minGames, setMinGames] = useState<number>(() => readLs(LS_MIN, 3));
+  const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN, 3);
   const sort = useSort("winRate", "desc");
-  useEffect(() => writeLs(LS_MIN, minGames), [minGames]);
 
   const { data, isLoading } = useApi<StratRow[]>(
     `/v1/opp-strategies${filtersToQuery(filters)}#${dbRev}`,
@@ -583,11 +577,18 @@ export function StrategiesTab() {
   // Default to "bvs" — Build vs strategy carries more actionable
   // information (your build paired with what they did) than the flat
   // by-opponent-strategy summary. Existing saved preferences win.
-  const [view, setView] = useState<"opp" | "bvs">(() =>
-    readLs(LS_VIEW, "bvs" as "opp" | "bvs"),
+  const [view, setView] = useLocalStorageState<StratView>(
+    LS_VIEW,
+    "bvs",
+    isStratView,
   );
+  const [bvsView, setBvsView] = useLocalStorageState<BvsView>(
+    LS_BVS_VW,
+    "table",
+    isBvsView,
+  );
+  const [bvsMinGames, setBvsMinGames] = useLocalStoragePositiveInt(LS_MIN, 3);
   const [drill, setDrill] = useState<DrillFilter | null>(null);
-  useEffect(() => writeLs(LS_VIEW, view), [view]);
 
   // Close the drill-down if global filters change so the user isn't
   // staring at stale rows.
@@ -635,10 +636,10 @@ export function StrategiesTab() {
           onOpenBvs={(my_build, opp_strat) =>
             setDrill({ build: my_build, opp_strategy: opp_strat })
           }
-          initialView={readLs(LS_BVS_VW, "table" as "heatmap" | "table")}
-          initialMinGames={readLs(LS_MIN, 3)}
-          onViewChange={(v) => writeLs(LS_BVS_VW, v)}
-          onMinGamesChange={(n) => writeLs(LS_MIN, n)}
+          initialView={bvsView}
+          initialMinGames={bvsMinGames}
+          onViewChange={setBvsView}
+          onMinGamesChange={setBvsMinGames}
           renderMinGamesPicker={(value, onChange) => (
             <MinGamesPicker value={value} onChange={onChange} />
           )}

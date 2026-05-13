@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
@@ -27,13 +27,13 @@ export type BvsCell = {
 
 export interface BuildVsStrategyViewProps {
   onOpenBvs: (build: string, strategy: string) => void;
-  /** Initial view mode; persisted by the caller. */
+  /** Current view mode — fully controlled by the caller. */
   initialView: "heatmap" | "table";
-  /** Initial min-games threshold; persisted by the caller. */
+  /** Current min-games threshold — fully controlled by the caller. */
   initialMinGames: number;
-  /** Notified whenever the view mode flips so the caller can persist. */
+  /** Setter invoked when the user flips the view mode. */
   onViewChange: (view: "heatmap" | "table") => void;
-  /** Notified whenever the threshold changes so the caller can persist. */
+  /** Setter invoked when the user adjusts the threshold. */
   onMinGamesChange: (n: number) => void;
   /** MinGames picker rendered above the matrix — supplied by the
    *  parent so the same control is shared with the by-strategy view. */
@@ -53,11 +53,17 @@ export function BuildVsStrategyView({
 }: BuildVsStrategyViewProps) {
   const { filters, dbRev } = useFilters();
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"heatmap" | "table">(initialView);
-  const [minGames, setMinGames] = useState<number>(initialMinGames);
+  // Fully controlled: ``view`` / ``minGames`` are owned by the parent
+  // so localStorage hydration in StrategiesTab (via
+  // ``useLocalStorageState``) flows straight through. Re-introducing
+  // local copies under ``useState(initialFoo)`` was the source of a
+  // hydration desync — the inner state captured the pre-hydration
+  // default and never picked up the user's saved value.
+  const view = initialView;
+  const setView = onViewChange;
+  const minGames = initialMinGames;
+  const setMinGames = onMinGamesChange;
   const sort = useSort("total", "desc");
-  useEffect(() => onViewChange(view), [view, onViewChange]);
-  useEffect(() => onMinGamesChange(minGames), [minGames, onMinGamesChange]);
 
   const { data, isLoading } = useApi<BvsCell[]>(
     `/v1/build-vs-strategy${filtersToQuery(filters)}#${dbRev}`,

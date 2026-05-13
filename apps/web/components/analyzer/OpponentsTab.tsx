@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useApiPaginated } from "@/lib/useApiPaginated";
+import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { fmtAgo, pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import { Skeleton, EmptyState } from "@/components/ui/Card";
@@ -11,25 +12,6 @@ import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 
 const LS_MIN_OPP = "analyzer.opponents.minGames";
-
-function readLs<T>(key: string, fb: T): T {
-  if (typeof window === "undefined") return fb;
-  try {
-    const v = window.localStorage.getItem(key);
-    return v == null ? fb : (JSON.parse(v) as T);
-  } catch {
-    return fb;
-  }
-}
-
-function writeLs(key: string, v: unknown) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(v));
-  } catch {
-    /* non-fatal */
-  }
-}
 
 type Opp = {
   pulseId: string;
@@ -63,8 +45,7 @@ export function OpponentsTab({
 }) {
   const { filters, dbRev } = useFilters();
   const [search, setSearch] = useState("");
-  const [minGames, setMinGames] = useState<number>(() => readLs(LS_MIN_OPP, 1));
-  useEffect(() => writeLs(LS_MIN_OPP, minGames), [minGames]);
+  const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_OPP, 1);
   const sort = useSort("lastPlayed", "desc");
 
   // We don't pass `limit` here — the paginator owns page size and

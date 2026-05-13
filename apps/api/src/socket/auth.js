@@ -75,7 +75,17 @@ const RESYNC_MIN_INTERVAL_MS = 2000;
  *     overlayLive?: object|null,
  *     gameKey?: string|null,
  *   } | null,
+ *   resolveClerkUser?: (clerkUserId: string) => Promise<{userId: string}|null>,
  * }} opts
+ *
+ * ``resolveClerkUser`` (web flavour, optional but recommended): maps a
+ * Clerk session ``sub`` to the internal ``userId``. When provided, the
+ * web handshake resolves it during auth and auto-joins ``user:<userId>``
+ * on connect — so games:changed / import:progress / macro:recompute_request
+ * fan-outs reach the right tab without the client having to claim the
+ * user id itself. Also locks down ``subscribe:user`` to the resolved
+ * id (the legacy free-form join survives only when this resolver is
+ * not wired, for backward compatibility with the bare-bones test setups).
  */
 function attachSocketAuth(io, opts) {
   io.use(async (socket, next) => {
@@ -143,6 +153,23 @@ function attachSocketAuth(io, opts) {
       }
       socket.data.clerkUserId = claims.sub;
       socket.data.kind = "web";
+      // Resolve internal userId in the handshake so the connect handler
+      // can auto-join ``user:<userId>`` without an async hop. Same
+      // ``ensureFromClerk`` semantics as the REST middleware so a
+      // brand-new sign-in lands a user document and a stable userId
+      // before any per-user fan-out (games:changed, import:progress,
+      // macro:recompute_request) can race the lookup.
+      if (opts.resolveClerkUser) {
+        try {
+          const hit = await opts.resolveClerkUser(claims.sub);
+          if (hit && typeof hit.userId === "string" && hit.userId.length > 0) {
+            socket.data.userId = hit.userId;
+          }
+        } catch (_err) {
+          // Resolution failures are non-fatal: the socket still
+          // connects, the client can fall back to subscribe:user.
+        }
+      }
       next();
     } catch (err) {
       next(/** @type {Error} */ (err));
@@ -297,10 +324,30 @@ function attachSocketAuth(io, opts) {
     }
     const cid = socket.data.clerkUserId;
     if (cid) socket.join(`clerk:${cid}`);
+    // Auto-join the resolved user room so cloud-emitted events like
+    // ``games:changed`` reach this tab without the client having to
+    // claim its own userId. The dashboard's auto-refresh on ingest
+    // depends on this room membership — see
+    // ``apps/web/lib/useUserSocket.ts``.
+    const resolvedUserId = socket.data.userId;
+    if (typeof resolvedUserId === "string" && resolvedUserId.length > 0) {
+      socket.join(`user:${resolvedUserId}`);
+    }
+    // ``subscribe:user`` predates ``resolveClerkUser`` and let any
+    // authenticated web client join any user room. When we DO have a
+    // resolved userId we lock the join down to the caller's own id;
+    // when we don't, we keep the legacy free-form join so tests and
+    // tiny deployments without the resolver wired still work.
     socket.on("subscribe:user", (userId) => {
-      if (typeof userId === "string" && userId.length > 0) {
-        socket.join(`user:${userId}`);
+      if (typeof userId !== "string" || userId.length === 0) return;
+      if (
+        typeof resolvedUserId === "string"
+        && resolvedUserId.length > 0
+        && userId !== resolvedUserId
+      ) {
+        return;
       }
+      socket.join(`user:${userId}`);
     });
   });
 }

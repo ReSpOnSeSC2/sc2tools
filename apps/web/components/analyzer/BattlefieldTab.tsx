@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
@@ -33,25 +34,6 @@ type MapRow = Row;
 type MatchupRow = Row;
 
 const LS_MIN_MAPS = "analyzer.battlefield.maps.minGames";
-
-function readLs<T>(key: string, fb: T): T {
-  if (typeof window === "undefined") return fb;
-  try {
-    const v = window.localStorage.getItem(key);
-    return v == null ? fb : (JSON.parse(v) as T);
-  } catch {
-    return fb;
-  }
-}
-
-function writeLs(key: string, v: unknown) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(v));
-  } catch {
-    /* non-fatal */
-  }
-}
 
 function FormSparkline({ results }: { results?: ("win" | "loss")[] }) {
   if (!results || results.length === 0)
@@ -77,10 +59,7 @@ function FormSparkline({ results }: { results?: ("win" | "loss")[] }) {
 
 export function BattlefieldTab() {
   const { filters, dbRev } = useFilters();
-  const [minGames, setMinGames] = useState<number>(() =>
-    readLs(LS_MIN_MAPS, 3),
-  );
-  useEffect(() => writeLs(LS_MIN_MAPS, minGames), [minGames]);
+  const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_MAPS, 3);
 
   const mapsApi = useApi<MapRow[]>(
     `/v1/maps${filtersToQuery(filters)}#${dbRev}`,

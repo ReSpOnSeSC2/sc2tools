@@ -56,6 +56,13 @@ async function main() {
     resolveOverlayToken: (token) => services.overlayTokens.resolve(token),
     resolveDeviceToken: (tokenHash) =>
       /** @type {any} */ (services).pairings.findTokenByHash(tokenHash),
+    // Same Clerk → internal userId map the REST middleware uses, so a
+    // dashboard tab's websocket joins ``user:<userId>`` on handshake
+    // and receives per-user fan-outs (games:changed → live opponents
+    // refresh, import:progress, macro:recompute_request) without
+    // having to claim its own userId via subscribe:user.
+    resolveClerkUser: (clerkUserId) =>
+      /** @type {any} */ (services).users.ensureFromClerk(clerkUserId),
     resolveSession: (userId, timezone) =>
       services.games.todaySession(userId, timezone),
     resolveVoicePrefs: (userId) =>
