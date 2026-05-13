@@ -102,6 +102,7 @@ export function OverlayClient({ token }: { token: string }) {
 
   useWidgetTimers({
     live,
+    liveGame,
     session,
     setVisibleLive,
     setSessionVisible,
@@ -146,7 +147,9 @@ export function OverlayClient({ token }: { token: string }) {
       className="relative h-screen w-screen"
       style={{ background: "transparent" }}
     >
-      {shouldShow("opponent") && <OpponentWidget live={live} />}
+      {shouldShow("opponent") && (
+        <OpponentWidget live={live} liveGame={liveGame} />
+      )}
       {shouldShow("match-result") && <MatchResultWidget live={live} />}
       {shouldShow("post-game") && <PostGameWidget live={live} />}
       {shouldShow("mmr-delta") && <MmrDeltaWidget live={live} />}
@@ -265,11 +268,13 @@ function useOverlaySocket(
  */
 function useWidgetTimers({
   live,
+  liveGame,
   session,
   setVisibleLive,
   setSessionVisible,
 }: {
   live: LiveGamePayload | null;
+  liveGame: LiveGameEnvelope | null;
   session: SessionSummary | null;
   setVisibleLive: (updater: (prev: Set<WidgetId>) => Set<WidgetId>) => void;
   setSessionVisible: (visible: boolean) => void;
@@ -281,6 +286,25 @@ function useWidgetTimers({
   // one fire mid-game.
   const liveTimers = useRef(new Map<WidgetId, number>());
   const sessionTimer = useRef<number | null>(null);
+
+  // Identity of the live-envelope match. Used as an effect dep so a
+  // back-to-back queue (game N → game N+1 with no idle/menu between)
+  // re-arms the opponent + scouting widgets when the gameKey rotates,
+  // even when ``liveGame.phase`` happens to land on the same string.
+  const liveGameKey =
+    liveGame && typeof liveGame.gameKey === "string"
+      ? liveGame.gameKey
+      : null;
+  // Active match phases — opponent + scouting consume the live envelope
+  // here and the all-in-one client must surface them through gameplay,
+  // not just for the 15s post-game window. ``match_ended`` drops out so
+  // the natural per-widget timer takes over and the scene clears after
+  // the result.
+  const isActivePhase =
+    !!liveGame
+    && (liveGame.phase === "match_loading"
+      || liveGame.phase === "match_started"
+      || liveGame.phase === "match_in_progress");
 
   useEffect(() => {
     if (!live) return;
@@ -294,6 +318,12 @@ function useWidgetTimers({
     for (const id of liveWidgets) {
       const existing = liveTimers.current.get(id);
       if (existing !== undefined) window.clearTimeout(existing);
+      // While the bridge reports an active match phase, the opponent
+      // widget pins through gameplay (see the liveGame effect below).
+      // Skip arming a natural timer that would race the pin and hide
+      // the widget mid-game — the pin is the source of truth until
+      // ``match_ended`` clears it.
+      if (id === "opponent" && isActivePhase) continue;
       const duration = resolveWidgetDurationMs(id, isTest);
       if (duration === null) continue;
       const handle = window.setTimeout(() => {
@@ -307,7 +337,54 @@ function useWidgetTimers({
       }, duration);
       liveTimers.current.set(id, handle);
     }
-  }, [live, setVisibleLive]);
+  }, [live, isActivePhase, setVisibleLive]);
+
+  // Mirror the per-widget client's ``useWidgetVisibility`` for the two
+  // widgets that consume the agent's pre/in-game envelope. Without
+  // this effect the all-in-one client would only ever render the
+  // opponent + scouting cards in the 15s post-game window after a
+  // ``live`` payload landed — the entire active phase of the *next*
+  // match would render nothing because ``live`` is cleared by the
+  // gameKey-change effect the moment the new loading screen arrives.
+  // Pinning here keeps the opponent identity chip on screen through
+  // gameplay AND re-arms scouting for each fresh loading screen.
+  useEffect(() => {
+    if (!isActivePhase) return;
+    // Opponent pins for the whole active phase — no natural timer.
+    const oppTimer = liveTimers.current.get("opponent");
+    if (oppTimer !== undefined) {
+      window.clearTimeout(oppTimer);
+      liveTimers.current.delete("opponent");
+    }
+    // Scouting still uses its natural 15s timer (the dossier is large
+    // and the streamer feedback was to not pin it through gameplay) —
+    // but we re-arm it here so each new loading screen relights the
+    // card even when no fresh ``live`` payload has arrived yet.
+    const scoutingTimer = liveTimers.current.get("scouting");
+    if (scoutingTimer !== undefined) {
+      window.clearTimeout(scoutingTimer);
+      liveTimers.current.delete("scouting");
+    }
+    setVisibleLive((prev) => {
+      const next = new Set(prev);
+      next.add("opponent");
+      next.add("scouting");
+      return next;
+    });
+    const scoutingDuration = resolveWidgetDurationMs("scouting", false);
+    if (scoutingDuration !== null) {
+      const handle = window.setTimeout(() => {
+        setVisibleLive((prev) => {
+          if (!prev.has("scouting")) return prev;
+          const next = new Set(prev);
+          next.delete("scouting");
+          return next;
+        });
+        liveTimers.current.delete("scouting");
+      }, scoutingDuration);
+      liveTimers.current.set("scouting", handle);
+    }
+  }, [isActivePhase, liveGameKey, setVisibleLive]);
 
   useEffect(() => {
     if (!session) return;
