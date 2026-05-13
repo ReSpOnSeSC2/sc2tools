@@ -241,6 +241,116 @@ describe("countUpgradesAt — Upgrades row", () => {
     expect(out.Charge).toBe(1);
     expect(out.Stalker).toBeUndefined();
   });
+
+  it("tier-collapses weapons/armor families so only the highest tier shows", () => {
+    // A player who researched +1 then +2 Ground Weapons should NOT see
+    // two chips — the +2 chip is enough because it implies the +1
+    // baseline (and matches the in-game vocabulary of "we're on +2").
+    // Tested across all races and all the upgrade families so the
+    // collapse fires universally.
+    const events: BuildEvent[] = [
+      { time: 240, name: "ProtossGroundWeaponsLevel1", is_building: false, category: "upgrade" },
+      { time: 480, name: "ProtossGroundWeaponsLevel2", is_building: false, category: "upgrade" },
+      { time: 720, name: "ProtossGroundArmorLevel1", is_building: false, category: "upgrade" },
+      { time: 800, name: "TerranInfantryWeaponsLevel1", is_building: false, category: "upgrade" },
+      { time: 850, name: "TerranInfantryWeaponsLevel2", is_building: false, category: "upgrade" },
+      { time: 880, name: "TerranInfantryWeaponsLevel3", is_building: false, category: "upgrade" },
+      { time: 900, name: "ZergMeleeAttacksLevel1", is_building: false, category: "upgrade" },
+      { time: 960, name: "ZergMeleeAttacksLevel2", is_building: false, category: "upgrade" },
+      { time: 1000, name: "Charge", is_building: false, category: "upgrade" },
+    ];
+    const out = countUpgradesAt(events, 9999);
+    // Only highest tier per family.
+    expect(out.ProtossGroundWeaponsLevel2).toBe(1);
+    expect(out.ProtossGroundWeaponsLevel1).toBeUndefined();
+    expect(out.ProtossGroundArmorLevel1).toBe(1); // singleton, kept
+    expect(out.TerranInfantryWeaponsLevel3).toBe(1);
+    expect(out.TerranInfantryWeaponsLevel1).toBeUndefined();
+    expect(out.TerranInfantryWeaponsLevel2).toBeUndefined();
+    expect(out.ZergMeleeAttacksLevel2).toBe(1);
+    expect(out.ZergMeleeAttacksLevel1).toBeUndefined();
+    // Non-tiered upgrade unaffected.
+    expect(out.Charge).toBe(1);
+  });
+
+  it("collapses across the singular/plural Armor spelling drift", () => {
+    // Some replays emit ``ProtossGroundArmorLevel1`` (singular Armor),
+    // others emit ``ProtossGroundArmorsLevel2`` (plural Armors) for the
+    // same upgrade line. Both must collapse onto a single family so the
+    // tier dedup fires correctly across the spelling drift.
+    const events: BuildEvent[] = [
+      { time: 240, name: "ProtossGroundArmorLevel1", is_building: false, category: "upgrade" },
+      { time: 480, name: "ProtossGroundArmorsLevel2", is_building: false, category: "upgrade" },
+    ];
+    const out = countUpgradesAt(events, 9999);
+    expect(out.ProtossGroundArmorsLevel2).toBe(1);
+    expect(out.ProtossGroundArmorLevel1).toBeUndefined();
+  });
+
+  it("collapses across the Zerg Weapons/Attacks + Armor/Carapace drift", () => {
+    const events: BuildEvent[] = [
+      { time: 100, name: "ZergMissileWeaponsLevel1", is_building: false, category: "upgrade" },
+      { time: 200, name: "ZergMissileAttacksLevel2", is_building: false, category: "upgrade" },
+      { time: 300, name: "ZergGroundArmorsLevel1", is_building: false, category: "upgrade" },
+      { time: 400, name: "ZergGroundCarapaceLevel2", is_building: false, category: "upgrade" },
+    ];
+    const out = countUpgradesAt(events, 9999);
+    expect(out.ZergMissileAttacksLevel2).toBe(1);
+    expect(out.ZergMissileWeaponsLevel1).toBeUndefined();
+    expect(out.ZergGroundCarapaceLevel2).toBe(1);
+    expect(out.ZergGroundArmorsLevel1).toBeUndefined();
+  });
+
+  it("collapses Terran Vehicle/Ship armor variants onto a single family", () => {
+    // TerranVehicleArmors / TerranVehicleAndShipArmors /
+    // TerranShipArmors / TerranVehicleandShipPlating all name the same
+    // in-game research in different patches. A player who got +1 then
+    // +2 should see only the +2 chip regardless of which spellings
+    // sc2reader emitted.
+    const events: BuildEvent[] = [
+      { time: 100, name: "TerranVehicleAndShipArmorsLevel1", is_building: false, category: "upgrade" },
+      { time: 200, name: "TerranVehicleArmorsLevel2", is_building: false, category: "upgrade" },
+      { time: 300, name: "TerranShipArmorsLevel3", is_building: false, category: "upgrade" },
+    ];
+    const out = countUpgradesAt(events, 9999);
+    // All three name the same family; +3 wins.
+    expect(out.TerranShipArmorsLevel3).toBe(1);
+    expect(out.TerranVehicleAndShipArmorsLevel1).toBeUndefined();
+    expect(out.TerranVehicleArmorsLevel2).toBeUndefined();
+  });
+
+  it("respects the time cutoff for tier-collapse", () => {
+    // The collapse must only consider events at-or-before t — a future
+    // higher tier shouldn't suppress a current lower tier.
+    const events: BuildEvent[] = [
+      { time: 240, name: "ProtossGroundWeaponsLevel1", is_building: false, category: "upgrade" },
+      { time: 480, name: "ProtossGroundWeaponsLevel2", is_building: false, category: "upgrade" },
+      { time: 720, name: "ProtossGroundWeaponsLevel3", is_building: false, category: "upgrade" },
+    ];
+    // At t=400 only +1 has happened.
+    const a = countUpgradesAt(events, 400);
+    expect(a.ProtossGroundWeaponsLevel1).toBe(1);
+    expect(a.ProtossGroundWeaponsLevel2).toBeUndefined();
+    expect(a.ProtossGroundWeaponsLevel3).toBeUndefined();
+    // At t=500 +1 and +2 have happened — only +2 shows.
+    const b = countUpgradesAt(events, 500);
+    expect(b.ProtossGroundWeaponsLevel2).toBe(1);
+    expect(b.ProtossGroundWeaponsLevel1).toBeUndefined();
+  });
+
+  it("keeps families with the same suffix distinct (Weapons ≠ Armor)", () => {
+    // Sanity-check: the collapse must not merge across different
+    // upgrade lines that happen to share a level number.
+    const events: BuildEvent[] = [
+      { time: 240, name: "ProtossGroundWeaponsLevel2", is_building: false, category: "upgrade" },
+      { time: 300, name: "ProtossGroundArmorLevel2", is_building: false, category: "upgrade" },
+      { time: 360, name: "ProtossShieldsLevel2", is_building: false, category: "upgrade" },
+      { time: 420, name: "ProtossAirWeaponsLevel2", is_building: false, category: "upgrade" },
+      { time: 480, name: "ProtossAirArmorLevel2", is_building: false, category: "upgrade" },
+    ];
+    const out = countUpgradesAt(events, 9999);
+    expect(Object.keys(out).length).toBe(5);
+  });
 });
 
 describe("deriveUnitComposition — chart's army-value fallback + roster source", () => {

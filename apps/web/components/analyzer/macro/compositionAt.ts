@@ -535,18 +535,69 @@ export function countBuildingsAt(
 }
 
 /**
+ * Identify the family + tier of a tiered upgrade name (weapons /
+ * armor / shields / carapace level 1-3). Returns ``null`` for non-
+ * tiered upgrades (Charge, Stim, Burrow, etc.).
+ *
+ * Family canonicalisation mirrors ``resolveTieredUpgradeKey`` in
+ * ``sc2-icons.ts`` so a player who researched LotV-named
+ * ``ProtossGroundArmorLevel1`` followed by HotS-named
+ * ``ProtossGroundArmorsLevel2`` collapses into the single
+ * ``ProtossGroundArmor`` family — the level 2 entry suppresses
+ * level 1, regardless of the singular/plural spelling drift.
+ */
+function tieredUpgradeFamily(
+  rawName: string,
+): { family: string; tier: number } | null {
+  const m = /^(.+?)level([1-3])$/i.exec(rawName);
+  if (!m) return null;
+  let family = m[1]
+    .toLowerCase()
+    .replace(/vanadiumplating$/, "")
+    .replace(/ultracapacitors$/, "");
+  family = family
+    .replace(/^terranvehicleandshipplating$/, "terranvehiclearmor")
+    .replace(/^terranvehicleandshiparmors?$/, "terranvehiclearmor")
+    .replace(/^terranshiparmors?$/, "terranvehiclearmor");
+  family = family
+    .replace(/armors$/, "armor")
+    .replace(/attacks$/, "weapons")
+    .replace(/carapace$/, "armor");
+  return { family, tier: Number(m[2]) };
+}
+
+/**
  * Reduce a build-order timeline into ``{upgrade: 1}`` for every
  * upgrade researched up to and including ``t``. Each upgrade only
  * fires once per game so the count is effectively a presence flag —
  * keeping it as a count map keeps the rendering helpers (chip + count
  * pair) uniform with units and buildings.
+ *
+ * Tier collapse: for the tiered weapons/armor/shields/carapace
+ * families, ONLY the highest tier researched-so-far appears in the
+ * output. A player who got +1 then +2 Protoss Ground Weapons sees a
+ * single ``Level2`` chip — the +1 is dropped because +2 already
+ * implies the +1 baseline (and matches the user expectation of one
+ * chip per upgrade line, not three). The BuildOrderTimeline keeps
+ * showing each individual research event chronologically; this
+ * collapse is scoped to the macro-breakdown roster summary.
+ *
+ * Non-tiered upgrades (Charge, Stim, Burrow, etc.) pass through with
+ * their own bucket.
  */
 export function countUpgradesAt(
   events: BuildEvent[] | undefined | null,
   t: number,
 ): Record<string, number> {
   if (!Array.isArray(events) || events.length === 0) return {};
-  const counts: Record<string, number> = {};
+  // First pass: walk events in chronological order, tracking the
+  // highest tier reached per family. Each event ≤ t either updates
+  // the tiered family's best entry or adds to the non-tiered count.
+  const tieredByFamily = new Map<
+    string,
+    { name: string; tier: number }
+  >();
+  const nonTieredCounts: Record<string, number> = {};
   for (const ev of events) {
     if (!ev) continue;
     if (ev.is_building) continue;
@@ -555,7 +606,22 @@ export function countUpgradesAt(
     if (time > t) break;
     const raw = ev.name || ev.display || "";
     if (!raw) continue;
-    counts[raw] = (counts[raw] || 0) + 1;
+    const tiered = tieredUpgradeFamily(raw);
+    if (tiered) {
+      const prev = tieredByFamily.get(tiered.family);
+      if (!prev || tiered.tier > prev.tier) {
+        tieredByFamily.set(tiered.family, { name: raw, tier: tiered.tier });
+      }
+      continue;
+    }
+    nonTieredCounts[raw] = (nonTieredCounts[raw] || 0) + 1;
+  }
+  // Second pass: assemble the output map, emitting one entry per
+  // tiered family (the highest-tier name we saw) plus every non-
+  // tiered upgrade with its accumulated count.
+  const counts: Record<string, number> = { ...nonTieredCounts };
+  for (const { name } of tieredByFamily.values()) {
+    counts[name] = (counts[name] || 0) + 1;
   }
   return counts;
 }

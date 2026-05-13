@@ -207,6 +207,91 @@ describe("build-events — upgrade rows flow through normalizeBuildEvent", () =>
   });
 });
 
+describe("sc2-icons — tiered upgrade variant resolver", () => {
+  // Every spelling variant of the same in-game upgrade should resolve
+  // to the same PNG, regardless of which sc2reader name happens to be
+  // emitted by the player's replay version.
+  const VARIANT_FAMILIES: Array<{ label: string; variants: string[]; expectedFile: string }> = [
+    {
+      label: "Protoss Ground Armor +2 — singular vs plural Armor",
+      variants: ["ProtossGroundArmorLevel2", "ProtossGroundArmorsLevel2"],
+      expectedFile: "/icons/sc2/upgrades/protossgroundarmor2.png",
+    },
+    {
+      label: "Protoss Air Armor +1",
+      variants: ["ProtossAirArmorLevel1", "ProtossAirArmorsLevel1"],
+      expectedFile: "/icons/sc2/upgrades/protossairarmor1.png",
+    },
+    {
+      label: "Terran Infantry Armor +3 — including the Mengsk co-op suffix",
+      variants: [
+        "TerranInfantryArmorLevel3",
+        "TerranInfantryArmorsLevel3",
+        "TerranInfantryArmorsVanadiumPlatingLevel3",
+      ],
+      expectedFile: "/icons/sc2/upgrades/terraninfantryarmor3.png",
+    },
+    {
+      label: "Terran Infantry Weapons +2 — including UltraCapacitors variant",
+      variants: [
+        "TerranInfantryWeaponsLevel2",
+        "TerranInfantryWeaponsUltraCapacitorsLevel2",
+      ],
+      expectedFile: "/icons/sc2/upgrades/terraninfantryweapons2.png",
+    },
+    {
+      label: "Terran Vehicle+Ship Armor +1 — every legacy and current spelling",
+      variants: [
+        "TerranVehicleArmorsLevel1",
+        "TerranVehicleAndShipArmorsLevel1",
+        "TerranVehicleandShipPlatingLevel1",
+        "TerranShipArmorsLevel1",
+        "TerranVehicleArmorsVanadiumPlatingLevel1",
+      ],
+      expectedFile: "/icons/sc2/upgrades/terranvehiclearmor1.png",
+    },
+    {
+      label: "Zerg Melee Attacks +2 — Weapons vs Attacks variants",
+      variants: ["ZergMeleeAttacksLevel2", "ZergMeleeWeaponsLevel2"],
+      expectedFile: "/icons/sc2/upgrades/zergmeleeattacks2.png",
+    },
+    {
+      label: "Zerg Missile Attacks +3",
+      variants: ["ZergMissileAttacksLevel3", "ZergMissileWeaponsLevel3"],
+      expectedFile: "/icons/sc2/upgrades/zergmissileattacks3.png",
+    },
+    {
+      label: "Zerg Ground Carapace +1 — Armor / Armors / Carapace drift",
+      variants: [
+        "ZergGroundArmorsLevel1",
+        "ZergGroundCarapaceLevel1",
+      ],
+      expectedFile: "/icons/sc2/upgrades/zerggroundcarapace1.png",
+    },
+    {
+      label: "Zerg Flyer Carapace +2",
+      variants: [
+        "ZergFlyerArmorsLevel2",
+        "ZergFlyerCarapaceLevel2",
+      ],
+      expectedFile: "/icons/sc2/upgrades/zergflyercarapace2.png",
+    },
+    {
+      label: "Zerg Flyer Attacks +3 — Weapons vs Attacks variants",
+      variants: ["ZergFlyerAttacksLevel3", "ZergFlyerWeaponsLevel3"],
+      expectedFile: "/icons/sc2/upgrades/zergflyerattacks3.png",
+    },
+  ];
+
+  for (const { label, variants, expectedFile } of VARIANT_FAMILIES) {
+    it(label, () => {
+      for (const v of variants) {
+        expect(getIconPath(v, "upgrade")).toBe(expectedFile);
+      }
+    });
+  }
+});
+
 describe("build-rules — Save as Build / Custom Build editor pipeline", () => {
   it("spaEventToWhat emits Research<Name> for category=upgrade events", () => {
     expect(
