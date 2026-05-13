@@ -105,6 +105,52 @@ describe("services/perGameCompute", () => {
       }
     });
 
+    test("upgrade variant patterns tag every sc2reader spelling of the tiered families", () => {
+      // sc2reader's tiered weapons/armor names drift across SC2
+      // expansions and commander modes. The regex fallback in
+      // ``isKnownUpgrade`` catches every variant the production corpus
+      // has ever produced — singular vs plural Armor, HotS combined
+      // ``TerranVehicleAndShipArmors``, lowercase-and
+      // ``TerranVehicleandShipPlating``, Mengsk co-op
+      // VanadiumPlating/UltraCapacitors suffixes, Zerg Weapons vs
+      // Attacks drift, Zerg Armor/Carapace drift.
+      const lines = [
+        // Protoss singular + plural Armor.
+        "[4:00] ProtossGroundArmorLevel2",
+        "[4:01] ProtossGroundArmorsLevel2",
+        "[4:02] ProtossAirArmorLevel3",
+        "[4:03] ProtossAirArmorsLevel3",
+        // Terran armor variants.
+        "[5:00] TerranInfantryArmorLevel1",
+        "[5:01] TerranInfantryArmorsLevel1",
+        "[5:02] TerranInfantryArmorsVanadiumPlatingLevel2",
+        // Terran weapons + commander-mode tag.
+        "[5:10] TerranInfantryWeaponsUltraCapacitorsLevel3",
+        // Terran combined vehicle/ship armor — every spelling.
+        "[6:00] TerranVehicleAndShipArmorsLevel1",
+        "[6:01] TerranVehicleArmorsLevel2",
+        "[6:02] TerranShipArmorsLevel3",
+        "[6:03] TerranVehicleandShipPlatingLevel1",
+        "[6:04] TerranVehicleArmorsVanadiumPlatingLevel2",
+        // Zerg Weapons/Attacks drift.
+        "[7:00] ZergMeleeAttacksLevel1",
+        "[7:01] ZergMeleeWeaponsLevel1",
+        "[7:02] ZergMissileAttacksLevel2",
+        "[7:03] ZergFlyerAttacksLevel3",
+        // Zerg Armor/Carapace drift.
+        "[8:00] ZergGroundArmorsLevel1",
+        "[8:01] ZergGroundCarapaceLevel1",
+        "[8:02] ZergFlyerCarapaceLevel2",
+        "[8:03] ZergFlyerArmorsLevel2",
+      ];
+      const events = parseBuildLogLines(lines);
+      expect(events.length).toBe(lines.length);
+      for (const ev of events) {
+        expect(ev.category).toBe("upgrade");
+        expect(ev.is_building).toBe(false);
+      }
+    });
+
     test("strips noise lines (Beacon, Reward, Spray)", () => {
       const events = parseBuildLogLines([
         "[0:00] Beacon (Place)",

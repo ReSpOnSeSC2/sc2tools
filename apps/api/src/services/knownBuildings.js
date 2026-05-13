@@ -134,6 +134,52 @@ const KNOWN_UPGRADE_NAMES = new Set([
 ]);
 
 /**
+ * Patterns for the tiered weapons/armor/shields/carapace upgrades.
+ * sc2reader emits multiple variants for the same in-game upgrade
+ * depending on the replay's expansion / data version:
+ *
+ *   - Protoss armor: ``ProtossGroundArmorLevel1`` (LotV) AND
+ *     ``ProtossGroundArmorsLevel1`` (HotS) — plural-s drifts in/out.
+ *   - Terran armor: ``TerranInfantryArmorLevel1`` /
+ *     ``TerranInfantryArmorsLevel1`` /
+ *     ``TerranInfantryArmorsVanadiumPlatingLevel1`` (Mengsk co-op
+ *     variant) and the equivalent ``UltraCapacitors`` weapons names.
+ *   - Terran ship/vehicle armor: ``TerranVehicleArmorsLevel1``,
+ *     ``TerranShipArmorsLevel1``, ``TerranVehicleAndShipArmorsLevel1``
+ *     (HotS combined research), and the lowercase-and variant
+ *     ``TerranVehicleandShipPlatingLevel1``. All four name the same
+ *     in-game research in different patches.
+ *   - Zerg attacks: ``ZergMeleeAttacksLevel1`` /
+ *     ``ZergMeleeWeaponsLevel1`` for the same Hatchery research.
+ *     Carapace likewise drifts: ``ZergGroundArmorsLevel1`` /
+ *     ``ZergGroundCarapaceLevel1`` / ``ZergFlyerArmorsLevel1`` /
+ *     ``ZergFlyerCarapaceLevel1``.
+ *
+ * The regex catches every variant the production replay corpus has
+ * ever produced. Keep it broad: a future sc2reader naming tweak should
+ * still tag through this fallback rather than slipping back into
+ * ``category: "unknown"``.
+ */
+const UPGRADE_VARIANT_PATTERNS = [
+  // Protoss ground / air / shields, Armor[s] variant.
+  /^Protoss(Ground|Air)Armors?Level[1-3]$/,
+  /^Protoss(Ground|Air)WeaponsLevel[1-3]$/,
+  /^ProtossShieldsLevel[1-3]$/,
+  // Terran infantry / vehicle / ship, with optional commander-mode
+  // suffixes (VanadiumPlating, UltraCapacitors).
+  /^Terran(Infantry|Vehicle|Ship)Armors?(?:VanadiumPlating)?Level[1-3]$/,
+  /^Terran(Infantry|Vehicle|Ship)Weapons(?:UltraCapacitors)?Level[1-3]$/,
+  // HotS combined Vehicle+Ship armor (two spellings — the older
+  // "and" form uses a lowercase 'a' in some replay versions).
+  /^TerranVehicle(And|and)ShipArmorsLevel[1-3]$/,
+  /^TerranVehicle(And|and)ShipPlatingLevel[1-3]$/,
+  // Zerg melee / missile attacks (or weapons), and the
+  // armor/carapace variants for ground + flyer.
+  /^Zerg(Melee|Missile|Flyer)(Attacks|Weapons)Level[1-3]$/,
+  /^Zerg(Ground|Flyer)(Armors?|Carapace)Level[1-3]$/,
+];
+
+/**
  * @param {string | null | undefined} name
  * @returns {boolean}
  */
@@ -143,7 +189,17 @@ function isKnownUpgrade(name) {
   // Some replay versions emit the leading-cap form ("Zerglingattackspeed");
   // try a Pascal-Case fold of the first character for those edge cases.
   const recase = name.charAt(0).toUpperCase() + name.slice(1);
-  return recase !== name && KNOWN_UPGRADE_NAMES.has(recase);
+  if (recase !== name && KNOWN_UPGRADE_NAMES.has(recase)) return true;
+  // Last resort: tiered weapons/armor/carapace patterns — these have
+  // too many variants per upgrade (singular/plural Armor[s], LotV vs
+  // HotS combined names, commander-mode suffixes) to enumerate
+  // explicitly. The regex set catches every form the production
+  // corpus has ever emitted and any near-future sc2reader naming
+  // drift on the same families.
+  for (const pat of UPGRADE_VARIANT_PATTERNS) {
+    if (pat.test(name)) return true;
+  }
+  return false;
 }
 
 module.exports = {

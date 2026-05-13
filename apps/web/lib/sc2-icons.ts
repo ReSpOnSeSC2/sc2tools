@@ -260,7 +260,68 @@ function lookupKind(normalized: string, hint?: IconKind):
   if (UPGRADE_SET.has(normalized)) return { kind: "upgrade", key: normalized };
   if (RACE_SET.has(normalized)) return { kind: "race", key: normalized };
   if (LEAGUE_SET.has(normalized)) return { kind: "league", key: normalized };
+  // Last-resort: tiered weapons / armor / shields / carapace variants.
+  // sc2reader emits many spellings per upgrade (singular/plural Armor[s],
+  // LotV vs HotS combined names, commander-mode VanadiumPlating /
+  // UltraCapacitors tags, lowercase 'and' in TerranVehicleandShipPlating)
+  // that the SYNONYMS table can't realistically enumerate one-by-one.
+  // The variant resolver below canonicalises any ``<family>level<N>``
+  // form onto the PNG filename we ship.
+  const variantKey = resolveTieredUpgradeKey(normalized);
+  if (variantKey && UPGRADE_SET.has(variantKey)) {
+    return { kind: "upgrade", key: variantKey };
+  }
   return null;
+}
+
+/**
+ * Canonicalise a tiered upgrade name to the matching PNG key, or null
+ * when the name isn't a known tiered family. Handles every variant the
+ * production replay corpus has produced:
+ *
+ *   - Singular vs plural ``Armor`` / ``Armors`` (Protoss + Terran).
+ *   - LotV ``TerranVehicleArmors`` / HotS combined
+ *     ``TerranVehicleAndShipArmors`` / lowercase-and
+ *     ``TerranVehicleandShipPlating`` — all the same in-game upgrade
+ *     in current SC2 ("Vehicle and Ship Plating"), folded onto the
+ *     ``terranvehiclearmor`` PNG.
+ *   - Co-op commander suffixes ``VanadiumPlating`` (Mengsk armor
+ *     variant) and ``UltraCapacitors`` (Mengsk weapons variant)
+ *     stripped before family resolution.
+ *   - Zerg ``Weapons`` ↔ ``Attacks`` drift on Melee / Missile / Flyer.
+ *   - Zerg ``Armor`` / ``Armors`` / ``Carapace`` drift on Ground +
+ *     Flyer (folded onto the carapace-named PNG since that matches
+ *     the Zerg in-game vocabulary).
+ *
+ * Pure function over a pre-normalised ``<all lowercase, no separators>``
+ * input — callers normalise via ``normalizeIconName`` before invoking.
+ *
+ * Exported so the build-order normalizer can reuse the same canonical
+ * key when reconstructing icon paths.
+ */
+export function resolveTieredUpgradeKey(normalized: string): string | null {
+  const m = /^(.+?)level([1-3])$/.exec(normalized);
+  if (!m) return null;
+  const [, rawFamily, tier] = m;
+  let family = rawFamily
+    .replace(/vanadiumplating$/, "")
+    .replace(/ultracapacitors$/, "");
+  // Terran combined-armor variants → vehicle armor.
+  family = family
+    .replace(/^terranvehicleandshipplating$/, "terranvehiclearmor")
+    .replace(/^terranvehicleandshiparmors?$/, "terranvehiclearmor")
+    .replace(/^terranshiparmors?$/, "terranvehiclearmor");
+  // Generic suffix normalisation.
+  family = family
+    .replace(/armors$/, "armor")
+    .replace(/attacks$/, "weapons")
+    .replace(/carapace$/, "armor");
+  // Map to the on-disk PNG naming convention. Zerg uses the
+  // attacks/carapace-named files (matches the in-game vocabulary).
+  family = family
+    .replace(/^zerg(melee|missile|flyer)weapons$/, "zerg$1attacks")
+    .replace(/^zerg(ground|flyer)armor$/, "zerg$1carapace");
+  return family + tier;
 }
 
 function setForKind(kind: IconKind): Set<string> {
