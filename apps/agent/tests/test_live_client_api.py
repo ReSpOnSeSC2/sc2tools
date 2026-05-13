@@ -430,3 +430,109 @@ def test_set_user_name_hint_updates_field() -> None:
     assert poller._user_name_hint is None
     poller.set_user_name_hint("MyHandle")
     assert poller._user_name_hint == "MyHandle"
+
+
+def test_fast_back_to_back_match_synthesises_fresh_game_key() -> None:
+    """Streamer regression: queueing the next ladder game immediately
+    after a loss can put SC2 on the loading screen for less than one
+    poll window (1 s default). The agent then jumps
+    ``MATCH_ENDED → MATCH_STARTED`` directly — the loading screen was
+    never observed. Pre-fix, the ``MATCH_STARTED`` branch's
+    ``if _current_game_key is None`` guard kept the just-finished
+    match's gameKey on the next match's envelope, the cloud +
+    overlay treated game N+1 as a continuation of game N, and the
+    streamer's OBS scene pinned the previous opponent through the
+    entire next match. The fix clears the per-match identity when
+    ``MATCH_ENDED`` first fires so every active-phase event for the
+    NEXT match starts from a clean slate.
+    """
+    session = _StubSession()
+
+    # Tick 1: Game N — loading screen, players seated.
+    session.queue(
+        "http://localhost:6119/ui",
+        _ok({"activeScreens": ["ScreenLoading"]}),
+    )
+    session.queue(
+        "http://localhost:6119/game",
+        _ok({
+            "isReplay": False,
+            "displayTime": 0.0,
+            "players": [
+                {"id": 1, "name": "Streamer#1", "type": "user",
+                 "race": "Zerg", "result": "Undecided"},
+                {"id": 2, "name": "OppPlayerA", "type": "user",
+                 "race": "Protoss", "result": "Undecided"},
+            ],
+        }),
+    )
+
+    # Tick 2: Game N — match ended (Defeat).
+    session.queue(
+        "http://localhost:6119/ui",
+        _ok({"activeScreens": ["ScreenScore"]}),
+    )
+    session.queue(
+        "http://localhost:6119/game",
+        _ok({
+            "isReplay": False,
+            "displayTime": 420.0,
+            "players": [
+                {"id": 1, "name": "Streamer#1", "type": "user",
+                 "race": "Zerg", "result": "Defeat"},
+                {"id": 2, "name": "OppPlayerA", "type": "user",
+                 "race": "Protoss", "result": "Victory"},
+            ],
+        }),
+    )
+
+    # Tick 3: Game N+1 — SC2 is already in the match before the agent
+    # observes the loading screen. ``/ui`` no longer carries
+    # ScreenLoading, the new opponent is on ``/game`` with
+    # ``displayTime > 0`` and undecided result. This is the fast-
+    # loading-screen path the pre-fix agent botched.
+    session.queue(
+        "http://localhost:6119/ui",
+        _ok({"activeScreens": []}),
+    )
+    session.queue(
+        "http://localhost:6119/game",
+        _ok({
+            "isReplay": False,
+            "displayTime": 4.0,
+            "players": [
+                {"id": 1, "name": "Streamer#1", "type": "user",
+                 "race": "Zerg", "result": "Undecided"},
+                # DIFFERENT opponent for the new match — the cloud's
+                # gameKey check downstream gets to see two distinct
+                # ``sorted_names|started_at_ms`` values.
+                {"id": 3, "name": "OppPlayerB", "type": "user",
+                 "race": "Terran", "result": "Undecided"},
+            ],
+        }),
+    )
+
+    poller, seen = _make_poller(session, user_name_hint="Streamer#1")
+    poller._tick_once()
+    poller._last_phase = LiveLifecyclePhase.MATCH_LOADING
+    poller._tick_once()
+    poller._last_phase = LiveLifecyclePhase.MATCH_ENDED
+    poller._tick_once()
+
+    phases = [e.phase for e in seen]
+    assert phases == [
+        LiveLifecyclePhase.MATCH_LOADING,
+        LiveLifecyclePhase.MATCH_ENDED,
+        LiveLifecyclePhase.MATCH_STARTED,
+    ]
+    # Game N's MATCH_LOADING + MATCH_ENDED share a gameKey (same match).
+    assert seen[0].game_key is not None
+    assert seen[0].game_key == seen[1].game_key
+    # Game N+1's MATCH_STARTED MUST carry a FRESH gameKey — this is
+    # the regression. The pre-fix code emitted the same key as game N.
+    assert seen[2].game_key is not None
+    assert seen[2].game_key != seen[0].game_key
+    # And the new key must derive from the new opponent's name so
+    # the cloud's ``pickGameKey`` opp-name match path can correlate
+    # the broker envelope with the post-game ingest.
+    assert "OppPlayerB" in seen[2].game_key

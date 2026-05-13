@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
@@ -20,25 +21,6 @@ type BuildRow = {
 
 const LS_MIN_BUILDS = "analyzer.builds.minGames";
 
-function readLs<T>(key: string, fb: T): T {
-  if (typeof window === "undefined") return fb;
-  try {
-    const v = window.localStorage.getItem(key);
-    return v == null ? fb : (JSON.parse(v) as T);
-  } catch {
-    return fb;
-  }
-}
-
-function writeLs(key: string, v: unknown) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(v));
-  } catch {
-    /* non-fatal */
-  }
-}
-
 /**
  * The full Builds analytics tab (separate from the personal-builds
  * editor). Shows aggregated WR per build, drilldown to game list, and
@@ -47,10 +29,7 @@ function writeLs(key: string, v: unknown) {
 export function BuildsTab() {
   const { filters, dbRev } = useFilters();
   const [search, setSearch] = useState("");
-  const [minGames, setMinGames] = useState<number>(() =>
-    readLs(LS_MIN_BUILDS, 1),
-  );
-  useEffect(() => writeLs(LS_MIN_BUILDS, minGames), [minGames]);
+  const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_BUILDS, 1);
   const [editing, setEditing] = useState<string | null>(null);
   const sort = useSort("total", "desc");
 

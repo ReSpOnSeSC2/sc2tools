@@ -7,6 +7,7 @@ import {
 } from "@/lib/filterContext";
 import { DEFAULT_PRESET, resolvePreset, type PresetId } from "@/lib/datePresets";
 import { rollUpSeasons, useSeasons } from "@/lib/useSeasons";
+import { useUserSocket } from "@/lib/useUserSocket";
 
 const LS_KEY = "analyzer.filters";
 
@@ -61,6 +62,21 @@ export function AnalyzerProvider({ children }: { children: ReactNode }) {
   const [filters, setFiltersState] = useState<AnalyzerFilters>(initialFilters);
   const [dbRev, setDbRev] = useState(0);
   const bumpRev = useCallback(() => setDbRev((v) => v + 1), []);
+
+  // Cloud-driven auto-refresh. The games ingest route fans out
+  // ``games:changed`` to ``user:<userId>``; bumping ``dbRev`` invalidates
+  // every ``useApiPaginated`` cache key downstream, so the Opponents
+  // table, KPI strip, charts, etc. re-fetch within a few hundred
+  // milliseconds of the agent posting a finished game. The handler
+  // object is memoised so the socket effect doesn't reconnect every
+  // render.
+  const socketHandlers = useMemo(
+    () => ({
+      "games:changed": () => bumpRev(),
+    }),
+    [bumpRev],
+  );
+  useUserSocket(socketHandlers);
 
   const { data: seasonsData } = useSeasons();
   const logicalSeasons = useMemo(

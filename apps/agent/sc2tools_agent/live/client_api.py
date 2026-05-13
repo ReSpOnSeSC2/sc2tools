@@ -232,6 +232,32 @@ class LiveClientPoller:
                     ui_state=ui,
                     game_state=game,
                 )
+                # Clear the per-match identity so the FOLLOWING match
+                # synthesises a fresh ``game_key`` regardless of which
+                # active-phase event fires first. Without this, a
+                # streamer who queues back-to-back fast enough that
+                # SC2's loading screen flips by inside one poll window
+                # would land on ``MATCH_STARTED`` for game N+1 with
+                # the just-finished game's key still set — the
+                # ``MATCH_STARTED`` branch only synthesises a key
+                # when ``_current_game_key is None``. The
+                # consequence on the wire is that the cloud + the
+                # overlay client both treat game N+1 as a continuation
+                # of game N (same gameKey), so
+                # ``useClearStalePostGameOnGameKeyChange`` never fires
+                # and the streamer sees the previous opponent pinned
+                # to the OBS scene through the whole next match (the
+                # scouting widget then suppresses itself because
+                # ``live.result`` is still set from game N's post-game
+                # payload). Clearing here makes the synthesis branches
+                # see a clean slate for any subsequent active-phase
+                # event — MATCH_LOADING already unconditionally
+                # synthesises on transition-in; MATCH_STARTED /
+                # MATCH_IN_PROGRESS take the ``is None`` branch which
+                # now flips back into "true" the moment a match ends.
+                self._current_game_key = None
+                self._match_started_at_ms = None
+                self._last_in_progress_display_time = -1.0
             return LiveLifecyclePhase.MATCH_ENDED, self._cfg.interval_sec
 
         if ui.is_loading:

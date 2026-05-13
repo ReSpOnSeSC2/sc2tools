@@ -5,10 +5,37 @@ import type { LiveGameEnvelope, LiveGamePayload } from "./types";
 
 /**
  * Clear the cached post-game ``LiveGamePayload`` (``live``) when the
- * agent's pre/in-game envelope reports a DIFFERENT gameKey than the
- * one ``live`` carries. This is the gameKey-aware successor to the
- * older ``match_loading``-only effect, which only fired on a single
- * lifecycle phase and missed three real failure modes:
+ * agent's pre/in-game envelope identifies a NEW match. Two signals,
+ * checked in priority order:
+ *
+ *   1. **gameKey rotation** — the agent stamps a fresh
+ *      ``sorted_player_names|started_at_ms`` key on every match's
+ *      first active-phase event. When the new envelope's key differs
+ *      from the live payload's key, the live payload belongs to a
+ *      finished match and must be dropped before the OpponentWidget
+ *      pins it onto the next match.
+ *   2. **Opponent identity change (defense-in-depth)** — the agent's
+ *      state machine prior to 2026-05-13 could re-use the previous
+ *      match's ``game_key`` when SC2 jumped MATCH_ENDED → MATCH_STARTED
+ *      faster than one poll window (the loading screen flipped by in
+ *      under ~1 s and the MATCH_STARTED branch's ``if
+ *      _current_game_key is None`` guard kept the stale id). Older
+ *      agent versions still in the wild therefore can produce two
+ *      back-to-back matches with the SAME gameKey but DIFFERENT
+ *      opponent names. We fall back to the opponent-name check so a
+ *      streamer running an old agent build still self-heals on the
+ *      client — the post-game card snaps off, the scouting widget
+ *      unblocks (its ``isRealPostGame`` early-return was the visible
+ *      consequence of this bug), and the live envelope renders the
+ *      new opponent's data.
+ *
+ * Both checks share one effect so we only call ``setLive(null)`` once
+ * per render even when both signals trip together (the common case
+ * once the agent fix ships).
+ *
+ * This is the gameKey-aware successor to the older ``match_loading``-
+ * only effect, which only fired on a single lifecycle phase and
+ * missed three real failure modes:
  *
  *   1. **Fast loading screen.** SC2's loading screen can finish
  *      before the agent's poll observes ``ScreenLoading``. The bridge
@@ -39,15 +66,33 @@ export function useClearStalePostGameOnGameKeyChange(
 ) {
   useEffect(() => {
     if (!liveGame || !live) return;
+    // Primary signal: the agent emitted a fresh gameKey for this
+    // match. Both sides must carry a string-typed key for the check
+    // to be meaningful; an absent key on either side falls through
+    // to the opponent-name fallback below.
     const lgKey = liveGame.gameKey;
     const liveKey = live.gameKey;
-    // No gameKey on either side → no signal, do nothing. The
-    // backwards-compat path (cloud running an older derivation that
-    // never stamped gameKey) was never observed in practice; we leave
-    // ``live`` alone rather than risk yanking it on every envelope
-    // tick of an active match.
-    if (typeof lgKey !== "string" || typeof liveKey !== "string") return;
-    if (lgKey === liveKey) return;
+    const gameKeysDiffer =
+      typeof lgKey === "string"
+      && typeof liveKey === "string"
+      && lgKey !== liveKey;
+    // Fallback signal: opponent identity changed. Lower-case +
+    // trimmed so a casing tweak from one ingest source to another
+    // (Pulse profile name vs. replay header name) doesn't false-
+    // positive. We require BOTH sides to have a non-empty name so a
+    // pre-resolution envelope (no ``opponent.name`` yet) cannot
+    // accidentally yank the live payload on the very first tick of a
+    // new match.
+    const lgOpp =
+      liveGame.opponent
+      && typeof liveGame.opponent.name === "string"
+        ? liveGame.opponent.name.trim().toLowerCase()
+        : "";
+    const liveOpp =
+      typeof live.oppName === "string" ? live.oppName.trim().toLowerCase() : "";
+    const opponentNamesDiffer =
+      lgOpp.length > 0 && liveOpp.length > 0 && lgOpp !== liveOpp;
+    if (!gameKeysDiffer && !opponentNamesDiffer) return;
     setLive(null);
   }, [liveGame, live, setLive]);
 }
