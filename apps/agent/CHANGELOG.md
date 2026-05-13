@@ -2,6 +2,35 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.6.5
+
+### Fixed — Fresh `game_key` on every match start, including fast back-to-back queues
+- `LiveClientPoller` now clears `_current_game_key` (and
+  `_match_started_at_ms`, `_last_in_progress_display_time`) the moment
+  it transitions into `MATCH_ENDED`. Previously the per-match identity
+  lingered until the next `IDLE` / `MENU` event or until the next
+  `MATCH_LOADING` branch ran. When SC2's loading screen for the NEXT
+  match flipped by inside one poll window (default 1 s) the poller
+  skipped `MATCH_LOADING` entirely, landed straight on
+  `MATCH_STARTED`, and the `if self._current_game_key is None` guard
+  in that branch kept the just-finished match's key on the new
+  match's envelope.
+- The downstream consequence streamers reported: the OBS opponent
+  widget kept showing the previous opponent through the entire next
+  match (the cloud + overlay correctly treated game N+1 as a
+  continuation of game N because gameKeys matched), and the scouting
+  widget never appeared for game N+1 because the post-game
+  `live.result` was still set so `ScoutingWidget` short-circuited
+  via its `isRealPostGame` check.
+- Regression test `test_fast_back_to_back_match_synthesises_fresh_game_key`
+  pins the new identity-reset semantics so any future refactor of the
+  state machine can't quietly resurrect the bug.
+- The web client also gained a defense-in-depth fallback: the
+  `useClearStalePostGameOnGameKeyChange` hook now drops stale `live`
+  when the envelope's opponent name differs from `live.oppName`, so
+  streamers still running an old agent build self-heal on the
+  client side.
+
 ## 0.6.4
 
 ### Fixed — Live bridge resets and re-announces match identity on server / region switch

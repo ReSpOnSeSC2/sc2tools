@@ -128,4 +128,106 @@ describe("OverlayWidgetClient — live clears on gameKey change regardless of ph
     );
     expect(out.live).toBeNull();
   });
+
+  it(
+    "clears stale ``live`` on opponent-name change even when gameKeys " +
+      "collide (older agent that reuses the previous match's game_key)",
+    () => {
+      // Pre-2026-05-13 agents kept ``_current_game_key`` set across
+      // a fast MATCH_ENDED → MATCH_STARTED transition. The downstream
+      // envelope therefore carried the JUST-FINISHED match's gameKey
+      // even though the opponent had changed. The post-game ``live``
+      // payload, also keyed to that gameKey by ``pickGameKey``'s
+      // opp-name match path, never got cleared — so the OpponentWidget
+      // pinned the previous opponent for the entire next match and
+      // the ScoutingWidget suppressed itself because ``live.result``
+      // was still set. The hook's opponent-name fallback unblocks
+      // both widgets even when a streamer is still on the old agent.
+      const out: { live: LiveGamePayload | null } = { live: null };
+      const stalePrev: LiveGamePayload = {
+        oppName: "OppPlayerA",
+        result: "loss",
+        // SAME gameKey as the new envelope below — agent bug repro.
+        gameKey: "leaked-key",
+      };
+      const { rerender } = render(
+        <Harness liveGame={null} initialLive={stalePrev} out={out} />,
+      );
+      expect(out.live).toEqual(stalePrev);
+      rerender(
+        <Harness
+          liveGame={env({
+            phase: "match_started",
+            gameKey: "leaked-key",
+            opponent: { name: "OppPlayerB", race: "Terran" },
+          })}
+          initialLive={stalePrev}
+          out={out}
+        />,
+      );
+      // gameKey check fails (same key on both sides), opponent-name
+      // fallback fires.
+      expect(out.live).toBeNull();
+    },
+  );
+
+  it(
+    "does NOT clear when the envelope's opponent name is missing " +
+      "(pre-resolution tick) and gameKeys match",
+    () => {
+      // The very first MATCH_LOADING envelope can land before SC2's
+      // ``/game`` populates the players list — the agent emits an
+      // envelope with no ``opponent.name`` set. We must not yank the
+      // live payload on that tick: a missing name is "we don't know
+      // yet", not "they changed".
+      const live: LiveGamePayload = {
+        oppName: "Continuing",
+        gameKey: "match-x",
+        result: "win",
+      };
+      const out: { live: LiveGamePayload | null } = { live: null };
+      const { rerender } = render(
+        <Harness liveGame={null} initialLive={live} out={out} />,
+      );
+      rerender(
+        <Harness
+          liveGame={env({
+            phase: "match_loading",
+            gameKey: "match-x",
+            opponent: { name: null, race: null },
+          })}
+          initialLive={live}
+          out={out}
+        />,
+      );
+      expect(out.live).toEqual(live);
+    },
+  );
+
+  it("is case-insensitive on the opponent-name fallback comparison", () => {
+    // Replay-header names and Pulse-resolved names can disagree on
+    // casing. ``"OppA" === "oppa"`` should NOT trip the fallback — we
+    // normalise both sides before comparing.
+    const live: LiveGamePayload = {
+      oppName: "OppPlayerA",
+      gameKey: "key-1",
+      result: "win",
+    };
+    const out: { live: LiveGamePayload | null } = { live: null };
+    const { rerender } = render(
+      <Harness liveGame={null} initialLive={live} out={out} />,
+    );
+    rerender(
+      <Harness
+        liveGame={env({
+          phase: "match_in_progress",
+          gameKey: "key-1",
+          opponent: { name: "  oppplayera  ", race: "Zerg" },
+        })}
+        initialLive={live}
+        out={out}
+      />,
+    );
+    expect(out.live).toEqual(live);
+  });
 });
