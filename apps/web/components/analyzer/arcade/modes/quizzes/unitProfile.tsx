@@ -16,25 +16,30 @@ const ID = "unit-profile";
 registerMode(ID, "hidden-derivation");
 
 /**
- * Unit Profile — two trivia variants over the user's all-time
- * (recent-window-bounded) unit-production aggregate exposed by
- * /v1/arcade/unit-stats:
+ * Unit Profile — four trivia variants over the user's recent-window
+ * unit-production aggregate exposed by /v1/arcade/unit-stats:
  *
- *   "built"  — Which unit have you built the most of?
- *   "lost"   — How many units have you lost in total?
+ *   "built"          — Which unit have you built the most of?
+ *   "lost"           — How many units have you lost in total?
+ *   "lost-per-game"  — On average, how many units have you lost per game?
+ *   "diversity"      — How many distinct unit types do you build?
  *
- * The two angles share a question payload type ``Q`` so the engine
- * picks a single variant per round. Daily mode rolls a deterministic
- * variant via the seeded RNG; both gate on the unit-stats endpoint
- * returning a non-trivial aggregate (≥25 scanned games for the
- * "built" variant, ≥10 lost-game contributions for the "lost" one)
- * so a brand-new user doesn't see "the correct answer is 0 units".
+ * The four angles share a discriminated-union ``Q`` so the engine picks
+ * a single variant per round. Daily mode rolls a deterministic variant
+ * via the seeded RNG; all four gate on the unit-stats endpoint returning
+ * a non-trivial aggregate so a brand-new user doesn't see "the correct
+ * answer is 0 units".
  */
 
-export type UnitProfileVariant = "built" | "lost";
+export type UnitProfileVariant =
+  | "built"
+  | "lost"
+  | "lost-per-game"
+  | "diversity";
 
 const BUILT_MIN_SCANNED = 25;
 const LOST_MIN_GAMES = 10;
+const DIVERSITY_MIN_DISTINCT = 6;
 
 interface BuiltQ {
   variant: "built";
@@ -65,7 +70,44 @@ interface LostQ {
   lostGames: number;
 }
 
-type Q = BuiltQ | LostQ;
+const LOST_PER_GAME_BUCKETS = [
+  "Under 10",
+  "10 – 30",
+  "30 – 75",
+  "75+",
+] as const;
+type LostPerGameBucket = (typeof LOST_PER_GAME_BUCKETS)[number];
+
+interface LostPerGameQ {
+  variant: "lost-per-game";
+  options: ReadonlyArray<string>;
+  truth: LostPerGameBucket;
+  /** Average units-lost per game (totalUnitsLost / lostGames). */
+  truthValue: number;
+  totalUnitsLost: number;
+  lostGames: number;
+}
+
+const DIVERSITY_BUCKETS = [
+  "Under 6",
+  "6 – 12",
+  "12 – 20",
+  "20+",
+] as const;
+type DiversityBucket = (typeof DIVERSITY_BUCKETS)[number];
+
+interface DiversityQ {
+  variant: "diversity";
+  options: ReadonlyArray<string>;
+  truth: DiversityBucket;
+  /** Number of distinct unit names with count > 0. */
+  truthValue: number;
+  scannedGames: number;
+  /** Top-5 unit names by count, for the reveal panel. */
+  topUnits: Array<{ name: string; count: number }>;
+}
+
+type Q = BuiltQ | LostQ | LostPerGameQ | DiversityQ;
 type A = string;
 
 export function bucketForUnitsLost(n: number): LostBucket {
@@ -73,6 +115,20 @@ export function bucketForUnitsLost(n: number): LostBucket {
   if (n < 2_500) return "500 – 2,500";
   if (n < 10_000) return "2,500 – 10,000";
   return "10,000+";
+}
+
+export function bucketForLostPerGame(avg: number): LostPerGameBucket {
+  if (!Number.isFinite(avg) || avg < 10) return "Under 10";
+  if (avg < 30) return "10 – 30";
+  if (avg < 75) return "30 – 75";
+  return "75+";
+}
+
+export function bucketForDiversity(distinct: number): DiversityBucket {
+  if (!Number.isFinite(distinct) || distinct < 6) return "Under 6";
+  if (distinct < 12) return "6 – 12";
+  if (distinct < 20) return "12 – 20";
+  return "20+";
 }
 
 /**
@@ -124,9 +180,7 @@ export function buildBuiltQuestion(
   };
 }
 
-export function buildLostQuestion(
-  stats: ArcadeUnitStats,
-): LostQ | null {
+export function buildLostQuestion(stats: ArcadeUnitStats): LostQ | null {
   if (stats.lostGames < LOST_MIN_GAMES) return null;
   const total = Number(stats.totalUnitsLost);
   if (!Number.isFinite(total) || total <= 0) return null;
@@ -140,6 +194,41 @@ export function buildLostQuestion(
   };
 }
 
+export function buildLostPerGameQuestion(
+  stats: ArcadeUnitStats,
+): LostPerGameQ | null {
+  if (stats.lostGames < LOST_MIN_GAMES) return null;
+  const total = Number(stats.totalUnitsLost);
+  if (!Number.isFinite(total) || total <= 0) return null;
+  const avg = total / stats.lostGames;
+  return {
+    variant: "lost-per-game",
+    options: LOST_PER_GAME_BUCKETS,
+    truth: bucketForLostPerGame(avg),
+    truthValue: avg,
+    totalUnitsLost: total,
+    lostGames: stats.lostGames,
+  };
+}
+
+export function buildDiversityQuestion(
+  stats: ArcadeUnitStats,
+): DiversityQ | null {
+  const entries = Object.entries(stats.builtByUnit || {}).filter(
+    ([, v]) => Number.isFinite(v) && v > 0,
+  );
+  if (entries.length < DIVERSITY_MIN_DISTINCT) return null;
+  entries.sort((a, b) => b[1] - a[1]);
+  return {
+    variant: "diversity",
+    options: DIVERSITY_BUCKETS,
+    truth: bucketForDiversity(entries.length),
+    truthValue: entries.length,
+    scannedGames: stats.scannedGames,
+    topUnits: entries.slice(0, 5).map(([name, count]) => ({ name, count })),
+  };
+}
+
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
   const stats = input.data.unitStats;
   if (!stats || stats.scannedGames < BUILT_MIN_SCANNED) {
@@ -149,18 +238,19 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
         "Play more games — Unit Profile needs detailed build-log history before it can quiz you.",
     };
   }
-  // Variant selection: daily seed pins it, Quick Play rolls. We try
-  // each variant in order and fall through to the next when the
-  // chosen one doesn't gate-pass.
-  const rollBuiltFirst = input.rng() < 0.5;
-  const order: UnitProfileVariant[] = rollBuiltFirst
-    ? ["built", "lost"]
-    : ["lost", "built"];
+  // Variant rotation: shuffle the 4 candidates via the seeded RNG and
+  // return the first that gate-passes. Daily seed pins the variant
+  // stably; Quick Play rotates across runs.
+  const order = shuffle(
+    ["built", "lost", "lost-per-game", "diversity"] as UnitProfileVariant[],
+    input.rng,
+  );
   for (const v of order) {
-    const q =
-      v === "built"
-        ? buildBuiltQuestion(stats, input.rng)
-        : buildLostQuestion(stats);
+    let q: Q | null = null;
+    if (v === "built") q = buildBuiltQuestion(stats, input.rng);
+    else if (v === "lost") q = buildLostQuestion(stats);
+    else if (v === "lost-per-game") q = buildLostPerGameQuestion(stats);
+    else q = buildDiversityQuestion(stats);
     if (q) {
       return { ok: true, minDataMet: true, question: q };
     }
@@ -174,14 +264,21 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
 
 function score(q: Q, a: A): ScoreResult {
   const correct = a === q.truth;
+  let note: string;
+  if (q.variant === "built") {
+    note = `Top-built: ${q.truth} (${q.truthValue.toLocaleString()} entries across your last ${q.scannedGames} games).`;
+  } else if (q.variant === "lost") {
+    note = `Total units lost: ${q.truthValue.toLocaleString()} across ${q.lostGames} games.`;
+  } else if (q.variant === "lost-per-game") {
+    note = `Avg units lost per game: ${q.truthValue.toFixed(1)} across ${q.lostGames} games (${q.totalUnitsLost.toLocaleString()} total).`;
+  } else {
+    note = `Distinct units built: ${q.truthValue.toLocaleString()} across your last ${q.scannedGames} games.`;
+  }
   return {
     raw: correct ? 1 : 0,
     xp: correct ? 14 : 0,
     outcome: correct ? "correct" : "wrong",
-    note:
-      q.variant === "built"
-        ? `Top-built: ${q.truth} (${q.truthValue.toLocaleString()} entries across your last ${q.scannedGames} games).`
-        : `Total units lost: ${q.truthValue.toLocaleString()} across ${q.lostGames} games.`,
+    note,
   };
 }
 
@@ -194,7 +291,7 @@ export const unitProfile: Mode<Q, A> = {
   depthTag: "hidden-derivation",
   title: "Unit Profile",
   blurb:
-    "Two angles on the units in your own build-logs. How well do you know your own army?",
+    "Four angles on the units in your own build-logs. How well do you know your own army?",
   generate,
   score,
   render: (ctx) => <Render ctx={ctx} />,
@@ -203,9 +300,14 @@ export const unitProfile: Mode<Q, A> = {
 export const __test = {
   buildBuiltQuestion,
   buildLostQuestion,
+  buildLostPerGameQuestion,
+  buildDiversityQuestion,
   bucketForUnitsLost,
+  bucketForLostPerGame,
+  bucketForDiversity,
   BUILT_MIN_SCANNED,
   LOST_MIN_GAMES,
+  DIVERSITY_MIN_DISTINCT,
 };
 
 function promptFor(q: Q): ReactNode {
@@ -218,20 +320,44 @@ function promptFor(q: Q): ReactNode {
       </span>
     );
   }
+  if (q.variant === "lost") {
+    return (
+      <span>
+        Across <span className="font-mono tabular-nums">{q.lostGames}</span> of
+        your recent games, roughly{" "}
+        <span className="font-semibold">how many units have you lost</span> in
+        total?
+      </span>
+    );
+  }
+  if (q.variant === "lost-per-game") {
+    return (
+      <span>
+        On <span className="font-semibold">average</span>, roughly{" "}
+        <span className="font-semibold">how many units do you lose per game</span>?{" "}
+        (Across <span className="font-mono tabular-nums">{q.lostGames}</span> games
+        with macro data.)
+      </span>
+    );
+  }
   return (
     <span>
-      Across <span className="font-mono tabular-nums">{q.lostGames}</span> of
-      your recent games, roughly{" "}
-      <span className="font-semibold">how many units have you lost</span> in
-      total?
+      Across your last{" "}
+      <span className="font-mono tabular-nums">{q.scannedGames}</span> games,
+      roughly{" "}
+      <span className="font-semibold">
+        how many distinct unit types have you built
+      </span>{" "}
+      at least once?
     </span>
   );
 }
 
 function depthLabelFor(q: Q): string {
-  return q.variant === "built"
-    ? "Cross-game buildLog tally"
-    : "Cross-game units-lost sum";
+  if (q.variant === "built") return "Cross-game buildLog tally";
+  if (q.variant === "lost") return "Cross-game units-lost sum";
+  if (q.variant === "lost-per-game") return "Cross-game units-lost average";
+  return "Cross-game roster diversity";
 }
 
 function Render({
@@ -298,7 +424,10 @@ function Reveal({ q, score }: { q: Q; score: ScoreResult }) {
   return (
     <div className="space-y-2 text-caption text-text">
       {headline}
-      {q.variant === "built" ? <BuiltDetail q={q} /> : <LostDetail q={q} />}
+      {q.variant === "built" ? <BuiltDetail q={q} /> : null}
+      {q.variant === "lost" ? <LostDetail q={q} /> : null}
+      {q.variant === "lost-per-game" ? <LostPerGameDetail q={q} /> : null}
+      {q.variant === "diversity" ? <DiversityDetail q={q} /> : null}
     </div>
   );
 }
@@ -331,5 +460,51 @@ function LostDetail({ q }: { q: LostQ }) {
       </span>{" "}
       units.
     </p>
+  );
+}
+
+function LostPerGameDetail({ q }: { q: LostPerGameQ }) {
+  return (
+    <p className="text-text-muted">
+      Average of{" "}
+      <span className="font-mono tabular-nums text-text">
+        {q.truthValue.toFixed(1)}
+      </span>{" "}
+      units per game —{" "}
+      <span className="font-mono tabular-nums">{q.totalUnitsLost.toLocaleString()}</span>{" "}
+      lost across{" "}
+      <span className="font-mono tabular-nums">{q.lostGames}</span> games with
+      macro data.
+    </p>
+  );
+}
+
+function DiversityDetail({ q }: { q: DiversityQ }) {
+  return (
+    <div className="space-y-1 text-text-muted">
+      <p>
+        You've built{" "}
+        <span className="font-mono tabular-nums text-text">
+          {q.truthValue.toLocaleString()}
+        </span>{" "}
+        distinct unit types across your last{" "}
+        <span className="font-mono tabular-nums">{q.scannedGames}</span> games.
+      </p>
+      {q.topUnits.length ? (
+        <ul className="space-y-1" aria-label="Top units">
+          {q.topUnits.map((u) => (
+            <li
+              key={u.name}
+              className="flex items-center justify-between rounded border border-border bg-bg-surface px-2 py-1"
+            >
+              <span className="truncate">{u.name}</span>
+              <span className="font-mono tabular-nums text-text-dim">
+                {u.count.toLocaleString()}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
