@@ -93,6 +93,12 @@ async function ensureIndexes(ctx) {
 
   await ctx.opponents.createIndex({ userId: 1, pulseId: 1 }, { unique: true });
   await ctx.opponents.createIndex({ userId: 1, lastSeen: -1 });
+  // Admin per-user top-opponents card runs
+  // ``find({userId}).sort({gameCount: -1}).limit(5)`` against this
+  // collection (services/admin.js). Without this index the sort
+  // scans every opponents row for the user — Atlas Performance
+  // Advisor flagged ~16k docs scanned per 5-doc result.
+  await ctx.opponents.createIndex({ userId: 1, gameCount: -1 });
 
   await ctx.games.createIndex({ userId: 1, gameId: 1 }, { unique: true });
   await ctx.games.createIndex({ userId: 1, date: -1 });
@@ -131,6 +137,25 @@ async function ensureIndexes(ctx) {
     userId: 1,
     date: -1,
     gameId: 1,
+  });
+  // Display-name fallback: services/overlayLiveAggregations.js drops
+  // to ``opponent.displayName`` when neither pulseId nor
+  // pulseCharacterId is available on the envelope (legacy pre-Pulse
+  // agents, unresolved-identity case). The two indexes below mirror
+  // the pulseId pair above for that branch and follow Atlas
+  // Performance Advisor field ordering.
+  await ctx.games.createIndex({
+    "opponent.displayName": 1,
+    "opponent.race": 1,
+    userId: 1,
+    date: -1,
+  });
+  await ctx.games.createIndex({
+    myRace: 1,
+    "opponent.displayName": 1,
+    "opponent.race": 1,
+    userId: 1,
+    date: -1,
   });
 
   // Game-detail rows live in their own collection so the slim
