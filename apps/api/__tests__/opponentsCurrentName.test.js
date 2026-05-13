@@ -284,6 +284,200 @@ describe("OpponentsService current-name invariant", () => {
     });
   });
 
+  describe("list() self-heals lastSeen / lastPlayed from games", () => {
+    /**
+     * Seed the bug state: opponents row has a stale ``lastSeen`` from
+     * 2024 but games show recent (2026) activity under the same
+     * pulseId. The user-visible symptom is a "Last" column rendering
+     * 2024 dates for opponents played this season.
+     */
+    async function seedLastSeenBugState(userId) {
+      await db.opponents.insertOne({
+        userId,
+        pulseId: baseGame.pulseId,
+        toonHandle: baseGame.toonHandle,
+        pulseCharacterId: "8636008",
+        displayNameSample: "EndOfLine",
+        race: "P",
+        gameCount: 2,
+        wins: 1,
+        losses: 1,
+        firstSeen: new Date("2018-10-20"),
+        lastSeen: new Date("2018-10-20"),
+      });
+      await db.games.insertMany([
+        {
+          userId,
+          gameId: "g_2018",
+          date: new Date("2018-10-20"),
+          result: "Victory",
+          myRace: "Protoss",
+          map: "M1",
+          durationSec: 600,
+          opponent: {
+            pulseId: baseGame.pulseId,
+            toonHandle: baseGame.toonHandle,
+            displayName: "EndOfLine",
+            race: "Protoss",
+          },
+        },
+        {
+          userId,
+          gameId: "g_2026",
+          date: new Date("2026-03-19"),
+          result: "Defeat",
+          myRace: "Protoss",
+          map: "M2",
+          durationSec: 700,
+          opponent: {
+            pulseId: baseGame.pulseId,
+            toonHandle: baseGame.toonHandle,
+            displayName: "EndOfLine",
+            race: "Protoss",
+          },
+        },
+      ]);
+    }
+
+    test("surfaces lastPlayed from the games-derived max date when the row's lastSeen is stale", async () => {
+      const userId = "u_lastseen_overlay";
+      await seedLastSeenBugState(userId);
+      const out = await opponents.list(userId);
+      expect(out.items.length).toBe(1);
+      expect(out.items[0].lastPlayed).toEqual(new Date("2026-03-19"));
+    });
+
+    test("heals the stored lastSeen so the next sort places the opponent correctly", async () => {
+      const userId = "u_lastseen_heal";
+      await seedLastSeenBugState(userId);
+      await opponents.list(userId);
+      const row = await db.opponents.findOne({
+        userId,
+        pulseId: baseGame.pulseId,
+      });
+      expect(row.lastSeen).toEqual(new Date("2026-03-19"));
+    });
+
+    test("does NOT overlay backward when stored lastSeen is fresher than any game date", async () => {
+      // Defensive: a row could have a fresher stored lastSeen than
+      // anything in games (e.g. games were pruned, partial restore).
+      // The overlay must only move FORWARD — never replace a fresher
+      // stored value with an older games-derived date.
+      const userId = "u_lastseen_no_regress";
+      await db.opponents.insertOne({
+        userId,
+        pulseId: baseGame.pulseId,
+        toonHandle: baseGame.toonHandle,
+        displayNameSample: "EndOfLine",
+        race: "P",
+        gameCount: 1,
+        wins: 1,
+        losses: 0,
+        firstSeen: new Date("2026-04-01"),
+        lastSeen: new Date("2026-04-01"),
+      });
+      await db.games.insertOne({
+        userId,
+        gameId: "g_old_only",
+        date: new Date("2018-10-20"),
+        result: "Victory",
+        myRace: "Protoss",
+        map: "M",
+        durationSec: 600,
+        opponent: {
+          pulseId: baseGame.pulseId,
+          toonHandle: baseGame.toonHandle,
+          displayName: "EndOfLine",
+          race: "Protoss",
+        },
+      });
+      const out = await opponents.list(userId);
+      expect(out.items[0].lastPlayed).toBeUndefined();
+      expect(out.items[0].lastSeen).toEqual(new Date("2026-04-01"));
+      const row = await db.opponents.findOne({
+        userId,
+        pulseId: baseGame.pulseId,
+      });
+      expect(row.lastSeen).toEqual(new Date("2026-04-01"));
+    });
+
+    test("pagination cursor uses stored lastSeen even when an overlay added a newer lastPlayed", async () => {
+      // The ``{ lastSeen: -1 }`` cursor sort runs against the stored
+      // field. ``nextBefore`` must be the stored value of the last
+      // row on the page, not the overlaid one — otherwise the next
+      // page query's ``$lt`` would skip over rows that share the same
+      // overlaid date.
+      const userId = "u_cursor_stable";
+      // Two rows: one with stale lastSeen, one with fresh lastSeen.
+      await db.opponents.insertMany([
+        {
+          userId,
+          pulseId: "1-S2-1-100",
+          toonHandle: "1-S2-1-100",
+          displayNameSample: "A",
+          race: "P",
+          gameCount: 1,
+          wins: 0,
+          losses: 1,
+          firstSeen: new Date("2018-10-20"),
+          lastSeen: new Date("2018-10-20"),
+        },
+        {
+          userId,
+          pulseId: "1-S2-1-200",
+          toonHandle: "1-S2-1-200",
+          displayNameSample: "B",
+          race: "P",
+          gameCount: 1,
+          wins: 1,
+          losses: 0,
+          firstSeen: new Date("2025-01-01"),
+          lastSeen: new Date("2025-01-01"),
+        },
+      ]);
+      await db.games.insertMany([
+        {
+          userId,
+          gameId: "g_a",
+          date: new Date("2026-03-19"),
+          result: "Defeat",
+          myRace: "Protoss",
+          map: "M",
+          durationSec: 600,
+          opponent: {
+            pulseId: "1-S2-1-100",
+            toonHandle: "1-S2-1-100",
+            displayName: "A",
+            race: "Protoss",
+          },
+        },
+        {
+          userId,
+          gameId: "g_b",
+          date: new Date("2025-01-01"),
+          result: "Victory",
+          myRace: "Protoss",
+          map: "M",
+          durationSec: 600,
+          opponent: {
+            pulseId: "1-S2-1-200",
+            toonHandle: "1-S2-1-200",
+            displayName: "B",
+            race: "Protoss",
+          },
+        },
+      ]);
+      const out = await opponents.list(userId, { limit: 1 });
+      // First row by the stored ``{ lastSeen: -1 }`` sort is row B
+      // (2025), not row A (2018 stored / 2026 overlaid). The cursor
+      // hands off the STORED date so the next page query lines up
+      // with the index.
+      expect(out.items.length).toBe(1);
+      expect(out.items[0].pulseId).toBe("1-S2-1-200");
+      expect(out.nextBefore).toEqual(new Date("2025-01-01"));
+    });
+  });
+
   describe("get() returns the latest-by-date game's displayName as name", () => {
     test("profile name reflects the absolute most-recent game, regardless of date filter", async () => {
       const userId = "u_get";

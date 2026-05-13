@@ -117,16 +117,24 @@ class OpponentsService {
       .toArray();
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
+    // Capture ``nextBefore`` BEFORE the read-time overlays run.
+    // ``_overlayLatestSeenFromGames`` may add a ``lastPlayed`` field
+    // surfaced to the frontend, but the cursor still uses the stored
+    // ``lastSeen`` so pagination is consistent with the
+    // ``{ lastSeen: -1 }`` sort above.
     const nextBefore = hasMore ? page[page.length - 1].lastSeen : null;
-    // Self-heal ``displayNameSample`` from the games collection. The
-    // row's stored value is whatever the most recent ingest wrote —
-    // which the May-2026 write guard now keeps in sync, but rows
-    // that pre-date the guard are still stale until the backfill
-    // migration runs. Recomputing from games at read time means the
-    // list shows the right name regardless of migration state. One
-    // batched aggregation per page (uses the
+    // Self-heal ``displayNameSample`` and ``lastSeen`` from the games
+    // collection. The row's stored values are whatever the most recent
+    // ingest wrote — which the May-2026 write guard now keeps in sync,
+    // but rows that pre-date the guard are still stale until the
+    // backfill migration runs. Recomputing from games at read time
+    // means the list shows the right values regardless of migration
+    // state. Two batched aggregations per page (each uses the
     // ``{opponent.pulseId, userId, date}`` index).
-    await this._overlayLatestNameFromGames(userId, page);
+    await Promise.all([
+      this._overlayLatestNameFromGames(userId, page),
+      this._overlayLatestSeenFromGames(userId, page),
+    ]);
     return { items: page, nextBefore };
   }
 
@@ -381,6 +389,110 @@ class OpponentsService {
       if (typeof latest === "string" && latest.length > 0) {
         r.displayNameSample = latest;
       }
+    }
+  }
+
+  /**
+   * In-place overlay of ``lastPlayed`` with each opponent's
+   * globally-most-recent game date. Source of truth: the games
+   * collection (immutable, dated, definitive).
+   *
+   * Why "from games" instead of the opponents row's ``lastSeen``:
+   *   * The row's ``lastSeen`` is maintained by ``recordGame`` /
+   *     ``refreshMetadata``, but rows that pre-date the May-2026
+   *     write guard hold stale values until the
+   *     ``2026-05-12-heal-opponent-current-name`` migration runs.
+   *     Until then, the Opponents tab would show a "Last" column
+   *     full of 2018-era dates for opponents the user actually
+   *     played this season.
+   *   * Computing from games at read time is self-healing and makes
+   *     the migration purely a sort-order optimization.
+   *
+   * Only the UNFILTERED list path calls this overlay. ``_listFiltered``
+   * already computes ``lastPlayed = $max("$date")`` WITHIN the active
+   * filter window, which is the correct windowed value — overwriting
+   * it with the global-latest date would defeat the date filter.
+   *
+   * Surfaces the date as ``lastPlayed`` (new field) rather than
+   * mutating the stored ``lastSeen`` on the row, so the
+   * ``page[len-1].lastSeen`` cursor captured above stays aligned with
+   * the ``{ lastSeen: -1 }`` index sort. The SPA's row normaliser
+   * (``OpponentsTab.tsx``) already prefers ``lastPlayed`` over
+   * ``lastSeen``, matching the filtered path's output shape.
+   *
+   * Opportunistic write-back: when stored ``lastSeen`` is older than
+   * the games-derived latest, we queue a bulk update to heal the row
+   * in place. Failures are non-fatal — the next read will retry.
+   * This means a stale-row user gets corrected sort order on their
+   * next list call, without waiting for the one-shot migration.
+   *
+   * One aggregation per page. Uses the
+   * ``{opponent.pulseId, userId, date}`` index. Safe on an empty page.
+   *
+   * @private
+   * @param {string} userId
+   * @param {Array<{pulseId: string, lastSeen?: Date|null, lastPlayed?: Date|null}>} rows
+   */
+  async _overlayLatestSeenFromGames(userId, rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const pulseIds = [];
+    for (const r of rows) {
+      if (r && typeof r.pulseId === "string" && r.pulseId.length > 0) {
+        pulseIds.push(r.pulseId);
+      }
+    }
+    if (pulseIds.length === 0) return;
+    const cursor = this.db.games.aggregate([
+      {
+        $match: {
+          userId,
+          "opponent.pulseId": { $in: pulseIds },
+        },
+      },
+      {
+        $group: {
+          _id: "$opponent.pulseId",
+          latestDate: { $max: "$date" },
+        },
+      },
+    ]);
+    /** @type {Map<string, Date>} */
+    const byPulseId = new Map();
+    for await (const doc of cursor) {
+      if (typeof doc._id === "string" && doc.latestDate instanceof Date) {
+        byPulseId.set(doc._id, doc.latestDate);
+      }
+    }
+    /** @type {Array<{updateOne: {filter: object, update: object}}>} */
+    const heals = [];
+    for (const r of rows) {
+      if (!r || typeof r.pulseId !== "string") continue;
+      const latest = byPulseId.get(r.pulseId);
+      if (!(latest instanceof Date)) continue;
+      const stored = r.lastSeen instanceof Date ? r.lastSeen : null;
+      const storedMs = stored ? stored.getTime() : 0;
+      const latestMs = latest.getTime();
+      if (latestMs > storedMs) {
+        // Surface to the frontend immediately.
+        r.lastPlayed = latest;
+        // Heal the stored row so the next list call's
+        // ``{ lastSeen: -1 }`` sort places this opponent correctly.
+        heals.push({
+          updateOne: {
+            filter: { userId, pulseId: r.pulseId },
+            update: { $set: { lastSeen: latest } },
+          },
+        });
+      }
+    }
+    if (heals.length === 0) return;
+    try {
+      await this.db.opponents.bulkWrite(heals, { ordered: false });
+    } catch (err) {
+      this.logger.warn(
+        { err, userId, count: heals.length },
+        "opponents_lastseen_heal_failed",
+      );
     }
   }
 
