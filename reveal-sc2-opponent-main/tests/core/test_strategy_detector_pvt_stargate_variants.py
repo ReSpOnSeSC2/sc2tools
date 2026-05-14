@@ -198,9 +198,12 @@ def test_stargate_opener_fires_when_no_specific_match():
     )
 
 
-def test_stargate_opener_does_not_override_robo_first():
-    """If Robo is built BEFORE Stargate, it's a Robo First build, not
-    a Stargate Opener. The catch-all must NOT clobber Robo First."""
+def test_robo_first_pure_path_with_no_stargate_classifies():
+    """Robo built first AND no Stargate ever — the canonical Robo
+    First opener. The Stargate Opener catch-all must NOT clobber it.
+    (Mixed Robo+Sg cases are covered separately by
+    ``test_robo_first_does_not_fire_when_stargate_exists`` below — the
+    user's rule is "any Stargate disqualifies Robo First".)"""
     events = [
         _building("Nexus", 0),
         _building("Pylon", 18),
@@ -208,16 +211,15 @@ def test_stargate_opener_does_not_override_robo_first():
         _building("Assimilator", 72),
         _building("CyberneticsCore", 115),
         _building("Nexus", 130),
-        # Robotics Facility goes down FIRST
+        # Robotics Facility — first AND only tech building
         _building("RoboticsFacility", 200),
-        # Stargate LATER
-        _building("Stargate", 320),
         _building("Gateway", 280),
+        # No Stargate ever
     ]
     detector = sd.UserBuildDetector(custom_builds=[])
     result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
     assert result == "PvT - Robo First", (
-        f"Robo-before-Stargate must classify as Robo First; got {result!r}"
+        f"Pure Robo opener (no Stargate) must classify as Robo First; got {result!r}"
     )
 
 
@@ -336,6 +338,119 @@ def test_robo_after_twilight_still_allows_stargate_into_x():
     result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
     assert result == "PvT - Stargate into Charge", (
         f"Robo AFTER Twilight should still tag as Stargate into Charge; "
+        f"got {result!r}"
+    )
+
+
+# -----------------------------------------------------------------------------
+# Stargate-disqualifies guards on Robo First + Standard Charge Macro
+# -----------------------------------------------------------------------------
+# A Stargate at any point in the build means it is NOT a pure Robo
+# First opener and NOT a pure Standard Charge Macro — those labels are
+# reserved for Stargate-free games. Hybrid Robo+Sg / Charge+Sg builds
+# land on Stargate-into-X / Phoenix-into-Robo / Stargate Opener
+# instead.
+def test_robo_first_does_not_fire_when_stargate_exists():
+    """Robo built first, then Stargate added later, no Phoenix on the
+    field (so Phoenix-into-Robo doesn't catch it either). Must NOT
+    classify as Robo First — falls through to the Stargate Opener
+    catch-all."""
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),
+        # Robotics Facility FIRST
+        _building("RoboticsFacility", 200),
+        # Stargate LATER (still exists at any time)
+        _building("Stargate", 320),
+        _building("Gateway", 280),
+        _unit("Oracle", 360),  # Oracle, not Phoenix
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - Robo First", (
+        f"Robo+Stargate hybrid must NOT classify as Robo First; "
+        f"got {result!r}"
+    )
+
+
+def test_robo_first_still_fires_when_no_stargate():
+    """Pure Robo opener — no Stargate ever — keeps the Robo First
+    label."""
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),
+        _building("RoboticsFacility", 200),
+        # No Stargate ever
+        _building("Gateway", 280),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - Robo First", (
+        f"Pure Robo opener must still classify as Robo First; got {result!r}"
+    )
+
+
+def test_standard_charge_macro_does_not_fire_when_stargate_exists():
+    """Charge + 3+ Nexus + a Stargate somewhere in the build must NOT
+    classify as Standard Charge Macro — that label is reserved for
+    pure Gateway/Twilight macro games without Sg tech."""
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),
+        _building("Nexus", 300),
+        # Stargate built somewhere along the way
+        _building("Stargate", 200),
+        _unit("Oracle", 260),
+        # Twilight + Charge research
+        _building("TwilightCouncil", 320),
+        # Robo built AFTER Twilight so the Robo guard above doesn't
+        # disqualify Stargate-into-Charge — we want to verify the
+        # Standard-Charge-Macro guard, not the Robo guard.
+        _building("RoboticsFacility", 400),
+        _upgrade("Charge", 380),
+        _building("Gateway", 360),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - Standard Charge Macro", (
+        f"Stargate+Charge+3nex must NOT classify as Standard Charge Macro; "
+        f"got {result!r}"
+    )
+
+
+def test_standard_charge_macro_still_fires_with_no_stargate():
+    """Pure Twilight+Charge+3nex (no Stargate at any point) keeps the
+    Standard Charge Macro label."""
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),
+        _building("Nexus", 300),
+        _building("TwilightCouncil", 220),
+        _upgrade("Charge", 280),
+        _building("Gateway", 240),
+        _building("Gateway", 320),
+        # No Stargate ever
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - Standard Charge Macro", (
+        f"Pure Twilight macro must still classify as Standard Charge Macro; "
         f"got {result!r}"
     )
 

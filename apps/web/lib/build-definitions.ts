@@ -375,14 +375,14 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - Robo First",
     description:
-      "Detected if a Robotics Facility is built before 6:30 AND it is the FIRST tech building (before any Stargate or Twilight Council).",
+      "Detected if a Robotics Facility is built before 6:30 AND it is the FIRST tech building (before any Twilight Council) AND NO Stargate has been built at any point. A Stargate — even one built AFTER the Robo — makes the build a Robo+Stargate hybrid that Phoenix into Robo / Stargate Opener cover instead.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - Standard Charge Macro",
     description:
-      "Detected if Charge is researched by 9:00 AND the player has taken 3+ Nexuses -- standard 3-base Chargelot macro.",
+      "Detected if Charge is researched by 9:00 AND the player has taken 3+ Nexuses AND NO Stargate has been built — the pure Gateway / Twilight 3-base Chargelot macro. Any Stargate (at any point) makes the build a hybrid Stargate composition; those replays land under Stargate into Charge / Phoenix into Robo / Stargate Opener instead.",
   },
   // ============================================================
   // PvZ

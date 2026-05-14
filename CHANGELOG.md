@@ -22,6 +22,13 @@ workflow builds the Windows installer on each tag push and attaches the
   now skip on `robo_time < twilight_time || immortal_time <
   twilight_time || robobay_time < twilight_time` so Phoenix-into-Robo
   catches the replay correctly. Catalog prose updated.
+- **Strategy classifier · `PvT - Robo First` and `PvT - Standard
+  Charge Macro` now require NO Stargate**: a Stargate at any point
+  in the build means the game is a Robo+Sg or Charge+Sg hybrid, not
+  the canonical pure-Robo / pure-Gateway-macro opener. Both rules
+  used to fire on hybrid replays that should have landed under
+  Stargate-into-X / Phoenix-into-Robo / Stargate Opener instead.
+  Catalog prose for both updated.
 - **Strategy classifier · "Game Too Short" threshold raised 30 s →
   45 s**: replays that survived to 32-40 s usually still amount to
   one Pylon and a handful of starting workers — not enough to call

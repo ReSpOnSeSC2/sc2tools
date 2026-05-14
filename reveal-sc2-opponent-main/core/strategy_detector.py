@@ -1378,7 +1378,21 @@ class UserBuildDetector(BaseStrategyDetector):
                 and (4 <= gate_count_730 <= 6)
             ):
                 return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
-            if has_upgrade_substr("Charge", 540) and len(nexus_times) >= 3:
+            # Standard Charge Macro is a pure Gateway / Twilight macro
+            # game — any Stargate at all means the build is a hybrid
+            # composition (Stargate-into-Charge / Phoenix-into-Robo /
+            # Stargate Opener) and should NOT collapse into this label.
+            # The earlier Stargate-into-X / Phoenix-into-Robo branches
+            # already catch the Stargate cases when their signatures
+            # match, but a Stargate replay that misses both (e.g. Oracle
+            # harass with no Phoenix + Robo-AFTER-Twilight + Charge) used
+            # to fall through to this rule. Explicit guard keeps the
+            # label honest.
+            if (
+                has_upgrade_substr("Charge", 540)
+                and len(nexus_times) >= 3
+                and not has_building("Stargate", 9999)
+            ):
                 return "PvT - Standard Charge Macro"
             if (
                 has_upgrade_substr("Charge", 540)
@@ -1415,9 +1429,18 @@ class UserBuildDetector(BaseStrategyDetector):
                 and count_units("WarpPrism", 600) >= 1
             ):
                 return "PvT - DT Drop"
-            if has_building("RoboticsFacility", 390):
-                if robo_time < sg_time and robo_time < twilight_time:
-                    return "PvT - Robo First"
+            # Robo First is a Stargate-free opener — Robotics Facility
+            # goes down before Twilight Council and no Stargate is ever
+            # built. A Stargate (even one built AFTER the Robo) makes
+            # the build a Robo+Sg hybrid; Phoenix-into-Robo / Stargate
+            # Opener handle those cases above and below.
+            if (
+                has_building("RoboticsFacility", 390)
+                and robo_time < sg_time
+                and robo_time < twilight_time
+                and not has_building("Stargate", 9999)
+            ):
+                return "PvT - Robo First"
             # Catch-all: a Stargate was the FIRST tech building after
             # the Cybernetics Core (before Twilight Council and before
             # Robotics Facility) but the build didn't match any of the
