@@ -244,7 +244,14 @@ export function buildCandidates(racesPlayed: Set<string>): Candidate[] {
     });
   }
 
-  // ── Macro / APM objectives ──────────────────────────────────
+  // ── Macro objectives ────────────────────────────────────────
+  // APM cells were retired in the May-2026 follow-up: per-game APM
+  // ingestion is unreliable (some replays ship a value that's an
+  // average across the player+opponent and others ship a per-player
+  // figure, so a 150-APM cell ticked or didn't depending on which
+  // path produced the row). Keeping macro-only cells avoids that
+  // ambiguity — macroScore is a single number the agent computes
+  // deterministically from supply / build / inject timings.
   push({
     key: "macro_above:70",
     predicate: "macro_above",
@@ -268,18 +275,6 @@ export function buildCandidates(racesPlayed: Set<string>): Candidate[] {
     predicate: "win_macro_below",
     params: { maxScore: 40 },
     label: "Win with macro score under 40",
-  });
-  push({
-    key: "win_apm_above:150",
-    predicate: "win_apm_above",
-    params: { minApm: 150 },
-    label: "Win with 150+ APM",
-  });
-  push({
-    key: "win_apm_above:250",
-    predicate: "win_apm_above",
-    params: { minApm: 250 },
-    label: "Win with 250+ APM",
   });
 
   // ── Build-order strategy objectives (myBuild substring) ─────
