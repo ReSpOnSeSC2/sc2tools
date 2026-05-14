@@ -254,7 +254,12 @@ export function FilterBar() {
  */
 function ExcludeTooShortToggle() {
   const { filters, setFilters } = useFilters();
-  const enabled = !!filters.exclude_too_short;
+  // Default-on: a fresh session lands with `exclude_too_short: true`
+  // from AnalyzerProvider. The user's explicit choice persists via
+  // localStorage as a boolean (true OR false), so toggle-off survives
+  // refreshes. ``undefined`` only appears transiently during hydration
+  // and is treated as on.
+  const enabled = filters.exclude_too_short !== false;
   return (
     <label
       className={[
@@ -263,18 +268,18 @@ function ExcludeTooShortToggle() {
         "text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text",
         "focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 focus-within:ring-offset-bg",
       ].join(" ")}
-      title="Drop replays that ended in under 30 seconds (no build order developed) from every tab."
+      title="Drop replays that ended in under 30 seconds (no build order developed) from every tab. On by default."
     >
       <input
         type="checkbox"
         checked={enabled}
         onChange={(e) =>
-          setFilters({
-            ...filters,
-            // Store undefined when off so the param disappears from
-            // the URL entirely; ?exclude_too_short=true otherwise.
-            exclude_too_short: e.target.checked ? true : undefined,
-          })
+          // Store the boolean explicitly (true or false). false is
+          // needed in localStorage to remember the user's opt-out;
+          // ``filtersToQuery`` drops false from the URL so the
+          // query string stays clean when the toggle is at its
+          // no-op state.
+          setFilters({ ...filters, exclude_too_short: e.target.checked })
         }
         className="h-4 w-4 accent-accent"
         aria-label="Exclude games shorter than 30 seconds"
