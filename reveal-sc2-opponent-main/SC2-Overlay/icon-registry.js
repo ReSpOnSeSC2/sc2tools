@@ -296,6 +296,11 @@
 
         // PvT user builds
         'PvT - Proxy Void Ray/Stargate':        ['buildings/stargate.png', 'units/voidray.png'],
+        'PvT - Stargate into Charge':           ['buildings/stargate.png', 'units/zealot.png', 'upgrades/charge.png'],
+        'PvT - Stargate into Glaives':          ['buildings/stargate.png', 'units/adept.png', 'upgrades/glaive.png'],
+        'PvT - Stargate into Blink':            ['buildings/stargate.png', 'units/stalker.png', 'upgrades/blink.png'],
+        'PvT - Stargate Opener':                ['buildings/stargate.png', 'units/voidray.png'],
+        'TvP - 1-1-1 One Base':                 ['buildings/barracks.png', 'buildings/factory.png', 'buildings/starport.png'],
         'PvT - Phoenix into Robo':              ['units/phoenix.png', 'buildings/roboticsfacility.png'],
         'PvT - Phoenix Opener':                 ['units/phoenix.png'],
         'PvT - 7 Gate Blink All-in':            ['units/stalker.png', 'upgrades/blink.png'],
