@@ -586,7 +586,10 @@ class OpponentStrategyDetector(BaseStrategyDetector):
 
             if (
                 has_building("TwilightCouncil", 360)
-                and has_upgrade_substr("Glaive", 400)
+                and (
+                    has_upgrade_substr("AdeptPiercing", 400)
+                    or has_upgrade_substr("Glaive", 400)
+                )
                 and count_units("Adept", 400) >= 6
             ):
                 return "Protoss - Glaive Adept Timing"
@@ -862,9 +865,15 @@ class UserBuildDetector(BaseStrategyDetector):
                 return "PvZ - AlphaStar Style (Oracle/Robo)"
 
             # 7 Gate Glaive/Immortal all-in: Immortals require Robotics
-            # Facility, Glaive research requires Twilight Council.
+            # Facility, Glaive research requires Twilight Council. The
+            # sc2reader raw name for Resonating Glaives is
+            # "AdeptPiercingAttack"; older callers used "Glaive" which
+            # silently never matched. Allow both.
             if (
-                has_upgrade_substr("Glaive", 510)
+                (
+                    has_upgrade_substr("AdeptPiercing", 510)
+                    or has_upgrade_substr("Glaive", 510)
+                )
                 and has_building("RoboticsFacility", 510)
                 and count_units("Sentry", 510) >= 2
                 and count_units("Immortal", 510) >= 1
@@ -878,13 +887,82 @@ class UserBuildDetector(BaseStrategyDetector):
 
             sg_time = building_time("Stargate")
             twilight_time = building_time("TwilightCouncil")
+            # Earliest research start for each Twilight-tree upgrade.
+            # Used to detect WHICH upgrade is first out of the Twilight
+            # Council — the key signal that distinguishes Adept Glaive
+            # Timings (Glaives first) from Stargate-into-Blink (Blink
+            # first) and the Charge macro builds (Charge first).
+            # NOTE on naming: sc2reader emits raw upgrade_type_name
+            # values — "AdeptPiercingAttack" for Resonating Glaives,
+            # "BlinkTech" for Blink, "Charge" for Charge. Substring
+            # match against ("AdeptPiercing", "Glaive") covers both raw
+            # and display-name variants; "Blink" matches "BlinkTech";
+            # "Charge" matches "Charge".
+            def upgrade_time(*sub_names):
+                times = [
+                    u["time"] for u in upgrades
+                    if any(s in u["name"] for s in sub_names)
+                ]
+                return min(times) if times else 9999
+
+            robo_time = building_time("RoboticsFacility")
+            dark_shrine_time = building_time("DarkShrine")
+            glaive_time = upgrade_time("AdeptPiercing", "Glaive")
+            blink_time = upgrade_time("Blink")
+            charge_time = upgrade_time("Charge")
+            glaive_first_off_twilight = (
+                glaive_time < 9999
+                and glaive_time < blink_time
+                and glaive_time < charge_time
+            )
+            # Twilight Council is the FIRST tech building after the
+            # Cybernetics Core: no Stargate / Robotics Facility / Dark
+            # Shrine has been started before it. (Templar Archives /
+            # Fleet Beacon / Robotics Bay each REQUIRE one of those,
+            # so they cannot be earlier and need no separate guard.)
+            twilight_first_tech = (
+                twilight_time < 480
+                and twilight_time < sg_time
+                and twilight_time < robo_time
+                and twilight_time < dark_shrine_time
+            )
+
+            # Stargate into Glaives (refined): Stargate goes down first
+            # as the tech building, Twilight comes after it, and the
+            # FIRST upgrade out of Twilight is Glaives (NOT Blink — that
+            # would be Stargate into Blink). 4-8 Gateways by 9:00 covers
+            # both Phoenix-and-Glaive and Oracle-and-Glaive variants.
             if (
                 sg_time < 420
                 and twilight_time > sg_time
-                and has_upgrade_substr("Glaive", 600)
-                and (4 <= gate_count_6min <= 6)
+                and twilight_time < 9999
+                and glaive_first_off_twilight
+                and (4 <= gate_count_6min <= 8)
             ):
                 return "PvZ - Stargate into Glaives"
+
+            # Adept Glaives (Twilight First + Robo): Twilight is the
+            # FIRST tech, Glaives is the FIRST upgrade out of Twilight,
+            # 4-8 Gateways by 9:00, AND a Robotics Facility is in place
+            # (Observer detection / Immortal armor support).
+            if (
+                twilight_first_tech
+                and glaive_first_off_twilight
+                and (4 <= gate_count_6min <= 8)
+                and has_building("RoboticsFacility", 600)
+            ):
+                return "PvZ - Adept Glaives (Robo)"
+
+            # Adept Glaives (Twilight First, No Robo): same opening +
+            # upgrade signature as the Robo variant but no Robotics
+            # Facility — a pure Gateway Adept Glaive Timing.
+            if (
+                twilight_first_tech
+                and glaive_first_off_twilight
+                and (4 <= gate_count_6min <= 8)
+                and not has_building("RoboticsFacility", 600)
+            ):
+                return "PvZ - Adept Glaives (No Robo)"
             if (
                 sg_time < twilight_time
                 and has_building("TemplarArchive", 540)

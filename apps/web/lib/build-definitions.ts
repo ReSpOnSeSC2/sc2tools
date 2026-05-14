@@ -462,7 +462,21 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Stargate into Glaives",
     description:
-      "Detected if a Stargate is built before 7:00 (and before any Twilight Council), Glaives is researched by 10:00, and the player has 4-6 Gateways by 9:00 -- Phoenix or Oracle into Glaive Adept timing.",
+      "Detected if a Stargate is built before 7:00 (and before any Twilight Council), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), and the player has 4-8 Gateways by 9:00 -- a Phoenix or Oracle into Glaive Adept timing. The Glaives-first signal is what separates this from Stargate into Blink, where Blink would be researched first instead.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvZ",
+    name: "PvZ - Adept Glaives (No Robo)",
+    description:
+      "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), 4-8 Gateways exist by 9:00, AND no Robotics Facility is built -- a pure Gateway Adept Glaive Timing without Robo support.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvZ",
+    name: "PvZ - Adept Glaives (Robo)",
+    description:
+      "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate or Dark Shrine is started before Twilight), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), 4-8 Gateways exist by 9:00, AND a Robotics Facility is built -- the Robo variant of Adept Glaive Timing, using Observers for detection and Immortals for armor support.",
   },
   {
     race: "Protoss",
