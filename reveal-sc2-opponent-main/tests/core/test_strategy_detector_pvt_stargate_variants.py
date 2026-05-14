@@ -246,6 +246,101 @@ def test_stargate_opener_does_not_fire_when_twilight_first():
 
 
 # -----------------------------------------------------------------------------
+# Robo-tech-before-Twilight guard
+# -----------------------------------------------------------------------------
+# If a Robotics Facility / Immortal / Robotics Bay lands BEFORE the
+# Twilight Council, the build committed to a Robo path — those replays
+# are Phoenix into Robo (or Robo First / Standard Charge Macro), NOT
+# Twilight-led Stargate-into-X. Verified end-to-end against the actual
+# rule chain: the disqualified replays should reach the Phoenix into
+# Robo branch (or a later catch-all) instead of stealing the
+# Stargate-into-X label.
+def test_stargate_then_robo_then_twilight_charge_is_phoenix_into_robo():
+    """The bug the user reported: Stargate -> Phoenix -> Robo -> Immortal
+    -> Twilight -> Charge was getting tagged as "Stargate into Charge"
+    because the Twilight + Charge signal fired before Phoenix-into-Robo
+    got a chance to. With the Robo-tech guard, the Stargate-into-X
+    rule is skipped and Phoenix-into-Robo correctly takes the replay."""
+    events = _stargate_opener_base()
+    # Phoenix harass off the Stargate
+    events.append(_unit("Phoenix", 280))
+    # Robotics Facility BEFORE the Twilight Council
+    events.append(_building("RoboticsFacility", 290))
+    events.append(_unit("Immortal", 340))  # Immortal also lands first
+    # Twilight Council, THEN Charge research
+    events.append(_building("TwilightCouncil", 360))
+    events.append(_building("Gateway", 280))
+    events.append(_building("Gateway", 340))
+    events.append(_upgrade("Charge", 400))
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - Phoenix into Robo", (
+        f"Stargate -> Robo -> Twilight -> Charge must tag as Phoenix into "
+        f"Robo, not Stargate into Charge; got {result!r}"
+    )
+
+
+def test_stargate_then_immortal_blocks_stargate_into_glaives():
+    """An Immortal lands before the Twilight Council means a Robo was up
+    first (Immortal requires Robotics Facility). Disqualifies all three
+    Stargate-into-X labels even when Glaives is the first Twilight
+    upgrade."""
+    events = _stargate_opener_base()
+    events.append(_unit("Phoenix", 280))
+    events.append(_building("RoboticsFacility", 290))
+    events.append(_unit("Immortal", 330))  # Immortal before Twilight
+    events.append(_building("TwilightCouncil", 360))
+    events.append(_building("Gateway", 320))
+    events.append(_upgrade("AdeptPiercingAttack", 400))  # Glaives first
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert "Stargate into" not in result, (
+        f"Immortal-before-Twilight must NOT classify as Stargate-into-X; "
+        f"got {result!r}"
+    )
+
+
+def test_stargate_then_robobay_blocks_stargate_into_blink():
+    """A Robotics Bay (Colossus / Disruptor tech) before the Twilight
+    Council is an even stronger commitment to a Robo path than a bare
+    Robotics Facility. Disqualifies Stargate-into-Blink even if Blink
+    research is the first Twilight upgrade."""
+    events = _stargate_opener_base()
+    events.append(_unit("Phoenix", 280))
+    events.append(_building("RoboticsFacility", 290))
+    events.append(_building("RoboticsBay", 330))  # RoboBay before Twilight
+    events.append(_building("TwilightCouncil", 360))
+    events.append(_building("Gateway", 320))
+    events.append(_upgrade("BlinkTech", 400))
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert "Stargate into" not in result, (
+        f"RoboBay-before-Twilight must NOT classify as Stargate-into-X; "
+        f"got {result!r}"
+    )
+
+
+def test_robo_after_twilight_still_allows_stargate_into_x():
+    """The guard fires on Robo-tech BEFORE Twilight only. A Robo that
+    lands AFTER the Twilight Council does NOT disqualify Stargate-
+    into-X — that's a legitimate Twilight-led macro game with Robo
+    follow-up tech."""
+    events = _stargate_opener_base()
+    events.append(_unit("Phoenix", 280))
+    events.append(_building("TwilightCouncil", 320))  # Twilight FIRST
+    events.append(_building("Gateway", 280))
+    events.append(_upgrade("Charge", 360))            # Charge first
+    events.append(_building("RoboticsFacility", 400))  # Robo AFTER
+    events.append(_unit("Immortal", 460))
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - Stargate into Charge", (
+        f"Robo AFTER Twilight should still tag as Stargate into Charge; "
+        f"got {result!r}"
+    )
+
+
+# -----------------------------------------------------------------------------
 # Catalog presence
 # -----------------------------------------------------------------------------
 def test_new_pvt_definitions_present_in_catalog():
