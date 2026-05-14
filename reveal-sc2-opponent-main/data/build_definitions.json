@@ -42,7 +42,7 @@
   "PvZ - Tempest Rush": "Detected if at least 1 Tempest has been produced by 10:00 -- long-range Tempest harass / siege.",
   "PvZ - 2 Stargate Void Ray": "Detected if 2+ Stargates and 2+ Nexuses by 10:00, plus 4+ Void Rays produced by 10:00.",
   "PvZ - 3 Stargate Phoenix": "Detected if 3+ Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00.",
-  "PvZ - 2 Stargate Phoenix": "Detected if 2+ Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00.",
+  "PvZ - 2 Stargate Phoenix": "Detected if EXACTLY 2 Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00. 3+ Stargates falls under PvZ - 3 Stargate Phoenix instead -- the two rules are mutually exclusive on Stargate count.",
   "PvZ - Rail's Disruptor Drop": "Detected if at least 1 Disruptor and at least 1 Warp Prism have both been produced by 8:00 -- an early Disruptor drop harass build.",
   "PvZ - AlphaStar Style (Oracle/Robo)": "Detected if 2+ Oracles and a Robotics Facility and a Forge are all in place by 8:30, with 3+ Nexuses by 8:30 -- the AlphaStar Oracle / Robo / fast 3rd composition.",
   "PvZ - 7 Gate Glaive/Immortal All-in": "Detected if Glaives is researched by 8:30, 2+ Sentries and 1+ Immortal are produced by 8:30, and 6+ Gateways exist by 9:00 -- a heavy Glaive Adept / Immortal all-in.",

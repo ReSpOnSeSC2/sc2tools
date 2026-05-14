@@ -902,7 +902,12 @@ class UserBuildDetector(BaseStrategyDetector):
                 return "PvZ - 2 Stargate Void Ray"
             if sg_count_10min >= 3 and nexus_count_10min >= 2 and count_units("Phoenix", 600) >= 4:
                 return "PvZ - 3 Stargate Phoenix"
-            if sg_count_10min >= 2 and nexus_count_10min >= 2 and count_units("Phoenix", 600) >= 4:
+            # Strict exactly-2: the 3+ variant above catches the heavier
+            # build, so anything still reaching here with 3+ Stargates
+            # has already returned. The explicit equality guards against
+            # someone reordering the rules later and accidentally letting
+            # 3-Stargate replays fall through to the 2-Stargate label.
+            if sg_count_10min == 2 and nexus_count_10min >= 2 and count_units("Phoenix", 600) >= 4:
                 return "PvZ - 2 Stargate Phoenix"
             # Rail's Disruptor Drop: Disruptor needs Robo + Robo Bay,
             # Warp Prism needs Robo. Robo presence is implied by the
