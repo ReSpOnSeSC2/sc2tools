@@ -392,7 +392,7 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - 2 Stargate Phoenix",
     description:
-      "Detected if 2+ Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations).",
+      "Detected if EXACTLY 2 Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations). 3+ Stargates falls under PvZ - 3 Stargate Phoenix instead -- the two rules are mutually exclusive on Stargate count.",
   },
   {
     race: "Protoss",
