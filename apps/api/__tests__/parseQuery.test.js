@@ -140,6 +140,33 @@ describe("util/parseQuery", () => {
       expect(stage["opponent.strategy"]).toBe("Cheese");
       expect(stage.myBuild).toBe("P - Stargate");
     });
+
+    test("excludeTooShort flips a Mongo $not regex on myBuild + opponent.strategy", () => {
+      const stage = gamesMatchStage("u1", { excludeTooShort: true });
+      expect(stage.myBuild).toEqual({ $not: /Game Too Short$/ });
+      expect(stage["opponent.strategy"]).toEqual({ $not: /Game Too Short$/ });
+    });
+
+    test("excludeTooShort defers to an explicit build / opp_strategy filter", () => {
+      // The user picked a specific build; the explicit filter wins
+      // and the regex isn't applied to myBuild. opponent.strategy
+      // still gets the regex because the user didn't filter it.
+      const stage = gamesMatchStage("u1", {
+        excludeTooShort: true,
+        build: "Terran - Cyclone Rush",
+      });
+      expect(stage.myBuild).toBe("Terran - Cyclone Rush");
+      expect(stage["opponent.strategy"]).toEqual({ $not: /Game Too Short$/ });
+    });
+
+    test("parseFilters surfaces exclude_too_short=1 as excludeTooShort:true", () => {
+      const out = parseFilters({ exclude_too_short: "1" });
+      expect(out.excludeTooShort).toBe(true);
+      expect(parseFilters({ exclude_too_short: "true" }).excludeTooShort).toBe(true);
+      expect(parseFilters({ exclude_too_short: "on" }).excludeTooShort).toBe(true);
+      expect(parseFilters({ exclude_too_short: "0" }).excludeTooShort).toBeUndefined();
+      expect(parseFilters({}).excludeTooShort).toBeUndefined();
+    });
   });
 
   describe("resultBucket", () => {

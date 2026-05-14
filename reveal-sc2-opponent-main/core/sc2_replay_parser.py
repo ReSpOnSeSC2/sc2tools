@@ -297,8 +297,25 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
     my_detector = UserBuildDetector(custom["Self"] + v3_user_builds)
 
     matchup = f"vs {ctx.opponent.race}"
-    ctx.opp_strategy = opp_detector.get_strategy_name(ctx.opponent.race, opp_events, matchup)
-    ctx.my_build = my_detector.detect_my_build(matchup, my_events, ctx.me.race)
+    # Pass the parsed game length so both detectors can short-circuit
+    # to the matchup-prefixed "<X>vY - Game Too Short" bucket on
+    # replays that ended before any build order developed (< 30 s).
+    # ``my_race`` is needed on the opponent side so the bucket uses the
+    # user-perspective matchup (e.g. "TvP - Game Too Short") rather
+    # than a race-prefixed variant.
+    ctx.opp_strategy = opp_detector.get_strategy_name(
+        ctx.opponent.race,
+        opp_events,
+        matchup,
+        game_length_seconds=ctx.length_seconds,
+        my_race=ctx.me.race,
+    )
+    ctx.my_build = my_detector.detect_my_build(
+        matchup,
+        my_events,
+        ctx.me.race,
+        game_length_seconds=ctx.length_seconds,
+    )
 
     ctx.build_log = build_log_lines(my_events, cutoff_seconds=None)
     ctx.early_build_log = build_log_lines(my_events, cutoff_seconds=300)

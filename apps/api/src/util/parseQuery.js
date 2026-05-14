@@ -59,6 +59,9 @@ function parseFilters(q) {
   if (typeof q.build === "string" && q.build.trim()) {
     out.build = q.build.trim();
   }
+  if (parseBool(q.exclude_too_short)) {
+    out.excludeTooShort = true;
+  }
   return out;
 }
 
@@ -102,6 +105,27 @@ function gamesMatchStage(userId, filters) {
   }
   if (f.build) {
     match.myBuild = f.build;
+  }
+  // "Exclude too-short games": the strategy detector emits a
+  // matchup-prefixed "<X>v<Y> - Game Too Short" label (also surfaced
+  // as race-prefixed "<Race> - Game Too Short" when my_race wasn't
+  // available) for replays that ended in under 30 seconds. The same
+  // suffix lands on both ``myBuild`` and ``opponent.strategy``, so a
+  // negated regex on either field drops the cohort. Only apply to
+  // fields the user has NOT already constrained — an explicit
+  // myBuild / opp_strategy filter is more specific and wins
+  // automatically (an exact build name either matches a too-short
+  // bucket, in which case the user explicitly asked for these games,
+  // or it doesn't, in which case the exact-match already excludes
+  // them).
+  if (f.excludeTooShort) {
+    const notTooShort = { $not: /Game Too Short$/ };
+    if (match.myBuild === undefined) {
+      match.myBuild = notTooShort;
+    }
+    if (match["opponent.strategy"] === undefined) {
+      match["opponent.strategy"] = notTooShort;
+    }
   }
   return match;
 }

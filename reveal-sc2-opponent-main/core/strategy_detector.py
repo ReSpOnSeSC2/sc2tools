@@ -52,6 +52,46 @@ def _matchup_to_vs_race(matchup: str) -> str:
     return "Unknown"
 
 
+# =========================================================
+# GAME-TOO-SHORT shared bucket
+# =========================================================
+# Replays that ended before 30 seconds have no meaningful build order
+# to classify (one player conceded / disconnected / dropped). Instead
+# of letting the strategy tree's catch-all bucket ("PvT - Macro
+# Transition (Unclassified)" etc.) absorb them, we short-circuit at
+# the top of both detectors and emit a single matchup-prefixed label
+# per matchup so users can filter / drill on "no-build-order games"
+# as one cohesive group.
+#
+# Threshold is 30 seconds. Below that, basically no production has
+# happened — only the auto-spawned starting workers and maybe a
+# Pylon / SupplyDepot / Overlord under construction. We don't
+# attempt to differentiate further.
+GAME_TOO_SHORT_THRESHOLD_SECONDS = 30
+
+# Race -> one-letter prefix used to build matchup labels like "PvT".
+# "Random" / unknown stays as "?" so the rule never crashes; the
+# label that comes out ("?v?-Game Too Short") is still a valid
+# bucket the UI can group on.
+_RACE_LETTER = {"Protoss": "P", "Terran": "T", "Zerg": "Z"}
+
+
+def _matchup_prefix(my_race: str, vs_race: str) -> str:
+    """Build the matchup prefix from two race names ("Protoss" + "Terran"
+    -> "PvT"). Unknown / "Random" races become "?" so the helper never
+    raises.
+    """
+    return f"{_RACE_LETTER.get(my_race, '?')}v{_RACE_LETTER.get(vs_race, '?')}"
+
+
+def too_short_label(my_race: str, vs_race: str) -> str:
+    """Return the "<Matchup> - Game Too Short" catch-all label for the
+    given matchup. The same string is emitted from both the user-side
+    build classifier and the opponent-strategy classifier so the two
+    fields agree when no build order had a chance to develop."""
+    return f"{_matchup_prefix(my_race, vs_race)} - Game Too Short"
+
+
 # Composition-tag -> human-readable phrase used for derived fallback names.
 _COMPOSITION_PHRASES = {
     "ling": "Ling-heavy", "bane": "Ling/Bane", "roach": "Roach/Ravager",
@@ -451,7 +491,31 @@ class BaseStrategyDetector:
 class OpponentStrategyDetector(BaseStrategyDetector):
     """Classifies the OPPONENT's strategy from extracted events."""
 
-    def get_strategy_name(self, race: str, enemy_events: List[Dict], matchup: str = "vs Any") -> str:
+    def get_strategy_name(
+        self,
+        race: str,
+        enemy_events: List[Dict],
+        matchup: str = "vs Any",
+        game_length_seconds: float = None,
+        my_race: str = None,
+    ) -> str:
+        # Short-circuit: a replay that ended before 30 seconds has no
+        # build order to classify. Emit the matchup-prefixed
+        # "Game Too Short" bucket so the dashboard groups these
+        # replays together instead of mis-tagging them with the
+        # macro-phase catch-all (e.g. "Macro Transition (Unclassified)")
+        # or a stub label. ``my_race`` is required to build the
+        # matchup prefix from the user's perspective; without it we
+        # fall back to a race-prefixed variant so the bucket stays
+        # consistent.
+        if (
+            game_length_seconds is not None
+            and game_length_seconds < GAME_TOO_SHORT_THRESHOLD_SECONDS
+        ):
+            if my_race:
+                return too_short_label(my_race, race)
+            return f"{race} - Game Too Short"
+
         buildings = [e for e in enemy_events if e["type"] == "building"]
         units = [e for e in enemy_events if e["type"] == "unit"]
         upgrades = [e for e in enemy_events if e["type"] == "upgrade"]
@@ -739,7 +803,27 @@ class OpponentStrategyDetector(BaseStrategyDetector):
 class UserBuildDetector(BaseStrategyDetector):
     """Classifies the USER's own build (PvZ / PvP / PvT)."""
 
-    def detect_my_build(self, matchup: str, my_events: List[Dict], my_race: str = "Protoss") -> str:
+    def detect_my_build(
+        self,
+        matchup: str,
+        my_events: List[Dict],
+        my_race: str = "Protoss",
+        game_length_seconds: float = None,
+    ) -> str:
+        # Short-circuit: a replay that ended before 30 seconds has no
+        # build order to classify. Emit the matchup-prefixed
+        # "Game Too Short" bucket so it groups with the opponent-side
+        # equivalent emitted from OpponentStrategyDetector. The macro
+        # rule tree below would otherwise tag these as "Macro
+        # Transition (Unclassified)" or "Unclassified - <Race>" which
+        # makes the no-build-order cohort impossible to filter.
+        if (
+            game_length_seconds is not None
+            and game_length_seconds < GAME_TOO_SHORT_THRESHOLD_SECONDS
+        ):
+            vs_race = _matchup_to_vs_race(matchup)
+            return too_short_label(my_race, vs_race)
+
         buildings = [e for e in my_events if e["type"] == "building"]
         units = [e for e in my_events if e["type"] == "unit"]
         upgrades = [e for e in my_events if e["type"] == "upgrade"]

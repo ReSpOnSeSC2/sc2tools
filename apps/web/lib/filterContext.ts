@@ -26,6 +26,15 @@ export type AnalyzerFilters = {
   build?: string;
   /** Filter by the detected opponent strategy (opponent.strategy). */
   opp_strategy?: string;
+  /**
+   * Drop replays that ended in under 30 seconds (no build order
+   * developed) from every analyzer tab's queries. The strategy
+   * detector tags these as "<X>v<Y> - Game Too Short" on BOTH
+   * `myBuild` and `opponent.strategy`; the API's `gamesMatchStage`
+   * applies a negated regex on whichever field isn't already
+   * constrained.
+   */
+  exclude_too_short?: boolean;
   /** Preset id selected in the date filter; not sent to the API. */
   preset?: PresetId;
 };

@@ -12,6 +12,27 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Added
 
+- **Strategy classifier · "Game Too Short" bucket per matchup**: the
+  desktop agent's strategy detector now emits a matchup-prefixed
+  `<X>v<Y> - Game Too Short` label on BOTH `myBuild` and
+  `opponent.strategy` for any replay that ended in under 30 seconds
+  (no build order developed). Nine labels — `PvP`, `PvT`, `PvZ`,
+  `TvP`, `TvT`, `TvZ`, `ZvP`, `ZvT`, `ZvZ` — ship in the catalog
+  with prose on `/definitions`. The same string lands on both fields
+  so the data view stays consistent and the cohort is filterable as
+  one group instead of being absorbed by `Macro Transition
+  (Unclassified)` or `Unclassified - <Race>`.
+- **Analyzer · "Hide too-short games" toggle**: the global
+  `FilterBar` now carries a checkbox that drops every
+  `Game Too Short` bucket from the Opponents, Strategies, Trends,
+  Maps, and Builds tabs in one shot. The toggle flips
+  `exclude_too_short=true` on the shared filter context;
+  `filtersToQuery` forwards it to the API and `gamesMatchStage`
+  applies a negated `Game Too Short$` regex on whichever side
+  (`myBuild` / `opponent.strategy`) the user hasn't already
+  constrained. Default off so historical bookmarks and shared links
+  stay reproducible.
+
 - **Strategy classifier · eight new build labels** wired end-to-end
   through the desktop agent's `OpponentStrategyDetector` /
   `UserBuildDetector`, the `/definitions` catalog, the analyzer
