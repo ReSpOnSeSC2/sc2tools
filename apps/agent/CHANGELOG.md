@@ -2,6 +2,26 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.6.10
+
+### Fixed — PvT "3 Gate Charge Opener" no longer steals Blink-first openers
+- The `PvT - 3 Gate Charge Opener` classifier fired on a boolean
+  "did Charge get researched by 9:00?" check together with
+  Twilight-first ordering, but never compared Charge timing against
+  Blink. A replay where the player opened Blink first and added
+  Charge later matched both the Charge rule and the `3 Gate Blink
+  (Macro)` / `4 Gate Blink` rules directly below it, and the Charge
+  rule won by file order — mistagging Blink openers as Charge.
+- The fix mirrors the existing Stargate-into-X ordering pattern:
+  gate the label on Charge being the FIRST Twilight upgrade
+  (vs Blink / Glaives). Both detector copies the agent ships
+  (`reveal-sc2-opponent-main/core/strategy_detector_pvt.py` and
+  `SC2Replay-Analyzer/detectors/user.py`) carry the same guard now.
+- New regression suite `test_strategy_detector_pvt_gateway_opener_variants.py`
+  covers Charge-first, Blink-first / Charge-after (the reported bug),
+  Blink-only, Blink-first with 4+ Gateways, and the Standard Charge
+  Macro promotion path so the discrimination can't silently regress.
+
 ## 0.6.5
 
 ### Fixed — Fresh `game_key` on every match start, including fast back-to-back queues
