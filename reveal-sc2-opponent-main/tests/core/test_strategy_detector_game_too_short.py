@@ -47,6 +47,13 @@ _load("core.atomic_io", "atomic_io.py")
 _load("core.paths", "paths.py")
 _load("core.custom_builds", "custom_builds.py")
 _load("core.build_definitions", "build_definitions.py")
+_load("core.strategy_detector_helpers", "strategy_detector_helpers.py")
+_load("core.strategy_detector_base", "strategy_detector_base.py")
+_load("core.strategy_detector_opponent", "strategy_detector_opponent.py")
+_load("core.strategy_detector_pvz", "strategy_detector_pvz.py")
+_load("core.strategy_detector_pvp", "strategy_detector_pvp.py")
+_load("core.strategy_detector_pvt", "strategy_detector_pvt.py")
+_load("core.strategy_detector_user", "strategy_detector_user.py")
 sd = _load("core.strategy_detector", "strategy_detector.py")
 
 
