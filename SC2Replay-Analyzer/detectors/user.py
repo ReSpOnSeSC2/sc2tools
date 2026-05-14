@@ -103,6 +103,13 @@ class UserBuildDetector(BaseStrategyDetector):
         def has_upgrade_substr(sub_name, time_limit=9999):
             return any(sub_name in u['name'] and u['time'] <= time_limit for u in upgrades)
 
+        def upgrade_time(*sub_names):
+            return min(
+                (u['time'] for u in upgrades
+                 if any(s in u['name'] for s in sub_names)),
+                default=9999,
+            )
+
         def building_time(name):
             times = [b['time'] for b in buildings if b['name'] == name]
             return min(times) if times else 9999
@@ -287,7 +294,16 @@ class UserBuildDetector(BaseStrategyDetector):
                 return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
             if has_upgrade_substr("Charge", 540) and len(nexus_times) >= 3:
                 return "PvT - Standard Charge Macro"
-            if has_upgrade_substr("Charge", 540) and twilight_time < robo_time and twilight_time < sg_time:
+            # Charge must be the FIRST Twilight upgrade. Without this
+            # ordering guard, a Blink-first / Charge-after build with
+            # Twilight before Robo+SG matches both this rule and the
+            # Blink rule below, and the Charge rule wins by file order.
+            pvt_first_twilight_upgrade = upgrade_time(
+                "Charge", "Blink", "AdeptPiercing", "Glaive",
+            )
+            if (has_upgrade_substr("Charge", 540)
+                    and twilight_time < robo_time and twilight_time < sg_time
+                    and upgrade_time("Charge") == pvt_first_twilight_upgrade):
                 return "PvT - 3 Gate Charge Opener"
 
             if twilight_time < robo_time and twilight_time < sg_time and has_upgrade_substr("Blink", 540):

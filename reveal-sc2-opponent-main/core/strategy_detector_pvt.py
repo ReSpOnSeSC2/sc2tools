@@ -147,10 +147,16 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         and not has_building("Stargate", 9999)
     ):
         return "PvT - Standard Charge Macro"
+    # Charge must be the FIRST Twilight upgrade for this label. Without
+    # the ordering guard, a Blink-first / Charge-after build with
+    # Twilight before Robo+SG matches both this rule and the Blink rule
+    # below — and the Charge rule wins by file order, mistagging the
+    # game. Mirror the Stargate-into-X ordering pattern from L82-97.
     if (
         has_upgrade_substr("Charge", 540)
         and twilight_time < robo_time
         and twilight_time < sg_time
+        and pvt_charge_time == pvt_first_twilight_upgrade
     ):
         return "PvT - 3 Gate Charge Opener"
 
