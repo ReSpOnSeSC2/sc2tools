@@ -69,6 +69,12 @@ export function filtersToQuery(p: Record<string, unknown>): string {
   for (const [k, v] of Object.entries(p)) {
     if (v === undefined || v === null || v === "") continue;
     if (UI_ONLY_KEYS.has(k)) continue;
+    // ``exclude_too_short: false`` is the user's explicit opt-out and
+    // needs to land in localStorage so the choice persists, but sending
+    // it on the wire is a no-op (the API's gamesMatchStage only acts
+    // when the flag is truthy). Drop it here so the query string stays
+    // clean when the toggle is off.
+    if (k === "exclude_too_short" && v === false) continue;
     usp.set(k, String(v));
   }
   const q = usp.toString();

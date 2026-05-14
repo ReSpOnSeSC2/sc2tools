@@ -30,8 +30,10 @@ workflow builds the Windows installer on each tag push and attaches the
   `filtersToQuery` forwards it to the API and `gamesMatchStage`
   applies a negated `Game Too Short$` regex on whichever side
   (`myBuild` / `opponent.strategy`) the user hasn't already
-  constrained. Default off so historical bookmarks and shared links
-  stay reproducible.
+  constrained. **Default on** so KPI strips / opponent profiles /
+  aggregates aren't polluted by disconnects + insta-quits out of
+  the box; the user's explicit opt-out persists in localStorage as
+  a boolean so refreshes don't re-enable it.
 
 - **Strategy classifier · eight new build labels** wired end-to-end
   through the desktop agent's `OpponentStrategyDetector` /

@@ -22,6 +22,7 @@ type StoredFilters = {
   mmr_max?: number;
   build?: string;
   opp_strategy?: string;
+  exclude_too_short?: boolean;
 };
 
 function readStored(): StoredFilters | null {
@@ -44,7 +45,13 @@ function writeStored(value: StoredFilters): void {
 }
 
 function initialFilters(): AnalyzerFilters {
-  return { preset: DEFAULT_PRESET };
+  // "Hide too-short games" defaults ON: a brand-new analyzer session
+  // automatically excludes the < 30 s no-build-order cohort so the
+  // KPI strip / opponent profile / aggregates aren't polluted by
+  // disconnects + insta-quits. The user can flip it off via the
+  // FilterBar toggle, which writes ``exclude_too_short: false`` to
+  // localStorage so their choice persists on subsequent visits.
+  return { preset: DEFAULT_PRESET, exclude_too_short: true };
 }
 
 /**
@@ -94,6 +101,12 @@ export function AnalyzerProvider({ children }: { children: ReactNode }) {
       next.since = range.since ? range.since.toISOString() : undefined;
       next.until = range.until ? range.until.toISOString() : undefined;
     }
+    // Default "Hide too-short games" to ON for any session that has
+    // not explicitly recorded a preference. Stored ``false`` (the
+    // user toggled it off) is respected verbatim; ``undefined``
+    // (legacy localStorage from before this feature shipped, or a
+    // first-time visitor) becomes ``true``.
+    if (next.exclude_too_short === undefined) next.exclude_too_short = true;
     setFiltersState(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
