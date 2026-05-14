@@ -68,6 +68,69 @@ describe("bingoLadder card generation", () => {
     }
   });
 
+  test("no card cell uses the retired win_vs_strategy_contains predicate", () => {
+    // The May-2026 second pass removed opponent-strategy substring
+    // cells ("Survive a rush", "Defend a cheese", "Beat a proxy",
+    // "Hold an all-in"). The agent's opponent-strategy classifier
+    // doesn't emit a stable taxonomy for those keywords, so the
+    // cells were effectively unwinnable. Sweep enough seeds that a
+    // single survivor would show up.
+    for (let seed = 0; seed < 40; seed += 1) {
+      const cells = buildCard(
+        {
+          rng: mulberry32(seed),
+          daySeed: "2026-05-11",
+          tz: "UTC",
+          data: datasetForRaces(["Protoss", "Zerg", "Terran"]),
+        },
+        "2026-W20",
+        new Set(["P", "Z", "T"]),
+      );
+      for (const c of cells) {
+        expect(c.predicate).not.toBe("win_vs_strategy_contains");
+        const lower = c.label.toLowerCase();
+        expect(lower).not.toMatch(/survive a rush/);
+        expect(lower).not.toMatch(/defend a cheese/);
+        expect(lower).not.toMatch(/beat a proxy build/);
+        expect(lower).not.toMatch(/hold an all-in/);
+      }
+    }
+  });
+
+  test("the candidate pool includes the new win_between_seconds range cells", () => {
+    // Replacement for the retired opponent-strategy cells. Range
+    // cells appear in candidate order, so a multi-seed sweep is
+    // enough to assert at least one made it onto a card.
+    const seenRanges = new Set<string>();
+    for (let seed = 0; seed < 30; seed += 1) {
+      const cells = buildCard(
+        {
+          rng: mulberry32(seed),
+          daySeed: "2026-05-11",
+          tz: "UTC",
+          data: datasetForRaces(["Protoss"]),
+        },
+        "2026-W20",
+        new Set(["P"]),
+      );
+      for (const c of cells) {
+        if (c.predicate !== "win_between_seconds") continue;
+        seenRanges.add(`${c.params.minSec}-${c.params.maxSec}`);
+      }
+    }
+    // The three range cells span 5-10, 10-15, 15-20 min (each in
+    // seconds). At least one must appear across 30 seeds.
+    expect(seenRanges.size).toBeGreaterThan(0);
+    // And every minted range cell must use a valid half-open
+    // interval (min < max, both positive integers).
+    for (const r of seenRanges) {
+      const [minS, maxS] = r.split("-").map((s) => Number(s));
+      expect(Number.isFinite(minS)).toBe(true);
+      expect(Number.isFinite(maxS)).toBe(true);
+      expect(minS).toBeLessThan(maxS);
+    }
+  });
+
   test("no duplicate cell predicate+params combinations on a single card", () => {
     // The screenshot the user reported showed a card with two
     // ostensibly-identical "Win as Protoss" cells. Cause: the
@@ -277,6 +340,32 @@ describe("bingoLadder legacy card detection", () => {
 
   test("LEGACY_PREDICATES includes win_on_map (the removed per-map predicate)", () => {
     expect(LEGACY_PREDICATES.has("win_on_map")).toBe(true);
+  });
+
+  test("LEGACY_PREDICATES includes win_vs_strategy_contains (May-2026 removal)", () => {
+    // Cards minted under the previous schema carry "Survive a rush" /
+    // "Defend a cheese" / etc. cells. The legacy detector must flag
+    // them so the next mount regenerates the card with the new
+    // duration-range cells.
+    expect(LEGACY_PREDICATES.has("win_vs_strategy_contains")).toBe(true);
+  });
+
+  test("isLegacyCard flags cards carrying retired opponent-strategy cells", () => {
+    const strategy: BingoState = {
+      startedAt: new Date().toISOString(),
+      weekKey: "2026-W20",
+      rerolled: false,
+      cells: [
+        {
+          id: "a",
+          predicate: "win_vs_strategy_contains",
+          params: { keyword: "Rush" },
+          label: "Survive a rush and win",
+          ticked: false,
+        },
+      ],
+    };
+    expect(isLegacyCard(strategy)).toBe(true);
   });
 
   test("isLegacyCard tolerates null / empty cells without throwing", () => {
