@@ -265,11 +265,12 @@ function ExcludeTooShortToggle() {
       // Mobile compact: matches the visual weight of the "Date range"
       // label on the left. No border / no bg so it doesn't look like
       // a second card sitting inside the FilterBar's own bordered
-      // surface. `ml-auto` pushes it right on a single-row layout
-      // and lets it wrap to its own line on narrow viewports without
-      // dominating the screen.
+      // surface. `sm:ml-auto` pushes it right on the desktop
+      // single-row layout. On mobile it wraps to its own line and
+      // stays left-aligned under "Date range" instead of being shoved
+      // to the right edge under the trigger button.
       className={[
-        "ml-auto inline-flex cursor-pointer items-center gap-1.5",
+        "inline-flex cursor-pointer items-center gap-1.5 sm:ml-auto",
         "py-1 text-xs uppercase tracking-wider text-text-dim",
         "transition-colors hover:text-text",
         "focus-within:text-text",
