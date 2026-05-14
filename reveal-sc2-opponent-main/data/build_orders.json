@@ -139,6 +139,35 @@
         ]
       },
       {
+        "id": "tvt_07b",
+        "name": "Proxy Starport Hellion Drop",
+        "style": "harass-expand",
+        "difficulty": "advanced",
+        "description": "Reaper expand into a proxy Factory + proxy Starport. The Factory pumps early Hellions while the Starport's first unit is a Medivac (the bus). Hellions are loaded into the Medivac and dropped into the opponent's mineral line for SCV/Drone/Probe damage. Distinct from a 1-base Proxy 1-1-1: the player takes a 2nd Command Center for sustained production behind the harass.",
+        "steps": [
+          {"supply": 14, "time": "0:18", "action": "Supply Depot"},
+          {"supply": 16, "time": "0:55", "action": "Barracks (in main)"},
+          {"supply": 16, "time": "1:00", "action": "Refinery"},
+          {"supply": 19, "time": "2:10", "action": "Orbital Command, Reaper (scout + harass)"},
+          {"supply": 19, "time": "2:20", "action": "Command Center at natural"},
+          {"supply": 20, "time": "2:30", "action": "SCV moves out to scout proxy location near opponent"},
+          {"supply": 22, "time": "3:00", "action": "PROXY Factory (built far from main, near opponent)"},
+          {"supply": 24, "time": "3:30", "action": "Refinery #2 in main"},
+          {"supply": 26, "time": "3:50", "action": "Reactor on PROXY Factory (for double Hellion production)"},
+          {"supply": 26, "time": "4:00", "action": "PROXY Starport beside Factory"},
+          {"supply": 28, "time": "4:10", "action": "Orbital Command at natural"},
+          {"supply": 30, "time": "4:25", "action": "Hellions x2 from PROXY Factory Reactor"},
+          {"supply": 32, "time": "4:30", "action": "Tech Lab on Barracks (Stim/Marauder later)"},
+          {"supply": 34, "time": "4:55", "action": "Hellions x2 (4 Hellions ready)"},
+          {"supply": 36, "time": "5:10", "action": "MEDIVAC from PROXY Starport (FIRST Starport unit) — load 4 Hellions, fly to opponent's mineral line"},
+          {"supply": 38, "time": "5:30", "action": "Drop Hellions in opponent's main, Medivac heals to sustain harass"},
+          {"supply": 40, "time": "5:35", "action": "Marines from Barracks at home, Bunker at natural"},
+          {"supply": 44, "time": "6:00", "action": "Liberator from Starport (continues Starport pressure)"},
+          {"supply": 50, "time": "6:30", "action": "Engineering Bay, Refinery, Siege Tank — transition into bio-tank macro"},
+          {"supply": 60, "time": "7:00", "action": "Add Barracks #2/#3 in main, begin 1/1 upgrades"}
+        ]
+      },
+      {
         "id": "tvt_07",
         "name": "Hellion Drop Harassment",
         "style": "harass",
@@ -743,6 +772,88 @@
           {"supply": 40, "time": "4:30", "action": "Baneling Nest"},
           {"supply": 54, "time": "6:00", "action": "Massive Ling-Bane-Roach army with dominant economy"},
           {"supply": 70, "time": "8:00", "action": "Superior resource income leads to overwhelming late game"}
+        ]
+      }
+    ],
+    "PvZ": [
+      {
+        "id": "pvz_01",
+        "name": "Adept Glaives (No Robo)",
+        "style": "aggressive-macro",
+        "difficulty": "intermediate",
+        "description": "Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robo, or Dark Shrine first). Resonating Glaives is the FIRST upgrade off the Twilight Council, well before Blink or Charge. Pure Gateway opener -- no Robo support -- relying on Adepts shading into the Zerg base to scout, deny third bases, and snipe Drones. Scales into 4-8 Gateways for a Glaive Adept timing around 7:00-7:30.",
+        "steps": [
+          {"supply": 14, "time": "0:18", "action": "Pylon"},
+          {"supply": 17, "time": "1:00", "action": "Gateway #1"},
+          {"supply": 18, "time": "1:10", "action": "Assimilator #1"},
+          {"supply": 20, "time": "1:40", "action": "Nexus at natural"},
+          {"supply": 21, "time": "1:55", "action": "Cybernetics Core (off Gateway #1)"},
+          {"supply": 22, "time": "2:10", "action": "Assimilator #2, Pylon"},
+          {"supply": 24, "time": "2:30", "action": "Adept (chrono out of Gateway)"},
+          {"supply": 25, "time": "3:00", "action": "Warp Gate research begins"},
+          {"supply": 26, "time": "3:30", "action": "Twilight Council (FIRST tech building -- no Robo / Stargate / Dark Shrine)"},
+          {"supply": 30, "time": "4:00", "action": "Gateway #2 and #3"},
+          {"supply": 34, "time": "4:30", "action": "Resonating Glaives research begins (FIRST upgrade out of Twilight)"},
+          {"supply": 38, "time": "5:00", "action": "Gateway #4, warp in Adepts off all Gateways"},
+          {"supply": 42, "time": "5:30", "action": "3rd Nexus, more Gateways (5-6 total)"},
+          {"supply": 50, "time": "6:30", "action": "Glaives finishes; Adepts shade aggressively into Zerg main / third"},
+          {"supply": 60, "time": "7:30", "action": "7-8 Gateways, push out with Glaive Adepts + Sentries for force fields"},
+          {"supply": 70, "time": "8:30", "action": "Transition: add Forge for upgrades, expand to 4th base"}
+        ]
+      },
+      {
+        "id": "pvz_02",
+        "name": "Adept Glaives (Robo)",
+        "style": "macro",
+        "difficulty": "intermediate",
+        "description": "Same Twilight-first opener as the pure Gateway variant -- Twilight is the FIRST tech building and Resonating Glaives is the FIRST upgrade -- but a Robotics Facility is added for Observer detection (covers DTs / burrowed Roaches / Banelings) and Immortal armor support. Safer than the no-Robo variant and the standard build for PvZ ladder play.",
+        "steps": [
+          {"supply": 14, "time": "0:18", "action": "Pylon"},
+          {"supply": 17, "time": "1:00", "action": "Gateway #1"},
+          {"supply": 18, "time": "1:10", "action": "Assimilator #1"},
+          {"supply": 20, "time": "1:40", "action": "Nexus at natural"},
+          {"supply": 21, "time": "1:55", "action": "Cybernetics Core"},
+          {"supply": 22, "time": "2:10", "action": "Assimilator #2, Pylon"},
+          {"supply": 24, "time": "2:30", "action": "Adept"},
+          {"supply": 25, "time": "3:00", "action": "Warp Gate research"},
+          {"supply": 26, "time": "3:30", "action": "Twilight Council (FIRST tech building)"},
+          {"supply": 30, "time": "4:00", "action": "Gateway #2 and #3"},
+          {"supply": 34, "time": "4:30", "action": "Resonating Glaives research begins (FIRST upgrade out of Twilight)"},
+          {"supply": 38, "time": "5:00", "action": "Robotics Facility (Robo SECOND tech building, AFTER Twilight)"},
+          {"supply": 42, "time": "5:30", "action": "3rd Nexus, Gateway #4"},
+          {"supply": 46, "time": "6:00", "action": "Observer from Robo, Gateway #5"},
+          {"supply": 52, "time": "6:30", "action": "Glaives finishes; Adepts shade into Zerg base"},
+          {"supply": 60, "time": "7:00", "action": "Immortal #1 from Robo, Gateway #6"},
+          {"supply": 68, "time": "7:30", "action": "Glaive Adept + Immortal push (4-8 gates) with Observer covering for DT / Banelings"},
+          {"supply": 80, "time": "8:30", "action": "Transition: Forge for upgrades, 4th base"}
+        ]
+      },
+      {
+        "id": "pvz_03",
+        "name": "Stargate into Glaives",
+        "style": "macro",
+        "difficulty": "advanced",
+        "description": "Stargate is the FIRST tech building (Phoenix or Oracle harass), THEN Twilight Council. Resonating Glaives is the FIRST upgrade out of the Twilight (NOT Blink -- that would be Stargate into Blink). 1-3 Stargate units kill Overlords / Queens / Drones while you take a 3rd base; then 4-8 Gateways pump Glaive Adepts for the mid-game timing push.",
+        "steps": [
+          {"supply": 14, "time": "0:18", "action": "Pylon"},
+          {"supply": 17, "time": "1:00", "action": "Gateway #1"},
+          {"supply": 18, "time": "1:10", "action": "Assimilator #1"},
+          {"supply": 20, "time": "1:40", "action": "Nexus at natural"},
+          {"supply": 21, "time": "1:55", "action": "Cybernetics Core"},
+          {"supply": 22, "time": "2:10", "action": "Assimilator #2, Pylon"},
+          {"supply": 24, "time": "2:30", "action": "Stalker / Adept (one of)"},
+          {"supply": 25, "time": "3:00", "action": "Warp Gate research"},
+          {"supply": 26, "time": "3:20", "action": "Stargate (FIRST tech building -- BEFORE any Twilight)"},
+          {"supply": 30, "time": "4:00", "action": "Oracle (or Phoenix) -- harass Overlords / Drones / Queens"},
+          {"supply": 34, "time": "4:30", "action": "Twilight Council (SECOND tech, AFTER Stargate)"},
+          {"supply": 38, "time": "5:00", "action": "Resonating Glaives research begins (FIRST upgrade out of Twilight, BEFORE Blink)"},
+          {"supply": 42, "time": "5:30", "action": "3rd Nexus (before or after Twilight -- timing flexible)"},
+          {"supply": 46, "time": "6:00", "action": "Gateway #2 and #3, more Stargate units (1-3 total)"},
+          {"supply": 54, "time": "6:30", "action": "Gateway #4 and #5"},
+          {"supply": 60, "time": "7:00", "action": "Glaives finishes; Adept shade into Zerg base"},
+          {"supply": 68, "time": "7:30", "action": "Gateway #6-#8, prepare Glaive Adept timing push"},
+          {"supply": 78, "time": "8:30", "action": "Push with 4-8 Gateways of Glaive Adepts backed by Stargate units"},
+          {"supply": 88, "time": "9:30", "action": "Transition: Forge, Robotics Facility for Observer, 4th base"}
         ]
       }
     ]
