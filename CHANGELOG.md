@@ -10,6 +10,27 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Fixed
+
+- **Strategy classifier · Terran 1-base 1-1-1 was lumped into the
+  composition fallback**: the opponent-side Terran detector treated
+  the OrbitalCommand morph of the main Command Center as a "2nd
+  base" event (along with PlanetaryFortress morphs), because
+  `cc_events` flattened all three name variants into one sorted
+  list. For a real 1-base 1-1-1 all-in (1 CC, OC morph at ~2:11,
+  Factory in main, Starport in main, no expand for the whole game)
+  this gave `second_cc_time ≈ 130 s`, which is BEFORE the
+  Factory's start time — so the rule chain skipped
+  `Terran - 1-1-1 One Base` and tried `Terran - 1-1-1 Standard`
+  instead. With no Engineering Bay on the field by 7:30 the
+  classifier then fell all the way through to the composition
+  fallback (`Terran - Bio / Mech / Sky / Stargate Comp`),
+  hiding the 1-base all-in inside a macro bucket. The detector now
+  counts ONLY `name == "CommandCenter"` events when computing
+  `second_cc_time`; OC / PF morphs emit under their own names and
+  are correctly ignored as same-building events. Mirrored in the
+  legacy SC2Replay-Analyzer copy.
+
 ### Changed
 
 - **Strategy classifier · `PvT - Stargate into Charge / Glaives /
