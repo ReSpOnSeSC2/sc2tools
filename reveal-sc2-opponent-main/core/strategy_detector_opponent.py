@@ -231,8 +231,17 @@ class OpponentStrategyDetector(BaseStrategyDetector):
 
         # --- TERRAN ---
         elif race == "Terran":
-            cc_names = {"CommandCenter", "OrbitalCommand", "PlanetaryFortress"}
-            cc_events = sorted([b for b in buildings if b["name"] in cc_names], key=lambda x: x["time"])
+            # Count actual new Command Centers only — morphs of the
+            # main CC to OrbitalCommand / PlanetaryFortress emit
+            # separate events under those names but they're the SAME
+            # physical building, NOT a 2nd base. The 1-1-1 / Standard
+            # Bio Tank / Bio Comp branches below all key off
+            # ``second_cc_time`` to distinguish 1-base all-ins from
+            # expanding macro games, so this filter is load-bearing.
+            cc_events = sorted(
+                [b for b in buildings if b["name"] == "CommandCenter"],
+                key=lambda x: x["time"],
+            )
             second_cc_time = cc_events[1]["time"] if len(cc_events) >= 2 else 9999
 
             gas_count_4min = count_buildings("Refinery", 330)
