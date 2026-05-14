@@ -266,6 +266,7 @@
         'Terran - Banshee Rush':                ['units/banshee.png'],
         'Terran - Fast 3 CC':                   ['buildings/commandcenter.png'],
         'Terran - 1-1-1 Standard':              ['buildings/factory.png', 'buildings/starport.png', 'buildings/barracks.png'],
+        'Terran - Proxy Starport Hellion Drop': ['buildings/starport.png', 'units/hellion.png', 'units/medivac.png'],
         'Terran - Standard Bio Tank':           ['units/marine.png', 'units/medivac.png', 'units/siegetank.png'],
         'Terran - Mech Comp':                   ['units/siegetank.png', 'units/thor.png'],
         'Terran - Bio Comp':                    ['units/marine.png', 'units/marauder.png', 'units/medivac.png'],

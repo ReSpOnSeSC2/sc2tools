@@ -580,6 +580,13 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   {
     race: "Terran",
     matchup: null,
+    name: "Terran - Proxy Starport Hellion Drop",
+    description:
+      "Detected if a Factory and Starport are built away from the main base, the player has expanded (2nd Command Center started), 2+ Hellions are produced by 6:00, and the FIRST unit produced from the Starport is a Medivac -- an expanding proxy Starport build that uses a Medivac to ferry Hellions into the opponent's mineral line (Yoon-style Hellion drop). Differs from Proxy 1-1-1 by the 2nd CC and the Medivac-first opener.",
+  },
+  {
+    race: "Terran",
+    matchup: null,
     name: "Terran - Proxy Rax",
     description: "Detected if Barracks are built far from the main base before 4:30.",
   },

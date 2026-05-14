@@ -685,6 +685,32 @@ class OpponentStrategyDetector(BaseStrategyDetector):
             has_star = has_building("Starport", 490)
             if has_fact and has_star:
                 if has_proxy_building("Factory", 390) or has_proxy_building("Starport", 490):
+                    # Proxy Factory + Starport off a Reaper-Expand. Distinct
+                    # from the 1-base Proxy 1-1-1 (Banshee/Liberator pressure)
+                    # because the player took a 2nd CC and the FIRST Starport
+                    # unit is a Medivac, used as a bus for early Hellions
+                    # (Yoon's proxy Starport Hellion drop). Without those
+                    # signals the build is the older 1-base proxy 1-1-1.
+                    starport_units = sorted(
+                        (
+                            u for u in units
+                            if u["name"] in (
+                                "Medivac",
+                                "Banshee",
+                                "Liberator",
+                                "Raven",
+                                "VikingFighter",
+                            )
+                        ),
+                        key=lambda u: u["time"],
+                    )
+                    first_sp_unit = starport_units[0]["name"] if starport_units else None
+                    if (
+                        second_cc_time < 9999
+                        and first_sp_unit == "Medivac"
+                        and count_units("Hellion", 360) >= 2
+                    ):
+                        return "Terran - Proxy Starport Hellion Drop"
                     return "Terran - Proxy 1-1-1"
                 fact_time = next((b["time"] for b in buildings if b["name"] == "Factory"), 9999)
                 star_time = next((b["time"] for b in buildings if b["name"] == "Starport"), 9999)

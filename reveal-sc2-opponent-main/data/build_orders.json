@@ -139,6 +139,35 @@
         ]
       },
       {
+        "id": "tvt_07b",
+        "name": "Proxy Starport Hellion Drop",
+        "style": "harass-expand",
+        "difficulty": "advanced",
+        "description": "Reaper expand into a proxy Factory + proxy Starport. The Factory pumps early Hellions while the Starport's first unit is a Medivac (the bus). Hellions are loaded into the Medivac and dropped into the opponent's mineral line for SCV/Drone/Probe damage. Distinct from a 1-base Proxy 1-1-1: the player takes a 2nd Command Center for sustained production behind the harass.",
+        "steps": [
+          {"supply": 14, "time": "0:18", "action": "Supply Depot"},
+          {"supply": 16, "time": "0:55", "action": "Barracks (in main)"},
+          {"supply": 16, "time": "1:00", "action": "Refinery"},
+          {"supply": 19, "time": "2:10", "action": "Orbital Command, Reaper (scout + harass)"},
+          {"supply": 19, "time": "2:20", "action": "Command Center at natural"},
+          {"supply": 20, "time": "2:30", "action": "SCV moves out to scout proxy location near opponent"},
+          {"supply": 22, "time": "3:00", "action": "PROXY Factory (built far from main, near opponent)"},
+          {"supply": 24, "time": "3:30", "action": "Refinery #2 in main"},
+          {"supply": 26, "time": "3:50", "action": "Reactor on PROXY Factory (for double Hellion production)"},
+          {"supply": 26, "time": "4:00", "action": "PROXY Starport beside Factory"},
+          {"supply": 28, "time": "4:10", "action": "Orbital Command at natural"},
+          {"supply": 30, "time": "4:25", "action": "Hellions x2 from PROXY Factory Reactor"},
+          {"supply": 32, "time": "4:30", "action": "Tech Lab on Barracks (Stim/Marauder later)"},
+          {"supply": 34, "time": "4:55", "action": "Hellions x2 (4 Hellions ready)"},
+          {"supply": 36, "time": "5:10", "action": "MEDIVAC from PROXY Starport (FIRST Starport unit) — load 4 Hellions, fly to opponent's mineral line"},
+          {"supply": 38, "time": "5:30", "action": "Drop Hellions in opponent's main, Medivac heals to sustain harass"},
+          {"supply": 40, "time": "5:35", "action": "Marines from Barracks at home, Bunker at natural"},
+          {"supply": 44, "time": "6:00", "action": "Liberator from Starport (continues Starport pressure)"},
+          {"supply": 50, "time": "6:30", "action": "Engineering Bay, Refinery, Siege Tank — transition into bio-tank macro"},
+          {"supply": 60, "time": "7:00", "action": "Add Barracks #2/#3 in main, begin 1/1 upgrades"}
+        ]
+      },
+      {
         "id": "tvt_07",
         "name": "Hellion Drop Harassment",
         "style": "harass",

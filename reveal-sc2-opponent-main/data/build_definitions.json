@@ -90,6 +90,7 @@
   "Terran - 3 Rax": "Detected if 3 Barracks are built after second CC but before any other tech buildings.",
   "Terran - 1-1-1 Standard": "Detected if Factory (before 6:30) and Starport (before 8:10) are built and they are after the second CC.",
   "Terran - Proxy 1-1-1": "Detected if Factory (before 6:30) and Starport (before 8:10) and are built away from their base.",
+  "Terran - Proxy Starport Hellion Drop": "Detected if a Factory and Starport are built away from the main base, the player has expanded (2nd Command Center started), 2+ Hellions are produced by 6:00, and the FIRST unit produced from the Starport is a Medivac -- an expanding proxy Starport build that uses a Medivac to ferry Hellions into the opponent's mineral line (Yoon-style Hellion drop). Differs from Proxy 1-1-1 by the 2nd CC and the Medivac-first opener.",
   "Terran - Standard Bio Tank": "Detected if 3 CCs, Engineering Bays, and Tanks/Medivacs are present.",
   "Terran - Mech Comp": "Mid/Late game composition fallback based on heavy Factory production.",
   "Terran - Bio Comp": "Mid/Late game composition fallback based on heavy Barracks production.",
