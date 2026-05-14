@@ -54,6 +54,14 @@ const LEGACY_PREDICATES = new Set([
   // ranges (Win between 5-10 min, etc.) that are derivable from the
   // game row alone.
   "win_vs_strategy_contains",
+  // APM objectives (May-2026 — third pass). Per-game APM ingestion
+  // is inconsistent across replay paths: some rows ship an averaged
+  // figure including the opponent's actions, others ship the
+  // per-player number. A "Win with 250+ APM" cell ticked or didn't
+  // based on which path produced the row, not on what the user
+  // actually did. Macro-score cells stay (single deterministic
+  // number derived from supply / build / inject timings).
+  "win_apm_above",
 ]);
 
 /**

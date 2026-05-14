@@ -68,6 +68,31 @@ describe("bingoLadder card generation", () => {
     }
   });
 
+  test("no card cell uses the retired win_apm_above predicate", () => {
+    // The May-2026 third pass removed APM-threshold cells ("Win with
+    // 150+ APM", "Win with 250+ APM"). Per-game APM ingestion is
+    // inconsistent across replay paths (averaged vs per-player), so
+    // these cells ticked or didn't based on which path produced the
+    // row, not on what the user actually did. Macro-score cells stay
+    // because macroScore is a single deterministic number.
+    for (let seed = 0; seed < 40; seed += 1) {
+      const cells = buildCard(
+        {
+          rng: mulberry32(seed),
+          daySeed: "2026-05-11",
+          tz: "UTC",
+          data: datasetForRaces(["Protoss", "Zerg", "Terran"]),
+        },
+        "2026-W20",
+        new Set(["P", "Z", "T"]),
+      );
+      for (const c of cells) {
+        expect(c.predicate).not.toBe("win_apm_above");
+        expect(c.label.toLowerCase()).not.toMatch(/\d+\+ apm/);
+      }
+    }
+  });
+
   test("no card cell uses the retired win_vs_strategy_contains predicate", () => {
     // The May-2026 second pass removed opponent-strategy substring
     // cells ("Survive a rush", "Defend a cheese", "Beat a proxy",
@@ -348,6 +373,33 @@ describe("bingoLadder legacy card detection", () => {
     // them so the next mount regenerates the card with the new
     // duration-range cells.
     expect(LEGACY_PREDICATES.has("win_vs_strategy_contains")).toBe(true);
+  });
+
+  test("LEGACY_PREDICATES includes win_apm_above (May-2026 third-pass removal)", () => {
+    // Cards minted under the previous schema carry "Win with 150+
+    // APM" / "Win with 250+ APM" cells. APM ingestion is inconsistent
+    // across replay paths so these cells ticked or didn't on factors
+    // outside the user's control. Flag them as legacy so the next
+    // mount regenerates the card.
+    expect(LEGACY_PREDICATES.has("win_apm_above")).toBe(true);
+  });
+
+  test("isLegacyCard flags cards carrying retired APM cells", () => {
+    const apm: BingoState = {
+      startedAt: new Date().toISOString(),
+      weekKey: "2026-W20",
+      rerolled: false,
+      cells: [
+        {
+          id: "a",
+          predicate: "win_apm_above",
+          params: { minApm: 150 },
+          label: "Win with 150+ APM",
+          ticked: false,
+        },
+      ],
+    };
+    expect(isLegacyCard(apm)).toBe(true);
   });
 
   test("isLegacyCard flags cards carrying retired opponent-strategy cells", () => {
