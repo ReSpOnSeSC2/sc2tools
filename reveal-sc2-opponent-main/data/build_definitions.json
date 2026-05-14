@@ -107,5 +107,14 @@
   "Terran - 3-4 Rax Marine rush": "Detected if 3+ Barracks exist before 6:30 off a single Command Center with NO Refineries -- a gas-less, Marine-only mass-Rax all-in.",
   "Terran - Widow Mine Drop into Thor Rush": "Detected if a Medivac and 2+ Widow Mines are built AFTER the second Command Center (within ~6:30), and a Thor has been produced before ~8:10 -- a Mine drop transitioning into Thor pressure.",
   "Terran - Widow Upgraded Mine Cheese": "Detected if a Medivac and 2+ Widow Mines are built BEFORE the second Command Center -- a 1-base Widow Mine drop cheese.",
-  "Terran - Standard Play (Unclassified)": "Catch-all for unclassified Terran games."
+  "Terran - Standard Play (Unclassified)": "Catch-all for unclassified Terran games.",
+  "PvP - Game Too Short": "Catch-all bucket for PvP replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+  "PvT - Game Too Short": "Catch-all bucket for PvT replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+  "PvZ - Game Too Short": "Catch-all bucket for PvZ replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+  "TvP - Game Too Short": "Catch-all bucket for TvP replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+  "TvT - Game Too Short": "Catch-all bucket for TvT replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+  "TvZ - Game Too Short": "Catch-all bucket for TvZ replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+  "ZvP - Game Too Short": "Catch-all bucket for ZvP replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+  "ZvT - Game Too Short": "Catch-all bucket for ZvT replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+  "ZvZ - Game Too Short": "Catch-all bucket for ZvZ replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle."
 }

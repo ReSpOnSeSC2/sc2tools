@@ -231,7 +231,58 @@ export function FilterBar() {
             : "now"}
         </span>
       ) : null}
+
+      <ExcludeTooShortToggle />
     </div>
+  );
+}
+
+/**
+ * "Hide too-short games" toggle. Replays that ended in under 30
+ * seconds get tagged "<X>v<Y> - Game Too Short" by the strategy
+ * detector on BOTH `myBuild` and `opponent.strategy`. This checkbox
+ * sets ``exclude_too_short=1`` on the filter context, which
+ * `filtersToQuery` forwards to the API; `gamesMatchStage` then adds
+ * a negated regex on whichever side isn't already constrained.
+ *
+ * Drives every analyzer tab (Opponents, Strategies, Trends, Maps,
+ * Builds) in one shot because they all read from the same shared
+ * `useFilters()` context.
+ *
+ * Default off so historical bookmarks and shared links stay
+ * reproducible.
+ */
+function ExcludeTooShortToggle() {
+  const { filters, setFilters } = useFilters();
+  const enabled = !!filters.exclude_too_short;
+  return (
+    <label
+      className={[
+        "ml-auto inline-flex min-h-[44px] cursor-pointer items-center gap-2",
+        "rounded-md border border-border bg-bg-surface px-3 py-2",
+        "text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text",
+        "focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 focus-within:ring-offset-bg",
+      ].join(" ")}
+      title="Drop replays that ended in under 30 seconds (no build order developed) from every tab."
+    >
+      <input
+        type="checkbox"
+        checked={enabled}
+        onChange={(e) =>
+          setFilters({
+            ...filters,
+            // Store undefined when off so the param disappears from
+            // the URL entirely; ?exclude_too_short=true otherwise.
+            exclude_too_short: e.target.checked ? true : undefined,
+          })
+        }
+        className="h-4 w-4 accent-accent"
+        aria-label="Exclude games shorter than 30 seconds"
+      />
+      <span className={enabled ? "text-text" : undefined}>
+        Hide too-short games
+      </span>
+    </label>
   );
 }
 
