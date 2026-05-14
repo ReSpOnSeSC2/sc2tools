@@ -779,6 +779,54 @@ class UserBuildDetector(BaseStrategyDetector):
         # misleading Protoss-tree label.
         if my_race in ("Zerg", "Terran"):
             vs_race = _matchup_to_vs_race(matchup)
+
+            # TvP — 1-base 1-1-1 all-in: Barracks + Factory + Starport
+            # are ALL built before the 2nd Command Center, and none of
+            # them are proxied (the trio sits inside the player's
+            # main). This is the same structural signature as the
+            # opponent-side "Terran - 1-1-1 One Base" but emitted for
+            # the player's own build when they're the Terran in TvP.
+            if my_race == "Terran" and "vs Protoss" in matchup:
+                # Count actual new Command Centers only — morphs to
+                # OrbitalCommand / PlanetaryFortress emit separate
+                # events under those names but they're the SAME
+                # building so they cannot be the "2nd base".
+                cc_times_local = sorted(
+                    b["time"] for b in buildings if b["name"] == "CommandCenter"
+                )
+                second_cc_time_local = (
+                    cc_times_local[1] if len(cc_times_local) >= 2 else 9999
+                )
+                rax_t = min(
+                    (b["time"] for b in buildings if b["name"] == "Barracks"),
+                    default=9999,
+                )
+                fact_t = min(
+                    (b["time"] for b in buildings if b["name"] == "Factory"),
+                    default=9999,
+                )
+                star_t = min(
+                    (b["time"] for b in buildings if b["name"] == "Starport"),
+                    default=9999,
+                )
+
+                def _has_proxy_building(target_name: str) -> bool:
+                    return any(
+                        b["name"] == target_name
+                        and self._is_proxy(b, main_loc, 50)
+                        for b in buildings
+                    )
+
+                if (
+                    rax_t < 9999
+                    and fact_t < second_cc_time_local
+                    and star_t < second_cc_time_local
+                    and not _has_proxy_building("Factory")
+                    and not _has_proxy_building("Starport")
+                    and not _has_proxy_building("Barracks")
+                ):
+                    return "TvP - 1-1-1 One Base"
+
             for name, meta in candidate_signatures_for(my_race, vs_race).items():
                 signature = meta.get("signature") or []
                 if not signature:
@@ -812,6 +860,19 @@ class UserBuildDetector(BaseStrategyDetector):
 
         def building_time(name):
             times = [b["time"] for b in buildings if b["name"] == name]
+            return min(times) if times else 9999
+
+        def upgrade_time(*sub_names):
+            """Earliest research start where the upgrade name contains
+            any of ``sub_names``. sc2reader emits raw upgrade_type_name
+            values ("AdeptPiercingAttack", "BlinkTech", "Charge") so
+            callers pass the raw substring (and optionally a display-
+            name fallback). Returns 9999 when no matching upgrade was
+            researched."""
+            times = [
+                u["time"] for u in upgrades
+                if any(s in u["name"] for s in sub_names)
+            ]
             return min(times) if times else 9999
 
         gate_count_6min = sum(1 for b in buildings if b["name"] == "Gateway" and b["time"] < 540)
@@ -887,24 +948,13 @@ class UserBuildDetector(BaseStrategyDetector):
 
             sg_time = building_time("Stargate")
             twilight_time = building_time("TwilightCouncil")
-            # Earliest research start for each Twilight-tree upgrade.
-            # Used to detect WHICH upgrade is first out of the Twilight
-            # Council — the key signal that distinguishes Adept Glaive
+            # Identify WHICH upgrade is researched first out of the
+            # Twilight Council — the signal that separates Adept Glaive
             # Timings (Glaives first) from Stargate-into-Blink (Blink
-            # first) and the Charge macro builds (Charge first).
-            # NOTE on naming: sc2reader emits raw upgrade_type_name
-            # values — "AdeptPiercingAttack" for Resonating Glaives,
-            # "BlinkTech" for Blink, "Charge" for Charge. Substring
-            # match against ("AdeptPiercing", "Glaive") covers both raw
-            # and display-name variants; "Blink" matches "BlinkTech";
-            # "Charge" matches "Charge".
-            def upgrade_time(*sub_names):
-                times = [
-                    u["time"] for u in upgrades
-                    if any(s in u["name"] for s in sub_names)
-                ]
-                return min(times) if times else 9999
-
+            # first) and Charge openers (Charge first). sc2reader emits
+            # raw upgrade_type_name values, so "AdeptPiercingAttack" is
+            # the Glaive event; "Blink" matches "BlinkTech"; "Charge"
+            # matches itself. See ``upgrade_time`` at function scope.
             robo_time = building_time("RoboticsFacility")
             dark_shrine_time = building_time("DarkShrine")
             glaive_time = upgrade_time("AdeptPiercing", "Glaive")
@@ -1150,6 +1200,36 @@ class UserBuildDetector(BaseStrategyDetector):
 
             if has_proxy("Stargate", sec_nexus_time, 50):
                 return "PvT - Proxy Void Ray/Stargate"
+
+            # Stargate-into-X variants: a Stargate goes down first as
+            # the tech building (the unit produced from it — Phoenix /
+            # Oracle / Void Ray — does NOT matter), then a Twilight
+            # Council, and the FIRST upgrade researched out of the
+            # Twilight is Charge / Glaives / Blink. The three labels
+            # are mutually exclusive on the first-upgrade signal and
+            # sit above Phoenix Opener / Phoenix into Robo so a
+            # Stargate-Phoenix opener that researches Glaives first gets
+            # the more informative "Stargate into Glaives" tag instead
+            # of the generic Phoenix Opener.
+            pvt_glaive_time = upgrade_time("AdeptPiercing", "Glaive")
+            pvt_blink_time = upgrade_time("Blink")
+            pvt_charge_time = upgrade_time("Charge")
+            pvt_first_twilight_upgrade = min(
+                pvt_glaive_time, pvt_blink_time, pvt_charge_time,
+            )
+            if (
+                has_building("Stargate", 480)
+                and sg_time < twilight_time
+                and twilight_time < 9999
+                and pvt_first_twilight_upgrade < 9999
+            ):
+                if pvt_charge_time == pvt_first_twilight_upgrade:
+                    return "PvT - Stargate into Charge"
+                if pvt_glaive_time == pvt_first_twilight_upgrade:
+                    return "PvT - Stargate into Glaives"
+                if pvt_blink_time == pvt_first_twilight_upgrade:
+                    return "PvT - Stargate into Blink"
+
             # Phoenix builds: require an actual Stargate. Sentry can
             # hallucinate Phoenix off Cyber + Twilight tech, so a
             # 2-base Charge / Templar build can register a "Phoenix"
@@ -1225,6 +1305,21 @@ class UserBuildDetector(BaseStrategyDetector):
             if has_building("RoboticsFacility", 390):
                 if robo_time < sg_time and robo_time < twilight_time:
                     return "PvT - Robo First"
+            # Catch-all: a Stargate was the FIRST tech building after
+            # the Cybernetics Core (before Twilight Council and before
+            # Robotics Facility) but the build didn't match any of the
+            # more specific Stargate-prefixed variants above (Proxy
+            # Void Ray, Stargate into Charge/Glaives/Blink, Phoenix
+            # into Robo, Phoenix Opener). Surface it as a generic
+            # "Stargate Opener" rather than the unhelpful Macro
+            # Transition (Unclassified) bucket — custom builds can
+            # refine it from there.
+            if (
+                has_building("Stargate", 480)
+                and sg_time < twilight_time
+                and sg_time < robo_time
+            ):
+                return "PvT - Stargate Opener"
             return "PvT - Macro Transition (Unclassified)"
 
         return f"Unclassified - {my_race}"
