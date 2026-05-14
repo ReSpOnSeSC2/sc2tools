@@ -55,7 +55,7 @@ def _matchup_to_vs_race(matchup: str) -> str:
 # =========================================================
 # GAME-TOO-SHORT shared bucket
 # =========================================================
-# Replays that ended before 30 seconds have no meaningful build order
+# Replays that ended before 45 seconds have no meaningful build order
 # to classify (one player conceded / disconnected / dropped). Instead
 # of letting the strategy tree's catch-all bucket ("PvT - Macro
 # Transition (Unclassified)" etc.) absorb them, we short-circuit at
@@ -63,11 +63,12 @@ def _matchup_to_vs_race(matchup: str) -> str:
 # per matchup so users can filter / drill on "no-build-order games"
 # as one cohesive group.
 #
-# Threshold is 30 seconds. Below that, basically no production has
-# happened — only the auto-spawned starting workers and maybe a
-# Pylon / SupplyDepot / Overlord under construction. We don't
+# Threshold is 45 seconds. Below that, basically no production has
+# happened — only the auto-spawned starting workers and maybe one
+# Pylon / SupplyDepot / Overlord under construction (most racial
+# first-supply builds break ground around 18-25 s). We don't
 # attempt to differentiate further.
-GAME_TOO_SHORT_THRESHOLD_SECONDS = 30
+GAME_TOO_SHORT_THRESHOLD_SECONDS = 45
 
 # Race -> one-letter prefix used to build matchup labels like "PvT".
 # "Random" / unknown stays as "?" so the rule never crashes; the
@@ -1300,6 +1301,28 @@ class UserBuildDetector(BaseStrategyDetector):
             # Stargate-Phoenix opener that researches Glaives first gets
             # the more informative "Stargate into Glaives" tag instead
             # of the generic Phoenix Opener.
+            #
+            # Robo-tech guard: if a Robotics Facility (or anything that
+            # requires it — an Immortal / Robotics Bay) lands BEFORE
+            # the Twilight Council, the build committed to a Robo path
+            # before any Twilight upgrade could be the "first" one in
+            # spirit. Those replays are Phoenix into Robo (or Robo
+            # First / Standard Charge Macro) — Twilight-Council-led
+            # labels like Stargate-into-Charge would mis-tag them.
+            # Immortal & RoboBay both transitively imply Robo, so the
+            # presence of EITHER signal before Twilight is enough; we
+            # check all three explicitly so the rule is self-documenting
+            # and future event-extractor changes can't silently break it.
+            pvt_first_immortal_time = min(
+                (u["time"] for u in units if u["name"] == "Immortal"),
+                default=9999,
+            )
+            pvt_robobay_time = building_time("RoboticsBay")
+            pvt_robo_tech_before_twilight = (
+                robo_time < twilight_time
+                or pvt_first_immortal_time < twilight_time
+                or pvt_robobay_time < twilight_time
+            )
             pvt_glaive_time = upgrade_time("AdeptPiercing", "Glaive")
             pvt_blink_time = upgrade_time("Blink")
             pvt_charge_time = upgrade_time("Charge")
@@ -1311,6 +1334,7 @@ class UserBuildDetector(BaseStrategyDetector):
                 and sg_time < twilight_time
                 and twilight_time < 9999
                 and pvt_first_twilight_upgrade < 9999
+                and not pvt_robo_tech_before_twilight
             ):
                 if pvt_charge_time == pvt_first_twilight_upgrade:
                     return "PvT - Stargate into Charge"
@@ -1354,7 +1378,21 @@ class UserBuildDetector(BaseStrategyDetector):
                 and (4 <= gate_count_730 <= 6)
             ):
                 return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
-            if has_upgrade_substr("Charge", 540) and len(nexus_times) >= 3:
+            # Standard Charge Macro is a pure Gateway / Twilight macro
+            # game — any Stargate at all means the build is a hybrid
+            # composition (Stargate-into-Charge / Phoenix-into-Robo /
+            # Stargate Opener) and should NOT collapse into this label.
+            # The earlier Stargate-into-X / Phoenix-into-Robo branches
+            # already catch the Stargate cases when their signatures
+            # match, but a Stargate replay that misses both (e.g. Oracle
+            # harass with no Phoenix + Robo-AFTER-Twilight + Charge) used
+            # to fall through to this rule. Explicit guard keeps the
+            # label honest.
+            if (
+                has_upgrade_substr("Charge", 540)
+                and len(nexus_times) >= 3
+                and not has_building("Stargate", 9999)
+            ):
                 return "PvT - Standard Charge Macro"
             if (
                 has_upgrade_substr("Charge", 540)
@@ -1391,9 +1429,18 @@ class UserBuildDetector(BaseStrategyDetector):
                 and count_units("WarpPrism", 600) >= 1
             ):
                 return "PvT - DT Drop"
-            if has_building("RoboticsFacility", 390):
-                if robo_time < sg_time and robo_time < twilight_time:
-                    return "PvT - Robo First"
+            # Robo First is a Stargate-free opener — Robotics Facility
+            # goes down before Twilight Council and no Stargate is ever
+            # built. A Stargate (even one built AFTER the Robo) makes
+            # the build a Robo+Sg hybrid; Phoenix-into-Robo / Stargate
+            # Opener handle those cases above and below.
+            if (
+                has_building("RoboticsFacility", 390)
+                and robo_time < sg_time
+                and robo_time < twilight_time
+                and not has_building("Stargate", 9999)
+            ):
+                return "PvT - Robo First"
             # Catch-all: a Stargate was the FIRST tech building after
             # the Cybernetics Core (before Twilight Council and before
             # Robotics Facility) but the build didn't match any of the

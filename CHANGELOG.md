@@ -10,12 +10,41 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Changed
+
+- **Strategy classifier · `PvT - Stargate into Charge / Glaives /
+  Blink` now require Robo-AFTER-Twilight**: if a Robotics Facility
+  (or anything that requires one — an Immortal / Robotics Bay) lands
+  BEFORE the Twilight Council, the build committed to a Robo path
+  and the Twilight-led label is the wrong call. Those replays were
+  getting silently stolen from `PvT - Phoenix into Robo` because the
+  Stargate-into-X rules sit above it in the chain. The three rules
+  now skip on `robo_time < twilight_time || immortal_time <
+  twilight_time || robobay_time < twilight_time` so Phoenix-into-Robo
+  catches the replay correctly. Catalog prose updated.
+- **Strategy classifier · `PvT - Robo First` and `PvT - Standard
+  Charge Macro` now require NO Stargate**: a Stargate at any point
+  in the build means the game is a Robo+Sg or Charge+Sg hybrid, not
+  the canonical pure-Robo / pure-Gateway-macro opener. Both rules
+  used to fire on hybrid replays that should have landed under
+  Stargate-into-X / Phoenix-into-Robo / Stargate Opener instead.
+  Catalog prose for both updated.
+- **Strategy classifier · "Game Too Short" threshold raised 30 s →
+  45 s**: replays that survived to 32-40 s usually still amount to
+  one Pylon and a handful of starting workers — not enough to call
+  a build order. The wider window captures more leavers / drops
+  into the matchup-prefixed `Game Too Short` bucket and out of the
+  `Macro Transition (Unclassified)` catch-all. The FilterBar
+  tooltip and all 9 `<X>v<Y> - Game Too Short` catalog entries
+  reflect the new threshold; the "Hide too-short games" toggle
+  behaviour and persistence are unchanged.
+
 ### Added
 
 - **Strategy classifier · "Game Too Short" bucket per matchup**: the
   desktop agent's strategy detector now emits a matchup-prefixed
   `<X>v<Y> - Game Too Short` label on BOTH `myBuild` and
-  `opponent.strategy` for any replay that ended in under 30 seconds
+  `opponent.strategy` for any replay that ended in under 45 seconds
   (no build order developed). Nine labels — `PvP`, `PvT`, `PvZ`,
   `TvP`, `TvT`, `TvZ`, `ZvP`, `ZvT`, `ZvZ` — ship in the catalog
   with prose on `/definitions`. The same string lands on both fields

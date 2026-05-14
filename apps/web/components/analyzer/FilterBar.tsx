@@ -274,7 +274,7 @@ function ExcludeTooShortToggle() {
         "transition-colors hover:text-text",
         "focus-within:text-text",
       ].join(" ")}
-      title="Drop replays that ended in under 30 seconds (no build order developed) from every tab and KPI. On by default."
+      title="Drop replays that ended in under 45 seconds (no build order developed) from every tab and KPI. On by default."
     >
       <input
         type="checkbox"

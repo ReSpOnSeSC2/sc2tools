@@ -1,6 +1,6 @@
 """Regression tests for the matchup-prefixed "Game Too Short" bucket.
 
-Replays that ended before 30 seconds carry no usable build order — only
+Replays that ended before 45 seconds carry no usable build order — only
 the auto-spawned starting workers and maybe a Pylon / SupplyDepot /
 Overlord under construction. The strategy detector short-circuits at
 the top of both entry points and emits a matchup-prefixed
@@ -59,7 +59,7 @@ def _building(name: str, time: int) -> Dict[str, Any]:
 
 # Even a build-order-rich event list does NOT defeat the short-circuit;
 # the detector is supposed to ignore events entirely once
-# ``game_length_seconds < 30``.
+# ``game_length_seconds < 45``.
 _RICH_EVENTS: List[Dict[str, Any]] = [
     _building("Nexus", 0),
     _building("Pylon", 18),
@@ -94,7 +94,7 @@ def test_detect_my_build_short_circuits_to_matchup_label(
         f"vs {vs_race}",
         _RICH_EVENTS,
         my_race=my_race,
-        game_length_seconds=25,
+        game_length_seconds=40,
     )
     assert result == f"{expected_prefix} - Game Too Short", (
         f"Expected {expected_prefix} short-circuit for ({my_race} vs {vs_race}); "
@@ -128,7 +128,7 @@ def test_get_strategy_name_short_circuits_to_matchup_label(
         opp_race,
         _RICH_EVENTS,
         matchup=f"vs {opp_race}",
-        game_length_seconds=25,
+        game_length_seconds=40,
         my_race=my_race,
     )
     assert result == f"{expected_prefix} - Game Too Short", (
@@ -137,14 +137,14 @@ def test_get_strategy_name_short_circuits_to_matchup_label(
     )
 
 
-def test_threshold_is_strict_less_than_30():
-    """29.99 fires the short-circuit; 30.0 does NOT."""
+def test_threshold_is_strict_less_than_45():
+    """44.99 fires the short-circuit; 45.0 does NOT."""
     detector = sd.UserBuildDetector(custom_builds=[])
     short = detector.detect_my_build(
         "vs Terran",
         _RICH_EVENTS,
         my_race="Protoss",
-        game_length_seconds=29.99,
+        game_length_seconds=44.99,
     )
     assert short == "PvT - Game Too Short"
 
@@ -152,10 +152,10 @@ def test_threshold_is_strict_less_than_30():
         "vs Terran",
         _RICH_EVENTS,
         my_race="Protoss",
-        game_length_seconds=30,
+        game_length_seconds=45,
     )
     assert boundary != "PvT - Game Too Short", (
-        f"30.0 seconds must run the normal classifier, not short-circuit; "
+        f"45.0 seconds must run the normal classifier, not short-circuit; "
         f"got {boundary!r}"
     )
 
@@ -185,7 +185,7 @@ def test_opponent_short_circuit_falls_back_to_race_prefix_when_my_race_missing()
         "Terran",
         _RICH_EVENTS,
         matchup="vs Terran",
-        game_length_seconds=25,
+        game_length_seconds=40,
         my_race=None,
     )
     assert result == "Terran - Game Too Short", (
@@ -208,8 +208,8 @@ def test_all_nine_matchup_definitions_present_in_catalog():
         assert name in defs, f"Missing definition prose for {name!r}"
         # Each entry must mention the threshold so the UI is honest
         # about what it filters.
-        assert "30 seconds" in defs[name], (
-            f"Definition for {name!r} should state the 30-second cutoff"
+        assert "45 seconds" in defs[name], (
+            f"Definition for {name!r} should state the 45-second cutoff"
         )
 
 

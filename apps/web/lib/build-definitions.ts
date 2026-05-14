@@ -347,21 +347,21 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - Stargate into Charge",
     description:
-      "Detected if a Stargate is built before any Twilight Council (the Stargate unit produced — Phoenix / Oracle / Void Ray — does NOT matter), a Twilight Council is built AFTER the Stargate, AND the FIRST upgrade researched out of the Twilight Council is Charge (i.e. Charge starts before Resonating Glaives and before Blink). The build can resolve as a 2-base Chargelot timing OR transition into a 3-base Charge macro game — the rule keys on the Stargate-then-Charge opening only and does NOT require an all-in commitment.",
+      "Detected if a Stargate is built before any Twilight Council (the Stargate unit produced — Phoenix / Oracle / Void Ray — does NOT matter), a Twilight Council is built AFTER the Stargate, AND the FIRST upgrade researched out of the Twilight Council is Charge (i.e. Charge starts before Resonating Glaives and before Blink). The build can resolve as a 2-base Chargelot timing OR transition into a 3-base Charge macro game — the rule keys on the Stargate-then-Charge opening only and does NOT require an all-in commitment. Disqualified if a Robotics Facility (or an Immortal / Robotics Bay) lands BEFORE the Twilight Council — those replays are Phoenix into Robo / Robo First, not Twilight-led.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - Stargate into Glaives",
     description:
-      "Detected if a Stargate is built before any Twilight Council (typically with Phoenix harass, but the Stargate unit does NOT matter), a Twilight Council is built AFTER the Stargate, AND the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts before Blink and before Charge). The old-school Stargate-Phoenix into Glaive Adept midgame timing.",
+      "Detected if a Stargate is built before any Twilight Council (typically with Phoenix harass, but the Stargate unit does NOT matter), a Twilight Council is built AFTER the Stargate, AND the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts before Blink and before Charge). The old-school Stargate-Phoenix into Glaive Adept midgame timing. Disqualified if a Robotics Facility (or an Immortal / Robotics Bay) lands BEFORE the Twilight Council — those replays are Phoenix into Robo, not Twilight-led.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - Stargate into Blink",
     description:
-      "Detected if a Stargate is built before any Twilight Council (the Stargate unit produced does NOT matter), a Twilight Council is built AFTER the Stargate, AND the FIRST upgrade researched out of the Twilight Council is Blink (i.e. Blink starts before Resonating Glaives and before Charge). Stargate harass into Blink Stalker macro/midgame.",
+      "Detected if a Stargate is built before any Twilight Council (the Stargate unit produced does NOT matter), a Twilight Council is built AFTER the Stargate, AND the FIRST upgrade researched out of the Twilight Council is Blink (i.e. Blink starts before Resonating Glaives and before Charge). Stargate harass into Blink Stalker macro/midgame. Disqualified if a Robotics Facility (or an Immortal / Robotics Bay) lands BEFORE the Twilight Council — those replays are Phoenix into Robo, not Twilight-led.",
   },
   {
     race: "Protoss",
@@ -375,14 +375,14 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - Robo First",
     description:
-      "Detected if a Robotics Facility is built before 6:30 AND it is the FIRST tech building (before any Stargate or Twilight Council).",
+      "Detected if a Robotics Facility is built before 6:30 AND it is the FIRST tech building (before any Twilight Council) AND NO Stargate has been built at any point. A Stargate — even one built AFTER the Robo — makes the build a Robo+Stargate hybrid that Phoenix into Robo / Stargate Opener cover instead.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - Standard Charge Macro",
     description:
-      "Detected if Charge is researched by 9:00 AND the player has taken 3+ Nexuses -- standard 3-base Chargelot macro.",
+      "Detected if Charge is researched by 9:00 AND the player has taken 3+ Nexuses AND NO Stargate has been built — the pure Gateway / Twilight 3-base Chargelot macro. Any Stargate (at any point) makes the build a hybrid Stargate composition; those replays land under Stargate into Charge / Phoenix into Robo / Stargate Opener instead.",
   },
   // ============================================================
   // PvZ
@@ -811,7 +811,7 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   },
   // ============================================================
   // Game Too Short — catch-all per matchup for replays that ended
-  // in under 30 seconds, before any build order developed. Both
+  // in under 45 seconds, before any build order developed. Both
   // the player and the opponent get this label so the data view
   // stays consistent. Filterable via the analyzer's "Exclude
   // too-short games" toggle in the FilterBar.
@@ -821,63 +821,63 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvP",
     name: "PvP - Game Too Short",
     description:
-      "Catch-all bucket for PvP replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+      "Catch-all bucket for PvP replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - Game Too Short",
     description:
-      "Catch-all bucket for PvT replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+      "Catch-all bucket for PvT replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - Game Too Short",
     description:
-      "Catch-all bucket for PvZ replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+      "Catch-all bucket for PvZ replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
   },
   {
     race: "Terran",
     matchup: "TvP",
     name: "TvP - Game Too Short",
     description:
-      "Catch-all bucket for TvP replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+      "Catch-all bucket for TvP replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
   },
   {
     race: "Terran",
     matchup: "TvT",
     name: "TvT - Game Too Short",
     description:
-      "Catch-all bucket for TvT replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+      "Catch-all bucket for TvT replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
   },
   {
     race: "Terran",
     matchup: "TvZ",
     name: "TvZ - Game Too Short",
     description:
-      "Catch-all bucket for TvZ replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+      "Catch-all bucket for TvZ replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
   },
   {
     race: "Zerg",
     matchup: "ZvP",
     name: "ZvP - Game Too Short",
     description:
-      "Catch-all bucket for ZvP replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+      "Catch-all bucket for ZvP replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
   },
   {
     race: "Zerg",
     matchup: "ZvT",
     name: "ZvT - Game Too Short",
     description:
-      "Catch-all bucket for ZvT replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+      "Catch-all bucket for ZvT replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
   },
   {
     race: "Zerg",
     matchup: "ZvZ",
     name: "ZvZ - Game Too Short",
     description:
-      "Catch-all bucket for ZvZ replays that ended in under 30 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+      "Catch-all bucket for ZvZ replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
   },
 ];
 
