@@ -345,6 +345,34 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   {
     race: "Protoss",
     matchup: "PvT",
+    name: "PvT - Stargate into Charge",
+    description:
+      "Detected if a Stargate is built before any Twilight Council (the Stargate unit produced — Phoenix / Oracle / Void Ray — does NOT matter), a Twilight Council is built AFTER the Stargate, AND the FIRST upgrade researched out of the Twilight Council is Charge (i.e. Charge starts before Resonating Glaives and before Blink). Stargate harass into a 2-base Chargelot timing.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvT",
+    name: "PvT - Stargate into Glaives",
+    description:
+      "Detected if a Stargate is built before any Twilight Council (typically with Phoenix harass, but the Stargate unit does NOT matter), a Twilight Council is built AFTER the Stargate, AND the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts before Blink and before Charge). The old-school Stargate-Phoenix into Glaive Adept midgame timing.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvT",
+    name: "PvT - Stargate into Blink",
+    description:
+      "Detected if a Stargate is built before any Twilight Council (the Stargate unit produced does NOT matter), a Twilight Council is built AFTER the Stargate, AND the FIRST upgrade researched out of the Twilight Council is Blink (i.e. Blink starts before Resonating Glaives and before Charge). Stargate harass into Blink Stalker macro/midgame.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvT",
+    name: "PvT - Stargate Opener",
+    description:
+      "Catch-all: detected when a Stargate is the FIRST tech building after the Cybernetics Core (before Twilight Council and before Robotics Facility) AND the build did NOT match any more specific Stargate-prefixed PvT rule (Proxy Void Ray / Stargate into Charge / Glaives / Blink / Phoenix into Robo / Phoenix Opener). A custom build rule can refine this further.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvT",
     name: "PvT - Robo First",
     description:
       "Detected if a Robotics Facility is built before 6:30 AND it is the FIRST tech building (before any Stargate or Twilight Council).",
@@ -494,6 +522,13 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     name: "Terran - 1-1-1 One Base",
     description:
       "Detected if a Factory (before 6:30) and Starport (before 8:10) are both built BEFORE the second Command Center -- a 1-base 1-Rax / 1-Fact / 1-Port pressure build, not the standard expanding 1-1-1.",
+  },
+  {
+    race: "Terran",
+    matchup: "TvP",
+    name: "TvP - 1-1-1 One Base",
+    description:
+      "Detected when the player is Terran in TvP and a Barracks, Factory, and Starport are ALL built before the second Command Center -- and none of the three is proxied (they all sit inside the main). The classic 1-base 1-1-1 all-in vs Protoss: Cloak Banshee / Marine-Tank / Marine-Medivac-Tank pressure off a single base with no expansion.",
   },
   {
     race: "Terran",

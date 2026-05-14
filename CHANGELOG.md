@@ -10,6 +10,56 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Added
+
+- **Strategy classifier · eight new build labels** wired end-to-end
+  through the desktop agent's `OpponentStrategyDetector` /
+  `UserBuildDetector`, the `/definitions` catalog, the analyzer
+  drill-downs, and the stream overlay icon registries:
+  - **`Terran - Proxy Starport Hellion Drop`** — sub-classifies the
+    Yoon-style expanding proxy Starport + Hellion drop out of the
+    generic `Terran - Proxy 1-1-1` bucket. Fires when a proxy
+    Starport sits beside a 2nd Command Center and the FIRST Starport
+    unit is a Medivac (the bus for the Hellions).
+  - **`PvZ - Adept Glaives (No Robo)`** — Twilight Council is the
+    FIRST tech building after the Cybernetics Core, Resonating
+    Glaives is the FIRST upgrade out of Twilight, 4-8 Gateways by
+    9:00, no Robotics Facility.
+  - **`PvZ - Adept Glaives (Robo)`** — same opening signature +
+    Robotics Facility for Observer / Immortal support.
+  - **`PvZ - Stargate into Glaives`** (refined) — Stargate first
+    tech, then Twilight Council, Glaives FIRST off Twilight (not
+    Blink — that's Stargate into Blink). Gateway range widened to
+    4-8 and the rule now strictly enforces upgrade order.
+  - **`PvT - Stargate into Charge`** — Stargate before Twilight,
+    Charge is the FIRST upgrade out of the Twilight Council. The
+    Stargate unit produced does NOT matter.
+  - **`PvT - Stargate into Glaives`** — same but Glaives first
+    (the old-school Phoenix-into-Glaive-Adept midgame timing).
+  - **`PvT - Stargate into Blink`** — same but Blink first.
+  - **`PvT - Stargate Opener`** — catch-all: Stargate is the FIRST
+    tech building after the Core and the build didn't match any
+    more specific Stargate-prefixed PvT rule. Custom builds can
+    refine from here.
+  - **`TvP - 1-1-1 One Base`** — Terran user-side label: Barracks +
+    Factory + Starport all built BEFORE the 2nd Command Center,
+    none of the three is proxied. The classic 1-base 1-1-1 all-in
+    vs Protoss (Cloak Banshee / Marine-Tank / Marine-Medivac-Tank
+    pressure off a single base).
+
+### Fixed
+
+- **Strategy classifier · Glaive upgrade substring**: the
+  `OpponentStrategyDetector` calls `has_upgrade_substr("Glaive", …)`
+  to spot Adept Resonating Glaives, but `sc2reader` emits the raw
+  `upgrade_type_name` as `AdeptPiercingAttack` — so
+  `"Glaive" in "AdeptPiercingAttack"` was always `False` and the
+  `Protoss - Glaive Adept Timing`, `PvZ - 7 Gate Glaive/Immortal
+  All-in`, and old `PvZ - Stargate into Glaives` rules silently
+  never fired on real replays. All three call sites now accept both
+  `AdeptPiercing` and `Glaive` substrings, so these labels will
+  start appearing in production once agents pick up `0.6.6`.
+
 ### Changed
 
 - **Arcade · Bingo: Ladder Edition**: card overhaul. The per-map
