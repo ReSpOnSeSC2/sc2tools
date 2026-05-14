@@ -30,7 +30,12 @@ import { PVZ_DEFINITIONS } from "./build-definitions/pvz";
 import { TERRAN_DEFINITIONS } from "./build-definitions/terran";
 import { TOO_SHORT_DEFINITIONS } from "./build-definitions/too-short";
 import { TVP_DEFINITIONS } from "./build-definitions/tvp";
+import { TVT_DEFINITIONS } from "./build-definitions/tvt";
+import { TVZ_DEFINITIONS } from "./build-definitions/tvz";
 import { ZERG_DEFINITIONS } from "./build-definitions/zerg";
+import { ZVP_DEFINITIONS } from "./build-definitions/zvp";
+import { ZVT_DEFINITIONS } from "./build-definitions/zvt";
+import { ZVZ_DEFINITIONS } from "./build-definitions/zvz";
 
 export type StrategyMatchup =
   | "PvP"
@@ -63,6 +68,11 @@ export interface BuildDefinition {
 // re-inserted right after the Terran-generic block so that the
 // resulting `BUILD_DEFINITIONS` array stays close to the original
 // ordering and slugified ids are produced in a stable sequence.
+//
+// TvT / TvZ / ZvP / ZvT / ZvZ are scaffolded as empty arrays today
+// (the analyzer has no matchup-specific signatures for them yet).
+// Grouping the imports by race means a future TvT entry just needs to
+// land in tvt.ts and will appear in the catalog automatically.
 const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   ...PROTOSS_DEFINITIONS,
   ...PVP_DEFINITIONS,
@@ -70,7 +80,12 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   ...PVZ_DEFINITIONS,
   ...TERRAN_DEFINITIONS,
   ...TVP_DEFINITIONS,
+  ...TVT_DEFINITIONS,
+  ...TVZ_DEFINITIONS,
   ...ZERG_DEFINITIONS,
+  ...ZVP_DEFINITIONS,
+  ...ZVT_DEFINITIONS,
+  ...ZVZ_DEFINITIONS,
   ...TOO_SHORT_DEFINITIONS,
 ];
 

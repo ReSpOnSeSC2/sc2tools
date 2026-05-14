@@ -23,6 +23,12 @@ from .strategy_detector_helpers import (
 from .strategy_detector_pvp import detect_pvp
 from .strategy_detector_pvt import detect_pvt
 from .strategy_detector_pvz import detect_pvz
+from .strategy_detector_tvp import detect_tvp
+from .strategy_detector_tvt import detect_tvt
+from .strategy_detector_tvz import detect_tvz
+from .strategy_detector_zvp import detect_zvp
+from .strategy_detector_zvt import detect_zvt
+from .strategy_detector_zvz import detect_zvz
 
 
 class UserBuildDetector(BaseStrategyDetector):
@@ -145,6 +151,41 @@ class UserBuildDetector(BaseStrategyDetector):
                     signature, buildings, units, upgrades, main_loc,
                 ):
                     return name
+
+            # Per-matchup decision-tree fallback for Terran / Zerg.
+            # All six detect_<matchup> functions are stubs that return
+            # None today, so this layer is a no-op until rules land in
+            # their respective ``strategy_detector_<matchup>.py`` file.
+            # Wiring them up now means a future rule author only has to
+            # edit the stub file — the dispatcher already calls it.
+            ctx = DetectionContext(
+                buildings=buildings,
+                units=units,
+                upgrades=upgrades,
+                main_loc=main_loc,
+                detector=self,
+            )
+            if my_race == "Terran":
+                if "vs Protoss" in matchup:
+                    label = detect_tvp(ctx)
+                elif "vs Terran" in matchup:
+                    label = detect_tvt(ctx)
+                elif "vs Zerg" in matchup:
+                    label = detect_tvz(ctx)
+                else:
+                    label = None
+            else:  # Zerg
+                if "vs Protoss" in matchup:
+                    label = detect_zvp(ctx)
+                elif "vs Terran" in matchup:
+                    label = detect_zvt(ctx)
+                elif "vs Zerg" in matchup:
+                    label = detect_zvz(ctx)
+                else:
+                    label = None
+            if label is not None:
+                return label
+
             return f"Unclassified - {my_race}"
 
         # 3. Protoss matchups dispatch to per-matchup decision trees.
