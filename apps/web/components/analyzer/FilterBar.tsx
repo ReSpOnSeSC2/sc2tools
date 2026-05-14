@@ -262,13 +262,19 @@ function ExcludeTooShortToggle() {
   const enabled = filters.exclude_too_short !== false;
   return (
     <label
+      // Mobile compact: matches the visual weight of the "Date range"
+      // label on the left. No border / no bg so it doesn't look like
+      // a second card sitting inside the FilterBar's own bordered
+      // surface. `ml-auto` pushes it right on a single-row layout
+      // and lets it wrap to its own line on narrow viewports without
+      // dominating the screen.
       className={[
-        "ml-auto inline-flex min-h-[44px] cursor-pointer items-center gap-2",
-        "rounded-md border border-border bg-bg-surface px-3 py-2",
-        "text-sm text-text-muted transition-colors hover:bg-bg-elevated hover:text-text",
-        "focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 focus-within:ring-offset-bg",
+        "ml-auto inline-flex cursor-pointer items-center gap-1.5",
+        "py-1 text-xs uppercase tracking-wider text-text-dim",
+        "transition-colors hover:text-text",
+        "focus-within:text-text",
       ].join(" ")}
-      title="Drop replays that ended in under 30 seconds (no build order developed) from every tab. On by default."
+      title="Drop replays that ended in under 30 seconds (no build order developed) from every tab and KPI. On by default."
     >
       <input
         type="checkbox"
@@ -281,11 +287,11 @@ function ExcludeTooShortToggle() {
           // no-op state.
           setFilters({ ...filters, exclude_too_short: e.target.checked })
         }
-        className="h-4 w-4 accent-accent"
+        className="h-3.5 w-3.5 cursor-pointer accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
         aria-label="Exclude games shorter than 30 seconds"
       />
       <span className={enabled ? "text-text" : undefined}>
-        Hide too-short games
+        Hide too-short
       </span>
     </label>
   );

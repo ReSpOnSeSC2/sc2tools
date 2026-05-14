@@ -69,7 +69,7 @@ function writeStoredPreset(value: PresetId): void {
  * touching the global filter. Sticky per-tab choice via localStorage.
  */
 export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
-  const { seasons } = useFilters();
+  const { filters, seasons } = useFilters();
 
   // The Win Rate card has its own preset, defaulting to "current_season"
   // so it answers "how am I doing right now?" out of the box.
@@ -91,12 +91,21 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
     () => resolvePreset(wrPreset, undefined, seasons),
     [wrPreset, seasons],
   );
+  // The Win Rate card uses its OWN preset for since/until (so the
+  // user can ask "season win rate" without touching the global date
+  // filter), but it MUST still honour the global "Hide too-short
+  // games" toggle — otherwise a season with a streak of leavers
+  // inflates the percentage the moment the user enables filtering
+  // everywhere else. We merge `exclude_too_short` from the shared
+  // filter context into the params before serialising; the falsy
+  // case is dropped by `filtersToQuery` so the URL stays clean.
   const wrQuery = useMemo(() => {
     const params: Record<string, unknown> = { interval: "day", tz };
     if (wrRange.since) params.since = wrRange.since.toISOString();
     if (wrRange.until) params.until = wrRange.until.toISOString();
+    if (filters.exclude_too_short) params.exclude_too_short = true;
     return filtersToQuery(params);
-  }, [wrRange, tz]);
+  }, [wrRange, tz, filters.exclude_too_short]);
 
   // Global series — used for Games today. Streak is fetched from a
   // dedicated /v1/streak endpoint that walks games one-by-one (the
@@ -114,8 +123,12 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
   // up with `todayKeyIn`.
   const globalSeriesQuery = useMemo(() => {
     const since = startOfTodayInTz(tz).toISOString();
-    return `interval=day&tz=${encodeURIComponent(tz)}&since=${encodeURIComponent(since)}`;
-  }, [tz]);
+    const base = `interval=day&tz=${encodeURIComponent(tz)}&since=${encodeURIComponent(since)}`;
+    // Honour the global "Hide too-short games" toggle on the Games
+    // today KPI too — a 20-second drop shouldn't show up as "1 game
+    // today" once the user has chosen to exclude leavers.
+    return filters.exclude_too_short ? `${base}&exclude_too_short=true` : base;
+  }, [tz, filters.exclude_too_short]);
   const globalSeries = useApi<ApiTimeseriesResponse>(
     `/v1/timeseries?${globalSeriesQuery}`,
   );
@@ -124,7 +137,11 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
     [globalSeries.data, tz],
   );
 
-  const streakResp = useApi<StreakResponse>("/v1/streak");
+  // /v1/streak walks games one-by-one to compute the consecutive
+  // same-result streak. Pass the global "Hide too-short games"
+  // toggle so a 25-second leaver mid-streak doesn't reset the count.
+  const streakQuery = filters.exclude_too_short ? "?exclude_too_short=true" : "";
+  const streakResp = useApi<StreakResponse>(`/v1/streak${streakQuery}`);
   const streak = streakResp.data ?? { kind: null, count: 0, lastGameAt: null };
 
   // Win rate uses its own series scoped by the chosen preset.
