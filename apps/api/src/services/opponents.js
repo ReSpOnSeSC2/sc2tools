@@ -199,6 +199,7 @@ class OpponentsService {
     await Promise.all([
       this._overlayLatestNameFromGames(userId, page),
       this._overlayLatestSeenFromGames(userId, page),
+      this._overlayLatestMmrFromGames(userId, page),
     ]);
     return { items: page, nextBefore };
   }
@@ -323,6 +324,13 @@ class OpponentsService {
     //     across all history.
     await this._overlayFromOpponents(userId, page);
     await this._overlayLatestNameFromGames(userId, page);
+    // (3) ``mmr`` / ``region`` — safety net for rows whose ``$last``
+    //     accumulator landed on a game without ``opponent.mmr`` (the
+    //     accumulator is non-deterministic without a prior $sort, so
+    //     a mmr-less game can win the "last" slot even when a sibling
+    //     game in the same group carries the field). Same overlay
+    //     used by the unfiltered path: zero outbound Pulse traffic.
+    await this._overlayLatestMmrFromGames(userId, page);
     return { items: page, nextBefore };
   }
 
@@ -453,6 +461,99 @@ class OpponentsService {
       const latest = byPulseId.get(r.pulseId);
       if (typeof latest === "string" && latest.length > 0) {
         r.displayNameSample = latest;
+      }
+    }
+  }
+
+  /**
+   * In-place overlay of ``mmr`` / ``region`` from the opponent's most
+   * recent game that actually carries those fields. Self-healing for
+   * the gap the Pulse-fill-at-ingest path leaves behind:
+   *
+   *   * If sc2reader extracted an opponent MMR for some game in the
+   *     past, ``game.opponent.mmr`` is set on that row even though
+   *     the opponents collection's ``mmr`` field may still be null
+   *     (rows pre-date the propagation guard, OR the ingest path
+   *     skipped the Pulse fetch because ``pulseCharacterId`` wasn't
+   *     resolved yet and was only filled in later by the backfill
+   *     cron).
+   *   * If the cloud-side Pulse fetch ever succeeded on a recent
+   *     game ingest, that game's ``opponent.mmr`` carries the value
+   *     authoritatively.
+   *
+   * Either way the data is already in our database — we just have to
+   * read it. Crucially this is a PURE-DATABASE overlay: zero outbound
+   * SC2Pulse traffic, so it adds no rate-limit pressure and runs on
+   * every list page without coordination.
+   *
+   * One aggregation per page. Uses the
+   * ``{opponent.pulseId, userId, date}`` index for the sort. Safe on
+   * an empty page; safe when every row already carries an ``mmr``
+   * (the ``$in`` set ends up empty and the aggregation short-circuits).
+   *
+   * Only overlays when the row's stored ``mmr`` is missing —
+   * non-null stored values are authoritative (they came from
+   * ``recordGame``'s SC2Pulse fetch, which beats anything the agent
+   * happened to extract from sc2reader).
+   *
+   * @private
+   * @param {string} userId
+   * @param {Array<{
+   *   pulseId: string,
+   *   mmr?: number|null,
+   *   region?: string|null,
+   * }>} rows
+   */
+  async _overlayLatestMmrFromGames(userId, rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const needIds = [];
+    for (const r of rows) {
+      if (!r || typeof r.pulseId !== "string" || r.pulseId.length === 0) {
+        continue;
+      }
+      if (typeof r.mmr === "number") continue;
+      needIds.push(r.pulseId);
+    }
+    if (needIds.length === 0) return;
+    const cursor = this.db.games.aggregate([
+      {
+        $match: {
+          userId,
+          "opponent.pulseId": { $in: needIds },
+          "opponent.mmr": { $type: "number" },
+        },
+      },
+      { $sort: { date: -1 } },
+      {
+        $group: {
+          _id: "$opponent.pulseId",
+          mmr: { $first: "$opponent.mmr" },
+          region: { $first: "$opponent.region" },
+        },
+      },
+    ]);
+    /** @type {Map<string, {mmr: number, region?: string|null}>} */
+    const byPulseId = new Map();
+    for await (const doc of cursor) {
+      if (typeof doc._id !== "string") continue;
+      const mmr = Number(doc.mmr);
+      if (!Number.isFinite(mmr) || mmr <= 0) continue;
+      byPulseId.set(doc._id, {
+        mmr: Math.round(mmr),
+        region: typeof doc.region === "string" ? doc.region : null,
+      });
+    }
+    for (const r of rows) {
+      if (!r || typeof r.pulseId !== "string") continue;
+      if (typeof r.mmr === "number") continue;
+      const found = byPulseId.get(r.pulseId);
+      if (!found) continue;
+      r.mmr = found.mmr;
+      if (
+        (r.region == null || r.region === "")
+        && typeof found.region === "string"
+      ) {
+        r.region = found.region;
       }
     }
   }
@@ -674,6 +775,27 @@ class OpponentsService {
     const last5Games = allGames.slice(0, 5);
     const matchupTimingsLegacy = dna.matchupTimings;
     const matchupTimings = projectMatchupTimings(matchupTimingsLegacy);
+    // MMR + region overlay from the most recent game that carries
+    // those fields. Same self-healing pattern as the list path: if
+    // the opponents row doesn't have ``mmr`` stored (because Pulse
+    // was skipped at first ingest or sc2reader carried no value),
+    // but a recent game DOES, surface that value on the profile
+    // header instead of "—". Pure database read — no Pulse traffic.
+    /** @type {{mmr: number, region: string|null}|null} */
+    let mmrOverlay = null;
+    if (typeof doc.mmr !== "number") {
+      for (const g of rawGames) {
+        const m = Number(g && g.opponent && g.opponent.mmr);
+        if (!Number.isFinite(m) || m <= 0) continue;
+        mmrOverlay = {
+          mmr: Math.round(m),
+          region: typeof g.opponent.region === "string"
+            ? g.opponent.region
+            : null,
+        };
+        break;
+      }
+    }
     return {
       ...doc,
       // Overlay the row's displayNameSample with the authoritative
@@ -681,6 +803,10 @@ class OpponentsService {
       // field see the same value.
       displayNameSample: authoritativeName || doc.displayNameSample || "",
       name: authoritativeName,
+      ...(mmrOverlay ? { mmr: mmrOverlay.mmr } : {}),
+      ...(mmrOverlay && (doc.region == null || doc.region === "")
+        ? { region: mmrOverlay.region }
+        : {}),
       mergedToonHandles,
       totals,
       byMap: aggregates.byMap,
