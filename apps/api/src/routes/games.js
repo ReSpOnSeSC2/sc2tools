@@ -2,6 +2,7 @@
 
 const express = require("express");
 const { validateGameRecord } = require("../validation/gameRecord");
+const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 
 /**
  * /v1/games — list, get, ingest from agent.
@@ -25,7 +26,17 @@ const { validateGameRecord } = require("../validation/gameRecord");
  * @param {{
  *   games: import('../services/types').GamesService,
  *   opponents: import('../services/types').OpponentsService,
- *   users?: { addPulseId: (userId: string, pulseId: string) => Promise<boolean> },
+ *   users?: {
+ *     addPulseId: (userId: string, pulseId: string) => Promise<boolean>,
+ *     getProfile?: (userId: string) => Promise<{ pulseIds?: string[] }>,
+ *   },
+ *   pulseMmr?: {
+ *     getCurrentMmr(pulseId: string): Promise<{ mmr: number, region: string|null } | null>,
+ *     getCurrentMmrForAny?(
+ *       ids: string[],
+ *       opts?: { preferredRegion?: string|null },
+ *     ): Promise<{ mmr: number, region: string|null } | null>,
+ *   },
  *   customBuilds?: import('../services/types').CustomBuildsService,
  *   overlayLive?: import('../services/overlayLive').OverlayLiveService,
  *   overlayTokens?: import('../services/types').OverlayTokensService,
@@ -108,6 +119,18 @@ function buildGamesRouter(deps) {
         : [req.body];
       const accepted = [];
       const rejected = [];
+      // Hoist the user's profile once per batch so a 100-replay
+      // Resync that lands here doesn't make 100 round-trips to fetch
+      // the same pulseIds. The myMmr filler below reads from it.
+      const userProfile = await loadUserProfile(deps.users, userId);
+      // Per-batch in-memory negative cache: once we've established
+      // that Pulse has no team for this user's pulseIds in this
+      // region, skip every subsequent game in the batch instead of
+      // hitting Pulse for each. Keyed by ``${preferredRegion}`` since
+      // a multi-region streamer's NA games can still benefit from a
+      // null EU result and vice-versa.
+      /** @type {Map<string, number|null>} */
+      const myMmrPerRegion = new Map();
       for (const raw of incoming) {
         const validation = validateGameRecord(raw);
         if (!validation.valid) {
@@ -135,6 +158,39 @@ function buildGamesRouter(deps) {
         // The slim row is left in place if the upsert wrote it before
         // the detail store call failed; the next agent re-upload
         // recovers, so this is a transient failure mode.
+        // SC2Pulse fill for the streamer's own MMR. sc2reader usually
+        // carries ``myMmr`` for the player's own row, but a sizable
+        // cohort of replays (mods, certain build versions) ship with
+        // it null — and the bingo MMR predicates (``win_vs_higher_mmr``
+        // / ``win_close_mmr``) need it to compute the delta against
+        // the opponent's MMR. Region-aware via the opponent's toon
+        // handle (in 1v1 ladder both players are on the same server).
+        // Cached per-region for the duration of this batch AND
+        // per-character inside PulseMmrService's 5-minute LRU.
+        if (
+          typeof game.myMmr !== "number"
+          && deps.pulseMmr
+          && userProfile
+          && Array.isArray(userProfile.pulseIds)
+          && userProfile.pulseIds.length > 0
+        ) {
+          const preferredRegion = pickRegionForGame(game);
+          const cacheKey = preferredRegion || "any";
+          let mmr;
+          if (myMmrPerRegion.has(cacheKey)) {
+            mmr = myMmrPerRegion.get(cacheKey);
+          } else {
+            mmr = await fetchMyMmrFromPulse(
+              deps.pulseMmr,
+              userProfile.pulseIds,
+              preferredRegion,
+            );
+            myMmrPerRegion.set(cacheKey, mmr);
+          }
+          if (typeof mmr === "number") {
+            game.myMmr = mmr;
+          }
+        }
         let created;
         try {
           created = await deps.games.upsert(userId, game);
@@ -557,4 +613,88 @@ function parseDate(raw) {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
-module.exports = { buildGamesRouter };
+/**
+ * Load the user profile we need for the myMmr fill. Returns ``null``
+ * when the UsersService isn't wired (unit tests) or the user has no
+ * pulseIds — both cases short-circuit the fill caller to a no-op.
+ *
+ * @param {any} usersService
+ * @param {string} userId
+ * @returns {Promise<{pulseIds: string[]}|null>}
+ */
+async function loadUserProfile(usersService, userId) {
+  if (!usersService || typeof usersService.getProfile !== "function") {
+    return null;
+  }
+  try {
+    const profile = await usersService.getProfile(userId);
+    if (!profile) return null;
+    const pulseIds = Array.isArray(profile.pulseIds) ? profile.pulseIds : [];
+    return { pulseIds };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Derive the region SC2Pulse should prefer for this game. 1v1 ladder
+ * games have both players on the same server, so the opponent's
+ * toon_handle is a reliable proxy. Falls back to the streamer's own
+ * ``myToonHandle`` when the opponent's isn't present (rare, but the
+ * agent emits this on v0.5.x+).
+ *
+ * @param {any} game
+ * @returns {string|null}
+ */
+function pickRegionForGame(game) {
+  const oppHandle = game && game.opponent && game.opponent.toonHandle;
+  const myHandle = game && game.myToonHandle;
+  return regionFromToonHandle(oppHandle) || regionFromToonHandle(myHandle);
+}
+
+/**
+ * Best-effort SC2Pulse fetch for the streamer's current 1v1 MMR.
+ * Region-aware via ``preferredRegion``. Returns the resolved integer
+ * MMR, or ``null`` when:
+ *   * the pulseMmr client is missing the multi-id ``getCurrentMmrForAny``
+ *     method AND no pulseIds were supplied (defensive);
+ *   * SC2Pulse has no team for any of the supplied character ids in
+ *     the relevant region(s);
+ *   * the call throws (rate-limited / network error / timeout).
+ *
+ * Trusted to mutate nothing — the caller is responsible for stamping
+ * the result onto the game record.
+ *
+ * @param {any} pulseMmr
+ * @param {string[]} pulseIds
+ * @param {string|null} preferredRegion
+ * @returns {Promise<number|null>}
+ */
+async function fetchMyMmrFromPulse(pulseMmr, pulseIds, preferredRegion) {
+  if (!pulseMmr || !Array.isArray(pulseIds) || pulseIds.length === 0) {
+    return null;
+  }
+  try {
+    let result = null;
+    if (typeof pulseMmr.getCurrentMmrForAny === "function") {
+      result = await pulseMmr.getCurrentMmrForAny(pulseIds, {
+        preferredRegion: preferredRegion || undefined,
+      });
+    } else if (typeof pulseMmr.getCurrentMmr === "function") {
+      result = await pulseMmr.getCurrentMmr(pulseIds[0]);
+    }
+    if (!result) return null;
+    const mmr = Number(result.mmr);
+    if (!Number.isFinite(mmr) || mmr <= 0) return null;
+    return Math.round(mmr);
+  } catch {
+    return null;
+  }
+}
+
+module.exports = {
+  buildGamesRouter,
+  // Exported for unit tests of the myMmr fill path; not part of the
+  // public service contract.
+  _testing: { loadUserProfile, pickRegionForGame, fetchMyMmrFromPulse },
+};

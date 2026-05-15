@@ -257,6 +257,7 @@ function makeServices(deps) {
     seasons,
     arcade,
     admin,
+    pulseMmr,
   };
 }
 
@@ -374,6 +375,7 @@ function mountRoutes(app, deps, services, clerk) {
       gdpr: services.gdpr,
       pairings: services.pairings,
       clerk,
+      pulseMmr: services.pulseMmr,
       auth,
       isAdmin,
       logger: deps.logger,
@@ -426,6 +428,7 @@ function mountRoutes(app, deps, services, clerk) {
       games: services.games,
       opponents: services.opponents,
       users: services.users,
+      pulseMmr: services.pulseMmr,
       customBuilds: services.customBuilds,
       overlayLive: services.overlayLive,
       overlayTokens: services.overlayTokens,
