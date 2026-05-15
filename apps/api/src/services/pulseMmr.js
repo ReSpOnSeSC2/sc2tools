@@ -371,6 +371,21 @@ class PulseMmrService {
     const idsParam = ids
       .map((id) => `characterId=${encodeURIComponent(id)}`)
       .join("&");
+    // Dedupe across region queries: SC2Pulse season IDs (battlenetId)
+    // are NOT globally unique — NA's season 67, EU's season 67 and
+    // KR's season 67 all share ``battlenetId=67``. The /group/team
+    // endpoint filters by that number, so each region query returns
+    // teams from EVERY region with the same season number, not just
+    // the queried one. Without dedup the same team lands in the
+    // candidate list multiple times (once per region we probed) and
+    // — worse — used to inherit the LOOP'S region label, which is how
+    // a NA 5459 and an EU 5172 both ended up tagged "KR" on the
+    // dashboard. Keying by ``team.id`` collapses the duplicates and
+    // reading region from ``team.region`` ensures every candidate
+    // carries its OWN region, not whichever season we happened to be
+    // iterating.
+    /** @type {Set<string|number>} */
+    const seenTeamIds = new Set();
     for (const [regionCode, seasonId] of seasons) {
       const url =
         `${PULSE_API_ROOT}/group/team` +
@@ -382,8 +397,31 @@ class PulseMmrService {
       for (const team of teams) {
         const rating = Number(team && team.rating);
         if (!Number.isFinite(rating) || rating <= 0) continue;
+        // Dedupe across region queries: SC2Pulse season IDs
+        // (battlenetId) are NOT globally unique — NA's season 67,
+        // EU's season 67 and KR's season 67 all share ``battlenetId
+        // = 67``. The /group/team endpoint filters by that number, so
+        // each region query returns teams from EVERY region with the
+        // same season number, not just the queried one. Keying by
+        // ``team.id`` collapses the duplicates so the same team
+        // doesn't land in candidates multiple times.
+        const teamId = team && (team.id != null ? team.id : null);
+        if (teamId != null) {
+          if (seenTeamIds.has(teamId)) continue;
+          seenTeamIds.add(teamId);
+        }
         const lastPlayedMs = parseTimestamp(team.lastPlayed);
-        const region = REGION_CODE_TO_LABEL[regionCode] || null;
+        // Region from the team itself — this is what ensures a NA
+        // 5459 and an EU 5172 don't both end up tagged "KR" (the
+        // pre-2026-05 bug, where every candidate inherited the
+        // loop's region label even though the queried season number
+        // matches teams across regions). Falls back to the loop's
+        // regionCode only when the team row doesn't carry its own
+        // region — defensive, since real Pulse responses always do.
+        const region =
+          pulseRegionLabel(team && team.region)
+          || REGION_CODE_TO_LABEL[regionCode]
+          || null;
         candidates.push({ rating, lastPlayedMs, region });
       }
     }
@@ -617,6 +655,30 @@ function pulseRegionCode(raw) {
   const map = { US: 1, NA: 1, EU: 2, KR: 3, CN: 5 };
   const code = map[raw.toUpperCase()];
   return typeof code === "number" ? code : null;
+}
+
+/**
+ * SC2Pulse team objects carry their own region (either a numeric
+ * code matching Blizzard's 1/2/3/5 scheme, or a label like
+ * ``"US"`` / ``"EU"`` / ``"KR"`` / ``"CN"``). This helper normalises
+ * either shape into the analyzer's canonical label set
+ * (``"NA"`` / ``"EU"`` / ``"KR"`` / ``"CN"`` / ``"SEA"``).
+ *
+ * Reading the team's OWN region (instead of the loop's regionCode
+ * in ``_fetchTeams``) is what fixes the pre-2026-05 bug where the
+ * dashboard tagged an NA 5459 and an EU 5172 both as "KR" — Pulse's
+ * /group/team filter is by ``battlenetId`` which collides across
+ * regions, so each region query returned teams from other regions
+ * too. The loop variable was the WRONG label every time the queried
+ * region didn't actually own the team.
+ *
+ * @param {unknown} raw
+ * @returns {string|null}
+ */
+function pulseRegionLabel(raw) {
+  const code = pulseRegionCode(raw);
+  if (code === null) return null;
+  return REGION_CODE_TO_LABEL[code] || null;
 }
 
 /**
