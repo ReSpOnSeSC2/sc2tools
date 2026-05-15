@@ -4,15 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ChevronDown,
-  Gamepad2,
-  Layers,
-  Map as MapIcon,
   Settings as SettingsIcon,
-  Swords,
-  TrendingUp,
-  Users,
-  type LucideIcon,
 } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
 import { AnalyzerProvider } from "@/components/AnalyzerProvider";
 import { Modal } from "@/components/ui/Modal";
 import { Section } from "@/components/ui/Section";
@@ -23,6 +17,14 @@ import { BuildsTab } from "./BuildsTab";
 import { DashboardKpiStrip } from "./DashboardKpiStrip";
 import { DoctorBanner } from "./DoctorBanner";
 import { FilterBar } from "./FilterBar";
+import {
+  ArcadeIcon,
+  BuildsIcon,
+  MapsIcon,
+  OpponentsIcon,
+  StrategiesIcon,
+  TrendsIcon,
+} from "./icons/NavIcons";
 import { OpponentsTab } from "./OpponentsTab";
 import { ProfileView } from "./ProfileView";
 import { StrategiesTab } from "./StrategiesTab";
@@ -36,20 +38,22 @@ type TabId =
   | "builds"
   | "arcade";
 
+type NavIconComponent = ComponentType<SVGProps<SVGSVGElement>>;
+
 type TabDef = {
   id: TabId;
   label: string;
-  icon: LucideIcon;
+  icon: NavIconComponent;
   description?: string;
 };
 
 const TABS: readonly TabDef[] = [
-  { id: "opponents", label: "Opponents", icon: Users, description: "Drill into the players you've faced." },
-  { id: "strategies", label: "Strategies", icon: Swords, description: "Build vs strategy and per-strategy results." },
-  { id: "trends", label: "Trends", icon: TrendingUp, description: "Win-rate trajectory across periods." },
-  { id: "battlefield", label: "Maps", icon: MapIcon, description: "Maps and matchup performance." },
-  { id: "builds", label: "Builds", icon: Layers, description: "Your builds, performance, and editor." },
-  { id: "arcade", label: "Arcade", icon: Gamepad2, description: "Quizzes and games that go deeper than the charts." },
+  { id: "opponents", label: "Opponents", icon: OpponentsIcon, description: "Drill into the players you've faced." },
+  { id: "strategies", label: "Strategies", icon: StrategiesIcon, description: "Build vs strategy and per-strategy results." },
+  { id: "trends", label: "Trends", icon: TrendsIcon, description: "Win-rate trajectory across periods." },
+  { id: "battlefield", label: "Maps", icon: MapsIcon, description: "Maps and matchup performance." },
+  { id: "builds", label: "Builds", icon: BuildsIcon, description: "Your builds, performance, and editor." },
+  { id: "arcade", label: "Arcade", icon: ArcadeIcon, description: "Quizzes and games that go deeper than the charts." },
 ] as const;
 
 export function AnalyzerShell({ totalGames }: { totalGames: number }) {
@@ -154,7 +158,7 @@ function MobileDrawerNav({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="Analyzer sections"
+        title="Dashboard sections"
         description="Pick a section to drill into."
         size="sm"
       >
@@ -211,7 +215,7 @@ function TabletScrollNav({
     <div className="hidden sm:block lg:hidden">
       <Tabs value={value} onValueChange={onChange} orientation="horizontal">
         <Tabs.List
-          ariaLabel="Analyzer sections"
+          ariaLabel="Dashboard sections"
           className="!flex-nowrap"
         >
           {TABS.map(({ id, label, icon: Icon }) => (
@@ -243,7 +247,7 @@ function DesktopSidebarNav({
         orientation="vertical"
         className="!block"
       >
-        <Tabs.List ariaLabel="Analyzer sections">
+        <Tabs.List ariaLabel="Dashboard sections">
           {TABS.map(({ id, label, icon: Icon }) => (
             <Tabs.Trigger key={id} value={id}>
               <span className="flex items-center gap-2">

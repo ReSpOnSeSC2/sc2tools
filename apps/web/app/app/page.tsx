@@ -19,7 +19,7 @@ export default async function AnalyzerHome() {
   if (!meRes.ok) {
     return (
       <Card padded>
-        <h1 className="mb-2 text-h2 font-semibold">Analyzer</h1>
+        <h1 className="mb-2 text-h2 font-semibold">Dashboard</h1>
         <p className="text-danger">
           Could not reach the API ({meRes.status} {meRes.error}). Check
           NEXT_PUBLIC_API_BASE in your env, and that the API server is
@@ -35,7 +35,7 @@ export default async function AnalyzerHome() {
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-h1 font-semibold">Analyzer</h1>
+          <h1 className="text-h1 font-semibold">Dashboard</h1>
           <SyncStatus
             total={meRes.data.games.total}
             latest={meRes.data.games.latest}
