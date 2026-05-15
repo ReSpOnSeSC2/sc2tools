@@ -44,6 +44,22 @@ const COLLECTIONS = Object.freeze({
   COMMUNITY_REPORTS: "community_reports",
   USER_BACKUPS: "user_backups",
   ARCADE_LEADERBOARD: "arcade_leaderboard",
+  // Pre-aggregated snapshot cohorts (build × matchup × MMR × scope).
+  // Cached aggregations of per-tick percentile bands (winner / loser
+  // ribbons) so the snapshot drilldown page never has to scan the
+  // games + gameDetails join on every request. Keyed by a SHA-256
+  // hash of (cohortKey + mmrBucket + scope); TTL'd via expiresAt so a
+  // stale cohort eventually gets recomputed without manual eviction.
+  // See ``services/snapshotCache.js`` for the read/write API and
+  // ``scripts/precomputeSnapshotCohorts.js`` for the nightly warmer.
+  SNAPSHOT_COHORTS: "snapshot_cohorts",
+  // Per-(matchup, mmrBucket, tick) composition matchup matrix cache.
+  // Cluster assignments + K×K win-rate grid + counter-suggestion seed
+  // data. Keyed by hash(matchup + mmrBucket + scope + tick + inputIds).
+  // The matrix payload is heavier than a per-cohort bands row (it
+  // carries centroids and the full grid) — kept in its own collection
+  // so a TTL eviction of one doesn't drag the other into a recompute.
+  SNAPSHOT_MATRICES: "snapshot_matrices",
 });
 
 const LIMITS = Object.freeze({
