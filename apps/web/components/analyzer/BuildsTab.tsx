@@ -9,6 +9,9 @@ import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { BuildEditorModal } from "./BuildEditorModal";
+import { BuildMmrPanel } from "./mmr/BuildMmrPanel";
+import { BuildAgingCurve } from "./mmr/BuildAgingCurve";
+import { MmrProgressionByBuild } from "./mmr/MmrProgressionByBuild";
 
 type BuildRow = {
   name: string;
@@ -122,6 +125,13 @@ export function BuildsTab() {
           </table>
         )}
       </Card>
+
+      <BuildMmrPanel />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <BuildAgingCurve />
+        <MmrProgressionByBuild />
+      </div>
 
       {editing && (
         <BuildEditorModal
