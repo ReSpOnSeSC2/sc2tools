@@ -93,7 +93,10 @@ export function raceColour(race: string | null | undefined): string {
 
 export function fmtMmr(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";
-  return Math.round(v).toLocaleString();
+  // No thousands separator — MMR is always a 4-digit number in
+  // practice and "4,955" reads less naturally than "4955" in the
+  // SC2 community.
+  return String(Math.round(v));
 }
 
 export function fmtMinutes(seconds: number | null | undefined): string {
