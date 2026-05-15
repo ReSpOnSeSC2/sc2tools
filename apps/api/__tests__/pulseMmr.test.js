@@ -176,6 +176,95 @@ describe("services/pulseMmr", () => {
     expect(result?.region).toBe("EU");
   });
 
+  test("uses team.region for the label so cross-region duplicates don't mis-tag (2026-05 fix)", async () => {
+    // SC2Pulse's /group/team filters by ``battlenetId``, which is the
+    // SAME number across regions for the same season (NA's S67, EU's
+    // S67 and KR's S67 all share battlenetId=67). Each region query
+    // therefore returns the same team(s), and the loop variable's
+    // regionCode is the WRONG label for any team that didn't actually
+    // belong to the queried region. The fix: read region from
+    // ``team.region`` and dedupe by ``team.id``.
+    //
+    // This scenario: an NA-only character. /season/list/all returns
+    // seasons for NA, EU and KR all with battlenetId=67. Every region
+    // query returns the same NA team (Pulse joins by battlenetId).
+    // Before the fix, the dashboard tagged that team with the LAST
+    // region iterated (KR). After: team.region wins.
+    const naTeam = {
+      id: 700001,
+      region: "US",
+      rating: 5459,
+      lastPlayed: "2026-05-10T10:00:00Z",
+    };
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([
+          { battlenetId: 67, region: "US", year: 2026, number: 67 },
+          { battlenetId: 67, region: "EU", year: 2026, number: 67 },
+          { battlenetId: 67, region: "KR", year: 2026, number: 67 },
+        ]);
+      }
+      if (url.includes("/group/team") && url.includes("characterId=994428")) {
+        // Whichever region we're querying, Pulse returns the same
+        // NA team because battlenetId collides.
+        return jsonResponse([naTeam]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const result = await svc.getCurrentMmr("994428");
+    expect(result?.mmr).toBe(5459);
+    expect(result?.region).toBe("NA");
+  });
+
+  test("dedupes the same team.id across multiple region queries", async () => {
+    // Same scenario as above, but with two distinct teams to confirm
+    // we end up with TWO candidates (not 6 = 2 teams × 3 regions).
+    // The "winner" should be the team with the most recent lastPlayed.
+    const naTeam = {
+      id: 700001,
+      region: "US",
+      rating: 5459,
+      lastPlayed: "2026-05-10T10:00:00Z",
+    };
+    const euTeam = {
+      id: 700002,
+      region: "EU",
+      rating: 5172,
+      lastPlayed: "2026-05-12T10:00:00Z", // more recent → wins
+    };
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([
+          { battlenetId: 67, region: "US" },
+          { battlenetId: 67, region: "EU" },
+          { battlenetId: 67, region: "KR" },
+        ]);
+      }
+      if (url.includes("/group/team")) {
+        // Every region query returns BOTH teams (Pulse's
+        // battlenetId-shared join). After dedup we expect a single
+        // pick: EU because lastPlayed is most recent.
+        return jsonResponse([naTeam, euTeam]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const result = await svc.getCurrentMmr("994428");
+    expect(result?.mmr).toBe(5172);
+    expect(result?.region).toBe("EU");
+    // Also confirm the preferredRegion hint still works correctly
+    // with the team.region path — pass region="NA" and the NA team
+    // wins despite being older.
+    svc._cache.clear();
+    svc._seasonCache.clear();
+    const pinned = await svc.getCurrentMmrForAny(["994428"], {
+      preferredRegion: "NA",
+    });
+    expect(pinned?.mmr).toBe(5459);
+    expect(pinned?.region).toBe("NA");
+  });
+
   test("returns null when no team carries a rating in any region", async () => {
     const fetchImpl = jest.fn(async (url) => {
       if (url.includes("/season/list/all")) {
