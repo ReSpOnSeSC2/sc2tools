@@ -6,7 +6,7 @@ import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { GlowHalo } from "@/components/ui/GlowHalo";
 import { StatCard } from "@/components/ui/Stat";
-import { pct1, wrColor } from "@/lib/format";
+import { fmtMmr, pct1, wrColor } from "@/lib/format";
 import {
   apiToPeriods,
   clientTimezone,
@@ -159,7 +159,7 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
 
   return (
     <div
-      className="grid auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      className="grid auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5"
       data-testid="dashboard-kpi-strip"
     >
       <LeadStat
@@ -219,6 +219,7 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
         }
         size="md"
       />
+      <MmrPerRegionStat />
       <StatCard
         label="Total games"
         value={
@@ -352,6 +353,98 @@ interface StreakResponse {
   kind: "win" | "loss" | null;
   count: number;
   lastGameAt: string | null;
+}
+
+interface MmrEntry {
+  pulseId: string;
+  region: string | null;
+  mmr: number;
+}
+
+interface MmrResponse {
+  entries: MmrEntry[];
+  truncated: boolean;
+}
+
+/**
+ * Per-toon / per-region MMR card. Renders one line per Battle.net
+ * region the streamer has a team on — sourced from SC2Pulse via
+ * ``/v1/me/mmr`` which fans out one fetch per ``pulseIds`` entry on
+ * the user's profile.
+ *
+ * Designed to stay compact when the user has many toons (smurfs,
+ * region-hoppers): collapses to "+N more" past two visible rows and
+ * surfaces a hover/tap title with the full set. Single-toon
+ * streamers (the common case) see the headline number with the
+ * region label as the hint.
+ *
+ * The card itself is filter-agnostic — region selection in the global
+ * FilterBar does NOT prune entries here. The card answers "what's my
+ * ladder rating right now?", which is a per-user attribute, not a
+ * per-game stat.
+ */
+function MmrPerRegionStat() {
+  const { data, isLoading } = useApi<MmrResponse>("/v1/me/mmr");
+  const entries = data?.entries || [];
+
+  if (isLoading) {
+    return <StatCard label="MMR" value="—" hint="Loading SC2Pulse" size="md" />;
+  }
+  if (entries.length === 0) {
+    return (
+      <StatCard
+        label="MMR"
+        value="—"
+        hint="Add a Pulse ID in Settings"
+        size="md"
+      />
+    );
+  }
+  if (entries.length === 1) {
+    const e = entries[0];
+    return (
+      <StatCard
+        label="MMR"
+        value={<span className="tabular-nums">{fmtMmr(e.mmr)}</span>}
+        hint={e.region || "—"}
+        size="md"
+      />
+    );
+  }
+
+  // Multi-toon: show the top 2 entries inline; collapse the rest into
+  // a "+N more" indicator with a tooltip listing them so the card
+  // doesn't grow vertically on mobile.
+  const visible = entries.slice(0, 2);
+  const hidden = entries.slice(2);
+  return (
+    <StatCard
+      label="MMR"
+      value={
+        <ul className="flex flex-col gap-0.5 text-base font-semibold leading-tight">
+          {visible.map((e) => (
+            <li
+              key={e.pulseId}
+              className="flex items-baseline justify-between gap-2"
+            >
+              <span className="text-[11px] uppercase tracking-wider text-text-dim">
+                {e.region || "—"}
+              </span>
+              <span className="tabular-nums">{fmtMmr(e.mmr)}</span>
+            </li>
+          ))}
+        </ul>
+      }
+      hint={
+        hidden.length > 0
+          ? `+${hidden.length} more · ${hidden
+              .map((h) => `${h.region || "—"} ${fmtMmr(h.mmr)}`)
+              .join(", ")}`
+          : `${entries.length} toons`
+      }
+      size="md"
+    />
+  );
 }
 
 /**
