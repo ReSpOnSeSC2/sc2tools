@@ -143,15 +143,18 @@ function makeServices(deps) {
   // unreachable / rate-limited at that moment). Built once and
   // shared so the in-process LRU cache survives across requests.
   const pulseResolver = buildPulseResolver({ logger: deps.logger });
+  // PulseMmrService — shared across services. Originally added as the
+  // Tier-3 MMR fallback for the session widget; OpponentsService also
+  // uses it to populate ``opponent.mmr`` / ``opponent.region`` on the
+  // opponents row at game ingest, since sc2reader almost never carries
+  // those for ranked ladder replays. Constructed once so the in-process
+  // 5-minute cache survives across requests.
+  const pulseMmr = new PulseMmrService();
   const opponents = new OpponentsService(
     deps.db,
     deps.config.serverPepper,
-    { gameDetails, logger: deps.logger, pulseResolver },
+    { gameDetails, logger: deps.logger, pulseResolver, pulseMmr },
   );
-  // PulseMmrService — Tier-3 fallback for the session widget when no
-  // game in the user's history carries a usable myMmr. Constructed
-  // once and shared so the in-process cache survives across requests.
-  const pulseMmr = new PulseMmrService();
   // GamesService persists heavy fields through GameDetailsService,
   // not directly to a collection — the indirection is what makes
   // the R2 swap a config change instead of a code change. It also
