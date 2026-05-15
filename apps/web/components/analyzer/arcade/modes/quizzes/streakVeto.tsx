@@ -34,16 +34,19 @@ type A = number;
 const ID = "streak-veto";
 registerMode(ID, "temporal");
 
+/** A single W between two losses isn't a "streak"; require ≥3 to count. */
+const STREAK_FLOOR = 3;
+
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
   // Reverse to chronological order (API gives newest-first).
   const chrono = [...input.data.games].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
-  const runs = streakVetoRuns(chrono);
+  const runs = streakVetoRuns(chrono).filter((r) => r.length >= STREAK_FLOOR);
   if (runs.length < 3) {
     return {
       ok: false,
-      reason: "We need at least 3 winning streaks ended by losses to play this round.",
+      reason: `We need at least 3 winning streaks of ${STREAK_FLOOR}+ games ended by losses to play this round.`,
     };
   }
   // A run can be the "answer" only if at least two strictly shorter runs
