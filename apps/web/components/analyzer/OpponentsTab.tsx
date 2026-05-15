@@ -5,7 +5,7 @@ import { ExternalLink } from "lucide-react";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useApiPaginated } from "@/lib/useApiPaginated";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
-import { fmtAgo, pct1, wrColor } from "@/lib/format";
+import { fmtAgo, fmtMmr, pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import { Skeleton, EmptyState } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
@@ -24,6 +24,7 @@ type Opp = {
   games: number;
   gameCount?: number;
   winRate: number;
+  mmr?: number | null;
   lastPlayed: string | null;
   lastSeen?: string | null;
 };
@@ -145,6 +146,7 @@ export function OpponentsTab({
                 {...sort}
                 width="9rem"
               />
+              <SortableTh col="mmr" label="MMR" {...sort} align="right" width="5.5rem" />
               <SortableTh col="wins" label="W" {...sort} align="right" width="5rem" />
               <SortableTh col="losses" label="L" {...sort} align="right" width="5rem" />
               <SortableTh col="games" label="Games" {...sort} align="right" width="5rem" />
@@ -156,13 +158,13 @@ export function OpponentsTab({
           <tbody>
             {showSkeleton ? (
               <tr>
-                <td colSpan={8} className="px-3 py-3">
+                <td colSpan={9} className="px-3 py-3">
                   <Skeleton rows={8} />
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={9}>
                   <EmptyState title="No opponents match these filters" />
                 </td>
               </tr>
@@ -182,7 +184,16 @@ export function OpponentsTab({
                     )}
                   </td>
                   <PulseIdCell opp={o} />
-
+                  <td
+                    className="px-3 py-1.5 text-right tabular-nums text-text-muted"
+                    title={
+                      typeof o.mmr === "number"
+                        ? "Last known MMR (most recent game)"
+                        : "No MMR on record yet"
+                    }
+                  >
+                    {fmtMmr(o.mmr)}
+                  </td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-success">
                     {o.wins}
                   </td>
