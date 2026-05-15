@@ -46,18 +46,20 @@ function buildGames(streaks: Array<[string, number]>): ArcadeGame[] {
 
 describe("Streak Veto — generate doesn't always force the all-time longest", () => {
   test("answer varies across seeds when many eligible runs exist", async () => {
-    // The all-time longest is a 7W streak ended by MAGYARPÉTER. If the
+    // The all-time longest is a 9W streak ended by MAGYARPÉTER. If the
     // old behavior were still in place, every seed would resolve to that
     // opponent. With the fix, any run with ≥2 strictly shorter runs
-    // available as fillers can be the answer.
+    // available as fillers can be the answer. All runs are ≥3 (the
+    // streak floor); pre-floor 1-2-game "runs" no longer qualify as
+    // fillers.
     const games = buildGames([
-      ["MAGYARPÉTER", 7],
-      ["Ragnarok", 5],
-      ["RedViper", 3],
-      ["Maze", 2],
-      ["JEROS", 1],
-      ["Bob", 1],
-      ["Carol", 1],
+      ["MAGYARPÉTER", 9],
+      ["Ragnarok", 7],
+      ["RedViper", 6],
+      ["Maze", 5],
+      ["JEROS", 4],
+      ["Bob", 3],
+      ["Carol", 3],
     ]);
     const dataset: ArcadeDataset = { ...baseDataset, games };
     const winners = new Set<string>();
@@ -78,13 +80,15 @@ describe("Streak Veto — generate doesn't always force the all-time longest", (
   });
 
   test("correct candidate always has a strictly longer streak than both fillers", async () => {
+    // All runs ≥3 so they pass the floor; the spread guarantees there's
+    // always an eligible answer with two strictly-shorter fillers.
     const games = buildGames([
-      ["A", 6],
-      ["B", 4],
-      ["C", 3],
-      ["D", 2],
-      ["E", 1],
-      ["F", 1],
+      ["A", 7],
+      ["B", 6],
+      ["C", 5],
+      ["D", 4],
+      ["E", 3],
+      ["F", 3],
     ]);
     const dataset: ArcadeDataset = { ...baseDataset, games };
     for (let seed = 1; seed <= 30; seed++) {
@@ -120,13 +124,13 @@ describe("Streak Veto — generate doesn't always force the all-time longest", (
   });
 
   test("ok=false when no run has ≥2 strictly shorter runs to use as fillers", async () => {
-    // Three streaks all of length 1 — the longest can't be uniquely
-    // determined among any picked triple.
+    // All runs ≥3 (so they pass the floor), but all the same length —
+    // no run has two strictly shorter to use as fillers.
     const games = buildGames([
-      ["A", 1],
-      ["B", 1],
-      ["C", 1],
-      ["D", 1],
+      ["A", 3],
+      ["B", 3],
+      ["C", 3],
+      ["D", 3],
     ]);
     const dataset: ArcadeDataset = { ...baseDataset, games };
     const out = await streakVeto.generate({
@@ -136,5 +140,54 @@ describe("Streak Veto — generate doesn't always force the all-time longest", (
       data: dataset,
     });
     expect(out.ok).toBe(false);
+  });
+
+  test("ok=false when no winning run reaches the 3-game streak floor", async () => {
+    // A single W isn't a streak — even a pile of length-1 and length-2
+    // runs shouldn't be playable.
+    const games = buildGames([
+      ["A", 1],
+      ["B", 2],
+      ["C", 1],
+      ["D", 2],
+      ["E", 1],
+    ]);
+    const dataset: ArcadeDataset = { ...baseDataset, games };
+    const out = await streakVeto.generate({
+      rng: mulberry32(1),
+      daySeed: "x",
+      tz: "UTC",
+      data: dataset,
+    });
+    expect(out.ok).toBe(false);
+  });
+
+  test("runs below the 3-game floor never appear as candidates", async () => {
+    // Mix of long (≥3) and short (1-2) runs. The quiz should never
+    // surface the short ones as a "streak" — every candidate length
+    // shown must be ≥3.
+    const games = buildGames([
+      ["A", 6],
+      ["B", 5],
+      ["C", 4],
+      ["D", 3],
+      ["E", 2],
+      ["F", 1],
+      ["G", 1],
+    ]);
+    const dataset: ArcadeDataset = { ...baseDataset, games };
+    for (let seed = 1; seed <= 30; seed++) {
+      const out = await streakVeto.generate({
+        rng: mulberry32(seed),
+        daySeed: `seed-${seed}`,
+        tz: "UTC",
+        data: dataset,
+      });
+      expect(out.ok).toBe(true);
+      if (!out.ok) return;
+      for (const c of out.question.candidates) {
+        expect(c.runLength).toBeGreaterThanOrEqual(3);
+      }
+    }
   });
 });
