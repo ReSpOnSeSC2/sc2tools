@@ -367,21 +367,27 @@ interface MmrResponse {
 }
 
 /**
- * Per-toon / per-region MMR card. Renders one line per Battle.net
- * region the streamer has a team on — sourced from SC2Pulse via
+ * Per-toon / per-region MMR card. Sourced from SC2Pulse via
  * ``/v1/me/mmr`` which fans out one fetch per ``pulseIds`` entry on
- * the user's profile.
+ * the user's profile, so each Battle.net account contributes its own
+ * region + MMR row.
  *
- * Designed to stay compact when the user has many toons (smurfs,
- * region-hoppers): collapses to "+N more" past two visible rows and
- * surfaces a hover/tap title with the full set. Single-toon
- * streamers (the common case) see the headline number with the
- * region label as the hint.
+ * Auto-resizing strategy — the strip allots ~120 px of horizontal
+ * real estate per card, so we never try to fit every name inline:
  *
- * The card itself is filter-agnostic — region selection in the global
+ *   * Single toon (most common): headline number with the region as
+ *     the hint. Looks identical in weight to the surrounding KPI
+ *     cards.
+ *   * 2 toons: both stacked as REGION · MMR rows.
+ *   * 3+ toons OR multiple toons in the same region: headline shows
+ *     the best MMR and a "details" disclosure opens a popover with
+ *     the full grouped-by-region list. The popover is scrollable —
+ *     any toon count fits without the card itself growing.
+ *
+ * The card is filter-agnostic: region selection in the global
  * FilterBar does NOT prune entries here. The card answers "what's my
- * ladder rating right now?", which is a per-user attribute, not a
- * per-game stat.
+ * ladder rating right now?", a per-user attribute — not a per-game
+ * stat.
  */
 function MmrPerRegionStat() {
   const { data, isLoading } = useApi<MmrResponse>("/v1/me/mmr");
@@ -400,6 +406,18 @@ function MmrPerRegionStat() {
       />
     );
   }
+
+  // Group by region in input order (entries arrive sorted desc by
+  // MMR, so the first entry per region is the highest there).
+  const byRegion = new Map<string, MmrEntry[]>();
+  for (const e of entries) {
+    const key = e.region || "—";
+    const bucket = byRegion.get(key);
+    if (bucket) bucket.push(e);
+    else byRegion.set(key, [e]);
+  }
+  const groups = Array.from(byRegion.entries());
+
   if (entries.length === 1) {
     const e = entries[0];
     return (
@@ -411,39 +429,144 @@ function MmrPerRegionStat() {
       />
     );
   }
+  if (entries.length === 2 && groups.length === 2) {
+    // Two regions, one toon each — render both inline. No popover
+    // needed; the card stays a single visual unit.
+    return (
+      <StatCard
+        label="MMR"
+        value={
+          <ul className="flex flex-col gap-0.5 text-base font-semibold leading-tight">
+            {entries.map((e) => (
+              <li
+                key={e.pulseId}
+                className="flex items-baseline justify-between gap-2"
+              >
+                <span className="text-[11px] uppercase tracking-wider text-text-dim">
+                  {e.region || "—"}
+                </span>
+                <span className="tabular-nums">{fmtMmr(e.mmr)}</span>
+              </li>
+            ))}
+          </ul>
+        }
+        size="md"
+      />
+    );
+  }
+  // ≥3 entries OR same-region duplicates: fixed-height card with a
+  // disclosure popover. The headline is the highest MMR overall;
+  // ``details`` opens a grouped list that scrolls past ~8 rows.
+  return <MmrCardWithDetails entries={entries} groups={groups} />;
+}
 
-  // Multi-toon: show the top 2 entries inline; collapse the rest into
-  // a "+N more" indicator with a tooltip listing them so the card
-  // doesn't grow vertically on mobile.
-  const visible = entries.slice(0, 2);
-  const hidden = entries.slice(2);
+/**
+ * Compact MMR card with a click-to-expand details popover. Keeps the
+ * dashboard strip a fixed visual height regardless of how many toons
+ * the user has on a single region — a streamer with 10 NA smurfs sees
+ * the same card footprint as one with 1 NA toon.
+ */
+function MmrCardWithDetails({
+  entries,
+  groups,
+}: {
+  entries: MmrEntry[];
+  groups: Array<[string, MmrEntry[]]>;
+}) {
+  const [open, setOpen] = useState(false);
+  const best = entries[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const summaryLabel =
+    groups.length === 1
+      ? `${entries.length} toons · ${groups[0][0]}`
+      : `${entries.length} toons · ${groups.length} regions`;
+
   return (
-    <StatCard
-      label="MMR"
-      value={
-        <ul className="flex flex-col gap-0.5 text-base font-semibold leading-tight">
-          {visible.map((e) => (
-            <li
-              key={e.pulseId}
-              className="flex items-baseline justify-between gap-2"
+    <div className="relative">
+      <StatCard
+        label={
+          <span className="inline-flex items-center gap-1">
+            <span>MMR</span>
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-haspopup="dialog"
+              aria-expanded={open}
+              aria-label="Show all toons and regions"
+              className="inline-flex h-5 items-center rounded px-1 text-[10px] uppercase tracking-wider text-text-dim hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              <span className="text-[11px] uppercase tracking-wider text-text-dim">
-                {e.region || "—"}
-              </span>
-              <span className="tabular-nums">{fmtMmr(e.mmr)}</span>
-            </li>
-          ))}
-        </ul>
-      }
-      hint={
-        hidden.length > 0
-          ? `+${hidden.length} more · ${hidden
-              .map((h) => `${h.region || "—"} ${fmtMmr(h.mmr)}`)
-              .join(", ")}`
-          : `${entries.length} toons`
-      }
-      size="md"
-    />
+              details
+              <ChevronDown
+                className={`ml-0.5 h-3 w-3 transition-transform ${
+                  open ? "rotate-180" : ""
+                }`}
+                aria-hidden
+              />
+            </button>
+          </span>
+        }
+        value={<span className="tabular-nums">{fmtMmr(best.mmr)}</span>}
+        hint={
+          <span>
+            <span className="uppercase tracking-wider">{best.region || "—"}</span>
+            <span className="ml-1 text-text-dim">· {summaryLabel}</span>
+          </span>
+        }
+        size="md"
+      />
+      {open ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close MMR details"
+            className="fixed inset-0 z-30"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-label="MMR by toon and region"
+            className="absolute left-0 right-0 top-full z-40 mt-1 max-h-[50vh] overflow-y-auto rounded-lg border border-border bg-bg-surface p-2 shadow-card sm:max-h-72 sm:w-[min(92vw,260px)]"
+          >
+            <ul className="space-y-2">
+              {groups.map(([region, rows]) => (
+                <li key={region}>
+                  <div className="flex items-baseline justify-between border-b border-border/60 pb-0.5 text-[10px] uppercase tracking-wider text-text-dim">
+                    <span>{region}</span>
+                    <span>
+                      {rows.length} toon{rows.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <ul className="mt-1 space-y-0.5">
+                    {rows.map((r) => (
+                      <li
+                        key={r.pulseId}
+                        className="flex items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="truncate font-mono text-text-dim">
+                          {r.pulseId}
+                        </span>
+                        <span className="tabular-nums font-semibold">
+                          {fmtMmr(r.mmr)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
 
