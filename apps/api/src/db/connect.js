@@ -25,8 +25,6 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   communityReports: import('mongodb').Collection,
  *   userBackups: import('mongodb').Collection,
  *   arcadeLeaderboard: import('mongodb').Collection,
- *   snapshotCohorts: import('mongodb').Collection,
- *   snapshotMatrices: import('mongodb').Collection,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -69,8 +67,6 @@ async function connect({ uri, dbName }) {
     communityReports: db.collection(COLLECTIONS.COMMUNITY_REPORTS),
     userBackups: db.collection(COLLECTIONS.USER_BACKUPS),
     arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
-    snapshotCohorts: db.collection(COLLECTIONS.SNAPSHOT_COHORTS),
-    snapshotMatrices: db.collection(COLLECTIONS.SNAPSHOT_MATRICES),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -231,34 +227,6 @@ async function ensureIndexes(ctx) {
     { unique: true },
   );
   await ctx.arcadeLeaderboard.createIndex({ weekKey: 1, pnlPct: -1, updatedAt: 1 });
-
-  // Snapshot cohort cache. The hash key uniquely identifies a
-  // (cohortKey, mmrBucket, scope) triple — ``_id`` is the hash, so a
-  // primary-key lookup serves the hot path. ``expiresAt`` drives TTL
-  // eviction; the nightly precompute cron refreshes the top cohorts
-  // before they expire so steady-state misses stay near zero.
-  await ctx.snapshotCohorts.createIndex(
-    { expiresAt: 1 },
-    { expireAfterSeconds: 0 },
-  );
-  // Operational index — the precompute cron lists cohorts by
-  // generatedAt so it can refresh the oldest first when running on
-  // a time budget.
-  await ctx.snapshotCohorts.createIndex({ generatedAt: 1 });
-
-  // Composition matchup matrix cache. Lookups are by primary key
-  // (the SHA-256 hash) for cache hits, and by (matchup, mmrBucket,
-  // scope, tickSec) for the cohort-browser matrix tab.
-  await ctx.snapshotMatrices.createIndex(
-    { expiresAt: 1 },
-    { expireAfterSeconds: 0 },
-  );
-  await ctx.snapshotMatrices.createIndex({
-    matchup: 1,
-    mmrBucket: 1,
-    scope: 1,
-    tickSec: 1,
-  });
 }
 
 module.exports = { connect, ensureIndexes };

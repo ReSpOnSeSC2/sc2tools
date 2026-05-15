@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Eye,
   Library,
-  LineChart,
   Pencil,
   Send,
   Trash2,
@@ -136,13 +135,6 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         description={build.description}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/snapshots?build=${encodeURIComponent(build.name || "")}&matchup=${encodeURIComponent(racePairToMatchup(build.race, build.vsRace))}`}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-3 text-caption font-semibold text-accent hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-            >
-              <LineChart className="h-4 w-4" aria-hidden />
-              View Snapshot Analysis
-            </Link>
             <Button
               variant="secondary"
               onClick={() => setEditorOpen(true)}
@@ -201,16 +193,6 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
       />
     </div>
   );
-}
-
-function racePairToMatchup(
-  race: string | null | undefined,
-  vsRace: string | null | undefined,
-): string {
-  const my = String(race || "?").trim().charAt(0).toUpperCase();
-  const opp = String(vsRace || "?").trim().charAt(0).toUpperCase();
-  if (!"PTZ".includes(my) || !"PTZ".includes(opp)) return "PvZ";
-  return `${my}v${opp}`;
 }
 
 function NotesPanel({

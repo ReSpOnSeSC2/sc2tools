@@ -152,23 +152,6 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
-  // Snapshot cohort cache rows are derived (deterministic from
-  // games + game_details). We still register a schema version so a
-  // shape change in the band/centroid payload triggers a clean
-  // recompute via the migration chain instead of stale rows
-  // sticking around past the TTL.
-  [COLLECTIONS.SNAPSHOT_COHORTS]: {
-    collection: COLLECTIONS.SNAPSHOT_COHORTS,
-    currentVersion: 1,
-    versionKey: VERSION_KEY,
-  },
-  // Snapshot matchup matrix cache — pinned at v1 alongside the
-  // cohort cache. A shape change here triggers a fresh fit via TTL.
-  [COLLECTIONS.SNAPSHOT_MATRICES]: {
-    collection: COLLECTIONS.SNAPSHOT_MATRICES,
-    currentVersion: 1,
-    versionKey: VERSION_KEY,
-  },
 });
 
 /** @type {{collection:string,fromVersion:number,toVersion:number,forward:Function,backward:Function,description?:string}[]} */
