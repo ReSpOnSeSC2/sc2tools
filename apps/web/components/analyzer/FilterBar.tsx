@@ -232,7 +232,95 @@ export function FilterBar() {
         </span>
       ) : null}
 
+      <RegionToggleRow />
+
       <ExcludeTooShortToggle />
+    </div>
+  );
+}
+
+/**
+ * Region multi-select. Renders five compact toggles (NA / EU / KR /
+ * CN / SEA) matching Blizzard's battle.net regions; default state is
+ * "all on" (no constraint) so a single-region streamer sees nothing
+ * unusual. Tapping a pill drops that region from the active set; only
+ * sends a ``regions`` param to the API when the user has actively
+ * deselected at least one — full set stays as the no-op zero-byte
+ * URL.
+ *
+ * Drives every analyzer tab via ``useFilters``: the API's
+ * ``gamesMatchStage`` applies the same set on Opponents, Strategies,
+ * Trends, Maps and Builds in one shot.
+ *
+ * Layout: compact horizontal row that wraps on narrow viewports. Sits
+ * inline with "Date range" and "Hide too-short" so the global filter
+ * bar stays a single conceptual surface; on mobile it flows into its
+ * own line under the date trigger.
+ */
+function RegionToggleRow() {
+  const { filters, setFilters } = useFilters();
+  const ALL_REGIONS = ["NA", "EU", "KR", "CN", "SEA"] as const;
+  const active = useMemo(() => {
+    const raw = (filters.regions || "").trim();
+    if (!raw) return new Set<string>(ALL_REGIONS);
+    const tokens = raw
+      .split(",")
+      .map((t) => t.trim().toUpperCase())
+      .filter((t) => (ALL_REGIONS as readonly string[]).includes(t));
+    return tokens.length > 0 ? new Set(tokens) : new Set<string>(ALL_REGIONS);
+  }, [filters.regions]);
+
+  const toggle = (code: string) => {
+    const next = new Set(active);
+    if (next.has(code)) next.delete(code);
+    else next.add(code);
+    // Empty deselect-all is meaningless (returns zero rows); snap
+    // back to the default rather than blank the dashboard.
+    if (next.size === 0) {
+      setFilters({ ...filters, regions: undefined });
+      return;
+    }
+    // All-on is the default; send no param so existing bookmarks
+    // keep a clean URL.
+    if (next.size === ALL_REGIONS.length) {
+      setFilters({ ...filters, regions: undefined });
+      return;
+    }
+    const sorted = ALL_REGIONS.filter((r) => next.has(r));
+    setFilters({ ...filters, regions: sorted.join(",") });
+  };
+
+  return (
+    <div
+      role="group"
+      aria-label="Filter by Battle.net region"
+      className="inline-flex flex-wrap items-center gap-1.5"
+    >
+      <span className="text-xs uppercase tracking-wider text-text-dim">
+        Region
+      </span>
+      {ALL_REGIONS.map((code) => {
+        const on = active.has(code);
+        return (
+          <button
+            key={code}
+            type="button"
+            onClick={() => toggle(code)}
+            aria-pressed={on}
+            title={`${on ? "Hide" : "Show"} ${code} opponents`}
+            className={[
+              "inline-flex min-h-[28px] items-center rounded-full border px-2 py-0.5",
+              "text-[11px] font-medium uppercase tracking-wider tabular-nums",
+              "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+              on
+                ? "border-accent/40 bg-accent/10 text-accent"
+                : "border-border text-text-dim hover:bg-bg-elevated hover:text-text",
+            ].join(" ")}
+          >
+            {code}
+          </button>
+        );
+      })}
     </div>
   );
 }
