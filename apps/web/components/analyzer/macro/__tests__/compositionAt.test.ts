@@ -392,6 +392,83 @@ describe("countUpgradesAt — Upgrades row", () => {
       expect(out[raw]).toBe(tier);
     }
   });
+
+  it("uses complete_time for the cutoff so in-progress research stays off the chip row", () => {
+    // Regression: the API rewinds upgrade events to their START time
+    // (so the build-order timeline reads as "the moment the player
+    // clicked Research"). Pre-fix, the chip row reused that same
+    // start-time field for its ``time <= t`` filter, which made every
+    // upgrade pop into the macro-breakdown roster the instant the
+    // research began — well before the buff actually applied.
+    //
+    // ``complete_time`` is the original recorded timestamp (i.e. when
+    // sc2reader's UpgradeCompleteEvent fired), so filtering on it gives
+    // the user the "what's active right now" semantics they expect.
+    const events: BuildEvent[] = [
+      {
+        // +1 Ground Weapons: 128s research, started 4:00, completes 6:08.
+        time: 240,
+        complete_time: 368,
+        name: "ProtossGroundWeaponsLevel1",
+        is_building: false,
+        category: "upgrade",
+      },
+    ];
+    // At 5:00 the research is in-progress. It must NOT appear yet.
+    const midway = countUpgradesAt(events, 300);
+    expect(midway.ProtossGroundWeaponsLevel1).toBeUndefined();
+    // One second before completion — still in-progress.
+    const justBefore = countUpgradesAt(events, 367);
+    expect(justBefore.ProtossGroundWeaponsLevel1).toBeUndefined();
+    // At the exact completion tick the chip appears.
+    const atComplete = countUpgradesAt(events, 368);
+    expect(atComplete.ProtossGroundWeaponsLevel1).toBe(1);
+    // Long after completion the chip remains.
+    const after = countUpgradesAt(events, 600);
+    expect(after.ProtossGroundWeaponsLevel1).toBe(1);
+  });
+
+  it("falls back to time when complete_time is absent (older API payloads)", () => {
+    // Pre-fix payloads omit ``complete_time`` entirely. The chip row
+    // must still render those, just with the (legacy, slightly-early)
+    // start-time semantics — better to show the upgrade a research-
+    // duration early than to drop it from the roster outright.
+    const events: BuildEvent[] = [
+      { time: 240, name: "Charge", is_building: false, category: "upgrade" },
+    ];
+    expect(countUpgradesAt(events, 200).Charge).toBeUndefined();
+    expect(countUpgradesAt(events, 240).Charge).toBe(1);
+  });
+
+  it("scans all events when sorted-by-start order disagrees with completion order", () => {
+    // Events come in sorted by START time. A short upgrade started
+    // later can complete BEFORE a long upgrade started earlier — so
+    // the iteration cannot early-break on the cutoff comparison.
+    // Concussive Shells (43s) starting at 0:30 completes at 1:13;
+    // +1 Ground Weapons (128s) starting at 0:00 completes at 2:08.
+    const events: BuildEvent[] = [
+      {
+        time: 0,
+        complete_time: 128,
+        name: "ProtossGroundWeaponsLevel1",
+        is_building: false,
+        category: "upgrade",
+      },
+      {
+        time: 30,
+        complete_time: 73,
+        name: "ConcussiveShells",
+        is_building: false,
+        category: "upgrade",
+      },
+    ];
+    // At t=80, Concussive is done (complete=73) but Weapons isn't
+    // (complete=128). The chip row must show Concussive even though
+    // Weapons appears first in the iteration and fails the cutoff.
+    const out = countUpgradesAt(events, 80);
+    expect(out.ConcussiveShells).toBe(1);
+    expect(out.ProtossGroundWeaponsLevel1).toBeUndefined();
+  });
 });
 
 describe("deriveUnitComposition — chart's army-value fallback + roster source", () => {

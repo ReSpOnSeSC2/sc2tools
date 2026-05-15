@@ -287,6 +287,38 @@ describe("services/perGameCompute", () => {
       expect(eventsToStartTime(null)).toEqual([]);
       expect(eventsToStartTime(undefined)).toEqual([]);
     });
+
+    test("attaches complete_time to finish-time events", () => {
+      // The macro-breakdown Upgrades chip row (countUpgradesAt in
+      // compositionAt.ts) reads ``complete_time`` to filter out
+      // research that is still in-progress at the hovered tick.
+      // Without it, an upgrade pops into the roster the instant the
+      // player clicked Research instead of when the buff actually
+      // applies. Units and structure morphs get the same field for
+      // consistency; plain structures (UnitInitEvent — already a
+      // start time) leave ``complete_time`` absent.
+      const recorded = parseBuildLogLines([
+        "[1:23] Pylon",
+        "[3:00] Stalker",
+        "[5:00] Lair",
+        "[7:00] WarpGateResearch",
+      ]);
+      const adjusted = eventsToStartTime(recorded);
+      const byName = new Map(adjusted.map((e) => [e.name, e]));
+      // Plain Protoss structure (UnitInit, already start) — no
+      // completion timestamp on the wire.
+      expect(byName.get("Pylon").complete_time).toBeUndefined();
+      // Unit (UnitBornEvent → finish): completion is the recorded
+      // 3:00 = 180s.
+      expect(byName.get("Stalker").complete_time).toBe(180);
+      // Structure morph (UnitTypeChangeEvent → finish): completion is
+      // the recorded 5:00 = 300s.
+      expect(byName.get("Lair").complete_time).toBe(300);
+      // Upgrade (UpgradeCompleteEvent → finish): completion is the
+      // recorded 7:00 = 420s, even though ``time`` was rewound to 320.
+      expect(byName.get("WarpGateResearch").complete_time).toBe(420);
+      expect(byName.get("WarpGateResearch").time).toBe(320);
+    });
   });
 
   describe("PerGameComputeService.buildOrder", () => {

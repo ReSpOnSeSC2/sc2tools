@@ -3,7 +3,7 @@
 const { COLLECTIONS, LIMITS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
-const { toStartSeconds } = require("./buildDurations");
+const { toStartSeconds, isFinishTimeEvent } = require("./buildDurations");
 
 const {
   KNOWN_BUILDING_NAMES,
@@ -746,6 +746,14 @@ function parseBuildLogLines(lines, catalog) {
  * so display surfaces (build-order timeline, dossier preview) stay
  * consistent without duplicating the offset table.
  *
+ * For finish-time events (upgrades, units, structure morphs) the
+ * recorded ``time`` IS the completion timestamp, so it's preserved on
+ * the output as ``complete_time``. The macro-breakdown roster
+ * (``countUpgradesAt`` in compositionAt.ts) needs this to only show an
+ * upgrade once its research has actually completed — using the rewound
+ * start time made every upgrade pop into the chip row at the moment
+ * the player clicked Research, well before the buff actually applied.
+ *
  * Pure: input is unchanged, output is a fresh array sorted by the
  * adjusted time.
  *
@@ -754,18 +762,19 @@ function parseBuildLogLines(lines, catalog) {
 function eventsToStartTime(events) {
   if (!Array.isArray(events) || events.length === 0) return [];
   const out = events.map((ev) => {
-    const startSec = Math.round(
-      toStartSeconds(ev.name, ev.time, {
-        isBuilding: !!ev.is_building,
-        category: ev.category,
-      }),
-    );
+    const hints = {
+      isBuilding: !!ev.is_building,
+      category: ev.category,
+    };
+    const startSec = Math.round(toStartSeconds(ev.name, ev.time, hints));
     const m = Math.floor(startSec / 60);
     const s = startSec - m * 60;
+    const completeTime = isFinishTimeEvent(ev.name, hints) ? ev.time : undefined;
     return {
       ...ev,
       time: startSec,
       time_display: `${m}:${String(s).padStart(2, "0")}`,
+      ...(completeTime != null ? { complete_time: completeTime } : {}),
     };
   });
   out.sort((a, b) => a.time - b.time);
