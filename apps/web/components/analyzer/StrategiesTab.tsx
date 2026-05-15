@@ -13,6 +13,8 @@ import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { AllGamesTable } from "./AllGamesTable";
+import { StrategyMmrPanel } from "./mmr/StrategyMmrPanel";
+import { BuildMatchupHeatmap } from "./mmr/BuildMatchupHeatmap";
 import type { ProfileGame } from "./Last5GamesTimeline";
 
 type StratRow = {
@@ -645,6 +647,8 @@ export function StrategiesTab() {
           )}
         />
       )}
+      <StrategyMmrPanel />
+      <BuildMatchupHeatmap />
     </div>
   );
 }
