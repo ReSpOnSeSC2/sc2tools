@@ -5,8 +5,39 @@ const { hmac } = require("../util/hash");
 const { expectedVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { opponentGamesFilter } = require("../util/opponentIdentity");
+const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 const TimingCatalog = require("./timingCatalog");
 const Dna = require("./dnaTimings");
+
+// SC2Pulse MMR refetch window. recordGame / refreshMetadata skip the
+// network call entirely when we resolved this opponent's MMR from
+// SC2Pulse within the window — the cap exists so a bulk re-upload of
+// 200 replays doesn't trigger 200 sequential SC2Pulse hits per
+// distinct opponent. Override per-deployment via env.
+const MMR_PULSE_FRESH_MS = (() => {
+  const env = Number(process.env.SC2TOOLS_OPP_MMR_FRESH_SEC);
+  if (Number.isFinite(env) && env > 0) return env * 1000;
+  return 60 * 60 * 1000;
+})();
+
+// Inverse of regionFromToonHandle. Used by the unfiltered list path's
+// region filter so old opponents rows (created before ``region`` was a
+// stored field) still match via their toonHandle prefix.
+const REGION_TO_HANDLE_PREFIX = { NA: "1", EU: "2", KR: "3", CN: "5", SEA: "6" };
+
+/**
+ * @param {string[]} labels
+ * @returns {string[]}
+ */
+function REGION_LABEL_TO_HANDLE_PREFIX_FOR(labels) {
+  /** @type {string[]} */
+  const out = [];
+  for (const l of labels) {
+    const code = REGION_TO_HANDLE_PREFIX[l];
+    if (code) out.push(code);
+  }
+  return out;
+}
 
 const OPPONENTS_VERSION = expectedVersion(COLLECTIONS.OPPONENTS);
 
@@ -79,6 +110,15 @@ class OpponentsService {
     // tests that don't exercise backfill; ``backfillPulseCharacterId``
     // throws if asked to run without one.
     this.pulseResolver = opts.pulseResolver || null;
+    // Optional SC2Pulse MMR client. When supplied, recordGame /
+    // refreshMetadata attempt one rate-limited fetch per ingest to
+    // populate ``mmr`` and ``region`` on the opponents row — the
+    // analyzer's Opponents tab and per-opponent profile read these
+    // fields directly. sc2reader almost never carries an opponent's
+    // MMR for 1v1 ladder replays, so SC2Pulse is the only viable
+    // source. Best-effort: a Pulse failure leaves the prior values
+    // untouched and the next encounter retries.
+    this.pulseMmr = opts.pulseMmr || null;
   }
 
   /**
@@ -109,6 +149,28 @@ class OpponentsService {
     const filter = { userId };
     if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
       filter.lastSeen = { $lt: opts.before };
+    }
+    // Region filter is the one global filter that's allowed to ride
+    // the unfiltered fast-path — it doesn't invalidate the cumulative
+    // counters on opponents rows the way a date / matchup window
+    // does. Two-tier match (stored ``region`` first, toonHandle prefix
+    // for rows that haven't been re-ingested since region became a
+    // stored field) so old data doesn't fall off the list immediately.
+    if (Array.isArray(filters.regions) && filters.regions.length > 0) {
+      const prefixes = REGION_LABEL_TO_HANDLE_PREFIX_FOR(filters.regions);
+      if (prefixes.length > 0) {
+        filter.$or = [
+          { region: { $in: filters.regions } },
+          {
+            region: { $in: [null, ""] },
+            toonHandle: { $regex: `^(${prefixes.join("|")})-` },
+          },
+          {
+            region: { $exists: false },
+            toonHandle: { $regex: `^(${prefixes.join("|")})-` },
+          },
+        ];
+      }
     }
     const items = await this.db.opponents
       .find(filter, { projection: { _id: 0 } })
@@ -667,7 +729,15 @@ class OpponentsService {
     // prior row is expected on the first encounter.
     const prior = await this.db.opponents.findOne(
       { userId, pulseId: game.pulseId },
-      { projection: { pulseCharacterId: 1, lastSeen: 1 } },
+      {
+        projection: {
+          pulseCharacterId: 1,
+          lastSeen: 1,
+          mmr: 1,
+          mmrFetchedAt: 1,
+          region: 1,
+        },
+      },
     );
     // displayNameSample / displayNameHash / lastSeen track the
     // CURRENT name (and CURRENT activity timestamp) for this
@@ -707,6 +777,35 @@ class OpponentsService {
     }
     if (typeof game.mmr === "number") set.mmr = game.mmr;
     if (typeof game.leagueId === "number") set.leagueId = game.leagueId;
+    // Region: derive from the toon_handle's leading byte (always
+    // present from sc2reader). Cheap, no network. The Pulse fetch
+    // below may overwrite with the authoritative region from
+    // SC2Pulse's team membership when reachable.
+    const derivedRegion = regionFromToonHandle(
+      game.toonHandle || (prior && prior.toonHandle) || null,
+    );
+    if (derivedRegion) set.region = derivedRegion;
+    // SC2Pulse current-MMR fetch. This is the only reliable source —
+    // sc2reader almost never carries an opponent's MMR for ranked
+    // ladder replays, so without this call ``opponent.mmr`` ends up
+    // null on every row. Rate-limit-friendly: skip when a recent
+    // Pulse-sourced value already lives on the row, and silently no-op
+    // when SC2Pulse is unreachable so the upsert always lands.
+    const pulseCharIdForMmr =
+      (typeof game.pulseCharacterId === "string" && game.pulseCharacterId)
+        ? game.pulseCharacterId
+        : (prior && typeof prior.pulseCharacterId === "string"
+          ? prior.pulseCharacterId
+          : null);
+    const pulseFetched = await this._fetchOpponentMmrFromPulse(
+      pulseCharIdForMmr,
+      prior,
+    );
+    if (pulseFetched) {
+      set.mmr = pulseFetched.mmr;
+      set.mmrFetchedAt = new Date();
+      if (pulseFetched.region) set.region = pulseFetched.region;
+    }
     // Identity: persist the raw toon_handle (always present from
     // sc2reader) and the resolved sc2pulse.nephest.com character id
     // when available.
@@ -800,7 +899,16 @@ class OpponentsService {
     if (!game.pulseId) throw new Error("pulseId required");
     const prior = await this.db.opponents.findOne(
       { userId, pulseId: game.pulseId },
-      { projection: { pulseCharacterId: 1, lastSeen: 1 } },
+      {
+        projection: {
+          pulseCharacterId: 1,
+          lastSeen: 1,
+          mmr: 1,
+          mmrFetchedAt: 1,
+          region: 1,
+          toonHandle: 1,
+        },
+      },
     );
     // Same guard as recordGame: displayNameSample / displayNameHash /
     // lastSeen reflect the most-recent-by-date game, NOT the most
@@ -822,6 +930,30 @@ class OpponentsService {
     }
     if (typeof game.mmr === "number") set.mmr = game.mmr;
     if (typeof game.leagueId === "number") set.leagueId = game.leagueId;
+    // Region + Pulse-current MMR. Same contract as recordGame: derive
+    // the region cheaply from toonHandle and try one rate-limited
+    // SC2Pulse fetch for the up-to-date MMR. See recordGame for the
+    // rationale on why this is the only reliable MMR source for
+    // ladder opponents.
+    const refreshDerivedRegion = regionFromToonHandle(
+      game.toonHandle || (prior && prior.toonHandle) || null,
+    );
+    if (refreshDerivedRegion) set.region = refreshDerivedRegion;
+    const refreshPulseCharId =
+      (typeof game.pulseCharacterId === "string" && game.pulseCharacterId)
+        ? game.pulseCharacterId
+        : (prior && typeof prior.pulseCharacterId === "string"
+          ? prior.pulseCharacterId
+          : null);
+    const refreshPulseFetched = await this._fetchOpponentMmrFromPulse(
+      refreshPulseCharId,
+      prior,
+    );
+    if (refreshPulseFetched) {
+      set.mmr = refreshPulseFetched.mmr;
+      set.mmrFetchedAt = new Date();
+      if (refreshPulseFetched.region) set.region = refreshPulseFetched.region;
+    }
     if (typeof game.toonHandle === "string" && game.toonHandle.length > 0) {
       set.toonHandle = game.toonHandle;
     }
@@ -866,6 +998,52 @@ class OpponentsService {
       modified: res.modifiedCount || 0,
       upgraded: Boolean(pulseCharIdChange),
     };
+  }
+
+  /**
+   * Best-effort SC2Pulse current-MMR fetch for one opponent. Called
+   * from recordGame / refreshMetadata on every game ingest — the
+   * existing 5-minute in-process cache in PulseMmrService plus the
+   * per-row freshness window below cap the rate to ~one outbound
+   * request per opponent per ``MMR_PULSE_FRESH_MS`` interval, which is
+   * well within SC2Pulse's tolerance even on a bulk re-upload of a
+   * day's replay folder.
+   *
+   * Returns ``null`` (and writes nothing to the row) when:
+   *   * the service was constructed without a pulseMmr dependency;
+   *   * we don't have a numeric pulseCharacterId for the opponent
+   *     (toon-only rows can't be looked up directly);
+   *   * the prior row's mmrFetchedAt timestamp is inside the
+   *     freshness window (we trust the recent value);
+   *   * the SC2Pulse call returns null (no team in any region) or
+   *     throws (rate-limited / network error / timeout).
+   *
+   * @private
+   * @param {string|null} pulseCharacterId
+   * @param {{mmrFetchedAt?: Date}|null} prior
+   * @returns {Promise<{mmr: number, region: string|null}|null>}
+   */
+  async _fetchOpponentMmrFromPulse(pulseCharacterId, prior) {
+    if (!this.pulseMmr) return null;
+    if (typeof pulseCharacterId !== "string" || !pulseCharacterId) return null;
+    const lastFetched = prior && prior.mmrFetchedAt instanceof Date
+      ? prior.mmrFetchedAt.getTime()
+      : null;
+    if (lastFetched && Date.now() - lastFetched < MMR_PULSE_FRESH_MS) {
+      return null;
+    }
+    try {
+      const result = await this.pulseMmr.getCurrentMmr(pulseCharacterId);
+      if (!result) return null;
+      const mmr = Number(result.mmr);
+      if (!Number.isFinite(mmr) || mmr <= 0) return null;
+      return {
+        mmr: Math.round(mmr),
+        region: typeof result.region === "string" ? result.region : null,
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**
