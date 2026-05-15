@@ -30,6 +30,7 @@ const { LiveGameBroker } = require("./services/liveGameBroker");
 const { AggregationsService } = require("./services/aggregations");
 const { StreakService } = require("./services/streak");
 const { BuildsService } = require("./services/builds");
+const { BuildsMmrStatsService } = require("./services/buildsMmrStats");
 const {
   PerGameComputeService,
   MacroBackfillService,
@@ -57,6 +58,7 @@ const { buildDevicePairingsRouter } = require("./routes/devicePairings");
 const { buildOverlayTokensRouter } = require("./routes/overlayTokens");
 const { buildAggregationsRouter } = require("./routes/aggregations");
 const { buildBuildsRouter } = require("./routes/builds");
+const { buildBuildsMmrStatsRouter } = require("./routes/buildsMmrStats");
 const {
   buildPerGameRouter,
   buildMacroBackfillRouter,
@@ -203,6 +205,7 @@ function makeServices(deps) {
   const aggregations = new AggregationsService(deps.db);
   const streak = new StreakService(deps.db);
   const builds = new BuildsService(deps.db);
+  const buildsMmrStats = new BuildsMmrStatsService(deps.db);
   const catalog = new CatalogService(deps.db);
   // Eager-load the JSON catalog so the first build-order /
   // macro-breakdown request after a cold start gets a populated
@@ -245,6 +248,7 @@ function makeServices(deps) {
     aggregations,
     streak,
     builds,
+    buildsMmrStats,
     catalog,
     perGame,
     macroBackfill,
@@ -465,6 +469,13 @@ function mountRoutes(app, deps, services, clerk) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildBuildsRouter({ builds: services.builds, auth }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildBuildsMmrStatsRouter({
+      buildsMmrStats: services.buildsMmrStats,
+      auth,
+    }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
