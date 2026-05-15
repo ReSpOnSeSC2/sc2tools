@@ -29,6 +29,7 @@ type MeAdminProbe = { isAdmin?: boolean };
 const BASE_NAV_LINKS: readonly MobileNavLink[] = [
   { href: "/app", label: "Dashboard", auth: "in" },
   { href: "/builds", label: "Custom builds", auth: "in" },
+  { href: "/snapshots", label: "Snapshots", auth: "in" },
   { href: "/community", label: "Community", auth: "any" },
   { href: "/settings", label: "Settings", auth: "in" },
 ];

@@ -44,6 +44,15 @@ const COLLECTIONS = Object.freeze({
   COMMUNITY_REPORTS: "community_reports",
   USER_BACKUPS: "user_backups",
   ARCADE_LEADERBOARD: "arcade_leaderboard",
+  // Pre-aggregated snapshot cohorts (build × matchup × MMR × scope).
+  // Cached aggregations of per-tick percentile bands (winner / loser
+  // ribbons) so the snapshot drilldown page never has to scan the
+  // games + gameDetails join on every request. Keyed by a SHA-256
+  // hash of (cohortKey + mmrBucket + scope); TTL'd via expiresAt so a
+  // stale cohort eventually gets recomputed without manual eviction.
+  // See ``services/snapshotCache.js`` for the read/write API and
+  // ``scripts/precomputeSnapshotCohorts.js`` for the nightly warmer.
+  SNAPSHOT_COHORTS: "snapshot_cohorts",
 });
 
 const LIMITS = Object.freeze({
