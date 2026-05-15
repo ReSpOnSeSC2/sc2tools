@@ -10,6 +10,10 @@
 
 const RACE_LETTERS = new Set(["P", "T", "Z", "R"]);
 const RESULT_BUCKETS = new Set(["win", "loss"]);
+// Battle.net region labels we accept on the ``regions`` filter.
+// Mirrors regionFromToonHandle's output set so values produced at
+// ingest time round-trip through the URL unchanged.
+const REGION_CODES = new Set(["NA", "EU", "KR", "CN", "SEA"]);
 
 /**
  * Parse the standard global filter bar from `req.query`.
@@ -62,7 +66,35 @@ function parseFilters(q) {
   if (parseBool(q.exclude_too_short)) {
     out.excludeTooShort = true;
   }
+  const regions = parseRegionList(q.regions);
+  if (regions) out.regions = regions;
   return out;
+}
+
+/**
+ * Parse the global region filter. Accepts a CSV ("NA,EU") or a
+ * single value ("NA"); unknown labels are dropped. Returns an array
+ * preserving input order, or ``undefined`` when nothing valid was
+ * supplied (so the caller treats it as "all regions pass").
+ *
+ * @param {unknown} raw
+ * @returns {string[]|undefined}
+ */
+function parseRegionList(raw) {
+  if (raw === undefined || raw === null) return undefined;
+  const tokens = Array.isArray(raw)
+    ? raw.flatMap((v) => String(v).split(","))
+    : String(raw).split(",");
+  /** @type {string[]} */
+  const out = [];
+  const seen = new Set();
+  for (const tok of tokens) {
+    const code = tok.trim().toUpperCase();
+    if (!REGION_CODES.has(code) || seen.has(code)) continue;
+    seen.add(code);
+    out.push(code);
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 /**
@@ -127,7 +159,52 @@ function gamesMatchStage(userId, filters) {
       match["opponent.strategy"] = notTooShort;
     }
   }
+  // Region filter. Drives the global FilterBar's region picker
+  // across every analyzer tab (Opponents, Strategies, Trends, Maps,
+  // Builds) since they all $match through this stage.
+  //
+  // Two-tier match because not every games row has been re-ingested
+  // since ``opponent.region`` became a stored field: trust the
+  // stored value when present, otherwise derive from the
+  // ``opponent.toonHandle`` leading byte at filter time (cheap
+  // regex). This means old data still matches without a backfill.
+  if (Array.isArray(f.regions) && f.regions.length > 0) {
+    const prefixes = regionLabelsToHandlePrefixes(f.regions);
+    if (prefixes.length > 0) {
+      match.$or = [
+        { "opponent.region": { $in: f.regions } },
+        {
+          "opponent.region": { $in: [null, ""] },
+          "opponent.toonHandle": { $regex: `^(${prefixes.join("|")})-` },
+        },
+        {
+          "opponent.region": { $exists: false },
+          "opponent.toonHandle": { $regex: `^(${prefixes.join("|")})-` },
+        },
+      ];
+    }
+  }
   return match;
+}
+
+/**
+ * Inverse of regionFromToonHandle. Used by the region filter so old
+ * games rows that pre-date the stored ``opponent.region`` field still
+ * match via a regex on the toon_handle's leading byte. Kept local
+ * (instead of imported) to keep parseQuery.js dependency-free.
+ *
+ * @param {string[]} labels
+ * @returns {string[]}
+ */
+function regionLabelsToHandlePrefixes(labels) {
+  const map = { NA: "1", EU: "2", KR: "3", CN: "5", SEA: "6" };
+  /** @type {string[]} */
+  const out = [];
+  for (const r of labels) {
+    const code = map[r];
+    if (code) out.push(code);
+  }
+  return out;
 }
 
 /**

@@ -3,6 +3,13 @@
 const express = require("express");
 const { validateProfile } = require("../validation/profile");
 
+// Hard cap on the per-request MMR fan-out. Profiles with many toons
+// are rare but legitimate (smurf accounts, region-hoppers); we cap to
+// keep the SC2Pulse outbound burst bounded and the payload small —
+// the dashboard caller surfaces a "+N more" indicator from
+// ``truncated`` when this kicks in.
+const ME_MMR_MAX_TOONS = 8;
+
 /**
  * /v1/me — sanity endpoint for the web app. Returns the user record
  * + last-sync timestamps so the SPA can render onboarding state.
@@ -27,6 +34,12 @@ const { validateProfile } = require("../validation/profile");
  *   gdpr: import('../services/gdpr').GdprService,
  *   pairings: import('../services/devicePairings').DevicePairingsService,
  *   clerk?: import('../services/clerkClient').ClerkClient,
+ *   pulseMmr?: {
+ *     getCurrentMmr(pulseId: string): Promise<{
+ *       mmr: number,
+ *       region: string | null,
+ *     } | null>,
+ *   },
  *   auth: import('express').RequestHandler,
  *   isAdmin?: (req: import('express').Request) => boolean,
  *   logger?: import('pino').Logger,
@@ -421,6 +434,68 @@ function buildMeRouter(deps) {
       }
     },
   );
+
+  /**
+   * Current MMR per toon/region for the dashboard KPI strip.
+   *
+   * One entry per pulseId on the user's profile, each resolved
+   * against SC2Pulse independently so a multi-toon streamer sees
+   * their NA and EU rows side-by-side. Cached for 5 minutes inside
+   * PulseMmrService — the dashboard polls liberally but pays no
+   * outbound cost until the cache expires.
+   *
+   * Response shape (small + capped so a streamer with many alts
+   * doesn't blow up the payload):
+   *   {
+   *     entries: Array<{ pulseId, region, mmr }>,
+   *     truncated: boolean,
+   *   }
+   *
+   * The route is best-effort throughout: a Pulse timeout / rate-limit
+   * /  miss for a single pulseId just drops that row, never blocks
+   * the others.
+   */
+  router.get("/me/mmr", deps.auth, async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      if (!deps.pulseMmr || typeof deps.pulseMmr.getCurrentMmr !== "function") {
+        res.json({ entries: [], truncated: false });
+        return;
+      }
+      const profile = await deps.users.getProfile(auth.userId);
+      const ids = Array.isArray(profile && profile.pulseIds)
+        ? profile.pulseIds.slice(0, ME_MMR_MAX_TOONS)
+        : [];
+      const truncated =
+        Array.isArray(profile && profile.pulseIds)
+        && profile.pulseIds.length > ME_MMR_MAX_TOONS;
+      const settled = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const r = await deps.pulseMmr.getCurrentMmr(id);
+            if (!r || !Number.isFinite(Number(r.mmr)) || Number(r.mmr) <= 0) {
+              return null;
+            }
+            return {
+              pulseId: String(id),
+              region: typeof r.region === "string" ? r.region : null,
+              mmr: Math.round(Number(r.mmr)),
+            };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const entries = settled.filter((e) => e !== null);
+      // Sort descending by MMR so the highest ladder always reads
+      // first — that's what a streamer's chat asks about.
+      entries.sort((a, b) => b.mmr - a.mmr);
+      res.json({ entries, truncated });
+    } catch (err) {
+      next(err);
+    }
+  });
 
   return router;
 }

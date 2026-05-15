@@ -153,6 +153,28 @@ class OpponentsService {
     if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
       filter.lastSeen = { $lt: opts.before };
     }
+    // Region filter rides the unfiltered fast-path because it doesn't
+    // invalidate the cumulative counters the way a date / matchup
+    // window does. Two-tier match (stored ``region`` first, toonHandle
+    // prefix for rows that haven't been re-ingested since ``region``
+    // became a stored field) so old data doesn't fall off the list
+    // immediately.
+    if (Array.isArray(filters.regions) && filters.regions.length > 0) {
+      const prefixes = regionLabelsToHandlePrefixes(filters.regions);
+      if (prefixes.length > 0) {
+        filter.$or = [
+          { region: { $in: filters.regions } },
+          {
+            region: { $in: [null, ""] },
+            toonHandle: { $regex: `^(${prefixes.join("|")})-` },
+          },
+          {
+            region: { $exists: false },
+            toonHandle: { $regex: `^(${prefixes.join("|")})-` },
+          },
+        ];
+      }
+    }
     const items = await this.db.opponents
       .find(filter, { projection: { _id: 0 } })
       .sort({ lastSeen: -1 })

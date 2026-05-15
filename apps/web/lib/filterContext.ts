@@ -35,6 +35,17 @@ export type AnalyzerFilters = {
    * constrained.
    */
   exclude_too_short?: boolean;
+  /**
+   * Battle.net regions to include. Comma-separated label list (e.g.
+   * "NA,EU,KR"). Empty / undefined means "all regions" (the default).
+   * Drives a region-bucket filter on every analyzer tab — Opponents,
+   * Strategies, Trends, Maps, Builds — so a multi-region streamer
+   * can isolate, say, their EU ladder grind from their NA grind in
+   * one click. The API derives an opponent's region from
+   * ``opponent.region`` (stored at ingest) with a fallback to the
+   * toon_handle's leading byte for rows that pre-date the field.
+   */
+  regions?: string;
   /** Preset id selected in the date filter; not sent to the API. */
   preset?: PresetId;
 };
