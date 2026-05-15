@@ -181,6 +181,12 @@ function buildGamesRouter(deps) {
           // whose first ingest happened during a transient
           // SC2Pulse outage.
           const opponentPayload = {
+            // gameId travels through so OpponentsService can stamp
+            // the SC2Pulse-resolved MMR / region back onto THIS
+            // game's opponent sub-document — the bingo MMR predicates
+            // read from games, not opponents. Without it the cells
+            // never tick.
+            gameId: game.gameId,
             pulseId: game.opponent.pulseId,
             toonHandle: game.opponent.toonHandle,
             pulseCharacterId: game.opponent.pulseCharacterId,
