@@ -82,16 +82,6 @@ export default async function CommunityOpponentPage({
           Aggregated across {data.contributors} contributing players.
           Battle-tag withheld for privacy.
         </p>
-        {data.race ? (
-          <div className="pt-1">
-            <Link
-              href={`/snapshots/trends?matchup=${encodeURIComponent(matchupAgainst(data.race))}`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-caption font-semibold text-accent hover:bg-accent/20"
-            >
-              Snapshot patterns vs this race →
-            </Link>
-          </div>
-        ) : null}
       </header>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -168,16 +158,6 @@ export default async function CommunityOpponentPage({
       </section>
     </article>
   );
-}
-
-function matchupAgainst(oppRace: string): string {
-  const head = String(oppRace || "?").trim().charAt(0).toUpperCase();
-  // Trends takes a matchup filter; the caller picks a fixed "their race"
-  // and lets the trends API span all of the player's own races. We
-  // default the my-race side to the same letter (mirror matchup) so the
-  // URL is always valid; the trends page lets the user override.
-  const oppLetter = "PTZ".includes(head) ? head : "Z";
-  return `${oppLetter}v${oppLetter}`;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

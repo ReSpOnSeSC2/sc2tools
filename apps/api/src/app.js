@@ -31,16 +31,6 @@ const { AggregationsService } = require("./services/aggregations");
 const { StreakService } = require("./services/streak");
 const { BuildsService } = require("./services/builds");
 const { BuildsMmrStatsService } = require("./services/buildsMmrStats");
-const { SnapshotCohortService } = require("./services/snapshotCohort");
-const { SnapshotCacheService } = require("./services/snapshotCache");
-const { SnapshotCompareService } = require("./services/snapshotCompare");
-const { SnapshotCentroidsService } = require("./services/snapshotCentroids");
-const { SnapshotInsightsService } = require("./services/snapshotInsights");
-const { SnapshotTrendsService } = require("./services/snapshotTrends");
-const { SnapshotNeighborsService } = require("./services/snapshotNeighbors");
-const { SnapshotTechPathService } = require("./services/snapshotTechPath");
-const { SnapshotMatchupMatrixService } = require("./services/snapshotMatchupMatrix");
-const { SnapshotGameComposer } = require("./services/snapshotGameComposer");
 const {
   PerGameComputeService,
   MacroBackfillService,
@@ -69,7 +59,6 @@ const { buildOverlayTokensRouter } = require("./routes/overlayTokens");
 const { buildAggregationsRouter } = require("./routes/aggregations");
 const { buildBuildsRouter } = require("./routes/builds");
 const { buildBuildsMmrStatsRouter } = require("./routes/buildsMmrStats");
-const { buildSnapshotsRouter } = require("./routes/snapshots");
 const {
   buildPerGameRouter,
   buildMacroBackfillRouter,
@@ -217,45 +206,6 @@ function makeServices(deps) {
   const streak = new StreakService(deps.db);
   const builds = new BuildsService(deps.db);
   const buildsMmrStats = new BuildsMmrStatsService(deps.db);
-  // Snapshot cohort analytics. The cohort service does the heavy
-  // band aggregation; the cache service persists the result keyed by
-  // a deterministic hash so subsequent reads hit Mongo's primary
-  // index instead of re-folding 100k+ ticks per request. Compare /
-  // centroids / insights / trends / neighbors all build on top of
-  // the cohort + cache pair, so this construction order is
-  // load-bearing — don't reorder without re-wiring deps.
-  const snapshotCohort = new SnapshotCohortService(deps.db, {
-    gameDetails,
-    logger: deps.logger,
-  });
-  const snapshotCache = new SnapshotCacheService(deps.db, {
-    logger: deps.logger,
-  });
-  const snapshotCompare = new SnapshotCompareService();
-  const snapshotCentroids = new SnapshotCentroidsService();
-  const snapshotInsights = new SnapshotInsightsService();
-  const snapshotTrends = new SnapshotTrendsService(deps.db, {
-    gameDetails,
-    cohort: snapshotCohort,
-  });
-  const snapshotNeighbors = new SnapshotNeighborsService(deps.db, {
-    gameDetails,
-    cohort: snapshotCohort,
-  });
-  // Addendum #1 services: tech-path categorical scoring + k-means
-  // composition matchup matrix + the orchestrator that splices the
-  // new signals into the per-tick rows the snapshot drilldown UI
-  // renders.
-  const snapshotTechPath = new SnapshotTechPathService();
-  const snapshotMatchupMatrix = new SnapshotMatchupMatrixService();
-  const snapshotGameComposer = new SnapshotGameComposer({
-    snapshotCohort,
-    snapshotCompare,
-    snapshotCentroids,
-    snapshotInsights,
-    snapshotTechPath,
-    snapshotMatchupMatrix,
-  });
   const catalog = new CatalogService(deps.db);
   // Eager-load the JSON catalog so the first build-order /
   // macro-breakdown request after a cold start gets a populated
@@ -299,16 +249,6 @@ function makeServices(deps) {
     streak,
     builds,
     buildsMmrStats,
-    snapshotCohort,
-    snapshotCache,
-    snapshotCompare,
-    snapshotCentroids,
-    snapshotInsights,
-    snapshotTrends,
-    snapshotNeighbors,
-    snapshotTechPath,
-    snapshotMatchupMatrix,
-    snapshotGameComposer,
     catalog,
     perGame,
     macroBackfill,
@@ -534,25 +474,6 @@ function mountRoutes(app, deps, services, clerk) {
     SERVICE.ROUTE_PREFIX,
     buildBuildsMmrStatsRouter({
       buildsMmrStats: services.buildsMmrStats,
-      auth,
-    }),
-  );
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildSnapshotsRouter({
-      db: deps.db,
-      gameDetails: services.gameDetails,
-      snapshotCohort: services.snapshotCohort,
-      snapshotCache: services.snapshotCache,
-      snapshotCompare: services.snapshotCompare,
-      snapshotCentroids: services.snapshotCentroids,
-      snapshotInsights: services.snapshotInsights,
-      snapshotTrends: services.snapshotTrends,
-      snapshotNeighbors: services.snapshotNeighbors,
-      snapshotTechPath: services.snapshotTechPath,
-      snapshotMatchupMatrix: services.snapshotMatchupMatrix,
-      snapshotGameComposer: services.snapshotGameComposer,
-      users: services.users,
       auth,
     }),
   );
