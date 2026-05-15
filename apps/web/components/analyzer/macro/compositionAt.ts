@@ -43,6 +43,16 @@ import type { UnitTimelineEntry } from "./MacroBreakdownPanel.types";
 
 export interface BuildEvent {
   time: number;
+  /**
+   * Completion timestamp in game seconds. Present for finish-time
+   * events (upgrades, units, structure morphs) where ``time`` has been
+   * rewound to the construction-start moment by the API. The
+   * macro-breakdown Upgrades chip row uses this so a research only
+   * appears in the roster once it has actually finished — not the
+   * moment the player clicked Research, which is what the rewound
+   * ``time`` represents.
+   */
+  complete_time?: number;
   name: string;
   display?: string;
   is_building?: boolean;
@@ -591,8 +601,20 @@ export function countUpgradesAt(
 ): Record<string, number> {
   if (!Array.isArray(events) || events.length === 0) return {};
   // First pass: walk events in chronological order, tracking the
-  // highest tier reached per family. Each event ≤ t either updates
-  // the tiered family's best entry or adds to the non-tiered count.
+  // highest tier reached per family. Each event whose completion is
+  // ≤ t either updates the tiered family's best entry or adds to the
+  // non-tiered count.
+  //
+  // Upgrades arrive sorted by START time (the API's ``eventsToStartTime``
+  // rewinds the recorded completion timestamp by each upgrade's research
+  // duration so the build-order timeline shows when the player issued
+  // the research command). For the roster we want COMPLETION semantics
+  // — "+1 weapons is active at this moment" — so we filter on
+  // ``complete_time`` when the API provided it, falling back to ``time``
+  // for older payloads. The sort order is start-time, not completion-
+  // time, so we cannot early-break: a long-duration upgrade that
+  // started earlier can complete after a short-duration upgrade that
+  // started later.
   const tieredByFamily = new Map<
     string,
     { name: string; tier: number }
@@ -602,8 +624,8 @@ export function countUpgradesAt(
     if (!ev) continue;
     if (ev.is_building) continue;
     if ((ev.category || "").toLowerCase() !== UPGRADE_CATEGORY) continue;
-    const time = Number(ev.time) || 0;
-    if (time > t) break;
+    const time = Number(ev.complete_time ?? ev.time) || 0;
+    if (time > t) continue;
     const raw = ev.name || ev.display || "";
     if (!raw) continue;
     const tiered = tieredUpgradeFamily(raw);
