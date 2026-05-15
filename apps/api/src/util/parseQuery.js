@@ -10,6 +10,10 @@
 
 const RACE_LETTERS = new Set(["P", "T", "Z", "R"]);
 const RESULT_BUCKETS = new Set(["win", "loss"]);
+// Blizzard battle.net region labels we accept on the ``regions`` filter.
+// Mirrors regionFromToonHandle's output set so values produced at ingest
+// time round-trip through the URL unchanged.
+const REGION_CODES = new Set(["NA", "EU", "KR", "CN", "SEA"]);
 
 /**
  * Parse the standard global filter bar from `req.query`.
@@ -62,7 +66,38 @@ function parseFilters(q) {
   if (parseBool(q.exclude_too_short)) {
     out.excludeTooShort = true;
   }
+  const regions = parseRegionList(q.regions);
+  if (regions) out.regions = regions;
   return out;
+}
+
+/**
+ * Parse the global region filter. Accepts a CSV ("NA,EU") or a single
+ * value ("NA"); unknown labels are dropped. Returns an array preserving
+ * input order, or undefined when nothing valid was supplied.
+ *
+ * The filter is a SET — the caller treats undefined as "all regions
+ * pass" (no constraint), and an empty result of selected regions as
+ * "no opponent matches" (drop the row).
+ *
+ * @param {unknown} raw
+ * @returns {string[]|undefined}
+ */
+function parseRegionList(raw) {
+  if (raw === undefined || raw === null) return undefined;
+  const tokens = Array.isArray(raw)
+    ? raw.flatMap((v) => String(v).split(","))
+    : String(raw).split(",");
+  /** @type {string[]} */
+  const out = [];
+  const seen = new Set();
+  for (const tok of tokens) {
+    const code = tok.trim().toUpperCase();
+    if (!REGION_CODES.has(code) || seen.has(code)) continue;
+    seen.add(code);
+    out.push(code);
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 /**
@@ -127,7 +162,55 @@ function gamesMatchStage(userId, filters) {
       match["opponent.strategy"] = notTooShort;
     }
   }
+  // Region filter. Drives the global FilterBar's region picker —
+  // applies uniformly to every analyzer tab (Opponents, Strategies,
+  // Trends, Maps, Builds) since they all $match through this stage.
+  // Two-tier match because not every games row has been re-ingested
+  // since region became a stored field: trust ``opponent.region`` when
+  // present, otherwise derive from the ``opponent.toonHandle`` leading
+  // byte (cheap regex, no index needed at the small filter cardinality
+  // this collection sees).
+  if (Array.isArray(f.regions) && f.regions.length > 0) {
+    const codes = regionCodesToHandlePrefixes(f.regions);
+    if (codes.length > 0) {
+      match.$or = [
+        { "opponent.region": { $in: f.regions } },
+        {
+          "opponent.region": { $in: [null, ""] },
+          "opponent.toonHandle": {
+            $regex: `^(${codes.join("|")})-`,
+          },
+        },
+        {
+          "opponent.region": { $exists: false },
+          "opponent.toonHandle": {
+            $regex: `^(${codes.join("|")})-`,
+          },
+        },
+      ];
+    }
+  }
   return match;
+}
+
+/**
+ * Map our user-facing region labels back to the leading-byte codes
+ * Blizzard puts on toon_handle. The inverse of regionFromToonHandle
+ * — kept here (instead of imported) to keep parseQuery.js
+ * dependency-free. Unknown labels are silently dropped.
+ *
+ * @param {string[]} regions
+ * @returns {string[]}
+ */
+function regionCodesToHandlePrefixes(regions) {
+  const map = { NA: "1", EU: "2", KR: "3", CN: "5", SEA: "6" };
+  /** @type {string[]} */
+  const out = [];
+  for (const r of regions) {
+    const code = map[r];
+    if (code) out.push(code);
+  }
+  return out;
 }
 
 /**

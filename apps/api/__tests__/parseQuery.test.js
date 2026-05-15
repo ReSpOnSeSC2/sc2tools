@@ -147,6 +147,18 @@ describe("util/parseQuery", () => {
       expect(stage["opponent.strategy"]).toEqual({ $not: /Game Too Short$/ });
     });
 
+    test("regions filter emits a two-tier $or (stored region OR toonHandle prefix)", () => {
+      const stage = gamesMatchStage("u1", { regions: ["NA", "EU"] });
+      expect(Array.isArray(stage.$or)).toBe(true);
+      expect(stage.$or).toHaveLength(3);
+      expect(stage.$or[0]).toEqual({ "opponent.region": { $in: ["NA", "EU"] } });
+      // Two fall-through clauses cover rows that pre-date the
+      // ``opponent.region`` field — match by toon-handle leading byte.
+      const [, bNullEmpty, bMissing] = stage.$or;
+      expect(bNullEmpty["opponent.toonHandle"].$regex).toBe("^(1|2)-");
+      expect(bMissing["opponent.toonHandle"].$regex).toBe("^(1|2)-");
+    });
+
     test("excludeTooShort defers to an explicit build / opp_strategy filter", () => {
       // The user picked a specific build; the explicit filter wins
       // and the regex isn't applied to myBuild. opponent.strategy
@@ -166,6 +178,22 @@ describe("util/parseQuery", () => {
       expect(parseFilters({ exclude_too_short: "on" }).excludeTooShort).toBe(true);
       expect(parseFilters({ exclude_too_short: "0" }).excludeTooShort).toBeUndefined();
       expect(parseFilters({}).excludeTooShort).toBeUndefined();
+    });
+
+    test("regions filter parses CSV, drops unknown labels, dedupes", () => {
+      expect(parseFilters({ regions: "NA,EU" }).regions).toEqual(["NA", "EU"]);
+      expect(parseFilters({ regions: "na, eu, kr" }).regions).toEqual([
+        "NA",
+        "EU",
+        "KR",
+      ]);
+      expect(parseFilters({ regions: "NA,XX,EU,NA" }).regions).toEqual([
+        "NA",
+        "EU",
+      ]);
+      expect(parseFilters({ regions: "" }).regions).toBeUndefined();
+      expect(parseFilters({ regions: "XX,YY" }).regions).toBeUndefined();
+      expect(parseFilters({}).regions).toBeUndefined();
     });
   });
 
