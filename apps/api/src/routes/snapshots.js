@@ -1,14 +1,15 @@
 "use strict";
 
 const express = require("express");
+const crypto = require("crypto");
 const {
   parseCohortQuery,
   parseGameQuery,
   parseTrendsQuery,
   parseNeighborsQuery,
   parseBuildsQuery,
+  parseMatrixQuery,
 } = require("../validation/snapshotQuery");
-const { indexUnitTimeline } = require("../services/snapshotCentroids");
 
 /**
  * /v1/snapshots/* — game-state snapshot cohort analytics.
@@ -34,6 +35,10 @@ const { indexUnitTimeline } = require("../services/snapshotCentroids");
  *   snapshotInsights: import('../services/snapshotInsights').SnapshotInsightsService,
  *   snapshotTrends: import('../services/snapshotTrends').SnapshotTrendsService,
  *   snapshotNeighbors: import('../services/snapshotNeighbors').SnapshotNeighborsService,
+ *   snapshotTechPath: import('../services/snapshotTechPath').SnapshotTechPathService,
+ *   snapshotMatchupMatrix: import('../services/snapshotMatchupMatrix').SnapshotMatchupMatrixService,
+ *   snapshotGameComposer: import('../services/snapshotGameComposer').SnapshotGameComposer,
+ *   users: import('../services/users').UsersService,
  *   auth: import('express').RequestHandler,
  * }} SnapshotsDeps
  *
@@ -113,6 +118,28 @@ function buildSnapshotsRouter(deps) {
       res.json(
         await deps.snapshotTrends.findTrends(userId, /** @type {any} */ (q.value)),
       );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/snapshots/matrix", async (req, res, next) => {
+    try {
+      requireAuth(req);
+      const q = parseMatrixQuery(req.query);
+      if (!q.valid) return badRequest(res, q.errors);
+      const data = await fetchMatrix(deps, /** @type {any} */ (q.value));
+      if (data.tooSmall) {
+        return res.status(422).json({
+          error: {
+            code: "cohort_too_small",
+            sampleSize: data.sampleSize,
+            requiredMin: data.requiredMin,
+          },
+        });
+      }
+      res.set("cache-control", "public, max-age=3600");
+      res.json(data);
     } catch (err) {
       next(err);
     }
@@ -315,57 +342,118 @@ async function fetchGameSnapshot(deps, userId, gameId, q) {
       missingDetail: true,
     };
   }
-  const tickScores = deps.snapshotCompare.compareGameToCohort(
-    detail,
-    { ticks: cohortResult.ticks },
-    { myRace: game.myRace, oppRace: game.opponent?.race },
-  );
   const cohortSlim = await deps.snapshotCohort.resolveCohort(cohortQuery);
-  const detailsMap = cohortSlim.tooSmall
-    ? new Map()
-    : await loadDetailsBatch(deps, cohortSlim.games);
-  const centroids = cohortSlim.tooSmall
-    ? { my: new Map(), opp: new Map() }
-    : deps.snapshotCentroids.computeCentroids(cohortSlim.games, detailsMap);
-  const { my: myUnits, opp: oppUnits } = indexUnitTimeline(detail.macroBreakdown?.unit_timeline);
-  const compositionByTick = deps.snapshotCentroids.computeDeltas(myUnits, oppUnits, centroids);
-  const ticksWithComposition = tickScores.map((row) => {
-    const comp = compositionByTick.get(row.t);
-    return {
-      ...row,
-      compositionDelta: comp
-        ? {
-            my: comp.my,
-            opp: comp.opp,
-            mySimilarity: comp.mySimilarity,
-            oppSimilarity: comp.oppSimilarity,
-          }
-        : null,
-    };
+  if (cohortSlim.tooSmall) return cohortSlim;
+  const detailsMap = await loadDetailsBatch(deps, cohortSlim.games);
+  const weightsOverride = deps.users && deps.users.getSnapshotWeightsOverride
+    ? await deps.users.getSnapshotWeightsOverride(userId).catch(() => null)
+    : null;
+  const composed = deps.snapshotGameComposer.composeGameResponse({
+    focal: { game, detail },
+    cohortGames: cohortSlim.games,
+    detailsByGameId: detailsMap,
+    bandsTicks: cohortResult.ticks,
+    weightsOverride,
   });
-  const inflection = deps.snapshotInsights.detectInflection(tickScores);
-  const timingMisses = cohortSlim.tooSmall
-    ? []
-    : deps.snapshotInsights.detectTimingMisses(
-        cohortSlim.games,
-        detailsMap,
-        detail.macroBreakdown?.unit_timeline,
-      );
-  const coachingTags = deps.snapshotInsights.deriveCoachingTags(tickScores);
+  const ticksWithComposition = composed.ticks;
+  const insights = composed.insights;
   return {
     gameId,
     cohortKey: cohortResult.cohortKey,
     cohortTier: cohortResult.cohortTier,
     sampleSize: cohortResult.sampleSize,
     ticks: ticksWithComposition,
-    insights: {
-      inflectionTick: inflection.inflectionTick,
-      primaryMetric: inflection.primaryMetric,
-      secondaryMetric: inflection.secondaryMetric,
-      timingMisses,
-      coachingTags,
-    },
+    insights,
   };
+}
+
+/**
+ * Standalone matchup matrix lookup for the cohort browser tab.
+ * Reads from the snapshot_matrices cache when fresh; recomputes on
+ * miss and writes the result back. K-anon gated like /cohort.
+ *
+ * @param {SnapshotsDeps} deps
+ * @param {{ matchup: string, mmrBucket?: number, tick?: number, scope?: string }} q
+ */
+async function fetchMatrix(deps, q) {
+  const matchup = parseMatchup(q.matchup);
+  if (!matchup) {
+    const err = new Error("invalid_matchup");
+    /** @type {any} */ (err).status = 400;
+    throw err;
+  }
+  const tickSec = roundTickToBin(q.tick ?? 360);
+  const scope = q.scope || "community";
+  const resolved = await deps.snapshotCohort.resolveCohort({
+    scope: /** @type {any} */ (scope),
+    myRace: matchup.my,
+    oppRace: matchup.opp,
+    mmrBucket: q.mmrBucket,
+  });
+  if (resolved.tooSmall) {
+    return { tooSmall: true, sampleSize: resolved.sampleSize, requiredMin: 8 };
+  }
+  const ids = resolved.games.map((g) => g.gameId);
+  const inputGameIdsHash = crypto
+    .createHash("sha256")
+    .update(ids.slice().sort().join("\0"))
+    .digest("hex")
+    .slice(0, 16);
+  const hashKey = crypto
+    .createHash("sha256")
+    .update(`${q.matchup}|${q.mmrBucket ?? "*"}|${scope}|${tickSec}|${inputGameIdsHash}`)
+    .digest("hex");
+  const cached = await deps.db.snapshotMatrices.findOne({ _id: hashKey });
+  if (cached && cached.inputGameIdsHash === inputGameIdsHash) {
+    return shapeMatrixResponse(cached, q.matchup, scope, tickSec);
+  }
+  const detailsByGameId = await loadDetailsBatch(deps, resolved.games);
+  const matrix = deps.snapshotMatchupMatrix.buildMatrix(resolved.games, detailsByGameId, tickSec);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  await deps.db.snapshotMatrices.findOneAndUpdate(
+    { _id: hashKey },
+    {
+      $set: {
+        _id: hashKey,
+        matchup: q.matchup,
+        mmrBucket: q.mmrBucket ?? null,
+        scope,
+        tickSec,
+        cohortTier: resolved.cohortTier,
+        sampleSize: resolved.sampleSize,
+        matrix,
+        inputGameIdsHash,
+        generatedAt: now,
+        expiresAt,
+      },
+    },
+    { upsert: true, returnDocument: "after" },
+  );
+  return shapeMatrixResponse(
+    { matrix, cohortTier: resolved.cohortTier, sampleSize: resolved.sampleSize },
+    q.matchup,
+    scope,
+    tickSec,
+  );
+}
+
+function shapeMatrixResponse(row, matchup, scope, tickSec) {
+  return {
+    matchup,
+    scope,
+    tick: tickSec,
+    cohortTier: row.cohortTier,
+    sampleSize: row.sampleSize,
+    matrix: row.matrix,
+  };
+}
+
+function roundTickToBin(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 360;
+  const r = Math.round(n / 30) * 30;
+  return Math.min(Math.max(r, 0), 1200);
 }
 
 /**

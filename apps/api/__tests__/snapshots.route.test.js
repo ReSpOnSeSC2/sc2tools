@@ -14,6 +14,9 @@ const { SnapshotCentroidsService } = require("../src/services/snapshotCentroids"
 const { SnapshotInsightsService } = require("../src/services/snapshotInsights");
 const { SnapshotTrendsService } = require("../src/services/snapshotTrends");
 const { SnapshotNeighborsService } = require("../src/services/snapshotNeighbors");
+const { SnapshotTechPathService } = require("../src/services/snapshotTechPath");
+const { SnapshotMatchupMatrixService } = require("../src/services/snapshotMatchupMatrix");
+const { SnapshotGameComposer } = require("../src/services/snapshotGameComposer");
 const { buildSnapshotsRouter } = require("../src/routes/snapshots");
 const { makeGameAndDetail } = require("./fixtures/snapshotFixtures");
 
@@ -55,7 +58,17 @@ describe("/v1/snapshots routes", () => {
     const insights = new SnapshotInsightsService();
     const trends = new SnapshotTrendsService(db, { gameDetails, cohort });
     const neighbors = new SnapshotNeighborsService(db, { gameDetails, cohort });
-    services = { cohort, cache, compare, centroids, insights, trends, neighbors };
+    const techPath = new SnapshotTechPathService();
+    const matchupMatrix = new SnapshotMatchupMatrixService();
+    const composer = new SnapshotGameComposer({
+      snapshotCohort: cohort,
+      snapshotCompare: compare,
+      snapshotCentroids: centroids,
+      snapshotInsights: insights,
+      snapshotTechPath: techPath,
+      snapshotMatchupMatrix: matchupMatrix,
+    });
+    services = { cohort, cache, compare, centroids, insights, trends, neighbors, techPath, matchupMatrix, composer };
     app = express();
     app.use(express.json());
     const fakeAuth = (req, _res, next) => { req.auth = { userId: "u1" }; next(); };
@@ -71,6 +84,10 @@ describe("/v1/snapshots routes", () => {
         snapshotInsights: insights,
         snapshotTrends: trends,
         snapshotNeighbors: neighbors,
+        snapshotTechPath: techPath,
+        snapshotMatchupMatrix: matchupMatrix,
+        snapshotGameComposer: composer,
+        users: null,
         auth: fakeAuth,
       }),
     );
@@ -198,6 +215,51 @@ describe("/v1/snapshots routes", () => {
       .get("/v1/snapshots/cohort")
       .query({ scope: "invalid" });
     expect(res.status).toBe(400);
+  });
+
+  test("GET /v1/snapshots/matrix returns K×K matchup matrix when cohort satisfies k-anon", async () => {
+    for (let i = 0; i < 6; i += 1) {
+      const { game, detail } = makeGameAndDetail({ gameId: `w${i}`, result: "Victory" });
+      await db.games.insertOne(game);
+      await gameDetails.upsert(game.userId, game.gameId, game.date, detail);
+    }
+    for (let i = 0; i < 6; i += 1) {
+      const { game, detail } = makeGameAndDetail({ gameId: `l${i}`, result: "Defeat" });
+      await db.games.insertOne(game);
+      await gameDetails.upsert(game.userId, game.gameId, game.date, detail);
+    }
+    const res = await agent.get("/v1/snapshots/matrix").query({ matchup: "PvZ", tick: 360 });
+    expect(res.status).toBe(200);
+    expect(res.body.matchup).toBe("PvZ");
+    expect(res.body.tick).toBe(360);
+    expect(res.body.matrix.myClusters.length).toBeGreaterThan(0);
+    expect(res.body.matrix.rows.length).toBe(res.body.matrix.myClusters.length);
+  });
+
+  test("GET /v1/snapshots/matrix returns 422 when below k-anon floor", async () => {
+    await seed(2);
+    const res = await agent.get("/v1/snapshots/matrix").query({ matchup: "PvZ" });
+    expect(res.status).toBe(422);
+  });
+
+  test("GET /v1/snapshots/game/:gameId includes new techPath + compositionMatchup blocks", async () => {
+    for (let i = 0; i < 6; i += 1) {
+      const { game, detail } = makeGameAndDetail({ gameId: `w${i}`, result: "Victory" });
+      await db.games.insertOne(game);
+      await gameDetails.upsert(game.userId, game.gameId, game.date, detail);
+    }
+    for (let i = 0; i < 6; i += 1) {
+      const { game, detail } = makeGameAndDetail({ gameId: `l${i}`, result: "Defeat" });
+      await db.games.insertOne(game);
+      await gameDetails.upsert(game.userId, game.gameId, game.date, detail);
+    }
+    const res = await agent.get("/v1/snapshots/game/w0");
+    expect(res.status).toBe(200);
+    const ticks = res.body.ticks;
+    expect(ticks.length).toBeGreaterThan(0);
+    // techPath should be populated on at least one tick once decision
+    // buildings would have surfaced in the cohort.
+    expect(ticks.some((t) => t.techPath !== null)).toBe(true);
   });
 
   test("GET /v1/snapshots/neighbors/:gameId surfaces counterfactual neighbors", async () => {

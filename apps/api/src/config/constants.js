@@ -53,6 +53,13 @@ const COLLECTIONS = Object.freeze({
   // See ``services/snapshotCache.js`` for the read/write API and
   // ``scripts/precomputeSnapshotCohorts.js`` for the nightly warmer.
   SNAPSHOT_COHORTS: "snapshot_cohorts",
+  // Per-(matchup, mmrBucket, tick) composition matchup matrix cache.
+  // Cluster assignments + K×K win-rate grid + counter-suggestion seed
+  // data. Keyed by hash(matchup + mmrBucket + scope + tick + inputIds).
+  // The matrix payload is heavier than a per-cohort bands row (it
+  // carries centroids and the full grid) — kept in its own collection
+  // so a TTL eviction of one doesn't drag the other into a recompute.
+  SNAPSHOT_MATRICES: "snapshot_matrices",
 });
 
 const LIMITS = Object.freeze({

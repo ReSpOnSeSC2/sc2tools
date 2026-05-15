@@ -5,13 +5,15 @@ import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { BandChart } from "@/components/snapshots/BandChart";
 import { CohortPicker, type CohortPickerValue } from "@/components/snapshots/CohortPicker";
 import { SnapshotLegend } from "@/components/snapshots/SnapshotLegend";
+import { CompositionMatchupMatrix } from "@/components/snapshots/CompositionMatchupMatrix";
 import { isTooSmall, useBuilds, useCohort } from "@/lib/snapshots/fetchCohort";
+import { useMatrix } from "@/lib/snapshots/fetchMatrix";
 import type {
   CohortResponse,
   CohortTooSmall,
   MetricKey,
 } from "@/components/snapshots/shared/snapshotTypes";
-import { tierLabel } from "@/components/snapshots/shared/snapshotTypes";
+import { fmtTick, tierLabel } from "@/components/snapshots/shared/snapshotTypes";
 
 // /snapshots — cohort browser landing page. Pure cohort view (no
 // user game overlay), used for exploration: "what does a typical
@@ -22,12 +24,17 @@ const METRICS: { key: MetricKey; label: string }[] = [
   { key: "army_supply", label: "Supply" },
   { key: "workers", label: "Workers" },
   { key: "bases", label: "Bases" },
+  { key: "production_capacity", label: "Production capacity" },
 ];
+
+type TabKey = "bands" | "matrix";
 
 export default function SnapshotsPage() {
   const [filters, setFilters] = useState<CohortPickerValue>({
     scope: "community",
   });
+  const [tab, setTab] = useState<TabKey>("bands");
+  const [matrixTick, setMatrixTick] = useState<number>(360);
   const { data: builds } = useBuilds(filters.matchup);
   const cohortQuery = useMemo(() => {
     if (!filters.matchup) return null;
@@ -70,15 +77,107 @@ export default function SnapshotsPage() {
           <SnapshotLegend />
         </aside>
         <section className="space-y-4">
-          <Body
-            filters={filters}
-            data={data}
-            isLoading={isLoading}
-            error={error}
-          />
+          <Tabs tab={tab} onChange={setTab} />
+          {tab === "bands" ? (
+            <Body
+              filters={filters}
+              data={data}
+              isLoading={isLoading}
+              error={error}
+            />
+          ) : (
+            <MatrixView
+              filters={filters}
+              tick={matrixTick}
+              onTickChange={setMatrixTick}
+            />
+          )}
         </section>
       </div>
     </div>
+  );
+}
+
+function Tabs({ tab, onChange }: { tab: TabKey; onChange: (t: TabKey) => void }) {
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: "bands", label: "Bands" },
+    { key: "matrix", label: "Composition matrix" },
+  ];
+  return (
+    <div className="flex gap-1 rounded-lg border border-border bg-bg-elevated p-0.5" role="tablist">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          role="tab"
+          aria-selected={tab === t.key}
+          onClick={() => onChange(t.key)}
+          className={[
+            "rounded-md px-3 py-1.5 text-caption font-medium",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+            tab === t.key
+              ? "bg-accent text-white"
+              : "text-text-muted hover:text-text",
+          ].join(" ")}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MatrixView({
+  filters,
+  tick,
+  onTickChange,
+}: {
+  filters: CohortPickerValue;
+  tick: number;
+  onTickChange: (t: number) => void;
+}) {
+  const matrixQuery = filters.matchup
+    ? { matchup: filters.matchup, mmrBucket: filters.mmrBucket, tick, scope: filters.scope }
+    : null;
+  const { data, isLoading, error } = useMatrix(matrixQuery);
+  if (!filters.matchup) {
+    return (
+      <Card>
+        <EmptyState
+          title="Pick a matchup to view the composition matrix"
+          sub="The matrix shows the cohort win rate for every composition pairing at the selected tick."
+        />
+      </Card>
+    );
+  }
+  return (
+    <>
+      <div className="rounded-lg border border-border bg-bg-elevated px-3 py-2">
+        <label className="block text-caption font-medium text-text">
+          Tick: <span className="font-mono text-accent">{fmtTick(tick)}</span>
+        </label>
+        <input
+          type="range"
+          min={60}
+          max={1200}
+          step={30}
+          value={tick}
+          onChange={(e) => onTickChange(Number(e.target.value))}
+          className="mt-1 w-full"
+          aria-label="Tick selector for composition matrix"
+        />
+      </div>
+      {isLoading ? <Skeleton rows={4} /> : null}
+      {error ? (
+        <Card>
+          <EmptyState
+            title="Couldn't load the matrix"
+            sub={(error as { message?: string })?.message}
+          />
+        </Card>
+      ) : null}
+      {data ? <CompositionMatchupMatrix block={null} matrixOverride={data} /> : null}
+    </>
   );
 }
 

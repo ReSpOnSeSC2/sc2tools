@@ -38,6 +38,9 @@ const { SnapshotCentroidsService } = require("./services/snapshotCentroids");
 const { SnapshotInsightsService } = require("./services/snapshotInsights");
 const { SnapshotTrendsService } = require("./services/snapshotTrends");
 const { SnapshotNeighborsService } = require("./services/snapshotNeighbors");
+const { SnapshotTechPathService } = require("./services/snapshotTechPath");
+const { SnapshotMatchupMatrixService } = require("./services/snapshotMatchupMatrix");
+const { SnapshotGameComposer } = require("./services/snapshotGameComposer");
 const {
   PerGameComputeService,
   MacroBackfillService,
@@ -239,6 +242,20 @@ function makeServices(deps) {
     gameDetails,
     cohort: snapshotCohort,
   });
+  // Addendum #1 services: tech-path categorical scoring + k-means
+  // composition matchup matrix + the orchestrator that splices the
+  // new signals into the per-tick rows the snapshot drilldown UI
+  // renders.
+  const snapshotTechPath = new SnapshotTechPathService();
+  const snapshotMatchupMatrix = new SnapshotMatchupMatrixService();
+  const snapshotGameComposer = new SnapshotGameComposer({
+    snapshotCohort,
+    snapshotCompare,
+    snapshotCentroids,
+    snapshotInsights,
+    snapshotTechPath,
+    snapshotMatchupMatrix,
+  });
   const catalog = new CatalogService(deps.db);
   // Eager-load the JSON catalog so the first build-order /
   // macro-breakdown request after a cold start gets a populated
@@ -289,6 +306,9 @@ function makeServices(deps) {
     snapshotInsights,
     snapshotTrends,
     snapshotNeighbors,
+    snapshotTechPath,
+    snapshotMatchupMatrix,
+    snapshotGameComposer,
     catalog,
     perGame,
     macroBackfill,
@@ -529,6 +549,10 @@ function mountRoutes(app, deps, services, clerk) {
       snapshotInsights: services.snapshotInsights,
       snapshotTrends: services.snapshotTrends,
       snapshotNeighbors: services.snapshotNeighbors,
+      snapshotTechPath: services.snapshotTechPath,
+      snapshotMatchupMatrix: services.snapshotMatchupMatrix,
+      snapshotGameComposer: services.snapshotGameComposer,
+      users: services.users,
       auth,
     }),
   );

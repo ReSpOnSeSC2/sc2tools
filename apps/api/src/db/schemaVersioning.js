@@ -162,6 +162,13 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  // Snapshot matchup matrix cache — pinned at v1 alongside the
+  // cohort cache. A shape change here triggers a fresh fit via TTL.
+  [COLLECTIONS.SNAPSHOT_MATRICES]: {
+    collection: COLLECTIONS.SNAPSHOT_MATRICES,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
 });
 
 /** @type {{collection:string,fromVersion:number,toVersion:number,forward:Function,backward:Function,description?:string}[]} */

@@ -8,6 +8,10 @@ const {
   scoreSide,
   VERDICTS,
 } = require("../src/services/snapshotCompare");
+const { loadWeights } = require("../src/services/snapshotWeights");
+
+const WEIGHTS_CFG = loadWeights();
+const MID_WEIGHTS = WEIGHTS_CFG.phases.mid.weights;
 
 describe("classifyPosition", () => {
   const band = { p25l: 100, p50l: 200, p75l: 250, p25w: 250, p50w: 300, p75w: 400, p90w: 500 };
@@ -70,16 +74,23 @@ describe("scoreSide", () => {
       workers: { p25l: 0, p50l: 30, p75l: 40, p25w: 45, p50w: 55, p75w: 65, p90w: 75 },
     };
     const values = { army_value: 500, workers: 30, army_supply: null, bases: null, income_min: null, income_gas: null };
-    const result = scoreSide(values, bands);
+    const result = scoreSide(values, bands, MID_WEIGHTS, {});
     expect(result.scores.army_value).toBe(2);
     expect(result.scores.workers).toBe(-1);
     expect(result.aggregate).toBeGreaterThan(0);
   });
 
   test("returns zero aggregate when nothing scoreable", () => {
-    const result = scoreSide({}, {});
+    const result = scoreSide({}, {}, MID_WEIGHTS, {});
     expect(result.aggregate).toBe(0);
     expect(Object.keys(result.scores)).toHaveLength(0);
+  });
+
+  test("uses extraScores for categorical metrics not in bands", () => {
+    const result = scoreSide({}, {}, MID_WEIGHTS, { tech_path_winrate: 2, composition_matchup: 1 });
+    expect(result.scores.tech_path_winrate).toBe(2);
+    expect(result.scores.composition_matchup).toBe(1);
+    expect(result.aggregate).toBeGreaterThan(0);
   });
 });
 

@@ -72,11 +72,24 @@ const buildsSchema = {
   },
 };
 
+const matrixSchema = {
+  type: "object",
+  additionalProperties: true,
+  properties: {
+    matchup: { type: "string", pattern: "^[PTZ]v[PTZ]$" },
+    mmrBucket: { type: "integer", minimum: 0, maximum: 9999 },
+    tick: { type: "integer", minimum: 0, maximum: 1200, default: 360 },
+    scope: { type: "string", enum: SCOPE_VALUES, default: "community" },
+  },
+  required: ["matchup"],
+};
+
 const validateCohortQuery = ajv.compile(cohortSchema);
 const validateGameQuery = ajv.compile(gameSchema);
 const validateTrendsQuery = ajv.compile(trendsSchema);
 const validateNeighborsQuery = ajv.compile(neighborsSchema);
 const validateBuildsQuery = ajv.compile(buildsSchema);
+const validateMatrixQuery = ajv.compile(matrixSchema);
 
 /**
  * @template T
@@ -124,6 +137,12 @@ function parseBuildsQuery(q) {
   return runValidator(validateBuildsQuery, copy);
 }
 
+/** @param {Record<string, unknown>} q */
+function parseMatrixQuery(q) {
+  const copy = pickKnown(q, ["matchup", "mmrBucket", "tick", "scope"]);
+  return runValidator(validateMatrixQuery, copy);
+}
+
 /**
  * @param {Record<string, unknown>} src
  * @param {string[]} keys
@@ -145,5 +164,6 @@ module.exports = {
   parseTrendsQuery,
   parseNeighborsQuery,
   parseBuildsQuery,
+  parseMatrixQuery,
   SCOPE_VALUES,
 };

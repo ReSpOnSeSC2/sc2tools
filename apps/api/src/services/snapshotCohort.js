@@ -6,6 +6,7 @@ const {
   bucketFor,
   bracketLabel,
 } = require("../util/mmrBracketing");
+const { countProduction } = require("./snapshotProduction");
 
 /**
  * SnapshotCohortService — resolves a "cohort" (the comparison set of
@@ -41,6 +42,7 @@ const METRICS = Object.freeze([
   "army_supply",
   "workers",
   "bases",
+  "production_capacity",
   "income_min",
   "income_gas",
 ]);
@@ -287,6 +289,10 @@ function pushIntoBins(target, events, timeline, side, race, isWin) {
     if (!units || typeof units !== "object") continue;
     const baseCount = countBases(units, race);
     pushMetric(target[t].bases, baseCount, isWin);
+    const prodCount = countProduction(units, race);
+    if (prodCount !== null) {
+      pushMetric(target[t].production_capacity, prodCount, isWin);
+    }
   }
 }
 

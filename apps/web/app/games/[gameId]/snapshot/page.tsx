@@ -13,6 +13,12 @@ import { CoachingTagChips } from "@/components/snapshots/CoachingTagChips";
 import { NeighborGameList } from "@/components/snapshots/NeighborGameList";
 import { ShareCardButton } from "@/components/snapshots/ShareCardButton";
 import { SnapshotLegend } from "@/components/snapshots/SnapshotLegend";
+import { ProductionBandStrip } from "@/components/snapshots/ProductionBandStrip";
+import { TechPathTimeline } from "@/components/snapshots/TechPathTimeline";
+import { TechPathAlternatives } from "@/components/snapshots/TechPathAlternatives";
+import { CompositionMatchupMatrix } from "@/components/snapshots/CompositionMatchupMatrix";
+import { CompositionMatchupRow } from "@/components/snapshots/CompositionMatchupRow";
+import { CounterSuggestionList } from "@/components/snapshots/CounterSuggestion";
 import { useSyncedCursor } from "@/components/snapshots/shared/useSyncedCursor";
 import { useCohort, isTooSmall } from "@/lib/snapshots/fetchCohort";
 import { useGameSnapshot, isGameTooSmall } from "@/lib/snapshots/fetchGameSnapshot";
@@ -169,11 +175,26 @@ export default function GameSnapshotPage({
                     compact
                   />
                 ))}
+                <ProductionBandStrip
+                  cohort={cohortData?.ticks ?? mergeCohortFromGame(game)}
+                  gameTicks={game.ticks}
+                  cursorTick={focusedTick}
+                  onHover={cursor.setTick}
+                />
               </div>
+              <TechPathTimeline
+                ticks={game.ticks}
+                focusedTick={focusedTick}
+                onFocus={cursor.setTick}
+              />
               <CompositionStackChart
                 cohort={cohortData?.ticks ?? mergeCohortFromGame(game)}
                 gameTicks={game.ticks}
                 side="my"
+              />
+              <FocusMatchup
+                game={game}
+                focusedTick={focusedTick}
               />
               <CompositionDeltaTable
                 ticks={game.ticks}
@@ -194,6 +215,7 @@ export default function GameSnapshotPage({
                   if (!cursor.pinned) cursor.togglePin();
                 }}
               />
+              <TechPathAlternatives techPath={focusedTechPath(game, focusedTick)} />
               <TimingMissList misses={game.insights.timingMisses} />
               <CoachingTagChips
                 rows={game.insights.coachingTags}
@@ -223,4 +245,56 @@ function synthesizeBand(values: Partial<Record<MetricKey, number | null>>) {
   // The game endpoint doesn't echo cohort bands explicitly; this
   // returns an empty band so BandChart can still render the user line.
   return {} as Record<string, never>;
+}
+
+function focusedTechPath(game: GameSnapshotResponse, focusedTick: number | null) {
+  if (focusedTick === null) {
+    for (let i = game.ticks.length - 1; i >= 0; i -= 1) {
+      if (game.ticks[i].techPath) return game.ticks[i].techPath ?? null;
+    }
+    return null;
+  }
+  const tick = game.ticks.find((t) => t.t === focusedTick);
+  return tick?.techPath ?? null;
+}
+
+function FocusMatchup({
+  game,
+  focusedTick,
+}: {
+  game: GameSnapshotResponse;
+  focusedTick: number | null;
+}) {
+  const ANCHOR_TICKS = [180, 300, 420, 600, 780, 960];
+  const anchor = nearestAnchor(focusedTick, ANCHOR_TICKS);
+  const tick = game.ticks.find((t) => t.t === anchor);
+  const block = tick?.compositionMatchup ?? null;
+  return (
+    <>
+      <div className="hidden sm:block">
+        <CompositionMatchupMatrix block={block} />
+      </div>
+      <div className="sm:hidden">
+        <CompositionMatchupRow block={block} />
+      </div>
+      <CounterSuggestionList
+        suggestions={block?.counterSuggestions ?? []}
+        currentWinRate={block?.winRate}
+      />
+    </>
+  );
+}
+
+function nearestAnchor(focused: number | null, anchors: number[]): number {
+  if (focused === null) return anchors[1] || anchors[0] || 360;
+  let best = anchors[0];
+  let bestDiff = Infinity;
+  for (const a of anchors) {
+    const d = Math.abs(a - focused);
+    if (d < bestDiff) {
+      bestDiff = d;
+      best = a;
+    }
+  }
+  return best;
 }
