@@ -28,6 +28,12 @@ import { MatchupOverTimeChart } from "./charts/MatchupOverTimeChart";
 import { TimeOfDayHeatmap } from "./charts/TimeOfDayHeatmap";
 import { GameLengthWrChart } from "./charts/GameLengthWrChart";
 import { ActivityCalendarChart } from "./charts/ActivityCalendarChart";
+import { MmrProgressionChart } from "./charts/MmrProgressionChart";
+import { MomentumChart } from "./charts/MomentumChart";
+import { SkillSpreadChart } from "./charts/SkillSpreadChart";
+import { MixOverTimeChart } from "./charts/MixOverTimeChart";
+import { MapTrendChart } from "./charts/MapTrendChart";
+import { NetMmrByMatchupChart } from "./charts/NetMmrByMatchupChart";
 
 const LS_BUCKET = "analyzer.trends.bucket";
 const LS_ROLL = "analyzer.trends.rollingOn";
@@ -395,8 +401,79 @@ export function TrendsTab() {
           <div className="md:col-span-2">
             <ActivityCalendarChart />
           </div>
+
+          {/*
+           * v0.5.x "Player insight" charts. These go beyond "when did
+           * you play" to ask "how are you actually trending as a player":
+           * MMR climb, tilt/momentum, MMR spread, build & strategy mix,
+           * map performance, and net MMR per matchup. All share the
+           * global filter set and the bucket above.
+           */}
+          <SectionDivider
+            title="Player insights"
+            subtitle="Deeper signal on how you're trending, beyond when and how often you play."
+          />
+          <div className="md:col-span-2">
+            <MmrProgressionChart bucket={bucket as "day" | "week" | "month"} />
+          </div>
+          <NetMmrByMatchupChart />
+          <SkillSpreadChart />
+          <div className="md:col-span-2">
+            <MomentumChart />
+          </div>
+          <div className="md:col-span-2">
+            <MixOverTimeChart
+              endpoint="timeseries/my-builds"
+              title="Your build mix over time"
+              caption="100% stacked share of your classified builds per period · spot stagnation or healthy experimentation at a glance."
+              bucket={bucket as "day" | "week" | "month"}
+              emptyTitle="No build mix yet"
+              emptySub="Build mix fills in once your replays carry classified myBuild values."
+            />
+          </div>
+          <div className="md:col-span-2">
+            <MixOverTimeChart
+              endpoint="timeseries/opp-strategies"
+              title="Strategies you're facing"
+              caption="100% stacked share of detected opponent strategies per period · watch the ladder meta shift around you."
+              bucket={bucket as "day" | "week" | "month"}
+              emptyTitle="No opponent strategy data yet"
+              emptySub="Strategy mix fills in once your replays carry classified opponent.strategy values."
+            />
+          </div>
+          <div className="md:col-span-2">
+            <MapTrendChart bucket={bucket as "day" | "week" | "month"} />
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Subtle section break between the "behavioural" charts at the top
+ * of the Trends tab (when/how often you play, by matchup, by length,
+ * activity calendar) and the v0.5+ "player insight" cluster (MMR
+ * climb, tilt, build mix, etc.). Spans both grid columns on desktop
+ * and reflows on mobile.
+ */
+function SectionDivider({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="mt-1 md:col-span-2">
+      <div className="flex items-baseline gap-3 border-t border-border pt-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-text">
+          {title}
+        </h2>
+        {subtitle ? (
+          <span className="text-caption text-text-dim">{subtitle}</span>
+        ) : null}
+      </div>
     </div>
   );
 }

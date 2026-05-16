@@ -3,6 +3,7 @@
 const { LIMITS } = require("../config/constants");
 const { gamesMatchStage } = require("../util/parseQuery");
 const trendsAgg = require("./trendsAggregations");
+const trendsInsights = require("./trendsInsights");
 const {
   attachRecentByMap,
   attachRecentByMatchup,
@@ -491,6 +492,16 @@ class AggregationsService {
   async activityCalendar(userId, opts, filters) {
     return trendsAgg.activityCalendar(this._trendsDeps(), userId, opts, filters);
   }
+
+  // v0.5+ "Player Insight" aggregations. All thin delegators —
+  // implementation in ``./trendsInsights.js``.
+  async mmrProgression(userId, opts, filters) { return trendsInsights.mmrProgression(this._trendsDeps(), userId, opts, filters); }
+  async momentum(userId, filters, opts) { return trendsInsights.momentum(this._trendsDeps(), userId, filters, opts); }
+  async skillSpread(userId, filters) { return trendsInsights.skillSpread(this._trendsDeps(), userId, filters); }
+  async myBuildMixOverTime(userId, opts, filters) { return trendsInsights.mixOverTime(this._trendsDeps(), userId, opts, filters, { field: "myBuild", fallback: "Unknown" }); }
+  async oppStrategyMixOverTime(userId, opts, filters) { return trendsInsights.mixOverTime(this._trendsDeps(), userId, opts, filters, { field: "opponent.strategy", fallback: "Unknown" }); }
+  async mapTrend(userId, opts, filters) { return trendsInsights.mapTrend(this._trendsDeps(), userId, opts, filters); }
+  async netMmrByMatchup(userId, filters) { return trendsInsights.netMmrByMatchup(this._trendsDeps(), userId, filters); }
 
   /** @private */
   _trendsDeps() {
