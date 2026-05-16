@@ -209,13 +209,19 @@ function buildAggregationsRouter(deps) {
     }
   });
 
-  // WR split by (opponent.mmr − myMmr) bracket. "Are you the upset
-  // artist or the upset victim?"
-  router.get("/skill-spread", async (req, res, next) => {
+  // WR split by absolute opponent MMR, in clean 50- or 100-MMR
+  // bands. ``bucket_width`` may be 50, 100, or "auto" (default);
+  // auto picks 50 for tight ranges and 100 for wide ones. The
+  // response carries the chosen width back so the client toggle
+  // can highlight which width was used.
+  router.get("/opp-mmr-buckets", async (req, res, next) => {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.aggregations.skillSpread(userId, filters));
+      const bucketWidth = parseOppMmrBucketWidth(req.query.bucket_width);
+      res.json(
+        await deps.aggregations.oppMmrBuckets(userId, filters, { bucketWidth }),
+      );
     } catch (err) {
       next(err);
     }
@@ -354,6 +360,22 @@ function pickResultBucket(raw) {
   const s = String(raw || "").toLowerCase();
   if (s === "win" || s === "loss") return s;
   return undefined;
+}
+
+/**
+ * Parse the ``bucket_width`` query param for /opp-mmr-buckets.
+ * Accepts 50, 100, or "auto"; anything else falls through to
+ * ``"auto"`` so the service picks a sensible default.
+ *
+ * @param {unknown} raw
+ * @returns {50 | 100 | "auto"}
+ */
+function parseOppMmrBucketWidth(raw) {
+  if (raw === undefined || raw === null) return "auto";
+  const s = String(raw).trim().toLowerCase();
+  if (s === "50") return 50;
+  if (s === "100") return 100;
+  return "auto";
 }
 
 /** @param {number} status @param {string} code */

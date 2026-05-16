@@ -30,7 +30,7 @@ import { GameLengthWrChart } from "./charts/GameLengthWrChart";
 import { ActivityCalendarChart } from "./charts/ActivityCalendarChart";
 import { MmrProgressionChart } from "./charts/MmrProgressionChart";
 import { MomentumChart } from "./charts/MomentumChart";
-import { SkillSpreadChart } from "./charts/SkillSpreadChart";
+import { OppMmrBucketsChart } from "./charts/OppMmrBucketsChart";
 import { MixOverTimeChart } from "./charts/MixOverTimeChart";
 import { MapTrendChart } from "./charts/MapTrendChart";
 import { NetMmrByMatchupChart } from "./charts/NetMmrByMatchupChart";
@@ -417,7 +417,7 @@ export function TrendsTab() {
             <MmrProgressionChart bucket={bucket as "day" | "week" | "month"} />
           </div>
           <NetMmrByMatchupChart />
-          <SkillSpreadChart />
+          <OppMmrBucketsChart />
           <div className="md:col-span-2">
             <MomentumChart />
           </div>
