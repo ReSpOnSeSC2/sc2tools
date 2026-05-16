@@ -363,6 +363,31 @@ function BreakdownBody({
 
   return (
     <div className="space-y-5 sm:space-y-6">
+      <section
+        aria-label="Active Army & Workers"
+        className="space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-4"
+      >
+        {samplesMissing ? (
+          <ChartSamplesMissingHint />
+        ) : (
+          <MacroChartSection
+            samples={data.stats_events || []}
+            oppSamples={data.opp_stats_events || []}
+            unitTimeline={data.unit_timeline}
+            gameLengthSec={data.game_length_sec}
+            leaks={leaks}
+            leakWindows={raw.leak_windows || []}
+            oppLeakWindows={raw.opp_leak_windows || []}
+            highlightedKey={highlightedKey}
+            myName={headerMeta?.playerName ?? null}
+            oppName={headerMeta?.opponentName ?? null}
+            myRace={headerMeta?.myRace ?? data.race ?? null}
+            oppRace={headerMeta?.opponentRace ?? null}
+            gameId={gameId}
+          />
+        )}
+      </section>
+
       <Headline score={score} colourClass={headlineColour} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -390,31 +415,6 @@ function BreakdownBody({
           explanation="How many mid-game samples showed a sustained mineral surplus. Banked minerals that aren't building units delay your next push."
         />
       </div>
-
-      <section
-        aria-label="Active Army & Workers"
-        className="space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-4"
-      >
-        {samplesMissing ? (
-          <ChartSamplesMissingHint />
-        ) : (
-          <MacroChartSection
-            samples={data.stats_events || []}
-            oppSamples={data.opp_stats_events || []}
-            unitTimeline={data.unit_timeline}
-            gameLengthSec={data.game_length_sec}
-            leaks={leaks}
-            leakWindows={raw.leak_windows || []}
-            oppLeakWindows={raw.opp_leak_windows || []}
-            highlightedKey={highlightedKey}
-            myName={headerMeta?.playerName ?? null}
-            oppName={headerMeta?.opponentName ?? null}
-            myRace={headerMeta?.myRace ?? data.race ?? null}
-            oppRace={headerMeta?.opponentRace ?? null}
-            gameId={gameId}
-          />
-        )}
-      </section>
 
       <section
         aria-labelledby="penalty-heading"
