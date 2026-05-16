@@ -113,10 +113,10 @@ describe("Rivalry Ranker — generate gate", () => {
   });
 });
 
-describe("Rivalry Ranker — WR semantics (opponent perspective)", () => {
-  test("truth ranks by opponent's WR against the user, not user's WR", async () => {
+describe("Rivalry Ranker — toughest-first ordering", () => {
+  test("truth puts the user's worst matchup first and best last", async () => {
     // Four opponents: user is 5-0, 4-1, 2-2, 1-3 against them.
-    // From the OPPONENT's perspective: 0/5, 1/5, 2/4, 3/4 WR.
+    // User WRs: 100%, 80%, 50%, 25%.
     // Toughest matchup ⇒ first ⇒ pulseId of the (1,3) opponent.
     const dataset: ArcadeDataset = {
       ...baseDataset,
@@ -218,12 +218,12 @@ describe("Rivalry Ranker — barcode filter", () => {
   });
 });
 
-describe("Rivalry Ranker — reveal renders from opponent perspective", () => {
+describe("Rivalry Ranker — reveal renders from user perspective", () => {
   afterEach(() => cleanup());
 
-  test("opponent-perspective WR text is displayed (e.g. 75.0% (3-1) for a 1-3 record vs user)", () => {
+  test("user-perspective WR text is displayed (e.g. 25.0% (1-3) for the user's toughest matchup)", () => {
     const candidates = [
-      opp("p1", "Toughest", 1, 3), // opp WR 75% (3-1)
+      opp("p1", "Toughest", 1, 3), // user WR 25% (1-3)
       opp("p2", "Medium", 2, 2),
       opp("p3", "Easy", 4, 1),
       opp("p4", "Easiest", 5, 0),
@@ -239,9 +239,9 @@ describe("Rivalry Ranker — reveal renders from opponent perspective", () => {
         isDaily: false,
       }) as React.ReactElement,
     );
-    // Reveal row for the (1,3) opponent must show opp perspective: 75.0% with (3-1).
-    // Both editor and reveal carry the WR text; assert at least one match.
-    expect(screen.getAllByText(/75\.0%/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/\(3-1\)/)).toBeTruthy();
+    // Reveal row for the (1,3) opponent must show the user's perspective:
+    // 25.0% with (1-3), matching the "your toughest matchup" prompt.
+    expect(screen.getAllByText(/25\.0%/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/\(1-3\)/)).toBeTruthy();
   });
 });
