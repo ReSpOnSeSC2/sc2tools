@@ -12,12 +12,11 @@ import {
   defenseFor,
   isFoil,
   rarityForPlays,
-  userEmittableCatalogEntry,
-  userPlayedRaces,
 } from "../../sessions";
 import { useArcadeState } from "../../hooks/useArcadeState";
 import { CardBinder } from "../../collection/CardBinder";
 import type {
+  ArcadeDataset,
   GenerateInput,
   GenerateResult,
   Mode,
@@ -45,33 +44,43 @@ type Q = {
 
 type A = { browsed: true };
 
+/**
+ * The binder seeds its universe from BUILD_DEFINITIONS, so
+ * `universe.length === 0` is never true on an empty dataset — the
+ * 100+ catalog stubs alone would qualify the mode as eligible.
+ * `hasAnyRealCards` is what the daily-picker probe (and the
+ * empty-state branch in `generate`) actually want: it returns true
+ * only when the user has at least one row that came from their own
+ * play history, an authored custom build, or a community-published
+ * build, i.e. some real data to anchor the binder against.
+ */
+function hasAnyRealCards(data: ArcadeDataset): boolean {
+  return (
+    data.builds.length > 0 ||
+    data.customBuilds.length > 0 ||
+    data.communityBuilds.length > 0
+  );
+}
+
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
-  // Builds-as-Cards is the user's personal collection — every card
-  // must represent a build label the analyzer's USER-side detector can
-  // plausibly emit as `myBuild`. That means dropping two flavours of
-  // catalog stubs:
-  //   • Race-prefixed labels (`Protoss - Robo Opener`,
-  //     `Terran - 1-1-1 Standard`, `Zerg - 12 Pool`). These are emitted
-  //     by the OPPONENT classifier only — the user-side detector
-  //     always picks the matchup-prefixed variant (PvX-Y / TvX-Y /
-  //     ZvX-Y) when tagging the player's own build. Without this
-  //     filter a Protoss main sees ~60 forever-locked stubs cluttering
-  //     the binder (17 Protoss-generic + 23 Terran + 19 Zerg + a few
-  //     cross-race matchup rows), and the completion counter is
-  //     anchored against a denominator the user can never close.
-  //   • Catalog rows for matchups the user has never played as the
-  //     owning race. A Protoss main never gets a TvP / ZvZ myBuild
-  //     either — including those rows would re-introduce the same
-  //     uncloseable denominator problem one race over.
-  // Own / community / custom rows are kept verbatim — those reflect
-  // either the user's real plays or builds they (or the community)
-  // authored, all of which are legitimate collection entries.
-  const races = userPlayedRaces(input.data);
-  const universe = buildUniverse(input.data, {
-    includeCatalog: true,
-    catalogFilter: (def) => userEmittableCatalogEntry(def, races),
-  });
-  if (universe.length === 0) {
+  // Pull from the same universe Stock Market does — own + community +
+  // custom + the bundled BUILD_DEFINITIONS catalog — so the binder
+  // surfaces every analyzer-detectable strategy across every race and
+  // matchup, not just the ones the user has personally engaged with.
+  // Catalog stubs with zero plays render as bronze rarity with
+  // attack=0 until the user plays them. The completion percentage is
+  // *expected* to be well below 100% — that's the point of seeing the
+  // full meta in one place — and the count is computed off the live
+  // `c.plays > 0` field below so it always matches the on-screen
+  // "Not played yet" rendering.
+  const universe = buildUniverse(input.data, { includeCatalog: true });
+  // The bundled catalog is non-empty, so an empty universe is
+  // unreachable in practice. The real signal we want for "no round
+  // available today" is whether the user has at least one own /
+  // community / custom row — otherwise the daily picker would queue
+  // Builds-as-Cards for a brand-new account that only has the 100+
+  // catalog stubs to look at.
+  if (universe.length === 0 || !hasAnyRealCards(input.data)) {
     return {
       ok: false,
       reason: "Play a few games and we'll start unlocking your card binder.",
