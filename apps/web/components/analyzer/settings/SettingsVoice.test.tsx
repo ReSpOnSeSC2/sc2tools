@@ -161,6 +161,43 @@ function installSpeechSynthMock(): SpeechMockState {
 }
 
 describe("<SettingsVoice />", () => {
+  function makeErrorEvent(error: SpeechSynthesisErrorCode): SpeechSynthesisErrorEvent {
+    return {
+      error,
+      charIndex: 0,
+      charLength: 0,
+      elapsedTime: 0,
+      name: "",
+      utterance: {} as SpeechSynthesisUtterance,
+      bubbles: false,
+      cancelable: false,
+      composed: false,
+      currentTarget: null,
+      defaultPrevented: false,
+      eventPhase: 0,
+      isTrusted: false,
+      returnValue: false,
+      srcElement: null,
+      target: null,
+      timeStamp: 0,
+      type: "error",
+      cancelBubble: false,
+      composedPath: () => [],
+      initEvent: () => {},
+      preventDefault: () => {},
+      stopImmediatePropagation: () => {},
+      stopPropagation: () => {},
+      AT_TARGET: 2,
+      BUBBLING_PHASE: 3,
+      CAPTURING_PHASE: 1,
+      NONE: 0,
+    } as SpeechSynthesisErrorEvent;
+  }
+
+  function makeStartEvent(): SpeechSynthesisEvent {
+    return { ...makeErrorEvent("not-allowed"), type: "start" } as unknown as SpeechSynthesisEvent;
+  }
+
   let speech: SpeechMockState;
 
   beforeEach(() => {
@@ -202,7 +239,7 @@ describe("<SettingsVoice />", () => {
     // Trigger the not-allowed error path.
     const utt = speech.utterances[0];
     act(() => {
-      utt.onerror?.({ error: "not-allowed" } as unknown as Event);
+      utt.onerror?.(makeErrorEvent("not-allowed"));
     });
     expect(screen.getByRole("alert").textContent).toMatch(/voice blocked by your browser/i);
     // The error path must NOT toast for autoplay block — the banner
@@ -230,7 +267,7 @@ describe("<SettingsVoice />", () => {
     });
     const utt = speech.utterances[0];
     act(() => {
-      utt.onstart?.({} as Event);
+      utt.onstart?.(makeStartEvent());
     });
     act(() => {
       vi.advanceTimersByTime(2500);
@@ -244,7 +281,7 @@ describe("<SettingsVoice />", () => {
       fireEvent.click(screen.getByRole("button", { name: /test voice/i }));
     });
     act(() => {
-      speech.utterances[0].onerror?.({ error: "synthesis-failed" } as unknown as Event);
+      speech.utterances[0].onerror?.(makeErrorEvent("synthesis-failed"));
     });
     expect(mockToast.error).toHaveBeenCalledWith(
       "Voice preview failed",
@@ -260,7 +297,7 @@ describe("<SettingsVoice />", () => {
       fireEvent.click(screen.getByRole("button", { name: /test voice/i }));
     });
     act(() => {
-      speech.utterances[0].onerror?.({ error: "interrupted" } as unknown as Event);
+      speech.utterances[0].onerror?.(makeErrorEvent("interrupted"));
     });
     expect(mockToast.error).not.toHaveBeenCalled();
     expect(screen.queryByRole("alert")).toBeNull();
