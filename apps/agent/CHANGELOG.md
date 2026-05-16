@@ -2,6 +2,36 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.7.2
+
+### Fixed — Opponent Protoss "Robo Opener" no longer fires on Twilight-first builds
+- The opponent-side Protoss classifier tagged any build with a
+  Robotics Facility before 6:30 as `Protoss - Robo Opener`,
+  regardless of whether a Twilight Council had already gone down.
+  A standard 2-Gate Expand Blink build with a follow-up Robo
+  (Twilight first, Robo later) was being mis-labelled, hiding the
+  Blink/Twilight context the user needs to react.
+- The Robo Opener branch now requires the earliest Robotics
+  Facility to predate the earliest Twilight Council, matching the
+  user-side PvZ / PvT definitions ("FIRST tech building"). A
+  Twilight-first build with a later Robo falls through to the
+  Blink All-In / Standard Expand / Standard Macro branches
+  instead.
+- Both detector copies the agent ships
+  (`reveal-sc2-opponent-main/core/strategy_detector_opponent.py`
+  and `SC2Replay-Analyzer/detectors/opponent.py`) carry the same
+  guard, and the build-definition catalogs (Python + the web
+  `apps/web/lib/build-definitions/protoss.ts`) document the
+  "FIRST tech building" requirement.
+- New regression suite
+  `test_strategy_detector_protoss_robo_opener_opponent.py` pins
+  three scenarios: the user-reported Twilight-first 2-Gate Expand
+  Blink with a later Robo (must NOT classify as Robo Opener), a
+  true Robo-first opener with no Twilight (must still classify as
+  Robo Opener), and a Robo-before-Twilight build with both present
+  (must still classify as Robo Opener), so the discrimination
+  can't silently regress.
+
 ## 0.6.10
 
 ### Fixed — PvT "3 Gate Charge Opener" no longer steals Blink-first openers
