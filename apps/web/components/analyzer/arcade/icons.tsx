@@ -144,6 +144,33 @@ const macroMemory = () =>
     </>
   ));
 
+const headToHeadCensus = () =>
+  withTitle("Head-to-head census", (
+    <>
+      {/* Two opposing silhouettes with a tally beneath — reads as
+          "count of head-to-head rivalries". */}
+      <circle cx="8" cy="8" r="2.4" />
+      <path d="M4 17c0-2.6 1.8-4.2 4-4.2s4 1.6 4 4.2" />
+      <circle cx="16" cy="8" r="2.4" />
+      <path d="M12 17c0-2.6 1.8-4.2 4-4.2s4 1.6 4 4.2" />
+      <path d="M5 20h14" opacity="0.55" />
+      <path d="M7 20v1M10 20v1M14 20v1M17 20v1" opacity="0.7" />
+    </>
+  ));
+
+const mapMasteryCensus = () =>
+  withTitle("Map mastery census", (
+    <>
+      {/* A 2×2 map grid with a small WR-meter tick on the upper-right
+          tile so it reads as "maps × win-rate". */}
+      <rect x="3" y="3" width="8" height="8" rx="1" />
+      <rect x="13" y="3" width="8" height="8" rx="1" />
+      <rect x="3" y="13" width="8" height="8" rx="1" opacity="0.55" />
+      <rect x="13" y="13" width="8" height="8" rx="1" opacity="0.55" />
+      <path d="M15 5l2 2 4-4" />
+    </>
+  ));
+
 /* ──────────────────────── Games (6) ──────────────────────── */
 
 const stockMarket = () =>
@@ -219,6 +246,8 @@ const SVG_REGISTRY: Record<string, () => ReactNode> = {
   "closers-eye": closersEye,
   "macro-memory": macroMemory,
   "unit-profile": unitProfile,
+  "head-to-head-census": headToHeadCensus,
+  "map-mastery-census": mapMasteryCensus,
   "stock-market": stockMarket,
   "bingo-ladder": bingoLadder,
   "buildle": buildle,
@@ -255,6 +284,8 @@ const TITLES: Record<string, string> = {
   "closers-eye": "Closer's Eye",
   "macro-memory": "Macro Memory",
   "unit-profile": "Unit Profile",
+  "head-to-head-census": "Head-to-Head Census",
+  "map-mastery-census": "Map Mastery Census",
   "stock-market": "Stock Market",
   "bingo-ladder": "Bingo: Ladder Edition",
   "buildle": "Buildle",
