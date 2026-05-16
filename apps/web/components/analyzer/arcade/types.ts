@@ -61,6 +61,21 @@ export interface ScoreResult {
   note?: string;
 }
 
+/**
+ * Share summary — the plain-text version of a round, used by the
+ * canvas-rendered share card. Each mode declares (1) the question
+ * prompt the user just answered and (2) the multi-line review
+ * (correct answer + breakdown / detail rows). The share card stacks
+ * these into a "Question / Answer" layout so the recipient can see
+ * the same context the in-app reveal showed, not just the mode title.
+ */
+export interface ShareSummary {
+  /** The question prompt as plain text (single short paragraph). */
+  question: string;
+  /** Review lines — correct answer + supporting breakdown. */
+  answer: string[];
+}
+
 /** Common props every render() receives. */
 export interface RenderContext<Q, A, S> {
   question: Q;
@@ -102,6 +117,13 @@ export interface Mode<Q, A, S extends ScoreResult = ScoreResult> {
   render: (ctx: RenderContext<Q, A, S>) => ReactNode;
   /** Pure scoring function. */
   score: (question: Q, answer: A) => S;
+  /**
+   * Optional: build a plain-text share summary (question + review)
+   * after the user has answered. When omitted, ModeRunner falls back
+   * to `mode.blurb` + `score.note` so every mode at least surfaces
+   * the question framing along with the one-line outcome.
+   */
+  share?: (question: Q, answer: A | null, score: S) => ShareSummary;
 }
 
 /** Data accessors injected into generate(). All read-only, real data only. */

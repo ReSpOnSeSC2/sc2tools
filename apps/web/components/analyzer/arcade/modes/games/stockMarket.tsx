@@ -15,6 +15,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
   StockMarketState,
 } from "../../types";
 
@@ -155,6 +156,36 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+function share(q: Q, a: A | null, _s: ScoreResult): ShareSummary {
+  // Build a name lookup from q.quotes so each pick line shows the
+  // build name rather than the raw slug. q.locked is null at submit
+  // time (the persisted portfolio lives in arcade state, not in Q),
+  // so we read the active picks off the answer payload.
+  const nameById = new Map<string, string>();
+  const priceById = new Map<string, number | null>();
+  for (const quote of q.quotes) {
+    nameById.set(quote.id, quote.name);
+    priceById.set(quote.id, quote.price);
+  }
+  const picks = a?.picks ?? [];
+  const answer: string[] = [`Week ${q.weekKey} · ${picks.length} pick${picks.length === 1 ? "" : "s"}`];
+  for (const p of picks) {
+    const name = nameById.get(p.id) || p.id;
+    const entry = priceById.get(p.id);
+    const entryText = typeof entry === "number" ? ` @ ${entry}` : "";
+    answer.push(`• ${name} · ${p.alloc}%${entryText}`);
+  }
+  const submitted = q.locked?.submittedPnl;
+  if (typeof submitted === "number") {
+    const sign = submitted > 0 ? "+" : "";
+    answer.push(`Total P&L · ${sign}${(submitted * 100).toFixed(1)}%`);
+  }
+  return {
+    question: "Locked portfolio for the week — P&L revealed at lock+7d.",
+    answer,
+  };
+}
+
 export const stockMarket: Mode<Q, A> = {
   id: ID,
   kind: "game",
@@ -166,6 +197,7 @@ export const stockMarket: Mode<Q, A> = {
   blurb: "Allocate 100 Mineral Credits across ≤5 builds. P&L = Σ(weight × Δprice).",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

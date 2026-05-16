@@ -15,6 +15,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 type Q = {
@@ -92,6 +93,22 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
+  const longest = q.candidates[q.correctIndex];
+  const answer: string[] = [
+    `Longest streak (${longest.runLength}W) broken by ${longest.opponentName}.`,
+    ...q.candidates.map((c, i) => {
+      const star = i === q.correctIndex ? " ★" : "";
+      return `vs ${c.opponentName} · ${fmtDate(c.endedByDate)} · ${c.runLength}W${star}`;
+    }),
+  ];
+  return {
+    question:
+      "Three of my losses each ended a different winning streak — which loss ended the longest one?",
+    answer,
+  };
+}
+
 export const streakVeto: Mode<Q, A> = {
   id: ID,
   kind: "quiz",
@@ -103,6 +120,7 @@ export const streakVeto: Mode<Q, A> = {
   blurb: "Three losses, three streaks. Which loss broke your longest run?",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

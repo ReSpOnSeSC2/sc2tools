@@ -20,6 +20,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 const ID = "buildle";
@@ -616,6 +617,31 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+function share(q: Q, a: A | null, _s: ScoreResult): ShareSummary {
+  const dayLabel = new Date().toISOString().slice(0, 10);
+  const label = QUESTION_LABEL[q.questionType] || "Daily";
+  const correctText = q.options[q.correctIndex];
+  const pickedIndex = typeof a === "number" && a >= 0 ? a : -1;
+  const pickedText = pickedIndex >= 0 ? q.options[pickedIndex] : null;
+  const answer: string[] = [
+    `${label} — ${correctText}`,
+  ];
+  if (pickedText && pickedText !== correctText) {
+    answer.push(`Your pick · ${pickedText}`);
+  }
+  // Surface a couple of supporting case-file rows so the reader sees
+  // the same context the in-app case file showed (opponent, matchup,
+  // date — whichever survive the hidden-key redaction).
+  const detailRows = q.caseFile.slice(0, 3);
+  for (const f of detailRows) {
+    answer.push(`${f.label} · ${f.value}`);
+  }
+  return {
+    question: `Buildle · ${dayLabel} · ${label} — pick the bucket that matches the redacted fact.`,
+    answer,
+  };
+}
+
 export const buildle: Mode<Q, A> = {
   id: ID,
   kind: "game",
@@ -628,6 +654,7 @@ export const buildle: Mode<Q, A> = {
     "Daily case file from your real games. One fact is hidden — pick the right bucket.",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

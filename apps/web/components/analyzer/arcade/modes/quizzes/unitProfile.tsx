@@ -10,6 +10,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 const ID = "unit-profile";
@@ -282,6 +283,51 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+function questionPlain(q: Q): string {
+  if (q.variant === "built") {
+    return `Which unit have you built the most of across your last ${q.scannedGames} games?`;
+  }
+  if (q.variant === "lost") {
+    return `Across ${q.lostGames} of your recent games, roughly how many units have you lost in total?`;
+  }
+  if (q.variant === "lost-per-game") {
+    return `On average, roughly how many units do you lose per game? (Across ${q.lostGames} games with macro data.)`;
+  }
+  return `Across your last ${q.scannedGames} games, roughly how many distinct unit types have you built at least once?`;
+}
+
+function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
+  const answer: string[] = [`Answer: ${q.truth}`];
+  if (q.variant === "built") {
+    answer.push(
+      `Top-built: ${q.truth} · ${q.truthValue.toLocaleString()} entries across last ${q.scannedGames} games.`,
+    );
+    for (const o of q.options) {
+      const star = o === q.truth ? " ★" : "";
+      answer.push(`${o} · ${(q.countsByOption[o] || 0).toLocaleString()}${star}`);
+    }
+  } else if (q.variant === "lost") {
+    answer.push(
+      `${q.truthValue.toLocaleString()} units lost across ${q.lostGames} games with macro data.`,
+    );
+  } else if (q.variant === "lost-per-game") {
+    answer.push(
+      `Avg ${q.truthValue.toFixed(1)} units/game · ${q.totalUnitsLost.toLocaleString()} lost across ${q.lostGames} games.`,
+    );
+  } else {
+    answer.push(
+      `${q.truthValue.toLocaleString()} distinct unit types across last ${q.scannedGames} games.`,
+    );
+    for (const u of q.topUnits) {
+      answer.push(`${u.name} · ${u.count.toLocaleString()}`);
+    }
+  }
+  return {
+    question: questionPlain(q),
+    answer,
+  };
+}
+
 export const unitProfile: Mode<Q, A> = {
   id: ID,
   kind: "quiz",
@@ -294,6 +340,7 @@ export const unitProfile: Mode<Q, A> = {
     "Four angles on the units in your own build-logs. How well do you know your own army?",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

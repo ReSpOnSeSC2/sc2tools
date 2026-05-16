@@ -180,3 +180,36 @@ describe("Closer's Eye generate (depth + thin-data)", () => {
     }
   });
 });
+
+describe("Closer's Eye share summary", () => {
+  test("includes the question prompt and every candidate row", () => {
+    const q = {
+      candidates: [
+        { build: "Reaper FE", meanWinSec: 8 * 60 + 30, wins: 4 },
+        { build: "Hellion Banshee", meanWinSec: 10 * 60, wins: 3 },
+        { build: "1-1-1", meanWinSec: 12 * 60, wins: 5 },
+        { build: "Mech", meanWinSec: 15 * 60, wins: 3 },
+      ],
+      correctIndex: 0,
+    };
+    expect(closersEye.share).toBeTypeOf("function");
+    const summary = closersEye.share!(q, 0, {
+      raw: 1,
+      xp: 14,
+      outcome: "correct",
+    });
+    expect(summary.question).toMatch(/shortest average win length/i);
+    expect(summary.answer[0]).toContain("Reaper FE");
+    expect(summary.answer).toHaveLength(1 + q.candidates.length);
+    // Every candidate appears as its own line in the breakdown.
+    for (const c of q.candidates) {
+      expect(summary.answer.some((line) => line.includes(c.build))).toBe(true);
+    }
+    // Correct candidate gets a star marker so the share image's reader
+    // can see which row was the right answer.
+    const correctLine = summary.answer.find((line) =>
+      line.startsWith("Reaper FE"),
+    );
+    expect(correctLine).toContain("★");
+  });
+});

@@ -15,6 +15,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 /**
@@ -254,6 +255,43 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+function questionPlain(variant: StreakVariant): string {
+  switch (variant) {
+    case "their-win":
+      return "Which of these opponents had the longest win streak against you?";
+    case "their-loss":
+      return "Which of these opponents had the longest loss streak against you?";
+    case "your-win":
+      return "Which of these opponents did you have the longest win streak against?";
+    case "your-loss":
+      return "Which of these opponents did you have the longest loss streak against?";
+  }
+}
+
+function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
+  const variant = q.variant;
+  const letter = metricLetter(variant);
+  const tail = streakDirectionTail(variant);
+  const m = (c: Candidate) => metricValue(c, variant);
+  const maxAmongShown = q.candidates.reduce(
+    (best, c) => (m(c) > best ? m(c) : best),
+    0,
+  );
+  const leaders = q.candidates.filter((c) => m(c) === maxAmongShown);
+  const headline =
+    leaders.length === 1
+      ? `${leaders[0].name} — ${maxAmongShown}${letter} ${tail}.`
+      : `${leaders.length} rivals tied on ${maxAmongShown}${letter} ${tail}.`;
+  const rows = q.candidates.map((c) => {
+    const star = m(c) === maxAmongShown ? " ★" : "";
+    return `${c.name} · ${m(c)}${letter} (${c.games} games)${star}`;
+  });
+  return {
+    question: questionPlain(variant),
+    answer: [headline, ...rows],
+  };
+}
+
 export const activeStreakHunter: Mode<Q, A> = {
   id: ID,
   kind: "quiz",
@@ -265,6 +303,7 @@ export const activeStreakHunter: Mode<Q, A> = {
   blurb: "Spot the rival on the longest streak — theirs against you, or yours against them.",
   generate: generateStreakHunter,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

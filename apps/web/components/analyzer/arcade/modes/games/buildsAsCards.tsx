@@ -20,6 +20,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 const ID = "builds-as-cards";
@@ -77,6 +78,32 @@ function score(q: Q): ScoreResult {
   };
 }
 
+function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
+  const total = q.cards.length;
+  const played = q.cards.filter((c) => c.plays > 0);
+  const answer: string[] = [
+    `Binder: ${total} build card${total === 1 ? "" : "s"}.`,
+    `Played: ${played.length} · Locked: ${total - played.length}`,
+  ];
+  // List a few of the user's most-played cards so the reader sees
+  // which builds anchor the binder — mirrors the per-card stats the
+  // CardBinder face shows (ATK / DEF / plays).
+  const top = played
+    .slice()
+    .sort((a, b) => b.plays - a.plays)
+    .slice(0, 4);
+  if (top.length > 0) {
+    answer.push("Top cards:");
+    for (const c of top) {
+      answer.push(`• ${c.name} · ${c.rarity}${c.foil ? " foil" : ""} · ${c.plays}p`);
+    }
+  }
+  return {
+    question: "Build binder — collected cards from your real games.",
+    answer,
+  };
+}
+
 export const buildsAsCards: Mode<Q, A> = {
   id: ID,
   kind: "game",
@@ -88,6 +115,7 @@ export const buildsAsCards: Mode<Q, A> = {
   blurb: "Every build you've played becomes a collectible card. Foil at 10 wins.",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

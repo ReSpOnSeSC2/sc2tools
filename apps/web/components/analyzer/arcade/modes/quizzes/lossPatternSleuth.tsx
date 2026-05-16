@@ -10,6 +10,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 /**
@@ -293,6 +294,43 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+function questionPlain(q: Q): string {
+  const raceName = FULL_RACE[q.raceLetter];
+  if (q.variant === "next-build") {
+    return `After losing to a ${raceName}, which of these four builds did you reach for most often the next game?`;
+  }
+  if (q.variant === "bounce-back") {
+    return `When you lose to a ${raceName}, what does your win rate on the very next game look like across the ${q.sample} times we've seen that situation?`;
+  }
+  return `Which of these builds has lost the most against ${raceName} across your history?`;
+}
+
+function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
+  const raceName = FULL_RACE[q.raceLetter];
+  const answer: string[] = [];
+  if (q.variant === "next-build") {
+    answer.push(`After losing to ${raceName}: ${q.truth} (${q.countsByOption[q.truth] || 0}×).`);
+    for (const o of q.options) {
+      const star = o === q.truth ? " ★" : "";
+      answer.push(`${o} · ${(q.countsByOption[o] || 0).toLocaleString()}×${star}`);
+    }
+  } else if (q.variant === "bounce-back") {
+    const pct = (q.truthValue * 100).toFixed(1);
+    answer.push(`Bounce-back vs ${raceName}: ${q.truth} (${pct}%).`);
+    answer.push(`${q.wins}W – ${q.losses}L across ${q.sample} next-games.`);
+  } else {
+    answer.push(`Tilt-build vs ${raceName}: ${q.truth} — ${q.lossesByOption[q.truth] || 0} losses.`);
+    for (const o of q.options) {
+      const star = o === q.truth ? " ★" : "";
+      answer.push(`${o} · ${(q.lossesByOption[o] || 0).toLocaleString()}L${star}`);
+    }
+  }
+  return {
+    question: questionPlain(q),
+    answer,
+  };
+}
+
 export const lossPatternSleuth: Mode<Q, A> = {
   id: ID,
   kind: "quiz",
@@ -305,6 +343,7 @@ export const lossPatternSleuth: Mode<Q, A> = {
     "Three angles on what your history looks like in the wake of a defeat: tilt-build, bounce-back, blind-spot.",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

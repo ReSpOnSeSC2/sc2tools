@@ -108,6 +108,30 @@ describe("Two Truths & a Lie — share lines", () => {
     expect(missed[0]).toMatch(/missed/i);
     expect(missed[0]).toContain("#2");
   });
+
+  test("Mode.share returns the full question prompt plus every claim", () => {
+    const q = {
+      claims: [
+        { text: "Claim A.", truthful: true, detail: "A detail." },
+        { text: "Claim B (the lie).", truthful: false, detail: "B detail." },
+        { text: "Claim C.", truthful: true, detail: "C detail." },
+      ],
+      lieIndex: 1,
+    };
+    expect(twoTruthsLie.share).toBeTypeOf("function");
+    const summary = twoTruthsLie.share!(q, 1, {
+      raw: 1,
+      xp: 16,
+      outcome: "correct",
+    });
+    // Plain-text question is included, no JSX.
+    expect(summary.question).toMatch(/two are true/i);
+    expect(summary.question).toMatch(/lie/i);
+    // Every claim should appear with its TRUE/LIE label.
+    expect(summary.answer.some((l) => l.includes("TRUE") && l.includes("Claim A"))).toBe(true);
+    expect(summary.answer.some((l) => l.includes("LIE") && l.includes("Claim B"))).toBe(true);
+    expect(summary.answer.some((l) => l.includes("TRUE") && l.includes("Claim C"))).toBe(true);
+  });
 });
 
 describe("Two Truths & a Lie — expanded fact families", () => {

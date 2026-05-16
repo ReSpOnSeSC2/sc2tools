@@ -10,6 +10,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 type Bucket = "<25%" | "25-50%" | "50-75%" | ">75%";
@@ -84,6 +85,17 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
+  return {
+    question:
+      "After losing my last 3 games, what bucket does my next-game WR fall into?",
+    answer: [
+      `Bounce-back WR ${pct1(q.wr)} — bucket ${q.truth}.`,
+      `Sample size · ${q.positions} occurrences`,
+    ],
+  };
+}
+
 export const streakAfterLoss: Mode<Q, A> = {
   id: ID,
   kind: "quiz",
@@ -95,6 +107,7 @@ export const streakAfterLoss: Mode<Q, A> = {
   blurb: "Three Ls in a row, then what? Pick the bucket your bounce-back WR lands in.",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 
