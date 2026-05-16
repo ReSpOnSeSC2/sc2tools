@@ -290,3 +290,210 @@ describe("Two Truths & a Lie — generate gate", () => {
     expect(out.ok).toBe(false);
   });
 });
+
+/* ──────────── Census-style fact families ──────────── */
+
+describe("Two Truths & a Lie — census-style facts", () => {
+  const opp = (
+    pulseId: string,
+    name = pulseId,
+    displayName: string | null = null,
+  ) => ({
+    pulseId,
+    pulseCharacterId: null,
+    name,
+    displayName,
+    wins: 0,
+    losses: 0,
+    games: 0,
+    userWinRate: 0,
+    opponentWinRate: 0,
+    lastPlayed: null,
+  });
+
+  const gamesAgainst = (
+    pulseId: string,
+    pattern: ReadonlyArray<"W" | "L">,
+  ): ArcadeGame[] =>
+    pattern.map((p, i) => ({
+      gameId: `${pulseId}-${i}`,
+      date: `2026-05-${String(i + 1).padStart(2, "0")}T12:00:00Z`,
+      result: p === "W" ? "Win" : "Loss",
+      oppPulseId: pulseId,
+    }));
+
+  const gamesOnMap = (
+    map: string,
+    pattern: ReadonlyArray<"W" | "L">,
+    extra: Partial<ArcadeGame> = {},
+  ): ArcadeGame[] =>
+    pattern.map((p, i) => ({
+      gameId: `${map}-${i}`,
+      date: `2026-05-${String(i + 1).padStart(2, "0")}T12:00:00Z`,
+      result: p === "W" ? "Win" : "Loss",
+      map,
+      oppPulseId: `${map}-opp-${i}`,
+      ...extra,
+    }));
+
+  const gamesWithBuild = (
+    build: string,
+    pattern: ReadonlyArray<"W" | "L">,
+  ): ArcadeGame[] =>
+    pattern.map((p, i) => ({
+      gameId: `${build}-${i}`,
+      date: `2026-05-${String(i + 1).padStart(2, "0")}T12:00:00Z`,
+      result: p === "W" ? "Win" : "Loss",
+      myBuild: build,
+      oppPulseId: `${build}-opp-${i}`,
+    }));
+
+  test("perfect-opponent-exists fires when a 5+ game perfect rivalry is present", () => {
+    const facts = buildFactPool({
+      ...baseDataset,
+      opponents: [opp("A", "RivalA"), opp("B", "RivalB")],
+      games: [
+        ...gamesAgainst("A", ["W", "W", "W", "W", "W"]),
+        ...gamesAgainst("B", ["W", "L", "W", "L", "W"]),
+      ],
+    });
+    const f = facts.find((x) =>
+      x.truthText.includes("without ever losing"),
+    );
+    expect(f).toBeDefined();
+    expect(f!.truthText).toMatch(/at least one opponent.+5\+/);
+    expect(f!.lieText).toMatch(/every opponent/);
+    expect(f!.detail).toContain("RivalA");
+  });
+
+  test("perfect-opponent-exists stays silent when every rivalry has at least one loss", () => {
+    const facts = buildFactPool({
+      ...baseDataset,
+      opponents: [opp("A"), opp("B")],
+      games: [
+        ...gamesAgainst("A", ["W", "L", "W", "L", "W"]),
+        ...gamesAgainst("B", ["W", "L", "W", "L", "W"]),
+      ],
+    });
+    expect(
+      facts.find((x) => x.truthText.includes("without ever losing")),
+    ).toBeUndefined();
+  });
+
+  test("perfect-opponent-exists stays silent when there's no non-perfect opponent to refute the lie", () => {
+    const facts = buildFactPool({
+      ...baseDataset,
+      opponents: [opp("A")],
+      games: gamesAgainst("A", ["W", "W", "W", "W", "W"]),
+    });
+    expect(
+      facts.find((x) => x.truthText.includes("without ever losing")),
+    ).toBeUndefined();
+  });
+
+  test("winless-map-exists fires when a 5+ game winless map is present", () => {
+    const facts = buildFactPool({
+      ...baseDataset,
+      games: [
+        ...gamesOnMap("Acropolis", ["L", "L", "L", "L", "L"]),
+        ...gamesOnMap("Equilibrium", ["W", "L", "W", "L", "W"]),
+      ],
+    });
+    const f = facts.find((x) =>
+      x.truthText.includes("without winning a single game"),
+    );
+    expect(f).toBeDefined();
+    expect(f!.detail).toContain("Acropolis");
+  });
+
+  test("dominant-build-exists fires when any 5+ game build clears 70% WR", () => {
+    const facts = buildFactPool({
+      ...baseDataset,
+      games: [
+        ...gamesWithBuild("Reaper FE", ["W", "W", "W", "W", "L"]), // 80%
+        ...gamesWithBuild("1-1-1", ["W", "L", "W", "L", "L"]), // 40%
+      ],
+    });
+    const f = facts.find((x) =>
+      x.truthText.includes("at least one build with a 70%"),
+    );
+    expect(f).toBeDefined();
+    expect(f!.detail).toContain("Reaper FE");
+  });
+
+  test("even-rivalry-exists fires when a 10+ game rivalry is exactly tied", () => {
+    const facts = buildFactPool({
+      ...baseDataset,
+      opponents: [opp("A", "Tied"), opp("B", "Lopsided")],
+      games: [
+        ...gamesAgainst("A", ["W", "L", "W", "L", "W", "L", "W", "L", "W", "L"]),
+        ...gamesAgainst("B", ["W", "W", "W", "W", "W", "W", "W", "W", "L", "L"]),
+      ],
+    });
+    const f = facts.find((x) => x.truthText.includes("exactly even"));
+    expect(f).toBeDefined();
+    expect(f!.detail).toContain("Tied");
+  });
+
+  test("one-and-done-opponents fires when the majority of opponents are singletons", () => {
+    const opponents = Array.from({ length: 10 }, (_, i) =>
+      opp(`p${i}`, `Player ${i}`),
+    );
+    // 8 singletons + 2 multi-game rivalries → 80% singleton ratio.
+    const games: ArcadeGame[] = [];
+    for (let i = 0; i < 8; i++) {
+      games.push(...gamesAgainst(`p${i}`, ["W"]));
+    }
+    games.push(...gamesAgainst("p8", ["W", "L"]));
+    games.push(...gamesAgainst("p9", ["W", "L"]));
+    const facts = buildFactPool({ ...baseDataset, opponents, games });
+    const f = facts.find((x) =>
+      x.truthText.includes("More than half of your opponents"),
+    );
+    expect(f).toBeDefined();
+    expect(f!.detail).toMatch(/8 one-time opponents out of 10/);
+  });
+
+  test("distinct-maps-recent fires when ≥4 distinct maps appear in the last 90 days", () => {
+    const recentDate = new Date(Date.now() - 30 * 86_400_000).toISOString();
+    const facts = buildFactPool({
+      ...baseDataset,
+      games: ["Alpha", "Bravo", "Charlie", "Delta", "Echo"].map(
+        (m, i): ArcadeGame => ({
+          gameId: `${m}-${i}`,
+          date: recentDate,
+          result: "Win",
+          map: m,
+          oppPulseId: `opp-${i}`,
+        }),
+      ),
+    });
+    const f = facts.find((x) =>
+      x.truthText.includes("distinct maps in the past 90 days"),
+    );
+    expect(f).toBeDefined();
+    expect(f!.detail).toMatch(/5 distinct maps/);
+  });
+
+  test("census facts never produce text containing 'undefined'", () => {
+    // A torture-test dataset covering all six census builders. Ensures
+    // the templating + display-name fallbacks don't emit "undefined".
+    const facts = buildFactPool({
+      ...baseDataset,
+      opponents: [opp("A", "", null), opp("B", "B")],
+      games: [
+        ...gamesAgainst("A", ["W", "W", "W", "W", "W"]),
+        ...gamesAgainst("B", ["W", "L", "W", "L", "W"]),
+        ...gamesOnMap("Acropolis", ["L", "L", "L", "L", "L"]),
+        ...gamesOnMap("Equilibrium", ["W", "L", "W", "L", "W"]),
+        ...gamesWithBuild("Reaper FE", ["W", "W", "W", "W", "L"]),
+        ...gamesWithBuild("1-1-1", ["W", "L", "W", "L", "L"]),
+      ],
+    });
+    for (const f of facts) {
+      expect(f.truthText.toLowerCase()).not.toContain("undefined");
+      expect(f.lieText.toLowerCase()).not.toContain("undefined");
+      expect(f.detail.toLowerCase()).not.toContain("undefined");
+    }
+  });
+});
