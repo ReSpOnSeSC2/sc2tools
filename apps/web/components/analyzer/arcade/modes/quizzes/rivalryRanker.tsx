@@ -32,9 +32,9 @@ type Q = {
   /** Source set in stable id order. */
   candidates: Candidate[];
   /**
-   * True ranking — pulseIds ordered from highest opponent-WR-against-the-
-   * user (i.e. toughest matchup) down to easiest. The prompt asks the
-   * user to rank "WR vs you", which is the opponent's perspective.
+   * True ranking — pulseIds ordered toughest-matchup-first (lowest
+   * userWinRate at index 0, highest at the end). The prompt and reveal
+   * are both phrased from the user's perspective.
    */
   truth: string[];
 };
@@ -77,10 +77,10 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
     userWinRate: o.userWinRate,
     opponentWinRate: o.opponentWinRate,
   }));
-  // Toughest first: descending opponentWinRate (= ascending userWinRate).
+  // Toughest first = lowest userWinRate first.
   const truth = sample
     .slice()
-    .sort((a, b) => b.opponentWinRate - a.opponentWinRate)
+    .sort((a, b) => a.userWinRate - b.userWinRate)
     .map((o) => o.pulseId);
   return { ok: true, minDataMet: true, question: { candidates: sample, truth } };
 }
@@ -125,7 +125,7 @@ export const rivalryRanker: Mode<Q, A> = {
   ttp: "medium",
   depthTag: "multi-entity",
   title: "Rivalry Ranker",
-  blurb: "Drag four rivals into the right WR order — toughest first.",
+  blurb: "Drag four rivals by your WR against them — toughest matchup first.",
   generate,
   score,
   render: (ctx) => <RivalryRankerRender ctx={ctx} />,
@@ -203,10 +203,10 @@ function RivalryRankerRender({
               </span>
               <span
                 className="font-mono tabular-nums"
-                style={{ color: wrColor(c.opponentWinRate, c.games) }}
+                style={{ color: wrColor(c.userWinRate, c.games) }}
               >
-                {pct1(c.opponentWinRate)}{" "}
-                <span className="text-text-dim">({c.losses}-{c.wins})</span>
+                {pct1(c.userWinRate)}{" "}
+                <span className="text-text-dim">({c.wins}-{c.losses})</span>
               </span>
             </li>
           );
