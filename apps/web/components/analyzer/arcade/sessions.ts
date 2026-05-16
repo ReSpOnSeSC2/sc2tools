@@ -17,8 +17,8 @@
 // builds for them — every analyzer-detectable strategy is a betting
 // option.
 
-import { BUILD_DEFINITIONS, type BuildDefinition } from "@/lib/build-definitions";
-import { coerceRace, inferRaceFromBuildName, type Race } from "@/lib/race";
+import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
+import { inferRaceFromBuildName } from "@/lib/race";
 import type { ArcadeBuild, ArcadeDataset } from "./types";
 
 /**
@@ -87,25 +87,13 @@ export function isUnclassifiedSentinel(name: string): boolean {
  * `opts.includeCatalog` (default true) controls whether the bundled
  * BUILD_DEFINITIONS catalog seeds the universe. Stock Market wants
  * this on so the bet surface spans the full meta even when the user
- * has no Z/T plays. Builds-as-Cards also wants it on, but pairs it
- * with a `catalogFilter` so the binder is restricted to labels the
- * user-side detector could plausibly emit.
- *
- * `opts.catalogFilter`, when supplied, narrows the catalog rows that
- * get folded in. Builds-as-Cards uses this to drop opponent-only
- * labels (the `Protoss - X` / `Terran - X` / `Zerg - X` race-prefixed
- * rows in BUILD_DEFINITIONS are emitted by the OPPONENT detector
- * only — the user-side detector never tags myBuild with them, so
- * leaving them in the binder produces forever-locked stubs). When
- * omitted, every catalog row enters the universe (Stock Market's
- * "speculation across all matchups" behaviour).
+ * has no Z/T plays. Builds-as-Cards wants it OFF — that mode is a
+ * collection of builds the user has actually engaged with, and catalog
+ * stubs with zero plays would dilute the binder.
  */
 export function buildUniverse(
   data: ArcadeDataset,
-  opts: {
-    includeCatalog?: boolean;
-    catalogFilter?: (def: BuildDefinition) => boolean;
-  } = {},
+  opts: { includeCatalog?: boolean } = {},
 ): UnifiedBuild[] {
   const includeCatalog = opts.includeCatalog !== false;
   const byName = new Map<string, UnifiedBuild>();
@@ -174,11 +162,9 @@ export function buildUniverse(
   // de-novo catalog rows surface as "no price yet" (untradeable)
   // until plays accumulate.
   if (includeCatalog) {
-    const filter = opts.catalogFilter;
     for (const def of BUILD_DEFINITIONS) {
       if (!def.name || isUnclassifiedSentinel(def.name)) continue;
       if (byName.has(def.name)) continue;
-      if (filter && !filter(def)) continue;
       byName.set(def.name, {
         id: `catalog:${def.id}`,
         name: def.name,
@@ -192,61 +178,6 @@ export function buildUniverse(
     }
   }
   return Array.from(byName.values());
-}
-
-/**
- * The set of player races the user has actually piloted, derived from
- * the `myRace` field on their recorded games. Single-race mains
- * collapse to `new Set(["Protoss"])`; off-race dabblers add a second
- * entry. Falls back to inferring from build-name prefixes on
- * `data.builds` when game-level `myRace` is missing (legacy rows from
- * ingestion paths that didn't project it).
- */
-export function userPlayedRaces(data: ArcadeDataset): Set<Race> {
-  const races = new Set<Race>();
-  for (const g of data.games) {
-    const r = coerceRace(g.myRace, "Random");
-    if (r !== "Random") races.add(r);
-  }
-  if (races.size > 0) return races;
-  // Fallback: infer from build prefixes when games[].myRace was empty.
-  // Heavy users with legacy ingestion data sometimes have games rows
-  // missing myRace; the build name still carries the matchup prefix
-  // (e.g. "PvT - Phoenix into Robo"), which pins the user's race.
-  for (const b of data.builds) {
-    if (!b.name) continue;
-    const r = inferRaceFromBuildName(b.name);
-    if (r && r !== "Random") races.add(r);
-  }
-  return races;
-}
-
-/**
- * Predicate for `buildUniverse({ catalogFilter })` that keeps only
- * catalog rows the analyzer's USER-side detector can plausibly emit
- * as a player's `myBuild`. Concretely:
- *
- *   • The row must be matchup-prefixed (PvP-X / PvT-X / PvZ-X / TvP-X
- *     / TvT-X / TvZ-X / ZvP-X / ZvT-X / ZvZ-X). The race-prefixed
- *     rows (`Protoss - 4 Gate Rush`, `Terran - 1-1-1 Standard`,
- *     `Zerg - 12 Pool`) are emitted by the OPPONENT detector only —
- *     the user-side classifier never tags myBuild with them.
- *   • The row's owning race must be one the user has actually played.
- *     A Protoss main never gets a TvP / ZvT myBuild, so those rows
- *     would still surface as forever-locked stubs in their binder.
- *
- * Returns false on every row when the user race set is empty
- * (brand-new account with no games). The binder's empty-state
- * message ("Play a few games and we'll start unlocking your card
- * binder.") takes over for fresh accounts.
- */
-export function userEmittableCatalogEntry(
-  def: BuildDefinition,
-  userRaces: ReadonlySet<Race>,
-): boolean {
-  if (def.matchup === null) return false;
-  if (userRaces.size === 0) return false;
-  return userRaces.has(def.race);
 }
 
 /**
