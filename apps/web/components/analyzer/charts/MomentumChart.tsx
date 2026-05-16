@@ -47,7 +47,6 @@ const COLOR_DANGER = "#ff6b6b";
 const COLOR_TEXT_DIM = "#6b7280";
 const COLOR_BG_SURFACE = "#11141b";
 const COLOR_GRID = "#1f2533";
-const COLOR_BORDER_STRONG = "#2a3142";
 
 /**
  * Tilt & Momentum.
@@ -93,8 +92,9 @@ export function MomentumChart() {
   return (
     <Card title="Tilt & momentum">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        Sessions split on a {data.sessionGapMinutes}-min gap · the dashed line
-        is your overall win rate ({baselinePct}%) so swings read in context.
+        Sessions split on a {data.sessionGapMinutes}-min gap · your overall
+        win rate is {baselinePct}% (the dashed line on the curve panel) so
+        swings read in context.
       </p>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <TiltPanel
@@ -172,18 +172,6 @@ function TiltPanel({
               fontSize={12}
               width={100}
               tickMargin={4}
-            />
-            <ReferenceLine
-              x={baselinePct}
-              stroke={COLOR_BORDER_STRONG}
-              strokeDasharray="4 4"
-              isFront
-              label={{
-                value: `${baselinePct}%`,
-                position: "top",
-                fill: COLOR_TEXT_DIM,
-                fontSize: 10,
-              }}
             />
             <Tooltip
               cursor={{ fill: "rgba(124,140,255,0.05)" }}
