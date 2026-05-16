@@ -497,6 +497,27 @@ describe("services/aggregations", () => {
     expect(out.unknown.total).toBe(1);
   });
 
+  test("skillSpread guards integer MMR with $isNumber, not a literal 'double' type check", async () => {
+    // Regression guard: the agent stores opponent.mmr via int(opp.mmr),
+    // so the slim row carries it as BSON int32. The first cut of the
+    // pipeline used `$eq: [{ $type: "$opponent.mmr" }, "double"]`, which
+    // silently dropped every row because $type returns "int" for ints.
+    // Capture the actual pipeline and verify the numeric guard uses
+    // $isNumber so the bracket fan-out never regresses.
+    let captured = null;
+    const games = {
+      aggregate(pipeline) {
+        captured = pipeline;
+        return { toArray: () => Promise.resolve([]) };
+      },
+    };
+    const svc = new AggregationsService({ games });
+    await svc.skillSpread("u1", {});
+    const json = JSON.stringify(captured);
+    expect(json).toContain("$isNumber");
+    expect(json).not.toContain('"double"');
+  });
+
   test("myBuildMixOverTime returns one row per (bucket, key)", async () => {
     const games = buildGames([
       () => [
