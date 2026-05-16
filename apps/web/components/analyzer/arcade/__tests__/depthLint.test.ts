@@ -27,9 +27,9 @@ describe("depth-tag lint", () => {
       expect(reg[m.id]).toBe(m.depthTag);
     }
   });
-  test("the catalog has exactly 17 modes (11 quizzes + 6 games)", () => {
-    expect(ALL_MODES.length).toBe(17);
-    expect(ALL_MODES.filter((m) => m.kind === "quiz").length).toBe(11);
+  test("the catalog has exactly 19 modes (13 quizzes + 6 games)", () => {
+    expect(ALL_MODES.length).toBe(19);
+    expect(ALL_MODES.filter((m) => m.kind === "quiz").length).toBe(13);
     expect(ALL_MODES.filter((m) => m.kind === "game").length).toBe(6);
   });
   test("no two modes share an id", () => {

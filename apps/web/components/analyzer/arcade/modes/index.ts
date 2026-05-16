@@ -23,6 +23,8 @@ import { lossPatternSleuth } from "./quizzes/lossPatternSleuth";
 import { closersEye } from "./quizzes/closersEye";
 import { macroMemory } from "./quizzes/macroMemory";
 import { unitProfile } from "./quizzes/unitProfile";
+import { headToHeadCensus } from "./quizzes/headToHeadCensus";
+import { mapMasteryCensus } from "./quizzes/mapMasteryCensus";
 
 import { stockMarket } from "./games/stockMarket";
 import { bingoLadder } from "./games/bingoLadder";
@@ -43,6 +45,8 @@ export const QUIZZES: AnyMode[] = [
   closersEye,
   macroMemory,
   unitProfile,
+  headToHeadCensus,
+  mapMasteryCensus,
 ] as unknown as AnyMode[];
 
 export const GAMES: AnyMode[] = [
