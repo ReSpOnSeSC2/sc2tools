@@ -48,6 +48,7 @@ export function MobileSectionPicker({
         title="Dashboard sections"
         description="Pick a section to drill into."
         size="sm"
+        mobileLayout="center"
       >
         <ul className="-mx-2 flex flex-col gap-0.5">
           {TABS.map(({ id, label, icon: Icon, description }) => {
