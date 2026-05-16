@@ -46,6 +46,7 @@ const { SeasonsService } = require("./services/seasons");
 const { ArcadeService } = require("./services/arcade");
 const { PulseMmrService } = require("./services/pulseMmr");
 const { AdminService } = require("./services/admin");
+const { AdminEventsService } = require("./services/adminEvents");
 const { buildPulseResolver } = require("./services/pulseResolver");
 const { loadAllMigrations } = require("./db/migrations");
 
@@ -124,7 +125,15 @@ function buildApp(deps) {
  * @param {AppDeps} deps
  */
 function makeServices(deps) {
-  const users = new UsersService(deps.db);
+  // Admin notification stream — wired BEFORE UsersService so the
+  // user-creation paths (ensureFromClerk first-touch, webhook upsert)
+  // can fire signup events without a forward reference.
+  const adminEvents = new AdminEventsService({
+    db: deps.db,
+    io: deps.io,
+    logger: deps.logger,
+  });
+  const users = new UsersService(deps.db, { adminEvents });
   // Pluggable backend for the per-game heavy blob. Defaults to
   // ``MongoDetailsStore`` (in-database); flips to ``R2DetailsStore``
   // when ``GAME_DETAILS_STORE=r2`` is set with the R2 connection
@@ -261,6 +270,7 @@ function makeServices(deps) {
     seasons,
     arcade,
     admin,
+    adminEvents,
     pulseMmr,
   };
 }
@@ -352,6 +362,7 @@ function mountRoutes(app, deps, services, clerk) {
     buildAgentVersionRouter({
       agentVersion: services.agentVersion,
       adminToken: deps.config.agentReleaseAdminToken,
+      adminEvents: services.adminEvents,
     }),
   );
   // devicePairings has unauth /start and /:code (the agent has no token
@@ -416,6 +427,7 @@ function mountRoutes(app, deps, services, clerk) {
     SERVICE.ROUTE_PREFIX,
     buildAdminRouter({
       admin: services.admin,
+      adminEvents: services.adminEvents,
       gdpr: services.gdpr,
       auth,
       isAdmin,

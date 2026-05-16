@@ -76,6 +76,7 @@ const RESYNC_MIN_INTERVAL_MS = 2000;
  *     gameKey?: string|null,
  *   } | null,
  *   resolveClerkUser?: (clerkUserId: string) => Promise<{userId: string}|null>,
+ *   isAdminClerkId?: (clerkUserId: string) => boolean,
  * }} opts
  *
  * ``resolveClerkUser`` (web flavour, optional but recommended): maps a
@@ -324,6 +325,19 @@ function attachSocketAuth(io, opts) {
     }
     const cid = socket.data.clerkUserId;
     if (cid) socket.join(`clerk:${cid}`);
+    // Admin live-event subscription. ``admin:event`` payloads
+    // (user signups + agent downloads) are broadcast to the
+    // ``admin`` Socket.io room by AdminEventsService; joining only
+    // sockets whose Clerk user id is on the allowlist keeps the
+    // fan-out scoped to actual admins.
+    if (cid && typeof opts.isAdminClerkId === "function") {
+      try {
+        if (opts.isAdminClerkId(cid)) socket.join("admin");
+      } catch {
+        // Never let the admin check crash the connect loop —
+        // worst case the socket just doesn't receive admin events.
+      }
+    }
     // Auto-join the resolved user room so cloud-emitted events like
     // ``games:changed`` reach this tab without the client having to
     // claim its own userId. The dashboard's auto-refresh on ingest

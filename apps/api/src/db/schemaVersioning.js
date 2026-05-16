@@ -152,6 +152,11 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.ADMIN_EVENTS]: {
+    collection: COLLECTIONS.ADMIN_EVENTS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
 });
 
 /** @type {{collection:string,fromVersion:number,toVersion:number,forward:Function,backward:Function,description?:string}[]} */

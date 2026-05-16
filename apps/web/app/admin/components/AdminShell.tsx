@@ -1,8 +1,14 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import useSWR from "swr";
+import { useAuth } from "@clerk/nextjs";
+
+import { apiCall } from "@/lib/clientApi";
+import { useAdminEventsSocket } from "./useAdminEventsSocket";
+import type { AdminEventCountsResp } from "./adminTypes";
 
 /**
  * Responsive shell for the admin section.
@@ -36,6 +42,12 @@ const NAV: ReadonlyArray<NavItem> = [
     icon: "M3 12l2-2 4 4 8-8 4 4M3 17h18",
   },
   {
+    href: "/admin/notifications",
+    label: "Notifications",
+    description: "Signups and downloads feed",
+    icon: "M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5m6 0a3 3 0 1 1-6 0",
+  },
+  {
     href: "/admin/users",
     label: "Users",
     description: "Per-user activity and tools",
@@ -65,6 +77,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = usePathname();
   const active = pickActive(NAV, pathname || "/admin");
+  const unread = useUnreadCount();
 
   return (
     <div className="flex min-h-[calc(100dvh-4rem)] flex-col gap-4 md:flex-row md:gap-6">
@@ -122,6 +135,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <nav className="space-y-1">
           {NAV.map((item) => {
             const isActive = item.href === active?.href;
+            const badge =
+              item.href === "/admin/notifications" && unread > 0 ? unread : 0;
             return (
               <Link
                 key={item.href}
@@ -146,9 +161,17 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 >
                   <NavIcon path={item.icon} />
                 </span>
-                <span className="flex flex-col gap-0.5">
-                  <span className="text-body font-semibold leading-tight">
-                    {item.label}
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="flex items-center gap-2 text-body font-semibold leading-tight">
+                    <span className="truncate">{item.label}</span>
+                    {badge > 0 ? (
+                      <span
+                        className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-cyan px-1.5 py-0.5 text-[10px] font-bold leading-none text-white"
+                        aria-label={`${badge} unread`}
+                      >
+                        {badge > 99 ? "99+" : badge}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="text-caption text-text-dim">
                     {item.description}
@@ -166,6 +189,35 @@ export function AdminShell({ children }: { children: ReactNode }) {
       </main>
     </div>
   );
+}
+
+/**
+ * Read the current unread-notification count off
+ * ``GET /v1/admin/events/counts`` and keep it live via the same
+ * Socket.io ``admin:event`` stream the dashboard subscribes to.
+ * Non-admins receive a 403 from the API and the badge stays at 0,
+ * which is fine — the admin section already 403s for them at the
+ * page level so the nav never renders.
+ */
+function useUnreadCount(): number {
+  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const swr = useSWR<AdminEventCountsResp>(
+    isLoaded && isSignedIn ? "/v1/admin/events/counts" : null,
+    async () => apiCall(getToken, "/v1/admin/events/counts"),
+    {
+      onErrorRetry: (error, _key, _config, revalidate, ctx) => {
+        if (error?.status === 403 || error?.status === 401) return;
+        if (ctx.retryCount >= 3) return;
+        setTimeout(() => revalidate({ retryCount: ctx.retryCount }), 5000);
+      },
+    },
+  );
+  useAdminEventsSocket(
+    useCallback(() => {
+      swr.mutate();
+    }, [swr]),
+  );
+  return swr.data?.unreadCount ?? 0;
 }
 
 function pickActive(items: ReadonlyArray<NavItem>, pathname: string) {

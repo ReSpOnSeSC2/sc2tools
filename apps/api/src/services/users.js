@@ -10,9 +10,17 @@ const { stampVersion } = require("../db/schemaVersioning");
  * the auth provider, so swapping Clerk later is a one-table migration.
  */
 class UsersService {
-  /** @param {{users: import('mongodb').Collection}} db */
-  constructor(db) {
+  /**
+   * @param {{users: import('mongodb').Collection}} db
+   * @param {{
+   *   adminEvents?: {
+   *     record: (type: string, payload: Record<string, unknown>) => Promise<unknown>,
+   *   } | null,
+   * }} [opts]
+   */
+  constructor(db, opts = {}) {
     this.db = db;
+    this.adminEvents = opts.adminEvents || null;
   }
 
   /**
@@ -50,6 +58,7 @@ class UsersService {
       }
       throw err;
     }
+    this._recordSignup({ clerkUserId, userId, source: "first_touch" });
     return { userId, clerkUserId };
   }
 
@@ -136,7 +145,35 @@ class UsersService {
       { $set: set, $setOnInsert: setOnInsert },
       { upsert: true },
     );
+    if (res.upsertedCount > 0) {
+      this._recordSignup({
+        clerkUserId,
+        userId: String(setOnInsert.userId),
+        email: typeof set.email === "string" ? set.email : null,
+        source: "clerk_webhook",
+      });
+    }
     return res.modifiedCount > 0 || res.upsertedCount > 0;
+  }
+
+  /**
+   * Fire-and-forget signup event. Idempotent at the storage layer
+   * (unique partial index on ``payload.clerkUserId`` for signup
+   * events), so the webhook → first-touch race naturally collapses
+   * to a single feed entry.
+   *
+   * @param {{
+   *   clerkUserId: string,
+   *   userId?: string | null,
+   *   email?: string | null,
+   *   source?: string,
+   * }} payload
+   */
+  _recordSignup(payload) {
+    if (!this.adminEvents || !payload || !payload.clerkUserId) return;
+    Promise.resolve(
+      this.adminEvents.record("user_signup", payload),
+    ).catch(() => {});
   }
 
   /**
