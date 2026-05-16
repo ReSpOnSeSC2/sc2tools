@@ -10,6 +10,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 type Q = {
@@ -73,6 +74,22 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
+  const best = q.candidates[q.correctIndex];
+  const answer: string[] = [
+    `Cleanest macro: ${best.matchupLetter} vs ${best.opponentName} (${best.macroScore}).`,
+    ...q.candidates.map((c, i) => {
+      const star = i === q.correctIndex ? " ★" : "";
+      return `${c.matchupLetter} vs ${c.opponentName} · ${c.macroScore}${star}`;
+    }),
+  ];
+  return {
+    question:
+      "Three games, all scored — the macro score is hidden. Which one had the cleanest macro?",
+    answer,
+  };
+}
+
 export const macroMemory: Mode<Q, A> = {
   id: ID,
   kind: "quiz",
@@ -84,6 +101,7 @@ export const macroMemory: Mode<Q, A> = {
   blurb: "Three games, no scores shown. Pick the cleanest macro game.",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

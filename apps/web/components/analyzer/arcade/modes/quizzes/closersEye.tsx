@@ -16,6 +16,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 type Q = {
@@ -118,6 +119,22 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
+  const closer = q.candidates[q.correctIndex];
+  const answer: string[] = [
+    `Closer was ${closer.build} at ${fmtMinutes(closer.meanWinSec)} avg.`,
+    ...q.candidates.map((c, i) => {
+      const star = i === q.correctIndex ? " ★" : "";
+      return `${c.build} · ${fmtMinutes(c.meanWinSec)} (${c.wins}W)${star}`;
+    }),
+  ];
+  return {
+    question:
+      "Of these four builds (≥3 wins, cannon rush excluded), which has the shortest average win length?",
+    answer,
+  };
+}
+
 export const closersEye: Mode<Q, A> = {
   id: ID,
   kind: "quiz",
@@ -129,6 +146,7 @@ export const closersEye: Mode<Q, A> = {
   blurb: "Which of your builds closes the door on opponents fastest? (Cannon-rush excluded.)",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

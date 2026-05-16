@@ -19,6 +19,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 type Candidate = Pick<
@@ -406,6 +407,46 @@ function questionFor(variant: OpponentBracketVariant): React.ReactNode {
   );
 }
 
+function questionPlain(variant: OpponentBracketVariant): string {
+  if (variant === "most-faced") {
+    return "Four opponents from your history. Which one have you played the most?";
+  }
+  if (variant === "last-beaten") {
+    return "Four opponents from your history. Which one did you most recently beat?";
+  }
+  if (variant === "last-loss-to") {
+    return "Four opponents from your history. Which one most recently beat you?";
+  }
+  if (variant === "broke-their-streak") {
+    return "Four opponents from your history. Which one had the longest streak against you that you broke?";
+  }
+  if (variant === "they-broke-yours") {
+    return "Four opponents from your history. Which one broke your longest streak against them?";
+  }
+  return "Four opponents you've played at least 3 times each. Which one has the highest WR against you?";
+}
+
+function share(q: Q, a: A | null, s: ScoreResult): ShareSummary {
+  const variant = q.variant ?? "highest-wr-vs-you";
+  const correct = q.candidates[q.correctIndex];
+  const fallbackMetrics = q.candidates.map(
+    (c) => `${pct1(c.opponentWinRate)} (${c.losses}-${c.wins})`,
+  );
+  const metrics = q.metrics ?? fallbackMetrics;
+  const userCorrect = a === q.correctIndex;
+  const headline = userCorrect
+    ? s.note ?? `It was ${displayNameFor(correct)}.`
+    : `It was ${displayNameFor(correct)} — ${metrics[q.correctIndex]}.`;
+  const rows = q.candidates.map((c, i) => {
+    const star = i === q.correctIndex ? " ★" : "";
+    return `${displayNameFor(c)} · ${metrics[i]}${star}`;
+  });
+  return {
+    question: questionPlain(variant),
+    answer: [headline, ...rows],
+  };
+}
+
 export const opponentBracketPick: Mode<Q, A> = {
   id: ID,
   kind: "quiz",
@@ -417,6 +458,7 @@ export const opponentBracketPick: Mode<Q, A> = {
   blurb: "Four opponents enter, one has the BEST record against you. Pick them.",
   generate,
   score,
+  share,
   render: (ctx) => <OpponentBracketRender ctx={ctx} />,
 };
 

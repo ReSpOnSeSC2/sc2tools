@@ -16,6 +16,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 const ID = "comeback-count";
@@ -440,6 +441,51 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+function questionPlain(q: Q): string {
+  switch (q.variant) {
+    case "count":
+      return "How many of your play sessions opened 0–2 but finished above 50%?";
+    case "rate":
+      return `Of the ${q.zeroTwoStartCount} sessions you opened 0–2, what share finished above 50%?`;
+    case "recency":
+      return "When did your most recent 0–2 → above-50% comeback happen?";
+    case "depth":
+      return "What was the deepest losing streak you ever climbed out of inside a single comeback session?";
+    case "matchup":
+      return "Across all your comebacks, which first-game opponent race appeared most often?";
+  }
+}
+
+function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
+  const headline = `${VARIANT_LABEL[q.variant]}: ${q.truth}`;
+  const detail = noteFor(q);
+  const answer: string[] = [headline, detail];
+  if (q.variant === "count") {
+    for (const c of q.comebacks.slice(0, 6)) {
+      answer.push(`${fmtDate(c.startDate)} · ${c.wins}W / ${c.losses}L`);
+    }
+  } else if (q.variant === "rate") {
+    const n = q.comebacks.length;
+    const d = q.zeroTwoStartCount;
+    const pct = d > 0 ? Math.round((n / d) * 100) : 0;
+    answer.push(`${n} of ${d} 0-2 starts turned into comebacks (${pct}%).`);
+  } else if (q.variant === "depth" && q.depthTally) {
+    for (const b of DEPTH_BUCKETS) {
+      const star = b === q.truth ? " ★" : "";
+      answer.push(`${b} · ${q.depthTally[b]}${star}`);
+    }
+  } else if (q.variant === "matchup" && q.raceTally) {
+    for (const b of MATCHUP_BUCKETS) {
+      const star = b === q.truth ? " ★" : "";
+      answer.push(`${b} · ${q.raceTally[b]}${star}`);
+    }
+  }
+  return {
+    question: questionPlain(q),
+    answer,
+  };
+}
+
 export const comebackCount: Mode<Q, A> = {
   id: ID,
   kind: "quiz",
@@ -452,6 +498,7 @@ export const comebackCount: Mode<Q, A> = {
     "Five angles on the sessions you opened 0–2 but finished above 50%. Daily rotation keeps it fresh.",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

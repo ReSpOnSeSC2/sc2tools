@@ -10,6 +10,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 type Q = {
@@ -83,6 +84,25 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+const TRUTH_LABEL: Record<Q["truth"], string> = {
+  higher: "higher than overall",
+  lower: "lower than overall",
+  within: "within ±2% of overall",
+};
+
+function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
+  return {
+    question:
+      "A session is games separated by ≥4 hours. Is your first-game-of-session WR higher than, lower than, or within ±2% of your overall WR?",
+    answer: [
+      `First-game WR ${TRUTH_LABEL[q.truth]}.`,
+      `First-game WR · ${pct1(q.firstGameWr)}`,
+      `Overall WR · ${pct1(q.overallWr)}`,
+      `Across ${q.sessionsCount} sessions`,
+    ],
+  };
+}
+
 export const firstGameOfDay: Mode<Q, A> = {
   id: ID,
   kind: "quiz",
@@ -94,6 +114,7 @@ export const firstGameOfDay: Mode<Q, A> = {
   blurb: "Are you a fast starter or a slow burn? Compare session openers to your overall WR.",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

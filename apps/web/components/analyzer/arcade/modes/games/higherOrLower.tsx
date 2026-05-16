@@ -15,6 +15,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 const ID = "higher-or-lower";
@@ -43,6 +44,28 @@ function score(_q: Q, a: A): ScoreResult {
   };
 }
 
+function share(q: Q, a: A | null, _s: ScoreResult): ShareSummary {
+  const chain = a?.chain ?? 0;
+  const answer: string[] = [
+    `Chain: ${chain} build${chain === 1 ? "" : "s"}.`,
+  ];
+  // Show the last few builds the user climbed through. The stack is
+  // shuffled per round, so positions [0..chain] are the cards the
+  // user actually saw face-up.
+  const visited = q.stack.slice(0, Math.max(0, chain) + 1);
+  const tail = visited.slice(-4);
+  if (tail.length > 0) {
+    answer.push("Recent rungs:");
+    for (const b of tail) {
+      answer.push(`• ${b.name} · ${pct1(b.winRate)} (${b.totalPlays}p)`);
+    }
+  }
+  return {
+    question: "Higher-or-lower chain on the matchup-WR ladder.",
+    answer,
+  };
+}
+
 export const higherOrLower: Mode<Q, A> = {
   id: ID,
   kind: "game",
@@ -54,6 +77,7 @@ export const higherOrLower: Mode<Q, A> = {
   blurb: "Card stack of your builds. Guess if the next WR is higher, lower, or equal.",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

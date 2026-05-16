@@ -12,6 +12,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 const ID = "two-truths-lie";
@@ -666,7 +667,9 @@ function score(q: Q, a: A): ScoreResult {
  * Build the share lines for Two Truths & a Lie. Shares the full reveal
  * — outcome header plus all three claims with their TRUE/LIE labels —
  * rather than just the lie text, so the card carries the same context
- * the in-app reveal does.
+ * the in-app reveal does. Each claim's supporting detail is appended
+ * underneath so a reader who hasn't played sees the same evidence the
+ * reveal panel shows.
  */
 export function twoTruthsLieShareLines(q: Q, correct: boolean): string[] {
   const header = correct
@@ -676,6 +679,25 @@ export function twoTruthsLieShareLines(q: Q, correct: boolean): string[] {
     header,
     ...q.claims.map((c, i) => `${i + 1}. ${c.truthful ? "TRUE" : "LIE"} · ${c.text}`),
   ];
+}
+
+function share(q: Q, a: A | null, s: ScoreResult): ShareSummary {
+  const correct = s.outcome === "correct";
+  const header = correct
+    ? `Spotted the lie (claim #${q.lieIndex + 1}).`
+    : `Missed the lie — it was claim #${q.lieIndex + 1}.`;
+  const answer: string[] = [header];
+  for (let i = 0; i < q.claims.length; i++) {
+    const c = q.claims[i];
+    answer.push(`${i + 1}. ${c.truthful ? "TRUE" : "LIE"} · ${c.text}`);
+    if (c.detail) answer.push(`   ${c.detail}`);
+  }
+  void a;
+  return {
+    question:
+      "Three statements about you. Two are true, one is a lie. Spot the lie.",
+    answer,
+  };
 }
 
 export const twoTruthsLie: Mode<Q, A> = {
@@ -689,6 +711,7 @@ export const twoTruthsLie: Mode<Q, A> = {
   blurb: "Two true claims about you, one fake. Spot the lie.",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

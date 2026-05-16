@@ -13,6 +13,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 
 type Candidate = Pick<
@@ -117,6 +118,24 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+function share(q: Q, _a: A | null, s: ScoreResult): ShareSummary {
+  const byId = new Map(q.candidates.map((c) => [c.pulseId, c]));
+  const headline =
+    s.note ?? "Toughest matchup first, by your win rate.";
+  const rows = q.truth
+    .map((pid, i) => {
+      const c = byId.get(pid);
+      if (!c) return null;
+      return `#${i + 1} ${displayNameFor(c)} · ${pct1(c.userWinRate)} (${c.wins}-${c.losses})`;
+    })
+    .filter((r): r is string => r !== null);
+  return {
+    question:
+      "Rank these rivals from your toughest matchup (#1) to your easiest (#4).",
+    answer: [headline, ...rows],
+  };
+}
+
 export const rivalryRanker: Mode<Q, A> = {
   id: ID,
   kind: "quiz",
@@ -128,6 +147,7 @@ export const rivalryRanker: Mode<Q, A> = {
   blurb: "Drag four rivals by your WR against them — toughest matchup first.",
   generate,
   score,
+  share,
   render: (ctx) => <RivalryRankerRender ctx={ctx} />,
 };
 

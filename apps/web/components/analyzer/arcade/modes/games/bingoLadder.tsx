@@ -14,6 +14,7 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "../../types";
 import { buildCandidates } from "./bingoLadder.candidates";
 
@@ -166,6 +167,39 @@ function score(q: Q): ScoreResult {
   };
 }
 
+function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
+  // Note: this share() only sees the freshly generated card (no
+  // ticked state), so we walk q.cells and report whichever cells
+  // already have ``ticked`` set true. In practice generate() always
+  // returns ticked=false on cells (resolver runs out-of-band against
+  // persisted state) — so this almost always lands on the "remaining
+  // cells" branch and gives the recipient a peek at the week's
+  // objectives. Persisted-state-aware share text lives in ModeRunner
+  // when we wire it in next.
+  const ticked = q.cells.filter((c) => c.ticked);
+  const tickedCount = ticked.length;
+  const total = q.cells.length;
+  const answer: string[] = [
+    `Week ${q.weekKey} · ${tickedCount}/${total} ticked`,
+  ];
+  if (tickedCount > 0) {
+    const recent = ticked
+      .slice()
+      .sort((a, b) => (b.tickedAt || "").localeCompare(a.tickedAt || ""))
+      .slice(0, 3);
+    answer.push("Recently ticked:");
+    for (const c of recent) answer.push(`• ${c.label}`);
+  } else {
+    const remaining = q.cells.filter((c) => !c.ticked).slice(0, 3);
+    answer.push("Open objectives:");
+    for (const c of remaining) answer.push(`• ${c.label}`);
+  }
+  return {
+    question: "This week's Bingo card — tick cells via matching games.",
+    answer,
+  };
+}
+
 export const bingoLadder: Mode<Q, A> = {
   id: ID,
   kind: "game",
@@ -177,6 +211,7 @@ export const bingoLadder: Mode<Q, A> = {
   blurb: "5×5 of forward objectives. Resolved from your real next-7-day games.",
   generate,
   score,
+  share,
   render: (ctx) => <Render ctx={ctx} />,
 };
 

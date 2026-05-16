@@ -12,12 +12,11 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
+  ShareSummary,
 } from "./types";
 import type { AnyMode } from "./modes";
 import { mulberry32 } from "./ArcadeEngine";
 import { shareCard } from "./ShareCard";
-import { buildleShareText } from "./modes/games/buildle";
-import { twoTruthsLieShareLines } from "./modes/games/twoTruthsLie";
 import { DailyEmptyState } from "./surfaces/DailyEmptyState";
 
 /**
@@ -163,41 +162,15 @@ export function ModeRunner({
 
   const handleShare = useCallback(async () => {
     if (!question || !question.ok) return;
-    if (mode.id === "buildle") {
-      // Single-question daily — share is a one-line summary.
-      const today = state.buildleByDay[seed.day];
-      const text = buildleShareText(today, seed.day);
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch {
-        // ignore
-      }
-      return;
-    }
-    // Per-mode share bodies. The default (scoreResult.note) is a
-    // single line, which loses context for modes whose reveal has
-    // multiple parts. TT&L is the obvious one — the score note is
-    // just the lie text, but the on-screen reveal shows all three
-    // claims with TRUE/LIE labels, which is what people actually
-    // want to share.
-    let lines: string[];
-    if (mode.id === "two-truths-lie") {
-      lines = twoTruthsLieShareLines(
-        question.question as Parameters<typeof twoTruthsLieShareLines>[0],
-        scoreResult?.outcome === "correct",
-      );
-    } else if (scoreResult?.note) {
-      lines = [scoreResult.note];
-    } else {
-      lines = ["I just played in Arcade."];
-    }
+    const summary = buildShareSummary(mode, question.question, answered, scoreResult);
     await shareCard({
       title: mode.title,
-      lines,
+      question: summary.question,
+      lines: summary.answer,
+      outcome: scoreResult?.outcome,
       tag: `Arcade · ${isDaily ? "Daily" : "Quick Play"}`,
-      tone: scoreResult?.outcome === "correct" ? "wins" : "neutral",
     });
-  }, [question, mode, scoreResult, isDaily, seed.day, state.buildleByDay]);
+  }, [question, mode, scoreResult, answered, isDaily]);
 
   if (loading) {
     return (
@@ -288,6 +261,42 @@ export function ModeRunner({
       ) : null}
     </div>
   );
+}
+
+/**
+ * Build the plain-text share payload for the round. Prefers the mode's
+ * own `share()` implementation (which can include detail tables, the
+ * full reveal etc.) and falls back to `mode.blurb` + `score.note` so
+ * every mode at least surfaces the question framing — not just the
+ * mode title — alongside the one-line outcome.
+ */
+function buildShareSummary(
+  mode: AnyMode,
+  question: unknown,
+  answer: unknown,
+  score: ScoreResult | null,
+): ShareSummary {
+  // The Mode<Q, A, S> generic parameters vary by mode; the registry
+  // narrows them away to AnyMode here, so the cast is a one-time
+  // contract assertion — the runtime values come from the same mode.
+  type ModeShareFn = (q: unknown, a: unknown, s: ScoreResult) => ShareSummary;
+  const shareFn = (mode as { share?: ModeShareFn }).share;
+  if (shareFn && score) {
+    try {
+      const out = shareFn(question, answer, score);
+      if (out && typeof out.question === "string" && Array.isArray(out.answer)) {
+        return out;
+      }
+    } catch {
+      // fall through to the default summary
+    }
+  }
+  const fallback: string[] = [];
+  if (score?.note) fallback.push(score.note);
+  else if (score?.outcome === "correct") fallback.push("Nailed it.");
+  else if (score?.outcome === "wrong") fallback.push("Missed this one.");
+  else fallback.push("I just played in Arcade.");
+  return { question: mode.blurb, answer: fallback };
 }
 
 function applyFilters(
