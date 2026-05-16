@@ -101,3 +101,52 @@ export type HealthResp = {
     gameDetailsStore: string;
   };
 };
+
+export type AdminEventType = "user_signup" | "agent_download";
+
+export type AdminEventSignupPayload = {
+  clerkUserId: string;
+  userId: string | null;
+  email: string | null;
+  source: string;
+};
+
+export type AdminEventDownloadPayload = {
+  platform: "windows" | "macos" | "linux" | "unknown";
+  version: string | null;
+  channel: string;
+  ip: string | null;
+  userAgent: string | null;
+  referer: string | null;
+  country: string | null;
+};
+
+export type AdminEvent = {
+  eventId: string;
+  type: AdminEventType;
+  payload: AdminEventSignupPayload | AdminEventDownloadPayload;
+  createdAt: string;
+  readAt: string | null;
+};
+
+export type AdminEventsListResp = {
+  items: AdminEvent[];
+  nextBefore: string | null;
+};
+
+export type AdminEventCountsResp = {
+  totalUsers: number;
+  signupsToday: number;
+  signupsThisWeek: number;
+  totalSignupsTracked: number;
+  totalDownloads: number;
+  downloadsToday: number;
+  downloadsThisWeek: number;
+  downloadsByPlatform: {
+    windows: number;
+    macos: number;
+    linux: number;
+  };
+  unreadCount: number;
+  generatedAt: string;
+};

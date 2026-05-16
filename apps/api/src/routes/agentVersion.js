@@ -18,10 +18,14 @@ const { compareVersions } = require("../services/agentVersion");
  * @param {{
  *   agentVersion: import('../services/types').AgentVersionService,
  *   adminToken?: string | null,
+ *   adminEvents?: {
+ *     record: (type: string, payload: Record<string, unknown>) => Promise<unknown>,
+ *   } | null,
  * }} deps
  */
 function buildAgentVersionRouter(deps) {
   const router = express.Router();
+  const adminEvents = deps.adminEvents || null;
 
   router.get("/agent/version", async (req, res, next) => {
     try {
@@ -67,6 +71,40 @@ function buildAgentVersionRouter(deps) {
     }
   });
 
+  /**
+   * Public download-click beacon. The marketing page's DownloadCard
+   * fires this with ``navigator.sendBeacon`` (or a keepalive fetch
+   * fallback) immediately before the browser starts the GitHub-hosted
+   * download. The response is intentionally tiny — clients don't
+   * await it — so a slow Mongo path can never delay a user's
+   * download. Best-effort: a failed insert returns 204 anyway so we
+   * never leak a 500 onto the marketing surface.
+   */
+  router.post("/agent/download-event", async (req, res) => {
+    try {
+      if (adminEvents) {
+        const body = (req.body && typeof req.body === "object") ? req.body : {};
+        const platform = typeof body.platform === "string" ? body.platform : "";
+        const version = typeof body.version === "string" ? body.version : "";
+        const channel = typeof body.channel === "string" ? body.channel : "stable";
+        const ip = pickClientIp(req);
+        const userAgent = headerStr(req, "user-agent");
+        const referer = headerStr(req, "referer");
+        await adminEvents.record("agent_download", {
+          platform,
+          version,
+          channel,
+          ip,
+          userAgent,
+          referer,
+        });
+      }
+      res.status(204).end();
+    } catch {
+      res.status(204).end();
+    }
+  });
+
   router.post("/agent/releases", async (req, res, next) => {
     try {
       requireAdmin(req, deps.adminToken);
@@ -103,6 +141,35 @@ function timingSafeEqual(a, b) {
   if (a.length !== b.length) return false;
   const crypto = require("crypto");
   return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
+/**
+ * Pick the best-effort client IP from a request. Honours the
+ * standard ``x-forwarded-for`` chain (Express's ``trust proxy``
+ * setting normalises this to ``req.ip``) and falls back to the raw
+ * socket address. The IP is masked to a /24 (or /64 for IPv6) inside
+ * ``AdminEventsService`` before it lands in the feed.
+ *
+ * @param {import('express').Request} req
+ */
+function pickClientIp(req) {
+  if (typeof req.ip === "string" && req.ip.length > 0) return req.ip;
+  const fwd = headerStr(req, "x-forwarded-for");
+  if (fwd) return fwd;
+  const sock = /** @type {any} */ (req).socket;
+  if (sock && typeof sock.remoteAddress === "string") return sock.remoteAddress;
+  return "";
+}
+
+/**
+ * @param {import('express').Request} req
+ * @param {string} name
+ */
+function headerStr(req, name) {
+  const v = req.headers[name];
+  if (typeof v === "string") return v;
+  if (Array.isArray(v) && v.length > 0 && typeof v[0] === "string") return v[0];
+  return "";
 }
 
 module.exports = { buildAgentVersionRouter };

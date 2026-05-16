@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useReleaseInfo, formatBytes } from "./useReleaseInfo";
 import { usePlatformDetect } from "./usePlatformDetect";
+import { reportDownloadStarted } from "./reportDownloadStarted";
 import type { DetectedOS } from "./types";
 
 const OS_LABEL: Record<Exclude<DetectedOS, "unknown">, string> = {
@@ -68,6 +69,13 @@ export function DownloadCard({
       <a
         href={artifact.downloadUrl}
         download
+        onClick={() =>
+          reportDownloadStarted({
+            platform: osLabelKey(os),
+            version: latest,
+            channel: "stable",
+          })
+        }
         className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accent-cyan px-5 text-body-lg font-semibold text-white shadow-halo-cyan transition-colors hover:bg-accent-cyan/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:w-auto"
         aria-describedby="download-verify-hint"
       >

@@ -25,6 +25,7 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   communityReports: import('mongodb').Collection,
  *   userBackups: import('mongodb').Collection,
  *   arcadeLeaderboard: import('mongodb').Collection,
+ *   adminEvents: import('mongodb').Collection,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -67,6 +68,7 @@ async function connect({ uri, dbName }) {
     communityReports: db.collection(COLLECTIONS.COMMUNITY_REPORTS),
     userBackups: db.collection(COLLECTIONS.USER_BACKUPS),
     arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
+    adminEvents: db.collection(COLLECTIONS.ADMIN_EVENTS),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -227,6 +229,22 @@ async function ensureIndexes(ctx) {
     { unique: true },
   );
   await ctx.arcadeLeaderboard.createIndex({ weekKey: 1, pnlPct: -1, updatedAt: 1 });
+
+  // Admin notification feed. Reverse-chronological reads are the hot
+  // path; the unique partial index on user_signup events ensures a
+  // Clerk webhook retry or a webhook-then-ensureFromClerk race can
+  // never produce two signup rows for the same Clerk user id.
+  await ctx.adminEvents.createIndex({ createdAt: -1 });
+  await ctx.adminEvents.createIndex({ type: 1, createdAt: -1 });
+  await ctx.adminEvents.createIndex(
+    { "payload.clerkUserId": 1 },
+    {
+      unique: true,
+      partialFilterExpression: { type: "user_signup" },
+      name: "user_signup_unique_clerk",
+    },
+  );
+  await ctx.adminEvents.createIndex({ readAt: 1, createdAt: -1 });
 }
 
 module.exports = { connect, ensureIndexes };

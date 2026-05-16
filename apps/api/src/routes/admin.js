@@ -31,6 +31,7 @@ const express = require("express");
 /**
  * @param {{
  *   admin: import('../services/admin').AdminService,
+ *   adminEvents: import('../services/adminEvents').AdminEventsService,
  *   gdpr: import('../services/gdpr').GdprService,
  *   auth: import('express').RequestHandler,
  *   isAdmin: (req: any) => boolean,
@@ -140,6 +141,36 @@ function buildAdminRouter(deps) {
           gameDetailsStoreKind: deps.gameDetailsStoreKind,
         }),
       );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/admin/events", async (req, res, next) => {
+    try {
+      const limit = parseLimit(req.query.limit);
+      const before = parseDate(req.query.before);
+      const typeRaw = req.query.type;
+      const type = typeof typeRaw === "string" && typeRaw.length > 0
+        ? typeRaw
+        : undefined;
+      res.json(await deps.adminEvents.list({ limit, before, type }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/admin/events/counts", async (_req, res, next) => {
+    try {
+      res.json(await deps.adminEvents.counts());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post("/admin/events/mark-read", async (_req, res, next) => {
+    try {
+      res.json(await deps.adminEvents.markAllRead());
     } catch (err) {
       next(err);
     }

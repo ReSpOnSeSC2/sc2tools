@@ -44,6 +44,9 @@ const COLLECTIONS = Object.freeze({
   COMMUNITY_REPORTS: "community_reports",
   USER_BACKUPS: "user_backups",
   ARCADE_LEADERBOARD: "arcade_leaderboard",
+  // Admin notification feed — one row per signup/download event.
+  // Drives the /admin Dashboard counters + /admin/notifications feed.
+  ADMIN_EVENTS: "admin_events",
 });
 
 const LIMITS = Object.freeze({

@@ -49,10 +49,15 @@ async function main() {
     },
   }} */ (buildApp({ db, logger, config, io }));
   httpServer.on("request", app);
+  // Admin allowlist used by the socket layer to scope ``admin:event``
+  // broadcasts to actual admins. Built once at boot from the same
+  // env var the REST middleware checks.
+  const adminClerkIds = new Set(config.adminUserIds || []);
   attachSocketAuth(io, {
     secretKey: config.clerkSecretKey,
     issuer: config.clerkJwtIssuer,
     audience: config.clerkJwtAudience,
+    isAdminClerkId: (clerkUserId) => adminClerkIds.has(clerkUserId),
     resolveOverlayToken: (token) => services.overlayTokens.resolve(token),
     resolveDeviceToken: (tokenHash) =>
       /** @type {any} */ (services).pairings.findTokenByHash(tokenHash),
