@@ -12,6 +12,8 @@ import {
   defenseFor,
   isFoil,
   rarityForPlays,
+  userEmittableCatalogEntry,
+  userPlayedRaces,
 } from "../../sessions";
 import { useArcadeState } from "../../hooks/useArcadeState";
 import { CardBinder } from "../../collection/CardBinder";
@@ -44,12 +46,31 @@ type Q = {
 type A = { browsed: true };
 
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
-  // Pull from the same universe Stock Market does — own + community +
-  // custom + the bundled BUILD_DEFINITIONS catalog — so the binder
-  // surfaces every analyzer-detectable strategy, not just the ones the
-  // user has personally engaged with. Catalog stubs with zero plays
-  // render as bronze rarity with attack=0 until the user plays them.
-  const universe = buildUniverse(input.data, { includeCatalog: true });
+  // Builds-as-Cards is the user's personal collection — every card
+  // must represent a build label the analyzer's USER-side detector can
+  // plausibly emit as `myBuild`. That means dropping two flavours of
+  // catalog stubs:
+  //   • Race-prefixed labels (`Protoss - Robo Opener`,
+  //     `Terran - 1-1-1 Standard`, `Zerg - 12 Pool`). These are emitted
+  //     by the OPPONENT classifier only — the user-side detector
+  //     always picks the matchup-prefixed variant (PvX-Y / TvX-Y /
+  //     ZvX-Y) when tagging the player's own build. Without this
+  //     filter a Protoss main sees ~60 forever-locked stubs cluttering
+  //     the binder (17 Protoss-generic + 23 Terran + 19 Zerg + a few
+  //     cross-race matchup rows), and the completion counter is
+  //     anchored against a denominator the user can never close.
+  //   • Catalog rows for matchups the user has never played as the
+  //     owning race. A Protoss main never gets a TvP / ZvZ myBuild
+  //     either — including those rows would re-introduce the same
+  //     uncloseable denominator problem one race over.
+  // Own / community / custom rows are kept verbatim — those reflect
+  // either the user's real plays or builds they (or the community)
+  // authored, all of which are legitimate collection entries.
+  const races = userPlayedRaces(input.data);
+  const universe = buildUniverse(input.data, {
+    includeCatalog: true,
+    catalogFilter: (def) => userEmittableCatalogEntry(def, races),
+  });
   if (universe.length === 0) {
     return {
       ok: false,
@@ -124,19 +145,30 @@ function Render({
 }: {
   ctx: Parameters<Mode<Q, A>["render"]>[0];
 }) {
-  const { state, unlockCard } = useArcadeState();
+  const { unlockCard } = useArcadeState();
   const totals = useMemo(() => ctx.question.cards.length, [ctx.question.cards]);
+  // Source of truth for "unlocked" is the card's own `plays` field —
+  // i.e. whether /v1/builds returned a row for this build name. The
+  // persisted `state.unlockedCards` dict used to drive this count, but
+  // because it accumulates lifetime unlocks (never clears) it drifted
+  // out of sync with the on-screen render (which keys "Not played yet"
+  // off `c.plays === 0`). For heavy users that drift surfaced as a
+  // score like 117/119 alongside a visibly-greater number of grayed-
+  // out catalog stubs. Keeping the persisted dict as a write-only
+  // audit log (so future features can ask "when did the user first
+  // unlock this card?") but reading the live count off `plays` keeps
+  // the HUD honest against what the binder grid is showing.
   const unlocked = useMemo(
-    () => ctx.question.cards.filter((c) => state.unlockedCards[c.slug]).length,
-    [ctx.question.cards, state.unlockedCards],
+    () => ctx.question.cards.filter((c) => c.plays > 0).length,
+    [ctx.question.cards],
   );
 
-  // Auto-unlock cards the user has actually played. Catalog stubs and
-  // community/custom builds that the user has never run land in the
-  // binder with plays=0 — those stay locked so the completion counter
-  // ("X / total") reflects real engagement instead of jumping to 100%
-  // the moment the binder opens. The unlock is single-pass; cards
-  // already in state are no-ops.
+  // Stamp first-unlock timestamps for played cards into the persisted
+  // arcade state. This no longer drives the visible counter (see the
+  // `unlocked` memo above) — it's purely an audit log so a future
+  // achievement / badge surface can ask "when did the user first
+  // collect <build>?" without re-scanning every game. Skips cards
+  // already stamped so we don't churn the persistence layer.
   useEffect(() => {
     for (const c of ctx.question.cards) {
       if (c.plays > 0) unlockCard(c.slug);
