@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -35,7 +35,6 @@ type ChartRow = {
 
 const COLOR_GRID = "#1f2533";
 const COLOR_TEXT_DIM = "#6b7280";
-const COLOR_BG_SURFACE = "#11141b";
 const OTHER_KEY = "__other";
 const OTHER_LABEL = "Other";
 const OTHER_COLOR = "#3a4252";
@@ -104,11 +103,39 @@ export function MixOverTimeChart({
     `/v1/${endpoint}${filtersToQuery(params)}#${dbRev}`,
   );
   const [topN, setTopN] = useState<number>(DEFAULT_TOP_N);
+  // Lifting the hovered/tapped bucket out of the floating tooltip
+  // and into a dedicated panel below the chart was the only way to
+  // make the breakdown legible on narrow mobile viewports — the
+  // default tooltip is wider than the plot region once build labels
+  // ("PvT - Phoenix into Robo") get involved and ends up covering
+  // the very chart it's annotating.
+  const [activeDate, setActiveDate] = useState<string | null>(null);
 
   const { rows, series, totalGames } = useMemo(
     () => shapeForChart(data?.points || [], tz, topN),
     [data, tz, topN],
   );
+
+  // Default selection = most recent period, so the panel always has
+  // something useful in it before the user interacts.
+  const selectedRow = useMemo(() => {
+    if (rows.length === 0) return null;
+    if (activeDate) {
+      const match = rows.find((r) => r.date === activeDate);
+      if (match) return match;
+    }
+    return rows[rows.length - 1];
+  }, [rows, activeDate]);
+
+  const onChartMouseMove = useCallback(
+    (state: { activeLabel?: string | number } | null) => {
+      if (state && typeof state.activeLabel === "string") {
+        setActiveDate(state.activeLabel);
+      }
+    },
+    [],
+  );
+  const onChartMouseLeave = useCallback(() => setActiveDate(null), []);
 
   if (isLoading) {
     return (
@@ -140,6 +167,8 @@ export function MixOverTimeChart({
             data={rows}
             margin={{ top: 4, right: 12, bottom: 4, left: -4 }}
             stackOffset="expand"
+            onMouseMove={onChartMouseMove}
+            onMouseLeave={onChartMouseLeave}
           >
             <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
             <XAxis
@@ -157,16 +186,17 @@ export function MixOverTimeChart({
               tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
               width={42}
             />
+            {/*
+             * Keep Recharts' cursor crosshair so hover position is
+             * visible, but suppress the floating tooltip body — the
+             * breakdown lives in <ActiveBreakdown> below the chart,
+             * never overlapping the plot.
+             */}
             <Tooltip
               cursor={{ stroke: "#7c8cff", strokeDasharray: "3 3" }}
-              contentStyle={{
-                background: COLOR_BG_SURFACE,
-                border: `1px solid ${COLOR_GRID}`,
-                borderRadius: 8,
-                fontSize: 12,
-                padding: "6px 8px",
-              }}
-              content={<MixTooltip series={series} />}
+              content={() => null}
+              wrapperStyle={{ display: "none" }}
+              isAnimationActive={false}
             />
             {series.map((s, idx) => (
               <Area
@@ -186,8 +216,93 @@ export function MixOverTimeChart({
           </AreaChart>
         </ResponsiveContainer>
       </div>
+      <ActiveBreakdown
+        row={selectedRow}
+        series={series}
+        isFollowingCursor={activeDate != null}
+      />
       <Legend series={series} />
     </Card>
+  );
+}
+
+/**
+ * Per-period breakdown rendered below the chart. Replaces the
+ * floating Recharts tooltip — on a narrow mobile viewport the
+ * tooltip's natural width exceeds the chart's plot region and
+ * covers the very area it's annotating. Hosting the breakdown in
+ * a dedicated row keeps the picture readable on any screen and
+ * makes the value visible at all times instead of only on hover.
+ *
+ * Idle state: shows the most recent period (so the panel is never
+ * blank). Hover/tap state: shows whichever period the cursor is
+ * over. The "Latest" / "Hovering" pill makes the source explicit.
+ */
+function ActiveBreakdown({
+  row,
+  series,
+  isFollowingCursor,
+}: {
+  row: (ChartRow & Record<string, number | string>) | null;
+  series: Array<{ key: string; label: string; color: string }>;
+  isFollowingCursor: boolean;
+}) {
+  if (!row) return null;
+  const total = (row.total as number) || 0;
+  const entries = series
+    .map((s) => ({ ...s, count: (row[s.key] as number) || 0 }))
+    .filter((e) => e.count > 0)
+    .sort((a, b) => b.count - a.count);
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-bg-elevated/60 p-3">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <div className="flex items-baseline gap-2">
+          <span className="text-caption font-semibold text-text">{row.date}</span>
+          <span
+            className={[
+              "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider",
+              isFollowingCursor
+                ? "bg-accent/15 text-accent ring-1 ring-accent/30"
+                : "bg-bg-elevated text-text-dim ring-1 ring-border",
+            ].join(" ")}
+          >
+            {isFollowingCursor ? "Hovering" : "Latest period"}
+          </span>
+        </div>
+        <span className="text-[11px] tabular-nums text-text-dim">
+          {total} game{total === 1 ? "" : "s"}
+        </span>
+      </div>
+      {entries.length === 0 ? (
+        <div className="text-caption text-text-dim">No games in this period.</div>
+      ) : (
+        <ul className="space-y-1">
+          {entries.map((e) => {
+            const share = total > 0 ? e.count / total : 0;
+            return (
+              <li key={e.key} className="flex items-center gap-2 text-caption">
+                <span
+                  className="inline-block h-2.5 w-2.5 flex-none rounded-sm"
+                  style={{ background: e.color }}
+                />
+                <span
+                  className="min-w-0 flex-1 truncate text-text-muted"
+                  title={e.label}
+                >
+                  {e.label}
+                </span>
+                <span className="flex-none tabular-nums text-text">
+                  {Math.round(share * 100)}%
+                </span>
+                <span className="flex-none text-[11px] tabular-nums text-text-dim">
+                  · {e.count}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -242,64 +357,6 @@ function Legend({
           <span className="text-text-dim tabular-nums">· {s.total}</span>
         </span>
       ))}
-    </div>
-  );
-}
-
-function MixTooltip({
-  series,
-  active,
-  payload,
-  label,
-}: {
-  series: Array<{ key: string; label: string; color: string }>;
-  active?: boolean;
-  payload?: Array<{ value: number; dataKey: string; payload: ChartRow }>;
-  label?: string;
-}) {
-  if (!active || !payload || payload.length === 0) return null;
-  const row = payload[0].payload;
-  const total = row.total || 0;
-  // Highest share first — usually 5-8 rows, sorting in render is fine.
-  const sorted = [...payload].sort((a, b) => b.value - a.value);
-  return (
-    <div
-      style={{
-        background: COLOR_BG_SURFACE,
-        border: `1px solid ${COLOR_GRID}`,
-        borderRadius: 8,
-        padding: "8px 10px",
-        minWidth: 180,
-        fontSize: 12,
-      }}
-    >
-      <div className="mb-1 flex items-baseline justify-between gap-3">
-        <span className="text-text">{label}</span>
-        <span className="text-[11px] tabular-nums text-text-dim">
-          {total} game{total === 1 ? "" : "s"}
-        </span>
-      </div>
-      <div className="space-y-1">
-        {sorted.map((p) => {
-          const def = series.find((s) => s.key === p.dataKey);
-          if (!def) return null;
-          const share = total > 0 ? p.value / total : 0;
-          if (p.value === 0) return null;
-          return (
-            <div key={p.dataKey} className="flex items-center gap-2">
-              <span
-                className="inline-block h-2.5 w-2.5 rounded-sm"
-                style={{ background: def.color }}
-              />
-              <span className="flex-1 truncate text-text-muted">{def.label}</span>
-              <span className="tabular-nums text-text">
-                {Math.round(share * 100)}%
-              </span>
-              <span className="tabular-nums text-text-dim">· {p.value}</span>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
