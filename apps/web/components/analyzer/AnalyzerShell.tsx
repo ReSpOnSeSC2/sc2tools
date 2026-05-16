@@ -2,13 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ChevronDown,
-  Settings as SettingsIcon,
-} from "lucide-react";
-import type { ComponentType, SVGProps } from "react";
+import { Settings as SettingsIcon } from "lucide-react";
 import { AnalyzerProvider } from "@/components/AnalyzerProvider";
-import { Modal } from "@/components/ui/Modal";
 import { Section } from "@/components/ui/Section";
 import { Tabs } from "@/components/ui/Tabs";
 import { ArcadeTab } from "./ArcadeTab";
@@ -17,53 +12,26 @@ import { BuildsTab } from "./BuildsTab";
 import { DashboardKpiStrip } from "./DashboardKpiStrip";
 import { DoctorBanner } from "./DoctorBanner";
 import { FilterBar } from "./FilterBar";
-import {
-  ArcadeIcon,
-  BuildsIcon,
-  MapsIcon,
-  OpponentsIcon,
-  StrategiesIcon,
-  TrendsIcon,
-} from "./icons/NavIcons";
 import { OpponentsTab } from "./OpponentsTab";
 import { ProfileView } from "./ProfileView";
 import { StrategiesTab } from "./StrategiesTab";
+import { TABS, type TabId } from "./tabs";
 import { TrendsTab } from "./TrendsTab";
 
-type TabId =
-  | "opponents"
-  | "strategies"
-  | "trends"
-  | "battlefield"
-  | "builds"
-  | "arcade";
-
-type NavIconComponent = ComponentType<SVGProps<SVGSVGElement>>;
-
-type TabDef = {
-  id: TabId;
-  label: string;
-  icon: NavIconComponent;
-  description?: string;
-};
-
-const TABS: readonly TabDef[] = [
-  { id: "opponents", label: "Opponents", icon: OpponentsIcon, description: "Drill into the players you've faced." },
-  { id: "strategies", label: "Strategies", icon: StrategiesIcon, description: "Build vs strategy and per-strategy results." },
-  { id: "trends", label: "Trends", icon: TrendsIcon, description: "Win-rate trajectory across periods." },
-  { id: "battlefield", label: "Maps", icon: MapsIcon, description: "Maps and matchup performance." },
-  { id: "builds", label: "Builds", icon: BuildsIcon, description: "Your builds, performance, and editor." },
-  { id: "arcade", label: "Arcade", icon: ArcadeIcon, description: "Quizzes and games that go deeper than the charts." },
-] as const;
-
-export function AnalyzerShell({ totalGames }: { totalGames: number }) {
-  const [tab, setTab] = useState<TabId>("opponents");
+export function AnalyzerShell({
+  totalGames,
+  tab,
+  onTabChange,
+}: {
+  totalGames: number;
+  tab: TabId;
+  onTabChange: (next: string) => void;
+}) {
   const [profileId, setProfileId] = useState<string | null>(null);
 
-  const onTabChange = (next: string) => {
-    setTab(next as TabId);
+  useEffect(() => {
     setProfileId(null);
-  };
+  }, [tab]);
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
 
@@ -79,7 +47,6 @@ export function AnalyzerShell({ totalGames }: { totalGames: number }) {
         </div>
 
         <div className="space-y-4 lg:grid lg:grid-cols-[220px_1fr] lg:gap-6 lg:space-y-0">
-          <MobileDrawerNav value={tab} onChange={onTabChange} active={activeTab} />
           <TabletScrollNav value={tab} onChange={onTabChange} />
           <DesktopSidebarNav value={tab} onChange={onTabChange} />
 
@@ -115,92 +82,6 @@ export function AnalyzerShell({ totalGames }: { totalGames: number }) {
         </div>
       </div>
     </AnalyzerProvider>
-  );
-}
-
-function MobileDrawerNav({
-  value,
-  onChange,
-  active,
-}: {
-  value: TabId;
-  onChange: (next: string) => void;
-  active: TabDef;
-}) {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (open) setOpen(false);
-  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <div className="sm:hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        className="flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2 text-left transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-      >
-        <span className="inline-flex items-center gap-2 text-body font-medium text-text">
-          <active.icon
-            className="h-4 w-4 flex-shrink-0 text-accent-cyan"
-            aria-hidden
-          />
-          {active.label}
-        </span>
-        <ChevronDown
-          className="h-4 w-4 flex-shrink-0 text-text-muted"
-          aria-hidden
-        />
-      </button>
-
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Dashboard sections"
-        description="Pick a section to drill into."
-        size="sm"
-      >
-        <ul className="-mx-2 flex flex-col gap-0.5">
-          {TABS.map(({ id, label, icon: Icon, description }) => {
-            const selected = id === value;
-            return (
-              <li key={id}>
-                <button
-                  type="button"
-                  onClick={() => onChange(id)}
-                  aria-pressed={selected}
-                  className={[
-                    "flex min-h-[44px] w-full items-start gap-2 rounded-md px-3 py-2 text-left",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-                    selected
-                      ? "bg-accent/15 text-accent"
-                      : "text-text-muted hover:bg-bg-elevated hover:text-text",
-                  ].join(" ")}
-                >
-                  <Icon
-                    className={[
-                      "mt-0.5 h-4 w-4 flex-shrink-0",
-                      selected ? "text-accent" : "text-accent-cyan",
-                    ].join(" ")}
-                    aria-hidden
-                  />
-                  <span className="flex flex-col gap-0.5">
-                    <span className="text-body font-medium">{label}</span>
-                    {description ? (
-                      <span className="text-caption text-text-dim">
-                        {description}
-                      </span>
-                    ) : null}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </Modal>
-    </div>
   );
 }
 
