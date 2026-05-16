@@ -192,7 +192,16 @@ class OpponentStrategyDetector(BaseStrategyDetector):
             if has_proxy_building("RoboticsFacility", 390, 50):
                 return "Protoss - Proxy Robo Opener"
             if has_building("RoboticsFacility", 390):
-                return "Protoss - Robo Opener"
+                # Robo Opener requires the Robo to be the FIRST tech
+                # building. A 2-Gate Expand Blink build with a later
+                # Robo (Twilight Council goes down first) is not a
+                # Robo Opener.
+                _robo_times = get_times("RoboticsFacility")
+                _twilight_times = get_times("TwilightCouncil")
+                _robo_t = _robo_times[0] if _robo_times else 9999
+                _twilight_t = _twilight_times[0] if _twilight_times else 9999
+                if _robo_t < _twilight_t:
+                    return "Protoss - Robo Opener"
 
             has_blink = has_upgrade_substr("Blink", 390)
             if (3 <= count_buildings("Gateway", 390) <= 5) and has_blink and second_nexus_time > 390:
