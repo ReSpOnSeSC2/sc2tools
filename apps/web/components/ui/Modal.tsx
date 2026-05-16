@@ -15,7 +15,8 @@ import { X } from "lucide-react";
  * Modal — portal-based dialog with focus trap and Esc-close.
  *
  * Behavior:
- *   - ≤640px viewport: renders as a bottom sheet (full-width).
+ *   - ≤640px viewport: renders as a bottom sheet (full-width) by default,
+ *     or a centered card when `mobileLayout="center"`.
  *   - ≥640px viewport: renders as a centered card.
  *   - Focus is trapped inside while open, returned to the previously
  *     focused element on close.
@@ -25,6 +26,7 @@ import { X } from "lucide-react";
  */
 
 export type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
+export type ModalMobileLayout = "sheet" | "center";
 
 const SIZE_CLASSES: Record<ModalSize, string> = {
   sm: "sm:max-w-md",
@@ -41,6 +43,11 @@ export interface ModalProps {
   title: ReactNode;
   description?: ReactNode;
   size?: ModalSize;
+  /**
+   * Mobile (≤640px) layout. Defaults to "sheet" (bottom sheet).
+   * Use "center" to render as a centered card on mobile too.
+   */
+  mobileLayout?: ModalMobileLayout;
   /** Hide the X close button (still closes on Esc / scrim click). */
   hideClose?: boolean;
   /** Disable scrim-click dismissal — useful for in-progress flows. */
@@ -55,6 +62,7 @@ export function Modal({
   title,
   description,
   size = "md",
+  mobileLayout = "sheet",
   hideClose = false,
   disableScrimClose = false,
   children,
@@ -107,9 +115,14 @@ export function Modal({
     if (!disableScrimClose) onClose();
   };
 
+  const centerOnMobile = mobileLayout === "center";
+
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
+      className={[
+        "fixed inset-0 z-50 flex justify-center sm:items-center sm:p-4",
+        centerOnMobile ? "items-center p-4" : "items-end",
+      ].join(" ")}
       role="presentation"
     >
       <button
@@ -128,13 +141,16 @@ export function Modal({
         tabIndex={-1}
         className={[
           "relative w-full bg-bg-surface text-text border border-border shadow-[var(--shadow-card)]",
-          "max-h-[100dvh] overflow-hidden flex flex-col",
+          "overflow-hidden flex flex-col",
+          centerOnMobile ? "max-h-[85dvh]" : "max-h-[100dvh]",
           // 3xl gets more vertical room for the build editor's timeline.
           size === "3xl"
             ? "sm:max-h-[94vh]"
             : "sm:max-h-[85vh]",
-          "rounded-t-2xl sm:rounded-xl",
-          "pb-[env(safe-area-inset-bottom,0px)]",
+          centerOnMobile ? "rounded-2xl" : "rounded-t-2xl sm:rounded-xl",
+          centerOnMobile
+            ? "sm:pb-0"
+            : "pb-[env(safe-area-inset-bottom,0px)]",
           SIZE_CLASSES[size],
         ].join(" ")}
       >
