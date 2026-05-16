@@ -43,7 +43,7 @@ BUILD_DEFINITIONS = {
     "Protoss - Glaive Adept Timing": "Detected if Twilight Council + Glaives researched + High Adept count by 6:30.",
     "Protoss - Chargelot All-in": "Detected if Charge is researched, 7+ Gates, and low gas count.",
     "Protoss - Stargate Opener": "Detected if a Stargate is built before 6:30.",
-    "Protoss - Robo Opener": "Detected if a Robotics Facility is built before 6:30.",
+    "Protoss - Robo Opener": "Detected if a Robotics Facility is built before 6:30 AND no Twilight Council was started before it (a 2-Gate Expand Blink build with a later Robo is a Twilight-first opener, not a Robo Opener).",
     "Protoss - Proxy Stargate Opener": "Detected if a Stargate is built away from the opponents base before 6:30.",
     "Protoss - Proxy Robo Opener": "Detected if a Robo is built away from the opponents base before 6:30.",
     "Protoss - Standard Expand": "Detected if the 2nd Nexus starts before 6:30.",

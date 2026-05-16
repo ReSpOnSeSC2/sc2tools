@@ -81,7 +81,8 @@ export const PROTOSS_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     race: "Protoss",
     matchup: null,
     name: "Protoss - Robo Opener",
-    description: "Detected if a Robotics Facility is built before 6:30.",
+    description:
+      "Detected if a Robotics Facility is built before 6:30 AND no Twilight Council was started before it (a 2-Gate Expand Blink build with a later Robo is a Twilight-first opener, not a Robo Opener).",
   },
   {
     race: "Protoss",
