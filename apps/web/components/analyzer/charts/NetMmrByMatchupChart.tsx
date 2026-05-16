@@ -9,7 +9,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  ReferenceLine,
   Cell,
 } from "recharts";
 import { useApi } from "@/lib/clientApi";
@@ -42,7 +41,6 @@ const RACE_META: Record<string, { label: string; color: string }> = {
 const COLOR_SUCCESS = "#3ec07a";
 const COLOR_DANGER = "#ff6b6b";
 const COLOR_GRID = "#1f2533";
-const COLOR_BORDER_STRONG = "#2a3142";
 const COLOR_TEXT_DIM = "#6b7280";
 const COLOR_BG_SURFACE = "#11141b";
 
@@ -137,7 +135,6 @@ export function NetMmrByMatchupChart() {
               width={104}
               tickMargin={4}
             />
-            <ReferenceLine x={0} stroke={COLOR_BORDER_STRONG} />
             <Tooltip
               cursor={{ fill: "rgba(124,140,255,0.04)" }}
               contentStyle={{
