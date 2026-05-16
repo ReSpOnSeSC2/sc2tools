@@ -477,45 +477,74 @@ describe("services/aggregations", () => {
     expect(tooBig.sessionGapMinutes).toBe(480);
   });
 
-  test("skillSpread fills every bracket and computes per-bucket winRate", async () => {
+  test("oppMmrBuckets honours an explicit bucketWidth and shapes each bin", async () => {
+    // Two pipeline runs happen in order:
+    //   1. resolveOppMmrBucketWidth's range query — skipped here because
+    //      an explicit width short-circuits it.
+    //   2. The main $facet — returns { bins: [...], unknown: [...] }.
     const games = buildGames([
       () => [
-        { _id: "-50_50", wins: 5, losses: 5, total: 10, avgSpread: 3 },
-        { _id: "gt_150", wins: 1, losses: 4, total: 5, avgSpread: 210 },
-        { _id: "unknown", wins: 0, losses: 1, total: 1, avgSpread: null },
+        {
+          bins: [
+            { _id: 3500, wins: 4, losses: 2, total: 6, avgMmr: 3540, minMmr: 3500, maxMmr: 3590 },
+            { _id: 3600, wins: 7, losses: 3, total: 10, avgMmr: 3645, minMmr: 3601, maxMmr: 3690 },
+          ],
+          unknown: [{ _id: null, wins: 5, losses: 8, total: 13 }],
+        },
       ],
     ]);
     const svc = new AggregationsService({ games });
-    const out = /** @type {any} */ (await svc.skillSpread("u1", {}));
-    expect(out.buckets).toHaveLength(5);
-    const peer = out.buckets.find((b) => b.id === "-50_50");
-    expect(peer.winRate).toBeCloseTo(0.5);
-    const upset = out.buckets.find((b) => b.id === "gt_150");
-    expect(upset.winRate).toBeCloseTo(0.2);
-    const empty = out.buckets.find((b) => b.id === "lt_-150");
-    expect(empty.total).toBe(0);
-    expect(out.unknown.total).toBe(1);
+    const out = /** @type {any} */ (
+      await svc.oppMmrBuckets("u1", {}, { bucketWidth: 100 })
+    );
+    expect(out.bucketWidth).toBe(100);
+    expect(out.buckets).toHaveLength(2);
+    expect(out.buckets[0]).toMatchObject({
+      lo: 3500,
+      hi: 3600,
+      label: "3500–3599",
+      total: 6,
+    });
+    expect(out.buckets[0].winRate).toBeCloseTo(4 / 6);
+    expect(out.buckets[1].avgMmr).toBe(3645);
+    expect(out.unknown.total).toBe(13);
   });
 
-  test("skillSpread guards integer MMR with $isNumber, not a literal 'double' type check", async () => {
-    // Regression guard: the agent stores opponent.mmr via int(opp.mmr),
-    // so the slim row carries it as BSON int32. The first cut of the
-    // pipeline used `$eq: [{ $type: "$opponent.mmr" }, "double"]`, which
-    // silently dropped every row because $type returns "int" for ints.
-    // Capture the actual pipeline and verify the numeric guard uses
-    // $isNumber so the bracket fan-out never regresses.
+  test("oppMmrBuckets auto-picks width 50 for tight ranges, 100 for wide", async () => {
+    // Two aggregations per call: (1) min/max range probe, (2) main pipeline.
+    // Mock pair 1 → tight range → expect 50. Pair 2 → wide range → expect 100.
+    const games = buildGames([
+      () => [{ _id: null, mn: 3500, mx: 3850 }], // tight: span 350 ≤ 500
+      () => [{ bins: [], unknown: [] }],
+      () => [{ _id: null, mn: 2400, mx: 4500 }], // wide: span 2100 > 500
+      () => [{ bins: [], unknown: [] }],
+    ]);
+    const svc = new AggregationsService({ games });
+    const tight = /** @type {any} */ (await svc.oppMmrBuckets("u1", {}));
+    expect(tight.bucketWidth).toBe(50);
+    const wide = /** @type {any} */ (await svc.oppMmrBuckets("u1", {}));
+    expect(wide.bucketWidth).toBe(100);
+  });
+
+  test("oppMmrBuckets guards opponent.mmr with $isNumber so int-stored values bucket correctly", async () => {
+    // Regression: the agent stores opponent.mmr via int(opp.mmr). An
+    // earlier cut of the pipeline used `$eq: [{ $type: ... }, "double"]`,
+    // which silently dropped every row because BSON $type returns "int".
+    // The replacement uses $isNumber / $type:"number" — keep that.
     let captured = null;
     const games = {
       aggregate(pipeline) {
         captured = pipeline;
-        return { toArray: () => Promise.resolve([]) };
+        return { toArray: () => Promise.resolve([{ bins: [], unknown: [] }]) };
       },
     };
     const svc = new AggregationsService({ games });
-    await svc.skillSpread("u1", {});
+    await svc.oppMmrBuckets("u1", {}, { bucketWidth: 100 });
     const json = JSON.stringify(captured);
-    expect(json).toContain("$isNumber");
+    // The new pipeline reads opponent.mmr via $type:"number" (query
+    // operator alias) — the literal type-name comparison must not return.
     expect(json).not.toContain('"double"');
+    expect(json).toContain('"opponent.mmr"');
   });
 
   test("myBuildMixOverTime returns one row per (bucket, key)", async () => {

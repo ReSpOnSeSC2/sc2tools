@@ -26,14 +26,12 @@ const RESULT_DEFEAT = ["defeat", "loss"];
 const SESSION_GAP_MINUTES = 90;
 /** Cap the within-session position bins — beyond this it's noise. */
 const MAX_SESSION_POSITIONS = 12;
-/** Spread bucket boundaries for "Skill spread" WR — opp − my MMR. */
-const SPREAD_BUCKETS = [
-  { id: "lt_-150", label: "≤-150", lo: -Infinity, hi: -150 },
-  { id: "-150_-50", label: "-150 to -50", lo: -150, hi: -50 },
-  { id: "-50_50", label: "±50", lo: -50, hi: 50 },
-  { id: "50_150", label: "+50 to +150", lo: 50, hi: 150 },
-  { id: "gt_150", label: "≥+150", lo: 150, hi: Infinity },
-];
+/** Bucket widths offered by the opponent-MMR histogram. */
+const OPP_MMR_BUCKET_WIDTHS = [50, 100];
+/** Range threshold (in MMR) below which 50-wide bins read cleaner. */
+const OPP_MMR_AUTO_WIDTH_CUTOFF = 500;
+/** Safety cap so a malformed payload can't fan out to thousands of bins. */
+const OPP_MMR_MAX_BUCKETS = 80;
 
 /**
  * @typedef {{
@@ -287,81 +285,146 @@ function shapeMomentum({ post, positions, baseline, gap }) {
  * @param {string} userId
  * @param {object} filters
  */
-async function skillSpread(deps, userId, filters) {
+/**
+ * Win rate bucketed by **absolute opponent MMR**, in clean 50- or
+ * 100-MMR bands.
+ *
+ * Bucket width is either picked explicitly (``opts.bucketWidth``
+ * = 50 or 100) or auto-chosen from the actual opponent-MMR spread
+ * in the filtered data: tight ranges (≤500 MMR end-to-end) get
+ * 50-wide bins so the picture has detail, wider ranges get 100-wide
+ * bins so the chart doesn't fan out into 30+ thin bars. Either way
+ * the response is self-describing — the chosen width is returned so
+ * the client can label its toggle accurately.
+ *
+ * Games with no ``opponent.mmr`` are split into an ``unknown``
+ * rollup the client can surface as a caption (never silently
+ * dropped). Numeric guard uses ``$isNumber`` so int, long, double,
+ * and decimal BSON types all match — the agent stores the field
+ * as ``int(opp.mmr)`` so a literal type-name check would miss
+ * every row (see PR #286).
+ *
+ * @param {Deps} deps
+ * @param {string} userId
+ * @param {object} filters
+ * @param {{ bucketWidth?: number | "auto" }} [opts]
+ */
+async function oppMmrBuckets(deps, userId, filters, opts = {}) {
   const match = deps.gamesMatchStage(userId, filters);
-  const rows = await deps.games.aggregate(skillSpreadPipeline(deps, match)).toArray();
-  return shapeSkillSpread(rows);
+  const width = await resolveOppMmrBucketWidth(deps, match, opts.bucketWidth);
+  const facet = await deps.games.aggregate(oppMmrPipeline(deps, match, width)).toArray();
+  return shapeOppMmrBuckets(facet[0], width);
 }
 
-function skillSpreadPipeline(deps, match) {
+/**
+ * Pick the bin width. Honours an explicit ``50`` / ``100`` from
+ * the caller; for ``"auto"`` or anything unrecognised, queries
+ * the data range and picks the cleaner default.
+ *
+ * @param {Deps} deps
+ * @param {object} match
+ * @param {number | "auto" | undefined} requested
+ */
+async function resolveOppMmrBucketWidth(deps, match, requested) {
+  if (requested === 50 || requested === 100) return requested;
+  const rows = await deps.games
+    .aggregate([
+      { $match: { ...match, "opponent.mmr": { $type: "number" } } },
+      {
+        $group: {
+          _id: null,
+          mn: { $min: "$opponent.mmr" },
+          mx: { $max: "$opponent.mmr" },
+        },
+      },
+    ])
+    .toArray();
+  const extremes = rows && rows[0];
+  if (!extremes || typeof extremes.mn !== "number" || typeof extremes.mx !== "number") {
+    return 100;
+  }
+  const span = extremes.mx - extremes.mn;
+  return span <= OPP_MMR_AUTO_WIDTH_CUTOFF ? 50 : 100;
+}
+
+/**
+ * Pipeline that fans games into absolute-MMR bins of ``width``
+ * plus an unknown rollup, in one $facet so the response is one
+ * round trip.
+ */
+function oppMmrPipeline(deps, match, width) {
   return [
     { $match: match },
     { $addFields: { _bucket: deps.bucketSwitch() } },
     { $match: { _bucket: { $in: ["win", "loss"] } } },
     {
-      $addFields: {
-        _spread: {
-          $cond: [
-            // $isNumber matches every numeric BSON type (int, long,
-            // double, decimal). The aggregation-expression form of
-            // $type would force us to enumerate them and is easy to
-            // get subtly wrong — the agent stores opponent.mmr as
-            // int(...) so a literal "double" comparison silently
-            // dropped every game.
-            { $and: [{ $isNumber: "$myMmr" }, { $isNumber: "$opponent.mmr" }] },
-            { $subtract: ["$opponent.mmr", "$myMmr"] },
-            null,
-          ],
-        },
-      },
-    },
-    { $addFields: { _spreadBucket: spreadBucketSwitch() } },
-    {
-      $group: {
-        _id: "$_spreadBucket",
-        wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
-        losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
-        total: { $sum: 1 },
-        avgSpread: { $avg: "$_spread" },
+      $facet: {
+        bins: [
+          { $match: { "opponent.mmr": { $type: "number" } } },
+          {
+            $addFields: {
+              _bin: { $multiply: [{ $floor: { $divide: ["$opponent.mmr", width] } }, width] },
+            },
+          },
+          {
+            $group: {
+              _id: "$_bin",
+              wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
+              losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
+              total: { $sum: 1 },
+              avgMmr: { $avg: "$opponent.mmr" },
+              minMmr: { $min: "$opponent.mmr" },
+              maxMmr: { $max: "$opponent.mmr" },
+            },
+          },
+          { $sort: { _id: 1 } },
+          { $limit: OPP_MMR_MAX_BUCKETS },
+        ],
+        unknown: [
+          {
+            $match: {
+              $or: [
+                { "opponent.mmr": { $exists: false } },
+                { "opponent.mmr": null },
+                { "opponent.mmr": { $not: { $type: "number" } } },
+              ],
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
+              losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
+              total: { $sum: 1 },
+            },
+          },
+        ],
       },
     },
   ];
 }
 
-function shapeSkillSpread(rows) {
-  const byId = new Map(rows.map((r) => [r._id, r]));
-  const unknownRow = byId.get("unknown");
+function shapeOppMmrBuckets(facet, width) {
+  const binRows = (facet && facet.bins) || [];
+  const unknownRow = (facet && facet.unknown && facet.unknown[0]) || null;
+  const buckets = binRows.map((r) => ({
+    lo: r._id,
+    hi: r._id + width,
+    label: `${r._id}–${r._id + width - 1}`,
+    wins: r.wins,
+    losses: r.losses,
+    total: r.total,
+    winRate: r.total ? r.wins / r.total : 0,
+    avgMmr: r.avgMmr != null ? Math.round(r.avgMmr) : null,
+    minMmr: r.minMmr ?? null,
+    maxMmr: r.maxMmr ?? null,
+  }));
   return {
-    buckets: SPREAD_BUCKETS.map((b) => {
-      const r = byId.get(b.id);
-      return {
-        id: b.id,
-        label: b.label,
-        wins: r ? r.wins : 0,
-        losses: r ? r.losses : 0,
-        total: r ? r.total : 0,
-        winRate: r && r.total ? r.wins / r.total : 0,
-        avgSpread: r && r.avgSpread != null ? Math.round(r.avgSpread) : null,
-      };
-    }),
+    bucketWidth: width,
+    buckets,
     unknown: unknownRow
       ? { total: unknownRow.total, wins: unknownRow.wins, losses: unknownRow.losses }
       : { total: 0, wins: 0, losses: 0 },
-  };
-}
-
-function spreadBucketSwitch() {
-  return {
-    $switch: {
-      branches: [
-        { case: { $eq: ["$_spread", null] }, then: "unknown" },
-        { case: { $lt: ["$_spread", -150] }, then: "lt_-150" },
-        { case: { $lt: ["$_spread", -50] }, then: "-150_-50" },
-        { case: { $lt: ["$_spread", 50] }, then: "-50_50" },
-        { case: { $lt: ["$_spread", 150] }, then: "50_150" },
-      ],
-      default: "gt_150",
-    },
   };
 }
 
@@ -527,13 +590,14 @@ function sanitizeGapMinutes(raw) {
 module.exports = {
   mmrProgression,
   momentum,
-  skillSpread,
+  oppMmrBuckets,
   mixOverTime,
   mapTrend,
   netMmrByMatchup,
   SESSION_GAP_MINUTES,
   MAX_SESSION_POSITIONS,
-  SPREAD_BUCKETS,
+  OPP_MMR_BUCKET_WIDTHS,
+  OPP_MMR_AUTO_WIDTH_CUTOFF,
   RESULT_VICTORY,
   RESULT_DEFEAT,
 };
