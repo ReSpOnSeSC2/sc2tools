@@ -170,6 +170,136 @@ function buildAggregationsRouter(deps) {
     }
   });
 
+  // MMR progression: closing MMR per bucket, plus peak / trough /
+  // latest scalars for the headline labels.
+  router.get("/timeseries/mmr", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      const intervalRaw = String(req.query.interval || "day").toLowerCase();
+      const interval =
+        intervalRaw === "week" || intervalRaw === "month"
+          ? intervalRaw
+          : "day";
+      const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
+      res.json(
+        await deps.aggregations.mmrProgression(
+          userId,
+          { interval, tz },
+          filters,
+        ),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Tilt + within-session momentum (post-win vs post-loss WR + the
+  // per-position curve). Reuses every global filter.
+  router.get("/momentum", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      const sessionGapMinutes = parseFiniteInt(req.query.session_gap_minutes);
+      res.json(
+        await deps.aggregations.momentum(userId, filters, { sessionGapMinutes }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // WR split by (opponent.mmr − myMmr) bracket. "Are you the upset
+  // artist or the upset victim?"
+  router.get("/skill-spread", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      res.json(await deps.aggregations.skillSpread(userId, filters));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Per-(bucket, myBuild) counts. Client picks top-N and renders a
+  // 100% stacked area so build mix evolution is legible.
+  router.get("/timeseries/my-builds", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      const intervalRaw = String(req.query.interval || "week").toLowerCase();
+      const interval =
+        intervalRaw === "day" || intervalRaw === "month"
+          ? intervalRaw
+          : "week";
+      const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
+      res.json(
+        await deps.aggregations.myBuildMixOverTime(
+          userId,
+          { interval, tz },
+          filters,
+        ),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Per-(bucket, opponent.strategy) counts. Same shape as my-builds.
+  router.get("/timeseries/opp-strategies", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      const intervalRaw = String(req.query.interval || "week").toLowerCase();
+      const interval =
+        intervalRaw === "day" || intervalRaw === "month"
+          ? intervalRaw
+          : "week";
+      const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
+      res.json(
+        await deps.aggregations.oppStrategyMixOverTime(
+          userId,
+          { interval, tz },
+          filters,
+        ),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Per-(bucket, map) WR. Client picks top-N maps by volume and
+  // renders faceted sparklines.
+  router.get("/timeseries/maps", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      const intervalRaw = String(req.query.interval || "week").toLowerCase();
+      const interval =
+        intervalRaw === "day" || intervalRaw === "month"
+          ? intervalRaw
+          : "week";
+      const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
+      res.json(
+        await deps.aggregations.mapTrend(userId, { interval, tz }, filters),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Net MMR gained / lost per opponent race. Surfaces matchups that
+  // bleed MMR even at parity WR.
+  router.get("/mmr-by-matchup", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      res.json(await deps.aggregations.netMmrByMatchup(userId, filters));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Current consecutive same-result streak across the user's games.
   // Game-level (not day-bucketed) so a mixed day no longer drops a
   // mid-streak indicator to 0. See services/streak.js for the rationale.

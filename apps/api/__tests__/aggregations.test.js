@@ -396,4 +396,155 @@ describe("services/aggregations", () => {
     expect(out.Terran).toBeDefined();
     expect(out.Zerg).toBeDefined();
   });
+
+  // ---------------- v0.5+ Player-insight aggregations ----------------
+
+  test("mmrProgression returns close/peak/trough scalars from bucketed rows", async () => {
+    const games = buildGames([
+      () => [
+        {
+          bucket: new Date("2026-04-01"),
+          openMmr: 4000,
+          closeMmr: 4050,
+          minMmr: 3990,
+          maxMmr: 4060,
+          wins: 3,
+          losses: 1,
+          total: 4,
+        },
+        {
+          bucket: new Date("2026-04-08"),
+          openMmr: 4055,
+          closeMmr: 4120,
+          minMmr: 4040,
+          maxMmr: 4140,
+          wins: 5,
+          losses: 2,
+          total: 7,
+        },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.mmrProgression("u1", { interval: "week" }, {})
+    );
+    expect(out.interval).toBe("week");
+    expect(out.points).toHaveLength(2);
+    expect(out.peak.mmr).toBe(4140);
+    expect(out.trough.mmr).toBe(3990);
+    expect(out.latest.mmr).toBe(4120);
+  });
+
+  test("momentum shapes post-win / post-loss splits + session positions", async () => {
+    const games = buildGames([
+      () => [
+        {
+          post: [
+            { _id: "win", wins: 7, losses: 3, total: 10 },
+            { _id: "loss", wins: 2, losses: 4, total: 6 },
+          ],
+          positions: [
+            { _id: 1, wins: 5, losses: 5, total: 10 },
+            { _id: 2, wins: 4, losses: 3, total: 7 },
+            { _id: 3, wins: 2, losses: 3, total: 5 },
+          ],
+          baseline: [{ wins: 11, losses: 11, total: 22 }],
+        },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (await svc.momentum("u1", {}, undefined));
+    expect(out.sessionGapMinutes).toBe(90);
+    expect(out.postWin.winRate).toBeCloseTo(0.7);
+    expect(out.postLoss.winRate).toBeCloseTo(2 / 6);
+    expect(out.baseline.winRate).toBeCloseTo(0.5);
+    expect(out.sessionPositions).toHaveLength(3);
+    expect(out.sessionPositions[1].pos).toBe(2);
+  });
+
+  test("momentum clamps session gap into the safe range", async () => {
+    const games = buildGames([
+      () => [{ post: [], positions: [], baseline: [] }],
+    ]);
+    const svc = new AggregationsService({ games });
+    const tooSmall = /** @type {any} */ (
+      await svc.momentum("u1", {}, { sessionGapMinutes: 5 })
+    );
+    expect(tooSmall.sessionGapMinutes).toBe(15);
+    const tooBig = /** @type {any} */ (
+      await svc.momentum("u1", {}, { sessionGapMinutes: 9999 })
+    );
+    expect(tooBig.sessionGapMinutes).toBe(480);
+  });
+
+  test("skillSpread fills every bracket and computes per-bucket winRate", async () => {
+    const games = buildGames([
+      () => [
+        { _id: "-50_50", wins: 5, losses: 5, total: 10, avgSpread: 3 },
+        { _id: "gt_150", wins: 1, losses: 4, total: 5, avgSpread: 210 },
+        { _id: "unknown", wins: 0, losses: 1, total: 1, avgSpread: null },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (await svc.skillSpread("u1", {}));
+    expect(out.buckets).toHaveLength(5);
+    const peer = out.buckets.find((b) => b.id === "-50_50");
+    expect(peer.winRate).toBeCloseTo(0.5);
+    const upset = out.buckets.find((b) => b.id === "gt_150");
+    expect(upset.winRate).toBeCloseTo(0.2);
+    const empty = out.buckets.find((b) => b.id === "lt_-150");
+    expect(empty.total).toBe(0);
+    expect(out.unknown.total).toBe(1);
+  });
+
+  test("myBuildMixOverTime returns one row per (bucket, key)", async () => {
+    const games = buildGames([
+      () => [
+        { bucket: new Date("2026-04-01"), key: "Mech", wins: 3, losses: 1, total: 4 },
+        { bucket: new Date("2026-04-01"), key: "Bio", wins: 2, losses: 2, total: 4 },
+        { bucket: new Date("2026-04-08"), key: "Mech", wins: 5, losses: 0, total: 5 },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.myBuildMixOverTime("u1", { interval: "week" }, {})
+    );
+    expect(out.interval).toBe("week");
+    expect(out.points).toHaveLength(3);
+    expect(out.points[0].key).toBe("Mech");
+    expect(out.points[0].total).toBe(4);
+  });
+
+  test("mapTrend returns one row per (bucket, map)", async () => {
+    const games = buildGames([
+      () => [
+        { bucket: new Date("2026-04-01"), key: "Goldenaura", wins: 4, losses: 1, total: 5 },
+        { bucket: new Date("2026-04-01"), key: "Site Delta", wins: 1, losses: 2, total: 3 },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.mapTrend("u1", { interval: "week" }, {})
+    );
+    expect(out.points).toHaveLength(2);
+    expect(out.points[0].key).toBe("Goldenaura");
+  });
+
+  test("netMmrByMatchup rounds the running totals and computes WR", async () => {
+    const games = buildGames([
+      () => [
+        { _id: "P", netMmr: 84.4, avgDelta: 14.06, games: 6, wins: 4, losses: 2 },
+        { _id: "Z", netMmr: -45.7, avgDelta: -9.14, games: 5, wins: 2, losses: 3 },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (await svc.netMmrByMatchup("u1", {}));
+    expect(out.matchups).toHaveLength(2);
+    const p = out.matchups.find((m) => m.race === "P");
+    expect(p.netMmr).toBe(84);
+    expect(p.avgDelta).toBeCloseTo(14.1);
+    expect(p.winRate).toBeCloseTo(4 / 6);
+    const z = out.matchups.find((m) => m.race === "Z");
+    expect(z.netMmr).toBe(-46);
+  });
 });
