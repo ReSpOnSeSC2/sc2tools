@@ -302,12 +302,13 @@ function skillSpreadPipeline(deps, match) {
       $addFields: {
         _spread: {
           $cond: [
-            {
-              $and: [
-                { $eq: [{ $type: "$myMmr" }, "double"] },
-                { $eq: [{ $type: "$opponent.mmr" }, "double"] },
-              ],
-            },
+            // $isNumber matches every numeric BSON type (int, long,
+            // double, decimal). The aggregation-expression form of
+            // $type would force us to enumerate them and is easy to
+            // get subtly wrong — the agent stores opponent.mmr as
+            // int(...) so a literal "double" comparison silently
+            // dropped every game.
+            { $and: [{ $isNumber: "$myMmr" }, { $isNumber: "$opponent.mmr" }] },
             { $subtract: ["$opponent.mmr", "$myMmr"] },
             null,
           ],
