@@ -28,7 +28,10 @@ export type TransitionNodeKind =
   | "build"
   | "oppStrategy"
   | "finalPhase"
-  | "lateComp";
+  | "lateComp"
+  // Opponent-profile column scheme uses this kind for col 1
+  // (opponent's race). Build-mode payloads never emit it.
+  | "oppRace";
 
 export interface TransitionNode {
   id: TransitionNodeId;
@@ -97,6 +100,9 @@ const KIND_COLORS: Record<TransitionNodeKind, string> = {
   oppStrategy: "#9aa3b2", // --text-muted
   finalPhase: "#3ec0c7", // --accent-cyan
   lateComp: "#e6b450", // --warning
+  // Distinct hue for the opponent-mode race column so it doesn't read
+  // as the same kind as the col-2 strategy in the same Sankey.
+  oppRace: "#c084fc", // --accent-purple-ish
 };
 
 const SANKEY_THEME = {

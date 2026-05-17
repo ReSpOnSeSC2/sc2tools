@@ -20,6 +20,9 @@ import type { StrategyEntry } from "./StrategyTendencyChart";
 import { H2HTrendsSection } from "./h2h/H2HTrendsSection";
 import type { BuildMatchupSelection } from "./h2h/BuildMatrix";
 import { gameOutcome } from "@/lib/h2hSeries";
+import { PhaseTrajectoryStrip } from "./PhaseTrajectoryStrip";
+import { BuildTransitionSankey } from "./BuildTransitionSankey";
+import type { BuildPhasePayload, BuildTransitionsPayload } from "@/lib/serverApi";
 
 type OpponentProfileResp = {
   pulseId?: string;
@@ -53,6 +56,13 @@ type OpponentProfileResp = {
   medianTimings?: Record<string, TimingInfo>;
   medianTimingsLegacy?: Record<string, TimingInfo>;
   medianTimingsOrder?: string[];
+  // Phase trajectory + transition Sankey for "How games against this
+  // opponent play out". Computed server-side from the same date-filtered
+  // matched games that drive the by-map / by-strategy / median-timings
+  // panels. Optional so old API builds that pre-date the wiring still
+  // render the rest of the profile without a runtime error.
+  phases?: BuildPhasePayload;
+  transitions?: BuildTransitionsPayload;
   last5Games?: ProfileGame[];
   games?: ProfileGame[];
 };
@@ -254,6 +264,11 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         selectedBuildMatchup={selectedBuildMatchup}
         onSelectBuildMatchup={setSelectedBuildMatchup}
         onSelectGame={handleSelectGame}
+      />
+
+      <OpponentPhaseSection
+        phases={data.phases}
+        transitions={data.transitions}
       />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -494,5 +509,75 @@ function ProfilePulseLine({
         sc2pulse id not resolved yet
       </span>
     </div>
+  );
+}
+
+/**
+ * "How games against this opponent play out" — phase trajectory strip
+ * + transition Sankey for the opponent profile.
+ *
+ * Composition: ProfileView is already wide and panel-dense, so the
+ * two visualizations sit side-by-side at lg+ (where the Sankey has
+ * room to spread its 4-column layout) and stack at narrower
+ * viewports. The Sankey's own internal height is 360px; the
+ * trajectory strip is roughly half that, so the lg+ row goes a bit
+ * top-aligned rather than vertically centred to keep the captions
+ * close to their visuals.
+ *
+ * Rendered nothing when both payloads are absent or empty — the API
+ * envelope may be missing them on an older build, and a 0-game
+ * opponent (admin "Rebuild" mid-cycle) has no useful trajectory to
+ * draw. The Sankey component itself handles its own sparse-data
+ * empty state for the < 4 node case.
+ */
+function OpponentPhaseSection({
+  phases,
+  transitions,
+}: {
+  phases?: BuildPhasePayload;
+  transitions?: BuildTransitionsPayload;
+}) {
+  if (!phases && !transitions) return null;
+  const hasPhases =
+    phases &&
+    ((phases.sampleSize?.early ?? 0) +
+      (phases.sampleSize?.earlyMid ?? 0) +
+      (phases.sampleSize?.mid ?? 0) +
+      (phases.sampleSize?.midLate ?? 0) +
+      (phases.sampleSize?.late ?? 0)) >
+      0;
+  const hasTransitions =
+    transitions && transitions.transitions.nodes.length > 0;
+  if (!hasPhases && !hasTransitions) return null;
+  return (
+    <Card title="How games against this opponent play out">
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+        <div className="min-w-0">
+          {hasPhases && phases ? (
+            <PhaseTrajectoryStrip
+              sampleSize={phases.sampleSize}
+              crossings={phases.medianCrossings}
+              finalPhaseDistribution={phases.finalPhaseDistribution}
+              durationP95Sec={phases.durationP95Sec}
+            />
+          ) : (
+            <EmptyState
+              title="Phase trajectory unavailable"
+              sub="Not enough macro data on this opponent's games yet."
+            />
+          )}
+        </div>
+        <div className="min-w-0">
+          {hasTransitions && transitions ? (
+            <BuildTransitionSankey transitions={transitions} />
+          ) : (
+            <EmptyState
+              title="Transitions unavailable"
+              sub="A few more games against this opponent will fill the Sankey."
+            />
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }

@@ -34,23 +34,32 @@ const {
  * cutting fix tracker.
  */
 
-/** @type {Record<number, "build"|"oppStrategy"|"finalPhase"|"lateComp">} */
-const COLUMN_KIND = {
+/** @type {Record<number, "build"|"oppStrategy"|"finalPhase"|"lateComp"|"oppRace">} */
+const BUILD_COLUMN_KIND = {
   0: "build",
   1: "oppStrategy",
   2: "finalPhase",
   3: "lateComp",
 };
 
+/** @type {Record<number, "build"|"oppStrategy"|"finalPhase"|"lateComp"|"oppRace">} */
+const OPPONENT_COLUMN_KIND = {
+  0: "build",
+  1: "oppRace",
+  2: "oppStrategy",
+  3: "finalPhase",
+};
+
 const OTHER_LABEL = "Other";
 const UNKNOWN_STRATEGY = "Unknown";
+const UNKNOWN_RACE = "Unknown";
 
 /**
  * @typedef {{
  *   id: string,
  *   label: string,
  *   column: 0|1|2|3,
- *   kind: "build"|"oppStrategy"|"finalPhase"|"lateComp",
+ *   kind: "build"|"oppStrategy"|"finalPhase"|"lateComp"|"oppRace",
  *   games: number,
  *   wins: number,
  *   losses: number,
@@ -69,13 +78,26 @@ const UNKNOWN_STRATEGY = "Unknown";
 
 /**
  * @param {Array<any>} games
+ * @param {{ mode?: "build"|"opponent", label?: string }} [opts]
+ *   ``mode`` selects the column scheme:
+ *     "build" (default) — col 0 build → col 1 oppStrategy →
+ *       col 2 finalPhase → col 3 lateComp (variable depth, col 3 only
+ *       for late-ending games).
+ *     "opponent" — col 0 vs-opponent → col 1 oppRace → col 2 oppStrategy
+ *       → col 3 finalPhase (fixed depth; no late-comp column). Used by
+ *       the opponent profile so the Sankey reads "this opponent (race
+ *       Z) tends to play strategy Y and gets the game to phase X".
+ *   ``label`` overrides the col-0 node's display label. In build mode
+ *   it defaults to the games' ``myBuild``; in opponent mode it should
+ *   be the opponent's display name ("vs <name>") so the col-0 node
+ *   labels the profile owner.
  * @returns {{
  *   nodes: TransitionNode[],
  *   edges: TransitionEdge[],
  *   rare: { collapsedNodes: number, collapsedEdges: number },
  * }}
  */
-function computeTransitions(games) {
+function computeTransitions(games, opts = {}) {
   const list = Array.isArray(games) ? games : [];
   if (list.length === 0) {
     return {
@@ -85,12 +107,16 @@ function computeTransitions(games) {
     };
   }
 
-  const buildLabel = pickBuildLabel(list);
+  const mode = opts.mode === "opponent" ? "opponent" : "build";
+  const columnKind = mode === "opponent" ? OPPONENT_COLUMN_KIND : BUILD_COLUMN_KIND;
+  const col0Label = opts.label || pickBuildLabel(list);
 
   /** @type {Array<{path: TransitionPathNode[], won: boolean, lost: boolean}>} */
   const paths = [];
   for (const g of list) {
-    const path = pathForGame(g, buildLabel);
+    const path = mode === "opponent"
+      ? pathForOpponentGame(g, col0Label)
+      : pathForGame(g, col0Label);
     paths.push({
       path,
       won: isWonResult(g && g.result),
@@ -115,7 +141,7 @@ function computeTransitions(games) {
   let agg = raw;
   if (rareIds.size > 0) {
     const remapped = paths.map(({ path, won, lost }) => ({
-      path: path.map((n) => rerouteRare(n, rareIds)),
+      path: path.map((n) => rerouteRare(n, rareIds, columnKind)),
       won,
       lost,
     }));
@@ -150,7 +176,7 @@ function computeTransitions(games) {
  *   id: string,
  *   label: string,
  *   column: 0|1|2|3,
- *   kind: "build"|"oppStrategy"|"finalPhase"|"lateComp",
+ *   kind: "build"|"oppStrategy"|"finalPhase"|"lateComp"|"oppRace",
  *   iconTokens?: string[],
  * }} TransitionPathNode
  */
@@ -228,6 +254,66 @@ function pathForGame(g, buildLabel) {
 }
 
 /**
+ * Opponent-mode column routing. Path is always 4 cols:
+ *   col 0 vs-opponent → col 1 oppRace → col 2 oppStrategy →
+ *   col 3 finalPhase
+ *
+ * The classifier still scores the game from the profile owner's
+ * perspective (``myRace`` + ``macroBreakdown``) — the col-3
+ * ``finalPhase`` reads "where this game ended up", which is what the
+ * Sankey caption ("this opponent vs me usually does Z and ends in
+ * mid/late") names. No col-3 lateComp branch in this mode — the
+ * opponent profile surfaces aggregate composition via the trajectory
+ * strip, not the Sankey.
+ *
+ * @param {any} g
+ * @param {string} col0Label  display label for the col-0 node — caller
+ *   passes e.g. ``vs <opponent name>`` so the node reads correctly.
+ * @returns {TransitionPathNode[]}
+ */
+function pathForOpponentGame(g, col0Label) {
+  const macroBreakdown = (g && g.macroBreakdown) || {};
+  const race = g && g.myRace;
+  const durationSec = (g && g.durationSec) || 0;
+  const classified = classifyGame({ macroBreakdown, race, durationSec });
+  const finalPhase = classified.finalPhase;
+
+  const rawOppRace =
+    (g && g.opponent && g.opponent.race) ||
+    (g && g.opp_race) ||
+    "";
+  const oppRace = rawOppRace ? String(rawOppRace) : UNKNOWN_RACE;
+
+  const rawStrat =
+    (g && g.opponent && g.opponent.strategy) ||
+    (g && g.opp_strategy) ||
+    "";
+  const strat = rawStrat ? String(rawStrat) : UNKNOWN_STRATEGY;
+
+  return [
+    { id: "opponent", label: col0Label, column: 0, kind: "build" },
+    {
+      id: `oppRace:${oppRace}`,
+      label: oppRace,
+      column: 1,
+      kind: "oppRace",
+    },
+    {
+      id: `strat:${strat}`,
+      label: strat,
+      column: 2,
+      kind: "oppStrategy",
+    },
+    {
+      id: `phase:${finalPhase}`,
+      label: finalPhase,
+      column: 3,
+      kind: "finalPhase",
+    },
+  ];
+}
+
+/**
  * @param {Record<string, any>} crossings
  * @param {number} durationSec
  */
@@ -244,16 +330,21 @@ function lateWindow(crossings, durationSec) {
  *
  * @param {TransitionPathNode} n
  * @param {Set<string>} rareIds
+ * @param {Record<number, "build"|"oppStrategy"|"finalPhase"|"lateComp"|"oppRace">} columnKind
+ *   Per-column kind table for the current mode — picks the right
+ *   kind to stamp on the synthetic "Other" node (e.g. col-2 is
+ *   ``oppStrategy`` in opponent mode but ``finalPhase`` in build
+ *   mode).
  * @returns {TransitionPathNode}
  */
-function rerouteRare(n, rareIds) {
+function rerouteRare(n, rareIds, columnKind) {
   if (n.column === 0) return n;
   if (!rareIds.has(n.id)) return n;
   return {
     id: `other:${n.column}`,
     label: OTHER_LABEL,
     column: n.column,
-    kind: COLUMN_KIND[n.column],
+    kind: columnKind[n.column],
   };
 }
 
