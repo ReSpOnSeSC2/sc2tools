@@ -39,6 +39,7 @@ from .build_definitions import (
     SKIP_UNITS,
     SKIP_BUILDINGS,
 )
+from .timebase import event_seconds, infer_fps
 
 
 def _clean_building_name(raw_name: str) -> str:
@@ -115,7 +116,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                         "type": "building",
                         "subtype": "init",
                         "name": clean,
-                        "time": event.second,
+                        "time": event_seconds(event, replay),
                         "x": x,
                         "y": y,
                     }
@@ -140,7 +141,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                         "type": "building",
                         "subtype": "born",
                         "name": clean,
-                        "time": event.second,
+                        "time": event_seconds(event, replay),
                         "x": x,
                         "y": y,
                     }
@@ -150,7 +151,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                     evt = {
                         "type": "unit",
                         "name": clean,
-                        "time": event.second,
+                        "time": event_seconds(event, replay),
                         "x": x,
                         "y": y,
                     }
@@ -173,7 +174,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                         "type": "building",
                         "subtype": "morph",
                         "name": clean,
-                        "time": event.second,
+                        "time": event_seconds(event, replay),
                         "x": x,
                         "y": y,
                     }
@@ -195,7 +196,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                     evt = {
                         "type": "unit",
                         "name": clean,
-                        "time": event.second,
+                        "time": event_seconds(event, replay),
                         "x": x,
                         "y": y,
                     }
@@ -208,7 +209,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 if pid is None or name is None:
                     stats["pid_failed"] += 1
                     continue
-                evt = {"type": "upgrade", "name": name, "time": event.second}
+                evt = {"type": "upgrade", "name": name, "time": event_seconds(event, replay)}
                 (my_events if pid == my_pid else opp_events).append(evt)
                 stats["processed"] += 1
 
@@ -443,7 +444,7 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
                     if pid != my_pid:
                         continue
                     out["stats_events"].append({
-                        "time": getattr(event, "second", 0),
+                        "time": event_seconds(event, replay),
                         "food_used": getattr(event, "food_used", 0),
                         "food_made": getattr(event, "food_made", 0),
                         "minerals_current": getattr(event, "minerals_current", 0),
@@ -464,7 +465,7 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
                     if not raw:
                         continue
                     clean = _clean_building_name(raw)
-                    t = int(getattr(event, "second", 0))
+                    t = event_seconds(event, replay)
                     uid = _resolve_unit_id(event)
 
                     if clean in KNOWN_BUILDINGS:
@@ -506,7 +507,7 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
                 if UnitDiedEvent is not None and isinstance(event, UnitDiedEvent):
                     uid = _resolve_unit_id(event)
                     if uid in lifetimes:
-                        lifetimes[uid]["died"] = int(getattr(event, "second", 0))
+                        lifetimes[uid]["died"] = event_seconds(event, replay)
                     continue
             except Exception:
                 continue
@@ -562,7 +563,7 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
                         out["ability_events"].append({
                             "ability_name": bucket,
                             "category": bucket,
-                            "time": int(getattr(event, "second", 0)),
+                            "time": event_seconds(event, replay),
                             "via": "state_event",
                         })
                         out["ability_counts"][bucket] += 1
@@ -581,7 +582,7 @@ def extract_macro_events(replay, my_pid: int) -> Dict:
                 out["ability_events"].append({
                     "ability_name": _normalize_ability_name(event) or bucket,
                     "category": bucket,
-                    "time": int(getattr(event, "second", 0)),
+                    "time": event_seconds(event, replay),
                 })
                 out["ability_counts"][bucket] += 1
             except Exception:
@@ -770,7 +771,7 @@ def extract_unit_tracks(replay, my_pid):
                         uid = getattr(u, "id", None) if u is not None else None
                     if uid is None:
                         continue
-                    t = float(getattr(ev, "second", 0.0))
+                    t = float(event_seconds(ev, replay))
                     x = float(getattr(ev, "x", 0) or 0)
                     y = float(getattr(ev, "y", 0) or 0)
                     rec = units.get(uid)
@@ -788,7 +789,7 @@ def extract_unit_tracks(replay, my_pid):
                             rec["waypoints"].append((t, x, y))
 
                 elif _UnitPositionsEvent is not None and isinstance(ev, _UnitPositionsEvent):
-                    t = float(getattr(ev, "second", 0.0))
+                    t = float(event_seconds(ev, replay))
                     for (uid, (x, y)) in (getattr(ev, "positions", []) or []):
                         rec = units.get(uid)
                         if rec is None:
@@ -803,7 +804,7 @@ def extract_unit_tracks(replay, my_pid):
                         uid = getattr(u, "id", None) if u is not None else None
                     rec = units.get(uid)
                     if rec is not None:
-                        rec["died"] = float(getattr(ev, "second", 0.0))
+                        rec["died"] = float(event_seconds(ev, replay))
 
                 elif isinstance(ev, UnitTypeChangeEvent):
                     uid = getattr(ev, "unit_id", None)
@@ -842,7 +843,7 @@ def extract_unit_tracks(replay, my_pid):
                     sel = selections.get(pid)
                     if not sel:
                         continue
-                    t = float(getattr(ev, "second", 0.0))
+                    t = float(event_seconds(ev, replay))
                     x = float(getattr(ev, "x", 0) or 0)
                     y = float(getattr(ev, "y", 0) or 0)
                     if not (x or y):

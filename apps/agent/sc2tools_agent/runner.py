@@ -107,6 +107,12 @@ def run_agent(argv: Optional[List[str]] = None) -> int:
         cfg.api_base,
         argv if argv is not None else sys.argv[1:],
     )
+    # One-line marker so the cloud-side runbook can confirm the
+    # sc2reader 22.4 fps fix landed on this build when a streamer
+    # reports a replay (issue #308 / PR #309). The fps figure here is
+    # the assumed fallback when ``replay.length`` is missing — the
+    # per-replay timebase still re-infers from ``frames / length``.
+    log.info("timebase: real-seconds (fps=22.4)")
 
     use_gui = (not args.no_gui) and can_use_gui()
     if args.no_gui:
