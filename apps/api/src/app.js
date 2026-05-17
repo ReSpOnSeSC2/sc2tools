@@ -188,7 +188,10 @@ function makeServices(deps) {
   // OverlayLiveService has no per-user state; constructed once and
   // shared across requests. It pulls from the same ``games`` /
   // ``opponents`` collections every other read service touches.
-  const overlayLive = new OverlayLiveService(deps.db);
+  // The ``gameDetails`` handle is what powers the scouting card's
+  // phase forecast — the per-game ``macroBreakdown`` blob lives in
+  // the detail store post-v0.4.3 cutover, not on the slim games row.
+  const overlayLive = new OverlayLiveService(deps.db, { gameDetails });
   // LiveGameBroker — in-process pub/sub for the agent → web SSE
   // bridge AND the agent → OBS overlay Socket.io fan-out.
   // Constructed once at app boot so every agent POST shares the

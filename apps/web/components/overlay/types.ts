@@ -126,7 +126,67 @@ export type LiveGamePayload = {
   };
   /** Rematch flag. */
   rematch?: { isRematch: boolean; lastResult?: "win" | "loss" } | null;
+  /**
+   * Pre-summarised phase forecast for the opponent. Computed cloud-
+   * side from up to 50 of the streamer's recent games against this
+   * opponent — see ``OverlayLiveService`` for the aggregation. Drives
+   * the scouting card's "Usually reaches Mid/Late" strip.
+   *
+   * Absent when the opponent is too sparse (first meeting, or < 3
+   * prior games with macroBreakdown). The widget renders NOTHING in
+   * that slot rather than a placeholder — better silent than wrong
+   * on stream.
+   */
+  opponentPhases?: OpponentPhases;
 };
+
+/**
+ * Single late-game composition summary for the scouting card. The
+ * ``units`` array carries unit tokens (e.g. ``["Carrier", "Tempest",
+ * "Mothership"]``) in the order the cloud's per-phase signature
+ * aggregator returned them — top-3 non-worker tokens active at the
+ * phase midpoint.
+ */
+export interface TypicalLateComp {
+  units: string[];
+  sampleCount: number;
+  winRate: number;
+}
+
+/**
+ * Phase forecast attached to the scouting widget's pre-game payload.
+ * ``trajectory`` mirrors ``PhaseTrajectoryStripProps`` from
+ * ``@/components/analyzer/PhaseTrajectoryStrip`` (re-stated as a
+ * structural type here so this file stays import-free of the
+ * renderer-side analyzer module).
+ */
+export interface OpponentPhases {
+  typicalFinalPhase: "early" | "earlyMid" | "mid" | "midLate" | "late";
+  trajectory: {
+    sampleSize: {
+      early: number;
+      earlyMid: number;
+      mid: number;
+      midLate: number;
+      late: number;
+    };
+    crossings: {
+      earlyMidAt: number | null;
+      midAt: number | null;
+      midLateAt: number | null;
+      lateAt: number | null;
+    };
+    finalPhaseDistribution: {
+      early: number;
+      earlyMid: number;
+      mid: number;
+      midLate: number;
+      late: number;
+    };
+    durationP95Sec: number;
+  };
+  typicalLateComp?: TypicalLateComp;
+}
 
 /**
  * Lifecycle phase the agent's bridge currently considers the user to
@@ -272,5 +332,6 @@ export interface LiveGameEnvelope {
     | "meta"
     | "rival"
     | "rematch"
+    | "opponentPhases"
   >;
 }

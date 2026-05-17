@@ -108,11 +108,20 @@ class OverlayLiveService {
    * }} db
    * @param {{
    *   opponents?: any,
+   *   gameDetails?: import('./gameDetails').GameDetailsService | null,
    * }} [services]
    */
   constructor(db, services = {}) {
     this.db = db;
     this.opponents = services.opponents || null;
+    /**
+     * Detail-store reader used by ``opponentPhases`` to hydrate
+     * ``macroBreakdown`` from the post-v0.4.3 detail blob. Optional —
+     * when absent the phase forecast is skipped and the rest of
+     * ``streamerHistory`` still lands.
+     * @type {import('./gameDetails').GameDetailsService | null}
+     */
+    this.gameDetails = services.gameDetails || null;
     /**
      * Per-(userId, oppName, oppRace) cache for live-envelope
      * enrichment. The agent fires envelopes at 1 Hz during a match;
@@ -627,6 +636,17 @@ class OverlayLiveService {
     );
     if (recent.length > 0) payload.recentGames = recent;
 
+    // Phase forecast — drives the scouting card's "Usually reaches
+    // Mid/Late" strip. Best-effort: a Mongo or detail-store blip must
+    // NOT block the rest of the pre-game card; absent ``opponentPhases``
+    // renders nothing in that slot, which is the desired fallback.
+    try {
+      const phases = await this._opponentPhaseProfile(
+        userId, opp, myRace, opponentRace,
+      );
+      if (phases) payload.opponentPhases = phases;
+    } catch { /* swallow */ }
+
     // Best answer vs the opponent's most-likely opening.
     const favOpeningStrategy = payload.favOpening?.name;
     if (favOpeningStrategy && myRace && opponentRace) {
@@ -777,6 +797,12 @@ class OverlayLiveService {
 
   _metaForMatchup(userId, myRace, oppRace) {
     return aggregations.metaForMatchup(this.db.games, userId, myRace, oppRace);
+  }
+
+  _opponentPhaseProfile(userId, opp, myRace, oppRace) {
+    return aggregations.opponentPhaseProfile(
+      this.db.games, this.gameDetails, userId, opp, myRace, oppRace,
+    );
   }
 }
 
