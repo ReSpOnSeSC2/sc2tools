@@ -6,6 +6,7 @@ import {
   type PhaseCompositionTabsProps,
   type Phase,
   type PhaseCompositionRow,
+  type PhaseStrategyEnvelope,
 } from "@/components/analyzer/PhaseCompositionTabs";
 
 afterEach(cleanup);
@@ -212,6 +213,275 @@ describe("PhaseCompositionTabs", () => {
     expect(
       container.querySelector('[data-testid="tech-timeline"]'),
     ).toBeNull();
+  });
+
+  it("renders per-strategy storyline cards under the active phase when byStrategy is provided", () => {
+    const strategy: PhaseStrategyEnvelope = {
+      strategy: "Zerg - 3 Base Macro (Hatch First)",
+      race: "Z",
+      games: 21,
+      wins: 12,
+      losses: 9,
+      winRate: 12 / 21,
+      phases: {
+        sampleSize: {
+          early: 21,
+          earlyMid: 21,
+          mid: 18,
+          midLate: 5,
+          late: 2,
+        },
+        perPhase: {
+          early: {
+            signatures: [
+              {
+                key: "Drone|Zergling",
+                units: [
+                  { token: "Drone", count: 14 },
+                  { token: "Zergling", count: 4 },
+                ],
+                sampleCount: 21,
+                wins: 12,
+                losses: 9,
+                winRate: 12 / 21,
+                sampleGameIds: ["g1", "g2"],
+              },
+            ],
+            tech: [
+              {
+                token: "Hatchery",
+                sampleCount: 21,
+                medianFirstSeen: 92,
+                p25: 80,
+                p75: 105,
+              },
+            ],
+            upgrades: [],
+          },
+          earlyMid: {
+            signatures: [
+              {
+                key: "Roach|Queen",
+                units: [
+                  { token: "Roach", count: 8 },
+                  { token: "Queen", count: 3 },
+                ],
+                sampleCount: 21,
+                wins: 12,
+                losses: 9,
+                winRate: 12 / 21,
+                sampleGameIds: ["g1"],
+              },
+            ],
+            tech: [
+              {
+                token: "RoachWarren",
+                sampleCount: 21,
+                medianFirstSeen: 252,
+                p25: 230,
+                p75: 280,
+              },
+            ],
+            upgrades: [],
+          },
+          mid: {
+            signatures: [
+              {
+                key: "Hydralisk|Ravager",
+                units: [
+                  { token: "Hydralisk", count: 12 },
+                  { token: "Ravager", count: 4 },
+                ],
+                sampleCount: 18,
+                wins: 10,
+                losses: 8,
+                winRate: 10 / 18,
+                sampleGameIds: ["g1"],
+              },
+            ],
+            tech: [
+              {
+                token: "HydraliskDen",
+                sampleCount: 18,
+                medianFirstSeen: 432,
+                p25: 410,
+                p75: 460,
+              },
+            ],
+            upgrades: [],
+          },
+          midLate: { signatures: [], tech: [], upgrades: [] },
+          late: { signatures: [], tech: [], upgrades: [] },
+        },
+        finalPhaseDistribution: {
+          early: 0,
+          earlyMid: 12,
+          mid: 7,
+          midLate: 2,
+          late: 0,
+        },
+        medianCrossings: {
+          earlyMidAt: 120,
+          midAt: 300,
+          midLateAt: 700,
+          lateAt: null,
+        },
+        durationP95Sec: 720,
+        flags: [],
+      },
+    };
+    const { container } = render(
+      <PhaseCompositionTabs
+        {...baseProps({
+          byStrategy: [strategy],
+        })}
+      />,
+    );
+    const breakdown = container.querySelector(
+      '[data-testid="strategy-breakdown"]',
+    );
+    expect(breakdown).not.toBeNull();
+    const cards = container.querySelectorAll(
+      '[data-testid="strategy-card"]',
+    );
+    expect(cards.length).toBe(1);
+    expect(cards[0].getAttribute("data-strategy")).toBe(strategy.strategy);
+    expect(cards[0].getAttribute("data-race")).toBe("Z");
+    const columns = cards[0].querySelectorAll(
+      '[data-testid="strategy-column"]',
+    );
+    expect(columns.length).toBe(3);
+    const labels = Array.from(columns).map((c) =>
+      c.getAttribute("data-column"),
+    );
+    expect(labels).toEqual(["opening", "mid", "late"]);
+  });
+
+  it("filters strategy cards to those that reached the active phase", () => {
+    const reaches: PhaseStrategyEnvelope = {
+      strategy: "Long Macro",
+      race: "Z",
+      games: 6,
+      wins: 4,
+      losses: 2,
+      winRate: 4 / 6,
+      phases: {
+        sampleSize: {
+          early: 6,
+          earlyMid: 6,
+          mid: 6,
+          midLate: 0,
+          late: 0,
+        },
+        perPhase: {
+          early: { signatures: [], tech: [], upgrades: [] },
+          earlyMid: { signatures: [], tech: [], upgrades: [] },
+          mid: { signatures: [], tech: [], upgrades: [] },
+          midLate: { signatures: [], tech: [], upgrades: [] },
+          late: { signatures: [], tech: [], upgrades: [] },
+        },
+        finalPhaseDistribution: {
+          early: 0,
+          earlyMid: 0,
+          mid: 6,
+          midLate: 0,
+          late: 0,
+        },
+        medianCrossings: {
+          earlyMidAt: 120,
+          midAt: 300,
+          midLateAt: null,
+          lateAt: null,
+        },
+        durationP95Sec: 540,
+        flags: [],
+      },
+    };
+    const doesNotReach: PhaseStrategyEnvelope = {
+      ...reaches,
+      strategy: "Quick Rush",
+      phases: {
+        ...reaches.phases,
+        sampleSize: {
+          early: 3,
+          earlyMid: 3,
+          mid: 0,
+          midLate: 0,
+          late: 0,
+        },
+      },
+    };
+    const { container } = render(
+      <PhaseCompositionTabs
+        {...baseProps({
+          byStrategy: [reaches, doesNotReach],
+          preferredPhase: "mid",
+        })}
+      />,
+    );
+    const cards = container.querySelectorAll(
+      '[data-testid="strategy-card"]',
+    );
+    expect(cards.length).toBe(1);
+    expect(cards[0].getAttribute("data-strategy")).toBe("Long Macro");
+  });
+
+  it("invokes onStrategyOpen with the strategy name on CTA click", () => {
+    const onStrategyOpen = vi.fn();
+    const env: PhaseStrategyEnvelope = {
+      strategy: "Zerg - 3 Base Macro",
+      race: "Z",
+      games: 4,
+      wins: 3,
+      losses: 1,
+      winRate: 0.75,
+      phases: {
+        sampleSize: {
+          early: 4,
+          earlyMid: 4,
+          mid: 0,
+          midLate: 0,
+          late: 0,
+        },
+        perPhase: {
+          early: { signatures: [], tech: [], upgrades: [] },
+          earlyMid: { signatures: [], tech: [], upgrades: [] },
+          mid: { signatures: [], tech: [], upgrades: [] },
+          midLate: { signatures: [], tech: [], upgrades: [] },
+          late: { signatures: [], tech: [], upgrades: [] },
+        },
+        finalPhaseDistribution: {
+          early: 0,
+          earlyMid: 4,
+          mid: 0,
+          midLate: 0,
+          late: 0,
+        },
+        medianCrossings: {
+          earlyMidAt: 100,
+          midAt: null,
+          midLateAt: null,
+          lateAt: null,
+        },
+        durationP95Sec: 360,
+        flags: [],
+      },
+    };
+    const { container } = render(
+      <PhaseCompositionTabs
+        {...baseProps({
+          byStrategy: [env],
+          onStrategyOpen,
+        })}
+      />,
+    );
+    const btn = container.querySelector<HTMLButtonElement>(
+      '[data-testid="strategy-open-btn"]',
+    );
+    expect(btn).not.toBeNull();
+    fireEvent.click(btn!);
+    expect(onStrategyOpen).toHaveBeenCalledTimes(1);
+    expect(onStrategyOpen).toHaveBeenCalledWith("Zerg - 3 Base Macro");
   });
 
   it("warns and shows the data-shape regression empty state when signatures are missing on a reached phase", () => {

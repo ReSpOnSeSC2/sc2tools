@@ -21,7 +21,7 @@ import { H2HTrendsSection } from "./h2h/H2HTrendsSection";
 import type { BuildMatchupSelection } from "./h2h/BuildMatrix";
 import { gameOutcome } from "@/lib/h2hSeries";
 import { PhaseTrajectoryStrip } from "./PhaseTrajectoryStrip";
-import { BuildTransitionSankey } from "./BuildTransitionSankey";
+import { PhaseCompositionTabs } from "./PhaseCompositionTabs";
 import type { BuildPhasePayload, BuildTransitionsPayload } from "@/lib/serverApi";
 
 type OpponentProfileResp = {
@@ -266,10 +266,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         onSelectGame={handleSelectGame}
       />
 
-      <OpponentPhaseSection
-        phases={data.phases}
-        transitions={data.transitions}
-      />
+      <OpponentPhaseSection phases={data.phases} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card
@@ -513,70 +510,50 @@ function ProfilePulseLine({
 }
 
 /**
- * "How games against this opponent play out" — phase trajectory strip
- * + transition Sankey for the opponent profile.
+ * "How games against this opponent play out" — unified phase widget.
  *
- * Composition: ProfileView is already wide and panel-dense, so the
- * two visualizations sit side-by-side at lg+ (where the Sankey has
- * room to spread its 4-column layout) and stack at narrower
- * viewports. The Sankey's own internal height is 360px; the
- * trajectory strip is roughly half that, so the lg+ row goes a bit
- * top-aligned rather than vertically centred to keep the captions
- * close to their visuals.
+ * Top: PhaseTrajectoryStrip renders the outcome bar (where games end)
+ * and the median phase-timing line with crossing markers + median-end
+ * pin. Bottom: PhaseCompositionTabs hosts the 5 phase tabs; the active
+ * tab shows aggregate composition signatures + tech timings AND a
+ * "Strategies that play out here" section with per-strategy storyline
+ * cards (Opening / Mid / Late columns built from the same
+ * computeCompositions pipeline as the aggregate, filtered to each
+ * strategy's games — no mock data).
  *
- * Rendered nothing when both payloads are absent or empty — the API
- * envelope may be missing them on an older build, and a 0-game
- * opponent (admin "Rebuild" mid-cycle) has no useful trajectory to
- * draw. The Sankey component itself handles its own sparse-data
- * empty state for the < 4 node case.
+ * The transition Sankey/flow that used to sit beside this is retired
+ * from the opponent profile — its information is now embedded directly
+ * in the phase tab panels, scoped to whichever phase the user picks.
+ *
+ * Rendered nothing when phases is absent or empty.
  */
 function OpponentPhaseSection({
   phases,
-  transitions,
 }: {
   phases?: BuildPhasePayload;
-  transitions?: BuildTransitionsPayload;
 }) {
-  if (!phases && !transitions) return null;
-  const hasPhases =
-    phases &&
-    ((phases.sampleSize?.early ?? 0) +
-      (phases.sampleSize?.earlyMid ?? 0) +
-      (phases.sampleSize?.mid ?? 0) +
-      (phases.sampleSize?.midLate ?? 0) +
-      (phases.sampleSize?.late ?? 0)) >
-      0;
-  const hasTransitions =
-    transitions && transitions.transitions.nodes.length > 0;
-  if (!hasPhases && !hasTransitions) return null;
+  if (!phases) return null;
+  const totalSamples =
+    (phases.sampleSize?.early ?? 0) +
+    (phases.sampleSize?.earlyMid ?? 0) +
+    (phases.sampleSize?.mid ?? 0) +
+    (phases.sampleSize?.midLate ?? 0) +
+    (phases.sampleSize?.late ?? 0);
+  if (totalSamples === 0) return null;
   return (
     <Card title="How games against this opponent play out">
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
-        <div className="min-w-0">
-          {hasPhases && phases ? (
-            <PhaseTrajectoryStrip
-              sampleSize={phases.sampleSize}
-              crossings={phases.medianCrossings}
-              finalPhaseDistribution={phases.finalPhaseDistribution}
-              durationP95Sec={phases.durationP95Sec}
-            />
-          ) : (
-            <EmptyState
-              title="Phase trajectory unavailable"
-              sub="Not enough macro data on this opponent's games yet."
-            />
-          )}
-        </div>
-        <div className="min-w-0">
-          {hasTransitions && transitions ? (
-            <BuildTransitionSankey transitions={transitions} />
-          ) : (
-            <EmptyState
-              title="Transitions unavailable"
-              sub="A few more games against this opponent will fill the Sankey."
-            />
-          )}
-        </div>
+      <div className="space-y-5">
+        <PhaseTrajectoryStrip
+          sampleSize={phases.sampleSize}
+          crossings={phases.medianCrossings}
+          finalPhaseDistribution={phases.finalPhaseDistribution}
+          durationP95Sec={phases.durationP95Sec}
+        />
+        <PhaseCompositionTabs
+          sampleSize={phases.sampleSize}
+          perPhase={phases.perPhase}
+          byStrategy={phases.byStrategy}
+        />
       </div>
     </Card>
   );

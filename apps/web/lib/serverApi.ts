@@ -32,6 +32,40 @@ export interface BuildPhasePayload {
   };
   durationP95Sec: number;
   flags: string[];
+  /** Per-strategy phase envelopes for the opponent profile's
+   *  storyline cards. Only present on opponent payloads (the build
+   *  dossier collapses on a single user-side ``my_build``, so per-
+   *  strategy grouping isn't meaningful there). Sorted by games desc
+   *  and capped server-side at 6 strategies. */
+  byStrategy?: StrategyPhaseEnvelope[];
+}
+
+/**
+ * One strategy bucket in ``BuildPhasePayload.byStrategy``. Mirrors the
+ * server's ``computeByStrategyPhases`` return shape and carries a full
+ * phase envelope so the client can show the same outcome bar / median
+ * timing / per-phase composition cards filtered to a single strategy.
+ */
+export interface StrategyPhaseEnvelope {
+  strategy: string;
+  race: string | null;
+  games: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  phases: {
+    sampleSize: Record<Phase, number>;
+    perPhase: Record<Phase, PhaseCompositionRow>;
+    finalPhaseDistribution: Record<Phase, number>;
+    medianCrossings: {
+      earlyMidAt: number | null;
+      midAt: number | null;
+      midLateAt: number | null;
+      lateAt: number | null;
+    };
+    durationP95Sec: number;
+    flags: string[];
+  };
 }
 
 const API_BASE =
