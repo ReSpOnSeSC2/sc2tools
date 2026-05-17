@@ -1,5 +1,5 @@
 import { pct1 } from "@/lib/format";
-import { outcome } from "../../ArcadeEngine";
+import { isGameTooShort, outcome } from "../../ArcadeEngine";
 import type { ArcadeDataset, ArcadeGame } from "../../types";
 import {
   factDistinctMapsRecent,
@@ -96,7 +96,7 @@ export function buildFactPool(data: ArcadeDataset): FactCandidate[] {
 function factTopBuildVsOverall(data: ArcadeDataset): FactCandidate | null {
   const topBuild = data.builds
     .slice()
-    .filter((b) => isDisplayableString(b.name))
+    .filter((b) => isDisplayableString(b.name) && !isGameTooShort(b.name))
     .sort((a, b) => b.total - a.total)[0];
   if (!topBuild || !data.summary || topBuild.total < 5) return null;
   const diff = topBuild.winRate - data.summary.winRate;
@@ -202,7 +202,10 @@ function factMatchupVsOverall(data: ArcadeDataset): FactCandidate | null {
 function factTopVsSecondBuild(data: ArcadeDataset): FactCandidate | null {
   const builds = data.builds
     .slice()
-    .filter((b) => isDisplayableString(b.name) && b.total >= 4)
+    .filter(
+      (b) =>
+        isDisplayableString(b.name) && !isGameTooShort(b.name) && b.total >= 4,
+    )
     .sort((a, b) => b.total - a.total);
   if (builds.length < 2) return null;
   const top = builds[0];
@@ -459,7 +462,7 @@ function factOppRaceCounts(data: ArcadeDataset): FactCandidate | null {
 
 function factBestVsWorstBuild(data: ArcadeDataset): FactCandidate | null {
   const builds = data.builds.filter(
-    (b) => isDisplayableString(b.name) && b.total >= 5,
+    (b) => isDisplayableString(b.name) && !isGameTooShort(b.name) && b.total >= 5,
   );
   if (builds.length < 2) return null;
   const sorted = builds.slice().sort((a, b) => b.winRate - a.winRate);

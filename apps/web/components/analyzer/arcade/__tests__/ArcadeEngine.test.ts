@@ -9,6 +9,7 @@ import {
   longestWinStreak,
   fnv1a,
   isCannonRush,
+  isGameTooShort,
   levelForXp,
   mulberry32,
   pickN,
@@ -255,6 +256,26 @@ describe("isCannonRush", () => {
     expect(isCannonRush("1/1/1")).toBe(false);
     expect(isCannonRush(undefined)).toBe(false);
     expect(isCannonRush(null)).toBe(false);
+  });
+});
+
+describe("isGameTooShort", () => {
+  test("matches the per-matchup catch-all labels", () => {
+    expect(isGameTooShort("ZvT - Game Too Short")).toBe(true);
+    expect(isGameTooShort("PvP - Game Too Short")).toBe(true);
+    expect(isGameTooShort("TvZ - Game Too Short")).toBe(true);
+    // Tolerate stray surrounding whitespace from a trim() upstream.
+    expect(isGameTooShort("  PvT - Game Too Short  ")).toBe(true);
+  });
+  test("ignores real builds even when the phrase appears mid-string", () => {
+    expect(isGameTooShort("Reaper FE")).toBe(false);
+    expect(isGameTooShort("PvT - Proxy Void Ray/Stargate")).toBe(false);
+    // Only the exact " - Game Too Short" suffix counts — never a
+    // free-text snippet inside a real build name.
+    expect(isGameTooShort("Game Too Short Cheese")).toBe(false);
+    expect(isGameTooShort(undefined)).toBe(false);
+    expect(isGameTooShort(null)).toBe(false);
+    expect(isGameTooShort("")).toBe(false);
   });
 });
 

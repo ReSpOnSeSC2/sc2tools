@@ -6,6 +6,7 @@ import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
 import {
   isCannonRush,
+  isGameTooShort,
   outcome,
   pickQuizSlate,
   registerMode,
@@ -65,7 +66,7 @@ export function meanWinLengths(
   for (const g of games) {
     if (outcome(g) !== "W") continue;
     const build = (g.myBuild || "").trim();
-    if (!build || isCannonRush(build)) continue;
+    if (!build || isCannonRush(build) || isGameTooShort(build)) continue;
     const dur = Number(g.duration);
     if (!Number.isFinite(dur) || dur <= 0) continue;
     const cur = acc.get(build) || { sum: 0, count: 0 };
