@@ -512,3 +512,29 @@ function classifyGame(input) {
 }
 
 module.exports = { classifyGame, PHASES, PHASE_LABELS };
+
+/*
+ * Calibration anchors (post-timebase fix, 2026-05-17):
+ *
+ * Replay                          finalPhase    midAt   lateAt
+ * --------------------------------------------------------------
+ * PvZ Adept Timing (warpgate)     mid           3:30   never
+ * PvT 20m Skytoss WIN (TIIIII)    late          3:30   8:30
+ * PvT 11m Cut-short LOSS (TPer.)  midLate       3:19   5:47
+ * PvZ 15m Skytoss WIN (JmaC)      late          3:09   6:12
+ *
+ * Only the warpgate row is auto-verified in CI — its macroBreakdown
+ * dump ships under apps/api/__tests__/fixtures/phase/ and is the
+ * locked snapshot in apps/api/__tests__/phaseClassifier.test.js. The
+ * other three calibration replays live in the maintainer's local
+ * archive (see apps/api/__tests__/fixtures/macro_score_before_vs_after.csv
+ * for the corresponding score envelope and the test.skip() entries
+ * in phaseClassifier.test.js for the wiring).
+ *
+ * Any change to scoring weights MUST regenerate these anchors and
+ * include them in the same commit as the weight change — re-dump the
+ * fixtures with scripts/dump-macro-fixture.py, flip the test.skip()
+ * to test() once the replay is available, and refresh the table
+ * above so it stays the source of truth for the calibration shape.
+ */
+
