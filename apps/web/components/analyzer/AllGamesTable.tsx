@@ -36,6 +36,8 @@ type BuildOrderResp = {
   early_events: BuildOrderEvent[];
   opp_events: BuildOrderEvent[];
   opp_early_events: BuildOrderEvent[];
+  my_status?: "ok" | "empty" | "not_extracted";
+  opp_status?: "ok" | "empty" | "not_extracted";
 };
 
 type GameRowData = ProfileGame & {
@@ -561,6 +563,8 @@ function BuildOrderRow({
       oppRace={data.opp_race || game.opp_race}
       myBuildName={data.my_build}
       oppBuildName={data.opp_strategy}
+      myStatus={data.my_status}
+      oppStatus={data.opp_status}
     />
   );
 }

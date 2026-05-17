@@ -280,7 +280,17 @@ function byCountDescTokenAsc(a, b) {
  * @param {"you"|"opponent"} [perspective]
  */
 function computePerPhase(classifiedGames, phase, perspective) {
-  /** @type {Map<string, {key: string, units: any[], sampleCount: number, wins: number, losses: number, sampleGameIds: string[]}>} */
+  /**
+   * @type {Map<string, {
+   *   key: string,
+   *   countsByToken: Map<string, number[]>,
+   *   fullCountsByToken: Map<string, number[]>,
+   *   sampleCount: number,
+   *   wins: number,
+   *   losses: number,
+   *   sampleGameIds: string[],
+   * }>}
+   */
   const sigBuckets = new Map();
   /** @type {Map<string, number[]>} */
   const techTimes = new Map();
@@ -294,12 +304,23 @@ function computePerPhase(classifiedGames, phase, perspective) {
     const midpoint = (window.start + window.end) / 2;
 
     const units = pickSignatureUnits(game.macroBreakdown, midpoint, perspective);
+    const allUnits = pickAllNonWorkerUnits(
+      game.macroBreakdown,
+      midpoint,
+      perspective,
+    );
     if (units.length > 0) {
       const key = signatureKey(units);
       let bucket = sigBuckets.get(key);
       if (!bucket) {
         bucket = {
-          key, units, sampleCount: 0, wins: 0, losses: 0, sampleGameIds: [],
+          key,
+          countsByToken: new Map(),
+          fullCountsByToken: new Map(),
+          sampleCount: 0,
+          wins: 0,
+          losses: 0,
+          sampleGameIds: [],
         };
         sigBuckets.set(key, bucket);
       }
@@ -307,6 +328,16 @@ function computePerPhase(classifiedGames, phase, perspective) {
       b.sampleCount += 1;
       if (isWonResult(game.result)) b.wins += 1;
       else if (isLossResult(game.result)) b.losses += 1;
+      // Track every observed count per token across games in this
+      // bucket. Top-3 are used for the headline display; the full set
+      // is exposed for the "show all units" expansion so a roach into
+      // ravager transition isn't hidden behind a top-3 truncation.
+      for (const u of units) {
+        appendCount(b.countsByToken, u.token, u.count);
+      }
+      for (const u of allUnits) {
+        appendCount(b.fullCountsByToken, u.token, u.count);
+      }
       if (b.sampleGameIds.length < MAX_SAMPLE_GAME_IDS && game.gameId) {
         b.sampleGameIds.push(String(game.gameId));
       }
@@ -328,6 +359,60 @@ function computePerPhase(classifiedGames, phase, perspective) {
  */
 function signatureKey(units) {
   return units.map((u) => u.token).join("|");
+}
+
+/**
+ * Variant of pickSignatureUnits that returns EVERY non-worker unit at
+ * the midpoint snapshot, not just the top 3. Used to compute median
+ * counts across all units in a signature bucket so the dossier can
+ * surface the complete composition (not just the headline three).
+ *
+ * @param {any} macroBreakdown
+ * @param {number} midpoint
+ * @param {"you"|"opponent"} [perspective]
+ * @returns {Array<{token: string, count: number}>}
+ */
+function pickAllNonWorkerUnits(macroBreakdown, midpoint, perspective) {
+  const timeline = Array.isArray(macroBreakdown && macroBreakdown.unit_timeline)
+    ? macroBreakdown.unit_timeline
+    : [];
+  if (timeline.length === 0) return [];
+  let best = timeline[0];
+  let bestDist = Math.abs(Number(best.time) - midpoint);
+  for (let i = 1; i < timeline.length; i++) {
+    const d = Math.abs(Number(timeline[i].time) - midpoint);
+    if (d < bestDist) {
+      best = timeline[i];
+      bestDist = d;
+    }
+  }
+  const side = perspective === "opponent"
+    ? ((best && best.opp) || {})
+    : ((best && best.my) || {});
+  /** @type {Array<{token: string, count: number}>} */
+  const entries = [];
+  for (const token of Object.keys(side)) {
+    if (WORKER_SKIP.has(token)) continue;
+    const n = Number(side[token]);
+    if (!(n > 0)) continue;
+    entries.push({ token, count: n });
+  }
+  entries.sort(byCountDescTokenAsc);
+  return entries;
+}
+
+/**
+ * @param {Map<string, number[]>} map
+ * @param {string} token
+ * @param {number} count
+ */
+function appendCount(map, token, count) {
+  let list = map.get(token);
+  if (!list) {
+    list = [];
+    map.set(token, list);
+  }
+  list.push(count);
 }
 
 /**
@@ -388,7 +473,15 @@ function collectUpgradeFirstSeen(game, midpoint, acc) {
 }
 
 /**
- * @param {Map<string, {key: string, units: any[], sampleCount: number, wins: number, losses: number, sampleGameIds: string[]}>} buckets
+ * @param {Map<string, {
+ *   key: string,
+ *   countsByToken: Map<string, number[]>,
+ *   fullCountsByToken: Map<string, number[]>,
+ *   sampleCount: number,
+ *   wins: number,
+ *   losses: number,
+ *   sampleGameIds: string[],
+ * }>} buckets
  */
 function finalizeSignatures(buckets) {
   const rows = [];
@@ -396,7 +489,14 @@ function finalizeSignatures(buckets) {
     const denom = b.wins + b.losses;
     rows.push({
       key: b.key,
-      units: b.units,
+      // ``units`` keeps the legacy shape — top 3 tokens with the
+      // median count across the bucket. Frontends that haven't been
+      // updated yet still render the same way.
+      units: medianUnitsList(b.countsByToken, b.key, 3),
+      // ``fullComposition`` is the new field: every non-worker unit
+      // observed across the bucket, with median + sample count per
+      // token. Frontends opt into it for the expanded view.
+      fullComposition: medianUnitsList(b.fullCountsByToken, b.key, Infinity),
       sampleCount: b.sampleCount,
       wins: b.wins,
       losses: b.losses,
@@ -420,6 +520,7 @@ function finalizeSignatures(buckets) {
   top.push({
     key: "Other",
     units: [],
+    fullComposition: [],
     sampleCount,
     wins,
     losses,
@@ -427,6 +528,62 @@ function finalizeSignatures(buckets) {
     sampleGameIds: [],
   });
   return top;
+}
+
+/**
+ * Convert a token → counts[] map into a sorted list of
+ * {token, count, sampleCount} entries where ``count`` is the median
+ * across the observations and ``sampleCount`` is how many games saw
+ * the token. Keys ordered by the signature key tokens (preserves the
+ * left-to-right reading order from the cluster key), then by median
+ * count desc for any extras.
+ *
+ * @param {Map<string, number[]>} countsByToken
+ * @param {string} signatureKey — pipe-separated top tokens for the bucket
+ * @param {number} limit — max tokens to include in the result
+ */
+function medianUnitsList(countsByToken, signatureKey, limit) {
+  const headTokens = signatureKey ? signatureKey.split("|") : [];
+  const seen = new Set();
+  /** @type {Array<{token: string, count: number, sampleCount: number}>} */
+  const out = [];
+  for (const token of headTokens) {
+    if (seen.has(token)) continue;
+    const list = countsByToken.get(token);
+    if (!list || list.length === 0) continue;
+    seen.add(token);
+    out.push(toMedianEntry(token, list));
+    if (out.length >= limit) return out;
+  }
+  // Extras: tokens beyond the signature head (only the full-composition
+  // map will have these; the top-3 map's keys are exactly the head).
+  /** @type {Array<{token: string, count: number, sampleCount: number}>} */
+  const extras = [];
+  for (const [token, list] of countsByToken) {
+    if (seen.has(token)) continue;
+    if (!list || list.length === 0) continue;
+    extras.push(toMedianEntry(token, list));
+  }
+  extras.sort(byCountDescTokenAsc);
+  for (const e of extras) {
+    out.push(e);
+    if (out.length >= limit) return out;
+  }
+  return out;
+}
+
+/**
+ * @param {string} token
+ * @param {number[]} counts
+ * @returns {{token: string, count: number, sampleCount: number}}
+ */
+function toMedianEntry(token, counts) {
+  const sorted = counts.slice().sort((a, b) => a - b);
+  return {
+    token,
+    count: Math.round(percentile(sorted, 50)),
+    sampleCount: sorted.length,
+  };
 }
 
 /**

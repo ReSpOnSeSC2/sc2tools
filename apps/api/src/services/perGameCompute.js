@@ -182,6 +182,10 @@ class PerGameComputeService {
     // surfaces — those continue to operate on recorded timestamps
     // so existing user-saved custom builds and built-in detection
     // rules keep their calibration.
+    const buildLogPresent = Array.isArray(merged.buildLog)
+      && merged.buildLog.length > 0;
+    const oppBuildLogPresent = Array.isArray(merged.oppBuildLog)
+      && merged.oppBuildLog.length > 0;
     const rawEvents = parseBuildLogLines(merged.buildLog || [], this.catalog);
     const rawEarly = parseBuildLogLines(readEarlyBuildLog(merged), this.catalog);
     const rawOpp = parseBuildLogLines(merged.oppBuildLog || [], this.catalog);
@@ -189,6 +193,13 @@ class PerGameComputeService {
       readOppEarlyBuildLog(merged),
       this.catalog,
     );
+    // Diagnostic reason codes for the UI's empty state. ``not_extracted``
+    // = the agent hasn't uploaded a build log for this side yet (the
+    // common case when the user is on an older agent for opponent
+    // builds, or hasn't Resync'd at all). ``empty`` = the agent
+    // uploaded a buildLog but parsing produced zero events — almost
+    // always a malformed / pre-game-only replay. ``ok`` = events
+    // present.
     return {
       ok: true,
       game_id: slim.gameId,
@@ -203,6 +214,8 @@ class PerGameComputeService {
       early_events: eventsToStartTime(rawEarly),
       opp_events: eventsToStartTime(rawOpp),
       opp_early_events: eventsToStartTime(rawOppEarly),
+      my_status: diagBuildStatus(buildLogPresent, rawEvents.length),
+      opp_status: diagBuildStatus(oppBuildLogPresent, rawOpp.length),
     };
   }
 
@@ -805,6 +818,22 @@ function clampPositive(raw, fallback) {
   const n = typeof raw === "number" ? raw : Number.parseInt(String(raw || ""), 10);
   if (!Number.isFinite(n) || n <= 0) return fallback;
   return n;
+}
+
+/**
+ * Reason code for the build-order UI's empty state. Lets the frontend
+ * distinguish "agent never uploaded this side's build log" from
+ * "uploaded but parsed to zero events" so the help text in each empty
+ * card can be specific instead of the same generic "no build" line.
+ *
+ * @param {boolean} hadLog
+ * @param {number} eventCount
+ * @returns {"ok" | "empty" | "not_extracted"}
+ */
+function diagBuildStatus(hadLog, eventCount) {
+  if (eventCount > 0) return "ok";
+  if (hadLog) return "empty";
+  return "not_extracted";
 }
 
 module.exports = {
