@@ -34,6 +34,31 @@ const OPP_MMR_AUTO_WIDTH_CUTOFF = 500;
 const OPP_MMR_MAX_BUCKETS = 80;
 
 /**
+ * Maximum gap between two consecutive MMR-tagged games for the
+ * pre-match → pre-match delta to plausibly reflect the FIRST game's
+ * outcome alone. Beyond ~6 hours the user's almost certainly resumed
+ * in a fresh session — and any games they played in between that
+ * didn't carry myMmr (older agent versions, unranked, missing
+ * scaled_rating) would silently bleed into the attributed delta.
+ * Setting this to "session" tightens it too far for streamers who
+ * queue one last game an hour after dinner; 6 hours is the smallest
+ * cap that still keeps a single sitting together.
+ */
+const NET_MMR_MAX_GAP_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Hard cap on the per-game pre-match → pre-match delta we trust as
+ * attributable to ONE matchup. A real SC2 1v1 swing tops out around
+ * ±60 MMR; anything past ±150 is almost certainly a race switch into
+ * a different ladder (Protoss main dipping into Random),
+ * a season soft-reset, or a stretch of unrecorded games inflating
+ * the diff. Excluding these pairs is the difference between
+ * "100% WR vs Protoss but the chart says -213" and a chart the user
+ * can trust.
+ */
+const NET_MMR_MAX_DELTA = 150;
+
+/**
  * @typedef {{
  *   games: import('mongodb').Collection,
  *   gamesMatchStage: (userId: string, filters: object) => object,
@@ -499,9 +524,25 @@ async function mapTrend(deps, userId, opts, filters) {
 
 /**
  * Net MMR change per opponent race. For every consecutive pair of
- * games (within the filtered set) where BOTH carry a numeric
- * ``myMmr``, attribute the delta (next.myMmr − this.myMmr) to the
- * opponent race of the FIRST game in the pair.
+ * MMR-tagged games (within the filtered set) where the gap and the
+ * delta both look like a single ladder game, attribute the delta
+ * (next.myMmr − this.myMmr) to the opponent race of the FIRST game.
+ *
+ * Two guards keep the chart honest:
+ *
+ *   1. Time gap ≤ ``NET_MMR_MAX_GAP_MS``. When ``next`` is hours or
+ *      days after ``this``, the user almost certainly played other
+ *      games in between that didn't carry myMmr (older agent
+ *      version, missing scaled_rating, filter excluded them, etc.).
+ *      Attributing that whole MMR drift to one matchup is how
+ *      "100% WR vs Protoss" ends up reading "−213".
+ *   2. |delta| ≤ ``NET_MMR_MAX_DELTA``. Single-game ladder swings
+ *      max out near ±60. Anything past 150 is a race-pool switch, a
+ *      season reset, or a recording gap — never a single match.
+ *
+ * Pairs that fail either guard are dropped: ``games`` reflects only
+ * the trustable pairs, so the WR shown next to the net-MMR number
+ * is computed over the same cohort that produced the number.
  *
  * @param {Deps} deps
  * @param {string} userId
@@ -519,6 +560,7 @@ async function netMmrByMatchup(deps, userId, filters) {
           sortBy: { date: 1 },
           output: {
             _nextMyMmr: { $shift: { output: "$myMmr", by: 1, default: null } },
+            _nextDate: { $shift: { output: "$date", by: 1, default: null } },
           },
         },
       },
@@ -526,7 +568,14 @@ async function netMmrByMatchup(deps, userId, filters) {
       {
         $addFields: {
           _delta: { $subtract: ["$_nextMyMmr", "$myMmr"] },
+          _gapMs: { $subtract: ["$_nextDate", "$date"] },
           _oppRace: oppRaceSwitch(),
+        },
+      },
+      {
+        $match: {
+          _gapMs: { $gte: 0, $lte: NET_MMR_MAX_GAP_MS },
+          _delta: { $gte: -NET_MMR_MAX_DELTA, $lte: NET_MMR_MAX_DELTA },
         },
       },
       {
@@ -598,6 +647,8 @@ module.exports = {
   MAX_SESSION_POSITIONS,
   OPP_MMR_BUCKET_WIDTHS,
   OPP_MMR_AUTO_WIDTH_CUTOFF,
+  NET_MMR_MAX_GAP_MS,
+  NET_MMR_MAX_DELTA,
   RESULT_VICTORY,
   RESULT_DEFEAT,
 };
