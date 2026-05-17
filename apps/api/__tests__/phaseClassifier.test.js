@@ -22,9 +22,12 @@ describe("phaseClassifier — calibration snapshots", () => {
     const fx = loadFixture("warpgate_adept_tracking.json");
     const out = classifyGame(fx);
     expect(out.finalPhase).toBe("mid");
+    // Crossings are in real LotV seconds after the 2026-05-17 timebase
+    // migration (PR #309). Pre-migration values were earlyMidAt=250 /
+    // midAt=410 on the broken 16fps scale.
     expect(out.crossings).toEqual({
-      earlyMidAt: 250,
-      midAt: 410,
+      earlyMidAt: 184,
+      midAt: 293,
       midLateAt: null,
       lateAt: null,
     });

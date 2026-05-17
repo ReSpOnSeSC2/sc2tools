@@ -10,12 +10,12 @@
       },
       {
         "name": "Nexus",
-        "born_time": 223,
+        "born_time": 160,
         "died_time": 470
       },
       {
         "name": "Nexus",
-        "born_time": 586,
+        "born_time": 419,
         "died_time": 470
       }
     ],
@@ -27,107 +27,107 @@
       },
       {
         "name": "Pylon",
-        "born_time": 59,
+        "born_time": 43,
         "died_time": 470
       },
       {
         "name": "Assimilator",
-        "born_time": 118,
+        "born_time": 84,
         "died_time": 470
       },
       {
         "name": "WarpGate",
-        "born_time": 126,
+        "born_time": 90,
         "died_time": 470
       },
       {
         "name": "Assimilator",
-        "born_time": 177,
+        "born_time": 127,
         "died_time": 470
       },
       {
         "name": "CyberneticsCore",
-        "born_time": 184,
+        "born_time": 131,
         "died_time": 470
       },
       {
         "name": "Pylon",
-        "born_time": 184,
+        "born_time": 132,
         "died_time": 470
       },
       {
         "name": "Nexus",
-        "born_time": 223,
+        "born_time": 160,
         "died_time": 470
       },
       {
         "name": "TwilightCouncil",
-        "born_time": 266,
+        "born_time": 191,
         "died_time": 470
       },
       {
         "name": "ShieldBattery",
-        "born_time": 276,
+        "born_time": 198,
         "died_time": 470
       },
       {
         "name": "WarpGate",
-        "born_time": 293,
+        "born_time": 210,
         "died_time": 470
       },
       {
         "name": "WarpGate",
-        "born_time": 363,
+        "born_time": 259,
         "died_time": 470
       },
       {
         "name": "WarpGate",
-        "born_time": 365,
+        "born_time": 261,
         "died_time": 470
       },
       {
         "name": "RoboticsFacility",
-        "born_time": 369,
+        "born_time": 263,
         "died_time": 470
       },
       {
         "name": "Pylon",
-        "born_time": 395,
+        "born_time": 282,
         "died_time": 470
       },
       {
         "name": "Pylon",
-        "born_time": 409,
+        "born_time": 293,
         "died_time": 470
       },
       {
         "name": "Pylon",
-        "born_time": 414,
+        "born_time": 296,
         "died_time": 470
       },
       {
         "name": "WarpGate",
-        "born_time": 438,
+        "born_time": 313,
         "died_time": 470
       },
       {
         "name": "WarpGate",
-        "born_time": 444,
+        "born_time": 317,
         "died_time": 470
       },
       {
         "name": "Pylon",
-        "born_time": 492,
+        "born_time": 352,
         "died_time": 470
       },
       {
         "name": "Pylon",
-        "born_time": 513,
+        "born_time": 367,
         "died_time": 470
       },
       {
         "name": "Nexus",
-        "born_time": 586,
+        "born_time": 419,
         "died_time": 470
       }
     ],
@@ -139,397 +139,397 @@
         "army_value": 0
       },
       {
-        "time": 10,
+        "time": 7,
         "food_workers": 12,
         "food_used": 13.0,
         "army_value": 0
       },
       {
-        "time": 20,
+        "time": 14,
         "food_workers": 13,
         "food_used": 13.0,
         "army_value": 0
       },
       {
-        "time": 30,
+        "time": 21,
         "food_workers": 13,
         "food_used": 14.0,
         "army_value": 0
       },
       {
-        "time": 40,
+        "time": 29,
         "food_workers": 14,
         "food_used": 15.0,
+        "army_value": 0
+      },
+      {
+        "time": 36,
+        "food_workers": 14,
+        "food_used": 15.0,
+        "army_value": 0
+      },
+      {
+        "time": 43,
+        "food_workers": 15,
+        "food_used": 16.0,
         "army_value": 0
       },
       {
         "time": 50,
-        "food_workers": 14,
-        "food_used": 15.0,
-        "army_value": 0
-      },
-      {
-        "time": 60,
         "food_workers": 15,
         "food_used": 16.0,
         "army_value": 0
       },
       {
-        "time": 70,
-        "food_workers": 15,
-        "food_used": 16.0,
-        "army_value": 0
-      },
-      {
-        "time": 80,
+        "time": 57,
         "food_workers": 16,
         "food_used": 17.0,
         "army_value": 0
       },
       {
-        "time": 90,
+        "time": 64,
         "food_workers": 17,
         "food_used": 18.0,
         "army_value": 0
       },
       {
+        "time": 71,
+        "food_workers": 18,
+        "food_used": 19.0,
+        "army_value": 0
+      },
+      {
+        "time": 79,
+        "food_workers": 18,
+        "food_used": 19.0,
+        "army_value": 0
+      },
+      {
+        "time": 86,
+        "food_workers": 19,
+        "food_used": 20.0,
+        "army_value": 0
+      },
+      {
+        "time": 93,
+        "food_workers": 19,
+        "food_used": 20.0,
+        "army_value": 0
+      },
+      {
         "time": 100,
-        "food_workers": 18,
-        "food_used": 19.0,
-        "army_value": 0
-      },
-      {
-        "time": 110,
-        "food_workers": 18,
-        "food_used": 19.0,
-        "army_value": 0
-      },
-      {
-        "time": 120,
-        "food_workers": 19,
-        "food_used": 20.0,
-        "army_value": 0
-      },
-      {
-        "time": 130,
-        "food_workers": 19,
-        "food_used": 20.0,
-        "army_value": 0
-      },
-      {
-        "time": 140,
         "food_workers": 20,
         "food_used": 20.0,
         "army_value": 0
       },
       {
-        "time": 150,
+        "time": 107,
         "food_workers": 20,
         "food_used": 21.0,
         "army_value": 0
       },
       {
-        "time": 160,
+        "time": 114,
         "food_workers": 21,
         "food_used": 22.0,
         "army_value": 0
       },
       {
-        "time": 170,
+        "time": 121,
         "food_workers": 21,
         "food_used": 22.0,
         "army_value": 0
       },
       {
-        "time": 180,
+        "time": 128,
         "food_workers": 22,
         "food_used": 23.0,
         "army_value": 0
       },
       {
-        "time": 190,
+        "time": 136,
         "food_workers": 22,
         "food_used": 25.0,
         "army_value": 0
       },
       {
-        "time": 200,
+        "time": 143,
         "food_workers": 23,
         "food_used": 26.0,
         "army_value": 0
       },
       {
-        "time": 210,
+        "time": 150,
         "food_workers": 23,
         "food_used": 26.0,
         "army_value": 0
       },
       {
-        "time": 220,
+        "time": 157,
         "food_workers": 24,
         "food_used": 27.0,
         "army_value": 175
       },
       {
-        "time": 230,
+        "time": 164,
         "food_workers": 25,
         "food_used": 29.0,
         "army_value": 175
       },
       {
-        "time": 240,
+        "time": 171,
         "food_workers": 26,
         "food_used": 31.0,
         "army_value": 175
       },
       {
-        "time": 250,
+        "time": 178,
         "food_workers": 27,
         "food_used": 33.0,
         "army_value": 175
       },
       {
-        "time": 260,
+        "time": 186,
         "food_workers": 28,
         "food_used": 34.0,
         "army_value": 175
       },
       {
-        "time": 270,
+        "time": 193,
         "food_workers": 30,
         "food_used": 36.0,
         "army_value": 175
       },
       {
-        "time": 280,
+        "time": 200,
         "food_workers": 31,
         "food_used": 37.0,
         "army_value": 325
       },
       {
-        "time": 290,
+        "time": 207,
         "food_workers": 32,
         "food_used": 38.0,
         "army_value": 325
       },
       {
-        "time": 300,
+        "time": 214,
         "food_workers": 33,
         "food_used": 39.0,
         "army_value": 325
       },
       {
-        "time": 310,
+        "time": 221,
         "food_workers": 34,
         "food_used": 40.0,
         "army_value": 325
       },
       {
-        "time": 320,
+        "time": 228,
         "food_workers": 36,
         "food_used": 38.0,
         "army_value": 175
       },
       {
-        "time": 330,
+        "time": 236,
         "food_workers": 36,
         "food_used": 38.0,
         "army_value": 175
       },
       {
-        "time": 340,
+        "time": 243,
         "food_workers": 34,
         "food_used": 36.0,
         "army_value": 175
       },
       {
-        "time": 350,
+        "time": 250,
         "food_workers": 34,
         "food_used": 40.0,
         "army_value": 175
       },
       {
-        "time": 360,
+        "time": 257,
         "food_workers": 34,
         "food_used": 42.0,
         "army_value": 425
       },
       {
-        "time": 370,
+        "time": 264,
         "food_workers": 36,
         "food_used": 44.0,
         "army_value": 425
       },
       {
-        "time": 380,
+        "time": 271,
         "food_workers": 36,
         "food_used": 44.0,
         "army_value": 425
       },
       {
-        "time": 390,
+        "time": 278,
         "food_workers": 36,
         "food_used": 46.0,
         "army_value": 550
       },
       {
-        "time": 400,
+        "time": 286,
         "food_workers": 35,
         "food_used": 45.0,
         "army_value": 550
       },
       {
-        "time": 410,
+        "time": 293,
         "food_workers": 35,
         "food_used": 51.0,
         "army_value": 1175
       },
       {
-        "time": 420,
+        "time": 300,
         "food_workers": 35,
         "food_used": 53.0,
         "army_value": 1175
       },
       {
-        "time": 430,
+        "time": 307,
         "food_workers": 35,
         "food_used": 53.0,
         "army_value": 1300
       },
       {
-        "time": 440,
+        "time": 314,
         "food_workers": 35,
         "food_used": 55.0,
         "army_value": 1425
       },
       {
-        "time": 450,
+        "time": 321,
         "food_workers": 35,
         "food_used": 49.0,
         "army_value": 1050
       },
       {
-        "time": 460,
+        "time": 328,
         "food_workers": 35,
         "food_used": 59.0,
         "army_value": 1550
       },
       {
-        "time": 470,
+        "time": 335,
         "food_workers": 36,
         "food_used": 59.0,
         "army_value": 1550
       },
       {
-        "time": 480,
+        "time": 343,
         "food_workers": 37,
         "food_used": 69.0,
         "army_value": 1800
       },
       {
-        "time": 490,
+        "time": 350,
         "food_workers": 37,
         "food_used": 69.0,
         "army_value": 2175
       },
       {
-        "time": 500,
+        "time": 357,
         "food_workers": 37,
         "food_used": 69.0,
         "army_value": 2175
       },
       {
-        "time": 510,
+        "time": 364,
         "food_workers": 37,
         "food_used": 71.0,
         "army_value": 2175
       },
       {
-        "time": 520,
+        "time": 371,
         "food_workers": 39,
         "food_used": 83.0,
         "army_value": 2925
       },
       {
-        "time": 530,
+        "time": 378,
         "food_workers": 39,
         "food_used": 65.0,
         "army_value": 1800
       },
       {
-        "time": 540,
+        "time": 385,
         "food_workers": 39,
         "food_used": 57.0,
         "army_value": 1300
       },
       {
-        "time": 550,
+        "time": 393,
         "food_workers": 39,
         "food_used": 55.0,
         "army_value": 1175
       },
       {
-        "time": 560,
+        "time": 400,
         "food_workers": 39,
         "food_used": 61.0,
         "army_value": 925
       },
       {
-        "time": 570,
+        "time": 407,
         "food_workers": 39,
         "food_used": 53.0,
         "army_value": 1050
       },
       {
-        "time": 580,
+        "time": 414,
         "food_workers": 39,
         "food_used": 53.0,
         "army_value": 875
       },
       {
-        "time": 590,
+        "time": 421,
         "food_workers": 41,
         "food_used": 53.0,
         "army_value": 750
       },
       {
-        "time": 600,
+        "time": 428,
         "food_workers": 41,
         "food_used": 57.0,
         "army_value": 375
       },
       {
-        "time": 610,
+        "time": 435,
         "food_workers": 43,
         "food_used": 59.0,
         "army_value": 1000
       },
       {
-        "time": 620,
+        "time": 443,
         "food_workers": 43,
         "food_used": 59.0,
         "army_value": 1000
       },
       {
-        "time": 630,
+        "time": 450,
         "food_workers": 45,
         "food_used": 73.0,
         "army_value": 1000
       },
       {
-        "time": 640,
+        "time": 457,
         "food_workers": 47,
         "food_used": 73.0,
         "army_value": 1750
       },
       {
-        "time": 650,
+        "time": 464,
         "food_workers": 47,
         "food_used": 65.0,
         "army_value": 1250
       },
       {
-        "time": 656,
+        "time": 468,
         "food_workers": 47,
         "food_used": 69.0,
         "army_value": 1000
@@ -543,403 +543,403 @@
         "army_value": 0
       },
       {
-        "time": 10,
+        "time": 7,
         "food_workers": 12,
         "food_used": 13.0,
         "army_value": 0
       },
       {
-        "time": 20,
+        "time": 14,
         "food_workers": 13,
         "food_used": 13.0,
         "army_value": 0
       },
       {
-        "time": 30,
+        "time": 21,
         "food_workers": 13,
         "food_used": 14.0,
         "army_value": 0
       },
       {
-        "time": 40,
+        "time": 29,
         "food_workers": 13,
         "food_used": 14.0,
+        "army_value": 0
+      },
+      {
+        "time": 36,
+        "food_workers": 14,
+        "food_used": 16.0,
+        "army_value": 0
+      },
+      {
+        "time": 43,
+        "food_workers": 14,
+        "food_used": 16.0,
         "army_value": 0
       },
       {
         "time": 50,
-        "food_workers": 14,
-        "food_used": 16.0,
-        "army_value": 0
-      },
-      {
-        "time": 60,
-        "food_workers": 14,
-        "food_used": 16.0,
-        "army_value": 0
-      },
-      {
-        "time": 70,
         "food_workers": 15,
         "food_used": 15.0,
         "army_value": 0
       },
       {
-        "time": 80,
+        "time": 57,
         "food_workers": 15,
         "food_used": 18.0,
         "army_value": 0
       },
       {
-        "time": 90,
+        "time": 64,
         "food_workers": 16,
         "food_used": 18.0,
         "army_value": 0
       },
       {
-        "time": 100,
+        "time": 71,
         "food_workers": 17,
         "food_used": 17.0,
         "army_value": 0
       },
       {
-        "time": 110,
+        "time": 79,
         "food_workers": 16,
         "food_used": 18.0,
         "army_value": 0
       },
       {
-        "time": 120,
+        "time": 86,
         "food_workers": 16,
         "food_used": 18.0,
         "army_value": 0
       },
       {
-        "time": 130,
+        "time": 93,
         "food_workers": 18,
         "food_used": 19.0,
         "army_value": 0
       },
       {
-        "time": 140,
+        "time": 100,
         "food_workers": 18,
         "food_used": 20.0,
         "army_value": 0
       },
       {
-        "time": 150,
+        "time": 107,
         "food_workers": 19,
         "food_used": 20.0,
         "army_value": 0
       },
       {
-        "time": 160,
+        "time": 114,
         "food_workers": 20,
         "food_used": 21.0,
         "army_value": 0
       },
       {
-        "time": 170,
+        "time": 121,
         "food_workers": 20,
         "food_used": 25.0,
         "army_value": 0
       },
       {
-        "time": 180,
+        "time": 128,
         "food_workers": 21,
         "food_used": 26.0,
         "army_value": 0
       },
       {
-        "time": 190,
+        "time": 136,
         "food_workers": 22,
         "food_used": 27.0,
         "army_value": 0
       },
       {
-        "time": 200,
+        "time": 143,
         "food_workers": 23,
         "food_used": 27.0,
         "army_value": 0
       },
       {
-        "time": 210,
+        "time": 150,
         "food_workers": 22,
         "food_used": 27.0,
         "army_value": 0
       },
       {
-        "time": 220,
+        "time": 157,
         "food_workers": 22,
         "food_used": 29.0,
         "army_value": 350
       },
       {
-        "time": 230,
+        "time": 164,
         "food_workers": 23,
         "food_used": 31.0,
         "army_value": 350
       },
       {
-        "time": 240,
+        "time": 171,
         "food_workers": 23,
         "food_used": 31.0,
         "army_value": 450
       },
       {
-        "time": 250,
+        "time": 178,
         "food_workers": 23,
         "food_used": 31.0,
         "army_value": 450
       },
       {
-        "time": 260,
+        "time": 186,
         "food_workers": 23,
         "food_used": 31.0,
         "army_value": 450
       },
       {
-        "time": 270,
+        "time": 193,
         "food_workers": 22,
         "food_used": 33.0,
         "army_value": 450
       },
       {
-        "time": 280,
+        "time": 200,
         "food_workers": 24,
         "food_used": 35.0,
         "army_value": 625
       },
       {
-        "time": 290,
+        "time": 207,
         "food_workers": 24,
         "food_used": 35.0,
         "army_value": 625
       },
       {
-        "time": 300,
+        "time": 214,
         "food_workers": 24,
         "food_used": 36.0,
         "army_value": 775
       },
       {
-        "time": 310,
+        "time": 221,
         "food_workers": 24,
         "food_used": 36.0,
         "army_value": 775
       },
       {
-        "time": 320,
+        "time": 228,
         "food_workers": 24,
         "food_used": 35.5,
         "army_value": 750
       },
       {
-        "time": 330,
+        "time": 236,
         "food_workers": 24,
         "food_used": 41.5,
         "army_value": 750
       },
       {
-        "time": 340,
+        "time": 243,
         "food_workers": 24,
         "food_used": 39.5,
         "army_value": 600
       },
       {
-        "time": 350,
+        "time": 250,
         "food_workers": 24,
         "food_used": 42.0,
         "army_value": 875
       },
       {
-        "time": 360,
+        "time": 257,
         "food_workers": 24,
         "food_used": 42.0,
         "army_value": 975
       },
       {
-        "time": 370,
+        "time": 264,
         "food_workers": 24,
         "food_used": 47.5,
         "army_value": 1100
       },
       {
-        "time": 380,
+        "time": 271,
         "food_workers": 24,
         "food_used": 50.5,
         "army_value": 1100
       },
       {
-        "time": 390,
+        "time": 278,
         "food_workers": 23,
         "food_used": 55.5,
         "army_value": 1100
       },
       {
-        "time": 400,
+        "time": 286,
         "food_workers": 26,
         "food_used": 56.5,
         "army_value": 1100
       },
       {
-        "time": 410,
+        "time": 293,
         "food_workers": 27,
         "food_used": 59.5,
         "army_value": 1400
       },
       {
-        "time": 420,
+        "time": 300,
         "food_workers": 27,
         "food_used": 58.5,
         "army_value": 1875
       },
       {
-        "time": 430,
+        "time": 307,
         "food_workers": 29,
         "food_used": 57.5,
         "army_value": 1875
       },
       {
-        "time": 440,
+        "time": 314,
         "food_workers": 29,
         "food_used": 52.5,
         "army_value": 1625
       },
       {
-        "time": 450,
+        "time": 321,
         "food_workers": 29,
         "food_used": 55.0,
         "army_value": 1350
       },
       {
-        "time": 460,
+        "time": 328,
         "food_workers": 28,
         "food_used": 55.0,
         "army_value": 1350
       },
       {
-        "time": 470,
+        "time": 335,
         "food_workers": 29,
         "food_used": 58.0,
         "army_value": 1550
       },
       {
-        "time": 480,
+        "time": 343,
         "food_workers": 30,
         "food_used": 62.5,
         "army_value": 1525
       },
       {
-        "time": 490,
+        "time": 350,
         "food_workers": 32,
         "food_used": 64.0,
         "army_value": 1450
       },
       {
-        "time": 500,
+        "time": 357,
         "food_workers": 31,
         "food_used": 60.0,
         "army_value": 1025
       },
       {
-        "time": 510,
+        "time": 364,
         "food_workers": 31,
         "food_used": 60.0,
         "army_value": 1475
       },
       {
-        "time": 520,
+        "time": 371,
         "food_workers": 31,
         "food_used": 61.0,
         "army_value": 1750
       },
       {
-        "time": 530,
+        "time": 378,
         "food_workers": 31,
         "food_used": 56.5,
         "army_value": 1100
       },
       {
-        "time": 540,
+        "time": 385,
         "food_workers": 31,
         "food_used": 53.0,
         "army_value": 900
       },
       {
-        "time": 550,
+        "time": 393,
         "food_workers": 31,
         "food_used": 49.0,
         "army_value": 700
       },
       {
-        "time": 560,
+        "time": 400,
         "food_workers": 31,
         "food_used": 49.0,
         "army_value": 1100
       },
       {
-        "time": 570,
+        "time": 407,
         "food_workers": 31,
         "food_used": 51.5,
         "army_value": 1075
       },
       {
-        "time": 580,
+        "time": 414,
         "food_workers": 30,
         "food_used": 50.5,
         "army_value": 925
       },
       {
-        "time": 590,
+        "time": 421,
         "food_workers": 30,
         "food_used": 48.5,
         "army_value": 1025
       },
       {
-        "time": 600,
+        "time": 428,
         "food_workers": 30,
         "food_used": 45.5,
         "army_value": 925
       },
       {
-        "time": 610,
+        "time": 435,
         "food_workers": 29,
         "food_used": 47.5,
         "army_value": 825
       },
       {
-        "time": 620,
+        "time": 443,
         "food_workers": 29,
         "food_used": 49.5,
         "army_value": 950
       },
       {
-        "time": 630,
+        "time": 450,
         "food_workers": 29,
         "food_used": 49.5,
         "army_value": 1350
       },
       {
-        "time": 640,
+        "time": 457,
         "food_workers": 24,
         "food_used": 48.5,
         "army_value": 1575
       },
       {
-        "time": 650,
+        "time": 464,
         "food_workers": 24,
         "food_used": 40.5,
         "army_value": 625
       },
       {
-        "time": 656,
+        "time": 468,
         "food_workers": 24,
         "food_used": 36.0,
         "army_value": 325
       },
       {
-        "time": 656,
+        "time": 468,
         "food_workers": 24,
         "food_used": 36.0,
         "army_value": 325
@@ -954,31 +954,45 @@
         }
       },
       {
-        "time": 10,
+        "time": 7,
         "my": {},
         "opp": {
           "Overlord": 1
         }
       },
       {
-        "time": 20,
+        "time": 14,
         "my": {},
         "opp": {
           "Overlord": 1
         }
       },
       {
-        "time": 30,
+        "time": 21,
         "my": {},
         "opp": {
           "Overlord": 1
         }
       },
       {
-        "time": 40,
+        "time": 29,
         "my": {},
         "opp": {
           "Overlord": 1
+        }
+      },
+      {
+        "time": 36,
+        "my": {},
+        "opp": {
+          "Overlord": 2
+        }
+      },
+      {
+        "time": 43,
+        "my": {},
+        "opp": {
+          "Overlord": 2
         }
       },
       {
@@ -989,28 +1003,42 @@
         }
       },
       {
-        "time": 60,
+        "time": 57,
         "my": {},
         "opp": {
           "Overlord": 2
         }
       },
       {
-        "time": 70,
+        "time": 64,
         "my": {},
         "opp": {
           "Overlord": 2
         }
       },
       {
-        "time": 80,
+        "time": 71,
         "my": {},
         "opp": {
           "Overlord": 2
         }
       },
       {
-        "time": 90,
+        "time": 79,
+        "my": {},
+        "opp": {
+          "Overlord": 2
+        }
+      },
+      {
+        "time": 86,
+        "my": {},
+        "opp": {
+          "Overlord": 2
+        }
+      },
+      {
+        "time": 93,
         "my": {},
         "opp": {
           "Overlord": 2
@@ -1024,148 +1052,120 @@
         }
       },
       {
-        "time": 110,
+        "time": 107,
         "my": {},
         "opp": {
           "Overlord": 2
         }
       },
       {
-        "time": 120,
+        "time": 114,
         "my": {},
         "opp": {
           "Overlord": 2
         }
       },
       {
-        "time": 130,
+        "time": 121,
         "my": {},
         "opp": {
           "Overlord": 2
         }
       },
       {
-        "time": 140,
+        "time": 128,
         "my": {},
         "opp": {
           "Overlord": 2
+        }
+      },
+      {
+        "time": 136,
+        "my": {},
+        "opp": {
+          "Overlord": 2
+        }
+      },
+      {
+        "time": 143,
+        "my": {},
+        "opp": {
+          "Overlord": 3
         }
       },
       {
         "time": 150,
         "my": {},
         "opp": {
-          "Overlord": 2
+          "Overlord": 3
         }
       },
       {
-        "time": 160,
-        "my": {},
+        "time": 157,
+        "my": {
+          "Stalker": 1
+        },
         "opp": {
-          "Overlord": 2
+          "Overlord": 3,
+          "Queen": 2
         }
       },
       {
-        "time": 170,
-        "my": {},
+        "time": 164,
+        "my": {
+          "Stalker": 1
+        },
         "opp": {
-          "Overlord": 2
+          "Overlord": 3,
+          "Queen": 2
         }
       },
       {
-        "time": 180,
-        "my": {},
+        "time": 171,
+        "my": {
+          "Stalker": 1
+        },
         "opp": {
-          "Overlord": 2
+          "Overlord": 3,
+          "Queen": 2,
+          "Zergling": 4
         }
       },
       {
-        "time": 190,
-        "my": {},
+        "time": 178,
+        "my": {
+          "Stalker": 1
+        },
         "opp": {
-          "Overlord": 2
+          "Overlord": 3,
+          "Queen": 2,
+          "Zergling": 4
+        }
+      },
+      {
+        "time": 186,
+        "my": {
+          "Stalker": 1
+        },
+        "opp": {
+          "Overlord": 3,
+          "Queen": 2,
+          "Zergling": 4
+        }
+      },
+      {
+        "time": 193,
+        "my": {
+          "Stalker": 1
+        },
+        "opp": {
+          "Overlord": 3,
+          "Queen": 2,
+          "Zergling": 4
         }
       },
       {
         "time": 200,
-        "my": {},
-        "opp": {
-          "Overlord": 3
-        }
-      },
-      {
-        "time": 210,
-        "my": {},
-        "opp": {
-          "Overlord": 3
-        }
-      },
-      {
-        "time": 220,
-        "my": {
-          "Stalker": 1
-        },
-        "opp": {
-          "Overlord": 3,
-          "Queen": 2
-        }
-      },
-      {
-        "time": 230,
-        "my": {
-          "Stalker": 1
-        },
-        "opp": {
-          "Overlord": 3,
-          "Queen": 2
-        }
-      },
-      {
-        "time": 240,
-        "my": {
-          "Stalker": 1
-        },
-        "opp": {
-          "Overlord": 3,
-          "Queen": 2,
-          "Zergling": 4
-        }
-      },
-      {
-        "time": 250,
-        "my": {
-          "Stalker": 1
-        },
-        "opp": {
-          "Overlord": 3,
-          "Queen": 2,
-          "Zergling": 4
-        }
-      },
-      {
-        "time": 260,
-        "my": {
-          "Stalker": 1
-        },
-        "opp": {
-          "Overlord": 3,
-          "Queen": 2,
-          "Zergling": 4
-        }
-      },
-      {
-        "time": 270,
-        "my": {
-          "Stalker": 1
-        },
-        "opp": {
-          "Overlord": 3,
-          "Queen": 2,
-          "Zergling": 4
-        }
-      },
-      {
-        "time": 280,
         "my": {
           "Stalker": 1,
           "Sentry": 1,
@@ -1178,7 +1178,7 @@
         }
       },
       {
-        "time": 290,
+        "time": 207,
         "my": {
           "Stalker": 1,
           "Sentry": 1,
@@ -1191,7 +1191,7 @@
         }
       },
       {
-        "time": 300,
+        "time": 214,
         "my": {
           "Stalker": 1,
           "Sentry": 1,
@@ -1204,10 +1204,22 @@
         }
       },
       {
-        "time": 310,
+        "time": 221,
         "my": {
           "Stalker": 1,
           "Sentry": 1,
+          "Phoenix": 1
+        },
+        "opp": {
+          "Overlord": 3,
+          "Queen": 3,
+          "Zergling": 10
+        }
+      },
+      {
+        "time": 228,
+        "my": {
+          "Stalker": 1,
           "Phoenix": 1
         },
         "opp": {
@@ -1217,19 +1229,7 @@
         }
       },
       {
-        "time": 320,
-        "my": {
-          "Stalker": 1,
-          "Phoenix": 1
-        },
-        "opp": {
-          "Overlord": 3,
-          "Queen": 3,
-          "Zergling": 11
-        }
-      },
-      {
-        "time": 330,
+        "time": 236,
         "my": {
           "Stalker": 1,
           "Phoenix": 1
@@ -1241,7 +1241,7 @@
         }
       },
       {
-        "time": 340,
+        "time": 243,
         "my": {
           "Stalker": 1
         },
@@ -1252,7 +1252,7 @@
         }
       },
       {
-        "time": 350,
+        "time": 250,
         "my": {
           "Stalker": 1,
           "Adept": 2
@@ -1265,7 +1265,7 @@
         }
       },
       {
-        "time": 360,
+        "time": 257,
         "my": {
           "Stalker": 1,
           "Adept": 2
@@ -1278,7 +1278,7 @@
         }
       },
       {
-        "time": 370,
+        "time": 264,
         "my": {
           "Stalker": 1,
           "Adept": 2
@@ -1291,7 +1291,7 @@
         }
       },
       {
-        "time": 380,
+        "time": 271,
         "my": {
           "Stalker": 1,
           "Adept": 2
@@ -1304,7 +1304,7 @@
         }
       },
       {
-        "time": 390,
+        "time": 278,
         "my": {
           "Stalker": 1,
           "Adept": 3
@@ -1317,7 +1317,7 @@
         }
       },
       {
-        "time": 400,
+        "time": 286,
         "my": {
           "Stalker": 1,
           "Adept": 3
@@ -1330,7 +1330,7 @@
         }
       },
       {
-        "time": 410,
+        "time": 293,
         "my": {
           "Stalker": 1,
           "Adept": 6,
@@ -1344,7 +1344,7 @@
         }
       },
       {
-        "time": 420,
+        "time": 300,
         "my": {
           "Stalker": 1,
           "Adept": 6,
@@ -1358,7 +1358,7 @@
         }
       },
       {
-        "time": 430,
+        "time": 307,
         "my": {
           "Stalker": 1,
           "Adept": 7,
@@ -1372,7 +1372,7 @@
         }
       },
       {
-        "time": 440,
+        "time": 314,
         "my": {
           "Stalker": 1,
           "Adept": 8,
@@ -1386,7 +1386,7 @@
         }
       },
       {
-        "time": 450,
+        "time": 321,
         "my": {
           "Stalker": 1,
           "Adept": 5,
@@ -1400,7 +1400,7 @@
         }
       },
       {
-        "time": 460,
+        "time": 328,
         "my": {
           "Stalker": 1,
           "Adept": 9,
@@ -1414,7 +1414,7 @@
         }
       },
       {
-        "time": 470,
+        "time": 335,
         "my": {
           "Stalker": 1,
           "Adept": 9,
@@ -1423,12 +1423,12 @@
         "opp": {
           "Overlord": 6,
           "Queen": 6,
-          "Zergling": 24,
-          "Baneling": 4
+          "Zergling": 18,
+          "Baneling": 2
         }
       },
       {
-        "time": 480,
+        "time": 343,
         "my": {
           "Stalker": 1,
           "Adept": 11,
@@ -1442,7 +1442,7 @@
         }
       },
       {
-        "time": 490,
+        "time": 350,
         "my": {
           "Stalker": 1,
           "Adept": 14,
@@ -1456,7 +1456,7 @@
         }
       },
       {
-        "time": 500,
+        "time": 357,
         "my": {
           "Stalker": 1,
           "Adept": 14,
@@ -1470,7 +1470,7 @@
         }
       },
       {
-        "time": 510,
+        "time": 364,
         "my": {
           "Stalker": 1,
           "Adept": 14,
@@ -1484,7 +1484,7 @@
         }
       },
       {
-        "time": 520,
+        "time": 371,
         "my": {
           "Stalker": 1,
           "Adept": 20,
@@ -1494,11 +1494,11 @@
           "Overlord": 6,
           "Queen": 4,
           "Baneling": 5,
-          "Zergling": 31
+          "Zergling": 32
         }
       },
       {
-        "time": 530,
+        "time": 378,
         "my": {
           "Stalker": 1,
           "WarpPrismPhasing": 1,
@@ -1507,25 +1507,25 @@
         "opp": {
           "Overlord": 6,
           "Queen": 4,
-          "Zergling": 11,
+          "Zergling": 13,
           "Baneling": 2
         }
       },
       {
-        "time": 540,
+        "time": 385,
         "my": {
           "Stalker": 1,
           "WarpPrismPhasing": 1,
-          "Adept": 6
+          "Adept": 7
         },
         "opp": {
           "Overlord": 6,
           "Queen": 4,
-          "Zergling": 6
+          "Zergling": 8
         }
       },
       {
-        "time": 550,
+        "time": 393,
         "my": {
           "Stalker": 1,
           "WarpPrismPhasing": 1,
@@ -1537,7 +1537,7 @@
         }
       },
       {
-        "time": 560,
+        "time": 400,
         "my": {
           "Stalker": 1,
           "WarpPrismPhasing": 1,
@@ -1550,7 +1550,7 @@
         }
       },
       {
-        "time": 570,
+        "time": 407,
         "my": {
           "WarpPrismPhasing": 1,
           "Adept": 5
@@ -1563,7 +1563,7 @@
         }
       },
       {
-        "time": 580,
+        "time": 414,
         "my": {
           "WarpPrismPhasing": 1,
           "Adept": 5
@@ -1571,12 +1571,12 @@
         "opp": {
           "Overlord": 6,
           "Queen": 4,
-          "Zergling": 7,
+          "Zergling": 8,
           "Baneling": 2
         }
       },
       {
-        "time": 590,
+        "time": 421,
         "my": {
           "WarpPrismPhasing": 1,
           "Adept": 4
@@ -1589,10 +1589,10 @@
         }
       },
       {
-        "time": 600,
+        "time": 428,
         "my": {
           "WarpPrismPhasing": 1,
-          "Adept": 2
+          "Adept": 1
         },
         "opp": {
           "Overlord": 6,
@@ -1602,7 +1602,7 @@
         }
       },
       {
-        "time": 610,
+        "time": 435,
         "my": {
           "WarpPrismPhasing": 1,
           "Adept": 6
@@ -1615,7 +1615,7 @@
         }
       },
       {
-        "time": 620,
+        "time": 443,
         "my": {
           "WarpPrismPhasing": 1,
           "Adept": 6
@@ -1628,7 +1628,7 @@
         }
       },
       {
-        "time": 630,
+        "time": 450,
         "my": {
           "WarpPrismPhasing": 1,
           "Adept": 6
@@ -1641,7 +1641,7 @@
         }
       },
       {
-        "time": 640,
+        "time": 457,
         "my": {
           "WarpPrismPhasing": 1,
           "Adept": 12
@@ -1654,7 +1654,7 @@
         }
       },
       {
-        "time": 650,
+        "time": 464,
         "my": {
           "WarpPrismPhasing": 1,
           "Adept": 8
@@ -1666,7 +1666,7 @@
         }
       },
       {
-        "time": 656,
+        "time": 468,
         "my": {
           "WarpPrismPhasing": 1,
           "Adept": 6
