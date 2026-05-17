@@ -49,10 +49,14 @@ const COLOR_BG_SURFACE = "#11141b";
  *
  * Sums the (next-game MMR − this-game MMR) for every consecutive
  * game pair in the filtered set and attributes the delta to the
- * opponent race of the FIRST game. Surfaces matchups that are
- * net-positive vs net-negative for your ladder rating — sometimes
- * a >50% WR bleeds MMR because the matchmaker keeps queueing you
- * into lower-rated opponents.
+ * opponent race of the FIRST game. The API drops pairs where the
+ * gap or the delta look bigger than a single ladder game, so the
+ * total never picks up MMR drift from games the agent didn't tag
+ * with myMmr (the bug that briefly let "100% WR vs Protoss" read
+ * as a net-negative). Surfaces matchups that are net-positive vs
+ * net-negative for your ladder rating — sometimes a >50% WR
+ * bleeds MMR because the matchmaker keeps queueing you into
+ * lower-rated opponents.
  *
  * Diverging bar layout: zero is the centre, green to the right,
  * red to the left. A footer card per matchup shows games, WR, and
@@ -109,8 +113,11 @@ export function NetMmrByMatchupChart() {
   return (
     <Card title="Net MMR by matchup">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        Total MMR gained (▶) or lost (◀) against each opponent race, summed
-        over consecutive game pairs with MMR on both sides.
+        MMR gained (▶) or lost (◀) per opponent race, summed over
+        back-to-back game pairs where both sides carry MMR and the
+        swing fits a single ladder game. Long gaps and outlier
+        swings (race switches, season resets) are dropped so a
+        100%-WR matchup never reads as a net loss.
       </p>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
