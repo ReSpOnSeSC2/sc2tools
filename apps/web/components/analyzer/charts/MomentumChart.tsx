@@ -173,20 +173,10 @@ function TiltPanel({
               width={100}
               tickMargin={4}
             />
-            <Tooltip
-              cursor={{ fill: "rgba(124,140,255,0.05)" }}
-              contentStyle={{
-                background: COLOR_BG_SURFACE,
-                border: `1px solid ${COLOR_GRID}`,
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              formatter={(_v: number, _n: string, ctx) => {
-                const p = (ctx as { payload?: { pct: number | null; sample: number } }).payload;
-                if (!p || p.pct == null) return ["—", "Win rate"];
-                return [`${p.pct}% · ${p.sample} games`, "Win rate"];
-              }}
-            />
+            {/* No Tooltip: the After-a-win / After-a-loss footer
+                cards below already show pct + sample, and on mobile
+                recharts' floating tooltip lands on top of the
+                two-row bar chart when a finger taps to read it. */}
             <Bar dataKey="pct" radius={[0, 6, 6, 0]} minPointSize={2}>
               {rows.map((r) => (
                 <Cell key={r.label} fill={r.color} fillOpacity={0.85} />
