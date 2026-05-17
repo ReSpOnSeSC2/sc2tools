@@ -19,6 +19,12 @@ import {
   persistUnlock,
   readPersistedUnlock,
 } from "./useVoiceReadout.gesture";
+import {
+  consumeFingerprint,
+  resetPreGameFingerprints,
+  resetScoutingFingerprints,
+  useScoutingFingerprints,
+} from "./useVoiceReadout.dedup";
 
 // Re-export builders so existing call sites (and the unit tests) can
 // keep importing from this module without breaking on the file split.
@@ -160,21 +166,6 @@ function clearAllLiveGameTimers(states: LiveGameStates): void {
 }
 
 /**
- * Per-trigger dedupe primitive — returns ``true`` when ``key`` is
- * fresh (and stamps it on ``ref``), ``false`` when it matches the
- * previously-spoken fingerprint. Lets each trigger (scouting,
- * matchStart, matchEnd, cheese) collapse to a one-line guard.
- */
-function consumeFingerprint(
-  ref: { current: string | null },
-  key: string,
-): boolean {
-  if (!key || key === ref.current) return false;
-  ref.current = key;
-  return true;
-}
-
-/**
  * Voice readout hook for the OBS overlay clients. Watches the live
  * payload, decides whether anything should be spoken (per the user's
  * voicePrefs), and queues / fires the utterance. Browser autoplay
@@ -213,11 +204,11 @@ export function useVoiceReadout(
 
   // Per-trigger dedupe keys. Scouting and matchEnd dedupe independently
   // so a single payload that has both shapes (e.g. an isTest fire that
-  // sets oppName AND result) speaks each line at most once.
-  const lastScoutingKey = useRef<string | null>(null);
-  const lastMatchEndKey = useRef<string | null>(null);
-  const lastCheeseKey = useRef<string | null>(null);
-  const lastMatchStartKey = useRef<string | null>(null);
+  // sets oppName AND result) speaks each line at most once. The bundle
+  // is shared with the live-envelope match-transition effect below so
+  // both the "stamp on speak" and "wipe on new match" call sites read
+  // from a single source of truth (see ``useVoiceReadout.dedup``).
+  const fingerprints = useScoutingFingerprints();
 
   // Per-gameKey state for the live-envelope readout. A single match
   // produces 5+ envelope deltas (loading → started → in-progress → ended)
@@ -408,8 +399,7 @@ export function useVoiceReadout(
       }
       // Clear the scouting fingerprint so the new opponent gets its own
       // readout even if (theoretically) the H2H is identical.
-      lastScoutingKey.current = null;
-      lastMatchStartKey.current = null;
+      resetPreGameFingerprints(fingerprints);
     }
     // Only track pre-game opponents — a finished-game oppName landing
     // here would clobber the legitimate pre-game opp we want to compare
@@ -429,11 +419,11 @@ export function useVoiceReadout(
     // to start" window in the live payload.
     const hasOpp = !!live.oppName && !live.result;
     if (hasOpp) {
-      if (wantsScouting && consumeFingerprint(lastScoutingKey, scoutingFingerprint(live))) {
+      if (wantsScouting && consumeFingerprint(fingerprints.scouting, scoutingFingerprint(live))) {
         const line = buildScoutingLine(live);
         if (line) lines.push(line);
       }
-      if (events.matchStart && consumeFingerprint(lastMatchStartKey, matchStartFingerprint(live))) {
+      if (events.matchStart && consumeFingerprint(fingerprints.matchStart, matchStartFingerprint(live))) {
         lines.push("Match starting.");
       }
     }
@@ -441,7 +431,7 @@ export function useVoiceReadout(
     if (
       events.matchEnd
       && live.result
-      && consumeFingerprint(lastMatchEndKey, matchEndFingerprint(live))
+      && consumeFingerprint(fingerprints.matchEnd, matchEndFingerprint(live))
     ) {
       lines.push(buildMatchEndLine(live));
     }
@@ -450,7 +440,7 @@ export function useVoiceReadout(
       events.cheese
       && typeof live.cheeseProbability === "number"
       && live.cheeseProbability >= 0.4
-      && consumeFingerprint(lastCheeseKey, cheeseFingerprint(live))
+      && consumeFingerprint(fingerprints.cheese, cheeseFingerprint(live))
     ) {
       lines.push(buildCheeseLine(live));
     }
@@ -465,37 +455,39 @@ export function useVoiceReadout(
   }, [live, enabled, prefs, enqueueOrSpeak, log]);
 
   // Live-envelope match transitions: wipe per-gameKey state AND the
-  // post-game fingerprint refs whenever the bridge clears OR the
-  // current envelope's ``gameKey`` flips to a fresh match. Without the
-  // wipe, an old ``entry.spoken = true`` from game N can silence game
-  // N+1's scouting line — most visibly when ``OverlayClient`` has
-  // collapsed an idle/menu envelope to a ``null`` liveGame (so the in-
-  // effect ``phase`` check below is unreachable in production), and
-  // even more reliably on rematches against the same opponent where
-  // the agent's envelope lacks a ``gameKey`` and the fallback
-  // ``live:${oppName}`` key collides.
+  // post-game fingerprint refs whenever the bridge clears a previously-
+  // observed envelope OR the current envelope's ``gameKey`` flips to a
+  // fresh match. Without the wipe, an old ``entry.spoken = true`` from
+  // game N can silence game N+1's scouting line — most visibly on
+  // rematches against the same opponent where the agent's envelope
+  // lacks a ``gameKey`` and the fallback ``live:${oppName}`` key
+  // collides.
   //
-  // Why we ALWAYS clear when liveGame transitions to null (rather than
-  // only after we've seen a real match): the fallback-key rematch path
-  // never lets us record a non-null prevKey, so the only reliable
-  // "we just finished a match" signal we have left is the bridge
-  // clearing. Clearing on every null transition is cheap and correct
-  // — the map either has stale entries (clear is right) or is empty
-  // (clear is a no-op).
+  // ``hadLiveGameRef`` distinguishes "initial mount, liveGame was never
+  // set" from "envelope cleared from a real, previously-non-null
+  // value". The distinction matters because the post-game payload
+  // effect ABOVE has already stamped its dedup fingerprints by the
+  // time this effect runs on mount; an unconditional wipe would erase
+  // those keys and cause the next render (rerender with new ``live``
+  // ref, or post-gesture replay) to re-fire the same line.
+  const hadLiveGameRef = useRef<boolean>(false);
   useEffect(() => {
     const states = liveGameStates.current;
     const wipe = () => {
       clearAllLiveGameTimers(states);
-      lastScoutingKey.current = null;
-      lastMatchStartKey.current = null;
-      lastMatchEndKey.current = null;
-      lastCheeseKey.current = null;
+      resetScoutingFingerprints(fingerprints);
     };
     if (!liveGame) {
-      wipe();
+      // Only treat this as a "bridge cleared" event when we'd
+      // previously seen a non-null envelope. Initial mount with no
+      // envelope is a no-op — nothing to wipe and, crucially, no
+      // dedup keys to invalidate behind the payload effect's back.
+      if (hadLiveGameRef.current) wipe();
+      hadLiveGameRef.current = false;
       lastLiveGameKeyRef.current = null;
       return;
     }
+    hadLiveGameRef.current = true;
     const lgKey = liveGame.gameKey ?? null;
     const prevKey = lastLiveGameKeyRef.current;
     if (lgKey !== null && prevKey !== null && lgKey !== prevKey) {
@@ -504,7 +496,7 @@ export function useVoiceReadout(
       wipe();
     }
     if (lgKey !== null) lastLiveGameKeyRef.current = lgKey;
-  }, [liveGame]);
+  }, [liveGame, fingerprints]);
 
   // Pre-game / in-game readout, driven by the desktop agent's
   // ``LiveGameEnvelope`` rather than the post-game ``LiveGamePayload``.
