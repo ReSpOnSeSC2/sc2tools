@@ -861,6 +861,30 @@ class OpponentsService {
         return null;
       }
     }).filter((envelope) => envelope !== null);
+    // Per-game scouting envelopes for EVERY date-filtered game — the
+    // opponent profile's "How games against this opponent play out"
+    // widget tabs through these to show real build orders, real
+    // compositions, real transitions, and real end-of-game phase /
+    // reason per replay. Operates on ``rawFilteredGames`` so the set
+    // respects the active date range (same filter the by-map /
+    // by-strategy panels use). Capped so a profile against an opponent
+    // with hundreds of games doesn't blow the response size; the
+    // overlay's last-5 surface keeps its dedicated field above.
+    const PROFILE_SCOUTING_CAP = 60;
+    const gamesScouting = rawFilteredGames
+      .slice(0, PROFILE_SCOUTING_CAP)
+      .map((g) => {
+        try {
+          return computePerGameScouting(g);
+        } catch (err) {
+          console.warn(
+            "perGameScouting failed for gameId=%s userId=%s: %s",
+            g && g.gameId, userId, (err && err.message) || err,
+          );
+          return null;
+        }
+      })
+      .filter((envelope) => envelope !== null);
     const matchupTimingsLegacy = dna.matchupTimings;
     const matchupTimings = projectMatchupTimings(matchupTimingsLegacy);
     // MMR + region overlay from the most recent game that carries
@@ -914,6 +938,7 @@ class OpponentsService {
       transitions,
       last5Games,
       last5GamesScouting,
+      gamesScouting,
       games: filteredGames,
     };
   }

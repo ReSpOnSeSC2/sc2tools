@@ -208,6 +208,37 @@ export interface PerGameScoutingEnvelope {
     }
   >;
 
+  /**
+   * Player's own build order — same shape as ``oppBuildOrder``. Lets
+   * the opponent-profile per-game timeline render "what I did" side-
+   * by-side with "what they did". Optional so cached payloads from
+   * pre-myside API builds keep type-checking.
+   */
+  myBuildOrder?: Array<{
+    name: string;
+    time: number;
+    category: "building" | "unit" | "upgrade";
+    tier: 1 | 2 | 3;
+  }>;
+
+  /** Player's phase crossings (from the user-side classifier). */
+  myTransitions?: {
+    earlyMidAt: number | null;
+    midAt: number | null;
+    midLateAt: number | null;
+    lateAt: number | null;
+  };
+
+  /** Player's composition snapshot per phase — mirror of opp side. */
+  myCompositionByPhase?: Record<
+    "early" | "earlyMid" | "mid" | "midLate" | "late",
+    {
+      reached: boolean;
+      atTime: number | null;
+      units: Array<{ token: string; count: number }>;
+    }
+  >;
+
   /** Phase the game ended in (per classifier finalPhase). */
   endPhase: "early" | "earlyMid" | "mid" | "midLate" | "late";
 
@@ -232,6 +263,7 @@ export interface PerGameScoutingEnvelope {
     | "opp_bases_synthesized"
     | "unit_timeline_missing"
     | "opp_buildlog_missing"
+    | "my_buildlog_missing"
   >;
 }
 

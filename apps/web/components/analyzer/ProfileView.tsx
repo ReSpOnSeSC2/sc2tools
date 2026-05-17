@@ -20,8 +20,8 @@ import type { StrategyEntry } from "./StrategyTendencyChart";
 import { H2HTrendsSection } from "./h2h/H2HTrendsSection";
 import type { BuildMatchupSelection } from "./h2h/BuildMatrix";
 import { gameOutcome } from "@/lib/h2hSeries";
-import { PhaseTrajectoryStrip } from "./PhaseTrajectoryStrip";
-import { PhaseCompositionTabs } from "./PhaseCompositionTabs";
+import { OpponentGamesTimeline } from "./OpponentGamesTimeline";
+import type { PerGameScoutingEnvelope } from "@/components/overlay/types";
 import type { BuildPhasePayload, BuildTransitionsPayload } from "@/lib/serverApi";
 
 type OpponentProfileResp = {
@@ -64,6 +64,14 @@ type OpponentProfileResp = {
   phases?: BuildPhasePayload;
   transitions?: BuildTransitionsPayload;
   last5Games?: ProfileGame[];
+  /**
+   * Per-game scouting envelopes for every date-filtered game (newest
+   * first, capped server-side). Drives the "How games against this
+   * opponent play out" widget — real per-game build orders, real
+   * compositions, real transitions, real end-phase / end-reason.
+   * Same shape as the overlay's scouting widget consumes.
+   */
+  gamesScouting?: PerGameScoutingEnvelope[];
   games?: ProfileGame[];
 };
 
@@ -266,7 +274,11 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         onSelectGame={handleSelectGame}
       />
 
-      <OpponentPhaseSection phases={data.phases} />
+      <OpponentGamesSection
+        envelopes={data.gamesScouting}
+        finalPhaseDistribution={data.phases?.finalPhaseDistribution}
+        sampleSize={data.phases?.sampleSize}
+      />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card
@@ -510,51 +522,44 @@ function ProfilePulseLine({
 }
 
 /**
- * "How games against this opponent play out" — unified phase widget.
+ * "How games against this opponent play out" — per-game timeline.
  *
- * Top: PhaseTrajectoryStrip renders the outcome bar (where games end)
- * and the median phase-timing line with crossing markers + median-end
- * pin. Bottom: PhaseCompositionTabs hosts the 5 phase tabs; the active
- * tab shows aggregate composition signatures + tech timings AND a
- * "Strategies that play out here" section with per-strategy storyline
- * cards (Opening / Mid / Late columns built from the same
- * computeCompositions pipeline as the aggregate, filtered to each
- * strategy's games — no mock data).
+ * Replaced the legacy median-based phase widget. Now renders one card
+ * per real replay: the streamer tabs through individual games and
+ * sees the opponent's actual build order, real composition snapshots
+ * at each phase the game reached, real phase transitions, and the
+ * phase the game ended in + why. The user's own build order +
+ * composition render alongside so the card reads as a complete "what
+ * I did and what they did against it" timeline.
  *
- * The transition Sankey/flow that used to sit beside this is retired
- * from the opponent profile — its information is now embedded directly
- * in the phase tab panels, scoped to whichever phase the user picks.
+ * The "WHERE GAMES END" outcome distribution sits at the top as a
+ * compact one-line summary — same information the legacy widget
+ * surfaced but without the median-phase-timing line the streamer
+ * called out as low-signal. ``MedianTimingsGrid`` already gives the
+ * tech timings the user needs.
  *
- * Rendered nothing when phases is absent or empty.
+ * Renders nothing when the API hasn't returned any scouting envelopes
+ * — keeps profiles for never-met / first-meeting opponents from
+ * showing an empty section.
  */
-function OpponentPhaseSection({
-  phases,
+function OpponentGamesSection({
+  envelopes,
+  finalPhaseDistribution,
+  sampleSize,
 }: {
-  phases?: BuildPhasePayload;
+  envelopes?: PerGameScoutingEnvelope[];
+  finalPhaseDistribution?: BuildPhasePayload["finalPhaseDistribution"];
+  sampleSize?: BuildPhasePayload["sampleSize"];
 }) {
-  if (!phases) return null;
-  const totalSamples =
-    (phases.sampleSize?.early ?? 0) +
-    (phases.sampleSize?.earlyMid ?? 0) +
-    (phases.sampleSize?.mid ?? 0) +
-    (phases.sampleSize?.midLate ?? 0) +
-    (phases.sampleSize?.late ?? 0);
-  if (totalSamples === 0) return null;
+  const list = envelopes ?? [];
+  if (list.length === 0) return null;
   return (
     <Card title="How games against this opponent play out">
-      <div className="space-y-5">
-        <PhaseTrajectoryStrip
-          sampleSize={phases.sampleSize}
-          crossings={phases.medianCrossings}
-          finalPhaseDistribution={phases.finalPhaseDistribution}
-          durationP95Sec={phases.durationP95Sec}
-        />
-        <PhaseCompositionTabs
-          sampleSize={phases.sampleSize}
-          perPhase={phases.perPhase}
-          byStrategy={phases.byStrategy}
-        />
-      </div>
+      <OpponentGamesTimeline
+        envelopes={list}
+        finalPhaseDistribution={finalPhaseDistribution}
+        sampleSize={sampleSize}
+      />
     </Card>
   );
 }
