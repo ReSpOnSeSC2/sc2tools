@@ -66,6 +66,15 @@ function coerceVsRace(input: unknown): VsRace {
   }
 }
 
+/**
+ * Reason the agent gave for the events array being empty. ``"ok"`` =
+ * events present. ``"empty"`` = agent uploaded a build log but it
+ * parsed to zero events (almost always a malformed or pre-game-only
+ * replay). ``"not_extracted"`` = agent never uploaded a build log for
+ * this side (older agent, no Resync, or Blizzard cup format).
+ */
+export type BuildOrderStatus = "ok" | "empty" | "not_extracted";
+
 export interface BuildOrderDualTimelineProps {
   events: BuildOrderEvent[];
   oppEvents?: BuildOrderEvent[];
@@ -74,6 +83,10 @@ export interface BuildOrderDualTimelineProps {
   oppRace: Race | string | null | undefined;
   myBuildName?: string | null;
   oppBuildName?: string | null;
+  /** Server diagnostic for the "your build" column. */
+  myStatus?: BuildOrderStatus;
+  /** Server diagnostic for the "opponent's build" column. */
+  oppStatus?: BuildOrderStatus;
   onSaved?: (slug: string) => void;
   className?: string;
 }
@@ -95,6 +108,8 @@ export function BuildOrderDualTimeline({
   oppRace,
   myBuildName,
   oppBuildName,
+  myStatus,
+  oppStatus,
   onSaved,
   className = "",
 }: BuildOrderDualTimelineProps) {
@@ -106,6 +121,9 @@ export function BuildOrderDualTimeline({
     () => normalizeBuildEvents(oppEvents ?? []),
     [oppEvents],
   );
+
+  const youEmpty = emptyCopyFor("you", myStatus, events.length);
+  const oppEmpty = emptyCopyFor("opponent", oppStatus, (oppEvents ?? []).length);
 
   return (
     <div
@@ -125,8 +143,8 @@ export function BuildOrderDualTimeline({
         vsRace={coerceVsRace(oppRaceValue)}
         gameId={gameId}
         onSaved={onSaved}
-        emptyHeadline="No build extracted yet"
-        emptyBody="Your build steps come from the .SC2Replay parsed by the agent. Once a game uploads they appear here."
+        emptyHeadline={youEmpty.headline}
+        emptyBody={youEmpty.body}
       />
       <BuildPanel
         perspective="opponent"
@@ -137,11 +155,47 @@ export function BuildOrderDualTimeline({
         vsRace={coerceVsRace(myRace)}
         gameId={gameId}
         onSaved={onSaved}
-        emptyHeadline="No opponent build extracted yet"
-        emptyBody="Update your desktop agent to v0.4+ and click Resync — newer builds extract the opponent's tech timeline alongside your own."
+        emptyHeadline={oppEmpty.headline}
+        emptyBody={oppEmpty.body}
       />
     </div>
   );
+}
+
+/**
+ * Map the server's diagnostic status into a user-facing reason. When
+ * the API didn't send a status field we infer one from the event
+ * count so the UI works against older API responses too.
+ */
+function emptyCopyFor(
+  side: BuildPerspective,
+  status: BuildOrderStatus | undefined,
+  eventCount: number,
+): { headline: string; body: string } {
+  const resolved: BuildOrderStatus =
+    status ?? (eventCount > 0 ? "ok" : "not_extracted");
+  if (side === "you") {
+    if (resolved === "empty") {
+      return {
+        headline: "This replay had no build events",
+        body: "The agent uploaded a build log for this game, but it parsed to zero steps — usually a pre-game-only or otherwise incomplete .SC2Replay. Re-uploading the file via the agent's Resync button is the fastest fix.",
+      };
+    }
+    return {
+      headline: "No build extracted yet",
+      body: "Your build steps come from the .SC2Replay parsed by the agent. Open the desktop agent and click Resync if this game is older than your current agent version.",
+    };
+  }
+  if (resolved === "empty") {
+    return {
+      headline: "Opponent's build log parsed to zero steps",
+      body: "The agent extracted an opponent build log for this game, but it had no valid events. Often happens with very short games or pre-release ladder builds.",
+    };
+  }
+  return {
+    headline: "No opponent build extracted yet",
+    body: "Update your desktop agent to v0.4+ and click Resync — newer agents extract the opponent's tech timeline alongside your own.",
+  };
 }
 
 function BuildPanel({

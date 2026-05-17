@@ -46,14 +46,13 @@ const FOCUSABLE_SELECTOR = [
 ].join(",");
 
 /**
- * MacroBreakdownPanel — slide-in sheet that drills into a single game's
- * macro score. Fetches the breakdown lazily (only while open), exposes
- * a Recompute action that requests an agent re-parse, and threads
- * highlight state from the leaks list into the chart marker layer.
+ * MacroBreakdownPanel — drilldown surface for a single game's macro
+ * score. On mobile it renders as a full-bleed page that takes over the
+ * viewport (matching the look of the Strategies dossier); on ≥640px
+ * it becomes a centered modal with margin + rounded corners.
  *
- * Sheet behavior: bottom-anchored full-screen ≤640px, right-anchored
- * (max-w-3xl) ≥640px. Esc closes; focus traps inside; body scrolls
- * locked while open; previous focus is restored on close.
+ * Esc closes; focus traps inside; body scrolls locked while open;
+ * previous focus is restored on close.
  */
 export function MacroBreakdownPanel({
   open,
@@ -141,23 +140,22 @@ export function MacroBreakdownPanel({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-stretch justify-stretch overflow-hidden"
+      className="fixed inset-0 z-50 overflow-y-auto bg-bg sm:bg-black/70 sm:backdrop-blur-sm sm:p-4 md:p-6"
       role="presentation"
+      data-testid="macro-breakdown-portal"
+      onClick={(e) => {
+        // Backdrop click closes only on >=sm — on mobile the surface is
+        // edge-to-edge with no backdrop to click.
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      <button
-        type="button"
-        aria-label="Close macro breakdown"
-        tabIndex={-1}
-        onClick={onClose}
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-      />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative flex h-full w-full max-h-[100dvh] flex-col bg-bg-surface text-text shadow-[var(--shadow-card)] sm:m-4 sm:rounded-xl sm:border sm:border-border sm:max-h-[calc(100dvh-2rem)] md:m-6 md:max-h-[calc(100dvh-3rem)]"
+        className="relative mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col bg-bg-surface text-text sm:min-h-0 sm:rounded-xl sm:border sm:border-border sm:shadow-[var(--shadow-card)]"
       >
         <PanelHeader
           titleId={titleId}
@@ -165,28 +163,26 @@ export function MacroBreakdownPanel({
           meta={headerMeta}
           onClose={onClose}
         />
-        <div className="flex-1 overflow-y-auto px-4 py-5 pb-[env(safe-area-inset-bottom,0px)] sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-6xl">
-            {isLoading ? (
-              <LoadingState />
-            ) : error ? (
-              <ErrorState
-                status={error.status}
-                message={error.message}
-                recomputing={recomputing}
-                onRecompute={recompute}
-              />
-            ) : !data ? null : (
-              <BreakdownBody
-                data={data}
-                gameId={gameId}
-                initialScore={initialScore}
-                highlightedKey={highlightedKey}
-                onHighlight={setHighlightedKey}
-                headerMeta={headerMeta}
-              />
-            )}
-          </div>
+        <div className="flex-1 px-4 py-5 pb-24 sm:px-6 sm:pb-5 lg:px-8">
+          {isLoading ? (
+            <LoadingState />
+          ) : error ? (
+            <ErrorState
+              status={error.status}
+              message={error.message}
+              recomputing={recomputing}
+              onRecompute={recompute}
+            />
+          ) : !data ? null : (
+            <BreakdownBody
+              data={data}
+              gameId={gameId}
+              initialScore={initialScore}
+              highlightedKey={highlightedKey}
+              onHighlight={setHighlightedKey}
+              headerMeta={headerMeta}
+            />
+          )}
         </div>
         <PanelFooter
           recomputing={recomputing}
@@ -221,7 +217,7 @@ function PanelHeader({
   const oppRaceLetter = (meta?.opponentRace || "").charAt(0).toUpperCase();
   const dateLine = formatHeaderDate(meta?.dateIso);
   return (
-    <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-bg-elevated/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-bg-elevated/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85 sm:rounded-t-xl sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-6xl items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="text-caption font-semibold uppercase tracking-wider text-accent-cyan">
@@ -301,7 +297,15 @@ function PanelFooter({
   onClose: () => void;
 }) {
   return (
-    <footer className="sticky bottom-0 z-10 border-t border-border bg-bg-elevated/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85 sm:px-6 lg:px-8">
+    <footer
+      className={[
+        // Mobile: fixed to viewport bottom so the action row is always
+        // reachable while the body scrolls. Desktop: in-flow at panel
+        // bottom inside the centered modal.
+        "fixed inset-x-0 bottom-0 z-20 border-t border-border bg-bg-elevated/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85",
+        "sm:relative sm:inset-auto sm:rounded-b-xl sm:pb-3 sm:px-6 lg:px-8",
+      ].join(" ")}
+    >
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-end gap-2">
         {recomputeMsg ? (
           <span

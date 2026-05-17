@@ -15,7 +15,25 @@ export type Phase = "early" | "earlyMid" | "mid" | "midLate" | "late";
 
 export type PhaseSignature = {
   key: string;
-  units: Array<{ token: string; count: number }>;
+  /**
+   * Headline composition shown by default — the top 3 tokens that
+   * defined this cluster. Each ``count`` is the MEDIAN across the
+   * games in the bucket (not a single sample), and ``sampleCount``
+   * mirrors the bucket's game count so the UI can show "12/15 games"
+   * confidence inline if it wants.
+   */
+  units: Array<{ token: string; count: number; sampleCount?: number }>;
+  /**
+   * Every non-worker unit observed in games matching this bucket
+   * (capped server-side). Powers the "show all units" expansion so
+   * roach + ravager mixes aren't truncated out of view. Each
+   * ``count`` is again the median across games in the bucket.
+   */
+  fullComposition?: Array<{
+    token: string;
+    count: number;
+    sampleCount?: number;
+  }>;
   sampleCount: number;
   wins: number;
   losses: number;
@@ -277,11 +295,20 @@ function CompositionCard({
   signature: PhaseSignature;
   onClick: PhaseCompositionTabsProps["onSignatureClick"];
 }) {
+  const [expanded, setExpanded] = useState(false);
   const total = signature.wins + signature.losses;
   const wrText =
     total > 0 ? `${signature.wins}–${signature.losses}` : "—";
   const wr = signature.winRate;
   const interactive = !!onClick && signature.sampleGameIds.length > 0;
+
+  const head = signature.units;
+  const all = signature.fullComposition ?? signature.units;
+  // Extras = full minus tokens already shown in the headline so the
+  // expansion doesn't repeat the leading icons.
+  const headTokens = new Set(head.map((u) => u.token));
+  const extras = all.filter((u) => !headTokens.has(u.token));
+  const hasMore = extras.length > 0;
 
   const activate = () => {
     if (!interactive) return;
@@ -304,16 +331,13 @@ function CompositionCard({
       onKeyDown={interactive ? handleKey : undefined}
       aria-label={
         interactive
-          ? `Open ${signature.units.map((u) => `${u.count} ${u.token}`).join(", ") || "this composition"}`
+          ? `Open ${head.map((u) => `${u.count} ${u.token}`).join(", ") || "this composition"}`
           : undefined
       }
       data-testid="composition-card"
       data-signature-key={signature.key}
       className={[
-        // `min-h-[44px]` matches the iOS minimum touch target; `min-w-[260px]`
-        // means absurdly narrow viewports scroll the grid horizontally
-        // rather than squishing the unit icons below their legible size.
-        "flex min-h-[44px] min-w-[260px] flex-col gap-3 rounded-lg border border-border bg-bg-surface p-3",
+        "flex min-h-[44px] flex-col gap-3 rounded-lg border border-border bg-bg-surface p-3",
         interactive
           ? "cursor-pointer transition-colors hover:bg-bg-elevated hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg motion-safe:hover:-translate-y-px"
           : "",
@@ -321,14 +345,16 @@ function CompositionCard({
         .filter(Boolean)
         .join(" ")}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          {signature.units.length === 0 ? (
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {head.length === 0 ? (
             <span className="text-caption font-medium text-text-muted">
-              {signature.key || "Other"}
+              {signature.key === "Other"
+                ? "Mixed / rare compositions"
+                : signature.key || "Other"}
             </span>
           ) : (
-            signature.units.map((u) => (
+            head.map((u) => (
               <UnitBadge key={u.token} token={u.token} count={u.count} />
             ))
           )}
@@ -347,28 +373,86 @@ function CompositionCard({
         </span>
       </div>
 
-      {signature.units.length > 0 ? (
-        <div className="text-[11px] text-text-dim">
-          {signature.sampleCount} game{signature.sampleCount === 1 ? "" : "s"}
-        </div>
-      ) : (
-        <div className="text-[11px] text-text-dim">
-          {signature.sampleCount} game{signature.sampleCount === 1 ? "" : "s"}{" "}
-          across rare comps
-        </div>
-      )}
+      <div className="flex items-center justify-between gap-2 text-[11px] text-text-dim">
+        <span>
+          {head.length > 0
+            ? `Median across ${signature.sampleCount} game${signature.sampleCount === 1 ? "" : "s"}`
+            : `${signature.sampleCount} game${signature.sampleCount === 1 ? "" : "s"} across rare comps`}
+        </span>
+        {hasMore ? (
+          <button
+            type="button"
+            data-testid="composition-toggle-extras"
+            aria-expanded={expanded}
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded((v) => !v);
+            }}
+            className="rounded-md border border-border bg-bg px-2 py-0.5 text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface"
+          >
+            {expanded
+              ? "Hide details"
+              : `+${extras.length} more unit${extras.length === 1 ? "" : "s"}`}
+          </button>
+        ) : null}
+      </div>
+
+      {expanded && hasMore ? (
+        <ExtrasGrid units={extras} totalGames={signature.sampleCount} />
+      ) : null}
     </li>
+  );
+}
+
+function ExtrasGrid({
+  units,
+  totalGames,
+}: {
+  units: Array<{ token: string; count: number; sampleCount?: number }>;
+  totalGames: number;
+}) {
+  return (
+    <ul
+      className="grid grid-cols-2 gap-2 border-t border-border pt-2 sm:grid-cols-3"
+      data-testid="composition-extras"
+    >
+      {units.map((u) => {
+        const seen = u.sampleCount ?? 0;
+        const coverage =
+          totalGames > 0 ? Math.round((100 * seen) / totalGames) : 0;
+        return (
+          <li
+            key={u.token}
+            className="flex items-center gap-2 rounded-md border border-border bg-bg px-2 py-1.5"
+          >
+            <Icon name={u.token} kind="unit" size={24} alt={u.token} />
+            <div className="flex min-w-0 flex-col leading-tight">
+              <span className="truncate text-[11px] text-text" title={u.token}>
+                {u.token}
+              </span>
+              <span className="text-[10px] tabular-nums text-text-dim">
+                ~{u.count}
+                {seen > 0
+                  ? totalGames > 0
+                    ? ` · ${coverage}%`
+                    : ` · ${seen}g`
+                  : ""}
+              </span>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
 function UnitBadge({ token, count }: { token: string; count: number }) {
   return (
     <span
-      // Icon is 32px on mobile and 36px on desktop per the responsive
-      // contract; the badge container hugs the icon at each size.
       className="relative inline-flex h-9 w-9 items-center justify-center rounded bg-bg-elevated md:h-10 md:w-10"
       data-testid="unit-badge"
       data-token={token}
+      title={`${token} · ~${count} per game (median)`}
     >
       <Icon
         name={token}
