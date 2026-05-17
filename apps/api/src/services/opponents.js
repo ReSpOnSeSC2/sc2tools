@@ -8,6 +8,8 @@ const { opponentGamesFilter } = require("../util/opponentIdentity");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 const TimingCatalog = require("./timingCatalog");
 const Dna = require("./dnaTimings");
+const { computeCompositions } = require("./buildCompositions");
+const { computeTransitions } = require("./buildTransitions");
 
 // SC2Pulse MMR refetch window. recordGame / refreshMetadata skip the
 // network call entirely when we resolved this opponent's MMR within
@@ -63,6 +65,16 @@ const PROFILE_GAME_PROJECTION = {
   // docs still derive correctly from the full log when a service
   // actually needs the early window (see ``readEarlyBuildLog`` in
   // perGameCompute).
+  //
+  // macroBreakdown projected for legacy (pre-v0.4.3) docs that still
+  // carry it inline — the phase classifier in computeCompositions /
+  // computeTransitions reads it to compute the trajectory + Sankey on
+  // the profile. Post-cutover docs return ``undefined`` for this
+  // field and the gameDetails hydration block below fills it from
+  // the detail store. Stripped from the response by
+  // ``serializeGameForProfile`` so the heavy blob never reaches the
+  // client.
+  macroBreakdown: 1,
   opponent: 1,
 };
 
@@ -707,15 +719,19 @@ class OpponentsService {
       .sort({ date: -1 })
       .toArray();
     // dnaTimings reads ``buildLog`` / ``oppBuildLog`` off each game
-    // object to compute first-occurrence-of-token timings. After the
-    // v0.4.3 cutover those arrays move to the detail store; bulk-fetch
-    // them here so ``serializeGameForProfile`` sees a hydrated game.
-    // The fetch is one batched query regardless of how many games the
-    // opponent profile spans, so the per-profile cost is constant.
+    // object to compute first-occurrence-of-token timings, and the
+    // phase classifier (powering the trajectory strip + transition
+    // Sankey on the profile) reads ``macroBreakdown``. All three
+    // fields live on the detail store after the v0.4.3 cutover —
+    // bulk-fetch them in one batched query so the per-profile cost
+    // is constant regardless of game count.
     if (this.gameDetails && rawGames.length > 0) {
       const needIds = [];
       for (const g of rawGames) {
-        if (!Array.isArray(g.buildLog) || !Array.isArray(g.oppBuildLog)) {
+        const missingLogs =
+          !Array.isArray(g.buildLog) || !Array.isArray(g.oppBuildLog);
+        const missingMacro = !g.macroBreakdown;
+        if (missingLogs || missingMacro) {
           if (g.gameId) needIds.push(String(g.gameId));
         }
       }
@@ -729,6 +745,9 @@ class OpponentsService {
           }
           if (!Array.isArray(g.oppBuildLog) && Array.isArray(blob.oppBuildLog)) {
             g.oppBuildLog = blob.oppBuildLog;
+          }
+          if (!g.macroBreakdown && blob.macroBreakdown) {
+            g.macroBreakdown = blob.macroBreakdown;
           }
         }
       }
@@ -769,6 +788,44 @@ class OpponentsService {
     const aggregates = aggregateByMapAndStrategy(filteredGames);
     const totals = computeTotals(filteredGames, doc);
     const dna = computeDnaFields(filteredGames);
+    // Phase trajectory + transition Sankey for "How games against this
+    // opponent play out". Pure compute over the same date-filtered
+    // games that drive the by-map / by-strategy / median-timings
+    // panels — keeps the section consistent with the rest of the
+    // profile when the user narrows the date range. Caller's perspective
+    // (myRace + macroBreakdown) drives the classifier; the col-0 node
+    // labels the opponent so the Sankey reads
+    //   "vs <name> → <race> → <strategy> → <finalPhase>".
+    const opponentLabel = authoritativeName
+      ? `vs ${authoritativeName}`
+      : "vs opponent";
+    // ``filterGamesByDate`` reads ``g.date`` via ``new Date(...)``,
+    // which works for both Date instances (rawGames) and the ISO
+    // strings ``serializeGameForProfile`` emits (allGames). Same
+    // window the by-map / by-strategy aggregates use.
+    const rawFilteredGames = filterGamesByDate(
+      rawGames, opts.since, opts.until,
+    );
+    const phasesCompute = computeCompositions(rawFilteredGames);
+    const transitionsCompute = computeTransitions(rawFilteredGames, {
+      mode: "opponent",
+      label: opponentLabel,
+    });
+    const phases = {
+      slug: pulseId,
+      name: opponentLabel,
+      sampleSize: phasesCompute.sampleSize,
+      perPhase: phasesCompute.perPhase,
+      finalPhaseDistribution: phasesCompute.finalPhaseDistribution,
+      medianCrossings: phasesCompute.medianCrossings,
+      durationP95Sec: phasesCompute.durationP95Sec,
+      flags: phasesCompute.flags,
+    };
+    const transitions = {
+      slug: pulseId,
+      name: opponentLabel,
+      transitions: transitionsCompute,
+    };
     // Predictions and the most-recent-5 list always reflect the full
     // history — see method jsdoc.
     const predictedStrategies = Dna.recencyWeightedStrategies(allGames);
@@ -822,6 +879,8 @@ class OpponentsService {
       medianTimings: projectMedianTimings(dna.medianTimings),
       medianTimingsLegacy: dna.medianTimings,
       medianTimingsOrder: dna.medianTimingsOrder,
+      phases,
+      transitions,
       last5Games,
       games: filteredGames,
     };
@@ -1462,8 +1521,13 @@ function hasFilters(f) {
 function serializeGameForProfile(g) {
   if (!g) return g;
   const opp = g.opponent || {};
+  // ``macroBreakdown`` is hydrated onto rawGames so the phase
+  // classifier can read it server-side, but the profile JSON envelope
+  // emits only the compact phase aggregates — drop the raw blob here
+  // so it doesn't bloat the response.
+  const { macroBreakdown: _macroDrop, ...rest } = g;
   return {
-    ...g,
+    ...rest,
     id: g.gameId || null,
     date: g.date instanceof Date ? g.date.toISOString() : g.date,
     map: g.map || "",
