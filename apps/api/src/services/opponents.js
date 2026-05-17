@@ -811,6 +811,16 @@ class OpponentsService {
       mode: "opponent",
       label: opponentLabel,
     });
+    // Per-strategy phase envelopes power the "Strategies that play out
+    // at <phase>" storyline cards under each phase tab. Pure compute:
+    // group the same date-filtered games by ``opponent.strategy`` and
+    // call ``computeCompositions`` per group. Cap at the top 6 by game
+    // count so the payload stays bounded; everything beyond is folded
+    // into the aggregate above.
+    const byStrategy = computeByStrategyPhases(rawFilteredGames, {
+      perspective: "opponent",
+      maxStrategies: 6,
+    });
     const phases = {
       slug: pulseId,
       name: opponentLabel,
@@ -820,6 +830,7 @@ class OpponentsService {
       medianCrossings: phasesCompute.medianCrossings,
       durationP95Sec: phasesCompute.durationP95Sec,
       flags: phasesCompute.flags,
+      byStrategy,
     };
     const transitions = {
       slug: pulseId,
@@ -1742,6 +1753,85 @@ function projectMatchupTimings(legacy) {
     out[ml] = projectMedianTimings(legacy[ml] && legacy[ml].timings);
   }
   return out;
+}
+
+/**
+ * Group games by opponent strategy and compute a full phase composition
+ * envelope per strategy. Powers the per-strategy "Opening / Mid / Late"
+ * detail rows under each phase tab on the opponent profile.
+ *
+ * Output is sorted by total games desc and capped at ``maxStrategies``
+ * to bound payload size; smaller strategy buckets fall through to the
+ * aggregate ``perPhase`` above.
+ *
+ * @param {Array<any>} games
+ * @param {{ perspective?: "you"|"opponent", maxStrategies?: number }} [opts]
+ * @returns {Array<{
+ *   strategy: string,
+ *   race: string|null,
+ *   games: number,
+ *   wins: number,
+ *   losses: number,
+ *   winRate: number,
+ *   phases: ReturnType<typeof computeCompositions>,
+ * }>}
+ */
+function computeByStrategyPhases(games, opts = {}) {
+  const list = Array.isArray(games) ? games : [];
+  const perspective = opts.perspective === "opponent" ? "opponent" : "you";
+  const cap = Math.max(1, Math.floor(opts.maxStrategies || 6));
+
+  /** @type {Map<string, { strategy: string, race: string|null, games: any[], wins: number, losses: number }>} */
+  const groups = new Map();
+
+  for (const g of list) {
+    if (!g) continue;
+    const raw =
+      (g.opponent && g.opponent.strategy) || g.opp_strategy || "";
+    const strategy = raw ? String(raw).trim() : "Unknown";
+    if (!strategy) continue;
+    const race =
+      perspective === "opponent"
+        ? (g.oppRace || (g.opponent && g.opponent.race) || null)
+        : (g.myRace || null);
+    let bucket = groups.get(strategy);
+    if (!bucket) {
+      bucket = {
+        strategy,
+        race: race ? String(race) : null,
+        games: [],
+        wins: 0,
+        losses: 0,
+      };
+      groups.set(strategy, bucket);
+    }
+    bucket.games.push(g);
+    // Win/loss attribution from the user's perspective. Mirrors the
+    // ``aggregateByMapAndStrategy`` helper above so the cards agree
+    // with the by-strategy panel.
+    const result = (g.result || "").toString().toLowerCase();
+    if (result === "win" || result === "victory") bucket.wins += 1;
+    else if (result === "loss" || result === "defeat") bucket.losses += 1;
+  }
+
+  const buckets = Array.from(groups.values())
+    .sort((a, b) => b.games.length - a.games.length)
+    .slice(0, cap);
+
+  return buckets.map((b) => {
+    const wins = b.wins;
+    const losses = b.losses;
+    const denom = wins + losses;
+    return {
+      strategy: b.strategy,
+      race: b.race,
+      games: b.games.length,
+      wins,
+      losses,
+      winRate: denom > 0 ? wins / denom : 0,
+      phases: computeCompositions(b.games, { perspective }),
+    };
+  });
 }
 
 module.exports = { OpponentsService };

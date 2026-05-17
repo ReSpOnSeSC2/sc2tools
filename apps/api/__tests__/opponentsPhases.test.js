@@ -372,6 +372,44 @@ describe("OpponentsService phase + transition envelope", () => {
     }
   });
 
+  test("phases.byStrategy groups games by opponent strategy with full per-phase envelopes", async () => {
+    await seedFixture();
+    const out = await opponents.get(userId, pulseId);
+    expect(Array.isArray(out.phases.byStrategy)).toBe(true);
+    // The fixture has 4 games of "Zerg - Hydra Comp" + 1 of
+    // "Zerg - Roach All-In" — both kept because the cap is 6.
+    const strategies = out.phases.byStrategy.map((s) => s.strategy);
+    expect(strategies).toEqual(
+      expect.arrayContaining(["Zerg - Hydra Comp", "Zerg - Roach All-In"]),
+    );
+    // The buckets sort by games desc; Hydra Comp (4 games) leads.
+    expect(out.phases.byStrategy[0].strategy).toBe("Zerg - Hydra Comp");
+    expect(out.phases.byStrategy[0].games).toBe(4);
+    expect(out.phases.byStrategy[1].strategy).toBe("Zerg - Roach All-In");
+    expect(out.phases.byStrategy[1].games).toBe(1);
+
+    // Each bucket carries the full ``computeCompositions`` envelope —
+    // same shape consumers already key on for the aggregate, just
+    // filtered to this strategy's games.
+    const hydra = out.phases.byStrategy[0];
+    expect(hydra.phases).toBeDefined();
+    expect(hydra.phases.sampleSize).toEqual(
+      expect.objectContaining({
+        early: expect.any(Number),
+        earlyMid: expect.any(Number),
+        mid: expect.any(Number),
+        midLate: expect.any(Number),
+        late: expect.any(Number),
+      }),
+    );
+    expect(hydra.phases.perPhase).toBeDefined();
+    expect(hydra.phases.medianCrossings).toBeDefined();
+    // The race the strategy was played as — sourced from
+    // ``opponent.race`` / ``oppRace`` on the games. Used by the
+    // SPA's storyline cards to colour the race rail / badge.
+    expect(typeof hydra.race === "string" || hydra.race === null).toBe(true);
+  });
+
   test("empty-games opponent still returns a well-formed envelope", async () => {
     // Defensive: an opponents row that pre-dates the games (admin
     // "Rebuild" mid-cycle) or one whose games were pruned must not
