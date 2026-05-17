@@ -4,6 +4,12 @@ import { useId, useMemo, useState } from "react";
 import { ResponsiveSankey } from "@nivo/sankey";
 import { EmptyState } from "@/components/ui/Card";
 import { wrColor } from "@/lib/format";
+import {
+  useChartTheme,
+  useMediaQuery,
+  useReducedMotion,
+  type ChartThemeTokens,
+} from "@/lib/useChartTheme";
 
 /**
  * BuildTransitionSankey — Sankey routing of a build's games through
@@ -95,31 +101,44 @@ const RARE_NODES_LIMIT = 5;
 const LOW_CONFIDENCE_GAMES = 5;
 const LOW_CONFIDENCE_ALPHA = 0.4;
 
-const KIND_COLORS: Record<TransitionNodeKind, string> = {
-  build: "#7c8cff", // --accent
-  oppStrategy: "#9aa3b2", // --text-muted
-  finalPhase: "#3ec0c7", // --accent-cyan
-  lateComp: "#e6b450", // --warning
-  // Distinct hue for the opponent-mode race column so it doesn't read
-  // as the same kind as the col-2 strategy in the same Sankey.
-  oppRace: "#c084fc", // --accent-purple-ish
-};
+// Viewport below which the Sankey rotates to a vertical (top-down)
+// layout. Matches Tailwind's `md` breakpoint (768px) so the JS swap
+// mirrors the CSS responsive contract in the rest of the app.
+const VERTICAL_SANKEY_QUERY = "(max-width: 767px)";
+// Extreme narrow viewports — the Sankey is unreadable below this, so
+// we fall back to the visible <table> view that the screen-reader
+// transcript already builds.
+const TABLE_FALLBACK_QUERY = "(max-width: 379px)";
 
-const SANKEY_THEME = {
-  background: "transparent",
-  text: { fill: "#9aa3b2", fontSize: 11, fontWeight: 500 },
-  tooltip: {
-    container: {
-      background: "#11141b",
-      color: "#e6e8ee",
-      border: "1px solid #1f2533",
-      borderRadius: 8,
-      padding: "8px 10px",
-      fontSize: 12,
-      boxShadow: "0 8px 24px rgba(0, 0, 0, 0.32)",
+function kindColors(t: ChartThemeTokens): Record<TransitionNodeKind, string> {
+  return {
+    build: t.accent,
+    oppStrategy: t.textMuted,
+    finalPhase: t.accentCyan,
+    lateComp: t.warning,
+    // Race column in opponent-profile mode — danger hue distinguishes
+    // it from the strategy column without colliding with build/accent.
+    oppRace: t.danger,
+  };
+}
+
+function sankeyTheme(t: ChartThemeTokens) {
+  return {
+    background: "transparent",
+    text: { fill: t.textMuted, fontSize: 11, fontWeight: 500 },
+    tooltip: {
+      container: {
+        background: t.bgSurface,
+        color: t.text,
+        border: `1px solid ${t.border}`,
+        borderRadius: 8,
+        padding: "8px 10px",
+        fontSize: 12,
+        boxShadow: "var(--shadow-card)",
+      },
     },
-  },
-} as const;
+  } as const;
+}
 
 export function BuildTransitionSankey({
   transitions,
@@ -127,6 +146,12 @@ export function BuildTransitionSankey({
   onEdgeClick,
 }: BuildTransitionSankeyProps) {
   const captionId = useId();
+  const tokens = useChartTheme();
+  const reducedMotion = useReducedMotion();
+  const isVertical = useMediaQuery(VERTICAL_SANKEY_QUERY);
+  const tooNarrowForSankey = useMediaQuery(TABLE_FALLBACK_QUERY);
+  const KIND_COLORS = useMemo(() => kindColors(tokens), [tokens]);
+  const SANKEY_THEME = useMemo(() => sankeyTheme(tokens), [tokens]);
   const t = transitions.transitions;
   const rawNodes = t.nodes;
   const rawEdges = t.edges;
@@ -198,96 +223,129 @@ export function BuildTransitionSankey({
         />
       ) : null}
 
-      <figure
-        role="img"
-        aria-label={ariaLabel}
-        aria-describedby={captionId}
-        className="rounded-lg border border-border bg-bg-surface"
-        data-testid="build-transition-sankey-figure"
-      >
-        <figcaption id={captionId} className="sr-only">
-          {ariaLabel}
-        </figcaption>
-        <div style={{ height: 360 }} className="w-full">
-          {sankeyData.links.length === 0 ? (
-            <div
-              className="flex h-full items-center justify-center px-4 text-caption text-text-muted"
-              data-testid="build-transition-sankey-no-edges"
-            >
-              No transitions in this matchup yet.
-            </div>
-          ) : (
-            <ResponsiveSankey
-              data={sankeyData}
-              margin={{ top: 12, right: 110, bottom: 12, left: 56 }}
-              align="justify"
-              sort="auto"
-              colors={(d: { kind?: TransitionNodeKind }) =>
-                d.kind ? KIND_COLORS[d.kind] : KIND_COLORS.build
-              }
-              nodeOpacity={0.95}
-              nodeThickness={14}
-              nodeSpacing={12}
-              nodeBorderWidth={0}
-              nodeBorderRadius={2}
-              linkOpacity={1}
-              linkContract={2}
-              linkBlendMode="normal"
-              enableLinkGradient={false}
-              labelPosition="outside"
-              labelOrientation="horizontal"
-              labelPadding={6}
-              label={(n: { nodeLabel?: string; id: string }) =>
-                truncateLabel(n.nodeLabel ?? n.id, 22)
-              }
-              labelTextColor={{ from: "color", modifiers: [["brighter", 0.8]] }}
-              theme={SANKEY_THEME}
-              isInteractive
-              onClick={(data) => {
-                const link = data as unknown as {
-                  source?: { id?: string };
-                  target?: { id?: string };
-                  games?: number;
-                  value?: number;
-                };
-                if (!link || !link.source || !link.target) return;
-                fireEdgeClick({
-                  from: String(link.source.id ?? ""),
-                  to: String(link.target.id ?? ""),
-                  games: link.games ?? link.value ?? 0,
-                  wins: 0,
-                  losses: 0,
-                  winRate: 0,
-                });
-              }}
-              linkTooltip={({ link }: { link: SankeyLinkLike }) => (
-                <EdgeTooltip
-                  from={String(link.source?.id ?? "")}
-                  to={String(link.target?.id ?? "")}
-                  games={link.games ?? link.value ?? 0}
-                  wins={link.wins ?? 0}
-                  losses={link.losses ?? 0}
-                  winRate={link.winRate ?? 0}
-                />
-              )}
-              nodeTooltip={({ node }: { node: SankeyNodeLike }) => (
-                <NodeTooltip
-                  label={node.nodeLabel ?? node.id}
-                  games={node.games ?? node.value ?? 0}
-                  wins={node.wins ?? 0}
-                  losses={node.losses ?? 0}
-                />
-              )}
-            />
-          )}
-        </div>
-      </figure>
+      {tooNarrowForSankey ? (
+        <VisibleEdgesTable
+          buildName={transitions.name}
+          edges={displayEdges}
+          ariaLabel={ariaLabel}
+          captionId={captionId}
+          onEdgeClick={onEdgeClick ? fireEdgeClick : undefined}
+        />
+      ) : (
+        <figure
+          role="img"
+          aria-label={ariaLabel}
+          aria-describedby={captionId}
+          className="rounded-lg border border-border bg-bg-surface"
+          data-testid="build-transition-sankey-figure"
+          data-orientation={isVertical ? "vertical" : "horizontal"}
+        >
+          <figcaption id={captionId} className="sr-only">
+            {ariaLabel}
+          </figcaption>
+          <div
+            className="w-full"
+            style={{
+              // Vertical orientation reads top-down on a portrait
+              // phone — give it room to breathe. Desktop layout keeps
+              // the historical 360px height.
+              height: isVertical ? 480 : 360,
+              minHeight: isVertical ? 320 : undefined,
+              maxHeight: isVertical ? 560 : undefined,
+            }}
+          >
+            {sankeyData.links.length === 0 ? (
+              <div
+                className="flex h-full items-center justify-center px-4 text-caption text-text-muted"
+                data-testid="build-transition-sankey-no-edges"
+              >
+                No transitions in this matchup yet.
+              </div>
+            ) : (
+              <ResponsiveSankey
+                data={sankeyData}
+                margin={
+                  isVertical
+                    ? { top: 24, right: 24, bottom: 24, left: 24 }
+                    : { top: 12, right: 110, bottom: 12, left: 56 }
+                }
+                layout={isVertical ? "vertical" : "horizontal"}
+                align="justify"
+                sort="auto"
+                colors={(d: { kind?: TransitionNodeKind }) =>
+                  d.kind ? KIND_COLORS[d.kind] : KIND_COLORS.build
+                }
+                nodeOpacity={0.95}
+                nodeThickness={14}
+                nodeSpacing={12}
+                nodeBorderWidth={0}
+                nodeBorderColor={tokens.borderStrong}
+                nodeBorderRadius={2}
+                linkOpacity={1}
+                linkContract={2}
+                linkBlendMode="normal"
+                enableLinkGradient={false}
+                labelPosition="outside"
+                labelOrientation={isVertical ? "vertical" : "horizontal"}
+                labelPadding={6}
+                label={(n: { nodeLabel?: string; id: string }) =>
+                  truncateLabel(n.nodeLabel ?? n.id, 22)
+                }
+                labelTextColor={{
+                  from: "color",
+                  modifiers: [["brighter", 0.8]],
+                }}
+                theme={SANKEY_THEME}
+                animate={!reducedMotion}
+                isInteractive
+                onClick={(data) => {
+                  const link = data as unknown as {
+                    source?: { id?: string };
+                    target?: { id?: string };
+                    games?: number;
+                    value?: number;
+                  };
+                  if (!link || !link.source || !link.target) return;
+                  fireEdgeClick({
+                    from: String(link.source.id ?? ""),
+                    to: String(link.target.id ?? ""),
+                    games: link.games ?? link.value ?? 0,
+                    wins: 0,
+                    losses: 0,
+                    winRate: 0,
+                  });
+                }}
+                linkTooltip={({ link }: { link: SankeyLinkLike }) => (
+                  <EdgeTooltip
+                    from={String(link.source?.id ?? "")}
+                    to={String(link.target?.id ?? "")}
+                    games={link.games ?? link.value ?? 0}
+                    wins={link.wins ?? 0}
+                    losses={link.losses ?? 0}
+                    winRate={link.winRate ?? 0}
+                  />
+                )}
+                nodeTooltip={({ node }: { node: SankeyNodeLike }) => (
+                  <NodeTooltip
+                    label={node.nodeLabel ?? node.id}
+                    games={node.games ?? node.value ?? 0}
+                    wins={node.wins ?? 0}
+                    losses={node.losses ?? 0}
+                  />
+                )}
+              />
+            )}
+          </div>
+        </figure>
+      )}
 
-      <SrOnlyEdgesTable
-        buildName={transitions.name}
-        edges={displayEdges}
-        onEdgeClick={onEdgeClick ? fireEdgeClick : undefined}
-      />
+      {tooNarrowForSankey ? null : (
+        <SrOnlyEdgesTable
+          buildName={transitions.name}
+          edges={displayEdges}
+          onEdgeClick={onEdgeClick ? fireEdgeClick : undefined}
+        />
+      )}
     </div>
   );
 }
@@ -414,15 +472,25 @@ function truncateLabel(label: string, max: number): string {
 
 function withAlpha(color: string, alpha: number): string {
   if (alpha >= 1) return color;
-  const hex = color.startsWith("#") ? color.slice(1) : color;
-  if (hex.length !== 6) return color;
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
-    return color;
+  // wrColor still returns 6-char hex (#rrggbb); keep that path working
+  // so non-token chart fills remain compatible.
+  if (color.startsWith("#")) {
+    const hex = color.slice(1);
+    if (hex.length !== 6) return color;
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+      return color;
+    }
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  // Tokens arrive as `rgb(R G B)` from getComputedStyle / our hook.
+  const m = color.match(/^rgb\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*\)$/i);
+  if (m) {
+    return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${alpha})`;
+  }
+  return color;
 }
 
 function MatchupPillBar({
@@ -457,7 +525,7 @@ function MatchupPillBar({
               "inline-flex min-h-[32px] items-center rounded-full border px-3 text-caption transition-colors",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
               selected
-                ? "border-accent bg-accent text-white"
+                ? "border-accent bg-accent/15 text-accent"
                 : "border-border bg-bg-surface text-text-muted hover:bg-bg-elevated hover:text-text",
             ].join(" ")}
           >
@@ -531,6 +599,92 @@ function NodeTooltip({
         {wins}–{losses} · {games} game{games === 1 ? "" : "s"}
       </div>
     </div>
+  );
+}
+
+/**
+ * Visible-table fallback used below 380px wide, where Sankey labels
+ * become unreadable. Same edge data, listed as a focusable button per
+ * row when ``onEdgeClick`` is wired up — keyboard parity with the
+ * Sankey path.
+ */
+function VisibleEdgesTable({
+  buildName,
+  edges,
+  ariaLabel,
+  captionId,
+  onEdgeClick,
+}: {
+  buildName: string;
+  edges: TransitionEdge[];
+  ariaLabel: string;
+  captionId: string;
+  onEdgeClick?: (e: TransitionEdge) => void;
+}) {
+  return (
+    <figure
+      role="img"
+      aria-label={ariaLabel}
+      aria-describedby={captionId}
+      className="rounded-lg border border-border bg-bg-surface p-3"
+      data-testid="build-transition-sankey-figure"
+      data-orientation="table"
+    >
+      <figcaption id={captionId} className="sr-only">
+        {ariaLabel}
+      </figcaption>
+      <ul
+        className="divide-y divide-border text-caption"
+        data-testid="build-transition-sankey-table-fallback"
+      >
+        {edges.map((e) => {
+          const denom = e.wins + e.losses;
+          const wrLabel = denom > 0 ? `${Math.round(e.winRate * 100)}%` : "—";
+          const interactive = !!onEdgeClick;
+          const labelParts = (
+            <>
+              <span className="font-medium text-text">{e.from}</span>
+              <span className="mx-1 text-text-dim">→</span>
+              <span className="font-medium text-text">{e.to}</span>
+            </>
+          );
+          return (
+            <li
+              key={`${e.from}->${e.to}`}
+              className="flex flex-col gap-1 py-2"
+              data-testid="transition-edge-row-visible"
+              data-edge-from={e.from}
+              data-edge-to={e.to}
+            >
+              {interactive ? (
+                <button
+                  type="button"
+                  onClick={() => onEdgeClick!(e)}
+                  className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                >
+                  {labelParts}
+                </button>
+              ) : (
+                <div>{labelParts}</div>
+              )}
+              <div className="flex items-center gap-3 text-text-muted tabular-nums">
+                <span>
+                  {e.wins}–{e.losses}
+                </span>
+                <span>{wrLabel}</span>
+                <span className="text-text-dim">
+                  · {e.games} game{e.games === 1 ? "" : "s"}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="sr-only">
+        Visible-table fallback for {buildName}; the Sankey is hidden on
+        very narrow viewports where labels would be unreadable.
+      </p>
+    </figure>
   );
 }
 

@@ -251,7 +251,7 @@ function OpponentPhaseStrip({ phases }: { phases: OpponentPhases }) {
     <div
       style={{
         marginTop: 12,
-        borderTop: "1px solid rgba(255,255,255,0.08)",
+        borderTop: "1px solid rgb(var(--border))",
         paddingTop: 12,
       }}
       data-testid="opponent-phase-strip"
@@ -274,7 +274,7 @@ function OpponentPhaseStrip({ phases }: { phases: OpponentPhases }) {
             fontSize: 13,
             fontWeight: 700,
             letterSpacing: 0.5,
-            color: "#e6e8ee",
+            color: "rgb(var(--text))",
           }}
         >
           {phaseLabel}

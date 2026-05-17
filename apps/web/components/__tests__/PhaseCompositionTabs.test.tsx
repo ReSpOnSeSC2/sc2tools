@@ -90,13 +90,34 @@ describe("PhaseCompositionTabs", () => {
       "midLate",
       "late",
     ]);
-    expect(tabs.map((t) => t.textContent?.trim())).toEqual([
-      "Early12",
-      "Early/Mid7",
-      "Mid3",
-      "Mid/Late0",
-      "Late0",
+    // Each tab renders BOTH a short and long label (Tailwind hides
+    // one per breakpoint) so a textContent dump concatenates them;
+    // query the desktop variant + count directly to assert content.
+    const longLabels = tabs.map(
+      (t) =>
+        t
+          .querySelector('[data-testid="phase-tab-label-long"]')
+          ?.textContent?.trim(),
+    );
+    const shortLabels = tabs.map(
+      (t) =>
+        t
+          .querySelector('[data-testid="phase-tab-label-short"]')
+          ?.textContent?.trim(),
+    );
+    const counts = tabs.map(
+      (t) =>
+        t.querySelector('[data-testid="phase-tab-count"]')?.textContent?.trim(),
+    );
+    expect(longLabels).toEqual([
+      "Early",
+      "Early/Mid",
+      "Mid",
+      "Mid/Late",
+      "Late",
     ]);
+    expect(shortLabels).toEqual(["Early", "E/Mid", "Mid", "M/Late", "Late"]);
+    expect(counts).toEqual(["12", "7", "3", "0", "0"]);
   });
 
   it("starts on the first reached phase and tab click swaps the panel content", () => {
@@ -216,4 +237,56 @@ describe("PhaseCompositionTabs", () => {
       warn.mockRestore();
     }
   });
+
+  describe("theme parity", () => {
+    it("renders identically structured DOM in both themes", () => {
+      document.documentElement.setAttribute("data-theme", "light");
+      const { container: light } = render(
+        <PhaseCompositionTabs {...baseProps()} />,
+      );
+      const lightSnapshot = stripStyles(light.innerHTML);
+      cleanup();
+
+      document.documentElement.setAttribute("data-theme", "dark");
+      const { container: dark } = render(
+        <PhaseCompositionTabs {...baseProps()} />,
+      );
+      const darkSnapshot = stripStyles(dark.innerHTML);
+
+      expect(lightSnapshot).toEqual(darkSnapshot);
+    });
+  });
+
+  describe("responsive", () => {
+    const breakpoints = { mobile: 375, tablet: 768, desktop: 1280 } as const;
+    Object.entries(breakpoints).forEach(([name, width]) => {
+      it(`renders at ${name} (${width}px) without horizontal overflow`, () => {
+        Object.defineProperty(window, "innerWidth", {
+          writable: true,
+          configurable: true,
+          value: width,
+        });
+        window.dispatchEvent(new Event("resize"));
+        const { container } = render(
+          <PhaseCompositionTabs {...baseProps()} />,
+        );
+        const overflowing = Array.from(
+          container.querySelectorAll<HTMLElement>("*"),
+        ).filter((el) => el.scrollWidth > el.clientWidth + 1);
+        expect(overflowing).toEqual([]);
+      });
+    });
+  });
 });
+
+/**
+ * Strip values that legitimately differ between themes (computed
+ * styles, color tokens reflected in inline ``style`` attributes) so
+ * snapshots can compare DOM SHAPE while letting the token system swap
+ * colors freely.
+ */
+function stripStyles(html: string): string {
+  return html
+    .replace(/\sstyle="[^"]*"/g, "")
+    .replace(/\sdata-theme="[^"]*"/g, "");
+}

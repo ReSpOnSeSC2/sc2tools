@@ -169,4 +169,50 @@ describe("PhaseTrajectoryStrip", () => {
     ).toBeNull();
     expect(container.textContent).toMatch(/Not enough games on this build yet/i);
   });
+
+  describe("theme parity", () => {
+    it("renders identically structured DOM in both themes", () => {
+      document.documentElement.setAttribute("data-theme", "light");
+      const { container: light } = render(
+        <PhaseTrajectoryStrip {...baseProps()} />,
+      );
+      const lightSnapshot = stripStyles(light.innerHTML);
+      cleanup();
+
+      document.documentElement.setAttribute("data-theme", "dark");
+      const { container: dark } = render(
+        <PhaseTrajectoryStrip {...baseProps()} />,
+      );
+      const darkSnapshot = stripStyles(dark.innerHTML);
+
+      expect(lightSnapshot).toEqual(darkSnapshot);
+    });
+  });
+
+  describe("responsive", () => {
+    const breakpoints = { mobile: 375, tablet: 768, desktop: 1280 } as const;
+    Object.entries(breakpoints).forEach(([name, width]) => {
+      it(`renders at ${name} (${width}px) without horizontal overflow`, () => {
+        Object.defineProperty(window, "innerWidth", {
+          writable: true,
+          configurable: true,
+          value: width,
+        });
+        window.dispatchEvent(new Event("resize"));
+        const { container } = render(
+          <PhaseTrajectoryStrip {...baseProps()} />,
+        );
+        const overflowing = Array.from(
+          container.querySelectorAll<HTMLElement>("*"),
+        ).filter((el) => el.scrollWidth > el.clientWidth + 1);
+        expect(overflowing).toEqual([]);
+      });
+    });
+  });
 });
+
+function stripStyles(html: string): string {
+  return html
+    .replace(/\sstyle="[^"]*"/g, "")
+    .replace(/\sdata-theme="[^"]*"/g, "");
+}

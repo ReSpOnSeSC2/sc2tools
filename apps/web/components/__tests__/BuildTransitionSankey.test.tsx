@@ -319,4 +319,54 @@ describe("BuildTransitionSankey", () => {
     fireEvent.click(pvtPill!);
     expect(root?.getAttribute("data-matchup")).toBe("PvZ");
   });
+
+  describe("theme parity", () => {
+    it("renders identically structured DOM in both themes", () => {
+      document.documentElement.setAttribute("data-theme", "light");
+      const { container: light } = render(
+        <BuildTransitionSankey transitions={payload()} />,
+      );
+      const lightSnapshot = stripStyles(light.innerHTML);
+      cleanup();
+
+      document.documentElement.setAttribute("data-theme", "dark");
+      const { container: dark } = render(
+        <BuildTransitionSankey transitions={payload()} />,
+      );
+      const darkSnapshot = stripStyles(dark.innerHTML);
+
+      expect(lightSnapshot).toEqual(darkSnapshot);
+    });
+  });
+
+  describe("responsive", () => {
+    const breakpoints = { mobile: 375, tablet: 768, desktop: 1280 } as const;
+    Object.entries(breakpoints).forEach(([name, width]) => {
+      it(`renders at ${name} (${width}px) without horizontal overflow`, () => {
+        Object.defineProperty(window, "innerWidth", {
+          writable: true,
+          configurable: true,
+          value: width,
+        });
+        window.dispatchEvent(new Event("resize"));
+        const { container } = render(
+          <BuildTransitionSankey transitions={payload()} />,
+        );
+        const overflowing = Array.from(
+          container.querySelectorAll<HTMLElement>("*"),
+        ).filter((el) => el.scrollWidth > el.clientWidth + 1);
+        expect(overflowing).toEqual([]);
+      });
+    });
+  });
 });
+
+function stripStyles(html: string): string {
+  return html
+    .replace(/\sstyle="[^"]*"/g, "")
+    .replace(/\sdata-theme="[^"]*"/g, "")
+    // React's useId() emits monotonically increasing ids per render
+    // (:r9:, :ra:, …). Normalize them so two consecutive renders
+    // compare equal on shape.
+    .replace(/(id|aria-describedby|for)="[^"]*"/g, '$1="<id>"');
+}
