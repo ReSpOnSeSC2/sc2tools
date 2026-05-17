@@ -7,7 +7,6 @@ import {
   Bar,
   XAxis,
   YAxis,
-  Tooltip,
   CartesianGrid,
   Cell,
 } from "recharts";
@@ -42,7 +41,6 @@ const COLOR_SUCCESS = "#3ec07a";
 const COLOR_DANGER = "#ff6b6b";
 const COLOR_GRID = "#1f2533";
 const COLOR_TEXT_DIM = "#6b7280";
-const COLOR_BG_SURFACE = "#11141b";
 
 /**
  * Net MMR per matchup.
@@ -142,26 +140,10 @@ export function NetMmrByMatchupChart() {
               width={104}
               tickMargin={4}
             />
-            <Tooltip
-              cursor={{ fill: "rgba(124,140,255,0.04)" }}
-              contentStyle={{
-                background: COLOR_BG_SURFACE,
-                border: `1px solid ${COLOR_GRID}`,
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              formatter={(_v: number, _n: string, ctx) => {
-                const p = (
-                  ctx as { payload?: MatchupRow & { meta: { label: string } } }
-                ).payload;
-                if (!p) return ["—", "Net MMR"];
-                const sign = p.netMmr > 0 ? "+" : "";
-                return [
-                  `${sign}${p.netMmr} MMR · ${p.games} games · ${pct1(p.winRate)} WR`,
-                  p.meta.label,
-                ];
-              }}
-            />
+            {/* No Tooltip: the footer cards already show
+                netMmr / games / WR / avg-per-game per matchup,
+                and on mobile recharts' floating tooltip lands on
+                top of the bars when the user taps to read them. */}
             <Bar dataKey="netMmr" radius={[4, 4, 4, 4]} minPointSize={2}>
               {rows.map((r) => (
                 <Cell
