@@ -416,7 +416,7 @@ class PerGameComputeService {
    * perspective without a second query.
    *
    * @param {string} userId
-   * @param {{ limit?: number }} [opts]
+   * @param {{ limit?: number, includeMacroBreakdown?: boolean }} [opts]
    * @returns {Promise<Array<{
    *   gameId: string,
    *   myBuild: string|null,
@@ -429,48 +429,59 @@ class PerGameComputeService {
    *   result: string|null,
    *   date: Date|null,
    *   map: string|null,
+   *   macroBreakdown?: object|null,
    * }>>}
    */
   async listForRulePreview(userId, opts = {}) {
     const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 600));
+    const includeMacroBreakdown = !!opts.includeMacroBreakdown;
+    /** @type {Record<string, number>} */
+    const projection = {
+      _id: 0,
+      gameId: 1,
+      myBuild: 1,
+      myRace: 1,
+      opponent: 1,
+      // Legacy fallback: pre-v0.4.3 docs still have these
+      // inline. Once the cleanup migration runs, the projection
+      // returns ``undefined`` and we serve from the detail
+      // store via the readMany call below.
+      buildLog: 1,
+      oppBuildLog: 1,
+      result: 1,
+      date: 1,
+      map: 1,
+      durationSec: 1,
+      macroScore: 1,
+      apm: 1,
+      spq: 1,
+    };
+    if (includeMacroBreakdown) {
+      // Legacy fallback: a few pre-v0.4.3 docs still carry
+      // ``macroBreakdown`` inline. Project it so we can hand it back
+      // without a detail-store round trip when present. Post-migration
+      // it's ``undefined`` and the value comes from the detail blob.
+      projection.macroBreakdown = 1;
+    }
     // Slim metadata first — needed for both legacy fallback and the
     // gameId list we'll batch-fetch detail blobs for.
     const games = await this.db.games
-      .find(
-        { userId },
-        {
-          projection: {
-            _id: 0,
-            gameId: 1,
-            myBuild: 1,
-            myRace: 1,
-            opponent: 1,
-            // Legacy fallback: pre-v0.4.3 docs still have these
-            // inline. Once the cleanup migration runs, the projection
-            // returns ``undefined`` and we serve from the detail
-            // store via the readMany call below.
-            buildLog: 1,
-            oppBuildLog: 1,
-            result: 1,
-            date: 1,
-            map: 1,
-            durationSec: 1,
-            macroScore: 1,
-            apm: 1,
-            spq: 1,
-          },
-        },
-      )
+      .find({ userId }, { projection })
       .sort({ date: -1 })
       .limit(limit)
       .toArray();
     // Identify games that need a detail-store lookup — anything
-    // missing buildLog/oppBuildLog inline. With the slim-only schema
+    // missing buildLog/oppBuildLog inline (or, when the caller asked
+    // for macroBreakdown, missing that too). With the slim-only schema
     // this will be every game; with legacy docs still on disk it's
     // the post-migration ones.
     const needDetails = [];
     for (const g of games) {
-      if (!Array.isArray(g.buildLog) || !Array.isArray(g.oppBuildLog)) {
+      const missingLogs =
+        !Array.isArray(g.buildLog) || !Array.isArray(g.oppBuildLog);
+      const missingMacro =
+        includeMacroBreakdown && !g.macroBreakdown;
+      if (missingLogs || missingMacro) {
         needDetails.push(String(g.gameId || ""));
       }
     }
@@ -478,7 +489,7 @@ class PerGameComputeService {
       ? await this.gameDetails.findMany(userId, needDetails.filter(Boolean))
       : new Map();
     return games.map(
-      /** @param {any} g */ (g) => {
+      /** @param {any} g @returns {any} */ (g) => {
         const gid = String(g.gameId || "");
         const blob = blobs.get(gid) || {};
         const buildLog = Array.isArray(g.buildLog)
@@ -487,7 +498,8 @@ class PerGameComputeService {
         const oppBuildLog = Array.isArray(g.oppBuildLog)
           ? g.oppBuildLog
           : Array.isArray(blob.oppBuildLog) ? blob.oppBuildLog : [];
-        return {
+        /** @type {Record<string, any>} */
+        const out = {
           gameId: gid,
           myBuild: g.myBuild || null,
           myRace: g.myRace || null,
@@ -513,6 +525,10 @@ class PerGameComputeService {
           date: g.date || null,
           map: g.map || null,
         };
+        if (includeMacroBreakdown) {
+          out.macroBreakdown = g.macroBreakdown || blob.macroBreakdown || null;
+        }
+        return out;
       },
     );
   }

@@ -138,6 +138,11 @@ export interface PerGameComputeServiceListedGame {
   result: string | null;
   date: Date | null;
   map: string | null;
+  /** Present only when `listForRulePreview` is called with
+   *  `{ includeMacroBreakdown: true }`. The buildCompositions
+   *  service is the primary consumer; rule preview / reclassify
+   *  paths never request it. */
+  macroBreakdown?: object | null;
 }
 
 export interface DeviceListItem {
@@ -270,7 +275,7 @@ export interface PerGameComputeService {
   ): Promise<void>;
   listForRulePreview(
     userId: string,
-    opts?: { limit?: number },
+    opts?: { limit?: number; includeMacroBreakdown?: boolean },
   ): Promise<PerGameComputeServiceListedGame[]>;
 }
 
