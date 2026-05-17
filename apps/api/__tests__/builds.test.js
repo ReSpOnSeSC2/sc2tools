@@ -2,6 +2,7 @@
 "use strict";
 
 const { BuildsService } = require("../src/services/builds");
+const { StrategyPhasesService } = require("../src/services/strategyPhases");
 
 function buildGames(handlers, opts = {}) {
   let i = 0;
@@ -148,5 +149,219 @@ describe("services/builds", () => {
     const out = await svc.oppStrategies("u1", {});
     expect(out).toHaveLength(2);
     expect(out[1].winRate).toBe(0.5);
+  });
+});
+
+/**
+ * Build a synthetic ``listForRulePreview`` payload for the strategy-
+ * phases service. Every game has a deterministic mid-window
+ * composition so the snapshot of the phase aggregator is stable
+ * across runs. ``Probe`` is always present at 50+ to exercise the
+ * worker-skip filter — the signature must never include it.
+ *
+ * @param {Array<{
+ *   gameId: string,
+ *   result: string,
+ *   strategy: string,
+ *   myUnitsAtMid: Record<string, number>,
+ * }>} entries
+ */
+function makeStrategyGames(entries) {
+  const duration = 600;
+  return entries.map((e) => {
+    const stats = [];
+    for (let t = 0; t <= duration; t += 10) {
+      stats.push({
+        time: t,
+        food_workers: Math.min(12 + t / 5, 70),
+        food_used: Math.min(12 + t / 4, 180),
+        army_value: Math.min(t * 8, 5000),
+      });
+    }
+    const timeline = [];
+    for (let t = 0; t <= duration; t += 30) {
+      timeline.push({ time: t, my: { ...e.myUnitsAtMid }, opp: {} });
+    }
+    return {
+      gameId: e.gameId,
+      myRace: "Protoss",
+      oppRace: "Zerg",
+      durationSec: duration,
+      result: e.result,
+      opponent: { strategy: e.strategy, race: "Zerg" },
+      macroBreakdown: {
+        bases: [
+          { name: "Nexus", born_time: 0, died_time: duration },
+          { name: "Nexus", born_time: 100, died_time: duration },
+        ],
+        production_buildings: [
+          { name: "CyberneticsCore", born_time: 80, died_time: duration },
+          { name: "TwilightCouncil", born_time: 180, died_time: duration },
+          { name: "RoboticsFacility", born_time: 200, died_time: duration },
+        ],
+        stats_events: stats,
+        unit_timeline: timeline,
+      },
+      events: [],
+      oppEvents: [],
+    };
+  });
+}
+
+describe("services/strategyPhases", () => {
+  /**
+   * Bind a synthetic ``listForRulePreview`` source onto a fresh
+   * StrategyPhasesService. ``db`` is unused by the evaluate path —
+   * passing an empty object is enough since the service only reaches
+   * for ``this.db.games`` via ``latestGameDateMs`` (covered
+   * separately).
+   */
+  function makeService(listedGames) {
+    const perGame = {
+      async listForRulePreview(_userId, _opts) {
+        return listedGames;
+      },
+    };
+    return new StrategyPhasesService({}, { perGame });
+  }
+
+  test("evaluate returns null when no games match the requested strategy", async () => {
+    const svc = makeService(
+      makeStrategyGames([
+        {
+          gameId: "g-other",
+          result: "Victory",
+          strategy: "Zerg - Roach allin",
+          myUnitsAtMid: { Stalker: 4, Immortal: 2, Probe: 50 },
+        },
+      ]),
+    );
+    const out = await svc.evaluate("u1", "Zerg - Mass Ling");
+    expect(out).toBeNull();
+  });
+
+  test("evaluate filters by opponent.strategy exact match", async () => {
+    const games = makeStrategyGames([
+      {
+        gameId: "g-mass-ling-1",
+        result: "Victory",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Stalker: 4, Phoenix: 3, Immortal: 2, Probe: 60 },
+      },
+      {
+        gameId: "g-roach",
+        result: "Defeat",
+        strategy: "Zerg - Roach allin",
+        myUnitsAtMid: { Zealot: 6, Adept: 4, Sentry: 2, Probe: 50 },
+      },
+      {
+        gameId: "g-mass-ling-2",
+        result: "Victory",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Stalker: 5, Phoenix: 2, Immortal: 1, Probe: 55 },
+      },
+    ]);
+    const svc = makeService(games);
+
+    const out = await svc.evaluate("u1", "Zerg - Mass Ling");
+    expect(out).not.toBeNull();
+    expect(out.name).toBe("Zerg - Mass Ling");
+    expect(out.total).toBe(2);
+    // The roach-allin game must not leak in — wrong strategy.
+    const midKeys = out.perPhase.mid.signatures.map((s) => s.key);
+    expect(midKeys).not.toContain("Zealot|Adept|Sentry");
+    expect(midKeys).toContain("Stalker|Phoenix|Immortal");
+  });
+
+  test("evaluate throws when perGame is unavailable", async () => {
+    const svc = new StrategyPhasesService({}, { perGame: null });
+    await expect(svc.evaluate("u1", "anything")).rejects.toThrow(
+      "perGame_unavailable",
+    );
+  });
+
+  test("evaluate returns null on empty strategy name", async () => {
+    const svc = makeService([]);
+    expect(await svc.evaluate("u1", "")).toBeNull();
+  });
+
+  /**
+   * Snapshot the per-phase composition output for a synthetic
+   * strategy bucket. Asserts the envelope is exactly what the
+   * StrategiesTab phase panel needs (sampleSize, perPhase signatures
+   * with sample counts, finalPhaseDistribution). The fixture is
+   * hand-crafted so the snapshot is deterministic — if it shifts the
+   * SPA's strategy phase panel renders differently and we want a
+   * tripwire.
+   */
+  test("evaluate snapshot for the strategy bucket fixture", async () => {
+    const games = makeStrategyGames([
+      {
+        gameId: "g1",
+        result: "Victory",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Stalker: 4, Phoenix: 3, Immortal: 2, Probe: 60 },
+      },
+      {
+        gameId: "g2",
+        result: "Victory",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Stalker: 5, Phoenix: 2, Immortal: 1, Probe: 55 },
+      },
+      {
+        gameId: "g3",
+        result: "Defeat",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Zealot: 6, Adept: 4, Sentry: 2, Probe: 50 },
+      },
+    ]);
+    const svc = makeService(games);
+    const out = await svc.evaluate("u1", "Zerg - Mass Ling");
+    // Hide noise that's incidental to the snapshot: medianCrossings
+    // and durationP95Sec depend on the synthetic stats curve, which
+    // is verified by the buildCompositions tests already. The strategy
+    // service's job is just to filter + delegate.
+    const slim = {
+      name: out.name,
+      total: out.total,
+      sampleSize: out.sampleSize,
+      finalPhaseDistribution: out.finalPhaseDistribution,
+      flags: out.flags,
+      midSignatures: out.perPhase.mid.signatures.map((s) => ({
+        key: s.key,
+        sampleCount: s.sampleCount,
+        wins: s.wins,
+        losses: s.losses,
+        winRate: s.winRate,
+        sampleGameIds: s.sampleGameIds,
+        units: s.units.map((u) => u.token),
+      })),
+    };
+    expect(slim).toMatchSnapshot();
+  });
+
+  test("latestGameDateMs returns 0 when the user has no games", async () => {
+    const db = {
+      games: {
+        async findOne() {
+          return null;
+        },
+      },
+    };
+    const svc = new StrategyPhasesService(db, { perGame: {} });
+    expect(await svc.latestGameDateMs("u1")).toBe(0);
+  });
+
+  test("latestGameDateMs returns the Date in ms", async () => {
+    const stamp = new Date("2026-05-10T00:00:00Z");
+    const db = {
+      games: {
+        async findOne() {
+          return { date: stamp };
+        },
+      },
+    };
+    const svc = new StrategyPhasesService(db, { perGame: {} });
+    expect(await svc.latestGameDateMs("u1")).toBe(stamp.getTime());
   });
 });

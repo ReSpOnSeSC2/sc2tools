@@ -15,6 +15,7 @@ import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { AllGamesTable } from "./AllGamesTable";
 import { StrategyMmrPanel } from "./mmr/StrategyMmrPanel";
 import { BuildMatchupHeatmap } from "./mmr/BuildMatchupHeatmap";
+import { StrategyPhasePanel } from "./StrategyPhasePanel";
 import type { ProfileGame } from "./Last5GamesTimeline";
 
 type StratRow = {
@@ -332,6 +333,12 @@ function StrategyGamesView({
           </div>
         ) : null}
       </div>
+      {/* Phase-by-phase panel sits above the games list so the user
+          orienting themselves on "what facing this strategy looks
+          like" sees the trajectory + typical compositions first,
+          then the raw replay list. Falls back to its own EmptyState
+          when the strategy has < 5 games. */}
+      <StrategyPhasePanel strategy={drill.opp_strategy} />
       {isLoading ? (
         <Skeleton rows={6} />
       ) : error ? (

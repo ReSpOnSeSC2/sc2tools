@@ -1,0 +1,58 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`services/strategyPhases evaluate snapshot for the strategy bucket fixture 1`] = `
+{
+  "finalPhaseDistribution": {
+    "early": 0,
+    "earlyMid": 0,
+    "late": 0,
+    "mid": 0,
+    "midLate": 3,
+  },
+  "flags": [
+    "stuck_in_mid",
+  ],
+  "midSignatures": [
+    {
+      "key": "Stalker|Phoenix|Immortal",
+      "losses": 0,
+      "sampleCount": 2,
+      "sampleGameIds": [
+        "g1",
+        "g2",
+      ],
+      "units": [
+        "Stalker",
+        "Phoenix",
+        "Immortal",
+      ],
+      "winRate": 1,
+      "wins": 2,
+    },
+    {
+      "key": "Zealot|Adept|Sentry",
+      "losses": 1,
+      "sampleCount": 1,
+      "sampleGameIds": [
+        "g3",
+      ],
+      "units": [
+        "Zealot",
+        "Adept",
+        "Sentry",
+      ],
+      "winRate": 0,
+      "wins": 0,
+    },
+  ],
+  "name": "Zerg - Mass Ling",
+  "sampleSize": {
+    "early": 3,
+    "earlyMid": 3,
+    "late": 0,
+    "mid": 3,
+    "midLate": 3,
+  },
+  "total": 3,
+}
+`;
