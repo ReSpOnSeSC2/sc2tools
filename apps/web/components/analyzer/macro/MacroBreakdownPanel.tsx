@@ -140,7 +140,7 @@ export function MacroBreakdownPanel({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-bg sm:bg-black/70 sm:backdrop-blur-sm sm:p-4 md:p-6"
+      className="fixed inset-0 z-50 overflow-x-hidden overflow-y-auto bg-bg sm:bg-black/70 sm:backdrop-blur-sm sm:p-4 md:p-6"
       role="presentation"
       data-testid="macro-breakdown-portal"
       onClick={(e) => {
@@ -155,7 +155,7 @@ export function MacroBreakdownPanel({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col bg-bg-surface text-text sm:min-h-0 sm:rounded-xl sm:border sm:border-border sm:shadow-[var(--shadow-card)]"
+        className="relative mx-auto flex min-h-[100dvh] w-full min-w-0 max-w-6xl flex-col bg-bg-surface text-text sm:min-h-0 sm:rounded-xl sm:border sm:border-border sm:shadow-[var(--shadow-card)]"
       >
         <PanelHeader
           titleId={titleId}
@@ -163,7 +163,7 @@ export function MacroBreakdownPanel({
           meta={headerMeta}
           onClose={onClose}
         />
-        <div className="flex-1 px-4 py-5 pb-24 sm:px-6 sm:pb-5 lg:px-8">
+        <div className="min-w-0 flex-1 px-4 py-5 pb-24 sm:px-6 sm:pb-5 lg:px-8">
           {isLoading ? (
             <LoadingState />
           ) : error ? (

@@ -140,7 +140,7 @@ export function Modal({
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
         className={[
-          "relative w-full bg-bg-surface text-text border border-border shadow-[var(--shadow-card)]",
+          "relative w-full min-w-0 bg-bg-surface text-text border border-border shadow-[var(--shadow-card)]",
           "overflow-hidden flex flex-col",
           centerOnMobile ? "max-h-[85dvh]" : "max-h-[100dvh]",
           // 3xl gets more vertical room for the build editor's timeline.
