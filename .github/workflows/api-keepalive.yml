@@ -67,16 +67,34 @@ jobs:
           done
 
       - name: Ping public web
-        # The Next.js frontend on Render shares the same idle problem
-        # as the API. Pinging /api/ping (a tiny route in
-        # apps/web/app/api/ping/route.ts) keeps the SSR runtime warm
-        # so users hitting sc2tools.com don't see a cold-start spinner.
+        # Vercel serverless functions cold-start per route. Pinging only
+        # /api/ping warms that one lambda; the public SSR pages users
+        # actually land on (community feed, leaderboard, builds index)
+        # stay cold between visits. Hitting them on a cron keeps the
+        # warm pool populated and avoids the multi-second TTFB on a
+        # first visit after a quiet stretch.
+        #
+        # /api/warmup-dashboard loads the same server modules as
+        # app/app/page.tsx (Clerk server SDK, API client). The /app SSR
+        # lambda is its own Vercel function and can't be warmed
+        # directly because Clerk middleware blocks unauthenticated
+        # requests at the edge — pinging the warmup route is the
+        # closest we can get without a service-account session.
         run: |
           set -euo pipefail
-          url="https://sc2tools.com/api/ping"
-          echo "==> ${url}"
-          curl --silent --show-error --fail \
-            --max-time 60 \
-            --retry 2 --retry-delay 5 --retry-all-errors \
-            --write-out 'http=%{http_code}  time=%{time_total}s\n' \
-            "${url}"
+          for path in \
+            /api/ping \
+            /api/warmup-dashboard \
+            / \
+            /community \
+            /community/leaderboard \
+            /builds; do
+            url="https://sc2tools.com${path}"
+            echo "==> ${url}"
+            curl --silent --show-error --fail \
+              --max-time 60 \
+              --retry 2 --retry-delay 5 --retry-all-errors \
+              --output /dev/null \
+              --write-out 'http=%{http_code}  time=%{time_total}s\n' \
+              "${url}"
+          done
