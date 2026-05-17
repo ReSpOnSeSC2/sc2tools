@@ -6,6 +6,7 @@ const { evaluateRules } = require("../services/buildRulesEvaluator");
 
 const PREVIEW_TRUNCATION_LIMIT = 200;
 const PREVIEW_GAME_SCAN_CAP = 600;
+const PHASE_CACHE_TTL_MS = 60 * 1000;
 
 /**
  * Permissive matchup filter mirroring the local SPA semantics: a game
@@ -64,6 +65,44 @@ function raceMatches(actual, requested, buildName, bucketPos) {
 function buildCustomBuildsRouter(deps) {
   const router = express.Router();
   router.use(deps.auth);
+
+  // In-process cache for the phase-aware compositions / transitions
+  // payloads. Both endpoints are heavy: every request re-fetches the
+  // full game set + macroBreakdown blobs, then runs the classifier
+  // per game. Scouting / dossier views re-poll on every panel mount,
+  // so a tight 60s TTL turns the typical user's "tab three panes in a
+  // row" interaction into a single Mongo scan. Keyed on
+  // (userId, slug, latestGameDate) so a newly-ingested game blows the
+  // entry without waiting for the TTL; explicit ``bust`` is called
+  // from the reclassify endpoint where the matched set may shift.
+  /** @type {Map<string, {expires: number, value: any}>} */
+  const phaseCache = new Map();
+  function phaseCacheKey(userId, slug, latestGameMs, kind) {
+    return `${userId}|${slug}|${latestGameMs}|${kind}`;
+  }
+  function phaseCacheGet(key) {
+    const hit = phaseCache.get(key);
+    if (!hit) return null;
+    if (hit.expires <= Date.now()) {
+      phaseCache.delete(key);
+      return null;
+    }
+    return hit.value;
+  }
+  function phaseCacheSet(key, value) {
+    phaseCache.set(key, { value, expires: Date.now() + PHASE_CACHE_TTL_MS });
+  }
+  function phaseCacheBust(userId, slug) {
+    const prefix = `${userId}|${slug}|`;
+    for (const key of phaseCache.keys()) {
+      if (key.startsWith(prefix)) phaseCache.delete(key);
+    }
+  }
+  function latestGameMs(userId) {
+    // Cheap probe so a fresh upload invalidates the cache key without
+    // waiting for the TTL.
+    return deps.customBuilds.latestGameDateMs(userId);
+  }
 
   /**
    * POST /v1/custom-builds/preview-matches
@@ -259,6 +298,86 @@ function buildCustomBuildsRouter(deps) {
     }
   });
 
+  /**
+   * GET /v1/custom-builds/:slug/compositions
+   *
+   * Per-phase signature aggregator for the scouting widget. Returns
+   * the lighter payload (no transitions) so the panel can request it
+   * independently of the heavier Sankey.
+   */
+  router.get("/custom-builds/:slug/compositions", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      if (!deps.perGame) {
+        res.status(503).json({ error: { code: "stats_unavailable" } });
+        return;
+      }
+      const slug = String(req.params.slug);
+      const latest = await latestGameMs(auth.userId);
+      const key = phaseCacheKey(auth.userId, slug, latest, "compositions");
+      const cached = phaseCacheGet(key);
+      if (cached) {
+        res.json(cached);
+        return;
+      }
+      const result = await deps.customBuilds.evaluateBuildPhases(
+        auth.userId,
+        slug,
+        { includeTransitions: false },
+      );
+      if (!result) {
+        res.status(404).json({ error: { code: "not_found" } });
+        return;
+      }
+      phaseCacheSet(key, result);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /v1/custom-builds/:slug/transitions
+   *
+   * Sankey-shaped routing payload for the BuildDetail transitions
+   * tab. Computed from the same matched-game set as ``compositions``
+   * but only the ``transitions`` half is returned so the heavier
+   * payload can be requested independently of the compositions one.
+   */
+  router.get("/custom-builds/:slug/transitions", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      if (!deps.perGame) {
+        res.status(503).json({ error: { code: "stats_unavailable" } });
+        return;
+      }
+      const slug = String(req.params.slug);
+      const latest = await latestGameMs(auth.userId);
+      const key = phaseCacheKey(auth.userId, slug, latest, "transitions");
+      const cached = phaseCacheGet(key);
+      if (cached) {
+        res.json(cached);
+        return;
+      }
+      const result = await deps.customBuilds.evaluateBuildPhases(
+        auth.userId,
+        slug,
+        { includeTransitions: true },
+      );
+      if (!result) {
+        res.status(404).json({ error: { code: "not_found" } });
+        return;
+      }
+      const payload = { slug: result.slug, name: result.name, transitions: result.transitions };
+      phaseCacheSet(key, payload);
+      res.json(payload);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/custom-builds/:slug", async (req, res, next) => {
     try {
       const auth = req.auth;
@@ -356,15 +475,19 @@ function buildCustomBuildsRouter(deps) {
         return;
       }
       const body = req.body || {};
+      const slug = String(req.params.slug);
       const result = await deps.customBuilds.reclassify(
         auth.userId,
-        String(req.params.slug),
+        slug,
         { replace: body.replace !== false },
       );
       if (!result) {
         res.status(404).json({ error: { code: "not_found" } });
         return;
       }
+      // Matched-set may have shifted — drop any cached compositions /
+      // transitions for this build so the next read recomputes.
+      phaseCacheBust(auth.userId, slug);
       res.json({ ok: true, ...result });
     } catch (err) {
       next(err);

@@ -4,6 +4,8 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { evaluateRules } = require("./buildRulesEvaluator");
 const { computeDossierExtras } = require("./buildDossier");
+const { computeCompositions } = require("./buildCompositions");
+const { computeTransitions } = require("./buildTransitions");
 const { parseBuildLogLines, eventsToStartTime } = require("./perGameCompute");
 
 const STATS_GAME_SCAN_CAP = 1000;
@@ -146,6 +148,85 @@ class CustomBuildsService {
       ruleCount: rules.length,
       ...extras,
     };
+  }
+
+  /**
+   * Latest game date (ms since epoch) for the user, or 0 when they
+   * have no games yet. Exposed for the phase-cache key in the routes
+   * layer so a freshly-ingested game invalidates a cached compositions
+   * / transitions payload without waiting for the TTL. Hits the same
+   * index ``/v1/games`` and the dossier services use, so this is a
+   * single seek.
+   *
+   * @param {string} userId
+   * @returns {Promise<number>}
+   */
+  async latestGameDateMs(userId) {
+    const doc = await this._gamesCollection().findOne(
+      { userId },
+      { projection: { _id: 0, date: 1 }, sort: { date: -1 } },
+    );
+    if (!doc || !doc.date) return 0;
+    return doc.date instanceof Date ? doc.date.getTime() : 0;
+  }
+
+  /**
+   * Phase-aware analysis of a saved build's matched games. Feeds the
+   * scouting widget (compositions panel) and the BuildDetail
+   * transitions Sankey. Mirrors evaluateBuild's matchup-gate + rule-
+   * evaluator pipeline but pulls the heavier ``macroBreakdown`` blob
+   * per game (via ``includeMacroBreakdown: true``) so each matched
+   * game carries the phase classifier's required input.
+   *
+   * ``includeTransitions=false`` skips the Sankey aggregation entirely
+   * so the scouting widget can request only the compositions payload
+   * — meaningfully cheaper than recomputing the full bundle.
+   *
+   * @param {string} userId
+   * @param {string} slug
+   * @param {{ includeTransitions?: boolean }} [opts]
+   * @returns {Promise<null | {
+   *   slug: string,
+   *   name: string,
+   *   sampleSize: Record<string, number>,
+   *   perPhase: Record<string, object>,
+   *   finalPhaseDistribution: Record<string, number>,
+   *   flags: string[],
+   *   transitions?: { nodes: object[], edges: object[], rare: object },
+   * }>}
+   */
+  async evaluateBuildPhases(userId, slug, opts = {}) {
+    if (!this.perGame) throw new Error("perGame_unavailable");
+    const includeTransitions = opts.includeTransitions !== false;
+    const build = await this.get(userId, slug);
+    if (!build) return null;
+    const rules = extractRules(build);
+    const perspective = build.perspective === "opponent" ? "opponent" : "you";
+    const games = await this.perGame.listForRulePreview(userId, {
+      limit: STATS_GAME_SCAN_CAP,
+      includeMacroBreakdown: true,
+    });
+    const inMatchup = games.filter((g) =>
+      gameMatchesBuildMatchup(g, build, perspective),
+    );
+    const matched =
+      rules.length === 0
+        ? []
+        : filterMatchingGames(inMatchup, rules, perspective);
+    const comps = computeCompositions(matched);
+    /** @type {Record<string, any>} */
+    const out = {
+      slug: build.slug,
+      name: build.name || build.slug,
+      sampleSize: comps.sampleSize,
+      perPhase: comps.perPhase,
+      finalPhaseDistribution: comps.finalPhaseDistribution,
+      flags: comps.flags,
+    };
+    if (includeTransitions) {
+      out.transitions = computeTransitions(matched);
+    }
+    return out;
   }
 
   /**
