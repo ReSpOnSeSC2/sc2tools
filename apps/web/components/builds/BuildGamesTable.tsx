@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { BuildOrderTimeline } from "@/components/analyzer/charts/BuildOrderTimeline";
@@ -28,9 +28,35 @@ interface BuildOrderResp {
  * BuildGamesTable — recent games for a custom build with build-order
  * drilldown. Desktop renders a sortable-style table; mobile collapses
  * to stacked cards with the same data and the same expand action.
+ *
+ * When ``filterGameIds`` is set, the table narrows ``games`` to that
+ * set and surfaces a dismissable chip naming the filter — used by the
+ * Phase compositions panel to drill from a clicked signature into the
+ * contributing games without leaving the dossier.
  */
-export function BuildGamesTable({ games }: { games: BuildRecentGame[] }) {
+export function BuildGamesTable({
+  games,
+  filterGameIds,
+  filterLabel,
+  onClearFilter,
+}: {
+  games: BuildRecentGame[];
+  filterGameIds?: string[];
+  filterLabel?: string;
+  onClearFilter?: () => void;
+}) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const filterSet = useMemo(
+    () =>
+      filterGameIds && filterGameIds.length > 0
+        ? new Set(filterGameIds)
+        : null,
+    [filterGameIds],
+  );
+  const filtered = useMemo(
+    () => (filterSet ? games.filter((g) => filterSet.has(g.gameId)) : games),
+    [games, filterSet],
+  );
   if (games.length === 0) {
     return (
       <Card title="Recent games">
@@ -38,8 +64,17 @@ export function BuildGamesTable({ games }: { games: BuildRecentGame[] }) {
       </Card>
     );
   }
+  const chip =
+    filterSet && filtered.length > 0 ? (
+      <FilterChip
+        label={filterLabel}
+        count={filtered.length}
+        onClear={onClearFilter}
+      />
+    ) : null;
   return (
-    <Card title={`Recent games · ${games.length}`}>
+    <Card title={`Recent games · ${filtered.length}`}>
+      {chip}
       <div className="hidden md:block">
         <table className="w-full text-caption">
           <thead className="bg-bg-elevated text-[11px] uppercase tracking-wider text-text-muted">
@@ -55,7 +90,7 @@ export function BuildGamesTable({ games }: { games: BuildRecentGame[] }) {
             </tr>
           </thead>
           <tbody>
-            {games.map((g) => (
+            {filtered.map((g) => (
               <GameRow
                 key={g.gameId}
                 game={g}
@@ -69,7 +104,7 @@ export function BuildGamesTable({ games }: { games: BuildRecentGame[] }) {
         </table>
       </div>
       <ul className="space-y-2 md:hidden">
-        {games.map((g) => (
+        {filtered.map((g) => (
           <GameMobile
             key={g.gameId}
             game={g}
@@ -81,6 +116,38 @@ export function BuildGamesTable({ games }: { games: BuildRecentGame[] }) {
         ))}
       </ul>
     </Card>
+  );
+}
+
+function FilterChip({
+  label,
+  count,
+  onClear,
+}: {
+  label?: string;
+  count: number;
+  onClear?: () => void;
+}) {
+  return (
+    <div
+      className="mb-2 inline-flex items-center gap-2 rounded-full border border-border bg-bg-elevated px-3 py-1 text-caption text-text-muted"
+      data-testid="build-games-filter-chip"
+    >
+      <span className="tabular-nums text-text">
+        Filtered to {count} game{count === 1 ? "" : "s"}
+      </span>
+      {label ? <span className="text-text-dim">from {label}</span> : null}
+      {onClear ? (
+        <button
+          type="button"
+          aria-label="Clear game filter"
+          onClick={onClear}
+          className="-mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full text-text-muted hover:bg-bg-surface hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <X className="h-3 w-3" aria-hidden />
+        </button>
+      ) : null}
+    </div>
   );
 }
 

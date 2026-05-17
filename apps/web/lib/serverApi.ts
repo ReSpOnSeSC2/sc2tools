@@ -1,6 +1,34 @@
 // Server-side fetcher used by the community pages so they can render
 // at request time and ship clean HTML to crawlers.
 
+import type {
+  Phase,
+  PhaseCompositionRow,
+} from "@/components/analyzer/PhaseCompositionTabs";
+
+export type { BuildTransitionsPayload } from "@/components/analyzer/BuildTransitionSankey";
+
+/**
+ * Response shape of GET /v1/custom-builds/:slug/compositions — the
+ * per-phase signature aggregator that backs the PhaseTrajectoryStrip
+ * and PhaseCompositionTabs widgets in the dossier surface.
+ */
+export interface BuildPhasePayload {
+  slug: string;
+  name: string;
+  sampleSize: Record<Phase, number>;
+  perPhase: Record<Phase, PhaseCompositionRow>;
+  finalPhaseDistribution: Record<Phase, number>;
+  medianCrossings: {
+    earlyMidAt: number | null;
+    midAt: number | null;
+    midLateAt: number | null;
+    lateAt: number | null;
+  };
+  durationP95Sec: number;
+  flags: string[];
+}
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ||
   process.env.SC2TOOLS_API_BASE ||

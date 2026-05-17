@@ -191,6 +191,8 @@ class CustomBuildsService {
    *   sampleSize: Record<string, number>,
    *   perPhase: Record<string, object>,
    *   finalPhaseDistribution: Record<string, number>,
+   *   medianCrossings: object,
+   *   durationP95Sec: number,
    *   flags: string[],
    *   transitions?: { nodes: object[], edges: object[], rare: object },
    * }>}
@@ -221,6 +223,8 @@ class CustomBuildsService {
       sampleSize: comps.sampleSize,
       perPhase: comps.perPhase,
       finalPhaseDistribution: comps.finalPhaseDistribution,
+      medianCrossings: comps.medianCrossings,
+      durationP95Sec: comps.durationP95Sec,
       flags: comps.flags,
     };
     if (includeTransitions) {
