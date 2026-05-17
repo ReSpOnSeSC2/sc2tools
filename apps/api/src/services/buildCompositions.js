@@ -455,4 +455,10 @@ function isLossResult(r) {
   return s === "loss" || s === "defeat";
 }
 
-module.exports = { computeCompositions, PHASE_WINDOWS, WORKER_SKIP };
+module.exports = {
+  computeCompositions,
+  PHASE_WINDOWS,
+  WORKER_SKIP,
+  pickSignatureUnits,
+  signatureKey,
+};
