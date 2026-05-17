@@ -347,6 +347,25 @@ export interface BuildsService {
   oppStrategies(userId: string, filters: object): Promise<object[]>;
 }
 
+export interface StrategyPhasesService {
+  evaluate(userId: string, strategyName: string): Promise<null | {
+    name: string;
+    total: number;
+    sampleSize: Record<string, number>;
+    perPhase: Record<string, object>;
+    finalPhaseDistribution: Record<string, number>;
+    medianCrossings: {
+      earlyMidAt: number | null;
+      midAt: number | null;
+      midLateAt: number | null;
+      lateAt: number | null;
+    };
+    durationP95Sec: number;
+    flags: string[];
+  }>;
+  latestGameDateMs(userId: string): Promise<number>;
+}
+
 export interface PerGameComputeService {
   buildOrder(userId: string, gameId: string): Promise<object | null>;
   macroBreakdown(userId: string, gameId: string): Promise<object | null>;

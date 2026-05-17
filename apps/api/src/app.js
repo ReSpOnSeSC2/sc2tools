@@ -30,6 +30,7 @@ const { LiveGameBroker } = require("./services/liveGameBroker");
 const { AggregationsService } = require("./services/aggregations");
 const { StreakService } = require("./services/streak");
 const { BuildsService } = require("./services/builds");
+const { StrategyPhasesService } = require("./services/strategyPhases");
 const { BuildsMmrStatsService } = require("./services/buildsMmrStats");
 const {
   PerGameComputeService,
@@ -229,6 +230,7 @@ function makeServices(deps) {
     gameDetails,
   });
   const customBuilds = new CustomBuildsService(deps.db, { perGame });
+  const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io });
   const spatial = new SpatialService(deps.db);
@@ -257,6 +259,7 @@ function makeServices(deps) {
     aggregations,
     streak,
     builds,
+    strategyPhases,
     buildsMmrStats,
     catalog,
     perGame,
@@ -480,7 +483,11 @@ function mountRoutes(app, deps, services, clerk) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildBuildsRouter({ builds: services.builds, auth }),
+    buildBuildsRouter({
+      builds: services.builds,
+      strategyPhases: services.strategyPhases,
+      auth,
+    }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
