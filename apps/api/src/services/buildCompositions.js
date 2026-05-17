@@ -72,6 +72,13 @@ const MAX_SAMPLE_GAME_IDS = 25;
  *     upgrades: Array<any>,
  *   }>,
  *   finalPhaseDistribution: Record<string, number>,
+ *   medianCrossings: {
+ *     earlyMidAt: number|null,
+ *     midAt: number|null,
+ *     midLateAt: number|null,
+ *     lateAt: number|null,
+ *   },
+ *   durationP95Sec: number,
  *   flags: string[],
  * }}
  */
@@ -91,6 +98,12 @@ function computeCompositions(games) {
   const classifiedGames = [];
   /** @type {number[]} */
   const finalScores = [];
+  /** @type {Record<string, number[]>} */
+  const crossingSamples = {
+    earlyMidAt: [], midAt: [], midLateAt: [], lateAt: [],
+  };
+  /** @type {number[]} */
+  const durations = [];
 
   for (const g of list) {
     const macroBreakdown = (g && g.macroBreakdown) || {};
@@ -100,6 +113,17 @@ function computeCompositions(games) {
     classifiedGames.push({ game: g, classified });
     finalPhaseDistribution[classified.finalPhase] += 1;
     finalScores.push(classified.finalScore);
+    if (durationSec > 0) durations.push(durationSec);
+    // Collect non-null crossings for the median aggregate. Null means
+    // the game never reached that phase — exclude it from the median
+    // so a build that's mostly short games doesn't drag the lateAt
+    // crossing to ``ceiling``.
+    for (const key of Object.keys(crossingSamples)) {
+      const v = classified.crossings && classified.crossings[key];
+      if (typeof v === "number" && Number.isFinite(v)) {
+        crossingSamples[key].push(v);
+      }
+    }
     // sampleSize: a game contributes to every phase up to and
     // including its final one (a "mid" game still reached early /
     // earlyMid). Mirrors the count semantics the dossier sample-size
@@ -118,7 +142,35 @@ function computeCompositions(games) {
 
   const flags = computeFlags(finalPhaseDistribution, finalScores, list.length);
 
-  return { sampleSize, perPhase, finalPhaseDistribution, flags };
+  const medianCrossings = {
+    earlyMidAt: medianOrNull(crossingSamples.earlyMidAt),
+    midAt: medianOrNull(crossingSamples.midAt),
+    midLateAt: medianOrNull(crossingSamples.midLateAt),
+    lateAt: medianOrNull(crossingSamples.lateAt),
+  };
+  const sortedDurations = durations.slice().sort((a, b) => a - b);
+  const durationP95Sec = sortedDurations.length
+    ? percentile(sortedDurations, 95)
+    : 0;
+
+  return {
+    sampleSize,
+    perPhase,
+    finalPhaseDistribution,
+    medianCrossings,
+    durationP95Sec,
+    flags,
+  };
+}
+
+/**
+ * @param {number[]} samples
+ * @returns {number|null}
+ */
+function medianOrNull(samples) {
+  if (!samples || samples.length === 0) return null;
+  const sorted = samples.slice().sort((a, b) => a - b);
+  return percentile(sorted, 50);
 }
 
 /**

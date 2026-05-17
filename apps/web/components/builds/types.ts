@@ -10,6 +10,11 @@
 import type { BuildSignatureItem } from "@/lib/build-events";
 import type { Race, VsRace } from "@/lib/race";
 
+export type {
+  BuildPhasePayload,
+  BuildTransitionsPayload,
+} from "@/lib/serverApi";
+
 export type BuildPerspective = "you" | "opponent";
 
 export interface CustomBuild {

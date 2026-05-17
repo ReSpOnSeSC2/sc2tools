@@ -36,6 +36,12 @@ export type PhaseCompositionTabsProps = {
   perPhase: Record<Phase, PhaseCompositionRow>;
   onSignatureClick?: (sampleGameIds: string[]) => void;
   showTechRow?: boolean;
+  /**
+   * Optional initial tab. When the requested phase has zero samples
+   * the component falls back to the first reached phase, so callers
+   * can safely set this without disabled-tab footguns.
+   */
+  preferredPhase?: Phase;
 };
 
 const PHASE_ORDER: Phase[] = ["early", "earlyMid", "mid", "midLate", "late"];
@@ -53,12 +59,16 @@ export function PhaseCompositionTabs({
   perPhase,
   onSignatureClick,
   showTechRow = true,
+  preferredPhase,
 }: PhaseCompositionTabsProps) {
-  const firstReached = useMemo<Phase>(() => {
+  const initial = useMemo<Phase>(() => {
+    if (preferredPhase && (sampleSize[preferredPhase] ?? 0) > 0) {
+      return preferredPhase;
+    }
     for (const p of PHASE_ORDER) if ((sampleSize[p] ?? 0) > 0) return p;
     return "early";
-  }, [sampleSize]);
-  const [active, setActive] = useState<Phase>(firstReached);
+  }, [sampleSize, preferredPhase]);
+  const [active, setActive] = useState<Phase>(initial);
 
   const activeRow = perPhase[active];
   const activeSamples = sampleSize[active] ?? 0;
