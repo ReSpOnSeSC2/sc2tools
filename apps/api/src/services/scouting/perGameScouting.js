@@ -40,6 +40,61 @@ const { tokenByInternalName } = require("../timingCatalog");
 
 const PHASE_LIST = PHASE_ORDER;
 
+/**
+ * sc2reader stores burrowed / morph / state-change forms of a unit
+ * under separate tokens in unit_timeline (e.g. ``Lurker`` and
+ * ``LurkerMPBurrowed`` for the same on-field unit). Without folding,
+ * the composition strip surfaces them as two rows ("Lurker 6" plus
+ * "LurkerMP 3") which both reads as "low counts" and double-stacks
+ * the same icon. Map every observed variant to its canonical token
+ * so the composition picker sums the burrowed + cocoon + form-change
+ * variants into one entry. Anything not listed is returned verbatim
+ * — adding aliases here is the only place the rollup is configured.
+ */
+const UNIT_TOKEN_ALIASES = new Map([
+  // ---- Zerg morph / burrowed states ----
+  ["LurkerMP", "Lurker"],
+  ["LurkerMPBurrowed", "Lurker"],
+  ["LurkerMPEgg", "Lurker"],
+  ["ZerglingBurrowed", "Zergling"],
+  ["BanelingBurrowed", "Baneling"],
+  ["BanelingCocoon", "Baneling"],
+  ["RoachBurrowed", "Roach"],
+  ["HydraliskBurrowed", "Hydralisk"],
+  ["RavagerBurrowed", "Ravager"],
+  ["RavagerCocoon", "Ravager"],
+  ["InfestorBurrowed", "Infestor"],
+  ["UltraliskBurrowed", "Ultralisk"],
+  ["QueenBurrowed", "Queen"],
+  ["SwarmHostMP", "SwarmHost"],
+  ["SwarmHostBurrowedMP", "SwarmHost"],
+  ["BroodLordCocoon", "BroodLord"],
+  ["LocustMP", "Locust"],
+  ["LocustMPFlying", "Locust"],
+  ["LocustMPPrecursor", "Locust"],
+  ["DroneBurrowed", "Drone"],
+  // ---- Terran transform states ----
+  ["SiegeTankSieged", "SiegeTank"],
+  ["WidowMineBurrowed", "WidowMine"],
+  ["VikingFighter", "Viking"],
+  ["VikingAssault", "Viking"],
+  ["LiberatorAG", "Liberator"],
+  ["HellionTank", "Hellbat"],
+  ["ThorAP", "Thor"],
+  // ---- Protoss morph / state ----
+  ["WarpPrismPhasing", "WarpPrism"],
+  ["ObserverSiegeMode", "Observer"],
+  ["AdeptPhaseShift", "Adept"],
+]);
+
+/**
+ * @param {string} token
+ * @returns {string}
+ */
+function canonicalUnitToken(token) {
+  return UNIT_TOKEN_ALIASES.get(token) || token;
+}
+
 const BUILD_LOG_LINE_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
 const BUILD_LOG_NOISE_RE = /^(Beacon|Reward|Spray)/;
 
@@ -338,13 +393,20 @@ function pickTopUnits(macroBreakdown, midpoint, perspective) {
   const side = perspective === "opponent"
     ? (best && best.opp ? best.opp : {})
     : (best && best.my ? best.my : {});
-  /** @type {Array<{token:string,count:number}>} */
-  const entries = [];
+  /** @type {Map<string, number>} */
+  const merged = new Map();
   for (const token of Object.keys(side)) {
     if (WORKER_SKIP.has(token)) continue;
     const n = Number(side[token]);
     if (!(n > 0)) continue;
-    entries.push({ token, count: n });
+    const canonical = canonicalUnitToken(token);
+    if (WORKER_SKIP.has(canonical)) continue;
+    merged.set(canonical, (merged.get(canonical) || 0) + n);
+  }
+  /** @type {Array<{token:string,count:number}>} */
+  const entries = [];
+  for (const [token, count] of merged) {
+    entries.push({ token, count });
   }
   entries.sort((a, b) => {
     if (a.count !== b.count) return b.count - a.count;
@@ -420,4 +482,6 @@ module.exports = {
   // under the original opponent-only name.
   buildOpponentBuildOrder: buildSideBuildOrder,
   BUILD_ORDER_SKIP,
+  canonicalUnitToken,
+  UNIT_TOKEN_ALIASES,
 };

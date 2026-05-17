@@ -315,6 +315,7 @@ function GameDetailCard({ envelope }: { envelope: PerGameScoutingEnvelope }) {
         events={envelope.oppBuildOrder}
         composition={envelope.oppCompositionByPhase}
         transitions={envelope.oppTransitions}
+        durationSec={envelope.durationSec}
         buildOrderUnavailable={oppBuildUnavailable}
         compositionUnavailable={compositionUnavailable}
         emptyMessage="Opponent build log not extracted for this game."
@@ -327,6 +328,7 @@ function GameDetailCard({ envelope }: { envelope: PerGameScoutingEnvelope }) {
           events={envelope.myBuildOrder ?? []}
           composition={envelope.myCompositionByPhase}
           transitions={envelope.myTransitions}
+          durationSec={envelope.durationSec}
           buildOrderUnavailable={myBuildUnavailable}
           compositionUnavailable={compositionUnavailable}
           emptyMessage="Your build log not available for this game."
@@ -407,6 +409,7 @@ function SideSection({
   events,
   composition,
   transitions,
+  durationSec,
   buildOrderUnavailable,
   compositionUnavailable,
   emptyMessage,
@@ -416,6 +419,7 @@ function SideSection({
   events: PerGameScoutingEnvelope["oppBuildOrder"];
   composition?: PerGameScoutingEnvelope["oppCompositionByPhase"];
   transitions?: PerGameScoutingEnvelope["oppTransitions"];
+  durationSec: number;
   buildOrderUnavailable: boolean;
   compositionUnavailable: boolean;
   emptyMessage: string;
@@ -439,7 +443,11 @@ function SideSection({
             Composition timeline unavailable for this game.
           </div>
         ) : (
-          <CompositionGrid composition={composition} transitions={transitions} />
+          <CompositionGrid
+            composition={composition}
+            transitions={transitions}
+            durationSec={durationSec}
+          />
         )
       ) : null}
     </div>
@@ -501,54 +509,187 @@ function BuildOrderStrip({
 function CompositionGrid({
   composition,
   transitions,
+  durationSec,
 }: {
   composition: PerGameScoutingEnvelope["oppCompositionByPhase"];
   transitions?: PerGameScoutingEnvelope["oppTransitions"];
+  durationSec: number;
 }) {
+  // The classifier records each crossing at the first second the
+  // game's score reaches that phase threshold. When T3 tech / unit
+  // floors ratchet the score across two or three thresholds in the
+  // same second (a common shape on fast-tech replays), consecutive
+  // crossings collapse onto the same timestamp — which would
+  // otherwise render two or three identical composition cards
+  // because their phase windows all sample the same unit_timeline
+  // row. Group those collapsed phases into a single card labelled
+  // with the highest phase reached so each card represents a real,
+  // non-zero span of game time.
+  const cells = buildPhaseCells(composition, transitions, durationSec);
   return (
     <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">
-      {PHASE_ORDER.map((phase) => {
-        const slice = composition[phase];
-        const reached = !!slice && slice.reached;
-        const crossing = transitions ? phaseStart(transitions, phase) : null;
-        return (
-          <div
-            key={phase}
-            className="rounded-md border border-border bg-bg-surface p-2"
-            data-testid="opponent-game-phase-card"
-            data-phase={phase}
-            data-reached={reached}
-          >
-            <div className="flex items-baseline justify-between gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-text-dim">
-                {PHASE_SHORT[phase]}
-              </span>
-              {crossing != null ? (
-                <span className="font-mono text-[10px] tabular-nums text-text-dim">
-                  {formatDuration(crossing)}
-                </span>
-              ) : null}
-            </div>
-            {!reached ? (
-              <div className="mt-1 text-caption text-text-dim">Did not reach</div>
-            ) : slice.units.length === 0 ? (
-              <div className="mt-1 text-caption text-text-dim">—</div>
-            ) : (
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                {slice.units.map((u) => (
-                  <span
-                    key={u.token}
-                    className="inline-flex items-center gap-0.5 tabular-nums"
-                  >
-                    <Icon name={u.token} kind="unit" size={18} alt={u.token} />
-                    <span className="text-caption">{u.count}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {cells.map((cell) => (
+        <PhaseCell key={cell.key} cell={cell} />
+      ))}
+    </div>
+  );
+}
+
+type PhaseCell = {
+  key: string;
+  /** Phases that collapsed into this cell, in chronological order. */
+  phases: Phase[];
+  /** The composition slice the cell renders — picked from the
+   *  last-listed phase so the card reflects the highest reached
+   *  state (and uses its later sampling midpoint). */
+  slice: PerGameScoutingEnvelope["oppCompositionByPhase"][Phase];
+  /** Start time of the merged window (= start of the first phase
+   *  in the chain). null when the game never reached the phase. */
+  startSec: number | null;
+  /** End of the merged window — start of the next reached phase,
+   *  or game end. */
+  endSec: number | null;
+  /** True when the merged window has effectively zero duration
+   *  (every crossing collapsed onto the same second AND the game
+   *  ended at the same instant). Used to colour the badge. */
+  isZeroWidth: boolean;
+};
+
+function buildPhaseCells(
+  composition: PerGameScoutingEnvelope["oppCompositionByPhase"],
+  transitions: PerGameScoutingEnvelope["oppTransitions"] | undefined,
+  durationSec: number,
+): PhaseCell[] {
+  const starts: Record<Phase, number | null> = {
+    early: 0,
+    earlyMid: transitions?.earlyMidAt ?? null,
+    mid: transitions?.midAt ?? null,
+    midLate: transitions?.midLateAt ?? null,
+    late: transitions?.lateAt ?? null,
+  };
+
+  const cells: PhaseCell[] = [];
+  let i = 0;
+  while (i < PHASE_ORDER.length) {
+    const phase = PHASE_ORDER[i];
+    const slice = composition[phase];
+    if (!slice || !slice.reached) {
+      cells.push({
+        key: phase,
+        phases: [phase],
+        slice: slice ?? { reached: false, atTime: null, units: [] },
+        startSec: null,
+        endSec: null,
+        isZeroWidth: false,
+      });
+      i++;
+      continue;
+    }
+    const group: Phase[] = [phase];
+    const groupStart = starts[phase];
+    // Walk forward, absorbing any subsequent reached phase whose
+    // crossing equals the current phase's crossing — those phases
+    // contributed zero duration and rendering them as standalone
+    // cards yields identical, misleading composition snapshots.
+    while (i + 1 < PHASE_ORDER.length) {
+      const next = PHASE_ORDER[i + 1];
+      const nextSlice = composition[next];
+      const nextStart = starts[next];
+      if (
+        !nextSlice
+        || !nextSlice.reached
+        || nextStart == null
+        || groupStart == null
+        || nextStart !== groupStart
+      ) {
+        break;
+      }
+      group.push(next);
+      i++;
+    }
+    const last = group[group.length - 1];
+    const lastSlice = composition[last];
+    const afterIdx = PHASE_ORDER.indexOf(last) + 1;
+    const nextReachedStart = afterIdx < PHASE_ORDER.length
+      ? findNextReachedStart(starts, composition, afterIdx)
+      : null;
+    const endSec = nextReachedStart ?? durationSec;
+    const startSec = groupStart;
+    const isZeroWidth =
+      startSec != null && endSec != null && Math.abs(endSec - startSec) < 1;
+    cells.push({
+      key: group.join("+"),
+      phases: group,
+      slice: lastSlice,
+      startSec,
+      endSec,
+      isZeroWidth,
+    });
+    i++;
+  }
+  return cells;
+}
+
+function findNextReachedStart(
+  starts: Record<Phase, number | null>,
+  composition: PerGameScoutingEnvelope["oppCompositionByPhase"],
+  fromIdx: number,
+): number | null {
+  for (let j = fromIdx; j < PHASE_ORDER.length; j++) {
+    const p = PHASE_ORDER[j];
+    if (composition[p]?.reached && starts[p] != null) return starts[p];
+  }
+  return null;
+}
+
+function PhaseCell({ cell }: { cell: PhaseCell }) {
+  const reached = cell.slice.reached;
+  const phaseLabel = cell.phases.map((p) => PHASE_SHORT[p]).join(" → ");
+  const isMerged = cell.phases.length > 1;
+  const finalPhase = cell.phases[cell.phases.length - 1];
+  return (
+    <div
+      className="rounded-md border border-border bg-bg-surface p-2"
+      data-testid="opponent-game-phase-card"
+      data-phase={finalPhase}
+      data-merged-phases={cell.phases.join(",")}
+      data-reached={reached}
+    >
+      <div className="flex items-baseline justify-between gap-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-text-dim">
+          {phaseLabel}
+        </span>
+        {cell.startSec != null ? (
+          <span className="font-mono text-[10px] tabular-nums text-text-dim">
+            {formatDuration(cell.startSec)}
+            {cell.endSec != null && cell.endSec > cell.startSec
+              ? `–${formatDuration(cell.endSec)}`
+              : ""}
+          </span>
+        ) : null}
+      </div>
+      {isMerged ? (
+        <div className="mt-0.5 text-[10px] uppercase tracking-wider text-text-dim/80">
+          transitioned through · showing {PHASE_SHORT[finalPhase]}
+        </div>
+      ) : null}
+      {!reached ? (
+        <div className="mt-1 text-caption text-text-dim">Did not reach</div>
+      ) : cell.slice.units.length === 0 ? (
+        <div className="mt-1 text-caption text-text-dim">—</div>
+      ) : (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {cell.slice.units.map((u) => (
+            <span
+              key={u.token}
+              className="inline-flex items-center gap-0.5 tabular-nums"
+            >
+              <Icon name={u.token} kind="unit" size={18} alt={u.token} />
+              <span className="text-caption">{u.count}</span>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
