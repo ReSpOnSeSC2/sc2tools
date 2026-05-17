@@ -10,6 +10,45 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Added
+
+- **Phase analytics rollout · build dossier, strategy drill-down,
+  opponent profile, and pre-game scouting** — a single calibrated
+  phase model (Early / Early-Mid / Mid / Mid-Late / Late) now drives
+  four new surfaces, all backed by the same `phaseClassifier`
+  service and the same trajectory + transition primitives:
+  - **Phase trajectory + composition view on every build dossier**:
+    `PhaseTrajectoryStrip` and `PhaseCompositionTabs` render inline
+    on `/app → Builds` and `/builds/[slug]` for any custom build
+    with ≥10 matched games. The strip shows the cohort's typical
+    phase walk over time; the tabs break down unit composition,
+    win rate, and final-phase distribution per phase bucket.
+    Wired through the new `/v1/custom-builds/:slug/compositions`
+    API route (`apps/api/src/services/buildCompositions.js`).
+  - **Game transition Sankey (build → opp strategy → final phase
+    → late comp)**: `BuildTransitionSankey` renders the four-stage
+    flow on the same dossier. Backed by
+    `/v1/custom-builds/:slug/transitions`
+    (`apps/api/src/services/buildTransitions.js`); accessible
+    `<table>` fallback for screen readers ships in the same
+    component.
+  - **Phase comparison in `StrategiesTabBuildVs`**: drill into a
+    strategy with ≥5 matched games and the new
+    `StrategyPhasePanel` + `BuildVsStrategyComparison` 2-col layout
+    renders inline above the existing `StrategyMmrPanel`. Backed by
+    `apps/api/src/services/strategyPhases.js`, with a snapshot test
+    that pins the calibration.
+  - **Opponent profile phase section**: recurring opponents on
+    `/app → Opponents → [profile]` now show the same trajectory
+    + Sankey pair, keyed on the opponent's perspective.
+    Backed by `apps/api/src/services/opponents.js` phase routes
+    and the `opponentsPhases.test.js` fixture suite.
+  - **Phase-aware pre-game scouting widget**: the overlay widget's
+    LAST GAMES rows are preserved verbatim; a new compact phase
+    strip with the opponent's forecast phase trajectory now renders
+    ALONGSIDE them. Triggered from `/settings/overlay` "Test
+    widget" the same way the existing card is.
+
 ### Fixed
 
 - **Strategy classifier · Terran 1-base 1-1-1 was lumped into the
