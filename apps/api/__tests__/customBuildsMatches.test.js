@@ -323,8 +323,9 @@ describe("GET /v1/custom-builds/:slug/compositions", () => {
         }),
       );
     }
-    // Both seeded games crossed the warpgate-adept fixture's midAt=410s
-    // before duration=470s, so they land in finalPhase=mid.
+    // Both seeded games crossed the warpgate-adept fixture's midAt=293s
+    // before duration=470s (real LotV seconds post-2026-05-17 timebase
+    // migration), so they land in finalPhase=mid.
     expect(res.body.finalPhaseDistribution.mid).toBe(2);
     expect(res.body.sampleSize.mid).toBe(2);
   });

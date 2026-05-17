@@ -129,8 +129,8 @@ describe("services/overlayLive.buildFromOpponentName — opponentPhases", () => 
     expect(p.opponentPhases.trajectory).toMatchObject({
       sampleSize: expect.any(Object),
       crossings: {
-        earlyMidAt: 250,
-        midAt: 410,
+        earlyMidAt: 184,
+        midAt: 293,
         midLateAt: null,
         lateAt: null,
       },

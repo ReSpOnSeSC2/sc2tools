@@ -1,0 +1,20 @@
+# Macro-score regression check for the 2026-05-17 timebase migration
+# (Prompt 16 step 5.5). BEFORE = sc2reader's broken 16fps event.second
+# scale (pre-PR #309); AFTER = real LotV 22.4fps via core/timebase.py.
+# Acceptable envelope per the spec: |delta| <= 15 points per game.
+#
+# Only warpgate_adept_tracking ships in the repo (under
+# SC2Replay-Analyzer/tests/fixtures/replays/). The other three
+# calibration replays (TIIIII PvT 20m WIN, TPeruano PvT 11m LOSS,
+# JmaC PvZ 15m Skytoss WIN) live in the maintainer's local archive
+# and could not be rescored from this branch. Re-run with::
+#
+#   .venv/bin/python -c "..."  # see scripts/macro_score_diff.py
+#
+# once the missing replays are accessible and append the rows.
+replay_id,race,length,score_pre,score_post,delta
+warpgate_adept_tracking,Protoss,470,79,76,-3
+warpgate_adept_tracking,Zerg,470,70,67,-3
+# pvt_20m_macro_win,Protoss,?,?,?,?     # not bundled — replay missing
+# pvt_11m_cut_short_loss,Protoss,?,?,?,? # not bundled — replay missing
+# pvz_15m_skytoss_win,Protoss,?,?,?,?    # not bundled — replay missing

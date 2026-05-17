@@ -16,13 +16,17 @@
  * `apps/api/__tests__/phaseClassifier.test.js`. Don't change the
  * numbers without re-running those snapshots.
  *
- * Time-base note: every `time`, `born_time`, `died_time` we read off
- * the macroBreakdown is on sc2reader's `event.second` scale, which
- * assumes 16fps and runs ~1.4x faster than real LotV game-time.
- * The whole replay-analyzer stack (buildLog timestamps, macro_score
- * computation, DNA timings) operates at this scale, so we DO NOT
- * convert. See issue #308 ("Fix sc2reader 22.4fps time-base bug
- * globally") for the cross-cutting fix.
+ * Time-base note: as of 2026-05-17 the entire stack runs at real LotV
+ * seconds. This classifier consumes macroBreakdown blobs at real scale
+ * and emits crossings/finalScore in real seconds. Pre-migration data
+ * (anything ingested before PR #309) is rewritten to the same scale by
+ * the 2026-05-17-rescale-timebase migration so the classifier sees one
+ * consistent timebase regardless of when the game was uploaded.
+ *
+ * The 60s base-ramp window in ``smoothedBaseCount`` is intentionally
+ * left at 60: it means "60s of real wall-clock life," which is now
+ * what the data actually provides. Pre-migration we were ramping over
+ * 60 broken-seconds ≈ 84 real seconds.
  */
 
 /** @type {Record<string, number>} */

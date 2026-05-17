@@ -10,6 +10,22 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Migration notes
+
+- **Timebase rescale** (PR #309 + the 2026-05-17-rescale-timebase
+  one-shot migration). After upgrading, run
+  ``apps/api/scripts/migrate.js timebase`` to rescale your existing
+  game data from the broken 16 fps sc2reader scale to the real LotV
+  22.4 fps scale the new agent emits. Without this, build-rule
+  thresholds saved before the migration will not match games ingested
+  after it (a "Stalker before 4:30" rule written against
+  pre-migration buildLog text will be ~1.4× too late versus fresh
+  ingests). The script snapshots each rewritten collection to
+  ``<name>_timebase_pre`` before writing, stamps
+  ``_timebaseScaledAt`` per doc so re-runs are no-ops, and drops the
+  derived caches that regenerate on read. See the script header for
+  ``--dry-run`` / ``--force`` / ``--user`` flags.
+
 ### Added
 
 - **Phase analytics rollout · build dossier, strategy drill-down,
