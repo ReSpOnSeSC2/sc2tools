@@ -71,7 +71,16 @@
  * Idempotency
  * -----------
  * Each migrated document is stamped with ``_timebaseScaledAt`` (a
- * ``Date``). Re-runs skip docs that already carry the field. Pass
+ * ``Date``) AND ``_schemaVersion`` bumped to the post-cutover value
+ * pulled from ``schemaVersioning.expectedVersion(collection)``.
+ * Together they give two ways to detect partial-migration state:
+ *
+ *   * ``db.games.countDocuments({ _timebaseScaledAt: { $exists: false } })``
+ *     — per-doc, finest-grained.
+ *   * ``db.games.countDocuments({ _schemaVersion: { $lt: 5 } })``
+ *     — collection-level, mirrors the registry contract.
+ *
+ * Re-runs skip docs that already carry ``_timebaseScaledAt``. Pass
  * ``--force`` to re-run anyway — useful if you spot-check a bug,
  * fix it here, and need to re-scan. Note that --force WITHOUT first
  * restoring the snapshot will double-rescale and corrupt data.
@@ -108,6 +117,9 @@ const { MongoClient } = require("mongodb");
 const { COLLECTIONS } = require(
   path.join(__dirname, "..", "..", "config", "constants"),
 );
+const { expectedVersion, VERSION_KEY } = require(
+  path.join(__dirname, "..", "schemaVersioning"),
+);
 
 /** Scale factor: broken 16fps → real 22.4fps  ⇒  multiply by 16/22.4. */
 const SCALE = 16 / 22.4;
@@ -116,6 +128,22 @@ const DEFAULT_BATCH = 500;
 
 /** Snapshot suffix appended to each rewritten collection name. */
 const SNAPSHOT_SUFFIX = "_timebase_pre";
+
+/**
+ * Stamp the post-cutover ``_schemaVersion`` for ``collection`` onto
+ * the bulkWrite ``$set`` payload, alongside the timebase-specific
+ * idempotency marker. Pulling the target version from the registry
+ * (instead of hard-coding ``5``) keeps the migration in lockstep with
+ * any future bump.
+ *
+ * @param {Record<string, any>} set
+ * @param {string} collection
+ */
+function stampTimebaseVersion(set, collection) {
+  const target = expectedVersion(collection);
+  if (typeof target === "number") set[VERSION_KEY] = target;
+  return set;
+}
 
 /**
  * Names of derived-cache collections that the migration should drop
@@ -478,7 +506,10 @@ async function runGames(db, opts) {
     scanned += 1;
     if (!opts.force && alreadyScaled(doc)) continue;
     /** @type {Record<string, any>} */
-    const set = { _timebaseScaledAt: stampedAt };
+    const set = stampTimebaseVersion(
+      { _timebaseScaledAt: stampedAt },
+      COLLECTIONS.GAMES,
+    );
     const fields = [
       "buildLog",
       "oppBuildLog",
@@ -494,11 +525,18 @@ async function runGames(db, opts) {
       }
     }
     if (!anyChange) {
-      // No build-log fields to touch — still stamp idempotency.
+      // No build-log fields to touch — still stamp idempotency
+      // markers (timebase + schema version) so partial-migration
+      // queries treat the doc as up-to-date.
       ops.push({
         updateOne: {
           filter: { _id: doc._id },
-          update: { $set: { _timebaseScaledAt: stampedAt } },
+          update: {
+            $set: stampTimebaseVersion(
+              { _timebaseScaledAt: stampedAt },
+              COLLECTIONS.GAMES,
+            ),
+          },
         },
       });
     } else {
@@ -572,7 +610,10 @@ async function runGameDetails(db, opts) {
       const realDurationSec =
         durations.get(`${doc.userId}|${doc.gameId}`) || 0;
       /** @type {Record<string, any>} */
-      const set = { _timebaseScaledAt: stampedAt };
+      const set = stampTimebaseVersion(
+        { _timebaseScaledAt: stampedAt },
+        COLLECTIONS.GAME_DETAILS,
+      );
       let anyChange = false;
       const logFields = [
         "buildLog",
@@ -602,7 +643,12 @@ async function runGameDetails(db, opts) {
         ops.push({
           updateOne: {
             filter: { _id: doc._id },
-            update: { $set: { _timebaseScaledAt: stampedAt } },
+            update: {
+              $set: stampTimebaseVersion(
+                { _timebaseScaledAt: stampedAt },
+                COLLECTIONS.GAME_DETAILS,
+              ),
+            },
           },
         });
       } else {
@@ -664,6 +710,7 @@ async function runCustomShaped(db, collectionName, opts) {
     if (!opts.force && alreadyScaled(doc)) continue;
     const set = customBuildSetPatch(doc);
     set._timebaseScaledAt = stampedAt;
+    stampTimebaseVersion(set, collectionName);
     ops.push({
       updateOne: { filter: { _id: doc._id }, update: { $set: set } },
     });

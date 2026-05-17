@@ -413,4 +413,50 @@ describe("rescale timebase migration", () => {
     // rescaleSec to the documented anchor.
     expect(brokenSec(212)).toBe(297);
   });
+
+  test("stamps post-cutover _schemaVersion on every rewritten collection (issue #308 req 6)", async () => {
+    const { expectedVersion } = require("../src/db/schemaVersioning");
+    await seedFixtures();
+    await runMigration(db);
+
+    const gamesV = expectedVersion(COLLECTIONS.GAMES);
+    const detailsV = expectedVersion(COLLECTIONS.GAME_DETAILS);
+    const cbV = expectedVersion(COLLECTIONS.CUSTOM_BUILDS);
+    const cmbV = expectedVersion(COLLECTIONS.COMMUNITY_BUILDS);
+    expect(gamesV).toBeGreaterThanOrEqual(5);
+    expect(detailsV).toBeGreaterThanOrEqual(2);
+    expect(cbV).toBeGreaterThanOrEqual(2);
+    expect(cmbV).toBeGreaterThanOrEqual(2);
+
+    // Each rescaled row carries _schemaVersion = the registry's
+    // currentVersion. Operators can detect partial-migration state via
+    // `count({ _schemaVersion: { $lt: <currentVersion> } })`.
+    const unscaledGames = await db
+      .collection(COLLECTIONS.GAMES)
+      .countDocuments({ _schemaVersion: { $lt: gamesV } });
+    expect(unscaledGames).toBe(0);
+
+    const unscaledDetails = await db
+      .collection(COLLECTIONS.GAME_DETAILS)
+      .countDocuments({ _schemaVersion: { $lt: detailsV } });
+    expect(unscaledDetails).toBe(0);
+
+    const unscaledCb = await db
+      .collection(COLLECTIONS.CUSTOM_BUILDS)
+      .countDocuments({ _schemaVersion: { $lt: cbV } });
+    expect(unscaledCb).toBe(0);
+
+    const unscaledCmb = await db
+      .collection(COLLECTIONS.COMMUNITY_BUILDS)
+      .countDocuments({ _schemaVersion: { $lt: cmbV } });
+    expect(unscaledCmb).toBe(0);
+
+    // Sanity: a doc carries BOTH markers — the timebase-specific
+    // timestamp and the schema-wide version stamp.
+    const g1 = await db
+      .collection(COLLECTIONS.GAMES)
+      .findOne({ userId: USER_A, gameId: "g1" });
+    expect(g1._timebaseScaledAt).toBeInstanceOf(Date);
+    expect(g1._schemaVersion).toBe(gamesV);
+  });
 });
