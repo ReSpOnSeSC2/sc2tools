@@ -21,8 +21,8 @@
  * assumes 16fps and runs ~1.4x faster than real LotV game-time.
  * The whole replay-analyzer stack (buildLog timestamps, macro_score
  * computation, DNA timings) operates at this scale, so we DO NOT
- * convert. See issue #TBD ("global sc2reader 22.4fps fix") for the
- * cross-cutting fix.
+ * convert. See issue #308 ("Fix sc2reader 22.4fps time-base bug
+ * globally") for the cross-cutting fix.
  */
 
 /** @type {Record<string, number>} */

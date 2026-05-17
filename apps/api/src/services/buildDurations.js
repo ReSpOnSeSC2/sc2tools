@@ -30,6 +30,18 @@
  * use the current patch-5.0.13 LotV values; the resulting drift on
  * older replays is small enough not to swamp the natural variance
  * in median timings.
+ *
+ * Time-base note: the ``recordedSec`` passed in here is on
+ * sc2reader's ``event.second`` scale (16fps assumed), same as the
+ * rest of the analyzer pipeline. The Liquipedia durations are
+ * wall-clock LotV seconds (22.4fps real time), so a strict reading
+ * would convert one or the other. We don't — the resulting drift
+ * (~1.4x) is internally consistent across the stack and matches
+ * what the rest of the cloud and the desktop agent display. Issue
+ * #308 ("Fix sc2reader 22.4fps time-base bug globally") tracks the
+ * cross-cutting fix; until then this module stays on the 16fps
+ * scale to remain consistent with ``phaseClassifier.js`` and the
+ * stored buildLog data.
  */
 
 /**
