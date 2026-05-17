@@ -373,6 +373,68 @@ describe("useVoiceReadout (hook)", () => {
     );
   });
 
+  it("speaks once even after the live prop reference is replaced three times with identical content", () => {
+    // Regression for the wipe-on-mount bug: the live-envelope match-
+    // transition effect used to clear the scouting fingerprint refs
+    // on initial render whenever ``liveGame`` was absent — which is the
+    // common case for these tests AND for the OverlayWidgetClient
+    // configuration in production. Once cleared, every subsequent
+    // re-render with a fresh ``live`` reference saw the fingerprint
+    // as null and re-fired the same line. Repeated parent re-renders
+    // (e.g. SWR refresh, OverlayClient state churn) would speak the
+    // same opponent N times.
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    window.sessionStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const prefs = { enabled: true, events: { scouting: true } };
+    const make = (): LiveGamePayload => ({
+      oppName: "Alice",
+      oppRace: "Zerg",
+      headToHead: { wins: 2, losses: 1 },
+    });
+    const { rerender } = render(
+      <Harness live={make()} prefs={prefs} refOut={ref} />,
+    );
+    flush();
+    rerender(<Harness live={make()} prefs={prefs} refOut={ref} />);
+    flush();
+    rerender(<Harness live={make()} prefs={prefs} refOut={ref} />);
+    flush();
+    rerender(<Harness live={make()} prefs={prefs} refOut={ref} />);
+    flush();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it("document-wide click speaks once even after several intervening re-renders", () => {
+    // Structural regression for failures 2 and 3: the dedup contract
+    // must hold across (1) the post-gesture payload-effect re-run that
+    // happens because ``enqueueOrSpeak`` is rebuilt when
+    // ``gestureGranted`` flips AND (2) the queued-utterance replay
+    // effect. Both code paths consult the same fingerprint refs; if
+    // either one finds the refs cleared, the line fires twice.
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, events: { scouting: true } };
+    const live: LiveGamePayload = {
+      oppName: "Alice",
+      oppRace: "Zerg",
+      headToHead: { wins: 2, losses: 1 },
+    };
+    const { rerender } = render(
+      <Harness live={live} prefs={prefs} refOut={ref} />,
+    );
+    flush();
+    rerender(<Harness live={{ ...live }} prefs={prefs} refOut={ref} />);
+    flush();
+    rerender(<Harness live={{ ...live }} prefs={prefs} refOut={ref} />);
+    flush();
+    expect(cap.speak).not.toHaveBeenCalled();
+    act(() => {
+      document.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    flush();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(cap.utterances[0]?.text).toContain("Facing Alice, Zerg.");
+  });
+
   it("queues until gesture, then replays the most recent payload", () => {
     const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
     const prefs = { enabled: true, events: { scouting: true } };

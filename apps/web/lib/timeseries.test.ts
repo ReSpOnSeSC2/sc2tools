@@ -23,7 +23,35 @@ describe("startOfTodayInTz", () => {
     const now = new Date("2026-05-10T02:43:00Z");
     for (const tz of tzs) {
       const start = startOfTodayInTz(tz, now);
-      expect(localDateKey(start, tz)).toBe(todayKeyIn(tz));
+      expect(localDateKey(start, tz)).toBe(todayKeyIn(tz, now));
+    }
+  });
+
+  test("startOfTodayInTz and todayKeyIn agree for arbitrary instants across UTC offsets", () => {
+    // Regression: previously `todayKeyIn` ignored the injected clock,
+    // so callers that needed the two helpers to align (e.g. building a
+    // `since=startOfTodayInTz` filter that the consumer then keyed
+    // against `todayKeyIn`) silently disagreed whenever the wall clock
+    // moved past the injected instant.
+    const instants = [
+      // Mid-afternoon UTC — same calendar day in every zone tested.
+      new Date("2026-05-09T15:30:00Z"),
+      // Just-past-midnight UTC — Auckland is already on the next day.
+      new Date("2026-05-10T00:05:00Z"),
+      // Late UTC evening — Los Angeles still on the previous day.
+      new Date("2026-05-09T23:50:00Z"),
+    ];
+    const zones = [
+      "America/Los_Angeles", // west of UTC
+      "Europe/London", // ~UTC (BST in May)
+      "Asia/Tokyo", // east of UTC
+      "Pacific/Auckland", // far east of UTC
+    ];
+    for (const now of instants) {
+      for (const tz of zones) {
+        const start = startOfTodayInTz(tz, now);
+        expect(localDateKey(start, tz)).toBe(todayKeyIn(tz, now));
+      }
     }
   });
 

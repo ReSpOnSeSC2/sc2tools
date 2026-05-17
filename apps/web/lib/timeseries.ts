@@ -71,9 +71,14 @@ export function localDateKey(value: string | Date, timeZone: string): string {
 
 /**
  * Today's date in the user's timezone, formatted as `YYYY-MM-DD`.
+ *
+ * @param now optional clock injection so the caller can pin "today"
+ *   against the same instant they pass to `startOfTodayInTz`. Without
+ *   the injection point, a test that freezes one side to a fixed date
+ *   while the other reads wall-clock time will never agree.
  */
-export function todayKeyIn(timeZone: string): string {
-  return localDateKey(new Date(), timeZone);
+export function todayKeyIn(timeZone: string, now: Date = new Date()): string {
+  return localDateKey(now, timeZone);
 }
 
 /**
