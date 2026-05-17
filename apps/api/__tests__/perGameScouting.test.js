@@ -15,6 +15,7 @@ const {
   computePerGameScouting,
   deriveEndReason,
   buildOpponentBuildOrder,
+  canonicalUnitToken,
 } = require("../src/services/scouting/perGameScouting");
 
 /**
@@ -273,6 +274,106 @@ describe("computePerGameScouting — endReason branches", () => {
   test("real late game uses macro_game endReason", () => {
     const env = computePerGameScouting(buildLateGame());
     expect(env.endReason).toBe("macro_game");
+  });
+});
+
+describe("composition snapshot — canonical unit token rollup", () => {
+  test("Lurker + LurkerMP + LurkerMPBurrowed sum into a single Lurker row", () => {
+    // Late-phase fixture where the timeline carries the unit under
+    // three sc2reader variant tokens at the same tick. Without
+    // rollup, the composition strip would surface three separate
+    // rows splitting the count.
+    const env = computePerGameScouting(buildLateGame({
+      macroBreakdown: {
+        ...makeMacroLate(),
+        unit_timeline: [
+          { time: 0, my: {}, opp: { Drone: 12 } },
+          { time: 600, my: {}, opp: {
+            Lurker: 4,
+            LurkerMP: 3,
+            LurkerMPBurrowed: 2,
+            Zergling: 8,
+          } },
+        ],
+      },
+    }));
+    const lateUnits = env.oppCompositionByPhase.late.units;
+    const lurker = lateUnits.find((u) => u.token === "Lurker");
+    expect(lurker).toBeDefined();
+    expect(lurker.count).toBe(9);
+    // No raw variant tokens leaked into the response.
+    expect(lateUnits.some((u) => u.token === "LurkerMP")).toBe(false);
+    expect(lateUnits.some((u) => u.token === "LurkerMPBurrowed")).toBe(false);
+  });
+
+  test("SiegeTank + SiegeTankSieged sum under the canonical SiegeTank token", () => {
+    expect(canonicalUnitToken("SiegeTankSieged")).toBe("SiegeTank");
+    expect(canonicalUnitToken("WidowMineBurrowed")).toBe("WidowMine");
+    expect(canonicalUnitToken("VikingFighter")).toBe("Viking");
+    expect(canonicalUnitToken("VikingAssault")).toBe("Viking");
+  });
+
+  test("Protoss morph variants fold to their base name", () => {
+    expect(canonicalUnitToken("WarpPrismPhasing")).toBe("WarpPrism");
+    expect(canonicalUnitToken("ObserverSiegeMode")).toBe("Observer");
+    expect(canonicalUnitToken("AdeptPhaseShift")).toBe("Adept");
+  });
+
+  test("unrecognised tokens pass through unchanged", () => {
+    expect(canonicalUnitToken("Carrier")).toBe("Carrier");
+    expect(canonicalUnitToken("Marine")).toBe("Marine");
+    expect(canonicalUnitToken("Stalker")).toBe("Stalker");
+  });
+
+  test("regex stance suffix fallback catches unenumerated variants", () => {
+    // No explicit alias for these — the suffix regex strips the
+    // posture and resolves to the base name. Matches the
+    // macro-breakdown canonicaliser's behaviour.
+    expect(canonicalUnitToken("CarrierFlying")).toBe("Carrier");
+    expect(canonicalUnitToken("BarracksFlying")).toBe("Barracks");
+    expect(canonicalUnitToken("SupplyDepotLowered")).toBe("SupplyDepot");
+    expect(canonicalUnitToken("SpineCrawlerUprooted")).toBe("SpineCrawler");
+  });
+
+  test("warp-in cocoon variants fold to their unit name", () => {
+    expect(canonicalUnitToken("ZealotWarp")).toBe("Zealot");
+    expect(canonicalUnitToken("StalkerWarp")).toBe("Stalker");
+    expect(canonicalUnitToken("DarkTemplarWarp")).toBe("DarkTemplar");
+    expect(canonicalUnitToken("ImmortalWarp")).toBe("Immortal");
+  });
+
+  test("Overlord variants fold (Transport / Cocoon / TransportOverlordCocoon)", () => {
+    expect(canonicalUnitToken("OverlordTransport")).toBe("Overlord");
+    expect(canonicalUnitToken("OverlordTransportCocoon")).toBe("Overlord");
+    expect(canonicalUnitToken("TransportOverlordCocoon")).toBe("Overlord");
+  });
+
+  test("real Roach + RoachBurrowed sum in a unit_timeline snapshot", () => {
+    // sc2reader frequently splits a roach army into the alive +
+    // burrowed forms in the same tick (player burrowed some roaches
+    // ahead of an engagement). The composition strip must sum them
+    // so the streamer sees the real on-field count, not half of it.
+    const env = computePerGameScouting(buildLateGame({
+      macroBreakdown: {
+        ...makeMacroLate(),
+        unit_timeline: [
+          { time: 0, my: {}, opp: { Drone: 12 } },
+          { time: 600, my: {}, opp: {
+            Roach: 14,
+            RoachBurrowed: 6,
+            ZerglingBurrowed: 12,
+            Zergling: 8,
+          } },
+        ],
+      },
+    }));
+    const lateUnits = env.oppCompositionByPhase.late.units;
+    const roach = lateUnits.find((u) => u.token === "Roach");
+    const zergling = lateUnits.find((u) => u.token === "Zergling");
+    expect(roach.count).toBe(20);
+    expect(zergling.count).toBe(20);
+    expect(lateUnits.some((u) => u.token === "RoachBurrowed")).toBe(false);
+    expect(lateUnits.some((u) => u.token === "ZerglingBurrowed")).toBe(false);
   });
 });
 

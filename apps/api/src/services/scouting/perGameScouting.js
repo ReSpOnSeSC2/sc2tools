@@ -40,6 +40,116 @@ const { tokenByInternalName } = require("../timingCatalog");
 
 const PHASE_LIST = PHASE_ORDER;
 
+/**
+ * sc2reader stores burrowed / morph / state-change forms of a unit
+ * under separate tokens in unit_timeline (e.g. ``Lurker`` /
+ * ``LurkerMP`` / ``LurkerMPBurrowed`` for the same on-field unit).
+ * Without folding, the composition strip surfaces them as two or
+ * three rows splitting the count and stacking the same icon.
+ *
+ * The alias map and regex stance-suffix strip below MIRROR the
+ * client-side canonicaliser in
+ * ``apps/web/components/analyzer/macro/compositionAt.ts`` — the
+ * macro-breakdown chart's roster already uses this exact rollup to
+ * collapse variants onto one chip per unit type, so the per-game
+ * scouting envelope follows suit. Keep the two lists in sync; the
+ * server-side rollup is the authoritative source for envelope
+ * output and the client list defensively re-runs the same
+ * normalisation on its own derived compositions.
+ */
+const UNIT_NAME_ALIASES = new Map([
+  // Terran combat-posture / stance variants
+  ["SiegeTankSieged", "SiegeTank"],
+  ["VikingFighter", "Viking"],
+  ["VikingAssault", "Viking"],
+  ["HellionTank", "Hellbat"],
+  ["ThorAP", "Thor"],
+  ["ThorAA", "Thor"],
+  ["WidowMineBurrowed", "WidowMine"],
+  ["LiberatorAG", "Liberator"],
+  // Protoss warp-in cocoon variants and stance toggles
+  ["WarpPrismPhasing", "WarpPrism"],
+  ["ZealotWarp", "Zealot"],
+  ["StalkerWarp", "Stalker"],
+  ["SentryWarp", "Sentry"],
+  ["AdeptWarp", "Adept"],
+  ["AdeptPhaseShift", "Adept"],
+  ["DarkTemplarWarp", "DarkTemplar"],
+  ["HighTemplarWarp", "HighTemplar"],
+  ["ImmortalWarp", "Immortal"],
+  ["ColossusWarp", "Colossus"],
+  ["ObserverSiegeMode", "Observer"],
+  // Zerg burrow / MP / cocoon variants
+  ["BanelingMP", "Baneling"],
+  ["BanelingBurrowed", "Baneling"],
+  ["BanelingCocoon", "Baneling"],
+  ["RoachBurrowed", "Roach"],
+  ["RoachMP", "Roach"],
+  ["ZerglingBurrowed", "Zergling"],
+  ["HydraliskBurrowed", "Hydralisk"],
+  ["InfestorBurrowed", "Infestor"],
+  ["LurkerMP", "Lurker"],
+  ["LurkerMPBurrowed", "Lurker"],
+  ["LurkerMPEgg", "Lurker"],
+  ["LurkerBurrowed", "Lurker"],
+  ["RavagerBurrowed", "Ravager"],
+  ["RavagerCocoon", "Ravager"],
+  ["SwarmHostMP", "SwarmHost"],
+  ["SwarmHostMPBurrowed", "SwarmHost"],
+  ["SwarmHostBurrowedMP", "SwarmHost"],
+  ["QueenBurrowed", "Queen"],
+  ["UltraliskBurrowed", "Ultralisk"],
+  ["BroodLordCocoon", "BroodLord"],
+  ["Broodlord", "BroodLord"],
+  ["OverseerSiegeMode", "Overseer"],
+  ["OverseerCocoon", "Overseer"],
+  ["OverlordTransport", "Overlord"],
+  ["OverlordTransportCocoon", "Overlord"],
+  ["TransportOverlordCocoon", "Overlord"],
+  ["LocustMP", "Locust"],
+  ["LocustMPFlying", "Locust"],
+  ["LocustMPPrecursor", "Locust"],
+  ["DroneBurrowed", "Drone"],
+]);
+
+// Same regex the macro-breakdown canonicaliser uses to strip stance
+// / state suffixes the alias map doesn't enumerate (defence against
+// sc2reader adding a new variant in a future patch). Tracks the
+// pattern in apps/web/components/analyzer/macro/compositionAt.ts:205.
+const UNIT_NAME_SUFFIX_RE = /(Burrowed|Sieged|Phasing|Flying|Lowered|Cocoon|Uprooted|Phased)$/i;
+const UNIT_NAME_PREFIX_BURROWED_RE = /^Burrowed/i;
+
+/**
+ * Canonicalise a unit-timeline token onto its base name. Resolution
+ * order mirrors the macro-breakdown's ``canonicalizeName``:
+ *   1. Direct alias hit (``InfestorBurrowed`` → ``Infestor``).
+ *   2. Regex suffix / prefix strip on unmatched names.
+ *   3. Second pass through the alias map after the strip — catches
+ *      hypothetical chained forms (``ImmortalWarpPhasing``
+ *      → ``ImmortalWarp`` → ``Immortal``).
+ *   4. Fallback: return the stripped name, or the original when even
+ *      the strip yielded an empty string.
+ *
+ * @param {string} token
+ * @returns {string}
+ */
+function canonicalUnitToken(token) {
+  if (!token) return "";
+  const direct = UNIT_NAME_ALIASES.get(token);
+  if (direct) return direct;
+  const stripped = token
+    .replace(UNIT_NAME_SUFFIX_RE, "")
+    .replace(UNIT_NAME_PREFIX_BURROWED_RE, "");
+  if (stripped !== token) {
+    const aliased = UNIT_NAME_ALIASES.get(stripped);
+    if (aliased) return aliased;
+  }
+  return stripped || token;
+}
+
+// Back-compat alias the existing tests reference.
+const UNIT_TOKEN_ALIASES = UNIT_NAME_ALIASES;
+
 const BUILD_LOG_LINE_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
 const BUILD_LOG_NOISE_RE = /^(Beacon|Reward|Spray)/;
 
@@ -338,13 +448,20 @@ function pickTopUnits(macroBreakdown, midpoint, perspective) {
   const side = perspective === "opponent"
     ? (best && best.opp ? best.opp : {})
     : (best && best.my ? best.my : {});
-  /** @type {Array<{token:string,count:number}>} */
-  const entries = [];
+  /** @type {Map<string, number>} */
+  const merged = new Map();
   for (const token of Object.keys(side)) {
     if (WORKER_SKIP.has(token)) continue;
     const n = Number(side[token]);
     if (!(n > 0)) continue;
-    entries.push({ token, count: n });
+    const canonical = canonicalUnitToken(token);
+    if (WORKER_SKIP.has(canonical)) continue;
+    merged.set(canonical, (merged.get(canonical) || 0) + n);
+  }
+  /** @type {Array<{token:string,count:number}>} */
+  const entries = [];
+  for (const [token, count] of merged) {
+    entries.push({ token, count });
   }
   entries.sort((a, b) => {
     if (a.count !== b.count) return b.count - a.count;
@@ -420,4 +537,6 @@ module.exports = {
   // under the original opponent-only name.
   buildOpponentBuildOrder: buildSideBuildOrder,
   BUILD_ORDER_SKIP,
+  canonicalUnitToken,
+  UNIT_TOKEN_ALIASES,
 };

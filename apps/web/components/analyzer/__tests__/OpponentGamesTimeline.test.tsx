@@ -157,6 +157,68 @@ describe("OpponentGamesTimeline", () => {
     expect(lateCard?.textContent).toContain("Did not reach");
   });
 
+  it("merges consecutive phases that share the same crossing time into one cell", () => {
+    // Classifier collapses mid + midLate + late onto the same crossing
+    // when T3 tech / unit floors ratchet the score across multiple
+    // thresholds in the same second. The grid must NOT render three
+    // identical composition cards in that case — it should merge them
+    // into a single cell labelled with the highest reached phase.
+    const env = envelope({
+      oppTransitions: {
+        earlyMidAt: 50,
+        midAt: 630,
+        midLateAt: 630,
+        lateAt: 630,
+      },
+      oppCompositionByPhase: {
+        early: {
+          reached: true,
+          atTime: 25,
+          units: [{ token: "Zergling", count: 6 }],
+        },
+        earlyMid: {
+          reached: true,
+          atTime: 340,
+          units: [{ token: "Roach", count: 4 }],
+        },
+        mid: {
+          reached: true,
+          atTime: 630,
+          units: [{ token: "Roach", count: 20 }, { token: "Hydralisk", count: 5 }],
+        },
+        midLate: {
+          reached: true,
+          atTime: 630,
+          units: [{ token: "Roach", count: 20 }, { token: "Hydralisk", count: 5 }],
+        },
+        late: {
+          reached: true,
+          atTime: 700,
+          units: [{ token: "Roach", count: 22 }, { token: "BroodLord", count: 7 }],
+        },
+      },
+      durationSec: 770,
+    });
+    render(<OpponentGamesTimeline envelopes={[env]} />);
+    const phaseCards = screen.getAllByTestId("opponent-game-phase-card");
+    // The OPPONENT side should now have only 3 cells: early, earlyMid,
+    // and one merged mid+midLate+late cell. (Player side has empty
+    // transitions so all five phase cards still render for it.)
+    const oppCards = phaseCards.filter((n) =>
+      n.getAttribute("data-merged-phases")?.split(",").every((p) =>
+        ["early", "earlyMid", "mid", "midLate", "late"].includes(p),
+      ),
+    );
+    const merged = oppCards.find(
+      (n) => n.getAttribute("data-merged-phases") === "mid,midLate,late",
+    );
+    expect(merged).toBeDefined();
+    expect(merged?.textContent).toContain("transitioned through");
+    // The merged cell renders the LATE composition (highest reached
+    // phase), not duplicated mid composition.
+    expect(merged?.textContent).toContain("22");
+  });
+
   it("renders the WHERE GAMES END distribution bar when finalPhaseDistribution is provided", () => {
     render(
       <OpponentGamesTimeline
