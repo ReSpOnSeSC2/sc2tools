@@ -93,11 +93,13 @@ def _load_extractor():
         "import sys, json, os; "
         "sys.path.insert(0, %r); "
         "import sc2reader; "
-        "from core.event_extractor import extract_macro_events; "
+        "from core.event_extractor import extract_macro_events, extract_events; "
         "r = sc2reader.load_replay(%r, load_level=4); "
         "out = extract_macro_events(r, my_pid=1, opp_pid=2); "
+        "my_ev, _opp_ev, _stats = extract_events(r, my_pid=1); "
         "json.dump({'unit_timeline': out['unit_timeline'], "
-        "'player_stats': out['player_stats']}, sys.stdout)"
+        "'player_stats': out['player_stats'], 'my_events': my_ev}, "
+        "sys.stdout)"
     ) % (_ROOT, _FIXTURE)
     res = subprocess.run(
         [sys.executable, "-c", script],
@@ -124,16 +126,22 @@ def _alive_at(timeline: List[Dict[str, Any]], t: int, side: str) -> Dict[str, in
 
 
 def test_warpgate_adepts_are_tracked_in_unit_timeline():
-    """At t=480s (the screenshot's locked hover time) the user's
-    timeline must report the Adepts alive on the field — pre-fix
-    the count read 0 because every WarpGate-warped Adept fired
-    ``UnitInitEvent`` + ``UnitDoneEvent`` and never ``UnitBornEvent``.
+    """At real t=343s (the screenshot's locked hover, scaled into the
+    new real-game-time axis after issue #308) the user's timeline must
+    report the Adepts alive on the field — pre-fix the count read 0
+    because every WarpGate-warped Adept fired ``UnitInitEvent`` +
+    ``UnitDoneEvent`` and never ``UnitBornEvent``.
+
+    Note on the hover time: the original screenshot read "8:00" off
+    the broken sc2reader scale. ``8:00`` broken-seconds maps to
+    ``8 * 60 / 1.4 ≈ 343 s`` of real game time, which is where the
+    user counted 11 alive Adepts.
     """
     out = _load_extractor()
-    my_at_480 = _alive_at(out["unit_timeline"], 480, "my")
-    assert my_at_480.get("Adept", 0) >= 8, (
-        f"Expected at least 8 Adepts alive at 8:00 (the user had 11 "
-        f"after WarpGate warp-ins around 7:30); got {my_at_480!r}. "
+    my_at_hover = _alive_at(out["unit_timeline"], 343, "my")
+    assert my_at_hover.get("Adept", 0) >= 8, (
+        f"Expected at least 8 Adepts alive at real t=343s (the user "
+        f"counted 11 after WarpGate warp-ins); got {my_at_hover!r}. "
         f"If this regressed, ``unit_lifetimes`` is again only listening "
         f"to UnitBornEvent and silently dropping every warp-in unit."
     )
@@ -167,13 +175,13 @@ def test_zerglings_are_not_corrupted_to_ling():
     while legacy ``"ZergHatchery"`` still folds to ``"Hatchery"``.
     """
     out = _load_extractor()
-    opp_at_480 = _alive_at(out["unit_timeline"], 480, "opp")
-    assert "Zergling" in opp_at_480, (
-        f"Expected 'Zergling' in opp roster at 8:00, got keys "
-        f"{sorted(opp_at_480.keys())}. If 'ling' is in the keys, "
+    opp_at_hover = _alive_at(out["unit_timeline"], 343, "opp")
+    assert "Zergling" in opp_at_hover, (
+        f"Expected 'Zergling' in opp roster at real t=343s, got keys "
+        f"{sorted(opp_at_hover.keys())}. If 'ling' is in the keys, "
         f"_clean_building_name regressed back to global .replace()."
     )
-    assert "ling" not in opp_at_480, (
+    assert "ling" not in opp_at_hover, (
         "Opp roster contained 'ling' — _clean_building_name corrupted "
         "the Zergling name. Check the prefix-strip CamelCase guard."
     )
@@ -189,12 +197,13 @@ def test_overlords_are_counted_in_opp_roster():
     Pinning Overlord presence here keeps chart and roster in sync.
     """
     out = _load_extractor()
-    opp_at_480 = _alive_at(out["unit_timeline"], 480, "opp")
-    assert opp_at_480.get("Overlord", 0) >= 1, (
-        f"Expected Overlord in opp roster at 8:00 (Zerg always has at "
-        f"least one Overlord by then); got {opp_at_480!r}. If this "
-        f"regressed, Overlord is back in SKIP_UNITS and the roster "
-        f"will under-count opp army by ~100/Overlord vs the chart."
+    opp_at_hover = _alive_at(out["unit_timeline"], 343, "opp")
+    assert opp_at_hover.get("Overlord", 0) >= 1, (
+        f"Expected Overlord in opp roster at real t=343s (Zerg always "
+        f"has at least one Overlord by then); got {opp_at_hover!r}. If "
+        f"this regressed, Overlord is back in SKIP_UNITS and the "
+        f"roster will under-count opp army by ~100/Overlord vs the "
+        f"chart."
     )
 
 
@@ -216,6 +225,39 @@ def test_ability_units_skipped_from_roster():
                 f"t={entry.get('time')}s ({side}): {sorted(leaked)}. "
                 f"Add to SKIP_UNITS in core/event_extractor.py."
             )
+
+
+def test_second_nexus_lands_at_real_game_time():
+    """Pre-fix every ``event.time`` on the extractor's output was on
+    sc2reader's broken ``frame // 16`` scale — 1.4× too high on every
+    LotV replay. The second Nexus on ``warpgate_adept_tracking.SC2Replay``
+    sits at frame 1981 — real time ``1981 / 22.4 ≈ 88 s`` (i.e.
+    ``[1:28]`` in the build log). The broken scale would have emitted
+    ``1981 // 16 = 123 s`` (``[2:03]``). Pin the corrected value here
+    so a regression to the 16fps scale shows up immediately as a
+    one-replay test failure rather than a silent 1.4× drift on every
+    build-log surface in production.
+    """
+    out = _load_extractor()
+    nexus_events = [
+        e for e in out["my_events"]
+        if e.get("type") == "building" and e.get("name") == "Nexus"
+        and e.get("subtype") == "init"
+    ]
+    assert len(nexus_events) >= 1, (
+        "Extractor lost every Nexus UnitInitEvent — check that "
+        "extract_events still emits buildings on the init path."
+    )
+    # First *built* Nexus (the natural; the main is UnitBornEvent at
+    # frame 0). Real time = frame / 22.4 ≈ 88 s.
+    first_built = nexus_events[0]
+    assert 87 <= first_built["time"] <= 89, (
+        f"Second Nexus arrived at t={first_built['time']}s; expected "
+        f"~88s (real 1:28). Pre-fix value was 123s — if the assertion "
+        f"says 123 the extractor regressed to sc2reader's broken "
+        f"frame//16 scale. Check core/timebase.py wiring in "
+        f"core/event_extractor.py::extract_events."
+    )
 
 
 def test_clean_building_name_unit_tests():

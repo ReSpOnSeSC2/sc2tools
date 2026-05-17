@@ -1292,6 +1292,15 @@ def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
     except Exception:  # noqa: BLE001
         CommandEvent = None  # type: ignore
         SelectionEvent = None  # type: ignore
+    # ``event.second`` from sc2reader 1.8.0 is ``frame // 16`` — the
+    # HotS-era 16fps scale — so reading it directly would put every
+    # bucket 1.4× too high on a LotV replay. Resolve the real
+    # frame-rate once via ``infer_fps`` and convert frames ourselves.
+    try:
+        from core.timebase import infer_fps  # type: ignore
+        fps = infer_fps(replay)
+    except Exception:  # noqa: BLE001
+        fps = 22.4
     for ev in events:
         pid = getattr(ev, "pid", None)
         if pid is None:
@@ -1299,16 +1308,24 @@ def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
             pid = getattr(player, "pid", None) if player else None
         if pid not in (me_pid, opp_pid):
             continue
-        sec = getattr(ev, "second", None)
-        if sec is None:
-            frame = getattr(ev, "frame", None)
-            if frame is not None:
-                try:
-                    sec = int(frame) // 16
-                except (TypeError, ValueError):
-                    sec = None
-        if sec is None:
-            continue
+        frame = getattr(ev, "frame", None)
+        if frame is None:
+            # Some game events don't expose frame; their ``second``
+            # is still on sc2reader's broken 16fps scale, so rescale
+            # it to real time the same way ``timebase.event_seconds``
+            # does in its frame-less fallback path.
+            sec_attr = getattr(ev, "second", None)
+            if sec_attr is None:
+                continue
+            try:
+                sec = int(round(float(sec_attr) * 16.0 / fps))
+            except (TypeError, ValueError):
+                continue
+        else:
+            try:
+                sec = int(round(int(frame) / fps))
+            except (TypeError, ValueError):
+                continue
         bucket = int(sec) // window_sec
         if CommandEvent is not None and isinstance(ev, CommandEvent):
             counts_apm.setdefault(pid, {}).setdefault(bucket, 0)

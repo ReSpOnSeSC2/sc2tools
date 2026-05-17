@@ -12,6 +12,20 @@ import sys
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
+    # Normal package import: the agent's process picks up
+    # ``core.event_extractor`` through ``sys.path`` and the relative
+    # import resolves against the loaded ``core`` package.
+    from .timebase import event_seconds, infer_fps
+except ImportError:
+    # ``_load_sc2ra_module`` (apps/agent/.../replay_pipeline.py) loads
+    # this file via ``importlib.util.spec_from_file_location`` under a
+    # synthetic ``_sc2ra_core_event_extractor`` name with no parent
+    # package, which breaks relative imports. Fall back to the
+    # absolute path — at that point ``sys.path`` already contains
+    # ``SC2Replay-Analyzer`` so ``core.timebase`` resolves.
+    from core.timebase import event_seconds, infer_fps  # type: ignore
+
+try:
     from sc2reader.events.tracker import (
         UnitBornEvent,
         UnitInitEvent,
@@ -363,7 +377,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 if clean in SKIP_BUILDINGS:
                     continue
                 if clean in KNOWN_BUILDINGS:
-                    evt = {'type': 'building', 'subtype': 'init', 'name': clean, 'time': event.second, 'x': x, 'y': y}
+                    evt = {'type': 'building', 'subtype': 'init', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
 
@@ -381,7 +395,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 if is_building:
                     if clean in SKIP_BUILDINGS:
                         continue
-                    evt = {'type': 'building', 'subtype': 'born', 'name': clean, 'time': event.second, 'x': x, 'y': y}
+                    evt = {'type': 'building', 'subtype': 'born', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
                 else:
                     if clean in SKIP_UNITS:
                         continue
@@ -390,7 +404,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                     # ``opponent.py`` / ``user.py`` are calibrated against
                     # this value — see ``_start_time`` for the start-time
                     # mapping the cloud applies on display.
-                    evt = {'type': 'unit', 'name': clean, 'time': event.second, 'x': x, 'y': y}
+                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
                 (my_events if pid == my_pid else opp_events).append(evt)
                 stats['processed'] += 1
 
@@ -406,7 +420,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 if clean in KNOWN_BUILDINGS and clean in MORPH_BUILDINGS:
                     if clean in SKIP_BUILDINGS:
                         continue
-                    evt = {'type': 'building', 'subtype': 'morph', 'name': clean, 'time': event.second, 'x': x, 'y': y}
+                    evt = {'type': 'building', 'subtype': 'morph', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
 
@@ -422,7 +436,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 if clean in KNOWN_BUILDINGS:
                     pass
                 elif clean not in SKIP_UNITS:
-                    evt = {'type': 'unit', 'name': clean, 'time': event.second, 'x': x, 'y': y}
+                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
 
@@ -432,7 +446,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 if pid is None or name is None:
                     stats['pid_failed'] += 1
                     continue
-                evt = {'type': 'upgrade', 'name': name, 'time': event.second}
+                evt = {'type': 'upgrade', 'name': name, 'time': event_seconds(event, replay)}
                 (my_events if pid == my_pid else opp_events).append(evt)
                 stats['processed'] += 1
     except Exception:
@@ -930,7 +944,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     )
                     army_value = int((army_minerals or 0) + (army_vespene or 0))
                     sample = {
-                        "time": getattr(event, "second", 0),
+                        "time": event_seconds(event, replay),
                         "food_used": getattr(event, "food_used", 0),
                         "food_made": getattr(event, "food_made", 0),
                         "minerals_current": getattr(event, "minerals_current", 0),
@@ -968,7 +982,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     if not raw:
                         continue
                     clean = _clean_building_name(raw)
-                    t = int(getattr(event, "second", 0))
+                    t = event_seconds(event, replay)
                     uid = _resolve_unit_id(event)
 
                     # Track non-building, non-skip units for BOTH pids so
@@ -1164,7 +1178,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                             and not clean.endswith(
                                 ("Uprooted", "Flying", "Lowered"))):
                         completion_recorded_uids.add(uid)
-                        morph_t = int(getattr(event, "second", 0))
+                        morph_t = event_seconds(event, replay)
                         unit_lifetimes[uid] = {
                             "pid": pid, "name": clean, "born": morph_t,
                             "died": None,
@@ -1173,7 +1187,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
 
                 if UnitDiedEvent is not None and isinstance(event, UnitDiedEvent):
                     uid = _resolve_unit_id(event)
-                    died_t = int(getattr(event, "second", 0))
+                    died_t = event_seconds(event, replay)
                     # Resolve who got the kill credit. sc2reader exposes
                     # ``killing_player_id`` on UnitDiedEvent as of 1.7.x;
                     # ``killer_pid`` is the deprecated alias and a useful
@@ -1281,7 +1295,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                         record = {
                             "ability_name": bucket,
                             "category": bucket,
-                            "time": int(getattr(event, "second", 0)),
+                            "time": event_seconds(event, replay),
                             "via": "state_event",
                         }
                         if bucket == "chrono":
@@ -1312,7 +1326,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                 record = {
                     "ability_name": _normalize_ability_name(event) or bucket,
                     "category": bucket,
-                    "time": int(getattr(event, "second", 0)),
+                    "time": event_seconds(event, replay),
                 }
                 if bucket == "chrono":
                     target = _resolve_target_unit_id(event)
@@ -1530,7 +1544,7 @@ def extract_unit_tracks(replay, my_pid):
                         uid = getattr(u, "id", None) if u is not None else None
                     if uid is None:
                         continue
-                    t = float(getattr(ev, "second", 0.0))
+                    t = float(event_seconds(ev, replay))
                     x = float(getattr(ev, "x", 0) or 0)
                     y = float(getattr(ev, "y", 0) or 0)
                     rec = units.get(uid)
@@ -1548,7 +1562,7 @@ def extract_unit_tracks(replay, my_pid):
                             rec["waypoints"].append((t, x, y))
 
                 elif _UnitPositionsEvent is not None and isinstance(ev, _UnitPositionsEvent):
-                    t = float(getattr(ev, "second", 0.0))
+                    t = float(event_seconds(ev, replay))
                     for (uid, (x, y)) in (getattr(ev, "positions", []) or []):
                         rec = units.get(uid)
                         if rec is None:
@@ -1563,7 +1577,7 @@ def extract_unit_tracks(replay, my_pid):
                         uid = getattr(u, "id", None) if u is not None else None
                     rec = units.get(uid)
                     if rec is not None:
-                        rec["died"] = float(getattr(ev, "second", 0.0))
+                        rec["died"] = float(event_seconds(ev, replay))
 
                 elif isinstance(ev, UnitTypeChangeEvent):
                     uid = getattr(ev, "unit_id", None)
@@ -1602,7 +1616,7 @@ def extract_unit_tracks(replay, my_pid):
                     sel = selections.get(pid)
                     if not sel:
                         continue
-                    t = float(getattr(ev, "second", 0.0))
+                    t = float(event_seconds(ev, replay))
                     x = float(getattr(ev, "x", 0) or 0)
                     y = float(getattr(ev, "y", 0) or 0)
                     if not (x or y):

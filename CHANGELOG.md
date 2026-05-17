@@ -51,6 +51,22 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Real-game-time timestamps everywhere** — all build-log and
+  replay-event timestamps now reflect the real in-game clock.
+  Previously every timestamp was emitted at sc2reader's hard-coded
+  16fps scale (``Event.second = frame // 16``), which is 1.4× too
+  high on LotV replays (the real frame-rate is 22.4 fps).
+  Affects ``buildLog`` / ``oppBuildLog`` text lines, macroBreakdown
+  ``time`` / ``born_time`` / ``died_time`` fields, ability-event
+  timestamps, ``unit_timeline`` ticks, and APM-curve sample times.
+  The fix lives in a new ``core/timebase.py`` utility that infers
+  the true fps from ``replay.frames / replay.length.seconds`` (so
+  legitimate HotS / WoL replays at the genuine 16 fps still resolve
+  correctly) and falls back to LotV's 22.4 fps when the header is
+  incomplete. Mirrored in both the SC2Replay-Analyzer and
+  reveal-sc2-opponent-main extractor copies, and in the agent's APM
+  curve fallback. Existing stored games will be migrated in a
+  one-shot pass (see issue #308 / Prompt 15). PR #309.
 - **Strategy classifier · Terran 1-base 1-1-1 was lumped into the
   composition fallback**: the opponent-side Terran detector treated
   the OrbitalCommand morph of the main Command Center as a "2nd
