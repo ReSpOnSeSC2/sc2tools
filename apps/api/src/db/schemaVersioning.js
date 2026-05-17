@@ -73,17 +73,32 @@ const REGISTRY = Object.freeze({
     //      ``games`` collection now that all readers fetch from the
     //      ``game_details`` collection (or from R2 when
     //      ``GAME_DETAILS_STORE=r2``).
-    currentVersion: 4,
+    // v5 — 2026-05-17 timebase cutover (issue #308): every stored
+    //      timestamp now lives on real LotV game-seconds (22.4 fps)
+    //      instead of sc2reader's broken 16 fps scale. Fresh writes
+    //      go straight to v5 via ``stampVersion``; historical rows
+    //      are bumped by the ``2026-05-17-rescale-timebase``
+    //      migration. ``db.games.countDocuments({ _schemaVersion:
+    //      { $lt: 5 } })`` reports unmigrated rows.
+    currentVersion: 5,
     versionKey: VERSION_KEY,
   },
   [COLLECTIONS.GAME_DETAILS]: {
     collection: COLLECTIONS.GAME_DETAILS,
-    currentVersion: 1,
+    // v2 — 2026-05-17 timebase cutover (issue #308). Same shape as
+    // v1 but every ``time`` / ``born_time`` / ``died_time`` /
+    // ``unit_timeline`` / ``ability_events`` / ``apmCurve`` second
+    // is now on the real 22.4 fps scale.
+    currentVersion: 2,
     versionKey: VERSION_KEY,
   },
   [COLLECTIONS.CUSTOM_BUILDS]: {
     collection: COLLECTIONS.CUSTOM_BUILDS,
-    currentVersion: 1,
+    // v2 — 2026-05-17 timebase cutover (issue #308). ``rules[].time_lt``
+    // and ``signature[].beforeSec`` thresholds are now wall-clock real
+    // seconds, matching the build-log times the matcher reads off
+    // games.
+    currentVersion: 2,
     versionKey: VERSION_KEY,
   },
   [COLLECTIONS.DEVICE_PAIRINGS]: {
@@ -134,7 +149,10 @@ const REGISTRY = Object.freeze({
   },
   [COLLECTIONS.COMMUNITY_BUILDS]: {
     collection: COLLECTIONS.COMMUNITY_BUILDS,
-    currentVersion: 1,
+    // v2 — 2026-05-17 timebase cutover (issue #308). Same threshold
+    // rescale as ``customBuilds``; published community builds carry
+    // the same ``rules[].time_lt`` / ``signature[].beforeSec`` shape.
+    currentVersion: 2,
     versionKey: VERSION_KEY,
   },
   [COLLECTIONS.COMMUNITY_REPORTS]: {
