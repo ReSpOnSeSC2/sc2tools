@@ -1,6 +1,12 @@
 "use client";
 
-import { useMemo, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { EmptyState } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { fmtMinutes, wrColor } from "@/lib/format";
@@ -54,6 +60,16 @@ const PHASE_LABELS: Record<Phase, string> = {
   late: "Late",
 };
 
+// Short labels used below the md breakpoint where the full names
+// wrap awkwardly inside the horizontally-scrolling tab row.
+const PHASE_SHORT_LABELS: Record<Phase, string> = {
+  early: "Early",
+  earlyMid: "E/Mid",
+  mid: "Mid",
+  midLate: "M/Late",
+  late: "Late",
+};
+
 export function PhaseCompositionTabs({
   sampleSize,
   perPhase,
@@ -69,6 +85,20 @@ export function PhaseCompositionTabs({
     return "early";
   }, [sampleSize, preferredPhase]);
   const [active, setActive] = useState<Phase>(initial);
+  const tabRefs = useRef<Partial<Record<Phase, HTMLButtonElement | null>>>({});
+
+  // Auto-scroll the active tab into view when the user picks it on
+  // mobile (where the tab row is horizontally scrollable). On desktop
+  // the row never overflows so this is a no-op.
+  useEffect(() => {
+    const node = tabRefs.current[active];
+    if (!node || typeof node.scrollIntoView !== "function") return;
+    node.scrollIntoView({
+      behavior: "smooth",
+      inline: "center",
+      block: "nearest",
+    });
+  }, [active]);
 
   const activeRow = perPhase[active];
   const activeSamples = sampleSize[active] ?? 0;
@@ -88,7 +118,11 @@ export function PhaseCompositionTabs({
         role="tablist"
         aria-label="Phase compositions"
         aria-orientation="horizontal"
-        className="flex flex-wrap items-center gap-1"
+        // Horizontal scroll with snap on mobile so a phone shows the
+        // active tab without truncating the rest. `flex-wrap` is
+        // suppressed by `flex-nowrap` here — letting tabs wrap onto
+        // multiple rows breaks the snap contract.
+        className="-mx-1 flex snap-x snap-mandatory items-center gap-1 overflow-x-auto px-1 py-0.5 scrollbar-thin md:flex-wrap md:overflow-visible"
       >
         {PHASE_ORDER.map((phase) => {
           const count = sampleSize[phase] ?? 0;
@@ -97,6 +131,9 @@ export function PhaseCompositionTabs({
           return (
             <button
               key={phase}
+              ref={(el) => {
+                tabRefs.current[phase] = el;
+              }}
               type="button"
               role="tab"
               data-phase={phase}
@@ -110,21 +147,32 @@ export function PhaseCompositionTabs({
                 setActive(phase);
               }}
               className={[
-                "inline-flex min-h-[36px] items-center gap-2 rounded-md border px-3 py-1.5 text-caption transition-colors",
+                "inline-flex min-h-[36px] shrink-0 snap-start items-center gap-2 rounded-md border px-3 py-1.5 text-caption transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                 selected
-                  ? "border-accent bg-accent text-white"
+                  ? "border-accent bg-accent/15 text-accent"
                   : disabled
                     ? "cursor-not-allowed border-border text-text-dim"
                     : "border-border bg-bg-surface text-text-muted hover:bg-bg-elevated hover:text-text",
               ].join(" ")}
             >
-              <span className="font-medium">{PHASE_LABELS[phase]}</span>
+              <span className="font-medium" data-testid="phase-tab-label">
+                <span className="md:hidden" data-testid="phase-tab-label-short">
+                  {PHASE_SHORT_LABELS[phase]}
+                </span>
+                <span
+                  className="hidden md:inline"
+                  data-testid="phase-tab-label-long"
+                >
+                  {PHASE_LABELS[phase]}
+                </span>
+              </span>
               <span
+                data-testid="phase-tab-count"
                 className={[
                   "tabular-nums",
                   selected
-                    ? "text-white/85"
+                    ? "text-accent/80"
                     : disabled
                       ? "text-text-dim"
                       : "text-text-muted",
@@ -210,7 +258,14 @@ function renderActiveBody({
           />
         ))}
       </ul>
-      {showTechRow ? <TechTimeline tech={activeRow.tech} /> : null}
+      {showTechRow ? (
+        // Tech timeline is dense; hidden below md per the responsive
+        // contract — mobile shows the per-phase median timings card
+        // already.
+        <div className="hidden md:block">
+          <TechTimeline tech={activeRow.tech} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -255,9 +310,12 @@ function CompositionCard({
       data-testid="composition-card"
       data-signature-key={signature.key}
       className={[
-        "flex flex-col gap-3 rounded-lg border border-border bg-bg-surface p-3",
+        // `min-h-[44px]` matches the iOS minimum touch target; `min-w-[260px]`
+        // means absurdly narrow viewports scroll the grid horizontally
+        // rather than squishing the unit icons below their legible size.
+        "flex min-h-[44px] min-w-[260px] flex-col gap-3 rounded-lg border border-border bg-bg-surface p-3",
         interactive
-          ? "cursor-pointer transition-colors hover:bg-bg-elevated hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          ? "cursor-pointer transition-colors hover:bg-bg-elevated hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg motion-safe:hover:-translate-y-px"
           : "",
       ]
         .filter(Boolean)
@@ -306,11 +364,26 @@ function CompositionCard({
 function UnitBadge({ token, count }: { token: string; count: number }) {
   return (
     <span
-      className="relative inline-flex h-9 w-9 items-center justify-center rounded bg-bg-elevated"
+      // Icon is 32px on mobile and 36px on desktop per the responsive
+      // contract; the badge container hugs the icon at each size.
+      className="relative inline-flex h-9 w-9 items-center justify-center rounded bg-bg-elevated md:h-10 md:w-10"
       data-testid="unit-badge"
       data-token={token}
     >
-      <Icon name={token} kind="unit" size={32} alt={token} />
+      <Icon
+        name={token}
+        kind="unit"
+        size={32}
+        className="md:hidden"
+        alt={token}
+      />
+      <Icon
+        name={token}
+        kind="unit"
+        size={36}
+        className="hidden md:block"
+        alt={token}
+      />
       <span
         className="absolute -bottom-1 -right-1 inline-flex min-w-[18px] items-center justify-center rounded-full border border-border bg-bg px-1 text-[10px] font-semibold tabular-nums text-text"
         aria-hidden="true"

@@ -182,11 +182,17 @@ function FullStrip({
   maxFinal: number;
 }) {
   const tickCount = Math.floor(ceiling / 60) + 1;
+  // Heights per the responsive contract:
+  //   mobile (<md): 48px strip, histogram bars capped at 18px
+  //   desktop (≥md): 64px strip, histogram bars capped at 24px
+  // The strip itself is a CSS-only swap (h-12 md:h-16); the histogram
+  // row owns vertical real estate above the strip and is sized in
+  // Tailwind utility classes too so it follows the breakpoint without
+  // a JS hook (which would mis-render under SSR).
   return (
     <div className="relative">
       <div
-        className="relative w-full"
-        style={{ height: 48 }}
+        className="relative h-[18px] w-full md:h-6"
         data-testid="phase-histogram"
       >
         {bands.map((b) => {
@@ -225,7 +231,7 @@ function FullStrip({
       <div
         role="img"
         aria-label={bandsAriaLabel}
-        className="relative h-7 w-full overflow-hidden rounded-md border border-border"
+        className="relative h-12 w-full overflow-hidden rounded-md border border-border md:h-16"
         data-testid="phase-bands"
       >
         {bands.map((b) => {
@@ -267,23 +273,42 @@ function FullStrip({
           return (
             <span
               key={key}
-              className="absolute top-0 h-full w-px"
-              style={{ left: `${left}%`, background: CROSSING_COLOR }}
+              className="absolute top-0 h-full"
+              style={{
+                left: `${left}%`,
+                // 32px-wide invisible touch target centered on the
+                // marker satisfies iOS's 44px guideline minus the line
+                // itself; tap-area only, the visible 1px is the inner
+                // span below.
+                width: 32,
+                marginLeft: -16,
+              }}
               title={`${label} crossing at ${fmtMinutes(v)}`}
               data-testid="phase-crossing"
               data-key={key}
               data-at-pct={left}
               aria-hidden="true"
-            />
+            >
+              <span
+                className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2"
+                style={{ background: CROSSING_COLOR }}
+              />
+            </span>
           );
         })}
       </div>
 
       <div
-        className="relative mt-1 h-4 w-full text-[10px] tabular-nums text-text-dim"
+        className="relative mt-1 h-4 w-full text-[11px] tabular-nums text-text-dim"
         data-testid="phase-labels"
       >
-        <span className="absolute left-0 whitespace-nowrap" aria-hidden="true">
+        {/* Boundary labels (0:00 and ceiling) hide below md so a phone
+            doesn't compete with the crossing-marker labels for space.
+            Crossings remain visible at every breakpoint. */}
+        <span
+          className="absolute left-0 hidden whitespace-nowrap md:inline"
+          aria-hidden="true"
+        >
           0:00
         </span>
         {CROSSING_ORDER.map(({ key, label }) => {
@@ -302,7 +327,7 @@ function FullStrip({
           );
         })}
         <span
-          className="absolute right-0 whitespace-nowrap"
+          className="absolute right-0 hidden whitespace-nowrap md:inline"
           aria-hidden="true"
         >
           {fmtMinutes(ceiling)}
