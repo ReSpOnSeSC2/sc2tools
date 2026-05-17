@@ -74,13 +74,102 @@ export interface GamesService {
   }>;
 }
 
+/**
+ * Per-phase row shape returned by ``buildCompositions.computeCompositions``.
+ * Mirrors the runtime contract so ``serverApi.ts`` on the web app can
+ * type the /v1/custom-builds/:slug/compositions response without
+ * duplicating the field list.
+ */
+export interface BuildPhaseRow {
+  signatures: Array<{
+    key: string;
+    units: Array<{ token: string; count: number }>;
+    sampleCount: number;
+    wins: number;
+    losses: number;
+    winRate: number;
+    sampleGameIds: string[];
+  }>;
+  tech: Array<{
+    token: string;
+    sampleCount: number;
+    medianFirstSeen: number;
+    p25: number;
+    p75: number;
+  }>;
+  upgrades: Array<{
+    token: string;
+    sampleCount: number;
+    medianFirstSeen: number;
+    p25: number;
+    p75: number;
+  }>;
+}
+
+/**
+ * Phase-aware compositions payload for the scouting widget. Keys on
+ * ``perPhase`` are ``"early" | "earlyMid" | "mid" | "midLate" | "late"``;
+ * record-shape used here so the consumer can iterate without a fixed
+ * union literal (server may add phases in future revisions of the
+ * classifier).
+ */
+export interface BuildPhasePayload {
+  slug: string;
+  name: string;
+  sampleSize: Record<string, number>;
+  perPhase: Record<string, BuildPhaseRow>;
+  finalPhaseDistribution: Record<string, number>;
+  flags: string[];
+}
+
+/**
+ * Sankey-shaped transitions payload for the BuildDetail transitions
+ * tab. The ``transitions`` half of the unified bundle, split out so
+ * the route can be requested independently of the heavier compositions
+ * one.
+ */
+export interface BuildTransitionsPayload {
+  slug: string;
+  name: string;
+  transitions: {
+    nodes: Array<{
+      id: string;
+      label: string;
+      column: 0 | 1 | 2 | 3;
+      kind: "build" | "oppStrategy" | "finalPhase" | "lateComp";
+      games: number;
+      wins: number;
+      losses: number;
+      iconTokens?: string[];
+    }>;
+    edges: Array<{
+      from: string;
+      to: string;
+      games: number;
+      wins: number;
+      losses: number;
+      winRate: number;
+    }>;
+    rare: { collapsedNodes: number; collapsedEdges: number };
+  };
+}
+
 export interface CustomBuildsService {
   list(userId: string): Promise<object[]>;
   get(userId: string, slug: string): Promise<object | null>;
   upsert(userId: string, build: object & { slug: string }): Promise<void>;
   softDelete(userId: string, slug: string): Promise<void>;
   evaluateBuild(userId: string, slug: string): Promise<object | null>;
+  evaluateBuildPhases(
+    userId: string,
+    slug: string,
+    opts?: { includeTransitions?: boolean },
+  ): Promise<
+    | null
+    | (BuildPhasePayload & { transitions?: BuildTransitionsPayload["transitions"] })
+  >;
   evaluateAllStats(userId: string): Promise<object[]>;
+  latestGameDateMs(userId: string): Promise<number>;
   reclassify(
     userId: string,
     slug: string,

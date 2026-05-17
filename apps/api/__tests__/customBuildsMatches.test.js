@@ -12,12 +12,23 @@
  * Top matchups, Recent games, and Vs opponent strategy.
  */
 
+const fs = require("fs");
+const path = require("path");
+const express = require("express");
 const request = require("supertest");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const pino = require("pino");
 
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
+const { buildCustomBuildsRouter } = require("../src/routes/customBuilds");
+
+const PHASE_FIXTURE = JSON.parse(
+  fs.readFileSync(
+    path.join(__dirname, "fixtures", "phase", "warpgate_adept_tracking.json"),
+    "utf8",
+  ),
+);
 
 jest.mock("@clerk/backend", () => ({
   verifyToken: jest.fn(async (token) => {
@@ -204,5 +215,361 @@ describe("GET /v1/custom-builds/:slug/matches matchup gate", () => {
     expect(ids).toEqual(
       expect.arrayContaining(["g-pvp-stargate", "g-pvt-stargate"]),
     );
+  });
+});
+
+describe("GET /v1/custom-builds/:slug/compositions", () => {
+  let mongo;
+  let db;
+  let app;
+  let services;
+
+  const config = {
+    port: 0,
+    nodeEnv: "test",
+    logLevel: "silent",
+    mongoUri: "",
+    mongoDb: "sc2tools_test_compositions",
+    clerkSecretKey: "sk_test",
+    clerkJwtIssuer: undefined,
+    clerkJwtAudience: undefined,
+    serverPepper: Buffer.alloc(32, 1),
+    corsAllowedOrigins: [],
+    rateLimitPerMinute: 1000,
+    agentReleaseAdminToken: "admin-token-for-tests",
+    pythonExe: null,
+    pythonAnalyzerDir: "/tmp/__definitely_missing__",
+  };
+
+  beforeAll(async () => {
+    mongo = await MongoMemoryServer.create();
+    db = await connect({ uri: mongo.getUri(), dbName: config.mongoDb });
+    const built = buildApp({ db, logger: pino({ level: "silent" }), config });
+    app = built.app;
+    services = built.services;
+  });
+
+  afterAll(async () => {
+    if (db) await db.close();
+    if (mongo) await mongo.stop();
+  });
+
+  function withAuth(req) {
+    return req.set("authorization", "Bearer test-clerk-token");
+  }
+
+  async function bootstrap() {
+    const me = await withAuth(request(app).get("/v1/me"));
+    expect(me.status).toBe(200);
+    return me.body.userId;
+  }
+
+  async function seedPhaseGame(userId, gameId, date) {
+    await services.games.upsert(userId, {
+      gameId,
+      date,
+      myRace: PHASE_FIXTURE.race,
+      myBuild: "PvZ — Adept",
+      buildLog: PROTOSS_BUILD_LOG,
+      oppBuildLog: ["[0:00] Drone", "[0:17] Overlord", "[0:50] SpawningPool"],
+      result: "Victory",
+      map: "Equilibrium LE",
+      durationSec: PHASE_FIXTURE.durationSec,
+      opponent: { displayName: "zergRusher", race: "Zerg", strategy: "Zerg - Mass Ling" },
+      macroBreakdown: PHASE_FIXTURE.macroBreakdown,
+    });
+  }
+
+  async function savePhaseBuild() {
+    const putRes = await withAuth(
+      request(app).put("/v1/custom-builds/pvz-adept").send({
+        slug: "pvz-adept",
+        name: "PvZ Adept",
+        race: "Protoss",
+        vsRace: "Zerg",
+        rules: [{ type: "before", name: "BuildOracle", time_lt: 418 }],
+      }),
+    );
+    expect(putRes.status).toBe(200);
+  }
+
+  test("returns the phase-aware JSON envelope without transitions", async () => {
+    const userId = await bootstrap();
+    await seedPhaseGame(userId, "g-comp-1", new Date("2026-05-04T00:00:00Z"));
+    await seedPhaseGame(userId, "g-comp-2", new Date("2026-05-05T00:00:00Z"));
+    await savePhaseBuild();
+
+    const res = await withAuth(
+      request(app).get("/v1/custom-builds/pvz-adept/compositions"),
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.slug).toBe("pvz-adept");
+    expect(res.body.name).toBe("PvZ Adept");
+    // Phase-aggregator envelope. transitions stays absent on this
+    // endpoint — the scouting widget only wants the compositions half.
+    expect(res.body).toHaveProperty("sampleSize");
+    expect(res.body).toHaveProperty("perPhase");
+    expect(res.body).toHaveProperty("finalPhaseDistribution");
+    expect(res.body).toHaveProperty("flags");
+    expect(res.body).not.toHaveProperty("transitions");
+    // Every phase carries the same row-shape so the SPA never needs
+    // existence checks before rendering.
+    for (const phase of ["early", "earlyMid", "mid", "midLate", "late"]) {
+      expect(res.body.perPhase[phase]).toEqual(
+        expect.objectContaining({
+          signatures: expect.any(Array),
+          tech: expect.any(Array),
+          upgrades: expect.any(Array),
+        }),
+      );
+    }
+    // Both seeded games crossed the warpgate-adept fixture's midAt=410s
+    // before duration=470s, so they land in finalPhase=mid.
+    expect(res.body.finalPhaseDistribution.mid).toBe(2);
+    expect(res.body.sampleSize.mid).toBe(2);
+  });
+
+  test("404 for an unknown slug", async () => {
+    await bootstrap();
+    const res = await withAuth(
+      request(app).get("/v1/custom-builds/no-such-build/compositions"),
+    );
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: { code: "not_found" } });
+  });
+
+  test("503 when perGame is missing", async () => {
+    // Mount the router with no perGame dep so the 503 branch fires.
+    // Mirrors how the route handler gates the stats / matches paths.
+    const standalone = express();
+    standalone.use(express.json());
+    standalone.use((req, _res, next) => {
+      req.auth = { userId: "u-no-pergame" };
+      next();
+    });
+    standalone.use(
+      "/v1",
+      buildCustomBuildsRouter({
+        customBuilds: services.customBuilds,
+        perGame: null,
+        auth: (_req, _res, next) => next(),
+      }),
+    );
+    const res = await request(standalone).get(
+      "/v1/custom-builds/anything/compositions",
+    );
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ error: { code: "stats_unavailable" } });
+  });
+
+  test("second call within 60s short-circuits via the cache", async () => {
+    const userId = await bootstrap();
+    await seedPhaseGame(userId, "g-cache-1", new Date("2026-05-06T00:00:00Z"));
+    await savePhaseBuild();
+
+    const first = await withAuth(
+      request(app).get("/v1/custom-builds/pvz-adept/compositions"),
+    );
+    expect(first.status).toBe(200);
+
+    // Spy on the underlying service method. The second request must
+    // hit the route-layer cache and never call into the service.
+    const spy = jest.spyOn(services.customBuilds, "evaluateBuildPhases");
+    try {
+      const second = await withAuth(
+        request(app).get("/v1/custom-builds/pvz-adept/compositions"),
+      );
+      expect(second.status).toBe(200);
+      expect(second.body).toEqual(first.body);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test("reclassify busts the cached payload", async () => {
+    const userId = await bootstrap();
+    await seedPhaseGame(userId, "g-bust-1", new Date("2026-05-07T00:00:00Z"));
+    await savePhaseBuild();
+
+    const first = await withAuth(
+      request(app).get("/v1/custom-builds/pvz-adept/compositions"),
+    );
+    expect(first.status).toBe(200);
+
+    const reclassify = await withAuth(
+      request(app).post("/v1/custom-builds/pvz-adept/reclassify"),
+    );
+    expect(reclassify.status).toBe(200);
+
+    const spy = jest.spyOn(services.customBuilds, "evaluateBuildPhases");
+    try {
+      const after = await withAuth(
+        request(app).get("/v1/custom-builds/pvz-adept/compositions"),
+      );
+      expect(after.status).toBe(200);
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe("GET /v1/custom-builds/:slug/transitions", () => {
+  let mongo;
+  let db;
+  let app;
+  let services;
+
+  const config = {
+    port: 0,
+    nodeEnv: "test",
+    logLevel: "silent",
+    mongoUri: "",
+    mongoDb: "sc2tools_test_transitions",
+    clerkSecretKey: "sk_test",
+    clerkJwtIssuer: undefined,
+    clerkJwtAudience: undefined,
+    serverPepper: Buffer.alloc(32, 1),
+    corsAllowedOrigins: [],
+    rateLimitPerMinute: 1000,
+    agentReleaseAdminToken: "admin-token-for-tests",
+    pythonExe: null,
+    pythonAnalyzerDir: "/tmp/__definitely_missing__",
+  };
+
+  beforeAll(async () => {
+    mongo = await MongoMemoryServer.create();
+    db = await connect({ uri: mongo.getUri(), dbName: config.mongoDb });
+    const built = buildApp({ db, logger: pino({ level: "silent" }), config });
+    app = built.app;
+    services = built.services;
+  });
+
+  afterAll(async () => {
+    if (db) await db.close();
+    if (mongo) await mongo.stop();
+  });
+
+  function withAuth(req) {
+    return req.set("authorization", "Bearer test-clerk-token");
+  }
+
+  async function bootstrap() {
+    const me = await withAuth(request(app).get("/v1/me"));
+    expect(me.status).toBe(200);
+    return me.body.userId;
+  }
+
+  async function seedPhaseGame(userId, gameId, date) {
+    await services.games.upsert(userId, {
+      gameId,
+      date,
+      myRace: PHASE_FIXTURE.race,
+      myBuild: "PvZ — Adept",
+      buildLog: PROTOSS_BUILD_LOG,
+      oppBuildLog: ["[0:00] Drone", "[0:17] Overlord", "[0:50] SpawningPool"],
+      result: "Victory",
+      map: "Equilibrium LE",
+      durationSec: PHASE_FIXTURE.durationSec,
+      opponent: { displayName: "zergRusher", race: "Zerg", strategy: "Zerg - Mass Ling" },
+      macroBreakdown: PHASE_FIXTURE.macroBreakdown,
+    });
+  }
+
+  async function savePhaseBuild() {
+    const putRes = await withAuth(
+      request(app).put("/v1/custom-builds/pvz-adept").send({
+        slug: "pvz-adept",
+        name: "PvZ Adept",
+        race: "Protoss",
+        vsRace: "Zerg",
+        rules: [{ type: "before", name: "BuildOracle", time_lt: 418 }],
+      }),
+    );
+    expect(putRes.status).toBe(200);
+  }
+
+  test("returns only the transitions half of the payload", async () => {
+    const userId = await bootstrap();
+    await seedPhaseGame(userId, "g-tx-1", new Date("2026-05-08T00:00:00Z"));
+    await savePhaseBuild();
+
+    const res = await withAuth(
+      request(app).get("/v1/custom-builds/pvz-adept/transitions"),
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.slug).toBe("pvz-adept");
+    expect(res.body.name).toBe("PvZ Adept");
+    expect(res.body.transitions).toEqual(
+      expect.objectContaining({
+        nodes: expect.any(Array),
+        edges: expect.any(Array),
+        rare: expect.objectContaining({
+          collapsedNodes: expect.any(Number),
+          collapsedEdges: expect.any(Number),
+        }),
+      }),
+    );
+    // The compositions half stays off this endpoint so the scouting
+    // widget can request /compositions independently without paying
+    // for the Sankey aggregation.
+    expect(res.body).not.toHaveProperty("perPhase");
+    expect(res.body).not.toHaveProperty("sampleSize");
+    expect(res.body).not.toHaveProperty("finalPhaseDistribution");
+  });
+
+  test("404 for an unknown slug", async () => {
+    await bootstrap();
+    const res = await withAuth(
+      request(app).get("/v1/custom-builds/no-such-build/transitions"),
+    );
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: { code: "not_found" } });
+  });
+
+  test("503 when perGame is missing", async () => {
+    const standalone = express();
+    standalone.use(express.json());
+    standalone.use((req, _res, next) => {
+      req.auth = { userId: "u-no-pergame" };
+      next();
+    });
+    standalone.use(
+      "/v1",
+      buildCustomBuildsRouter({
+        customBuilds: services.customBuilds,
+        perGame: null,
+        auth: (_req, _res, next) => next(),
+      }),
+    );
+    const res = await request(standalone).get(
+      "/v1/custom-builds/anything/transitions",
+    );
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ error: { code: "stats_unavailable" } });
+  });
+
+  test("second call within 60s short-circuits via the cache", async () => {
+    const userId = await bootstrap();
+    await seedPhaseGame(userId, "g-tx-cache-1", new Date("2026-05-09T00:00:00Z"));
+    await savePhaseBuild();
+
+    const first = await withAuth(
+      request(app).get("/v1/custom-builds/pvz-adept/transitions"),
+    );
+    expect(first.status).toBe(200);
+
+    const spy = jest.spyOn(services.customBuilds, "evaluateBuildPhases");
+    try {
+      const second = await withAuth(
+        request(app).get("/v1/custom-builds/pvz-adept/transitions"),
+      );
+      expect(second.status).toBe(200);
+      expect(second.body).toEqual(first.body);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
