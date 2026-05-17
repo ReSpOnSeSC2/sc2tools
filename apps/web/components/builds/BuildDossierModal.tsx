@@ -147,6 +147,9 @@ export function BuildDossierModal({
 
         <BuildDossier
           apiPath={apiPath}
+          phasePerspective={
+            build.perspective === "opponent" ? "opponent" : undefined
+          }
           headerSlot={() => (
             <NotesPanel notes={build.notes} onEdit={() => onEdit(build.slug)} />
           )}

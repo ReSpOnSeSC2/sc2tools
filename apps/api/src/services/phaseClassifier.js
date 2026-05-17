@@ -420,22 +420,66 @@ function finalWindowScore(scoreFn, durationSec) {
 }
 
 /**
+ * Pick the right ``bases / production_buildings / stats`` triple for
+ * the requested perspective. Centralises the opp-fallback decision so
+ * the rest of the classifier doesn't branch on it.
+ *
+ * @param {object} mb
+ * @param {number} durationSec
+ * @param {"you"|"opponent"} perspective
+ */
+function pickClassifierInputs(mb, durationSec, perspective) {
+  if (perspective === "opponent") {
+    const bases = Array.isArray(mb.opp_bases) ? mb.opp_bases : [];
+    const prodBuildings = Array.isArray(mb.opp_production_buildings)
+      ? mb.opp_production_buildings : [];
+    const oppStatsEvents = Array.isArray(mb.opp_stats_events)
+      ? mb.opp_stats_events : [];
+    // Fall back to the user's stats stream when opp's is missing.
+    // sc2reader sometimes drops the opponent's tracker stream
+    // entirely on Zerg replays — without the fallback the score
+    // would always be 0 for those games, dragging the median
+    // crossings to ``never reached``.
+    const statsSource = oppStatsEvents.length > 0
+      ? oppStatsEvents
+      : (Array.isArray(mb.stats_events) ? mb.stats_events : []);
+    const stats = buildStatsLookup(statsSource, durationSec);
+    return { bases, prodBuildings, stats };
+  }
+  const bases = Array.isArray(mb.bases) ? mb.bases : [];
+  const prodBuildings = Array.isArray(mb.production_buildings)
+    ? mb.production_buildings : [];
+  const stats = buildStatsLookup(mb.stats_events || [], durationSec);
+  return { bases, prodBuildings, stats };
+}
+
+/**
  * Classify each moment of a single game.
  *
  * @param {{
  *   macroBreakdown: object,
  *   race: "Protoss"|"Terran"|"Zerg",
  *   durationSec: number,
+ *   perspective?: "you"|"opponent",
  * }} input
+ *
+ * ``perspective="opponent"`` rescores the trajectory from the
+ * opponent's side: ``opp_bases``, ``opp_production_buildings``, and
+ * ``opp_stats_events`` are the primary inputs. When the extractor
+ * dropped ``opp_stats_events`` (a known sc2reader tracker quirk on
+ * some Zerg replays) we fall back to ``stats_events`` for the
+ * workers / supply / army terms so the classifier still has signal;
+ * bases / tech stay null-handled and just drop their score
+ * contribution rather than borrow from the user's side.
  */
 function classifyGame(input) {
   const mb = (input && input.macroBreakdown) || {};
   const race = input && input.race;
   const durationSec = Math.max(0, Math.floor((input && input.durationSec) || 0));
-  const bases = Array.isArray(mb.bases) ? mb.bases : [];
-  const prodBuildings = Array.isArray(mb.production_buildings)
-    ? mb.production_buildings : [];
-  const stats = buildStatsLookup(mb.stats_events || [], durationSec);
+  const perspective = input && input.perspective === "opponent" ? "opponent" : "you";
+  const { bases, prodBuildings, stats } = pickClassifierInputs(
+    mb, durationSec, perspective,
+  );
 
   const scoreFn = (t) => scoreAt({
     bases, production_buildings: prodBuildings, stats,

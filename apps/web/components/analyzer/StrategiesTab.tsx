@@ -26,7 +26,7 @@ type StratRow = {
   winRate: number;
 };
 
-import { BuildVsStrategyView } from "./StrategiesTabBuildVs";
+import { BuildVsStrategyView, BuildVsStrategyComparison } from "./StrategiesTabBuildVs";
 
 const RACE_OPTIONS = [
   { value: "", label: "Any race" },
@@ -337,7 +337,20 @@ function StrategyGamesView({
           orienting themselves on "what facing this strategy looks
           like" sees the trajectory + typical compositions first,
           then the raw replay list. Falls back to its own EmptyState
-          when the strategy has < 5 games. */}
+          when the strategy has < 5 games.
+
+          When the drill carries both a build AND a strategy, the
+          2-column comparison renders alongside — left side is the
+          user's perspective on their build, right side is the
+          opponent's perspective on the strategy. The single-strategy
+          panel still shows so the user can see the matchup-wide
+          aggregate independently of the per-build cut. */}
+      {drill.build ? (
+        <BuildVsStrategyComparison
+          build={drill.build}
+          strategy={drill.opp_strategy}
+        />
+      ) : null}
       <StrategyPhasePanel strategy={drill.opp_strategy} />
       {isLoading ? (
         <Skeleton rows={6} />

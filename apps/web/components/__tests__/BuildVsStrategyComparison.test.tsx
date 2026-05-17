@@ -1,0 +1,206 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+
+/**
+ * Tests for the 2-column build × strategy comparison renderer in
+ * ``StrategiesTabBuildVs``. The component runs three useApi hooks
+ * (custom-builds list for the slug bridge, plus left + right phase
+ * payloads); we mock useApi to drive each call's state directly.
+ */
+
+const useApiMock = vi.fn();
+
+vi.mock("@/lib/clientApi", () => ({
+  useApi: (path: string | null) => useApiMock(path),
+}));
+
+import { BuildVsStrategyComparison } from "../analyzer/StrategiesTabBuildVs";
+
+afterEach(() => {
+  cleanup();
+  useApiMock.mockReset();
+});
+
+function buildPhasesPayload(total: number, perspective: "you" | "opponent") {
+  return {
+    slug: "stargate-phoenix",
+    name: "Stargate Phoenix",
+    perspective,
+    total,
+    sampleSize: {
+      early: total, earlyMid: total, mid: total, midLate: 0, late: 0,
+    },
+    perPhase: {
+      early: { signatures: [], tech: [], upgrades: [] },
+      earlyMid: { signatures: [], tech: [], upgrades: [] },
+      mid: {
+        signatures: [
+          {
+            key: "Stalker|Phoenix|Immortal",
+            units: [
+              { token: "Stalker", count: 5 },
+              { token: "Phoenix", count: 3 },
+              { token: "Immortal", count: 2 },
+            ],
+            sampleCount: total,
+            wins: total,
+            losses: 0,
+            winRate: 1,
+            sampleGameIds: ["g1", "g2"],
+          },
+        ],
+        tech: [], upgrades: [],
+      },
+      midLate: { signatures: [], tech: [], upgrades: [] },
+      late: { signatures: [], tech: [], upgrades: [] },
+    },
+    finalPhaseDistribution: {
+      early: 0, earlyMid: 0, mid: total, midLate: 0, late: 0,
+    },
+    medianCrossings: {
+      earlyMidAt: 120, midAt: 240, midLateAt: null, lateAt: null,
+    },
+    durationP95Sec: 600,
+    flags: [],
+  };
+}
+
+function wireMocks({
+  customBuildsList = [{ slug: "stargate-phoenix", name: "Stargate Phoenix" }],
+  yourPayload,
+  oppPayload,
+}: {
+  customBuildsList?: Array<{ slug: string; name: string }>;
+  yourPayload?: unknown;
+  oppPayload?: unknown;
+}) {
+  useApiMock.mockImplementation((path: string | null) => {
+    if (path === "/v1/custom-builds") {
+      return { data: { items: customBuildsList }, isLoading: false, error: null };
+    }
+    if (path && path.includes("/compositions")) {
+      return { data: yourPayload, isLoading: false, error: null };
+    }
+    if (path && path.includes("/phases")) {
+      return { data: oppPayload, isLoading: false, error: null };
+    }
+    return { data: undefined, isLoading: false, error: null };
+  });
+}
+
+describe("BuildVsStrategyComparison", () => {
+  it("requests the left column with perspective=you and right column with perspective=opponent", () => {
+    wireMocks({
+      yourPayload: buildPhasesPayload(7, "you"),
+      oppPayload: { ...buildPhasesPayload(7, "opponent"), name: "Terran - Mech" },
+    });
+
+    render(
+      <BuildVsStrategyComparison
+        build="Stargate Phoenix"
+        strategy="Terran - Mech"
+      />,
+    );
+
+    const callPaths = useApiMock.mock.calls.map((c) => c[0]);
+    // Slug bridge call:
+    expect(callPaths).toContain("/v1/custom-builds");
+    // Left column: perspective=you.
+    expect(callPaths).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you",
+        ),
+      ]),
+    );
+    // Right column: perspective=opponent.
+    expect(callPaths).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          "/v1/strategies/Terran%20-%20Mech/phases?perspective=opponent",
+        ),
+      ]),
+    );
+  });
+
+  it("renders two columns of comparable visual width when both have data", () => {
+    wireMocks({
+      yourPayload: buildPhasesPayload(8, "you"),
+      oppPayload: { ...buildPhasesPayload(8, "opponent"), name: "Terran - Mech" },
+    });
+
+    const { container } = render(
+      <BuildVsStrategyComparison
+        build="Stargate Phoenix"
+        strategy="Terran - Mech"
+      />,
+    );
+
+    // Both columns rendered.
+    expect(screen.getByTestId("bvs-column-you")).toBeTruthy();
+    expect(screen.getByTestId("bvs-column-opponent")).toBeTruthy();
+
+    // The flex / grid wrapper carries lg:grid-cols-2 so each column
+    // gets half-width on a wide layout — same visual budget for left
+    // and right. Asserting the class is the cheapest way to guard the
+    // "comparable visual width" claim without a JSDOM layout engine.
+    const wrapper = container.querySelector(
+      "[data-testid='build-vs-strategy-comparison']",
+    );
+    expect(wrapper).toBeTruthy();
+    expect(wrapper?.className).toMatch(/grid-cols-1/);
+    expect(wrapper?.className).toMatch(/lg:grid-cols-2/);
+
+    // Each column hosts its own trajectory strip — that's the
+    // primary visual element. Two strips means the comparison is
+    // really side-by-side.
+    const strips = container.querySelectorAll(
+      "[data-testid='phase-trajectory-strip']",
+    );
+    expect(strips.length).toBe(2);
+  });
+
+  it("falls back to an EmptyState in the left column when no saved build matches the name", () => {
+    wireMocks({
+      customBuildsList: [], // user hasn't saved this build yet
+      oppPayload: { ...buildPhasesPayload(8, "opponent"), name: "Terran - Mech" },
+    });
+
+    render(
+      <BuildVsStrategyComparison
+        build="Some Agent Auto-Label"
+        strategy="Terran - Mech"
+      />,
+    );
+
+    expect(
+      screen.getByText(/No saved build for this label/i),
+    ).toBeTruthy();
+    // Right column still renders its trajectory — the comparison
+    // doesn't gate one column on the other.
+    expect(screen.getByTestId("bvs-column-opponent")).toBeTruthy();
+  });
+
+  it("renders the opp-signal sparse EmptyState when the right payload sets that flag", () => {
+    wireMocks({
+      yourPayload: buildPhasesPayload(8, "you"),
+      oppPayload: {
+        ...buildPhasesPayload(0, "opponent"),
+        name: "Terran - Mech",
+        total: 8,
+        flags: ["opp_signals_sparse"],
+      },
+    });
+
+    render(
+      <BuildVsStrategyComparison
+        build="Stargate Phoenix"
+        strategy="Terran - Mech"
+      />,
+    );
+
+    expect(
+      screen.getByText(/Opponent signal too sparse/i),
+    ).toBeTruthy();
+  });
+});

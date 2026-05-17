@@ -64,6 +64,14 @@ const MAX_SAMPLE_GAME_IDS = 25;
 
 /**
  * @param {Array<any>} games
+ * @param {{ perspective?: "you"|"opponent" }} [opts]
+ *   ``perspective="opponent"`` rescores phases from the opponent's
+ *   side and pulls signatures from ``unit_timeline[*].opp`` instead
+ *   of ``.my``. When >50% of the matched games are missing
+ *   ``opp_stats_events`` the function returns a zeroed envelope plus
+ *   the ``opp_signals_sparse`` flag — the frontend's EmptyState
+ *   already triggers on all-zero sampleSize so the trajectory strip
+ *   doesn't render a noisy / incomplete chart.
  * @returns {{
  *   sampleSize: Record<string, number>,
  *   perPhase: Record<string, {
@@ -82,8 +90,13 @@ const MAX_SAMPLE_GAME_IDS = 25;
  *   flags: string[],
  * }}
  */
-function computeCompositions(games) {
+function computeCompositions(games, opts = {}) {
   const list = Array.isArray(games) ? games : [];
+  const perspective = opts && opts.perspective === "opponent" ? "opponent" : "you";
+
+  if (perspective === "opponent" && oppSignalTooSparse(list)) {
+    return emptyCompositionsResult(["opp_signals_sparse"]);
+  }
 
   /** @type {Record<string, number>} */
   const sampleSize = {
@@ -107,9 +120,16 @@ function computeCompositions(games) {
 
   for (const g of list) {
     const macroBreakdown = (g && g.macroBreakdown) || {};
-    const race = g && g.myRace;
+    // From the opponent's perspective the trajectory uses their race,
+    // not the user's — falls back to the user's race when the
+    // extractor didn't record an opponent race (legacy imports).
+    const race = perspective === "opponent"
+      ? ((g && g.oppRace) || (g && g.myRace))
+      : (g && g.myRace);
     const durationSec = (g && g.durationSec) || 0;
-    const classified = classifyGame({ macroBreakdown, race, durationSec });
+    const classified = classifyGame({
+      macroBreakdown, race, durationSec, perspective,
+    });
     classifiedGames.push({ game: g, classified });
     finalPhaseDistribution[classified.finalPhase] += 1;
     finalScores.push(classified.finalScore);
@@ -137,7 +157,7 @@ function computeCompositions(games) {
   /** @type {Record<string, ReturnType<typeof computePerPhase>>} */
   const perPhase = {};
   for (const phase of PHASE_ORDER) {
-    perPhase[phase] = computePerPhase(classifiedGames, phase);
+    perPhase[phase] = computePerPhase(classifiedGames, phase, perspective);
   }
 
   const flags = computeFlags(finalPhaseDistribution, finalScores, list.length);
@@ -206,9 +226,13 @@ function getPhaseWindow(phase, crossings, durationSec) {
  *
  * @param {any} macroBreakdown
  * @param {number} midpoint
+ * @param {"you"|"opponent"} [perspective]
+ *   ``"opponent"`` reads ``unit_timeline[*].opp`` instead of ``.my``
+ *   — the killer-view companion to the perspective-aware
+ *   phaseClassifier.
  * @returns {Array<{token: string, count: number}>}
  */
-function pickSignatureUnits(macroBreakdown, midpoint) {
+function pickSignatureUnits(macroBreakdown, midpoint, perspective) {
   const timeline = Array.isArray(macroBreakdown && macroBreakdown.unit_timeline)
     ? macroBreakdown.unit_timeline
     : [];
@@ -222,12 +246,14 @@ function pickSignatureUnits(macroBreakdown, midpoint) {
       bestDist = d;
     }
   }
-  const my = (best && best.my) || {};
+  const side = perspective === "opponent"
+    ? ((best && best.opp) || {})
+    : ((best && best.my) || {});
   /** @type {Array<{token: string, count: number}>} */
   const entries = [];
-  for (const token of Object.keys(my)) {
+  for (const token of Object.keys(side)) {
     if (WORKER_SKIP.has(token)) continue;
-    const n = Number(my[token]);
+    const n = Number(side[token]);
     if (!(n > 0)) continue;
     entries.push({ token, count: n });
   }
@@ -251,8 +277,9 @@ function byCountDescTokenAsc(a, b) {
  *
  * @param {Array<{game: any, classified: any}>} classifiedGames
  * @param {string} phase
+ * @param {"you"|"opponent"} [perspective]
  */
-function computePerPhase(classifiedGames, phase) {
+function computePerPhase(classifiedGames, phase, perspective) {
   /** @type {Map<string, {key: string, units: any[], sampleCount: number, wins: number, losses: number, sampleGameIds: string[]}>} */
   const sigBuckets = new Map();
   /** @type {Map<string, number[]>} */
@@ -266,7 +293,7 @@ function computePerPhase(classifiedGames, phase) {
     if (!window) continue;
     const midpoint = (window.start + window.end) / 2;
 
-    const units = pickSignatureUnits(game.macroBreakdown, midpoint);
+    const units = pickSignatureUnits(game.macroBreakdown, midpoint, perspective);
     if (units.length > 0) {
       const key = signatureKey(units);
       let bucket = sigBuckets.get(key);
@@ -505,6 +532,52 @@ function isLossResult(r) {
   if (!r) return false;
   const s = String(r).toLowerCase();
   return s === "loss" || s === "defeat";
+}
+
+/**
+ * Returns true when >50% of the games are missing opp_stats_events
+ * — the sc2reader tracker quirk that drops the opponent's stream on
+ * some Zerg replays. Strict ``>`` so an exact 50/50 split still
+ * draws.
+ *
+ * @param {Array<any>} list
+ */
+function oppSignalTooSparse(list) {
+  if (!list || list.length === 0) return false;
+  let missing = 0;
+  for (const g of list) {
+    const mb = (g && g.macroBreakdown) || {};
+    const opp = Array.isArray(mb.opp_stats_events) ? mb.opp_stats_events : [];
+    if (opp.length === 0) missing += 1;
+  }
+  return missing > list.length / 2;
+}
+
+/**
+ * Build the zero-filled envelope returned when opp-perspective signal
+ * is too sparse to render. Mirrors the empty-input shape callers
+ * already handle so the frontend code path stays the same.
+ *
+ * @param {string[]} flags
+ */
+function emptyCompositionsResult(flags) {
+  /** @type {Record<string, number>} */
+  const zeroes = { early: 0, earlyMid: 0, mid: 0, midLate: 0, late: 0 };
+  /** @type {Record<string, {signatures: any[], tech: any[], upgrades: any[]}>} */
+  const perPhase = {};
+  for (const p of PHASE_ORDER) {
+    perPhase[p] = { signatures: [], tech: [], upgrades: [] };
+  }
+  return {
+    sampleSize: { ...zeroes },
+    perPhase,
+    finalPhaseDistribution: { ...zeroes },
+    medianCrossings: {
+      earlyMidAt: null, midAt: null, midLateAt: null, lateAt: null,
+    },
+    durationP95Sec: 0,
+    flags: flags.slice(),
+  };
 }
 
 module.exports = {

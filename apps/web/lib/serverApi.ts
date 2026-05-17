@@ -16,6 +16,11 @@ export type { BuildTransitionsPayload } from "@/components/analyzer/BuildTransit
 export interface BuildPhasePayload {
   slug: string;
   name: string;
+  /** Echoed by the API. ``"opponent"`` means the trajectory + per-
+   *  phase signatures were scored off the ``opp_*`` macroBreakdown
+   *  fields and the ``unit_timeline[*].opp`` side — the killer
+   *  companion view for an opponent-perspective build. */
+  perspective?: "you" | "opponent";
   sampleSize: Record<Phase, number>;
   perPhase: Record<Phase, PhaseCompositionRow>;
   finalPhaseDistribution: Record<Phase, number>;

@@ -387,6 +387,46 @@ describe("GET /v1/custom-builds/:slug/compositions", () => {
     }
   });
 
+  test("?perspective=opponent forwards through to evaluateBuildPhases and is cached separately", async () => {
+    const userId = await bootstrap();
+    await seedPhaseGame(userId, "g-persp-1", new Date("2026-05-10T00:00:00Z"));
+    await savePhaseBuild();
+
+    const spy = jest.spyOn(services.customBuilds, "evaluateBuildPhases");
+    try {
+      // First "you" call to seed the cache for that perspective.
+      const yourFirst = await withAuth(
+        request(app).get("/v1/custom-builds/pvz-adept/compositions?perspective=you"),
+      );
+      expect(yourFirst.status).toBe(200);
+      expect(yourFirst.body.perspective).toBe("you");
+
+      // Opponent perspective is a separate cache slot — the spy
+      // must fire even though "you" is already cached.
+      spy.mockClear();
+      const oppFirst = await withAuth(
+        request(app).get("/v1/custom-builds/pvz-adept/compositions?perspective=opponent"),
+      );
+      expect(oppFirst.status).toBe(200);
+      expect(oppFirst.body.perspective).toBe("opponent");
+      expect(spy).toHaveBeenCalledWith(
+        userId,
+        "pvz-adept",
+        expect.objectContaining({ perspective: "opponent" }),
+      );
+
+      // Second opp call hits the cache. The spy must NOT fire again.
+      spy.mockClear();
+      const oppSecond = await withAuth(
+        request(app).get("/v1/custom-builds/pvz-adept/compositions?perspective=opponent"),
+      );
+      expect(oppSecond.status).toBe(200);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   test("reclassify busts the cached payload", async () => {
     const userId = await bootstrap();
     await seedPhaseGame(userId, "g-bust-1", new Date("2026-05-07T00:00:00Z"));

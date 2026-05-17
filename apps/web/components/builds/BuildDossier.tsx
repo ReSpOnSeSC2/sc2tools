@@ -98,6 +98,16 @@ export interface BuildDossierProps {
   footerSlot?: (data: BuildDossierData | null) => ReactNode;
   /** When true, surface the macro aggregate panel. Defaults to true. */
   showMacro?: boolean;
+  /**
+   * Which side of the matched games the phase classifier scores when
+   * fetching ``/compositions`` and ``/transitions``. Defaults to the
+   * saved build's stored perspective on the server; pass
+   * ``"opponent"`` to render the phase trajectory off the
+   * ``opp_*`` macro fields — the killer companion view for an
+   * "opponent-perspective" build (captured from a replay where the
+   * user wanted to study what THEIR opponent did).
+   */
+  phasePerspective?: "you" | "opponent";
 }
 
 /**
@@ -113,6 +123,7 @@ export function BuildDossier({
   headerSlot,
   footerSlot,
   showMacro = true,
+  phasePerspective,
 }: BuildDossierProps) {
   const { data, error, isLoading } = useApi<BuildDossierData>(apiPath);
 
@@ -122,11 +133,12 @@ export function BuildDossier({
   // from the analyzer modal), no sibling routes exist; phaseBase is
   // null and the section below isn't rendered.
   const phaseBase = phaseBasePath(apiPath);
+  const phaseQuery = phasePerspective ? `?perspective=${phasePerspective}` : "";
   const compositions = useApi<BuildPhasePayload>(
-    phaseBase ? `${phaseBase}/compositions` : null,
+    phaseBase ? `${phaseBase}/compositions${phaseQuery}` : null,
   );
   const transitions = useApi<BuildTransitionsPayload>(
-    phaseBase ? `${phaseBase}/transitions` : null,
+    phaseBase ? `${phaseBase}/transitions${phaseQuery}` : null,
   );
 
   const [gameFilter, setGameFilter] = useState<{

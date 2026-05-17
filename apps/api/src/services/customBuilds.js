@@ -182,9 +182,17 @@ class CustomBuildsService {
    * so the scouting widget can request only the compositions payload
    * — meaningfully cheaper than recomputing the full bundle.
    *
+   * ``perspective`` overrides which side of the matched games the
+   * classifier and the signature picker score. Defaults to the
+   * build's stored perspective (a "this is what my opponent does"
+   * build implicitly wants the opponent's trajectory) so existing
+   * callers don't need to change. Caller can still override — the
+   * StrategiesTabBuildVs comparison view fetches the same build
+   * twice with different perspectives.
+   *
    * @param {string} userId
    * @param {string} slug
-   * @param {{ includeTransitions?: boolean }} [opts]
+   * @param {{ includeTransitions?: boolean, perspective?: "you"|"opponent" }} [opts]
    * @returns {Promise<null | {
    *   slug: string,
    *   name: string,
@@ -203,23 +211,35 @@ class CustomBuildsService {
     const build = await this.get(userId, slug);
     if (!build) return null;
     const rules = extractRules(build);
-    const perspective = build.perspective === "opponent" ? "opponent" : "you";
+    // ``rulePerspective`` decides which side's events the rule
+    // evaluator scans — that always follows the saved build's intent
+    // (a build saved as "opponent" describes the opponent's opener).
+    // ``phasePerspective`` decides which side the classifier /
+    // signature picker score, and can be overridden by the caller so
+    // the comparison view can render both sides off the same matched
+    // set.
+    const rulePerspective = build.perspective === "opponent" ? "opponent" : "you";
+    const phasePerspective = opts.perspective === "opponent"
+      || opts.perspective === "you"
+      ? opts.perspective
+      : rulePerspective;
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
     });
     const inMatchup = games.filter((g) =>
-      gameMatchesBuildMatchup(g, build, perspective),
+      gameMatchesBuildMatchup(g, build, rulePerspective),
     );
     const matched =
       rules.length === 0
         ? []
-        : filterMatchingGames(inMatchup, rules, perspective);
-    const comps = computeCompositions(matched);
+        : filterMatchingGames(inMatchup, rules, rulePerspective);
+    const comps = computeCompositions(matched, { perspective: phasePerspective });
     /** @type {Record<string, any>} */
     const out = {
       slug: build.slug,
       name: build.name || build.slug,
+      perspective: phasePerspective,
       sampleSize: comps.sampleSize,
       perPhase: comps.perPhase,
       finalPhaseDistribution: comps.finalPhaseDistribution,
@@ -228,7 +248,9 @@ class CustomBuildsService {
       flags: comps.flags,
     };
     if (includeTransitions) {
-      out.transitions = computeTransitions(matched);
+      out.transitions = computeTransitions(matched, {
+        perspective: phasePerspective,
+      });
     }
     return out;
   }

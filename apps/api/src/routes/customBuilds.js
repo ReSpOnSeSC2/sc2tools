@@ -37,6 +37,22 @@ function gameMatchesMatchup(g, race, vsRace) {
  * @param {number} bucketPos  0 = my-race char of "PvT" bucket, 2 = vs-race char
  * @returns {boolean}
  */
+/**
+ * Coerce a query-string ``perspective`` value into the union the
+ * service expects, or ``undefined`` so the service falls back to the
+ * saved build's stored perspective. Unknown values silently fall
+ * through to the default — the client UI sends only the two valid
+ * values, so a bad input is almost always a stale link.
+ *
+ * @param {unknown} raw
+ * @returns {"you"|"opponent"|undefined}
+ */
+function pickPerspective(raw) {
+  if (raw === "opponent") return "opponent";
+  if (raw === "you") return "you";
+  return undefined;
+}
+
 function raceMatches(actual, requested, buildName, bucketPos) {
   if (!requested || requested === "Any") return true;
   if (!actual) {
@@ -77,8 +93,12 @@ function buildCustomBuildsRouter(deps) {
   // from the reclassify endpoint where the matched set may shift.
   /** @type {Map<string, {expires: number, value: any}>} */
   const phaseCache = new Map();
-  function phaseCacheKey(userId, slug, latestGameMs, kind) {
-    return `${userId}|${slug}|${latestGameMs}|${kind}`;
+  function phaseCacheKey(userId, slug, latestGameMs, kind, perspective) {
+    // ``perspective`` is included so the comparison view's two
+    // queries don't poison each other's cache slot — left ("you")
+    // and right ("opponent") off the same slug must compute
+    // independently.
+    return `${userId}|${slug}|${latestGameMs}|${kind}|${perspective}`;
   }
   function phaseCacheGet(key) {
     const hit = phaseCache.get(key);
@@ -314,8 +334,11 @@ function buildCustomBuildsRouter(deps) {
         return;
       }
       const slug = String(req.params.slug);
+      const perspective = pickPerspective(req.query && req.query.perspective);
       const latest = await latestGameMs(auth.userId);
-      const key = phaseCacheKey(auth.userId, slug, latest, "compositions");
+      const key = phaseCacheKey(
+        auth.userId, slug, latest, "compositions", perspective || "default",
+      );
       const cached = phaseCacheGet(key);
       if (cached) {
         res.json(cached);
@@ -324,7 +347,7 @@ function buildCustomBuildsRouter(deps) {
       const result = await deps.customBuilds.evaluateBuildPhases(
         auth.userId,
         slug,
-        { includeTransitions: false },
+        { includeTransitions: false, perspective },
       );
       if (!result) {
         res.status(404).json({ error: { code: "not_found" } });
@@ -354,8 +377,11 @@ function buildCustomBuildsRouter(deps) {
         return;
       }
       const slug = String(req.params.slug);
+      const perspective = pickPerspective(req.query && req.query.perspective);
       const latest = await latestGameMs(auth.userId);
-      const key = phaseCacheKey(auth.userId, slug, latest, "transitions");
+      const key = phaseCacheKey(
+        auth.userId, slug, latest, "transitions", perspective || "default",
+      );
       const cached = phaseCacheGet(key);
       if (cached) {
         res.json(cached);
@@ -364,13 +390,18 @@ function buildCustomBuildsRouter(deps) {
       const result = await deps.customBuilds.evaluateBuildPhases(
         auth.userId,
         slug,
-        { includeTransitions: true },
+        { includeTransitions: true, perspective },
       );
       if (!result) {
         res.status(404).json({ error: { code: "not_found" } });
         return;
       }
-      const payload = { slug: result.slug, name: result.name, transitions: result.transitions };
+      const payload = {
+        slug: result.slug,
+        name: result.name,
+        perspective: result.perspective,
+        transitions: result.transitions,
+      };
       phaseCacheSet(key, payload);
       res.json(payload);
     } catch (err) {
