@@ -19,6 +19,7 @@
 
 import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
 import { inferRaceFromBuildName } from "@/lib/race";
+import { isGameTooShort } from "./ArcadeEngine";
 import type { ArcadeBuild, ArcadeDataset } from "./types";
 
 /**
@@ -101,6 +102,7 @@ export function buildUniverse(
   for (const b of data.builds) {
     if (!b.name) continue;
     if (isUnclassifiedSentinel(b.name)) continue;
+    if (isGameTooShort(b.name)) continue;
     byName.set(b.name, {
       id: `own:${b.name}`,
       name: b.name,
@@ -120,6 +122,7 @@ export function buildUniverse(
   // the 14-day window).
   for (const c of data.communityBuilds) {
     if (!c.title || isUnclassifiedSentinel(c.title)) continue;
+    if (isGameTooShort(c.title)) continue;
     const own = byName.get(c.title);
     if (own) continue; // already in universe via /v1/builds
     byName.set(c.title, {
@@ -140,6 +143,7 @@ export function buildUniverse(
   // a missing price.
   for (const cb of data.customBuilds) {
     if (!cb.name || isUnclassifiedSentinel(cb.name)) continue;
+    if (isGameTooShort(cb.name)) continue;
     const own = byName.get(cb.name);
     if (own) continue;
     byName.set(cb.name, {
@@ -165,6 +169,7 @@ export function buildUniverse(
   if (includeCatalog) {
     for (const def of BUILD_DEFINITIONS) {
       if (!def.name || isUnclassifiedSentinel(def.name)) continue;
+      if (isGameTooShort(def.name)) continue;
       if (byName.has(def.name)) continue;
       byName.set(def.name, {
         id: `catalog:${def.id}`,

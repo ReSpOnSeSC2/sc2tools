@@ -3,7 +3,13 @@
 import { useState, type ReactNode } from "react";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
-import { outcome, pickQuizSlate, registerMode, shuffle } from "../../ArcadeEngine";
+import {
+  isGameTooShort,
+  outcome,
+  pickQuizSlate,
+  registerMode,
+  shuffle,
+} from "../../ArcadeEngine";
 import type {
   ArcadeGame,
   GenerateInput,
@@ -146,7 +152,7 @@ export function buildNextBuildQuestion(
     if (opp !== race) continue;
     const next = chronoGames[i + 1];
     const build = (next.myBuild || "").trim();
-    if (!build) continue;
+    if (!build || isGameTooShort(build)) continue;
     counts[build] = (counts[build] || 0) + 1;
   }
   const candidates = Object.entries(counts).map(([build, count]) => ({
@@ -217,7 +223,7 @@ export function buildWorstVsRaceQuestion(
     const opp = String(g.oppRace || "").charAt(0).toUpperCase();
     if (opp !== race) continue;
     const build = (g.myBuild || "").trim();
-    if (!build) continue;
+    if (!build || isGameTooShort(build)) continue;
     counts[build] = (counts[build] || 0) + 1;
   }
   const candidates = Object.entries(counts).map(([build, losses]) => ({

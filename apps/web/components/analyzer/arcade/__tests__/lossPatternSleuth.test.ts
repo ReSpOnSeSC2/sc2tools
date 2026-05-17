@@ -151,6 +151,27 @@ describe("Loss Pattern Sleuth — buildNextBuildQuestion", () => {
     }
   });
 
+  test("excludes '<MU> - Game Too Short' from next-build options", () => {
+    // Even if the user reaches for a sub-45-second replay-bucketed
+    // game after losing, that "build" must not surface as an answer.
+    const pairs = [
+      ...Array(20).fill("ZvT - Game Too Short"),
+      ...Array(6).fill("A"),
+      ...Array(5).fill("B"),
+      ...Array(4).fill("C"),
+      ...Array(3).fill("D"),
+      ...Array(2).fill("E"),
+    ];
+    const games = chronoSort(buildPairsVsP(pairs));
+    for (let seed = 1; seed <= 25; seed++) {
+      const q = buildNextBuildQuestion(games, "P", mulberry32(seed));
+      expect(q).not.toBeNull();
+      if (!q) continue;
+      expect(q.options).not.toContain("ZvT - Game Too Short");
+      expect(q.truth).not.toBe("ZvT - Game Too Short");
+    }
+  });
+
   test("returns null when fewer than 4 distinct next-builds exist", () => {
     const games = chronoSort(buildPairsVsP(["A", "A", "B", "B", "C", "C"]));
     expect(buildNextBuildQuestion(games, "P", mulberry32(1))).toBeNull();
@@ -355,6 +376,40 @@ describe("Loss Pattern Sleuth — buildWorstVsRaceQuestion", () => {
     // surface as the correct answer.
     expect(truths.has("A")).toBe(true);
     expect(truths.has("C")).toBe(false);
+  });
+
+  test("excludes '<MU> - Game Too Short' from answer options", () => {
+    // The under-45-second catch-all is not a real build — it should
+    // never compete with strategy labels for "worst build vs race".
+    const games: ArcadeGame[] = [];
+    let cursor = 0;
+    const pushLoss = (build: string, n: number) => {
+      for (let i = 0; i < n; i++) {
+        games.push({
+          gameId: `l-${cursor}`,
+          date: new Date(2026, 0, 1 + cursor++).toISOString(),
+          result: "Loss",
+          oppRace: "T",
+          myBuild: build,
+          duration: 600,
+        });
+      }
+    };
+    // Even though "ZvT - Game Too Short" has the most losses, the
+    // slate must be drawn from real builds only.
+    pushLoss("ZvT - Game Too Short", 50);
+    pushLoss("PvT - Proxy Void Ray/Stargate", 10);
+    pushLoss("PvT - Stargate into Glaives", 8);
+    pushLoss("Reaper FE", 6);
+    pushLoss("Bio Drop", 4);
+    pushLoss("Mech Macro", 2);
+    for (let seed = 1; seed <= 25; seed++) {
+      const q = buildWorstVsRaceQuestion(games, "T", mulberry32(seed));
+      expect(q).not.toBeNull();
+      if (!q) continue;
+      expect(q.options).not.toContain("ZvT - Game Too Short");
+      expect(q.truth).not.toBe("ZvT - Game Too Short");
+    }
   });
 
   test("ignores wins, including big wins, when ranking by loss count", () => {

@@ -1,5 +1,5 @@
 import { pct1 } from "@/lib/format";
-import { outcome } from "../../ArcadeEngine";
+import { isGameTooShort, outcome } from "../../ArcadeEngine";
 import type { ArcadeDataset, ArcadeGame } from "../../types";
 import {
   isDisplayableString,
@@ -89,7 +89,7 @@ function statsByBuild(games: ArcadeGame[]): KeyedStats[] {
   const acc = new Map<string, KeyedStats>();
   for (const g of games) {
     const b = typeof g.myBuild === "string" ? g.myBuild.trim() : "";
-    if (!b) continue;
+    if (!b || isGameTooShort(b)) continue;
     const o = outcome(g);
     if (o === "U") continue;
     let row = acc.get(b);

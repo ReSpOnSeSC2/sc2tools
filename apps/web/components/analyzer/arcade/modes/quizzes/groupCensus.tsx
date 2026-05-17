@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { pct1 } from "@/lib/format";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
-import { outcome, registerMode } from "../../ArcadeEngine";
+import { isGameTooShort, outcome, registerMode } from "../../ArcadeEngine";
 import type {
   ArcadeGame,
   ArcadeOpponent,
@@ -269,7 +269,8 @@ function keyFor(kind: GroupKind, g: ArcadeGame): string | null {
   }
   // build
   const b = typeof g.myBuild === "string" ? g.myBuild.trim() : "";
-  return b || null;
+  if (!b || isGameTooShort(b)) return null;
+  return b;
 }
 
 function displayNameFor(

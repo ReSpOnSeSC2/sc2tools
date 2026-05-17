@@ -324,6 +324,20 @@ export function isCannonRush(name: string | null | undefined): boolean {
   return name.toLowerCase().includes("cannon rush");
 }
 
+/**
+ * "<Matchup> - Game Too Short" is the catch-all build label for replays
+ * that ended in under 45 seconds, before any build order developed (see
+ * apps/web/lib/build-definitions/too-short.ts). It's not a real build
+ * — it's an artifact of filtering — so quiz/arcade modes that surface
+ * build names as answer options must drop it to avoid asking
+ * "which build did you lose with most against Terran?" and offering
+ * "ZvT - Game Too Short" alongside actual strategies.
+ */
+export function isGameTooShort(name: string | null | undefined): boolean {
+  if (typeof name !== "string") return false;
+  return / - Game Too Short$/i.test(name.trim());
+}
+
 /* ──────────── shuffle / pick helpers ──────────── */
 
 /**

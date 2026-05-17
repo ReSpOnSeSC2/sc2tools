@@ -5,6 +5,7 @@ import { GameStage } from "../../shells/GameStage";
 import { IconFor } from "../../icons";
 import {
   fnv1a,
+  isGameTooShort,
   mulberry32,
   outcome,
   registerMode,
@@ -369,6 +370,7 @@ function buildOptionsForMatchup(
 ): string[] {
   const candidates = builds
     .filter((b) => b.name !== truth)
+    .filter((b) => !isGameTooShort(b.name))
     .filter((b) => !myRace || normaliseRace(b.race) === myRace)
     .sort((a, b) => b.total - a.total)
     .slice(0, 8);
@@ -454,7 +456,7 @@ function generateYourBuild(
   data: GenerateInput["data"],
   rng: () => number,
 ): QSpec | null {
-  if (!g.myBuild) return null;
+  if (!g.myBuild || isGameTooShort(g.myBuild)) return null;
   const myRace = normaliseRace(g.myRace);
   const opts = buildOptionsForMatchup(data.builds, g.myBuild, myRace, rng);
   if (opts.length < 2 || !opts.includes(g.myBuild)) return null;
