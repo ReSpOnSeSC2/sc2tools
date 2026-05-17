@@ -78,7 +78,7 @@ const UNKNOWN_RACE = "Unknown";
 
 /**
  * @param {Array<any>} games
- * @param {{ mode?: "build"|"opponent", label?: string }} [opts]
+ * @param {{ mode?: "build"|"opponent", label?: string, perspective?: "you"|"opponent" }} [opts]
  *   ``mode`` selects the column scheme:
  *     "build" (default) — col 0 build → col 1 oppStrategy →
  *       col 2 finalPhase → col 3 lateComp (variable depth, col 3 only
@@ -91,6 +91,12 @@ const UNKNOWN_RACE = "Unknown";
  *   it defaults to the games' ``myBuild``; in opponent mode it should
  *   be the opponent's display name ("vs <name>") so the col-0 node
  *   labels the profile owner.
+ *   ``perspective="opponent"`` (build mode only) flips the classifier
+ *   and the col-3 lateComp picker to the opponent's side: phases are
+ *   scored off ``opp_*`` lifetimes / stats and the late composition
+ *   reads ``unit_timeline[*].opp``. Lets the build-vs-strategy 2-col
+ *   comparison render "what they typically do" alongside the user's
+ *   side.
  * @returns {{
  *   nodes: TransitionNode[],
  *   edges: TransitionEdge[],
@@ -116,7 +122,7 @@ function computeTransitions(games, opts = {}) {
   for (const g of list) {
     const path = mode === "opponent"
       ? pathForOpponentGame(g, col0Label)
-      : pathForGame(g, col0Label);
+      : pathForGame(g, col0Label, opts.perspective);
     paths.push({
       path,
       won: isWonResult(g && g.result),
@@ -198,13 +204,19 @@ function pickBuildLabel(list) {
  *
  * @param {any} g
  * @param {string} buildLabel
+ * @param {"you"|"opponent"} [perspective]
  * @returns {TransitionPathNode[]}
  */
-function pathForGame(g, buildLabel) {
+function pathForGame(g, buildLabel, perspective) {
   const macroBreakdown = (g && g.macroBreakdown) || {};
-  const race = g && g.myRace;
+  const sidePerspective = perspective === "opponent" ? "opponent" : "you";
+  const race = sidePerspective === "opponent"
+    ? ((g && g.oppRace) || (g && g.myRace))
+    : (g && g.myRace);
   const durationSec = (g && g.durationSec) || 0;
-  const classified = classifyGame({ macroBreakdown, race, durationSec });
+  const classified = classifyGame({
+    macroBreakdown, race, durationSec, perspective: sidePerspective,
+  });
   const finalPhase = classified.finalPhase;
 
   const rawStrat =
@@ -234,7 +246,9 @@ function pathForGame(g, buildLabel) {
     const win = lateWindow(classified.crossings, durationSec);
     if (win) {
       const midpoint = (win.start + win.end) / 2;
-      const units = pickSignatureUnits(macroBreakdown, midpoint);
+      const units = pickSignatureUnits(
+        macroBreakdown, midpoint, sidePerspective,
+      );
       const key = units.length > 0 ? signatureKey(units) : "Unknown";
       /** @type {TransitionPathNode} */
       const node = {

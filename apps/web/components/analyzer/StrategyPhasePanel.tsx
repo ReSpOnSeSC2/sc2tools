@@ -21,6 +21,12 @@ import {
 export type StrategyPhasesPayload = {
   name: string;
   total: number;
+  /** Echoed by the API. The default StrategyPhasePanel renders the
+   *  "you" perspective (the user's side of replays against this
+   *  strategy); the BuildVsStrategyComparison renders the right
+   *  column with ``?perspective=opponent``. Optional for back-
+   *  compat with older snapshots that omitted the field. */
+  perspective?: "you" | "opponent";
   sampleSize: Record<Phase, number>;
   perPhase: Record<Phase, PhaseCompositionRow>;
   finalPhaseDistribution: Record<Phase, number>;

@@ -6,6 +6,14 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
+import { PhaseTrajectoryStrip } from "./PhaseTrajectoryStrip";
+import {
+  PhaseCompositionTabs,
+  type Phase,
+  type PhaseCompositionRow,
+} from "./PhaseCompositionTabs";
+import type { CustomBuild } from "@/components/builds/types";
+import type { BuildPhasePayload } from "@/lib/serverApi";
 
 /**
  * Build × Opponent-strategy matrix for ``StrategiesTab``.
@@ -234,6 +242,251 @@ function BvsHeatmap({
         </div>
       </div>
     </Card>
+  );
+}
+
+/**
+ * Response shape of GET ``/v1/strategies/:name/phases``. Mirrors the
+ * ``StrategyPhasesPayload`` in ``StrategyPhasePanel`` but redeclared
+ * here so this file doesn't import the panel just for its type
+ * definition (would create a cycle if either side ever pulls helpers
+ * the other way).
+ */
+type StrategyPhasesResponse = {
+  name: string;
+  total: number;
+  perspective: "you" | "opponent";
+  sampleSize: Record<Phase, number>;
+  perPhase: Record<Phase, PhaseCompositionRow>;
+  finalPhaseDistribution: Record<Phase, number>;
+  medianCrossings: {
+    earlyMidAt: number | null;
+    midAt: number | null;
+    midLateAt: number | null;
+    lateAt: number | null;
+  };
+  durationP95Sec: number;
+  flags: string[];
+};
+
+const COMPARISON_MIN_GAMES = 3;
+
+/**
+ * BuildVsStrategyComparison — side-by-side phase trajectory + per-
+ * phase composition for the drill-down view of "my build × their
+ * strategy". Left column is the user's perspective on their saved
+ * build; right column is the opponent's perspective on the
+ * detected strategy. Each column reuses the same trajectory strip /
+ * composition tabs the BuildDossier and StrategyPhasePanel surface
+ * — agnostic by design, only the perspective and aggregation key
+ * differ.
+ *
+ * Empty states are independent per column: a brand-new build with
+ * no games still renders the right column if the opponent strategy
+ * has enough samples. When the build doesn't map to a saved custom
+ * build (e.g. the agent's auto-classifier label), the left column
+ * surfaces the unmatched-build EmptyState rather than guessing a
+ * slug.
+ */
+export function BuildVsStrategyComparison({
+  build,
+  strategy,
+}: {
+  build: string;
+  strategy: string;
+}) {
+  // Resolve build name → custom-build slug via the user's library.
+  // The drill state only carries the display name (matches ``myBuild``
+  // on the game record); custom-build endpoints key on slug, so we
+  // bridge here. Falls back to "no matching saved build" if the user
+  // hasn't authored a build with that name yet — common when the
+  // label was assigned by the agent's auto-classifier.
+  const customBuilds = useApi<{ items: CustomBuild[] } | CustomBuild[]>(
+    "/v1/custom-builds",
+  );
+  const slug = useMemo(() => {
+    const list = Array.isArray(customBuilds.data)
+      ? customBuilds.data
+      : customBuilds.data?.items ?? [];
+    const hit = list.find((b) => (b.name || b.slug) === build);
+    return hit?.slug || null;
+  }, [customBuilds.data, build]);
+
+  return (
+    <Card title="Build vs strategy — phase comparison">
+      <p className="mb-3 text-[11px] text-text-dim">
+        Left: how you typically play this build. Right: how the opponent
+        typically plays this strategy. Compare the crossings to see who
+        gets to late game first — and with what.
+      </p>
+      <div
+        className="grid grid-cols-1 gap-5 lg:grid-cols-2"
+        data-testid="build-vs-strategy-comparison"
+      >
+        <ComparisonColumn
+          title="What you typically do"
+          subtitle={build}
+          testId="bvs-column-you"
+        >
+          <YouColumn slug={slug} />
+        </ComparisonColumn>
+        <ComparisonColumn
+          title="What they typically do"
+          subtitle={strategy}
+          testId="bvs-column-opponent"
+        >
+          <OpponentColumn strategy={strategy} />
+        </ComparisonColumn>
+      </div>
+    </Card>
+  );
+}
+
+function ComparisonColumn({
+  title,
+  subtitle,
+  testId,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  testId: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      className="space-y-3 rounded-lg border border-border bg-bg-surface p-4"
+      data-testid={testId}
+    >
+      <header>
+        <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
+          {title}
+        </h3>
+        <p className="truncate text-[11px] text-text-muted" title={subtitle}>
+          {subtitle}
+        </p>
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function YouColumn({ slug }: { slug: string | null }) {
+  // Left side reads the user's build with perspective=you. We pass
+  // it explicitly so the cache slot in the API matches the right
+  // column's explicit "opponent" — keeps the two queries from
+  // colliding in the route-layer cache.
+  const path = slug
+    ? `/v1/custom-builds/${encodeURIComponent(slug)}/compositions?perspective=you`
+    : null;
+  const { data, isLoading, error } = useApi<BuildPhasePayload>(path);
+
+  if (!slug) {
+    return (
+      <EmptyState
+        title="No saved build for this label"
+        sub="The left column shows phases for builds saved in your library. Save this build to compare side-by-side."
+      />
+    );
+  }
+  if (isLoading && !data) return <Skeleton rows={3} />;
+  if (error) {
+    return (
+      <EmptyState
+        title="Couldn't load this build"
+        sub="Phase compositions failed to load for the left column."
+      />
+    );
+  }
+  if (!data) return null;
+  return <ComparisonBody payload={data} />;
+}
+
+function OpponentColumn({ strategy }: { strategy: string }) {
+  const path = strategy
+    ? `/v1/strategies/${encodeURIComponent(strategy)}/phases?perspective=opponent`
+    : null;
+  const { data, isLoading, error } = useApi<StrategyPhasesResponse>(path);
+
+  if (!strategy) {
+    return (
+      <EmptyState
+        title="Pick a strategy"
+        sub="The right column needs an opponent strategy to compare against."
+      />
+    );
+  }
+  if (isLoading && !data) return <Skeleton rows={3} />;
+  // 404 here means the strategy has no qualifying games — surface
+  // the empty state and keep the left column rendering.
+  if (error && error.status !== 404) {
+    return (
+      <EmptyState
+        title="Couldn't load this strategy"
+        sub="Phase compositions failed to load for the right column."
+      />
+    );
+  }
+  if (!data || data.total < COMPARISON_MIN_GAMES) {
+    return (
+      <EmptyState
+        title="Not enough samples"
+        sub={
+          data && data.total > 0
+            ? `${data.total} game${data.total === 1 ? "" : "s"} so far · the comparison starts at ${COMPARISON_MIN_GAMES}.`
+            : "Play a few games against this strategy to see what they typically do."
+        }
+      />
+    );
+  }
+  return <ComparisonBody payload={data} />;
+}
+
+function ComparisonBody({
+  payload,
+}: {
+  payload: {
+    sampleSize: Record<Phase, number>;
+    perPhase: Record<Phase, PhaseCompositionRow>;
+    finalPhaseDistribution: Record<Phase, number>;
+    medianCrossings: {
+      earlyMidAt: number | null;
+      midAt: number | null;
+      midLateAt: number | null;
+      lateAt: number | null;
+    };
+    durationP95Sec: number;
+    flags?: string[];
+  };
+}) {
+  // ``opp_signals_sparse`` is the API's tell that >50% of matched
+  // games had no opp_stats_events — the trajectory would be noisy
+  // and incomplete, so we surface the same EmptyState as the
+  // all-zero sampleSize fallback would.
+  if (payload.flags && payload.flags.includes("opp_signals_sparse")) {
+    return (
+      <EmptyState
+        title="Opponent signal too sparse"
+        sub="Most matched replays are missing the opponent's tracker events — drawing the trajectory here would be misleading."
+      />
+    );
+  }
+  return (
+    <div className="space-y-4">
+      <PhaseTrajectoryStrip
+        sampleSize={payload.sampleSize}
+        crossings={payload.medianCrossings}
+        finalPhaseDistribution={payload.finalPhaseDistribution}
+        durationP95Sec={payload.durationP95Sec}
+        compact
+      />
+      <PhaseCompositionTabs
+        sampleSize={payload.sampleSize}
+        perPhase={payload.perPhase}
+        preferredPhase="mid"
+        showTechRow={false}
+      />
+    </div>
   );
 }
 

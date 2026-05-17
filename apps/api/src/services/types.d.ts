@@ -116,6 +116,11 @@ export interface BuildPhaseRow {
 export interface BuildPhasePayload {
   slug: string;
   name: string;
+  /** Which side of the game the phase trajectory was scored from.
+   *  Echoed by the API so the client can render the panel header
+   *  accurately ("What you typically do" vs "What they typically do")
+   *  without re-deriving from the saved build's stored field. */
+  perspective?: "you" | "opponent";
   sampleSize: Record<string, number>;
   perPhase: Record<string, BuildPhaseRow>;
   finalPhaseDistribution: Record<string, number>;
@@ -163,7 +168,10 @@ export interface CustomBuildsService {
   evaluateBuildPhases(
     userId: string,
     slug: string,
-    opts?: { includeTransitions?: boolean },
+    opts?: {
+      includeTransitions?: boolean;
+      perspective?: "you" | "opponent";
+    },
   ): Promise<
     | null
     | (BuildPhasePayload & { transitions?: BuildTransitionsPayload["transitions"] })
@@ -348,9 +356,14 @@ export interface BuildsService {
 }
 
 export interface StrategyPhasesService {
-  evaluate(userId: string, strategyName: string): Promise<null | {
+  evaluate(
+    userId: string,
+    strategyName: string,
+    opts?: { perspective?: "you" | "opponent" },
+  ): Promise<null | {
     name: string;
     total: number;
+    perspective: "you" | "opponent";
     sampleSize: Record<string, number>;
     perPhase: Record<string, object>;
     finalPhaseDistribution: Record<string, number>;

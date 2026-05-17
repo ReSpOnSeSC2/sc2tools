@@ -245,6 +245,161 @@ describe("buildCompositions — flags", () => {
   });
 });
 
+describe("buildCompositions — perspective='opponent'", () => {
+  /**
+   * Build a game whose own-side macroBreakdown is light and whose
+   * opp_* fields carry the heavy late-game signal. The classifier on
+   * the user's side would put this game in "early"; flipped to
+   * "opponent" it has to land in "mid"/"late" because the opp_*
+   * fields are doing the work.
+   *
+   * @param {{ gameId: string, oppUnitsAtMid: Record<string, number> }} opts
+   */
+  function makeOppPerspectiveGame(opts) {
+    const duration = 600;
+    const oppBases = [
+      { name: "CommandCenter", born_time: 0, died_time: duration },
+      { name: "CommandCenter", born_time: 100, died_time: duration },
+      { name: "CommandCenter", born_time: 220, died_time: duration },
+    ];
+    const oppProduction = [
+      { name: "Factory", born_time: 90, died_time: duration },
+      { name: "Starport", born_time: 200, died_time: duration },
+      { name: "Armory", born_time: 260, died_time: duration },
+      { name: "FusionCore", born_time: 320, died_time: duration },
+    ];
+    const oppStats = [];
+    for (let t = 0; t <= duration; t += 10) {
+      oppStats.push({
+        time: t,
+        food_workers: Math.min(20 + t / 8, 70),
+        food_used: Math.min(12 + t / 4, 180),
+        army_value: Math.min(t * 12, 5000),
+      });
+    }
+    const timeline = [];
+    for (let t = 0; t <= duration; t += 30) {
+      timeline.push({
+        time: t,
+        my: { Probe: 50 },
+        opp: { ...opts.oppUnitsAtMid },
+      });
+    }
+    return {
+      gameId: opts.gameId,
+      myRace: "Protoss",
+      oppRace: "Terran",
+      durationSec: duration,
+      result: "Defeat",
+      opponent: { strategy: "Terran - Mech" },
+      macroBreakdown: {
+        // The user's side is intentionally empty — without the
+        // perspective flip the classifier finds nothing to score
+        // and the game lands in "early".
+        bases: [],
+        production_buildings: [],
+        stats_events: [],
+        opp_bases: oppBases,
+        opp_production_buildings: oppProduction,
+        opp_stats_events: oppStats,
+        unit_timeline: timeline,
+      },
+      events: [],
+      oppEvents: [],
+    };
+  }
+
+  test("scores phases off opp_* fields and signs the opponent's units", () => {
+    const games = [
+      makeOppPerspectiveGame({
+        gameId: "g1",
+        oppUnitsAtMid: { SiegeTank: 6, Marauder: 4, Marine: 8, SCV: 60 },
+      }),
+      makeOppPerspectiveGame({
+        gameId: "g2",
+        oppUnitsAtMid: { SiegeTank: 7, Marauder: 3, Marine: 9, SCV: 55 },
+      }),
+    ];
+    const own = computeCompositions(games, { perspective: "you" });
+    const flipped = computeCompositions(games, { perspective: "opponent" });
+
+    // Own-side perspective: the user has no bases / no production /
+    // no stats, so finalPhase clamps to "early" and the mid window
+    // has zero samples.
+    expect(own.finalPhaseDistribution.early).toBe(2);
+    expect(own.sampleSize.mid).toBe(0);
+    // Flipped to opponent: the opp_* fields drive the score so the
+    // classifier passes through mid and into mid/late or late.
+    expect(flipped.sampleSize.mid).toBe(2);
+    // The mid-phase signature is read off ``unit_timeline[*].opp``
+    // and contains the opponent's units, not the user's worker
+    // count.
+    const sig = flipped.perPhase.mid.signatures[0];
+    expect(sig).toBeDefined();
+    expect(sig.units.map((u) => u.token)).toContain("SiegeTank");
+    // SCV is in the worker-skip set so it never appears in the
+    // signature, no matter which side carries it.
+    expect(sig.units.map((u) => u.token)).not.toContain("SCV");
+  });
+
+  test("returns empty + 'opp_signals_sparse' when >50% of games have no opp_stats_events", () => {
+    // 3 games, 2 of which carry no opp_stats_events (the sc2reader
+    // Zerg tracker quirk). The empty-fallback fires at 67% missing,
+    // which is comfortably over the 50% threshold.
+    const games = [
+      makeOppPerspectiveGame({
+        gameId: "g1",
+        oppUnitsAtMid: { SiegeTank: 5, Marauder: 4, Marine: 8 },
+      }),
+      makeOppPerspectiveGame({
+        gameId: "g2",
+        oppUnitsAtMid: { SiegeTank: 5, Marauder: 4, Marine: 8 },
+      }),
+      makeOppPerspectiveGame({
+        gameId: "g3",
+        oppUnitsAtMid: { SiegeTank: 5, Marauder: 4, Marine: 8 },
+      }),
+    ];
+    games[1].macroBreakdown.opp_stats_events = [];
+    games[2].macroBreakdown.opp_stats_events = [];
+
+    const out = computeCompositions(games, { perspective: "opponent" });
+    expect(out.flags).toContain("opp_signals_sparse");
+    expect(out.sampleSize.mid).toBe(0);
+    expect(out.sampleSize.late).toBe(0);
+    expect(out.perPhase.mid.signatures).toEqual([]);
+  });
+
+  test("still draws when exactly half the games carry opp_stats_events", () => {
+    // 2 of 4 missing = 50% which is NOT strictly > 50%, so the
+    // gate does not fire and the picker still produces a signature.
+    const games = [
+      makeOppPerspectiveGame({
+        gameId: "g1",
+        oppUnitsAtMid: { SiegeTank: 5, Marauder: 4, Marine: 8 },
+      }),
+      makeOppPerspectiveGame({
+        gameId: "g2",
+        oppUnitsAtMid: { SiegeTank: 5, Marauder: 4, Marine: 8 },
+      }),
+      makeOppPerspectiveGame({
+        gameId: "g3",
+        oppUnitsAtMid: { SiegeTank: 5, Marauder: 4, Marine: 8 },
+      }),
+      makeOppPerspectiveGame({
+        gameId: "g4",
+        oppUnitsAtMid: { SiegeTank: 5, Marauder: 4, Marine: 8 },
+      }),
+    ];
+    games[2].macroBreakdown.opp_stats_events = [];
+    games[3].macroBreakdown.opp_stats_events = [];
+
+    const out = computeCompositions(games, { perspective: "opponent" });
+    expect(out.flags).not.toContain("opp_signals_sparse");
+    expect(out.sampleSize.mid).toBeGreaterThan(0);
+  });
+});
+
 describe("buildCompositions — PvT-WIN snapshot (Prompt 1 fixture)", () => {
   // The fixture this anchors on (``pvt_20m_macro_win.json``) is the
   // TIIIII 20-minute PvT win called out in the phaseClassifier
@@ -282,5 +437,34 @@ describe("buildCompositions — PvT-WIN snapshot (Prompt 1 fixture)", () => {
     expect(lateSig.units.map((u) => u.token)).toEqual([
       "Carrier", "Immortal", "Stalker",
     ]);
+  });
+
+  // Opp-perspective companion. The PvT-WIN fixture's Terran side
+  // arrives at mech in the late window — once the perspective flip
+  // and ``unit_timeline[*].opp`` reader land, this assertion
+  // re-grounds the snapshot on the opponent's late composition,
+  // which is exactly what the StrategiesTabBuildVs "what they
+  // typically do" column renders. Same skip-until-fixture pattern
+  // as the existing one above.
+  test.skip("opp-perspective late composition contains SiegeTank", () => {
+    const fx = loadFixture("pvt_20m_macro_win.json");
+    const game = {
+      gameId: "pvt_20m_macro_win",
+      myRace: fx.race,
+      oppRace: "Terran",
+      durationSec: fx.durationSec,
+      result: "Victory",
+      opponent: { strategy: "Terran - Standard Bio Tank" },
+      macroBreakdown: fx.macroBreakdown,
+      events: [],
+    };
+    const out = computeCompositions([game], { perspective: "opponent" });
+    const lateSig = out.perPhase.late.signatures[0];
+    expect(lateSig).toBeDefined();
+    // The Terran side's late composition in this fixture is mech-
+    // heavy. Asserting a substring (``SiegeTank``) rather than a
+    // strict equality keeps the anchor stable across small
+    // signature-set tweaks while still naming the trademark unit.
+    expect(lateSig.units.map((u) => u.token)).toContain("SiegeTank");
   });
 });

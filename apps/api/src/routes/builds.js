@@ -29,8 +29,8 @@ function buildBuildsRouter(deps) {
   // endpoints behave the same way after a fresh upload.
   /** @type {Map<string, {expires: number, value: any}>} */
   const phaseCache = new Map();
-  function phaseCacheKey(userId, name, latestGameMs) {
-    return `${userId}|${name}|${latestGameMs}`;
+  function phaseCacheKey(userId, name, latestGameMs, perspective) {
+    return `${userId}|${name}|${latestGameMs}|${perspective}`;
   }
   function phaseCacheGet(key) {
     const hit = phaseCache.get(key);
@@ -103,14 +103,19 @@ function buildBuildsRouter(deps) {
         return;
       }
       const name = String(req.params.name || "");
+      const perspective = req.query && req.query.perspective === "opponent"
+        ? "opponent"
+        : "you";
       const latest = await deps.strategyPhases.latestGameDateMs(userId);
-      const key = phaseCacheKey(userId, name, latest);
+      const key = phaseCacheKey(userId, name, latest, perspective);
       const cached = phaseCacheGet(key);
       if (cached) {
         res.json(cached);
         return;
       }
-      const result = await deps.strategyPhases.evaluate(userId, name);
+      const result = await deps.strategyPhases.evaluate(userId, name, {
+        perspective,
+      });
       if (!result) {
         res.status(404).json({ error: { code: "strategy_not_found" } });
         return;

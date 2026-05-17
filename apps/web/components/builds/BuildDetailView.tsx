@@ -163,6 +163,9 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
       {dossierPath ? (
         <BuildDossier
           apiPath={dossierPath}
+          phasePerspective={
+            build.perspective === "opponent" ? "opponent" : undefined
+          }
           headerSlot={() => <NotesPanel notes={build.notes} accent={tint.text} />}
         />
       ) : null}

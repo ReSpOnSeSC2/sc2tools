@@ -36,11 +36,18 @@ class StrategyPhasesService {
    * has zero matches in the user's recent window so the route layer
    * can answer with a 404 (parallel to the build-detail flow).
    *
+   * ``perspective="opponent"`` rescores the trajectory from the
+   * opponent's side — feeds the right column of the
+   * StrategiesTabBuildVs comparison view ("what they typically do
+   * with this strategy").
+   *
    * @param {string} userId
    * @param {string} strategyName
+   * @param {{ perspective?: "you"|"opponent" }} [opts]
    * @returns {Promise<null | {
    *   name: string,
    *   total: number,
+   *   perspective: "you"|"opponent",
    *   sampleSize: Record<string, number>,
    *   perPhase: Record<string, object>,
    *   finalPhaseDistribution: Record<string, number>,
@@ -49,9 +56,10 @@ class StrategyPhasesService {
    *   flags: string[],
    * }>}
    */
-  async evaluate(userId, strategyName) {
+  async evaluate(userId, strategyName, opts = {}) {
     if (!this.perGame) throw new Error("perGame_unavailable");
     if (!strategyName) return null;
+    const perspective = opts && opts.perspective === "opponent" ? "opponent" : "you";
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
@@ -61,10 +69,11 @@ class StrategyPhasesService {
       return s === strategyName;
     });
     if (matched.length === 0) return null;
-    const comps = computeCompositions(matched);
+    const comps = computeCompositions(matched, { perspective });
     return {
       name: strategyName,
       total: matched.length,
+      perspective,
       sampleSize: comps.sampleSize,
       perPhase: comps.perPhase,
       finalPhaseDistribution: comps.finalPhaseDistribution,
