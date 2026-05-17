@@ -1,26 +1,12 @@
 "use client";
 
-import {
-  PhaseTrajectoryStrip,
-  type Phase,
-} from "@/components/analyzer/PhaseTrajectoryStrip";
-import { Icon } from "@/components/ui/Icon";
-import { pct1 } from "@/lib/format";
 import type {
   LiveGameEnvelope,
   LiveGameEnvelopeProfile,
   LiveGamePayload,
-  OpponentPhases,
 } from "../types";
 import { Dim, WidgetShell } from "../WidgetShell";
-
-const PHASE_DISPLAY: Record<OpponentPhases["typicalFinalPhase"], string> = {
-  early: "Early",
-  earlyMid: "Early/Mid",
-  mid: "Mid",
-  midLate: "Mid/Late",
-  late: "Late",
-};
+import { ScoutingLastGames } from "./ScoutingLastGames";
 
 /**
  * Scouting Report card — visual rebuild matching the legacy SPA's
@@ -97,7 +83,7 @@ export function ScoutingWidget({
   const cheeseHigh =
     typeof effective.cheeseProbability === "number"
     && effective.cheeseProbability >= 0.4;
-  const opponentPhases = effective.opponentPhases || null;
+  const last5GamesScouting = (effective.last5GamesScouting || []).slice(0, 5);
 
   const hasAnyContent =
     Boolean(effective.oppName)
@@ -106,7 +92,7 @@ export function ScoutingWidget({
     || bestAnswer != null
     || cheeseHigh
     || rivalNote != null
-    || opponentPhases != null;
+    || last5GamesScouting.length > 0;
   if (!hasAnyContent) return null;
 
   return (
@@ -186,8 +172,8 @@ export function ScoutingWidget({
         </div>
       ) : null}
 
-      {opponentPhases ? (
-        <OpponentPhaseStrip phases={opponentPhases} />
+      {last5GamesScouting.length > 0 ? (
+        <ScoutingLastGames envelopes={last5GamesScouting} />
       ) : null}
 
       {bestAnswer ? (
@@ -225,107 +211,6 @@ export function ScoutingWidget({
         </FooterRow>
       ) : null}
     </WidgetShell>
-  );
-}
-
-/**
- * Phase forecast strip — single-line "Usually reaches Mid/Late" hint
- * plus a compact PhaseTrajectoryStrip, with an optional typical-late-
- * comp row underneath. Renders to ~70px of vertical real estate so
- * the 600px-wide WidgetShell stays balanced.
- *
- * Gated by the caller on ``opponentPhases`` being populated — there's
- * no internal "render placeholder" path. On a sparse opponent (first
- * meeting / < 3 games of history) the slot stays silent rather than
- * showing a misleading guess on stream.
- */
-function OpponentPhaseStrip({ phases }: { phases: OpponentPhases }) {
-  const phaseLabel = PHASE_DISPLAY[phases.typicalFinalPhase];
-  const lateComp = phases.typicalLateComp || null;
-  // The compact strip needs a non-empty sampleSize to render the
-  // bands; the server gates ``opponentPhases`` on ≥ 3 games but the
-  // Phase type for ``sampleSize`` is exact, so we widen the cast at
-  // the prop boundary.
-  const trajectory = phases.trajectory;
-  return (
-    <div
-      style={{
-        marginTop: 12,
-        borderTop: "1px solid rgb(var(--border))",
-        paddingTop: 12,
-      }}
-      data-testid="opponent-phase-strip"
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          fontSize: 11,
-          letterSpacing: 1.2,
-          marginBottom: 4,
-        }}
-      >
-        <Dim>
-          <span>Usually reaches</span>
-        </Dim>
-        <span
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            letterSpacing: 0.5,
-            color: "rgb(var(--text))",
-          }}
-        >
-          {phaseLabel}
-        </span>
-      </div>
-      <PhaseTrajectoryStrip
-        sampleSize={
-          trajectory.sampleSize as Record<Phase, number>
-        }
-        crossings={trajectory.crossings}
-        finalPhaseDistribution={
-          trajectory.finalPhaseDistribution as Record<Phase, number>
-        }
-        durationP95Sec={trajectory.durationP95Sec}
-        compact
-      />
-      {lateComp ? (
-        <div
-          style={{
-            marginTop: 8,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            fontSize: 12,
-          }}
-          data-testid="opponent-phase-late-comp"
-        >
-          <Dim>
-            <span>Plays into</span>
-          </Dim>
-          {lateComp.units.slice(0, 3).map((u) => (
-            <Icon
-              key={u}
-              name={u}
-              kind="unit"
-              size={20}
-              alt={u}
-            />
-          ))}
-          <span
-            style={{
-              marginLeft: "auto",
-              opacity: 0.6,
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {lateComp.sampleCount}g · {pct1(lateComp.winRate)}
-          </span>
-        </div>
-      ) : null}
-    </div>
   );
 }
 

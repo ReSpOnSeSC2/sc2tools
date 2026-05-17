@@ -68,9 +68,15 @@ function makeMacroLate(opts) {
       army_value: Math.min(t * 12, 5000),
     });
   }
+  // Spawn the late-game units only after t=360s so the T3-unit
+  // floor in phaseClassifier doesn't pin the early-game score to
+  // "late" from t=0. Pre-360 timeline rows carry the worker/larva
+  // baseline only — same shape, just no Carrier/Brood/etc. yet.
+  const earlyUnits = pickNonT3(opts.units);
   const timeline = [];
   for (let t = 0; t <= duration; t += 30) {
-    timeline.push({ time: t, my: { ...opts.units }, opp: {} });
+    const side = t < 360 ? earlyUnits : opts.units;
+    timeline.push({ time: t, my: { ...side }, opp: {} });
   }
   return {
     bases,
@@ -78,6 +84,29 @@ function makeMacroLate(opts) {
     stats_events: stats,
     unit_timeline: timeline,
   };
+}
+
+const _T3_UNITS_FIXTURE = new Set([
+  "BroodLord", "Ultralisk", "Lurker", "LurkerMP",
+  "Carrier", "Tempest", "Mothership",
+  "Battlecruiser", "Thor",
+]);
+
+/**
+ * Strip T3 unit tokens from a unit-bag for the early-window timeline
+ * rows. Mirrors the classifier's T3_UNITS list so the fixtures stay
+ * realistic (no carriers at t=0).
+ *
+ * @param {Record<string, number>} units
+ */
+function pickNonT3(units) {
+  /** @type {Record<string, number>} */
+  const out = {};
+  for (const k of Object.keys(units)) {
+    if (_T3_UNITS_FIXTURE.has(k)) continue;
+    out[k] = units[k];
+  }
+  return out;
 }
 
 /**

@@ -1,0 +1,307 @@
+"use strict";
+
+/**
+ * computePerGameScouting — pure compute that produces the per-game
+ * scouting envelope the overlay's "Last 5 games" widget renders.
+ *
+ * The fixtures here are hand-crafted so the classifier lands on a
+ * known finalPhase + endReason and so the per-phase composition
+ * snapshot picks the unit-token we expect. Same calibration anchors
+ * the Workstream-A phaseClassifier tests use: T3 tech raises the
+ * floor to midLate, T3 unit raises the floor to late.
+ */
+
+const {
+  computePerGameScouting,
+  deriveEndReason,
+  buildOpponentBuildOrder,
+} = require("../src/services/scouting/perGameScouting");
+
+/**
+ * Build a macroBreakdown that classifies into "late" with the
+ * supplied units in the late-phase window. Mirrors the late-shape
+ * helpers used in opponentsPhases.test.js, with units gated past
+ * t=420 so the T3-unit floor only fires inside the late phase.
+ *
+ * @param {{ units?: Record<string, number>, duration?: number, t3TechBornAt?: number, t3UnitBornAt?: number }} opts
+ */
+function makeMacroLate(opts = {}) {
+  const duration = opts.duration || 600;
+  const techBorn = opts.t3TechBornAt ?? 280;
+  const unitBorn = opts.t3UnitBornAt ?? 420;
+  const opp_bases = [
+    { name: "Hatchery", born_time: 0, died_time: duration },
+    { name: "Hatchery", born_time: 100, died_time: duration },
+    { name: "Hatchery", born_time: 200, died_time: duration },
+  ];
+  const opp_production_buildings = [
+    { name: "SpawningPool", born_time: 30, died_time: duration },
+    { name: "RoachWarren", born_time: 90, died_time: duration },
+    { name: "HydraliskDen", born_time: 160, died_time: duration },
+    { name: "Spire", born_time: 220, died_time: duration },
+    { name: "Hive", born_time: techBorn, died_time: duration },
+  ];
+  const opp_stats_events = [];
+  for (let t = 0; t <= duration; t += 10) {
+    opp_stats_events.push({
+      time: t,
+      food_workers: Math.min(20 + t / 8, 70),
+      food_used: Math.min(12 + t / 4, 180),
+      army_value: Math.min(t * 12, 5000),
+    });
+  }
+  const lateUnits = opts.units || { BroodLord: 4, Corruptor: 6 };
+  const unit_timeline = [];
+  for (let t = 0; t <= duration; t += 30) {
+    const opp = t >= unitBorn
+      ? { ...lateUnits }
+      : { Zergling: 8, Roach: 4 };
+    unit_timeline.push({ time: t, my: {}, opp });
+  }
+  return {
+    opp_bases,
+    opp_production_buildings,
+    opp_stats_events,
+    unit_timeline,
+  };
+}
+
+function buildLateGame(overrides = {}) {
+  const macroBreakdown = overrides.macroBreakdown || makeMacroLate();
+  return {
+    gameId: "g_late",
+    date: new Date("2026-04-10T00:00:00Z"),
+    result: "Victory",
+    map: "Goldenaura LE",
+    myRace: "Protoss",
+    myBuild: "PvZ - 3 Stargate Phoenix",
+    durationSec: 600,
+    opponent: {
+      displayName: "WallOfHydra",
+      race: "Zerg",
+      strategy: "Zerg - Brood Lord Macro",
+    },
+    oppBuildLog: [
+      "[0:12] SpawningPool",
+      "[1:30] RoachWarren",
+      "[2:40] HydraliskDen",
+      "[3:40] Spire",
+      "[4:40] Hive",
+      "[5:00] GreaterSpire",
+      "[5:20] BroodLord",
+      "[5:50] BroodLord",
+    ],
+    macroBreakdown,
+    ...overrides,
+  };
+}
+
+describe("computePerGameScouting — canonical shape", () => {
+  test("returns the canonical envelope shape", () => {
+    const env = computePerGameScouting(buildLateGame());
+    expect(env).toEqual(expect.objectContaining({
+      gameId: "g_late",
+      date: expect.any(String),
+      map: "Goldenaura LE",
+      result: "win",
+      durationSec: 600,
+      myRace: "Protoss",
+      myBuild: "PvZ - 3 Stargate Phoenix",
+      oppRace: "Zerg",
+      oppName: "WallOfHydra",
+      oppStrategy: "Zerg - Brood Lord Macro",
+    }));
+    // The five phase buckets all exist on the snapshot map.
+    expect(Object.keys(env.oppCompositionByPhase).sort()).toEqual(
+      ["early", "earlyMid", "late", "mid", "midLate"],
+    );
+    // Build order events carry name + time + category + tier.
+    expect(env.oppBuildOrder.length).toBeGreaterThan(0);
+    const first = env.oppBuildOrder[0];
+    expect(first).toEqual(expect.objectContaining({
+      name: expect.any(String),
+      time: expect.any(Number),
+      category: expect.stringMatching(/^(building|unit|upgrade)$/),
+      tier: expect.any(Number),
+    }));
+  });
+
+  test("applies the workstream-A T3 floor through to endPhase", () => {
+    // The macro carries Brood Lord (T3 unit) in the unit_timeline
+    // from t=420; the classifier's T3 floor pushes finalPhase to "late".
+    const env = computePerGameScouting(buildLateGame());
+    expect(env.endPhase).toBe("late");
+    // The classifier also reports the corresponding crossing.
+    expect(env.oppTransitions.lateAt).not.toBeNull();
+    expect(env.oppTransitions.lateAt).toBeLessThanOrEqual(420);
+  });
+
+  test("composition snapshot at late phase includes the T3 unit", () => {
+    const env = computePerGameScouting(buildLateGame());
+    const lateUnits = env.oppCompositionByPhase.late.units.map((u) => u.token);
+    expect(lateUnits).toContain("BroodLord");
+  });
+
+  test("phases the game didn't reach render reached=false", () => {
+    // Short early-game fixture — score should never cross midLate.
+    const env = computePerGameScouting({
+      gameId: "g_short",
+      date: new Date("2026-04-10T00:00:00Z"),
+      result: "Defeat",
+      map: "Goldenaura LE",
+      myRace: "Protoss",
+      myBuild: "PvZ - Cannon Rush",
+      durationSec: 180,
+      opponent: {
+        displayName: "OppX", race: "Zerg", strategy: "Zerg - Pool First",
+      },
+      oppBuildLog: ["[0:12] SpawningPool"],
+      macroBreakdown: {
+        opp_bases: [{ name: "Hatchery", born_time: 0, died_time: 180 }],
+        opp_production_buildings: [
+          { name: "SpawningPool", born_time: 30, died_time: 180 },
+        ],
+        opp_stats_events: [
+          { time: 0, food_workers: 12, food_used: 12, army_value: 0 },
+          { time: 90, food_workers: 14, food_used: 16, army_value: 100 },
+          { time: 180, food_workers: 16, food_used: 18, army_value: 200 },
+        ],
+        unit_timeline: [
+          { time: 0, my: {}, opp: { Zergling: 4 } },
+          { time: 60, my: {}, opp: { Zergling: 8 } },
+        ],
+      },
+    });
+    expect(env.endPhase).toBe("early");
+    expect(env.oppCompositionByPhase.early.reached).toBe(true);
+    expect(env.oppCompositionByPhase.midLate.reached).toBe(false);
+    expect(env.oppCompositionByPhase.late.reached).toBe(false);
+  });
+});
+
+describe("computePerGameScouting — degraded inputs", () => {
+  test("missing unit_timeline produces empty compositions + flag", () => {
+    const macro = makeMacroLate();
+    delete macro.unit_timeline;
+    const env = computePerGameScouting(buildLateGame({ macroBreakdown: macro }));
+    expect(env.flags).toContain("unit_timeline_missing");
+    for (const phase of Object.keys(env.oppCompositionByPhase)) {
+      expect(env.oppCompositionByPhase[phase].units).toEqual([]);
+    }
+  });
+
+  test("missing oppBuildLog produces empty build order + flag", () => {
+    const env = computePerGameScouting(buildLateGame({ oppBuildLog: [] }));
+    expect(env.flags).toContain("opp_buildlog_missing");
+    expect(env.oppBuildOrder).toEqual([]);
+  });
+
+  test("opp_bases empty + opp_production_buildings present sets the synthesized flag", () => {
+    const macro = makeMacroLate();
+    macro.opp_bases = [];
+    const env = computePerGameScouting(buildLateGame({ macroBreakdown: macro }));
+    expect(env.flags).toContain("opp_bases_synthesized");
+  });
+
+  test("oppBuildOrder filters out worker / overlord / supply / cocoon noise", () => {
+    const env = computePerGameScouting(buildLateGame({
+      oppBuildLog: [
+        "[0:12] SpawningPool",
+        "[0:15] Overlord",          // dropped — supply
+        "[0:20] Drone",             // dropped — worker
+        "[1:00] RoachWarren",
+        "[2:00] OverlordCocoon",    // dropped — supply morph
+        "[3:00] BroodLordCocoon",   // dropped — cocoon
+        "[4:00] BroodLord",
+      ],
+    }));
+    const names = env.oppBuildOrder.map((e) => e.name);
+    expect(names).not.toContain("Overlord");
+    expect(names).not.toContain("Drone");
+    expect(names).not.toContain("OverlordCocoon");
+    expect(names).not.toContain("BroodLordCocoon");
+    expect(names).toContain("SpawningPool");
+    expect(names).toContain("BroodLord");
+  });
+});
+
+describe("computePerGameScouting — endReason branches", () => {
+  test("early_allin: finalPhase=early + duration < 240", () => {
+    const env = computePerGameScouting({
+      gameId: "g_allin",
+      date: new Date("2026-04-10T00:00:00Z"),
+      result: "Defeat",
+      map: "Pylon Wars",
+      myRace: "Protoss", myBuild: "PvZ - Cheese",
+      durationSec: 180,
+      opponent: { displayName: "OppX", race: "Zerg", strategy: "6 Pool" },
+      oppBuildLog: ["[0:10] SpawningPool"],
+      macroBreakdown: {
+        opp_bases: [{ name: "Hatchery", born_time: 0, died_time: 180 }],
+        opp_production_buildings: [],
+        opp_stats_events: [],
+        unit_timeline: [],
+      },
+    });
+    expect(env.endPhase).toBe("early");
+    expect(env.endReason).toBe("early_allin");
+  });
+
+  test("early_loss: finalPhase=early + duration >= 240 + result=loss", () => {
+    expect(deriveEndReason("early", 300, "loss")).toBe("early_loss");
+  });
+
+  test("early_win: finalPhase=early + duration >= 240 + result=win", () => {
+    expect(deriveEndReason("early", 300, "win")).toBe("early_win");
+  });
+
+  test("midgame_engagement: finalPhase=earlyMid|mid + duration < 540", () => {
+    expect(deriveEndReason("earlyMid", 400, "win")).toBe("midgame_engagement");
+    expect(deriveEndReason("mid", 500, "loss")).toBe("midgame_engagement");
+  });
+
+  test("macro_game: finalPhase=midLate|late", () => {
+    expect(deriveEndReason("midLate", 800, "win")).toBe("macro_game");
+    expect(deriveEndReason("late", 1200, "loss")).toBe("macro_game");
+  });
+
+  test("unknown: mid game past 540s with no other rule matching", () => {
+    expect(deriveEndReason("mid", 600, "win")).toBe("unknown");
+    expect(deriveEndReason("earlyMid", 700, "loss")).toBe("unknown");
+  });
+
+  test("real late game uses macro_game endReason", () => {
+    const env = computePerGameScouting(buildLateGame());
+    expect(env.endReason).toBe("macro_game");
+  });
+});
+
+describe("buildOpponentBuildOrder — direct", () => {
+  test("orders by time ascending", () => {
+    const out = buildOpponentBuildOrder([
+      "[2:00] HydraliskDen",
+      "[0:12] SpawningPool",
+      "[1:00] RoachWarren",
+    ]);
+    expect(out.map((e) => e.name)).toEqual([
+      "SpawningPool", "RoachWarren", "HydraliskDen",
+    ]);
+  });
+
+  test("tags tier 3 units as tier:3", () => {
+    const out = buildOpponentBuildOrder(["[6:00] BroodLord"]);
+    expect(out[0]).toEqual({
+      name: "BroodLord", time: 360, category: "unit", tier: 3,
+    });
+  });
+
+  test("keeps only the first occurrence of each non-building unit", () => {
+    const out = buildOpponentBuildOrder([
+      "[6:00] BroodLord",
+      "[6:30] BroodLord",
+      "[7:00] BroodLord",
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].time).toBe(360);
+  });
+});

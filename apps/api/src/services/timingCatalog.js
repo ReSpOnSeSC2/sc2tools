@@ -137,6 +137,26 @@ function tokenByInternalName(internalName) {
   return BY_INTERNAL[internalName] || null;
 }
 
+/**
+ * Internal names for every catalog entry tagged ``tier: 3``. Used by
+ * the phase classifier as the single source of truth for the
+ * "production-tech is up" floor — keep the tier annotations on the
+ * RACE_BUILDINGS entries above as the canonical list and call this
+ * helper instead of re-deriving the list at the call site.
+ *
+ * @returns {string[]}
+ */
+function tierThreeInternalNames() {
+  /** @type {Set<string>} */
+  const seen = new Set();
+  for (const race of Object.keys(RACE_BUILDINGS)) {
+    for (const t of RACE_BUILDINGS[race]) {
+      if (t.tier === 3) seen.add(t.internalName);
+    }
+  }
+  return Array.from(seen);
+}
+
 module.exports = {
   RACE_BUILDINGS,
   ZERG,
@@ -146,4 +166,5 @@ module.exports = {
   matchupLabel,
   relevantTokens,
   tokenByInternalName,
+  tierThreeInternalNames,
 };

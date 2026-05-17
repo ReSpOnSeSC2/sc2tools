@@ -360,55 +360,24 @@ class OverlayLiveService {
   }
 
   /**
-   * Build a pre-game ``LiveGamePayload``-shaped object from just an
-   * opponent identity (name + race + optional Pulse character ID +
-   * optional toon_handle). The cloud has the streamer's full game
-   * history; we use it to fill in the SAME contextual fields the
-   * post-game card carries (head-to-head, RIVAL/FAMILIAR, last-games
-   * list, best answer, cheese probability, predicted strategies, top
-   * builds, meta) so the scouting widget renders the rich pre-game
-   * dossier instead of just "Looking up opponent…".
+   * Build a pre-game ``LiveGamePayload``-shaped object from an
+   * opponent identity. Mirrors the post-game card's contextual fields
+   * (H2H, RIVAL/FAMILIAR, last-games list, best answer, predicted
+   * strategies, top builds, meta, opponent phases, last5GamesScouting)
+   * — result-specific fields (result/durationSec/mmrDelta/map) are
+   * NOT populated; those only land post-game.
    *
-   * Result-specific fields (``result``, ``durationSec``,
-   * ``mmrDelta``, ``map``) are NOT populated — those only land
-   * post-game when the replay parses. The ``map`` field can be set
-   * by the agent later if Blizzard's local API ever exposes it pre-
-   * game; today the loading screen has it but the SC2 client doesn't
-   * surface it.
-   *
-   * **Three-tier opponent-row lookup.** The opponents collection
-   * stores TWO identity fields (see ``util/opponentIdentity.js``):
-   * ``pulseId`` is the raw sc2reader toon_handle, ``pulseCharacterId``
-   * is the canonical SC2Pulse numeric id. Display name lives under
-   * ``displayNameSample`` (HMAC under ``displayNameHash``). We try
-   * each identifier in order of stability:
-   *
-   *   * Tier A — by ``pulseCharacterId``: most stable, survives the
-   *     rare Battle.net rebind that rotates the toon_handle while
-   *     keeping the Pulse character identity stable.
-   *   * Tier B — by ``pulseId`` (toon_handle): covers opponents
-   *     whose row pre-dates SC2Pulse resolution, or whose
-   *     ``pulseCharacterId`` hasn't been backfilled yet.
-   *   * Tier C — by ``displayNameSample`` with race disambiguation:
-   *     last-resort match when neither identifier is supplied (legacy
-   *     pre-Pulse agents) or known. Race ties pick the row with the
-   *     largest ``gameCount``.
+   * Three-tier opponent-row lookup:
+   *   * Tier A — ``pulseCharacterId`` (most stable; survives toon_handle rotation).
+   *   * Tier B — ``pulseId`` (toon_handle) — covers pre-SC2Pulse rows.
+   *   * Tier C — ``displayNameSample`` + race disambiguation (legacy fallback).
    *
    * @param {string} userId
    * @param {string} opponentName
    * @param {string} [opponentRace]
-   * @param {string|number|null} [opponentPulseCharacterId] numeric
-   *   SC2Pulse character id from the live envelope's
-   *   ``opponent.profile.pulse_character_id``. May arrive as a number
-   *   (JSON wire) or string — stringified before the Mongo query
-   *   because the opponents collection persists it as a string.
+   * @param {string|number|null} [opponentPulseCharacterId]
    * @param {string} [myRace]
-   * @param {string|null} [opponentToonHandle] raw sc2reader
-   *   ``toon_handle`` (``region-S2-realm-bnid``) from the live
-   *   envelope's ``opponent.toonHandle``. Used for Tier B when no
-   *   Pulse character id is available, OR as a strict equality fall-
-   *   back when Tier A misses (e.g. pulseCharacterId hasn't been
-   *   backfilled on this opponent's row yet).
+   * @param {string|null} [opponentToonHandle]
    * @returns {Promise<object|null>}
    */
   async buildFromOpponentName(
@@ -646,6 +615,20 @@ class OverlayLiveService {
       );
       if (phases) payload.opponentPhases = phases;
     } catch { /* swallow */ }
+
+    // Per-game scouting envelopes for the overlay's "Last 5 games"
+    // block. Best-effort guard as above.
+    try {
+      const scouting = await aggregations.last5GamesScouting(
+        this.db.games, this.gameDetails, userId, opp, myRace, opponentRace,
+      );
+      if (scouting.length > 0) payload.last5GamesScouting = scouting;
+    } catch (err) {
+      console.warn(
+        "overlayLive: last5GamesScouting failed for userId=%s: %s",
+        userId, (err && err.message) || err,
+      );
+    }
 
     // Best answer vs the opponent's most-likely opening.
     const favOpeningStrategy = payload.favOpening?.name;

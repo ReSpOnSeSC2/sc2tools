@@ -10,6 +10,7 @@ const TimingCatalog = require("./timingCatalog");
 const Dna = require("./dnaTimings");
 const { computeCompositions } = require("./buildCompositions");
 const { computeTransitions } = require("./buildTransitions");
+const { computePerGameScouting } = require("./scouting/perGameScouting");
 
 // SC2Pulse MMR refetch window. recordGame / refreshMetadata skip the
 // network call entirely when we resolved this opponent's MMR within
@@ -841,6 +842,25 @@ class OpponentsService {
     // history — see method jsdoc.
     const predictedStrategies = Dna.recencyWeightedStrategies(allGames);
     const last5Games = allGames.slice(0, 5);
+    // Per-game scouting envelopes for the overlay's scouting widget.
+    // Operates on the un-serialized rawGames entries (which still
+    // carry ``macroBreakdown`` + ``oppBuildLog``) so the per-game
+    // build-order strip + composition snapshots have real source
+    // data. ``serializeGameForProfile`` strips the heavy blobs from
+    // ``allGames``, hence the raw-side traversal here. The compute
+    // itself lives in ``scouting/perGameScouting.js`` to keep this
+    // file under the 800-line ceiling.
+    const last5GamesScouting = rawGames.slice(0, 5).map((g) => {
+      try {
+        return computePerGameScouting(g);
+      } catch (err) {
+        console.warn(
+          "perGameScouting failed for gameId=%s userId=%s: %s",
+          g && g.gameId, userId, (err && err.message) || err,
+        );
+        return null;
+      }
+    }).filter((envelope) => envelope !== null);
     const matchupTimingsLegacy = dna.matchupTimings;
     const matchupTimings = projectMatchupTimings(matchupTimingsLegacy);
     // MMR + region overlay from the most recent game that carries
@@ -893,6 +913,7 @@ class OpponentsService {
       phases,
       transitions,
       last5Games,
+      last5GamesScouting,
       games: filteredGames,
     };
   }
