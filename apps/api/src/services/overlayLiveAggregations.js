@@ -2,6 +2,7 @@
 
 const { attachOpponentIdsToFilter } = require("../util/opponentIdentity");
 const { computeCompositions } = require("./buildCompositions");
+const { computePerGameScouting } = require("./scouting/perGameScouting");
 
 /**
  * Cap on the number of recent games we run the phase classifier over
@@ -521,6 +522,118 @@ async function opponentPhaseProfile(games, gameDetails, userId, opp, myRace, opp
   return out;
 }
 
+/**
+ * Per-game scouting envelopes for the last 5 games against this
+ * opponent. Drives the overlay's scouting widget's "Last 5 games"
+ * block — real build-order events + phase transitions +
+ * composition-by-phase snapshots from real games (no medians, no
+ * fabricated data).
+ *
+ * Returns the array sorted newest-first to match the widget's
+ * top-to-bottom render order. Empty when no games match.
+ *
+ * @param {import('mongodb').Collection} games
+ * @param {import('./gameDetails').GameDetailsService | null} gameDetails
+ * @param {string} userId
+ * @param {Record<string, any>} opp
+ * @param {string|undefined} myRace
+ * @param {string|undefined} oppRace
+ * @returns {Promise<Array<object>>}
+ */
+async function last5GamesScouting(games, gameDetails, userId, opp, myRace, oppRace) {
+  if (!opp) return [];
+  /** @type {Record<string, any>} */
+  const filter = { userId };
+  const attached = attachOpponentIdsToFilter(filter, {
+    pulseId: opp.pulseId,
+    pulseCharacterId: opp.pulseCharacterId,
+  });
+  if (!attached) {
+    if (opp.displayName) {
+      filter["opponent.displayName"] = opp.displayName;
+    } else {
+      return [];
+    }
+  }
+  if (myRace) {
+    filter.myRace = { $regex: `^${escapeRegex(String(myRace).charAt(0))}`, $options: "i" };
+  }
+  if (oppRace) {
+    filter["opponent.race"] = {
+      $regex: `^${escapeRegex(String(oppRace).charAt(0))}`,
+      $options: "i",
+    };
+  }
+  const rows = await games
+    .find(filter, {
+      projection: {
+        _id: 0,
+        gameId: 1,
+        date: 1,
+        result: 1,
+        map: 1,
+        myRace: 1,
+        myBuild: 1,
+        durationSec: 1,
+        opponent: 1,
+        buildLog: 1,
+        oppBuildLog: 1,
+        macroBreakdown: 1,
+      },
+    })
+    .sort({ date: -1 })
+    .limit(5)
+    .toArray()
+    .catch(() => []);
+  if (rows.length === 0) return [];
+  // Hydrate macroBreakdown + oppBuildLog from the detail store for
+  // post-v0.4.3 docs that don't carry them inline. Same pattern as
+  // ``opponentPhaseProfile``; bounded to 5 ids so this is a single
+  // small batched read.
+  if (gameDetails) {
+    const needIds = [];
+    for (const r of rows) {
+      const missingLog = !Array.isArray(r.oppBuildLog);
+      const missingMacro = !r.macroBreakdown;
+      if ((missingLog || missingMacro) && r.gameId) {
+        needIds.push(String(r.gameId));
+      }
+    }
+    if (needIds.length > 0) {
+      const blobs = await gameDetails
+        .findMany(userId, needIds)
+        .catch(() => new Map());
+      for (const r of rows) {
+        const blob = blobs.get(String(r.gameId || ""));
+        if (!blob) continue;
+        if (!Array.isArray(r.oppBuildLog) && Array.isArray(blob.oppBuildLog)) {
+          r.oppBuildLog = blob.oppBuildLog;
+        }
+        if (!r.macroBreakdown && blob.macroBreakdown) {
+          r.macroBreakdown = blob.macroBreakdown;
+        }
+      }
+    }
+  }
+  /** @type {Array<object>} */
+  const envelopes = [];
+  for (const r of rows) {
+    try {
+      const env = computePerGameScouting(r);
+      // Strip the heavy ``macroBreakdown`` blob if the compute kept any
+      // reference (it doesn't — it copies the fields it needs — but
+      // defensive against future regressions).
+      envelopes.push(env);
+    } catch (err) {
+      console.warn(
+        "last5GamesScouting: skipping gameId=%s userId=%s: %s",
+        r && r.gameId, userId, (err && err.message) || err,
+      );
+    }
+  }
+  return envelopes;
+}
+
 module.exports = {
   bucketResult,
   chipResult,
@@ -533,5 +646,6 @@ module.exports = {
   bestAnswerVsStrategy,
   metaForMatchup,
   opponentPhaseProfile,
+  last5GamesScouting,
   OPPONENT_PHASE_SCAN_CAP,
 };

@@ -365,12 +365,10 @@ describe("ScoutingWidget — live envelope path", () => {
     expect(container.textContent).toContain("Disruptor Drop");
   });
 
-  it("renders the phase forecast strip when opponentPhases is populated", () => {
-    // Gated on the new ``opponentPhases`` payload. Renders:
-    //   * "Usually reaches Mid/Late" headline
-    //   * Compact PhaseTrajectoryStrip
-    //   * "Plays into" row with the typical late-comp units +
-    //     sample count + win rate
+  it("removes the legacy OpponentPhases medians block — even when opponentPhases is set the markup is gone", () => {
+    // The scouting overlay now renders per-game timelines instead of
+    // matchup-wide medians. Pin that the legacy ``opponentPhases``
+    // payload no longer drives any markup on the card.
     const opponentPhases: OpponentPhases = {
       typicalFinalPhase: "midLate",
       trajectory: {
@@ -411,68 +409,19 @@ describe("ScoutingWidget — live envelope path", () => {
     const { container } = render(
       <ScoutingWidget live={null} liveGame={env} />,
     );
-    expect(container.textContent).toContain("Usually reaches");
-    expect(container.textContent).toContain("Mid/Late");
-    // Compact strip renders with the data-compact marker.
-    const strip = container.querySelector(
-      '[data-testid="phase-trajectory-strip"]',
-    );
-    expect(strip).toBeTruthy();
-    const bands = strip?.querySelector('[data-testid="phase-bands"]');
-    expect(bands?.getAttribute("data-compact")).toBe("1");
-    // Late comp row — sample count + percentage.
-    expect(container.textContent).toContain("Plays into");
-    expect(container.textContent).toContain("4g");
-    expect(container.textContent).toContain("73.0%");
-  });
-
-  it("renders the phase strip without a late comp row when typicalLateComp is absent", () => {
-    // Early/Mid-typical opponents don't get a late comp row — the
-    // headline + strip carry the signal on their own.
-    const opponentPhases: OpponentPhases = {
-      typicalFinalPhase: "earlyMid",
-      trajectory: {
-        sampleSize: { early: 8, earlyMid: 7, mid: 3, midLate: 1, late: 0 },
-        crossings: {
-          earlyMidAt: 180,
-          midAt: 360,
-          midLateAt: null,
-          lateAt: null,
-        },
-        finalPhaseDistribution: {
-          early: 1,
-          earlyMid: 4,
-          mid: 2,
-          midLate: 1,
-          late: 0,
-        },
-        durationP95Sec: 720,
-      },
-    };
-    const env = envelope({
-      phase: "match_started",
-      opponent: { name: "Future", race: "Terran" },
-      streamerHistory: {
-        oppName: "Future",
-        oppRace: "Terran",
-        opponentPhases,
-      },
-    });
-    const { container } = render(
-      <ScoutingWidget live={null} liveGame={env} />,
-    );
-    expect(container.textContent).toContain("Usually reaches");
-    expect(container.textContent).toContain("Early/Mid");
     expect(
-      container.querySelector('[data-testid="opponent-phase-late-comp"]'),
+      container.querySelector('[data-testid="opponent-phase-strip"]'),
     ).toBeNull();
+    expect(
+      container.querySelector('[data-testid="phase-trajectory-strip"]'),
+    ).toBeNull();
+    expect(container.textContent).not.toContain("Usually reaches");
     expect(container.textContent).not.toContain("Plays into");
   });
 
-  it("renders NOTHING in the phase slot when opponentPhases is missing — better silent than wrong", () => {
-    // Spec: "sparse opponent — first meeting, or < 3 games of
-    // history". The widget MUST omit the entire forecast block
-    // rather than show a misleading placeholder on stream.
+  it("renders nothing of the medians block when opponentPhases is missing", () => {
+    // Sanity check: even without the legacy payload the rest of the
+    // card renders.
     const env = envelope({
       phase: "match_started",
       opponent: { name: "Future", race: "Terran" },
@@ -497,7 +446,6 @@ describe("ScoutingWidget — live envelope path", () => {
     ).toBeNull();
     expect(container.textContent).not.toContain("Usually reaches");
     expect(container.textContent).not.toContain("Plays into");
-    // The rest of the card still renders.
     expect(container.textContent).toContain("Future");
     expect(container.textContent).toContain("LAST GAMES");
   });

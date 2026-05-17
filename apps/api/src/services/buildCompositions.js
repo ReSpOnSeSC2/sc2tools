@@ -739,8 +739,10 @@ function emptyCompositionsResult(flags) {
 
 module.exports = {
   computeCompositions,
+  PHASE_ORDER,
   PHASE_WINDOWS,
   WORKER_SKIP,
   pickSignatureUnits,
   signatureKey,
+  getPhaseWindow,
 };

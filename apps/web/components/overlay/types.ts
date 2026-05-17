@@ -136,9 +136,104 @@ export type LiveGamePayload = {
    * prior games with macroBreakdown). The widget renders NOTHING in
    * that slot rather than a placeholder — better silent than wrong
    * on stream.
+   *
+   * @deprecated The scouting overlay no longer renders medians — the
+   *   per-game ``last5GamesScouting`` field below replaces this slot.
+   *   Kept on the type for one release so cached payloads continue to
+   *   type-check; remove after the rollout window closes.
    */
   opponentPhases?: OpponentPhases;
+  /**
+   * Per-game scouting envelopes for the last 5 games against this
+   * opponent. Drives the scouting card's "Last 5 games" block —
+   * real build-order events + real phase transitions + real
+   * composition-by-phase snapshots, no medians.
+   *
+   * Newest first. Absent when this is a first meeting (no prior
+   * games). The cloud computes each entry on the same per-game
+   * macroBreakdown + oppBuildLog the dossier reads, so the wire
+   * shape stays free of the heavy raw blob.
+   */
+  last5GamesScouting?: PerGameScoutingEnvelope[];
 };
+
+/**
+ * Per-game scouting envelope. Mirror of the API's
+ * ``PerGameScoutingEnvelope`` shape in
+ * ``apps/api/src/services/scouting/perGameScouting.js``. The two
+ * MUST agree field-for-field — the wire payload is consumed by the
+ * widget without further reshape.
+ */
+export interface PerGameScoutingEnvelope {
+  gameId: string;
+  /** ISO date string. */
+  date: string;
+  map: string;
+  result: "win" | "loss" | "tie";
+  durationSec: number;
+
+  myRace: string;
+  myBuild: string;
+  oppRace: string;
+  oppName: string;
+  /** The labelled strategy, when known. */
+  oppStrategy: string | null;
+
+  /** Opponent's real build order — buildings + tech + first-of unit kinds. */
+  oppBuildOrder: Array<{
+    name: string;
+    /** Seconds from game start. */
+    time: number;
+    category: "building" | "unit" | "upgrade";
+    tier: 1 | 2 | 3;
+  }>;
+
+  /** When the opponent actually crossed each phase boundary. */
+  oppTransitions: {
+    earlyMidAt: number | null;
+    midAt: number | null;
+    midLateAt: number | null;
+    lateAt: number | null;
+  };
+
+  /** Composition snapshot at each phase the game reached. */
+  oppCompositionByPhase: Record<
+    "early" | "earlyMid" | "mid" | "midLate" | "late",
+    {
+      reached: boolean;
+      /** Seconds the snapshot was sampled at. */
+      atTime: number | null;
+      /** Top 5 non-worker units. */
+      units: Array<{ token: string; count: number }>;
+    }
+  >;
+
+  /** Phase the game ended in (per classifier finalPhase). */
+  endPhase: "early" | "earlyMid" | "mid" | "midLate" | "late";
+
+  /**
+   * Why the game ended where it did — derived from real signals
+   * (final phase + duration + result). See the API-side type for
+   * the exact branching rules.
+   */
+  endReason:
+    | "early_allin"
+    | "early_loss"
+    | "early_win"
+    | "midgame_engagement"
+    | "macro_game"
+    | "unknown";
+
+  /**
+   * Set when source data was missing/partial. The UI displays a
+   * dimmed badge instead of an empty composition strip.
+   */
+  flags: Array<
+    | "opp_bases_synthesized"
+    | "unit_timeline_missing"
+    | "opp_buildlog_missing"
+  >;
+}
 
 /**
  * Single late-game composition summary for the scouting card. The
@@ -333,5 +428,6 @@ export interface LiveGameEnvelope {
     | "rival"
     | "rematch"
     | "opponentPhases"
+    | "last5GamesScouting"
   >;
 }
