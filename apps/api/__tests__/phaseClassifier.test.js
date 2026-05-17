@@ -211,4 +211,135 @@ describe("phaseClassifier — unit behaviour", () => {
     expect(PHASES.early).toBe(0);
     expect(PHASES.late).toBe(80);
   });
+
+  test("trajectory rows carry rawScore + floor alongside score", () => {
+    const fx = loadFixture("warpgate_adept_tracking.json");
+    const out = classifyGame(fx);
+    expect(out.trajectory.length).toBeGreaterThan(0);
+    const sample = out.trajectory[0];
+    expect(sample).toHaveProperty("rawScore");
+    expect(sample).toHaveProperty("floor");
+    // Warpgate fixture has no T3 tech / unit, so the floor is 0 at
+    // every sample — score should equal rawScore.
+    expect(sample.floor).toBe(0);
+    expect(sample.score).toBe(sample.rawScore);
+  });
+});
+
+describe("phaseClassifier — tier-3 floors", () => {
+  test("T3 tech (Hive) active raises floor to midLate", () => {
+    const out = classifyGame({
+      macroBreakdown: {
+        bases: [{ name: "Hatchery", born_time: 0, died_time: 600 }],
+        production_buildings: [
+          { name: "Hive", born_time: 100, died_time: 600 },
+        ],
+        stats_events: [],
+        unit_timeline: [],
+      },
+      race: "Zerg",
+      durationSec: 600,
+    });
+    // Without the floor a single base + one tech would score ~3
+    // and classify as Early. With the floor active from t=100 the
+    // score is pinned to 60 (midLate) and the final phase is
+    // midLate.
+    expect(out.finalPhase).toBe("midLate");
+    expect(out.crossings.midLateAt).not.toBeNull();
+    expect(out.crossings.midLateAt).toBeGreaterThanOrEqual(100);
+    // Floor never raises score below the threshold.
+    const lateSample = out.trajectory.find((p) => p.t >= 120);
+    expect(lateSample.floor).toBeGreaterThanOrEqual(60);
+  });
+
+  test("T3 unit (BroodLord) observed raises floor to late", () => {
+    const timeline = [];
+    for (let t = 0; t <= 600; t += 30) {
+      const my = t >= 300 ? { BroodLord: 1 } : {};
+      timeline.push({ time: t, my, opp: {} });
+    }
+    const out = classifyGame({
+      macroBreakdown: {
+        bases: [{ name: "Hatchery", born_time: 0, died_time: 600 }],
+        production_buildings: [],
+        stats_events: [],
+        unit_timeline: timeline,
+      },
+      race: "Zerg",
+      durationSec: 600,
+    });
+    expect(out.finalPhase).toBe("late");
+    expect(out.crossings.lateAt).toBe(300);
+  });
+
+  test("Lurker observed raises floor to late even on 2 bases", () => {
+    const timeline = [];
+    for (let t = 0; t <= 600; t += 30) {
+      const my = t >= 240 ? { Lurker: 2 } : {};
+      timeline.push({ time: t, my, opp: {} });
+    }
+    const out = classifyGame({
+      macroBreakdown: {
+        bases: [
+          { name: "Hatchery", born_time: 0, died_time: 600 },
+          { name: "Hatchery", born_time: 60, died_time: 600 },
+        ],
+        production_buildings: [],
+        stats_events: [],
+        unit_timeline: timeline,
+      },
+      race: "Zerg",
+      durationSec: 600,
+    });
+    expect(out.finalPhase).toBe("late");
+    expect(out.crossings.lateAt).toBe(240);
+  });
+
+  test("opp_bases empty falls back to opp_production_buildings expansions", () => {
+    const out = classifyGame({
+      macroBreakdown: {
+        opp_bases: [],
+        opp_production_buildings: [
+          { name: "Hatchery", born_time: 0, died_time: 600 },
+          { name: "Lair", born_time: 200, died_time: 600 },
+          { name: "Hive", born_time: 400, died_time: 600 },
+        ],
+        opp_stats_events: [],
+        stats_events: [],
+      },
+      race: "Zerg",
+      durationSec: 600,
+      perspective: "opponent",
+    });
+    expect(out.basesFromExpansionFallback).toBe(true);
+    // After t=400 the base contribution is non-zero (3 bases all
+    // alive), so the opponent's trajectory carries the active base
+    // count instead of zero.
+    const after400 = out.oppTrajectory.find((p) => p.t >= 420);
+    expect(after400.bases).toBe(3);
+    expect(after400.basesEffective).toBeGreaterThan(0);
+  });
+
+  test("perspective='opponent' picks T3 unit from .opp side of timeline", () => {
+    const timeline = [];
+    for (let t = 0; t <= 600; t += 30) {
+      const opp = t >= 360 ? { Carrier: 1 } : {};
+      timeline.push({ time: t, my: {}, opp });
+    }
+    const out = classifyGame({
+      macroBreakdown: {
+        opp_bases: [
+          { name: "Nexus", born_time: 0, died_time: 600 },
+        ],
+        opp_production_buildings: [],
+        opp_stats_events: [],
+        unit_timeline: timeline,
+      },
+      race: "Protoss",
+      durationSec: 600,
+      perspective: "opponent",
+    });
+    expect(out.finalPhase).toBe("late");
+    expect(out.crossings.lateAt).toBe(360);
+  });
 });

@@ -29,6 +29,8 @@
  * 60 broken-seconds ≈ 84 real seconds.
  */
 
+const { tierThreeInternalNames } = require("./timingCatalog");
+
 /** @type {Record<string, number>} */
 const PHASES = {
   early: 0,
@@ -50,13 +52,62 @@ const PHASE_LABELS = {
 const TECH_NAMES = new Set([
   // Protoss
   "CyberneticsCore", "TwilightCouncil", "RoboticsFacility", "RoboticsBay",
-  "Stargate", "FleetBeacon", "TemplarArchives", "DarkShrine",
+  "Stargate", "FleetBeacon", "TemplarArchive", "DarkShrine",
   // Terran
   "Factory", "Starport", "Armory", "FusionCore", "GhostAcademy",
   // Zerg
   "BanelingNest", "RoachWarren", "HydraliskDen", "LurkerDen",
   "Spire", "GreaterSpire", "InfestationPit", "UltraliskCavern",
   "Lair", "Hive",
+]);
+
+/**
+ * Tier-3 production-tech buildings. When ANY of these is active at
+ * time ``t`` the per-second score is floored at ``PHASES.midLate``
+ * — a 2-base game that has Hive or Templar Archives on the field has
+ * reached the production point that *defines* mid/late SC2, even when
+ * the base/worker terms say otherwise.
+ *
+ * Single source of truth: the ``tier: 3`` annotations on
+ * ``timingCatalog.js``. Do NOT maintain a duplicate list here.
+ *
+ * @type {Set<string>}
+ */
+const T3_TECH = new Set(tierThreeInternalNames());
+
+/**
+ * Tier-3 units. When ONE has appeared in ``unit_timeline`` by time
+ * ``t`` for the relevant perspective, the per-second score is floored
+ * at ``PHASES.late``. Liberator / Viper / Disruptor sit at T2.5 in
+ * practice — pulling a 5-minute Viper game into Late would over-
+ * correct, so they're intentionally absent.
+ *
+ * @type {Set<string>}
+ */
+const T3_UNITS = new Set([
+  // Zerg
+  "BroodLord", "Ultralisk", "Lurker", "LurkerMP",
+  // Protoss
+  "Carrier", "Tempest", "Mothership",
+  // Terran
+  "Battlecruiser", "Thor",
+]);
+
+/**
+ * Production-building names that double as expansions — used as the
+ * fallback source when ``opp_bases`` is empty but ``opp_production_buildings``
+ * carries the same hatchery/nexus/cc rows. Mirrors the ``_BASE_TYPES`` set
+ * the extractor uses to split bases out of the production list.
+ *
+ * @type {Set<string>}
+ */
+const EXPANSION_NAMES = new Set([
+  // Zerg
+  "Hatchery", "Lair", "Hive",
+  // Protoss
+  "Nexus",
+  // Terran
+  "CommandCenter", "OrbitalCommand", "PlanetaryFortress",
 ]);
 
 const BASE_PTS_ZERG = [0, 0, 12, 25, 38, 50, 55];
@@ -207,6 +258,50 @@ function phaseFromScore(score) {
 }
 
 /**
+ * True if any T3 production-tech structure is alive at time ``t``.
+ *
+ * @param {Array<{name:string,born_time:number,died_time:number}>} productionBuildings
+ * @param {number} t
+ * @param {number} durationSec
+ */
+function hasActiveT3Tech(productionBuildings, t, durationSec) {
+  for (const p of productionBuildings) {
+    if (!T3_TECH.has(p.name)) continue;
+    if (p.born_time > durationSec) continue;
+    if (t < p.born_time) continue;
+    if (t > p.died_time) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * True if any T3 unit (per ``T3_UNITS``) has been observed on the
+ * given perspective's side of the unit timeline at or before ``t``.
+ *
+ * @param {Array<{time:number,my?:Record<string,number>,opp?:Record<string,number>}>} timeline
+ * @param {number} t
+ * @param {"you"|"opponent"} perspective
+ */
+function hasT3UnitByTime(timeline, t, perspective) {
+  if (!Array.isArray(timeline) || timeline.length === 0) return false;
+  const sideKey = perspective === "opponent" ? "opp" : "my";
+  for (const row of timeline) {
+    if (!row || typeof row !== "object") continue;
+    const rowT = Number(row.time);
+    if (!Number.isFinite(rowT) || rowT > t) continue;
+    const side = row[sideKey];
+    if (!side || typeof side !== "object") continue;
+    for (const token of Object.keys(side)) {
+      if (!T3_UNITS.has(token)) continue;
+      const n = Number(side[token]);
+      if (n > 0) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * @param {{
  *   bases: Array<object>,
  *   production_buildings: Array<object>,
@@ -214,6 +309,8 @@ function phaseFromScore(score) {
  *   race: string,
  *   durationSec: number,
  *   t: number,
+ *   unitTimeline?: Array<object>,
+ *   perspective?: "you"|"opponent",
  * }} ctx
  */
 function scoreAt(ctx) {
@@ -232,8 +329,25 @@ function scoreAt(ctx) {
   if (s.armyValue !== null) {
     score += Math.min(s.armyValue / 5000, 1) * 10;
   }
+  // Tier-3 floors: a 2-base Zerg with Brood Lords on the field should
+  // never read as "Mid" just because the base/worker terms cap out
+  // early. Production-tech being up floors at midLate; a T3 unit
+  // having spawned floors at late. Floors only raise the score —
+  // never lower it — so the rawScore is preserved for debugging.
+  let floor = 0;
+  if (hasActiveT3Tech(ctx.production_buildings, ctx.t, ctx.durationSec)) {
+    floor = PHASES.midLate;
+  }
+  const timeline = Array.isArray(ctx.unitTimeline) ? ctx.unitTimeline : null;
+  if (timeline && hasT3UnitByTime(timeline, ctx.t, ctx.perspective || "you")) {
+    if (PHASES.late > floor) floor = PHASES.late;
+  }
+  const rawScore = score;
+  const adjustedScore = rawScore > floor ? rawScore : floor;
   return {
-    score,
+    score: adjustedScore,
+    rawScore,
+    floor,
     bases: countActiveBases(ctx.bases, ctx.t, ctx.durationSec),
     basesEffective: eff,
     workers: s.workers,
@@ -329,15 +443,25 @@ function findCrossings(scoreFn, durationSec) {
  * the opponent's trajectory rather than fabricating them from
  * stats_events.
  *
+ * When ``opp_bases`` is empty but ``opp_production_buildings`` carries
+ * expansion rows, synthesizes the bases array from the expansion
+ * rows in production_buildings (sc2reader tracker quirk on some Zerg
+ * replays — the hatchery rows are present, just not in the dedicated
+ * bases stream).
+ *
  * @param {object} macroBreakdown
  */
 function readOppLifetimes(macroBreakdown) {
-  return {
-    bases: Array.isArray(macroBreakdown.opp_bases)
-      ? macroBreakdown.opp_bases : null,
-    production: Array.isArray(macroBreakdown.opp_production_buildings)
-      ? macroBreakdown.opp_production_buildings : null,
-  };
+  const rawBases = Array.isArray(macroBreakdown.opp_bases)
+    ? macroBreakdown.opp_bases : null;
+  const production = Array.isArray(macroBreakdown.opp_production_buildings)
+    ? macroBreakdown.opp_production_buildings : null;
+  let bases = rawBases;
+  if ((!rawBases || rawBases.length === 0) && production) {
+    const synth = synthesizeBasesFromProduction(production);
+    if (synth.length > 0) bases = synth;
+  }
+  return { bases, production };
 }
 
 /**
@@ -356,6 +480,8 @@ function sampleTrajectory(sampleFn, durationSec) {
       t,
       phase: phaseFromScore(sample.score),
       score: sample.score,
+      rawScore: sample.rawScore,
+      floor: sample.floor,
       bases: sample.bases,
       basesEffective: sample.basesEffective,
       workers: sample.workers,
@@ -424,9 +550,40 @@ function finalWindowScore(scoreFn, durationSec) {
 }
 
 /**
- * Pick the right ``bases / production_buildings / stats`` triple for
- * the requested perspective. Centralises the opp-fallback decision so
- * the rest of the classifier doesn't branch on it.
+ * Synthesize a bases array from the production-buildings list by
+ * filtering on the expansion-building names. Used as the fallback
+ * when ``opp_bases`` is empty (sc2reader tracker quirk on some Zerg
+ * replays) but ``opp_production_buildings`` still carries the
+ * Hatchery / Lair / Hive rows with their real born/died timestamps.
+ *
+ * @param {Array<{name:string,born_time:number,died_time:number}>} prodBuildings
+ */
+function synthesizeBasesFromProduction(prodBuildings) {
+  /** @type {Array<{name:string,born_time:number,died_time:number}>} */
+  const out = [];
+  for (const p of prodBuildings) {
+    if (!EXPANSION_NAMES.has(p.name)) continue;
+    out.push({
+      name: p.name,
+      born_time: p.born_time,
+      died_time: p.died_time,
+    });
+  }
+  return out;
+}
+
+/**
+ * Pick the right ``bases / production_buildings / stats /
+ * unit_timeline`` set for the requested perspective. Centralises the
+ * opp-fallback decision so the rest of the classifier doesn't branch
+ * on it.
+ *
+ * When ``opp_bases`` is empty but ``opp_production_buildings`` carries
+ * expansion rows, synthesizes a bases array from those rows so the
+ * base term still contributes to the score on Zerg replays where the
+ * tracker dropped the dedicated bases stream. Flags this fallback
+ * with ``basesFromExpansionFallback: true`` so the test suite can pin
+ * that the fallback fired.
  *
  * @param {object} mb
  * @param {number} durationSec
@@ -434,9 +591,18 @@ function finalWindowScore(scoreFn, durationSec) {
  */
 function pickClassifierInputs(mb, durationSec, perspective) {
   if (perspective === "opponent") {
-    const bases = Array.isArray(mb.opp_bases) ? mb.opp_bases : [];
+    const rawBases = Array.isArray(mb.opp_bases) ? mb.opp_bases : [];
     const prodBuildings = Array.isArray(mb.opp_production_buildings)
       ? mb.opp_production_buildings : [];
+    let bases = rawBases;
+    let basesFromExpansionFallback = false;
+    if (rawBases.length === 0 && prodBuildings.length > 0) {
+      const synth = synthesizeBasesFromProduction(prodBuildings);
+      if (synth.length > 0) {
+        bases = synth;
+        basesFromExpansionFallback = true;
+      }
+    }
     const oppStatsEvents = Array.isArray(mb.opp_stats_events)
       ? mb.opp_stats_events : [];
     // Fall back to the user's stats stream when opp's is missing.
@@ -448,13 +614,15 @@ function pickClassifierInputs(mb, durationSec, perspective) {
       ? oppStatsEvents
       : (Array.isArray(mb.stats_events) ? mb.stats_events : []);
     const stats = buildStatsLookup(statsSource, durationSec);
-    return { bases, prodBuildings, stats };
+    const unitTimeline = Array.isArray(mb.unit_timeline) ? mb.unit_timeline : [];
+    return { bases, prodBuildings, stats, unitTimeline, basesFromExpansionFallback };
   }
   const bases = Array.isArray(mb.bases) ? mb.bases : [];
   const prodBuildings = Array.isArray(mb.production_buildings)
     ? mb.production_buildings : [];
   const stats = buildStatsLookup(mb.stats_events || [], durationSec);
-  return { bases, prodBuildings, stats };
+  const unitTimeline = Array.isArray(mb.unit_timeline) ? mb.unit_timeline : [];
+  return { bases, prodBuildings, stats, unitTimeline, basesFromExpansionFallback: false };
 }
 
 /**
@@ -481,18 +649,25 @@ function classifyGame(input) {
   const race = input && input.race;
   const durationSec = Math.max(0, Math.floor((input && input.durationSec) || 0));
   const perspective = input && input.perspective === "opponent" ? "opponent" : "you";
-  const { bases, prodBuildings, stats } = pickClassifierInputs(
-    mb, durationSec, perspective,
-  );
+  const {
+    bases,
+    prodBuildings,
+    stats,
+    unitTimeline,
+    basesFromExpansionFallback,
+  } = pickClassifierInputs(mb, durationSec, perspective);
 
-  const scoreFn = (t) => scoreAt({
-    bases, production_buildings: prodBuildings, stats,
-    race, durationSec, t,
-  }).score;
-  const sampleFn = (t) => scoreAt({
-    bases, production_buildings: prodBuildings, stats,
-    race, durationSec, t,
-  });
+  const ctx = {
+    bases,
+    production_buildings: prodBuildings,
+    stats,
+    race,
+    durationSec,
+    unitTimeline,
+    perspective,
+  };
+  const scoreFn = (t) => scoreAt({ ...ctx, t }).score;
+  const sampleFn = (t) => scoreAt({ ...ctx, t });
 
   const crossings = findCrossings(scoreFn, durationSec);
   const finalScore = finalWindowScore(scoreFn, durationSec);
@@ -508,13 +683,21 @@ function classifyGame(input) {
     trajectory,
     oppTrajectory,
     deathEvents,
+    basesFromExpansionFallback,
   };
 }
 
-module.exports = { classifyGame, PHASES, PHASE_LABELS };
+module.exports = {
+  classifyGame,
+  PHASES,
+  PHASE_LABELS,
+  T3_TECH,
+  T3_UNITS,
+  EXPANSION_NAMES,
+};
 
 /*
- * Calibration anchors (post-timebase fix, 2026-05-17):
+ * Calibration anchors (post-timebase fix 2026-05-17, post-T3-floor 2026-05-17):
  *
  * Replay                          finalPhase    midAt   lateAt
  * --------------------------------------------------------------
@@ -530,6 +713,14 @@ module.exports = { classifyGame, PHASES, PHASE_LABELS };
  * archive (see apps/api/__tests__/fixtures/macro_score_before_vs_after.csv
  * for the corresponding score envelope and the test.skip() entries
  * in phaseClassifier.test.js for the wiring).
+ *
+ * T3 floor (2026-05-17): the warpgate fixture is a Protoss build that
+ * never reaches a tier-3 production-tech structure (no TemplarArchive
+ * / DarkShrine / RoboticsBay / FleetBeacon active by game end) and
+ * has no T3 unit in unit_timeline, so the floor logic adds zero
+ * adjustment — the snapshot above is unchanged. The remaining three
+ * calibration replays sit at finalPhase late/midLate/late already, so
+ * the floor (which only raises scores) is also a no-op for them.
  *
  * Any change to scoring weights MUST regenerate these anchors and
  * include them in the same commit as the weight change — re-dump the
