@@ -147,6 +147,21 @@ const SYNONYMS: Record<string, { kind: IconKind; key: string }> = {
   bc: { kind: "unit", key: "battlecruiser" },
   tank: { kind: "unit", key: "siegetank" },
   mine: { kind: "unit", key: "widowmine" },
+  // sc2reader internal unit names: Blizzard kept the original
+  // multiplayer-variant suffix on Lurkers ("MP" — multiplayer) plus a
+  // burrowed-state morph. Both surface in macroBreakdown unit_timeline
+  // payloads, so they need to resolve to the same lurker.png that
+  // the canonical ``lurker`` token does — otherwise the composition
+  // strip falls back to the "LUR" text badge.
+  lurkermp: { kind: "unit", key: "lurker" },
+  lurkermpburrowed: { kind: "unit", key: "lurker" },
+  lurkermpegg: { kind: "unit", key: "lurker" },
+  // Other sc2reader morph variants seen in the wild.
+  banelingcocoon: { kind: "unit", key: "baneling" },
+  ravagercocoon: { kind: "unit", key: "ravager" },
+  broodlordcocoon: { kind: "unit", key: "broodlord" },
+  overlordtransport: { kind: "unit", key: "overlord" },
+  overlordcocoon: { kind: "unit", key: "overlord" },
   // building shorthand
   rax: { kind: "building", key: "barracks" },
   pool: { kind: "building", key: "spawningpool" },

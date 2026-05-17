@@ -99,6 +99,12 @@ function computePerGameScouting(game) {
   if (classified.basesFromExpansionFallback) {
     flags.push("opp_bases_synthesized");
   }
+  const classifiedMy = classifyGame({
+    macroBreakdown,
+    race: myRace || oppRace,
+    durationSec,
+    perspective: "you",
+  });
 
   const hasUnitTimeline = Array.isArray(macroBreakdown.unit_timeline)
     && macroBreakdown.unit_timeline.length > 0;
@@ -108,14 +114,28 @@ function computePerGameScouting(game) {
   if (!oppBuildLog || oppBuildLog.length === 0) {
     flags.push("opp_buildlog_missing");
   }
+  const myBuildLog = Array.isArray(game.buildLog) ? game.buildLog : null;
+  if (!myBuildLog || myBuildLog.length === 0) {
+    flags.push("my_buildlog_missing");
+  }
 
-  const oppBuildOrder = buildOpponentBuildOrder(oppBuildLog || []);
-  const oppTransitions = pickOppTransitions(classified.crossings);
+  const oppBuildOrder = buildSideBuildOrder(oppBuildLog || []);
+  const myBuildOrder = buildSideBuildOrder(myBuildLog || []);
+  const oppTransitions = pickTransitions(classified.crossings);
+  const myTransitions = pickTransitions(classifiedMy.crossings);
   const oppCompositionByPhase = sampleCompositionsByPhase(
     macroBreakdown,
     classified.crossings,
     durationSec,
     hasUnitTimeline,
+    "opponent",
+  );
+  const myCompositionByPhase = sampleCompositionsByPhase(
+    macroBreakdown,
+    classifiedMy.crossings,
+    durationSec,
+    hasUnitTimeline,
+    "you",
   );
   const endPhase = classified.finalPhase;
   const endReason = deriveEndReason(endPhase, durationSec, result);
@@ -136,6 +156,9 @@ function computePerGameScouting(game) {
     oppBuildOrder,
     oppTransitions,
     oppCompositionByPhase,
+    myBuildOrder,
+    myTransitions,
+    myCompositionByPhase,
     endPhase,
     endReason,
     flags,
@@ -178,16 +201,17 @@ function isoDate(raw) {
 }
 
 /**
- * Walk the opponent's stored build-log lines and emit a structured
- * timeline keyed on (name, time, category, tier). Filters out
- * supply / worker / cocoon noise and keeps the first occurrence of
- * each T2/T3 unit name — repeat copies don't add scouting signal
- * once the streamer knows the build is coming.
+ * Walk one side's stored build-log lines and emit a structured timeline
+ * keyed on (name, time, category, tier). Filters out supply / worker /
+ * cocoon noise and keeps the first occurrence of each T2/T3 unit name
+ * — repeat copies don't add scouting signal once the streamer knows
+ * the build is coming. Side-agnostic: applies the same noise filter to
+ * the player's own buildLog when invoked for the "my" timeline.
  *
  * @param {string[]} lines
  * @returns {Array<{name:string,time:number,category:"building"|"unit"|"upgrade",tier:1|2|3}>}
  */
-function buildOpponentBuildOrder(lines) {
+function buildSideBuildOrder(lines) {
   /** @type {Array<{name:string,time:number,category:"building"|"unit"|"upgrade",tier:1|2|3}>} */
   const out = [];
   /** @type {Set<string>} */
@@ -229,7 +253,7 @@ function buildOpponentBuildOrder(lines) {
  *
  * @param {{earlyMidAt:number|null,midAt:number|null,midLateAt:number|null,lateAt:number|null}} crossings
  */
-function pickOppTransitions(crossings) {
+function pickTransitions(crossings) {
   return {
     earlyMidAt: crossings.earlyMidAt ?? null,
     midAt: crossings.midAt ?? null,
@@ -260,6 +284,7 @@ function sampleCompositionsByPhase(
   crossings,
   durationSec,
   hasUnitTimeline,
+  perspective,
 ) {
   /** @type {Record<string,{reached:boolean,atTime:number|null,units:Array<{token:string,count:number}>}>} */
   const out = {};
@@ -273,7 +298,7 @@ function sampleCompositionsByPhase(
     /** @type {Array<{token:string,count:number}>} */
     let units = [];
     if (hasUnitTimeline) {
-      units = pickTopOpponentUnits(macroBreakdown, midpoint);
+      units = pickTopUnits(macroBreakdown, midpoint, perspective);
     }
     out[phase] = {
       reached: true,
@@ -285,7 +310,7 @@ function sampleCompositionsByPhase(
 }
 
 /**
- * Top 5 (not 3) non-worker units on the ``opp`` side at the closest
+ * Top 5 (not 3) non-worker units on the requested side at the closest
  * unit_timeline row to ``midpoint``. Used for the per-game scouting
  * snapshot — wider than the dossier's top-3 because the widget has
  * the room and the streamer benefits from seeing the long tail
@@ -293,13 +318,10 @@ function sampleCompositionsByPhase(
  *
  * @param {object} macroBreakdown
  * @param {number} midpoint
+ * @param {"you"|"opponent"} perspective
  * @returns {Array<{token:string,count:number}>}
  */
-function pickTopOpponentUnits(macroBreakdown, midpoint) {
-  // Reuse pickSignatureUnits for the row-selection + filter logic,
-  // then widen to top 5. pickSignatureUnits already handles
-  // perspective + WORKER_SKIP — but it caps at 3. Re-implement the
-  // top-N here using the same row-selection rule.
+function pickTopUnits(macroBreakdown, midpoint, perspective) {
   const timeline = Array.isArray(macroBreakdown && macroBreakdown.unit_timeline)
     ? macroBreakdown.unit_timeline
     : [];
@@ -313,7 +335,9 @@ function pickTopOpponentUnits(macroBreakdown, midpoint) {
       bestDist = d;
     }
   }
-  const side = best && best.opp ? best.opp : {};
+  const side = perspective === "opponent"
+    ? (best && best.opp ? best.opp : {})
+    : (best && best.my ? best.my : {});
   /** @type {Array<{token:string,count:number}>} */
   const entries = [];
   for (const token of Object.keys(side)) {
@@ -391,6 +415,9 @@ function isUpgradeName(name) {
 module.exports = {
   computePerGameScouting,
   deriveEndReason,
-  buildOpponentBuildOrder,
+  buildSideBuildOrder,
+  // Back-compat alias — older tests / callers may still import this
+  // under the original opponent-only name.
+  buildOpponentBuildOrder: buildSideBuildOrder,
   BUILD_ORDER_SKIP,
 };
