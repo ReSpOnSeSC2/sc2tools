@@ -1,6 +1,20 @@
 "use strict";
 
 const { attachOpponentIdsToFilter } = require("../util/opponentIdentity");
+const { computeCompositions } = require("./buildCompositions");
+
+/**
+ * Cap on the number of recent games we run the phase classifier over
+ * when deriving ``opponentPhases``. This runs on every pre-game wake-
+ * up (the 1 Hz envelope cadence is cached, but the first envelope of
+ * each new gameKey bypasses the cache) so the upper bound matters —
+ * 50 is enough to give the modal final-phase and the trajectory
+ * medians a stable signal while keeping the detail-store fetch under
+ * a single batched round trip.
+ */
+const OPPONENT_PHASE_SCAN_CAP = 50;
+
+const PHASE_ORDER = ["early", "earlyMid", "mid", "midLate", "late"];
 
 /**
  * Mongo-aggregation helpers backing the OverlayLiveService.
@@ -355,6 +369,158 @@ async function metaForMatchup(games, userId, myRace, oppRace) {
   }));
 }
 
+/**
+ * Phase forecast for the scouting card's "Usually reaches Mid/Late"
+ * strip. Pulls up to ``OPPONENT_PHASE_SCAN_CAP`` of the streamer's
+ * recent games against this opponent in this matchup, hydrates
+ * ``macroBreakdown`` from the detail store, then hands the matched
+ * set to ``computeCompositions`` to derive the same trajectory shape
+ * the BuildDossier / StrategyPhasesPanel render — re-using exactly
+ * one piece of compute logic across every phase-aware UI in the app.
+ *
+ * Returns ``null`` when the opponent is too sparse (< 3 games with
+ * usable ``macroBreakdown``). The renderer treats null as "render
+ * nothing in this slot" — better silent than wrong on stream.
+ *
+ * @param {import('mongodb').Collection} games
+ * @param {import('./gameDetails').GameDetailsService|null} gameDetails
+ * @param {string} userId
+ * @param {Record<string, any>} opp
+ * @param {string|undefined} myRace
+ * @param {string|undefined} oppRace
+ * @returns {Promise<null | {
+ *   typicalFinalPhase: 'early'|'earlyMid'|'mid'|'midLate'|'late',
+ *   trajectory: {
+ *     sampleSize: Record<string, number>,
+ *     crossings: { earlyMidAt: number|null, midAt: number|null, midLateAt: number|null, lateAt: number|null },
+ *     finalPhaseDistribution: Record<string, number>,
+ *     durationP95Sec: number,
+ *   },
+ *   typicalLateComp?: { units: string[], sampleCount: number, winRate: number },
+ * }>}
+ */
+async function opponentPhaseProfile(games, gameDetails, userId, opp, myRace, oppRace) {
+  if (!opp) return null;
+  /** @type {Record<string, any>} */
+  const filter = { userId };
+  const attached = attachOpponentIdsToFilter(filter, {
+    pulseId: opp.pulseId,
+    pulseCharacterId: opp.pulseCharacterId,
+  });
+  if (!attached) {
+    if (opp.displayName) {
+      filter["opponent.displayName"] = opp.displayName;
+    } else {
+      return null;
+    }
+  }
+  if (myRace) {
+    filter.myRace = { $regex: `^${escapeRegex(String(myRace).charAt(0))}`, $options: "i" };
+  }
+  if (oppRace) {
+    filter["opponent.race"] = {
+      $regex: `^${escapeRegex(String(oppRace).charAt(0))}`,
+      $options: "i",
+    };
+  }
+  // Inline projection covers the legacy pre-v0.4.3 docs that still
+  // carry ``macroBreakdown`` on the game row. Post-migration docs need
+  // the detail-store round-trip below — same pattern
+  // ``listForRulePreview`` uses for the customBuilds preview cursor.
+  const rows = await games
+    .find(filter, {
+      projection: {
+        _id: 0,
+        gameId: 1,
+        result: 1,
+        durationSec: 1,
+        myRace: 1,
+        macroBreakdown: 1,
+      },
+    })
+    .sort({ date: -1 })
+    .limit(OPPONENT_PHASE_SCAN_CAP)
+    .toArray()
+    .catch(() => []);
+  if (rows.length === 0) return null;
+
+  const needDetailIds = [];
+  for (const r of rows) {
+    if (!r.macroBreakdown && r.gameId) needDetailIds.push(String(r.gameId));
+  }
+  /** @type {Map<string, Record<string, any>>} */
+  const blobs = gameDetails && needDetailIds.length > 0
+    ? await gameDetails.findMany(userId, needDetailIds).catch(() => new Map())
+    : new Map();
+
+  const matched = [];
+  for (const r of rows) {
+    const macroBreakdown = r.macroBreakdown
+      || (r.gameId ? (blobs.get(String(r.gameId)) || {}).macroBreakdown : null)
+      || null;
+    if (!macroBreakdown) continue;
+    matched.push({
+      gameId: String(r.gameId || ""),
+      myRace: r.myRace || myRace || null,
+      durationSec: Number(r.durationSec) || 0,
+      result: r.result || null,
+      macroBreakdown,
+    });
+  }
+  // 3-game floor mirrors the rival-tag threshold and the best-answer
+  // sample floor — fewer than that and any modal phase is noise.
+  if (matched.length < 3) return null;
+
+  const comps = computeCompositions(matched);
+
+  let typicalFinalPhase = "early";
+  let topCount = -1;
+  for (const phase of PHASE_ORDER) {
+    const c = comps.finalPhaseDistribution[phase] || 0;
+    if (c > topCount) {
+      topCount = c;
+      typicalFinalPhase = phase;
+    }
+  }
+  if (topCount <= 0) return null;
+
+  const trajectory = {
+    sampleSize: comps.sampleSize,
+    crossings: comps.medianCrossings,
+    finalPhaseDistribution: comps.finalPhaseDistribution,
+    durationP95Sec: comps.durationP95Sec,
+  };
+
+  /** @type {{ units: string[], sampleCount: number, winRate: number } | undefined} */
+  let typicalLateComp;
+  const reachesMidPlus = PHASE_ORDER.indexOf(typicalFinalPhase) >= PHASE_ORDER.indexOf("mid");
+  if (reachesMidPlus) {
+    // Pick the deepest phase the games actually reached and surface
+    // its top signature. Walk from "late" → "mid" so a build that
+    // mostly ends in midLate still surfaces the midLate signature
+    // rather than falling silent because "late" had zero samples.
+    const phasePreference = ["late", "midLate", "mid"];
+    for (const phase of phasePreference) {
+      const row = comps.perPhase && comps.perPhase[phase];
+      const sigs = row && Array.isArray(row.signatures) ? row.signatures : [];
+      const top = sigs.find((s) => s.key !== "Other" && s.units && s.units.length > 0);
+      if (top) {
+        typicalLateComp = {
+          units: top.units.map((u) => u.token),
+          sampleCount: top.sampleCount || 0,
+          winRate: typeof top.winRate === "number" ? top.winRate : 0,
+        };
+        break;
+      }
+    }
+  }
+
+  /** @type {Record<string, any>} */
+  const out = { typicalFinalPhase, trajectory };
+  if (typicalLateComp) out.typicalLateComp = typicalLateComp;
+  return out;
+}
+
 module.exports = {
   bucketResult,
   chipResult,
@@ -366,4 +532,6 @@ module.exports = {
   topBuildsForMatchup,
   bestAnswerVsStrategy,
   metaForMatchup,
+  opponentPhaseProfile,
+  OPPONENT_PHASE_SCAN_CAP,
 };

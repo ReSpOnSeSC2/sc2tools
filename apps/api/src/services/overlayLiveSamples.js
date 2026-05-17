@@ -115,6 +115,37 @@ function buildSamplePayload(widget) {
       note: "Frequent matchup",
     },
     rematch: { isRematch: true, lastResult: "win" },
+    // Realistic phase forecast — modal final phase Mid/Late with a
+    // Skytoss composition, matching the calibration anchor from the
+    // PvZ 15m Skytoss snapshot in
+    // ``apps/api/__tests__/phaseClassifier.test.js``. Numbers are
+    // shaped so the trajectory strip's crossings + final-phase
+    // histogram both render through the compact path.
+    opponentPhases: {
+      typicalFinalPhase: "midLate",
+      trajectory: {
+        sampleSize: { early: 6, earlyMid: 6, mid: 6, midLate: 5, late: 2 },
+        crossings: {
+          earlyMidAt: 240,
+          midAt: 420,
+          midLateAt: 660,
+          lateAt: 900,
+        },
+        finalPhaseDistribution: {
+          early: 0,
+          earlyMid: 0,
+          mid: 1,
+          midLate: 3,
+          late: 2,
+        },
+        durationP95Sec: 1080,
+      },
+      typicalLateComp: {
+        units: ["Carrier", "Tempest", "Mothership"],
+        sampleCount: 4,
+        winRate: 0.73,
+      },
+    },
   };
   if (!widget) return FULL;
   const keys = PER_WIDGET_KEYS[widget];
@@ -166,6 +197,7 @@ const PER_WIDGET_KEYS = {
     "favOpening",
     "cheeseProbability",
     "recentGames",
+    "opponentPhases",
   ],
   "session": ["session"],
 };
