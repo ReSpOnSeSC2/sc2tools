@@ -314,6 +314,8 @@ function GameDetailCard({ envelope }: { envelope: PerGameScoutingEnvelope }) {
         accent="rgb(var(--warning))"
         events={envelope.oppBuildOrder}
         composition={envelope.oppCompositionByPhase}
+        buildings={envelope.oppBuildingsByPhase}
+        upgrades={envelope.oppUpgradesByPhase}
         transitions={envelope.oppTransitions}
         durationSec={envelope.durationSec}
         buildOrderUnavailable={oppBuildUnavailable}
@@ -327,6 +329,8 @@ function GameDetailCard({ envelope }: { envelope: PerGameScoutingEnvelope }) {
           accent="rgb(var(--accent-cyan))"
           events={envelope.myBuildOrder ?? []}
           composition={envelope.myCompositionByPhase}
+          buildings={envelope.myBuildingsByPhase}
+          upgrades={envelope.myUpgradesByPhase}
           transitions={envelope.myTransitions}
           durationSec={envelope.durationSec}
           buildOrderUnavailable={myBuildUnavailable}
@@ -408,6 +412,8 @@ function SideSection({
   accent,
   events,
   composition,
+  buildings,
+  upgrades,
   transitions,
   durationSec,
   buildOrderUnavailable,
@@ -418,6 +424,8 @@ function SideSection({
   accent: string;
   events: PerGameScoutingEnvelope["oppBuildOrder"];
   composition?: PerGameScoutingEnvelope["oppCompositionByPhase"];
+  buildings?: PerGameScoutingEnvelope["oppBuildingsByPhase"];
+  upgrades?: PerGameScoutingEnvelope["oppUpgradesByPhase"];
   transitions?: PerGameScoutingEnvelope["oppTransitions"];
   durationSec: number;
   buildOrderUnavailable: boolean;
@@ -438,13 +446,15 @@ function SideSection({
         <BuildOrderStrip events={events} />
       )}
       {composition ? (
-        compositionUnavailable ? (
+        compositionUnavailable && !buildings ? (
           <div className="text-caption text-text-dim">
             Composition timeline unavailable for this game.
           </div>
         ) : (
           <CompositionGrid
             composition={composition}
+            buildings={buildings}
+            upgrades={upgrades}
             transitions={transitions}
             durationSec={durationSec}
           />
@@ -508,10 +518,14 @@ function BuildOrderStrip({
 
 function CompositionGrid({
   composition,
+  buildings,
+  upgrades,
   transitions,
   durationSec,
 }: {
   composition: PerGameScoutingEnvelope["oppCompositionByPhase"];
+  buildings?: PerGameScoutingEnvelope["oppBuildingsByPhase"];
+  upgrades?: PerGameScoutingEnvelope["oppUpgradesByPhase"];
   transitions?: PerGameScoutingEnvelope["oppTransitions"];
   durationSec: number;
 }) {
@@ -527,15 +541,44 @@ function CompositionGrid({
   // non-zero span of game time.
   const cells = buildPhaseCells(composition, transitions, durationSec);
   return (
-    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
       {cells.map((cell) => (
-        <PhaseCell key={cell.key} cell={cell} />
+        <PhaseCell
+          key={cell.key}
+          cell={cell}
+          buildings={pickBuildingsForCell(cell, buildings)}
+          upgrades={pickUpgradesForCell(cell, upgrades)}
+        />
       ))}
     </div>
   );
 }
 
-type PhaseCell = {
+function pickBuildingsForCell(
+  cell: PhaseCell,
+  buildings?: PerGameScoutingEnvelope["oppBuildingsByPhase"],
+): Array<{ token: string; count: number }> {
+  if (!buildings) return [];
+  // Use the LAST phase in the merged group — same as the composition.
+  // It carries the cumulative count at the end of the merged window.
+  const last = cell.phases[cell.phases.length - 1];
+  const slice = buildings[last];
+  if (!slice || !slice.reached) return [];
+  return slice.buildings;
+}
+
+function pickUpgradesForCell(
+  cell: PhaseCell,
+  upgrades?: PerGameScoutingEnvelope["oppUpgradesByPhase"],
+): Array<{ token: string; count: number }> {
+  if (!upgrades) return [];
+  const last = cell.phases[cell.phases.length - 1];
+  const slice = upgrades[last];
+  if (!slice || !slice.reached) return [];
+  return slice.upgrades;
+}
+
+interface PhaseCell {
   key: string;
   /** Phases that collapsed into this cell, in chronological order. */
   phases: Phase[];
@@ -553,7 +596,7 @@ type PhaseCell = {
    *  (every crossing collapsed onto the same second AND the game
    *  ended at the same instant). Used to colour the badge. */
   isZeroWidth: boolean;
-};
+}
 
 function buildPhaseCells(
   composition: PerGameScoutingEnvelope["oppCompositionByPhase"],
@@ -642,18 +685,28 @@ function findNextReachedStart(
   return null;
 }
 
-function PhaseCell({ cell }: { cell: PhaseCell }) {
+function PhaseCell({
+  cell,
+  buildings,
+  upgrades,
+}: {
+  cell: PhaseCell;
+  buildings: Array<{ token: string; count: number }>;
+  upgrades: Array<{ token: string; count: number }>;
+}) {
   const reached = cell.slice.reached;
   const phaseLabel = cell.phases.map((p) => PHASE_SHORT[p]).join(" → ");
   const isMerged = cell.phases.length > 1;
   const finalPhase = cell.phases[cell.phases.length - 1];
+  const source = cell.slice.source;
   return (
     <div
-      className="rounded-md border border-border bg-bg-surface p-2"
+      className="rounded-md border border-border bg-bg-surface p-2.5"
       data-testid="opponent-game-phase-card"
       data-phase={finalPhase}
       data-merged-phases={cell.phases.join(",")}
       data-reached={reached}
+      data-composition-source={source ?? "unknown"}
     >
       <div className="flex items-baseline justify-between gap-1.5">
         <span className="text-[10px] font-bold uppercase tracking-wider text-text-dim">
@@ -675,21 +728,65 @@ function PhaseCell({ cell }: { cell: PhaseCell }) {
       ) : null}
       {!reached ? (
         <div className="mt-1 text-caption text-text-dim">Did not reach</div>
-      ) : cell.slice.units.length === 0 ? (
-        <div className="mt-1 text-caption text-text-dim">—</div>
       ) : (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          {cell.slice.units.map((u) => (
-            <span
-              key={u.token}
-              className="inline-flex items-center gap-0.5 tabular-nums"
-            >
-              <Icon name={u.token} kind="unit" size={18} alt={u.token} />
-              <span className="text-caption">{u.count}</span>
-            </span>
-          ))}
-        </div>
+        <>
+          <PhaseChipRow
+            label="UNITS"
+            kind="unit"
+            entries={cell.slice.units}
+            sourceHint={source === "timeline" ? "peak alive" : null}
+          />
+          <PhaseChipRow
+            label="BUILDINGS"
+            kind="building"
+            entries={buildings}
+          />
+          <PhaseChipRow
+            label="UPGRADES"
+            kind="upgrade"
+            entries={upgrades}
+          />
+        </>
       )}
+    </div>
+  );
+}
+
+function PhaseChipRow({
+  label,
+  kind,
+  entries,
+  sourceHint,
+}: {
+  label: string;
+  kind: "unit" | "building" | "upgrade";
+  entries: Array<{ token: string; count: number }>;
+  sourceHint?: string | null;
+}) {
+  if (entries.length === 0) return null;
+  return (
+    <div className="mt-2">
+      <div className="mb-1 flex items-baseline justify-between gap-1.5">
+        <span className="text-[9px] font-bold uppercase tracking-wider text-text-dim">
+          {label}
+        </span>
+        {sourceHint ? (
+          <span className="text-[9px] uppercase tracking-wider text-text-dim/70">
+            {sourceHint}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {entries.map((e) => (
+          <span
+            key={e.token}
+            className="inline-flex items-center gap-0.5 tabular-nums"
+          >
+            <Icon name={e.token} kind={kind} size={18} alt={e.token} />
+            <span className="text-caption">{e.count}</span>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

@@ -203,8 +203,40 @@ export interface PerGameScoutingEnvelope {
       reached: boolean;
       /** Seconds the snapshot was sampled at. */
       atTime: number | null;
-      /** Top 5 non-worker units. */
+      /** Top N non-worker units (server caps at MAX_UNITS_PER_PHASE). */
       units: Array<{ token: string; count: number }>;
+      /**
+       * Where the composition came from. Mirrors the macro-breakdown
+       * panel's resolution order: ``timeline`` = unit_timeline alive
+       * count (death-aware); ``hybrid`` = build-order cumulative minus
+       * timeline-derived deaths; ``build_order`` = build-order
+       * cumulative alone (no timeline available to subtract deaths);
+       * ``empty`` = neither source had data. Surfaced to the widget
+       * so end-users can see when an upper-bound count is shown
+       * rather than an authoritative alive-count.
+       */
+      source?: "timeline" | "hybrid" | "build_order" | "empty";
+    }
+  >;
+
+  /** Cumulative buildings built per phase end. */
+  oppBuildingsByPhase?: Record<
+    "early" | "earlyMid" | "mid" | "midLate" | "late",
+    {
+      reached: boolean;
+      atTime: number | null;
+      buildings: Array<{ token: string; count: number }>;
+    }
+  >;
+
+  /** Cumulative upgrades researched per phase end. Tiered families
+   *  collapse onto the highest tier reached (count value IS the tier). */
+  oppUpgradesByPhase?: Record<
+    "early" | "earlyMid" | "mid" | "midLate" | "late",
+    {
+      reached: boolean;
+      atTime: number | null;
+      upgrades: Array<{ token: string; count: number }>;
     }
   >;
 
@@ -236,6 +268,27 @@ export interface PerGameScoutingEnvelope {
       reached: boolean;
       atTime: number | null;
       units: Array<{ token: string; count: number }>;
+      source?: "timeline" | "hybrid" | "build_order" | "empty";
+    }
+  >;
+
+  /** Player's cumulative buildings per phase. */
+  myBuildingsByPhase?: Record<
+    "early" | "earlyMid" | "mid" | "midLate" | "late",
+    {
+      reached: boolean;
+      atTime: number | null;
+      buildings: Array<{ token: string; count: number }>;
+    }
+  >;
+
+  /** Player's cumulative upgrades per phase. */
+  myUpgradesByPhase?: Record<
+    "early" | "earlyMid" | "mid" | "midLate" | "late",
+    {
+      reached: boolean;
+      atTime: number | null;
+      upgrades: Array<{ token: string; count: number }>;
     }
   >;
 

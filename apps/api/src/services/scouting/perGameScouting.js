@@ -37,117 +37,36 @@ const {
   getPhaseWindow,
 } = require("../buildCompositions");
 const { tokenByInternalName } = require("../timingCatalog");
+const { parseBuildLogLines } = require("../perGameCompute");
+const {
+  canonicalizeName,
+  deriveUnitComposition,
+  countBuildingsAt,
+  countUpgradesAt,
+  sortByCountDesc,
+} = require("./compositionAt");
 
 const PHASE_LIST = PHASE_ORDER;
 
-/**
- * sc2reader stores burrowed / morph / state-change forms of a unit
- * under separate tokens in unit_timeline (e.g. ``Lurker`` /
- * ``LurkerMP`` / ``LurkerMPBurrowed`` for the same on-field unit).
- * Without folding, the composition strip surfaces them as two or
- * three rows splitting the count and stacking the same icon.
- *
- * The alias map and regex stance-suffix strip below MIRROR the
- * client-side canonicaliser in
- * ``apps/web/components/analyzer/macro/compositionAt.ts`` — the
- * macro-breakdown chart's roster already uses this exact rollup to
- * collapse variants onto one chip per unit type, so the per-game
- * scouting envelope follows suit. Keep the two lists in sync; the
- * server-side rollup is the authoritative source for envelope
- * output and the client list defensively re-runs the same
- * normalisation on its own derived compositions.
- */
-const UNIT_NAME_ALIASES = new Map([
-  // Terran combat-posture / stance variants
-  ["SiegeTankSieged", "SiegeTank"],
-  ["VikingFighter", "Viking"],
-  ["VikingAssault", "Viking"],
-  ["HellionTank", "Hellbat"],
-  ["ThorAP", "Thor"],
-  ["ThorAA", "Thor"],
-  ["WidowMineBurrowed", "WidowMine"],
-  ["LiberatorAG", "Liberator"],
-  // Protoss warp-in cocoon variants and stance toggles
-  ["WarpPrismPhasing", "WarpPrism"],
-  ["ZealotWarp", "Zealot"],
-  ["StalkerWarp", "Stalker"],
-  ["SentryWarp", "Sentry"],
-  ["AdeptWarp", "Adept"],
-  ["AdeptPhaseShift", "Adept"],
-  ["DarkTemplarWarp", "DarkTemplar"],
-  ["HighTemplarWarp", "HighTemplar"],
-  ["ImmortalWarp", "Immortal"],
-  ["ColossusWarp", "Colossus"],
-  ["ObserverSiegeMode", "Observer"],
-  // Zerg burrow / MP / cocoon variants
-  ["BanelingMP", "Baneling"],
-  ["BanelingBurrowed", "Baneling"],
-  ["BanelingCocoon", "Baneling"],
-  ["RoachBurrowed", "Roach"],
-  ["RoachMP", "Roach"],
-  ["ZerglingBurrowed", "Zergling"],
-  ["HydraliskBurrowed", "Hydralisk"],
-  ["InfestorBurrowed", "Infestor"],
-  ["LurkerMP", "Lurker"],
-  ["LurkerMPBurrowed", "Lurker"],
-  ["LurkerMPEgg", "Lurker"],
-  ["LurkerBurrowed", "Lurker"],
-  ["RavagerBurrowed", "Ravager"],
-  ["RavagerCocoon", "Ravager"],
-  ["SwarmHostMP", "SwarmHost"],
-  ["SwarmHostMPBurrowed", "SwarmHost"],
-  ["SwarmHostBurrowedMP", "SwarmHost"],
-  ["QueenBurrowed", "Queen"],
-  ["UltraliskBurrowed", "Ultralisk"],
-  ["BroodLordCocoon", "BroodLord"],
-  ["Broodlord", "BroodLord"],
-  ["OverseerSiegeMode", "Overseer"],
-  ["OverseerCocoon", "Overseer"],
-  ["OverlordTransport", "Overlord"],
-  ["OverlordTransportCocoon", "Overlord"],
-  ["TransportOverlordCocoon", "Overlord"],
-  ["LocustMP", "Locust"],
-  ["LocustMPFlying", "Locust"],
-  ["LocustMPPrecursor", "Locust"],
-  ["DroneBurrowed", "Drone"],
-]);
-
-// Same regex the macro-breakdown canonicaliser uses to strip stance
-// / state suffixes the alias map doesn't enumerate (defence against
-// sc2reader adding a new variant in a future patch). Tracks the
-// pattern in apps/web/components/analyzer/macro/compositionAt.ts:205.
-const UNIT_NAME_SUFFIX_RE = /(Burrowed|Sieged|Phasing|Flying|Lowered|Cocoon|Uprooted|Phased)$/i;
-const UNIT_NAME_PREFIX_BURROWED_RE = /^Burrowed/i;
+/** Cap on units / buildings / upgrades shipped per phase. The widget
+ * renders top-N icons; tighter caps keep the envelope payload bounded
+ * on long, varied games against an opponent the user has many games
+ * with. Matches the macro-panel roster's visual weight. */
+const MAX_UNITS_PER_PHASE = 8;
+const MAX_BUILDINGS_PER_PHASE = 10;
+const MAX_UPGRADES_PER_PHASE = 8;
 
 /**
- * Canonicalise a unit-timeline token onto its base name. Resolution
- * order mirrors the macro-breakdown's ``canonicalizeName``:
- *   1. Direct alias hit (``InfestorBurrowed`` → ``Infestor``).
- *   2. Regex suffix / prefix strip on unmatched names.
- *   3. Second pass through the alias map after the strip — catches
- *      hypothetical chained forms (``ImmortalWarpPhasing``
- *      → ``ImmortalWarp`` → ``Immortal``).
- *   4. Fallback: return the stripped name, or the original when even
- *      the strip yielded an empty string.
- *
- * @param {string} token
- * @returns {string}
+ * Back-compat re-exports — the alias map + canonical resolver moved
+ * to ``./compositionAt`` so the same module powers both the per-game
+ * envelope's variant rollup and the per-phase build-order / upgrade
+ * snapshots. Tests that imported these from perGameScouting before
+ * the refactor still type-check against the same names.
  */
-function canonicalUnitToken(token) {
-  if (!token) return "";
-  const direct = UNIT_NAME_ALIASES.get(token);
-  if (direct) return direct;
-  const stripped = token
-    .replace(UNIT_NAME_SUFFIX_RE, "")
-    .replace(UNIT_NAME_PREFIX_BURROWED_RE, "");
-  if (stripped !== token) {
-    const aliased = UNIT_NAME_ALIASES.get(stripped);
-    if (aliased) return aliased;
-  }
-  return stripped || token;
-}
-
-// Back-compat alias the existing tests reference.
+const {
+  UNIT_NAME_ALIASES,
+  canonicalizeName: canonicalUnitToken,
+} = require("./compositionAt");
 const UNIT_TOKEN_ALIASES = UNIT_NAME_ALIASES;
 
 const BUILD_LOG_LINE_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
@@ -216,8 +135,10 @@ function computePerGameScouting(game) {
     perspective: "you",
   });
 
-  const hasUnitTimeline = Array.isArray(macroBreakdown.unit_timeline)
-    && macroBreakdown.unit_timeline.length > 0;
+  const unitTimeline = Array.isArray(macroBreakdown.unit_timeline)
+    ? macroBreakdown.unit_timeline
+    : [];
+  const hasUnitTimeline = unitTimeline.length > 0;
   if (!hasUnitTimeline) flags.push("unit_timeline_missing");
 
   const oppBuildLog = Array.isArray(game.oppBuildLog) ? game.oppBuildLog : null;
@@ -229,23 +150,50 @@ function computePerGameScouting(game) {
     flags.push("my_buildlog_missing");
   }
 
+  // Parse the stored build logs into the same event shape the macro
+  // breakdown's /v1/games/:id/build-order route emits — categorised
+  // (building/unit/upgrade) with tier and complete_time. Catalog is
+  // optional (perGameCompute's parser falls back to isKnownBuilding +
+  // isKnownUpgrade when absent); the opponent profile path doesn't
+  // thread one through so we pass null and rely on the fallback.
+  const myEvents = parseBuildLogLines(myBuildLog || [], null);
+  const oppEvents = parseBuildLogLines(oppBuildLog || [], null);
+
   const oppBuildOrder = buildSideBuildOrder(oppBuildLog || []);
   const myBuildOrder = buildSideBuildOrder(myBuildLog || []);
   const oppTransitions = pickTransitions(classified.crossings);
   const myTransitions = pickTransitions(classifiedMy.crossings);
   const oppCompositionByPhase = sampleCompositionsByPhase(
-    macroBreakdown,
+    unitTimeline,
     classified.crossings,
     durationSec,
-    hasUnitTimeline,
-    "opponent",
+    "opp",
   );
   const myCompositionByPhase = sampleCompositionsByPhase(
-    macroBreakdown,
+    unitTimeline,
     classifiedMy.crossings,
     durationSec,
-    hasUnitTimeline,
-    "you",
+    "my",
+  );
+  const oppBuildingsByPhase = sampleBuildingsByPhase(
+    oppEvents,
+    classified.crossings,
+    durationSec,
+  );
+  const myBuildingsByPhase = sampleBuildingsByPhase(
+    myEvents,
+    classifiedMy.crossings,
+    durationSec,
+  );
+  const oppUpgradesByPhase = sampleUpgradesByPhase(
+    oppEvents,
+    classified.crossings,
+    durationSec,
+  );
+  const myUpgradesByPhase = sampleUpgradesByPhase(
+    myEvents,
+    classifiedMy.crossings,
+    durationSec,
   );
   const endPhase = classified.finalPhase;
   const endReason = deriveEndReason(endPhase, durationSec, result);
@@ -266,9 +214,13 @@ function computePerGameScouting(game) {
     oppBuildOrder,
     oppTransitions,
     oppCompositionByPhase,
+    oppBuildingsByPhase,
+    oppUpgradesByPhase,
     myBuildOrder,
     myTransitions,
     myCompositionByPhase,
+    myBuildingsByPhase,
+    myUpgradesByPhase,
     endPhase,
     endReason,
     flags,
@@ -389,31 +341,232 @@ function pickTransitions(crossings) {
  * @param {number} durationSec
  * @param {boolean} hasUnitTimeline
  */
+/**
+ * Build a per-phase composition map by taking the PEAK alive count
+ * per unit across every unit_timeline sample inside the phase
+ * window.
+ *
+ * Why peak alive instead of "build-order cumulative" or "alive at
+ * sample-N":
+ *   - Sample-N (the macro panel's hover behaviour) can land on a
+ *     sparse / post-engagement row and read "1 Carrier" when the
+ *     player really fielded 8 during the phase.
+ *   - Build-order cumulative grows monotonically without death info
+ *     and gives nonsense like "65 Zealots simultaneously" — over
+ *     food cap, clearly not real.
+ *   - Peak alive walks every sample in the window and surfaces the
+ *     high-water mark per canonical unit name. That's the
+ *     interpretation a streamer naturally reads off the widget:
+ *     "how many of unit X did you have on the field during late
+ *     game" — bounded by real food at every sample, plus reflects
+ *     the meaningful army composition rather than a transient
+ *     post-engagement count.
+ *
+ * Canonical names are folded via the macro-panel-mirrored alias
+ * map (LurkerMP + LurkerMPBurrowed → Lurker, etc.) before max-ing
+ * so variants don't split the count.
+ *
+ * @param {Array<{time:number,my?:object,opp?:object}>} unitTimeline
+ * @param {{earlyMidAt:number|null,midAt:number|null,midLateAt:number|null,lateAt:number|null}} crossings
+ * @param {number} durationSec
+ * @param {"my"|"opp"} side
+ */
 function sampleCompositionsByPhase(
-  macroBreakdown,
+  unitTimeline,
   crossings,
   durationSec,
-  hasUnitTimeline,
-  perspective,
+  side,
 ) {
-  /** @type {Record<string,{reached:boolean,atTime:number|null,units:Array<{token:string,count:number}>}>} */
+  /** @type {Record<string,{reached:boolean,atTime:number|null,units:Array<{token:string,count:number}>,source:string}>} */
+  const out = {};
+  const hasTimeline = Array.isArray(unitTimeline) && unitTimeline.length > 0;
+  for (const phase of PHASE_LIST) {
+    const window = getPhaseWindow(phase, crossings, durationSec);
+    if (!window) {
+      out[phase] = { reached: false, atTime: null, units: [], source: "empty" };
+      continue;
+    }
+    if (!hasTimeline) {
+      out[phase] = {
+        reached: true,
+        atTime: window.end,
+        units: [],
+        source: "empty",
+      };
+      continue;
+    }
+    const peak = peakAliveInWindow(unitTimeline, window.start, window.end, side);
+    const units = sortByCountDesc(peak.counts)
+      .filter((row) => !WORKER_SKIP.has(row.name) && row.count > 0)
+      .slice(0, MAX_UNITS_PER_PHASE)
+      .map((row) => ({ token: row.name, count: row.count }));
+    out[phase] = {
+      reached: true,
+      atTime: peak.atTime,
+      units,
+      source: peak.sampleCount > 0 ? "timeline" : "empty",
+    };
+  }
+  return out;
+}
+
+/**
+ * Walk every unit_timeline sample whose ``time`` falls within
+ * ``[start, end]`` (inclusive) and accumulate the PEAK alive count
+ * per canonical unit name. Returns the peak map AND the timestamp of
+ * the sample that contributed the most non-worker units (the
+ * "centre of mass" of the engagement window — used by the UI as the
+ * cell's atTime so users see a real point in game time rather than
+ * a synthetic midpoint).
+ *
+ * Folds sc2reader variants (LurkerMP / LurkerMPBurrowed / etc.) via
+ * ``canonicalizeName`` before max-ing so a stack of burrowed +
+ * unburrowed roaches sums into one Roach entry.
+ *
+ * When the window contains no samples we widen to the NEAREST
+ * sample to ``end`` so a tight window that fell between two
+ * unit_timeline ticks doesn't render as empty. The atTime returned
+ * is the sample's time, not the widened/clamped value.
+ *
+ * @param {Array<{time:number,my?:object,opp?:object}>} timeline
+ * @param {number} start
+ * @param {number} end
+ * @param {"my"|"opp"} side
+ * @returns {{counts:Record<string,number>, atTime:number|null, sampleCount:number}}
+ */
+function peakAliveInWindow(timeline, start, end, side) {
+  /** @type {Map<string, number>} */
+  const peak = new Map();
+  let atTime = null;
+  let bestUnitCount = -1;
+  let sampleCount = 0;
+  for (const row of timeline) {
+    const t = Number(row && row.time);
+    if (!Number.isFinite(t)) continue;
+    if (t < start || t > end) continue;
+    const sideMap = side === "my" ? row.my : row.opp;
+    if (!sideMap || typeof sideMap !== "object") continue;
+    sampleCount += 1;
+    // STEP 1: Fold variants on THIS tick — burrowed + unburrowed forms
+    // co-exist on the field, so they sum within a single tick before
+    // we compare against the running peak.
+    /** @type {Map<string, number>} */
+    const perTick = new Map();
+    let totalThisRow = 0;
+    for (const rawName of Object.keys(sideMap)) {
+      if (WORKER_SKIP.has(rawName)) continue;
+      const n = Number(sideMap[rawName]);
+      if (!(n > 0)) continue;
+      const canonical = canonicalizeName(rawName);
+      if (!canonical || WORKER_SKIP.has(canonical)) continue;
+      perTick.set(canonical, (perTick.get(canonical) || 0) + n);
+      totalThisRow += n;
+    }
+    // STEP 2: Update the running peak per canonical name across ticks.
+    for (const [canonical, count] of perTick) {
+      const prev = peak.get(canonical) || 0;
+      if (count > prev) peak.set(canonical, count);
+    }
+    if (totalThisRow > bestUnitCount) {
+      bestUnitCount = totalThisRow;
+      atTime = t;
+    }
+  }
+  if (sampleCount === 0) {
+    // Window fell between timeline ticks. Widen by picking the
+    // single nearest sample to ``end`` (the phase boundary) and
+    // folding its variants the same way.
+    let best = null;
+    let bestDist = Infinity;
+    for (const row of timeline) {
+      const t = Number(row && row.time);
+      if (!Number.isFinite(t)) continue;
+      const d = Math.abs(t - end);
+      if (d < bestDist) {
+        best = row;
+        bestDist = d;
+      }
+    }
+    if (best) {
+      const sideMap = side === "my" ? best.my : best.opp;
+      if (sideMap && typeof sideMap === "object") {
+        for (const rawName of Object.keys(sideMap)) {
+          if (WORKER_SKIP.has(rawName)) continue;
+          const n = Number(sideMap[rawName]);
+          if (!(n > 0)) continue;
+          const canonical = canonicalizeName(rawName);
+          if (!canonical || WORKER_SKIP.has(canonical)) continue;
+          peak.set(canonical, (peak.get(canonical) || 0) + n);
+        }
+        atTime = Number(best.time) || null;
+        sampleCount = 1;
+      }
+    }
+  }
+  /** @type {Record<string, number>} */
+  const counts = {};
+  for (const [name, n] of peak) counts[name] = n;
+  return { counts, atTime, sampleCount };
+}
+
+/**
+ * Per-phase cumulative buildings map. Mirrors the macro panel's
+ * ``countBuildingsAt`` snapshot, sampled at the phase end.
+ *
+ * @param {Array<object>} buildEvents
+ * @param {{earlyMidAt:number|null,midAt:number|null,midLateAt:number|null,lateAt:number|null}} crossings
+ * @param {number} durationSec
+ */
+function sampleBuildingsByPhase(buildEvents, crossings, durationSec) {
+  /** @type {Record<string,{reached:boolean,atTime:number|null,buildings:Array<{token:string,count:number}>}>} */
   const out = {};
   for (const phase of PHASE_LIST) {
     const window = getPhaseWindow(phase, crossings, durationSec);
     if (!window) {
-      out[phase] = { reached: false, atTime: null, units: [] };
+      out[phase] = { reached: false, atTime: null, buildings: [] };
       continue;
     }
-    const midpoint = (window.start + window.end) / 2;
-    /** @type {Array<{token:string,count:number}>} */
-    let units = [];
-    if (hasUnitTimeline) {
-      units = pickTopUnits(macroBreakdown, midpoint, perspective);
-    }
+    const sampleAt = Math.max(window.end, window.start);
+    const counts = countBuildingsAt(buildEvents, sampleAt);
+    const buildings = sortByCountDesc(counts)
+      .slice(0, MAX_BUILDINGS_PER_PHASE)
+      .map((row) => ({ token: row.name, count: row.count }));
     out[phase] = {
       reached: true,
-      atTime: midpoint,
-      units,
+      atTime: sampleAt,
+      buildings,
+    };
+  }
+  return out;
+}
+
+/**
+ * Per-phase cumulative upgrades map. Mirrors the macro panel's
+ * ``countUpgradesAt`` snapshot — tiered weapons/armor families
+ * collapse onto the highest tier reached (count value IS the tier).
+ *
+ * @param {Array<object>} buildEvents
+ * @param {{earlyMidAt:number|null,midAt:number|null,midLateAt:number|null,lateAt:number|null}} crossings
+ * @param {number} durationSec
+ */
+function sampleUpgradesByPhase(buildEvents, crossings, durationSec) {
+  /** @type {Record<string,{reached:boolean,atTime:number|null,upgrades:Array<{token:string,count:number}>}>} */
+  const out = {};
+  for (const phase of PHASE_LIST) {
+    const window = getPhaseWindow(phase, crossings, durationSec);
+    if (!window) {
+      out[phase] = { reached: false, atTime: null, upgrades: [] };
+      continue;
+    }
+    const sampleAt = Math.max(window.end, window.start);
+    const counts = countUpgradesAt(buildEvents, sampleAt);
+    const upgrades = sortByCountDesc(counts)
+      .slice(0, MAX_UPGRADES_PER_PHASE)
+      .map((row) => ({ token: row.name, count: row.count }));
+    out[phase] = {
+      reached: true,
+      atTime: sampleAt,
+      upgrades,
     };
   }
   return out;
@@ -431,47 +584,6 @@ function sampleCompositionsByPhase(
  * @param {"you"|"opponent"} perspective
  * @returns {Array<{token:string,count:number}>}
  */
-function pickTopUnits(macroBreakdown, midpoint, perspective) {
-  const timeline = Array.isArray(macroBreakdown && macroBreakdown.unit_timeline)
-    ? macroBreakdown.unit_timeline
-    : [];
-  if (timeline.length === 0) return [];
-  let best = timeline[0];
-  let bestDist = Math.abs(Number(best.time) - midpoint);
-  for (let i = 1; i < timeline.length; i++) {
-    const d = Math.abs(Number(timeline[i].time) - midpoint);
-    if (d < bestDist) {
-      best = timeline[i];
-      bestDist = d;
-    }
-  }
-  const side = perspective === "opponent"
-    ? (best && best.opp ? best.opp : {})
-    : (best && best.my ? best.my : {});
-  /** @type {Map<string, number>} */
-  const merged = new Map();
-  for (const token of Object.keys(side)) {
-    if (WORKER_SKIP.has(token)) continue;
-    const n = Number(side[token]);
-    if (!(n > 0)) continue;
-    const canonical = canonicalUnitToken(token);
-    if (WORKER_SKIP.has(canonical)) continue;
-    merged.set(canonical, (merged.get(canonical) || 0) + n);
-  }
-  /** @type {Array<{token:string,count:number}>} */
-  const entries = [];
-  for (const [token, count] of merged) {
-    entries.push({ token, count });
-  }
-  entries.sort((a, b) => {
-    if (a.count !== b.count) return b.count - a.count;
-    if (a.token < b.token) return -1;
-    if (a.token > b.token) return 1;
-    return 0;
-  });
-  return entries.slice(0, 5);
-}
-
 /**
  * Map (endPhase, durationSec, result) onto the structured endReason
  * enum the widget chips render. Applied in priority order — first
