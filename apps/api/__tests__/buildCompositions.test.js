@@ -116,6 +116,102 @@ describe("buildCompositions — exports", () => {
   });
 });
 
+describe("buildCompositions — peak-alive sampling across phase window", () => {
+  /**
+   * Build a fixture where the player's army at the mid-phase midpoint
+   * is small (post-engagement low) but the peak alive during the
+   * phase window is much larger. The peak-alive sampler must surface
+   * the peak count, not the midpoint dip — that's the same fix the
+   * scouting envelope ships, applied here to the Strategies tab.
+   *
+   * @param {Record<string, number>} peakUnits the army roster the
+   *   timeline carries at its busiest tick inside the mid window
+   * @param {Record<string, number>} dipUnits the army at the exact
+   *   midpoint tick (typically lower than peak)
+   */
+  function makeMidPeakFixture(peakUnits, dipUnits) {
+    const duration = 600;
+    const stats = [];
+    for (let t = 0; t <= duration; t += 10) {
+      stats.push({
+        time: t, food_workers: Math.min(12 + t / 5, 70),
+        food_used: Math.min(12 + t / 4, 180), army_value: Math.min(t * 8, 5000),
+      });
+    }
+    // Timeline samples: dense roster at the busy ticks (peak), a
+    // sparse row at midpoint (post-engagement dip). The exact
+    // midpoint of the mid window depends on the classifier, but the
+    // stats curve pushes midAt to roughly 200s and lateAt past
+    // duration → mid window is roughly [200, 600] → midpoint ~400s.
+    const timeline = [
+      { time: 0, my: { Probe: 12 }, opp: {} },
+      { time: 250, my: { Probe: 50, ...peakUnits }, opp: {} },
+      { time: 350, my: { Probe: 50, ...peakUnits }, opp: {} },
+      // Midpoint sample carries only the dip roster — sparse, low count.
+      { time: 400, my: { Probe: 50, ...dipUnits }, opp: {} },
+      { time: 450, my: { Probe: 50, ...peakUnits }, opp: {} },
+      { time: 500, my: { Probe: 50, ...peakUnits }, opp: {} },
+    ];
+    return {
+      bases: [{ name: "Nexus", born_time: 0, died_time: duration },
+              { name: "Nexus", born_time: 100, died_time: duration }],
+      production_buildings: [
+        { name: "CyberneticsCore", born_time: 80, died_time: duration },
+        { name: "TwilightCouncil", born_time: 180, died_time: duration },
+        { name: "RoboticsFacility", born_time: 200, died_time: duration },
+        { name: "Stargate", born_time: 250, died_time: duration },
+      ],
+      stats_events: stats,
+      unit_timeline: timeline,
+    };
+  }
+
+  test("uses PEAK alive across the window, not the midpoint sample", () => {
+    // Player fielded 8 Carriers at peak, then lost 7 in an engagement
+    // landing at the midpoint sample (1 Carrier alive). The signature
+    // must reflect "8 Carriers were on the field during mid" — the
+    // headline read the streamer expects — not the trailing 1.
+    const macroBreakdown = makeMidPeakFixture(
+      { Carrier: 8, Tempest: 6, VoidRay: 4 },
+      { Carrier: 1 },
+    );
+    const result = computeCompositions([{
+      gameId: "g_peak", myRace: "Protoss", oppRace: "Zerg",
+      durationSec: 600, result: "Victory",
+      opponent: { strategy: "Zerg - Hydra Comp" },
+      macroBreakdown, events: [], oppEvents: [],
+    }]);
+    expect(result.perPhase.mid.signatures.length).toBeGreaterThan(0);
+    const sig = result.perPhase.mid.signatures[0];
+    const carrier = sig.units.find((u) => u.token === "Carrier");
+    expect(carrier).toBeDefined();
+    expect(carrier.count).toBeGreaterThanOrEqual(8); // peak, not dip-1
+  });
+
+  test("sums sc2reader variants on the same tick (Roach + RoachBurrowed)", () => {
+    // The signature picker now canonicalises variants — a 14 Roach
+    // + 6 RoachBurrowed army reads as Roach 20, never as two
+    // separate signature entries that would split the count and
+    // double-stack the icon.
+    const macroBreakdown = makeMidPeakFixture(
+      { Roach: 14, RoachBurrowed: 6 },
+      { Roach: 14, RoachBurrowed: 6 },
+    );
+    const result = computeCompositions([{
+      gameId: "g_burrow", myRace: "Protoss", oppRace: "Zerg",
+      durationSec: 600, result: "Victory",
+      opponent: { strategy: "Zerg - Roach Comp" },
+      macroBreakdown, events: [], oppEvents: [],
+    }]);
+    const sig = result.perPhase.mid.signatures[0];
+    const roach = sig.units.find((u) => u.token === "Roach");
+    const rawBurrowed = sig.units.find((u) => u.token === "RoachBurrowed");
+    expect(roach).toBeDefined();
+    expect(roach.count).toBe(20);
+    expect(rawBurrowed).toBeUndefined();
+  });
+});
+
 describe("buildCompositions — empty input", () => {
   test("returns zero-filled shape", () => {
     const out = computeCompositions([]);

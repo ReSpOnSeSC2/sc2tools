@@ -510,4 +510,103 @@ module.exports = {
   countUpgradesAt,
   tieredUpgradeFamily,
   sortByCountDesc,
+  peakAliveInWindow,
 };
+
+/**
+ * Walk every unit_timeline sample whose ``time`` falls within
+ * ``[start, end]`` (inclusive) and accumulate the PEAK alive count
+ * per canonical unit name. Variants on the same tick (Lurker +
+ * LurkerMP + LurkerMPBurrowed for a stack of lurkers) are SUMMED
+ * within the tick before the peak is taken across ticks — so a
+ * burrow/unburrow oscillation never double-counts, AND a stacked
+ * morph army on a single tick reads as the real on-field total.
+ *
+ * Skips worker / supply / overlord noise per ``skip`` (defaults to
+ * ``WORKER_NAMES``) before folding. When the window contains no
+ * samples, widens to the single NEAREST sample to ``end`` so a
+ * tight window that fell between two timeline ticks doesn't render
+ * empty.
+ *
+ * Mirrors the macro-breakdown panel's "alive units while the player
+ * was in this phase" reading — not a single-tick snapshot, not a
+ * cumulative-built count.
+ *
+ * @param {Array<{time:number,my?:object,opp?:object}>} timeline
+ * @param {number} start
+ * @param {number} end
+ * @param {"my"|"opp"} side
+ * @param {Set<string>} [skip] worker / noise tokens to drop before fold
+ * @returns {{counts:Record<string,number>, atTime:number|null, sampleCount:number}}
+ */
+function peakAliveInWindow(timeline, start, end, side, skip) {
+  const ignore = skip instanceof Set ? skip : WORKER_NAMES;
+  /** @type {Map<string, number>} */
+  const peak = new Map();
+  let atTime = null;
+  let bestUnitCount = -1;
+  let sampleCount = 0;
+  if (!Array.isArray(timeline) || timeline.length === 0) {
+    return { counts: {}, atTime: null, sampleCount: 0 };
+  }
+  for (const row of timeline) {
+    const t = Number(row && row.time);
+    if (!Number.isFinite(t)) continue;
+    if (t < start || t > end) continue;
+    const sideMap = side === "my" ? row.my : row.opp;
+    if (!sideMap || typeof sideMap !== "object") continue;
+    sampleCount += 1;
+    /** @type {Map<string, number>} */
+    const perTick = new Map();
+    let totalThisRow = 0;
+    for (const rawName of Object.keys(sideMap)) {
+      if (ignore.has(rawName)) continue;
+      const n = Number(sideMap[rawName]);
+      if (!(n > 0)) continue;
+      const canonical = canonicalizeName(rawName);
+      if (!canonical || ignore.has(canonical)) continue;
+      perTick.set(canonical, (perTick.get(canonical) || 0) + n);
+      totalThisRow += n;
+    }
+    for (const [canonical, count] of perTick) {
+      const prev = peak.get(canonical) || 0;
+      if (count > prev) peak.set(canonical, count);
+    }
+    if (totalThisRow > bestUnitCount) {
+      bestUnitCount = totalThisRow;
+      atTime = t;
+    }
+  }
+  if (sampleCount === 0) {
+    let best = null;
+    let bestDist = Infinity;
+    for (const row of timeline) {
+      const t = Number(row && row.time);
+      if (!Number.isFinite(t)) continue;
+      const d = Math.abs(t - end);
+      if (d < bestDist) {
+        best = row;
+        bestDist = d;
+      }
+    }
+    if (best) {
+      const sideMap = side === "my" ? best.my : best.opp;
+      if (sideMap && typeof sideMap === "object") {
+        for (const rawName of Object.keys(sideMap)) {
+          if (ignore.has(rawName)) continue;
+          const n = Number(sideMap[rawName]);
+          if (!(n > 0)) continue;
+          const canonical = canonicalizeName(rawName);
+          if (!canonical || ignore.has(canonical)) continue;
+          peak.set(canonical, (peak.get(canonical) || 0) + n);
+        }
+        atTime = Number(best.time) || null;
+        sampleCount = 1;
+      }
+    }
+  }
+  /** @type {Record<string, number>} */
+  const counts = {};
+  for (const [name, n] of peak) counts[name] = n;
+  return { counts, atTime, sampleCount };
+}
