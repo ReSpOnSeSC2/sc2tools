@@ -376,6 +376,26 @@ export interface StrategyPhasesService {
     durationP95Sec: number;
     flags: string[];
   }>;
+  evaluateByBuildName(
+    userId: string,
+    buildName: string,
+    opts?: { perspective?: "you" | "opponent" },
+  ): Promise<null | {
+    name: string;
+    total: number;
+    perspective: "you" | "opponent";
+    sampleSize: Record<string, number>;
+    perPhase: Record<string, object>;
+    finalPhaseDistribution: Record<string, number>;
+    medianCrossings: {
+      earlyMidAt: number | null;
+      midAt: number | null;
+      midLateAt: number | null;
+      lateAt: number | null;
+    };
+    durationP95Sec: number;
+    flags: string[];
+  }>;
   latestGameDateMs(userId: string): Promise<number>;
 }
 

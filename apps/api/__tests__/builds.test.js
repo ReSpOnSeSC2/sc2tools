@@ -159,11 +159,16 @@ describe("services/builds", () => {
  * across runs. ``Probe`` is always present at 50+ to exercise the
  * worker-skip filter — the signature must never include it.
  *
+ * ``myBuild`` is optional so the same fixture builder feeds both the
+ * opponent-strategy path (``evaluate``) and the user-side build-name
+ * path (``evaluateByBuildName``).
+ *
  * @param {Array<{
  *   gameId: string,
  *   result: string,
  *   strategy: string,
  *   myUnitsAtMid: Record<string, number>,
+ *   myBuild?: string,
  * }>} entries
  */
 function makeStrategyGames(entries) {
@@ -188,6 +193,7 @@ function makeStrategyGames(entries) {
       oppRace: "Zerg",
       durationSec: duration,
       result: e.result,
+      myBuild: e.myBuild || null,
       opponent: { strategy: e.strategy, race: "Zerg" },
       macroBreakdown: {
         bases: [
@@ -363,5 +369,77 @@ describe("services/strategyPhases", () => {
     };
     const svc = new StrategyPhasesService(db, { perGame: {} });
     expect(await svc.latestGameDateMs("u1")).toBe(stamp.getTime());
+  });
+
+  // ----- evaluateByBuildName ---------------------------------------
+  // The user-side fallback that powers the left column of the
+  // StrategiesTab build × strategy drill-down when no saved custom
+  // build matches the agent's auto-classified label.
+
+  test("evaluateByBuildName returns null when no games carry the label", async () => {
+    const svc = makeService(
+      makeStrategyGames([
+        {
+          gameId: "g-other",
+          result: "Victory",
+          strategy: "Zerg - Mass Ling",
+          myUnitsAtMid: { Stalker: 4, Phoenix: 3, Probe: 50 },
+          myBuild: "PvZ - Different Build",
+        },
+      ]),
+    );
+    const out = await svc.evaluateByBuildName("u1", "PvZ - 3 Stargate Phoenix");
+    expect(out).toBeNull();
+  });
+
+  test("evaluateByBuildName filters by myBuild exact match", async () => {
+    const games = makeStrategyGames([
+      {
+        gameId: "g-stargate-1",
+        result: "Victory",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Phoenix: 5, Stalker: 3, Probe: 60 },
+        myBuild: "PvZ - 3 Stargate Phoenix",
+      },
+      {
+        gameId: "g-other-build",
+        result: "Defeat",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Zealot: 6, Sentry: 2, Probe: 50 },
+        myBuild: "PvZ - Glaive Adept",
+      },
+      {
+        gameId: "g-stargate-2",
+        result: "Victory",
+        strategy: "Zerg - Roach allin",
+        myUnitsAtMid: { Phoenix: 4, Stalker: 4, Probe: 55 },
+        myBuild: "PvZ - 3 Stargate Phoenix",
+      },
+    ]);
+    const svc = makeService(games);
+    const out = await svc.evaluateByBuildName(
+      "u1",
+      "PvZ - 3 Stargate Phoenix",
+    );
+    expect(out).not.toBeNull();
+    expect(out.name).toBe("PvZ - 3 Stargate Phoenix");
+    expect(out.total).toBe(2);
+    expect(out.perspective).toBe("you");
+    // Glaive Adept game must not leak in.
+    const midKeys = out.perPhase.mid.signatures.map((s) => s.key);
+    expect(midKeys).toContain("Phoenix|Stalker");
+    expect(midKeys).not.toContain("Zealot|Sentry");
+  });
+
+  test("evaluateByBuildName throws when perGame is unavailable", async () => {
+    const svc = new StrategyPhasesService({}, { perGame: null });
+    await expect(
+      svc.evaluateByBuildName("u1", "PvZ - 3 Stargate Phoenix"),
+    ).rejects.toThrow("perGame_unavailable");
+  });
+
+  test("evaluateByBuildName returns null on empty build name", async () => {
+    const svc = makeService([]);
+    expect(await svc.evaluateByBuildName("u1", "")).toBeNull();
   });
 });
