@@ -1,12 +1,25 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 /**
  * Stacked outcome bar showing what phase games against an opponent
- * ended in. Click a sliver to highlight it and surface a popover
- * with the exact game count for that phase; click outside, click
- * the sliver again, or press Escape to dismiss.
+ * ended in. Click (or tap) a sliver to highlight it and surface a
+ * popover with the exact game count and percentage; click outside,
+ * click the sliver again, or press Escape to dismiss.
+ *
+ * The popover anchor is clamped to the bar's bounds at measure time
+ * so it never bleeds past the card; the callout arrow tracks the
+ * actual sliver center so the connection stays legible even on
+ * narrow viewports.
  */
 
 type Phase = "early" | "earlyMid" | "mid" | "midLate" | "late";
@@ -46,6 +59,11 @@ type Segment = {
   center: number;
 };
 
+type PopoverGeom = {
+  popoverLeft: number;
+  arrowLeft: number;
+};
+
 export function WhereGamesEndBar({
   finalPhaseDistribution,
 }: WhereGamesEndBarProps) {
@@ -53,6 +71,8 @@ export function WhereGamesEndBar({
   const total = PHASE_ORDER.reduce((acc, p) => acc + (dist[p] || 0), 0);
   const [selected, setSelected] = useState<Phase | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const popoverId = useId();
 
   const segments = useMemo<Segment[]>(() => {
@@ -75,6 +95,11 @@ export function WhereGamesEndBar({
     return out;
   }, [dist, total]);
 
+  const selectedSeg = useMemo(
+    () => segments.find((s) => s.phase === selected) ?? null,
+    [segments, selected],
+  );
+
   useEffect(() => {
     if (!selected) return;
     function onPointerDown(e: PointerEvent) {
@@ -94,18 +119,65 @@ export function WhereGamesEndBar({
     };
   }, [selected]);
 
-  // Drop selection if the selected phase no longer has any games (e.g.
-  // upstream data refresh). Keeps the bar from getting "stuck" on a
-  // phase that has gone empty.
+  // Drop a selection that no longer maps to a visible segment (e.g.,
+  // upstream data refresh).
   useEffect(() => {
     if (selected && !segments.some((s) => s.phase === selected)) {
       setSelected(null);
     }
   }, [segments, selected]);
 
+  const [geom, setGeom] = useState<PopoverGeom | null>(null);
+
+  const measure = useCallback(() => {
+    const bar = barRef.current;
+    const pop = popoverRef.current;
+    if (!selectedSeg || !bar || !pop) return;
+    const barW = bar.clientWidth;
+    if (barW <= 0) return;
+    const popW = pop.offsetWidth;
+    const sliverCenterPx = (selectedSeg.center / 100) * barW;
+    const halfPop = popW / 2;
+    const PAD = 4;
+    let popoverLeft: number;
+    if (popW + PAD * 2 >= barW) {
+      popoverLeft = barW / 2;
+    } else {
+      popoverLeft = Math.max(
+        halfPop + PAD,
+        Math.min(barW - halfPop - PAD, sliverCenterPx),
+      );
+    }
+    const rawArrow = sliverCenterPx - (popoverLeft - halfPop);
+    const arrowLeft = Math.max(10, Math.min(popW - 10, rawArrow));
+    setGeom((prev) =>
+      prev &&
+      Math.abs(prev.popoverLeft - popoverLeft) < 0.5 &&
+      Math.abs(prev.arrowLeft - arrowLeft) < 0.5
+        ? prev
+        : { popoverLeft, arrowLeft },
+    );
+  }, [selectedSeg]);
+
+  useLayoutEffect(() => {
+    if (!selectedSeg) {
+      setGeom(null);
+      return;
+    }
+    measure();
+    const target = wrapperRef.current;
+    if (typeof ResizeObserver === "undefined" || !target) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(target);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [selectedSeg, measure]);
+
   if (total === 0) return null;
 
-  const selectedSeg = segments.find((s) => s.phase === selected) ?? null;
   const selectedColor = selectedSeg
     ? PHASE_DIST_COLOR[selectedSeg.phase]
     : null;
@@ -118,6 +190,7 @@ export function WhereGamesEndBar({
 
       <div className="relative py-1.5">
         <div
+          ref={barRef}
           className="relative flex h-3 w-full rounded-full border border-border bg-bg-surface"
           role="group"
           aria-label="Phase the game ended in, across all matches"
@@ -145,13 +218,7 @@ export function WhereGamesEndBar({
                 data-testid="phase-final-bar"
                 data-phase={seg.phase}
                 data-selected={isSelected ? "1" : "0"}
-                className={[
-                  "relative h-full cursor-pointer transition-all duration-200",
-                  "focus:outline-none focus-visible:z-10",
-                  "focus-visible:ring-2 focus-visible:ring-offset-2",
-                  "focus-visible:ring-offset-bg-surface",
-                  "hover:brightness-110",
-                ].join(" ")}
+                className="relative h-full cursor-pointer transition-[opacity,box-shadow,filter] duration-200 hover:brightness-110"
                 style={{
                   width: `${seg.pct}%`,
                   backgroundColor: color,
@@ -162,12 +229,20 @@ export function WhereGamesEndBar({
                   borderBottomRightRadius: isLast ? 9999 : 0,
                   zIndex: isSelected ? 2 : 1,
                   boxShadow: isSelected
-                    ? `0 0 0 2px rgb(var(--bg-surface)), 0 0 0 4px ${color}, 0 0 20px 2px ${soft}`
+                    ? `0 0 0 2px rgb(var(--bg-surface)), 0 0 0 4px ${color}, 0 0 22px 2px ${soft}`
                     : "none",
-                  // Inline accent color so focus-visible ring matches the phase.
-                  ["--tw-ring-color" as never]: color,
                 }}
-              />
+              >
+                {/* Pointer-events extender. Stretches the tap target
+                 *  downward by 12px and a hair upward (within the
+                 *  wrapper's py-1.5 cushion, so it never reaches the
+                 *  "N games" label above). Pointer events bubble to
+                 *  the button. */}
+                <span
+                  aria-hidden
+                  className="absolute -bottom-3 -top-1 left-0 right-0"
+                />
+              </button>
             );
           })}
         </div>
@@ -181,22 +256,24 @@ export function WhereGamesEndBar({
             style={{ marginTop: 10 }}
           >
             <div
-              className="pointer-events-auto absolute"
+              ref={popoverRef}
+              className="pointer-events-auto absolute transition-[left] duration-150"
               style={{
-                left: `clamp(0%, ${selectedSeg.center}%, 100%)`,
+                left: geom ? `${geom.popoverLeft}px` : "50%",
                 transform: "translateX(-50%)",
                 maxWidth: "calc(100% - 8px)",
+                visibility: geom ? "visible" : "hidden",
               }}
             >
               <div
-                className="relative flex items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-bg-surface px-3 py-1.5 shadow-[var(--shadow-card)]"
+                className="relative flex items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-1.5 shadow-[var(--shadow-card)]"
                 style={{
                   boxShadow: `0 0 0 1px ${selectedColor}, 0 0 24px ${PHASE_DIST_COLOR_SOFT[selectedSeg.phase]}`,
                 }}
               >
                 <span
                   aria-hidden
-                  className="block h-2 w-2 rounded-full"
+                  className="block h-2 w-2 shrink-0 rounded-full"
                   style={{ backgroundColor: selectedColor }}
                 />
                 <span className="text-caption font-semibold uppercase tracking-wider text-text">
@@ -215,8 +292,10 @@ export function WhereGamesEndBar({
                 </span>
                 <span
                   aria-hidden
-                  className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-bg-surface"
+                  className="absolute -top-1 h-2 w-2 rotate-45 bg-bg-surface transition-[left] duration-150"
                   style={{
+                    left: geom ? `${geom.arrowLeft}px` : "50%",
+                    marginLeft: -4,
                     boxShadow: `-1px -1px 0 0 ${selectedColor}`,
                   }}
                 />
@@ -226,7 +305,7 @@ export function WhereGamesEndBar({
         ) : null}
       </div>
 
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-caption text-text-dim">
+      <div className="flex flex-wrap gap-x-2 gap-y-1 text-caption text-text-dim">
         {segments.map((seg) => {
           const isSelected = selected === seg.phase;
           return (
@@ -236,7 +315,7 @@ export function WhereGamesEndBar({
               onClick={() => setSelected(isSelected ? null : seg.phase)}
               aria-pressed={isSelected}
               className={[
-                "-mx-1 inline-flex items-center gap-1.5 rounded-md px-1 py-0.5",
+                "inline-flex min-h-[28px] items-center gap-1.5 rounded-md px-2 py-1",
                 "tabular-nums transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
                 isSelected
