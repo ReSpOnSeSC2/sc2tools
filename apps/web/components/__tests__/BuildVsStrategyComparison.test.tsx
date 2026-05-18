@@ -181,6 +181,62 @@ describe("BuildVsStrategyComparison", () => {
     expect(screen.getByTestId("bvs-column-opponent")).toBeTruthy();
   });
 
+  it("resolves the saved-build slug even when the drill carries the agent's race-matchup prefix", () => {
+    // The agent's auto-classifier emits names like "PvZ - 3 Stargate
+    // Phoenix" while users typically save the build without the
+    // "PvZ - " prefix. The comparison should still bridge to the
+    // saved slug rather than falling into the "no saved build" state.
+    wireMocks({
+      customBuildsList: [
+        { slug: "stargate-phoenix", name: "3 Stargate Phoenix" },
+      ],
+      yourPayload: buildPhasesPayload(8, "you"),
+      oppPayload: { ...buildPhasesPayload(8, "opponent"), name: "Zerg - 3 Base Macro" },
+    });
+
+    render(
+      <BuildVsStrategyComparison
+        build="PvZ - 3 Stargate Phoenix"
+        strategy="Zerg - 3 Base Macro"
+      />,
+    );
+
+    const callPaths = useApiMock.mock.calls.map((c) => c[0]);
+    expect(callPaths).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you",
+        ),
+      ]),
+    );
+  });
+
+  it("renders the 'where games end' stacked bar (not the median-timing bands) in both columns", () => {
+    // Comparison columns swap the full PhaseTrajectoryStrip for the
+    // outcomeOnly variant — that means `phase-histogram` (the stacked
+    // bar) renders, while `phase-bands` (the median-timing strip) and
+    // `phase-crossing` markers do not.
+    wireMocks({
+      yourPayload: buildPhasesPayload(8, "you"),
+      oppPayload: { ...buildPhasesPayload(8, "opponent"), name: "Terran - Mech" },
+    });
+    const { container } = render(
+      <BuildVsStrategyComparison
+        build="Stargate Phoenix"
+        strategy="Terran - Mech"
+      />,
+    );
+    expect(
+      container.querySelectorAll('[data-testid="phase-histogram"]').length,
+    ).toBe(2);
+    expect(
+      container.querySelector('[data-testid="phase-bands"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-testid="phase-crossing"]'),
+    ).toBeNull();
+  });
+
   it("renders the opp-signal sparse EmptyState when the right payload sets that flag", () => {
     wireMocks({
       yourPayload: buildPhasesPayload(8, "you"),

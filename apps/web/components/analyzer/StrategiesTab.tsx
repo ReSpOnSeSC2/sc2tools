@@ -15,7 +15,6 @@ import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { AllGamesTable } from "./AllGamesTable";
 import { StrategyMmrPanel } from "./mmr/StrategyMmrPanel";
 import { BuildMatchupHeatmap } from "./mmr/BuildMatchupHeatmap";
-import { StrategyPhasePanel } from "./StrategyPhasePanel";
 import type { ProfileGame } from "./Last5GamesTimeline";
 
 type StratRow = {
@@ -333,25 +332,16 @@ function StrategyGamesView({
           </div>
         ) : null}
       </div>
-      {/* Phase-by-phase panel sits above the games list so the user
-          orienting themselves on "what facing this strategy looks
-          like" sees the trajectory + typical compositions first,
-          then the raw replay list. Falls back to its own EmptyState
-          when the strategy has < 5 games.
-
-          When the drill carries both a build AND a strategy, the
-          2-column comparison renders alongside — left side is the
-          user's perspective on their build, right side is the
-          opponent's perspective on the strategy. The single-strategy
-          panel still shows so the user can see the matchup-wide
-          aggregate independently of the per-build cut. */}
+      {/* When the drill carries both a build AND a strategy, the
+          2-column comparison renders above the games list — left side
+          is the user's perspective on their build, right side is the
+          opponent's perspective on the strategy. */}
       {drill.build ? (
         <BuildVsStrategyComparison
           build={drill.build}
           strategy={drill.opp_strategy}
         />
       ) : null}
-      <StrategyPhasePanel strategy={drill.opp_strategy} />
       {isLoading ? (
         <Skeleton rows={6} />
       ) : error ? (

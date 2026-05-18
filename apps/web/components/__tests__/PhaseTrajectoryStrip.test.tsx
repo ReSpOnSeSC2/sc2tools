@@ -106,6 +106,31 @@ describe("PhaseTrajectoryStrip", () => {
     expect(byPhase.earlyMid).toBeCloseTo(0, 4);
   });
 
+  it("renders only the 'where games end' stacked bar in outcomeOnly mode", () => {
+    const { container } = render(
+      <PhaseTrajectoryStrip {...baseProps({ outcomeOnly: true })} />,
+    );
+    // Stacked bar is present with one segment per phase.
+    expect(
+      container.querySelector('[data-testid="phase-histogram"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelectorAll('[data-testid="phase-final-bar"]').length,
+    ).toBe(5);
+    // Median-timing bands and crossing markers are suppressed — the
+    // outcomeOnly variant is the bar-only renderer the comparison
+    // columns rely on.
+    expect(
+      container.querySelector('[data-testid="phase-bands"]'),
+    ).toBeNull();
+    expect(
+      container.querySelectorAll('[data-testid="phase-crossing"]').length,
+    ).toBe(0);
+    expect(
+      container.querySelector('[data-testid="phase-labels"]'),
+    ).toBeNull();
+  });
+
   it("hides labels and histogram in compact mode but keeps bands and crossings", () => {
     const { container } = render(
       <PhaseTrajectoryStrip {...baseProps({ compact: true })} />,

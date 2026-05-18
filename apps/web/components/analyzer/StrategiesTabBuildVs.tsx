@@ -246,11 +246,9 @@ function BvsHeatmap({
 }
 
 /**
- * Response shape of GET ``/v1/strategies/:name/phases``. Mirrors the
- * ``StrategyPhasesPayload`` in ``StrategyPhasePanel`` but redeclared
- * here so this file doesn't import the panel just for its type
- * definition (would create a cycle if either side ever pulls helpers
- * the other way).
+ * Response shape of GET ``/v1/strategies/:name/phases`` — the payload
+ * the right column ("what they typically do") reads from. Declared
+ * locally so this file stays self-contained.
  */
 type StrategyPhasesResponse = {
   name: string;
@@ -272,14 +270,26 @@ type StrategyPhasesResponse = {
 const COMPARISON_MIN_GAMES = 3;
 
 /**
+ * Strip the leading race-matchup prefix from a build label. The agent's
+ * auto-classifier produces names like "PvZ - 3 Stargate Phoenix" — the
+ * "PvZ - " segment encodes (your race)(v)(opp race) and shouldn't
+ * participate in name comparisons against saved custom-build names,
+ * which users typically author without that prefix. The character class
+ * covers P/T/Z/R; the dash may be a hyphen or em-dash with arbitrary
+ * surrounding whitespace.
+ */
+function stripMatchupPrefix(s: string): string {
+  return s.replace(/^[PTZR]v[PTZR]\s*[-—]\s*/, "");
+}
+
+/**
  * BuildVsStrategyComparison — side-by-side phase trajectory + per-
  * phase composition for the drill-down view of "my build × their
  * strategy". Left column is the user's perspective on their saved
  * build; right column is the opponent's perspective on the
  * detected strategy. Each column reuses the same trajectory strip /
- * composition tabs the BuildDossier and StrategyPhasePanel surface
- * — agnostic by design, only the perspective and aggregation key
- * differ.
+ * composition tabs the BuildDossier surface — agnostic by design,
+ * only the perspective and aggregation key differ.
  *
  * Empty states are independent per column: a brand-new build with
  * no games still renders the right column if the opponent strategy
@@ -298,9 +308,12 @@ export function BuildVsStrategyComparison({
   // Resolve build name → custom-build slug via the user's library.
   // The drill state only carries the display name (matches ``myBuild``
   // on the game record); custom-build endpoints key on slug, so we
-  // bridge here. Falls back to "no matching saved build" if the user
-  // hasn't authored a build with that name yet — common when the
-  // label was assigned by the agent's auto-classifier.
+  // bridge here. The agent's auto-classifier emits race-matchup-
+  // prefixed labels ("PvZ - 3 Stargate Phoenix") whereas the user
+  // typically saves the build without that prefix ("3 Stargate
+  // Phoenix"), so we normalize both sides before comparing — otherwise
+  // every drill from a build × strategy cell falls back to the empty
+  // state even when the user has data on that build.
   const customBuilds = useApi<{ items: CustomBuild[] } | CustomBuild[]>(
     "/v1/custom-builds",
   );
@@ -308,7 +321,11 @@ export function BuildVsStrategyComparison({
     const list = Array.isArray(customBuilds.data)
       ? customBuilds.data
       : customBuilds.data?.items ?? [];
-    const hit = list.find((b) => (b.name || b.slug) === build);
+    const target = stripMatchupPrefix(build);
+    const hit = list.find((b) => {
+      const candidate = stripMatchupPrefix(b.name || b.slug || "");
+      return candidate === target;
+    });
     return hit?.slug || null;
   }, [customBuilds.data, build]);
 
@@ -478,7 +495,7 @@ function ComparisonBody({
         crossings={payload.medianCrossings}
         finalPhaseDistribution={payload.finalPhaseDistribution}
         durationP95Sec={payload.durationP95Sec}
-        compact
+        outcomeOnly
       />
       <PhaseCompositionTabs
         sampleSize={payload.sampleSize}
