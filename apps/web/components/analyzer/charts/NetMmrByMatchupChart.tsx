@@ -29,7 +29,6 @@ type Response = {
   matchups: MatchupRow[];
   totalGames?: number;
   dropped?: {
-    longGap: number;
     outlierSwing: number;
     missingMyMmr?: number;
   };
@@ -121,9 +120,8 @@ export function NetMmrByMatchupChart() {
         each region from consecutive ranked games. Each pair needs
         your own MMR on both sides, so games the agent didn't tag
         with MMR (older versions) sit out — the line under the
-        cards spells out how many. Pairs more than 24 h apart or
-        swinging past ±150 MMR (race switches, season resets) are
-        dropped so a 100%-WR matchup never reads as a net loss.
+        cards spells out how many. Single-game swings past ±150 MMR
+        (race switches, season resets) are dropped as outliers.
       </p>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
@@ -221,29 +219,17 @@ function PairCoverageSummary({
 }: {
   rows: { games: number }[];
   totalGames: number | undefined;
-  dropped:
-    | { longGap: number; outlierSwing: number; missingMyMmr?: number }
-    | undefined;
+  dropped: { outlierSwing: number; missingMyMmr?: number } | undefined;
 }) {
   const pairCount = rows.reduce((sum, r) => sum + r.games, 0);
-  const longGap = dropped?.longGap ?? 0;
   const outlierSwing = dropped?.outlierSwing ?? 0;
   const missingMyMmr = dropped?.missingMyMmr ?? 0;
-  // Nothing to explain: no totals from API and no drops.
-  if (
-    !totalGames &&
-    !longGap &&
-    !outlierSwing &&
-    !missingMyMmr
-  ) {
+  if (!totalGames && !outlierSwing && !missingMyMmr) {
     return null;
   }
   const reasons: string[] = [];
   if (missingMyMmr > 0) {
     reasons.push(`${missingMyMmr} missing MMR data`);
-  }
-  if (longGap > 0) {
-    reasons.push(`${longGap} long gap${longGap === 1 ? "" : "s"} (>24 h)`);
   }
   if (outlierSwing > 0) {
     reasons.push(

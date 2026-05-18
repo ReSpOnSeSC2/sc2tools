@@ -618,7 +618,7 @@ describe("services/aggregations", () => {
             { _id: "P", netMmr: 84.4, avgDelta: 14.06, games: 6, wins: 4, losses: 2 },
             { _id: "Z", netMmr: -45.7, avgDelta: -9.14, games: 5, wins: 2, losses: 3 },
           ],
-          droppedPairs: [{ _id: null, longGap: 2, outlierSwing: 1 }],
+          droppedPairs: [{ _id: null, outlierSwing: 1 }],
         },
       ],
     ]);
@@ -632,9 +632,8 @@ describe("services/aggregations", () => {
     const z = out.matchups.find((m) => m.race === "Z");
     expect(z.netMmr).toBe(-46);
     // Diagnostic counters surface so the chart can show
-    // "13 pairs from 28 games · 13 missing MMR · 2 long gaps · 1 outlier".
+    // "13 pairs from 28 games · 13 missing MMR · 1 outlier swing".
     expect(out.totalGames).toBe(28);
-    expect(out.dropped.longGap).toBe(2);
     expect(out.dropped.outlierSwing).toBe(1);
     expect(out.dropped.missingMyMmr).toBe(13);
   });
@@ -682,7 +681,6 @@ describe("services/aggregations", () => {
     const out = /** @type {any} */ (await svc.netMmrByMatchup("u1", {}));
     expect(out.matchups).toEqual([]);
     expect(out.totalGames).toBe(0);
-    expect(out.dropped.longGap).toBe(0);
     expect(out.dropped.outlierSwing).toBe(0);
     expect(out.dropped.missingMyMmr).toBe(0);
   });

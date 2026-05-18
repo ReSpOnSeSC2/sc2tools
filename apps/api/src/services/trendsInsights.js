@@ -34,29 +34,17 @@ const OPP_MMR_AUTO_WIDTH_CUTOFF = 500;
 const OPP_MMR_MAX_BUCKETS = 80;
 
 /**
- * Maximum gap between two consecutive MMR-tagged games on the SAME
- * region for the pre-match → pre-match delta to plausibly reflect
- * the FIRST game's outcome alone. The pipeline now partitions by
- * region (derived from ``myToonHandle``) so a region switch can
- * never silently contribute a 1000-MMR "loss" — within a region the
- * remaining concern is gaps long enough that a non-myMmr ranked game
- * might have happened in between. v0.7.x bumps this from 6 h to
- * 24 h: the region partition handles cross-region noise, the
- * ``NET_MMR_MAX_DELTA`` cap still drops outlier swings, and 24 h
- * matches the "ladder day" intuition (evening session + next
- * morning's warm-up count as one continuous climb).
- */
-const NET_MMR_MAX_GAP_MS = 24 * 60 * 60 * 1000;
-
-/**
  * Hard cap on the per-game pre-match → pre-match delta we trust as
  * attributable to ONE matchup. A real SC2 1v1 swing tops out around
  * ±60 MMR; anything past ±150 is almost certainly a race switch into
  * a different ladder (Protoss main dipping into Random),
  * a season soft-reset, or a stretch of unrecorded games inflating
- * the diff. Excluding these pairs is the difference between
- * "100% WR vs Protoss but the chart says -213" and a chart the user
- * can trust.
+ * the diff. Region partitioning + this cap together are now the
+ * only outlier guards — the older 24 h "session" cap was dropped
+ * once we had region partitioning + the dashboard's SC2Pulse-backed
+ * current-MMR card reconciling the totals, since pair gaps within a
+ * region almost always reflect a real ladder break rather than
+ * unrecorded games.
  */
 const NET_MMR_MAX_DELTA = 150;
 
@@ -609,28 +597,24 @@ async function mapTrend(deps, userId, opts, filters) {
  * shared "Unknown" partition where the ``NET_MMR_MAX_DELTA`` cap
  * still drops the worst cross-region noise.
  *
- * Two guards keep the chart honest:
+ * One guard keeps the chart honest:
  *
- *   1. Time gap ≤ ``NET_MMR_MAX_GAP_MS`` (24 h within a region).
- *      A pair across a longer break almost certainly skipped a
- *      ranked game the agent didn't tag with myMmr — attributing
- *      the combined drift to one matchup would mislead. 24 h is
- *      a relaxed cap vs the original 6 h, because the region
- *      partition already kills the worst noise (cross-region) and
- *      most "I queued one more in the morning" sittings finish
- *      inside a day.
- *   2. |delta| ≤ ``NET_MMR_MAX_DELTA``. Single-game ladder swings
- *      max out near ±60. Anything past 150 is a race-pool switch, a
- *      season reset, or a recording gap — never a single match.
+ *   |delta| ≤ ``NET_MMR_MAX_DELTA``. Single-game ladder swings
+ *   max out near ±60. Anything past 150 is a race-pool switch, a
+ *   season reset, or a recording gap — never a single match.
  *
- * Pairs that fail either guard are dropped but counted into the
- * ``dropped`` summary. The summary also carries ``missingMyMmr``
- * (games in the filter that don't carry myMmr at all — older agent
- * versions, missing scaled_rating) and ``totalGames`` (the size of
- * the filtered set) so the chart can show "13 pairs from 28 games ·
- * 13 missing MMR · 1 long gap". Without that, users compare the
- * pair count to the Win-Rate-by-MMR game count and assume the
- * chart is broken.
+ * The older 24 h gap cap is gone: with region partitioning in
+ * place and the dashboard's SC2Pulse-backed current-MMR card
+ * reconciling the running totals, pair gaps within a region almost
+ * always reflect a real ladder break rather than unrecorded games —
+ * the user explicitly asked for those pairs to count.
+ *
+ * The summary carries ``totalGames`` (size of the filtered set)
+ * plus ``dropped.missingMyMmr`` (games in the filter that don't
+ * carry myMmr at all — older agent versions, missing
+ * scaled_rating) and ``dropped.outlierSwing`` (pairs nuked by the
+ * delta cap). Without those, users compare the pair count to the
+ * Win-Rate-by-MMR game count and assume the chart is broken.
  *
  * @param {Deps} deps
  * @param {string} userId
@@ -656,7 +640,6 @@ async function netMmrByMatchup(deps, userId, filters) {
         sortBy: { date: 1 },
         output: {
           _nextMyMmr: { $shift: { output: "$myMmr", by: 1, default: null } },
-          _nextDate: { $shift: { output: "$date", by: 1, default: null } },
         },
       },
     },
@@ -664,7 +647,6 @@ async function netMmrByMatchup(deps, userId, filters) {
     {
       $addFields: {
         _delta: { $subtract: ["$_nextMyMmr", "$myMmr"] },
-        _gapMs: { $subtract: ["$_nextDate", "$date"] },
         _oppRace: oppRaceSwitch(),
       },
     },
@@ -688,7 +670,6 @@ async function netMmrByMatchup(deps, userId, filters) {
             ...pairingPrefix,
             {
               $match: {
-                _gapMs: { $gte: 0, $lte: NET_MMR_MAX_GAP_MS },
                 _delta: { $gte: -NET_MMR_MAX_DELTA, $lte: NET_MMR_MAX_DELTA },
               },
             },
@@ -711,11 +692,6 @@ async function netMmrByMatchup(deps, userId, filters) {
             {
               $group: {
                 _id: null,
-                longGap: {
-                  $sum: {
-                    $cond: [{ $gt: ["$_gapMs", NET_MMR_MAX_GAP_MS] }, 1, 0],
-                  },
-                },
                 outlierSwing: {
                   $sum: {
                     $cond: [
@@ -753,7 +729,6 @@ async function netMmrByMatchup(deps, userId, filters) {
     })),
     totalGames: summaryRow ? summaryRow.totalGames : 0,
     dropped: {
-      longGap: droppedRow ? droppedRow.longGap : 0,
       outlierSwing: droppedRow ? droppedRow.outlierSwing : 0,
       missingMyMmr: summaryRow ? summaryRow.missingMyMmr : 0,
     },
@@ -837,7 +812,6 @@ module.exports = {
   MAX_SESSION_POSITIONS,
   OPP_MMR_BUCKET_WIDTHS,
   OPP_MMR_AUTO_WIDTH_CUTOFF,
-  NET_MMR_MAX_GAP_MS,
   NET_MMR_MAX_DELTA,
   RESULT_VICTORY,
   RESULT_DEFEAT,
