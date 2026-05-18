@@ -9,7 +9,6 @@ import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
 import { fmtMmr, pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import { AllGamesTable } from "./AllGamesTable";
-import { Last5GamesTimeline } from "./Last5GamesTimeline";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import { MedianTimingsGrid } from "./MedianTimingsGrid";
 import type { MatchupTimings, TimingInfo } from "./MedianTimingsGrid";
@@ -20,8 +19,7 @@ import type { StrategyEntry } from "./StrategyTendencyChart";
 import { H2HTrendsSection } from "./h2h/H2HTrendsSection";
 import type { BuildMatchupSelection } from "./h2h/BuildMatrix";
 import { gameOutcome } from "@/lib/h2hSeries";
-import { OpponentGamesTimeline } from "./OpponentGamesTimeline";
-import type { PerGameScoutingEnvelope } from "@/components/overlay/types";
+import { WhereGamesEndBar } from "./WhereGamesEndBar";
 import type { BuildPhasePayload, BuildTransitionsPayload } from "@/lib/serverApi";
 
 type OpponentProfileResp = {
@@ -56,22 +54,13 @@ type OpponentProfileResp = {
   medianTimings?: Record<string, TimingInfo>;
   medianTimingsLegacy?: Record<string, TimingInfo>;
   medianTimingsOrder?: string[];
-  // Phase trajectory + transition Sankey for "How games against this
-  // opponent play out". Computed server-side from the same date-filtered
-  // matched games that drive the by-map / by-strategy / median-timings
-  // panels. Optional so old API builds that pre-date the wiring still
-  // render the rest of the profile without a runtime error.
+  // Phase distribution for the "Where games end" outcome bar.
+  // Computed server-side from the same date-filtered matched games
+  // that drive the by-map / by-strategy / median-timings panels.
+  // Optional so old API builds that pre-date the wiring still render
+  // the rest of the profile without a runtime error.
   phases?: BuildPhasePayload;
   transitions?: BuildTransitionsPayload;
-  last5Games?: ProfileGame[];
-  /**
-   * Per-game scouting envelopes for every date-filtered game (newest
-   * first, capped server-side). Drives the "How games against this
-   * opponent play out" widget — real per-game build orders, real
-   * compositions, real transitions, real end-phase / end-reason.
-   * Same shape as the overlay's scouting widget consumes.
-   */
-  gamesScouting?: PerGameScoutingEnvelope[];
   games?: ProfileGame[];
 };
 
@@ -99,8 +88,8 @@ export function ProfileView({
 
 function ProfileBody({ pulseId }: { pulseId: string }) {
   // Date-range filter applies to every panel below except "Likely
-  // strategies next" and "Last 5 games", which the API resolves from
-  // the unfiltered history regardless of since/until.
+  // strategies next", which the API resolves from the unfiltered
+  // history regardless of since/until.
   const { filters } = useFilters();
   const profileQuery = buildProfileQuery(filters.since, filters.until);
   const { data, isLoading } = useApi<OpponentProfileResp>(
@@ -274,35 +263,29 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         onSelectGame={handleSelectGame}
       />
 
-      <OpponentGamesSection
-        envelopes={data.gamesScouting}
+      <WhereGamesEndSection
         finalPhaseDistribution={data.phases?.finalPhaseDistribution}
         sampleSize={data.phases?.sampleSize}
       />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Card
-          title={`Median key timings${data.matchupLabel ? ` — ${data.matchupLabel}` : ""}`}
-        >
-          <MedianTimingsGrid
-            timings={medianTimings}
-            order={medianTimingsOrder}
-            matchupLabel={data.matchupLabel || ""}
-            matchupCounts={matchupCounts}
-            matchupTimings={matchupTimings}
-            opponentName={opponentName}
-          />
-          <p className="mt-2 text-[10px] text-text-dim">
-            Opponent-tech cards come from the agent-uploaded opponent build
-            log; your-tech cards come from your build log. Click a card with
-            samples to see the contributing games. "-" means no samples in
-            this matchup.
-          </p>
-        </Card>
-        <Card title="Last 5 games">
-          <Last5GamesTimeline games={data.last5Games || []} />
-        </Card>
-      </div>
+      <Card
+        title={`Median key timings${data.matchupLabel ? ` — ${data.matchupLabel}` : ""}`}
+      >
+        <MedianTimingsGrid
+          timings={medianTimings}
+          order={medianTimingsOrder}
+          matchupLabel={data.matchupLabel || ""}
+          matchupCounts={matchupCounts}
+          matchupTimings={matchupTimings}
+          opponentName={opponentName}
+        />
+        <p className="mt-2 text-[10px] text-text-dim">
+          Opponent-tech cards come from the agent-uploaded opponent build
+          log; your-tech cards come from your build log. Click a card with
+          samples to see the contributing games. "-" means no samples in
+          this matchup.
+        </p>
+      </Card>
 
       <Card
         title={
@@ -522,41 +505,29 @@ function ProfilePulseLine({
 }
 
 /**
- * "How games against this opponent play out" — per-game timeline.
- *
- * Replaced the legacy median-based phase widget. Now renders one card
- * per real replay: the streamer tabs through individual games and
- * sees the opponent's actual build order, real composition snapshots
- * at each phase the game reached, real phase transitions, and the
- * phase the game ended in + why. The user's own build order +
- * composition render alongside so the card reads as a complete "what
- * I did and what they did against it" timeline.
- *
- * The "WHERE GAMES END" outcome distribution sits at the top as a
- * compact one-line summary — same information the legacy widget
- * surfaced but without the median-phase-timing line the streamer
- * called out as low-signal. ``MedianTimingsGrid`` already gives the
- * tech timings the user needs.
- *
- * Renders nothing when the API hasn't returned any scouting envelopes
- * — keeps profiles for never-met / first-meeting opponents from
- * showing an empty section.
+ * "Where games end" — stacked outcome distribution over the same
+ * date-filtered matched games that drive the other panels on this
+ * page. Renders nothing when the API hasn't returned any phase data
+ * (or the sum is zero), so first-meeting opponents don't see an
+ * empty card.
  */
-function OpponentGamesSection({
-  envelopes,
+function WhereGamesEndSection({
   finalPhaseDistribution,
   sampleSize,
 }: {
-  envelopes?: PerGameScoutingEnvelope[];
   finalPhaseDistribution?: BuildPhasePayload["finalPhaseDistribution"];
   sampleSize?: BuildPhasePayload["sampleSize"];
 }) {
-  const list = envelopes ?? [];
-  if (list.length === 0) return null;
+  const total =
+    (finalPhaseDistribution?.early || 0) +
+    (finalPhaseDistribution?.earlyMid || 0) +
+    (finalPhaseDistribution?.mid || 0) +
+    (finalPhaseDistribution?.midLate || 0) +
+    (finalPhaseDistribution?.late || 0);
+  if (total === 0) return null;
   return (
-    <Card title="How games against this opponent play out">
-      <OpponentGamesTimeline
-        envelopes={list}
+    <Card title="Where games end">
+      <WhereGamesEndBar
         finalPhaseDistribution={finalPhaseDistribution}
         sampleSize={sampleSize}
       />
