@@ -269,6 +269,38 @@ describe("services/buildsMmrStats", () => {
       expect(byKey.get("Zerg - Hatch First|4400")?.games).toBe(2);
       expect(byKey.get("Zerg - Pool First|4600")?.games).toBe(1);
     });
+
+    test("falls back to opponents-collection mmr when the game snapshot is missing", async () => {
+      // Recent ranked replays usually arrive without an opponent.mmr
+      // snapshot (sc2reader doesn't expose it). The opponents
+      // collection holds the SC2Pulse-fetched current MMR — the
+      // pipeline must $lookup that and bucket the game on it so the
+      // matchup against a 5961-MMR Protoss player actually appears.
+      await db.opponents.insertOne({
+        userId: "u1",
+        pulseId: "p-fallback",
+        mmr: 5961,
+      });
+      await insertGames([
+        makeGame({
+          gameId: "g-fallback",
+          opponent: {
+            pulseId: "p-fallback",
+            toonHandle: "1-S2-1-9",
+            displayName: "AngryBird",
+            race: "P",
+            // No mmr snapshot — the agent didn't carry it.
+            strategy: "Protoss - Stargate",
+          },
+        }),
+      ]);
+      const { buckets } = await svc.oppStrategyWinRateByMmr("u1", {});
+      const row = buckets.find((b) => b.strategy === "Protoss - Stargate");
+      expect(row).toBeDefined();
+      expect(row.bucket).toBe(5800);
+      expect(row.games).toBe(1);
+      await db.opponents.deleteOne({ pulseId: "p-fallback" });
+    });
   });
 
   describe("buildVsStrategyByMmr", () => {

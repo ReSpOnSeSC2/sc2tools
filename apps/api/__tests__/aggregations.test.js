@@ -544,7 +544,36 @@ describe("services/aggregations", () => {
     // The new pipeline reads opponent.mmr via $type:"number" (query
     // operator alias) — the literal type-name comparison must not return.
     expect(json).not.toContain('"double"');
-    expect(json).toContain('"opponent.mmr"');
+    // The snapshot side of the fallback still references the per-game
+    // opponent.mmr field as a $-prefixed expression source.
+    expect(json).toContain('"$opponent.mmr"');
+    // $isNumber gates the snapshot AND the fallback so int / long /
+    // double values all bucket correctly.
+    expect(json).toContain('"$isNumber"');
+  });
+
+  test("oppMmrBuckets falls back to the opponents-collection mmr when the game snapshot is missing", async () => {
+    // Recent ranked 1v1 replays rarely carry opponent.mmr in the
+    // replay payload — sc2reader doesn't expose it. The opponents
+    // collection stores the SC2Pulse-fetched current MMR, and the
+    // bucketing pipeline $lookups that as a fallback so a game vs a
+    // 5961 opponent doesn't vanish from the chart just because the
+    // replay was MMR-less.
+    let captured = null;
+    const games = {
+      aggregate(pipeline) {
+        captured = pipeline;
+        return { toArray: () => Promise.resolve([{ bins: [], unknown: [] }]) };
+      },
+    };
+    const svc = new AggregationsService({ games });
+    await svc.oppMmrBuckets("u1", {}, { bucketWidth: 100 });
+    const json = JSON.stringify(captured);
+    expect(json).toContain('"from":"opponents"');
+    expect(json).toContain('"$opponent.pulseId"');
+    // Bucketing keys off the synthesised effective MMR, not the
+    // raw snapshot — so fallback rows bin alongside snapshot rows.
+    expect(json).toContain('"$_oppMmr"');
   });
 
   test("myBuildMixOverTime returns one row per (bucket, key)", async () => {

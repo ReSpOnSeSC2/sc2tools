@@ -329,6 +329,14 @@ function shapeMomentum({ post, positions, baseline, gap }) {
  * as ``int(opp.mmr)`` so a literal type-name check would miss
  * every row (see PR #286).
  *
+ * Fallback for missing per-game snapshot: sc2reader rarely surfaces
+ * an opponent's MMR for ranked 1v1, so most games arrive with no
+ * ``opponent.mmr``. When that's the case the pipeline $lookups the
+ * opponents-collection row (keyed by ``(userId, pulseId)``) and
+ * uses its ``mmr`` field — the same number the Opponents tab shows
+ * — so the recent-vs-5900 game the user just played doesn't vanish
+ * from the chart just because the replay didn't carry MMR.
+ *
  * @param {Deps} deps
  * @param {string} userId
  * @param {object} filters
@@ -346,6 +354,12 @@ async function oppMmrBuckets(deps, userId, filters, opts = {}) {
  * the caller; for ``"auto"`` or anything unrecognised, queries
  * the data range and picks the cleaner default.
  *
+ * The range probe joins in the opponents-row mmr fallback so a user
+ * whose only high-MMR encounter has no per-game snapshot still gets
+ * the wide-range (100-wide) layout when appropriate — otherwise the
+ * width auto-pick would collapse to 50 from the snapshot-only span
+ * and the AngryBird 5900 bin would end up off the chart.
+ *
  * @param {Deps} deps
  * @param {object} match
  * @param {number | "auto" | undefined} requested
@@ -354,12 +368,14 @@ async function resolveOppMmrBucketWidth(deps, match, requested) {
   if (requested === 50 || requested === 100) return requested;
   const rows = await deps.games
     .aggregate([
-      { $match: { ...match, "opponent.mmr": { $type: "number" } } },
+      { $match: match },
+      ...oppMmrLookupStages(),
+      { $match: { _oppMmr: { $type: "number" } } },
       {
         $group: {
           _id: null,
-          mn: { $min: "$opponent.mmr" },
-          mx: { $max: "$opponent.mmr" },
+          mn: { $min: "$_oppMmr" },
+          mx: { $max: "$_oppMmr" },
         },
       },
     ])
@@ -373,6 +389,65 @@ async function resolveOppMmrBucketWidth(deps, match, requested) {
 }
 
 /**
+ * $lookup + $addFields stages that produce ``_oppMmr`` on each
+ * input game: the per-game snapshot when numeric, otherwise the
+ * opponents row's latest known ``mmr`` (sourced from SC2Pulse at
+ * ingest time / by the backfill cron). Shared between the width
+ * probe and the main bin pipeline so both see the same effective
+ * MMR per game.
+ *
+ * The lookup is indexed (opponents has a unique
+ * ``{userId, pulseId}``) and skipped at the document level when the
+ * snapshot already exists, so the cost is amortised across the
+ * majority of games that already carry it.
+ */
+function oppMmrLookupStages() {
+  return [
+    {
+      $lookup: {
+        from: "opponents",
+        let: { uid: "$userId", pid: "$opponent.pulseId" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$userId", "$$uid"] },
+                  { $eq: ["$pulseId", "$$pid"] },
+                ],
+              },
+            },
+          },
+          { $project: { _id: 0, mmr: 1 } },
+        ],
+        as: "_opp",
+      },
+    },
+    {
+      $addFields: {
+        _oppMmr: {
+          $let: {
+            vars: {
+              snap: "$opponent.mmr",
+              fallback: { $first: "$_opp.mmr" },
+            },
+            in: {
+              $cond: [
+                { $isNumber: "$$snap" },
+                "$$snap",
+                {
+                  $cond: [{ $isNumber: "$$fallback" }, "$$fallback", null],
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  ];
+}
+
+/**
  * Pipeline that fans games into absolute-MMR bins of ``width``
  * plus an unknown rollup, in one $facet so the response is one
  * round trip.
@@ -382,13 +457,14 @@ function oppMmrPipeline(deps, match, width) {
     { $match: match },
     { $addFields: { _bucket: deps.bucketSwitch() } },
     { $match: { _bucket: { $in: ["win", "loss"] } } },
+    ...oppMmrLookupStages(),
     {
       $facet: {
         bins: [
-          { $match: { "opponent.mmr": { $type: "number" } } },
+          { $match: { _oppMmr: { $type: "number" } } },
           {
             $addFields: {
-              _bin: { $multiply: [{ $floor: { $divide: ["$opponent.mmr", width] } }, width] },
+              _bin: { $multiply: [{ $floor: { $divide: ["$_oppMmr", width] } }, width] },
             },
           },
           {
@@ -397,24 +473,16 @@ function oppMmrPipeline(deps, match, width) {
               wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
               losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
               total: { $sum: 1 },
-              avgMmr: { $avg: "$opponent.mmr" },
-              minMmr: { $min: "$opponent.mmr" },
-              maxMmr: { $max: "$opponent.mmr" },
+              avgMmr: { $avg: "$_oppMmr" },
+              minMmr: { $min: "$_oppMmr" },
+              maxMmr: { $max: "$_oppMmr" },
             },
           },
           { $sort: { _id: 1 } },
           { $limit: OPP_MMR_MAX_BUCKETS },
         ],
         unknown: [
-          {
-            $match: {
-              $or: [
-                { "opponent.mmr": { $exists: false } },
-                { "opponent.mmr": null },
-                { "opponent.mmr": { $not: { $type: "number" } } },
-              ],
-            },
-          },
+          { $match: { _oppMmr: null } },
           {
             $group: {
               _id: null,
