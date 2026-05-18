@@ -32,8 +32,8 @@
  *   * Per-region season-id cache: 6 h (seasons roll quarterly).
  *
  * Rate-limit handling: respects ``Retry-After`` on 429, falls back
- * to exponential backoff (2 s, 4 s, 8 s) up to 3 retries on any
- * 5xx / network failure. Hard per-call timeout via
+ * to exponential backoff (2 s, 4 s) for one retry on any 5xx /
+ * network failure. Hard per-call timeout via
  * ``SC2TOOLS_API_PULSE_TIMEOUT_SEC`` (default 8 s).
  */
 
@@ -43,7 +43,7 @@ const REGION_CODE_TO_NAME = Object.freeze({
   1: "US", 2: "EU", 3: "KR", 5: "CN",
 });
 const USER_AGENT = "sc2tools-api-pulse-resolver/1";
-const HARD_RETRIES = 3;
+const HARD_RETRIES = 2;
 const BACKOFF_MS = [2000, 4000, 8000];
 const POSITIVE_TTL_MS = 24 * 60 * 60 * 1000;
 const NEGATIVE_TTL_MS = 30 * 60 * 1000;
