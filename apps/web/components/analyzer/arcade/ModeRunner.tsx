@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useFilters } from "@/lib/filterContext";
+import { useCallback, useEffect, useState } from "react";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { useDailySeed } from "./hooks/useDailySeed";
 import { useArcadeData } from "./hooks/useArcadeData";
 import { useArcadeState } from "./hooks/useArcadeState";
 import type {
-  ArcadeDataset,
   GenerateInput,
   GenerateResult,
   Mode,
@@ -54,23 +52,25 @@ export function ModeRunner({
   const seed = useDailySeed();
   const { data, loading, error } = useArcadeData();
   const { recordPlay, earnBadge, state } = useArcadeState();
-  // Filters are intentionally ignored for daily content; QuickPlay
-  // honors them only on cross-axis modes (TT&L) where they make sense.
-  const { filters } = useFilters();
   const [round, setRound] = useState(0);
   const [question, setQuestion] = useState<GenerateResult<unknown> | null>(null);
   const [answered, setAnswered] = useState<unknown>(null);
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
 
-  const filteredData = useMemo<ArcadeDataset | null>(() => {
-    if (!data) return null;
-    if (mode.depthTag !== "cross-axis" || isDaily) return data;
-    // Cross-axis modes inherit the analyzer FilterBar.
-    return applyFilters(data, filters);
-  }, [data, filters, isDaily, mode.depthTag]);
+  // The arcade deliberately ignores the analyzer FilterBar. Cross-axis
+  // modes (Two Truths & a Lie) used to inherit it, but clipping a
+  // gamified discovery surface to the user's current season slice
+  // (~530g out of ~12k) starved fact builders of sample size and made
+  // the claim wording feel wrong — the dashboard showed "11,783
+  // lifetime", the quiz aggregated over 530. Going lifetime here
+  // maximises which fact gates fire (more variety per round) and lets
+  // claims define their own window in the wording itself ("under 12
+  // minutes", "after 10pm", "past 90 days"). If we ever want filtered
+  // arcade modes again, opt them in per-mode rather than gating on
+  // depthTag.
 
   useEffect(() => {
-    if (!filteredData) return;
+    if (!data) return;
     let cancelled = false;
     const rng = isDaily
       ? seed.rng
@@ -79,7 +79,7 @@ export function ModeRunner({
       rng,
       daySeed: isDaily ? seed.day : "",
       tz: seed.tz,
-      data: filteredData,
+      data,
     };
     setAnswered(null);
     setScoreResult(null);
@@ -95,7 +95,7 @@ export function ModeRunner({
     return () => {
       cancelled = true;
     };
-  }, [filteredData, isDaily, mode, round, seed.day, seed.rng, seed.tz]);
+  }, [data, isDaily, mode, round, seed.day, seed.rng, seed.tz]);
 
   const handleAnswer = useCallback(
     (a: unknown) => {
@@ -179,7 +179,7 @@ export function ModeRunner({
       </Card>
     );
   }
-  if (error || !filteredData) {
+  if (error || !data) {
     return (
       <Card>
         <EmptyState title="Couldn't load" sub={error || "No data available."} />
@@ -299,35 +299,3 @@ function buildShareSummary(
   return { question: mode.blurb, answer: fallback };
 }
 
-function applyFilters(
-  data: ArcadeDataset,
-  filters: ReturnType<typeof useFilters>["filters"],
-): ArcadeDataset {
-  if (!filters) return data;
-  // Date / race filters affect the games slice.
-  const since = filters.since ? new Date(filters.since).getTime() : -Infinity;
-  const until = filters.until ? new Date(filters.until).getTime() : Infinity;
-  const games = data.games.filter((g) => {
-    const t = new Date(g.date).getTime();
-    if (!Number.isFinite(t) || t < since || t > until) return false;
-    if (
-      filters.race &&
-      filters.race !== "Any" &&
-      String(g.myRace || "").charAt(0).toUpperCase() !== filters.race.charAt(0).toUpperCase()
-    ) {
-      return false;
-    }
-    if (
-      filters.opp_race &&
-      filters.opp_race !== "Any" &&
-      String(g.oppRace || "").charAt(0).toUpperCase() !== filters.opp_race.charAt(0).toUpperCase()
-    ) {
-      return false;
-    }
-    if (filters.map && g.map !== filters.map) return false;
-    if (filters.build && g.myBuild !== filters.build) return false;
-    if (filters.opp_strategy && g.opp_strategy !== filters.opp_strategy) return false;
-    return true;
-  });
-  return { ...data, games };
-}
