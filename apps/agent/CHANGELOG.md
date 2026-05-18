@@ -2,6 +2,22 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.7.4
+
+### Changed — Macro Breakdown samples at 10 s cadence
+- `_downsample_stats_events` now buckets at 10 s instead of 30 s,
+  matching sc2reader's native PlayerStatsEvent cadence. The Active
+  Army & Workers chart in the web SPA's Macro Breakdown drilldown
+  scrubs at 3× the previous resolution — every hover lands on a
+  real sample.
+- `unit_timeline` is filtered to the same 10 s sample times so the
+  chart line, the hover tooltip, and the unit composition roster
+  beneath the chart still agree at every tick.
+- Wire payload grows ~4 kB per side on a 30 min game (still well
+  within the 5000-entry validator cap → ~13 h headroom).
+- macro_score is still computed on the FULL native stream first, so
+  leak detection / SQ / penalty calculations are unaffected.
+
 ## 0.7.2
 
 ### Fixed — Opponent Protoss "Robo Opener" no longer fires on Twilight-first builds
