@@ -197,6 +197,89 @@ describe("OpponentsService read-time MMR overlay from games", () => {
     expect(profile.region).toBe("EU");
   });
 
+  test(
+    "filtered list path falls back to the opponents-row mmr when " +
+      "no game in the window carries one (the AngryBird regression)",
+    async () => {
+      // The bug: a high-ladder opponent (AngryBird @ 5961 MMR) shows
+      // up on the Opponents tab with the MMR column blank when the
+      // user has a date filter on. sc2reader doesn't carry mmr for
+      // ranked 1v1, so every game.opponent.mmr is null; the only
+      // place we have the number is the opponents row (stamped from
+      // SC2Pulse during recordGame). The filtered list path used to
+      // ignore that fallback entirely.
+      await insertOpponent({
+        pulseId: "1-S2-1-9999999",
+        toonHandle: "1-S2-1-9999999",
+        pulseCharacterId: "555444333",
+        displayNameSample: "AngryBird",
+        mmr: 5961,
+        region: "NA",
+        firstSeen: new Date("2026-05-01T10:00:00Z"),
+        lastSeen: new Date("2026-05-09T20:00:00Z"),
+      });
+      // Three games against AngryBird in the filter window, none
+      // carrying opponent.mmr.
+      await db.games.insertMany([
+        {
+          userId: "u1",
+          gameId: "g1",
+          date: new Date("2026-05-09T18:00:00Z"),
+          result: "Defeat",
+          myRace: "Protoss",
+          map: "Hard Lead LE",
+          durationSec: 720,
+          opponent: {
+            pulseId: "1-S2-1-9999999",
+            toonHandle: "1-S2-1-9999999",
+            displayName: "AngryBird",
+            race: "Zerg",
+          },
+        },
+        {
+          userId: "u1",
+          gameId: "g2",
+          date: new Date("2026-05-09T19:00:00Z"),
+          result: "Victory",
+          myRace: "Protoss",
+          map: "Hard Lead LE",
+          durationSec: 720,
+          opponent: {
+            pulseId: "1-S2-1-9999999",
+            toonHandle: "1-S2-1-9999999",
+            displayName: "AngryBird",
+            race: "Zerg",
+          },
+        },
+        {
+          userId: "u1",
+          gameId: "g3",
+          date: new Date("2026-05-09T20:00:00Z"),
+          result: "Defeat",
+          myRace: "Protoss",
+          map: "Hard Lead LE",
+          durationSec: 720,
+          opponent: {
+            pulseId: "1-S2-1-9999999",
+            toonHandle: "1-S2-1-9999999",
+            displayName: "AngryBird",
+            race: "Zerg",
+          },
+        },
+      ]);
+      const { items } = await opponents.list("u1", {
+        filters: {
+          since: new Date("2026-05-09T00:00:00Z"),
+          until: new Date("2026-05-10T00:00:00Z"),
+        },
+      });
+      expect(items).toHaveLength(1);
+      expect(items[0].displayNameSample).toBe("AngryBird");
+      expect(items[0].mmr).toBe(5961);
+      expect(items[0].region).toBe("NA");
+    },
+  );
+
   test("overlay does NOT trigger any SC2Pulse call", async () => {
     // Constructed WITHOUT a pulseMmr dep — proves the read-time
     // path never reaches for one. If anything in list/get tried to

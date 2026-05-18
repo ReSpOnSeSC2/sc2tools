@@ -556,10 +556,46 @@ class OpponentsService {
         region: typeof doc.region === "string" ? doc.region : null,
       });
     }
+    // Second tier: for any row still without an MMR, fall back to
+    // the opponents-collection row's stored ``mmr`` / ``region``.
+    // That's where the SC2Pulse current-MMR fetch in ``recordGame``
+    // lands — sc2reader almost never carries opponent.mmr for ranked
+    // 1v1 replays, so for high-ladder opponents the opponents-row
+    // value is the ONLY place we have the number. Without this
+    // fallback the filtered Opponents tab silently blanks the MMR
+    // column for anyone whose every game in the filter window was
+    // missing opponent.mmr (the bug surfaced as "the mmr disappeared
+    // for AngryBird"). Mirrors the same fallback the
+    // MMR-bucket charts use in trendsInsights.js.
+    /** @type {string[]} */
+    const stillMissing = [];
     for (const r of rows) {
       if (!r || typeof r.pulseId !== "string") continue;
       if (typeof r.mmr === "number") continue;
-      const found = byPulseId.get(r.pulseId);
+      if (byPulseId.has(r.pulseId)) continue;
+      stillMissing.push(r.pulseId);
+    }
+    /** @type {Map<string, {mmr: number, region?: string|null}>} */
+    const opponentsFallback = new Map();
+    if (stillMissing.length > 0) {
+      const oppCursor = this.db.opponents.find(
+        { userId, pulseId: { $in: stillMissing }, mmr: { $type: "number" } },
+        { projection: { _id: 0, pulseId: 1, mmr: 1, region: 1 } },
+      );
+      for await (const doc of oppCursor) {
+        if (typeof doc.pulseId !== "string") continue;
+        const mmr = Number(doc.mmr);
+        if (!Number.isFinite(mmr) || mmr <= 0) continue;
+        opponentsFallback.set(doc.pulseId, {
+          mmr: Math.round(mmr),
+          region: typeof doc.region === "string" ? doc.region : null,
+        });
+      }
+    }
+    for (const r of rows) {
+      if (!r || typeof r.pulseId !== "string") continue;
+      if (typeof r.mmr === "number") continue;
+      const found = byPulseId.get(r.pulseId) || opponentsFallback.get(r.pulseId);
       if (!found) continue;
       r.mmr = found.mmr;
       if (
