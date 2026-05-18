@@ -181,20 +181,76 @@ describe("computePerGameScouting — canonical shape", () => {
 });
 
 describe("computePerGameScouting — degraded inputs", () => {
-  test("missing unit_timeline produces empty compositions + flag", () => {
+  test("missing unit_timeline sets the flag AND renders empty composition", () => {
+    // Composition is now PEAK-alive across unit_timeline samples in
+    // the phase window — there is no cumulative-build-order fallback.
+    // Build-order cumulative produced nonsense like "65 Zealots
+    // alive" (way over food cap) because it never subtracted deaths.
+    // Without timeline data the right answer is "we don't know" —
+    // surface the unit_timeline_missing flag and leave units empty
+    // so the UI hints rather than misinforms.
     const macro = makeMacroLate();
     delete macro.unit_timeline;
     const env = computePerGameScouting(buildLateGame({ macroBreakdown: macro }));
     expect(env.flags).toContain("unit_timeline_missing");
-    for (const phase of Object.keys(env.oppCompositionByPhase)) {
-      expect(env.oppCompositionByPhase[phase].units).toEqual([]);
-    }
+    expect(env.oppCompositionByPhase.late.units).toEqual([]);
+    expect(env.oppCompositionByPhase.late.source).toBe("empty");
   });
 
   test("missing oppBuildLog produces empty build order + flag", () => {
     const env = computePerGameScouting(buildLateGame({ oppBuildLog: [] }));
     expect(env.flags).toContain("opp_buildlog_missing");
     expect(env.oppBuildOrder).toEqual([]);
+  });
+
+  test("composition uses PEAK alive across the phase window, not point-sample", () => {
+    // unit_timeline shows Carrier count growing to 8 mid-window then
+    // shrinking back to 1 by the phase boundary. The peak-alive
+    // sampler returns 8 (the high-water mark) rather than the 1
+    // alive at the phase end — that's the streamer-meaningful
+    // "how many carriers did you field during this phase".
+    const macro = makeMacroLate();
+    macro.unit_timeline = [
+      { time: 0, my: {}, opp: { Drone: 12 } },
+      { time: 420, my: {}, opp: { Drone: 70, Zergling: 8 } },
+      { time: 450, my: {}, opp: { Drone: 70, Zergling: 8, Carrier: 4 } },
+      { time: 480, my: {}, opp: { Drone: 70, Zergling: 16, Carrier: 8, BroodLord: 2 } },
+      { time: 540, my: {}, opp: { Drone: 70, Zergling: 12, Carrier: 5, BroodLord: 4 } },
+      { time: 600, my: {}, opp: { Drone: 70, Carrier: 1 } },
+    ];
+    const env = computePerGameScouting(buildLateGame({ macroBreakdown: macro }));
+    const lateUnits = env.oppCompositionByPhase.late.units;
+    const carrier = lateUnits.find((u) => u.token === "Carrier");
+    const zergling = lateUnits.find((u) => u.token === "Zergling");
+    const broodLord = lateUnits.find((u) => u.token === "BroodLord");
+    expect(carrier).toBeDefined();
+    expect(carrier.count).toBe(8); // peak, not the trailing 1
+    expect(zergling.count).toBe(16); // peak, not the trailing 0
+    expect(broodLord.count).toBe(4); // peak, not the trailing 0
+  });
+
+  test("composition never falls back to cumulative-built when timeline absent", () => {
+    // A heavy-production replay with no unit_timeline must not report
+    // a build-order cumulative count — that would surface a
+    // food-cap-violating "65 Zealots alive" style number. The right
+    // failure mode is "empty + flag" so the UI can hint rather than
+    // misinform.
+    const macro = makeMacroLate();
+    delete macro.unit_timeline;
+    const env = computePerGameScouting(buildLateGame({
+      macroBreakdown: macro,
+      oppBuildLog: Array.from({ length: 65 }, (_, i) =>
+        `[${Math.floor((300 + i * 5) / 60)}:${String((300 + i * 5) % 60).padStart(2, "0")}] Zergling`,
+      ).concat(["[10:00] BroodLord"]),
+    }));
+    expect(env.flags).toContain("unit_timeline_missing");
+    // Build order parsing succeeded so oppBuildOrder is populated…
+    expect(env.oppBuildOrder.length).toBeGreaterThan(0);
+    // …but compositionByPhase stays empty rather than emitting a
+    // cumulative count that would mislead the streamer.
+    for (const phase of ["early", "earlyMid", "mid", "midLate", "late"]) {
+      expect(env.oppCompositionByPhase[phase].units).toEqual([]);
+    }
   });
 
   test("opp_bases empty + opp_production_buildings present sets the synthesized flag", () => {
@@ -274,6 +330,81 @@ describe("computePerGameScouting — endReason branches", () => {
   test("real late game uses macro_game endReason", () => {
     const env = computePerGameScouting(buildLateGame());
     expect(env.endReason).toBe("macro_game");
+  });
+});
+
+describe("computePerGameScouting — buildings + upgrades parity with macro panel", () => {
+  test("oppBuildingsByPhase counts cumulative buildings up to the phase end", () => {
+    const env = computePerGameScouting(buildLateGame());
+    // The fixture's oppBuildLog drops SpawningPool / RoachWarren /
+    // HydraliskDen / Spire / Hive / GreaterSpire. By the late phase
+    // end (game end = 600s), all of those buildings are present, but
+    // the Hatchery → Lair → Hive chain collapses to one Hive and
+    // Spire → GreaterSpire collapses to one GreaterSpire.
+    const late = env.oppBuildingsByPhase.late;
+    expect(late.reached).toBe(true);
+    const buildingTokens = late.buildings.map((b) => b.token);
+    expect(buildingTokens).toContain("SpawningPool");
+    expect(buildingTokens).toContain("RoachWarren");
+    expect(buildingTokens).toContain("HydraliskDen");
+    expect(buildingTokens).toContain("Hive");
+    expect(buildingTokens).toContain("GreaterSpire");
+    // Lair was consumed by Hive — no separate Lair row.
+    expect(buildingTokens).not.toContain("Lair");
+    // Spire was consumed by GreaterSpire — no separate Spire row.
+    expect(buildingTokens).not.toContain("Spire");
+  });
+
+  test("buildings reached=false when the phase wasn't reached", () => {
+    // Short fixture that never reaches mid/midLate/late. The
+    // buildings map mirrors the composition map's reached flag.
+    const env = computePerGameScouting({
+      gameId: "g_early",
+      date: new Date("2026-04-10T00:00:00Z"),
+      result: "Defeat",
+      map: "Pylon Wars",
+      myRace: "Protoss", myBuild: "PvZ - Cheese",
+      durationSec: 180,
+      opponent: { displayName: "OppX", race: "Zerg", strategy: "6 Pool" },
+      oppBuildLog: ["[0:10] SpawningPool"],
+      buildLog: ["[0:00] Nexus", "[0:12] Pylon"],
+      macroBreakdown: {
+        opp_bases: [{ name: "Hatchery", born_time: 0, died_time: 180 }],
+        opp_production_buildings: [],
+        opp_stats_events: [],
+        unit_timeline: [],
+      },
+    });
+    expect(env.oppBuildingsByPhase.midLate.reached).toBe(false);
+    expect(env.oppBuildingsByPhase.late.reached).toBe(false);
+    expect(env.oppBuildingsByPhase.late.buildings).toEqual([]);
+  });
+
+  test("upgrades surface in the upgradesByPhase map using completion time", () => {
+    // Add a research event to the user's buildLog and confirm it
+    // shows up in myUpgradesByPhase at the phase containing its
+    // completion time. The base fixture sets durationSec=600 so the
+    // 5:00 research completes within the game.
+    const env = computePerGameScouting(buildLateGame({
+      buildLog: [
+        "[0:00] Nexus",
+        "[0:54] Pylon",
+        "[1:06] Assimilator",
+        "[1:58] Gateway",
+        "[5:00] WarpGateResearch",
+      ],
+    }));
+    // Upgrade lands in whatever phase contains its completion time.
+    // We just confirm SOMEWHERE on the phase ladder the upgrade was
+    // recorded — the exact phase depends on classifier timing.
+    const allUpgrades = [
+      ...env.myUpgradesByPhase.early.upgrades,
+      ...env.myUpgradesByPhase.earlyMid.upgrades,
+      ...env.myUpgradesByPhase.mid.upgrades,
+      ...env.myUpgradesByPhase.midLate.upgrades,
+      ...env.myUpgradesByPhase.late.upgrades,
+    ].map((u) => u.token);
+    expect(allUpgrades).toContain("WarpGateResearch");
   });
 });
 

@@ -250,6 +250,83 @@ describe("OpponentGamesTimeline", () => {
     expect(container.textContent).not.toMatch(/median ends here/i);
   });
 
+  it("renders buildings and upgrades when the envelope carries them", () => {
+    const env = envelope({
+      oppBuildingsByPhase: {
+        early: { reached: true, atTime: 25, buildings: [
+          { token: "Hatchery", count: 1 },
+          { token: "SpawningPool", count: 1 },
+        ] },
+        earlyMid: { reached: true, atTime: 115, buildings: [
+          { token: "Hatchery", count: 2 },
+          { token: "RoachWarren", count: 1 },
+        ] },
+        mid: { reached: true, atTime: 240, buildings: [] },
+        midLate: { reached: true, atTime: 360, buildings: [] },
+        late: { reached: true, atTime: 510, buildings: [
+          { token: "Hive", count: 1 },
+          { token: "Hatchery", count: 3 },
+        ] },
+      },
+      oppUpgradesByPhase: {
+        early: { reached: true, atTime: 25, upgrades: [] },
+        earlyMid: { reached: true, atTime: 115, upgrades: [
+          { token: "MetabolicBoost", count: 1 },
+        ] },
+        mid: { reached: true, atTime: 240, upgrades: [] },
+        midLate: { reached: true, atTime: 360, upgrades: [] },
+        late: { reached: true, atTime: 510, upgrades: [
+          { token: "MetabolicBoost", count: 1 },
+          { token: "ZergMissileWeaponsLevel2", count: 2 },
+        ] },
+      },
+    });
+    render(<OpponentGamesTimeline envelopes={[env]} />);
+    const detail = screen.getByTestId("opponent-game-detail");
+    expect(detail.textContent).toContain("BUILDINGS");
+    expect(detail.textContent).toContain("UPGRADES");
+    // Building chips render via the Icon component which surfaces the
+    // token name through aria-label / alt text rather than as a text
+    // node, so look it up on the actual DOM rather than textContent.
+    const oppPhaseCards = detail.querySelectorAll(
+      '[data-testid="opponent-game-phase-card"]',
+    );
+    // Find the cell whose merged-phases ends in "late".
+    const lateLikeCard = Array.from(oppPhaseCards).find((n) =>
+      n.getAttribute("data-merged-phases")?.split(",").includes("late"),
+    );
+    expect(lateLikeCard).toBeDefined();
+    const icons = lateLikeCard!.querySelectorAll('img, [role="img"]');
+    const altTexts = Array.from(icons).map(
+      (n) => n.getAttribute("alt") || n.getAttribute("aria-label") || "",
+    );
+    expect(altTexts).toContain("Hive");
+  });
+
+  it("labels timeline-sourced compositions as 'peak alive'", () => {
+    const env = envelope({
+      oppCompositionByPhase: {
+        early: { reached: true, atTime: 25, units: [
+          { token: "Zergling", count: 6 },
+        ], source: "timeline" },
+        earlyMid: { reached: true, atTime: 115, units: [
+          { token: "Roach", count: 4 },
+        ], source: "timeline" },
+        mid: { reached: true, atTime: 240, units: [
+          { token: "Roach", count: 8 },
+        ], source: "timeline" },
+        midLate: { reached: false, atTime: null, units: [] },
+        late: { reached: false, atTime: null, units: [] },
+      },
+      oppTransitions: { earlyMidAt: 50, midAt: 180, midLateAt: null, lateAt: null },
+      endPhase: "mid",
+      endReason: "midgame_engagement",
+    });
+    render(<OpponentGamesTimeline envelopes={[env]} />);
+    const detail = screen.getByTestId("opponent-game-detail");
+    expect(detail.textContent?.toLowerCase()).toContain("peak alive");
+  });
+
   it("steps through games with ArrowRight / ArrowLeft", () => {
     const games = [
       envelope({ gameId: "g1" }),
