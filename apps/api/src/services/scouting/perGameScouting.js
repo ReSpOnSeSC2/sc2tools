@@ -44,6 +44,7 @@ const {
   countBuildingsAt,
   countUpgradesAt,
   sortByCountDesc,
+  peakAliveInWindow,
 } = require("./compositionAt");
 
 const PHASE_LIST = PHASE_ORDER;
@@ -395,7 +396,12 @@ function sampleCompositionsByPhase(
       };
       continue;
     }
-    const peak = peakAliveInWindow(unitTimeline, window.start, window.end, side);
+    // ``WORKER_SKIP`` is broader than the default WORKER_NAMES — it
+    // also drops overlords / supply structures / extractors that the
+    // scouting strip never wants to surface as combat units.
+    const peak = peakAliveInWindow(
+      unitTimeline, window.start, window.end, side, WORKER_SKIP,
+    );
     const units = sortByCountDesc(peak.counts)
       .filter((row) => !WORKER_SKIP.has(row.name) && row.count > 0)
       .slice(0, MAX_UNITS_PER_PHASE)
@@ -408,105 +414,6 @@ function sampleCompositionsByPhase(
     };
   }
   return out;
-}
-
-/**
- * Walk every unit_timeline sample whose ``time`` falls within
- * ``[start, end]`` (inclusive) and accumulate the PEAK alive count
- * per canonical unit name. Returns the peak map AND the timestamp of
- * the sample that contributed the most non-worker units (the
- * "centre of mass" of the engagement window — used by the UI as the
- * cell's atTime so users see a real point in game time rather than
- * a synthetic midpoint).
- *
- * Folds sc2reader variants (LurkerMP / LurkerMPBurrowed / etc.) via
- * ``canonicalizeName`` before max-ing so a stack of burrowed +
- * unburrowed roaches sums into one Roach entry.
- *
- * When the window contains no samples we widen to the NEAREST
- * sample to ``end`` so a tight window that fell between two
- * unit_timeline ticks doesn't render as empty. The atTime returned
- * is the sample's time, not the widened/clamped value.
- *
- * @param {Array<{time:number,my?:object,opp?:object}>} timeline
- * @param {number} start
- * @param {number} end
- * @param {"my"|"opp"} side
- * @returns {{counts:Record<string,number>, atTime:number|null, sampleCount:number}}
- */
-function peakAliveInWindow(timeline, start, end, side) {
-  /** @type {Map<string, number>} */
-  const peak = new Map();
-  let atTime = null;
-  let bestUnitCount = -1;
-  let sampleCount = 0;
-  for (const row of timeline) {
-    const t = Number(row && row.time);
-    if (!Number.isFinite(t)) continue;
-    if (t < start || t > end) continue;
-    const sideMap = side === "my" ? row.my : row.opp;
-    if (!sideMap || typeof sideMap !== "object") continue;
-    sampleCount += 1;
-    // STEP 1: Fold variants on THIS tick — burrowed + unburrowed forms
-    // co-exist on the field, so they sum within a single tick before
-    // we compare against the running peak.
-    /** @type {Map<string, number>} */
-    const perTick = new Map();
-    let totalThisRow = 0;
-    for (const rawName of Object.keys(sideMap)) {
-      if (WORKER_SKIP.has(rawName)) continue;
-      const n = Number(sideMap[rawName]);
-      if (!(n > 0)) continue;
-      const canonical = canonicalizeName(rawName);
-      if (!canonical || WORKER_SKIP.has(canonical)) continue;
-      perTick.set(canonical, (perTick.get(canonical) || 0) + n);
-      totalThisRow += n;
-    }
-    // STEP 2: Update the running peak per canonical name across ticks.
-    for (const [canonical, count] of perTick) {
-      const prev = peak.get(canonical) || 0;
-      if (count > prev) peak.set(canonical, count);
-    }
-    if (totalThisRow > bestUnitCount) {
-      bestUnitCount = totalThisRow;
-      atTime = t;
-    }
-  }
-  if (sampleCount === 0) {
-    // Window fell between timeline ticks. Widen by picking the
-    // single nearest sample to ``end`` (the phase boundary) and
-    // folding its variants the same way.
-    let best = null;
-    let bestDist = Infinity;
-    for (const row of timeline) {
-      const t = Number(row && row.time);
-      if (!Number.isFinite(t)) continue;
-      const d = Math.abs(t - end);
-      if (d < bestDist) {
-        best = row;
-        bestDist = d;
-      }
-    }
-    if (best) {
-      const sideMap = side === "my" ? best.my : best.opp;
-      if (sideMap && typeof sideMap === "object") {
-        for (const rawName of Object.keys(sideMap)) {
-          if (WORKER_SKIP.has(rawName)) continue;
-          const n = Number(sideMap[rawName]);
-          if (!(n > 0)) continue;
-          const canonical = canonicalizeName(rawName);
-          if (!canonical || WORKER_SKIP.has(canonical)) continue;
-          peak.set(canonical, (peak.get(canonical) || 0) + n);
-        }
-        atTime = Number(best.time) || null;
-        sampleCount = 1;
-      }
-    }
-  }
-  /** @type {Record<string, number>} */
-  const counts = {};
-  for (const [name, n] of peak) counts[name] = n;
-  return { counts, atTime, sampleCount };
 }
 
 /**
