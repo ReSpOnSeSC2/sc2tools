@@ -576,6 +576,10 @@ async function last5GamesScouting(games, gameDetails, userId, opp, myRace, oppRa
         myBuild: 1,
         durationSec: 1,
         opponent: 1,
+        // Both build logs are projected so the per-game scouting
+        // envelope can compute both sides' build orders + per-phase
+        // composition / buildings / upgrades. Older v0.4.3 docs that
+        // moved them to the detail store are hydrated below.
         buildLog: 1,
         oppBuildLog: 1,
         macroBreakdown: 1,
@@ -586,16 +590,21 @@ async function last5GamesScouting(games, gameDetails, userId, opp, myRace, oppRa
     .toArray()
     .catch(() => []);
   if (rows.length === 0) return [];
-  // Hydrate macroBreakdown + oppBuildLog from the detail store for
-  // post-v0.4.3 docs that don't carry them inline. Same pattern as
-  // ``opponentPhaseProfile``; bounded to 5 ids so this is a single
-  // small batched read.
+  // Hydrate macroBreakdown + buildLog + oppBuildLog from the detail
+  // store for post-v0.4.3 docs that don't carry them inline. Same
+  // pattern as ``opponentPhaseProfile``; bounded to 5 ids so this is
+  // a single small batched read. ``buildLog`` is included so the
+  // per-game scouting envelope's player-side data (myBuildOrder /
+  // myCompositionByPhase / myBuildingsByPhase / myUpgradesByPhase)
+  // is consistent with the opponent profile's path — even though
+  // the overlay's renderer only surfaces the opp side today.
   if (gameDetails) {
     const needIds = [];
     for (const r of rows) {
-      const missingLog = !Array.isArray(r.oppBuildLog);
+      const missingMyLog = !Array.isArray(r.buildLog);
+      const missingOppLog = !Array.isArray(r.oppBuildLog);
       const missingMacro = !r.macroBreakdown;
-      if ((missingLog || missingMacro) && r.gameId) {
+      if ((missingMyLog || missingOppLog || missingMacro) && r.gameId) {
         needIds.push(String(r.gameId));
       }
     }
@@ -606,6 +615,9 @@ async function last5GamesScouting(games, gameDetails, userId, opp, myRace, oppRa
       for (const r of rows) {
         const blob = blobs.get(String(r.gameId || ""));
         if (!blob) continue;
+        if (!Array.isArray(r.buildLog) && Array.isArray(blob.buildLog)) {
+          r.buildLog = blob.buildLog;
+        }
         if (!Array.isArray(r.oppBuildLog) && Array.isArray(blob.oppBuildLog)) {
           r.oppBuildLog = blob.oppBuildLog;
         }
