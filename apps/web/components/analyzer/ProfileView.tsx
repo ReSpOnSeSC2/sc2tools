@@ -265,7 +265,6 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
 
       <WhereGamesEndSection
         finalPhaseDistribution={data.phases?.finalPhaseDistribution}
-        sampleSize={data.phases?.sampleSize}
       />
 
       <Card
@@ -513,10 +512,8 @@ function ProfilePulseLine({
  */
 function WhereGamesEndSection({
   finalPhaseDistribution,
-  sampleSize,
 }: {
   finalPhaseDistribution?: BuildPhasePayload["finalPhaseDistribution"];
-  sampleSize?: BuildPhasePayload["sampleSize"];
 }) {
   const total =
     (finalPhaseDistribution?.early || 0) +
@@ -527,10 +524,7 @@ function WhereGamesEndSection({
   if (total === 0) return null;
   return (
     <Card title="Where games end">
-      <WhereGamesEndBar
-        finalPhaseDistribution={finalPhaseDistribution}
-        sampleSize={sampleSize}
-      />
+      <WhereGamesEndBar finalPhaseDistribution={finalPhaseDistribution} />
     </Card>
   );
 }
