@@ -34,17 +34,19 @@ const OPP_MMR_AUTO_WIDTH_CUTOFF = 500;
 const OPP_MMR_MAX_BUCKETS = 80;
 
 /**
- * Maximum gap between two consecutive MMR-tagged games for the
- * pre-match → pre-match delta to plausibly reflect the FIRST game's
- * outcome alone. Beyond ~6 hours the user's almost certainly resumed
- * in a fresh session — and any games they played in between that
- * didn't carry myMmr (older agent versions, unranked, missing
- * scaled_rating) would silently bleed into the attributed delta.
- * Setting this to "session" tightens it too far for streamers who
- * queue one last game an hour after dinner; 6 hours is the smallest
- * cap that still keeps a single sitting together.
+ * Maximum gap between two consecutive MMR-tagged games on the SAME
+ * region for the pre-match → pre-match delta to plausibly reflect
+ * the FIRST game's outcome alone. The pipeline now partitions by
+ * region (derived from ``myToonHandle``) so a region switch can
+ * never silently contribute a 1000-MMR "loss" — within a region the
+ * remaining concern is gaps long enough that a non-myMmr ranked game
+ * might have happened in between. v0.7.x bumps this from 6 h to
+ * 24 h: the region partition handles cross-region noise, the
+ * ``NET_MMR_MAX_DELTA`` cap still drops outlier swings, and 24 h
+ * matches the "ladder day" intuition (evening session + next
+ * morning's warm-up count as one continuous climb).
  */
-const NET_MMR_MAX_GAP_MS = 6 * 60 * 60 * 1000;
+const NET_MMR_MAX_GAP_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Hard cap on the per-game pre-match → pre-match delta we trust as
@@ -591,26 +593,40 @@ async function mapTrend(deps, userId, opts, filters) {
 }
 
 /**
- * Net MMR change per opponent race. For every consecutive pair of
- * MMR-tagged games (within the filtered set) where the gap and the
- * delta both look like a single ladder game, attribute the delta
- * (next.myMmr − this.myMmr) to the opponent race of the FIRST game.
+ * Net MMR change per opponent race. The simple model:
+ *   "running tally of MMR won or lost per matchup, per region."
+ *
+ * For every consecutive pair of MMR-tagged games on the SAME REGION,
+ * attribute the delta (next.myMmr − this.myMmr) to the opponent race
+ * of the FIRST game. The region partition is the important part —
+ * a streamer who plays both NA (4900 MMR) and EU (3500 MMR) would
+ * otherwise see a phantom −1400 attributed to whichever matchup
+ * happened to bridge the region switch.
+ *
+ * Region is derived from ``myToonHandle``'s leading byte
+ * (1=NA, 2=EU, 3=KR, 5=CN, 6=SEA — see ``regionFromToonHandle``).
+ * Games without a ``myToonHandle`` (older agent versions) land in a
+ * shared "Unknown" partition where the ``NET_MMR_MAX_DELTA`` cap
+ * still drops the worst cross-region noise.
  *
  * Two guards keep the chart honest:
  *
- *   1. Time gap ≤ ``NET_MMR_MAX_GAP_MS``. When ``next`` is hours or
- *      days after ``this``, the user almost certainly played other
- *      games in between that didn't carry myMmr (older agent
- *      version, missing scaled_rating, filter excluded them, etc.).
- *      Attributing that whole MMR drift to one matchup is how
- *      "100% WR vs Protoss" ends up reading "−213".
+ *   1. Time gap ≤ ``NET_MMR_MAX_GAP_MS`` (24 h within a region).
+ *      A pair across a longer break almost certainly skipped a
+ *      ranked game the agent didn't tag with myMmr — attributing
+ *      the combined drift to one matchup would mislead. 24 h is
+ *      a relaxed cap vs the original 6 h, because the region
+ *      partition already kills the worst noise (cross-region) and
+ *      most "I queued one more in the morning" sittings finish
+ *      inside a day.
  *   2. |delta| ≤ ``NET_MMR_MAX_DELTA``. Single-game ladder swings
  *      max out near ±60. Anything past 150 is a race-pool switch, a
  *      season reset, or a recording gap — never a single match.
  *
- * Pairs that fail either guard are dropped: ``games`` reflects only
- * the trustable pairs, so the WR shown next to the net-MMR number
- * is computed over the same cohort that produced the number.
+ * Pairs that fail either guard are dropped but counted into the
+ * ``dropped`` summary so the chart caption can show "X pairs hidden:
+ * Y long gaps, Z outlier swings" — the user can see what the
+ * filtering is doing instead of guessing.
  *
  * @param {Deps} deps
  * @param {string} userId
@@ -618,13 +634,18 @@ async function mapTrend(deps, userId, opts, filters) {
  */
 async function netMmrByMatchup(deps, userId, filters) {
   const match = deps.gamesMatchStage(userId, filters);
-  const rows = await deps.games
+  const facet = await deps.games
     .aggregate([
       { $match: { ...match, myMmr: { $type: "number" } } },
-      { $addFields: { _bucket: deps.bucketSwitch() } },
-      { $sort: { date: 1 } },
+      {
+        $addFields: {
+          _bucket: deps.bucketSwitch(),
+          _myRegion: regionFromToonHandleExpr("$myToonHandle"),
+        },
+      },
       {
         $setWindowFields: {
+          partitionBy: "$_myRegion",
           sortBy: { date: 1 },
           output: {
             _nextMyMmr: { $shift: { output: "$myMmr", by: 1, default: null } },
@@ -641,24 +662,58 @@ async function netMmrByMatchup(deps, userId, filters) {
         },
       },
       {
-        $match: {
-          _gapMs: { $gte: 0, $lte: NET_MMR_MAX_GAP_MS },
-          _delta: { $gte: -NET_MMR_MAX_DELTA, $lte: NET_MMR_MAX_DELTA },
+        $facet: {
+          kept: [
+            {
+              $match: {
+                _gapMs: { $gte: 0, $lte: NET_MMR_MAX_GAP_MS },
+                _delta: { $gte: -NET_MMR_MAX_DELTA, $lte: NET_MMR_MAX_DELTA },
+              },
+            },
+            {
+              $group: {
+                _id: "$_oppRace",
+                netMmr: { $sum: "$_delta" },
+                games: { $sum: 1 },
+                wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
+                losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
+                avgDelta: { $avg: "$_delta" },
+              },
+            },
+            { $sort: { netMmr: -1 } },
+          ],
+          dropped: [
+            {
+              $group: {
+                _id: null,
+                longGap: {
+                  $sum: {
+                    $cond: [{ $gt: ["$_gapMs", NET_MMR_MAX_GAP_MS] }, 1, 0],
+                  },
+                },
+                outlierSwing: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $or: [
+                          { $lt: ["$_delta", -NET_MMR_MAX_DELTA] },
+                          { $gt: ["$_delta", NET_MMR_MAX_DELTA] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+              },
+            },
+          ],
         },
       },
-      {
-        $group: {
-          _id: "$_oppRace",
-          netMmr: { $sum: "$_delta" },
-          games: { $sum: 1 },
-          wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
-          losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
-          avgDelta: { $avg: "$_delta" },
-        },
-      },
-      { $sort: { netMmr: -1 } },
     ])
     .toArray();
+  const rows = (facet[0] && facet[0].kept) || [];
+  const droppedRow = (facet[0] && facet[0].dropped && facet[0].dropped[0]) || null;
   return {
     matchups: rows.map((r) => ({
       race: r._id,
@@ -669,6 +724,44 @@ async function netMmrByMatchup(deps, userId, filters) {
       losses: r.losses,
       winRate: r.games ? r.wins / r.games : 0,
     })),
+    dropped: {
+      longGap: droppedRow ? droppedRow.longGap : 0,
+      outlierSwing: droppedRow ? droppedRow.outlierSwing : 0,
+    },
+  };
+}
+
+/**
+ * Aggregation-pipeline mirror of ``regionFromToonHandle``: maps the
+ * leading byte of a toon handle to a Blizzard region label. Used by
+ * netMmrByMatchup so pairs only chain within the same region — a
+ * region switch can't fake a thousand-MMR loss anymore.
+ *
+ * Games whose ``myToonHandle`` is missing or starts with an unknown
+ * byte fall into "U" so they still chain among themselves (better
+ * than dropping every pre-myToonHandle game).
+ *
+ * @param {string} field MongoDB field expression, e.g. ``"$myToonHandle"``.
+ */
+function regionFromToonHandleExpr(field) {
+  return {
+    $let: {
+      vars: {
+        head: { $substrCP: [{ $ifNull: [field, ""] }, 0, 1] },
+      },
+      in: {
+        $switch: {
+          branches: [
+            { case: { $eq: ["$$head", "1"] }, then: "NA" },
+            { case: { $eq: ["$$head", "2"] }, then: "EU" },
+            { case: { $eq: ["$$head", "3"] }, then: "KR" },
+            { case: { $eq: ["$$head", "5"] }, then: "CN" },
+            { case: { $eq: ["$$head", "6"] }, then: "SEA" },
+          ],
+          default: "U",
+        },
+      },
+    },
   };
 }
 

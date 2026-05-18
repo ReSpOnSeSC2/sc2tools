@@ -612,8 +612,13 @@ describe("services/aggregations", () => {
   test("netMmrByMatchup rounds the running totals and computes WR", async () => {
     const games = buildGames([
       () => [
-        { _id: "P", netMmr: 84.4, avgDelta: 14.06, games: 6, wins: 4, losses: 2 },
-        { _id: "Z", netMmr: -45.7, avgDelta: -9.14, games: 5, wins: 2, losses: 3 },
+        {
+          kept: [
+            { _id: "P", netMmr: 84.4, avgDelta: 14.06, games: 6, wins: 4, losses: 2 },
+            { _id: "Z", netMmr: -45.7, avgDelta: -9.14, games: 5, wins: 2, losses: 3 },
+          ],
+          dropped: [{ _id: null, longGap: 2, outlierSwing: 1 }],
+        },
       ],
     ]);
     const svc = new AggregationsService({ games });
@@ -625,5 +630,45 @@ describe("services/aggregations", () => {
     expect(p.winRate).toBeCloseTo(4 / 6);
     const z = out.matchups.find((m) => m.race === "Z");
     expect(z.netMmr).toBe(-46);
+    // Diagnostic counters surface so the chart can show "X pairs
+    // hidden: Y long gaps · Z outlier swings".
+    expect(out.dropped.longGap).toBe(2);
+    expect(out.dropped.outlierSwing).toBe(1);
+  });
+
+  test("netMmrByMatchup partitions by region so a region switch doesn't fake a phantom loss", async () => {
+    // Region partitioning is the headline of the v0.7.x rewrite — a
+    // streamer playing NA 4900 and EU 3500 should not see a −1400
+    // attributed to whichever matchup happened to bridge the regions.
+    // Inspecting the pipeline guarantees the $setWindowFields stage
+    // uses ``partitionBy: "$_myRegion"`` and that ``_myRegion`` is
+    // derived from ``myToonHandle``'s leading byte.
+    let captured = null;
+    const games = {
+      aggregate(pipeline) {
+        captured = pipeline;
+        return {
+          toArray: () => Promise.resolve([{ kept: [], dropped: [] }]),
+        };
+      },
+    };
+    const svc = new AggregationsService({ games });
+    await svc.netMmrByMatchup("u1", {});
+    const json = JSON.stringify(captured);
+    expect(json).toContain('"partitionBy":"$_myRegion"');
+    expect(json).toContain('"$myToonHandle"');
+    // The region switch is the only branches we explicitly call out,
+    // since they drive every regional partition.
+    expect(json).toContain('"NA"');
+    expect(json).toContain('"EU"');
+  });
+
+  test("netMmrByMatchup empty result still returns matchups[] and dropped counters", async () => {
+    const games = buildGames([() => [{ kept: [], dropped: [] }]]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (await svc.netMmrByMatchup("u1", {}));
+    expect(out.matchups).toEqual([]);
+    expect(out.dropped.longGap).toBe(0);
+    expect(out.dropped.outlierSwing).toBe(0);
   });
 });

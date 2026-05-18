@@ -27,6 +27,10 @@ type MatchupRow = {
 
 type Response = {
   matchups: MatchupRow[];
+  dropped?: {
+    longGap: number;
+    outlierSwing: number;
+  };
 };
 
 const RACE_META: Record<string, { label: string; color: string }> = {
@@ -111,11 +115,12 @@ export function NetMmrByMatchupChart() {
   return (
     <Card title="Net MMR by matchup">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        MMR gained (▶) or lost (◀) per opponent race, summed over
-        back-to-back game pairs where both sides carry MMR and the
-        swing fits a single ladder game. Long gaps and outlier
-        swings (race switches, season resets) are dropped so a
-        100%-WR matchup never reads as a net loss.
+        MMR gained (▶) or lost (◀) per opponent race, summed within
+        each region from consecutive ranked games. Region partitioning
+        keeps a NA → EU switch from faking a thousand-MMR loss; pairs
+        more than 24 h apart or swinging past ±150 MMR (race
+        switches, season resets) are dropped so a 100%-WR matchup
+        never reads as a net loss.
       </p>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
@@ -185,6 +190,41 @@ export function NetMmrByMatchupChart() {
           </div>
         ))}
       </div>
+      <DroppedSummary dropped={data?.dropped} />
     </Card>
+  );
+}
+
+/**
+ * Surfaces the per-reason "pairs hidden" count from the API so the
+ * filtering is visible rather than mysterious. ``longGap`` counts
+ * pairs where the next myMmr-tagged game on the same region landed
+ * more than 24 h later; ``outlierSwing`` counts pairs where the
+ * delta blew past ±150 MMR (race switches, season resets, recording
+ * gaps). Renders nothing when both counters are zero so the card
+ * stays uncluttered for users whose data is clean.
+ */
+function DroppedSummary({
+  dropped,
+}: {
+  dropped: { longGap: number; outlierSwing: number } | undefined;
+}) {
+  if (!dropped) return null;
+  const { longGap, outlierSwing } = dropped;
+  const total = longGap + outlierSwing;
+  if (total === 0) return null;
+  const parts: string[] = [];
+  if (longGap > 0) {
+    parts.push(`${longGap} long gap${longGap === 1 ? "" : "s"} (>24 h)`);
+  }
+  if (outlierSwing > 0) {
+    parts.push(
+      `${outlierSwing} outlier swing${outlierSwing === 1 ? "" : "s"} (>±150)`,
+    );
+  }
+  return (
+    <p className="mt-2 text-[10px] text-text-dim">
+      {total} pair{total === 1 ? "" : "s"} hidden · {parts.join(" · ")}
+    </p>
   );
 }

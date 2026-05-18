@@ -130,13 +130,17 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
       // later (a fresh session) and skipped over a stack of losses
       // the older agent didn't tag with myMmr.
       //
-      // We reproduce it by spacing the Protoss games across days
-      // with a steep MMR decline between them — the kind of trace
-      // an agent missing myMmr on the intervening games leaves
-      // behind. With the gap+magnitude guard, none of those pairs
-      // should land on the Protoss bar.
+      // We reproduce it by spacing the Protoss games across MORE
+      // THAN NET_MMR_MAX_GAP_MS with a steep MMR decline between
+      // them — the kind of trace an agent missing myMmr on the
+      // intervening games leaves behind. With the gap+magnitude
+      // guard, none of those pairs should land on the Protoss bar.
+      //
+      // Spacing scales off the constant so a v0.7.x-style relaxation
+      // of NET_MMR_MAX_GAP_MS (24 h instead of 6 h) doesn't quietly
+      // turn the regression test green.
       const t0 = new Date("2026-05-09T12:00:00Z").getTime();
-      const ONE_DAY = 24 * 60 * 60 * 1000;
+      const PAIR_GAP = NET_MMR_MAX_GAP_MS + 60 * 60 * 1000;
       await db.games.insertMany([
         makeGame({
           gameId: "p_day1",
@@ -145,19 +149,18 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
           result: "Victory",
           opponent: { race: "Protoss", mmr: 4800 },
         }),
-        // ... a long day of losses with no myMmr lands the user
-        // 100 MMR lower, but the next recorded reading is the next
-        // day's Protoss game.
+        // ... a long break with no myMmr lands the user 100 MMR
+        // lower, but the next recorded reading is past the gap cap.
         makeGame({
           gameId: "p_day2",
-          date: new Date(t0 + 1 * ONE_DAY),
+          date: new Date(t0 + 1 * PAIR_GAP),
           myMmr: 4700,
           result: "Victory",
           opponent: { race: "Protoss", mmr: 4700 },
         }),
         makeGame({
           gameId: "p_day3",
-          date: new Date(t0 + 2 * ONE_DAY),
+          date: new Date(t0 + 2 * PAIR_GAP),
           myMmr: 4600,
           result: "Victory",
           opponent: { race: "Protoss", mmr: 4600 },
@@ -165,19 +168,79 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
         // Closing game so day3 has a "next".
         makeGame({
           gameId: "p_day4",
-          date: new Date(t0 + 3 * ONE_DAY),
+          date: new Date(t0 + 3 * PAIR_GAP),
           myMmr: 4500,
           result: "Victory",
           opponent: { race: "Protoss", mmr: 4500 },
         }),
       ]);
 
-      const { matchups } = await svc.netMmrByMatchup("u1", {});
+      const { matchups, dropped } = await svc.netMmrByMatchup("u1", {});
       const p = findRow(matchups, "P");
       // Every pair sits beyond NET_MMR_MAX_GAP_MS so the row is
       // dropped entirely — better than reporting a number the user
-      // can't reconcile with their own W/L record.
+      // can't reconcile with their own W/L record. The diagnostic
+      // counter still reflects the three dropped pairs so the chart
+      // can render "3 pairs hidden: 3 long gaps".
       expect(p).toBeUndefined();
+      expect(dropped.longGap).toBe(3);
+    },
+  );
+
+  test(
+    "region partitioning prevents an NA → EU switch from faking a phantom loss",
+    async () => {
+      // Two consecutive games on different regions used to chain
+      // into a single delta — a streamer at 4900 NA who logged into
+      // EU at 3500 would see a ~-1400 phantom loss attributed to
+      // whichever matchup happened to bridge the regions. Region
+      // partitioning short-circuits that: the EU game doesn't even
+      // see the NA game as its "previous".
+      const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+      await db.games.insertMany([
+        makeGame({
+          gameId: "na1",
+          date: new Date(t0),
+          myToonHandle: "1-S2-1-100",
+          myMmr: 4900,
+          result: "Victory",
+          opponent: { race: "Zerg", mmr: 4900, toonHandle: "1-S2-1-101" },
+        }),
+        makeGame({
+          gameId: "na2",
+          date: new Date(t0 + 5 * MIN_AGO),
+          myToonHandle: "1-S2-1-100",
+          myMmr: 4925,
+          result: "Victory",
+          opponent: { race: "Zerg", mmr: 4925, toonHandle: "1-S2-1-102" },
+        }),
+        // Region switch — EU pulseId, different ladder rating.
+        makeGame({
+          gameId: "eu1",
+          date: new Date(t0 + 10 * MIN_AGO),
+          myToonHandle: "2-S2-1-300",
+          myMmr: 3500,
+          result: "Victory",
+          opponent: { race: "Zerg", mmr: 3500, toonHandle: "2-S2-1-301" },
+        }),
+        makeGame({
+          gameId: "eu2",
+          date: new Date(t0 + 15 * MIN_AGO),
+          myToonHandle: "2-S2-1-300",
+          myMmr: 3520,
+          result: "Victory",
+          opponent: { race: "Zerg", mmr: 3520, toonHandle: "2-S2-1-302" },
+        }),
+      ]);
+      const { matchups } = await svc.netMmrByMatchup("u1", {});
+      const z = findRow(matchups, "Z");
+      expect(z).toBeDefined();
+      // Two valid pairs: na1→na2 (+25 NA) and eu1→eu2 (+20 EU).
+      // The na2→eu1 hop is suppressed by the partition, so the
+      // chart reads +45 instead of (+25 − 1425 + 20) = −1380.
+      expect(z.games).toBe(2);
+      expect(z.netMmr).toBe(45);
+      expect(z.winRate).toBeCloseTo(1);
     },
   );
 
