@@ -624,9 +624,13 @@ async function mapTrend(deps, userId, opts, filters) {
  *      season reset, or a recording gap — never a single match.
  *
  * Pairs that fail either guard are dropped but counted into the
- * ``dropped`` summary so the chart caption can show "X pairs hidden:
- * Y long gaps, Z outlier swings" — the user can see what the
- * filtering is doing instead of guessing.
+ * ``dropped`` summary. The summary also carries ``missingMyMmr``
+ * (games in the filter that don't carry myMmr at all — older agent
+ * versions, missing scaled_rating) and ``totalGames`` (the size of
+ * the filtered set) so the chart can show "13 pairs from 28 games ·
+ * 13 missing MMR · 1 long gap". Without that, users compare the
+ * pair count to the Win-Rate-by-MMR game count and assume the
+ * chart is broken.
  *
  * @param {Deps} deps
  * @param {string} userId
@@ -634,36 +638,54 @@ async function mapTrend(deps, userId, opts, filters) {
  */
 async function netMmrByMatchup(deps, userId, filters) {
   const match = deps.gamesMatchStage(userId, filters);
+  // Shared pairing prefix used by the keptPairs + droppedPairs
+  // facet branches. Inlined here (rather than nested $facet) because
+  // MongoDB disallows $facet inside $facet — the duplication is the
+  // price of getting summary + kept + dropped from one aggregate.
+  const pairingPrefix = [
+    { $match: { _hasMyMmr: true } },
+    {
+      $addFields: {
+        _bucket: deps.bucketSwitch(),
+        _myRegion: regionFromToonHandleExpr("$myToonHandle"),
+      },
+    },
+    {
+      $setWindowFields: {
+        partitionBy: "$_myRegion",
+        sortBy: { date: 1 },
+        output: {
+          _nextMyMmr: { $shift: { output: "$myMmr", by: 1, default: null } },
+          _nextDate: { $shift: { output: "$date", by: 1, default: null } },
+        },
+      },
+    },
+    { $match: { _nextMyMmr: { $type: "number" } } },
+    {
+      $addFields: {
+        _delta: { $subtract: ["$_nextMyMmr", "$myMmr"] },
+        _gapMs: { $subtract: ["$_nextDate", "$date"] },
+        _oppRace: oppRaceSwitch(),
+      },
+    },
+  ];
   const facet = await deps.games
     .aggregate([
-      { $match: { ...match, myMmr: { $type: "number" } } },
-      {
-        $addFields: {
-          _bucket: deps.bucketSwitch(),
-          _myRegion: regionFromToonHandleExpr("$myToonHandle"),
-        },
-      },
-      {
-        $setWindowFields: {
-          partitionBy: "$_myRegion",
-          sortBy: { date: 1 },
-          output: {
-            _nextMyMmr: { $shift: { output: "$myMmr", by: 1, default: null } },
-            _nextDate: { $shift: { output: "$date", by: 1, default: null } },
-          },
-        },
-      },
-      { $match: { _nextMyMmr: { $type: "number" } } },
-      {
-        $addFields: {
-          _delta: { $subtract: ["$_nextMyMmr", "$myMmr"] },
-          _gapMs: { $subtract: ["$_nextDate", "$date"] },
-          _oppRace: oppRaceSwitch(),
-        },
-      },
+      { $match: match },
+      { $addFields: { _hasMyMmr: { $isNumber: "$myMmr" } } },
       {
         $facet: {
-          kept: [
+          summary: [
+            {
+              $group: {
+                _id: null,
+                totalGames: { $sum: 1 },
+                missingMyMmr: { $sum: { $cond: ["$_hasMyMmr", 0, 1] } },
+              },
+            },
+          ],
+          keptPairs: [
+            ...pairingPrefix,
             {
               $match: {
                 _gapMs: { $gte: 0, $lte: NET_MMR_MAX_GAP_MS },
@@ -676,13 +698,16 @@ async function netMmrByMatchup(deps, userId, filters) {
                 netMmr: { $sum: "$_delta" },
                 games: { $sum: 1 },
                 wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
-                losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
+                losses: {
+                  $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] },
+                },
                 avgDelta: { $avg: "$_delta" },
               },
             },
             { $sort: { netMmr: -1 } },
           ],
-          dropped: [
+          droppedPairs: [
+            ...pairingPrefix,
             {
               $group: {
                 _id: null,
@@ -712,10 +737,12 @@ async function netMmrByMatchup(deps, userId, filters) {
       },
     ])
     .toArray();
-  const rows = (facet[0] && facet[0].kept) || [];
-  const droppedRow = (facet[0] && facet[0].dropped && facet[0].dropped[0]) || null;
+  const root = facet[0] || {};
+  const summaryRow = (root.summary && root.summary[0]) || null;
+  const keptRows = root.keptPairs || [];
+  const droppedRow = (root.droppedPairs && root.droppedPairs[0]) || null;
   return {
-    matchups: rows.map((r) => ({
+    matchups: keptRows.map((r) => ({
       race: r._id,
       netMmr: Math.round(r.netMmr),
       avgDelta: Math.round(r.avgDelta * 10) / 10,
@@ -724,9 +751,11 @@ async function netMmrByMatchup(deps, userId, filters) {
       losses: r.losses,
       winRate: r.games ? r.wins / r.games : 0,
     })),
+    totalGames: summaryRow ? summaryRow.totalGames : 0,
     dropped: {
       longGap: droppedRow ? droppedRow.longGap : 0,
       outlierSwing: droppedRow ? droppedRow.outlierSwing : 0,
+      missingMyMmr: summaryRow ? summaryRow.missingMyMmr : 0,
     },
   };
 }
