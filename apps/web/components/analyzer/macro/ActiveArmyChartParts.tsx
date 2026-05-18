@@ -27,11 +27,14 @@ export const COLOR_OPP = "rgb(var(--danger))";
 export const COLOR_HIGHLIGHT = "rgb(var(--accent-cyan))";
 export const COLOR_LEAK = "rgb(var(--warning))";
 
-export interface ActiveArmyLeakWindow {
+export interface ActiveArmySupplyBlockWindow {
   /** Window start (seconds, game time). */
   start: number;
   /** Window end (seconds, game time). */
   end: number;
+  /** Total counted blocked seconds inside the window — see
+   *  ``detect_supply_block_windows`` in macro_score.py. */
+  blocked_sec?: number;
   /** Optional category — drives the band tone. */
   kind?: string;
 }
@@ -52,7 +55,6 @@ export function Legend() {
       <Swatch color={COLOR_YOU} dashed label="you wkrs" />
       <Swatch color={COLOR_OPP} dashed={false} label="opp army" />
       <Swatch color={COLOR_OPP} dashed label="opp wkrs" />
-      <Swatch color={COLOR_LEAK} dashed label="leak" thin />
       <BandSwatch color={COLOR_YOU} label="you blocks" />
       <BandSwatch color={COLOR_OPP} label="opp blocks" />
     </span>
@@ -149,24 +151,6 @@ export function YAxisLabels({ layout }: { layout: ChartLayout }) {
           </g>
         );
       })}
-      <text
-        x={layout.plotLeft - 6}
-        y={PAD_TOP - 4}
-        textAnchor="end"
-        fontSize="9"
-        fill={COLOR_AXIS}
-      >
-        army
-      </text>
-      <text
-        x={layout.plotRight + 6}
-        y={PAD_TOP - 4}
-        textAnchor="start"
-        fontSize="9"
-        fill={COLOR_AXIS}
-      >
-        wkrs
-      </text>
     </g>
   );
 }
@@ -399,13 +383,13 @@ function PlayerRow({
   );
 }
 
-export function LeakBands({
+export function SupplyBlockBands({
   layout,
   windows,
   tone,
 }: {
   layout: ChartLayout;
-  windows: ActiveArmyLeakWindow[] | undefined;
+  windows: ActiveArmySupplyBlockWindow[] | undefined;
   tone: "me" | "opp";
 }) {
   if (!Array.isArray(windows) || windows.length === 0) return null;
@@ -429,7 +413,7 @@ export function LeakBands({
             width={width}
             height={layout.plotBottom - layout.plotTop}
             fill={fill}
-            fillOpacity={0.08}
+            fillOpacity={0.18}
           />
         );
       })}

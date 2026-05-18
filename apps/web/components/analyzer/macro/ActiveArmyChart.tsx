@@ -22,17 +22,17 @@ import {
   ChartTooltip,
   Grid,
   HoverCrosshair,
-  LeakBands,
   LeakMarkers,
   Legend,
   Lines,
+  SupplyBlockBands,
   XAxis,
   YAxisLabels,
-  type ActiveArmyLeakWindow,
+  type ActiveArmySupplyBlockWindow,
   type HoverState,
 } from "./ActiveArmyChartParts";
 
-export type { ActiveArmyLeakWindow } from "./ActiveArmyChartParts";
+export type { ActiveArmySupplyBlockWindow } from "./ActiveArmyChartParts";
 
 /**
  * Single hover dispatch — the chart emits these to the parent so the
@@ -62,12 +62,12 @@ export interface ActiveArmyChartProps {
   gameLengthSec?: number;
   /** Leak collection — drives vertical markers along the time axis. */
   leaks: LeakItem[];
-  /** Time-span windows (supply blocks, opp leak windows, etc.) drawn
+  /** Per-window supply-block annotations for the local player, drawn
    *  as translucent vertical bands behind the chart lines. Empty when
    *  the macro engine didn't surface windows for this game. */
-  leakWindows?: ActiveArmyLeakWindow[];
-  /** Opponent's leak windows — rendered with a distinct tone. */
-  oppLeakWindows?: ActiveArmyLeakWindow[];
+  supplyBlockWindows?: ActiveArmySupplyBlockWindow[];
+  /** Opponent's supply-block windows — rendered with a distinct tone. */
+  oppSupplyBlockWindows?: ActiveArmySupplyBlockWindow[];
   /** Stable id of the highlighted leak — receives an emphasised marker. */
   highlightedKey?: string | null;
   /** Hovered game-time second — when set, the crosshair locks here. */
@@ -111,8 +111,8 @@ export function ActiveArmyChart({
   oppSeries,
   gameLengthSec,
   leaks,
-  leakWindows,
-  oppLeakWindows,
+  supplyBlockWindows,
+  oppSupplyBlockWindows,
   highlightedKey,
   hoveredTime = null,
   onHover,
@@ -248,8 +248,8 @@ export function ActiveArmyChart({
         >
           <Grid layout={layout} />
           <XAxis layout={layout} />
-          <LeakBands layout={layout} windows={leakWindows} tone="me" />
-          <LeakBands layout={layout} windows={oppLeakWindows} tone="opp" />
+          <SupplyBlockBands layout={layout} windows={supplyBlockWindows} tone="me" />
+          <SupplyBlockBands layout={layout} windows={oppSupplyBlockWindows} tone="opp" />
           <LeakMarkers
             layout={layout}
             leaks={leaks}

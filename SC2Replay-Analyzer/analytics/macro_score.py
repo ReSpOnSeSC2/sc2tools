@@ -391,27 +391,68 @@ def _interval_to_next(stats: List[Dict], i: int, default: int = 10) -> int:
     return default
 
 
+def _is_blocked_sample(sample: Dict) -> bool:
+    food_used = sample.get("food_used", 0)
+    food_made = sample.get("food_made", 0)
+    return (
+        food_used >= food_made - SUPPLY_BLOCK_MARGIN
+        and food_used < SUPPLY_CAP_LIMIT
+    )
+
+
+def detect_supply_block_windows(stats: List[Dict]) -> List[Dict[str, Any]]:
+    """Per-window supply-block annotations.
+
+    Walks ``stats`` and groups contiguous blocked samples into windows.
+    Each window: ``{start, end, blocked_sec}``. ``blocked_sec`` is the
+    same contribution ``_supply_block_seconds`` would sum for that run
+    (``min(gap_to_next_sample, 4)`` per blocked sample), so summing
+    ``blocked_sec`` across the returned windows equals the aggregate.
+
+    The chart renders these as translucent vertical bands so the user
+    can see WHEN the blocks happened, not just the total. A block ends
+    at the timestamp of the first non-blocked sample after the run; a
+    block that's still active at the last sample closes at
+    ``last.time + 4`` (the per-sample floor we already credited).
+    """
+    if not stats:
+        return []
+    windows: List[Dict[str, Any]] = []
+    cur_start: Optional[int] = None
+    cur_blocked: float = 0.0
+    for i, s in enumerate(stats):
+        if _is_blocked_sample(s):
+            if cur_start is None:
+                cur_start = int(s.get("time", 0))
+            # min(gap, 4) — see _supply_block_seconds for rationale.
+            cur_blocked += min(4, _interval_to_next(stats, i))
+        elif cur_start is not None:
+            windows.append({
+                "start": int(cur_start),
+                "end": int(s.get("time", 0)),
+                "blocked_sec": round(cur_blocked, 1),
+            })
+            cur_start = None
+            cur_blocked = 0.0
+    if cur_start is not None:
+        last_t = int(stats[-1].get("time", 0))
+        windows.append({
+            "start": int(cur_start),
+            "end": last_t + 4,
+            "blocked_sec": round(cur_blocked, 1),
+        })
+    return windows
+
+
 def _supply_block_seconds(stats: List[Dict]) -> float:
-    """Supply-blocked seconds.
+    """Supply-blocked seconds — sum across detected windows.
 
     A sample counts as blocked when food_used >= food_made - 1 AND the
     player isn't at the 200 supply cap. Each blocked sample contributes
-    the gap until the next sample (clamped to a 4-second floor — most
-    real blocks are short and the next sample is 8-12s later).
+    ``min(gap_to_next_sample, 4)`` seconds (most real blocks are short
+    and the next sample is 8-12s later).
     """
-    if not stats:
-        return 0.0
-    total = 0.0
-    for i, s in enumerate(stats):
-        food_used = s.get("food_used", 0)
-        food_made = s.get("food_made", 0)
-        if food_used >= food_made - SUPPLY_BLOCK_MARGIN and food_used < SUPPLY_CAP_LIMIT:
-            # Use min(gap, 4) so a single 10-sec PlayerStatsEvent doesn't
-            # claim 10 full seconds of block. In reality a block is over the
-            # second the next pylon finishes warping in.
-            gap = _interval_to_next(stats, i)
-            total += min(4, gap)
-    return float(total)
+    return float(sum(w["blocked_sec"] for w in detect_supply_block_windows(stats)))
 
 
 def _supply_block_penalty(blocked_sec: float, game_length_sec: int) -> float:
@@ -553,11 +594,20 @@ def compute_macro_score(
     base = max(0.0, min(100.0, sq - SQ_OFFSET))
 
     leaks: List[Leak] = []
+    # supply_block_windows / opp_supply_block_windows drive the
+    # translucent bands on the SPA's Active Army & Workers chart so
+    # users see exactly WHEN each block happened, not just the total
+    # seconds. Computed off the same per-sample rule as the aggregate
+    # below so the bands and the headline "Supply blocked" stat stay
+    # consistent. detect_leak_windows (economic SQ-leak periods) is
+    # kept available as a helper but no longer ships in the wire
+    # payload — nothing consumed it, and the chart's "blocks" legend
+    # entry is supposed to mean supply blocks.
     raw: Dict[str, Any] = {
         "sq": round(sq, 2),
         "base_score": round(base, 2),
-        "leak_windows": detect_leak_windows(stats),
-        "opp_leak_windows": detect_leak_windows(opp_stats),
+        "supply_block_windows": detect_supply_block_windows(stats),
+        "opp_supply_block_windows": detect_supply_block_windows(opp_stats),
     }
 
     # 2. Supply-block adjustment.

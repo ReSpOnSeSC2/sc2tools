@@ -2,6 +2,23 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.7.5
+
+### Changed — Macro Breakdown emits per-window supply blocks
+- `macro_score.detect_supply_block_windows` replaces the aggregate-only
+  `_supply_block_seconds` view with a list of `{start, end, blocked_sec}`
+  windows. The Active Army & Workers chart binds its translucent
+  vertical bands to these so users see WHEN each block happened, not
+  just the total seconds. The "you blocks" / "opp blocks" legend
+  entries now match what's actually plotted.
+- The aggregate `supply_blocked_seconds` is derived from the windows so
+  the headline "Supply blocked" stat below the chart and the per-window
+  bands can never disagree.
+- The dead `raw.leak_windows` / `raw.opp_leak_windows` keys (economic
+  SQ-leak periods that nothing consumed and the chart legend never
+  actually described) are no longer shipped on the wire. Recompute on
+  any earlier replay to pick up the new field.
+
 ## 0.7.4
 
 ### Changed — Macro Breakdown samples at 10 s cadence
