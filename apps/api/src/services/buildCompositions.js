@@ -2,6 +2,7 @@
 
 const { classifyGame } = require("./phaseClassifier");
 const { TECH_SC2_NAMES } = require("./techTokens");
+const { peakAliveInWindow } = require("./scouting/compositionAt");
 
 /**
  * buildCompositions — per-phase signature aggregator for a list of
@@ -216,46 +217,41 @@ function getPhaseWindow(phase, crossings, durationSec) {
 }
 
 /**
- * Pick the top-3 non-worker units active at the unit_timeline row
- * whose ``time`` is closest to ``midpoint``. Returns an empty array
- * if no usable row exists (missing or empty unit_timeline, or row
- * has no non-worker entries).
+ * Pick the top-3 non-worker units active during the phase window.
+ * Uses the SAME peak-alive sampler the per-game scouting envelope
+ * uses (``peakAliveInWindow``), so a strategy bucket's signature
+ * reflects "what units did the player typically have on the field
+ * during this phase" rather than "what was alive at the exact
+ * midpoint timeline row" — the midpoint approach used to land on
+ * sparse / post-engagement samples and report nonsense like
+ * "1 Carrier" when the player fielded 8.
  *
- * Sort is deterministic: count desc, token asc on ties — so the
- * resulting signature key is stable across runs.
+ * Canonicalises sc2reader variants (Lurker / LurkerMP /
+ * LurkerMPBurrowed → Lurker) before the peak is taken, so a stack
+ * of burrowed + unburrowed roaches reads as one Roach entry. Sort
+ * is deterministic: count desc, token asc on ties — keeps the
+ * signature key stable across runs.
  *
  * @param {any} macroBreakdown
- * @param {number} midpoint
+ * @param {number} windowStart phase window start (seconds)
+ * @param {number} windowEnd phase window end (seconds)
  * @param {"you"|"opponent"} [perspective]
- *   ``"opponent"`` reads ``unit_timeline[*].opp`` instead of ``.my``
- *   — the killer-view companion to the perspective-aware
- *   phaseClassifier.
  * @returns {Array<{token: string, count: number}>}
  */
-function pickSignatureUnits(macroBreakdown, midpoint, perspective) {
+function pickSignatureUnits(macroBreakdown, windowStart, windowEnd, perspective) {
   const timeline = Array.isArray(macroBreakdown && macroBreakdown.unit_timeline)
     ? macroBreakdown.unit_timeline
     : [];
   if (timeline.length === 0) return [];
-  let best = timeline[0];
-  let bestDist = Math.abs(Number(best.time) - midpoint);
-  for (let i = 1; i < timeline.length; i++) {
-    const d = Math.abs(Number(timeline[i].time) - midpoint);
-    if (d < bestDist) {
-      best = timeline[i];
-      bestDist = d;
-    }
-  }
-  const side = perspective === "opponent"
-    ? ((best && best.opp) || {})
-    : ((best && best.my) || {});
+  const side = perspective === "opponent" ? "opp" : "my";
+  const peak = peakAliveInWindow(
+    timeline, windowStart, windowEnd, side, WORKER_SKIP,
+  );
   /** @type {Array<{token: string, count: number}>} */
   const entries = [];
-  for (const token of Object.keys(side)) {
-    if (WORKER_SKIP.has(token)) continue;
-    const n = Number(side[token]);
-    if (!(n > 0)) continue;
-    entries.push({ token, count: n });
+  for (const [token, count] of Object.entries(peak.counts)) {
+    if (!(count > 0)) continue;
+    entries.push({ token, count });
   }
   entries.sort(byCountDescTokenAsc);
   return entries.slice(0, 3);
@@ -303,11 +299,17 @@ function computePerPhase(classifiedGames, phase, perspective) {
     if (!window) continue;
     const midpoint = (window.start + window.end) / 2;
 
-    const units = pickSignatureUnits(game.macroBreakdown, midpoint, perspective);
+    // PEAK-alive across the whole phase window — see the docstrings
+    // on pickSignatureUnits / pickAllNonWorkerUnits for why we no
+    // longer use a single midpoint sample. The midpoint is still
+    // passed to collectTechFirstSeen / collectUpgradeFirstSeen since
+    // those want the chronological midpoint of the phase, not the
+    // peak.
+    const units = pickSignatureUnits(
+      game.macroBreakdown, window.start, window.end, perspective,
+    );
     const allUnits = pickAllNonWorkerUnits(
-      game.macroBreakdown,
-      midpoint,
-      perspective,
+      game.macroBreakdown, window.start, window.end, perspective,
     );
     if (units.length > 0) {
       const key = signatureKey(units);
@@ -362,40 +364,34 @@ function signatureKey(units) {
 }
 
 /**
- * Variant of pickSignatureUnits that returns EVERY non-worker unit at
- * the midpoint snapshot, not just the top 3. Used to compute median
- * counts across all units in a signature bucket so the dossier can
- * surface the complete composition (not just the headline three).
+ * Variant of pickSignatureUnits that returns EVERY non-worker unit
+ * at the phase window's PEAK alive snapshot (not just the top 3).
+ * Used to compute median counts across all units in a signature
+ * bucket so the dossier can surface the complete composition (not
+ * just the headline three). Uses the same peak-alive sampler as
+ * pickSignatureUnits so the headline + full-composition reads stay
+ * internally consistent.
  *
  * @param {any} macroBreakdown
- * @param {number} midpoint
+ * @param {number} windowStart
+ * @param {number} windowEnd
  * @param {"you"|"opponent"} [perspective]
  * @returns {Array<{token: string, count: number}>}
  */
-function pickAllNonWorkerUnits(macroBreakdown, midpoint, perspective) {
+function pickAllNonWorkerUnits(macroBreakdown, windowStart, windowEnd, perspective) {
   const timeline = Array.isArray(macroBreakdown && macroBreakdown.unit_timeline)
     ? macroBreakdown.unit_timeline
     : [];
   if (timeline.length === 0) return [];
-  let best = timeline[0];
-  let bestDist = Math.abs(Number(best.time) - midpoint);
-  for (let i = 1; i < timeline.length; i++) {
-    const d = Math.abs(Number(timeline[i].time) - midpoint);
-    if (d < bestDist) {
-      best = timeline[i];
-      bestDist = d;
-    }
-  }
-  const side = perspective === "opponent"
-    ? ((best && best.opp) || {})
-    : ((best && best.my) || {});
+  const side = perspective === "opponent" ? "opp" : "my";
+  const peak = peakAliveInWindow(
+    timeline, windowStart, windowEnd, side, WORKER_SKIP,
+  );
   /** @type {Array<{token: string, count: number}>} */
   const entries = [];
-  for (const token of Object.keys(side)) {
-    if (WORKER_SKIP.has(token)) continue;
-    const n = Number(side[token]);
-    if (!(n > 0)) continue;
-    entries.push({ token, count: n });
+  for (const [token, count] of Object.entries(peak.counts)) {
+    if (!(count > 0)) continue;
+    entries.push({ token, count });
   }
   entries.sort(byCountDescTokenAsc);
   return entries;
