@@ -117,7 +117,11 @@ function buildPulseBackfillJob(deps) {
         { $set: { key: LOCK_KEY, expiresAt, acquiredAt: new Date(now()) } },
         { upsert: true, returnDocument: "after" },
       );
-      return Boolean(res && (res.value || res.ok));
+      // mongodb@6 returns the document directly (not a `{value, ok}`
+      // envelope) when `includeResultMetadata` is unset. A non-null
+      // result here means we either updated an expired lock or
+      // inserted a fresh one — both count as a successful claim.
+      return res != null;
     } catch (err) {
       // E11000 = another replica won the race. That's fine; we'll
       // run next tick.

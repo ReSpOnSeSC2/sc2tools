@@ -56,7 +56,7 @@ describe("db/schemaVersioning", () => {
     const doc = { foo: 1 };
     expect(getOnDiskVersion(doc, TEST)).toBe(null);
     stampVersion(doc, TEST);
-    expect(getOnDiskVersion(doc, TEST)).toBe(1);
+    expect(getOnDiskVersion(doc, TEST)).toBe(expectedVersion(TEST));
   });
 
   test("migrateDoc applies forward migration", () => {
