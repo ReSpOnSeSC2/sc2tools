@@ -1032,22 +1032,20 @@ def _compute_macro_breakdown(
         log.warning("compute_macro_score_failed: %s", exc)
         score = {}
     macro_score_val = score.get("macro_score") if isinstance(score, dict) else None
-    # sc2reader's PlayerStatsEvent fires every ~10 s, which is finer
-    # resolution than the SPA's resource/army charts can render
-    # (typical chart widths give ~5–10 px per sample at 30 s, so the
-    # 10 s grid is invisible). Downsampling to 30 s buckets cuts each
-    # ``stats_events`` array to roughly a third of its original size
-    # — about 12 kB / game saved, the single biggest knob in the
-    # per-game payload. The macro_score above already ran against the
-    # full stream so nothing scoring-side is affected.
+    # sc2reader's PlayerStatsEvent fires every ~10 s. We bucket at the
+    # same cadence so the chart hover snaps to every native sample —
+    # users scrubbing the Active Army timeline get a reading every 10 s
+    # of game time instead of every 30 s. Each sample is ~24 bytes on
+    # the wire, so a 30 min game adds ~4 kB per side vs. the old 30 s
+    # cadence — well within the 5000-entry maxItems cap (≥13 h of
+    # game time). The macro_score above already ran against the full
+    # stream so nothing scoring-side is affected.
     my_stats_full = list(my_macro.get("stats_events") or [])
     my_stats_ds = _downsample_stats_events(my_stats_full)
     opp_stats_ds = _downsample_stats_events(opp_stats)
     # Match unit_timeline against the downsampled my-stats sample times
     # so the SPA's chart hover and unit-composition snapshot land on
-    # the SAME ticks as the army/worker lines. unit_timeline at the
-    # full 10 s cadence would unbalance the wire payload; the chart
-    # can't render finer than 30 s anyway.
+    # the SAME ticks as the army/worker lines.
     unit_timeline = _downsample_unit_timeline(
         list(my_macro.get("unit_timeline") or []),
         kept_times=[int(s.get("time", 0)) for s in my_stats_ds],
@@ -1073,23 +1071,23 @@ def _compute_macro_breakdown(
 
 
 # How wide each ``stats_events`` retention bucket is, in game-time
-# seconds. 30 s matches the chart resolution the SPA's
-# ResourcesOverTimeChart and ActiveArmyChart render at — finer
-# granularity is invisible. The constant is module-level so tests can
-# import + assert against it.
-_STATS_EVENTS_BUCKET_SEC = 30
+# seconds. 10 s matches sc2reader's native PlayerStatsEvent cadence so
+# the chart hover snaps to every emitted sample. The constant is
+# module-level so tests can import + assert against it.
+_STATS_EVENTS_BUCKET_SEC = 10
 
 
 def _downsample_stats_events(events: list) -> list:
-    """Keep one ``stats_events`` entry per 30 s game-time bucket.
+    """Keep one ``stats_events`` entry per ``_STATS_EVENTS_BUCKET_SEC``
+    game-time bucket.
 
     Input is sc2reader's ~10 s-cadence ``PlayerStatsEvent`` rows;
-    output is the FIRST event in each 30 s bucket. We keep the first
-    rather than averaging because each row is already a snapshot of
-    cumulative state (food_used, minerals_current, etc.) — averaging
-    would smooth meaningful spikes (a temporary mineral float, a
-    burst of unspent gas) that the user cares about. Empty input
-    returns an empty list; a None input is also handled.
+    output is the FIRST event in each bucket. We keep the first rather
+    than averaging because each row is already a snapshot of cumulative
+    state (food_used, minerals_current, etc.) — averaging would smooth
+    meaningful spikes (a temporary mineral float, a burst of unspent
+    gas) that the user cares about. Empty input returns an empty list;
+    a None input is also handled.
     """
     if not events:
         return []

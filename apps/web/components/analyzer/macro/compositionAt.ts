@@ -6,7 +6,7 @@
  * by accuracy:
  *
  *   1. ``unit_timeline`` — agent v0.5+ uploads. One snapshot of alive
- *      units per stats sample (~30s cadence post-downsample) per side.
+ *      units per stats sample (~10 s cadence post-downsample) per side.
  *      The tracker walk that builds it is fully death-aware: a unit
  *      vanishes from the snapshot the tick after its UnitDiedEvent.
  *
@@ -304,7 +304,7 @@ interface DeathEvent {
  * exact death time within the sample window — the tracker only
  * surfaces alive-counts at sample times — so we anchor the death to
  * the later sample. The user-facing impact is bounded by the sample
- * cadence (≤30 s in v0.5+ payloads).
+ * cadence (≤10 s in v0.5+ payloads).
  *
  * Increases are ignored — they're handled by the build-order births.
  * That means a unit that was born and died inside a single window

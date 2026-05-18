@@ -85,9 +85,11 @@ const GAME_SCHEMA = {
         stats_events: { type: "array", maxItems: 5000 },
         opp_stats_events: { type: "array", maxItems: 5000 },
         // unit_timeline arrives at the same cadence as stats_events
-        // (one entry per 30 s game-time bucket post-downsample). Each
-        // entry shape: { time, my: {Name: count}, opp: {Name: count} }.
-        // Caps match stats_events to keep the wire payload bounded.
+        // (one entry per 10 s game-time bucket post-downsample, matching
+        // sc2reader's native PlayerStatsEvent cadence). Each entry
+        // shape: { time, my: {Name: count}, opp: {Name: count} }. Cap
+        // is 5000 entries — enough for ~13 h of game time, so SC2's
+        // hard 60-min limit never approaches the bound.
         unit_timeline: { type: "array", maxItems: 5000 },
         // Per-player cumulative stats: { me, opponent } each carrying
         // counters (units_produced, units_killed, etc.) plus the

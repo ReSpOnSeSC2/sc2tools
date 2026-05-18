@@ -1024,28 +1024,27 @@ def test_parse_replay_for_cloud_caps_build_logs_to_schema_limits(
 
 
 # -------------------------------------------------------------------------
-# stats_events downsampling — v0.4.3 storage trim. sc2reader emits
-# PlayerStatsEvent every ~10 s, but the SPA's resource/army charts
-# render at 30 s resolution at most. Keeping all 10 s samples doubles
-# per-doc storage on the 30k-game-and-up scale we're targeting, so the
-# agent now keeps only the FIRST event in each 30 s game-time bucket
-# before shipping the macroBreakdown payload. macro_score is computed
-# on the FULL stream first so leak detection / SQ / penalties are
-# unaffected.
+# stats_events downsampling — the agent buckets sc2reader's native
+# ~10 s PlayerStatsEvent stream to one entry per bucket before shipping
+# the macroBreakdown payload. Bucket width matches the native cadence
+# so the SPA's Active Army chart hover snaps to every emitted sample.
+# macro_score is computed on the FULL stream first so leak detection /
+# SQ / penalties are unaffected.
 # -------------------------------------------------------------------------
 
 
-def test_downsample_stats_events_keeps_first_per_30s_bucket():
+def test_downsample_stats_events_keeps_first_per_bucket():
     from sc2tools_agent.replay_pipeline import (
         _downsample_stats_events,
         _STATS_EVENTS_BUCKET_SEC,
     )
-    assert _STATS_EVENTS_BUCKET_SEC == 30  # locked to chart resolution
-    # 10 s cadence input, 0..120 s — buckets are [0,30), [30,60),
-    # [60,90), [90,120), [120,150) so we expect t=0, 30, 60, 90, 120.
-    events = [{"time": t, "food_used": t} for t in range(0, 130, 10)]
+    assert _STATS_EVENTS_BUCKET_SEC == 10  # locked to sc2reader native cadence
+    # 5 s cadence input, 0..50 s — buckets are [0,10), [10,20), [20,30),
+    # [30,40), [40,50), [50,60) so we expect the first event in each
+    # bucket: t=0, 10, 20, 30, 40, 50.
+    events = [{"time": t, "food_used": t} for t in range(0, 55, 5)]
     out = _downsample_stats_events(events)
-    assert [e["time"] for e in out] == [0, 30, 60, 90, 120]
+    assert [e["time"] for e in out] == [0, 10, 20, 30, 40, 50]
 
 
 def test_downsample_stats_events_handles_empty_and_none():
@@ -1063,7 +1062,7 @@ def test_downsample_stats_events_skips_malformed_time():
         {"time": 0, "food_used": 1},
         {"food_used": 2},                    # missing time
         {"time": "garbage", "food_used": 3},  # unparseable time
-        {"time": 35, "food_used": 4},        # bucket 1
+        {"time": 15, "food_used": 4},        # bucket 1
     ]
     out = _downsample_stats_events(events)
     assert [e["food_used"] for e in out] == [1, 4]
