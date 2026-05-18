@@ -48,7 +48,12 @@ export const FOOD_FALLBACK_MULT = 50;
 export const ARMY_FALLBACK_CAP = 9000;
 export const ARMY_FLOOR = 200;
 export const WORKER_FLOOR = 12;
-export const X_TICK_STEP_SEC = 60;
+/**
+ * Lower bound for the X-axis when a game length is unavailable AND no
+ * samples were extracted (very-short replays or slim payloads). Keeps
+ * the empty-state chart legible.
+ */
+export const MIN_AXIS_SECONDS = 60;
 export const Y_TICK_FRACTIONS = [0, 0.25, 0.5, 0.75, 1];
 
 /**
@@ -248,13 +253,41 @@ export function buildLayout(
   oppSeries: SeriesPoint[],
   gameLengthSec: number | undefined,
 ): ChartLayout | null {
-  const myArr = Array.isArray(mySeries) ? mySeries : [];
-  const oppArr = Array.isArray(oppSeries) ? oppSeries : [];
-  if (myArr.length === 0 && oppArr.length === 0) return null;
-  const allSeries = myArr.concat(oppArr);
+  const myArrRaw = Array.isArray(mySeries) ? mySeries : [];
+  const oppArrRaw = Array.isArray(oppSeries) ? oppSeries : [];
+  if (myArrRaw.length === 0 && oppArrRaw.length === 0) return null;
 
-  const observedT = allSeries.reduce((m, p) => Math.max(m, p.t), 0);
-  const maxT = Math.max(observedT, Number(gameLengthSec) || 0, 60);
+  const observedT = Math.max(
+    myArrRaw.reduce((m, p) => Math.max(m, p.t), 0),
+    oppArrRaw.reduce((m, p) => Math.max(m, p.t), 0),
+  );
+  // Trust the replay's authoritative length whenever the agent reported
+  // a positive game_length_sec — that's the actual seconds-played from
+  // the replay header. The axis (and every consumer of maxT) ends
+  // exactly where the game ended, with no padding past the leaver/GG.
+  // When the field is missing or zero (very old payloads, broken
+  // metadata) we fall back to the latest observed sample, floored to
+  // MIN_AXIS_SECONDS so a 12-second test-replay still draws an axis.
+  const lengthFromMeta = Number(gameLengthSec) || 0;
+  const maxT =
+    lengthFromMeta > 0
+      ? lengthFromMeta
+      : Math.max(observedT, MIN_AXIS_SECONDS);
+
+  // Drop any samples that landed past the authoritative game end (can
+  // happen when sc2reader's stat tick fires inside the post-game grace
+  // period). Without this, the line would continue past plotRight and
+  // the SVG would draw it outside the plot area on browsers that don't
+  // honour the implicit viewBox clip.
+  const myArr =
+    lengthFromMeta > 0
+      ? myArrRaw.filter((p) => p.t <= maxT)
+      : myArrRaw;
+  const oppArr =
+    lengthFromMeta > 0
+      ? oppArrRaw.filter((p) => p.t <= maxT)
+      : oppArrRaw;
+  const allSeries = myArr.concat(oppArr);
   const armyVals = allSeries.map((p) => p.army);
   const workerVals = allSeries.map((p) => p.workers);
   const armyPeak = Math.max(
@@ -281,12 +314,7 @@ export function buildLayout(
     return ((clamped - PAD_LEFT) / innerW) * maxT;
   };
 
-  // X-tick density adapts to game length so labels never collide:
-  // ≤7 min → 60 s ticks; ≤15 min → 120 s; otherwise 180 s.
-  const xTickStep =
-    maxT > 900 ? 180 : maxT > 420 ? 120 : X_TICK_STEP_SEC;
-  const xTicks: number[] = [];
-  for (let t = 0; t <= maxT; t += xTickStep) xTicks.push(t);
+  const xTicks = computeXTicks(maxT);
 
   return {
     width: VIEW_W,
@@ -312,6 +340,58 @@ export function buildLayout(
     mySeries: myArr,
     oppSeries: oppArr,
   };
+}
+
+/**
+ * Compute X-axis tick positions for the chart. Targets ~5–7 evenly-
+ * spaced labels for ANY game length so the axis never collides at the
+ * mobile minimum width (320 px ≈ 0.44× viewBox scale) and never sits
+ * sparse at desktop width. Steps are picked from the same human-
+ * readable cadence — 30 s, 1 m, 2 m, 3 m, 5 m, 10 m — that
+ * sc2replaystats's chart uses, so a viewer's mental model carries
+ * across charts.
+ *
+ * Examples:
+ *   2 min game →  30 s step → 0:00, 0:30, 1:00, 1:30, 2:00
+ *   5 min     →  60 s step → 0:00, 1:00, 2:00, 3:00, 4:00, 5:00
+ *  10 min     → 120 s step → 0:00 … 10:00 (6 labels)
+ *  15 min     → 180 s step → 0:00 … 15:00 (6 labels)
+ *  25 min     → 300 s step → 0:00 … 25:00 (6 labels)
+ *  45 min     → 600 s step → 0:00 … 40:00 + the final cap label
+ *
+ * The closing tick is always pinned to ``maxT`` exactly so a 27:42
+ * game reads "0:00 … 27:42" rather than ending at the previous tick.
+ * Exported for the test suite.
+ */
+export function computeXTicks(maxT: number): number[] {
+  const step = pickXTickStep(maxT);
+  const ticks: number[] = [];
+  for (let t = 0; t < maxT; t += step) ticks.push(t);
+  // Always include the exact end-of-game marker. If it would sit
+  // closer than ~35% of a step to the previous tick we drop the
+  // crowding inner tick instead of the labelled endpoint — readers
+  // care more about "the game ended at 27:42" than the round 27:00.
+  const endTick = Math.round(maxT);
+  if (ticks.length === 0) {
+    ticks.push(endTick);
+  } else {
+    const prev = ticks[ticks.length - 1];
+    if (endTick - prev < step * 0.35) {
+      ticks[ticks.length - 1] = endTick;
+    } else {
+      ticks.push(endTick);
+    }
+  }
+  return ticks;
+}
+
+function pickXTickStep(maxT: number): number {
+  if (maxT <= 180) return 30;       // ≤3 min  → 30 s
+  if (maxT <= 360) return 60;       // ≤6 min  → 1 m
+  if (maxT <= 720) return 120;      // ≤12 min → 2 m
+  if (maxT <= 1200) return 180;     // ≤20 min → 3 m
+  if (maxT <= 1800) return 300;     // ≤30 min → 5 m
+  return 600;                       //  >30 min → 10 m
 }
 
 function pathFor(
@@ -364,7 +444,7 @@ export function niceCeil(value: number): number {
 /**
  * Find the series point whose time is closest to ``t``. Returns
  * ``null`` for an empty series. Linear scan is fine — series length
- * caps at ~50 entries on a 25-minute game (one per 30 s).
+ * caps at ~150 entries on a 25-minute game (one per 10 s).
  */
 export function nearestPoint(
   series: SeriesPoint[],

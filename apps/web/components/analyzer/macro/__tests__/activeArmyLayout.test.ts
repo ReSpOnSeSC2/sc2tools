@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   ARMY_FALLBACK_CAP,
+  buildLayout,
   buildSeries,
+  computeXTicks,
   nearestPriorPoint,
   niceCeil,
   seriesAt,
@@ -250,5 +252,76 @@ describe("niceCeil", () => {
     expect(niceCeil(173)).toBe(200);
     expect(niceCeil(518)).toBe(600);
     expect(niceCeil(2487)).toBe(2500);
+  });
+});
+
+describe("computeXTicks — adaptive density for clean mobile + desktop axes", () => {
+  it("uses 30 s steps for very short games and pins the end label exactly", () => {
+    // 2 min game with a non-round end time — first ticks at 30 s
+    // cadence, final tick pinned to the exact end so the user reads
+    // "the game ended at 1:48", not "ended at 1:30".
+    const ticks = computeXTicks(108);
+    expect(ticks).toEqual([0, 30, 60, 90, 108]);
+  });
+
+  it("absorbs the last regular tick when it would crowd the end cap", () => {
+    // 121 s — last regular tick would be 120, only 1 s from the end.
+    // 1 s < 30 * 0.35 = 10.5 s so the inner tick is replaced by the
+    // labelled endpoint to avoid two labels stacking on each other.
+    const ticks = computeXTicks(121);
+    expect(ticks).toEqual([0, 30, 60, 90, 121]);
+  });
+
+  it("scales steps so a 30-minute game produces ~6 clean labels", () => {
+    const ticks = computeXTicks(1800);
+    expect(ticks).toEqual([0, 300, 600, 900, 1200, 1500, 1800]);
+  });
+
+  it("scales steps so a 60-minute game stays under ~8 labels", () => {
+    const ticks = computeXTicks(3600);
+    expect(ticks.length).toBeLessThanOrEqual(8);
+    expect(ticks[0]).toBe(0);
+    expect(ticks[ticks.length - 1]).toBe(3600);
+  });
+});
+
+describe("buildLayout — game length drives the axis", () => {
+  it("clamps maxT to the replay-reported game length when present", () => {
+    // Samples extend to 1830 s (sc2reader's post-game grace tick) but
+    // the replay's authoritative length is 1422 s — chart must end at
+    // 1422, not 1830.
+    const samples = Array.from({ length: 184 }, (_, i) => ({
+      t: i * 10,
+      army: 100,
+      workers: 20,
+      armySource: "stats" as const,
+      units: {},
+      unitsSource: "empty" as const,
+    }));
+    const layout = buildLayout(samples, [], 1422);
+    expect(layout?.maxT).toBe(1422);
+    // Samples past the cap are dropped so the line never draws outside
+    // the plot area.
+    expect(layout?.mySeries.every((p) => p.t <= 1422)).toBe(true);
+    // The end-of-game tick is labelled exactly at the cap.
+    expect(layout?.xTicks[layout.xTicks.length - 1]).toBe(1422);
+  });
+
+  it("falls back to the latest observed sample when game length is missing", () => {
+    const samples = [
+      { t: 0, army: 100, workers: 12, armySource: "stats" as const, units: {}, unitsSource: "empty" as const },
+      { t: 600, army: 1500, workers: 30, armySource: "stats" as const, units: {}, unitsSource: "empty" as const },
+    ];
+    const layout = buildLayout(samples, [], undefined);
+    expect(layout?.maxT).toBe(600);
+  });
+
+  it("never goes below the minimum axis floor on tiny replays", () => {
+    const samples = [
+      { t: 0, army: 0, workers: 12, armySource: "stats" as const, units: {}, unitsSource: "empty" as const },
+      { t: 12, army: 50, workers: 12, armySource: "stats" as const, units: {}, unitsSource: "empty" as const },
+    ];
+    const layout = buildLayout(samples, [], 0);
+    expect(layout?.maxT).toBeGreaterThanOrEqual(60);
   });
 });
