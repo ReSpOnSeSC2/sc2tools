@@ -125,8 +125,8 @@ export function factPerfectOpponentExists(
   if (perfect.length === 0 || nonPerfect.length === 0) return null;
   const sample = perfect.slice().sort((a, b) => b.games - a.games)[0];
   return {
-    truthText: `You have at least one opponent you've played ${CENSUS_MIN_GAMES}+ times against without ever losing.`,
-    lieText: `You've lost at least once to every opponent you've played ${CENSUS_MIN_GAMES}+ times against.`,
+    truthText: `In your tracked history, you have at least one opponent you've played ${CENSUS_MIN_GAMES}+ times against without ever losing.`,
+    lieText: `In your tracked history, you've lost at least once to every opponent you've played ${CENSUS_MIN_GAMES}+ times against.`,
     detail: `${sample.displayName} · ${sample.wins}-${sample.losses} (${pct1(sample.wins / sample.games)}).`,
   };
 }
@@ -148,8 +148,8 @@ export function factWinlessMapExists(
   if (winless.length === 0 || nonWinless.length === 0) return null;
   const sample = winless.slice().sort((a, b) => b.games - a.games)[0];
   return {
-    truthText: `You have at least one map you've played ${CENSUS_MIN_GAMES}+ times on without winning a single game.`,
-    lieText: `You've won at least once on every map you've played ${CENSUS_MIN_GAMES}+ times on.`,
+    truthText: `In your tracked history, you have at least one map you've played ${CENSUS_MIN_GAMES}+ times on without winning a single game.`,
+    lieText: `In your tracked history, you've won at least once on every map you've played ${CENSUS_MIN_GAMES}+ times on.`,
     detail: `${sample.displayName} · ${sample.wins}-${sample.losses} (${pct1(sample.wins / sample.games)}).`,
   };
 }
@@ -171,8 +171,8 @@ export function factDominantBuildExists(
   if (dominant.length === 0 || nonDominant.length === 0) return null;
   const sample = dominant.slice().sort((a, b) => b.games - a.games)[0];
   return {
-    truthText: `You have at least one build with a 70%+ WR over ${CENSUS_MIN_GAMES}+ games.`,
-    lieText: `Every build you've played ${CENSUS_MIN_GAMES}+ times sits below a 70% WR.`,
+    truthText: `In your tracked history, you have at least one build with a 70%+ WR over ${CENSUS_MIN_GAMES}+ games.`,
+    lieText: `In your tracked history, every build you've played ${CENSUS_MIN_GAMES}+ times sits below a 70% WR.`,
     detail: `${sample.displayName} · ${sample.wins}-${sample.losses} (${pct1(sample.wins / sample.games)}).`,
   };
 }
@@ -194,8 +194,8 @@ export function factEvenRivalryExists(
   if (even.length === 0 || nonEven.length === 0) return null;
   const sample = even.slice().sort((a, b) => b.games - a.games)[0];
   return {
-    truthText: `You have at least one opponent you've played ${CENSUS_EVEN_MIN_GAMES}+ times against where the head-to-head is exactly even.`,
-    lieText: `Every opponent you've played ${CENSUS_EVEN_MIN_GAMES}+ times against has either a winning or a losing record (no exact ties).`,
+    truthText: `In your tracked history, you have at least one opponent you've played ${CENSUS_EVEN_MIN_GAMES}+ times against where the head-to-head is exactly even.`,
+    lieText: `In your tracked history, every opponent you've played ${CENSUS_EVEN_MIN_GAMES}+ times against has either a winning or a losing record (no exact ties).`,
     detail: `${sample.displayName} · ${sample.wins}-${sample.losses} (${pct1(sample.wins / sample.games)}).`,
   };
 }
@@ -219,11 +219,11 @@ export function factOneAndDoneOpponents(
   const majority = ratio > 0.5;
   return {
     truthText: majority
-      ? `More than half of your opponents are people you've only played once.`
-      : `Less than half of your opponents are people you've only played once.`,
+      ? `In your tracked history, more than half of your opponents are people you've only played once.`
+      : `In your tracked history, less than half of your opponents are people you've only played once.`,
     lieText: majority
-      ? `Less than half of your opponents are people you've only played once.`
-      : `More than half of your opponents are people you've only played once.`,
+      ? `In your tracked history, less than half of your opponents are people you've only played once.`
+      : `In your tracked history, more than half of your opponents are people you've only played once.`,
     detail: `${singletons} one-time opponents out of ${stats.length} (${pct1(ratio)}).`,
   };
 }
