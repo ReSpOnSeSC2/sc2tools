@@ -613,11 +613,12 @@ describe("services/aggregations", () => {
     const games = buildGames([
       () => [
         {
-          kept: [
+          summary: [{ _id: null, totalGames: 28, missingMyMmr: 13 }],
+          keptPairs: [
             { _id: "P", netMmr: 84.4, avgDelta: 14.06, games: 6, wins: 4, losses: 2 },
             { _id: "Z", netMmr: -45.7, avgDelta: -9.14, games: 5, wins: 2, losses: 3 },
           ],
-          dropped: [{ _id: null, longGap: 2, outlierSwing: 1 }],
+          droppedPairs: [{ _id: null, longGap: 2, outlierSwing: 1 }],
         },
       ],
     ]);
@@ -630,10 +631,12 @@ describe("services/aggregations", () => {
     expect(p.winRate).toBeCloseTo(4 / 6);
     const z = out.matchups.find((m) => m.race === "Z");
     expect(z.netMmr).toBe(-46);
-    // Diagnostic counters surface so the chart can show "X pairs
-    // hidden: Y long gaps · Z outlier swings".
+    // Diagnostic counters surface so the chart can show
+    // "13 pairs from 28 games · 13 missing MMR · 2 long gaps · 1 outlier".
+    expect(out.totalGames).toBe(28);
     expect(out.dropped.longGap).toBe(2);
     expect(out.dropped.outlierSwing).toBe(1);
+    expect(out.dropped.missingMyMmr).toBe(13);
   });
 
   test("netMmrByMatchup partitions by region so a region switch doesn't fake a phantom loss", async () => {
@@ -648,7 +651,10 @@ describe("services/aggregations", () => {
       aggregate(pipeline) {
         captured = pipeline;
         return {
-          toArray: () => Promise.resolve([{ kept: [], dropped: [] }]),
+          toArray: () =>
+            Promise.resolve([
+              { summary: [], keptPairs: [], droppedPairs: [] },
+            ]),
         };
       },
     };
@@ -661,14 +667,23 @@ describe("services/aggregations", () => {
     // since they drive every regional partition.
     expect(json).toContain('"NA"');
     expect(json).toContain('"EU"');
+    // Summary branch must run BEFORE the $match that drops
+    // !myMmr games — otherwise the missingMyMmr counter is
+    // always zero and the chart can't explain the disparity.
+    expect(json).toContain('"missingMyMmr"');
+    expect(json).toContain('"totalGames"');
   });
 
-  test("netMmrByMatchup empty result still returns matchups[] and dropped counters", async () => {
-    const games = buildGames([() => [{ kept: [], dropped: [] }]]);
+  test("netMmrByMatchup empty result still returns matchups[] and full dropped+totals counters", async () => {
+    const games = buildGames([
+      () => [{ summary: [], keptPairs: [], droppedPairs: [] }],
+    ]);
     const svc = new AggregationsService({ games });
     const out = /** @type {any} */ (await svc.netMmrByMatchup("u1", {}));
     expect(out.matchups).toEqual([]);
+    expect(out.totalGames).toBe(0);
     expect(out.dropped.longGap).toBe(0);
     expect(out.dropped.outlierSwing).toBe(0);
+    expect(out.dropped.missingMyMmr).toBe(0);
   });
 });

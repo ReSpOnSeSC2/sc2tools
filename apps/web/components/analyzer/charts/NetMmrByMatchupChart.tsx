@@ -27,9 +27,11 @@ type MatchupRow = {
 
 type Response = {
   matchups: MatchupRow[];
+  totalGames?: number;
   dropped?: {
     longGap: number;
     outlierSwing: number;
+    missingMyMmr?: number;
   };
 };
 
@@ -116,11 +118,12 @@ export function NetMmrByMatchupChart() {
     <Card title="Net MMR by matchup">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
         MMR gained (▶) or lost (◀) per opponent race, summed within
-        each region from consecutive ranked games. Region partitioning
-        keeps a NA → EU switch from faking a thousand-MMR loss; pairs
-        more than 24 h apart or swinging past ±150 MMR (race
-        switches, season resets) are dropped so a 100%-WR matchup
-        never reads as a net loss.
+        each region from consecutive ranked games. Each pair needs
+        your own MMR on both sides, so games the agent didn't tag
+        with MMR (older versions) sit out — the line under the
+        cards spells out how many. Pairs more than 24 h apart or
+        swinging past ±150 MMR (race switches, season resets) are
+        dropped so a 100%-WR matchup never reads as a net loss.
       </p>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
@@ -190,41 +193,71 @@ export function NetMmrByMatchupChart() {
           </div>
         ))}
       </div>
-      <DroppedSummary dropped={data?.dropped} />
+      <PairCoverageSummary
+        rows={rows}
+        totalGames={data?.totalGames}
+        dropped={data?.dropped}
+      />
     </Card>
   );
 }
 
 /**
- * Surfaces the per-reason "pairs hidden" count from the API so the
- * filtering is visible rather than mysterious. ``longGap`` counts
- * pairs where the next myMmr-tagged game on the same region landed
- * more than 24 h later; ``outlierSwing`` counts pairs where the
- * delta blew past ±150 MMR (race switches, season resets, recording
- * gaps). Renders nothing when both counters are zero so the card
- * stays uncluttered for users whose data is clean.
+ * Reconciles the chart's pair count against the user's filtered
+ * game count so the disparity isn't mysterious. The Win-Rate-by-MMR
+ * chart uses an opponents-collection fallback for opp.mmr, which
+ * picks up games where the agent never logged myMmr — those same
+ * games can't form Net-MMR pairs (we need myMmr on both sides), so
+ * Net-MMR will always read lower. Without surfacing the breakdown
+ * the user assumes the chart is broken.
+ *
+ * Shape: "N pairs from M games · K missing MMR · L long gaps · O outlier swings".
+ * Only renders non-zero categories.
  */
-function DroppedSummary({
+function PairCoverageSummary({
+  rows,
+  totalGames,
   dropped,
 }: {
-  dropped: { longGap: number; outlierSwing: number } | undefined;
+  rows: { games: number }[];
+  totalGames: number | undefined;
+  dropped:
+    | { longGap: number; outlierSwing: number; missingMyMmr?: number }
+    | undefined;
 }) {
-  if (!dropped) return null;
-  const { longGap, outlierSwing } = dropped;
-  const total = longGap + outlierSwing;
-  if (total === 0) return null;
-  const parts: string[] = [];
+  const pairCount = rows.reduce((sum, r) => sum + r.games, 0);
+  const longGap = dropped?.longGap ?? 0;
+  const outlierSwing = dropped?.outlierSwing ?? 0;
+  const missingMyMmr = dropped?.missingMyMmr ?? 0;
+  // Nothing to explain: no totals from API and no drops.
+  if (
+    !totalGames &&
+    !longGap &&
+    !outlierSwing &&
+    !missingMyMmr
+  ) {
+    return null;
+  }
+  const reasons: string[] = [];
+  if (missingMyMmr > 0) {
+    reasons.push(`${missingMyMmr} missing MMR data`);
+  }
   if (longGap > 0) {
-    parts.push(`${longGap} long gap${longGap === 1 ? "" : "s"} (>24 h)`);
+    reasons.push(`${longGap} long gap${longGap === 1 ? "" : "s"} (>24 h)`);
   }
   if (outlierSwing > 0) {
-    parts.push(
+    reasons.push(
       `${outlierSwing} outlier swing${outlierSwing === 1 ? "" : "s"} (>±150)`,
     );
   }
+  const head =
+    typeof totalGames === "number" && totalGames > 0
+      ? `${pairCount} pair${pairCount === 1 ? "" : "s"} from ${totalGames} game${totalGames === 1 ? "" : "s"}`
+      : `${pairCount} pair${pairCount === 1 ? "" : "s"}`;
   return (
     <p className="mt-2 text-[10px] text-text-dim">
-      {total} pair{total === 1 ? "" : "s"} hidden · {parts.join(" · ")}
+      {head}
+      {reasons.length ? ` · ${reasons.join(" · ")}` : ""}
     </p>
   );
 }

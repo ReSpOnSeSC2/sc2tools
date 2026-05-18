@@ -376,7 +376,76 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
       makeGame({ gameId: "g1", myMmr: null }),
       makeGame({ gameId: "g2", myMmr: null }),
     ]);
-    const { matchups } = await svc.netMmrByMatchup("u1", {});
+    const { matchups, totalGames, dropped } = await svc.netMmrByMatchup(
+      "u1",
+      {},
+    );
     expect(matchups).toEqual([]);
+    // Two games show up in the filtered set, both missing myMmr —
+    // chart can render "0 pairs from 2 games · 2 missing MMR".
+    expect(totalGames).toBe(2);
+    expect(dropped.missingMyMmr).toBe(2);
   });
+
+  test(
+    "diagnostic counters explain why pair count < game count " +
+      "(missing-myMmr games are visible)",
+    async () => {
+      // Bug repro: Win-Rate-by-MMR chart shows 28 games (it uses the
+      // opp-mmr fallback), Net-MMR-by-matchup shows only ~13 pairs.
+      // The disparity has to be legible: games without ``myMmr`` are
+      // the dominant reason, and the chart now surfaces that count
+      // so the user doesn't think the chart is broken.
+      const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+      await db.games.insertMany([
+        // Three myMmr-tagged games on NA → two valid pairs vs Zerg.
+        makeGame({
+          gameId: "z1",
+          date: new Date(t0 + 0 * MIN_AGO),
+          myMmr: 4500,
+          result: "Victory",
+          opponent: { race: "Zerg", mmr: 4500 },
+        }),
+        makeGame({
+          gameId: "z2",
+          date: new Date(t0 + 5 * MIN_AGO),
+          myMmr: 4525,
+          result: "Victory",
+          opponent: { race: "Zerg", mmr: 4525 },
+        }),
+        makeGame({
+          gameId: "z3",
+          date: new Date(t0 + 10 * MIN_AGO),
+          myMmr: 4550,
+          result: "Victory",
+          opponent: { race: "Zerg", mmr: 4550 },
+        }),
+        // Two ranked games WITHOUT myMmr (older agent versions): they
+        // appear in Win-Rate-by-MMR but can never form a pair.
+        makeGame({
+          gameId: "no_mmr_1",
+          date: new Date(t0 + 20 * MIN_AGO),
+          myMmr: null,
+          result: "Defeat",
+          opponent: { race: "Terran", mmr: 4540 },
+        }),
+        makeGame({
+          gameId: "no_mmr_2",
+          date: new Date(t0 + 25 * MIN_AGO),
+          myMmr: null,
+          result: "Victory",
+          opponent: { race: "Protoss", mmr: 4530 },
+        }),
+      ]);
+      const out = await svc.netMmrByMatchup("u1", {});
+      // 5 filtered games, 2 missing myMmr, 2 surviving pairs (z1→z2,
+      // z2→z3). The disparity (5 games vs 2 pairs) is now visible in
+      // the response and the chart can render the "why".
+      expect(out.totalGames).toBe(5);
+      expect(out.dropped.missingMyMmr).toBe(2);
+      const z = findRow(out.matchups, "Z");
+      expect(z).toBeDefined();
+      expect(z.games).toBe(2);
+    },
+  );
 });
