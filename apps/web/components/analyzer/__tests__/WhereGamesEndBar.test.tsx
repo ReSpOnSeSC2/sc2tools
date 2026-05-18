@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { WhereGamesEndBar } from "../WhereGamesEndBar";
 
 afterEach(cleanup);
@@ -19,7 +19,7 @@ describe("WhereGamesEndBar", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders the stacked outcome bar with the total game count", () => {
+  it("renders the stacked outcome bar with the total game count and no 'reached by' suffix", () => {
     render(
       <WhereGamesEndBar
         finalPhaseDistribution={{
@@ -29,7 +29,6 @@ describe("WhereGamesEndBar", () => {
           midLate: 0,
           late: 3,
         }}
-        sampleSize={{ early: 9, earlyMid: 8, mid: 3, midLate: 3, late: 3 }}
       />,
     );
     const bar = screen.getByLabelText(
@@ -37,7 +36,32 @@ describe("WhereGamesEndBar", () => {
     );
     expect(bar).toBeTruthy();
     expect(screen.getByText("9 games")).toBeTruthy();
-    expect(screen.getByText(/reached by 9/i)).toBeTruthy();
-    expect(screen.getByText(/reached by 8/i)).toBeTruthy();
+    expect(screen.queryByText(/reached by/i)).toBeNull();
+  });
+
+  it("opens a popover with the game count when a sliver is clicked and closes it on a second click", () => {
+    render(
+      <WhereGamesEndBar
+        finalPhaseDistribution={{
+          early: 5,
+          earlyMid: 15,
+          mid: 3,
+          midLate: 0,
+          late: 15,
+        }}
+      />,
+    );
+    const earlyMidSliver = screen
+      .getAllByTestId("phase-final-bar")
+      .find((el) => el.getAttribute("data-phase") === "earlyMid");
+    expect(earlyMidSliver).toBeTruthy();
+    fireEvent.click(earlyMidSliver!);
+    const popover = screen.getByRole("status");
+    expect(popover.textContent).toMatch(/Early\/Mid/);
+    expect(popover.textContent).toMatch(/15/);
+    expect(popover.textContent).toMatch(/games/);
+    expect(earlyMidSliver!.getAttribute("data-selected")).toBe("1");
+    fireEvent.click(earlyMidSliver!);
+    expect(screen.queryByRole("status")).toBeNull();
   });
 });
