@@ -168,6 +168,53 @@ describe("ScoutingLastGames", () => {
     ).not.toBeNull();
   });
 
+  it("composition cards surface peak-alive counts from the envelope without re-splitting variants", () => {
+    // The API ships canonical unit tokens with PEAK ALIVE counts per
+    // phase. The overlay's mergeBucket aggregates across the
+    // mid/late phases inside one card by taking the MAX per token,
+    // which (because the server already merged variants) preserves
+    // the peak count rather than splitting it. This test pins that
+    // a 10-Carrier peak surfaces as "10" on the strip — not split
+    // into "Carrier 7" + "Carrier 3" or capped at a midpoint dip.
+    const env = baseEnvelope({
+      endPhase: "late",
+      endReason: "macro_game",
+      oppCompositionByPhase: {
+        early: { reached: true, atTime: 25, units: [{ token: "Zergling", count: 6 }] },
+        earlyMid: { reached: true, atTime: 115, units: [{ token: "Roach", count: 4 }] },
+        mid: { reached: true, atTime: 240, units: [
+          { token: "Roach", count: 8 },
+          { token: "Hydralisk", count: 6 },
+        ] },
+        midLate: { reached: true, atTime: 360, units: [
+          { token: "BroodLord", count: 4 },
+          { token: "Corruptor", count: 6 },
+        ] },
+        late: { reached: true, atTime: 510, units: [
+          { token: "BroodLord", count: 8 },
+          { token: "Corruptor", count: 10 },
+        ] },
+      },
+    });
+    const { container } = render(
+      <ScoutingLastGames envelopes={[env]} />,
+    );
+    const compositionCards = container.querySelectorAll(
+      '[data-testid="scouting-composition-card"]',
+    );
+    // Three cards: Early/Mid · Mid · Mid/Late+ (the mergeBucket grouping).
+    expect(compositionCards.length).toBe(3);
+    const midLatePlus = Array.from(compositionCards).find(
+      (n) => n.getAttribute("data-phase") === "Mid/Late+",
+    );
+    expect(midLatePlus).toBeDefined();
+    // Mid/Late+ bucket merges midLate (BroodLord 4 / Corruptor 6) +
+    // late (BroodLord 8 / Corruptor 10) by taking the MAX per token →
+    // BroodLord 8, Corruptor 10. Both peak counts survive.
+    expect(midLatePlus?.textContent).toContain("8");
+    expect(midLatePlus?.textContent).toContain("10");
+  });
+
   it("renders the build-order strip with real timestamps from real events", () => {
     const env = baseEnvelope();
     const { container } = render(
