@@ -18,10 +18,7 @@ const { MongoMemoryServer } = require("mongodb-memory-server");
 
 const { connect } = require("../src/db/connect");
 const { AggregationsService } = require("../src/services/aggregations");
-const {
-  NET_MMR_MAX_GAP_MS,
-  NET_MMR_MAX_DELTA,
-} = require("../src/services/trendsInsights");
+const { NET_MMR_MAX_DELTA } = require("../src/services/trendsInsights");
 
 describe("services/trendsInsights.netMmrByMatchup", () => {
   let mongo;
@@ -122,25 +119,26 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
   });
 
   test(
-    "regression: a 100% WR matchup never reads net-negative when " +
-      "earlier deltas were inflated by an unrecorded ladder run",
+    "long gaps within the same region still count: the dashboard's " +
+      "current-MMR card reconciles the totals so unrecorded games " +
+      "don't get filtered behind the user's back",
     async () => {
-      // The bug: three wins vs Protoss attributed -213 MMR because
-      // the "next game" the API used to land its delta on was hours
-      // later (a fresh session) and skipped over a stack of losses
-      // the older agent didn't tag with myMmr.
+      // v0.5.x used to drop pairs spaced beyond a session cap so a
+      // 100%-WR matchup could never read net-negative. The user
+      // explicitly asked for those pairs to count now: region
+      // partitioning kills the worst noise (cross-region log-ins)
+      // and the SC2Pulse current-MMR card on the dashboard
+      // reconciles the running totals, so any drift within a region
+      // is a real ladder change the chart should attribute to the
+      // last matchup played.
       //
-      // We reproduce it by spacing the Protoss games across MORE
-      // THAN NET_MMR_MAX_GAP_MS with a steep MMR decline between
-      // them — the kind of trace an agent missing myMmr on the
-      // intervening games leaves behind. With the gap+magnitude
-      // guard, none of those pairs should land on the Protoss bar.
-      //
-      // Spacing scales off the constant so a v0.7.x-style relaxation
-      // of NET_MMR_MAX_GAP_MS (24 h instead of 6 h) doesn't quietly
-      // turn the regression test green.
+      // Four wins vs Protoss spaced multiple days apart with a 100
+      // MMR slide between each one: a season-long climb-down. All
+      // three pairs survive — −300 net, 100% WR. Surprising on its
+      // face but the chart is now honest about what happened on
+      // the ladder.
       const t0 = new Date("2026-05-09T12:00:00Z").getTime();
-      const PAIR_GAP = NET_MMR_MAX_GAP_MS + 60 * 60 * 1000;
+      const PAIR_GAP = 3 * 24 * 60 * 60 * 1000;
       await db.games.insertMany([
         makeGame({
           gameId: "p_day1",
@@ -149,8 +147,6 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
           result: "Victory",
           opponent: { race: "Protoss", mmr: 4800 },
         }),
-        // ... a long break with no myMmr lands the user 100 MMR
-        // lower, but the next recorded reading is past the gap cap.
         makeGame({
           gameId: "p_day2",
           date: new Date(t0 + 1 * PAIR_GAP),
@@ -165,7 +161,6 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
           result: "Victory",
           opponent: { race: "Protoss", mmr: 4600 },
         }),
-        // Closing game so day3 has a "next".
         makeGame({
           gameId: "p_day4",
           date: new Date(t0 + 3 * PAIR_GAP),
@@ -175,15 +170,15 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
         }),
       ]);
 
-      const { matchups, dropped } = await svc.netMmrByMatchup("u1", {});
-      const p = findRow(matchups, "P");
-      // Every pair sits beyond NET_MMR_MAX_GAP_MS so the row is
-      // dropped entirely — better than reporting a number the user
-      // can't reconcile with their own W/L record. The diagnostic
-      // counter still reflects the three dropped pairs so the chart
-      // can render "3 pairs hidden: 3 long gaps".
-      expect(p).toBeUndefined();
-      expect(dropped.longGap).toBe(3);
+      const out = await svc.netMmrByMatchup("u1", {});
+      const p = findRow(out.matchups, "P");
+      expect(p).toBeDefined();
+      expect(p.games).toBe(3);
+      expect(p.wins).toBe(3);
+      expect(p.winRate).toBeCloseTo(1);
+      expect(p.netMmr).toBe(-300);
+      // No gap dropper anymore — only the ±150 delta cap.
+      expect(out.dropped.outlierSwing).toBe(0);
     },
   );
 
@@ -244,40 +239,46 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
     },
   );
 
-  test("a wide gap inside the same race-pool is dropped", async () => {
-    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
-    await db.games.insertMany([
-      // Pair 1 — tight gap, valid.
-      makeGame({
-        gameId: "z1",
-        date: new Date(t0 + 0),
-        myMmr: 4500,
-        result: "Victory",
-        opponent: { race: "Zerg", mmr: 4500 },
-      }),
-      makeGame({
-        gameId: "z2",
-        date: new Date(t0 + 5 * MIN_AGO),
-        myMmr: 4525,
-        result: "Victory",
-        opponent: { race: "Zerg", mmr: 4525 },
-      }),
-      // Pair 2 — gap one minute past the cap. Must be dropped.
-      makeGame({
-        gameId: "z3",
-        date: new Date(t0 + 5 * MIN_AGO + NET_MMR_MAX_GAP_MS + MIN_AGO),
-        myMmr: 4525 - 80,
-        result: "Defeat",
-        opponent: { race: "Zerg", mmr: 4525 },
-      }),
-    ]);
-    const { matchups } = await svc.netMmrByMatchup("u1", {});
-    const z = findRow(matchups, "Z");
-    expect(z).toBeDefined();
-    // Only z1→z2 survives; z2→z3 fails the gap guard.
-    expect(z.games).toBe(1);
-    expect(z.netMmr).toBe(25);
-  });
+  test(
+    "long gaps inside the same race-pool now count — only the " +
+      "±150 delta cap filters outliers",
+    async () => {
+      const ONE_DAY = 24 * 60 * 60 * 1000;
+      const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+      await db.games.insertMany([
+        makeGame({
+          gameId: "z1",
+          date: new Date(t0 + 0),
+          myMmr: 4500,
+          result: "Victory",
+          opponent: { race: "Zerg", mmr: 4500 },
+        }),
+        makeGame({
+          gameId: "z2",
+          date: new Date(t0 + 5 * MIN_AGO),
+          myMmr: 4525,
+          result: "Victory",
+          opponent: { race: "Zerg", mmr: 4525 },
+        }),
+        // 2-day gap that the old session cap would have dropped.
+        // Now it survives — the −80 delta is well within ±150.
+        makeGame({
+          gameId: "z3",
+          date: new Date(t0 + 5 * MIN_AGO + 2 * ONE_DAY),
+          myMmr: 4525 - 80,
+          result: "Defeat",
+          opponent: { race: "Zerg", mmr: 4525 },
+        }),
+      ]);
+      const { matchups, dropped } = await svc.netMmrByMatchup("u1", {});
+      const z = findRow(matchups, "Z");
+      expect(z).toBeDefined();
+      // Both z1→z2 (+25) and z2→z3 (−80) survive.
+      expect(z.games).toBe(2);
+      expect(z.netMmr).toBe(-55);
+      expect(dropped.outlierSwing).toBe(0);
+    },
+  );
 
   test("oversized swings (race-pool switch, season reset) are dropped", async () => {
     // Two same-session Terran games on a 4500 ladder, then a switch
