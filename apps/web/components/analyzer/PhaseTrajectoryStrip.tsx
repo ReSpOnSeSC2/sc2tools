@@ -23,6 +23,10 @@ export type PhaseTrajectoryStripProps = {
   durationP95Sec: number;
   className?: string;
   compact?: boolean;
+  /** When true, render only the "where games end" stacked bar — used by
+   *  side-by-side comparison columns where the median-timing bands
+   *  would crowd the layout. Takes precedence over ``compact``. */
+  outcomeOnly?: boolean;
 };
 
 const PHASE_ORDER: Phase[] = ["early", "earlyMid", "mid", "midLate", "late"];
@@ -82,6 +86,7 @@ export function PhaseTrajectoryStrip({
   durationP95Sec,
   className,
   compact = false,
+  outcomeOnly = false,
 }: PhaseTrajectoryStripProps) {
   const allEmpty = PHASE_ORDER.every((p) => (sampleSize[p] ?? 0) === 0);
   if (allEmpty) {
@@ -168,7 +173,14 @@ export function PhaseTrajectoryStrip({
   return (
     <figure className={figureClass} data-testid="phase-trajectory-strip">
       <figcaption className="sr-only">{caption}</figcaption>
-      {compact ? (
+      {outcomeOnly ? (
+        <OutcomeBar
+          finalPhaseDistribution={finalPhaseDistribution}
+          maxFinal={maxFinal}
+          totalFinal={totalFinal}
+          totalSamples={totalSamples}
+        />
+      ) : compact ? (
         <CompactStrip
           bands={bands}
           crossings={crossings}
