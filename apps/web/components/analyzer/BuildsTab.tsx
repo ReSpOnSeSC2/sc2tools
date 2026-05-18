@@ -86,43 +86,45 @@ export function BuildsTab() {
             }
           />
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-bg-elevated">
-              <tr>
-                <SortableTh col="name" label="Build" {...sort} />
-                <SortableTh col="wins" label="W" {...sort} align="right" />
-                <SortableTh col="losses" label="L" {...sort} align="right" />
-                <SortableTh col="total" label="Games" {...sort} align="right" />
-                <SortableTh col="winRate" label="WR" {...sort} align="right" />
-                <th className="w-32 px-3 py-2 text-left text-[11px] uppercase text-text-dim">
-                  Trend
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((b) => (
-                <tr
-                  key={b.name}
-                  className="cursor-pointer border-t border-border hover:bg-accent/10"
-                  onClick={() => setEditing(b.name)}
-                >
-                  <td className="px-3 py-1.5 text-text">{b.name}</td>
-                  <td className="px-3 py-1.5 text-right text-success">{b.wins}</td>
-                  <td className="px-3 py-1.5 text-right text-danger">{b.losses}</td>
-                  <td className="px-3 py-1.5 text-right">{b.total}</td>
-                  <td
-                    className="px-3 py-1.5 text-right tabular-nums"
-                    style={{ color: wrColor(b.winRate, b.total) }}
-                  >
-                    {pct1(b.winRate)}
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <WrBar wins={b.wins} losses={b.losses} />
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="bg-bg-elevated">
+                <tr>
+                  <SortableTh col="name" label="Build" {...sort} />
+                  <SortableTh col="wins" label="W" {...sort} align="right" />
+                  <SortableTh col="losses" label="L" {...sort} align="right" />
+                  <SortableTh col="total" label="Games" {...sort} align="right" />
+                  <SortableTh col="winRate" label="WR" {...sort} align="right" />
+                  <th className="w-32 px-3 py-2 text-left text-[11px] uppercase text-text-dim">
+                    Trend
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((b) => (
+                  <tr
+                    key={b.name}
+                    className="cursor-pointer border-t border-border hover:bg-accent/10"
+                    onClick={() => setEditing(b.name)}
+                  >
+                    <td className="whitespace-nowrap px-3 py-1.5 text-text">{b.name}</td>
+                    <td className="px-3 py-1.5 text-right text-success">{b.wins}</td>
+                    <td className="px-3 py-1.5 text-right text-danger">{b.losses}</td>
+                    <td className="px-3 py-1.5 text-right">{b.total}</td>
+                    <td
+                      className="px-3 py-1.5 text-right tabular-nums"
+                      style={{ color: wrColor(b.winRate, b.total) }}
+                    >
+                      {pct1(b.winRate)}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <WrBar wins={b.wins} losses={b.losses} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
 
