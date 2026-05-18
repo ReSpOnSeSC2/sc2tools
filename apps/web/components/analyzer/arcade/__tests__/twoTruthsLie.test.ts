@@ -291,6 +291,33 @@ describe("Two Truths & a Lie — generate gate", () => {
   });
 });
 
+describe("Two Truths & a Lie — scope phrase prefix", () => {
+  const matchupDataset: ArcadeDataset = {
+    ...baseDataset,
+    summary: { totalGames: 50, wins: 25, losses: 25, winRate: 0.5 },
+    matchups: [
+      { name: "vs P", oppRace: "P", wins: 8, losses: 2, total: 10, winRate: 0.8 },
+      { name: "vs T", oppRace: "T", wins: 5, losses: 5, total: 10, winRate: 0.5 },
+    ],
+  };
+
+  test("default scope prefixes ambient all-time claims", () => {
+    const facts = buildFactPool(matchupDataset);
+    const matchupFact = facts.find((f) => f.truthText.includes("vs Protoss"));
+    expect(matchupFact).toBeDefined();
+    expect(matchupFact!.truthText.startsWith("Across all your tracked games,")).toBe(true);
+    expect(matchupFact!.lieText.startsWith("Across all your tracked games,")).toBe(true);
+  });
+
+  test("custom scope reaches every cross-axis claim", () => {
+    const facts = buildFactPool(matchupDataset, "In Season 67");
+    const matchupFact = facts.find((f) => f.truthText.includes("vs Protoss"));
+    expect(matchupFact).toBeDefined();
+    expect(matchupFact!.truthText.startsWith("In Season 67,")).toBe(true);
+    expect(matchupFact!.lieText.startsWith("In Season 67,")).toBe(true);
+  });
+});
+
 /* ──────────── Census-style fact families ──────────── */
 
 describe("Two Truths & a Lie — census-style facts", () => {

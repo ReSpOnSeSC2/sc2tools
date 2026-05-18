@@ -51,7 +51,7 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
   if (input.data.games.length < 25) {
     return { ok: false, reason: "Need at least 25 games to weave claims from." };
   }
-  const facts = buildFactPool(input.data);
+  const facts = buildFactPool(input.data, input.scopePhrase);
   if (facts.length < 3) {
     return { ok: false, reason: "Couldn't find enough cross-axis facts." };
   }

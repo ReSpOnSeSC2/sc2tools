@@ -112,6 +112,7 @@ function statsByBuild(games: ArcadeGame[]): KeyedStats[] {
  */
 export function factPerfectOpponentExists(
   data: ArcadeDataset,
+  scope: string,
 ): FactCandidate | null {
   const stats = statsByOppPulseId(data).filter(
     (s) => s.games >= CENSUS_MIN_GAMES,
@@ -125,8 +126,8 @@ export function factPerfectOpponentExists(
   if (perfect.length === 0 || nonPerfect.length === 0) return null;
   const sample = perfect.slice().sort((a, b) => b.games - a.games)[0];
   return {
-    truthText: `In your tracked history, you have at least one opponent you've played ${CENSUS_MIN_GAMES}+ times against without ever losing.`,
-    lieText: `In your tracked history, you've lost at least once to every opponent you've played ${CENSUS_MIN_GAMES}+ times against.`,
+    truthText: `${scope}, you have at least one opponent you've played ${CENSUS_MIN_GAMES}+ times against without ever losing.`,
+    lieText: `${scope}, you've lost at least once to every opponent you've played ${CENSUS_MIN_GAMES}+ times against.`,
     detail: `${sample.displayName} · ${sample.wins}-${sample.losses} (${pct1(sample.wins / sample.games)}).`,
   };
 }
@@ -138,6 +139,7 @@ export function factPerfectOpponentExists(
  */
 export function factWinlessMapExists(
   data: ArcadeDataset,
+  scope: string,
 ): FactCandidate | null {
   const stats = statsByMap(data.games).filter(
     (s) => s.games >= CENSUS_MIN_GAMES,
@@ -148,8 +150,8 @@ export function factWinlessMapExists(
   if (winless.length === 0 || nonWinless.length === 0) return null;
   const sample = winless.slice().sort((a, b) => b.games - a.games)[0];
   return {
-    truthText: `In your tracked history, you have at least one map you've played ${CENSUS_MIN_GAMES}+ times on without winning a single game.`,
-    lieText: `In your tracked history, you've won at least once on every map you've played ${CENSUS_MIN_GAMES}+ times on.`,
+    truthText: `${scope}, you have at least one map you've played ${CENSUS_MIN_GAMES}+ times on without winning a single game.`,
+    lieText: `${scope}, you've won at least once on every map you've played ${CENSUS_MIN_GAMES}+ times on.`,
     detail: `${sample.displayName} · ${sample.wins}-${sample.losses} (${pct1(sample.wins / sample.games)}).`,
   };
 }
@@ -161,6 +163,7 @@ export function factWinlessMapExists(
  */
 export function factDominantBuildExists(
   data: ArcadeDataset,
+  scope: string,
 ): FactCandidate | null {
   const stats = statsByBuild(data.games).filter(
     (s) => s.games >= CENSUS_MIN_GAMES,
@@ -171,8 +174,8 @@ export function factDominantBuildExists(
   if (dominant.length === 0 || nonDominant.length === 0) return null;
   const sample = dominant.slice().sort((a, b) => b.games - a.games)[0];
   return {
-    truthText: `In your tracked history, you have at least one build with a 70%+ WR over ${CENSUS_MIN_GAMES}+ games.`,
-    lieText: `In your tracked history, every build you've played ${CENSUS_MIN_GAMES}+ times sits below a 70% WR.`,
+    truthText: `${scope}, you have at least one build with a 70%+ WR over ${CENSUS_MIN_GAMES}+ games.`,
+    lieText: `${scope}, every build you've played ${CENSUS_MIN_GAMES}+ times sits below a 70% WR.`,
     detail: `${sample.displayName} · ${sample.wins}-${sample.losses} (${pct1(sample.wins / sample.games)}).`,
   };
 }
@@ -184,6 +187,7 @@ export function factDominantBuildExists(
  */
 export function factEvenRivalryExists(
   data: ArcadeDataset,
+  scope: string,
 ): FactCandidate | null {
   const stats = statsByOppPulseId(data).filter(
     (s) => s.games >= CENSUS_EVEN_MIN_GAMES,
@@ -194,8 +198,8 @@ export function factEvenRivalryExists(
   if (even.length === 0 || nonEven.length === 0) return null;
   const sample = even.slice().sort((a, b) => b.games - a.games)[0];
   return {
-    truthText: `In your tracked history, you have at least one opponent you've played ${CENSUS_EVEN_MIN_GAMES}+ times against where the head-to-head is exactly even.`,
-    lieText: `In your tracked history, every opponent you've played ${CENSUS_EVEN_MIN_GAMES}+ times against has either a winning or a losing record (no exact ties).`,
+    truthText: `${scope}, you have at least one opponent you've played ${CENSUS_EVEN_MIN_GAMES}+ times against where the head-to-head is exactly even.`,
+    lieText: `${scope}, every opponent you've played ${CENSUS_EVEN_MIN_GAMES}+ times against has either a winning or a losing record (no exact ties).`,
     detail: `${sample.displayName} · ${sample.wins}-${sample.losses} (${pct1(sample.wins / sample.games)}).`,
   };
 }
@@ -207,6 +211,7 @@ export function factEvenRivalryExists(
  */
 export function factOneAndDoneOpponents(
   data: ArcadeDataset,
+  scope: string,
 ): FactCandidate | null {
   const stats = statsByOppPulseId(data);
   // Need enough opponents that the majority statement is meaningful.
@@ -219,11 +224,11 @@ export function factOneAndDoneOpponents(
   const majority = ratio > 0.5;
   return {
     truthText: majority
-      ? `In your tracked history, more than half of your opponents are people you've only played once.`
-      : `In your tracked history, less than half of your opponents are people you've only played once.`,
+      ? `${scope}, more than half of your opponents are people you've only played once.`
+      : `${scope}, less than half of your opponents are people you've only played once.`,
     lieText: majority
-      ? `In your tracked history, less than half of your opponents are people you've only played once.`
-      : `In your tracked history, more than half of your opponents are people you've only played once.`,
+      ? `${scope}, less than half of your opponents are people you've only played once.`
+      : `${scope}, more than half of your opponents are people you've only played once.`,
     detail: `${singletons} one-time opponents out of ${stats.length} (${pct1(ratio)}).`,
   };
 }
@@ -236,6 +241,7 @@ export function factOneAndDoneOpponents(
  */
 export function factDistinctMapsRecent(
   data: ArcadeDataset,
+  _scope: string,
 ): FactCandidate | null {
   const since = Date.now() - 90 * 86_400_000;
   const distinct = new Set<string>();

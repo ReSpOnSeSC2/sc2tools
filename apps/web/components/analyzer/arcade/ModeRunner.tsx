@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFilters } from "@/lib/filterContext";
+import { scopePhraseFor } from "@/lib/datePresets";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { useDailySeed } from "./hooks/useDailySeed";
 import { useArcadeData } from "./hooks/useArcadeData";
@@ -56,7 +57,19 @@ export function ModeRunner({
   const { recordPlay, earnBadge, state } = useArcadeState();
   // Filters are intentionally ignored for daily content; QuickPlay
   // honors them only on cross-axis modes (TT&L) where they make sense.
-  const { filters } = useFilters();
+  const { filters, seasons } = useFilters();
+  // Phrase like "In Season 67" / "In the last 30 days" / "Across all
+  // your tracked games" — cross-axis modes splice it into claim text
+  // so the wording matches the FilterBar slice they're aggregating.
+  // Daily runs skip the FilterBar entirely (data already === unfiltered
+  // dataset) so the prefix should reflect that.
+  const scopePhrase = useMemo(
+    () =>
+      isDaily || mode.depthTag !== "cross-axis"
+        ? scopePhraseFor("all", seasons)
+        : scopePhraseFor(filters.preset, seasons),
+    [filters.preset, isDaily, mode.depthTag, seasons],
+  );
   const [round, setRound] = useState(0);
   const [question, setQuestion] = useState<GenerateResult<unknown> | null>(null);
   const [answered, setAnswered] = useState<unknown>(null);
@@ -80,6 +93,7 @@ export function ModeRunner({
       daySeed: isDaily ? seed.day : "",
       tz: seed.tz,
       data: filteredData,
+      scopePhrase,
     };
     setAnswered(null);
     setScoreResult(null);
@@ -95,7 +109,7 @@ export function ModeRunner({
     return () => {
       cancelled = true;
     };
-  }, [filteredData, isDaily, mode, round, seed.day, seed.rng, seed.tz]);
+  }, [filteredData, isDaily, mode, round, scopePhrase, seed.day, seed.rng, seed.tz]);
 
   const handleAnswer = useCallback(
     (a: unknown) => {

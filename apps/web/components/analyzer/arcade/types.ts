@@ -135,6 +135,16 @@ export interface GenerateInput {
   /** User's IANA timezone (used for session/week math). */
   tz: string;
   data: ArcadeDataset;
+  /**
+   * Sentence-starting scope phrase reflecting the analyzer FilterBar's
+   * active date preset (e.g. "In Season 67", "In the last 30 days",
+   * "Across all your tracked games"). Cross-axis modes splice this into
+   * their claim text so the reader can tell which window the numbers
+   * reference — the FilterBar quietly clips `data.games` for cross-axis
+   * modes, and without an explicit scope the wording reads as if it
+   * spanned the user's full lifetime.
+   */
+  scopePhrase?: string;
 }
 
 /**

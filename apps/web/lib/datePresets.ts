@@ -240,6 +240,53 @@ export function longLabelFor(
 }
 
 /**
+ * Sentence-starting scope phrase for a preset — drops into claim text
+ * like "<phrase>, you've played more games vs Zerg than vs Terran." so
+ * the reader can tell which window the numbers reference. Grammar
+ * varies by preset (seasons take "In Season N"; relative ranges take
+ * "In the last 30 days"; "all" gets a non-prefixed phrase) so we
+ * special-case them here rather than blindly concatenating "In " + the
+ * shortLabel.
+ */
+export function scopePhraseFor(
+  id: PresetId | undefined,
+  seasons?: LogicalSeason[],
+): string {
+  if (!id || id === "all") return "Across all your tracked games";
+  if (id === "current_season") {
+    const cur = seasons?.find((s) => s.isCurrent);
+    return cur ? `In Season ${cur.number}` : "In the current season";
+  }
+  if (typeof id === "string" && id.startsWith("season:")) {
+    return `In Season ${id.slice("season:".length)}`;
+  }
+  switch (id) {
+    case "today":
+      return "Today";
+    case "yesterday":
+      return "Yesterday";
+    case "last_week":
+      return "Last week";
+    case "last_7d":
+      return "In the last 7 days";
+    case "this_month":
+      return "This month";
+    case "last_30d":
+      return "In the last 30 days";
+    case "last_90d":
+      return "In the last 90 days";
+    case "this_year":
+      return "This year";
+    case "last_year":
+      return "In the last 365 days";
+    case "custom":
+      return "In your selected date range";
+    default:
+      return "Across all your tracked games";
+  }
+}
+
+/**
  * The picker's default selection. "current_season" is a virtual id
  * resolved against the SC2Pulse catalog at hydration time; if the
  * catalog hasn't loaded yet we treat it like "all time" so nothing

@@ -51,12 +51,29 @@ export function isDisplayableString(v: unknown): v is string {
 export const MIN_WR_GAP = 0.04;
 
 /**
+ * Default scope phrase when the caller doesn't supply one (e.g. unit
+ * tests, daily Quick Play where the FilterBar is bypassed). Matches the
+ * "all" preset's wording so the default behaves like "lifetime".
+ */
+export const DEFAULT_SCOPE_PHRASE = "Across all your tracked games";
+
+/**
  * Full fact pool, composed from many small per-family builders. The
  * runner picks two truths + one lie from whichever subset the user's
  * data supports.
+ *
+ * `scopePhrase` is the sentence-starting clause that says which time
+ * window the claim's numbers cover ("In Season 67", "In the last 30
+ * days", "Across all your tracked games"). The runner derives it from
+ * the analyzer FilterBar in ModeRunner; tests fall back to the default.
  */
-export function buildFactPool(data: ArcadeDataset): FactCandidate[] {
-  const builders: Array<(d: ArcadeDataset) => FactCandidate | null> = [
+export function buildFactPool(
+  data: ArcadeDataset,
+  scopePhrase: string = DEFAULT_SCOPE_PHRASE,
+): FactCandidate[] {
+  const builders: Array<
+    (d: ArcadeDataset, scope: string) => FactCandidate | null
+  > = [
     factTopBuildVsOverall,
     factShortGamesRaceSplit,
     factBestVsWorstMap,
@@ -85,7 +102,7 @@ export function buildFactPool(data: ArcadeDataset): FactCandidate[] {
   ];
   const out: FactCandidate[] = [];
   for (const b of builders) {
-    const f = b(data);
+    const f = b(data, scopePhrase);
     if (f) out.push(f);
   }
   return out;
@@ -93,7 +110,10 @@ export function buildFactPool(data: ArcadeDataset): FactCandidate[] {
 
 /* ──────────── Original four fact families ──────────── */
 
-function factTopBuildVsOverall(data: ArcadeDataset): FactCandidate | null {
+function factTopBuildVsOverall(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   const topBuild = data.builds
     .slice()
     .filter((b) => isDisplayableString(b.name) && !isGameTooShort(b.name))
@@ -103,17 +123,20 @@ function factTopBuildVsOverall(data: ArcadeDataset): FactCandidate | null {
   return {
     truthText:
       diff >= 0
-        ? `In your tracked history, your most-played build (“${topBuild.name}”) has a higher WR than your overall WR.`
-        : `In your tracked history, your most-played build (“${topBuild.name}”) has a lower WR than your overall WR.`,
+        ? `${scope}, your most-played build (“${topBuild.name}”) has a higher WR than your overall WR.`
+        : `${scope}, your most-played build (“${topBuild.name}”) has a lower WR than your overall WR.`,
     lieText:
       diff >= 0
-        ? `In your tracked history, your most-played build (“${topBuild.name}”) has a lower WR than your overall WR.`
-        : `In your tracked history, your most-played build (“${topBuild.name}”) has a higher WR than your overall WR.`,
+        ? `${scope}, your most-played build (“${topBuild.name}”) has a lower WR than your overall WR.`
+        : `${scope}, your most-played build (“${topBuild.name}”) has a higher WR than your overall WR.`,
     detail: `Build WR ${pct1(topBuild.winRate)} vs overall ${pct1(data.summary.winRate)}.`,
   };
 }
 
-function factShortGamesRaceSplit(data: ArcadeDataset): FactCandidate | null {
+function factShortGamesRaceSplit(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   const shortGames = data.games.filter(
     (g) => Number(g.duration) > 0 && Number(g.duration) < 12 * 60,
   );
@@ -125,13 +148,16 @@ function factShortGamesRaceSplit(data: ArcadeDataset): FactCandidate | null {
   const top = entries[0][0];
   const bottom = entries[entries.length - 1][0];
   return {
-    truthText: `Across your tracked games under 12 minutes, you do better vs ${fullRace(top)} than vs ${fullRace(bottom)}.`,
-    lieText: `Across your tracked games under 12 minutes, you do better vs ${fullRace(bottom)} than vs ${fullRace(top)}.`,
+    truthText: `${scope}, in games under 12 minutes you do better vs ${fullRace(top)} than vs ${fullRace(bottom)}.`,
+    lieText: `${scope}, in games under 12 minutes you do better vs ${fullRace(bottom)} than vs ${fullRace(top)}.`,
     detail: `Short-game WR vs ${fullRace(top)} ${pct1(wrByRace[top].wr)}, vs ${fullRace(bottom)} ${pct1(wrByRace[bottom].wr)}.`,
   };
 }
 
-function factBestVsWorstMap(data: ArcadeDataset): FactCandidate | null {
+function factBestVsWorstMap(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   // /v1/maps occasionally returns rows with a null/empty `map` field
   // (matchmaking quirk on certain expired co-op maps) — those rows
   // make their way into the claim text as the literal string
@@ -145,13 +171,16 @@ function factBestVsWorstMap(data: ArcadeDataset): FactCandidate | null {
   const worst = sortedMaps[sortedMaps.length - 1];
   if (best.map === worst.map) return null;
   return {
-    truthText: `In your tracked history, you have a higher WR on ${best.map} than on ${worst.map}.`,
-    lieText: `In your tracked history, you have a higher WR on ${worst.map} than on ${best.map}.`,
+    truthText: `${scope}, you have a higher WR on ${best.map} than on ${worst.map}.`,
+    lieText: `${scope}, you have a higher WR on ${worst.map} than on ${best.map}.`,
     detail: `${best.map} ${pct1(best.winRate)} (${best.total}g), ${worst.map} ${pct1(worst.winRate)} (${worst.total}g).`,
   };
 }
 
-function factLateVsEarly(data: ArcadeDataset): FactCandidate | null {
+function factLateVsEarly(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   const hourBuckets = bucketByHour(data.games);
   if (hourBuckets.late.total < 5 || hourBuckets.early.total < 5) return null;
   const lateWr = hourBuckets.late.wr;
@@ -160,19 +189,22 @@ function factLateVsEarly(data: ArcadeDataset): FactCandidate | null {
   return {
     truthText:
       diff >= 0
-        ? `Across your tracked games, your WR after 10pm is higher than your WR before noon.`
-        : `Across your tracked games, your WR after 10pm is lower than your WR before noon.`,
+        ? `${scope}, your WR after 10pm is higher than your WR before noon.`
+        : `${scope}, your WR after 10pm is lower than your WR before noon.`,
     lieText:
       diff >= 0
-        ? `Across your tracked games, your WR after 10pm is lower than your WR before noon.`
-        : `Across your tracked games, your WR after 10pm is higher than your WR before noon.`,
+        ? `${scope}, your WR after 10pm is lower than your WR before noon.`
+        : `${scope}, your WR after 10pm is higher than your WR before noon.`,
     detail: `Late ${pct1(lateWr)} (${hourBuckets.late.total}g), early ${pct1(earlyWr)} (${hourBuckets.early.total}g).`,
   };
 }
 
 /* ──────────── Expanded fact families ──────────── */
 
-function factMatchupVsOverall(data: ArcadeDataset): FactCandidate | null {
+function factMatchupVsOverall(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   if (!data.summary) return null;
   const overall = data.summary.winRate;
   const real = data.matchups.filter((m) => m.oppRace && m.total >= 6);
@@ -189,17 +221,20 @@ function factMatchupVsOverall(data: ArcadeDataset): FactCandidate | null {
   return {
     truthText:
       diff > 0
-        ? `In your tracked history, your WR vs ${race} is higher than your overall WR.`
-        : `In your tracked history, your WR vs ${race} is lower than your overall WR.`,
+        ? `${scope}, your WR vs ${race} is higher than your overall WR.`
+        : `${scope}, your WR vs ${race} is lower than your overall WR.`,
     lieText:
       diff > 0
-        ? `In your tracked history, your WR vs ${race} is lower than your overall WR.`
-        : `In your tracked history, your WR vs ${race} is higher than your overall WR.`,
+        ? `${scope}, your WR vs ${race} is lower than your overall WR.`
+        : `${scope}, your WR vs ${race} is higher than your overall WR.`,
     detail: `vs ${race} ${pct1(m.winRate)} (${m.total}g) vs overall ${pct1(overall)}.`,
   };
 }
 
-function factTopVsSecondBuild(data: ArcadeDataset): FactCandidate | null {
+function factTopVsSecondBuild(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   const builds = data.builds
     .slice()
     .filter(
@@ -214,16 +249,19 @@ function factTopVsSecondBuild(data: ArcadeDataset): FactCandidate | null {
   const topBetter = top.winRate > second.winRate;
   return {
     truthText: topBetter
-      ? `In your tracked history, your most-played build (“${top.name}”) wins more often than your 2nd-most (“${second.name}”).`
-      : `In your tracked history, your 2nd-most-played build (“${second.name}”) wins more often than your most-played (“${top.name}”).`,
+      ? `${scope}, your most-played build (“${top.name}”) wins more often than your 2nd-most (“${second.name}”).`
+      : `${scope}, your 2nd-most-played build (“${second.name}”) wins more often than your most-played (“${top.name}”).`,
     lieText: topBetter
-      ? `In your tracked history, your 2nd-most-played build (“${second.name}”) wins more often than your most-played (“${top.name}”).`
-      : `In your tracked history, your most-played build (“${top.name}”) wins more often than your 2nd-most (“${second.name}”).`,
+      ? `${scope}, your 2nd-most-played build (“${second.name}”) wins more often than your most-played (“${top.name}”).`
+      : `${scope}, your most-played build (“${top.name}”) wins more often than your 2nd-most (“${second.name}”).`,
     detail: `${top.name} ${pct1(top.winRate)} (${top.total}g), ${second.name} ${pct1(second.winRate)} (${second.total}g).`,
   };
 }
 
-function factRecentVsOlder(data: ArcadeDataset): FactCandidate | null {
+function factRecentVsOlder(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   const games = data.games
     .filter(
       (g) => outcome(g) !== "U" && !Number.isNaN(new Date(g.date).getTime()),
@@ -240,16 +278,19 @@ function factRecentVsOlder(data: ArcadeDataset): FactCandidate | null {
   const recentBetter = recentWr > olderWr;
   return {
     truthText: recentBetter
-      ? `Splitting your tracked games in half chronologically, your WR in the more recent half is higher than in the earlier half.`
-      : `Splitting your tracked games in half chronologically, your WR in the more recent half is lower than in the earlier half.`,
+      ? `${scope}, splitting your games in half chronologically, your WR in the more recent half is higher than in the earlier half.`
+      : `${scope}, splitting your games in half chronologically, your WR in the more recent half is lower than in the earlier half.`,
     lieText: recentBetter
-      ? `Splitting your tracked games in half chronologically, your WR in the more recent half is lower than in the earlier half.`
-      : `Splitting your tracked games in half chronologically, your WR in the more recent half is higher than in the earlier half.`,
+      ? `${scope}, splitting your games in half chronologically, your WR in the more recent half is lower than in the earlier half.`
+      : `${scope}, splitting your games in half chronologically, your WR in the more recent half is higher than in the earlier half.`,
     detail: `Recent ${pct1(recentWr)} (${recent.length}g), earlier ${pct1(olderWr)} (${older.length}g).`,
   };
 }
 
-function factLongVsShortGames(data: ArcadeDataset): FactCandidate | null {
+function factLongVsShortGames(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   const long = data.games.filter(
     (g) => Number(g.duration) > 20 * 60 && outcome(g) !== "U",
   );
@@ -266,16 +307,19 @@ function factLongVsShortGames(data: ArcadeDataset): FactCandidate | null {
   const longBetter = longWr > shortWr;
   return {
     truthText: longBetter
-      ? `Across your tracked games, you win more often in games over 20 minutes than in games under 12 minutes.`
-      : `Across your tracked games, you win more often in games under 12 minutes than in games over 20 minutes.`,
+      ? `${scope}, you win more often in games over 20 minutes than in games under 12 minutes.`
+      : `${scope}, you win more often in games under 12 minutes than in games over 20 minutes.`,
     lieText: longBetter
-      ? `Across your tracked games, you win more often in games under 12 minutes than in games over 20 minutes.`
-      : `Across your tracked games, you win more often in games over 20 minutes than in games under 12 minutes.`,
+      ? `${scope}, you win more often in games under 12 minutes than in games over 20 minutes.`
+      : `${scope}, you win more often in games over 20 minutes than in games under 12 minutes.`,
     detail: `Long ${pct1(longWr)} (${long.length}g), short ${pct1(shortWr)} (${short.length}g).`,
   };
 }
 
-function factWeekendVsWeekday(data: ArcadeDataset): FactCandidate | null {
+function factWeekendVsWeekday(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   let weekendW = 0;
   let weekendL = 0;
   let weekdayW = 0;
@@ -303,16 +347,19 @@ function factWeekendVsWeekday(data: ArcadeDataset): FactCandidate | null {
   const weekendBetter = weWr > wdWr;
   return {
     truthText: weekendBetter
-      ? `Across your tracked games, your weekend WR is higher than your weekday WR.`
-      : `Across your tracked games, your weekend WR is lower than your weekday WR.`,
+      ? `${scope}, your weekend WR is higher than your weekday WR.`
+      : `${scope}, your weekend WR is lower than your weekday WR.`,
     lieText: weekendBetter
-      ? `Across your tracked games, your weekend WR is lower than your weekday WR.`
-      : `Across your tracked games, your weekend WR is higher than your weekday WR.`,
+      ? `${scope}, your weekend WR is lower than your weekday WR.`
+      : `${scope}, your weekend WR is higher than your weekday WR.`,
     detail: `Weekend ${pct1(weWr)} (${weTotal}g), weekday ${pct1(wdWr)} (${wdTotal}g).`,
   };
 }
 
-function factTopMapVsOverall(data: ArcadeDataset): FactCandidate | null {
+function factTopMapVsOverall(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   if (!data.summary) return null;
   const maps = data.maps.filter(
     (m) => isDisplayableString(m.map) && m.total >= 4,
@@ -324,17 +371,18 @@ function factTopMapVsOverall(data: ArcadeDataset): FactCandidate | null {
   const better = diff > 0;
   return {
     truthText: better
-      ? `In your tracked history, your most-played map (${top.map}) has a higher WR than your overall WR.`
-      : `In your tracked history, your most-played map (${top.map}) has a lower WR than your overall WR.`,
+      ? `${scope}, your most-played map (${top.map}) has a higher WR than your overall WR.`
+      : `${scope}, your most-played map (${top.map}) has a lower WR than your overall WR.`,
     lieText: better
-      ? `In your tracked history, your most-played map (${top.map}) has a lower WR than your overall WR.`
-      : `In your tracked history, your most-played map (${top.map}) has a higher WR than your overall WR.`,
+      ? `${scope}, your most-played map (${top.map}) has a lower WR than your overall WR.`
+      : `${scope}, your most-played map (${top.map}) has a higher WR than your overall WR.`,
     detail: `${top.map} ${pct1(top.winRate)} (${top.total}g) vs overall ${pct1(data.summary.winRate)}.`,
   };
 }
 
 function factHighVsLowMmrOpponents(
   data: ArcadeDataset,
+  scope: string,
 ): FactCandidate | null {
   let hiW = 0;
   let hiL = 0;
@@ -366,16 +414,19 @@ function factHighVsLowMmrOpponents(
   const upsetBetter = hiWr > loWr;
   return {
     truthText: upsetBetter
-      ? `In your tracked history, your WR vs higher-MMR opponents is higher than your WR vs lower-MMR opponents.`
-      : `In your tracked history, your WR vs higher-MMR opponents is lower than your WR vs lower-MMR opponents.`,
+      ? `${scope}, your WR vs higher-MMR opponents is higher than your WR vs lower-MMR opponents.`
+      : `${scope}, your WR vs higher-MMR opponents is lower than your WR vs lower-MMR opponents.`,
     lieText: upsetBetter
-      ? `In your tracked history, your WR vs higher-MMR opponents is lower than your WR vs lower-MMR opponents.`
-      : `In your tracked history, your WR vs higher-MMR opponents is higher than your WR vs lower-MMR opponents.`,
+      ? `${scope}, your WR vs higher-MMR opponents is lower than your WR vs lower-MMR opponents.`
+      : `${scope}, your WR vs higher-MMR opponents is higher than your WR vs lower-MMR opponents.`,
     detail: `Above your MMR ${pct1(hiWr)} (${hiT}g), below your MMR ${pct1(loWr)} (${loT}g).`,
   };
 }
 
-function factTopRival(data: ArcadeDataset): FactCandidate | null {
+function factTopRival(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   if (!data.summary) return null;
   const ops = data.opponents.filter(
     (o) => o.games >= 4 && isDisplayableString(o.displayName || o.name),
@@ -388,16 +439,19 @@ function factTopRival(data: ArcadeDataset): FactCandidate | null {
   const better = diff > 0;
   return {
     truthText: better
-      ? `In your tracked history, your WR vs your most-faced opponent (${name}) is higher than your overall WR.`
-      : `In your tracked history, your WR vs your most-faced opponent (${name}) is lower than your overall WR.`,
+      ? `${scope}, your WR vs your most-faced opponent (${name}) is higher than your overall WR.`
+      : `${scope}, your WR vs your most-faced opponent (${name}) is lower than your overall WR.`,
     lieText: better
-      ? `In your tracked history, your WR vs your most-faced opponent (${name}) is lower than your overall WR.`
-      : `In your tracked history, your WR vs your most-faced opponent (${name}) is higher than your overall WR.`,
+      ? `${scope}, your WR vs your most-faced opponent (${name}) is lower than your overall WR.`
+      : `${scope}, your WR vs your most-faced opponent (${name}) is higher than your overall WR.`,
     detail: `vs ${name} ${pct1(top.userWinRate)} (${top.games}g) vs overall ${pct1(data.summary.winRate)}.`,
   };
 }
 
-function factRevengeVsMomentum(data: ArcadeDataset): FactCandidate | null {
+function factRevengeVsMomentum(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   const games = data.games
     .filter(
       (g) => outcome(g) !== "U" && !Number.isNaN(new Date(g.date).getTime()),
@@ -429,16 +483,19 @@ function factRevengeVsMomentum(data: ArcadeDataset): FactCandidate | null {
   const revengeBetter = afterLossWr > afterWinWr;
   return {
     truthText: revengeBetter
-      ? `Across your tracked games, your WR in the game right after a loss is higher than the game right after a win.`
-      : `Across your tracked games, your WR in the game right after a loss is lower than the game right after a win.`,
+      ? `${scope}, your WR in the game right after a loss is higher than the game right after a win.`
+      : `${scope}, your WR in the game right after a loss is lower than the game right after a win.`,
     lieText: revengeBetter
-      ? `Across your tracked games, your WR in the game right after a loss is lower than the game right after a win.`
-      : `Across your tracked games, your WR in the game right after a loss is higher than the game right after a win.`,
+      ? `${scope}, your WR in the game right after a loss is lower than the game right after a win.`
+      : `${scope}, your WR in the game right after a loss is higher than the game right after a win.`,
     detail: `After loss ${pct1(afterLossWr)} (${lossT}g), after win ${pct1(afterWinWr)} (${winT}g).`,
   };
 }
 
-function factOppRaceCounts(data: ArcadeDataset): FactCandidate | null {
+function factOppRaceCounts(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   const counts: Record<"P" | "T" | "Z", number> = { P: 0, T: 0, Z: 0 };
   for (const g of data.games) {
     const r = String(g.oppRace || "").charAt(0).toUpperCase();
@@ -454,13 +511,16 @@ function factOppRaceCounts(data: ArcadeDataset): FactCandidate | null {
   const bottom = entries[entries.length - 1];
   if (top[1] - bottom[1] < 4) return null;
   return {
-    truthText: `In your tracked history, you've played more games vs ${fullRace(top[0])} than vs ${fullRace(bottom[0])}.`,
-    lieText: `In your tracked history, you've played more games vs ${fullRace(bottom[0])} than vs ${fullRace(top[0])}.`,
+    truthText: `${scope}, you've played more games vs ${fullRace(top[0])} than vs ${fullRace(bottom[0])}.`,
+    lieText: `${scope}, you've played more games vs ${fullRace(bottom[0])} than vs ${fullRace(top[0])}.`,
     detail: `vs ${fullRace(top[0])} ${top[1]}g, vs ${fullRace(bottom[0])} ${bottom[1]}g.`,
   };
 }
 
-function factBestVsWorstBuild(data: ArcadeDataset): FactCandidate | null {
+function factBestVsWorstBuild(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   const builds = data.builds.filter(
     (b) => isDisplayableString(b.name) && !isGameTooShort(b.name) && b.total >= 5,
   );
@@ -471,13 +531,16 @@ function factBestVsWorstBuild(data: ArcadeDataset): FactCandidate | null {
   if (best.name === worst.name) return null;
   if (best.winRate - worst.winRate < MIN_WR_GAP) return null;
   return {
-    truthText: `In your tracked history, your “${best.name}” build wins more often than your “${worst.name}” build.`,
-    lieText: `In your tracked history, your “${worst.name}” build wins more often than your “${best.name}” build.`,
+    truthText: `${scope}, your “${best.name}” build wins more often than your “${worst.name}” build.`,
+    lieText: `${scope}, your “${worst.name}” build wins more often than your “${best.name}” build.`,
     detail: `${best.name} ${pct1(best.winRate)} (${best.total}g), ${worst.name} ${pct1(worst.winRate)} (${worst.total}g).`,
   };
 }
 
-function factMyRaceWrSplit(data: ArcadeDataset): FactCandidate | null {
+function factMyRaceWrSplit(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   const acc: Record<string, { w: number; t: number }> = {};
   for (const g of data.games) {
     const o = outcome(g);
@@ -497,13 +560,16 @@ function factMyRaceWrSplit(data: ArcadeDataset): FactCandidate | null {
   const bottomWr = bottom[1].w / bottom[1].t;
   if (topWr - bottomWr < MIN_WR_GAP) return null;
   return {
-    truthText: `In your tracked history, you win more often playing ${fullRace(top[0])} than playing ${fullRace(bottom[0])}.`,
-    lieText: `In your tracked history, you win more often playing ${fullRace(bottom[0])} than playing ${fullRace(top[0])}.`,
+    truthText: `${scope}, you win more often playing ${fullRace(top[0])} than playing ${fullRace(bottom[0])}.`,
+    lieText: `${scope}, you win more often playing ${fullRace(bottom[0])} than playing ${fullRace(top[0])}.`,
     detail: `As ${fullRace(top[0])} ${pct1(topWr)} (${top[1].t}g), as ${fullRace(bottom[0])} ${pct1(bottomWr)} (${bottom[1].t}g).`,
   };
 }
 
-function factAfternoonVsEvening(data: ArcadeDataset): FactCandidate | null {
+function factAfternoonVsEvening(
+  data: ArcadeDataset,
+  scope: string,
+): FactCandidate | null {
   let aW = 0;
   let aL = 0;
   let eW = 0;
@@ -531,11 +597,11 @@ function factAfternoonVsEvening(data: ArcadeDataset): FactCandidate | null {
   const afternoonBetter = aWr > eWr;
   return {
     truthText: afternoonBetter
-      ? `Across your tracked games, your afternoon WR (noon–6pm) is higher than your evening WR (6–10pm).`
-      : `Across your tracked games, your afternoon WR (noon–6pm) is lower than your evening WR (6–10pm).`,
+      ? `${scope}, your afternoon WR (noon–6pm) is higher than your evening WR (6–10pm).`
+      : `${scope}, your afternoon WR (noon–6pm) is lower than your evening WR (6–10pm).`,
     lieText: afternoonBetter
-      ? `Across your tracked games, your afternoon WR (noon–6pm) is lower than your evening WR (6–10pm).`
-      : `Across your tracked games, your afternoon WR (noon–6pm) is higher than your evening WR (6–10pm).`,
+      ? `${scope}, your afternoon WR (noon–6pm) is lower than your evening WR (6–10pm).`
+      : `${scope}, your afternoon WR (noon–6pm) is higher than your evening WR (6–10pm).`,
     detail: `Afternoon ${pct1(aWr)} (${aT}g), evening ${pct1(eWr)} (${eT}g).`,
   };
 }
