@@ -23,9 +23,13 @@ export interface LeakItem {
   time?: number;
 }
 
-export interface LeakWindow {
+export interface SupplyBlockWindow {
   start: number;
   end: number;
+  /** Total counted blocked seconds inside the window — see
+   *  ``detect_supply_block_windows`` in macro_score.py. Optional on
+   *  older payloads that emitted only ``{start, end}``. */
+  blocked_sec?: number;
   kind?: string;
 }
 
@@ -51,8 +55,8 @@ export interface BreakdownRaw {
   mules_expected?: number | null;
   supply_blocked_seconds?: number | null;
   mineral_float_spikes?: number | null;
-  leak_windows?: LeakWindow[];
-  opp_leak_windows?: LeakWindow[];
+  supply_block_windows?: SupplyBlockWindow[];
+  opp_supply_block_windows?: SupplyBlockWindow[];
   chrono_targets?: ChronoTarget[];
 }
 

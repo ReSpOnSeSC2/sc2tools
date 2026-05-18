@@ -380,8 +380,8 @@ function BreakdownBody({
             unitTimeline={data.unit_timeline}
             gameLengthSec={data.game_length_sec}
             leaks={leaks}
-            leakWindows={raw.leak_windows || []}
-            oppLeakWindows={raw.opp_leak_windows || []}
+            supplyBlockWindows={raw.supply_block_windows || []}
+            oppSupplyBlockWindows={raw.opp_supply_block_windows || []}
             highlightedKey={highlightedKey}
             myName={headerMeta?.playerName ?? null}
             oppName={headerMeta?.opponentName ?? null}

@@ -10,7 +10,7 @@ import {
 import { useApi } from "@/lib/clientApi";
 import {
   ActiveArmyChart,
-  type ActiveArmyLeakWindow,
+  type ActiveArmySupplyBlockWindow,
   type HoverEvent,
 } from "./ActiveArmyChart";
 import {
@@ -30,10 +30,10 @@ export interface MacroChartSectionProps {
   unitTimeline?: UnitTimelineEntry[];
   gameLengthSec?: number;
   leaks: LeakItem[];
-  /** Time-span windows (supply blocks etc.) for the local player. */
-  leakWindows?: ActiveArmyLeakWindow[];
-  /** Time-span windows for the opponent. */
-  oppLeakWindows?: ActiveArmyLeakWindow[];
+  /** Per-window supply-block annotations for the local player. */
+  supplyBlockWindows?: ActiveArmySupplyBlockWindow[];
+  /** Per-window supply-block annotations for the opponent. */
+  oppSupplyBlockWindows?: ActiveArmySupplyBlockWindow[];
   highlightedKey?: string | null;
   myName?: string | null;
   oppName?: string | null;
@@ -86,8 +86,8 @@ export function MacroChartSection({
   unitTimeline,
   gameLengthSec,
   leaks,
-  leakWindows,
-  oppLeakWindows,
+  supplyBlockWindows,
+  oppSupplyBlockWindows,
   highlightedKey,
   myName,
   oppName,
@@ -177,8 +177,8 @@ export function MacroChartSection({
         oppSeries={oppSeries}
         gameLengthSec={gameLengthSec}
         leaks={leaks}
-        leakWindows={leakWindows}
-        oppLeakWindows={oppLeakWindows}
+        supplyBlockWindows={supplyBlockWindows}
+        oppSupplyBlockWindows={oppSupplyBlockWindows}
         highlightedKey={highlightedKey}
         hoveredTime={hover.time}
         onHover={handleHover}
