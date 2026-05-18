@@ -616,40 +616,44 @@ function BvsTable({
 }) {
   return (
     <Card>
-      <table className="w-full text-sm">
-        <thead className="bg-bg-elevated">
-          <tr>
-            <SortableTh col="my_build" label="My build" {...sort} />
-            <SortableTh col="opp_strat" label="vs Opponent strategy" {...sort} />
-            <SortableTh col="wins" label="W" {...sort} align="right" />
-            <SortableTh col="losses" label="L" {...sort} align="right" />
-            <SortableTh col="total" label="Games" {...sort} align="right" />
-            <SortableTh col="winRate" label="WR" {...sort} align="right" />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((c, i) => (
-            <tr
-              key={`${c.my_build}-${c.opp_strat}-${i}`}
-              onClick={() => onOpenBvs(c.my_build, c.opp_strat)}
-              className="cursor-pointer border-t border-border hover:bg-bg-elevated/40"
-              title="Click to see the games"
-            >
-              <td className="px-3 py-1.5">{c.my_build}</td>
-              <td className="px-3 py-1.5 text-text-muted">{c.opp_strat}</td>
-              <td className="px-3 py-1.5 text-right text-success">{c.wins}</td>
-              <td className="px-3 py-1.5 text-right text-danger">{c.losses}</td>
-              <td className="px-3 py-1.5 text-right">{c.total}</td>
-              <td
-                className="px-3 py-1.5 text-right tabular-nums"
-                style={{ color: wrColor(c.winRate, c.total) }}
-              >
-                {pct1(c.winRate)}
-              </td>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead className="bg-bg-elevated">
+            <tr>
+              <SortableTh col="my_build" label="My build" {...sort} />
+              <SortableTh col="opp_strat" label="vs Opponent strategy" {...sort} />
+              <SortableTh col="wins" label="W" {...sort} align="right" />
+              <SortableTh col="losses" label="L" {...sort} align="right" />
+              <SortableTh col="total" label="Games" {...sort} align="right" />
+              <SortableTh col="winRate" label="WR" {...sort} align="right" />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((c, i) => (
+              <tr
+                key={`${c.my_build}-${c.opp_strat}-${i}`}
+                onClick={() => onOpenBvs(c.my_build, c.opp_strat)}
+                className="cursor-pointer border-t border-border hover:bg-bg-elevated/40"
+                title="Click to see the games"
+              >
+                <td className="whitespace-nowrap px-3 py-1.5">{c.my_build}</td>
+                <td className="whitespace-nowrap px-3 py-1.5 text-text-muted">
+                  {c.opp_strat}
+                </td>
+                <td className="px-3 py-1.5 text-right text-success">{c.wins}</td>
+                <td className="px-3 py-1.5 text-right text-danger">{c.losses}</td>
+                <td className="px-3 py-1.5 text-right">{c.total}</td>
+                <td
+                  className="px-3 py-1.5 text-right tabular-nums"
+                  style={{ color: wrColor(c.winRate, c.total) }}
+                >
+                  {pct1(c.winRate)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }
