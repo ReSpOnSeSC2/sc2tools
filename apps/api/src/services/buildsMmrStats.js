@@ -133,13 +133,22 @@ class BuildsMmrStatsService {
   async oppStrategyWinRateByMmr(userId, filters, opts = {}) {
     const bucketWidth = parseBucketWidth(opts.bucketWidth);
     const mmrDelta = parseMmrDelta(opts.mmrDelta);
-    const matchStage = this._mmrAwareMatch(userId, filters, mmrDelta);
+    // Loose match: require myMmr but let the opponent-side mmr come
+    // from either the per-game snapshot OR the opponents-collection
+    // fallback (see _oppMmrLookupStages). Without this every game vs
+    // an opponent the agent didn't tag with mmr — i.e. almost every
+    // ranked 1v1 replay — would drop out of the chart.
+    const matchStage = this._myMmrOnlyMatch(userId, filters);
     const rows = await this.db.games
       .aggregate([
         { $match: matchStage },
+        ...this._oppMmrLookupStages(),
+        {
+          $match: this._oppMmrRangeMatch(mmrDelta),
+        },
         {
           $addFields: {
-            _bucket: this._bucketExpr("$opponent.mmr", bucketWidth),
+            _bucket: this._bucketExpr("$_oppMmr", bucketWidth),
             _result: this._resultExpr(),
           },
         },
@@ -210,15 +219,23 @@ class BuildsMmrStatsService {
   async buildVsStrategyByMmr(userId, filters, opts = {}) {
     const bucketWidth = parseBucketWidth(opts.bucketWidth);
     const mmrDelta = parseMmrDelta(opts.mmrDelta);
-    const matchStage = this._mmrAwareMatch(userId, filters, mmrDelta);
+    // Same fallback as oppStrategyWinRateByMmr — the "match MMR"
+    // average is just (myMmr + opp.mmr) / 2, and the opp side falls
+    // back to the opponents-collection mmr when the per-game
+    // snapshot is missing.
+    const matchStage = this._myMmrOnlyMatch(userId, filters);
     const rows = await this.db.games
       .aggregate([
         { $match: matchStage },
+        ...this._oppMmrLookupStages(),
+        {
+          $match: this._oppMmrRangeMatch(mmrDelta),
+        },
         {
           $addFields: {
             _matchMmr: {
               $divide: [
-                { $add: ["$myMmr", "$opponent.mmr"] },
+                { $add: ["$myMmr", "$_oppMmr"] },
                 2,
               ],
             },
@@ -433,6 +450,112 @@ class BuildsMmrStatsService {
       match.$expr = {
         $lte: [
           { $abs: { $subtract: ["$myMmr", "$opponent.mmr"] } },
+          mmrDelta,
+        ],
+      };
+    }
+    return match;
+  }
+
+  /**
+   * Like ``_mmrAwareMatch`` but only enforces ``myMmr`` — leaves the
+   * opponent-side MMR check to a downstream stage that consults the
+   * opponents-collection fallback (see ``_oppMmrLookupStages``).
+   * Used by the two opponent-MMR-bucketed pipelines so the AngryBird
+   * scenario — a recent ranked game where sc2reader didn't carry
+   * opp.mmr but SC2Pulse did — actually lands on the chart.
+   *
+   * @private
+   * @param {string} userId
+   * @param {object} filters
+   * @returns {Record<string, any>}
+   */
+  _myMmrOnlyMatch(userId, filters) {
+    const match = gamesMatchStage(userId, filters);
+    match.myMmr = {
+      $exists: true,
+      $type: "number",
+      $gte: MMR_FLOOR,
+      $lte: MMR_CEILING,
+    };
+    return match;
+  }
+
+  /**
+   * $lookup + $addFields stages that synthesise ``_oppMmr`` on each
+   * input game: the per-game snapshot when numeric, otherwise the
+   * opponent's latest MMR from the opponents collection (sourced
+   * from SC2Pulse at ingest / by the backfill cron). Index-backed
+   * via the unique ``{userId, pulseId}`` opponents index.
+   *
+   * @private
+   * @returns {object[]}
+   */
+  _oppMmrLookupStages() {
+    return [
+      {
+        $lookup: {
+          from: "opponents",
+          let: { uid: "$userId", pid: "$opponent.pulseId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$userId", "$$uid"] },
+                    { $eq: ["$pulseId", "$$pid"] },
+                  ],
+                },
+              },
+            },
+            { $project: { _id: 0, mmr: 1 } },
+          ],
+          as: "_opp",
+        },
+      },
+      {
+        $addFields: {
+          _oppMmr: {
+            $let: {
+              vars: {
+                snap: "$opponent.mmr",
+                fallback: { $first: "$_opp.mmr" },
+              },
+              in: {
+                $cond: [
+                  { $isNumber: "$$snap" },
+                  "$$snap",
+                  {
+                    $cond: [{ $isNumber: "$$fallback" }, "$$fallback", null],
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    ];
+  }
+
+  /**
+   * $match stage applied AFTER ``_oppMmrLookupStages``: requires
+   * ``_oppMmr`` in the plausible-MMR window and (optionally) within
+   * ``mmrDelta`` of ``myMmr``. Mirror-MMR window uses ``_oppMmr`` so
+   * a fallback value participates the same way as a snapshot.
+   *
+   * @private
+   * @param {number|undefined} mmrDelta
+   * @returns {Record<string, any>}
+   */
+  _oppMmrRangeMatch(mmrDelta) {
+    /** @type {Record<string, any>} */
+    const match = {
+      _oppMmr: { $type: "number", $gte: MMR_FLOOR, $lte: MMR_CEILING },
+    };
+    if (typeof mmrDelta === "number" && Number.isFinite(mmrDelta)) {
+      match.$expr = {
+        $lte: [
+          { $abs: { $subtract: ["$myMmr", "$_oppMmr"] } },
           mmrDelta,
         ],
       };
