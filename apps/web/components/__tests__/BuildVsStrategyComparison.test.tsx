@@ -211,6 +211,67 @@ describe("BuildVsStrategyComparison", () => {
     );
   });
 
+  it("matches saved builds when case, whitespace, or dash style differ from the agent label", () => {
+    // Real-world reports: user has a build saved as "3 stargate
+    // phoenix" (lowercase, stray trailing space) and the agent label
+    // is "PvZ - 3 Stargate Phoenix". Strict equality misses; the
+    // bridge should normalize case + whitespace so they line up.
+    wireMocks({
+      customBuildsList: [
+        { slug: "stargate-phoenix", name: "  3 stargate  Phoenix " },
+      ],
+      yourPayload: buildPhasesPayload(8, "you"),
+      oppPayload: { ...buildPhasesPayload(8, "opponent"), name: "Zerg - 3 Base Macro" },
+    });
+
+    render(
+      <BuildVsStrategyComparison
+        build="PvZ - 3 Stargate Phoenix"
+        strategy="Zerg - 3 Base Macro"
+      />,
+    );
+
+    const callPaths = useApiMock.mock.calls.map((c) => c[0]);
+    expect(callPaths).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you",
+        ),
+      ]),
+    );
+    expect(screen.queryByText(/No saved build for this label/i)).toBeNull();
+  });
+
+  it("does not flash the empty state while the custom-builds list is still loading", () => {
+    // Initial render before the slug-bridge fetch settles: data is
+    // undefined, isLoading is true. The left column should show a
+    // skeleton rather than the "No saved build for this label" empty
+    // state — otherwise users with a matching build see the wrong
+    // message until SWR resolves.
+    useApiMock.mockImplementation((path: string | null) => {
+      if (path === "/v1/custom-builds") {
+        return { data: undefined, isLoading: true, error: null };
+      }
+      if (path && path.includes("/phases")) {
+        return {
+          data: { ...buildPhasesPayload(8, "opponent"), name: "Zerg - 3 Base Macro" },
+          isLoading: false,
+          error: null,
+        };
+      }
+      return { data: undefined, isLoading: false, error: null };
+    });
+
+    render(
+      <BuildVsStrategyComparison
+        build="PvZ - 3 Stargate Phoenix"
+        strategy="Zerg - 3 Base Macro"
+      />,
+    );
+
+    expect(screen.queryByText(/No saved build for this label/i)).toBeNull();
+  });
+
   it("renders the 'where games end' stacked bar (not the median-timing bands) in both columns", () => {
     // Comparison columns swap the full PhaseTrajectoryStrip for the
     // outcomeOnly variant — that means `phase-histogram` (the stacked

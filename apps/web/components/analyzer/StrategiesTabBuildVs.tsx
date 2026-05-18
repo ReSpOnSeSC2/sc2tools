@@ -275,11 +275,23 @@ const COMPARISON_MIN_GAMES = 3;
  * "PvZ - " segment encodes (your race)(v)(opp race) and shouldn't
  * participate in name comparisons against saved custom-build names,
  * which users typically author without that prefix. The character class
- * covers P/T/Z/R; the dash may be a hyphen or em-dash with arbitrary
- * surrounding whitespace.
+ * covers P/T/Z/R (case-insensitive); the separator may be a hyphen,
+ * en-dash or em-dash with arbitrary surrounding whitespace, or just
+ * whitespace alone — users sometimes save builds as "PvZ Stargate"
+ * without the dash.
  */
 function stripMatchupPrefix(s: string): string {
-  return s.replace(/^[PTZR]v[PTZR]\s*[-—]\s*/, "");
+  return s.replace(/^[PTZR]v[PTZR](\s*[-–—]\s*|\s+)/i, "");
+}
+
+/**
+ * Normalize a build name for slug-bridge comparison: strip the matchup
+ * prefix, trim, lowercase, and collapse internal whitespace. The agent
+ * label is generated mechanically while user-saved names are typed by
+ * hand — equality should tolerate case + whitespace drift.
+ */
+function normalizeBuildName(s: string): string {
+  return stripMatchupPrefix(s).trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 /**
@@ -321,13 +333,18 @@ export function BuildVsStrategyComparison({
     const list = Array.isArray(customBuilds.data)
       ? customBuilds.data
       : customBuilds.data?.items ?? [];
-    const target = stripMatchupPrefix(build);
+    const target = normalizeBuildName(build);
     const hit = list.find((b) => {
-      const candidate = stripMatchupPrefix(b.name || b.slug || "");
+      const candidate = normalizeBuildName(b.name || b.slug || "");
       return candidate === target;
     });
     return hit?.slug || null;
   }, [customBuilds.data, build]);
+  // While the custom-builds list is in flight, ``slug`` is null but the
+  // user may well have a matching build — gate the empty state on the
+  // fetch settling so we don't flash "No saved build for this label"
+  // (or worse, leave it on a stale render) before the bridge resolves.
+  const slugLoading = !customBuilds.data && !customBuilds.error;
 
   return (
     <Card title="Build vs strategy — phase comparison">
@@ -345,7 +362,7 @@ export function BuildVsStrategyComparison({
           subtitle={build}
           testId="bvs-column-you"
         >
-          <YouColumn slug={slug} />
+          <YouColumn slug={slug} isResolvingSlug={slugLoading} />
         </ComparisonColumn>
         <ComparisonColumn
           title="What they typically do"
@@ -388,7 +405,13 @@ function ComparisonColumn({
   );
 }
 
-function YouColumn({ slug }: { slug: string | null }) {
+function YouColumn({
+  slug,
+  isResolvingSlug,
+}: {
+  slug: string | null;
+  isResolvingSlug: boolean;
+}) {
   // Left side reads the user's build with perspective=you. We pass
   // it explicitly so the cache slot in the API matches the right
   // column's explicit "opponent" — keeps the two queries from
@@ -399,6 +422,7 @@ function YouColumn({ slug }: { slug: string | null }) {
   const { data, isLoading, error } = useApi<BuildPhasePayload>(path);
 
   if (!slug) {
+    if (isResolvingSlug) return <Skeleton rows={3} />;
     return (
       <EmptyState
         title="No saved build for this label"
