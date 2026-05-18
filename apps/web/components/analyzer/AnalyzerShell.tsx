@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Settings as SettingsIcon } from "lucide-react";
 import { AnalyzerProvider } from "@/components/AnalyzerProvider";
 import { Section } from "@/components/ui/Section";
 import { Tabs } from "@/components/ui/Tabs";
@@ -62,15 +60,6 @@ export function AnalyzerShell({
                 </span>
               }
               description={activeTab.description}
-              actions={
-                <Link
-                  href="/settings"
-                  className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md px-3 py-2 text-caption uppercase tracking-wider text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                >
-                  <SettingsIcon className="h-3.5 w-3.5" aria-hidden />
-                  Settings
-                </Link>
-              }
             >
               <TabPanel
                 tab={tab}

@@ -6,11 +6,6 @@ import { fmtAgo, fmtMinutes, pct1, wrColor } from "@/lib/format";
 import { Last5GamesTimeline } from "@/components/analyzer/Last5GamesTimeline";
 import type { ProfileGame } from "@/components/analyzer/Last5GamesTimeline";
 import {
-  MedianTimingsGrid,
-  type MatchupTimings,
-  type TimingInfo,
-} from "@/components/analyzer/MedianTimingsGrid";
-import {
   PredictedStrategiesList,
   type Prediction,
 } from "@/components/analyzer/PredictedStrategiesList";
@@ -51,8 +46,8 @@ const PHASE_LABELS: Record<Phase, string> = {
  * `/v1/custom-builds/:slug/matches` (custom builds).
  *
  * Both endpoints share the same envelope: totals + by-cuts + recent +
- * dossier extras (median key timings, opponent-strategy predictions,
- * macro aggregate). See `apps/api/src/services/buildDossier.js`.
+ * dossier extras (opponent-strategy predictions, macro aggregate). See
+ * `apps/api/src/services/buildDossier.js`.
  */
 export interface BuildDossierData {
   name: string;
@@ -72,19 +67,10 @@ export interface BuildDossierData {
   predictedStrategies?: Prediction[];
   myRace?: string;
   oppRaceModal?: string;
-  matchupLabel?: string;
-  matchupCounts?: Record<string, number>;
-  matchupTimings?: Record<string, MatchupTimings>;
-  matchupTimingsLegacy?: Record<string, MatchupTimings>;
-  medianTimings?: Record<string, TimingInfo>;
-  medianTimingsLegacy?: Record<string, TimingInfo>;
-  medianTimingsOrder?: string[];
   last5Games?: ProfileGame[];
   macro?: {
     gamesWithScore: number;
     avgMacroScore: number | null;
-    avgApm: number | null;
-    avgSpq: number | null;
     avgDurationSec: number | null;
     scoreDistribution: { excellent: number; good: number; poor: number };
   };
@@ -115,8 +101,7 @@ export interface BuildDossierProps {
  * the custom-builds card modal, and the standalone `/builds/[slug]`
  * route. Renders the full opponent-style breakdown for a build:
  * Performance, Vs strategy / Vs map, Top matchups, Build tendencies,
- * Likely strategies next, Median key timings (per-matchup), Last 5
- * games, and a macro aggregate.
+ * Likely strategies next, Last 5 games, and a macro aggregate.
  */
 export function BuildDossier({
   apiPath,
@@ -205,7 +190,6 @@ export function BuildDossier({
         strategies={data.topStrategies ?? []}
         predictions={data.predictedStrategies ?? []}
       />
-      <MedianKeyTimings data={data} />
       {phaseBase ? (
         <PhaseAndTransitions
           compositions={compositions.data}
@@ -317,50 +301,6 @@ function TendenciesAndPredictions({
   );
 }
 
-function MedianKeyTimings({ data }: { data: BuildDossierData }) {
-  const timings = data.medianTimingsLegacy ?? data.medianTimings ?? {};
-  const order =
-    data.medianTimingsOrder && data.medianTimingsOrder.length
-      ? data.medianTimingsOrder
-      : Object.keys(timings);
-  const matchupTimings = data.matchupTimingsLegacy ?? data.matchupTimings ?? {};
-  const matchupCounts = data.matchupCounts ?? {};
-  const matchupLabel = data.matchupLabel ?? "";
-  const opponentName = data.name || "Build";
-  const hasTimings = order.length > 0;
-
-  return (
-    <Card
-      title={`Median key timings${matchupLabel ? ` — ${matchupLabel}` : ""}`}
-    >
-      {hasTimings ? (
-        <>
-          <MedianTimingsGrid
-            timings={timings as Record<string, TimingInfo>}
-            order={order}
-            matchupLabel={matchupLabel}
-            matchupCounts={matchupCounts}
-            matchupTimings={
-              matchupTimings as Record<string, MatchupTimings>
-            }
-            opponentName={opponentName}
-          />
-          <p className="mt-2 text-[10px] text-text-dim">
-            Aggregated from games tagged with this build. Cards labelled "your
-            tech" come from your build log; "opponent's tech" cards come from
-            theirs. Click a card with samples to see contributing games.
-          </p>
-        </>
-      ) : (
-        <EmptyState
-          title="Not enough samples"
-          sub="Once a few games on this build are parsed, median timings will appear here."
-        />
-      )}
-    </Card>
-  );
-}
-
 function MacroAggregate({ macro }: { macro?: BuildDossierData["macro"] }) {
   const m = macro;
   const empty = !m || m.gamesWithScore === 0;
@@ -400,8 +340,6 @@ function MacroAggregate({ macro }: { macro?: BuildDossierData["macro"] }) {
     );
   }
   const avgMacro = m!.avgMacroScore != null ? m!.avgMacroScore.toFixed(1) : "—";
-  const avgApm = m!.avgApm != null ? Math.round(m!.avgApm).toString() : "—";
-  const avgSpq = m!.avgSpq != null ? m!.avgSpq.toFixed(1) : "—";
   const avgDur =
     m!.avgDurationSec != null ? fmtMinutes(m!.avgDurationSec) : "—";
   const macroColor =
@@ -415,10 +353,8 @@ function MacroAggregate({ macro }: { macro?: BuildDossierData["macro"] }) {
 
   return (
     <Card title="Macro breakdown (averages on this build)">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3">
         <Stat label="Avg macro" value={avgMacro} color={macroColor} />
-        <Stat label="Avg APM" value={avgApm} />
-        <Stat label="Avg SQ" value={avgSpq} />
         <Stat label="Avg length" value={avgDur} />
       </div>
       {dist ? (
