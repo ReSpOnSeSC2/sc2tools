@@ -178,7 +178,7 @@ describe("Two Truths & a Lie — expanded fact families", () => {
       ...baseDataset,
       games: [...olderLosses, ...recentWins],
     });
-    const f = facts.find((x) => x.truthText.includes("most recent half"));
+    const f = facts.find((x) => x.truthText.includes("more recent half"));
     expect(f).toBeDefined();
     expect(f!.truthText).toMatch(/higher than in the earlier half/);
   });
@@ -448,7 +448,7 @@ describe("Two Truths & a Lie — census-style facts", () => {
     games.push(...gamesAgainst("p9", ["W", "L"]));
     const facts = buildFactPool({ ...baseDataset, opponents, games });
     const f = facts.find((x) =>
-      x.truthText.includes("More than half of your opponents"),
+      x.truthText.includes("more than half of your opponents"),
     );
     expect(f).toBeDefined();
     expect(f!.detail).toMatch(/8 one-time opponents out of 10/);

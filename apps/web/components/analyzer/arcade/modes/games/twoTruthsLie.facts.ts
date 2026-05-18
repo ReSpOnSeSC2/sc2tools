@@ -103,12 +103,12 @@ function factTopBuildVsOverall(data: ArcadeDataset): FactCandidate | null {
   return {
     truthText:
       diff >= 0
-        ? `Your most-played build (“${topBuild.name}”) has a higher WR than your overall WR.`
-        : `Your most-played build (“${topBuild.name}”) has a lower WR than your overall WR.`,
+        ? `In your tracked history, your most-played build (“${topBuild.name}”) has a higher WR than your overall WR.`
+        : `In your tracked history, your most-played build (“${topBuild.name}”) has a lower WR than your overall WR.`,
     lieText:
       diff >= 0
-        ? `Your most-played build (“${topBuild.name}”) has a lower WR than your overall WR.`
-        : `Your most-played build (“${topBuild.name}”) has a higher WR than your overall WR.`,
+        ? `In your tracked history, your most-played build (“${topBuild.name}”) has a lower WR than your overall WR.`
+        : `In your tracked history, your most-played build (“${topBuild.name}”) has a higher WR than your overall WR.`,
     detail: `Build WR ${pct1(topBuild.winRate)} vs overall ${pct1(data.summary.winRate)}.`,
   };
 }
@@ -125,8 +125,8 @@ function factShortGamesRaceSplit(data: ArcadeDataset): FactCandidate | null {
   const top = entries[0][0];
   const bottom = entries[entries.length - 1][0];
   return {
-    truthText: `In games under 12 minutes, you do better vs ${fullRace(top)} than vs ${fullRace(bottom)}.`,
-    lieText: `In games under 12 minutes, you do better vs ${fullRace(bottom)} than vs ${fullRace(top)}.`,
+    truthText: `Across your tracked games under 12 minutes, you do better vs ${fullRace(top)} than vs ${fullRace(bottom)}.`,
+    lieText: `Across your tracked games under 12 minutes, you do better vs ${fullRace(bottom)} than vs ${fullRace(top)}.`,
     detail: `Short-game WR vs ${fullRace(top)} ${pct1(wrByRace[top].wr)}, vs ${fullRace(bottom)} ${pct1(wrByRace[bottom].wr)}.`,
   };
 }
@@ -145,8 +145,8 @@ function factBestVsWorstMap(data: ArcadeDataset): FactCandidate | null {
   const worst = sortedMaps[sortedMaps.length - 1];
   if (best.map === worst.map) return null;
   return {
-    truthText: `You have a higher WR on ${best.map} than on ${worst.map}.`,
-    lieText: `You have a higher WR on ${worst.map} than on ${best.map}.`,
+    truthText: `In your tracked history, you have a higher WR on ${best.map} than on ${worst.map}.`,
+    lieText: `In your tracked history, you have a higher WR on ${worst.map} than on ${best.map}.`,
     detail: `${best.map} ${pct1(best.winRate)} (${best.total}g), ${worst.map} ${pct1(worst.winRate)} (${worst.total}g).`,
   };
 }
@@ -160,12 +160,12 @@ function factLateVsEarly(data: ArcadeDataset): FactCandidate | null {
   return {
     truthText:
       diff >= 0
-        ? `Your WR after 10pm is higher than your WR before noon.`
-        : `Your WR after 10pm is lower than your WR before noon.`,
+        ? `Across your tracked games, your WR after 10pm is higher than your WR before noon.`
+        : `Across your tracked games, your WR after 10pm is lower than your WR before noon.`,
     lieText:
       diff >= 0
-        ? `Your WR after 10pm is lower than your WR before noon.`
-        : `Your WR after 10pm is higher than your WR before noon.`,
+        ? `Across your tracked games, your WR after 10pm is lower than your WR before noon.`
+        : `Across your tracked games, your WR after 10pm is higher than your WR before noon.`,
     detail: `Late ${pct1(lateWr)} (${hourBuckets.late.total}g), early ${pct1(earlyWr)} (${hourBuckets.early.total}g).`,
   };
 }
@@ -189,12 +189,12 @@ function factMatchupVsOverall(data: ArcadeDataset): FactCandidate | null {
   return {
     truthText:
       diff > 0
-        ? `Your WR vs ${race} is higher than your overall WR.`
-        : `Your WR vs ${race} is lower than your overall WR.`,
+        ? `In your tracked history, your WR vs ${race} is higher than your overall WR.`
+        : `In your tracked history, your WR vs ${race} is lower than your overall WR.`,
     lieText:
       diff > 0
-        ? `Your WR vs ${race} is lower than your overall WR.`
-        : `Your WR vs ${race} is higher than your overall WR.`,
+        ? `In your tracked history, your WR vs ${race} is lower than your overall WR.`
+        : `In your tracked history, your WR vs ${race} is higher than your overall WR.`,
     detail: `vs ${race} ${pct1(m.winRate)} (${m.total}g) vs overall ${pct1(overall)}.`,
   };
 }
@@ -214,11 +214,11 @@ function factTopVsSecondBuild(data: ArcadeDataset): FactCandidate | null {
   const topBetter = top.winRate > second.winRate;
   return {
     truthText: topBetter
-      ? `Your most-played build (“${top.name}”) wins more often than your 2nd-most (“${second.name}”).`
-      : `Your 2nd-most-played build (“${second.name}”) wins more often than your most-played (“${top.name}”).`,
+      ? `In your tracked history, your most-played build (“${top.name}”) wins more often than your 2nd-most (“${second.name}”).`
+      : `In your tracked history, your 2nd-most-played build (“${second.name}”) wins more often than your most-played (“${top.name}”).`,
     lieText: topBetter
-      ? `Your 2nd-most-played build (“${second.name}”) wins more often than your most-played (“${top.name}”).`
-      : `Your most-played build (“${top.name}”) wins more often than your 2nd-most (“${second.name}”).`,
+      ? `In your tracked history, your 2nd-most-played build (“${second.name}”) wins more often than your most-played (“${top.name}”).`
+      : `In your tracked history, your most-played build (“${top.name}”) wins more often than your 2nd-most (“${second.name}”).`,
     detail: `${top.name} ${pct1(top.winRate)} (${top.total}g), ${second.name} ${pct1(second.winRate)} (${second.total}g).`,
   };
 }
@@ -240,11 +240,11 @@ function factRecentVsOlder(data: ArcadeDataset): FactCandidate | null {
   const recentBetter = recentWr > olderWr;
   return {
     truthText: recentBetter
-      ? `Your WR in your most recent half of games is higher than in the earlier half.`
-      : `Your WR in your most recent half of games is lower than in the earlier half.`,
+      ? `Splitting your tracked games in half chronologically, your WR in the more recent half is higher than in the earlier half.`
+      : `Splitting your tracked games in half chronologically, your WR in the more recent half is lower than in the earlier half.`,
     lieText: recentBetter
-      ? `Your WR in your most recent half of games is lower than in the earlier half.`
-      : `Your WR in your most recent half of games is higher than in the earlier half.`,
+      ? `Splitting your tracked games in half chronologically, your WR in the more recent half is lower than in the earlier half.`
+      : `Splitting your tracked games in half chronologically, your WR in the more recent half is higher than in the earlier half.`,
     detail: `Recent ${pct1(recentWr)} (${recent.length}g), earlier ${pct1(olderWr)} (${older.length}g).`,
   };
 }
@@ -266,11 +266,11 @@ function factLongVsShortGames(data: ArcadeDataset): FactCandidate | null {
   const longBetter = longWr > shortWr;
   return {
     truthText: longBetter
-      ? `You win more often in games over 20 minutes than in games under 12 minutes.`
-      : `You win more often in games under 12 minutes than in games over 20 minutes.`,
+      ? `Across your tracked games, you win more often in games over 20 minutes than in games under 12 minutes.`
+      : `Across your tracked games, you win more often in games under 12 minutes than in games over 20 minutes.`,
     lieText: longBetter
-      ? `You win more often in games under 12 minutes than in games over 20 minutes.`
-      : `You win more often in games over 20 minutes than in games under 12 minutes.`,
+      ? `Across your tracked games, you win more often in games under 12 minutes than in games over 20 minutes.`
+      : `Across your tracked games, you win more often in games over 20 minutes than in games under 12 minutes.`,
     detail: `Long ${pct1(longWr)} (${long.length}g), short ${pct1(shortWr)} (${short.length}g).`,
   };
 }
@@ -303,11 +303,11 @@ function factWeekendVsWeekday(data: ArcadeDataset): FactCandidate | null {
   const weekendBetter = weWr > wdWr;
   return {
     truthText: weekendBetter
-      ? `Your weekend WR is higher than your weekday WR.`
-      : `Your weekend WR is lower than your weekday WR.`,
+      ? `Across your tracked games, your weekend WR is higher than your weekday WR.`
+      : `Across your tracked games, your weekend WR is lower than your weekday WR.`,
     lieText: weekendBetter
-      ? `Your weekend WR is lower than your weekday WR.`
-      : `Your weekend WR is higher than your weekday WR.`,
+      ? `Across your tracked games, your weekend WR is lower than your weekday WR.`
+      : `Across your tracked games, your weekend WR is higher than your weekday WR.`,
     detail: `Weekend ${pct1(weWr)} (${weTotal}g), weekday ${pct1(wdWr)} (${wdTotal}g).`,
   };
 }
@@ -324,11 +324,11 @@ function factTopMapVsOverall(data: ArcadeDataset): FactCandidate | null {
   const better = diff > 0;
   return {
     truthText: better
-      ? `Your most-played map (${top.map}) has a higher WR than your overall WR.`
-      : `Your most-played map (${top.map}) has a lower WR than your overall WR.`,
+      ? `In your tracked history, your most-played map (${top.map}) has a higher WR than your overall WR.`
+      : `In your tracked history, your most-played map (${top.map}) has a lower WR than your overall WR.`,
     lieText: better
-      ? `Your most-played map (${top.map}) has a lower WR than your overall WR.`
-      : `Your most-played map (${top.map}) has a higher WR than your overall WR.`,
+      ? `In your tracked history, your most-played map (${top.map}) has a lower WR than your overall WR.`
+      : `In your tracked history, your most-played map (${top.map}) has a higher WR than your overall WR.`,
     detail: `${top.map} ${pct1(top.winRate)} (${top.total}g) vs overall ${pct1(data.summary.winRate)}.`,
   };
 }
@@ -366,11 +366,11 @@ function factHighVsLowMmrOpponents(
   const upsetBetter = hiWr > loWr;
   return {
     truthText: upsetBetter
-      ? `Your WR vs higher-MMR opponents is higher than your WR vs lower-MMR opponents.`
-      : `Your WR vs higher-MMR opponents is lower than your WR vs lower-MMR opponents.`,
+      ? `In your tracked history, your WR vs higher-MMR opponents is higher than your WR vs lower-MMR opponents.`
+      : `In your tracked history, your WR vs higher-MMR opponents is lower than your WR vs lower-MMR opponents.`,
     lieText: upsetBetter
-      ? `Your WR vs higher-MMR opponents is lower than your WR vs lower-MMR opponents.`
-      : `Your WR vs higher-MMR opponents is higher than your WR vs lower-MMR opponents.`,
+      ? `In your tracked history, your WR vs higher-MMR opponents is lower than your WR vs lower-MMR opponents.`
+      : `In your tracked history, your WR vs higher-MMR opponents is higher than your WR vs lower-MMR opponents.`,
     detail: `Above your MMR ${pct1(hiWr)} (${hiT}g), below your MMR ${pct1(loWr)} (${loT}g).`,
   };
 }
@@ -388,11 +388,11 @@ function factTopRival(data: ArcadeDataset): FactCandidate | null {
   const better = diff > 0;
   return {
     truthText: better
-      ? `Your WR vs your most-faced opponent (${name}) is higher than your overall WR.`
-      : `Your WR vs your most-faced opponent (${name}) is lower than your overall WR.`,
+      ? `In your tracked history, your WR vs your most-faced opponent (${name}) is higher than your overall WR.`
+      : `In your tracked history, your WR vs your most-faced opponent (${name}) is lower than your overall WR.`,
     lieText: better
-      ? `Your WR vs your most-faced opponent (${name}) is lower than your overall WR.`
-      : `Your WR vs your most-faced opponent (${name}) is higher than your overall WR.`,
+      ? `In your tracked history, your WR vs your most-faced opponent (${name}) is lower than your overall WR.`
+      : `In your tracked history, your WR vs your most-faced opponent (${name}) is higher than your overall WR.`,
     detail: `vs ${name} ${pct1(top.userWinRate)} (${top.games}g) vs overall ${pct1(data.summary.winRate)}.`,
   };
 }
@@ -429,11 +429,11 @@ function factRevengeVsMomentum(data: ArcadeDataset): FactCandidate | null {
   const revengeBetter = afterLossWr > afterWinWr;
   return {
     truthText: revengeBetter
-      ? `Your WR in the game right after a loss is higher than the game right after a win.`
-      : `Your WR in the game right after a loss is lower than the game right after a win.`,
+      ? `Across your tracked games, your WR in the game right after a loss is higher than the game right after a win.`
+      : `Across your tracked games, your WR in the game right after a loss is lower than the game right after a win.`,
     lieText: revengeBetter
-      ? `Your WR in the game right after a loss is lower than the game right after a win.`
-      : `Your WR in the game right after a loss is higher than the game right after a win.`,
+      ? `Across your tracked games, your WR in the game right after a loss is lower than the game right after a win.`
+      : `Across your tracked games, your WR in the game right after a loss is higher than the game right after a win.`,
     detail: `After loss ${pct1(afterLossWr)} (${lossT}g), after win ${pct1(afterWinWr)} (${winT}g).`,
   };
 }
@@ -454,8 +454,8 @@ function factOppRaceCounts(data: ArcadeDataset): FactCandidate | null {
   const bottom = entries[entries.length - 1];
   if (top[1] - bottom[1] < 4) return null;
   return {
-    truthText: `You've played more games vs ${fullRace(top[0])} than vs ${fullRace(bottom[0])}.`,
-    lieText: `You've played more games vs ${fullRace(bottom[0])} than vs ${fullRace(top[0])}.`,
+    truthText: `In your tracked history, you've played more games vs ${fullRace(top[0])} than vs ${fullRace(bottom[0])}.`,
+    lieText: `In your tracked history, you've played more games vs ${fullRace(bottom[0])} than vs ${fullRace(top[0])}.`,
     detail: `vs ${fullRace(top[0])} ${top[1]}g, vs ${fullRace(bottom[0])} ${bottom[1]}g.`,
   };
 }
@@ -471,8 +471,8 @@ function factBestVsWorstBuild(data: ArcadeDataset): FactCandidate | null {
   if (best.name === worst.name) return null;
   if (best.winRate - worst.winRate < MIN_WR_GAP) return null;
   return {
-    truthText: `Your “${best.name}” build wins more often than your “${worst.name}” build.`,
-    lieText: `Your “${worst.name}” build wins more often than your “${best.name}” build.`,
+    truthText: `In your tracked history, your “${best.name}” build wins more often than your “${worst.name}” build.`,
+    lieText: `In your tracked history, your “${worst.name}” build wins more often than your “${best.name}” build.`,
     detail: `${best.name} ${pct1(best.winRate)} (${best.total}g), ${worst.name} ${pct1(worst.winRate)} (${worst.total}g).`,
   };
 }
@@ -497,8 +497,8 @@ function factMyRaceWrSplit(data: ArcadeDataset): FactCandidate | null {
   const bottomWr = bottom[1].w / bottom[1].t;
   if (topWr - bottomWr < MIN_WR_GAP) return null;
   return {
-    truthText: `You win more often playing ${fullRace(top[0])} than playing ${fullRace(bottom[0])}.`,
-    lieText: `You win more often playing ${fullRace(bottom[0])} than playing ${fullRace(top[0])}.`,
+    truthText: `In your tracked history, you win more often playing ${fullRace(top[0])} than playing ${fullRace(bottom[0])}.`,
+    lieText: `In your tracked history, you win more often playing ${fullRace(bottom[0])} than playing ${fullRace(top[0])}.`,
     detail: `As ${fullRace(top[0])} ${pct1(topWr)} (${top[1].t}g), as ${fullRace(bottom[0])} ${pct1(bottomWr)} (${bottom[1].t}g).`,
   };
 }
@@ -531,11 +531,11 @@ function factAfternoonVsEvening(data: ArcadeDataset): FactCandidate | null {
   const afternoonBetter = aWr > eWr;
   return {
     truthText: afternoonBetter
-      ? `Your afternoon WR (noon–6pm) is higher than your evening WR (6–10pm).`
-      : `Your afternoon WR (noon–6pm) is lower than your evening WR (6–10pm).`,
+      ? `Across your tracked games, your afternoon WR (noon–6pm) is higher than your evening WR (6–10pm).`
+      : `Across your tracked games, your afternoon WR (noon–6pm) is lower than your evening WR (6–10pm).`,
     lieText: afternoonBetter
-      ? `Your afternoon WR (noon–6pm) is lower than your evening WR (6–10pm).`
-      : `Your afternoon WR (noon–6pm) is higher than your evening WR (6–10pm).`,
+      ? `Across your tracked games, your afternoon WR (noon–6pm) is lower than your evening WR (6–10pm).`
+      : `Across your tracked games, your afternoon WR (noon–6pm) is higher than your evening WR (6–10pm).`,
     detail: `Afternoon ${pct1(aWr)} (${aT}g), evening ${pct1(eWr)} (${eT}g).`,
   };
 }
