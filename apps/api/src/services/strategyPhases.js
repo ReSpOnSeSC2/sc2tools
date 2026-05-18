@@ -6,19 +6,24 @@ const STATS_GAME_SCAN_CAP = 1000;
 
 /**
  * StrategyPhasesService — phase-aware aggregator keyed by the
- * detected opponent strategy. Mirrors ``CustomBuildsService
- * .evaluateBuildPhases`` but groups by ``opponent.strategy`` rather
- * than by saved-rule matches. Feeds the StrategiesTab drill-down
- * "what this matchup looks like phase-by-phase" panel.
+ * detected opponent strategy or the user-side build label. Mirrors
+ * ``CustomBuildsService.evaluateBuildPhases`` but groups by a
+ * single game field (``opponent.strategy`` for ``evaluate`` /
+ * ``myBuild`` for ``evaluateByBuildName``) rather than by saved-
+ * rule matches. Feeds the StrategiesTab drill-down "what this
+ * matchup looks like phase-by-phase" panel on the right, and the
+ * "what you typically do" fallback on the left when the user has
+ * games for an agent-classified label but hasn't saved a matching
+ * custom build.
  *
  * Pipeline: pull the user's recent games via ``perGame
  * .listForRulePreview`` with ``includeMacroBreakdown: true``, filter
- * to ``opponent.strategy === name`` (case-sensitive — names come
- * from the same detector that powers ``/v1/opp-strategies``), then
- * hand the matched set to ``computeCompositions``. We never re-run
- * the phaseClassifier or signature logic here; matching the same
- * pipeline as Prompt 4 keeps the StrategiesTab card identical in
- * shape to the BuildDossier phase section.
+ * by the chosen field (case-sensitive — names come from the same
+ * detectors that power ``/v1/opp-strategies`` and ``/v1/builds``),
+ * then hand the matched set to ``computeCompositions``. We never
+ * re-run the phaseClassifier or signature logic here; matching the
+ * same pipeline keeps the StrategiesTab cards identical in shape to
+ * the BuildDossier phase section.
  */
 class StrategyPhasesService {
   /**
@@ -72,6 +77,58 @@ class StrategyPhasesService {
     const comps = computeCompositions(matched, { perspective });
     return {
       name: strategyName,
+      total: matched.length,
+      perspective,
+      sampleSize: comps.sampleSize,
+      perPhase: comps.perPhase,
+      finalPhaseDistribution: comps.finalPhaseDistribution,
+      medianCrossings: comps.medianCrossings,
+      durationP95Sec: comps.durationP95Sec,
+      flags: comps.flags,
+    };
+  }
+
+  /**
+   * Run the phase-aware composition pipeline against every game where
+   * ``myBuild === buildName``. Returns null when no games carry that
+   * label so the route layer can answer with a 404. Always scored
+   * from the user's perspective — the left column of the comparison
+   * view shows "what YOU typically do", and the agent only ever
+   * stamps user-side build labels on the ``myBuild`` field.
+   *
+   * The shape mirrors ``evaluate`` so the StrategiesTab can hand
+   * either payload straight to PhaseTrajectoryStrip /
+   * PhaseCompositionTabs.
+   *
+   * @param {string} userId
+   * @param {string} buildName
+   * @param {{ perspective?: "you"|"opponent" }} [opts]
+   * @returns {Promise<null | {
+   *   name: string,
+   *   total: number,
+   *   perspective: "you"|"opponent",
+   *   sampleSize: Record<string, number>,
+   *   perPhase: Record<string, object>,
+   *   finalPhaseDistribution: Record<string, number>,
+   *   medianCrossings: object,
+   *   durationP95Sec: number,
+   *   flags: string[],
+   * }>}
+   */
+  async evaluateByBuildName(userId, buildName, opts = {}) {
+    if (!this.perGame) throw new Error("perGame_unavailable");
+    if (!buildName) return null;
+    const perspective =
+      opts && opts.perspective === "opponent" ? "opponent" : "you";
+    const games = await this.perGame.listForRulePreview(userId, {
+      limit: STATS_GAME_SCAN_CAP,
+      includeMacroBreakdown: true,
+    });
+    const matched = games.filter((g) => g && g.myBuild === buildName);
+    if (matched.length === 0) return null;
+    const comps = computeCompositions(matched, { perspective });
+    return {
+      name: buildName,
       total: matched.length,
       perspective,
       sampleSize: comps.sampleSize,

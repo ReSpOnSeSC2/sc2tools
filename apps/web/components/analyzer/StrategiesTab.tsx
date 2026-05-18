@@ -322,7 +322,11 @@ function StrategyGamesView({
           {titleText}
         </h2>
         {!isLoading && summary.total > 0 ? (
-          <div className="ml-auto text-xs tabular-nums text-text-dim">
+          // ``w-full md:w-auto`` forces the stats line onto its own row
+          // on mobile (so it left-aligns under the title) and lets it
+          // slot back into the flex row with ``md:ml-auto`` on desktop,
+          // where it sits right-aligned next to the back button + title.
+          <div className="w-full text-xs tabular-nums text-text-dim md:ml-auto md:w-auto">
             <span className="text-text-muted">{summary.total}</span> games ·{" "}
             <span className="text-success">{summary.wins}W</span> -{" "}
             <span className="text-danger">{summary.losses}L</span> ·{" "}

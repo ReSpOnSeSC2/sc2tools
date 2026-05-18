@@ -362,7 +362,11 @@ export function BuildVsStrategyComparison({
           subtitle={build}
           testId="bvs-column-you"
         >
-          <YouColumn slug={slug} isResolvingSlug={slugLoading} />
+          <YouColumn
+            build={build}
+            slug={slug}
+            isResolvingSlug={slugLoading}
+          />
         </ComparisonColumn>
         <ComparisonColumn
           title="What they typically do"
@@ -406,32 +410,66 @@ function ComparisonColumn({
 }
 
 function YouColumn({
+  build,
   slug,
   isResolvingSlug,
 }: {
+  build: string;
   slug: string | null;
   isResolvingSlug: boolean;
 }) {
-  // Left side reads the user's build with perspective=you. We pass
-  // it explicitly so the cache slot in the API matches the right
-  // column's explicit "opponent" — keeps the two queries from
-  // colliding in the route-layer cache.
-  const path = slug
+  // Left side has two data sources, picked in priority order:
+  //
+  // 1. Saved custom build (``/v1/custom-builds/:slug/compositions``)
+  //    — when the user has explicitly saved a matching build, its
+  //    rule-driven match set is the most authoritative answer.
+  // 2. Agent-classified build label (``/v1/builds/:name/phases``) —
+  //    the fallback for labels the agent auto-detected but the user
+  //    never saved. Filters games by ``myBuild === build`` so the
+  //    left column still renders against the 17W-7L set of games
+  //    that powered the drill in the first place.
+  //
+  // Both endpoints return the same envelope shape so
+  // ``ComparisonBody`` can render either without branching.
+  const customPath = slug
     ? `/v1/custom-builds/${encodeURIComponent(slug)}/compositions?perspective=you`
     : null;
-  const { data, isLoading, error } = useApi<BuildPhasePayload>(path);
+  const customResult = useApi<BuildPhasePayload>(customPath);
 
-  if (!slug) {
-    if (isResolvingSlug) return <Skeleton rows={3} />;
-    return (
-      <EmptyState
-        title="No saved build for this label"
-        sub="The left column shows phases for builds saved in your library. Save this build to compare side-by-side."
-      />
-    );
+  // Only fire the fallback once the slug bridge has settled and
+  // resolved to "no saved build" — firing both in parallel would
+  // double up Mongo scans for users who DO have a saved build.
+  const labelPath =
+    !slug && !isResolvingSlug && build
+      ? `/v1/builds/${encodeURIComponent(build)}/phases?perspective=you`
+      : null;
+  const labelResult = useApi<BuildLabelPhasesResponse>(labelPath);
+
+  if (isResolvingSlug) return <Skeleton rows={3} />;
+
+  if (slug) {
+    if (customResult.isLoading && !customResult.data) {
+      return <Skeleton rows={3} />;
+    }
+    if (customResult.error) {
+      return (
+        <EmptyState
+          title="Couldn't load this build"
+          sub="Phase compositions failed to load for the left column."
+        />
+      );
+    }
+    if (!customResult.data) return null;
+    return <ComparisonBody payload={customResult.data} />;
   }
-  if (isLoading && !data) return <Skeleton rows={3} />;
-  if (error) {
+
+  // Auto-classified label fallback
+  if (labelResult.isLoading && !labelResult.data) {
+    return <Skeleton rows={3} />;
+  }
+  // 404 is the API's tell for "no games match" — surface the empty
+  // state below rather than the generic load-failure copy.
+  if (labelResult.error && labelResult.error.status !== 404) {
     return (
       <EmptyState
         title="Couldn't load this build"
@@ -439,9 +477,45 @@ function YouColumn({
       />
     );
   }
-  if (!data) return null;
-  return <ComparisonBody payload={data} />;
+  if (!labelResult.data || labelResult.data.total < COMPARISON_MIN_GAMES) {
+    const total = labelResult.data?.total ?? 0;
+    return (
+      <EmptyState
+        title="Not enough samples"
+        sub={
+          total > 0
+            ? `${total} game${total === 1 ? "" : "s"} so far · the comparison starts at ${COMPARISON_MIN_GAMES}.`
+            : "Play a few games with this build to see what you typically do — or save it to your library to lock the signature."
+        }
+      />
+    );
+  }
+  return <ComparisonBody payload={labelResult.data} />;
 }
+
+/**
+ * Response shape of GET ``/v1/builds/:name/phases`` — the user-side
+ * fallback the left column reads when no saved custom build matches
+ * the agent's auto-classified label. Mirrors
+ * ``StrategyPhasesResponse`` but keyed on ``myBuild`` rather than
+ * ``opponent.strategy``.
+ */
+type BuildLabelPhasesResponse = {
+  name: string;
+  total: number;
+  perspective: "you" | "opponent";
+  sampleSize: Record<Phase, number>;
+  perPhase: Record<Phase, PhaseCompositionRow>;
+  finalPhaseDistribution: Record<Phase, number>;
+  medianCrossings: {
+    earlyMidAt: number | null;
+    midAt: number | null;
+    midLateAt: number | null;
+    lateAt: number | null;
+  };
+  durationP95Sec: number;
+  flags: string[];
+};
 
 function OpponentColumn({ strategy }: { strategy: string }) {
   const path = strategy

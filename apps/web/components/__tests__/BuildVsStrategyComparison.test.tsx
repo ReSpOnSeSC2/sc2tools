@@ -69,10 +69,16 @@ function wireMocks({
   customBuildsList = [{ slug: "stargate-phoenix", name: "Stargate Phoenix" }],
   yourPayload,
   oppPayload,
+  labelPayload,
+  labelError,
 }: {
   customBuildsList?: Array<{ slug: string; name: string }>;
   yourPayload?: unknown;
   oppPayload?: unknown;
+  // Fallback payload served by /v1/builds/:name/phases — used by the
+  // left column when no saved custom build matches the agent label.
+  labelPayload?: unknown;
+  labelError?: { status: number } | null;
 }) {
   useApiMock.mockImplementation((path: string | null) => {
     if (path === "/v1/custom-builds") {
@@ -80,6 +86,13 @@ function wireMocks({
     }
     if (path && path.includes("/compositions")) {
       return { data: yourPayload, isLoading: false, error: null };
+    }
+    if (path && path.startsWith("/v1/builds/") && path.includes("/phases")) {
+      return {
+        data: labelPayload,
+        isLoading: false,
+        error: labelError ?? null,
+      };
     }
     if (path && path.includes("/phases")) {
       return { data: oppPayload, isLoading: false, error: null };
@@ -160,9 +173,58 @@ describe("BuildVsStrategyComparison", () => {
     expect(strips.length).toBe(2);
   });
 
-  it("falls back to an EmptyState in the left column when no saved build matches the name", () => {
+  it("falls back to the build-label phases endpoint when no saved build matches", () => {
+    // User has 8 games tagged with the agent's auto-classified label
+    // but no saved custom build by that name. The left column should
+    // fire ``/v1/builds/:name/phases`` and render the resulting
+    // trajectory rather than spinning forever or showing the legacy
+    // "No saved build" empty state.
     wireMocks({
-      customBuildsList: [], // user hasn't saved this build yet
+      customBuildsList: [],
+      labelPayload: {
+        ...buildPhasesPayload(8, "you"),
+        name: "Some Agent Auto-Label",
+      },
+      oppPayload: { ...buildPhasesPayload(8, "opponent"), name: "Terran - Mech" },
+    });
+
+    const { container } = render(
+      <BuildVsStrategyComparison
+        build="Some Agent Auto-Label"
+        strategy="Terran - Mech"
+      />,
+    );
+
+    const callPaths = useApiMock.mock.calls.map((c) => c[0]);
+    expect(callPaths).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          "/v1/builds/Some%20Agent%20Auto-Label/phases?perspective=you",
+        ),
+      ]),
+    );
+    // Both columns render a trajectory strip — the fallback wired the
+    // left column off the auto-classified label set.
+    expect(
+      container.querySelectorAll('[data-testid="phase-trajectory-strip"]').length,
+    ).toBe(2);
+    // Empty-state copy must NOT appear when the fallback has data.
+    expect(screen.queryByText(/No saved build for this label/i)).toBeNull();
+    expect(screen.queryByText(/Not enough samples/i)).toBeNull();
+  });
+
+  it("renders an empty-state on the left when the agent label has too few games", () => {
+    // Fewer than COMPARISON_MIN_GAMES (3) games carry the label — the
+    // left column shouldn't try to draw a trajectory off a 1-sample
+    // bucket. Surfaces a friendlier message than the legacy "No saved
+    // build" empty state.
+    wireMocks({
+      customBuildsList: [],
+      labelPayload: {
+        ...buildPhasesPayload(1, "you"),
+        name: "Some Agent Auto-Label",
+        total: 1,
+      },
       oppPayload: { ...buildPhasesPayload(8, "opponent"), name: "Terran - Mech" },
     });
 
@@ -173,12 +235,32 @@ describe("BuildVsStrategyComparison", () => {
       />,
     );
 
-    expect(
-      screen.getByText(/No saved build for this label/i),
-    ).toBeTruthy();
-    // Right column still renders its trajectory — the comparison
-    // doesn't gate one column on the other.
+    expect(screen.getByText(/Not enough samples/i)).toBeTruthy();
+    // Right column still renders — the comparison doesn't gate one
+    // column on the other.
     expect(screen.getByTestId("bvs-column-opponent")).toBeTruthy();
+  });
+
+  it("handles a 404 from the build-label endpoint with the empty-state copy", () => {
+    // No games at all for the agent label — API returns 404, which
+    // the column treats the same as "no data" (NOT a load failure).
+    wireMocks({
+      customBuildsList: [],
+      labelPayload: undefined,
+      labelError: { status: 404 },
+      oppPayload: { ...buildPhasesPayload(8, "opponent"), name: "Terran - Mech" },
+    });
+
+    render(
+      <BuildVsStrategyComparison
+        build="Some Agent Auto-Label"
+        strategy="Terran - Mech"
+      />,
+    );
+
+    expect(screen.getByText(/Not enough samples/i)).toBeTruthy();
+    // Generic "Couldn't load this build" must not appear on 404.
+    expect(screen.queryByText(/Couldn't load this build/i)).toBeNull();
   });
 
   it("resolves the saved-build slug even when the drill carries the agent's race-matchup prefix", () => {

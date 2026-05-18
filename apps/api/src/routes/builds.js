@@ -23,14 +23,16 @@ function buildBuildsRouter(deps) {
   // In-process cache for the strategy phase-aware payload. Each
   // request re-scans up to STATS_GAME_SCAN_CAP games with the
   // ``macroBreakdown`` blob; a tight 60s TTL keyed on
-  // (userId, name, latestGameDate) turns a back-and-forth flip
-  // between strategy drill-downs into a single Mongo scan. Mirrors
+  // (kind, userId, name, latestGameDate, perspective) turns a back-
+  // and-forth flip between strategy drill-downs into a single Mongo
+  // scan. ``kind`` prefixes prevent a collision between a strategy
+  // and a build label that happen to share the same string. Mirrors
   // the cache shape in routes/customBuilds.js so both phase
   // endpoints behave the same way after a fresh upload.
   /** @type {Map<string, {expires: number, value: any}>} */
   const phaseCache = new Map();
-  function phaseCacheKey(userId, name, latestGameMs, perspective) {
-    return `${userId}|${name}|${latestGameMs}|${perspective}`;
+  function phaseCacheKey(kind, userId, name, latestGameMs, perspective) {
+    return `${kind}|${userId}|${name}|${latestGameMs}|${perspective}`;
   }
   function phaseCacheGet(key) {
     const hit = phaseCache.get(key);
@@ -107,7 +109,7 @@ function buildBuildsRouter(deps) {
         ? "opponent"
         : "you";
       const latest = await deps.strategyPhases.latestGameDateMs(userId);
-      const key = phaseCacheKey(userId, name, latest, perspective);
+      const key = phaseCacheKey("strategy", userId, name, latest, perspective);
       const cached = phaseCacheGet(key);
       if (cached) {
         res.json(cached);
@@ -118,6 +120,53 @@ function buildBuildsRouter(deps) {
       });
       if (!result) {
         res.status(404).json({ error: { code: "strategy_not_found" } });
+        return;
+      }
+      phaseCacheSet(key, result);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /v1/builds/:name/phases
+   *
+   * Phase-aware aggregator keyed by the user-side build label
+   * (``g.myBuild``). The left column of the StrategiesTab build ×
+   * strategy drill-down ("WHAT YOU TYPICALLY DO") consumes this when
+   * the agent's auto-classified label doesn't map to a saved custom
+   * build, so the user still sees their typical pattern from the
+   * games already tagged with that label. Same envelope as
+   * ``/v1/strategies/:name/phases`` — the SPA can pass either
+   * straight to PhaseTrajectoryStrip / PhaseCompositionTabs.
+   */
+  router.get("/builds/:name/phases", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      if (!deps.strategyPhases) {
+        res.status(503).json({ error: { code: "stats_unavailable" } });
+        return;
+      }
+      const name = String(req.params.name || "");
+      const perspective =
+        req.query && req.query.perspective === "opponent"
+          ? "opponent"
+          : "you";
+      const latest = await deps.strategyPhases.latestGameDateMs(userId);
+      const key = phaseCacheKey("build", userId, name, latest, perspective);
+      const cached = phaseCacheGet(key);
+      if (cached) {
+        res.json(cached);
+        return;
+      }
+      const result = await deps.strategyPhases.evaluateByBuildName(
+        userId,
+        name,
+        { perspective },
+      );
+      if (!result) {
+        res.status(404).json({ error: { code: "build_not_found" } });
         return;
       }
       phaseCacheSet(key, result);
