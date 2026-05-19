@@ -6,7 +6,6 @@ import type {
   LiveGamePayload,
 } from "../types";
 import { Dim, WidgetShell } from "../WidgetShell";
-import { ScoutingLastGames } from "./ScoutingLastGames";
 
 /**
  * Scouting Report card — visual rebuild matching the legacy SPA's
@@ -83,7 +82,6 @@ export function ScoutingWidget({
   const cheeseHigh =
     typeof effective.cheeseProbability === "number"
     && effective.cheeseProbability >= 0.4;
-  const last5GamesScouting = (effective.last5GamesScouting || []).slice(0, 5);
 
   const hasAnyContent =
     Boolean(effective.oppName)
@@ -91,8 +89,7 @@ export function ScoutingWidget({
     || recentGames.length > 0
     || bestAnswer != null
     || cheeseHigh
-    || rivalNote != null
-    || last5GamesScouting.length > 0;
+    || rivalNote != null;
   if (!hasAnyContent) return null;
 
   return (
@@ -170,10 +167,6 @@ export function ScoutingWidget({
             ))}
           </div>
         </div>
-      ) : null}
-
-      {last5GamesScouting.length > 0 ? (
-        <ScoutingLastGames envelopes={last5GamesScouting} />
       ) : null}
 
       {bestAnswer ? (
