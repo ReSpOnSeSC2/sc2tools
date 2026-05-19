@@ -241,15 +241,22 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         </Card>
       </div>
 
+      {/* ``min-w-0`` on the grid children lets the columns shrink
+          below their intrinsic content size — long strategy names
+          inside the Cards would otherwise overflow the page. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Card title="Build tendencies (top 5 strategies)">
-          <StrategyTendencyChart strategies={data.topStrategies || []} />
-        </Card>
-        <Card title="Likely strategies next">
-          <PredictedStrategiesList
-            predictions={data.predictedStrategies || []}
-          />
-        </Card>
+        <div className="min-w-0">
+          <Card title="Build tendencies (top 5 strategies)">
+            <StrategyTendencyChart strategies={data.topStrategies || []} />
+          </Card>
+        </div>
+        <div className="min-w-0">
+          <Card title="Likely strategies next">
+            <PredictedStrategiesList
+              predictions={data.predictedStrategies || []}
+            />
+          </Card>
+        </div>
       </div>
 
       <H2HTrendsSection

@@ -128,36 +128,44 @@ export function BuildOrderDualTimeline({
   return (
     <div
       className={[
+        // ``min-w-0`` is applied per-child wrapper below — without it
+        // the long build titles + event rows inside each panel can
+        // push their column wider than the grid track and overflow
+        // the page horizontally.
         "grid grid-cols-1 gap-3 lg:grid-cols-2",
         className,
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      <BuildPanel
-        perspective="you"
-        title={myBuildName ? `Your build — ${myBuildName}` : "Your build"}
-        rows={rowsYou}
-        events={events}
-        race={myRace}
-        vsRace={coerceVsRace(oppRaceValue)}
-        gameId={gameId}
-        onSaved={onSaved}
-        emptyHeadline={youEmpty.headline}
-        emptyBody={youEmpty.body}
-      />
-      <BuildPanel
-        perspective="opponent"
-        title={oppBuildName ? `Opponent's build — ${oppBuildName}` : "Opponent's build"}
-        rows={rowsOpp}
-        events={oppEvents ?? []}
-        race={oppRaceValue}
-        vsRace={coerceVsRace(myRace)}
-        gameId={gameId}
-        onSaved={onSaved}
-        emptyHeadline={oppEmpty.headline}
-        emptyBody={oppEmpty.body}
-      />
+      <div className="min-w-0">
+        <BuildPanel
+          perspective="you"
+          title={myBuildName ? `Your build — ${myBuildName}` : "Your build"}
+          rows={rowsYou}
+          events={events}
+          race={myRace}
+          vsRace={coerceVsRace(oppRaceValue)}
+          gameId={gameId}
+          onSaved={onSaved}
+          emptyHeadline={youEmpty.headline}
+          emptyBody={youEmpty.body}
+        />
+      </div>
+      <div className="min-w-0">
+        <BuildPanel
+          perspective="opponent"
+          title={oppBuildName ? `Opponent's build — ${oppBuildName}` : "Opponent's build"}
+          rows={rowsOpp}
+          events={oppEvents ?? []}
+          race={oppRaceValue}
+          vsRace={coerceVsRace(myRace)}
+          gameId={gameId}
+          onSaved={onSaved}
+          emptyHeadline={oppEmpty.headline}
+          emptyBody={oppEmpty.body}
+        />
+      </div>
     </div>
   );
 }
