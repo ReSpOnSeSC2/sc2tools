@@ -238,6 +238,19 @@ function useOverlayWidgetSocket(
   // synchronously inside the socket handler so a ref is the simplest
   // way to get the previous value without re-binding the listener.
   const liveGameKeyRef = useRef<string | null>(null);
+  // Sticky cache of the latest enriched ``streamerHistory`` keyed by
+  // gameKey. The cloud's ``LiveGameBroker`` fans every 1 Hz envelope
+  // tick out twice — first as a partial (no ``streamerHistory``) and
+  // then enriched (with ``streamerHistory``). Without preserving the
+  // enriched block across the partial tick, the scouting + opponent
+  // widgets flicker between the rich card and the thin pre-game
+  // placeholder once per second of the match. Clearing on a gameKey
+  // change keeps the next match from inheriting the previous one's
+  // history.
+  const stickyHistoryRef = useRef<{
+    gameKey: string;
+    streamerHistory: NonNullable<LiveGameEnvelope["streamerHistory"]>;
+  } | null>(null);
   useEffect(() => {
     const socket: Socket = io(API_BASE, {
       // The OBS Browser Source carries no Clerk session; the token IS
@@ -270,6 +283,7 @@ function useOverlayWidgetSocket(
       if (msg.phase === "idle" || msg.phase === "menu") {
         setLiveGame(null);
         liveGameKeyRef.current = null;
+        stickyHistoryRef.current = null;
         return;
       }
       // ``match_ended`` with a NEW gameKey means the previous match's
@@ -292,7 +306,40 @@ function useOverlayWidgetSocket(
         liveGameKeyRef.current = msg.gameKey;
         gameKeyRef.current = msg.gameKey;
       }
-      setLiveGame(msg);
+      // Sticky ``streamerHistory`` merge — see ``stickyHistoryRef``
+      // above for the partial+enriched flicker context.
+      const incomingKey = typeof msg.gameKey === "string" ? msg.gameKey : null;
+      let next: LiveGameEnvelope = msg;
+      if (incomingKey) {
+        if (msg.streamerHistory) {
+          stickyHistoryRef.current = {
+            gameKey: incomingKey,
+            streamerHistory: msg.streamerHistory,
+          };
+        } else if (
+          stickyHistoryRef.current
+          && stickyHistoryRef.current.gameKey === incomingKey
+        ) {
+          next = {
+            ...msg,
+            streamerHistory: stickyHistoryRef.current.streamerHistory,
+          };
+        } else if (
+          stickyHistoryRef.current
+          && stickyHistoryRef.current.gameKey !== incomingKey
+        ) {
+          // New gameKey with no enrichment yet — drop the cached
+          // history so the next match doesn't inherit the previous
+          // one's recentGames / bestAnswer.
+          stickyHistoryRef.current = null;
+        }
+      } else if (!msg.streamerHistory) {
+        // No gameKey identity to match against — fall back to the raw
+        // envelope and reset the sticky cache. Without a gameKey we
+        // can't safely attribute a cached history to this envelope.
+        stickyHistoryRef.current = null;
+      }
+      setLiveGame(next);
     });
     socket.on(
       "overlay:config",
@@ -324,6 +371,7 @@ function useOverlayWidgetSocket(
             setLiveGame(null);
             gameKeyRef.current = null;
             liveGameKeyRef.current = null;
+            stickyHistoryRef.current = null;
           }
         }
       },
