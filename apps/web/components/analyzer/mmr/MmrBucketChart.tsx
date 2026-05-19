@@ -194,13 +194,14 @@ function shapeForChart(rows: MmrBucketRow[], minSampleSize: number): {
   );
   // Show the most-played series first in legend order (and pick the
   // most-saturated colours for the ones the user plays most).
-  const seriesNames = Array.from(seriesAgg.entries())
-    .sort((a, b) => b[1].totalGames - a[1].totalGames)
-    .map(([name, group]) => ({
-      name,
-      color: colorFor(name),
-      totalGames: group.totalGames,
-    }));
+  const sortedSeries = Array.from(seriesAgg.entries())
+    .sort((a, b) => b[1].totalGames - a[1].totalGames);
+  const colors = assignColors(sortedSeries.map(([name]) => name));
+  const seriesNames = sortedSeries.map(([name, group]) => ({
+    name,
+    color: colors.get(name) || PALETTE[0],
+    totalGames: group.totalGames,
+  }));
   const chartData: ChartRow[] = sortedBuckets.map((b) => {
     /** @type {ChartRow} */
     const row: ChartRow = { bucket: b.bucket, label: b.label };
@@ -230,32 +231,64 @@ function shapeForChart(rows: MmrBucketRow[], minSampleSize: number): {
 }
 
 /**
- * Color palette — high-contrast, dark-bg-friendly, colour-blind-aware
- * (Okabe-Ito inspired set). The same series always gets the same
- * colour across charts because the index is a stable hash of the
- * series name.
+ * Color palette — ordered so adjacent indices are maximally distinct
+ * hues (blue → orange → green → magenta → yellow → cyan → red → lime
+ * → …) rather than the prior version's blue/purple/green/red cluster
+ * which produced near-identical lines on real datasets with 3+ Protoss
+ * builds. Dark-bg-friendly. Series get a stable hash-based slot
+ * preference, with collision-free assignment within each chart so two
+ * visible series never share a color.
  */
 const PALETTE = [
-  "#7c8cff", // accent blue
-  "#a78bfa", // purple
-  "#3ec07a", // green
-  "#ff6b6b", // red
-  "#f59e0b", // amber
+  "#3b82f6", // blue
+  "#f97316", // orange
+  "#10b981", // emerald
+  "#ec4899", // pink
+  "#eab308", // yellow
   "#06b6d4", // cyan
-  "#e879f9", // magenta
+  "#ef4444", // red
   "#84cc16", // lime
-  "#fb7185", // rose
-  "#22d3ee", // sky
-  "#fbbf24", // yellow
-  "#a3e635", // chartreuse
+  "#a855f7", // purple
+  "#14b8a6", // teal
+  "#fb923c", // light orange
+  "#22d3ee", // light cyan
+  "#e879f9", // fuchsia
+  "#fbbf24", // amber
+  "#4ade80", // light green
+  "#f43f5e", // rose
 ];
 
-function colorFor(name: string): string {
+function hashName(name: string): number {
   let hash = 0;
   for (let i = 0; i < name.length; i += 1) {
     hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   }
-  return PALETTE[hash % PALETTE.length];
+  return hash;
+}
+
+/**
+ * Assign a palette color to each series so (a) the same build tends to
+ * land on the same color across re-renders (hash-based slot preference)
+ * AND (b) no two visible series share a color even when their hashes
+ * collide on the same slot. Collisions step forward through the palette
+ * until an unused slot is found; if every slot is taken the assignment
+ * wraps and the last few series intentionally repeat colors. With a
+ * 16-entry palette this only happens past topN=16.
+ */
+function assignColors(names: ReadonlyArray<string>): Map<string, string> {
+  const used = new Set<number>();
+  const out = new Map<string, string>();
+  for (const name of names) {
+    let idx = hashName(name) % PALETTE.length;
+    let steps = 0;
+    while (used.has(idx) && steps < PALETTE.length) {
+      idx = (idx + 1) % PALETTE.length;
+      steps += 1;
+    }
+    used.add(idx);
+    out.set(name, PALETTE[idx]);
+  }
+  return out;
 }
 
 interface TooltipPayloadEntry {

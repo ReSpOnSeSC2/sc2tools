@@ -171,27 +171,60 @@ export function BuildAgingCurve() {
   );
 }
 
+// Palette ordered so adjacent indices are maximally distinct hues
+// (blue → orange → green → magenta → yellow → cyan → red → lime → …)
+// rather than the prior version's blue/purple/green/red cluster which
+// produced near-identical lines on real datasets with 3+ Protoss builds.
 const PALETTE = [
-  "#7c8cff",
-  "#a78bfa",
-  "#3ec07a",
-  "#ff6b6b",
-  "#f59e0b",
-  "#06b6d4",
-  "#e879f9",
-  "#84cc16",
-  "#fb7185",
-  "#22d3ee",
-  "#fbbf24",
-  "#a3e635",
+  "#3b82f6", // blue
+  "#f97316", // orange
+  "#10b981", // emerald
+  "#ec4899", // pink
+  "#eab308", // yellow
+  "#06b6d4", // cyan
+  "#ef4444", // red
+  "#84cc16", // lime
+  "#a855f7", // purple
+  "#14b8a6", // teal
+  "#fb923c", // light orange
+  "#22d3ee", // light cyan
+  "#e879f9", // fuchsia
+  "#fbbf24", // amber
+  "#4ade80", // light green
+  "#f43f5e", // rose
 ];
 
-function colorFor(name: string): string {
+function hashName(name: string): number {
   let hash = 0;
   for (let i = 0; i < name.length; i += 1) {
     hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   }
-  return PALETTE[hash % PALETTE.length];
+  return hash;
+}
+
+/**
+ * Assign a palette color to each series so (a) the same build tends to
+ * land on the same color across re-renders (hash-based slot preference)
+ * AND (b) no two visible series share a color even when their hashes
+ * collide on the same slot. Collisions step forward through the palette
+ * until an unused slot is found; if every slot is taken the assignment
+ * wraps and the last few series intentionally repeat colors. With a
+ * 16-entry palette this only happens past topN=16.
+ */
+function assignColors(names: ReadonlyArray<string>): Map<string, string> {
+  const used = new Set<number>();
+  const out = new Map<string, string>();
+  for (const name of names) {
+    let idx = hashName(name) % PALETTE.length;
+    let steps = 0;
+    while (used.has(idx) && steps < PALETTE.length) {
+      idx = (idx + 1) % PALETTE.length;
+      steps += 1;
+    }
+    used.add(idx);
+    out.set(name, PALETTE[idx]);
+  }
+  return out;
 }
 
 interface ChartRow {
@@ -219,9 +252,10 @@ function shapeAgingForChart(
     (m, s) => Math.max(m, s.curve.length),
     0,
   );
+  const colors = assignColors(qualified.map((s) => s.build));
   const seriesList = qualified.map((s) => ({
     name: s.build,
-    color: colorFor(s.build),
+    color: colors.get(s.build) || PALETTE[0],
   }));
   const chartData: ChartRow[] = [];
   for (let n = 1; n <= maxN; n += 1) {
