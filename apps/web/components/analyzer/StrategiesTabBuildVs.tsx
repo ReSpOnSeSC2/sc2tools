@@ -354,7 +354,7 @@ export function BuildVsStrategyComparison({
         gets to late game first — and with what.
       </p>
       <div
-        className="grid grid-cols-1 gap-5 lg:grid-cols-2"
+        className="grid grid-cols-1 gap-5 xl:grid-cols-2"
         data-testid="build-vs-strategy-comparison"
       >
         <ComparisonColumn

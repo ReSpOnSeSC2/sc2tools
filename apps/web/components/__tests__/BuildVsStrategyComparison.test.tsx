@@ -153,16 +153,19 @@ describe("BuildVsStrategyComparison", () => {
     expect(screen.getByTestId("bvs-column-you")).toBeTruthy();
     expect(screen.getByTestId("bvs-column-opponent")).toBeTruthy();
 
-    // The flex / grid wrapper carries lg:grid-cols-2 so each column
+    // The flex / grid wrapper carries xl:grid-cols-2 so each column
     // gets half-width on a wide layout — same visual budget for left
-    // and right. Asserting the class is the cheapest way to guard the
-    // "comparable visual width" claim without a JSDOM layout engine.
+    // and right. Stacked below xl so common 1024-1279px desktops give
+    // each column the full content width instead of cramming both into
+    // ~600px halves. Asserting the class is the cheapest way to guard
+    // the "comparable visual width" claim without a JSDOM layout
+    // engine.
     const wrapper = container.querySelector(
       "[data-testid='build-vs-strategy-comparison']",
     );
     expect(wrapper).toBeTruthy();
     expect(wrapper?.className).toMatch(/grid-cols-1/);
-    expect(wrapper?.className).toMatch(/lg:grid-cols-2/);
+    expect(wrapper?.className).toMatch(/xl:grid-cols-2/);
 
     // Each column hosts its own trajectory strip — that's the
     // primary visual element. Two strips means the comparison is
