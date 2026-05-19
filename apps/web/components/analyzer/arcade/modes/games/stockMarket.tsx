@@ -235,25 +235,26 @@ function Render({
     for (const p of locked.picks) out[p.slug] = p.alloc;
     return out;
   });
-  const [optIn, setOptIn] = useState(state.leaderboardOptIn);
+  // Privacy is a per-lock-in opt-out: every week defaults to PUBLIC and
+  // the user has to actively tick the "Keep private" box to suppress
+  // the leaderboard post for THIS week. We deliberately don't seed
+  // this from `state.leaderboardOptIn` — a stale `false` saved by a
+  // previous week's lock would otherwise silently make every future
+  // lock private without the user realising.
+  const [keepPrivate, setKeepPrivate] = useState(false);
   const [name, setName] = useState(state.leaderboardDisplayName);
 
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // useArcadeState hydrates asynchronously — the useState initializers
-  // above capture pre-hydrate defaults (optIn=true, name=""). Once
-  // the real saved state lands, mirror it into the draft form fields
-  // so a returning user sees their previous opt-in choice and display
-  // name without having to re-toggle. Guarded by `hydrated` so we
-  // sync exactly once on transition; subsequent user edits are not
-  // overwritten on re-render.
+  // Display name hydrates once from saved state so a returning user
+  // doesn't have to re-type it. The privacy flag is intentionally not
+  // hydrated (see useState above).
   const syncedFromHydrateRef = useRef(false);
   useEffect(() => {
     if (!hydrated || syncedFromHydrateRef.current) return;
     syncedFromHydrateRef.current = true;
-    setOptIn(state.leaderboardOptIn);
     setName(state.leaderboardDisplayName);
-  }, [hydrated, state.leaderboardOptIn, state.leaderboardDisplayName]);
+  }, [hydrated, state.leaderboardDisplayName]);
 
   const totalAlloc = Object.values(picks).reduce((s, v) => s + v, 0);
   const slotsUsed = Object.keys(picks).filter((k) => picks[k] > 0).length;
@@ -288,8 +289,9 @@ function Render({
         };
       });
     const valid = portfolioPicks.length > 0 && portfolioPicks.length <= 5 && totalAlloc === 100;
+    const goPublic = !keepPrivate;
     if (!valid) {
-      ctx.onAnswer({ picks: portfolioPicks.map((p) => ({ id: p.slug, alloc: p.alloc })), submitToLeaderboard: optIn });
+      ctx.onAnswer({ picks: portfolioPicks.map((p) => ({ id: p.slug, alloc: p.alloc })), submitToLeaderboard: goPublic });
       return;
     }
     update((prev) => ({
@@ -299,11 +301,11 @@ function Render({
         lockedAt: new Date().toISOString(),
         picks: portfolioPicks,
       },
-      leaderboardOptIn: optIn,
+      leaderboardOptIn: goPublic,
       leaderboardDisplayName: name,
     }));
-    ctx.onAnswer({ picks: portfolioPicks.map((p) => ({ id: p.slug, alloc: p.alloc })), submitToLeaderboard: optIn });
-    if (optIn) {
+    ctx.onAnswer({ picks: portfolioPicks.map((p) => ({ id: p.slug, alloc: p.alloc })), submitToLeaderboard: goPublic });
+    if (goPublic) {
       // Surface failures inline instead of swallowing them — silently
       // catching meant users whose POST 401'd or got rate-limited saw
       // their portfolio "lock" without ever entering the leaderboard,
@@ -452,8 +454,9 @@ function Render({
           </p>
           <p>
             <span className="font-semibold text-text">Leaderboard</span> —
-            on by default; untick to keep the lock private. Submissions
-            anonymize to your display name when set, otherwise a stable hash.
+            public by default; tick the box below to keep this week&apos;s
+            lock private. Submissions anonymize to your display name when
+            set, otherwise a stable hash.
           </p>
         </div>
       </details>
@@ -555,22 +558,22 @@ function Render({
       <fieldset
         className={[
           "rounded-lg border p-3",
-          optIn
-            ? "border-accent/60 bg-accent/10"
-            : "border-border bg-bg-elevated",
+          keepPrivate
+            ? "border-border bg-bg-elevated"
+            : "border-accent/60 bg-accent/10",
         ].join(" ")}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="flex items-center gap-2 text-body font-semibold text-text">
             <input
               type="checkbox"
-              checked={optIn}
-              onChange={(e) => setOptIn(e.target.checked)}
+              checked={keepPrivate}
+              onChange={(e) => setKeepPrivate(e.target.checked)}
               className="h-5 w-5 rounded border-border bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
-            {optIn
-              ? "Posting to public weekly leaderboard"
-              : "Locking privately — not on leaderboard"}
+            {keepPrivate
+              ? "Keep this week's portfolio private"
+              : "Posting to public weekly leaderboard"}
           </label>
           <Link
             href="/community/leaderboard"
@@ -580,11 +583,11 @@ function Render({
           </Link>
         </div>
         <p className="mt-1 pl-7 text-caption text-text-muted">
-          {optIn
-            ? "On by default. Untick if you want this week's portfolio to stay private."
-            : "Tick the box to enter the public weekly P&L ranking."}
+          {keepPrivate
+            ? "This lock stays off the public weekly P&L ranking. Untick to enter."
+            : "Public by default. Tick the box to keep this week's portfolio private."}
         </p>
-        {optIn ? (
+        {!keepPrivate ? (
           <input
             type="text"
             value={name}
@@ -618,7 +621,7 @@ function Render({
             disabled={totalAlloc !== 100 || slotsUsed === 0 || slotsUsed > 5}
             className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md bg-accent px-4 text-caption font-semibold uppercase tracking-wider text-bg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
-            {optIn ? "Lock & post to leaderboard" : "Lock portfolio (private)"}
+            {keepPrivate ? "Lock portfolio (private)" : "Lock & post to leaderboard"}
           </button>
         ) : null
       }
