@@ -201,6 +201,17 @@ function useOverlaySocket(
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
   onClear: () => void,
 ) {
+  // Sticky cache of the latest enriched ``streamerHistory`` keyed by
+  // gameKey. The cloud's ``LiveGameBroker`` fans every 1 Hz envelope
+  // tick out twice — first as a partial (no ``streamerHistory``) and
+  // then enriched (with ``streamerHistory``). Without preserving the
+  // enriched block across the partial tick, the scouting + opponent
+  // widgets flicker between the rich card and the thin pre-game
+  // placeholder once per second of the match.
+  const stickyHistoryRef = useRef<{
+    gameKey: string;
+    streamerHistory: NonNullable<LiveGameEnvelope["streamerHistory"]>;
+  } | null>(null);
   useEffect(() => {
     const socket: Socket = io(API_BASE, {
       // The OBS Browser Source has no Clerk session — the token IS the
@@ -221,9 +232,37 @@ function useOverlaySocket(
       // voice readout's per-gameKey state reset for the next match.
       if (msg.phase === "idle" || msg.phase === "menu") {
         setLiveGame(null);
+        stickyHistoryRef.current = null;
         return;
       }
-      setLiveGame(msg);
+      // Sticky ``streamerHistory`` merge — see ``stickyHistoryRef``
+      // above for the partial+enriched flicker context.
+      const incomingKey = typeof msg.gameKey === "string" ? msg.gameKey : null;
+      let next: LiveGameEnvelope = msg;
+      if (incomingKey) {
+        if (msg.streamerHistory) {
+          stickyHistoryRef.current = {
+            gameKey: incomingKey,
+            streamerHistory: msg.streamerHistory,
+          };
+        } else if (
+          stickyHistoryRef.current
+          && stickyHistoryRef.current.gameKey === incomingKey
+        ) {
+          next = {
+            ...msg,
+            streamerHistory: stickyHistoryRef.current.streamerHistory,
+          };
+        } else if (
+          stickyHistoryRef.current
+          && stickyHistoryRef.current.gameKey !== incomingKey
+        ) {
+          stickyHistoryRef.current = null;
+        }
+      } else if (!msg.streamerHistory) {
+        stickyHistoryRef.current = null;
+      }
+      setLiveGame(next);
     });
     socket.on("overlay:session", (msg: SessionSummary) => {
       if (msg && typeof msg === "object") setSession(msg);
@@ -242,7 +281,10 @@ function useOverlaySocket(
     // Streamer cancelled the test fire — drop every payload + visible
     // flag so the scene snaps clean instead of waiting for the natural
     // visibility timers to expire on each panel.
-    socket.on("overlay:clear", () => onClear());
+    socket.on("overlay:clear", () => {
+      stickyHistoryRef.current = null;
+      onClear();
+    });
     return () => {
       socket.disconnect();
     };
