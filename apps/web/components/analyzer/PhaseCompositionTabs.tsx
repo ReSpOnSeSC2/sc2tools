@@ -380,7 +380,15 @@ function renderActiveBody({
   return (
     <div className="space-y-4">
       <ul
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        className="grid gap-3"
+        style={{
+          // Auto-fit so composition cards keep enough room for the
+          // unit row + WR pill + sample-size footer regardless of the
+          // parent container's width. ~240px per card matches the
+          // designed minimum for the dense head row (3 UnitBadges
+          // ~44px each + WR pill + gap).
+          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+        }}
         data-testid="composition-cards"
       >
         {signatures.map((sig) => (
@@ -554,7 +562,15 @@ function ExtrasGrid({
 }) {
   return (
     <ul
-      className="grid grid-cols-2 gap-2 border-t border-border pt-2 sm:grid-cols-3"
+      className="grid gap-2 border-t border-border pt-2"
+      style={{
+        // Auto-fit to the available width so unit cards never get
+        // crammed when the parent column is narrow (e.g. the half-
+        // width column inside ``BuildVsStrategyComparison`` at xl).
+        // Each card needs ~150px to fit the icon + token name +
+        // "~N · NN%" line without truncation overlap.
+        gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+      }}
       data-testid="composition-extras"
     >
       {units.map((u) => {

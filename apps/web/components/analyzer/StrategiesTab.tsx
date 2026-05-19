@@ -202,7 +202,11 @@ function ByOppStrategyView({
               key={s.name}
               type="button"
               onClick={() => onOpenStrategy(s.name)}
-              className="group rounded-lg border border-border bg-bg-surface p-4 text-left transition hover:border-accent/40 hover:bg-bg-elevated focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              // ``min-w-0`` is required so the inner ``truncate``
+              // strategy name doesn't push the button wider than its
+              // grid column, which would otherwise overflow the page
+              // when a streamer has long strategy labels.
+              className="group min-w-0 rounded-lg border border-border bg-bg-surface p-4 text-left transition hover:border-accent/40 hover:bg-bg-elevated focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <div
                 className="truncate text-sm font-medium text-text"

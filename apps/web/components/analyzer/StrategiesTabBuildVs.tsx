@@ -354,7 +354,7 @@ export function BuildVsStrategyComparison({
         gets to late game first — and with what.
       </p>
       <div
-        className="grid grid-cols-1 gap-5 lg:grid-cols-2"
+        className="grid grid-cols-1 gap-5 xl:grid-cols-2"
         data-testid="build-vs-strategy-comparison"
       >
         <ComparisonColumn
@@ -392,11 +392,15 @@ function ComparisonColumn({
   children: React.ReactNode;
 }) {
   return (
+    // ``min-w-0`` is what lets the grid track shrink below its intrinsic
+    // content size. Without it the long ``subtitle`` (build / strategy
+    // name with ``truncate``) forces this section wider than its grid
+    // column at xl, and the whole panel overflows the page.
     <section
-      className="space-y-3 rounded-lg border border-border bg-bg-surface p-4"
+      className="min-w-0 space-y-3 rounded-lg border border-border bg-bg-surface p-4"
       data-testid={testId}
     >
-      <header>
+      <header className="min-w-0">
         <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
           {title}
         </h3>

@@ -130,9 +130,17 @@ export function BuildsTab() {
 
       <BuildMmrPanel />
 
+      {/* ``[&>*]:min-w-0`` style applied per-child below — see each
+          chart wrapper. Without it the long build labels in the chart
+          legends push their column wider than the grid track and the
+          row overflows the page horizontally. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <BuildAgingCurve />
-        <MmrProgressionByBuild />
+        <div className="min-w-0">
+          <BuildAgingCurve />
+        </div>
+        <div className="min-w-0">
+          <MmrProgressionByBuild />
+        </div>
       </div>
 
       {editing && (
