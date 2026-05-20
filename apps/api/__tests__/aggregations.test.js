@@ -399,28 +399,67 @@ describe("services/aggregations", () => {
 
   // ---------------- v0.5+ Player-insight aggregations ----------------
 
-  test("mmrProgression returns close/peak/trough scalars from bucketed rows", async () => {
+  test("mmrProgression returns close/peak/trough scalars + per-region series", async () => {
     const games = buildGames([
       () => [
         {
-          bucket: new Date("2026-04-01"),
-          openMmr: 4000,
-          closeMmr: 4050,
-          minMmr: 3990,
-          maxMmr: 4060,
-          wins: 3,
-          losses: 1,
-          total: 4,
-        },
-        {
-          bucket: new Date("2026-04-08"),
-          openMmr: 4055,
-          closeMmr: 4120,
-          minMmr: 4040,
-          maxMmr: 4140,
-          wins: 5,
-          losses: 2,
-          total: 7,
+          overall: [
+            {
+              bucket: new Date("2026-04-01"),
+              openMmr: 4000,
+              closeMmr: 4050,
+              minMmr: 3990,
+              maxMmr: 4060,
+              wins: 3,
+              losses: 1,
+              total: 4,
+            },
+            {
+              bucket: new Date("2026-04-08"),
+              openMmr: 4055,
+              closeMmr: 4120,
+              minMmr: 4040,
+              maxMmr: 4140,
+              wins: 5,
+              losses: 2,
+              total: 7,
+            },
+          ],
+          byRegion: [
+            {
+              bucket: new Date("2026-04-01"),
+              region: "NA",
+              openMmr: 4000,
+              closeMmr: 4050,
+              minMmr: 3990,
+              maxMmr: 4060,
+              wins: 3,
+              losses: 1,
+              total: 4,
+            },
+            {
+              bucket: new Date("2026-04-08"),
+              region: "NA",
+              openMmr: 4055,
+              closeMmr: 4080,
+              minMmr: 4055,
+              maxMmr: 4090,
+              wins: 2,
+              losses: 1,
+              total: 3,
+            },
+            {
+              bucket: new Date("2026-04-08"),
+              region: "EU",
+              openMmr: 4100,
+              closeMmr: 4120,
+              minMmr: 4040,
+              maxMmr: 4140,
+              wins: 3,
+              losses: 1,
+              total: 4,
+            },
+          ],
         },
       ],
     ]);
@@ -433,6 +472,15 @@ describe("services/aggregations", () => {
     expect(out.peak.mmr).toBe(4140);
     expect(out.trough.mmr).toBe(3990);
     expect(out.latest.mmr).toBe(4120);
+    expect(out.regions).toHaveLength(2);
+    const [na, eu] = out.regions;
+    expect(na.region).toBe("NA");
+    expect(na.points).toHaveLength(2);
+    expect(na.latest.mmr).toBe(4080);
+    expect(na.peak.mmr).toBe(4090);
+    expect(eu.region).toBe("EU");
+    expect(eu.points).toHaveLength(1);
+    expect(eu.latest.mmr).toBe(4120);
   });
 
   test("momentum shapes post-win / post-loss splits + session positions", async () => {

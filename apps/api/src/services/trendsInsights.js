@@ -64,8 +64,19 @@ const NET_MMR_MAX_DELTA = 150;
  * plus min/max so the client can paint a band when bucket size
  * collapses several games into one mark.
  *
- * Output also carries the peak / trough / latest scalars so the
- * client can label them without scanning the series itself.
+ * The response also carries a ``regions`` array — one entry per
+ * Battle.net region the user has actually played on (NA, EU, KR, CN,
+ * SEA, plus "U" for older agent versions whose toon handle wasn't
+ * recorded). Each region carries its own points + peak/trough/latest
+ * so the client can paint one line per ladder; without the split, a
+ * 5,000-MMR NA main who dabbles on a 3,500-MMR EU smurf saw the
+ * combined line dive whenever they queued EU. Region is derived
+ * from ``myToonHandle`` via {@link regionFromToonHandleExpr} — the
+ * same source of truth the netMmrByMatchup pipeline uses.
+ *
+ * The overall ``points`` / ``peak`` / ``trough`` / ``latest`` scalars
+ * are preserved at the top level so existing consumers keep working
+ * even if they ignore the new ``regions`` field.
  *
  * @param {Deps} deps
  * @param {string} userId
@@ -76,44 +87,144 @@ async function mmrProgression(deps, userId, opts, filters) {
   const interval = deps.pickInterval(opts && opts.interval);
   const timezone = deps.pickTimezone(opts && opts.tz);
   const match = deps.gamesMatchStage(userId, filters);
-  const rows = await deps.games
+  const truncBucket = {
+    $dateTrunc: { date: "$date", unit: interval, timezone },
+  };
+  const projectPoint = {
+    _id: 0,
+    bucket: "$_id",
+    openMmr: 1,
+    closeMmr: 1,
+    minMmr: 1,
+    maxMmr: 1,
+    wins: 1,
+    losses: 1,
+    total: 1,
+  };
+  const groupAccumulators = {
+    // $last after $sort:asc gives the most recent MMR in the bucket.
+    closeMmr: { $last: "$myMmr" },
+    openMmr: { $first: "$myMmr" },
+    minMmr: { $min: "$myMmr" },
+    maxMmr: { $max: "$myMmr" },
+    wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
+    losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
+    total: { $sum: 1 },
+  };
+  const facet = await deps.games
     .aggregate([
       { $match: { ...match, myMmr: { $type: "number" } } },
-      { $addFields: { _bucket: deps.bucketSwitch() } },
-      { $sort: { date: 1 } },
       {
-        $group: {
-          _id: { $dateTrunc: { date: "$date", unit: interval, timezone } },
-          // $last after $sort:asc gives the most recent MMR in the bucket.
-          closeMmr: { $last: "$myMmr" },
-          openMmr: { $first: "$myMmr" },
-          minMmr: { $min: "$myMmr" },
-          maxMmr: { $max: "$myMmr" },
-          wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
-          losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
-          total: { $sum: 1 },
+        $addFields: {
+          _bucket: deps.bucketSwitch(),
+          _myRegion: regionFromToonHandleExpr("$myToonHandle"),
         },
       },
-      { $sort: { _id: -1 } },
-      { $limit: LIMITS.TIMESERIES_MAX_BUCKETS },
-      { $sort: { _id: 1 } },
+      // Sort once before $facet so both sub-pipelines see the same
+      // chronological order and $first / $last resolve to the
+      // bucket's opening / closing MMR.
+      { $sort: { date: 1 } },
       {
-        $project: {
-          _id: 0,
-          bucket: "$_id",
-          openMmr: 1,
-          closeMmr: 1,
-          minMmr: 1,
-          maxMmr: 1,
-          wins: 1,
-          losses: 1,
-          total: 1,
+        $facet: {
+          overall: [
+            { $group: { _id: truncBucket, ...groupAccumulators } },
+            { $sort: { _id: -1 } },
+            { $limit: LIMITS.TIMESERIES_MAX_BUCKETS },
+            { $sort: { _id: 1 } },
+            { $project: projectPoint },
+          ],
+          byRegion: [
+            {
+              $group: {
+                _id: { bucket: truncBucket, region: "$_myRegion" },
+                ...groupAccumulators,
+              },
+            },
+            // Cap with the same single-region budget × the five real
+            // regions + one "U" bin; for a single-region account this
+            // is identical to the overall cap.
+            { $sort: { "_id.bucket": -1 } },
+            { $limit: LIMITS.TIMESERIES_MAX_BUCKETS * 6 },
+            { $sort: { "_id.region": 1, "_id.bucket": 1 } },
+            {
+              $project: {
+                _id: 0,
+                bucket: "$_id.bucket",
+                region: "$_id.region",
+                openMmr: 1,
+                closeMmr: 1,
+                minMmr: 1,
+                maxMmr: 1,
+                wins: 1,
+                losses: 1,
+                total: 1,
+              },
+            },
+          ],
         },
       },
     ])
     .toArray();
-  return { interval, points: rows, ...summarize(rows) };
+  const root = facet[0] || { overall: [], byRegion: [] };
+  const overall = Array.isArray(root.overall) ? root.overall : [];
+  const regions = groupRegionSeries(
+    Array.isArray(root.byRegion) ? root.byRegion : [],
+  );
+  return { interval, points: overall, regions, ...summarize(overall) };
 }
+
+/**
+ * Bucket the flat per-(bucket, region) rows from the byRegion facet
+ * into one series per region, attaching per-region peak/trough/latest
+ * so the client can drop them into the headline without scanning the
+ * series itself. Region order matches REGION_PRIORITY so the legend
+ * is stable across reloads regardless of how the user toggled the
+ * region filter.
+ *
+ * @param {Array<{bucket: Date, region: string} & Record<string, number>>} rows
+ */
+function groupRegionSeries(rows) {
+  const byKey = new Map();
+  for (const r of rows) {
+    const key = r.region || "U";
+    let bucket = byKey.get(key);
+    if (!bucket) {
+      bucket = [];
+      byKey.set(key, bucket);
+    }
+    bucket.push({
+      bucket: r.bucket,
+      openMmr: r.openMmr,
+      closeMmr: r.closeMmr,
+      minMmr: r.minMmr,
+      maxMmr: r.maxMmr,
+      wins: r.wins,
+      losses: r.losses,
+      total: r.total,
+    });
+  }
+  const ordered = [];
+  for (const region of REGION_PRIORITY) {
+    if (byKey.has(region)) {
+      ordered.push({ region, points: byKey.get(region), ...summarize(byKey.get(region)) });
+      byKey.delete(region);
+    }
+  }
+  // Any unexpected region label (future Blizzard cluster, malformed
+  // toon handle) gets appended after the known set in alphabetical
+  // order so it still shows up rather than being silently dropped.
+  for (const region of Array.from(byKey.keys()).sort()) {
+    ordered.push({ region, points: byKey.get(region), ...summarize(byKey.get(region)) });
+  }
+  return ordered;
+}
+
+/**
+ * Ordering used for the per-region series. Matches the FilterBar
+ * toggle order so the chart legend reads in the same direction the
+ * user picks regions in the filter row.
+ */
+const REGION_PRIORITY = ["NA", "EU", "KR", "CN", "SEA", "U"];
 
 /** @param {Array<{closeMmr: number, minMmr: number, maxMmr: number, bucket: Date}>} rows */
 function summarize(rows) {
