@@ -526,20 +526,45 @@ export function countBuildingsAt(
 ): Record<string, number> {
   if (!Array.isArray(events) || events.length === 0) return {};
   const counts: Record<string, number> = {};
+  // Once WarpGate research completes, every existing Gateway auto-morphs
+  // into a Warp Gate (≈7 s transition per building) and any Gateway built
+  // afterwards morphs immediately on completion. The build log's
+  // UnitTypeChangeEvent stream emits a WarpGate entry for each morph and
+  // the loop below consumes a Gateway per WarpGate it sees — but residual
+  // Gateways can still leak through: a Gateway whose construction hadn't
+  // finished at the hovered time has no morph event yet, and on slim/
+  // truncated payloads the morph event for an already-finished Gateway
+  // may have been dropped. Fold the residual Gateway count into WarpGate
+  // once the research has completed so the roster shows a single
+  // "WarpGate × N" chip rather than splitting the same in-game building
+  // type across two chips.
+  let warpGateResearchComplete = false;
   for (const ev of events) {
-    if (!ev || !ev.is_building) continue;
-    const time = Number(ev.time) || 0;
-    if (time > t) break; // events are sorted ascending
-    const raw = ev.name || ev.display || "";
-    if (!raw) continue;
-    const canonical = canonicalizeName(raw);
-    if (!canonical) continue;
-    const prev = BUILDING_MORPH_PARENT[canonical];
-    if (prev && (counts[prev] || 0) > 0) {
-      counts[prev] = (counts[prev] || 0) - 1;
-      if (counts[prev] === 0) delete counts[prev];
+    if (!ev) continue;
+    const startTime = Number(ev.time) || 0;
+    if (startTime > t) break; // events are sorted ascending by start time
+    if (ev.is_building) {
+      const raw = ev.name || ev.display || "";
+      if (!raw) continue;
+      const canonical = canonicalizeName(raw);
+      if (!canonical) continue;
+      const prev = BUILDING_MORPH_PARENT[canonical];
+      if (prev && (counts[prev] || 0) > 0) {
+        counts[prev] = (counts[prev] || 0) - 1;
+        if (counts[prev] === 0) delete counts[prev];
+      }
+      counts[canonical] = (counts[canonical] || 0) + 1;
+    } else if ((ev.category || "").toLowerCase() === UPGRADE_CATEGORY) {
+      const name = ev.name || ev.display || "";
+      if (name === "WarpGateResearch") {
+        const completeTime = Number(ev.complete_time ?? ev.time) || 0;
+        if (completeTime <= t) warpGateResearchComplete = true;
+      }
     }
-    counts[canonical] = (counts[canonical] || 0) + 1;
+  }
+  if (warpGateResearchComplete && (counts.Gateway || 0) > 0) {
+    counts.WarpGate = (counts.WarpGate || 0) + counts.Gateway;
+    delete counts.Gateway;
   }
   return counts;
 }

@@ -385,20 +385,44 @@ function countBuildingsAt(events, t) {
   if (!Array.isArray(events) || events.length === 0) return {};
   /** @type {Record<string, number>} */
   const counts = {};
+  // Once WarpGate research completes, every existing Gateway auto-morphs
+  // into a Warp Gate (≈7 s transition per building) and any Gateway built
+  // afterwards morphs on completion. WarpGate UnitTypeChangeEvent entries
+  // in the build log consume a Gateway per morph, but residual Gateways
+  // can still leak through (in-flight construction at the hovered time,
+  // or a morph event missing from a slim/truncated payload). Fold the
+  // residual Gateway count into WarpGate once the research has completed
+  // so the roster shows a single "WarpGate × N" chip — mirrors the same
+  // fold in apps/web/components/analyzer/macro/compositionAt.ts.
+  let warpGateResearchComplete = false;
   for (const ev of events) {
-    if (!ev || !ev.is_building) continue;
-    const time = Number(ev.time) || 0;
-    if (time > t) break;
-    const raw = ev.name || ev.display || "";
-    if (!raw) continue;
-    const canonical = canonicalizeName(raw);
-    if (!canonical) continue;
-    const prev = BUILDING_MORPH_PARENT[canonical];
-    if (prev && (counts[prev] || 0) > 0) {
-      counts[prev] -= 1;
-      if (counts[prev] === 0) delete counts[prev];
+    if (!ev) continue;
+    const startTime = Number(ev.time) || 0;
+    if (startTime > t) break;
+    if (ev.is_building) {
+      const raw = ev.name || ev.display || "";
+      if (!raw) continue;
+      const canonical = canonicalizeName(raw);
+      if (!canonical) continue;
+      const prev = BUILDING_MORPH_PARENT[canonical];
+      if (prev && (counts[prev] || 0) > 0) {
+        counts[prev] -= 1;
+        if (counts[prev] === 0) delete counts[prev];
+      }
+      counts[canonical] = (counts[canonical] || 0) + 1;
+    } else if ((ev.category || "").toLowerCase() === "upgrade") {
+      const name = ev.name || ev.display || "";
+      if (name === "WarpGateResearch") {
+        const completeTime = Number(
+          ev.complete_time != null ? ev.complete_time : ev.time,
+        ) || 0;
+        if (completeTime <= t) warpGateResearchComplete = true;
+      }
     }
-    counts[canonical] = (counts[canonical] || 0) + 1;
+  }
+  if (warpGateResearchComplete && (counts.Gateway || 0) > 0) {
+    counts.WarpGate = (counts.WarpGate || 0) + counts.Gateway;
+    delete counts.Gateway;
   }
   return counts;
 }
