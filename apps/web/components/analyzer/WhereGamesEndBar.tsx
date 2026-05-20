@@ -246,64 +246,70 @@ export function WhereGamesEndBar({
             );
           })}
         </div>
+      </div>
 
-        {selectedSeg && selectedColor ? (
+      {/* Popover lives in the document flow (not absolutely positioned
+       *  inside the bar wrapper) so the enclosing Card's overflow-hidden
+       *  can't clip its lower edge on narrow viewports. The popover card
+       *  is absolute inside this relative shell so the arrow can keep
+       *  tracking the selected sliver's center, and the shell reserves
+       *  enough vertical space (min-h-10) for the card + arrow to render
+       *  in full regardless of whether the legend below wraps. */}
+      {selectedSeg && selectedColor ? (
+        <div
+          id={popoverId}
+          role="status"
+          aria-live="polite"
+          className="relative min-h-10"
+        >
           <div
-            id={popoverId}
-            role="status"
-            aria-live="polite"
-            className="pointer-events-none absolute left-0 right-0 top-full z-20"
-            style={{ marginTop: 10 }}
+            ref={popoverRef}
+            className="absolute transition-[left] duration-150"
+            style={{
+              left: geom ? `${geom.popoverLeft}px` : "50%",
+              transform: "translateX(-50%)",
+              maxWidth: "calc(100% - 8px)",
+              visibility: geom ? "visible" : "hidden",
+            }}
           >
             <div
-              ref={popoverRef}
-              className="pointer-events-auto absolute transition-[left] duration-150"
+              className="relative flex items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-1.5 shadow-[var(--shadow-card)]"
               style={{
-                left: geom ? `${geom.popoverLeft}px` : "50%",
-                transform: "translateX(-50%)",
-                maxWidth: "calc(100% - 8px)",
-                visibility: geom ? "visible" : "hidden",
+                boxShadow: `0 0 0 1px ${selectedColor}, 0 0 24px ${PHASE_DIST_COLOR_SOFT[selectedSeg.phase]}`,
               }}
             >
-              <div
-                className="relative flex items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-1.5 shadow-[var(--shadow-card)]"
+              <span
+                aria-hidden
+                className="block h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: selectedColor }}
+              />
+              <span className="text-caption font-semibold uppercase tracking-wider text-text">
+                {PHASE_LABEL[selectedSeg.phase]}
+              </span>
+              <span className="font-mono tabular-nums text-text">
+                <span className="text-sm font-semibold">
+                  {selectedSeg.count}
+                </span>
+                <span className="ml-1 text-caption text-text-muted">
+                  game{selectedSeg.count === 1 ? "" : "s"}
+                </span>
+                <span className="ml-1.5 text-caption text-text-dim">
+                  · {Math.round(selectedSeg.pct)}%
+                </span>
+              </span>
+              <span
+                aria-hidden
+                className="absolute -top-1 h-2 w-2 rotate-45 bg-bg-surface transition-[left] duration-150"
                 style={{
-                  boxShadow: `0 0 0 1px ${selectedColor}, 0 0 24px ${PHASE_DIST_COLOR_SOFT[selectedSeg.phase]}`,
+                  left: geom ? `${geom.arrowLeft}px` : "50%",
+                  marginLeft: -4,
+                  boxShadow: `-1px -1px 0 0 ${selectedColor}`,
                 }}
-              >
-                <span
-                  aria-hidden
-                  className="block h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: selectedColor }}
-                />
-                <span className="text-caption font-semibold uppercase tracking-wider text-text">
-                  {PHASE_LABEL[selectedSeg.phase]}
-                </span>
-                <span className="font-mono tabular-nums text-text">
-                  <span className="text-sm font-semibold">
-                    {selectedSeg.count}
-                  </span>
-                  <span className="ml-1 text-caption text-text-muted">
-                    game{selectedSeg.count === 1 ? "" : "s"}
-                  </span>
-                  <span className="ml-1.5 text-caption text-text-dim">
-                    · {Math.round(selectedSeg.pct)}%
-                  </span>
-                </span>
-                <span
-                  aria-hidden
-                  className="absolute -top-1 h-2 w-2 rotate-45 bg-bg-surface transition-[left] duration-150"
-                  style={{
-                    left: geom ? `${geom.arrowLeft}px` : "50%",
-                    marginLeft: -4,
-                    boxShadow: `-1px -1px 0 0 ${selectedColor}`,
-                  }}
-                />
-              </div>
+              />
             </div>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-x-2 gap-y-1 text-caption text-text-dim">
         {segments.map((seg) => {
