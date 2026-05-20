@@ -278,7 +278,21 @@ class UserBuildDetector(BaseStrategyDetector):
                 if len(gate_times) >= 2 and gate_times[1] < robo_time:
                     return "PvT - Phoenix Opener"
 
-            if has_upgrade_substr("Blink", 540) and gate_count_6min >= 6:
+            # The 5th Gateway must go down BEFORE the 3rd Nexus for this to
+            # be a 2-base mass-Gateway all-in. A 3rd Nexus taken before the
+            # 5th Gateway means the player is on 3-base macro economy and
+            # the extra Gateways are macro reinforcement, not all-in
+            # production. Without this guard, a 3-base Blink macro game
+            # that ends up with 6-8 Gateways gets mistagged as a 7-Gate
+            # Blink All-in.
+            gate_times_sorted = sorted(
+                b['time'] for b in buildings if b['name'] == "Gateway"
+            )
+            fifth_gateway_time = (
+                gate_times_sorted[4] if len(gate_times_sorted) >= 5 else 9999
+            )
+            if (has_upgrade_substr("Blink", 540) and gate_count_6min >= 6
+                    and fifth_gateway_time < third_nexus_time):
                 return "PvT - 7 Gate Blink All-in"
             if has_upgrade_substr("Charge", 540) and gate_count_730 >= 7 and len(nexus_times) < 3:
                 return "PvT - 8 Gate Charge All-in"

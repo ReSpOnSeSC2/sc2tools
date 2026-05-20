@@ -177,3 +177,70 @@ def test_charge_with_third_nexus_graduates_to_standard_charge_macro():
         f"Charge + 3rd Nexus + no Stargate must classify as Standard Charge "
         f"Macro; got {result!r}"
     )
+
+
+# -----------------------------------------------------------------------------
+# 7 Gate Blink All-in vs 3-base Blink Macro discrimination
+# -----------------------------------------------------------------------------
+def test_seven_gate_blink_allin_blocked_when_third_nexus_before_fifth_gateway():
+    """A 3-base Blink macro game that adds mass Gateways (6+ by 9:00)
+    used to get mistagged as 'PvT - 7 Gate Blink All-in' because the
+    rule only checked Blink + Gateway count. The fix disqualifies any
+    replay where the 3rd Nexus was taken BEFORE the 5th Gateway -- the
+    economy commitment marks it as macro, not all-in. Regression for
+    https://github.com/responsesc2/sc2tools/issues report: macro 3-Nexus
+    Blink into 8 Gateways lumping into the 7-Gate All-in bucket."""
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),               # Gate 1
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),                # Natural
+        _building("Assimilator", 150),
+        _building("Pylon", 170),
+        _building("Gateway", 240),              # Gate 2
+        _building("TwilightCouncil", 260),
+        _building("Nexus", 310),                # 3rd Nexus BEFORE 5th Gate
+        _building("Gateway", 360),              # Gate 3
+        _building("Gateway", 400),              # Gate 4
+        _building("Gateway", 440),              # Gate 5 (after 3rd Nexus)
+        _building("Gateway", 470),              # Gate 6
+        _upgrade("BlinkTech", 460),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - 7 Gate Blink All-in", (
+        f"3rd Nexus before 5th Gateway must NOT classify as 7-Gate Blink "
+        f"All-in; got {result!r}"
+    )
+
+
+def test_seven_gate_blink_allin_still_fires_for_two_base_mass_gates():
+    """The canonical 2-base 7-Gate Blink All-in must still classify
+    correctly: Blink by 9:00, 6+ Gateways by 9:00, and NO 3rd Nexus
+    before the 5th Gateway (here, no 3rd Nexus at all)."""
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),               # Gate 1
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),                # Natural -- no 3rd
+        _building("Assimilator", 150),
+        _building("Pylon", 170),
+        _building("Gateway", 240),              # Gate 2
+        _building("TwilightCouncil", 260),
+        _building("Gateway", 300),              # Gate 3
+        _building("Gateway", 340),              # Gate 4
+        _building("Gateway", 380),              # Gate 5
+        _building("Gateway", 420),              # Gate 6
+        _building("Gateway", 460),              # Gate 7
+        _upgrade("BlinkTech", 460),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - 7 Gate Blink All-in", (
+        f"2-base 6+ Gateway Blink build must classify as 7-Gate Blink "
+        f"All-in; got {result!r}"
+    )
