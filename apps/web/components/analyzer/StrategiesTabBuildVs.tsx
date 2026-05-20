@@ -620,7 +620,52 @@ function BvsTable({
 }) {
   return (
     <Card>
-      <div className="overflow-x-auto">
+      {/* Mobile (< md): stacked cards per row. The desktop table-fixed
+          layout below keeps WR from being pushed off-screen on mid-width
+          viewports, but on a phone the build / strategy columns still
+          collapse to single letters; swap to a vertical card on small
+          screens so both names render in full. */}
+      <ul className="space-y-2 md:hidden">
+        {rows.map((c, i) => (
+          <li key={`${c.my_build}-${c.opp_strat}-${i}`}>
+            <button
+              type="button"
+              onClick={() => onOpenBvs(c.my_build, c.opp_strat)}
+              className="flex w-full flex-col gap-1.5 rounded-lg border border-border bg-bg-surface px-3 py-2 text-left transition hover:bg-bg-elevated/40"
+            >
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] uppercase tracking-wider text-text-dim">
+                  My build
+                </span>
+                <span className="text-sm font-semibold text-text">
+                  {c.my_build}
+                </span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] uppercase tracking-wider text-text-dim">
+                  vs Opponent strategy
+                </span>
+                <span className="text-sm text-text-muted">
+                  {c.opp_strat}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
+                <span className="text-success">{c.wins}W</span>
+                <span className="text-danger">{c.losses}L</span>
+                <span className="text-text-muted">{c.total} games</span>
+                <span
+                  className="font-semibold"
+                  style={{ color: wrColor(c.winRate, c.total) }}
+                >
+                  {pct1(c.winRate)}
+                </span>
+              </div>
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden overflow-x-auto md:block">
         {/* ``table-fixed`` plus an explicit ``colgroup`` is what stops
             the four numeric columns from claiming an equal share of
             leftover space (each ~25 % of the row, with W / L right-
