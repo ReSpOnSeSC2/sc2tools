@@ -320,17 +320,23 @@ class UserBuildDetector(BaseStrategyDetector):
             if (has_building("TemplarArchive", 9999) and ta_time < third_nexus_time
                     and (4 <= gate_count_730 <= 6)):
                 return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
-            # Standard Charge Macro is a pure Gateway / Twilight macro
-            # game. Charge must also be the FIRST Twilight upgrade --
-            # a Blink-first / Charge-after 3-base build matches on the
-            # Charge-existence + 3-Nexus signature alone and gets
-            # mistagged here without the ordering guard. The no-
-            # Stargate guard keeps Stargate-into-Charge / Phoenix-into-
-            # Robo / Stargate Opener hybrids out of this bucket. Mirror
-            # of reveal-sc2-opponent-main's Standard Charge Macro rule.
+            # Standard Charge Macro is a Twilight-opener 3-base
+            # Charge macro game. The label describes the OPENER
+            # (Twilight is the first tech building — before any
+            # Stargate), not the entire composition: a Twilight-
+            # first Charge macro that transitions into Stargate
+            # tech later in the midgame still classifies here.
+            # ``twilight_time < sg_time`` keeps Stargate-led builds
+            # out (Stargate-into-Charge catches those earlier).
+            # Charge must also be the FIRST Twilight upgrade --
+            # a Blink-first / Charge-after 3-base build matches
+            # on the Charge-existence + 3-Nexus signature alone
+            # and gets mistagged here without the ordering guard.
+            # Mirror of reveal-sc2-opponent-main's Standard Charge
+            # Macro rule.
             if (has_upgrade_substr("Charge", 540)
                     and total_nexuses >= 3
-                    and not has_building("Stargate", 9999)
+                    and twilight_time < sg_time
                     and pvt_charge_time == pvt_first_twilight_upgrade):
                 return "PvT - Standard Charge Macro"
             # Charge must be the FIRST Twilight upgrade. Without this

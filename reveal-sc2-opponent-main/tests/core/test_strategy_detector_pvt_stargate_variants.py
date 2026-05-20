@@ -356,18 +356,34 @@ def test_robo_after_twilight_still_allows_stargate_into_x():
 
 
 # -----------------------------------------------------------------------------
-# Stargate-disqualifies guards on Robo First + Standard Charge Macro
+# Robo First describes the OPENER, not the entire composition
 # -----------------------------------------------------------------------------
-# A Stargate at any point in the build means it is NOT a pure Robo
-# First opener and NOT a pure Standard Charge Macro — those labels are
-# reserved for Stargate-free games. Hybrid Robo+Sg / Charge+Sg builds
-# land on Stargate-into-X / Phoenix-into-Robo / Stargate Opener
-# instead.
-def test_robo_first_does_not_fire_when_stargate_exists():
+# Robo First fires whenever Robotics Facility is the first tech building
+# (before any Twilight Council AND before any Stargate). A later Stargate
+# transition does NOT retroactively change the OPENER — once the player
+# has committed to Robo as the first tech, any midgame Stargate addition
+# (Skytoss tech-switch, end-game Tempests, late Phoenix harass) is a
+# transition out of Robo First, not a reclassification of it.
+#
+# Stargate-led hybrids never reach this rule because they're caught
+# earlier: Phoenix into Robo fires on Stargate + real Phoenix by 7:00 +
+# Robo by 8:00, and the Stargate Opener catch-all fires on Stargate as
+# the first tech building (``sg_time < robo_time``). Both of those run
+# BEFORE Robo First in the detector chain.
+def test_robo_first_fires_when_stargate_added_later():
     """Robo built first, then Stargate added later, no Phoenix on the
-    field (so Phoenix-into-Robo doesn't catch it either). Must NOT
-    classify as Robo First — falls through to the Stargate Opener
-    catch-all."""
+    field (so Phoenix-into-Robo doesn't catch it either). The opener
+    is Robo, so the label IS Robo First — the later Stargate is a
+    transition, not a reclassification of the opener.
+
+    Reported scenario (Tourmaline LE, 2026-05-20, 16:48 game): the
+    player opened Gateway → Cyber → Robo at 2:43, then added a
+    Stargate later in the midgame. The previous strict "any Stargate
+    disqualifies Robo First" rule pushed this into the Macro
+    Transition (Unclassified) catch-all even though the OPENER was
+    textbook Robo First. The rule now matches the user's mental
+    model: Robo First describes the opener.
+    """
     events = [
         _building("Nexus", 0),
         _building("Pylon", 18),
@@ -384,9 +400,46 @@ def test_robo_first_does_not_fire_when_stargate_exists():
     ]
     detector = sd.UserBuildDetector(custom_builds=[])
     result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - Robo First", (
+        f"Robo-first opener with a later Stargate transition must "
+        f"classify as Robo First (the OPENER is Robo); got {result!r}"
+    )
+
+
+def test_stargate_first_then_robo_is_not_robo_first():
+    """Stargate as the FIRST tech building, Robo added later. The
+    opener is Stargate, so the label is NOT Robo First. With no
+    Phoenix on the field (Phoenix-into-Robo can't catch it) this
+    lands on the Stargate Opener catch-all instead.
+
+    This is the rule that keeps Stargate-led hybrids out of the
+    Robo First bucket — ``robo_time < sg_time`` fails so the Robo
+    First branch is skipped, and ``sg_time < robo_time`` lets the
+    Stargate Opener catch-all pick the replay up.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),
+        # Stargate FIRST
+        _building("Stargate", 200),
+        # Robo LATER
+        _building("RoboticsFacility", 320),
+        _building("Gateway", 280),
+        _unit("Oracle", 260),  # Oracle, not Phoenix
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
     assert result != "PvT - Robo First", (
-        f"Robo+Stargate hybrid must NOT classify as Robo First; "
+        f"Stargate-first opener must NOT classify as Robo First; "
         f"got {result!r}"
+    )
+    assert result == "PvT - Stargate Opener", (
+        f"Stargate-first with no Phoenix and a later Robo must land "
+        f"on the Stargate Opener catch-all; got {result!r}"
     )
 
 
@@ -411,10 +464,12 @@ def test_robo_first_still_fires_when_no_stargate():
     )
 
 
-def test_standard_charge_macro_does_not_fire_when_stargate_exists():
-    """Charge + 3+ Nexus + a Stargate somewhere in the build must NOT
-    classify as Standard Charge Macro — that label is reserved for
-    pure Gateway/Twilight macro games without Sg tech."""
+def test_standard_charge_macro_does_not_fire_when_stargate_is_first_tech():
+    """Stargate is the FIRST tech building (sg_time < twilight_time):
+    the OPENER is Stargate, not Twilight, so the label is NOT
+    Standard Charge Macro. The build is correctly stolen by
+    Stargate-into-Charge earlier in the chain (Charge as the first
+    Twilight upgrade off a Stargate-first opener)."""
     events = [
         _building("Nexus", 0),
         _building("Pylon", 18),
@@ -423,14 +478,14 @@ def test_standard_charge_macro_does_not_fire_when_stargate_exists():
         _building("CyberneticsCore", 115),
         _building("Nexus", 130),
         _building("Nexus", 300),
-        # Stargate built somewhere along the way
+        # Stargate FIRST
         _building("Stargate", 200),
         _unit("Oracle", 260),
-        # Twilight + Charge research
+        # Twilight + Charge research come AFTER the Stargate
         _building("TwilightCouncil", 320),
         # Robo built AFTER Twilight so the Robo guard above doesn't
         # disqualify Stargate-into-Charge — we want to verify the
-        # Standard-Charge-Macro guard, not the Robo guard.
+        # Standard-Charge-Macro ordering guard.
         _building("RoboticsFacility", 400),
         _upgrade("Charge", 380),
         _building("Gateway", 360),
@@ -438,8 +493,12 @@ def test_standard_charge_macro_does_not_fire_when_stargate_exists():
     detector = sd.UserBuildDetector(custom_builds=[])
     result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
     assert result != "PvT - Standard Charge Macro", (
-        f"Stargate+Charge+3nex must NOT classify as Standard Charge Macro; "
+        f"Stargate-first opener must NOT classify as Standard Charge Macro; "
         f"got {result!r}"
+    )
+    assert result == "PvT - Stargate into Charge", (
+        f"Stargate-first opener with Charge as first Twilight upgrade "
+        f"must classify as Stargate into Charge; got {result!r}"
     )
 
 
@@ -465,6 +524,47 @@ def test_standard_charge_macro_still_fires_with_no_stargate():
     assert result == "PvT - Standard Charge Macro", (
         f"Pure Twilight macro must still classify as Standard Charge Macro; "
         f"got {result!r}"
+    )
+
+
+def test_standard_charge_macro_fires_with_twilight_opener_and_late_stargate():
+    """Twilight is the FIRST tech building, Charge is the first
+    Twilight upgrade, 3+ Nexuses, and a Stargate is added LATER in
+    the midgame (Skytoss tech-switch / late-game Tempests / Phoenix
+    harass). The OPENER was Twilight + Charge, so the label is
+    still Standard Charge Macro. Mirrors the Robo First fix: the
+    label describes the opener, not the entire composition.
+
+    Before the fix, ``not has_building("Stargate", 9999)`` excluded
+    any build with a Stargate at any point and shunted these
+    Twilight-opener replays into ``Macro Transition
+    (Unclassified)`` even though the opening was textbook
+    Standard Charge Macro.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),
+        _building("Nexus", 300),
+        _building("TwilightCouncil", 220),    # Twilight FIRST
+        _upgrade("Charge", 280),               # Charge first Twilight upgrade
+        _building("Gateway", 240),
+        _building("Gateway", 320),
+        # Stargate added LATER in the midgame -- well after the
+        # opener committed to Twilight + Charge macro
+        _building("Stargate", 600),            # 10:00
+        _unit("Phoenix", 660),
+        _unit("Tempest", 900),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - Standard Charge Macro", (
+        f"Twilight-opener Charge macro with a midgame Stargate "
+        f"transition must classify as Standard Charge Macro (the "
+        f"OPENER was Twilight); got {result!r}"
     )
 
 

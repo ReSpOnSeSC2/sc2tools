@@ -2,6 +2,90 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.8.0
+
+### Fixed — PvT Robo First AND PvT Standard Charge Macro describe the OPENER, not the entire composition
+- **The same anti-pattern was hiding in TWO rules.** After fixing
+  Robo First, an audit (`grep "not has_building\\(.*9999\\)"`)
+  found a sibling bug in PvT Standard Charge Macro: it carried
+  the same strict `not has_building("Stargate", 9999)` guard,
+  which excluded any Twilight-opener Charge macro that later
+  added a Stargate. The fix is the parallel one: replace the
+  "ever" guard with an opener-ordering check
+  (`twilight_time < sg_time`), so Twilight-first Charge macro
+  with a midgame Stargate tech-switch still classifies as
+  Standard Charge Macro. Stargate-first builds remain caught
+  by Stargate-into-Charge earlier in the chain.
+- Audit scope: scanned every PvT / PvZ / PvP / opponent rule
+  for the same anti-pattern. Findings:
+  - `strategy_detector_pvt.py:195` — Standard Charge Macro
+    `not has_building("Stargate", 9999)`. **Fixed**.
+  - `SC2Replay-Analyzer/detectors/user.py:333` — legacy mirror
+    of the same rule. **Fixed**.
+  - `strategy_detector_pvz.py:99, :166` — time-windowed
+    (`...480`, `...600`), not "ever". OK.
+  - `strategy_detector_pvp.py` — uses `b["time"] < second_nexus`
+    style time-bounded checks. OK.
+  - `strategy_detector_opponent.py` — no `9999` literals in
+    rule conditions (only as default function args). OK.
+  - `strategy_detector_pvt.py:169` — `has_building("TemplarArchive", 9999)`
+    is a POSITIVE existence check (rule requires the structure
+    to exist + then orders against `third_nexus_time`). OK.
+
+### Fixed — PvT Robo First describes the OPENER, not the entire composition
+- **User-visible symptom**: a Robo First opener on Tourmaline LE
+  (2026-05-20, 16:48 game) was getting tagged as
+  `PvT - Macro Transition (Unclassified)`. The player opened
+  Gateway → Cyber → Robo at 2:43 — a textbook Robo First opener — but
+  later in the midgame added a Stargate (for Skytoss tech-switch /
+  end-game Tempests / late Phoenix harass). The previous strict rule
+  excluded any build with ANY Stargate from the Robo First bucket and
+  shunted these replays into the catch-all.
+- **Root cause**: `core/strategy_detector_pvt.py` carried a
+  `not has_building("Stargate", 9999)` guard on Robo First. That
+  guard was added on the premise that "a Stargate at any point makes
+  the build a Robo+Sg hybrid, not the canonical pure-Robo opener" —
+  but the catch-all rules below it (Phoenix into Robo / Stargate
+  Opener) only fire on Stargate-led openers (Stargate before Robo),
+  not on Robo-first openers with a later Stargate transition. The
+  result: a Robo-first opener with a midgame Stargate had nowhere to
+  land and fell through to Macro Transition (Unclassified).
+- **Fix**: drop the strict guard. The Robo First label now describes
+  the OPENER (Robo is the first tech building — before any Twilight
+  Council AND before any Stargate), not the entire composition. The
+  remaining ordering checks (`robo_time < sg_time`,
+  `robo_time < twilight_time`) keep Stargate-led hybrids out:
+  ```
+  if (has_building("RoboticsFacility", 390)
+          and robo_time < sg_time
+          and robo_time < twilight_time):
+      return "PvT - Robo First"
+  ```
+  Stargate-first builds are caught earlier by Phoenix into Robo (when
+  a real Phoenix is on the field) or Stargate Opener (the catch-all
+  for Stargate-first with no Phoenix), so Robo First only sees
+  Robo-first openers.
+- Build-definition catalogs (`core/build_definitions.py`,
+  `data/build_definitions.json`, `apps/web/lib/build-definitions/pvt.ts`)
+  updated to describe Robo First as an opener label, including the
+  fact that midgame Stargate transitions don't reclassify the opener.
+- Tests:
+  - `test_strategy_detector_pvt_stargate_variants.py`: the
+    `test_robo_first_does_not_fire_when_stargate_exists` regression
+    that pinned the old "any Stargate disqualifies" behaviour is
+    rewritten to assert the opposite — Robo-first opener + later
+    Stargate transition IS Robo First. A companion
+    `test_stargate_first_then_robo_is_not_robo_first` keeps the
+    Stargate-first case routed to Stargate Opener.
+  - `test_strategy_detector_pvt_gateway_opener_variants.py`: two new
+    regression cases lock in the Tourmaline LE replay shape
+    (Gateway → Cyber → Robo at 2:43, Stargate at 9:00) and a
+    sibling early-midgame Stargate variant (Robo 3:20, Stargate
+    5:30, no Phoenix on the field).
+  - Full reveal-sc2-opponent-main detector suite: 225/225 passing
+    (the pre-existing `test_integrity_sweep` failure is unrelated
+    to detection).
+
 ## 0.7.9
 
 ### Changed — Widen PvT DT Drop buffer to +60s; tighten DT/Ghost/BC Rush opponent labels

@@ -171,28 +171,40 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         and (4 <= gate_count_730 <= 6)
     ):
         return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
-    # Standard Charge Macro is a pure Gateway / Twilight macro
-    # game — any Stargate at all means the build is a hybrid
-    # composition (Stargate-into-Charge / Phoenix-into-Robo /
-    # Stargate Opener) and should NOT collapse into this label.
-    # The earlier Stargate-into-X / Phoenix-into-Robo branches
-    # already catch the Stargate cases when their signatures
-    # match, but a Stargate replay that misses both (e.g. Oracle
-    # harass with no Phoenix + Robo-AFTER-Twilight + Charge) used
-    # to fall through to this rule. Explicit guard keeps the
-    # label honest.
+    # Standard Charge Macro is a Twilight-OPENER 3-base Charge
+    # macro game. The label describes the OPENER (Twilight is
+    # the first tech building — before any Stargate), not the
+    # entire composition: a Twilight-first Charge macro that
+    # transitions into Stargate tech later in the midgame
+    # (Skytoss tech-switch, end-game Tempests) still classifies
+    # as Standard Charge Macro because the opening was Twilight.
+    # The previous strict ``not has_building("Stargate", 9999)``
+    # excluded any build with a Stargate at any point, which is
+    # the same anti-pattern the Robo First rule used to have:
+    # it shunted Twilight-opener replays with a midgame Stargate
+    # transition into the Macro Transition (Unclassified)
+    # catch-all even though the opener was textbook Standard
+    # Charge Macro. Earlier rules already catch Stargate-led
+    # hybrids:
+    #   * Stargate-into-Charge — Stargate before Twilight + Charge
+    #     is first Twilight upgrade. Fires before this rule when
+    #     Stargate is the opener.
+    #   * Phoenix into Robo — Stargate by 7:00 + real Phoenix by
+    #     7:00 + Robo by 8:00. Fires before this rule on
+    #     Phoenix-led builds.
+    # So Standard Charge Macro only sees Twilight-first builds.
     #
     # Charge must also be the FIRST Twilight upgrade. Without
     # this ordering guard, a Blink-first / Charge-after 3-base
-    # build matches on the Charge-existence + 3-Nexus + no-SG
-    # signature alone and gets mistagged here -- it is really a
-    # 3 Gate Blink (Macro) game that happened to research Charge
+    # build matches on the Charge-existence + 3-Nexus signature
+    # alone and gets mistagged here -- it is really a 3 Gate
+    # Blink (Macro) game that happened to research Charge
     # second. Mirror the same first-upgrade pattern the
     # Stargate-into-X and 3 Gate Charge Opener rules use.
     if (
         has_upgrade_substr("Charge", 540)
         and total_nexuses >= 3
-        and not has_building("Stargate", 9999)
+        and twilight_time < sg_time
         and pvt_charge_time == pvt_first_twilight_upgrade
     ):
         return "PvT - Standard Charge Macro"
@@ -284,16 +296,26 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         and count_units("DarkTemplar", 300) >= 1
     ):
         return "PvT - DT Drop"
-    # Robo First is a Stargate-free opener — Robotics Facility
-    # goes down before Twilight Council and no Stargate is ever
-    # built. A Stargate (even one built AFTER the Robo) makes
-    # the build a Robo+Sg hybrid; Phoenix-into-Robo / Stargate
-    # Opener handle those cases above and below.
+    # Robo First is a Robo-opener label: the player committed to
+    # Robotics Facility as the FIRST tech building (before any
+    # Twilight Council AND before any Stargate). A later Stargate
+    # transition (e.g. Skytoss tech-switch in the midgame, end-game
+    # Tempests) does NOT retroactively change the OPENER — the
+    # opening was Robo, period. Earlier rules already catch the
+    # Stargate-led hybrids:
+    #   * Phoenix into Robo — Stargate built + real Phoenix by 7:00
+    #     + Robo by 8:00. Fires before Robo First on Stargate-first
+    #     openers.
+    #   * Stargate Opener (catch-all below) — Stargate is the first
+    #     tech building. Disqualifies on ``sg_time < robo_time``;
+    #     it never fires for Robo-first builds.
+    # So a Robo-first opener with a LATER Stargate addition lands
+    # here naturally, which matches the user's mental model: "Robo
+    # First" describes the opener, not the entire composition.
     if (
         has_building("RoboticsFacility", 390)
         and robo_time < sg_time
         and robo_time < twilight_time
-        and not has_building("Stargate", 9999)
     ):
         return "PvT - Robo First"
     # Catch-all: a Stargate was the FIRST tech building after

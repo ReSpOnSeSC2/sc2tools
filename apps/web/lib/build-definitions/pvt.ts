@@ -118,13 +118,13 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - Robo First",
     description:
-      "Detected if a Robotics Facility is built before 6:30 AND it is the FIRST tech building (before any Twilight Council) AND NO Stargate has been built at any point. A Stargate — even one built AFTER the Robo — makes the build a Robo+Stargate hybrid that Phoenix into Robo / Stargate Opener cover instead.",
+      "Detected if a Robotics Facility is built before 6:30 AND it is the FIRST tech building — Robo lands before any Twilight Council AND before any Stargate. The label describes the OPENER, not the entire composition: a Robo opener that transitions into Stargate tech later in the midgame (Skytoss tech-switch, end-game Tempests) still classifies as Robo First because the opening was Robo. Stargate-led openers are caught earlier by Phoenix into Robo / Phoenix Opener / Stargate Opener so they don't fall into this bucket.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - Standard Charge Macro",
     description:
-      "Detected if Charge is researched by 9:00 AND the player has taken 3+ Nexuses AND NO Stargate has been built — the pure Gateway / Twilight 3-base Chargelot macro. Any Stargate (at any point) makes the build a hybrid Stargate composition; those replays land under Stargate into Charge / Phoenix into Robo / Stargate Opener instead.",
+      "Detected if Charge is researched by 9:00, the player has taken 3+ Nexuses, AND Twilight Council was built BEFORE any Stargate — a Twilight-opener 3-base Chargelot macro. The label describes the OPENER, not the entire composition: a Twilight-first Charge macro that transitions into Stargate tech later in the midgame (Skytoss tech-switch, end-game Tempests, late Phoenix harass) still classifies as Standard Charge Macro because the opening was Twilight + Charge. Stargate-led openers are caught earlier by Stargate into Charge / Phoenix into Robo so they don't fall into this bucket.",
   },
 ];

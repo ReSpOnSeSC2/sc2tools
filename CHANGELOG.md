@@ -67,6 +67,54 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Strategy classifier · `PvT - Standard Charge Macro` now
+  describes the OPENER, not the entire composition**: same
+  anti-pattern as the Robo First fix below — Standard Charge
+  Macro carried `not has_building("Stargate", 9999)` which
+  excluded any Twilight-opener Charge macro with a later Stargate
+  tech-switch from the bucket. Found during the post-fix audit
+  for "ever" guards across PvT / PvZ / PvP / opponent rules.
+  The guard is replaced with `twilight_time < sg_time` so a
+  Twilight-first 3-base Chargelot macro that adds a Stargate
+  later in the midgame (Skytoss tech-switch, end-game Tempests,
+  late Phoenix harass) still classifies as Standard Charge
+  Macro. Stargate-led openers remain correctly caught by
+  Stargate-into-Charge earlier in the chain. Mirrored in
+  `SC2Replay-Analyzer/detectors/user.py`. Catalog prose
+  updated in three places. Regression test
+  `test_standard_charge_macro_fires_with_twilight_opener_and_late_stargate`
+  pins the new positive case; the existing
+  Stargate-first-then-Charge test is renamed to
+  `test_standard_charge_macro_does_not_fire_when_stargate_is_first_tech`
+  and now asserts the build resolves to Stargate into Charge
+  (the correct label for that ordering).
+- **Strategy classifier · `PvT - Robo First` now describes the
+  OPENER, not the entire composition**: the previous strict rule
+  carried a `not has_building("Stargate", 9999)` guard that excluded
+  any build with a Stargate at any point from the Robo First bucket
+  (the 31c38df / "Robo+Sg hybrid" change). That produced false
+  negatives on the natural case: a Robo-first opener that later
+  transitions into Stargate tech in the midgame (Skytoss tech-switch,
+  end-game Tempests, late Phoenix harass). User-reported example:
+  Tourmaline LE 2026-05-20 16:48 replay opened Gateway → Cyber →
+  Robo at 2:43 — textbook Robo First — but the midgame Stargate
+  knocked it into `PvT - Macro Transition (Unclassified)`. Catch-all
+  rules below (Phoenix into Robo / Stargate Opener) only fire on
+  Stargate-led openers (Stargate before Robo), so Robo-first
+  openers with later Stargate transitions had nowhere to land. The
+  Robo First rule now keys solely on the opener:
+  `Robo before Twilight Council AND Robo before any Stargate`,
+  matching the user's mental model that "Robo First" describes
+  what the player opened with — not what their full composition
+  ends up looking like by minute 12. Catalog prose updated;
+  regression tests added in
+  `test_strategy_detector_pvt_stargate_variants.py` (the
+  Robo+Stargate-hybrid case now asserts it IS Robo First) and
+  `test_strategy_detector_pvt_gateway_opener_variants.py` (the
+  Tourmaline LE replay shape). Mirrors the legacy
+  `SC2Replay-Analyzer/detectors/user.py` behaviour, which never
+  carried the strict guard. Supersedes the entry below under
+  `### Changed` for the same rule.
 - **Real-game-time timestamps everywhere** — all build-log and
   replay-event timestamps now reflect the real in-game clock.
   Previously every timestamp was emitted at sc2reader's hard-coded
