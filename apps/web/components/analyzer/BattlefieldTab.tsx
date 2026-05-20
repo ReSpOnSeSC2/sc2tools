@@ -136,9 +136,19 @@ export function BattlefieldTab() {
               ))}
             </ul>
 
-            {/* Desktop — table. */}
+            {/* Desktop — table. ``table-fixed`` + explicit colgroup
+                so the W/L/Games/WR columns pack tightly and don't grab
+                equal shares of leftover space. */}
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col />
+                  <col style={{ width: "3.5rem" }} />
+                  <col style={{ width: "3.5rem" }} />
+                  <col style={{ width: "4.5rem" }} />
+                  <col style={{ width: "4.5rem" }} />
+                  <col style={{ width: "7rem" }} />
+                </colgroup>
                 <thead className="bg-bg-elevated">
                   <tr>
                     <SortableTh col="name" label="Matchup" {...muSort} />
@@ -154,12 +164,14 @@ export function BattlefieldTab() {
                 <tbody>
                   {sortedMu.map((m) => (
                     <tr key={m.name} className="border-t border-border">
-                      <td className="px-3 py-1.5 font-medium">{m.name}</td>
-                      <td className="px-3 py-1.5 text-right text-success">{m.wins}</td>
-                      <td className="px-3 py-1.5 text-right text-danger">{m.losses}</td>
-                      <td className="px-3 py-1.5 text-right">{m.total}</td>
+                      <td className="truncate px-3 py-1.5 font-medium" title={m.name}>
+                        {m.name}
+                      </td>
+                      <td className="px-2 py-1.5 text-right text-success">{m.wins}</td>
+                      <td className="px-2 py-1.5 text-right text-danger">{m.losses}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{m.total}</td>
                       <td
-                        className="px-3 py-1.5 text-right tabular-nums"
+                        className="px-2 py-1.5 text-right tabular-nums"
                         style={{ color: wrColor(m.winRate, m.total) }}
                       >
                         {pct1(m.winRate)}
@@ -263,9 +275,18 @@ export function BattlefieldTab() {
               ))}
             </ul>
 
-            {/* Desktop — table. */}
+            {/* Desktop — table. ``table-fixed`` + explicit colgroup
+                packs the W/L/Games/WR columns tight against the name
+                column. */}
             <div className="mt-4 hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col />
+                  <col style={{ width: "3.5rem" }} />
+                  <col style={{ width: "3.5rem" }} />
+                  <col style={{ width: "4.5rem" }} />
+                  <col style={{ width: "4.5rem" }} />
+                </colgroup>
                 <thead className="bg-bg-elevated">
                   <tr>
                     <SortableTh col="name" label="Map" {...mapSort} />
@@ -278,12 +299,14 @@ export function BattlefieldTab() {
                 <tbody>
                   {sortedMaps.map((m) => (
                     <tr key={m.name} className="border-t border-border">
-                      <td className="px-3 py-1.5">{m.name}</td>
-                      <td className="px-3 py-1.5 text-right text-success">{m.wins}</td>
-                      <td className="px-3 py-1.5 text-right text-danger">{m.losses}</td>
-                      <td className="px-3 py-1.5 text-right">{m.total}</td>
+                      <td className="truncate px-3 py-1.5" title={m.name}>
+                        {m.name}
+                      </td>
+                      <td className="px-2 py-1.5 text-right text-success">{m.wins}</td>
+                      <td className="px-2 py-1.5 text-right text-danger">{m.losses}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{m.total}</td>
                       <td
-                        className="px-3 py-1.5 text-right tabular-nums"
+                        className="px-2 py-1.5 text-right tabular-nums"
                         style={{ color: wrColor(m.winRate, m.total) }}
                       >
                         {pct1(m.winRate)}
