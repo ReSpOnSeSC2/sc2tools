@@ -41,7 +41,7 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - 7 Gate Blink All-in",
     description:
-      "Detected if Blink is researched by 9:00 AND 6+ Gateways exist by 9:00 AND the 5th Gateway went down BEFORE the 3rd Nexus -- a heavy multi-Gate Blink all-in. A 3rd Nexus taken before the 5th Gateway means the build is 3-base macro and is excluded from this label.",
+      "Detected if Blink is researched by 9:00 AND 6+ Gateways exist by 9:00 AND the 5th Gateway was STARTED before the 3rd Nexus was STARTED -- a heavy multi-Gate Blink all-in. \"Taken\" the 3rd Nexus means construction was initiated, not finished: a player can drop the 3rd Nexus and add Gateways while it is still building and those Gateways are still macro reinforcement, not all-in production. The build is excluded if the 3rd Nexus broke ground before the 5th Gateway.",
   },
   {
     race: "Protoss",

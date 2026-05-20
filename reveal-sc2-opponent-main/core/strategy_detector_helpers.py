@@ -245,6 +245,132 @@ def count_real_units(
     return valid
 
 
+# =========================================================
+# BUILDING-START-TIME HELPERS
+# =========================================================
+# event_extractor.py emits TWO events for each Protoss / Terran building
+# the player constructs: subtype="init" when construction starts (the
+# UnitInitEvent fires when a worker drops the foundation / warp-in
+# begins) and subtype="born" when construction completes (~build_time
+# later). Plus subtype="morph" for in-place morphs (Gateway -> WarpGate,
+# Lair, Hive, ...). Build classification cares about WHEN the player
+# committed to a building -- the start time -- not when it finished, so
+# every count / sorted-index / threshold should be computed off init
+# events only.
+#
+# Two failure modes the helpers below prevent:
+#
+#   1. Over-counting. A naive `sum(1 for b in buildings if name == X
+#      and time < T)` counts both init AND born events for the same
+#      building, so 3 Gateways completed by 9:00 register as 6 events.
+#      Thresholds like `gate_count_6min >= 6` would then fire on as
+#      little as ~3 actual gates.
+#
+#   2. Finish-time leakage on sorted-index access. A naive
+#      `sorted([b["time"] for b in buildings if name == "Nexus"])[2]`
+#      can resolve to a 2nd Nexus's BORN time rather than the 3rd
+#      Nexus's INIT time when the 3rd is late (born of the 2nd at ~370
+#      slots between init of the 2nd at ~270 and init of the 3rd at
+#      ~500). A rule comparing "5th gateway started < 3rd nexus
+#      taken" then compares against the 2nd Nexus's finish, not the
+#      3rd Nexus's start.
+#
+# Pre-placed main town hall (Nexus / CommandCenter / Hatchery): only
+# emits a UnitBornEvent at t=0 in real replays (no UnitInitEvent for
+# game-placed units). Test fixtures sometimes model it as a t=0 init
+# event. `start_times_excluding_main` filters t > 0 to normalise both
+# shapes to the same expansion-only list -- so index-1 is always the
+# 3rd base (= 2nd expansion).
+#
+# `subtype` fallback: events created by older test fixtures or by code
+# paths that don't carry a subtype default to "init" so they count as
+# starts. Real-replay events always carry an explicit subtype.
+
+MAIN_TOWN_HALLS = ("Nexus", "CommandCenter", "Hatchery")
+_START_SUBTYPES = ("init", "morph")
+
+
+def _is_start_event(b: Dict) -> bool:
+    """True if `b` is a construction-START event.
+
+    UnitInitEvent ("init") fires when a worker drops the foundation.
+    UnitTypeChangeEvent ("morph") fires for in-place morphs (Gateway ->
+    WarpGate, Lair, Hive, GreaterSpire, Orbital, Planetary) -- the morph
+    event IS the start of the new building (there is no later "born"
+    twin), so it counts as a start too. Events with no `subtype` field
+    default to "init" so test fixtures that omit it continue to work.
+    """
+    return b.get("subtype", "init") in _START_SUBTYPES
+
+
+def start_times(buildings: List[Dict], name: str) -> List[float]:
+    """Return sorted construction-START times for buildings of `name`.
+
+    Filters out subtype="born" (construction-completed) events so the
+    count / sorted-index resolves to actual building starts rather than
+    the same building's completion event firing ~build_time later.
+    """
+    return sorted(
+        b["time"] for b in buildings
+        if b["name"] == name and _is_start_event(b)
+    )
+
+
+def start_times_excluding_main(buildings: List[Dict], name: str) -> List[float]:
+    """Sorted construction-START times for a town-hall name, excluding
+    the pre-placed main at t=0.
+
+    Use for "the Nth expansion" / "the 3rd Nexus is the 2nd expansion"
+    style rules where the pre-placed main should not occupy index 0.
+    """
+    return [t for t in start_times(buildings, name) if t > 0]
+
+
+def count_started_before(buildings: List[Dict], name: str, time_limit: float) -> int:
+    """Count distinct buildings of `name` whose construction was
+    STARTED before `time_limit`.
+    """
+    return sum(
+        1 for b in buildings
+        if b["name"] == name and _is_start_event(b) and b["time"] < time_limit
+    )
+
+
+def nth_base_start(buildings: List[Dict], name: str, n: int) -> float:
+    """Return the START time of the player's n-th town hall of `name`,
+    counting the pre-placed main as base #1.
+
+    Examples (Nexus):
+        n=1 -> main (returns 0 sentinel if any Nexus event exists)
+        n=2 -> natural / 1st expansion (= start_times_excluding_main[0])
+        n=3 -> 3rd Nexus      (= start_times_excluding_main[1])
+
+    Returns 9999 if the player has not started an n-th base.
+    """
+    if n < 1:
+        return 9999
+    if n == 1:
+        return 0 if any(b["name"] == name for b in buildings) else 9999
+    expansions = start_times_excluding_main(buildings, name)
+    idx = n - 2
+    return expansions[idx] if 0 <= idx < len(expansions) else 9999
+
+
+def base_count_at(buildings: List[Dict], name: str, time_limit: float = 9999) -> int:
+    """Count town halls of `name` STARTED by `time_limit`, including the
+    pre-placed main (which is treated as present at t=0 if any event for
+    `name` exists in the buildings list).
+    """
+    expansions = sum(
+        1 for b in buildings
+        if b["name"] == name
+        and _is_start_event(b)
+        and 0 < b["time"] <= time_limit
+    )
+    has_main = any(b["name"] == name for b in buildings)
+    return (1 if has_main else 0) + expansions
+
+
 def _composition_fallback_name(race: str, enemy_events: List[Dict]) -> str:
     """Derive a meaningful name from the dominant unit composition.
 
@@ -324,6 +450,12 @@ class DetectionContext:
         )
 
     def building_time(self, name: str) -> float:
+        """Earliest event time for buildings of `name`. For player-built
+        structures this is the construction-start (UnitInitEvent) time
+        because init always precedes born. For the pre-placed main in
+        real replays the only event is "born" at t=0, which is still
+        the correct "when did this exist" answer.
+        """
         times = [b["time"] for b in self.buildings if b["name"] == name]
         return min(times) if times else 9999
 
@@ -341,14 +473,8 @@ class DetectionContext:
 
     @property
     def gate_count_6min(self) -> int:
-        return sum(
-            1 for b in self.buildings
-            if b["name"] == "Gateway" and b["time"] < 540
-        )
+        return count_started_before(self.buildings, "Gateway", 540)
 
     @property
     def gate_count_530(self) -> int:
-        return sum(
-            1 for b in self.buildings
-            if b["name"] == "Gateway" and b["time"] < 480
-        )
+        return count_started_before(self.buildings, "Gateway", 480)

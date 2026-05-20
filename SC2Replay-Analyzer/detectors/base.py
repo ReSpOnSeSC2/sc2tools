@@ -113,6 +113,82 @@ UNIT_TECH_PREREQUISITES: Dict[str, List[List[str]]] = {
 }
 
 
+# =========================================================
+# BUILDING-START-TIME HELPERS
+# =========================================================
+# Mirror of strategy_detector_helpers in the reveal-sc2-opponent-main
+# package. event_extractor emits TWO events per Protoss/Terran
+# building (subtype="init" at construction start, subtype="born" at
+# completion ~build_time later) plus subtype="morph" for in-place
+# morphs (Gateway -> WarpGate, Lair, Hive, ...). Build classification
+# keys on the start time, so every count / sorted-index pattern in
+# the detectors below routes through these helpers to avoid double-
+# counting the same building (init + born) and to prevent the
+# 2nd-Nexus's BORN time from masquerading as the 3rd Nexus's INIT
+# time when the 3rd is taken late.
+_START_SUBTYPES = ("init", "morph")
+
+
+def _is_start_event(b: Dict) -> bool:
+    """True if `b` is a construction-START event. Events without a
+    subtype default to "init" so test fixtures that omit it still
+    count as starts."""
+    return b.get("subtype", "init") in _START_SUBTYPES
+
+
+def start_times(buildings: List[Dict], name: str) -> List[float]:
+    """Sorted construction-START times for buildings of `name`."""
+    return sorted(
+        b["time"] for b in buildings
+        if b.get("name") == name and _is_start_event(b)
+    )
+
+
+def start_times_excluding_main(buildings: List[Dict], name: str) -> List[float]:
+    """Sorted construction-START times for a town-hall name, excluding
+    the pre-placed main at t=0 (real replays don't fire an init event
+    for game-placed units; test fixtures sometimes model it as an init
+    at t=0 -- this filter normalises both shapes)."""
+    return [t for t in start_times(buildings, name) if t > 0]
+
+
+def count_started_before(
+    buildings: List[Dict], name: str, time_limit: float
+) -> int:
+    """Count distinct buildings of `name` STARTED before `time_limit`."""
+    return sum(
+        1 for b in buildings
+        if b.get("name") == name and _is_start_event(b) and b.get("time", 9999) < time_limit
+    )
+
+
+def nth_base_start(buildings: List[Dict], name: str, n: int) -> float:
+    """Start time of the player's n-th town hall of `name`, counting
+    the pre-placed main as base #1. Returns 9999 if not yet started."""
+    if n < 1:
+        return 9999
+    if n == 1:
+        return 0 if any(b.get("name") == name for b in buildings) else 9999
+    expansions = start_times_excluding_main(buildings, name)
+    idx = n - 2
+    return expansions[idx] if 0 <= idx < len(expansions) else 9999
+
+
+def base_count_at(
+    buildings: List[Dict], name: str, time_limit: float = 9999
+) -> int:
+    """Count town halls of `name` STARTED by `time_limit`, including
+    the pre-placed main."""
+    expansions = sum(
+        1 for b in buildings
+        if b.get("name") == name
+        and _is_start_event(b)
+        and 0 < b.get("time", 9999) <= time_limit
+    )
+    has_main = any(b.get("name") == name for b in buildings)
+    return (1 if has_main else 0) + expansions
+
+
 def _structures_present_by(
     names: List[str], buildings: List[Dict], by_time: float
 ) -> bool:

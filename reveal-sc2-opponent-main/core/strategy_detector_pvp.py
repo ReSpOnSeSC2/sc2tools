@@ -10,7 +10,13 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .strategy_detector_helpers import DetectionContext
+from .strategy_detector_helpers import (
+    DetectionContext,
+    base_count_at,
+    count_started_before,
+    nth_base_start,
+    start_times,
+)
 
 
 def detect_pvp(ctx: DetectionContext) -> Optional[str]:
@@ -25,23 +31,18 @@ def detect_pvp(ctx: DetectionContext) -> Optional[str]:
     units = ctx.units
     upgrades = ctx.upgrades
 
+    sec_nexus_time = nth_base_start(buildings, "Nexus", 2)
+    total_nexuses = base_count_at(buildings, "Nexus")
+
     # Tightened: a real proxy 2-Gate is committed -- no early
     # natural. Without this guard, ANY gateway that registers
     # near the opponent's main before 4:30 (forward gate during
     # a 4-Gate timing, mis-tagged distance, etc.) was being
     # mis-classified as "Proxy 2 Gate" even on FE-into-X games.
-    _pvp_nexus_times_proxy = sorted(
-        b["time"] for b in buildings if b["name"] == "Nexus"
-    )
-    _pvp_has_early_natural = (
-        len(_pvp_nexus_times_proxy) >= 2
-        and _pvp_nexus_times_proxy[1] < 270
-    )
-    if has_proxy("Gateway", 270, 50) and not _pvp_has_early_natural:
+    if has_proxy("Gateway", 270, 50) and not (sec_nexus_time < 270):
         return "PvP - Proxy 2 Gate"
 
-    nexus_times = sorted([b["time"] for b in buildings if b["name"] == "Nexus"])
-    gate_times = sorted([b["time"] for b in buildings if b["name"] == "Gateway"])
+    gate_times = start_times(buildings, "Gateway")
     # Count gateways that were finished BEFORE the second Nexus
     # started warping in. This is what distinguishes the
     # 1-gate expand (Strange's / standard) from the 2-gate expand
@@ -49,8 +50,8 @@ def detect_pvp(ctx: DetectionContext) -> Optional[str]:
     # only required `len(gate_times) >= 1`, which let any 2+ gate
     # expand fall into the Strange's bucket as long as the first
     # produced unit happened to be a Sentry.
-    if len(nexus_times) >= 2 and nexus_times[1] < 300:
-        second_nexus = nexus_times[1]
+    if sec_nexus_time < 300:
+        second_nexus = sec_nexus_time
         gates_before_expand = sum(1 for t in gate_times if t < second_nexus)
 
         first_unit = next(
@@ -90,14 +91,9 @@ def detect_pvp(ctx: DetectionContext) -> Optional[str]:
         # transitions into a 4-Gate Stalker timing. Must be
         # checked BEFORE the generic "1 Gate Expand" so the
         # 4-Gate signal upgrades the classification.
-        _gate_times_pvp = sorted(
-            b["time"] for b in buildings if b["name"] == "Gateway"
-        )
-        _gate_count_6min = sum(
-            1 for t in _gate_times_pvp if t < 360
-        )
+        _gate_count_6min = count_started_before(buildings, "Gateway", 360)
         _fourth_gate_time = (
-            _gate_times_pvp[3] if len(_gate_times_pvp) >= 4 else 9999
+            gate_times[3] if len(gate_times) >= 4 else 9999
         )
         _PVP_4G_TECH = (
             "Stargate", "RoboticsFacility",
@@ -144,14 +140,13 @@ def detect_pvp(ctx: DetectionContext) -> Optional[str]:
 
     robo_time = building_time("RoboticsFacility")
     twilight_time = building_time("TwilightCouncil")
-    sec_nexus_time = nexus_times[1] if len(nexus_times) >= 2 else 9999
     if robo_time < twilight_time and twilight_time < sec_nexus_time:
         return "PvP - Rail's Blink Stalker (Robo 1st)"
     if has_building("Stargate", 510) and count_units("Phoenix", 510) >= 3:
         return "PvP - Phoenix Style"
     if (
         has_upgrade_substr("Blink", 540)
-        and len(nexus_times) >= 2
+        and total_nexuses >= 2
         and (2 <= gate_count_6min <= 4)
     ):
         return "PvP - Blink Stalker Style"
