@@ -353,10 +353,16 @@ class UserBuildDetector(BaseStrategyDetector):
                     and has_building("RoboticsFacility", 480)):
                 return "PvT - 2 Gate Blink (Fast 3rd Nexus)"
 
-            # DT Drop: needs Dark Shrine for the DTs and Robotics
-            # Facility for the Warp Prism.
-            if (has_building("DarkShrine", 540) and has_building("RoboticsFacility", 600)
-                    and count_units("WarpPrism", 600) >= 1):
+            # DT Drop: tactical opener -- Dark Shrine started EARLY,
+            # at least one real Dark Templar warps in, Warp Prism
+            # transports it across the map. Earlier version fired on
+            # any Dark Shrine + Robo + Warp Prism combo by 10:00 which
+            # mistagged Robo-First builds that added a Dark Shrine
+            # late-game. Mirror of reveal-sc2-opponent-main rule.
+            if (has_building("DarkShrine", 480)
+                    and has_building("RoboticsFacility", 540)
+                    and count_units("WarpPrism", 540) >= 1
+                    and count_units("DarkTemplar", 600) >= 1):
                 return "PvT - DT Drop"
             if has_building("RoboticsFacility", 390):
                 if robo_time < sg_time and robo_time < twilight_time:

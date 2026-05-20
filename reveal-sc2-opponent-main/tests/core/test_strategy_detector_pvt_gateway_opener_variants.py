@@ -449,3 +449,126 @@ def test_seven_gate_blink_allin_blocked_when_gateways_added_during_third_nexus_b
         f"before the 5th Gateway, which marks the build as macro; "
         f"got {result!r}"
     )
+
+
+# -----------------------------------------------------------------------------
+# DT Drop must require an actual Dark Templar, not just the tech buildings
+# -----------------------------------------------------------------------------
+def _robo_first_base() -> List[Dict[str, Any]]:
+    """Standard Robo First opener: Robo is the FIRST tech building, no
+    Twilight, no Stargate. The Warp Prism is for Immortal / Observer
+    drops -- a Robo First's signature unit, not a DT taxi.
+    """
+    return [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),
+        _building("Assimilator", 150),
+        _building("Pylon", 170),
+        _building("RoboticsFacility", 230),       # Robo FIRST
+        _building("Gateway", 280),
+        _unit("Immortal", 360),                   # the Robo's first unit
+        _unit("WarpPrism", 420),                  # for Immortal drops
+        _unit("Immortal", 440),
+    ]
+
+
+def test_robo_first_with_late_dark_shrine_and_warp_prism_is_not_dt_drop():
+    """Reported bug (Tourmaline LE, 2026-05-20, 16:48 game): a normal
+    Robo First build that added a Dark Shrine for late-game DT support
+    and made a Warp Prism for Immortal drops was getting tagged as
+    "PvT - DT Drop." The old rule fired on the three buildings/units
+    combo alone -- without ever checking that an actual DarkTemplar
+    existed. The fix requires a real (non-hallucinated) DT by 10:00
+    AND tightens the Dark Shrine window to 8:00, so a late-game DT
+    tech addition (Shrine started after 8:00) is excluded too.
+    """
+    events = _robo_first_base()
+    events.append(_building("DarkShrine", 530))   # added at 8:50 -- too late
+    # No DarkTemplar units exist anywhere in the events list.
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - DT Drop", (
+        f"Robo-First + late Dark Shrine + Warp Prism (for Immortal "
+        f"drops) + 0 DTs must NOT classify as PvT - DT Drop; "
+        f"got {result!r}"
+    )
+    assert result == "PvT - Robo First", (
+        f"Robo-First should be the natural fall-through label here; "
+        f"got {result!r}"
+    )
+
+
+def test_robo_first_with_early_shrine_but_no_dt_is_not_dt_drop():
+    """Even if the Dark Shrine lands within the 8:00 window, an
+    actual DarkTemplar unit must be on the field by 10:00 for the
+    rule to fire. Without the unit-count guard a build that opened
+    Robo + WarpPrism + (planned-but-cancelled) DT Shrine would still
+    misfire.
+    """
+    events = _robo_first_base()
+    events.append(_building("DarkShrine", 460))   # 7:40 -- within 8:00 window
+    # Still 0 DarkTemplar units -- the player committed but never warped one in.
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - DT Drop", (
+        f"No DarkTemplar unit exists; build must NOT classify as DT "
+        f"Drop on the tech buildings alone; got {result!r}"
+    )
+
+
+def test_canonical_dt_drop_still_classifies():
+    """Canonical DT Drop opener: Dark Shrine in early-mid game (~6:00),
+    Robo + Warp Prism shortly after, and a real DarkTemplar lands on
+    the field around 7:30-8:00 ready to drop. The tightened rule must
+    still fire here -- positive case to prove we didn't over-narrow.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),
+        _building("Gateway", 220),
+        _building("TwilightCouncil", 250),        # DT requires Twilight
+        _building("RoboticsFacility", 320),       # Robo by 5:20 for Warp Prism
+        _building("DarkShrine", 360),             # Dark Shrine at 6:00
+        _unit("WarpPrism", 480),                  # Warp Prism by 8:00
+        _unit("DarkTemplar", 500),                # First DT at 8:20
+        _unit("DarkTemplar", 540),                # Second DT
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - DT Drop", (
+        f"Canonical DT Drop opener (Shrine 6:00, Robo 5:20, Prism 8:00, "
+        f"DTs by 8:20) must still classify as PvT - DT Drop; got "
+        f"{result!r}"
+    )
+
+
+def test_dt_drop_rejects_sentry_hallucinated_dark_templar():
+    """count_units uses the prereq-aware count_real_units helper, so
+    a 'DarkTemplar' event without a Dark Shrine in the buildings list
+    is treated as a Sentry hallucination and doesn't satisfy the
+    >= 1 DT requirement. Without this guard, a Sentry hallucinated DT
+    plus the Dark Shrine + Robo + Prism combo could still misfire."""
+    events = _robo_first_base()
+    events.append(_building("DarkShrine", 460))   # 7:40 -- within window
+    # A "DarkTemplar" event without the prereq being met EARLIER is a
+    # hallucination by definition: the unit appeared before the
+    # required Dark Shrine existed.
+    hallucinated_dt = {
+        "type": "unit", "name": "DarkTemplar", "time": 300,  # 5:00 -- before Shrine
+        "x": 0.0, "y": 0.0,
+    }
+    events.append(hallucinated_dt)
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - DT Drop", (
+        f"Sentry-hallucinated DarkTemplar must NOT satisfy the DT Drop "
+        f"unit-count guard; got {result!r}"
+    )

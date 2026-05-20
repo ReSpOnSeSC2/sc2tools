@@ -91,7 +91,7 @@ BUILD_DEFINITIONS = {
     "PvT - 4 Gate Blink": "Detected if Twilight Council goes BEFORE Robo and Stargate, Blink is researched by 9:00, AND 4+ Gateways exist by 7:30 -- a 4-Gate Blink Stalker timing.",
     "PvT - 3 Gate Blink (Macro)": "Detected if Twilight Council goes BEFORE Robo and Stargate, Blink is researched by 9:00, AND fewer than 4 Gateways exist by 7:30 -- a macro 3-Gate Blink style.",
     "PvT - 2 Gate Blink (Fast 3rd Nexus)": "Detected if Blink is researched by 8:00, the player has taken 3+ Nexuses, exactly 2 Gateways exist by 8:00, AND a Robotics Facility is up by 8:00 -- a fast-3rd 2-Gate Blink style.",
-    "PvT - DT Drop": "Detected if a Dark Shrine is built by 9:00 AND a Robotics Facility is up by 10:00 AND a Warp Prism is on the field by 10:00 -- a Dark Templar drop in PvT.",
+    "PvT - DT Drop": "Detected if a Dark Shrine is started by 8:00 AND a Robotics Facility is up by 9:00 AND a Warp Prism is on the field by 9:00 AND at least one real (non-hallucinated) Dark Templar exists by 10:00 -- a Dark Templar drop in PvT. The DarkTemplar requirement excludes Robo-First builds that add a Dark Shrine for late-game support but never actually warp in a DT to drop.",
     "PvT - Robo First": "Detected if a Robotics Facility is built before 6:30 AND it is the FIRST tech building (before any Stargate or Twilight Council).",
     "PvT - Macro Transition (Unclassified)": "PvT catch-all: the game reached the macro phase but did not match a more specific PvT pattern.",
     "Protoss - Standard Play (Unclassified)": "Catch-all for unclassified Protoss games.",

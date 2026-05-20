@@ -2,6 +2,50 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.7.8
+
+### Fixed — PvT DT Drop requires an actual Dark Templar on the field
+- **User-visible symptom**: a normal Robo First game on Tourmaline LE
+  (2026-05-20, 16:48 game) was getting tagged as `PvT - DT Drop`. The
+  player opened Robotics Facility first, made Warp Prisms for Immortal
+  drops, and added a Dark Shrine later in the game for late-game DT
+  support — but never actually warped in a Dark Templar to drop.
+- **Root cause**: the PvT - DT Drop rule fired on three signals alone
+  (`has_building("DarkShrine", 540) AND has_building("RoboticsFacility", 600)
+  AND count_units("WarpPrism", 600) >= 1`) and never asked "did any
+  actual DarkTemplar exist?" Warp Prisms are heavily used for Immortal
+  drops in Robo First builds, and a Dark Shrine added in the late
+  midgame still satisfied the 9-minute window. So any Robo First with
+  a late Dark Shrine got mistagged.
+- **Fix** in `core/strategy_detector_pvt.py` (and the legacy
+  `SC2Replay-Analyzer/detectors/user.py` mirror — both kept in sync):
+  - Dark Shrine must be STARTED by 8:00 (was 9:00). A real DT-drop
+    opener commits to the Shrine early so the first DT pops by ~8:30
+    and the drop lands by 8:30-9:30.
+  - Robotics Facility must be up by 9:00 (was 10:00).
+  - Warp Prism on the field by 9:00 (was 10:00).
+  - **NEW**: at least one real (non-hallucinated) DarkTemplar by 10:00.
+    `count_units` is prereq-aware so Sentry hallucinations cannot
+    satisfy this — the actual unit has to have a Dark Shrine in the
+    buildings list at its appearance time.
+  - This mirrors the PvZ "DT drop into Archon Drop" rule which has
+    required `count_units("DarkTemplar", 540) >= 3` since the matchup
+    rules first landed.
+- Build-definition catalogs (`core/build_definitions.py`,
+  `data/build_definitions.json`, `apps/web/lib/build-definitions/pvt.ts`)
+  updated to spell out the new conditions in the user-facing rule
+  description.
+- Tests: four new regression cases in
+  `test_strategy_detector_pvt_gateway_opener_variants.py`:
+  - User's reported scenario (Robo First + late Dark Shrine + Warp
+    Prism + 0 DTs) → `PvT - Robo First`, not DT Drop
+  - Early-Shrine + Warp Prism but still 0 DTs → not DT Drop
+  - Canonical DT Drop opener (Shrine 6:00, Robo 5:20, Prism 8:00, DTs
+    by 8:20) → still classifies as DT Drop (positive case)
+  - Sentry-hallucinated DarkTemplar event before the Shrine exists →
+    doesn't satisfy the unit-count guard
+- Full PvT detector suite: 210/210 passing.
+
 ## 0.7.7
 
 ### Fixed — PvT build classification keys on which Twilight upgrade was FIRST, not just "exists by 9:00"

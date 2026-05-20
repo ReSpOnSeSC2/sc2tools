@@ -55,7 +55,7 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - DT Drop",
     description:
-      "Detected if a Dark Shrine is built by 9:00 AND a Robotics Facility is up by 10:00 AND a Warp Prism is on the field by 10:00 -- a Dark Templar drop in PvT.",
+      "Detected if a Dark Shrine is started by 8:00 AND a Robotics Facility is up by 9:00 AND a Warp Prism is on the field by 9:00 AND at least one real (non-hallucinated) Dark Templar exists by 10:00 -- a Dark Templar drop in PvT. The DarkTemplar requirement excludes Robo-First builds that add a Dark Shrine for late-game support but never actually warp in a DT to drop.",
   },
   {
     race: "Protoss",

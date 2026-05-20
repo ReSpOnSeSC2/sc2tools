@@ -227,14 +227,33 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvT - 2 Gate Blink (Fast 3rd Nexus)"
 
-    # DT Drop: needs Dark Shrine for the DTs and Robotics
-    # Facility for the Warp Prism. count_units already enforces
-    # the Robo prereq for WarpPrism, but spelling it out keeps
-    # the rule self-contained.
+    # DT Drop: a tactical opener where the player builds Dark Shrine
+    # EARLY, ships at least one Dark Templar across the map in a Warp
+    # Prism, and drops it in the opponent's base around 7:30-9:00.
+    #
+    # The earlier version of this rule fired on any replay with a Dark
+    # Shrine by 9:00 + Robo by 10:00 + Warp Prism by 10:00 -- which
+    # mistagged a "normal Robo First" game on Tourmaline LE
+    # (2026-05-20, 16:48 game) that built a Robo for Immortal drops
+    # and added a Dark Shrine later for late-game DT support but
+    # never actually warped in a DT to drop. The rule has to confirm
+    # the player ACTUALLY went DT, not just built the tech.
+    #
+    # Tightened semantics (mirrors the PvZ "DT drop into Archon Drop"
+    # rule which already requires `count_units("DarkTemplar", 540) >= 3`):
+    #   * Dark Shrine started by 8:00 -- a real DT-drop opener
+    #     commits to the Shrine early so the first DT pops by ~8:30
+    #     and the drop lands by 8:30-9:30. A 9:00 Shrine is too late
+    #     to be the opener's intent.
+    #   * Robotics Facility by 9:00 (was 10:00).
+    #   * Warp Prism on the field by 9:00 (was 10:00).
+    #   * NEW: at least one real DarkTemplar by 10:00. count_units is
+    #     prereq-aware so Sentry hallucinations cannot satisfy this.
     if (
-        has_building("DarkShrine", 540)
-        and has_building("RoboticsFacility", 600)
-        and count_units("WarpPrism", 600) >= 1
+        has_building("DarkShrine", 480)
+        and has_building("RoboticsFacility", 540)
+        and count_units("WarpPrism", 540) >= 1
+        and count_units("DarkTemplar", 600) >= 1
     ):
         return "PvT - DT Drop"
     # Robo First is a Stargate-free opener — Robotics Facility
