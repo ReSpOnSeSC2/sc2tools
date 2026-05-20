@@ -86,59 +86,99 @@ export function BuildsTab() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
-            {/* ``table-fixed`` + explicit colgroup widths so the four
-                numeric cols don't grab equal shares of leftover space
-                and push WR off the right edge — see StrategiesTabBuildVs
-                for the same treatment. */}
-            <table className="w-full table-fixed text-sm">
-              <colgroup>
-                <col />
-                <col style={{ width: "3.5rem" }} />
-                <col style={{ width: "3.5rem" }} />
-                <col style={{ width: "4.5rem" }} />
-                <col style={{ width: "4.5rem" }} />
-                <col style={{ width: "8rem" }} />
-              </colgroup>
-              <thead className="bg-bg-elevated">
-                <tr>
-                  <SortableTh col="name" label="Build" {...sort} />
-                  <SortableTh col="wins" label="W" {...sort} align="right" />
-                  <SortableTh col="losses" label="L" {...sort} align="right" />
-                  <SortableTh col="total" label="Games" {...sort} align="right" />
-                  <SortableTh col="winRate" label="WR" {...sort} align="right" />
-                  <th className="px-3 py-2 text-left text-[11px] uppercase text-text-dim">
-                    Trend
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((b) => (
-                  <tr
-                    key={b.name}
-                    className="cursor-pointer border-t border-border hover:bg-accent/10"
+          <>
+            {/* Mobile (< md): stacked cards per row so the build name
+                stays fully readable. The desktop table-fixed layout
+                below keeps the four numeric columns from grabbing
+                leftover space and pushing WR off-screen, but on a
+                phone viewport even the build column itself collapses,
+                so swap to a vertical card on small screens. */}
+            <ul className="space-y-2 md:hidden">
+              {rows.map((b) => (
+                <li key={b.name}>
+                  <button
+                    type="button"
                     onClick={() => setEditing(b.name)}
+                    className="flex w-full flex-col gap-1.5 rounded-lg border border-border bg-bg-surface px-3 py-2 text-left transition hover:bg-accent/10"
                   >
-                    <td className="truncate px-3 py-1.5 text-text" title={b.name}>
+                    <div className="text-sm font-semibold text-text">
                       {b.name}
-                    </td>
-                    <td className="px-2 py-1.5 text-right text-success">{b.wins}</td>
-                    <td className="px-2 py-1.5 text-right text-danger">{b.losses}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{b.total}</td>
-                    <td
-                      className="px-2 py-1.5 text-right tabular-nums"
-                      style={{ color: wrColor(b.winRate, b.total) }}
-                    >
-                      {pct1(b.winRate)}
-                    </td>
-                    <td className="px-3 py-1.5">
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
+                      <span className="text-success">{b.wins}W</span>
+                      <span className="text-danger">{b.losses}L</span>
+                      <span className="text-text-muted">
+                        {b.total} games
+                      </span>
+                      <span
+                        className="font-semibold"
+                        style={{ color: wrColor(b.winRate, b.total) }}
+                      >
+                        {pct1(b.winRate)}
+                      </span>
+                    </div>
+                    <div className="w-full">
                       <WrBar wins={b.wins} losses={b.losses} />
-                    </td>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            <div className="hidden overflow-x-auto md:block">
+              {/* ``table-fixed`` + explicit colgroup widths so the four
+                  numeric cols don't grab equal shares of leftover space
+                  and push WR off the right edge — see StrategiesTabBuildVs
+                  for the same treatment. */}
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col />
+                  <col style={{ width: "3.5rem" }} />
+                  <col style={{ width: "3.5rem" }} />
+                  <col style={{ width: "4.5rem" }} />
+                  <col style={{ width: "4.5rem" }} />
+                  <col style={{ width: "8rem" }} />
+                </colgroup>
+                <thead className="bg-bg-elevated">
+                  <tr>
+                    <SortableTh col="name" label="Build" {...sort} />
+                    <SortableTh col="wins" label="W" {...sort} align="right" />
+                    <SortableTh col="losses" label="L" {...sort} align="right" />
+                    <SortableTh col="total" label="Games" {...sort} align="right" />
+                    <SortableTh col="winRate" label="WR" {...sort} align="right" />
+                    <th className="px-3 py-2 text-left text-[11px] uppercase text-text-dim">
+                      Trend
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {rows.map((b) => (
+                    <tr
+                      key={b.name}
+                      className="cursor-pointer border-t border-border hover:bg-accent/10"
+                      onClick={() => setEditing(b.name)}
+                    >
+                      <td className="truncate px-3 py-1.5 text-text" title={b.name}>
+                        {b.name}
+                      </td>
+                      <td className="px-2 py-1.5 text-right text-success">{b.wins}</td>
+                      <td className="px-2 py-1.5 text-right text-danger">{b.losses}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{b.total}</td>
+                      <td
+                        className="px-2 py-1.5 text-right tabular-nums"
+                        style={{ color: wrColor(b.winRate, b.total) }}
+                      >
+                        {pct1(b.winRate)}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <WrBar wins={b.wins} losses={b.losses} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Card>
 
