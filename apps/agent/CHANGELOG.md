@@ -2,6 +2,52 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.7.7
+
+### Fixed — PvT build classification keys on which Twilight upgrade was FIRST, not just "exists by 9:00"
+- **User-visible symptom**: a 3-base PvT macro game where the player
+  researched Blink FIRST and Charge later (both before 9:00, no
+  Stargate) was getting tagged `PvT - Standard Charge Macro`.
+  Reported on the Taito Citadel LE / Ruby Rock LE replays from
+  2026-05-19 — the Macro Breakdown showed Blink in the upgrade
+  roster but the matchup label said "Standard Charge Macro." The
+  build is a Blink macro game that happens to add Charge late; the
+  label has to reflect which upgrade the player committed to first.
+- **Root cause**: three PvT rules in
+  `core/strategy_detector_pvt.py` keyed only on
+  `has_upgrade_substr("Charge"|"Blink", 540)` ("does upgrade X exist
+  by 9:00?") without checking which upgrade was the FIRST one
+  researched out of the Twilight Council. A Blink-first /
+  Charge-later replay matched the Standard Charge Macro signature
+  (Charge exists + 3+ Nexuses + no Stargate) and the rule fired
+  before the Blink rule below it ever got a chance.
+- **Fix** mirrors the first-upgrade ordering pattern the
+  `Stargate-into-Charge / Glaives / Blink` rules and the
+  `3 Gate Charge Opener` rule already use. The PvT detector now
+  hoists the first-Twilight-upgrade calculation up to the top of the
+  matchup block (it was previously only computed for 3 Gate Charge
+  Opener) and three rules consume it:
+  - **PvT - Standard Charge Macro** now requires Charge to be the
+    FIRST Twilight upgrade. A Blink-first build correctly falls
+    through to `3 Gate Blink (Macro)` / `4 Gate Blink` instead.
+  - **PvT - 7 Gate Blink All-in** now requires Blink to be the FIRST
+    Twilight upgrade. A Charge-first / Glaives-first build that
+    later adds Blink with 6+ Gateways on 2 bases is a hybrid timing
+    push, not a Blink all-in.
+  - **PvT - 8 Gate Charge All-in** now requires Charge to be the
+    FIRST Twilight upgrade. A Blink-first build with 7+ Gates on 2
+    bases is not a Chargelot all-in.
+- The legacy parallel detector
+  (`SC2Replay-Analyzer/detectors/user.py`) carries the same three
+  guards now — both implementations agree.
+- Tests: three new regression cases added to
+  `test_strategy_detector_pvt_gateway_opener_variants.py`. The
+  user's specific scenario (Blink first, Charge later, 3 Nexuses,
+  no Stargate, Twilight-first) now classifies as
+  `PvT - 3 Gate Blink (Macro)`; the inverse (Charge first, Blink
+  later, same shape) still classifies as `PvT - Standard Charge
+  Macro`. Full PvT detector suite: 206/206 passing.
+
 ## 0.7.6
 
 ### Fixed — Build classification uses building START times, not finish times

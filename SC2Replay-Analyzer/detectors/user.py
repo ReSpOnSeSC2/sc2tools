@@ -266,6 +266,20 @@ class UserBuildDetector(BaseStrategyDetector):
             ta_time = building_time("TemplarArchive")
             gate_count_730 = count_started_before(buildings, "Gateway", 450)
 
+            # First-Twilight-upgrade hoist: needed by Standard Charge
+            # Macro / 7-Gate Blink / 8-Gate Charge / 3-Gate Charge Opener
+            # to enforce "which upgrade was started FIRST" rather than
+            # the loose "exists by 9:00" pattern that mistagged
+            # Blink-first / Charge-later macro games as Standard Charge
+            # Macro. Keep in sync with reveal-sc2-opponent-main's
+            # strategy_detector_pvt.detect_pvt.
+            pvt_glaive_time = upgrade_time("AdeptPiercing", "Glaive")
+            pvt_blink_time = upgrade_time("Blink")
+            pvt_charge_time = upgrade_time("Charge")
+            pvt_first_twilight_upgrade = min(
+                pvt_glaive_time, pvt_blink_time, pvt_charge_time,
+            )
+
             if has_proxy("Stargate", sec_nexus_time, 50):
                 return "PvT - Proxy Void Ray/Stargate"
             # Phoenix builds: require an actual Stargate. A Sentry can
@@ -286,32 +300,46 @@ class UserBuildDetector(BaseStrategyDetector):
             # not finished -- a player can drop the 3rd Nexus and
             # keep adding Gateways while it is still building (~100s
             # Nexus build time) and those Gateways are still macro
-            # reinforcement, not all-in production.
+            # reinforcement, not all-in production. Blink must also be
+            # the FIRST Twilight upgrade -- a Charge-first / Glaives-
+            # first build that later picks up Blink with 6+ Gates on
+            # 2 bases is a hybrid, not a Blink all-in.
             gateway_starts = start_times(buildings, "Gateway")
             fifth_gateway_started = (
                 gateway_starts[4] if len(gateway_starts) >= 5 else 9999
             )
             if (has_upgrade_substr("Blink", 540) and gate_count_6min >= 6
-                    and fifth_gateway_started < third_nexus_time):
+                    and fifth_gateway_started < third_nexus_time
+                    and pvt_blink_time == pvt_first_twilight_upgrade):
                 return "PvT - 7 Gate Blink All-in"
-            if has_upgrade_substr("Charge", 540) and gate_count_730 >= 7 and total_nexuses < 3:
+            if (has_upgrade_substr("Charge", 540) and gate_count_730 >= 7
+                    and total_nexuses < 3
+                    and pvt_charge_time == pvt_first_twilight_upgrade):
                 return "PvT - 8 Gate Charge All-in"
             # 2 Base Templar requires an actual Templar Archives.
             if (has_building("TemplarArchive", 9999) and ta_time < third_nexus_time
                     and (4 <= gate_count_730 <= 6)):
                 return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
-            if has_upgrade_substr("Charge", 540) and total_nexuses >= 3:
+            # Standard Charge Macro is a pure Gateway / Twilight macro
+            # game. Charge must also be the FIRST Twilight upgrade --
+            # a Blink-first / Charge-after 3-base build matches on the
+            # Charge-existence + 3-Nexus signature alone and gets
+            # mistagged here without the ordering guard. The no-
+            # Stargate guard keeps Stargate-into-Charge / Phoenix-into-
+            # Robo / Stargate Opener hybrids out of this bucket. Mirror
+            # of reveal-sc2-opponent-main's Standard Charge Macro rule.
+            if (has_upgrade_substr("Charge", 540)
+                    and total_nexuses >= 3
+                    and not has_building("Stargate", 9999)
+                    and pvt_charge_time == pvt_first_twilight_upgrade):
                 return "PvT - Standard Charge Macro"
             # Charge must be the FIRST Twilight upgrade. Without this
             # ordering guard, a Blink-first / Charge-after build with
             # Twilight before Robo+SG matches both this rule and the
             # Blink rule below, and the Charge rule wins by file order.
-            pvt_first_twilight_upgrade = upgrade_time(
-                "Charge", "Blink", "AdeptPiercing", "Glaive",
-            )
             if (has_upgrade_substr("Charge", 540)
                     and twilight_time < robo_time and twilight_time < sg_time
-                    and upgrade_time("Charge") == pvt_first_twilight_upgrade):
+                    and pvt_charge_time == pvt_first_twilight_upgrade):
                 return "PvT - 3 Gate Charge Opener"
 
             if twilight_time < robo_time and twilight_time < sg_time and has_upgrade_substr("Blink", 540):
