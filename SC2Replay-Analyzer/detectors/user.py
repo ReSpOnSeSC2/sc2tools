@@ -342,21 +342,37 @@ class UserBuildDetector(BaseStrategyDetector):
                     and pvt_charge_time == pvt_first_twilight_upgrade):
                 return "PvT - 3 Gate Charge Opener"
 
+            # X Gate Blink rules: gate count is the number of Gateways
+            # STARTED BEFORE the 3rd Nexus -- macro-vs-aggression
+            # commitment, not arbitrary 7:30 threshold. third_nexus_time
+            # defaults to 9999 so 2-base Blink builds still classify
+            # against their total Gateway count.
+            gates_before_third_nexus = count_started_before(
+                buildings, "Gateway", third_nexus_time,
+            )
             if twilight_time < robo_time and twilight_time < sg_time and has_upgrade_substr("Blink", 540):
-                if gate_count_730 >= 4:
+                if gates_before_third_nexus >= 4:
                     return "PvT - 4 Gate Blink"
-                else:
+                if gates_before_third_nexus == 3:
                     return "PvT - 3 Gate Blink (Macro)"
 
             if (has_upgrade_substr("Blink", 480) and total_nexuses >= 3
-                    and count_started_before(buildings, "Gateway", 480) == 2
+                    and gates_before_third_nexus == 2
                     and has_building("RoboticsFacility", 480)):
                 return "PvT - 2 Gate Blink (Fast 3rd Nexus)"
 
-            # DT Drop: needs Dark Shrine for the DTs and Robotics
-            # Facility for the Warp Prism.
-            if (has_building("DarkShrine", 540) and has_building("RoboticsFacility", 600)
-                    and count_units("WarpPrism", 600) >= 1):
+            # DT Drop: fast tactical opener calibrated against a real
+            # PvT DT Drop replay (Peruano, Taito Citadel LE 2026-05-11)
+            # with ~30s buffer per signal. Observed timings: Dark
+            # Shrine 3:13, Robo 3:32, first DT 3:51, Warp Prism 4:11.
+            # Cutoffs (3:45 / 4:00 / 4:30 / 4:45) are observed + ~30s.
+            # Earlier 8-10 minute windows let in Robo First builds
+            # with late Dark Shrines for harass; the tighter cutoffs
+            # match the opener's intent.
+            if (has_building("DarkShrine", 225)
+                    and has_building("RoboticsFacility", 240)
+                    and count_units("WarpPrism", 285) >= 1
+                    and count_units("DarkTemplar", 270) >= 1):
                 return "PvT - DT Drop"
             if has_building("RoboticsFacility", 390):
                 if robo_time < sg_time and robo_time < twilight_time:

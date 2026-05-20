@@ -2,6 +2,108 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.7.8
+
+### Changed — PvT DT Drop windows calibrated against a real replay; Blink rules count Gateways before the 3rd Nexus
+- **DT Drop calibrated to a real reference replay.** The 0.7.8 first
+  pass tightened the DT Drop rule to require an actual DarkTemplar
+  (no more Robo First mistagging) but kept loose 8-10 minute windows
+  on Dark Shrine / Robo / Warp Prism. A reviewer provided a real PvT
+  DT Drop replay (Peruano, Taito Citadel LE, 2026-05-11) whose
+  observed timings are MUCH faster than that:
+  ```
+  Dark Shrine started   3:13
+  RoboticsFacility      3:32
+  First DarkTemplar     3:51
+  WarpPrism on field    4:11
+  ```
+  The rule is now calibrated to each observed signal + ~30 seconds
+  of buffer:
+  ```
+  has_building("DarkShrine", 225)         # was 480 (8:00)
+  has_building("RoboticsFacility", 240)   # was 540 (9:00)
+  count_units("DarkTemplar", 270) >= 1    # was 600 (10:00)
+  count_units("WarpPrism", 285) >= 1      # was 540 (9:00)
+  ```
+  Slower-tech builds that pick up DT tech later in the midgame don't
+  fit the fast-tactical DT Drop signature and now fall through to
+  `PvT - Robo First` / `Macro Transition (Unclassified)` instead.
+- **Blink rules count Gateways STARTED before the 3rd Nexus**, not
+  Gateways by a fixed 7:30 timer. The "X Gate Blink" label names
+  itself after the player's macro-vs-aggression commitment — how
+  many Gateways went down BEFORE the 3rd Nexus broke ground. A fast
+  3rd Nexus that's followed by more Gateways post-expansion is a
+  3 Gate Blink macro game (only 3 Gates pre-3rd), not a 4 Gate Blink.
+  A delayed 3rd Nexus with 4+ Gateways pushed out pre-expansion IS a
+  4 Gate Blink even if no further Gateways follow.
+  ```
+  gates_before_third_nexus = count_started_before(
+      buildings, "Gateway", third_nexus_time,
+  )
+  # 4 Gate Blink:           gates_before_third_nexus >= 4
+  # 3 Gate Blink (Macro):   gates_before_third_nexus == 3
+  # 2 Gate Blink (Fast 3rd): gates_before_third_nexus == 2 (+ Robo + 3+ Nexuses)
+  ```
+  `third_nexus_time` defaults to 9999 when no 3rd Nexus is ever
+  taken, so 2-base Blink builds still classify against their total
+  Gateway count — and the 7 Gate Blink All-in rule above keeps
+  catching mass-gate 2-base aggression first.
+- Both the modular `core/strategy_detector_pvt.py` detector and the
+  legacy `SC2Replay-Analyzer/detectors/user.py` mirror carry the
+  new cutoffs.
+- Build-definition catalogs (`core/build_definitions.py`,
+  `data/build_definitions.json`, `apps/web/lib/build-definitions/pvt.ts`)
+  updated with the new timing thresholds and the gates-before-3rd-Nexus
+  wording.
+- Tests: three new Blink-gate-counting regression cases pin (a) fast
+  3rd Nexus + 3 gates pre-expansion + 5 gates total → 3 Gate Blink,
+  (b) delayed 3rd + 4 gates pre-expansion → 4 Gate Blink, (c) 2 gates
+  pre-expansion + Robo + 3 Nexuses + Blink → 2 Gate Blink (Fast 3rd
+  Nexus). The canonical DT Drop test is rebuilt against the Peruano
+  reference replay's actual timings. Full PvT suite: 213/213 passing.
+
+### Fixed — PvT DT Drop requires an actual Dark Templar on the field
+- **User-visible symptom**: a normal Robo First game on Tourmaline LE
+  (2026-05-20, 16:48 game) was getting tagged as `PvT - DT Drop`. The
+  player opened Robotics Facility first, made Warp Prisms for Immortal
+  drops, and added a Dark Shrine later in the game for late-game DT
+  support — but never actually warped in a Dark Templar to drop.
+- **Root cause**: the PvT - DT Drop rule fired on three signals alone
+  (`has_building("DarkShrine", 540) AND has_building("RoboticsFacility", 600)
+  AND count_units("WarpPrism", 600) >= 1`) and never asked "did any
+  actual DarkTemplar exist?" Warp Prisms are heavily used for Immortal
+  drops in Robo First builds, and a Dark Shrine added in the late
+  midgame still satisfied the 9-minute window. So any Robo First with
+  a late Dark Shrine got mistagged.
+- **Fix** in `core/strategy_detector_pvt.py` (and the legacy
+  `SC2Replay-Analyzer/detectors/user.py` mirror — both kept in sync):
+  - Dark Shrine must be STARTED by 8:00 (was 9:00). A real DT-drop
+    opener commits to the Shrine early so the first DT pops by ~8:30
+    and the drop lands by 8:30-9:30.
+  - Robotics Facility must be up by 9:00 (was 10:00).
+  - Warp Prism on the field by 9:00 (was 10:00).
+  - **NEW**: at least one real (non-hallucinated) DarkTemplar by 10:00.
+    `count_units` is prereq-aware so Sentry hallucinations cannot
+    satisfy this — the actual unit has to have a Dark Shrine in the
+    buildings list at its appearance time.
+  - This mirrors the PvZ "DT drop into Archon Drop" rule which has
+    required `count_units("DarkTemplar", 540) >= 3` since the matchup
+    rules first landed.
+- Build-definition catalogs (`core/build_definitions.py`,
+  `data/build_definitions.json`, `apps/web/lib/build-definitions/pvt.ts`)
+  updated to spell out the new conditions in the user-facing rule
+  description.
+- Tests: four new regression cases in
+  `test_strategy_detector_pvt_gateway_opener_variants.py`:
+  - User's reported scenario (Robo First + late Dark Shrine + Warp
+    Prism + 0 DTs) → `PvT - Robo First`, not DT Drop
+  - Early-Shrine + Warp Prism but still 0 DTs → not DT Drop
+  - Canonical DT Drop opener (Shrine 6:00, Robo 5:20, Prism 8:00, DTs
+    by 8:20) → still classifies as DT Drop (positive case)
+  - Sentry-hallucinated DarkTemplar event before the Shrine exists →
+    doesn't satisfy the unit-count guard
+- Full PvT detector suite: 210/210 passing.
+
 ## 0.7.7
 
 ### Fixed — PvT build classification keys on which Twilight upgrade was FIRST, not just "exists by 9:00"
