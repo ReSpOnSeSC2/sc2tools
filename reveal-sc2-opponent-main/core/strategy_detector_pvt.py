@@ -129,6 +129,13 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # still macro reinforcement, not all-in production. Without this
     # guard, a 3-base Blink macro that ends up with 6-8 Gateways gets
     # mistagged as a 7-Gate Blink All-in.
+    #
+    # Blink-FIRST ordering guard: an "all-in" label should hinge on
+    # which upgrade was committed to first, not on whether Blink ever
+    # finished researching. A Charge-first or Glaives-first build that
+    # later picks up Blink with 6+ Gates on 2 bases is a hybrid timing
+    # / Adept push, not a Blink all-in. Mirror the same first-upgrade
+    # pattern Standard Charge Macro / 3 Gate Charge Opener use.
     gateway_starts = start_times(buildings, "Gateway")
     fifth_gateway_started = (
         gateway_starts[4] if len(gateway_starts) >= 5 else 9999
@@ -137,9 +144,20 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         has_upgrade_substr("Blink", 540)
         and gate_count_6min >= 6
         and fifth_gateway_started < third_nexus_time
+        and pvt_blink_time == pvt_first_twilight_upgrade
     ):
         return "PvT - 7 Gate Blink All-in"
-    if has_upgrade_substr("Charge", 540) and gate_count_730 >= 7 and total_nexuses < 3:
+    # Charge-FIRST ordering guard mirrors the 7-Gate-Blink rule above:
+    # a Blink-first / Glaives-first build that later researches Charge
+    # with 7+ Gateways on 2 bases is not a Charge all-in -- it is a
+    # hybrid that committed to Stalkers / Adepts first. Require Charge
+    # to be the first Twilight upgrade.
+    if (
+        has_upgrade_substr("Charge", 540)
+        and gate_count_730 >= 7
+        and total_nexuses < 3
+        and pvt_charge_time == pvt_first_twilight_upgrade
+    ):
         return "PvT - 8 Gate Charge All-in"
     # 2 Base Templar requires a Templar Archives: HT / Storm play
     # is impossible without it. building_time returns 9999 when
@@ -163,10 +181,19 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # harass with no Phoenix + Robo-AFTER-Twilight + Charge) used
     # to fall through to this rule. Explicit guard keeps the
     # label honest.
+    #
+    # Charge must also be the FIRST Twilight upgrade. Without
+    # this ordering guard, a Blink-first / Charge-after 3-base
+    # build matches on the Charge-existence + 3-Nexus + no-SG
+    # signature alone and gets mistagged here -- it is really a
+    # 3 Gate Blink (Macro) game that happened to research Charge
+    # second. Mirror the same first-upgrade pattern the
+    # Stargate-into-X and 3 Gate Charge Opener rules use.
     if (
         has_upgrade_substr("Charge", 540)
         and total_nexuses >= 3
         and not has_building("Stargate", 9999)
+        and pvt_charge_time == pvt_first_twilight_upgrade
     ):
         return "PvT - Standard Charge Macro"
     # Charge must be the FIRST Twilight upgrade for this label. Without

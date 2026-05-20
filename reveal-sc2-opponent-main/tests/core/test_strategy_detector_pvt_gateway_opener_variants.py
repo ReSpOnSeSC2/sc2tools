@@ -179,6 +179,105 @@ def test_charge_with_third_nexus_graduates_to_standard_charge_macro():
     )
 
 
+def test_blink_first_then_charge_on_three_bases_classifies_as_blink_not_charge_macro():
+    """Reported bug (Taito Citadel / Ruby Rock screenshots, 2026-05-19):
+    a 3-base macro game where Blink is researched FIRST and Charge is
+    researched later (both before 9:00) used to fall through to the
+    Standard Charge Macro rule because that rule only checked
+    ``has_upgrade_substr("Charge", 540) + 3+ Nexuses + no Stargate``,
+    ignoring which upgrade was started first. The first-Twilight-
+    upgrade guard added to Standard Charge Macro must keep the build
+    from mistagging -- Blink-first on 3 bases must classify as one of
+    the Blink labels, mirroring the Charge-vs-Blink ordering enforced
+    on the 3 Gate Charge Opener rule below it.
+    """
+    events = _twilight_first_base()
+    events.append(_building("Nexus", 380))      # 3rd Nexus -- macro signal
+    events.append(_upgrade("BlinkTech", 340))   # Blink FIRST
+    events.append(_upgrade("Charge", 500))      # Charge later, still by 9:00
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert "Blink" in result, (
+        f"Blink-first on 3 bases must classify as a Blink build, not "
+        f"Standard Charge Macro; got {result!r}"
+    )
+    assert result != "PvT - Standard Charge Macro", (
+        f"Standard Charge Macro must require Charge to be the first "
+        f"Twilight upgrade; got {result!r}"
+    )
+
+
+# -----------------------------------------------------------------------------
+# All-in rules must require the matching upgrade to be the FIRST Twilight upgrade
+# -----------------------------------------------------------------------------
+def test_seven_gate_blink_allin_requires_blink_to_be_first_upgrade():
+    """7 Gate Blink All-in keys on a 2-base 6+ Gateway + Blink commitment.
+    A player who researched Charge or Glaives first and only researched
+    Blink LATER is not committing to a Blink all-in -- the upgrade
+    ordering identifies the build. Without this guard, an Adept-Glaives
+    push that picked up Blink late used to flip the label to a Blink
+    all-in.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),                # natural -- no 3rd
+        _building("Assimilator", 150),
+        _building("Pylon", 170),
+        _building("Gateway", 240),
+        _building("TwilightCouncil", 260),
+        _building("Gateway", 300),
+        _building("Gateway", 340),
+        _building("Gateway", 380),
+        _building("Gateway", 420),
+        _building("Gateway", 460),              # 7 Gateways by 9:00
+        _upgrade("Charge", 320),                # Charge FIRST off Twilight
+        _upgrade("BlinkTech", 500),             # Blink later
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - 7 Gate Blink All-in", (
+        f"Charge-first build must NOT classify as 7 Gate Blink All-in; "
+        f"got {result!r}"
+    )
+
+
+def test_eight_gate_charge_allin_requires_charge_to_be_first_upgrade():
+    """8 Gate Charge All-in keys on a 2-base 7+ Gateway + Charge
+    commitment. A Blink-first / Charge-later build with the same
+    Gateway count is not a Chargelot all-in -- the player committed to
+    Stalkers first.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),                # natural -- no 3rd
+        _building("Assimilator", 150),
+        _building("Pylon", 170),
+        _building("Gateway", 200),
+        _building("TwilightCouncil", 230),
+        _building("Gateway", 280),
+        _building("Gateway", 320),
+        _building("Gateway", 360),
+        _building("Gateway", 400),
+        _building("Gateway", 440),              # 8 Gateways by 7:30
+        _upgrade("BlinkTech", 280),             # Blink FIRST off Twilight
+        _upgrade("Charge", 470),                # Charge later
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - 8 Gate Charge All-in", (
+        f"Blink-first build must NOT classify as 8 Gate Charge All-in; "
+        f"got {result!r}"
+    )
+
+
 # -----------------------------------------------------------------------------
 # 7 Gate Blink All-in vs 3-base Blink Macro discrimination
 # -----------------------------------------------------------------------------
