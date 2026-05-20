@@ -67,6 +67,24 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Strategy classifier · every PvT OPENER label now requires
+  its labelled tech to be the FIRST tech building (0.8.1 full
+  sweep)**: same principle from the Robo First fix (0.8.0) and
+  the Standard Charge Macro fix earlier in 0.8.1, now applied
+  to every remaining PvT rule that names a specific opener.
+  `Phoenix into Robo` and `Phoenix Opener` now require
+  `sg_time < robo_time AND sg_time < twilight_time` (Stargate-
+  first). `7 Gate Blink All-in`, `8 Gate Charge All-in`,
+  `2 Base Templar (Reactive/Delayed 3rd)`, and `2 Gate Blink
+  (Fast 3rd Nexus)` now require `twilight_time < robo_time AND
+  twilight_time < sg_time` (Twilight-first). Without these
+  guards a Robo-first opener that ADDED a Stargate / Twilight /
+  TA later in the midgame would mis-fire the named label and
+  steal the replay from the Robo First branch. Catalog prose
+  for all six rules updated. Mirror in
+  `SC2Replay-Analyzer/detectors/user.py` in sync. 7 new
+  regression tests (one per affected rule + a positive case)
+  in `test_strategy_detector_pvt_gateway_opener_variants.py`.
 - **Strategy classifier · `PvT - Standard Charge Macro` now also
   requires Twilight to be the FIRST tech building (0.8.1
   follow-up to the 0.8.0 fix below)**: 0.8.0 replaced the strict

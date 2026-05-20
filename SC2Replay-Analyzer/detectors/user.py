@@ -286,10 +286,22 @@ class UserBuildDetector(BaseStrategyDetector):
             # hallucinate Phoenix off Cyber + Twilight tech, so a 2-base
             # Charge / Templar build will register a "Phoenix" event
             # without any Stargate ever going down.
+            #
+            # OPENER ordering (mirrors Robo First / Standard Charge
+            # Macro): Phoenix into Robo and Phoenix Opener describe
+            # STARGATE-FIRST openers. Without ``sg_time < robo_time``
+            # AND ``sg_time < twilight_time`` a Robo-first opener that
+            # added a Stargate later and got a real Phoenix on the
+            # field by 7:00 would mis-fire here, stealing the replay
+            # from Robo First.
             if (has_building("Stargate", 420) and count_units("Phoenix", 420) >= 1
-                    and has_building("RoboticsFacility", 480)):
+                    and has_building("RoboticsFacility", 480)
+                    and sg_time < robo_time
+                    and sg_time < twilight_time):
                 return "PvT - Phoenix into Robo"
-            if has_building("Stargate", 420) and count_units("Phoenix", 420) >= 1:
+            if (has_building("Stargate", 420) and count_units("Phoenix", 420) >= 1
+                    and sg_time < robo_time
+                    and sg_time < twilight_time):
                 gate_starts = start_times(buildings, "Gateway")
                 if len(gate_starts) >= 2 and gate_starts[1] < robo_time:
                     return "PvT - Phoenix Opener"
@@ -304,21 +316,36 @@ class UserBuildDetector(BaseStrategyDetector):
             # the FIRST Twilight upgrade -- a Charge-first / Glaives-
             # first build that later picks up Blink with 6+ Gates on
             # 2 bases is a hybrid, not a Blink all-in.
+            #
+            # OPENER ordering: 7 Gate Blink is a TWILIGHT-FIRST all-in;
+            # a Robo-first opener that ends up with 6+ Gateways and
+            # researches Blink late is NOT a Blink all-in. Mirror of
+            # the OPENER guards on Standard Charge Macro / Robo First.
             gateway_starts = start_times(buildings, "Gateway")
             fifth_gateway_started = (
                 gateway_starts[4] if len(gateway_starts) >= 5 else 9999
             )
             if (has_upgrade_substr("Blink", 540) and gate_count_6min >= 6
                     and fifth_gateway_started < third_nexus_time
-                    and pvt_blink_time == pvt_first_twilight_upgrade):
+                    and pvt_blink_time == pvt_first_twilight_upgrade
+                    and twilight_time < robo_time
+                    and twilight_time < sg_time):
                 return "PvT - 7 Gate Blink All-in"
+            # 8 Gate Charge All-in: same Twilight-first OPENER guard.
             if (has_upgrade_substr("Charge", 540) and gate_count_730 >= 7
                     and total_nexuses < 3
-                    and pvt_charge_time == pvt_first_twilight_upgrade):
+                    and pvt_charge_time == pvt_first_twilight_upgrade
+                    and twilight_time < robo_time
+                    and twilight_time < sg_time):
                 return "PvT - 8 Gate Charge All-in"
             # 2 Base Templar requires an actual Templar Archives.
+            # OPENER ordering: TA requires Twilight, so this is a
+            # Twilight-first opener. Robo-first builds that add a
+            # late TA for storm support correctly fall to Robo First.
             if (has_building("TemplarArchive", 9999) and ta_time < third_nexus_time
-                    and (4 <= gate_count_730 <= 6)):
+                    and (4 <= gate_count_730 <= 6)
+                    and twilight_time < robo_time
+                    and twilight_time < sg_time):
                 return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
             # Standard Charge Macro is a Twilight-opener 3-base
             # Charge macro game. "Twilight opener" means the
@@ -366,9 +393,16 @@ class UserBuildDetector(BaseStrategyDetector):
                 if gates_before_third_nexus == 3:
                     return "PvT - 3 Gate Blink (Macro)"
 
+            # 2 Gate Blink (Fast 3rd Nexus): Twilight-first opener
+            # with Robo follow-up for Observer / Immortal support.
+            # Mirror of the OPENER guards on 4 / 3 Gate Blink Macro
+            # above (they already have ``twilight_time < robo_time``
+            # AND ``twilight_time < sg_time``).
             if (has_upgrade_substr("Blink", 480) and total_nexuses >= 3
                     and gates_before_third_nexus == 2
-                    and has_building("RoboticsFacility", 480)):
+                    and has_building("RoboticsFacility", 480)
+                    and twilight_time < robo_time
+                    and twilight_time < sg_time):
                 return "PvT - 2 Gate Blink (Fast 3rd Nexus)"
 
             # DT Drop: fast tactical opener calibrated against a real

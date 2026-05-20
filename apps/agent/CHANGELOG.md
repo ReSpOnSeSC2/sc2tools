@@ -4,6 +4,65 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## 0.8.1
 
+### Fixed — Every PvT OPENER label now requires its labelled tech to be the FIRST tech building (full sweep)
+- **Same OPENER ordering principle from 0.8.0 (Robo First) and the
+  initial 0.8.1 Standard Charge Macro fix, now applied to every PvT
+  rule that names a specific opener.** A label that calls itself
+  "Phoenix into Robo" or "7 Gate Blink All-in" should fire only on
+  builds where the named tech was the FIRST tech building -- a
+  Robo-first opener that ADDS a Stargate / Twilight / TA later in
+  the midgame is still a Robo First opener, not a Phoenix / Blink /
+  Templar build. Without the ordering guards each of these labels
+  would steal Robo-first replays from the Robo First branch below.
+- **Phoenix into Robo + Phoenix Opener** (Stargate-first openers):
+  added `sg_time < robo_time AND sg_time < twilight_time`. Robo-
+  first openers that add a midgame Stargate + real Phoenix harass
+  no longer mis-fire these labels.
+- **7 Gate Blink All-in** (Twilight-first all-in): added
+  `twilight_time < robo_time AND twilight_time < sg_time`. Robo-
+  first openers that end up with 6+ Gateways and research Blink
+  late no longer mis-fire this label.
+- **8 Gate Charge All-in** (Twilight-first all-in): same Twilight-
+  first guard. Robo-first openers with 7+ Gateways + late Charge
+  no longer mis-fire this label.
+- **2 Base Templar (Reactive/Delayed 3rd)** (Twilight-first
+  Storm timing): same Twilight-first guard. Robo-first openers
+  that add a late Templar Archives for Storm support no longer
+  mis-fire this label.
+- **2 Gate Blink (Fast 3rd Nexus)** (Twilight-first with Robo
+  follow-up): same Twilight-first guard. Robo-first openers with
+  a midgame Blink tech-switch no longer mis-fire this label.
+- Rules that ALREADY had the OPENER guards in place (and continue
+  to work as-is): `4 Gate Blink`, `3 Gate Blink (Macro)`,
+  `3 Gate Charge Opener` (`twilight_time < robo_time AND
+  twilight_time < sg_time`), `Stargate-into-Charge/Glaives/Blink`
+  (`sg_time < twilight_time AND not pvt_robo_tech_before_twilight`),
+  `Stargate Opener` (`sg_time < twilight_time AND sg_time <
+  robo_time`), `Standard Charge Macro` (`twilight_time < robo_time
+  AND twilight_time < sg_time` -- added earlier this version),
+  `Robo First` (`robo_time < sg_time AND robo_time < twilight_time`
+  -- 0.8.0). DT Drop and Proxy Stargate are time-window / location
+  rules and don't need the opener ordering.
+- All sentinel defaults (`9999` for "structure was never built")
+  keep pure builds classifying correctly: e.g. a Stargate-first
+  build with no Twilight has `twilight_time = 9999`, so `sg_time <
+  9999` is trivially satisfied.
+- Mirror in `SC2Replay-Analyzer/detectors/user.py` in sync.
+- Catalog prose (`core/build_definitions.py`,
+  `data/build_definitions.json`,
+  `apps/web/lib/build-definitions/pvt.ts`) updated for all six
+  rules to call out the "FIRST tech building" requirement and
+  explain that Robo-first openers fall through to Robo First.
+- Tests: 7 new regression cases in
+  `test_strategy_detector_pvt_gateway_opener_variants.py` -- one
+  per affected rule -- pin that Robo-first opener + the rule's
+  trigger conditions classifies as Robo First, NOT the named
+  label. Plus a positive
+  `test_stargate_first_phoenix_into_robo_still_classifies` that
+  asserts canonical Stargate-first Phoenix into Robo still
+  classifies under the tightened guards. Full PvT detector test
+  suite: 49/49 passing.
+
 ### Fixed — PvT Standard Charge Macro requires Twilight to be the FIRST tech building (not just before Stargate)
 - **User-visible symptom**: the same Tourmaline LE 2026-05-20 16:48
   replay that 0.8.0 fixed (was: `PvT - Macro Transition
