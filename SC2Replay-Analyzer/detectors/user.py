@@ -321,13 +321,16 @@ class UserBuildDetector(BaseStrategyDetector):
                     and (4 <= gate_count_730 <= 6)):
                 return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
             # Standard Charge Macro is a Twilight-opener 3-base
-            # Charge macro game. The label describes the OPENER
-            # (Twilight is the first tech building — before any
-            # Stargate), not the entire composition: a Twilight-
-            # first Charge macro that transitions into Stargate
-            # tech later in the midgame still classifies here.
-            # ``twilight_time < sg_time`` keeps Stargate-led builds
-            # out (Stargate-into-Charge catches those earlier).
+            # Charge macro game. "Twilight opener" means the
+            # Twilight Council is the FIRST tech building -- built
+            # before any Stargate AND before any Robotics Facility.
+            # Both ordering checks are required, mirroring the
+            # symmetric Robo First rule below which requires Robo
+            # before Twilight AND before Stargate. Without the
+            # ``twilight_time < robo_time`` check, a Robo-first
+            # opener that adds a Twilight Council later for Charge
+            # support on 3 bases would mis-fire this rule before
+            # the Robo First branch could claim the replay.
             # Charge must also be the FIRST Twilight upgrade --
             # a Blink-first / Charge-after 3-base build matches
             # on the Charge-existence + 3-Nexus signature alone
@@ -337,6 +340,7 @@ class UserBuildDetector(BaseStrategyDetector):
             if (has_upgrade_substr("Charge", 540)
                     and total_nexuses >= 3
                     and twilight_time < sg_time
+                    and twilight_time < robo_time
                     and pvt_charge_time == pvt_first_twilight_upgrade):
                 return "PvT - Standard Charge Macro"
             # Charge must be the FIRST Twilight upgrade. Without this

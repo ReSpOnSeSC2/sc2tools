@@ -2,6 +2,58 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.8.1
+
+### Fixed — PvT Standard Charge Macro requires Twilight to be the FIRST tech building (not just before Stargate)
+- **User-visible symptom**: the same Tourmaline LE 2026-05-20 16:48
+  replay that 0.8.0 fixed (was: `PvT - Macro Transition
+  (Unclassified)`, became: `PvT - Robo First`) flipped to a NEW
+  wrong label after the 0.8.0 ship — `PvT - Standard Charge Macro`.
+  The build: Gateway → Cyber → Robo at 2:43 (textbook Robo First
+  OPENER), Twilight Council added later in the midgame for Charge
+  support, 3+ bases by 7:30.
+- **Root cause**: the 0.8.0 Standard Charge Macro fix replaced the
+  strict `not has_building("Stargate", 9999)` guard with
+  `twilight_time < sg_time`, intending to let Twilight-opener
+  Charge macros with a midgame Stargate transition classify here.
+  But that check is satisfied by *any* build where Twilight exists
+  and no Stargate exists earlier — including Robo-first openers
+  that add a Twilight Council later (`sg_time` defaults to 9999
+  when no Stargate exists; `twilight_time` is well below 9999 for
+  any build that researched Charge). The rule's COMMENT said
+  "Standard Charge Macro only sees Twilight-first builds" but the
+  code never enforced it. So Standard Charge Macro mis-fired on
+  Robo-first openers before the Robo First branch below could
+  claim the replay.
+- **Fix**: add the missing ordering check
+  `twilight_time < robo_time` to Standard Charge Macro, mirroring
+  the symmetric Robo First rule which has BOTH
+  `robo_time < sg_time` AND `robo_time < twilight_time`. The
+  combined check now means what the label says: Twilight is the
+  FIRST tech building (before both Robo and Stargate). Robo-first
+  openers correctly fall through to Robo First. The legacy
+  `SC2Replay-Analyzer/detectors/user.py` mirror carries the same
+  guard.
+- Build-definition catalogs (`core/build_definitions.py`,
+  `data/build_definitions.json`,
+  `apps/web/lib/build-definitions/pvt.ts`) updated: the rule
+  description now spells out "Twilight Council is the FIRST tech
+  building -- before any Robotics Facility AND before any
+  Stargate" and notes that Robo-first openers go to Robo First
+  instead.
+- Tests: new regression
+  `test_robo_first_opener_with_later_twilight_and_charge_is_robo_first_not_standard_charge_macro`
+  locks in the Tourmaline LE shape — Robo at 2:43, Twilight at
+  6:00, Charge at 7:00, 3rd Nexus at 7:30, no Stargate. The
+  existing Twilight-opener positive tests
+  (`test_standard_charge_macro_still_fires_with_no_stargate`,
+  `test_standard_charge_macro_fires_with_twilight_opener_and_late_stargate`)
+  still pass because they never had a Robo in the events list, so
+  `robo_time = 9999` and `twilight_time < robo_time` is trivially
+  satisfied. Full
+  `reveal-sc2-opponent-main/tests/core/test_strategy_detector_pvt_*`
+  suite: 42/42 passing.
+
 ## 0.8.0
 
 ### Fixed — PvT Robo First AND PvT Standard Charge Macro describe the OPENER, not the entire composition

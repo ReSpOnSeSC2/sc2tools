@@ -67,6 +67,29 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Strategy classifier · `PvT - Standard Charge Macro` now also
+  requires Twilight to be the FIRST tech building (0.8.1
+  follow-up to the 0.8.0 fix below)**: 0.8.0 replaced the strict
+  `not has_building("Stargate", 9999)` guard with
+  `twilight_time < sg_time` so Twilight-opener Charge macros
+  with a midgame Stargate transition would classify here. But
+  that check is trivially satisfied by any build that researched
+  Charge with no Stargate exists earlier — including Robo-first
+  openers that add a Twilight Council later for Charge support
+  on 3 bases. So a Robo-first opener with a later Twilight + Charge
+  was mis-firing Standard Charge Macro before the Robo First branch
+  below could claim it. The fix adds the missing
+  `twilight_time < robo_time` ordering check, mirroring the
+  symmetric Robo First rule which has BOTH `robo_time < sg_time`
+  AND `robo_time < twilight_time`. Standard Charge Macro now means
+  what the label says: Twilight is the FIRST tech building (before
+  both Robo and Stargate). Robo-first openers correctly fall
+  through to Robo First. Mirrored in
+  `SC2Replay-Analyzer/detectors/user.py`. Catalog prose updated.
+  Regression test
+  `test_robo_first_opener_with_later_twilight_and_charge_is_robo_first_not_standard_charge_macro`
+  pins the Tourmaline LE shape — Robo at 2:43, Twilight at 6:00,
+  Charge at 7:00, 3rd Nexus at 7:30, no Stargate.
 - **Strategy classifier · `PvT - Standard Charge Macro` now
   describes the OPENER, not the entire composition**: same
   anti-pattern as the Robo First fix below — Standard Charge

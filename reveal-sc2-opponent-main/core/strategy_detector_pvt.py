@@ -172,20 +172,29 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
     # Standard Charge Macro is a Twilight-OPENER 3-base Charge
-    # macro game. The label describes the OPENER (Twilight is
-    # the first tech building — before any Stargate), not the
-    # entire composition: a Twilight-first Charge macro that
-    # transitions into Stargate tech later in the midgame
-    # (Skytoss tech-switch, end-game Tempests) still classifies
-    # as Standard Charge Macro because the opening was Twilight.
-    # The previous strict ``not has_building("Stargate", 9999)``
-    # excluded any build with a Stargate at any point, which is
-    # the same anti-pattern the Robo First rule used to have:
-    # it shunted Twilight-opener replays with a midgame Stargate
-    # transition into the Macro Transition (Unclassified)
-    # catch-all even though the opener was textbook Standard
-    # Charge Macro. Earlier rules already catch Stargate-led
-    # hybrids:
+    # macro game. "Twilight opener" means the Twilight Council is
+    # the FIRST tech building — built before any Stargate AND
+    # before any Robotics Facility. Both ordering checks are
+    # required, mirroring the symmetric Robo First rule below
+    # which requires Robo before Twilight AND before Stargate.
+    #
+    # 0.8.0 dropped the strict ``not has_building("Stargate", 9999)``
+    # guard in favor of ``twilight_time < sg_time``, which correctly
+    # let Twilight-opener Charge macros with a midgame Stargate
+    # tech-switch (Skytoss transition, late Tempests, late Phoenix
+    # harass) classify here instead of falling into Macro Transition
+    # (Unclassified). But that fix was incomplete: it never asked
+    # whether Twilight was actually first. A Robo-first opener that
+    # added a Twilight Council LATER for Charge support on 3 bases
+    # would satisfy ``twilight_time < sg_time`` (since sg_time
+    # defaults to 9999 when no Stargate exists) and incorrectly
+    # fire this rule BEFORE the Robo First branch below could
+    # claim the replay. Adding ``twilight_time < robo_time`` makes
+    # the rule mean what its label says: the OPENER was Twilight.
+    # Robo-first openers (robo_time < twilight_time) fall through
+    # to Robo First, which is the correct label for them.
+    #
+    # Earlier rules already catch Stargate-led hybrids:
     #   * Stargate-into-Charge — Stargate before Twilight + Charge
     #     is first Twilight upgrade. Fires before this rule when
     #     Stargate is the opener.
@@ -205,6 +214,7 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         has_upgrade_substr("Charge", 540)
         and total_nexuses >= 3
         and twilight_time < sg_time
+        and twilight_time < robo_time
         and pvt_charge_time == pvt_first_twilight_upgrade
     ):
         return "PvT - Standard Charge Macro"

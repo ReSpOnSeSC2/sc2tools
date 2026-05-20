@@ -818,3 +818,58 @@ def test_robo_first_opener_with_stargate_added_inside_opener_window_still_robo_f
         f"First; got {result!r}"
     )
 
+
+def test_robo_first_opener_with_later_twilight_and_charge_is_robo_first_not_standard_charge_macro():
+    """0.8.0 regression: a Robo-first opener (Robo at 2:43 — first
+    tech building) that later adds a Twilight Council for Charge
+    support on 3 bases was mis-firing PvT - Standard Charge Macro
+    even though the OPENER was Robo. The 0.8.0 Standard Charge Macro
+    fix replaced the strict ``not has_building("Stargate", 9999)``
+    guard with ``twilight_time < sg_time`` but never required
+    ``twilight_time < robo_time``. So a Robo-first build that later
+    researched Charge satisfied the rule (sg_time defaults to 9999
+    when no Stargate, twilight_time < 9999 trivially) and stole the
+    replay before the Robo First branch below could claim it.
+
+    The fix adds the ``twilight_time < robo_time`` ordering check
+    so Standard Charge Macro means what its label says: the OPENER
+    was Twilight (Twilight before Robo AND before Stargate).
+    Robo-first openers fall through to Robo First instead, which
+    is the correct label for them — the Charge upgrade is a
+    midgame tech-switch on top of a Robo-first opener, not a
+    reclassification of it.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 19),
+        _building("Gateway", 38),
+        _building("Assimilator", 42),
+        _building("Nexus", 79),
+        _building("CyberneticsCore", 90),
+        _building("Assimilator", 97),
+        _building("Pylon", 107),
+        _unit("Stalker", 115),
+        _upgrade("WarpGate", 127),
+        _unit("Sentry", 140),
+        _building("RoboticsFacility", 163),   # 2:43 -- Robo FIRST
+        _unit("Phoenix", 173),                 # Sentry hallucination
+        _unit("Immortal", 240),                # Robo path
+        _unit("WarpPrism", 280),               # Robo path
+        _building("Gateway", 300),
+        # Twilight added LATER (after Robo was already the opener)
+        _building("TwilightCouncil", 360),     # 6:00 -- well after Robo
+        _building("Gateway", 380),
+        _upgrade("Charge", 420),               # 7:00
+        # 3rd Nexus for the macro game
+        _building("Nexus", 450),               # 7:30
+        # No Stargate at all -- the 0.8.0 regression case
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - Robo First", (
+        f"Robo-first opener with a midgame Twilight + Charge tech-"
+        f"switch on 3 bases must classify as Robo First (the OPENER "
+        f"was Robo, not Twilight). Standard Charge Macro requires "
+        f"Twilight to be the FIRST tech building. Got {result!r}"
+    )
+
