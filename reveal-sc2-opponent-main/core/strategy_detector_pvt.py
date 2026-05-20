@@ -209,51 +209,79 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvT - 3 Gate Charge Opener"
 
+    # X Gate Blink rules: the gate count that names each label is the
+    # number of Gateways the player STARTED BEFORE their 3rd Nexus
+    # went down. That's the macro-vs-aggression signal -- a player
+    # who committed to 4 Gateways before taking the 3rd is doing a
+    # heavier 4-Gate Blink, while a 2-Gate / fast-3rd-Nexus opener
+    # delays the extra Gateways until after the economy is secured.
+    # Counting "Gateways by 7:30" got the right answer most of the
+    # time but mistagged builds where the player took the 3rd Nexus
+    # FAST (e.g. 3rd Nexus at 5:30) and then added Gateways during
+    # the 3rd Nexus's build -- those gates are macro reinforcement,
+    # not all-in commitment.
+    #
+    # When the player never took a 3rd Nexus, third_nexus_time is
+    # 9999 and gates_before_third_nexus collapses to the total
+    # Gateway count, so a 2-base 4-Gate Blink still classifies.
+    # The 7-Gate Blink All-in rule above keys on 6+ Gateways with
+    # 5th gate before 3rd Nexus, so it fires first for mass-gate
+    # aggression and the 4 Gate Blink branch only sees 4-5 gate
+    # builds.
+    gates_before_third_nexus = count_started_before(
+        buildings, "Gateway", third_nexus_time,
+    )
+
     if (
         twilight_time < robo_time
         and twilight_time < sg_time
         and has_upgrade_substr("Blink", 540)
     ):
-        if gate_count_730 >= 4:
+        if gates_before_third_nexus >= 4:
             return "PvT - 4 Gate Blink"
-        else:
+        if gates_before_third_nexus == 3:
             return "PvT - 3 Gate Blink (Macro)"
 
     if (
         has_upgrade_substr("Blink", 480)
         and total_nexuses >= 3
-        and count_started_before(buildings, "Gateway", 480) == 2
+        and gates_before_third_nexus == 2
         and has_building("RoboticsFacility", 480)
     ):
         return "PvT - 2 Gate Blink (Fast 3rd Nexus)"
 
-    # DT Drop: a tactical opener where the player builds Dark Shrine
-    # EARLY, ships at least one Dark Templar across the map in a Warp
-    # Prism, and drops it in the opponent's base around 7:30-9:00.
+    # DT Drop: a fast tactical opener where the player commits to Dark
+    # Shrine EARLY, warps in a Dark Templar, and ferries it across the
+    # map in a Warp Prism for a 4-5 minute mark drop.
     #
-    # The earlier version of this rule fired on any replay with a Dark
-    # Shrine by 9:00 + Robo by 10:00 + Warp Prism by 10:00 -- which
-    # mistagged a "normal Robo First" game on Tourmaline LE
-    # (2026-05-20, 16:48 game) that built a Robo for Immortal drops
-    # and added a Dark Shrine later for late-game DT support but
-    # never actually warped in a DT to drop. The rule has to confirm
-    # the player ACTUALLY went DT, not just built the tech.
+    # Cutoffs are calibrated against a real PvT DT Drop replay
+    # (Peruano, Taito Citadel LE, 2026-05-11) with ~30s of buffer per
+    # signal so a slightly slower variant still classifies. The
+    # reference replay's actual timings:
+    #   * Dark Shrine started 3:13 -> cutoff 3:45 (225s)
+    #   * Robotics Facility   3:32 -> cutoff 4:00 (240s)
+    #   * First Dark Templar  3:51 -> cutoff 4:30 (270s)
+    #   * Warp Prism on field 4:11 -> cutoff 4:45 (285s)
     #
-    # Tightened semantics (mirrors the PvZ "DT drop into Archon Drop"
-    # rule which already requires `count_units("DarkTemplar", 540) >= 3`):
-    #   * Dark Shrine started by 8:00 -- a real DT-drop opener
-    #     commits to the Shrine early so the first DT pops by ~8:30
-    #     and the drop lands by 8:30-9:30. A 9:00 Shrine is too late
-    #     to be the opener's intent.
-    #   * Robotics Facility by 9:00 (was 10:00).
-    #   * Warp Prism on the field by 9:00 (was 10:00).
-    #   * NEW: at least one real DarkTemplar by 10:00. count_units is
-    #     prereq-aware so Sentry hallucinations cannot satisfy this.
+    # The earlier version of this rule fired on Dark Shrine by 9:00 +
+    # Robo by 10:00 + Warp Prism by 10:00 + (>=1 DT by 10:00) -- the
+    # DarkTemplar guard fixed the no-DT misfire (Tourmaline LE
+    # 2026-05-20 Robo First with late Dark Shrine), but the 8-10
+    # minute windows still let in any build with a mid-game Dark
+    # Shrine that warped in a single DT for harass. Tightening to the
+    # observed-plus-30s window matches the *opener's* intent: if the
+    # Shrine isn't up by 3:45 and the DT isn't on the field by 4:30,
+    # the build is something else (Robo First with late tech, a
+    # delayed DT-counter, etc.).
+    #
+    # count_units is prereq-aware so a Sentry-hallucinated DarkTemplar
+    # (DarkTemplar event with no Dark Shrine built yet) still cannot
+    # satisfy the unit guard.
     if (
-        has_building("DarkShrine", 480)
-        and has_building("RoboticsFacility", 540)
-        and count_units("WarpPrism", 540) >= 1
-        and count_units("DarkTemplar", 600) >= 1
+        has_building("DarkShrine", 225)
+        and has_building("RoboticsFacility", 240)
+        and count_units("WarpPrism", 285) >= 1
+        and count_units("DarkTemplar", 270) >= 1
     ):
         return "PvT - DT Drop"
     # Robo First is a Stargate-free opener — Robotics Facility

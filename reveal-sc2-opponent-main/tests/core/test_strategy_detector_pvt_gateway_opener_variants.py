@@ -521,31 +521,44 @@ def test_robo_first_with_early_shrine_but_no_dt_is_not_dt_drop():
 
 
 def test_canonical_dt_drop_still_classifies():
-    """Canonical DT Drop opener: Dark Shrine in early-mid game (~6:00),
-    Robo + Warp Prism shortly after, and a real DarkTemplar lands on
-    the field around 7:30-8:00 ready to drop. The tightened rule must
-    still fire here -- positive case to prove we didn't over-narrow.
+    """Canonical PvT DT Drop opener calibrated against a real replay
+    (Peruano, Taito Citadel LE 2026-05-11). The actual observed
+    timings, used as the basis for the rule's cutoffs:
+        Dark Shrine started   3:13 (193s)
+        RoboticsFacility      3:32 (212s)
+        First DarkTemplar     3:51 (231s)
+        WarpPrism on field    4:11 (251s)
+    Cutoffs (3:45 / 4:00 / 4:30 / 4:45) are observed + ~30s buffer,
+    so this canonical replay must still classify with room to spare.
     """
     events = [
         _building("Nexus", 0),
-        _building("Pylon", 18),
-        _building("Gateway", 60),
-        _building("Assimilator", 72),
-        _building("CyberneticsCore", 115),
-        _building("Nexus", 130),
+        _building("Pylon", 19),
+        _building("Gateway", 37),
+        _building("Assimilator", 46),
+        _building("Nexus", 78),
+        _building("CyberneticsCore", 90),
+        _building("Assimilator", 95),
+        _building("Pylon", 107),
+        _unit("Stalker", 114),
+        _building("TwilightCouncil", 148),       # 2:28
+        _unit("Sentry", 149),
+        _building("DarkShrine", 193),            # 3:13
+        _building("Gateway", 203),
+        _building("RoboticsFacility", 212),      # 3:32
         _building("Gateway", 220),
-        _building("TwilightCouncil", 250),        # DT requires Twilight
-        _building("RoboticsFacility", 320),       # Robo by 5:20 for Warp Prism
-        _building("DarkShrine", 360),             # Dark Shrine at 6:00
-        _unit("WarpPrism", 480),                  # Warp Prism by 8:00
-        _unit("DarkTemplar", 500),                # First DT at 8:20
-        _unit("DarkTemplar", 540),                # Second DT
+        _building("Pylon", 226),
+        _building("Assimilator", 231),
+        _unit("DarkTemplar", 231),               # 3:51
+        _unit("DarkTemplar", 236),
+        _unit("WarpPrism", 251),                 # 4:11
+        _unit("DarkTemplar", 263),
     ]
     detector = sd.UserBuildDetector(custom_builds=[])
     result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
     assert result == "PvT - DT Drop", (
-        f"Canonical DT Drop opener (Shrine 6:00, Robo 5:20, Prism 8:00, "
-        f"DTs by 8:20) must still classify as PvT - DT Drop; got "
+        f"Canonical DT Drop opener (Peruano replay timings) must "
+        f"still classify as PvT - DT Drop; got "
         f"{result!r}"
     )
 
@@ -571,4 +584,103 @@ def test_dt_drop_rejects_sentry_hallucinated_dark_templar():
     assert result != "PvT - DT Drop", (
         f"Sentry-hallucinated DarkTemplar must NOT satisfy the DT Drop "
         f"unit-count guard; got {result!r}"
+    )
+
+
+# -----------------------------------------------------------------------------
+# X Gate Blink labels count Gateways STARTED BEFORE the 3rd Nexus
+# -----------------------------------------------------------------------------
+def test_blink_gates_counted_before_third_nexus_not_by_730():
+    """The X Gate Blink labels (2/3/4 Gate) name themselves after the
+    number of Gateways the player committed to BEFORE taking the 3rd
+    Nexus -- the macro-vs-aggression signal -- not the gate count at
+    a fixed 7:30 timer. A player who takes a fast 3rd Nexus and then
+    pads to 5 Gateways post-expansion is a 3 Gate Blink macro game
+    (only 3 Gateways pre-3rd), NOT a 4 Gate Blink (which would imply
+    they delayed the 3rd to push out a 4th Gateway).
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),                  # Gate 1
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),                   # natural at 2:10
+        _building("Assimilator", 150),
+        _building("Pylon", 170),
+        _building("Gateway", 240),                 # Gate 2 -- BEFORE 3rd
+        _building("TwilightCouncil", 260),
+        _building("Gateway", 300),                 # Gate 3 -- BEFORE 3rd
+        _building("Nexus", 340),                   # 3rd Nexus FAST at 5:40
+        _building("Gateway", 380),                 # Gate 4 -- AFTER 3rd
+        _building("Gateway", 430),                 # Gate 5 -- AFTER 3rd (5 by 7:30)
+        _upgrade("BlinkTech", 410),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    # Old rule: gate_count_730 >= 4 (5 gates by 7:30) -> would be 4 Gate Blink.
+    # New rule: gates_before_third_nexus == 3 -> 3 Gate Blink (Macro).
+    assert result == "PvT - 3 Gate Blink (Macro)", (
+        f"3 Gateways before the 3rd Nexus must classify as 3 Gate "
+        f"Blink (Macro), regardless of how many Gateways are added "
+        f"after the 3rd; got {result!r}"
+    )
+
+
+def test_blink_four_gates_before_third_nexus_classifies_as_four_gate_blink():
+    """Inverse case: a player who delays the 3rd Nexus to push out a
+    4th Gateway IS a 4 Gate Blink, even if they only have 4 Gateways
+    total (no extra pad after the 3rd lands).
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),                  # Gate 1
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),                   # natural
+        _building("Assimilator", 150),
+        _building("Pylon", 170),
+        _building("Gateway", 240),                 # Gate 2 -- BEFORE 3rd
+        _building("TwilightCouncil", 260),
+        _building("Gateway", 300),                 # Gate 3 -- BEFORE 3rd
+        _building("Gateway", 360),                 # Gate 4 -- BEFORE 3rd
+        _building("Nexus", 420),                   # 3rd Nexus DELAYED to 7:00
+        _upgrade("BlinkTech", 400),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - 4 Gate Blink", (
+        f"4 Gateways committed before the 3rd Nexus must classify "
+        f"as 4 Gate Blink; got {result!r}"
+    )
+
+
+def test_blink_two_gates_before_third_nexus_with_robo_classifies_as_two_gate():
+    """A canonical 2 Gate Blink (Fast 3rd Nexus): exactly 2 Gateways
+    are committed before the 3rd Nexus, a Robo is up for Warp Prism
+    / Immortal support, Blink lands by 8:00.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),                  # Gate 1
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),                   # natural
+        _building("Assimilator", 150),
+        _building("Pylon", 170),
+        _building("Gateway", 240),                 # Gate 2 -- BEFORE 3rd
+        _building("TwilightCouncil", 260),
+        _building("Nexus", 310),                   # 3rd Nexus at 5:10
+        _building("RoboticsFacility", 350),        # Robo by 8:00 ✓
+        _building("Gateway", 400),                 # Gate 3 -- AFTER 3rd
+        _upgrade("BlinkTech", 420),                # Blink by 8:00 ✓
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - 2 Gate Blink (Fast 3rd Nexus)", (
+        f"2 Gateways before 3rd Nexus + Robo + Blink + 3 Nexuses "
+        f"must classify as 2 Gate Blink (Fast 3rd Nexus); got "
+        f"{result!r}"
     )

@@ -4,6 +4,64 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## 0.7.8
 
+### Changed — PvT DT Drop windows calibrated against a real replay; Blink rules count Gateways before the 3rd Nexus
+- **DT Drop calibrated to a real reference replay.** The 0.7.8 first
+  pass tightened the DT Drop rule to require an actual DarkTemplar
+  (no more Robo First mistagging) but kept loose 8-10 minute windows
+  on Dark Shrine / Robo / Warp Prism. A reviewer provided a real PvT
+  DT Drop replay (Peruano, Taito Citadel LE, 2026-05-11) whose
+  observed timings are MUCH faster than that:
+  ```
+  Dark Shrine started   3:13
+  RoboticsFacility      3:32
+  First DarkTemplar     3:51
+  WarpPrism on field    4:11
+  ```
+  The rule is now calibrated to each observed signal + ~30 seconds
+  of buffer:
+  ```
+  has_building("DarkShrine", 225)         # was 480 (8:00)
+  has_building("RoboticsFacility", 240)   # was 540 (9:00)
+  count_units("DarkTemplar", 270) >= 1    # was 600 (10:00)
+  count_units("WarpPrism", 285) >= 1      # was 540 (9:00)
+  ```
+  Slower-tech builds that pick up DT tech later in the midgame don't
+  fit the fast-tactical DT Drop signature and now fall through to
+  `PvT - Robo First` / `Macro Transition (Unclassified)` instead.
+- **Blink rules count Gateways STARTED before the 3rd Nexus**, not
+  Gateways by a fixed 7:30 timer. The "X Gate Blink" label names
+  itself after the player's macro-vs-aggression commitment — how
+  many Gateways went down BEFORE the 3rd Nexus broke ground. A fast
+  3rd Nexus that's followed by more Gateways post-expansion is a
+  3 Gate Blink macro game (only 3 Gates pre-3rd), not a 4 Gate Blink.
+  A delayed 3rd Nexus with 4+ Gateways pushed out pre-expansion IS a
+  4 Gate Blink even if no further Gateways follow.
+  ```
+  gates_before_third_nexus = count_started_before(
+      buildings, "Gateway", third_nexus_time,
+  )
+  # 4 Gate Blink:           gates_before_third_nexus >= 4
+  # 3 Gate Blink (Macro):   gates_before_third_nexus == 3
+  # 2 Gate Blink (Fast 3rd): gates_before_third_nexus == 2 (+ Robo + 3+ Nexuses)
+  ```
+  `third_nexus_time` defaults to 9999 when no 3rd Nexus is ever
+  taken, so 2-base Blink builds still classify against their total
+  Gateway count — and the 7 Gate Blink All-in rule above keeps
+  catching mass-gate 2-base aggression first.
+- Both the modular `core/strategy_detector_pvt.py` detector and the
+  legacy `SC2Replay-Analyzer/detectors/user.py` mirror carry the
+  new cutoffs.
+- Build-definition catalogs (`core/build_definitions.py`,
+  `data/build_definitions.json`, `apps/web/lib/build-definitions/pvt.ts`)
+  updated with the new timing thresholds and the gates-before-3rd-Nexus
+  wording.
+- Tests: three new Blink-gate-counting regression cases pin (a) fast
+  3rd Nexus + 3 gates pre-expansion + 5 gates total → 3 Gate Blink,
+  (b) delayed 3rd + 4 gates pre-expansion → 4 Gate Blink, (c) 2 gates
+  pre-expansion + Robo + 3 Nexuses + Blink → 2 Gate Blink (Fast 3rd
+  Nexus). The canonical DT Drop test is rebuilt against the Peruano
+  reference replay's actual timings. Full PvT suite: 213/213 passing.
+
 ### Fixed — PvT DT Drop requires an actual Dark Templar on the field
 - **User-visible symptom**: a normal Robo First game on Tourmaline LE
   (2026-05-20, 16:48 game) was getting tagged as `PvT - DT Drop`. The

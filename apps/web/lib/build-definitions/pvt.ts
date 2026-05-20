@@ -13,14 +13,14 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - 2 Gate Blink (Fast 3rd Nexus)",
     description:
-      "Detected if Blink is researched by 8:00, the player has taken 3+ Nexuses, exactly 2 Gateways exist by 8:00, AND a Robotics Facility is up by 8:00 -- a fast-3rd 2-Gate Blink style.",
+      "Detected if Blink is researched by 8:00, the player has taken 3+ Nexuses, exactly 2 Gateways were STARTED before the 3rd Nexus, AND a Robotics Facility is up by 8:00 -- a fast-3rd 2-Gate Blink style. The gate count is measured against the 3rd Nexus's start time, not a fixed 7:30 cutoff, so a player can add more Gateways after taking the 3rd Nexus without flipping the label to 3 or 4 Gate Blink.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - 3 Gate Blink (Macro)",
     description:
-      "Detected if Twilight Council goes BEFORE Robo and Stargate, Blink is researched by 9:00, AND fewer than 4 Gateways exist by 7:30 -- a macro 3-Gate Blink style.",
+      "Detected if Twilight Council goes BEFORE Robo and Stargate, Blink is researched by 9:00, AND exactly 3 Gateways were STARTED before the 3rd Nexus -- a macro 3-Gate Blink style. Counting gates before the 3rd Nexus (not a fixed 7:30 cutoff) means a player who takes the 3rd Nexus fast and then adds more Gateways still classifies as 3 Gate Blink, while a player who delays the 3rd Nexus to push out 4+ Gateways gets labelled 4 Gate Blink.",
   },
   {
     race: "Protoss",
@@ -34,7 +34,7 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - 4 Gate Blink",
     description:
-      "Detected if Twilight Council goes BEFORE Robo and Stargate, Blink is researched by 9:00, AND 4+ Gateways exist by 7:30 -- a 4-Gate Blink Stalker timing.",
+      "Detected if Twilight Council goes BEFORE Robo and Stargate, Blink is researched by 9:00, AND 4+ Gateways were STARTED before the 3rd Nexus -- a 4-Gate Blink Stalker timing. The gate count is measured against the 3rd Nexus's start time, so a player who delays the 3rd Nexus while adding Gateways gets this label, while a player who takes the 3rd Nexus fast and then adds Gateways gets the lower-count Blink label that matches what was committed pre-expansion.",
   },
   {
     race: "Protoss",
@@ -55,7 +55,7 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - DT Drop",
     description:
-      "Detected if a Dark Shrine is started by 8:00 AND a Robotics Facility is up by 9:00 AND a Warp Prism is on the field by 9:00 AND at least one real (non-hallucinated) Dark Templar exists by 10:00 -- a Dark Templar drop in PvT. The DarkTemplar requirement excludes Robo-First builds that add a Dark Shrine for late-game support but never actually warp in a DT to drop.",
+      "Detected if a Dark Shrine is started by 3:45 AND a Robotics Facility is up by 4:00 AND at least one real (non-hallucinated) Dark Templar exists on the field by 4:30 AND a Warp Prism is on the field by 4:45 -- a fast tactical PvT DT drop. The cutoffs are calibrated against a real PvT DT Drop replay (Peruano, Taito Citadel LE 2026-05-11: Shrine 3:13, Robo 3:32, DT 3:51, Prism 4:11) with ~30 seconds of buffer per signal. Slower variants that miss these windows are Robo First or late-tech DT support builds, not drop openers.",
   },
   {
     race: "Protoss",
