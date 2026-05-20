@@ -192,7 +192,11 @@ class OpponentStrategyDetector(BaseStrategyDetector):
             )
             if proxied_gates_3m >= 3:
                 return "Protoss - Proxy 4 Gate"
-            if has_building("DarkShrine", 450):
+            # DT Rush: require a real DT on the field within the rush
+            # window, not just a Dark Shrine -- the old check fired on
+            # any mid-game DT-tech addition. Mirrors the same fix in
+            # reveal-sc2-opponent-main/core/strategy_detector_opponent.py.
+            if has_building("DarkShrine", 360) and count_units("DarkTemplar", 420) >= 1:
                 return "Protoss - DT Rush"
 
             gateway_times = get_times("Gateway")
@@ -261,7 +265,10 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                 return "Terran - Cyclone Rush"
             if has_building("Armory", 300) and count_units("Hellion", 330) > 4:
                 return "Terran - Hellbat All-in"
-            if has_building("GhostAcademy", 390):
+            # Ghost Rush: tighten to 5:00 -- standard Bio macro often
+            # adds the Academy by 6:00-6:30. Mirrors the fix in the
+            # modular opponent detector.
+            if has_building("GhostAcademy", 360):
                 return "Terran - Ghost Rush"
 
             mines_5m = count_units("WidowMine", 390)
@@ -274,7 +281,11 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                     return "Terran - Widow Mine Drop"
                 return "Terran - Widow Upgraded Mine Cheese"
 
-            if has_building("FusionCore", 390):
+            # BC Rush: require a real Battlecruiser by 8:30, not just a
+            # Fusion Core (which any mech-into-BC macro game builds for
+            # end-game). Mirrors the fix in the modular opponent
+            # detector.
+            if has_building("FusionCore", 390) and count_units("Battlecruiser", 510) >= 1:
                 return "Terran - BC Rush"
             if count_units("Banshee", 450) > 0 and (has_upgrade_substr("Cloak", 450) or has_upgrade_substr("Banshee", 450)):
                 return "Terran - Banshee Rush"

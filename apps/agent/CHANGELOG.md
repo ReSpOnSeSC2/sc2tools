@@ -4,30 +4,49 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## 0.7.8
 
-### Changed — PvT DT Drop windows calibrated against a real replay; Blink rules count Gateways before the 3rd Nexus
-- **DT Drop calibrated to a real reference replay.** The 0.7.8 first
-  pass tightened the DT Drop rule to require an actual DarkTemplar
-  (no more Robo First mistagging) but kept loose 8-10 minute windows
-  on Dark Shrine / Robo / Warp Prism. A reviewer provided a real PvT
-  DT Drop replay (Peruano, Taito Citadel LE, 2026-05-11) whose
-  observed timings are MUCH faster than that:
+### Changed — PvT DT Drop windows calibrated against a real replay; Blink rules count Gateways before the 3rd Nexus; tightened DT Rush / Ghost Rush / BC Rush opponent labels
+- **DT Drop calibrated to a real reference replay with a 60s buffer.**
+  The 0.7.8 first pass tightened the DT Drop rule to require an actual
+  DarkTemplar (no more Robo First mistagging) but kept loose 8-10
+  minute windows on Dark Shrine / Robo / Warp Prism. A reviewer
+  provided a real PvT DT Drop replay (Peruano, Taito Citadel LE,
+  2026-05-11) whose observed timings are MUCH faster than that:
   ```
   Dark Shrine started   3:13
   RoboticsFacility      3:32
   First DarkTemplar     3:51
   WarpPrism on field    4:11
   ```
-  The rule is now calibrated to each observed signal + ~30 seconds
-  of buffer:
+  The rule is now calibrated to each observed signal + ~60 seconds
+  of buffer (was +30s in the first 0.7.8 draft; widened so slightly
+  slower DT Drop variants still classify):
   ```
-  has_building("DarkShrine", 225)         # was 480 (8:00)
-  has_building("RoboticsFacility", 240)   # was 540 (9:00)
-  count_units("DarkTemplar", 270) >= 1    # was 600 (10:00)
-  count_units("WarpPrism", 285) >= 1      # was 540 (9:00)
+  has_building("DarkShrine", 255)         # was 480 (8:00)
+  has_building("RoboticsFacility", 270)   # was 540 (9:00)
+  count_units("DarkTemplar", 300) >= 1    # was 600 (10:00)
+  count_units("WarpPrism", 315) >= 1      # was 540 (9:00)
   ```
   Slower-tech builds that pick up DT tech later in the midgame don't
   fit the fast-tactical DT Drop signature and now fall through to
   `PvT - Robo First` / `Macro Transition (Unclassified)` instead.
+- **DT Rush / Ghost Rush / BC Rush opponent labels tightened.** The
+  same too-loose-cutoff pattern that caught DT Drop was hiding in
+  three opponent-side rules: each fired on a SINGLE building existing
+  by a generous cutoff, with no follow-up unit check. They now require
+  the build's signature unit to actually be on the field within a
+  realistic harass / attack window:
+  ```
+  Protoss - DT Rush:  Dark Shrine by 6:00 + real DT by 7:00
+                      (was: Dark Shrine by 7:30 alone)
+  Terran - Ghost Rush: Ghost Academy by 6:00
+                      (was: Ghost Academy by 6:30 -- standard Bio macro
+                      adds the Academy after 6:00 for snipes/EMPs)
+  Terran - BC Rush:    Fusion Core by 6:30 + real Battlecruiser by 8:30
+                      (was: Fusion Core by 6:30 alone -- any mech-into-
+                      late-game-BC macro built FC for end-game)
+  ```
+  Same fix mirrored in both `core/strategy_detector_opponent.py` and
+  the legacy `SC2Replay-Analyzer/detectors/opponent.py`.
 - **Blink rules count Gateways STARTED before the 3rd Nexus**, not
   Gateways by a fixed 7:30 timer. The "X Gate Blink" label names
   itself after the player's macro-vs-aggression commitment — how

@@ -55,7 +55,7 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - DT Drop",
     description:
-      "Detected if a Dark Shrine is started by 3:45 AND a Robotics Facility is up by 4:00 AND at least one real (non-hallucinated) Dark Templar exists on the field by 4:30 AND a Warp Prism is on the field by 4:45 -- a fast tactical PvT DT drop. The cutoffs are calibrated against a real PvT DT Drop replay (Peruano, Taito Citadel LE 2026-05-11: Shrine 3:13, Robo 3:32, DT 3:51, Prism 4:11) with ~30 seconds of buffer per signal. Slower variants that miss these windows are Robo First or late-tech DT support builds, not drop openers.",
+      "Detected if a Dark Shrine is started by 4:15 AND a Robotics Facility is up by 4:30 AND at least one real (non-hallucinated) Dark Templar exists on the field by 5:00 AND a Warp Prism is on the field by 5:15 -- a fast tactical PvT DT drop. The cutoffs are calibrated against a real PvT DT Drop replay (Peruano, Taito Citadel LE 2026-05-11: Shrine 3:13, Robo 3:32, DT 3:51, Prism 4:11) with ~60 seconds of buffer per signal so slower variants still classify. Slower openers that miss these windows are Robo First or late-tech DT support builds, not drop openers.",
   },
   {
     race: "Protoss",

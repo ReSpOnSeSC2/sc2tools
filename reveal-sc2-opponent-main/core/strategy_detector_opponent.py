@@ -185,7 +185,15 @@ class OpponentStrategyDetector(BaseStrategyDetector):
             )
             if proxied_gates_3m >= 3:
                 return "Protoss - Proxy 4 Gate"
-            if has_building("DarkShrine", 450):
+            # DT Rush: a real DT rush has the Dark Shrine going down by
+            # ~5:30-6:00 and at least one DT on the field by ~7:00 for
+            # the harass. The old "Dark Shrine by 7:30" check fired on
+            # any build that added a Shrine as a mid-game DT-tech
+            # transition (post-Stargate harass, late-game DT support
+            # off a macro game, etc.). Require an actual real (non-
+            # hallucinated) Dark Templar to land within the rush window
+            # so the label means what it says.
+            if has_building("DarkShrine", 360) and count_units("DarkTemplar", 420) >= 1:
                 return "Protoss - DT Rush"
 
             gateway_times = get_times("Gateway")
@@ -275,7 +283,12 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                 return "Terran - Cyclone Rush"
             if has_building("Armory", 300) and count_units("Hellion", 330) > 4:
                 return "Terran - Hellbat All-in"
-            if has_building("GhostAcademy", 390):
+            # Ghost Rush: a true Ghost rush commits to the Academy by
+            # ~5:00 on a 1-base / 2-base economy and uses Ghosts for
+            # early snipes / EMPs. The old 6:30 cutoff caught any
+            # macro game that built a Ghost Academy mid-game for
+            # standard Bio + Ghost composition.
+            if has_building("GhostAcademy", 360):
                 return "Terran - Ghost Rush"
 
             mines_5m = count_units("WidowMine", 390)
@@ -288,7 +301,12 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                     return "Terran - Widow Mine Drop"
                 return "Terran - Widow Upgraded Mine Cheese"
 
-            if has_building("FusionCore", 390):
+            # BC Rush: requires an actual Battlecruiser on the field
+            # within the rush window. A Fusion Core alone fires for any
+            # mech-into-BC macro game that took FC late for end-game
+            # composition. A real BC rush lands the first BC by ~8:30
+            # off a Starport-into-FC commitment.
+            if has_building("FusionCore", 390) and count_units("Battlecruiser", 510) >= 1:
                 return "Terran - BC Rush"
             if count_units("Banshee", 450) > 0 and (
                 has_upgrade_substr("Cloak", 450) or has_upgrade_substr("Banshee", 450)

@@ -255,13 +255,13 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # map in a Warp Prism for a 4-5 minute mark drop.
     #
     # Cutoffs are calibrated against a real PvT DT Drop replay
-    # (Peruano, Taito Citadel LE, 2026-05-11) with ~30s of buffer per
-    # signal so a slightly slower variant still classifies. The
-    # reference replay's actual timings:
-    #   * Dark Shrine started 3:13 -> cutoff 3:45 (225s)
-    #   * Robotics Facility   3:32 -> cutoff 4:00 (240s)
-    #   * First Dark Templar  3:51 -> cutoff 4:30 (270s)
-    #   * Warp Prism on field 4:11 -> cutoff 4:45 (285s)
+    # (Peruano, Taito Citadel LE, 2026-05-11) with ~60s of buffer per
+    # signal so slower variants still classify. The reference replay's
+    # actual timings:
+    #   * Dark Shrine started 3:13 -> cutoff 4:15 (255s)
+    #   * Robotics Facility   3:32 -> cutoff 4:30 (270s)
+    #   * First Dark Templar  3:51 -> cutoff 5:00 (300s)
+    #   * Warp Prism on field 4:11 -> cutoff 5:15 (315s)
     #
     # The earlier version of this rule fired on Dark Shrine by 9:00 +
     # Robo by 10:00 + Warp Prism by 10:00 + (>=1 DT by 10:00) -- the
@@ -269,19 +269,19 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # 2026-05-20 Robo First with late Dark Shrine), but the 8-10
     # minute windows still let in any build with a mid-game Dark
     # Shrine that warped in a single DT for harass. Tightening to the
-    # observed-plus-30s window matches the *opener's* intent: if the
-    # Shrine isn't up by 3:45 and the DT isn't on the field by 4:30,
-    # the build is something else (Robo First with late tech, a
+    # observed-plus-buffer window matches the *opener's* intent: if
+    # the Shrine isn't up by 4:15 and the DT isn't on the field by
+    # 5:00, the build is something else (Robo First with late tech, a
     # delayed DT-counter, etc.).
     #
     # count_units is prereq-aware so a Sentry-hallucinated DarkTemplar
     # (DarkTemplar event with no Dark Shrine built yet) still cannot
     # satisfy the unit guard.
     if (
-        has_building("DarkShrine", 225)
-        and has_building("RoboticsFacility", 240)
-        and count_units("WarpPrism", 285) >= 1
-        and count_units("DarkTemplar", 270) >= 1
+        has_building("DarkShrine", 255)
+        and has_building("RoboticsFacility", 270)
+        and count_units("WarpPrism", 315) >= 1
+        and count_units("DarkTemplar", 300) >= 1
     ):
         return "PvT - DT Drop"
     # Robo First is a Stargate-free opener — Robotics Facility

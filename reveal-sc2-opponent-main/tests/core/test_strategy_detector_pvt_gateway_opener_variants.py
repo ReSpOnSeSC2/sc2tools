@@ -528,7 +528,7 @@ def test_canonical_dt_drop_still_classifies():
         RoboticsFacility      3:32 (212s)
         First DarkTemplar     3:51 (231s)
         WarpPrism on field    4:11 (251s)
-    Cutoffs (3:45 / 4:00 / 4:30 / 4:45) are observed + ~30s buffer,
+    Cutoffs (4:15 / 4:30 / 5:00 / 5:15) are observed + ~60s buffer,
     so this canonical replay must still classify with room to spare.
     """
     events = [
@@ -584,6 +584,43 @@ def test_dt_drop_rejects_sentry_hallucinated_dark_templar():
     assert result != "PvT - DT Drop", (
         f"Sentry-hallucinated DarkTemplar must NOT satisfy the DT Drop "
         f"unit-count guard; got {result!r}"
+    )
+
+
+def test_slower_dt_drop_still_classifies_within_60s_buffer():
+    """A DT drop that lands ~30s slower than the canonical Peruano
+    replay (Dark Shrine at 3:45, Robo at 4:00, first DT at 4:30, Warp
+    Prism at 4:45) must still classify -- it sits right inside the
+    +60s buffer the rule allows. This catches genuine DT drops that
+    are a notch slower than the reference replay (different map, a
+    delayed start, etc.) without re-opening the old 8-10 minute
+    window that let mid-game DT support builds through.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 19),
+        _building("Gateway", 37),
+        _building("Assimilator", 46),
+        _building("Nexus", 78),
+        _building("CyberneticsCore", 90),
+        _building("Assimilator", 95),
+        _building("Pylon", 107),
+        _unit("Stalker", 114),
+        _building("TwilightCouncil", 148),
+        _unit("Sentry", 149),
+        _building("DarkShrine", 225),            # 3:45 -- 32s slower than Peruano
+        _building("Gateway", 235),
+        _building("RoboticsFacility", 240),      # 4:00 -- 28s slower
+        _building("Gateway", 250),
+        _unit("DarkTemplar", 270),               # 4:30 -- 39s slower
+        _unit("WarpPrism", 285),                 # 4:45 -- 34s slower
+        _unit("DarkTemplar", 295),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - DT Drop", (
+        f"A slightly slower DT Drop (~30s behind the Peruano replay) "
+        f"must still classify within the 60s buffer; got {result!r}"
     )
 
 
