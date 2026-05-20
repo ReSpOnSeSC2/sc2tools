@@ -227,6 +227,44 @@ describe("countBuildingsAt — Buildings row parity", () => {
     expect(out.Stalker).toBeUndefined();
     expect(out.Probe).toBeUndefined();
   });
+
+  it("folds residual Gateways into WarpGate once WarpGate research is complete", () => {
+    // In SC2 every Gateway auto-morphs into a Warp Gate once the
+    // WarpGate research finishes (≈7 s per building). The build log
+    // usually emits a UnitTypeChange ‘WarpGate’ entry for each morph
+    // so the loop consumes a Gateway per WarpGate it sees — but
+    // residual Gateways can still leak through when (a) a Gateway is
+    // mid-construction at the hovered time so no morph event has
+    // fired yet, or (b) the payload was trimmed and the morph event
+    // for an already-finished Gateway was dropped. The roster must
+    // surface a single "WarpGate × N" chip in both cases rather than
+    // splitting the same in-game building type across two chips.
+    const events: BuildEvent[] = [
+      { time: 30, name: "Gateway", is_building: true },
+      { time: 60, name: "Gateway", is_building: true },
+      { time: 90, name: "Gateway", is_building: true },
+      // WarpGateResearch finishes at t=200 (start=100, duration=100s).
+      { time: 100, complete_time: 200, name: "WarpGateResearch", is_building: false, category: "upgrade" },
+      // Only one of the three Gateways got a morph entry in the
+      // payload — the other two are still tagged as Gateway.
+      { time: 210, name: "WarpGate", is_building: true },
+    ];
+    const out = countBuildingsAt(events, 9999);
+    expect(out.Gateway).toBeUndefined();
+    expect(out.WarpGate).toBe(3);
+  });
+
+  it("keeps Gateway separate while WarpGate research is still in progress", () => {
+    const events: BuildEvent[] = [
+      { time: 30, name: "Gateway", is_building: true },
+      { time: 60, name: "Gateway", is_building: true },
+      // Research issued but not yet complete by the hovered time.
+      { time: 100, complete_time: 200, name: "WarpGateResearch", is_building: false, category: "upgrade" },
+    ];
+    const out = countBuildingsAt(events, 150);
+    expect(out.Gateway).toBe(2);
+    expect(out.WarpGate).toBeUndefined();
+  });
 });
 
 describe("countUpgradesAt — Upgrades row", () => {
