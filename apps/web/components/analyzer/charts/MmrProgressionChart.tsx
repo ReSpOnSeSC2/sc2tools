@@ -38,10 +38,21 @@ type RegionSeries = {
   latest: { bucket: string; mmr: number } | null;
 };
 
+type AccountSeries = {
+  toonHandle: string;
+  region: string;
+  label: string;
+  points: MmrPoint[];
+  peak: { bucket: string; mmr: number } | null;
+  trough: { bucket: string; mmr: number } | null;
+  latest: { bucket: string; mmr: number } | null;
+};
+
 type MmrResponse = {
   interval: "day" | "week" | "month";
   points: MmrPoint[];
   regions?: RegionSeries[];
+  accounts?: AccountSeries[];
   peak: { bucket: string; mmr: number } | null;
   trough: { bucket: string; mmr: number } | null;
   latest: { bucket: string; mmr: number } | null;
@@ -54,17 +65,17 @@ const COLOR_GRID = "#1f2533";
 const COLOR_TEXT_DIM = "#6b7280";
 const COLOR_BG_SURFACE = "#11141b";
 
-// Per-region line colours. NA keeps the accent so a single-region
-// account looks identical to the pre-split chart. The rest are tuned
-// to stay distinguishable on a dark background without two regions
-// landing on visually adjacent hues.
-const REGION_COLORS: Record<string, string> = {
-  NA: "#7c8cff",
-  EU: "#3ec07a",
-  KR: "#ff6b6b",
-  CN: "#f5b942",
-  SEA: "#b385ff",
-  U: "#9aa3b2",
+// Per-region base colours. The first account on a region uses the
+// base; any additional accounts on the same region cycle through the
+// shades below so a NA main + NA smurf still read as "two NA lines"
+// while staying visually distinct.
+const REGION_COLORS: Record<string, string[]> = {
+  NA: ["#7c8cff", "#4f5dcc", "#a8b3ff", "#3b4799"],
+  EU: ["#3ec07a", "#1f8a52", "#7be0a8", "#155e3a"],
+  KR: ["#ff6b6b", "#c94545", "#ff9e9e", "#902e2e"],
+  CN: ["#f5b942", "#c08a1c", "#ffd887", "#8a610f"],
+  SEA: ["#b385ff", "#8758d6", "#d4b8ff", "#5d3aa3"],
+  U: ["#9aa3b2", "#6b7280", "#c5cdd9", "#4a5260"],
 };
 
 const REGION_LABELS: Record<string, string> = {
@@ -76,25 +87,47 @@ const REGION_LABELS: Record<string, string> = {
   U: "Unknown",
 };
 
-function regionColor(region: string): string {
-  return REGION_COLORS[region] || COLOR_TEXT_DIM;
-}
-
 function regionLabel(region: string): string {
   return REGION_LABELS[region] || region;
+}
+
+/**
+ * Walk the accounts array once and hand each account a colour based
+ * on its region + position within that region. Same-region accounts
+ * cycle through shades of the base hue so the legend still groups
+ * visually by ladder.
+ */
+function buildAccountColors(
+  accounts: AccountSeries[],
+): Record<string, string> {
+  const seen: Record<string, number> = {};
+  const out: Record<string, string> = {};
+  for (const a of accounts) {
+    const idx = (seen[a.region] = (seen[a.region] || 0));
+    seen[a.region] = idx + 1;
+    const palette = REGION_COLORS[a.region] || [COLOR_TEXT_DIM];
+    out[a.toonHandle] = palette[idx % palette.length];
+  }
+  return out;
 }
 
 /**
  * MMR progression over time.
  *
  * Renders the closing MMR per bucket as a smooth line. When the
- * streamer has played on more than one Battle.net region, the chart
- * splits into one line per region (NA / EU / KR / CN / SEA / Unknown)
- * so a 5,000-MMR NA main who dabbles on a 3,500-MMR EU smurf doesn't
- * see the combined line dive whenever they queue EU. With a single
- * region we keep the original single-line look — accent line + soft
- * min/max band + peak / trough / current markers — so nothing
- * changes for the common case.
+ * streamer has played on more than one Battle.net account (any
+ * combination of regions or smurfs), the chart splits into one line
+ * per account — labelled "<REGION> <bnid>" so a streamer with a
+ * 5,000-MMR NA main and a 3,500-MMR EU smurf, or two NA accounts at
+ * different MMR levels, doesn't see the combined line whipsaw
+ * whenever they queue on the other ladder. With a single account we
+ * keep the original single-line look — accent line + soft min/max
+ * band + peak / trough / current markers — so nothing changes for
+ * the common case.
+ *
+ * Accounts data is derived from ``myToonHandle`` (the agent records
+ * it on every replay). Older games that pre-date that field collapse
+ * into a single "Unknown" series so they still appear.
  *
  * The chart shares the global bucket choice from TrendsTab and
  * reuses every filter (since/until/race/opp_race/map/mmr range).
@@ -114,14 +147,48 @@ export function MmrProgressionChart({
     `/v1/timeseries/mmr${filtersToQuery(params)}#${dbRev}`,
   );
 
-  // Per-region series collapse into the overall single-line view
-  // whenever the filtered set only covers one region — both the
-  // legend and the band would just be noise in that case.
+  // Per-account series take priority. Fall back to per-region when
+  // an older API response (pre-accounts) is still in the SWR cache.
+  // Either way the multi-line view only kicks in when the series
+  // count is >= 2 — a single-account / single-region user keeps the
+  // original look.
+  const accounts = useMemo<AccountSeries[]>(
+    () => (Array.isArray(data?.accounts) ? data!.accounts! : []),
+    [data],
+  );
   const regions = useMemo<RegionSeries[]>(
     () => (Array.isArray(data?.regions) ? data!.regions! : []),
     [data],
   );
-  const multiRegion = regions.length > 1;
+  const multiSeries: MultiSeries[] = useMemo(() => {
+    if (accounts.length >= 2) {
+      const colors = buildAccountColors(accounts);
+      return accounts.map((a) => ({
+        key: a.toonHandle,
+        label: a.label,
+        region: a.region,
+        color: colors[a.toonHandle] || COLOR_TEXT_DIM,
+        points: a.points,
+        peak: a.peak,
+        trough: a.trough,
+        latest: a.latest,
+      }));
+    }
+    if (regions.length >= 2) {
+      return regions.map((r) => ({
+        key: r.region,
+        label: regionLabel(r.region),
+        region: r.region,
+        color: (REGION_COLORS[r.region] || [COLOR_TEXT_DIM])[0],
+        points: r.points,
+        peak: r.peak,
+        trough: r.trough,
+        latest: r.latest,
+      }));
+    }
+    return [];
+  }, [accounts, regions]);
+  const multi = multiSeries.length > 1;
 
   const overallRows = useMemo(() => {
     if (!data || !Array.isArray(data.points)) return [];
@@ -137,35 +204,35 @@ export function MmrProgressionChart({
     }));
   }, [data, tz]);
 
-  // Multi-region rows: one row per bucket, one column per region.
+  // Multi-series rows: one row per bucket, one column per series.
   // Missing buckets stay as ``null`` so Recharts skips them rather
   // than drawing a line through zero.
-  const regionRows = useMemo(() => {
-    if (!multiRegion) return [];
+  const multiRows = useMemo(() => {
+    if (!multi) return [];
     const byDate = new Map<string, Record<string, number | string | null>>();
-    for (const series of regions) {
-      for (const p of series.points) {
+    for (const s of multiSeries) {
+      for (const p of s.points) {
         const key = localDateKey(p.bucket, tz);
         let row = byDate.get(key);
         if (!row) {
           row = { date: key };
-          for (const r of regions) row[r.region] = null;
+          for (const other of multiSeries) row[other.key] = null;
           byDate.set(key, row);
         }
-        row[series.region] = p.closeMmr;
+        row[s.key] = p.closeMmr;
       }
     }
     return Array.from(byDate.values()).sort((a, b) =>
       String(a.date).localeCompare(String(b.date)),
     );
-  }, [regions, tz, multiRegion]);
+  }, [multiSeries, tz, multi]);
 
   const yDomain = useMemo(
     () =>
-      multiRegion
-        ? computeRegionYDomain(regions, tz)
+      multi
+        ? computeMultiYDomain(multiSeries)
         : computeYDomain(overallRows),
-    [multiRegion, regions, overallRows, tz],
+    [multi, multiSeries, overallRows],
   );
 
   if (isLoading) {
@@ -191,16 +258,16 @@ export function MmrProgressionChart({
     <Card title="MMR progression">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
         Closing MMR per {bucket} ·{" "}
-        {multiRegion
-          ? "one line per Battle.net region — peak / trough / current per region below."
+        {multi
+          ? "one line per Battle.net account — peak / trough / current per account below."
           : "shaded band = min/max within the bucket · markers highlight peak, trough, and most recent."}
       </p>
-      <MmrHeadline data={data} regions={regions} multiRegion={multiRegion} />
+      <MmrHeadline data={data} multiSeries={multiSeries} multi={multi} />
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
-          {multiRegion ? (
+          {multi ? (
             <ComposedChart
-              data={regionRows}
+              data={multiRows}
               margin={{ top: 8, right: 24, bottom: 4, left: 4 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
@@ -227,31 +294,37 @@ export function MmrProgressionChart({
                   borderRadius: 8,
                   fontSize: 12,
                 }}
-                formatter={(value: number, name: string) => [
-                  value != null ? value.toLocaleString() : "—",
-                  regionLabel(name),
-                ]}
+                formatter={(value: number, name: string) => {
+                  const series = multiSeries.find((s) => s.key === name);
+                  return [
+                    value != null ? value.toLocaleString() : "—",
+                    series ? series.label : name,
+                  ];
+                }}
               />
               <Legend
                 verticalAlign="top"
                 align="right"
                 iconType="line"
                 wrapperStyle={{ fontSize: 11, paddingBottom: 4 }}
-                formatter={(value: string) => regionLabel(value)}
+                formatter={(value: string) => {
+                  const series = multiSeries.find((s) => s.key === value);
+                  return series ? series.label : value;
+                }}
               />
-              {regions.map((series) => (
+              {multiSeries.map((s) => (
                 <Line
-                  key={series.region}
+                  key={s.key}
                   type="monotone"
-                  dataKey={series.region}
-                  name={series.region}
-                  stroke={regionColor(series.region)}
+                  dataKey={s.key}
+                  name={s.key}
+                  stroke={s.color}
                   strokeWidth={2.5}
                   dot={false}
                   connectNulls
                   activeDot={{
                     r: 4,
-                    fill: regionColor(series.region),
+                    fill: s.color,
                     stroke: COLOR_BG_SURFACE,
                     strokeWidth: 2,
                   }}
@@ -260,7 +333,7 @@ export function MmrProgressionChart({
               ))}
             </ComposedChart>
           ) : (
-            <SingleRegionChart
+            <SingleSeriesChart
               rows={overallRows}
               yDomain={yDomain}
               data={data}
@@ -274,11 +347,27 @@ export function MmrProgressionChart({
 }
 
 /**
- * Original single-line chart, broken out so the multi-region branch
+ * Unified shape the multi-line chart cares about — whether the
+ * underlying series came from the per-account split (one line per
+ * toon handle) or the per-region fallback (one line per ladder).
+ */
+type MultiSeries = {
+  key: string;
+  label: string;
+  region: string;
+  color: string;
+  points: MmrPoint[];
+  peak: { bucket: string; mmr: number } | null;
+  trough: { bucket: string; mmr: number } | null;
+  latest: { bucket: string; mmr: number } | null;
+};
+
+/**
+ * Original single-line chart, broken out so the multi-series branch
  * can stay readable without a wall of conditional JSX inside the
  * ResponsiveContainer.
  */
-function SingleRegionChart({
+function SingleSeriesChart({
   rows,
   yDomain,
   data,
@@ -413,40 +502,39 @@ function SingleRegionChart({
 
 function MmrHeadline({
   data,
-  regions,
-  multiRegion,
+  multiSeries,
+  multi,
 }: {
   data: MmrResponse | undefined;
-  regions: RegionSeries[];
-  multiRegion: boolean;
+  multiSeries: MultiSeries[];
+  multi: boolean;
 }) {
   if (!data) return null;
-  if (multiRegion) {
+  if (multi) {
     return (
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:max-w-2xl">
-        {regions.map((series) => {
-          const color = regionColor(series.region);
-          const sub = series.peak && series.trough
-            ? `Peak ${series.peak.mmr.toLocaleString()} · Trough ${series.trough.mmr.toLocaleString()}`
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:max-w-3xl">
+        {multiSeries.map((s) => {
+          const sub = s.peak && s.trough
+            ? `Peak ${s.peak.mmr.toLocaleString()} · Trough ${s.trough.mmr.toLocaleString()}`
             : undefined;
           return (
             <div
-              key={series.region}
+              key={s.key}
               className="rounded-lg border border-border bg-bg-elevated/60 px-3 py-2"
             >
               <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-text-dim">
                 <span
                   aria-hidden
                   className="inline-block h-2 w-2 rounded-full"
-                  style={{ background: color }}
+                  style={{ background: s.color }}
                 />
-                {regionLabel(series.region)}
+                {s.label}
               </div>
               <div
                 className="mt-0.5 text-lg font-semibold tabular-nums"
-                style={{ color }}
+                style={{ color: s.color }}
               >
-                {series.latest ? series.latest.mmr.toLocaleString() : "—"}
+                {s.latest ? s.latest.mmr.toLocaleString() : "—"}
               </div>
               {sub ? (
                 <div className="text-[10px] tabular-nums text-text-dim">
@@ -537,17 +625,16 @@ function computeYDomain(rows: Array<{ min: number; max: number }>): [number, num
 }
 
 /**
- * Domain spanning every region's min/max so the multi-line view
+ * Domain spanning every series' min/max so the multi-line view
  * doesn't clip the higher-MMR ladders just because the band logic
  * picked tighter bounds for one of them.
  */
-function computeRegionYDomain(
-  regions: RegionSeries[],
-  _tz: string,
+function computeMultiYDomain(
+  series: MultiSeries[],
 ): [number, number] | undefined {
   const all: Array<{ min: number; max: number }> = [];
-  for (const series of regions) {
-    for (const p of series.points) {
+  for (const s of series) {
+    for (const p of s.points) {
       all.push({ min: p.minMmr, max: p.maxMmr });
     }
   }

@@ -399,7 +399,7 @@ describe("services/aggregations", () => {
 
   // ---------------- v0.5+ Player-insight aggregations ----------------
 
-  test("mmrProgression returns close/peak/trough scalars + per-region series", async () => {
+  test("mmrProgression returns close/peak/trough + per-region + per-account series", async () => {
     const games = buildGames([
       () => [
         {
@@ -460,6 +460,59 @@ describe("services/aggregations", () => {
               total: 4,
             },
           ],
+          byAccount: [
+            // Main account on NA — 5 games, lands first in NA group.
+            {
+              bucket: new Date("2026-04-01"),
+              toonHandle: "1-S2-1-12345",
+              region: "NA",
+              openMmr: 4000,
+              closeMmr: 4050,
+              minMmr: 3990,
+              maxMmr: 4060,
+              wins: 3,
+              losses: 1,
+              total: 4,
+            },
+            {
+              bucket: new Date("2026-04-08"),
+              toonHandle: "1-S2-1-12345",
+              region: "NA",
+              openMmr: 4055,
+              closeMmr: 4080,
+              minMmr: 4055,
+              maxMmr: 4090,
+              wins: 1,
+              losses: 0,
+              total: 1,
+            },
+            // NA smurf — fewer games, must sort below the main.
+            {
+              bucket: new Date("2026-04-08"),
+              toonHandle: "1-S2-1-99999",
+              region: "NA",
+              openMmr: 3500,
+              closeMmr: 3520,
+              minMmr: 3490,
+              maxMmr: 3540,
+              wins: 1,
+              losses: 1,
+              total: 2,
+            },
+            // EU account.
+            {
+              bucket: new Date("2026-04-08"),
+              toonHandle: "2-S2-1-267727",
+              region: "EU",
+              openMmr: 4100,
+              closeMmr: 4120,
+              minMmr: 4040,
+              maxMmr: 4140,
+              wins: 3,
+              losses: 1,
+              total: 4,
+            },
+          ],
         },
       ],
     ]);
@@ -481,6 +534,19 @@ describe("services/aggregations", () => {
     expect(eu.region).toBe("EU");
     expect(eu.points).toHaveLength(1);
     expect(eu.latest.mmr).toBe(4120);
+    // Per-account series: NA main first (most games), then NA smurf,
+    // then EU. Labels render as "<region> <bnid>".
+    expect(out.accounts).toHaveLength(3);
+    expect(out.accounts.map((a) => a.label)).toEqual([
+      "NA 12345",
+      "NA 99999",
+      "EU 267727",
+    ]);
+    expect(out.accounts[0].region).toBe("NA");
+    expect(out.accounts[0].points).toHaveLength(2);
+    expect(out.accounts[0].latest.mmr).toBe(4080);
+    expect(out.accounts[1].latest.mmr).toBe(3520);
+    expect(out.accounts[2].latest.mmr).toBe(4120);
   });
 
   test("momentum shapes post-win / post-loss splits + session positions", async () => {
