@@ -41,7 +41,7 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - 7 Gate Blink All-in",
     description:
-      "Detected if Blink is researched by 9:00 AND 6+ Gateways exist by 9:00 -- a heavy multi-Gate Blink all-in.",
+      "Detected if Blink is researched by 9:00 AND 6+ Gateways exist by 9:00 AND the 5th Gateway went down BEFORE the 3rd Nexus -- a heavy multi-Gate Blink all-in. A 3rd Nexus taken before the 5th Gateway means the build is 3-base macro and is excluded from this label.",
   },
   {
     race: "Protoss",
