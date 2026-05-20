@@ -2,6 +2,30 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.7.6
+
+### Fixed — PvT "7 Gate Blink All-in" no longer absorbs 3-base Blink macro
+- The `PvT - 7 Gate Blink All-in` classifier fired on `Blink researched
+  by 9:00 AND 6+ Gateways by 9:00` alone, with no nexus-count or
+  nexus-vs-gateway timing check. A 3-base Blink macro game that ended
+  up with 6-8 Gateways was being mistagged as a 2-base all-in — the
+  rule was seeing the extra Gateways but not the 3rd Nexus that marked
+  the build as macro.
+- The fix adds a guard: the 5th Gateway must go down BEFORE the 3rd
+  Nexus. A 3rd Nexus taken before the 5th Gateway means the player
+  committed to a 3-base macro economy and the extra Gateways are
+  macro reinforcement, not all-in production. Both detector copies the
+  agent ships (`reveal-sc2-opponent-main/core/strategy_detector_pvt.py`
+  and `SC2Replay-Analyzer/detectors/user.py`) carry the same guard now,
+  and the build-definition catalogs (Python + the web
+  `apps/web/lib/build-definitions/pvt.ts`) document the new criterion.
+- Two new tests in
+  `test_strategy_detector_pvt_gateway_opener_variants.py` pin the
+  discrimination: a 3rd-Nexus-before-5th-Gateway macro build (must NOT
+  classify as 7-Gate Blink All-in) and the canonical 2-base mass-Gate
+  Blink all-in (must still classify correctly), so the macro / all-in
+  split can't silently regress.
+
 ## 0.7.5
 
 ### Changed — Macro Breakdown emits per-window supply blocks
