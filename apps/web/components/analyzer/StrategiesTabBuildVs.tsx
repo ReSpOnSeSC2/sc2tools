@@ -621,7 +621,21 @@ function BvsTable({
   return (
     <Card>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
+        {/* ``table-fixed`` plus an explicit ``colgroup`` is what stops
+            the four numeric columns from claiming an equal share of
+            leftover space (each ~25 % of the row, with W / L right-
+            aligned inside a 300 px-wide cell). With fixed widths,
+            numerics pack into their content size and the two text
+            columns absorb the rest. */}
+        <table className="w-full table-fixed text-sm">
+          <colgroup>
+            <col />
+            <col />
+            <col style={{ width: "3.5rem" }} />
+            <col style={{ width: "3.5rem" }} />
+            <col style={{ width: "4.5rem" }} />
+            <col style={{ width: "4.5rem" }} />
+          </colgroup>
           <thead className="bg-bg-elevated">
             <tr>
               <SortableTh col="my_build" label="My build" {...sort} />
@@ -640,15 +654,20 @@ function BvsTable({
                 className="cursor-pointer border-t border-border hover:bg-bg-elevated/40"
                 title="Click to see the games"
               >
-                <td className="whitespace-nowrap px-3 py-1.5">{c.my_build}</td>
-                <td className="whitespace-nowrap px-3 py-1.5 text-text-muted">
+                <td className="truncate px-3 py-1.5" title={c.my_build}>
+                  {c.my_build}
+                </td>
+                <td
+                  className="truncate px-3 py-1.5 text-text-muted"
+                  title={c.opp_strat}
+                >
                   {c.opp_strat}
                 </td>
-                <td className="px-3 py-1.5 text-right text-success">{c.wins}</td>
-                <td className="px-3 py-1.5 text-right text-danger">{c.losses}</td>
-                <td className="px-3 py-1.5 text-right">{c.total}</td>
+                <td className="px-2 py-1.5 text-right text-success">{c.wins}</td>
+                <td className="px-2 py-1.5 text-right text-danger">{c.losses}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums">{c.total}</td>
                 <td
-                  className="px-3 py-1.5 text-right tabular-nums"
+                  className="px-2 py-1.5 text-right tabular-nums"
                   style={{ color: wrColor(c.winRate, c.total) }}
                 >
                   {pct1(c.winRate)}

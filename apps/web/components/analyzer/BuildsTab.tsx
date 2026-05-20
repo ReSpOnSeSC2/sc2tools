@@ -87,7 +87,19 @@ export function BuildsTab() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            {/* ``table-fixed`` + explicit colgroup widths so the four
+                numeric cols don't grab equal shares of leftover space
+                and push WR off the right edge — see StrategiesTabBuildVs
+                for the same treatment. */}
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col />
+                <col style={{ width: "3.5rem" }} />
+                <col style={{ width: "3.5rem" }} />
+                <col style={{ width: "4.5rem" }} />
+                <col style={{ width: "4.5rem" }} />
+                <col style={{ width: "8rem" }} />
+              </colgroup>
               <thead className="bg-bg-elevated">
                 <tr>
                   <SortableTh col="name" label="Build" {...sort} />
@@ -95,7 +107,7 @@ export function BuildsTab() {
                   <SortableTh col="losses" label="L" {...sort} align="right" />
                   <SortableTh col="total" label="Games" {...sort} align="right" />
                   <SortableTh col="winRate" label="WR" {...sort} align="right" />
-                  <th className="w-32 px-3 py-2 text-left text-[11px] uppercase text-text-dim">
+                  <th className="px-3 py-2 text-left text-[11px] uppercase text-text-dim">
                     Trend
                   </th>
                 </tr>
@@ -107,12 +119,14 @@ export function BuildsTab() {
                     className="cursor-pointer border-t border-border hover:bg-accent/10"
                     onClick={() => setEditing(b.name)}
                   >
-                    <td className="whitespace-nowrap px-3 py-1.5 text-text">{b.name}</td>
-                    <td className="px-3 py-1.5 text-right text-success">{b.wins}</td>
-                    <td className="px-3 py-1.5 text-right text-danger">{b.losses}</td>
-                    <td className="px-3 py-1.5 text-right">{b.total}</td>
+                    <td className="truncate px-3 py-1.5 text-text" title={b.name}>
+                      {b.name}
+                    </td>
+                    <td className="px-2 py-1.5 text-right text-success">{b.wins}</td>
+                    <td className="px-2 py-1.5 text-right text-danger">{b.losses}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{b.total}</td>
                     <td
-                      className="px-3 py-1.5 text-right tabular-nums"
+                      className="px-2 py-1.5 text-right tabular-nums"
                       style={{ color: wrColor(b.winRate, b.total) }}
                     >
                       {pct1(b.winRate)}
