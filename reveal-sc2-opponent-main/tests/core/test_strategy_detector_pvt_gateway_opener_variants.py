@@ -721,3 +721,100 @@ def test_blink_two_gates_before_third_nexus_with_robo_classifies_as_two_gate():
         f"must classify as 2 Gate Blink (Fast 3rd Nexus); got "
         f"{result!r}"
     )
+
+
+# -----------------------------------------------------------------------------
+# Robo First opener with a midgame Stargate transition
+# -----------------------------------------------------------------------------
+# Reported by the user on the Tourmaline LE 2026-05-20 16:48 replay:
+# Gateway → Cyber → Robo at 2:43, then later in the midgame a Stargate
+# went down. The previous strict "any Stargate disqualifies Robo First"
+# rule shunted this game into the Macro Transition (Unclassified)
+# catch-all even though the OPENER was a textbook Robo First. The rule
+# now matches the user's mental model: Robo First describes the opener,
+# not the entire composition, so a later Stargate transition is a
+# tech-switch on top of a Robo First opener — not a different label.
+def test_robo_first_opener_with_late_stargate_classifies_as_robo_first():
+    """Tourmaline LE 2026-05-20 16:48 replay shape:
+
+        0:19  Pylon
+        0:38  Gateway
+        0:42  Assimilator
+        1:19  Nexus (natural)
+        1:30  CyberneticsCore
+        1:37  Assimilator
+        1:47  Pylon
+        1:55  Stalker (unit, from Gateway)
+        2:07  WarpGateResearch (upgrade)
+        2:20  Sentry (unit, from Gateway)
+        2:43  RoboticsFacility       <-- first tech building
+        2:53  Phoenix (Sentry hallucination -- no Stargate up yet)
+        ...
+       ~9:00  Stargate (midgame Skytoss tech-switch on top of Robo)
+
+    The visible build-order timeline in the SPA shows Robo as the
+    only tech building inside the opener window. The Stargate goes
+    down well after the Robo path is established. Classification
+    must reflect the OPENER — Robo First.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 19),
+        _building("Gateway", 38),
+        _building("Assimilator", 42),
+        _building("Nexus", 79),
+        _building("CyberneticsCore", 90),
+        _building("Assimilator", 97),
+        _building("Pylon", 107),
+        _unit("Stalker", 115),
+        _upgrade("WarpGate", 127),
+        _unit("Sentry", 140),
+        _building("RoboticsFacility", 163),   # 2:43 -- Robo FIRST
+        # Sentry hallucination, not a real Phoenix (no Stargate yet).
+        # count_units filters it out via the prereq table, but the
+        # event is in the unit log either way.
+        _unit("Phoenix", 173),
+        _unit("Immortal", 240),
+        _unit("WarpPrism", 280),
+        _building("Gateway", 300),
+        # Midgame Stargate tech-switch (well after Robo path is set)
+        _building("Stargate", 540),           # 9:00
+        _unit("Phoenix", 600),
+        _unit("VoidRay", 720),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - Robo First", (
+        f"Tourmaline LE Robo-opener + midgame Stargate transition "
+        f"must classify as PvT - Robo First (the opener was Robo); "
+        f"got {result!r}"
+    )
+
+
+def test_robo_first_opener_with_stargate_added_inside_opener_window_still_robo_first():
+    """Even a Stargate that lands well inside the opener window
+    (e.g. 5:30) does NOT change a Robo-first opener's label as long
+    as Robo went down first AND no Phoenix is on the field by 7:00
+    (which would route the replay to Phoenix into Robo earlier in
+    the chain). The OPENER ordering is what counts.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),
+        _building("RoboticsFacility", 200),   # Robo FIRST at 3:20
+        _building("Stargate", 330),           # Stargate at 5:30 -- still after Robo
+        _building("Gateway", 280),
+        _unit("Oracle", 380),                  # no Phoenix
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - Robo First", (
+        f"Robo-first opener with an early-midgame Stargate addition "
+        f"(no Phoenix on the field) must still classify as Robo "
+        f"First; got {result!r}"
+    )
+
