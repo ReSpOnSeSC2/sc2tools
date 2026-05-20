@@ -8,7 +8,14 @@ appropriate branch here.
 
 from typing import Dict, List
 
-from .base import BaseStrategyDetector, count_real_units
+from .base import (
+    BaseStrategyDetector,
+    base_count_at,
+    count_real_units,
+    count_started_before,
+    nth_base_start,
+    start_times,
+)
 from .definitions import candidate_signatures_for
 
 
@@ -114,13 +121,13 @@ class UserBuildDetector(BaseStrategyDetector):
             times = [b['time'] for b in buildings if b['name'] == name]
             return min(times) if times else 9999
 
-        gate_count_6min = sum(1 for b in buildings if b['name'] == "Gateway" and b['time'] < 540)
-        gate_count_530 = sum(1 for b in buildings if b['name'] == "Gateway" and b['time'] < 480)
+        gate_count_6min = count_started_before(buildings, "Gateway", 540)
+        gate_count_530 = count_started_before(buildings, "Gateway", 480)
 
         # --- PvZ ---
         if "vs Zerg" in matchup:
-            sg_count_10min     = sum(1 for b in buildings if b['name'] == "Stargate" and b['time'] < 600)
-            nexus_count_10min  = sum(1 for b in buildings if b['name'] == "Nexus"    and b['time'] < 600)
+            sg_count_10min = count_started_before(buildings, "Stargate", 600)
+            nexus_count_10min = base_count_at(buildings, "Nexus", 600)
             # DT-path discriminators for the 2SG VR rule. A pure 2-Stargate
             # Void Ray opener never builds a Dark Shrine, never produces a
             # Dark Templar, and never adds a 3rd Stargate inside the 10:00
@@ -157,7 +164,7 @@ class UserBuildDetector(BaseStrategyDetector):
 
             if (has_building("Stargate", 510) and count_units("Oracle", 510) >= 2
                     and has_building("RoboticsFacility", 510) and has_building("Forge", 510)
-                    and sum(1 for b in buildings if b['name'] == "Nexus" and b['time'] < 510) >= 3):
+                    and base_count_at(buildings, "Nexus", 510) >= 3):
                 return "PvZ - AlphaStar Style (Oracle/Robo)"
 
             # 7 Gate Glaive/Immortal: Immortals require RoboticsFacility,
@@ -183,9 +190,9 @@ class UserBuildDetector(BaseStrategyDetector):
                     and has_building("RoboticsFacility", 540)
                     and count_units("DarkTemplar", 540) >= 3 and count_units("WarpPrism", 540) >= 1):
                 return "PvZ - DT drop into Archon Drop"
-            if sg_time < twilight_time and has_upgrade_substr("Blink", 600) and sum(1 for b in buildings if b['name'] == "Nexus" and b['time'] < 540) >= 3:
+            if sg_time < twilight_time and has_upgrade_substr("Blink", 600) and base_count_at(buildings, "Nexus", 540) >= 3:
                 return "PvZ - Standard Blink Macro"
-            if sg_time < twilight_time and has_upgrade_substr("Charge", 540) and sum(1 for b in buildings if b['name'] == "Nexus" and b['time'] < 540) >= 3:
+            if sg_time < twilight_time and has_upgrade_substr("Charge", 540) and base_count_at(buildings, "Nexus", 540) >= 3:
                 return "PvZ - Standard charge Macro"
 
             if has_building("RoboticsFacility", 420):
@@ -199,20 +206,19 @@ class UserBuildDetector(BaseStrategyDetector):
             if has_proxy("Gateway", 270, 50):
                 return "PvP - Proxy 2 Gate"
 
-            nexus_times = sorted([b['time'] for b in buildings if b['name'] == 'Nexus'])
-            gate_times = sorted([b['time'] for b in buildings if b['name'] == 'Gateway'])
-            # Count gateways FINISHED before the second Nexus -- this is what
-            # separates a 1-gate expand from a 2-gate expand. The previous
-            # rule only required len(gate_times) >= 1, which let any 2+ gate
-            # expand fall into Strange's bucket whenever the first warp-in
-            # happened to be a Sentry.
-            if len(nexus_times) >= 2 and nexus_times[1] < 300:
-                second_nexus = nexus_times[1]
+            sec_nexus_time = nth_base_start(buildings, "Nexus", 2)
+            total_nexuses = base_count_at(buildings, "Nexus")
+            gate_times = start_times(buildings, "Gateway")
+            # Count gateways STARTED before the second Nexus started --
+            # this is what separates a 1-gate expand from a 2-gate
+            # expand.
+            if sec_nexus_time < 300:
+                second_nexus = sec_nexus_time
                 gates_before_expand = sum(1 for t in gate_times if t < second_nexus)
                 first_unit = next((u['name'] for u in sorted(units, key=lambda x: x['time']) if u['name'] in ("Stalker", "Adept", "Sentry", "Zealot")), None)
 
-                # 2 Gate Expand: 2+ gates finished before the natural goes
-                # down (the "safe" PvP opener).
+                # 2 Gate Expand: 2+ gates started before the natural
+                # goes down (the "safe" PvP opener).
                 if gates_before_expand >= 2:
                     return "PvP - 2 Gate Expand"
 
@@ -236,12 +242,11 @@ class UserBuildDetector(BaseStrategyDetector):
 
             robo_time = building_time("RoboticsFacility")
             twilight_time = building_time("TwilightCouncil")
-            sec_nexus_time = nexus_times[1] if len(nexus_times) >= 2 else 9999
             if robo_time < twilight_time and twilight_time < sec_nexus_time:
                 return "PvP - Rail's Blink Stalker (Robo 1st)"
             if has_building("Stargate", 510) and count_units("Phoenix", 510) >= 3:
                 return "PvP - Phoenix Style"
-            if has_upgrade_substr("Blink", 540) and len(nexus_times) >= 2 and (2 <= gate_count_6min <= 4):
+            if has_upgrade_substr("Blink", 540) and total_nexuses >= 2 and (2 <= gate_count_6min <= 4):
                 return "PvP - Blink Stalker Style"
             if has_proxy("RoboticsFacility", 390):
                 return "PvP - Proxy Robo Opener"
@@ -251,62 +256,51 @@ class UserBuildDetector(BaseStrategyDetector):
 
         # --- PvT ---
         elif "vs Terran" in matchup:
-            nexus_times = sorted([b['time'] for b in buildings if b['name'] == 'Nexus'])
-            sec_nexus_time = nexus_times[1] if len(nexus_times) >= 2 else 9999
-            third_nexus_time = nexus_times[2] if len(nexus_times) >= 3 else 9999
+            sec_nexus_time = nth_base_start(buildings, "Nexus", 2)
+            third_nexus_time = nth_base_start(buildings, "Nexus", 3)
+            total_nexuses = base_count_at(buildings, "Nexus")
 
             robo_time = building_time("RoboticsFacility")
             sg_time = building_time("Stargate")
             twilight_time = building_time("TwilightCouncil")
             ta_time = building_time("TemplarArchive")
-            gate_count_730 = sum(1 for b in buildings if b['name'] == "Gateway" and b['time'] < 450)
+            gate_count_730 = count_started_before(buildings, "Gateway", 450)
 
             if has_proxy("Stargate", sec_nexus_time, 50):
                 return "PvT - Proxy Void Ray/Stargate"
             # Phoenix builds: require an actual Stargate. A Sentry can
             # hallucinate Phoenix off Cyber + Twilight tech, so a 2-base
             # Charge / Templar build will register a "Phoenix" event
-            # without any Stargate ever going down. count_units already
-            # filters hallucinations via the prereq table; the explicit
-            # has_building guard documents the intent and makes the
-            # rule robust to count_units regressions.
+            # without any Stargate ever going down.
             if (has_building("Stargate", 420) and count_units("Phoenix", 420) >= 1
                     and has_building("RoboticsFacility", 480)):
                 return "PvT - Phoenix into Robo"
             if has_building("Stargate", 420) and count_units("Phoenix", 420) >= 1:
-                gate_times = sorted([b['time'] for b in buildings if b['name'] == "Gateway"])
-                if len(gate_times) >= 2 and gate_times[1] < robo_time:
+                gate_starts = start_times(buildings, "Gateway")
+                if len(gate_starts) >= 2 and gate_starts[1] < robo_time:
                     return "PvT - Phoenix Opener"
 
-            # The 5th Gateway must go down BEFORE the 3rd Nexus for this to
-            # be a 2-base mass-Gateway all-in. A 3rd Nexus taken before the
-            # 5th Gateway means the player is on 3-base macro economy and
-            # the extra Gateways are macro reinforcement, not all-in
-            # production. Without this guard, a 3-base Blink macro game
-            # that ends up with 6-8 Gateways gets mistagged as a 7-Gate
-            # Blink All-in.
-            gate_times_sorted = sorted(
-                b['time'] for b in buildings if b['name'] == "Gateway"
-            )
-            fifth_gateway_time = (
-                gate_times_sorted[4] if len(gate_times_sorted) >= 5 else 9999
+            # 7-Gate Blink All-in vs 3-base Blink macro: the 5th
+            # Gateway must be STARTED before the 3rd Nexus is STARTED.
+            # "Taken" the 3rd Nexus means construction was initiated,
+            # not finished -- a player can drop the 3rd Nexus and
+            # keep adding Gateways while it is still building (~100s
+            # Nexus build time) and those Gateways are still macro
+            # reinforcement, not all-in production.
+            gateway_starts = start_times(buildings, "Gateway")
+            fifth_gateway_started = (
+                gateway_starts[4] if len(gateway_starts) >= 5 else 9999
             )
             if (has_upgrade_substr("Blink", 540) and gate_count_6min >= 6
-                    and fifth_gateway_time < third_nexus_time):
+                    and fifth_gateway_started < third_nexus_time):
                 return "PvT - 7 Gate Blink All-in"
-            if has_upgrade_substr("Charge", 540) and gate_count_730 >= 7 and len(nexus_times) < 3:
+            if has_upgrade_substr("Charge", 540) and gate_count_730 >= 7 and total_nexuses < 3:
                 return "PvT - 8 Gate Charge All-in"
-            # 2 Base Templar requires an actual Templar Archives
-            # (HighTemplar / Storm). Without this guard, a replay where
-            # neither a Templar Archives nor a 3rd Nexus was ever built
-            # would compare 9999 < 9999 (False), but a replay where only
-            # the 3rd Nexus is missing would compare ta_time < 9999
-            # which is True even when ta_time itself is 9999 only when
-            # both are missing - so anchor explicitly to has_building.
+            # 2 Base Templar requires an actual Templar Archives.
             if (has_building("TemplarArchive", 9999) and ta_time < third_nexus_time
                     and (4 <= gate_count_730 <= 6)):
                 return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
-            if has_upgrade_substr("Charge", 540) and len(nexus_times) >= 3:
+            if has_upgrade_substr("Charge", 540) and total_nexuses >= 3:
                 return "PvT - Standard Charge Macro"
             # Charge must be the FIRST Twilight upgrade. Without this
             # ordering guard, a Blink-first / Charge-after build with
@@ -326,8 +320,8 @@ class UserBuildDetector(BaseStrategyDetector):
                 else:
                     return "PvT - 3 Gate Blink (Macro)"
 
-            if (has_upgrade_substr("Blink", 480) and len(nexus_times) >= 3
-                    and sum(1 for b in buildings if b['name'] == "Gateway" and b['time'] < 480) == 2
+            if (has_upgrade_substr("Blink", 480) and total_nexuses >= 3
+                    and count_started_before(buildings, "Gateway", 480) == 2
                     and has_building("RoboticsFacility", 480)):
                 return "PvT - 2 Gate Blink (Fast 3rd Nexus)"
 

@@ -10,7 +10,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .strategy_detector_helpers import DetectionContext
+from .strategy_detector_helpers import (
+    DetectionContext,
+    base_count_at,
+    count_started_before,
+)
 
 
 def detect_pvz(ctx: DetectionContext) -> Optional[str]:
@@ -24,8 +28,8 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     gate_count_530 = ctx.gate_count_530
     buildings = ctx.buildings
 
-    sg_count_10min = sum(1 for b in buildings if b["name"] == "Stargate" and b["time"] < 600)
-    nexus_count_10min = sum(1 for b in buildings if b["name"] == "Nexus" and b["time"] < 600)
+    sg_count_10min = count_started_before(buildings, "Stargate", 600)
+    nexus_count_10min = base_count_at(buildings, "Nexus", 600)
 
     # Carrier / Tempest both require Stargate + Fleet Beacon.
     # count_units already filters hallucinations, but document
@@ -70,7 +74,7 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and count_units("Oracle", 510) >= 2
         and has_building("RoboticsFacility", 510)
         and has_building("Forge", 510)
-        and sum(1 for b in buildings if b["name"] == "Nexus" and b["time"] < 510) >= 3
+        and base_count_at(buildings, "Nexus", 510) >= 3
     ):
         return "PvZ - AlphaStar Style (Oracle/Robo)"
 
@@ -181,13 +185,13 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     if (
         sg_time < twilight_time
         and has_upgrade_substr("Blink", 600)
-        and sum(1 for b in buildings if b["name"] == "Nexus" and b["time"] < 540) >= 3
+        and base_count_at(buildings, "Nexus", 540) >= 3
     ):
         return "PvZ - Standard Blink Macro"
     if (
         sg_time < twilight_time
         and has_upgrade_substr("Charge", 540)
-        and sum(1 for b in buildings if b["name"] == "Nexus" and b["time"] < 540) >= 3
+        and base_count_at(buildings, "Nexus", 540) >= 3
     ):
         return "PvZ - Standard charge Macro"
 

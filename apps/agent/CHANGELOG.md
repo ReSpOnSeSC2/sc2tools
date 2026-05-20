@@ -2,6 +2,58 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.7.6
+
+### Fixed — Build classification uses building START times, not finish times
+- `event_extractor.py` emits TWO events per Protoss / Terran building
+  the player constructs: `subtype="init"` when construction starts
+  (UnitInitEvent) and `subtype="born"` when construction completes
+  (UnitBornEvent ~build_time later). Plus `subtype="morph"` for
+  in-place morphs (Gateway → WarpGate, Lair, Hive, …). Every strategy
+  rule that counted "N+ Gateways by 9:00" or indexed into the sorted
+  Nexus list to find "the 3rd Nexus" was reading BOTH events
+  unfiltered, which caused two symptoms:
+  - **Over-counting** in `sum(1 for b in buildings ...)` patterns. A
+    Gateway that finished by 9:00 contributed two events (init + born),
+    so 3 actual Gateways registered as 6 — and the `gate_count_6min
+    >= 6` threshold fired on as little as 3 real Gateways.
+  - **Finish-time leakage on indexed access**. A naive
+    `sorted([b["time"] ...])[2]` for the 3rd Nexus could resolve to
+    the 2nd Nexus's BORN time (~370s) instead of the 3rd Nexus's
+    INIT time (~500s) when the 3rd was taken late, so a rule
+    comparing "5th Gateway started < 3rd Nexus taken" would compare
+    against the wrong moment entirely.
+- Centralized start-time helpers in
+  `core/strategy_detector_helpers.py` (and a mirror in
+  `SC2Replay-Analyzer/detectors/base.py`):
+  `start_times(buildings, name)`,
+  `start_times_excluding_main(buildings, name)`,
+  `count_started_before(buildings, name, t)`,
+  `nth_base_start(buildings, name, n)`,
+  `base_count_at(buildings, name, t)`. All filter to subtype `init`
+  or `morph` (morph = the only event for Lair / Hive / WarpGate /
+  Orbital / Planetary, and IS the start of the new building).
+- `DetectionContext.gate_count_6min` / `gate_count_530` and every
+  inline `sum(...)` / `sorted([...])` pattern across the PvT, PvZ,
+  PvP, and opponent detectors (both the modular `core/` set and the
+  legacy `SC2Replay-Analyzer/detectors/` mirrors) now routes through
+  the helpers, so the entire classifier reads start times
+  consistently.
+- **Direct user-visible consequence**: PvT "7 Gate Blink All-in" now
+  excludes any replay where the 3rd Nexus was STARTED before the 5th
+  Gateway was started -- a player can drop the 3rd Nexus and keep
+  adding Gateways while it is still building (~100s Nexus build
+  time) and those Gateways are still macro reinforcement, not
+  all-in production. Build-definition catalogs (Python +
+  `apps/web/lib/build-definitions/pvt.ts`) updated to spell out
+  "STARTED" in the description.
+- Tests: two new regression cases in
+  `test_strategy_detector_pvt_gateway_opener_variants.py` model the
+  full production event flow (init + born per building) and pin the
+  start-time semantic -- a late-3rd 7-Gate all-in must still
+  classify, and Gateways added DURING the 3rd Nexus's construction
+  must NOT promote a macro build into the all-in bucket.
+
 ## 0.7.5
 
 ### Changed — Macro Breakdown emits per-window supply blocks

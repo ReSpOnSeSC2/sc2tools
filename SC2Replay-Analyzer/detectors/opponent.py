@@ -14,7 +14,13 @@ from typing import Dict, List
 
 from core.sc2_catalog import composition_summary
 
-from .base import BaseStrategyDetector, count_real_units
+from .base import (
+    BaseStrategyDetector,
+    _is_start_event,
+    count_real_units,
+    count_started_before,
+    start_times,
+)
 
 
 # Composition-tag -> human-readable phrase used by `_composition_fallback`.
@@ -72,8 +78,12 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                         return cb["name"]
 
         # 2. Hardcoded Logic Functions
+        # get_times and count_buildings filter to construction-START
+        # events so the same building isn't double-counted (init +
+        # born), and sorted-index access (e.g. ``nexus_times[2]``)
+        # always resolves to a start time rather than a completion.
         def get_times(name):
-            return sorted([b['time'] for b in buildings if b['name'] == name])
+            return start_times(buildings, name)
 
         def has_building(name, time_limit=9999):
             return any(b['name'] == name and b['time'] <= time_limit for b in buildings)
@@ -88,10 +98,12 @@ class OpponentStrategyDetector(BaseStrategyDetector):
             return count_real_units(name, time_limit, units, buildings)
 
         def count_buildings(name, time_limit=9999):
-            return sum(1 for b in buildings if b['name'] == name and b['time'] <= time_limit)
+            return count_started_before(buildings, name, time_limit + 1)
 
-        def count_buildings_strict(name, time_limit=9999):
-            return sum(1 for b in buildings if b['name'] == name and b['time'] <= time_limit and b.get('subtype') in ('init', 'born'))
+        # count_buildings_strict was an earlier attempt at the same
+        # filter (init+born only, excluding "morph"). Alias to the
+        # canonical start-time count so the two helpers can't drift.
+        count_buildings_strict = count_buildings
 
         def has_upgrade_substr(sub_name, time_limit=9999):
             return any(sub_name in u['name'] and u['time'] <= time_limit for u in upgrades)
@@ -171,7 +183,13 @@ class OpponentStrategyDetector(BaseStrategyDetector):
 
             if has_proxy_building("PhotonCannon", 270):
                 return "Protoss - Cannon Rush"
-            proxied_gates_3m = sum(1 for b in buildings if b['name'] == "Gateway" and b['time'] < 270 and self._is_proxy(b, main_loc, 40))
+            proxied_gates_3m = sum(
+                1 for b in buildings
+                if b['name'] == "Gateway"
+                and _is_start_event(b)
+                and b['time'] < 270
+                and self._is_proxy(b, main_loc, 40)
+            )
             if proxied_gates_3m >= 3:
                 return "Protoss - Proxy 4 Gate"
             if has_building("DarkShrine", 450):
@@ -228,11 +246,8 @@ class OpponentStrategyDetector(BaseStrategyDetector):
             # separate events under those names but they're the SAME
             # physical building, NOT a 2nd base. Mirrors the same fix
             # in reveal-sc2-opponent-main/core/strategy_detector.py.
-            cc_events = sorted(
-                [b for b in buildings if b['name'] == "CommandCenter"],
-                key=lambda x: x['time'],
-            )
-            second_cc_time = cc_events[1]['time'] if len(cc_events) >= 2 else 9999
+            cc_starts = start_times(buildings, "CommandCenter")
+            second_cc_time = cc_starts[1] if len(cc_starts) >= 2 else 9999
 
             gas_count_4min = count_buildings("Refinery", 330)
             reaper_count = count_units("Reaper", 330)
@@ -305,8 +320,10 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                     ):
                         return "Terran - Proxy Starport Hellion Drop"
                     return "Terran - Proxy 1-1-1"
-                fact_time = next((b['time'] for b in buildings if b['name'] == "Factory"), 9999)
-                star_time = next((b['time'] for b in buildings if b['name'] == "Starport"), 9999)
+                fact_starts = start_times(buildings, "Factory")
+                star_starts = start_times(buildings, "Starport")
+                fact_time = fact_starts[0] if fact_starts else 9999
+                star_time = star_starts[0] if star_starts else 9999
                 if fact_time < second_cc_time and star_time < second_cc_time:
                     return "Terran - 1-1-1 One Base"
                 if fact_time > second_cc_time:

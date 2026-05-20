@@ -244,3 +244,109 @@ def test_seven_gate_blink_allin_still_fires_for_two_base_mass_gates():
         f"2-base 6+ Gateway Blink build must classify as 7-Gate Blink "
         f"All-in; got {result!r}"
     )
+
+
+# -----------------------------------------------------------------------------
+# Production-style event flow: each building emits subtype="init" at
+# construction start AND subtype="born" ~build_time later when complete.
+# The detectors must read START times and ignore later born events.
+# -----------------------------------------------------------------------------
+def _building_born(name: str, time: int):
+    """Production-style construction-COMPLETED event. Real sc2reader
+    replays emit one of these per building ~build_time after the init
+    event. Detectors must NOT count these toward Gateway / Nexus
+    tallies."""
+    return {
+        "type": "building", "name": name, "time": time, "x": 0.0, "y": 0.0,
+        "subtype": "born",
+    }
+
+
+def test_seven_gate_blink_allin_ignores_born_events_for_count_and_index():
+    """Production-realistic event stream: each Protoss building emits
+    BOTH an "init" (construction-start) and a "born" (construction-
+    complete) event. A naive `sum(1 for b in ... if name == X)` would
+    double-count, and a naive `sorted([b["time"] ... ])[2]` for Nexuses
+    can resolve to a 2nd Nexus's BORN time instead of the 3rd Nexus's
+    INIT time.
+
+    Scenario: 2-base 6-Gate Blink that adds the 3rd Nexus LATE (after
+    Gateways 5-6 are already underway). The build IS a 7-Gate Blink
+    all-in -- player committed mass Gates before taking the 3rd. Born
+    events for early Gateways and the 2nd Nexus must not push the rule
+    into the macro bucket."""
+    events = [
+        _building("Nexus", 0),                          # main (init at 0)
+        _building_born("Nexus", 0),                     # main born too
+        _building("Pylon", 18),
+        _building("Gateway", 60),                       # Gate 1 init
+        _building_born("Gateway", 125),                 # Gate 1 born
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 270),                        # 2nd Nexus init
+        _building_born("Nexus", 370),                   # 2nd Nexus born
+        _building("Gateway", 240),                      # Gate 2 init
+        _building_born("Gateway", 305),                 # Gate 2 born
+        _building("TwilightCouncil", 260),
+        _building("Gateway", 300),                      # Gate 3
+        _building("Gateway", 340),                      # Gate 4
+        _building("Gateway", 380),                      # Gate 5 -- BEFORE 3rd
+        _building("Gateway", 420),                      # Gate 6 -- BEFORE 3rd
+        _building("Nexus", 500),                        # 3rd Nexus LATE
+        _building_born("Nexus", 600),                   # 3rd Nexus born
+        _building("Gateway", 460),                      # Gate 7
+        _upgrade("BlinkTech", 460),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - 7 Gate Blink All-in", (
+        f"5 Gateways started BEFORE the 3rd Nexus must classify as "
+        f"7-Gate Blink All-in even when production-style \"born\" "
+        f"events are present; got {result!r}"
+    )
+
+
+def test_seven_gate_blink_allin_blocked_when_gateways_added_during_third_nexus_build():
+    """The 3rd Nexus is taken at 6:00 (= 360s) and takes ~100s to
+    finish (born at 460). The player keeps adding Gateways DURING the
+    3rd Nexus's construction (Gates 5-7 init at 380, 420, 460). The
+    build is macro, not all-in: \"taken\" the 3rd Nexus means
+    construction STARTED (at 360), not finished. The 5th Gateway
+    (init at 380) is AFTER the 3rd Nexus broke ground (360), so the
+    rule must NOT classify this as 7-Gate Blink All-in.
+
+    Without the start-time-only semantic, the 3rd Nexus's BORN event
+    at 460 would slip into the sorted Nexus list as the 3rd-indexed
+    entry, the rule would compare 5th Gateway (380) < 460 (=2nd
+    Nexus born time, NOT 3rd init time), and mis-classify as all-in.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building_born("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building_born("Gateway", 125),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 270),                        # 2nd Nexus init
+        _building_born("Nexus", 370),                   # 2nd Nexus born
+        _building("Gateway", 240),
+        _building_born("Gateway", 305),
+        _building("TwilightCouncil", 260),
+        _building("Gateway", 300),                      # Gate 3
+        _building("Gateway", 340),                      # Gate 4
+        _building("Nexus", 360),                        # 3rd Nexus STARTED at 6:00
+        _building("Gateway", 380),                      # Gate 5 -- AFTER 3rd start
+        _building("Gateway", 420),                      # Gate 6 (3rd still building)
+        _building_born("Nexus", 460),                   # 3rd Nexus born
+        _building("Gateway", 460),                      # Gate 7
+        _upgrade("BlinkTech", 470),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - 7 Gate Blink All-in", (
+        f"Gateways added DURING 3rd Nexus construction must NOT "
+        f"classify as 7-Gate Blink All-in -- the 3rd Nexus STARTED "
+        f"before the 5th Gateway, which marks the build as macro; "
+        f"got {result!r}"
+    )

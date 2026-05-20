@@ -16,7 +16,13 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .strategy_detector_helpers import DetectionContext
+from .strategy_detector_helpers import (
+    DetectionContext,
+    base_count_at,
+    count_started_before,
+    nth_base_start,
+    start_times,
+)
 
 
 def detect_pvt(ctx: DetectionContext) -> Optional[str]:
@@ -31,15 +37,15 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     buildings = ctx.buildings
     units = ctx.units
 
-    nexus_times = sorted([b["time"] for b in buildings if b["name"] == "Nexus"])
-    sec_nexus_time = nexus_times[1] if len(nexus_times) >= 2 else 9999
-    third_nexus_time = nexus_times[2] if len(nexus_times) >= 3 else 9999
+    sec_nexus_time = nth_base_start(buildings, "Nexus", 2)
+    third_nexus_time = nth_base_start(buildings, "Nexus", 3)
+    total_nexuses = base_count_at(buildings, "Nexus")
 
     robo_time = building_time("RoboticsFacility")
     sg_time = building_time("Stargate")
     twilight_time = building_time("TwilightCouncil")
     ta_time = building_time("TemplarArchive")
-    gate_count_730 = sum(1 for b in buildings if b["name"] == "Gateway" and b["time"] < 450)
+    gate_count_730 = count_started_before(buildings, "Gateway", 450)
 
     if has_proxy("Stargate", sec_nexus_time, 50):
         return "PvT - Proxy Void Ray/Stargate"
@@ -111,29 +117,29 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvT - Phoenix into Robo"
     if has_building("Stargate", 420) and count_units("Phoenix", 420) >= 1:
-        gate_t = sorted([b["time"] for b in buildings if b["name"] == "Gateway"])
-        if len(gate_t) >= 2 and gate_t[1] < robo_time:
+        gate_starts = start_times(buildings, "Gateway")
+        if len(gate_starts) >= 2 and gate_starts[1] < robo_time:
             return "PvT - Phoenix Opener"
 
-    # The 5th Gateway must go down BEFORE the 3rd Nexus for this to be
-    # a 2-base mass-Gateway all-in. A 3rd Nexus taken before the 5th
-    # Gateway means the player is on 3-base macro economy and the
-    # extra Gateways are macro reinforcement, not all-in production.
-    # Without this guard, a 3-base Blink macro game that ends up with
-    # 6-8 Gateways gets mistagged as a 7-Gate Blink All-in.
-    gate_times_sorted = sorted(
-        b["time"] for b in buildings if b["name"] == "Gateway"
-    )
-    fifth_gateway_time = (
-        gate_times_sorted[4] if len(gate_times_sorted) >= 5 else 9999
+    # 7-Gate Blink All-in vs 3-base Blink macro: the 5th Gateway must
+    # be STARTED before the 3rd Nexus is STARTED. "Taken" the 3rd
+    # Nexus means construction was initiated, not finished -- a player
+    # can drop the 3rd Nexus and keep adding Gateways while it is
+    # still building (~100s Nexus build time) and those Gateways are
+    # still macro reinforcement, not all-in production. Without this
+    # guard, a 3-base Blink macro that ends up with 6-8 Gateways gets
+    # mistagged as a 7-Gate Blink All-in.
+    gateway_starts = start_times(buildings, "Gateway")
+    fifth_gateway_started = (
+        gateway_starts[4] if len(gateway_starts) >= 5 else 9999
     )
     if (
         has_upgrade_substr("Blink", 540)
         and gate_count_6min >= 6
-        and fifth_gateway_time < third_nexus_time
+        and fifth_gateway_started < third_nexus_time
     ):
         return "PvT - 7 Gate Blink All-in"
-    if has_upgrade_substr("Charge", 540) and gate_count_730 >= 7 and len(nexus_times) < 3:
+    if has_upgrade_substr("Charge", 540) and gate_count_730 >= 7 and total_nexuses < 3:
         return "PvT - 8 Gate Charge All-in"
     # 2 Base Templar requires a Templar Archives: HT / Storm play
     # is impossible without it. building_time returns 9999 when
@@ -159,7 +165,7 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # label honest.
     if (
         has_upgrade_substr("Charge", 540)
-        and len(nexus_times) >= 3
+        and total_nexuses >= 3
         and not has_building("Stargate", 9999)
     ):
         return "PvT - Standard Charge Macro"
@@ -188,8 +194,8 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
 
     if (
         has_upgrade_substr("Blink", 480)
-        and len(nexus_times) >= 3
-        and sum(1 for b in buildings if b["name"] == "Gateway" and b["time"] < 480) == 2
+        and total_nexuses >= 3
+        and count_started_before(buildings, "Gateway", 480) == 2
         and has_building("RoboticsFacility", 480)
     ):
         return "PvT - 2 Gate Blink (Fast 3rd Nexus)"
