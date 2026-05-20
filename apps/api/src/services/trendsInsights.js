@@ -64,8 +64,25 @@ const NET_MMR_MAX_DELTA = 150;
  * plus min/max so the client can paint a band when bucket size
  * collapses several games into one mark.
  *
- * Output also carries the peak / trough / latest scalars so the
- * client can label them without scanning the series itself.
+ * The response also carries:
+ *
+ *   - ``accounts``: one series per ``myToonHandle`` the user has
+ *     played on. Each account carries its own region label (derived
+ *     from the leading byte of the handle) and a friendly short
+ *     label like "EU 267727" so the chart can paint one line per
+ *     ladder account — a streamer with a main + smurf on the same
+ *     region gets two NA lines instead of a misleading single line
+ *     averaged between them. Pre-myToonHandle games (older agent
+ *     versions) collapse into a single "Unknown" series.
+ *
+ *   - ``regions``: legacy roll-up of the above, one entry per
+ *     Battle.net region. Kept for the previous chart iteration and
+ *     any other consumer that wants the coarser cut. New work should
+ *     prefer ``accounts``.
+ *
+ * The overall ``points`` / ``peak`` / ``trough`` / ``latest`` scalars
+ * are preserved at the top level so existing consumers keep working
+ * even if they ignore the new fields.
  *
  * @param {Deps} deps
  * @param {string} userId
@@ -76,44 +93,270 @@ async function mmrProgression(deps, userId, opts, filters) {
   const interval = deps.pickInterval(opts && opts.interval);
   const timezone = deps.pickTimezone(opts && opts.tz);
   const match = deps.gamesMatchStage(userId, filters);
-  const rows = await deps.games
+  const truncBucket = {
+    $dateTrunc: { date: "$date", unit: interval, timezone },
+  };
+  const projectPoint = {
+    _id: 0,
+    bucket: "$_id",
+    openMmr: 1,
+    closeMmr: 1,
+    minMmr: 1,
+    maxMmr: 1,
+    wins: 1,
+    losses: 1,
+    total: 1,
+  };
+  const groupAccumulators = {
+    // $last after $sort:asc gives the most recent MMR in the bucket.
+    closeMmr: { $last: "$myMmr" },
+    openMmr: { $first: "$myMmr" },
+    minMmr: { $min: "$myMmr" },
+    maxMmr: { $max: "$myMmr" },
+    wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
+    losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
+    total: { $sum: 1 },
+  };
+  const facet = await deps.games
     .aggregate([
       { $match: { ...match, myMmr: { $type: "number" } } },
-      { $addFields: { _bucket: deps.bucketSwitch() } },
-      { $sort: { date: 1 } },
       {
-        $group: {
-          _id: { $dateTrunc: { date: "$date", unit: interval, timezone } },
-          // $last after $sort:asc gives the most recent MMR in the bucket.
-          closeMmr: { $last: "$myMmr" },
-          openMmr: { $first: "$myMmr" },
-          minMmr: { $min: "$myMmr" },
-          maxMmr: { $max: "$myMmr" },
-          wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
-          losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
-          total: { $sum: 1 },
+        $addFields: {
+          _bucket: deps.bucketSwitch(),
+          _myRegion: regionFromToonHandleExpr("$myToonHandle"),
+          // Normalise a missing / blank toon handle to the sentinel
+          // "U" so it groups with the other Unknown rows instead of
+          // creating a dozen ``null``-keyed series.
+          _myAccount: {
+            $cond: [
+              { $and: [{ $ne: ["$myToonHandle", null] }, { $ne: ["$myToonHandle", ""] }] },
+              "$myToonHandle",
+              "U",
+            ],
+          },
         },
       },
-      { $sort: { _id: -1 } },
-      { $limit: LIMITS.TIMESERIES_MAX_BUCKETS },
-      { $sort: { _id: 1 } },
+      // Sort once before $facet so every sub-pipeline sees the same
+      // chronological order and $first / $last resolve to the
+      // bucket's opening / closing MMR.
+      { $sort: { date: 1 } },
       {
-        $project: {
-          _id: 0,
-          bucket: "$_id",
-          openMmr: 1,
-          closeMmr: 1,
-          minMmr: 1,
-          maxMmr: 1,
-          wins: 1,
-          losses: 1,
-          total: 1,
+        $facet: {
+          overall: [
+            { $group: { _id: truncBucket, ...groupAccumulators } },
+            { $sort: { _id: -1 } },
+            { $limit: LIMITS.TIMESERIES_MAX_BUCKETS },
+            { $sort: { _id: 1 } },
+            { $project: projectPoint },
+          ],
+          byRegion: [
+            {
+              $group: {
+                _id: { bucket: truncBucket, region: "$_myRegion" },
+                ...groupAccumulators,
+              },
+            },
+            // Cap with the same single-region budget × the five real
+            // regions + one "U" bin; for a single-region account this
+            // is identical to the overall cap.
+            { $sort: { "_id.bucket": -1 } },
+            { $limit: LIMITS.TIMESERIES_MAX_BUCKETS * 6 },
+            { $sort: { "_id.region": 1, "_id.bucket": 1 } },
+            {
+              $project: {
+                _id: 0,
+                bucket: "$_id.bucket",
+                region: "$_id.region",
+                openMmr: 1,
+                closeMmr: 1,
+                minMmr: 1,
+                maxMmr: 1,
+                wins: 1,
+                losses: 1,
+                total: 1,
+              },
+            },
+          ],
+          byAccount: [
+            {
+              $group: {
+                _id: {
+                  bucket: truncBucket,
+                  toonHandle: "$_myAccount",
+                  region: "$_myRegion",
+                },
+                ...groupAccumulators,
+              },
+            },
+            // Per-toon-handle cap. A realistic ceiling is "a few
+            // accounts" — 20 is generous and still well inside Mongo
+            // pipeline memory.
+            { $sort: { "_id.bucket": -1 } },
+            { $limit: LIMITS.TIMESERIES_MAX_BUCKETS * 20 },
+            { $sort: { "_id.toonHandle": 1, "_id.bucket": 1 } },
+            {
+              $project: {
+                _id: 0,
+                bucket: "$_id.bucket",
+                toonHandle: "$_id.toonHandle",
+                region: "$_id.region",
+                openMmr: 1,
+                closeMmr: 1,
+                minMmr: 1,
+                maxMmr: 1,
+                wins: 1,
+                losses: 1,
+                total: 1,
+              },
+            },
+          ],
         },
       },
     ])
     .toArray();
-  return { interval, points: rows, ...summarize(rows) };
+  const root = facet[0] || { overall: [], byRegion: [], byAccount: [] };
+  const overall = Array.isArray(root.overall) ? root.overall : [];
+  const regions = groupRegionSeries(
+    Array.isArray(root.byRegion) ? root.byRegion : [],
+  );
+  const accounts = groupAccountSeries(
+    Array.isArray(root.byAccount) ? root.byAccount : [],
+  );
+  return {
+    interval,
+    points: overall,
+    regions,
+    accounts,
+    ...summarize(overall),
+  };
 }
+
+/**
+ * Bucket the flat per-(bucket, region) rows from the byRegion facet
+ * into one series per region, attaching per-region peak/trough/latest
+ * so the client can drop them into the headline without scanning the
+ * series itself. Region order matches REGION_PRIORITY so the legend
+ * is stable across reloads regardless of how the user toggled the
+ * region filter.
+ *
+ * @param {Array<{bucket: Date, region: string} & Record<string, number>>} rows
+ */
+function groupRegionSeries(rows) {
+  const byKey = new Map();
+  for (const r of rows) {
+    const key = r.region || "U";
+    let bucket = byKey.get(key);
+    if (!bucket) {
+      bucket = [];
+      byKey.set(key, bucket);
+    }
+    bucket.push({
+      bucket: r.bucket,
+      openMmr: r.openMmr,
+      closeMmr: r.closeMmr,
+      minMmr: r.minMmr,
+      maxMmr: r.maxMmr,
+      wins: r.wins,
+      losses: r.losses,
+      total: r.total,
+    });
+  }
+  const ordered = [];
+  for (const region of REGION_PRIORITY) {
+    if (byKey.has(region)) {
+      ordered.push({ region, points: byKey.get(region), ...summarize(byKey.get(region)) });
+      byKey.delete(region);
+    }
+  }
+  // Any unexpected region label (future Blizzard cluster, malformed
+  // toon handle) gets appended after the known set in alphabetical
+  // order so it still shows up rather than being silently dropped.
+  for (const region of Array.from(byKey.keys()).sort()) {
+    ordered.push({ region, points: byKey.get(region), ...summarize(byKey.get(region)) });
+  }
+  return ordered;
+}
+
+/**
+ * Bucket the flat per-(bucket, toonHandle) rows from the byAccount
+ * facet into one series per Battle.net account. Each series carries
+ * the region (so the chart can colour-code) and a short, friendly
+ * label like "EU 267727" — the legend renders the latter so the
+ * legend reads cleanly even when the user has several smurfs.
+ *
+ * Series order: by region (REGION_PRIORITY) then by total games
+ * descending within a region — so the main account on each ladder
+ * lands above its smurfs in the legend.
+ *
+ * @param {Array<{bucket: Date, toonHandle: string, region: string} & Record<string, number>>} rows
+ */
+function groupAccountSeries(rows) {
+  /** @type {Map<string, {region: string, points: any[], totalGames: number}>} */
+  const byKey = new Map();
+  for (const r of rows) {
+    const handle = r.toonHandle || "U";
+    let bucket = byKey.get(handle);
+    if (!bucket) {
+      bucket = { region: r.region || "U", points: [], totalGames: 0 };
+      byKey.set(handle, bucket);
+    }
+    bucket.points.push({
+      bucket: r.bucket,
+      openMmr: r.openMmr,
+      closeMmr: r.closeMmr,
+      minMmr: r.minMmr,
+      maxMmr: r.maxMmr,
+      wins: r.wins,
+      losses: r.losses,
+      total: r.total,
+    });
+    bucket.totalGames += r.total || 0;
+  }
+  const entries = Array.from(byKey.entries()).map(([handle, v]) => ({
+    toonHandle: handle,
+    region: v.region,
+    label: shortAccountLabel(handle, v.region),
+    points: v.points,
+    totalGames: v.totalGames,
+    ...summarize(v.points),
+  }));
+  entries.sort((a, b) => {
+    const ra = REGION_PRIORITY.indexOf(a.region);
+    const rb = REGION_PRIORITY.indexOf(b.region);
+    const wa = ra === -1 ? REGION_PRIORITY.length : ra;
+    const wb = rb === -1 ? REGION_PRIORITY.length : rb;
+    if (wa !== wb) return wa - wb;
+    // Main account (most games) first within a region.
+    if (a.totalGames !== b.totalGames) return b.totalGames - a.totalGames;
+    return a.toonHandle.localeCompare(b.toonHandle);
+  });
+  return entries.map(({ totalGames: _totalGames, ...rest }) => rest);
+}
+
+/**
+ * Build a short, human-friendly label for a toon handle so the chart
+ * legend doesn't have to display the raw "2-S2-1-267727" wire format.
+ * Format: ``<REGION> <bnid>`` — e.g. "EU 267727". For the Unknown
+ * sentinel the label is just "Unknown" so the headline reads cleanly
+ * for old data that never carried a handle.
+ *
+ * @param {string} handle
+ * @param {string} region
+ */
+function shortAccountLabel(handle, region) {
+  if (!handle || handle === "U") return "Unknown";
+  const segments = String(handle).split("-");
+  const bnid = segments.length >= 4 ? segments[3] : segments[segments.length - 1];
+  const safeRegion = region && region !== "U" ? region : "??";
+  return `${safeRegion} ${bnid}`;
+}
+
+/**
+ * Ordering used for the per-region series. Matches the FilterBar
+ * toggle order so the chart legend reads in the same direction the
+ * user picks regions in the filter row.
+ */
+const REGION_PRIORITY = ["NA", "EU", "KR", "CN", "SEA", "U"];
 
 /** @param {Array<{closeMmr: number, minMmr: number, maxMmr: number, bucket: Date}>} rows */
 function summarize(rows) {

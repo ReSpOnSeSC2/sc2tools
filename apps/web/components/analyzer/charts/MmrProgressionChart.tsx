@@ -6,6 +6,7 @@ import {
   ComposedChart,
   Area,
   Line,
+  Legend,
   XAxis,
   YAxis,
   Tooltip,
@@ -29,9 +30,29 @@ type MmrPoint = {
   total: number;
 };
 
+type RegionSeries = {
+  region: string;
+  points: MmrPoint[];
+  peak: { bucket: string; mmr: number } | null;
+  trough: { bucket: string; mmr: number } | null;
+  latest: { bucket: string; mmr: number } | null;
+};
+
+type AccountSeries = {
+  toonHandle: string;
+  region: string;
+  label: string;
+  points: MmrPoint[];
+  peak: { bucket: string; mmr: number } | null;
+  trough: { bucket: string; mmr: number } | null;
+  latest: { bucket: string; mmr: number } | null;
+};
+
 type MmrResponse = {
   interval: "day" | "week" | "month";
   points: MmrPoint[];
+  regions?: RegionSeries[];
+  accounts?: AccountSeries[];
   peak: { bucket: string; mmr: number } | null;
   trough: { bucket: string; mmr: number } | null;
   latest: { bucket: string; mmr: number } | null;
@@ -44,14 +65,69 @@ const COLOR_GRID = "#1f2533";
 const COLOR_TEXT_DIM = "#6b7280";
 const COLOR_BG_SURFACE = "#11141b";
 
+// Per-region base colours. The first account on a region uses the
+// base; any additional accounts on the same region cycle through the
+// shades below so a NA main + NA smurf still read as "two NA lines"
+// while staying visually distinct.
+const REGION_COLORS: Record<string, string[]> = {
+  NA: ["#7c8cff", "#4f5dcc", "#a8b3ff", "#3b4799"],
+  EU: ["#3ec07a", "#1f8a52", "#7be0a8", "#155e3a"],
+  KR: ["#ff6b6b", "#c94545", "#ff9e9e", "#902e2e"],
+  CN: ["#f5b942", "#c08a1c", "#ffd887", "#8a610f"],
+  SEA: ["#b385ff", "#8758d6", "#d4b8ff", "#5d3aa3"],
+  U: ["#9aa3b2", "#6b7280", "#c5cdd9", "#4a5260"],
+};
+
+const REGION_LABELS: Record<string, string> = {
+  NA: "NA",
+  EU: "EU",
+  KR: "KR",
+  CN: "CN",
+  SEA: "SEA",
+  U: "Unknown",
+};
+
+function regionLabel(region: string): string {
+  return REGION_LABELS[region] || region;
+}
+
+/**
+ * Walk the accounts array once and hand each account a colour based
+ * on its region + position within that region. Same-region accounts
+ * cycle through shades of the base hue so the legend still groups
+ * visually by ladder.
+ */
+function buildAccountColors(
+  accounts: AccountSeries[],
+): Record<string, string> {
+  const seen: Record<string, number> = {};
+  const out: Record<string, string> = {};
+  for (const a of accounts) {
+    const idx = (seen[a.region] = (seen[a.region] || 0));
+    seen[a.region] = idx + 1;
+    const palette = REGION_COLORS[a.region] || [COLOR_TEXT_DIM];
+    out[a.toonHandle] = palette[idx % palette.length];
+  }
+  return out;
+}
+
 /**
  * MMR progression over time.
  *
- * Renders the closing MMR per bucket as a smooth line with a soft
- * gradient fill; the bucket's min/max define a translucent band so
- * volatile periods read at a glance. Peak / trough / current markers
- * sit on top with subtle labels, and a stat row above the chart
- * shows the three numbers explicitly for quick scanning.
+ * Renders the closing MMR per bucket as a smooth line. When the
+ * streamer has played on more than one Battle.net account (any
+ * combination of regions or smurfs), the chart splits into one line
+ * per account — labelled "<REGION> <bnid>" so a streamer with a
+ * 5,000-MMR NA main and a 3,500-MMR EU smurf, or two NA accounts at
+ * different MMR levels, doesn't see the combined line whipsaw
+ * whenever they queue on the other ladder. With a single account we
+ * keep the original single-line look — accent line + soft min/max
+ * band + peak / trough / current markers — so nothing changes for
+ * the common case.
+ *
+ * Accounts data is derived from ``myToonHandle`` (the agent records
+ * it on every replay). Older games that pre-date that field collapse
+ * into a single "Unknown" series so they still appear.
  *
  * The chart shares the global bucket choice from TrendsTab and
  * reuses every filter (since/until/race/opp_race/map/mmr range).
@@ -71,7 +147,50 @@ export function MmrProgressionChart({
     `/v1/timeseries/mmr${filtersToQuery(params)}#${dbRev}`,
   );
 
-  const rows = useMemo(() => {
+  // Per-account series take priority. Fall back to per-region when
+  // an older API response (pre-accounts) is still in the SWR cache.
+  // Either way the multi-line view only kicks in when the series
+  // count is >= 2 — a single-account / single-region user keeps the
+  // original look.
+  const accounts = useMemo<AccountSeries[]>(
+    () => (Array.isArray(data?.accounts) ? data!.accounts! : []),
+    [data],
+  );
+  const regions = useMemo<RegionSeries[]>(
+    () => (Array.isArray(data?.regions) ? data!.regions! : []),
+    [data],
+  );
+  const multiSeries: MultiSeries[] = useMemo(() => {
+    if (accounts.length >= 2) {
+      const colors = buildAccountColors(accounts);
+      return accounts.map((a) => ({
+        key: a.toonHandle,
+        label: a.label,
+        region: a.region,
+        color: colors[a.toonHandle] || COLOR_TEXT_DIM,
+        points: a.points,
+        peak: a.peak,
+        trough: a.trough,
+        latest: a.latest,
+      }));
+    }
+    if (regions.length >= 2) {
+      return regions.map((r) => ({
+        key: r.region,
+        label: regionLabel(r.region),
+        region: r.region,
+        color: (REGION_COLORS[r.region] || [COLOR_TEXT_DIM])[0],
+        points: r.points,
+        peak: r.peak,
+        trough: r.trough,
+        latest: r.latest,
+      }));
+    }
+    return [];
+  }, [accounts, regions]);
+  const multi = multiSeries.length > 1;
+
+  const overallRows = useMemo(() => {
     if (!data || !Array.isArray(data.points)) return [];
     return data.points.map((p) => ({
       date: localDateKey(p.bucket, tz),
@@ -85,11 +204,36 @@ export function MmrProgressionChart({
     }));
   }, [data, tz]);
 
-  const yDomain = useMemo(() => computeYDomain(rows), [rows]);
+  // Multi-series rows: one row per bucket, one column per series.
+  // Missing buckets stay as ``null`` so Recharts skips them rather
+  // than drawing a line through zero.
+  const multiRows = useMemo(() => {
+    if (!multi) return [];
+    const byDate = new Map<string, Record<string, number | string | null>>();
+    for (const s of multiSeries) {
+      for (const p of s.points) {
+        const key = localDateKey(p.bucket, tz);
+        let row = byDate.get(key);
+        if (!row) {
+          row = { date: key };
+          for (const other of multiSeries) row[other.key] = null;
+          byDate.set(key, row);
+        }
+        row[s.key] = p.closeMmr;
+      }
+    }
+    return Array.from(byDate.values()).sort((a, b) =>
+      String(a.date).localeCompare(String(b.date)),
+    );
+  }, [multiSeries, tz, multi]);
 
-  const peakKey = data?.peak ? localDateKey(data.peak.bucket, tz) : null;
-  const troughKey = data?.trough ? localDateKey(data.trough.bucket, tz) : null;
-  const latestKey = data?.latest ? localDateKey(data.latest.bucket, tz) : null;
+  const yDomain = useMemo(
+    () =>
+      multi
+        ? computeMultiYDomain(multiSeries)
+        : computeYDomain(overallRows),
+    [multi, multiSeries, overallRows],
+  );
 
   if (isLoading) {
     return (
@@ -99,7 +243,7 @@ export function MmrProgressionChart({
     );
   }
 
-  if (!rows.length) {
+  if (!overallRows.length) {
     return (
       <Card title="MMR progression">
         <EmptyState
@@ -113,131 +257,296 @@ export function MmrProgressionChart({
   return (
     <Card title="MMR progression">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        Closing MMR per {bucket} · shaded band = min/max within the bucket ·
-        markers highlight peak, trough, and most recent.
+        Closing MMR per {bucket} ·{" "}
+        {multi
+          ? "one line per Battle.net account — peak / trough / current per account below."
+          : "shaded band = min/max within the bucket · markers highlight peak, trough, and most recent."}
       </p>
-      <MmrHeadline data={data} />
+      <MmrHeadline data={data} multiSeries={multiSeries} multi={multi} />
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={rows}
-            margin={{ top: 8, right: 24, bottom: 4, left: 4 }}
-          >
-            <defs>
-              <linearGradient id="mmrFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={COLOR_ACCENT} stopOpacity={0.32} />
-                <stop offset="100%" stopColor={COLOR_ACCENT} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
-            <XAxis
-              dataKey="date"
-              stroke={COLOR_TEXT_DIM}
-              fontSize={11}
-              minTickGap={28}
-              tickMargin={6}
-            />
-            <YAxis
-              stroke={COLOR_TEXT_DIM}
-              fontSize={11}
-              domain={yDomain}
-              width={52}
-              tickMargin={4}
-              tickFormatter={(v: number) => v.toLocaleString()}
-            />
-            {data?.latest ? (
-              <ReferenceLine
-                y={data.latest.mmr}
-                stroke={COLOR_ACCENT}
-                strokeOpacity={0.35}
-                strokeDasharray="4 4"
+          {multi ? (
+            <ComposedChart
+              data={multiRows}
+              margin={{ top: 8, right: 24, bottom: 4, left: 4 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
+              <XAxis
+                dataKey="date"
+                stroke={COLOR_TEXT_DIM}
+                fontSize={11}
+                minTickGap={28}
+                tickMargin={6}
               />
-            ) : null}
-            <Tooltip
-              cursor={{ stroke: COLOR_ACCENT, strokeDasharray: "3 3" }}
-              contentStyle={{
-                background: COLOR_BG_SURFACE,
-                border: `1px solid ${COLOR_GRID}`,
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              formatter={(value: number, name: string) => {
-                if (name === "close") return [value.toLocaleString(), "Closing MMR"];
-                if (name === "band") return [null, null];
-                return [value, name];
-              }}
-            />
-            <Area
-              type="monotone"
-              dataKey="band"
-              stroke="none"
-              fill={COLOR_ACCENT}
-              fillOpacity={0.12}
-              isAnimationActive={false}
-              connectNulls
-              activeDot={false}
-              legendType="none"
-            />
-            <Area
-              type="monotone"
-              dataKey="close"
-              stroke="none"
-              fill="url(#mmrFill)"
-              isAnimationActive={false}
-              activeDot={false}
-              legendType="none"
-            />
-            <Line
-              type="monotone"
-              dataKey="close"
-              stroke={COLOR_ACCENT}
-              strokeWidth={2.5}
-              dot={false}
-              activeDot={{ r: 5, fill: COLOR_ACCENT, stroke: COLOR_BG_SURFACE, strokeWidth: 2 }}
-              isAnimationActive={false}
-            />
-            {peakKey && data?.peak ? (
-              <ReferenceDot
-                x={peakKey}
-                y={data.peak.mmr}
-                r={5}
-                fill={COLOR_SUCCESS}
-                stroke={COLOR_BG_SURFACE}
-                strokeWidth={2}
-                isFront
+              <YAxis
+                stroke={COLOR_TEXT_DIM}
+                fontSize={11}
+                domain={yDomain}
+                width={52}
+                tickMargin={4}
+                tickFormatter={(v: number) => v.toLocaleString()}
               />
-            ) : null}
-            {troughKey && data?.trough ? (
-              <ReferenceDot
-                x={troughKey}
-                y={data.trough.mmr}
-                r={5}
-                fill={COLOR_DANGER}
-                stroke={COLOR_BG_SURFACE}
-                strokeWidth={2}
-                isFront
+              <Tooltip
+                cursor={{ stroke: COLOR_ACCENT, strokeDasharray: "3 3" }}
+                contentStyle={{
+                  background: COLOR_BG_SURFACE,
+                  border: `1px solid ${COLOR_GRID}`,
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+                formatter={(value: number, name: string) => {
+                  const series = multiSeries.find((s) => s.key === name);
+                  return [
+                    value != null ? value.toLocaleString() : "—",
+                    series ? series.label : name,
+                  ];
+                }}
               />
-            ) : null}
-            {latestKey && data?.latest ? (
-              <ReferenceDot
-                x={latestKey}
-                y={data.latest.mmr}
-                r={5}
-                fill={COLOR_ACCENT}
-                stroke={COLOR_BG_SURFACE}
-                strokeWidth={2}
-                isFront
+              <Legend
+                verticalAlign="top"
+                align="right"
+                iconType="line"
+                wrapperStyle={{ fontSize: 11, paddingBottom: 4 }}
+                formatter={(value: string) => {
+                  const series = multiSeries.find((s) => s.key === value);
+                  return series ? series.label : value;
+                }}
               />
-            ) : null}
-          </ComposedChart>
+              {multiSeries.map((s) => (
+                <Line
+                  key={s.key}
+                  type="monotone"
+                  dataKey={s.key}
+                  name={s.key}
+                  stroke={s.color}
+                  strokeWidth={2.5}
+                  dot={false}
+                  connectNulls
+                  activeDot={{
+                    r: 4,
+                    fill: s.color,
+                    stroke: COLOR_BG_SURFACE,
+                    strokeWidth: 2,
+                  }}
+                  isAnimationActive={false}
+                />
+              ))}
+            </ComposedChart>
+          ) : (
+            <SingleSeriesChart
+              rows={overallRows}
+              yDomain={yDomain}
+              data={data}
+              tz={tz}
+            />
+          )}
         </ResponsiveContainer>
       </div>
     </Card>
   );
 }
 
-function MmrHeadline({ data }: { data: MmrResponse | undefined }) {
+/**
+ * Unified shape the multi-line chart cares about — whether the
+ * underlying series came from the per-account split (one line per
+ * toon handle) or the per-region fallback (one line per ladder).
+ */
+type MultiSeries = {
+  key: string;
+  label: string;
+  region: string;
+  color: string;
+  points: MmrPoint[];
+  peak: { bucket: string; mmr: number } | null;
+  trough: { bucket: string; mmr: number } | null;
+  latest: { bucket: string; mmr: number } | null;
+};
+
+/**
+ * Original single-line chart, broken out so the multi-series branch
+ * can stay readable without a wall of conditional JSX inside the
+ * ResponsiveContainer.
+ */
+function SingleSeriesChart({
+  rows,
+  yDomain,
+  data,
+  tz,
+}: {
+  rows: Array<{
+    date: string;
+    close: number;
+    band: [number, number];
+  }>;
+  yDomain: [number, number] | undefined;
+  data: MmrResponse | undefined;
+  tz: string;
+}) {
+  const peakKey = data?.peak ? localDateKey(data.peak.bucket, tz) : null;
+  const troughKey = data?.trough ? localDateKey(data.trough.bucket, tz) : null;
+  const latestKey = data?.latest ? localDateKey(data.latest.bucket, tz) : null;
+  return (
+    <ComposedChart
+      data={rows}
+      margin={{ top: 8, right: 24, bottom: 4, left: 4 }}
+    >
+      <defs>
+        <linearGradient id="mmrFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={COLOR_ACCENT} stopOpacity={0.32} />
+          <stop offset="100%" stopColor={COLOR_ACCENT} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
+      <XAxis
+        dataKey="date"
+        stroke={COLOR_TEXT_DIM}
+        fontSize={11}
+        minTickGap={28}
+        tickMargin={6}
+      />
+      <YAxis
+        stroke={COLOR_TEXT_DIM}
+        fontSize={11}
+        domain={yDomain}
+        width={52}
+        tickMargin={4}
+        tickFormatter={(v: number) => v.toLocaleString()}
+      />
+      {data?.latest ? (
+        <ReferenceLine
+          y={data.latest.mmr}
+          stroke={COLOR_ACCENT}
+          strokeOpacity={0.35}
+          strokeDasharray="4 4"
+        />
+      ) : null}
+      <Tooltip
+        cursor={{ stroke: COLOR_ACCENT, strokeDasharray: "3 3" }}
+        contentStyle={{
+          background: COLOR_BG_SURFACE,
+          border: `1px solid ${COLOR_GRID}`,
+          borderRadius: 8,
+          fontSize: 12,
+        }}
+        formatter={(value: number, name: string) => {
+          if (name === "close") return [value.toLocaleString(), "Closing MMR"];
+          if (name === "band") return [null, null];
+          return [value, name];
+        }}
+      />
+      <Area
+        type="monotone"
+        dataKey="band"
+        stroke="none"
+        fill={COLOR_ACCENT}
+        fillOpacity={0.12}
+        isAnimationActive={false}
+        connectNulls
+        activeDot={false}
+        legendType="none"
+      />
+      <Area
+        type="monotone"
+        dataKey="close"
+        stroke="none"
+        fill="url(#mmrFill)"
+        isAnimationActive={false}
+        activeDot={false}
+        legendType="none"
+      />
+      <Line
+        type="monotone"
+        dataKey="close"
+        stroke={COLOR_ACCENT}
+        strokeWidth={2.5}
+        dot={false}
+        activeDot={{ r: 5, fill: COLOR_ACCENT, stroke: COLOR_BG_SURFACE, strokeWidth: 2 }}
+        isAnimationActive={false}
+      />
+      {peakKey && data?.peak ? (
+        <ReferenceDot
+          x={peakKey}
+          y={data.peak.mmr}
+          r={5}
+          fill={COLOR_SUCCESS}
+          stroke={COLOR_BG_SURFACE}
+          strokeWidth={2}
+          isFront
+        />
+      ) : null}
+      {troughKey && data?.trough ? (
+        <ReferenceDot
+          x={troughKey}
+          y={data.trough.mmr}
+          r={5}
+          fill={COLOR_DANGER}
+          stroke={COLOR_BG_SURFACE}
+          strokeWidth={2}
+          isFront
+        />
+      ) : null}
+      {latestKey && data?.latest ? (
+        <ReferenceDot
+          x={latestKey}
+          y={data.latest.mmr}
+          r={5}
+          fill={COLOR_ACCENT}
+          stroke={COLOR_BG_SURFACE}
+          strokeWidth={2}
+          isFront
+        />
+      ) : null}
+    </ComposedChart>
+  );
+}
+
+function MmrHeadline({
+  data,
+  multiSeries,
+  multi,
+}: {
+  data: MmrResponse | undefined;
+  multiSeries: MultiSeries[];
+  multi: boolean;
+}) {
   if (!data) return null;
+  if (multi) {
+    return (
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:max-w-3xl">
+        {multiSeries.map((s) => {
+          const sub = s.peak && s.trough
+            ? `Peak ${s.peak.mmr.toLocaleString()} · Trough ${s.trough.mmr.toLocaleString()}`
+            : undefined;
+          return (
+            <div
+              key={s.key}
+              className="rounded-lg border border-border bg-bg-elevated/60 px-3 py-2"
+            >
+              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-text-dim">
+                <span
+                  aria-hidden
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ background: s.color }}
+                />
+                {s.label}
+              </div>
+              <div
+                className="mt-0.5 text-lg font-semibold tabular-nums"
+                style={{ color: s.color }}
+              >
+                {s.latest ? s.latest.mmr.toLocaleString() : "—"}
+              </div>
+              {sub ? (
+                <div className="text-[10px] tabular-nums text-text-dim">
+                  {sub}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
   const items: Array<{
     label: string;
     value: string;
@@ -313,4 +622,21 @@ function computeYDomain(rows: Array<{ min: number; max: number }>): [number, num
   const range = Math.max(hi - lo, 80);
   const pad = Math.max(20, Math.round(range * 0.08));
   return [Math.max(0, Math.floor((lo - pad) / 10) * 10), Math.ceil((hi + pad) / 10) * 10];
+}
+
+/**
+ * Domain spanning every series' min/max so the multi-line view
+ * doesn't clip the higher-MMR ladders just because the band logic
+ * picked tighter bounds for one of them.
+ */
+function computeMultiYDomain(
+  series: MultiSeries[],
+): [number, number] | undefined {
+  const all: Array<{ min: number; max: number }> = [];
+  for (const s of series) {
+    for (const p of s.points) {
+      all.push({ min: p.minMmr, max: p.maxMmr });
+    }
+  }
+  return computeYDomain(all);
 }
