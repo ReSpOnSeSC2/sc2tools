@@ -818,3 +818,312 @@ def test_robo_first_opener_with_stargate_added_inside_opener_window_still_robo_f
         f"First; got {result!r}"
     )
 
+
+def test_robo_first_opener_with_later_twilight_and_charge_is_robo_first_not_standard_charge_macro():
+    """0.8.0 regression: a Robo-first opener (Robo at 2:43 — first
+    tech building) that later adds a Twilight Council for Charge
+    support on 3 bases was mis-firing PvT - Standard Charge Macro
+    even though the OPENER was Robo. The 0.8.0 Standard Charge Macro
+    fix replaced the strict ``not has_building("Stargate", 9999)``
+    guard with ``twilight_time < sg_time`` but never required
+    ``twilight_time < robo_time``. So a Robo-first build that later
+    researched Charge satisfied the rule (sg_time defaults to 9999
+    when no Stargate, twilight_time < 9999 trivially) and stole the
+    replay before the Robo First branch below could claim it.
+
+    The fix adds the ``twilight_time < robo_time`` ordering check
+    so Standard Charge Macro means what its label says: the OPENER
+    was Twilight (Twilight before Robo AND before Stargate).
+    Robo-first openers fall through to Robo First instead, which
+    is the correct label for them — the Charge upgrade is a
+    midgame tech-switch on top of a Robo-first opener, not a
+    reclassification of it.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 19),
+        _building("Gateway", 38),
+        _building("Assimilator", 42),
+        _building("Nexus", 79),
+        _building("CyberneticsCore", 90),
+        _building("Assimilator", 97),
+        _building("Pylon", 107),
+        _unit("Stalker", 115),
+        _upgrade("WarpGate", 127),
+        _unit("Sentry", 140),
+        _building("RoboticsFacility", 163),   # 2:43 -- Robo FIRST
+        _unit("Phoenix", 173),                 # Sentry hallucination
+        _unit("Immortal", 240),                # Robo path
+        _unit("WarpPrism", 280),               # Robo path
+        _building("Gateway", 300),
+        # Twilight added LATER (after Robo was already the opener)
+        _building("TwilightCouncil", 360),     # 6:00 -- well after Robo
+        _building("Gateway", 380),
+        _upgrade("Charge", 420),               # 7:00
+        # 3rd Nexus for the macro game
+        _building("Nexus", 450),               # 7:30
+        # No Stargate at all -- the 0.8.0 regression case
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - Robo First", (
+        f"Robo-first opener with a midgame Twilight + Charge tech-"
+        f"switch on 3 bases must classify as Robo First (the OPENER "
+        f"was Robo, not Twilight). Standard Charge Macro requires "
+        f"Twilight to be the FIRST tech building. Got {result!r}"
+    )
+
+
+# -----------------------------------------------------------------------------
+# OPENER semantics sweep — every Twilight-led / Stargate-led label
+# requires the labelled tech to be the FIRST tech building. Robo-first
+# openers that ADD that tech later in the midgame fall through to
+# Robo First, which is the correct label for them.
+# -----------------------------------------------------------------------------
+def test_robo_first_opener_with_late_blink_and_seven_gates_is_robo_first_not_blink_allin():
+    """A Robo-first opener (Robo at 2:43 — first tech building) that
+    ends up with 6+ Gateways and researches Blink LATE off a
+    midgame Twilight Council is NOT a 7 Gate Blink All-in -- the
+    OPENER was Robo. The 7 Gate Blink All-in label is reserved for
+    Twilight-FIRST mass-gate commitments. Robo-first builds that
+    add 6+ Gateways and Blink fall through to Robo First.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 19),
+        _building("Gateway", 38),                # Gate 1
+        _building("Assimilator", 42),
+        _building("Nexus", 79),                  # natural
+        _building("CyberneticsCore", 90),
+        _building("Assimilator", 97),
+        _building("Pylon", 107),
+        _building("RoboticsFacility", 163),      # 2:43 -- Robo FIRST
+        _unit("Immortal", 240),
+        _building("Gateway", 250),               # Gate 2
+        _building("TwilightCouncil", 300),       # 5:00 -- WELL after Robo
+        _building("Gateway", 320),               # Gate 3
+        _building("Gateway", 360),               # Gate 4
+        _building("Gateway", 400),               # Gate 5
+        _building("Gateway", 440),               # Gate 6
+        _building("Gateway", 480),               # Gate 7
+        _upgrade("BlinkTech", 500),              # Blink LATE (8:20)
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - 7 Gate Blink All-in", (
+        f"Robo-first opener with late Blink + 7 gates must NOT "
+        f"classify as 7 Gate Blink All-in (the OPENER was Robo, "
+        f"not Twilight). Got {result!r}"
+    )
+    assert result == "PvT - Robo First", (
+        f"Robo-first opener with a midgame Blink + 7-Gate tech-"
+        f"switch must classify as Robo First; got {result!r}"
+    )
+
+
+def test_robo_first_opener_with_late_charge_and_eight_gates_is_robo_first_not_charge_allin():
+    """A Robo-first opener that ends up with 7+ Gateways on 2 bases
+    and researches Charge LATE is NOT an 8 Gate Charge All-in --
+    that label is for Twilight-FIRST 2-base Chargelot commitments.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 19),
+        _building("Gateway", 38),                # Gate 1
+        _building("Assimilator", 42),
+        _building("Nexus", 79),                  # natural -- no 3rd
+        _building("CyberneticsCore", 90),
+        _building("RoboticsFacility", 163),      # Robo FIRST at 2:43
+        _unit("Immortal", 240),
+        _building("Gateway", 240),               # Gate 2
+        _building("TwilightCouncil", 280),       # WELL after Robo
+        _building("Gateway", 300),               # Gate 3
+        _building("Gateway", 340),               # Gate 4
+        _building("Gateway", 380),               # Gate 5
+        _building("Gateway", 420),               # Gate 6
+        _building("Gateway", 440),               # Gate 7
+        _building("Gateway", 450),               # Gate 8
+        _upgrade("Charge", 450),                 # Charge LATE
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - 8 Gate Charge All-in", (
+        f"Robo-first opener with 8 gates and late Charge must NOT "
+        f"classify as 8 Gate Charge All-in; got {result!r}"
+    )
+    assert result == "PvT - Robo First", (
+        f"Robo-first opener with a midgame Charge + 8-Gate tech-"
+        f"switch must classify as Robo First; got {result!r}"
+    )
+
+
+def test_robo_first_opener_with_late_templar_archive_is_robo_first_not_2base_templar():
+    """A Robo-first opener that adds a Templar Archives later in
+    the midgame for Storm support is NOT a 2 Base Templar build --
+    that label is reserved for Twilight-FIRST reactive Storm
+    openers with 4-6 gates and a delayed 3rd Nexus.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 19),
+        _building("Gateway", 38),                # Gate 1
+        _building("Assimilator", 42),
+        _building("Nexus", 79),                  # natural -- no 3rd
+        _building("CyberneticsCore", 90),
+        _building("Assimilator", 97),
+        _building("Pylon", 107),
+        _building("RoboticsFacility", 163),      # Robo FIRST at 2:43
+        _unit("Immortal", 240),
+        _building("Gateway", 250),               # Gate 2
+        _building("Gateway", 280),               # Gate 3
+        _building("Gateway", 320),               # Gate 4
+        _building("TwilightCouncil", 360),       # 6:00 -- well after Robo
+        _building("TemplarArchive", 420),        # TA at 7:00
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - 2 Base Templar (Reactive/Delayed 3rd)", (
+        f"Robo-first opener with a late TA must NOT classify as "
+        f"2 Base Templar; got {result!r}"
+    )
+    assert result == "PvT - Robo First", (
+        f"Robo-first opener with a midgame TA tech-switch must "
+        f"classify as Robo First; got {result!r}"
+    )
+
+
+def test_robo_first_opener_with_late_blink_and_two_gates_pre_third_is_robo_first_not_2gate_blink():
+    """A Robo-first opener (Robo as first tech) with 3+ bases, 2
+    Gateways before 3rd Nexus, and a LATE Blink upgrade is NOT a
+    "PvT - 2 Gate Blink (Fast 3rd Nexus)" -- that label is for
+    Twilight-FIRST 2-Gate Blink openers with Robo as the SECOND
+    tech (Observer / Immortal support). Robo-first openers fall
+    through to Robo First.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 19),
+        _building("Gateway", 38),                # Gate 1 (pre-3rd)
+        _building("Assimilator", 42),
+        _building("Nexus", 79),                  # natural
+        _building("CyberneticsCore", 90),
+        _building("Assimilator", 97),
+        _building("Pylon", 107),
+        _building("RoboticsFacility", 163),      # 2:43 -- Robo FIRST
+        _unit("Immortal", 240),
+        _building("Gateway", 250),               # Gate 2 (pre-3rd)
+        _building("Nexus", 280),                 # 3rd Nexus at 4:40
+        # Twilight added LATER, Blink LATE
+        _building("TwilightCouncil", 360),       # 6:00 -- after Robo
+        _upgrade("BlinkTech", 460),              # Blink at 7:40
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - 2 Gate Blink (Fast 3rd Nexus)", (
+        f"Robo-first opener with late Blink must NOT classify as "
+        f"2 Gate Blink (Fast 3rd Nexus); got {result!r}"
+    )
+    assert result == "PvT - Robo First", (
+        f"Robo-first opener with a midgame Blink tech-switch must "
+        f"classify as Robo First; got {result!r}"
+    )
+
+
+def test_robo_first_opener_with_late_stargate_and_real_phoenix_is_robo_first_not_phoenix_into_robo():
+    """A Robo-first opener (Robo at 2:43) that ADDS a Stargate later
+    in the midgame and gets a real Phoenix on the field by 7:00 is
+    NOT a "Phoenix into Robo" build -- that label is for STARGATE-
+    FIRST Phoenix openers that transition into Robo tech. The
+    user's Robo-first openers fall through to Robo First instead.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 19),
+        _building("Gateway", 38),
+        _building("Assimilator", 42),
+        _building("Nexus", 79),                  # natural
+        _building("CyberneticsCore", 90),
+        _building("Assimilator", 97),
+        _building("Pylon", 107),
+        _building("RoboticsFacility", 163),      # 2:43 -- Robo FIRST
+        _unit("Immortal", 240),
+        # Stargate added LATER (after Robo was already the opener)
+        _building("Stargate", 300),              # 5:00 -- AFTER Robo
+        # Real Phoenix from the (real) Stargate
+        _unit("Phoenix", 360),                   # 6:00
+        _building("Gateway", 380),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - Phoenix into Robo", (
+        f"Robo-first opener with a midgame Stargate + Phoenix must "
+        f"NOT classify as Phoenix into Robo (the OPENER was Robo, "
+        f"not Stargate). Got {result!r}"
+    )
+    assert result == "PvT - Robo First", (
+        f"Robo-first opener with a midgame Stargate + Phoenix harass "
+        f"tech-switch must classify as Robo First; got {result!r}"
+    )
+
+
+def test_robo_first_opener_with_late_stargate_and_phoenix_only_is_robo_first_not_phoenix_opener():
+    """Same shape as above but without the Robo follow-up matching
+    Phoenix into Robo's signature -- a Robo-first opener with a
+    late Stargate must NOT mis-fire Phoenix Opener either. The
+    OPENER ordering keeps Stargate-led labels reserved for
+    Stargate-first openers.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 19),
+        _building("Gateway", 38),                # Gate 1
+        _building("Assimilator", 42),
+        _building("Nexus", 79),                  # natural
+        _building("CyberneticsCore", 90),
+        _building("Assimilator", 97),
+        _building("Pylon", 107),
+        _building("Gateway", 130),               # Gate 2 (early, before Robo)
+        _building("RoboticsFacility", 163),      # 2:43 -- Robo FIRST
+        _unit("Immortal", 240),
+        # Stargate added LATER for Phoenix harass
+        _building("Stargate", 300),              # 5:00 -- AFTER Robo
+        _unit("Phoenix", 360),                   # 6:00 -- real Phoenix
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - Phoenix Opener", (
+        f"Robo-first opener with a midgame Stargate must NOT "
+        f"classify as Phoenix Opener (the OPENER was Robo, not "
+        f"Stargate). Got {result!r}"
+    )
+
+
+def test_stargate_first_phoenix_into_robo_still_classifies():
+    """Positive case: Stargate is the FIRST tech building, Phoenix is
+    on the field by 7:00, Robo comes second as a tech follow-up. The
+    new ``sg_time < robo_time AND sg_time < twilight_time`` guards
+    are satisfied (Stargate at 220, no Twilight, Robo at 320) so
+    this canonical Stargate-into-Robo replay still classifies as
+    Phoenix into Robo.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),
+        _building("Assimilator", 150),
+        _building("Pylon", 170),
+        _building("Stargate", 220),              # Stargate FIRST
+        _unit("Phoenix", 280),                    # real Phoenix by 7:00
+        _building("RoboticsFacility", 320),      # Robo SECOND
+        _building("Gateway", 280),
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - Phoenix into Robo", (
+        f"Stargate-first opener with Phoenix + Robo follow-up must "
+        f"still classify as Phoenix into Robo; got {result!r}"
+    )
+

@@ -6,14 +6,14 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - 2 Base Templar (Reactive/Delayed 3rd)",
     description:
-      "Detected if a Templar Archives is built (required for HighTemplar / Psionic Storm) AND it finishes BEFORE the third Nexus is taken AND the player has 4-6 Gateways by 7:30 -- a reactive 2-base High Templar / Storm timing with a delayed 3rd. A hallucinated High Templar is NOT enough; the Templar Archives must actually exist.",
+      "Detected if Twilight Council is the FIRST tech building (before any Robotics Facility AND before any Stargate), a Templar Archives finishes BEFORE the third Nexus is taken, AND the player has 4-6 Gateways by 7:30 -- a reactive 2-base High Templar / Storm timing with a delayed 3rd. The Twilight-first ordering guard keeps Robo-first openers that add a late TA for Storm support off this label (those fall through to Robo First). A hallucinated High Templar is NOT enough; the Templar Archives must actually exist.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - 2 Gate Blink (Fast 3rd Nexus)",
     description:
-      "Detected if Blink is researched by 8:00, the player has taken 3+ Nexuses, exactly 2 Gateways were STARTED before the 3rd Nexus, AND a Robotics Facility is up by 8:00 -- a fast-3rd 2-Gate Blink style. The gate count is measured against the 3rd Nexus's start time, not a fixed 7:30 cutoff, so a player can add more Gateways after taking the 3rd Nexus without flipping the label to 3 or 4 Gate Blink.",
+      "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Blink is researched by 8:00, the player has taken 3+ Nexuses, exactly 2 Gateways were STARTED before the 3rd Nexus, AND a Robotics Facility is up by 8:00 -- a fast-3rd 2-Gate Blink style with Robo follow-up for Observer / Immortal support. The Twilight-first ordering keeps Robo-first openers with a midgame Blink tech-switch off this label. The gate count is measured against the 3rd Nexus's start time, not a fixed 7:30 cutoff, so a player can add more Gateways after taking the 3rd Nexus without flipping the label to 3 or 4 Gate Blink.",
   },
   {
     race: "Protoss",
@@ -41,14 +41,14 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - 7 Gate Blink All-in",
     description:
-      "Detected if Blink is researched by 9:00 AND 6+ Gateways exist by 9:00 AND the 5th Gateway was STARTED before the 3rd Nexus was STARTED -- a heavy multi-Gate Blink all-in. \"Taken\" the 3rd Nexus means construction was initiated, not finished: a player can drop the 3rd Nexus and add Gateways while it is still building and those Gateways are still macro reinforcement, not all-in production. The build is excluded if the 3rd Nexus broke ground before the 5th Gateway.",
+      "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Blink is researched by 9:00, 6+ Gateways exist by 9:00, AND the 5th Gateway was STARTED before the 3rd Nexus was STARTED -- a heavy Twilight-first multi-Gate Blink all-in. The Twilight-first guard keeps Robo-first openers with 6+ Gateways + late Blink off this label (those fall through to Robo First). \"Taken\" the 3rd Nexus means construction was initiated, not finished: a player can drop the 3rd Nexus and add Gateways while it is still building and those Gateways are still macro reinforcement, not all-in production. The build is excluded if the 3rd Nexus broke ground before the 5th Gateway.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - 8 Gate Charge All-in",
     description:
-      "Detected if Charge is researched by 9:00 AND 7+ Gateways exist by 7:30 AND fewer than 3 Nexuses have been taken -- a 2-base mass-Gate Chargelot all-in.",
+      "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Charge is researched by 9:00, 7+ Gateways exist by 7:30, AND fewer than 3 Nexuses have been taken -- a 2-base Twilight-first mass-Gate Chargelot all-in. The Twilight-first guard keeps Robo-first openers with 7+ Gateways + late Charge off this label (those fall through to Robo First).",
   },
   {
     race: "Protoss",
@@ -69,14 +69,14 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - Phoenix Opener",
     description:
-      "Detected if a Stargate is built, 1+ real (non-hallucinated) Phoenix is on the field by 7:00, AND the player's second Gateway was built BEFORE the Robotics Facility -- a pure Phoenix opener. Hallucinated Phoenix from Sentries do NOT count.",
+      "Detected if Stargate is the FIRST tech building (before Robo AND Twilight), 1+ real (non-hallucinated) Phoenix is on the field by 7:00, AND the player's second Gateway was built BEFORE the Robotics Facility -- a pure Stargate-first Phoenix opener. The Stargate-first ordering keeps Robo-first openers with a midgame Stargate + Phoenix harass off this label (those fall through to Robo First). Hallucinated Phoenix from Sentries do NOT count.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - Phoenix into Robo",
     description:
-      "Detected if a Stargate is built, 1+ real (non-hallucinated) Phoenix is on the field by 7:00, AND a Robotics Facility is up by 8:00 -- a Phoenix opener that transitions into Robo tech. A Sentry's hallucinated Phoenix does NOT trigger this build.",
+      "Detected if Stargate is the FIRST tech building (before Robo AND Twilight), 1+ real (non-hallucinated) Phoenix is on the field by 7:00, AND a Robotics Facility is up by 8:00 -- a Stargate-first Phoenix opener that transitions into Robo tech. The Stargate-first ordering keeps Robo-first openers that ADD a midgame Stargate + real Phoenix off this label (those fall through to Robo First, since the OPENER was Robo). A Sentry's hallucinated Phoenix does NOT trigger this build.",
   },
   {
     race: "Protoss",
@@ -125,6 +125,6 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - Standard Charge Macro",
     description:
-      "Detected if Charge is researched by 9:00, the player has taken 3+ Nexuses, AND Twilight Council was built BEFORE any Stargate — a Twilight-opener 3-base Chargelot macro. The label describes the OPENER, not the entire composition: a Twilight-first Charge macro that transitions into Stargate tech later in the midgame (Skytoss tech-switch, end-game Tempests, late Phoenix harass) still classifies as Standard Charge Macro because the opening was Twilight + Charge. Stargate-led openers are caught earlier by Stargate into Charge / Phoenix into Robo so they don't fall into this bucket.",
+      "Detected if Charge is researched by 9:00, the player has taken 3+ Nexuses, AND Twilight Council is the FIRST tech building — Twilight goes down before any Robotics Facility AND before any Stargate. The label describes the OPENER, not the entire composition: a Twilight-first Charge macro that later adds Robo (Observer / Immortal support) or transitions into Stargate tech in the midgame (Skytoss tech-switch, end-game Tempests, late Phoenix harass) still classifies as Standard Charge Macro because the opening was Twilight + Charge. Robo-first openers (Robo before Twilight) are caught by Robo First instead; Stargate-led openers are caught earlier by Stargate into Charge / Phoenix into Robo.",
   },
 ];

@@ -110,13 +110,33 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # the explicit guard makes the requirement self-documenting
     # and prevents a regression if count_units is ever swapped
     # for a raw count again.
+    #
+    # OPENER ordering (mirrors Robo First / Standard Charge
+    # Macro): "Phoenix into Robo" and "Phoenix Opener" both
+    # describe a STARGATE-FIRST opener, so we require Stargate
+    # to be the first tech building -- ``sg_time < robo_time``
+    # AND ``sg_time < twilight_time``. Without these checks a
+    # Robo-first opener that ADDED a Stargate later in the
+    # midgame and got a real Phoenix on the field by 7:00 would
+    # mis-fire Phoenix into Robo, stealing the replay from the
+    # Robo First branch below even though the actual OPENER was
+    # Robo. The default-9999 sentinels keep pure builds
+    # (no Twilight at all, no Robo at all) classifying
+    # correctly: ``sg_time(any) < 9999`` is trivially true.
     if (
         has_building("Stargate", 420)
         and count_units("Phoenix", 420) >= 1
         and has_building("RoboticsFacility", 480)
+        and sg_time < robo_time
+        and sg_time < twilight_time
     ):
         return "PvT - Phoenix into Robo"
-    if has_building("Stargate", 420) and count_units("Phoenix", 420) >= 1:
+    if (
+        has_building("Stargate", 420)
+        and count_units("Phoenix", 420) >= 1
+        and sg_time < robo_time
+        and sg_time < twilight_time
+    ):
         gate_starts = start_times(buildings, "Gateway")
         if len(gate_starts) >= 2 and gate_starts[1] < robo_time:
             return "PvT - Phoenix Opener"
@@ -140,11 +160,22 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     fifth_gateway_started = (
         gateway_starts[4] if len(gateway_starts) >= 5 else 9999
     )
+    # OPENER ordering (mirrors Robo First / Standard Charge Macro):
+    # the 7 Gate Blink All-in is a TWILIGHT-FIRST opener -- the
+    # player commits to Blink off a Twilight Council before any
+    # Robo / Stargate tech. Without ``twilight_time < robo_time``
+    # AND ``twilight_time < sg_time`` a Robo-first opener that
+    # ended up with 6+ Gateways and researched Blink later would
+    # mis-fire here, stealing the replay from Robo First. The
+    # default-9999 sentinels make pure-Twilight builds (no Robo,
+    # no Stargate) trivially satisfy the checks.
     if (
         has_upgrade_substr("Blink", 540)
         and gate_count_6min >= 6
         and fifth_gateway_started < third_nexus_time
         and pvt_blink_time == pvt_first_twilight_upgrade
+        and twilight_time < robo_time
+        and twilight_time < sg_time
     ):
         return "PvT - 7 Gate Blink All-in"
     # Charge-FIRST ordering guard mirrors the 7-Gate-Blink rule above:
@@ -152,11 +183,19 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # with 7+ Gateways on 2 bases is not a Charge all-in -- it is a
     # hybrid that committed to Stalkers / Adepts first. Require Charge
     # to be the first Twilight upgrade.
+    #
+    # OPENER ordering: same Twilight-first guard as 7 Gate Blink
+    # All-in. The 8 Gate Charge All-in is a pure 2-base
+    # Twilight-led Chargelot mass-Gate commitment; a Robo-first
+    # opener that drops 7 Gateways before 7:30 is doing something
+    # else (likely a Robo all-in or mismatched build).
     if (
         has_upgrade_substr("Charge", 540)
         and gate_count_730 >= 7
         and total_nexuses < 3
         and pvt_charge_time == pvt_first_twilight_upgrade
+        and twilight_time < robo_time
+        and twilight_time < sg_time
     ):
         return "PvT - 8 Gate Charge All-in"
     # 2 Base Templar requires a Templar Archives: HT / Storm play
@@ -165,27 +204,44 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # comparison alone is not enough on a replay where the user
     # never finished a 3rd Nexus -- both sides of the inequality
     # could be infinity. Anchor the check to a real cutoff.
+    #
+    # OPENER ordering: 2 Base Templar is a TWILIGHT-FIRST opener
+    # (Templar Archives requires Twilight Council). Adding the
+    # ordering guards keeps Robo-first openers that add a late TA
+    # for storm support off this rule -- they correctly fall
+    # through to Robo First instead.
     if (
         has_building("TemplarArchive", 9999)
         and ta_time < third_nexus_time
         and (4 <= gate_count_730 <= 6)
+        and twilight_time < robo_time
+        and twilight_time < sg_time
     ):
         return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
     # Standard Charge Macro is a Twilight-OPENER 3-base Charge
-    # macro game. The label describes the OPENER (Twilight is
-    # the first tech building — before any Stargate), not the
-    # entire composition: a Twilight-first Charge macro that
-    # transitions into Stargate tech later in the midgame
-    # (Skytoss tech-switch, end-game Tempests) still classifies
-    # as Standard Charge Macro because the opening was Twilight.
-    # The previous strict ``not has_building("Stargate", 9999)``
-    # excluded any build with a Stargate at any point, which is
-    # the same anti-pattern the Robo First rule used to have:
-    # it shunted Twilight-opener replays with a midgame Stargate
-    # transition into the Macro Transition (Unclassified)
-    # catch-all even though the opener was textbook Standard
-    # Charge Macro. Earlier rules already catch Stargate-led
-    # hybrids:
+    # macro game. "Twilight opener" means the Twilight Council is
+    # the FIRST tech building — built before any Stargate AND
+    # before any Robotics Facility. Both ordering checks are
+    # required, mirroring the symmetric Robo First rule below
+    # which requires Robo before Twilight AND before Stargate.
+    #
+    # 0.8.0 dropped the strict ``not has_building("Stargate", 9999)``
+    # guard in favor of ``twilight_time < sg_time``, which correctly
+    # let Twilight-opener Charge macros with a midgame Stargate
+    # tech-switch (Skytoss transition, late Tempests, late Phoenix
+    # harass) classify here instead of falling into Macro Transition
+    # (Unclassified). But that fix was incomplete: it never asked
+    # whether Twilight was actually first. A Robo-first opener that
+    # added a Twilight Council LATER for Charge support on 3 bases
+    # would satisfy ``twilight_time < sg_time`` (since sg_time
+    # defaults to 9999 when no Stargate exists) and incorrectly
+    # fire this rule BEFORE the Robo First branch below could
+    # claim the replay. Adding ``twilight_time < robo_time`` makes
+    # the rule mean what its label says: the OPENER was Twilight.
+    # Robo-first openers (robo_time < twilight_time) fall through
+    # to Robo First, which is the correct label for them.
+    #
+    # Earlier rules already catch Stargate-led hybrids:
     #   * Stargate-into-Charge — Stargate before Twilight + Charge
     #     is first Twilight upgrade. Fires before this rule when
     #     Stargate is the opener.
@@ -205,6 +261,7 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         has_upgrade_substr("Charge", 540)
         and total_nexuses >= 3
         and twilight_time < sg_time
+        and twilight_time < robo_time
         and pvt_charge_time == pvt_first_twilight_upgrade
     ):
         return "PvT - Standard Charge Macro"
@@ -254,11 +311,24 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         if gates_before_third_nexus == 3:
             return "PvT - 3 Gate Blink (Macro)"
 
+    # 2 Gate Blink (Fast 3rd Nexus) is a TWILIGHT-FIRST opener
+    # with a Robo follow-up (for Observer / Immortal support).
+    # The Robo presence is REQUIRED by ``has_building("RoboticsFacility",
+    # 480)`` below, so the opener-ordering check is what keeps a
+    # Robo-first opener that researched Blink later from
+    # mis-firing this label -- the OPENER is the first tech
+    # building, and for this rule that must be the Twilight
+    # Council (with Robo arriving second as a follow-up tech).
+    # Mirror of the OPENER guards on 4 / 3 Gate Blink Macro
+    # above (they already have ``twilight_time < robo_time`` AND
+    # ``twilight_time < sg_time``).
     if (
         has_upgrade_substr("Blink", 480)
         and total_nexuses >= 3
         and gates_before_third_nexus == 2
         and has_building("RoboticsFacility", 480)
+        and twilight_time < robo_time
+        and twilight_time < sg_time
     ):
         return "PvT - 2 Gate Blink (Fast 3rd Nexus)"
 
