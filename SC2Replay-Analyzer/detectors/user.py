@@ -363,16 +363,17 @@ class UserBuildDetector(BaseStrategyDetector):
 
             # DT Drop: fast tactical opener calibrated against a real
             # PvT DT Drop replay (Peruano, Taito Citadel LE 2026-05-11)
-            # with ~30s buffer per signal. Observed timings: Dark
+            # with ~60s buffer per signal. Observed timings: Dark
             # Shrine 3:13, Robo 3:32, first DT 3:51, Warp Prism 4:11.
-            # Cutoffs (3:45 / 4:00 / 4:30 / 4:45) are observed + ~30s.
+            # Cutoffs (4:15 / 4:30 / 5:00 / 5:15) are observed + ~60s.
             # Earlier 8-10 minute windows let in Robo First builds
             # with late Dark Shrines for harass; the tighter cutoffs
-            # match the opener's intent.
-            if (has_building("DarkShrine", 225)
-                    and has_building("RoboticsFacility", 240)
-                    and count_units("WarpPrism", 285) >= 1
-                    and count_units("DarkTemplar", 270) >= 1):
+            # match the opener's intent while leaving room for slower
+            # variants.
+            if (has_building("DarkShrine", 255)
+                    and has_building("RoboticsFacility", 270)
+                    and count_units("WarpPrism", 315) >= 1
+                    and count_units("DarkTemplar", 300) >= 1):
                 return "PvT - DT Drop"
             if has_building("RoboticsFacility", 390):
                 if robo_time < sg_time and robo_time < twilight_time:

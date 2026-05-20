@@ -2,6 +2,46 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.7.9
+
+### Changed — Widen PvT DT Drop buffer to +60s; tighten DT/Ghost/BC Rush opponent labels
+- **PvT DT Drop buffer widened from +30s to +60s.** 0.7.8 calibrated
+  the DT Drop rule against the Peruano replay (Shrine 3:13, Robo 3:32,
+  DT 3:51, Prism 4:11) with a +30s buffer. That window was tight to
+  the reference and dropped slightly-slower legitimate DT Drops. New
+  cutoffs (observed + ~60s):
+  ```
+  has_building("DarkShrine", 255)         # 3:45 -> 4:15
+  has_building("RoboticsFacility", 270)   # 4:00 -> 4:30
+  count_units("DarkTemplar", 300) >= 1    # 4:30 -> 5:00
+  count_units("WarpPrism", 315) >= 1      # 4:45 -> 5:15
+  ```
+  Mid-game DT-tech additions (Shrine going down after 4:15) still
+  don't match. New regression test
+  `test_slower_dt_drop_still_classifies_within_60s_buffer` pins a DT
+  Drop landing ~30s behind Peruano.
+- **DT Rush / Ghost Rush / BC Rush opponent labels tightened.** The
+  same too-loose-cutoff pattern that caught DT Drop was hiding in
+  three opponent-side rules: each fired on a SINGLE building existing
+  by a generous cutoff, with no follow-up unit check. They now require
+  the build's signature unit to actually be on the field within a
+  realistic harass / attack window:
+  ```
+  Protoss - DT Rush:  Dark Shrine by 5:00 + real DT by 6:00
+                      (was: Dark Shrine by 7:30 alone)
+  Terran - Ghost Rush: Ghost Academy by 5:30
+                      (was: Ghost Academy by 6:30 -- standard Bio macro
+                      adds the Academy after 6:00 for snipes/EMPs)
+  Terran - BC Rush:    Fusion Core by 5:30 + real Battlecruiser by 7:30
+                      (was: Fusion Core by 6:30 alone -- any mech-into-
+                      late-game-BC macro built FC for end-game)
+  ```
+  Same fix mirrored in both `core/strategy_detector_opponent.py` and
+  the legacy `SC2Replay-Analyzer/detectors/opponent.py`.
+- Build-definition catalogs (`core/build_definitions.py`,
+  `data/build_definitions.json`, `apps/web/lib/build-definitions/pvt.ts`)
+  updated to document the new windows and unit-presence requirements.
+
 ## 0.7.8
 
 ### Changed — PvT DT Drop windows calibrated against a real replay; Blink rules count Gateways before the 3rd Nexus
