@@ -324,6 +324,72 @@ describe("services/strategyPhases", () => {
     expect(midKeys).toContain("Stalker|Phoenix");
   });
 
+  test("evaluate forwards the global filter bar to perGame.listForRulePreview", async () => {
+    // Regression guard: the StrategiesTab build × strategy comparison
+    // panels were ignoring the global filter bar, so the "What you/they
+    // typically do" sample counts didn't match the "All games" list
+    // below them. Filters must reach ``listForRulePreview`` so the
+    // matched set respects the active timeframe / race / map / region.
+    let capturedOpts = null;
+    const svc = new StrategyPhasesService(
+      {},
+      {
+        perGame: {
+          async listForRulePreview(_userId, opts) {
+            capturedOpts = opts;
+            return makeStrategyGames([
+              {
+                gameId: "g-x",
+                result: "Victory",
+                strategy: "Zerg - Mass Ling",
+                myUnitsAtMid: { Stalker: 4, Phoenix: 3, Probe: 60 },
+              },
+            ]);
+          },
+        },
+      },
+    );
+    const filters = {
+      since: new Date("2026-01-01"),
+      race: "P",
+      map: "ghost river",
+    };
+    await svc.evaluate("u1", "Zerg - Mass Ling", { filters });
+    expect(capturedOpts).not.toBeNull();
+    expect(capturedOpts.filters).toBe(filters);
+  });
+
+  test("evaluateByBuildName forwards the global filter bar to perGame.listForRulePreview", async () => {
+    // Mirror of the evaluate test for the left column's auto-classified
+    // label fallback. Same fix, same regression guard.
+    let capturedOpts = null;
+    const svc = new StrategyPhasesService(
+      {},
+      {
+        perGame: {
+          async listForRulePreview(_userId, opts) {
+            capturedOpts = opts;
+            return makeStrategyGames([
+              {
+                gameId: "g-y",
+                result: "Victory",
+                strategy: "Zerg - Mass Ling",
+                myUnitsAtMid: { Stalker: 4, Phoenix: 3, Probe: 60 },
+                myBuild: "PvZ - 3 Stargate Phoenix",
+              },
+            ]);
+          },
+        },
+      },
+    );
+    const filters = { since: new Date("2026-01-01"), oppRace: "Z" };
+    await svc.evaluateByBuildName("u1", "PvZ - 3 Stargate Phoenix", {
+      filters,
+    });
+    expect(capturedOpts).not.toBeNull();
+    expect(capturedOpts.filters).toBe(filters);
+  });
+
   test("evaluate returns null when the buildName filter empties the matched set", async () => {
     // Mass-Ling games exist but none carry the requested build label —
     // the cell-scoped query must 404, not return the strategy's full

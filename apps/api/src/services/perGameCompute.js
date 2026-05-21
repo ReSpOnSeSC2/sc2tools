@@ -4,6 +4,7 @@ const { COLLECTIONS, LIMITS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
 const { toStartSeconds, isFinishTimeEvent } = require("./buildDurations");
+const { gamesMatchStage } = require("../util/parseQuery");
 
 const {
   KNOWN_BUILDING_NAMES,
@@ -428,13 +429,21 @@ class PerGameComputeService {
    * both my-events AND opp-events lets the route honour the build's
    * perspective without a second query.
    *
-   * ``match`` is an optional Mongo filter merged into the find query
-   * (under the user-scope). Callers that already know the matchup —
-   * the StrategiesTab build × strategy drill-down passes ``myBuild``
-   * and ``opponent.strategy`` for example — push their predicate down
-   * here so the ``limit`` cap applies to the *matching* set instead of
-   * the user's full recent window. Without push-down, a user with more
-   * than ``limit`` games would see the analysis cohort silently
+   * ``filters`` — optional global-filter-bar object (since / until /
+   * race / oppRace / map / mmr range / regions / excludeTooShort).
+   * When present, the userId-scoped Mongo $match is built via
+   * ``gamesMatchStage`` so the caller honours the same time-frame /
+   * matchup / region scoping the "All games" list uses. Unscoped
+   * callers (legacy preview, dossier) keep the userId-only behaviour
+   * by omitting it.
+   *
+   * ``match`` is an optional cohort push-down merged on top of the
+   * filter-bar match. Callers that already know the matchup — the
+   * StrategiesTab build × strategy drill-down passes ``myBuild`` and
+   * ``opponent.strategy`` for example — push their predicate down
+   * here so the ``limit`` cap applies to the *matching* set instead
+   * of the user's full recent window. Without push-down, a user with
+   * more than ``limit`` games would see the analysis cohort silently
    * shrink to whichever fraction of their most-recent ``limit`` games
    * happened to satisfy the post-filter, even if many more matching
    * games exist further back.
@@ -443,6 +452,7 @@ class PerGameComputeService {
    * @param {{
    *   limit?: number,
    *   includeMacroBreakdown?: boolean,
+   *   filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>,
    *   match?: Record<string, any>,
    * }} [opts]
    * @returns {Promise<Array<{
@@ -463,11 +473,15 @@ class PerGameComputeService {
   async listForRulePreview(userId, opts = {}) {
     const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 600));
     const includeMacroBreakdown = !!opts.includeMacroBreakdown;
-    // Optional Mongo-level push-down filter. Callers that already know
-    // which slice of the user's games they want (e.g. the build ×
-    // strategy drill-down) merge a {myBuild, "opponent.strategy"}
-    // predicate here so the ``limit`` cap applies AFTER the filter and
-    // the analysis cohort doesn't get silently truncated by recency.
+    // Build the base match from the global filter bar (if any), then
+    // merge the optional cohort push-down on top. The two are
+    // orthogonal: filters narrow by timeframe / race / map / region;
+    // match narrows by build / opponent.strategy. Combined, the
+    // ``limit`` cap applies to games that satisfy both — which is what
+    // the StrategiesTab build × strategy comparison view needs.
+    const baseMatch = opts.filters
+      ? gamesMatchStage(userId, opts.filters)
+      : { userId };
     const extraMatch =
       opts.match && typeof opts.match === "object" && !Array.isArray(opts.match)
         ? opts.match
@@ -505,7 +519,7 @@ class PerGameComputeService {
     // always the most selective predicate; extra match keys are merged
     // on top so a downstream {myBuild, "opponent.strategy"} pair gets
     // pushed into the same indexed find rather than filtered in memory.
-    const filter = extraMatch ? { userId, ...extraMatch } : { userId };
+    const filter = extraMatch ? { ...baseMatch, ...extraMatch } : baseMatch;
     const games = await this.db.games
       .find(filter, { projection })
       .sort({ date: -1 })

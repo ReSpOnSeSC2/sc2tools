@@ -3,6 +3,7 @@
 const express = require("express");
 const { validateCustomBuild } = require("../validation/customBuild");
 const { evaluateRules } = require("../services/buildRulesEvaluator");
+const { parseFilters } = require("../util/parseQuery");
 
 const PREVIEW_TRUNCATION_LIMIT = 200;
 const PREVIEW_GAME_SCAN_CAP = 600;
@@ -93,15 +94,37 @@ function buildCustomBuildsRouter(deps) {
   // from the reclassify endpoint where the matched set may shift.
   /** @type {Map<string, {expires: number, value: any}>} */
   const phaseCache = new Map();
-  function phaseCacheKey(userId, slug, latestGameMs, kind, perspective, scope) {
+  function phaseCacheKey(userId, slug, latestGameMs, kind, perspective, scope, filtersKey) {
     // ``perspective`` is included so the comparison view's two
     // queries don't poison each other's cache slot — left ("you")
     // and right ("opponent") off the same slug must compute
     // independently. ``scope`` is the optional opponent-strategy
     // axis the BuildVsStrategyComparison drill-down passes through —
     // unscoped (BuildDossier) and cell-scoped (drill-down) payloads
-    // for the same slug must NOT alias.
-    return `${userId}|${slug}|${latestGameMs}|${kind}|${perspective}|${scope || ""}`;
+    // for the same slug must NOT alias. ``filtersKey`` serialises the
+    // global filter bar so timeframe / race / map / mmr / region
+    // changes don't alias either.
+    return `${userId}|${slug}|${latestGameMs}|${kind}|${perspective}|${scope || ""}|${filtersKey || ""}`;
+  }
+  /**
+   * Stable string key for a parsed filter object. Sorted entries so two
+   * URLs with the same filters in a different order share a cache slot.
+   * Dates serialise to ms so the value is a single primitive per key.
+   *
+   * @param {Record<string, any>} filters
+   * @returns {string}
+   */
+  function filtersCacheKey(filters) {
+    if (!filters) return "";
+    const entries = Object.entries(filters)
+      .filter(([, v]) => v !== undefined && v !== null && v !== "")
+      .map(([k, v]) => {
+        if (v instanceof Date) return [k, v.getTime()];
+        if (Array.isArray(v)) return [k, v.slice().sort().join(",")];
+        return [k, v];
+      })
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    return entries.map(([k, v]) => `${k}=${v}`).join("&");
   }
   function phaseCacheGet(key) {
     const hit = phaseCache.get(key);
@@ -346,6 +369,7 @@ function buildCustomBuildsRouter(deps) {
         req.query && typeof req.query.strategy === "string" && req.query.strategy
           ? String(req.query.strategy)
           : null;
+      const filters = parseFilters(req.query);
       const latest = await latestGameMs(auth.userId);
       const key = phaseCacheKey(
         auth.userId,
@@ -354,6 +378,7 @@ function buildCustomBuildsRouter(deps) {
         "compositions",
         perspective || "default",
         strategyName ? `s:${strategyName}` : "",
+        filtersCacheKey(filters),
       );
       const cached = phaseCacheGet(key);
       if (cached) {
@@ -363,7 +388,7 @@ function buildCustomBuildsRouter(deps) {
       const result = await deps.customBuilds.evaluateBuildPhases(
         auth.userId,
         slug,
-        { includeTransitions: false, perspective, strategyName },
+        { includeTransitions: false, perspective, strategyName, filters },
       );
       if (!result) {
         res.status(404).json({ error: { code: "not_found" } });

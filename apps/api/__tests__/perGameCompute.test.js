@@ -388,9 +388,10 @@ describe("services/perGameCompute", () => {
     // start times. ``listForRulePreview`` is the rule evaluator's only
     // event-source, so it must serve start-time events too — otherwise
     // the saved rule would silently match the wrong games.
-    function buildSvc(games) {
+    function buildSvc(games, capture) {
       const collection = {
-        find() {
+        find(match) {
+          if (capture) capture.match = match;
           return {
             sort() {
               return {
@@ -404,6 +405,42 @@ describe("services/perGameCompute", () => {
       };
       return new PerGameComputeService({ games: collection });
     }
+
+    test("filters are applied to the Mongo $match when present", async () => {
+      // Regression guard: the StrategiesTab build × strategy phase
+      // panels were ignoring the global filter bar (timeframe / race /
+      // map / mmr / region). ``listForRulePreview`` now accepts a
+      // pre-parsed filter object and builds the $match via
+      // ``gamesMatchStage`` — same primitive the "All games" list uses
+      // — so the two surfaces describe the same game set.
+      const capture = {};
+      const svc = buildSvc([], capture);
+      await svc.listForRulePreview("u1", {
+        filters: {
+          since: new Date("2026-01-01"),
+          race: "P",
+          oppRace: "Z",
+          map: "ghost river",
+        },
+      });
+      expect(capture.match.userId).toBe("u1");
+      expect(capture.match.date.$gte).toEqual(new Date("2026-01-01"));
+      // raceMatcher returns a regex — assert the source rather than
+      // pinning the exact RegExp instance.
+      expect(capture.match.myRace).toBeInstanceOf(RegExp);
+      expect(capture.match.myRace.source).toBe("^P");
+      expect(capture.match["opponent.race"]).toBeInstanceOf(RegExp);
+      expect(capture.match["opponent.race"].source).toBe("^Z");
+      expect(capture.match.map).toBeInstanceOf(RegExp);
+      expect(capture.match.map.source).toBe("ghost river");
+    });
+
+    test("no filters keeps the userId-only $match (unchanged legacy behavior)", async () => {
+      const capture = {};
+      const svc = buildSvc([], capture);
+      await svc.listForRulePreview("u1", {});
+      expect(capture.match).toEqual({ userId: "u1" });
+    });
 
     test("returns events at start time so saved rules fire on the right games", async () => {
       const svc = buildSvc([

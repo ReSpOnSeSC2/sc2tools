@@ -449,11 +449,22 @@ function YouColumn({
   // the left column reports the build's marginal across every
   // opponent strategy (often orders of magnitude larger than the
   // cell), which is what made the side-by-side counts incomparable.
+  //
+  // The global filter bar (timeframe / race / map / mmr / region) is
+  // also threaded through so the panel describes the SAME game set as
+  // the "All games" list below — without it the column scanned the
+  // latest 1000 games regardless of the active timeframe.
+  const { filters } = useFilters();
+  const filterQuery = filtersToQuery(filters);
   const strategyParam = strategy
     ? `&strategy=${encodeURIComponent(strategy)}`
     : "";
+  const phaseParams = `perspective=you${strategyParam}`;
+  const phaseQuery = filterQuery
+    ? `${filterQuery}&${phaseParams}`
+    : `?${phaseParams}`;
   const customPath = slug
-    ? `/v1/custom-builds/${encodeURIComponent(slug)}/compositions?perspective=you${strategyParam}`
+    ? `/v1/custom-builds/${encodeURIComponent(slug)}/compositions${phaseQuery}`
     : null;
   const customResult = useApi<BuildPhasePayload>(customPath);
 
@@ -462,7 +473,7 @@ function YouColumn({
   // double up Mongo scans for users who DO have a saved build.
   const labelPath =
     !slug && !isResolvingSlug && build
-      ? `/v1/builds/${encodeURIComponent(build)}/phases?perspective=you${strategyParam}`
+      ? `/v1/builds/${encodeURIComponent(build)}/phases${phaseQuery}`
       : null;
   const labelResult = useApi<BuildLabelPhasesResponse>(labelPath);
 
@@ -547,10 +558,19 @@ function OpponentColumn({
 }) {
   // ``build`` scopes the strategy aggregation to one cell of the
   // build × strategy matrix — same game set as the cell the user
-  // clicked, so both columns render comparable sample sizes.
+  // clicked, so both columns render comparable sample sizes. The
+  // global filter bar is threaded through so the matched set respects
+  // the same timeframe / race / map / mmr / region scoping as the
+  // "All games" list below.
+  const { filters } = useFilters();
+  const filterQuery = filtersToQuery(filters);
   const buildParam = build ? `&build=${encodeURIComponent(build)}` : "";
+  const phaseParams = `perspective=opponent${buildParam}`;
+  const phaseQuery = filterQuery
+    ? `${filterQuery}&${phaseParams}`
+    : `?${phaseParams}`;
   const path = strategy
-    ? `/v1/strategies/${encodeURIComponent(strategy)}/phases?perspective=opponent${buildParam}`
+    ? `/v1/strategies/${encodeURIComponent(strategy)}/phases${phaseQuery}`
     : null;
   const { data, isLoading, error } = useApi<StrategyPhasesResponse>(path);
 

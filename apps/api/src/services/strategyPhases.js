@@ -65,9 +65,15 @@ class StrategyPhasesService {
    * magnitude larger than the cell), which made the side-by-side
    * counts incomparable.
    *
+   * ``filters`` — global-filter-bar object honoured downstream so the
+   * matched set respects the same time-frame / matchup / region scoping
+   * as the "All games" list. Without it, the panel scanned the latest
+   * 1000 games regardless of the timeframe filter and reported a
+   * larger sample than the cell it was meant to describe.
+   *
    * @param {string} userId
    * @param {string} strategyName
-   * @param {{ perspective?: "you"|"opponent", buildName?: string }} [opts]
+   * @param {{ perspective?: "you"|"opponent", buildName?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters> }} [opts]
    * @returns {Promise<null | {
    *   name: string,
    *   total: number,
@@ -90,13 +96,17 @@ class StrategyPhasesService {
         : null;
     // Push the cohort filter into the Mongo find so the scan cap caps
     // matching games — not the user's most recent ``cap`` games of
-    // which only a fraction happen to be this strategy.
+    // which only a fraction happen to be this strategy. The global
+    // filter bar (timeframe / race / map / mmr / region) is forwarded
+    // alongside so the panel describes the same game set as the
+    // "All games" list does at the analyzer-page level.
     /** @type {Record<string, any>} */
     const match = { "opponent.strategy": strategyName };
     if (buildName) match.myBuild = buildName;
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
+      filters: opts && opts.filters,
       match,
     });
     // Defensive in-memory filter — keeps the service correct against
@@ -145,7 +155,7 @@ class StrategyPhasesService {
    *
    * @param {string} userId
    * @param {string} buildName
-   * @param {{ perspective?: "you"|"opponent", strategyName?: string }} [opts]
+   * @param {{ perspective?: "you"|"opponent", strategyName?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters> }} [opts]
    * @returns {Promise<null | {
    *   name: string,
    *   total: number,
@@ -169,13 +179,16 @@ class StrategyPhasesService {
         : null;
     // Push the cohort filter into the Mongo find so the scan cap caps
     // matching games — not the user's most recent ``cap`` games of
-    // which only a fraction happen to carry this build label.
+    // which only a fraction happen to carry this build label. Forward
+    // the global filter bar alongside so the panel honours the active
+    // timeframe / race / map / mmr / region too.
     /** @type {Record<string, any>} */
     const match = { myBuild: buildName };
     if (strategyName) match["opponent.strategy"] = strategyName;
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
+      filters: opts && opts.filters,
       match,
     });
     // Defensive in-memory filter — see ``evaluate`` for the rationale.
