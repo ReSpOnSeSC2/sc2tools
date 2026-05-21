@@ -125,10 +125,15 @@ export function PhaseTrajectoryStrip({
     (m, p) => Math.max(m, finalPhaseDistribution[p] ?? 0),
     0,
   );
-  const totalSamples = PHASE_ORDER.reduce(
-    (s, p) => s + (sampleSize[p] ?? 0),
-    0,
-  );
+  // ``totalSamples`` is the unique-game count for the panel header and
+  // screen-reader caption. ``sampleSize[phase]`` counts how many games
+  // *reached* that phase, so a game that ran to Late contributes to
+  // every earlier bucket too — summing across phases double-counts
+  // (a 48-game corpus where some reached Late and some E/Mid produced a
+  // 164 in the header next to a 48-game "All games" list below). The
+  // unique count equals the sum of ``finalPhaseDistribution`` since
+  // each game ends in exactly one phase.
+  const totalSamples = totalFinal;
 
   const crossingsCaption = CROSSING_ORDER.map(({ key, label }) => {
     const v = crossings[key];
