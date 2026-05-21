@@ -55,9 +55,15 @@ class StrategyPhasesService {
    * magnitude larger than the cell), which made the side-by-side
    * counts incomparable.
    *
+   * ``filters`` — global-filter-bar object honoured downstream so the
+   * matched set respects the same time-frame / matchup / region scoping
+   * as the "All games" list. Without it, the panel scanned the latest
+   * 1000 games regardless of the timeframe filter and reported a
+   * larger sample than the cell it was meant to describe.
+   *
    * @param {string} userId
    * @param {string} strategyName
-   * @param {{ perspective?: "you"|"opponent", buildName?: string }} [opts]
+   * @param {{ perspective?: "you"|"opponent", buildName?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters> }} [opts]
    * @returns {Promise<null | {
    *   name: string,
    *   total: number,
@@ -81,6 +87,7 @@ class StrategyPhasesService {
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
+      filters: opts && opts.filters,
     });
     const matched = games.filter((g) => {
       const s = g && g.opponent && g.opponent.strategy;
@@ -124,7 +131,7 @@ class StrategyPhasesService {
    *
    * @param {string} userId
    * @param {string} buildName
-   * @param {{ perspective?: "you"|"opponent", strategyName?: string }} [opts]
+   * @param {{ perspective?: "you"|"opponent", strategyName?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters> }} [opts]
    * @returns {Promise<null | {
    *   name: string,
    *   total: number,
@@ -149,6 +156,7 @@ class StrategyPhasesService {
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
+      filters: opts && opts.filters,
     });
     const matched = games.filter((g) => {
       if (!g || g.myBuild !== buildName) return false;

@@ -9,16 +9,42 @@ import { cleanup, render, screen } from "@testing-library/react";
  */
 
 const useApiMock = vi.fn();
+const useFiltersMock = vi.fn(() => ({
+  filters: { preset: "season" },
+  setFilters: () => {},
+  dbRev: 0,
+  bumpRev: () => {},
+  seasons: [],
+}));
 
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string | null) => useApiMock(path),
 }));
+
+vi.mock("@/lib/filterContext", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/filterContext")>(
+    "@/lib/filterContext",
+  );
+  return {
+    ...actual,
+    useFilters: () => useFiltersMock(),
+  };
+});
 
 import { BuildVsStrategyComparison } from "../analyzer/StrategiesTabBuildVs";
 
 afterEach(() => {
   cleanup();
   useApiMock.mockReset();
+  useFiltersMock.mockReset();
+  // Reset to default filters (just the preset id, which is UI-only).
+  useFiltersMock.mockImplementation(() => ({
+    filters: { preset: "season" },
+    setFilters: () => {},
+    dbRev: 0,
+    bumpRev: () => {},
+    seasons: [],
+  }));
 });
 
 function buildPhasesPayload(total: number, perspective: "you" | "opponent") {
@@ -384,6 +410,61 @@ describe("BuildVsStrategyComparison", () => {
     expect(
       container.querySelector('[data-testid="phase-crossing"]'),
     ).toBeNull();
+  });
+
+  it("threads the global filter bar (timeframe / race / map) into both phase URLs so the panel counts match the All-games list", () => {
+    // Regression guard for the "All games (292) but typical (573)"
+    // mismatch users reported: the panels were scanning the latest
+    // 1000 games regardless of the active filters, so they reported a
+    // larger sample than the cell they were meant to describe. With
+    // the filter bar threaded through, the panel URLs carry the same
+    // since/race/map query params the "All games" endpoint uses.
+    useFiltersMock.mockImplementation(() => ({
+      filters: {
+        preset: "custom",
+        since: "2026-01-01",
+        race: "P",
+        map: "ghost river",
+      },
+      setFilters: () => {},
+      dbRev: 0,
+      bumpRev: () => {},
+      seasons: [],
+    }));
+    wireMocks({
+      yourPayload: buildPhasesPayload(7, "you"),
+      oppPayload: { ...buildPhasesPayload(7, "opponent"), name: "Terran - Mech" },
+    });
+
+    render(
+      <BuildVsStrategyComparison
+        build="Stargate Phoenix"
+        strategy="Terran - Mech"
+      />,
+    );
+
+    const callPaths = useApiMock.mock.calls.map((c) => c[0]);
+    const leftUrl = callPaths.find(
+      (p) => typeof p === "string" && p.includes("/compositions"),
+    );
+    const rightUrl = callPaths.find(
+      (p) =>
+        typeof p === "string" &&
+        p.includes("/strategies/") &&
+        p.includes("/phases"),
+    );
+    expect(leftUrl).toBeTruthy();
+    expect(rightUrl).toBeTruthy();
+    // Filter params land before the phase params so the URL shape is
+    // ``?<filters>&perspective=<...>&<cross-axis>=<...>``.
+    expect(leftUrl).toContain("since=2026-01-01");
+    expect(leftUrl).toContain("race=P");
+    expect(leftUrl).toContain("map=ghost+river");
+    expect(leftUrl).toContain("perspective=you");
+    expect(rightUrl).toContain("since=2026-01-01");
+    expect(rightUrl).toContain("race=P");
+    expect(rightUrl).toContain("map=ghost+river");
+    expect(rightUrl).toContain("perspective=opponent");
   });
 
   it("renders the opp-signal sparse EmptyState when the right payload sets that flag", () => {

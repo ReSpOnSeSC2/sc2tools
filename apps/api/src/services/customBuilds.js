@@ -197,7 +197,7 @@ class CustomBuildsService {
    *
    * @param {string} userId
    * @param {string} slug
-   * @param {{ includeTransitions?: boolean, perspective?: "you"|"opponent", strategyName?: string|null }} [opts]
+   * @param {{ includeTransitions?: boolean, perspective?: "you"|"opponent", strategyName?: string|null, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters> }} [opts]
    * @returns {Promise<null | {
    *   slug: string,
    *   name: string,
@@ -240,6 +240,7 @@ class CustomBuildsService {
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
+      filters: opts && opts.filters,
     });
     const inMatchup = games.filter((g) =>
       gameMatchesBuildMatchup(g, build, rulePerspective),

@@ -4,6 +4,7 @@ const { COLLECTIONS, LIMITS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
 const { toStartSeconds, isFinishTimeEvent } = require("./buildDurations");
+const { gamesMatchStage } = require("../util/parseQuery");
 
 const {
   KNOWN_BUILDING_NAMES,
@@ -428,8 +429,15 @@ class PerGameComputeService {
    * both my-events AND opp-events lets the route honour the build's
    * perspective without a second query.
    *
+   * ``filters`` — optional global-filter-bar object (since / until / race
+   * / oppRace / map / mmr range / regions / excludeTooShort). When
+   * present, the Mongo $match is built via ``gamesMatchStage`` so the
+   * caller honours the same time-frame / matchup / region scoping the
+   * "All games" list uses. Unscoped callers (legacy preview, dossier)
+   * keep the userId-only behaviour by omitting it.
+   *
    * @param {string} userId
-   * @param {{ limit?: number, includeMacroBreakdown?: boolean }} [opts]
+   * @param {{ limit?: number, includeMacroBreakdown?: boolean, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters> }} [opts]
    * @returns {Promise<Array<{
    *   gameId: string,
    *   myBuild: string|null,
@@ -448,6 +456,9 @@ class PerGameComputeService {
   async listForRulePreview(userId, opts = {}) {
     const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 600));
     const includeMacroBreakdown = !!opts.includeMacroBreakdown;
+    const match = opts.filters
+      ? gamesMatchStage(userId, opts.filters)
+      : { userId };
     /** @type {Record<string, number>} */
     const projection = {
       _id: 0,
@@ -479,7 +490,7 @@ class PerGameComputeService {
     // Slim metadata first — needed for both legacy fallback and the
     // gameId list we'll batch-fetch detail blobs for.
     const games = await this.db.games
-      .find({ userId }, { projection })
+      .find(match, { projection })
       .sort({ date: -1 })
       .limit(limit)
       .toArray();

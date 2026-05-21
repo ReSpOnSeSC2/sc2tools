@@ -31,13 +31,38 @@ function buildBuildsRouter(deps) {
   // endpoints behave the same way after a fresh upload.
   /** @type {Map<string, {expires: number, value: any}>} */
   const phaseCache = new Map();
-  function phaseCacheKey(kind, userId, name, latestGameMs, perspective, crossAxis) {
+  function phaseCacheKey(kind, userId, name, latestGameMs, perspective, crossAxis, filtersKey) {
     // ``crossAxis`` is the OTHER coordinate of the build × strategy
     // cell the BuildVsStrategyComparison drill-down passes through —
     // including it in the cache key keeps the cell-scoped payload
     // from colliding with the unfiltered "all games with this label"
     // payload BuildDossier-style callers still ask for.
-    return `${kind}|${userId}|${name}|${latestGameMs}|${perspective}|${crossAxis || ""}`;
+    //
+    // ``filtersKey`` serialises the global filter bar (timeframe / race
+    // / map / mmr / region / excludeTooShort) so two requests that
+    // differ only in the filter bar don't alias to the same cached
+    // entry — the matched-set is filter-dependent.
+    return `${kind}|${userId}|${name}|${latestGameMs}|${perspective}|${crossAxis || ""}|${filtersKey || ""}`;
+  }
+  /**
+   * Stable string key for a parsed filter object. Sorted entries so two
+   * URLs with the same filters in a different order share a cache slot.
+   * Dates serialise to ms so the value is a single primitive per key.
+   *
+   * @param {Record<string, any>} filters
+   * @returns {string}
+   */
+  function filtersCacheKey(filters) {
+    if (!filters) return "";
+    const entries = Object.entries(filters)
+      .filter(([, v]) => v !== undefined && v !== null && v !== "")
+      .map(([k, v]) => {
+        if (v instanceof Date) return [k, v.getTime()];
+        if (Array.isArray(v)) return [k, v.slice().sort().join(",")];
+        return [k, v];
+      })
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    return entries.map(([k, v]) => `${k}=${v}`).join("&");
   }
   function phaseCacheGet(key) {
     const hit = phaseCache.get(key);
@@ -121,6 +146,7 @@ function buildBuildsRouter(deps) {
         req.query && typeof req.query.build === "string" && req.query.build
           ? String(req.query.build)
           : null;
+      const filters = parseFilters(req.query);
       const latest = await deps.strategyPhases.latestGameDateMs(userId);
       const key = phaseCacheKey(
         "strategy",
@@ -129,6 +155,7 @@ function buildBuildsRouter(deps) {
         latest,
         perspective,
         buildName ? `b:${buildName}` : "",
+        filtersCacheKey(filters),
       );
       const cached = phaseCacheGet(key);
       if (cached) {
@@ -138,6 +165,7 @@ function buildBuildsRouter(deps) {
       const result = await deps.strategyPhases.evaluate(userId, name, {
         perspective,
         buildName,
+        filters,
       });
       if (!result) {
         res.status(404).json({ error: { code: "strategy_not_found" } });
@@ -182,6 +210,7 @@ function buildBuildsRouter(deps) {
         req.query && typeof req.query.strategy === "string" && req.query.strategy
           ? String(req.query.strategy)
           : null;
+      const filters = parseFilters(req.query);
       const latest = await deps.strategyPhases.latestGameDateMs(userId);
       const key = phaseCacheKey(
         "build",
@@ -190,6 +219,7 @@ function buildBuildsRouter(deps) {
         latest,
         perspective,
         strategyName ? `s:${strategyName}` : "",
+        filtersCacheKey(filters),
       );
       const cached = phaseCacheGet(key);
       if (cached) {
@@ -199,7 +229,7 @@ function buildBuildsRouter(deps) {
       const result = await deps.strategyPhases.evaluateByBuildName(
         userId,
         name,
-        { perspective, strategyName },
+        { perspective, strategyName, filters },
       );
       if (!result) {
         res.status(404).json({ error: { code: "build_not_found" } });
