@@ -31,8 +31,13 @@ function buildBuildsRouter(deps) {
   // endpoints behave the same way after a fresh upload.
   /** @type {Map<string, {expires: number, value: any}>} */
   const phaseCache = new Map();
-  function phaseCacheKey(kind, userId, name, latestGameMs, perspective) {
-    return `${kind}|${userId}|${name}|${latestGameMs}|${perspective}`;
+  function phaseCacheKey(kind, userId, name, latestGameMs, perspective, crossAxis) {
+    // ``crossAxis`` is the OTHER coordinate of the build × strategy
+    // cell the BuildVsStrategyComparison drill-down passes through —
+    // including it in the cache key keeps the cell-scoped payload
+    // from colliding with the unfiltered "all games with this label"
+    // payload BuildDossier-style callers still ask for.
+    return `${kind}|${userId}|${name}|${latestGameMs}|${perspective}|${crossAxis || ""}`;
   }
   function phaseCacheGet(key) {
     const hit = phaseCache.get(key);
@@ -108,8 +113,23 @@ function buildBuildsRouter(deps) {
       const perspective = req.query && req.query.perspective === "opponent"
         ? "opponent"
         : "you";
+      // Optional ``build`` query param scopes the strategy aggregation
+      // to one cell of the build × strategy matrix — the drill-down
+      // passes it through so the right column of the comparison view
+      // describes the SAME game set as the cell the user clicked.
+      const buildName =
+        req.query && typeof req.query.build === "string" && req.query.build
+          ? String(req.query.build)
+          : null;
       const latest = await deps.strategyPhases.latestGameDateMs(userId);
-      const key = phaseCacheKey("strategy", userId, name, latest, perspective);
+      const key = phaseCacheKey(
+        "strategy",
+        userId,
+        name,
+        latest,
+        perspective,
+        buildName ? `b:${buildName}` : "",
+      );
       const cached = phaseCacheGet(key);
       if (cached) {
         res.json(cached);
@@ -117,6 +137,7 @@ function buildBuildsRouter(deps) {
       }
       const result = await deps.strategyPhases.evaluate(userId, name, {
         perspective,
+        buildName,
       });
       if (!result) {
         res.status(404).json({ error: { code: "strategy_not_found" } });
@@ -153,8 +174,23 @@ function buildBuildsRouter(deps) {
         req.query && req.query.perspective === "opponent"
           ? "opponent"
           : "you";
+      // Optional ``strategy`` query param scopes the build aggregation
+      // to one cell of the build × strategy matrix — the drill-down
+      // passes it through so the left column of the comparison view
+      // describes the SAME game set as the cell the user clicked.
+      const strategyName =
+        req.query && typeof req.query.strategy === "string" && req.query.strategy
+          ? String(req.query.strategy)
+          : null;
       const latest = await deps.strategyPhases.latestGameDateMs(userId);
-      const key = phaseCacheKey("build", userId, name, latest, perspective);
+      const key = phaseCacheKey(
+        "build",
+        userId,
+        name,
+        latest,
+        perspective,
+        strategyName ? `s:${strategyName}` : "",
+      );
       const cached = phaseCacheGet(key);
       if (cached) {
         res.json(cached);
@@ -163,7 +199,7 @@ function buildBuildsRouter(deps) {
       const result = await deps.strategyPhases.evaluateByBuildName(
         userId,
         name,
-        { perspective },
+        { perspective, strategyName },
       );
       if (!result) {
         res.status(404).json({ error: { code: "build_not_found" } });

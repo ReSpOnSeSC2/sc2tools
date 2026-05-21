@@ -190,9 +190,14 @@ class CustomBuildsService {
    * StrategiesTabBuildVs comparison view fetches the same build
    * twice with different perspectives.
    *
+   * ``strategyName`` restricts the rule-matched set to games where
+   * ``opponent.strategy`` equals the requested value — the drill-down
+   * passes it through so the left column describes the same build ×
+   * strategy cell as the matrix the user clicked.
+   *
    * @param {string} userId
    * @param {string} slug
-   * @param {{ includeTransitions?: boolean, perspective?: "you"|"opponent" }} [opts]
+   * @param {{ includeTransitions?: boolean, perspective?: "you"|"opponent", strategyName?: string|null }} [opts]
    * @returns {Promise<null | {
    *   slug: string,
    *   name: string,
@@ -223,6 +228,15 @@ class CustomBuildsService {
       || opts.perspective === "you"
       ? opts.perspective
       : rulePerspective;
+    // Optional cell-scoping filter: when the BuildVsStrategyComparison
+    // drill-down asks for a saved build's compositions, it also passes
+    // the opponent strategy axis so the trajectory describes the SAME
+    // game set as the matrix cell the user clicked. Unscoped callers
+    // (BuildDossier) pass nothing and still get the full marginal.
+    const strategyName =
+      typeof opts.strategyName === "string" && opts.strategyName
+        ? opts.strategyName
+        : null;
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
@@ -230,10 +244,16 @@ class CustomBuildsService {
     const inMatchup = games.filter((g) =>
       gameMatchesBuildMatchup(g, build, rulePerspective),
     );
-    const matched =
+    const ruleMatched =
       rules.length === 0
         ? []
         : filterMatchingGames(inMatchup, rules, rulePerspective);
+    const matched = strategyName
+      ? ruleMatched.filter((g) => {
+          const s = g && g.opponent && g.opponent.strategy;
+          return s === strategyName;
+        })
+      : ruleMatched;
     const comps = computeCompositions(matched, { perspective: phasePerspective });
     /** @type {Record<string, any>} */
     const out = {

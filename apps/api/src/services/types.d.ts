@@ -171,6 +171,14 @@ export interface CustomBuildsService {
     opts?: {
       includeTransitions?: boolean;
       perspective?: "you" | "opponent";
+      /**
+       * Optional opponent-strategy axis. When set, the matched set is
+       * further restricted to games where ``opponent.strategy`` equals
+       * the requested value — the BuildVsStrategyComparison drill-down
+       * passes it through so the left column describes the same cell
+       * as the matrix the user clicked.
+       */
+      strategyName?: string | null;
     },
   ): Promise<
     | null
@@ -230,6 +238,13 @@ export interface PerGameComputeServiceListedGame {
   myBuild: string | null;
   myRace: string | null;
   oppRace: string | null;
+  /** Embedded opponent block. ``strategy`` is what the StrategyPhases
+   *  service filters on for the BuildVsStrategyComparison drill-down. */
+  opponent: {
+    displayName?: string | null;
+    race?: string | null;
+    strategy?: string | null;
+  } | null;
   events: ParsedBuildLogEvent[];
   oppEvents: ParsedBuildLogEvent[];
   result: string | null;
@@ -359,7 +374,18 @@ export interface StrategyPhasesService {
   evaluate(
     userId: string,
     strategyName: string,
-    opts?: { perspective?: "you" | "opponent" },
+    opts?: {
+      perspective?: "you" | "opponent";
+      /**
+       * Optional user-build axis. When set, the matched set is further
+       * restricted to games where ``myBuild`` equals the requested
+       * value — the BuildVsStrategyComparison drill-down passes it
+       * through so the right column describes the same cell as the
+       * matrix the user clicked, not the strategy's full marginal
+       * across every build the user plays.
+       */
+      buildName?: string | null;
+    },
   ): Promise<null | {
     name: string;
     total: number;
@@ -379,7 +405,16 @@ export interface StrategyPhasesService {
   evaluateByBuildName(
     userId: string,
     buildName: string,
-    opts?: { perspective?: "you" | "opponent" },
+    opts?: {
+      perspective?: "you" | "opponent";
+      /**
+       * Optional opponent-strategy axis. When set, the matched set is
+       * further restricted to games where ``opponent.strategy`` equals
+       * the requested value — the drill-down passes it through so the
+       * left column describes the build × strategy cell.
+       */
+      strategyName?: string | null;
+    },
   ): Promise<null | {
     name: string;
     total: number;

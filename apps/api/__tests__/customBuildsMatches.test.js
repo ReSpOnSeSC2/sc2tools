@@ -428,6 +428,121 @@ describe("GET /v1/custom-builds/:slug/compositions", () => {
     }
   });
 
+  test("?strategy=<name> narrows the matched set to the build × strategy cell", async () => {
+    // Seed three games on a NEW custom build so the assertion is
+    // independent of every other test in this describe block (which
+    // shares the same MongoDB instance):
+    //   - two against "Zerg - Mass Ling"
+    //   - one against "Zerg - Roach allin"
+    // The drill-down passes ``?strategy=`` so the left column of the
+    // comparison view describes only the cell — not the build's full
+    // marginal across opponents.
+    const userId = await bootstrap();
+    const seedCellGame = (gameId, date, strategyLabel) =>
+      services.games.upsert(userId, {
+        gameId,
+        date,
+        myRace: PHASE_FIXTURE.race,
+        myBuild: "PvZ — Cell Adept",
+        buildLog: PROTOSS_BUILD_LOG,
+        oppBuildLog: ["[0:00] Drone", "[0:17] Overlord", "[0:50] SpawningPool"],
+        result: "Victory",
+        map: "Equilibrium LE",
+        durationSec: PHASE_FIXTURE.durationSec,
+        opponent: { displayName: "zergRusher", race: "Zerg", strategy: strategyLabel },
+        macroBreakdown: PHASE_FIXTURE.macroBreakdown,
+      });
+    await seedCellGame(
+      "g-cell-mass-ling-1",
+      new Date("2026-05-12T00:00:00Z"),
+      "Zerg - Cell Mass Ling",
+    );
+    await seedCellGame(
+      "g-cell-mass-ling-2",
+      new Date("2026-05-13T00:00:00Z"),
+      "Zerg - Cell Mass Ling",
+    );
+    await seedCellGame(
+      "g-cell-roach",
+      new Date("2026-05-14T00:00:00Z"),
+      "Zerg - Cell Roach allin",
+    );
+    const putRes = await withAuth(
+      request(app).put("/v1/custom-builds/pvz-cell-adept").send({
+        slug: "pvz-cell-adept",
+        name: "PvZ Cell Adept",
+        race: "Protoss",
+        vsRace: "Zerg",
+        rules: [{ type: "before", name: "BuildOracle", time_lt: 418 }],
+      }),
+    );
+    expect(putRes.status).toBe(200);
+
+    // The prior tests in this describe block share the same Mongo
+    // instance and seed games that ALSO satisfy this build's matchup
+    // gate + rule, so we can't assert an absolute total. Instead we
+    // assert the cell-scoped payload only matches our seeded
+    // strategy labels — which are unique to this test — and the
+    // unscoped payload picks up at LEAST the 3 newly-seeded games.
+    const wide = await withAuth(
+      request(app).get("/v1/custom-builds/pvz-cell-adept/compositions"),
+    );
+    expect(wide.status).toBe(200);
+    expect(wide.body.finalPhaseDistribution.mid).toBeGreaterThanOrEqual(3);
+
+    // Cell-scoped: only the two Mass-Ling games (the unique strategy
+    // label this test owns). Other tests in the suite seed against
+    // different strategies, so the cell-scope filter narrows to
+    // exactly the two cell-Mass-Ling games.
+    const cell = await withAuth(
+      request(app).get(
+        "/v1/custom-builds/pvz-cell-adept/compositions?strategy=Zerg%20-%20Cell%20Mass%20Ling",
+      ),
+    );
+    expect(cell.status).toBe(200);
+    expect(cell.body.finalPhaseDistribution.mid).toBe(2);
+
+    // And the cell-scoped total is strictly less than the unscoped
+    // total — proving the filter actually narrows the matched set.
+    expect(cell.body.finalPhaseDistribution.mid).toBeLessThan(
+      wide.body.finalPhaseDistribution.mid,
+    );
+
+    // The two responses come from independent cache slots — a second
+    // unscoped call after the scoped one must still return the wider
+    // count (cell payload didn't poison the unscoped slot).
+    const wideAgain = await withAuth(
+      request(app).get("/v1/custom-builds/pvz-cell-adept/compositions"),
+    );
+    expect(wideAgain.status).toBe(200);
+    expect(wideAgain.body.finalPhaseDistribution.mid).toBe(
+      wide.body.finalPhaseDistribution.mid,
+    );
+  });
+
+  test("?strategy=<name> with no games in the intersection returns an empty envelope", async () => {
+    const userId = await bootstrap();
+    await seedPhaseGame(userId, "g-only-mass-ling", new Date("2026-05-15T00:00:00Z"));
+    await savePhaseBuild();
+
+    // The compositions endpoint short-circuits on an empty matched
+    // set by returning the envelope with zeroed phase rows (the
+    // service returns ``out`` regardless of matched.length). The new
+    // behavior we're protecting is that the matched set DOES shrink
+    // under the strategy filter, not that 404 is returned.
+    const res = await withAuth(
+      request(app).get(
+        "/v1/custom-builds/pvz-adept/compositions?strategy=Zerg%20-%20Nydus%20Worm",
+      ),
+    );
+    expect(res.status).toBe(200);
+    const totalSamples = ["early", "earlyMid", "mid", "midLate", "late"].reduce(
+      (acc, phase) => acc + (res.body.sampleSize[phase] || 0),
+      0,
+    );
+    expect(totalSamples).toBe(0);
+  });
+
   test("reclassify busts the cached payload", async () => {
     const userId = await bootstrap();
     await seedPhaseGame(userId, "g-bust-1", new Date("2026-05-07T00:00:00Z"));
