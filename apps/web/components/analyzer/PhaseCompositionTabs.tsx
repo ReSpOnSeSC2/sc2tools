@@ -181,12 +181,19 @@ export function PhaseCompositionTabs({
 
   return (
     <div className="space-y-4" data-testid="phase-composition-tabs">
-      {/* Underlined tab row — real tab affordance, not stat-card buttons. */}
+      {/* Underlined tab row — real tab affordance, not stat-card buttons.
+          Always uses ``overflow-x-auto`` (not ``md:overflow-visible``) so
+          the row can never push its parent wider than the grid track —
+          the half-width column inside ``BuildVsStrategyComparison`` at
+          xl has only ~440px to share with five ``shrink-0`` tabs whose
+          long-form labels ("Early/Mid", "Mid/Late") sum past that. With
+          ``overflow-x-auto`` the thin scrollbar appears only when needed
+          and the Card stops being forced past the viewport edge. */}
       <div
         role="tablist"
         aria-label="Phase compositions"
         aria-orientation="horizontal"
-        className="-mx-1 flex snap-x snap-mandatory items-stretch gap-1 overflow-x-auto border-b border-border px-1 scrollbar-thin md:overflow-visible"
+        className="-mx-1 flex snap-x snap-mandatory items-stretch gap-1 overflow-x-auto border-b border-border px-1 scrollbar-thin"
       >
         {PHASE_ORDER.map((phase) => {
           const count = sampleSize[phase] ?? 0;

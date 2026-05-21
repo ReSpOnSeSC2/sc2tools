@@ -349,12 +349,13 @@ export function BuildVsStrategyComparison({
   return (
     <Card title="Build vs strategy — phase comparison">
       <p className="mb-3 text-[11px] text-text-dim">
-        Left: how you typically play this build. Right: how the opponent
-        typically plays this strategy. Compare the crossings to see who
+        Both sides describe the SAME games — the ones where you played
+        this build and the opponent played this strategy. Left is your
+        trajectory, right is theirs. Compare the crossings to see who
         gets to late game first — and with what.
       </p>
       <div
-        className="grid grid-cols-1 gap-5 xl:grid-cols-2"
+        className="grid grid-cols-1 gap-3 xl:grid-cols-2 xl:gap-4"
         data-testid="build-vs-strategy-comparison"
       >
         <ComparisonColumn
@@ -395,9 +396,13 @@ function ComparisonColumn({
     // ``min-w-0`` is what lets the grid track shrink below its intrinsic
     // content size. Without it the long ``subtitle`` (build / strategy
     // name with ``truncate``) forces this section wider than its grid
-    // column at xl, and the whole panel overflows the page.
+    // column at xl, and the whole panel overflows the page. Inner
+    // padding is intentionally tighter than the parent Card's ``p-4``
+    // so two columns of composition cards still fit comfortably at
+    // common 1280–1440px desktop widths after the Card padding +
+    // sidebar gutter eat their share.
     <section
-      className="min-w-0 space-y-3 rounded-lg border border-border bg-bg-surface p-4"
+      className="min-w-0 space-y-3 rounded-lg border border-border bg-bg-surface p-3"
       data-testid={testId}
     >
       <header className="min-w-0">
