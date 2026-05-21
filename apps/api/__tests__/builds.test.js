@@ -575,4 +575,92 @@ describe("services/strategyPhases", () => {
     const svc = makeService([]);
     expect(await svc.evaluateByBuildName("u1", "")).toBeNull();
   });
+
+  // ----- push-down predicate ---------------------------------------
+  // Regression guard for "265 games in the BvS cell, only 13 in the
+  // comparison header." StrategyPhasesService must hand the build /
+  // strategy axes to ``listForRulePreview`` as a Mongo-level ``match``
+  // filter so the recency cap caps matching games — not the user's
+  // full recent window of which a fraction happens to qualify.
+
+  test("evaluate pushes opponent.strategy into the perGame match filter", async () => {
+    let captured = null;
+    const perGame = {
+      async listForRulePreview(_userId, opts) {
+        captured = opts || {};
+        return makeStrategyGames([
+          {
+            gameId: "g-mass-ling-1",
+            result: "Victory",
+            strategy: "Zerg - Mass Ling",
+            myUnitsAtMid: { Stalker: 4, Phoenix: 3, Probe: 60 },
+          },
+        ]);
+      },
+    };
+    const svc = new StrategyPhasesService({}, { perGame });
+    const out = await svc.evaluate("u1", "Zerg - Mass Ling");
+    expect(out).not.toBeNull();
+    expect(captured && captured.match).toEqual({
+      "opponent.strategy": "Zerg - Mass Ling",
+    });
+    // No buildName — the build axis stays out of the predicate.
+    expect(captured.match.myBuild).toBeUndefined();
+  });
+
+  test("evaluate adds myBuild to the match filter when buildName is provided", async () => {
+    let captured = null;
+    const perGame = {
+      async listForRulePreview(_userId, opts) {
+        captured = opts || {};
+        return makeStrategyGames([
+          {
+            gameId: "g-stargate-mass-ling",
+            result: "Victory",
+            strategy: "Zerg - Mass Ling",
+            myUnitsAtMid: { Phoenix: 5, Stalker: 3, Probe: 60 },
+            myBuild: "PvZ - 3 Stargate Phoenix",
+          },
+        ]);
+      },
+    };
+    const svc = new StrategyPhasesService({}, { perGame });
+    await svc.evaluate("u1", "Zerg - Mass Ling", {
+      buildName: "PvZ - 3 Stargate Phoenix",
+    });
+    expect(captured.match).toEqual({
+      "opponent.strategy": "Zerg - Mass Ling",
+      myBuild: "PvZ - 3 Stargate Phoenix",
+    });
+  });
+
+  test("evaluateByBuildName pushes myBuild (and strategy when supplied) into the match filter", async () => {
+    let captured = null;
+    const perGame = {
+      async listForRulePreview(_userId, opts) {
+        captured = opts || {};
+        return makeStrategyGames([
+          {
+            gameId: "g-stargate-mass-ling",
+            result: "Victory",
+            strategy: "Zerg - Mass Ling",
+            myUnitsAtMid: { Phoenix: 5, Stalker: 3, Probe: 60 },
+            myBuild: "PvZ - 3 Stargate Phoenix",
+          },
+        ]);
+      },
+    };
+    const svc = new StrategyPhasesService({}, { perGame });
+    await svc.evaluateByBuildName("u1", "PvZ - 3 Stargate Phoenix");
+    expect(captured.match).toEqual({ myBuild: "PvZ - 3 Stargate Phoenix" });
+
+    captured = null;
+    await svc.evaluateByBuildName("u1", "PvZ - 3 Stargate Phoenix", {
+      strategyName: "Zerg - Mass Ling",
+    });
+    expect(captured.match).toEqual({
+      myBuild: "PvZ - 3 Stargate Phoenix",
+      "opponent.strategy": "Zerg - Mass Ling",
+    });
+  });
 });

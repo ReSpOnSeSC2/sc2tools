@@ -451,7 +451,19 @@ export interface PerGameComputeService {
   ): Promise<void>;
   listForRulePreview(
     userId: string,
-    opts?: { limit?: number; includeMacroBreakdown?: boolean },
+    opts?: {
+      limit?: number;
+      includeMacroBreakdown?: boolean;
+      /**
+       * Optional Mongo-level filter merged into the find query under
+       * the user scope. Callers that already know the matchup (e.g.
+       * the StrategiesTab build × strategy drill-down passing
+       * ``{myBuild, "opponent.strategy"}``) push the predicate down
+       * so the ``limit`` cap applies to matching games and the
+       * analysis cohort doesn't get silently truncated by recency.
+       */
+      match?: Record<string, unknown>;
+    },
   ): Promise<PerGameComputeServiceListedGame[]>;
 }
 
