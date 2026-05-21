@@ -429,15 +429,32 @@ class PerGameComputeService {
    * both my-events AND opp-events lets the route honour the build's
    * perspective without a second query.
    *
-   * ``filters`` — optional global-filter-bar object (since / until / race
-   * / oppRace / map / mmr range / regions / excludeTooShort). When
-   * present, the Mongo $match is built via ``gamesMatchStage`` so the
-   * caller honours the same time-frame / matchup / region scoping the
-   * "All games" list uses. Unscoped callers (legacy preview, dossier)
-   * keep the userId-only behaviour by omitting it.
+   * ``filters`` — optional global-filter-bar object (since / until /
+   * race / oppRace / map / mmr range / regions / excludeTooShort).
+   * When present, the userId-scoped Mongo $match is built via
+   * ``gamesMatchStage`` so the caller honours the same time-frame /
+   * matchup / region scoping the "All games" list uses. Unscoped
+   * callers (legacy preview, dossier) keep the userId-only behaviour
+   * by omitting it.
+   *
+   * ``match`` is an optional cohort push-down merged on top of the
+   * filter-bar match. Callers that already know the matchup — the
+   * StrategiesTab build × strategy drill-down passes ``myBuild`` and
+   * ``opponent.strategy`` for example — push their predicate down
+   * here so the ``limit`` cap applies to the *matching* set instead
+   * of the user's full recent window. Without push-down, a user with
+   * more than ``limit`` games would see the analysis cohort silently
+   * shrink to whichever fraction of their most-recent ``limit`` games
+   * happened to satisfy the post-filter, even if many more matching
+   * games exist further back.
    *
    * @param {string} userId
-   * @param {{ limit?: number, includeMacroBreakdown?: boolean, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters> }} [opts]
+   * @param {{
+   *   limit?: number,
+   *   includeMacroBreakdown?: boolean,
+   *   filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>,
+   *   match?: Record<string, any>,
+   * }} [opts]
    * @returns {Promise<Array<{
    *   gameId: string,
    *   myBuild: string|null,
@@ -456,9 +473,19 @@ class PerGameComputeService {
   async listForRulePreview(userId, opts = {}) {
     const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 600));
     const includeMacroBreakdown = !!opts.includeMacroBreakdown;
-    const match = opts.filters
+    // Build the base match from the global filter bar (if any), then
+    // merge the optional cohort push-down on top. The two are
+    // orthogonal: filters narrow by timeframe / race / map / region;
+    // match narrows by build / opponent.strategy. Combined, the
+    // ``limit`` cap applies to games that satisfy both — which is what
+    // the StrategiesTab build × strategy comparison view needs.
+    const baseMatch = opts.filters
       ? gamesMatchStage(userId, opts.filters)
       : { userId };
+    const extraMatch =
+      opts.match && typeof opts.match === "object" && !Array.isArray(opts.match)
+        ? opts.match
+        : null;
     /** @type {Record<string, number>} */
     const projection = {
       _id: 0,
@@ -488,9 +515,13 @@ class PerGameComputeService {
       projection.macroBreakdown = 1;
     }
     // Slim metadata first — needed for both legacy fallback and the
-    // gameId list we'll batch-fetch detail blobs for.
+    // gameId list we'll batch-fetch detail blobs for. ``userId`` is
+    // always the most selective predicate; extra match keys are merged
+    // on top so a downstream {myBuild, "opponent.strategy"} pair gets
+    // pushed into the same indexed find rather than filtered in memory.
+    const filter = extraMatch ? { ...baseMatch, ...extraMatch } : baseMatch;
     const games = await this.db.games
-      .find(match, { projection })
+      .find(filter, { projection })
       .sort({ date: -1 })
       .limit(limit)
       .toArray();

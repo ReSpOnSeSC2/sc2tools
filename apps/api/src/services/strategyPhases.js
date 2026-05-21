@@ -16,14 +16,24 @@ const STATS_GAME_SCAN_CAP = 1000;
  * games for an agent-classified label but hasn't saved a matching
  * custom build.
  *
- * Pipeline: pull the user's recent games via ``perGame
- * .listForRulePreview`` with ``includeMacroBreakdown: true``, filter
- * by the chosen field (case-sensitive — names come from the same
- * detectors that power ``/v1/opp-strategies`` and ``/v1/builds``),
- * then hand the matched set to ``computeCompositions``. We never
- * re-run the phaseClassifier or signature logic here; matching the
- * same pipeline keeps the StrategiesTab cards identical in shape to
- * the BuildDossier phase section.
+ * Pipeline: pull the user's matching games via ``perGame
+ * .listForRulePreview`` with ``includeMacroBreakdown: true``, pushing
+ * the build/strategy predicate down into the Mongo find so the
+ * ``STATS_GAME_SCAN_CAP`` cap applies to the matching set (not to the
+ * user's full recent window). Names come from the same detectors that
+ * power ``/v1/opp-strategies`` and ``/v1/builds`` — case-sensitive
+ * exact match. We never re-run the phaseClassifier or signature
+ * logic here; matching the same pipeline keeps the StrategiesTab
+ * cards identical in shape to the BuildDossier phase section.
+ *
+ * Push-down rationale: the previous implementation pulled the most
+ * recent ``STATS_GAME_SCAN_CAP`` games unfiltered and then narrowed
+ * in JS. For a user whose total game count exceeds the cap, only a
+ * fraction of their actual matching games (e.g. 13 of 265) survived
+ * the recency window — and the comparison view's "13 games" header
+ * disagreed with the BvS matrix's true cell count. With the filter
+ * pushed into Mongo the cap is on matching games and the cohort
+ * matches the matrix.
  */
 class StrategyPhasesService {
   /**
@@ -84,11 +94,25 @@ class StrategyPhasesService {
       opts && typeof opts.buildName === "string" && opts.buildName
         ? opts.buildName
         : null;
+    // Push the cohort filter into the Mongo find so the scan cap caps
+    // matching games — not the user's most recent ``cap`` games of
+    // which only a fraction happen to be this strategy. The global
+    // filter bar (timeframe / race / map / mmr / region) is forwarded
+    // alongside so the panel describes the same game set as the
+    // "All games" list does at the analyzer-page level.
+    /** @type {Record<string, any>} */
+    const match = { "opponent.strategy": strategyName };
+    if (buildName) match.myBuild = buildName;
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
       filters: opts && opts.filters,
+      match,
     });
+    // Defensive in-memory filter — keeps the service correct against
+    // a perGame implementation that ignores ``match`` (test mocks
+    // historically returned every game). In production the Mongo find
+    // has already done this work, so the filter is a no-op.
     const matched = games.filter((g) => {
       const s = g && g.opponent && g.opponent.strategy;
       if (s !== strategyName) return false;
@@ -153,11 +177,21 @@ class StrategyPhasesService {
       opts && typeof opts.strategyName === "string" && opts.strategyName
         ? opts.strategyName
         : null;
+    // Push the cohort filter into the Mongo find so the scan cap caps
+    // matching games — not the user's most recent ``cap`` games of
+    // which only a fraction happen to carry this build label. Forward
+    // the global filter bar alongside so the panel honours the active
+    // timeframe / race / map / mmr / region too.
+    /** @type {Record<string, any>} */
+    const match = { myBuild: buildName };
+    if (strategyName) match["opponent.strategy"] = strategyName;
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
       filters: opts && opts.filters,
+      match,
     });
+    // Defensive in-memory filter — see ``evaluate`` for the rationale.
     const matched = games.filter((g) => {
       if (!g || g.myBuild !== buildName) return false;
       if (strategyName) {

@@ -467,6 +467,75 @@ describe("services/perGameCompute", () => {
       expect(opp.get("Stalker")).toBe(150);
     });
 
+    test("pushes the optional ``match`` predicate into the Mongo find so the limit caps matching games", async () => {
+      // Regression guard for the "265 games in DB but only 13 in
+      // analysis" report: when the caller already knows the matchup
+      // (e.g. the StrategiesTab build × strategy drill-down), the
+      // ``match`` option merges into the find filter so the recency
+      // cap is applied AFTER the match — not before.
+      let observedFilter = null;
+      let observedLimit = null;
+      const collection = {
+        find(filter) {
+          observedFilter = filter;
+          return {
+            sort() {
+              return {
+                limit(n) {
+                  observedLimit = n;
+                  return { toArray: () => Promise.resolve([]) };
+                },
+              };
+            },
+          };
+        },
+      };
+      const svc = new PerGameComputeService({ games: collection });
+      await svc.listForRulePreview("u1", {
+        limit: 1000,
+        match: {
+          myBuild: "PvZ - AlphaStar Style (Oracle/Robo)",
+          "opponent.strategy": "Zerg - 3 Base Macro (Hatch First)",
+        },
+      });
+      expect(observedFilter).toEqual({
+        userId: "u1",
+        myBuild: "PvZ - AlphaStar Style (Oracle/Robo)",
+        "opponent.strategy": "Zerg - 3 Base Macro (Hatch First)",
+      });
+      expect(observedLimit).toBe(1000);
+    });
+
+    test("ignores a non-object ``match`` option without throwing", async () => {
+      // Defensive: bad ``match`` shapes (null/array/string) fall back
+      // to the legacy unfiltered ``{userId}`` find so a typo in a
+      // future caller can't 404 the user's whole analysis.
+      let observedFilter = null;
+      const collection = {
+        find(filter) {
+          observedFilter = filter;
+          return {
+            sort() {
+              return {
+                limit() {
+                  return { toArray: () => Promise.resolve([]) };
+                },
+              };
+            },
+          };
+        },
+      };
+      const svc = new PerGameComputeService({ games: collection });
+      // @ts-expect-error — exercising the defensive path
+      await svc.listForRulePreview("u1", { limit: 10, match: "bogus" });
+      expect(observedFilter).toEqual({ userId: "u1" });
+      // @ts-expect-error — exercising the defensive path
+      await svc.listForRulePreview("u1", { limit: 10, match: [1, 2] });
+      expect(observedFilter).toEqual({ userId: "u1" });
+      await svc.listForRulePreview("u1", { limit: 10, match: null });
+      expect(observedFilter).toEqual({ userId: "u1" });
+    });
+
     test("a rule saved as 'Lair before 4:30 (start)' matches a game that completed Lair at 5:00", async () => {
       const { evaluateRules } = require("../src/services/buildRulesEvaluator");
       const svc = buildSvc([
