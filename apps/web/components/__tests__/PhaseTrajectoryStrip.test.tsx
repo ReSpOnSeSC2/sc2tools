@@ -175,6 +175,46 @@ describe("PhaseTrajectoryStrip", () => {
     expect(text).toMatch(/Early 0%/);
   });
 
+  it("labels the OutcomeBar with the unique game count, not the sum of phase reaches", () => {
+    // Regression guard for the "All games (48) but WHAT YOU TYPICALLY
+    // DO header says 164 games" mismatch users reported on the
+    // StrategiesTab build × strategy drill-down. ``sampleSize`` counts
+    // how many games *reached* each phase, so a game that runs to Late
+    // adds to early/earlyMid/mid/midLate/late all at once — summing
+    // across phases double-counts. The header has to read the unique-
+    // game count (the sum of ``finalPhaseDistribution`` since every
+    // game ends in exactly one phase) so the panel describes the same
+    // cohort as the "All games" list below it.
+    const { container } = render(
+      <PhaseTrajectoryStrip
+        {...baseProps({
+          // 48 unique games, classic "many played to Late" distribution.
+          sampleSize: {
+            early: 48,
+            earlyMid: 47,
+            mid: 25,
+            midLate: 22,
+            late: 22,
+          },
+          finalPhaseDistribution: {
+            early: 1,
+            earlyMid: 22,
+            mid: 3,
+            midLate: 0,
+            late: 22,
+          },
+        })}
+      />,
+    );
+    const histogram = container.querySelector(
+      '[data-testid="phase-histogram"]',
+    );
+    expect(histogram?.textContent).toMatch(/48 games/);
+    expect(histogram?.textContent).not.toMatch(/164 games/);
+    const caption = container.querySelector("figcaption");
+    expect(caption?.textContent).toMatch(/across 48 games/);
+  });
+
   it("renders the empty state when every sample bucket is zero", () => {
     const { container } = render(
       <PhaseTrajectoryStrip
