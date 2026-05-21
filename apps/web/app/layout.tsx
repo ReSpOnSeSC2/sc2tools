@@ -1,14 +1,35 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { CookieBanner } from "@/components/CookieBanner";
 import { Header } from "@/components/chrome/Header";
 import { Footer } from "@/components/chrome/Footer";
+import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "SC2 Tools — opponent intel, build orders, live overlay",
   description:
     "Sign in, install the agent, and your StarCraft II opponents tab loads in seconds — across every device.",
+  applicationName: "SC2 Tools",
+  appleWebApp: {
+    capable: true,
+    title: "SC2 Tools",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/pwa/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/pwa/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/pwa/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0b0d12",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 /**
@@ -39,6 +60,7 @@ export default function RootLayout({
           </main>
           <Footer />
           <CookieBanner />
+          <ServiceWorkerRegister />
         </body>
       </html>
     </ClerkProvider>

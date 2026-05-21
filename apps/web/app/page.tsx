@@ -31,6 +31,7 @@ import {
   type HeroCarouselSlide,
 } from "@/components/landing/HeroCarousel";
 import { ReplayDemo } from "@/components/landing/ReplayDemo";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 
 /* =============================================================== */
 /* PAGE                                                             */
@@ -40,6 +41,7 @@ export default function LandingPage() {
   return (
     <div className="space-y-24 md:space-y-32">
       <CarouselSection />
+      <MobileInstallSection />
       <SocialProofSection />
       <ReplayDemo />
       <AgentDownloadSection />
@@ -76,6 +78,18 @@ function CarouselSection() {
         slides={slides}
         ariaLabel="SC2 Tools landing carousel"
       />
+    </section>
+  );
+}
+
+/* =============================================================== */
+/* MOBILE INSTALL — PWA "Add to Home Screen" banner (mobile only)   */
+/* =============================================================== */
+
+function MobileInstallSection() {
+  return (
+    <section className="relative md:hidden">
+      <InstallPrompt />
     </section>
   );
 }
