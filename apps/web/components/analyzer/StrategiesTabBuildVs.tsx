@@ -349,8 +349,9 @@ export function BuildVsStrategyComparison({
   return (
     <Card title="Build vs strategy — phase comparison">
       <p className="mb-3 text-[11px] text-text-dim">
-        Left: how you typically play this build. Right: how the opponent
-        typically plays this strategy. Compare the crossings to see who
+        Both sides describe the SAME games — the ones where you played
+        this build and the opponent played this strategy. Left is your
+        trajectory, right is theirs. Compare the crossings to see who
         gets to late game first — and with what.
       </p>
       <div
@@ -364,6 +365,7 @@ export function BuildVsStrategyComparison({
         >
           <YouColumn
             build={build}
+            strategy={strategy}
             slug={slug}
             isResolvingSlug={slugLoading}
           />
@@ -373,7 +375,7 @@ export function BuildVsStrategyComparison({
           subtitle={strategy}
           testId="bvs-column-opponent"
         >
-          <OpponentColumn strategy={strategy} />
+          <OpponentColumn strategy={strategy} build={build} />
         </ComparisonColumn>
       </div>
     </Card>
@@ -415,10 +417,12 @@ function ComparisonColumn({
 
 function YouColumn({
   build,
+  strategy,
   slug,
   isResolvingSlug,
 }: {
   build: string;
+  strategy: string;
   slug: string | null;
   isResolvingSlug: boolean;
 }) {
@@ -435,8 +439,17 @@ function YouColumn({
   //
   // Both endpoints return the same envelope shape so
   // ``ComparisonBody`` can render either without branching.
+  //
+  // The ``strategy`` axis is forwarded so the matched set is
+  // additionally scoped to the cell the user clicked — without it,
+  // the left column reports the build's marginal across every
+  // opponent strategy (often orders of magnitude larger than the
+  // cell), which is what made the side-by-side counts incomparable.
+  const strategyParam = strategy
+    ? `&strategy=${encodeURIComponent(strategy)}`
+    : "";
   const customPath = slug
-    ? `/v1/custom-builds/${encodeURIComponent(slug)}/compositions?perspective=you`
+    ? `/v1/custom-builds/${encodeURIComponent(slug)}/compositions?perspective=you${strategyParam}`
     : null;
   const customResult = useApi<BuildPhasePayload>(customPath);
 
@@ -445,7 +458,7 @@ function YouColumn({
   // double up Mongo scans for users who DO have a saved build.
   const labelPath =
     !slug && !isResolvingSlug && build
-      ? `/v1/builds/${encodeURIComponent(build)}/phases?perspective=you`
+      ? `/v1/builds/${encodeURIComponent(build)}/phases?perspective=you${strategyParam}`
       : null;
   const labelResult = useApi<BuildLabelPhasesResponse>(labelPath);
 
@@ -521,9 +534,19 @@ type BuildLabelPhasesResponse = {
   flags: string[];
 };
 
-function OpponentColumn({ strategy }: { strategy: string }) {
+function OpponentColumn({
+  strategy,
+  build,
+}: {
+  strategy: string;
+  build: string;
+}) {
+  // ``build`` scopes the strategy aggregation to one cell of the
+  // build × strategy matrix — same game set as the cell the user
+  // clicked, so both columns render comparable sample sizes.
+  const buildParam = build ? `&build=${encodeURIComponent(build)}` : "";
   const path = strategy
-    ? `/v1/strategies/${encodeURIComponent(strategy)}/phases?perspective=opponent`
+    ? `/v1/strategies/${encodeURIComponent(strategy)}/phases?perspective=opponent${buildParam}`
     : null;
   const { data, isLoading, error } = useApi<StrategyPhasesResponse>(path);
 

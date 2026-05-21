@@ -279,6 +279,71 @@ describe("services/strategyPhases", () => {
     expect(midKeys).toContain("Stalker|Phoenix|Immortal");
   });
 
+  test("evaluate also filters by buildName when the cell-scoping option is passed", async () => {
+    // Same opponent strategy across three games; only two of them
+    // carry the requested user-side build label. The BuildVsStrategy
+    // drill-down passes ``buildName`` so the right column reports the
+    // intersection — not the strategy's full marginal across every
+    // build the user has played.
+    const games = makeStrategyGames([
+      {
+        gameId: "g-stargate-mass-ling-1",
+        result: "Victory",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Stalker: 4, Phoenix: 3, Probe: 60 },
+        myBuild: "PvZ - 3 Stargate Phoenix",
+      },
+      {
+        gameId: "g-glaive-mass-ling",
+        result: "Defeat",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Zealot: 6, Adept: 4, Probe: 50 },
+        myBuild: "PvZ - Glaive Adept",
+      },
+      {
+        gameId: "g-stargate-mass-ling-2",
+        result: "Victory",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Stalker: 5, Phoenix: 2, Probe: 55 },
+        myBuild: "PvZ - 3 Stargate Phoenix",
+      },
+    ]);
+    const svc = makeService(games);
+
+    // Unfiltered: all three Mass-Ling games qualify (legacy behavior).
+    const wide = await svc.evaluate("u1", "Zerg - Mass Ling");
+    expect(wide.total).toBe(3);
+
+    // Cell-scoped: only the two Stargate Phoenix games.
+    const cell = await svc.evaluate("u1", "Zerg - Mass Ling", {
+      buildName: "PvZ - 3 Stargate Phoenix",
+    });
+    expect(cell.total).toBe(2);
+    const midKeys = cell.perPhase.mid.signatures.map((s) => s.key);
+    expect(midKeys).not.toContain("Zealot|Adept");
+    expect(midKeys).toContain("Stalker|Phoenix");
+  });
+
+  test("evaluate returns null when the buildName filter empties the matched set", async () => {
+    // Mass-Ling games exist but none carry the requested build label —
+    // the cell-scoped query must 404, not return the strategy's full
+    // marginal as a fallback.
+    const games = makeStrategyGames([
+      {
+        gameId: "g-other-build",
+        result: "Victory",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Stalker: 4, Phoenix: 3, Probe: 60 },
+        myBuild: "PvZ - Glaive Adept",
+      },
+    ]);
+    const svc = makeService(games);
+    const out = await svc.evaluate("u1", "Zerg - Mass Ling", {
+      buildName: "PvZ - 3 Stargate Phoenix",
+    });
+    expect(out).toBeNull();
+  });
+
   test("evaluate throws when perGame is unavailable", async () => {
     const svc = new StrategyPhasesService({}, { perGame: null });
     await expect(svc.evaluate("u1", "anything")).rejects.toThrow(
@@ -429,6 +494,74 @@ describe("services/strategyPhases", () => {
     const midKeys = out.perPhase.mid.signatures.map((s) => s.key);
     expect(midKeys).toContain("Phoenix|Stalker");
     expect(midKeys).not.toContain("Zealot|Sentry");
+  });
+
+  test("evaluateByBuildName narrows to the build × strategy cell when strategyName is passed", async () => {
+    // Two builds × two strategies. The drill-down passes both so the
+    // left column describes exactly one cell — the same N games the
+    // matrix reported, not the build's full marginal across opponents.
+    const games = makeStrategyGames([
+      {
+        gameId: "g-stargate-mass-ling",
+        result: "Victory",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Phoenix: 5, Stalker: 3, Probe: 60 },
+        myBuild: "PvZ - 3 Stargate Phoenix",
+      },
+      {
+        gameId: "g-stargate-roach",
+        result: "Defeat",
+        strategy: "Zerg - Roach allin",
+        myUnitsAtMid: { Phoenix: 3, Stalker: 5, Probe: 55 },
+        myBuild: "PvZ - 3 Stargate Phoenix",
+      },
+      {
+        gameId: "g-glaive-mass-ling",
+        result: "Victory",
+        strategy: "Zerg - Mass Ling",
+        myUnitsAtMid: { Adept: 8, Zealot: 4, Probe: 50 },
+        myBuild: "PvZ - Glaive Adept",
+      },
+    ]);
+    const svc = makeService(games);
+
+    // Build's full marginal — two Stargate Phoenix games.
+    const wide = await svc.evaluateByBuildName(
+      "u1",
+      "PvZ - 3 Stargate Phoenix",
+    );
+    expect(wide.total).toBe(2);
+
+    // Cell-scoped — only the one game in the (Stargate Phoenix × Mass
+    // Ling) intersection.
+    const cell = await svc.evaluateByBuildName(
+      "u1",
+      "PvZ - 3 Stargate Phoenix",
+      { strategyName: "Zerg - Mass Ling" },
+    );
+    expect(cell.total).toBe(1);
+    const midKeys = cell.perPhase.mid.signatures.map((s) => s.key);
+    expect(midKeys).toContain("Phoenix|Stalker");
+    expect(midKeys).not.toContain("Adept|Zealot");
+  });
+
+  test("evaluateByBuildName returns null when the strategyName filter empties the matched set", async () => {
+    const games = makeStrategyGames([
+      {
+        gameId: "g-stargate-roach-only",
+        result: "Victory",
+        strategy: "Zerg - Roach allin",
+        myUnitsAtMid: { Phoenix: 5, Stalker: 3, Probe: 60 },
+        myBuild: "PvZ - 3 Stargate Phoenix",
+      },
+    ]);
+    const svc = makeService(games);
+    const out = await svc.evaluateByBuildName(
+      "u1",
+      "PvZ - 3 Stargate Phoenix",
+      { strategyName: "Zerg - Mass Ling" },
+    );
+    expect(out).toBeNull();
   });
 
   test("evaluateByBuildName throws when perGame is unavailable", async () => {

@@ -46,9 +46,18 @@ class StrategyPhasesService {
    * StrategiesTabBuildVs comparison view ("what they typically do
    * with this strategy").
    *
+   * ``buildName`` further restricts the matched set to games where the
+   * user's ``myBuild`` label equals the requested value. This is what
+   * the BuildVsStrategyComparison drill-down passes through so the
+   * right column describes the SAME game set as the cell the user
+   * clicked — without it, the right column reports the strategy's
+   * marginal sample across all of the user's builds (often orders of
+   * magnitude larger than the cell), which made the side-by-side
+   * counts incomparable.
+   *
    * @param {string} userId
    * @param {string} strategyName
-   * @param {{ perspective?: "you"|"opponent" }} [opts]
+   * @param {{ perspective?: "you"|"opponent", buildName?: string }} [opts]
    * @returns {Promise<null | {
    *   name: string,
    *   total: number,
@@ -65,13 +74,19 @@ class StrategyPhasesService {
     if (!this.perGame) throw new Error("perGame_unavailable");
     if (!strategyName) return null;
     const perspective = opts && opts.perspective === "opponent" ? "opponent" : "you";
+    const buildName =
+      opts && typeof opts.buildName === "string" && opts.buildName
+        ? opts.buildName
+        : null;
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
     });
     const matched = games.filter((g) => {
       const s = g && g.opponent && g.opponent.strategy;
-      return s === strategyName;
+      if (s !== strategyName) return false;
+      if (buildName && g.myBuild !== buildName) return false;
+      return true;
     });
     if (matched.length === 0) return null;
     const comps = computeCompositions(matched, { perspective });
@@ -96,13 +111,20 @@ class StrategyPhasesService {
    * view shows "what YOU typically do", and the agent only ever
    * stamps user-side build labels on the ``myBuild`` field.
    *
+   * ``strategyName`` further restricts the matched set to games where
+   * ``opponent.strategy`` equals the requested value. The drill-down
+   * passes it through so the left column describes the SAME game set
+   * as the cell the user clicked (build × strategy intersection),
+   * rather than every game with that build label regardless of the
+   * opponent's strategy.
+   *
    * The shape mirrors ``evaluate`` so the StrategiesTab can hand
    * either payload straight to PhaseTrajectoryStrip /
    * PhaseCompositionTabs.
    *
    * @param {string} userId
    * @param {string} buildName
-   * @param {{ perspective?: "you"|"opponent" }} [opts]
+   * @param {{ perspective?: "you"|"opponent", strategyName?: string }} [opts]
    * @returns {Promise<null | {
    *   name: string,
    *   total: number,
@@ -120,11 +142,22 @@ class StrategyPhasesService {
     if (!buildName) return null;
     const perspective =
       opts && opts.perspective === "opponent" ? "opponent" : "you";
+    const strategyName =
+      opts && typeof opts.strategyName === "string" && opts.strategyName
+        ? opts.strategyName
+        : null;
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
     });
-    const matched = games.filter((g) => g && g.myBuild === buildName);
+    const matched = games.filter((g) => {
+      if (!g || g.myBuild !== buildName) return false;
+      if (strategyName) {
+        const s = g.opponent && g.opponent.strategy;
+        if (s !== strategyName) return false;
+      }
+      return true;
+    });
     if (matched.length === 0) return null;
     const comps = computeCompositions(matched, { perspective });
     return {

@@ -93,12 +93,15 @@ function buildCustomBuildsRouter(deps) {
   // from the reclassify endpoint where the matched set may shift.
   /** @type {Map<string, {expires: number, value: any}>} */
   const phaseCache = new Map();
-  function phaseCacheKey(userId, slug, latestGameMs, kind, perspective) {
+  function phaseCacheKey(userId, slug, latestGameMs, kind, perspective, scope) {
     // ``perspective`` is included so the comparison view's two
     // queries don't poison each other's cache slot — left ("you")
     // and right ("opponent") off the same slug must compute
-    // independently.
-    return `${userId}|${slug}|${latestGameMs}|${kind}|${perspective}`;
+    // independently. ``scope`` is the optional opponent-strategy
+    // axis the BuildVsStrategyComparison drill-down passes through —
+    // unscoped (BuildDossier) and cell-scoped (drill-down) payloads
+    // for the same slug must NOT alias.
+    return `${userId}|${slug}|${latestGameMs}|${kind}|${perspective}|${scope || ""}`;
   }
   function phaseCacheGet(key) {
     const hit = phaseCache.get(key);
@@ -335,9 +338,22 @@ function buildCustomBuildsRouter(deps) {
       }
       const slug = String(req.params.slug);
       const perspective = pickPerspective(req.query && req.query.perspective);
+      // Optional ``strategy`` query param scopes the saved-build
+      // matched set to one cell of the build × strategy matrix. The
+      // drill-down passes it through so the left column describes the
+      // SAME game set as the cell the user clicked.
+      const strategyName =
+        req.query && typeof req.query.strategy === "string" && req.query.strategy
+          ? String(req.query.strategy)
+          : null;
       const latest = await latestGameMs(auth.userId);
       const key = phaseCacheKey(
-        auth.userId, slug, latest, "compositions", perspective || "default",
+        auth.userId,
+        slug,
+        latest,
+        "compositions",
+        perspective || "default",
+        strategyName ? `s:${strategyName}` : "",
       );
       const cached = phaseCacheGet(key);
       if (cached) {
@@ -347,7 +363,7 @@ function buildCustomBuildsRouter(deps) {
       const result = await deps.customBuilds.evaluateBuildPhases(
         auth.userId,
         slug,
-        { includeTransitions: false, perspective },
+        { includeTransitions: false, perspective, strategyName },
       );
       if (!result) {
         res.status(404).json({ error: { code: "not_found" } });

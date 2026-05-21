@@ -67,6 +67,34 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Strategies drill-down · build × strategy comparison now describes
+  the same N games on both sides** (`#StrategiesTabBuildVs`). When the
+  user clicked a cell in the build × strategy matrix, the resulting
+  side-by-side trajectory used to compare incomparable populations: the
+  left ("WHAT YOU TYPICALLY DO") column filtered the user's games by
+  `myBuild === build` only, while the right ("WHAT THEY TYPICALLY DO")
+  filtered by `opponent.strategy === strategy` only. For a player with
+  a narrow build label but a broad opp-strategy bucket this produced
+  wildly asymmetric counts (e.g. 15 games on the left vs. 503 on the
+  right for `PvZ - AlphaStar Style (Oracle/Robo)` × `Zerg - 3 Base Macro
+  (Hatch First)`) and the trajectories meant different things on each
+  side. The drill-down now passes the OTHER axis through as a query
+  parameter on all three endpoints
+  (`/v1/custom-builds/:slug/compositions?strategy=…`,
+  `/v1/builds/:name/phases?strategy=…`,
+  `/v1/strategies/:name/phases?build=…`); both
+  `StrategyPhasesService.evaluate` /
+  `StrategyPhasesService.evaluateByBuildName` and
+  `CustomBuildsService.evaluateBuildPhases` accept the cross-axis filter
+  and restrict the matched set to the build × strategy intersection. The
+  route-layer phase cache keys include the cross-axis suffix so
+  unscoped (BuildDossier) and cell-scoped (drill-down) payloads for the
+  same slug never alias. Header copy updated to reflect the new
+  semantics. 5 new regression tests in
+  `apps/api/__tests__/builds.test.js` +
+  `apps/api/__tests__/customBuildsMatches.test.js`; existing
+  `BuildVsStrategyComparison.test.tsx` assertions updated for the new
+  query string.
 - **Strategy classifier · every PvT OPENER label now requires
   its labelled tech to be the FIRST tech building (0.8.1 full
   sweep)**: same principle from the Robo First fix (0.8.0) and

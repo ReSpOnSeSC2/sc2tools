@@ -102,7 +102,7 @@ function wireMocks({
 }
 
 describe("BuildVsStrategyComparison", () => {
-  it("requests the left column with perspective=you and right column with perspective=opponent", () => {
+  it("requests the left column with perspective=you and right column with perspective=opponent, both scoped to the matrix cell", () => {
     wireMocks({
       yourPayload: buildPhasesPayload(7, "you"),
       oppPayload: { ...buildPhasesPayload(7, "opponent"), name: "Terran - Mech" },
@@ -118,19 +118,20 @@ describe("BuildVsStrategyComparison", () => {
     const callPaths = useApiMock.mock.calls.map((c) => c[0]);
     // Slug bridge call:
     expect(callPaths).toContain("/v1/custom-builds");
-    // Left column: perspective=you.
+    // Left column: perspective=you AND strategy filter — describes
+    // the SAME cell as the right column.
     expect(callPaths).toEqual(
       expect.arrayContaining([
         expect.stringContaining(
-          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you",
+          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you&strategy=Terran%20-%20Mech",
         ),
       ]),
     );
-    // Right column: perspective=opponent.
+    // Right column: perspective=opponent AND build filter — same cell.
     expect(callPaths).toEqual(
       expect.arrayContaining([
         expect.stringContaining(
-          "/v1/strategies/Terran%20-%20Mech/phases?perspective=opponent",
+          "/v1/strategies/Terran%20-%20Mech/phases?perspective=opponent&build=Stargate%20Phoenix",
         ),
       ]),
     );
@@ -201,8 +202,10 @@ describe("BuildVsStrategyComparison", () => {
     const callPaths = useApiMock.mock.calls.map((c) => c[0]);
     expect(callPaths).toEqual(
       expect.arrayContaining([
+        // The fallback also carries the strategy filter so the cell-
+        // scoped intersection holds in the auto-classified-label path.
         expect.stringContaining(
-          "/v1/builds/Some%20Agent%20Auto-Label/phases?perspective=you",
+          "/v1/builds/Some%20Agent%20Auto-Label/phases?perspective=you&strategy=Terran%20-%20Mech",
         ),
       ]),
     );
@@ -290,7 +293,7 @@ describe("BuildVsStrategyComparison", () => {
     expect(callPaths).toEqual(
       expect.arrayContaining([
         expect.stringContaining(
-          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you",
+          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you&strategy=Zerg%20-%203%20Base%20Macro",
         ),
       ]),
     );
@@ -320,7 +323,7 @@ describe("BuildVsStrategyComparison", () => {
     expect(callPaths).toEqual(
       expect.arrayContaining([
         expect.stringContaining(
-          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you",
+          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you&strategy=Zerg%20-%203%20Base%20Macro",
         ),
       ]),
     );
