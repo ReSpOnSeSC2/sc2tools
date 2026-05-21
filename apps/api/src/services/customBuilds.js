@@ -237,9 +237,24 @@ class CustomBuildsService {
       typeof opts.strategyName === "string" && opts.strategyName
         ? opts.strategyName
         : null;
+    // Push the strategy predicate into the Mongo find so the recency
+    // cap applies to matching games. Without push-down a user with
+    // more games than ``STATS_GAME_SCAN_CAP`` saw the comparison
+    // cohort silently shrink whenever the matrix cell sat outside the
+    // most recent slice — this is what produced the "265 games in the
+    // BvS cell, 13 in the WHAT YOU TYPICALLY DO header" discrepancy.
+    // The race / opponent-race side of the matchup-gate stays in JS
+    // because the legacy fallback (deriving race from a "PvT - …"
+    // build-name prefix when the field is absent) can't be expressed
+    // as a Mongo predicate without a more expensive aggregate.
+    /** @type {Record<string, any>|null} */
+    const matchPushdown = strategyName
+      ? { "opponent.strategy": strategyName }
+      : null;
     const games = await this.perGame.listForRulePreview(userId, {
       limit: STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: true,
+      ...(matchPushdown ? { match: matchPushdown } : {}),
     });
     const inMatchup = games.filter((g) =>
       gameMatchesBuildMatchup(g, build, rulePerspective),
@@ -248,6 +263,9 @@ class CustomBuildsService {
       rules.length === 0
         ? []
         : filterMatchingGames(inMatchup, rules, rulePerspective);
+    // Defensive in-memory filter — keeps the service correct against
+    // a perGame implementation that ignores ``match`` (test mocks).
+    // In production the Mongo find has already done this work.
     const matched = strategyName
       ? ruleMatched.filter((g) => {
           const s = g && g.opponent && g.opponent.strategy;

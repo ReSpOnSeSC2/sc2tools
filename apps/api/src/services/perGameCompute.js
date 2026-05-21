@@ -428,8 +428,23 @@ class PerGameComputeService {
    * both my-events AND opp-events lets the route honour the build's
    * perspective without a second query.
    *
+   * ``match`` is an optional Mongo filter merged into the find query
+   * (under the user-scope). Callers that already know the matchup —
+   * the StrategiesTab build × strategy drill-down passes ``myBuild``
+   * and ``opponent.strategy`` for example — push their predicate down
+   * here so the ``limit`` cap applies to the *matching* set instead of
+   * the user's full recent window. Without push-down, a user with more
+   * than ``limit`` games would see the analysis cohort silently
+   * shrink to whichever fraction of their most-recent ``limit`` games
+   * happened to satisfy the post-filter, even if many more matching
+   * games exist further back.
+   *
    * @param {string} userId
-   * @param {{ limit?: number, includeMacroBreakdown?: boolean }} [opts]
+   * @param {{
+   *   limit?: number,
+   *   includeMacroBreakdown?: boolean,
+   *   match?: Record<string, any>,
+   * }} [opts]
    * @returns {Promise<Array<{
    *   gameId: string,
    *   myBuild: string|null,
@@ -448,6 +463,15 @@ class PerGameComputeService {
   async listForRulePreview(userId, opts = {}) {
     const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 600));
     const includeMacroBreakdown = !!opts.includeMacroBreakdown;
+    // Optional Mongo-level push-down filter. Callers that already know
+    // which slice of the user's games they want (e.g. the build ×
+    // strategy drill-down) merge a {myBuild, "opponent.strategy"}
+    // predicate here so the ``limit`` cap applies AFTER the filter and
+    // the analysis cohort doesn't get silently truncated by recency.
+    const extraMatch =
+      opts.match && typeof opts.match === "object" && !Array.isArray(opts.match)
+        ? opts.match
+        : null;
     /** @type {Record<string, number>} */
     const projection = {
       _id: 0,
@@ -477,9 +501,13 @@ class PerGameComputeService {
       projection.macroBreakdown = 1;
     }
     // Slim metadata first — needed for both legacy fallback and the
-    // gameId list we'll batch-fetch detail blobs for.
+    // gameId list we'll batch-fetch detail blobs for. ``userId`` is
+    // always the most selective predicate; extra match keys are merged
+    // on top so a downstream {myBuild, "opponent.strategy"} pair gets
+    // pushed into the same indexed find rather than filtered in memory.
+    const filter = extraMatch ? { userId, ...extraMatch } : { userId };
     const games = await this.db.games
-      .find({ userId }, { projection })
+      .find(filter, { projection })
       .sort({ date: -1 })
       .limit(limit)
       .toArray();
