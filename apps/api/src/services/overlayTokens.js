@@ -4,7 +4,10 @@ const { COLLECTIONS } = require("../config/constants");
 const { randomToken } = require("../util/hash");
 const { stampVersion } = require("../db/schemaVersioning");
 
-const DEFAULT_WIDGETS = Object.freeze([
+// Every widget the overlay knows how to render — the whitelist used to
+// validate toggle requests. Keep in sync with ALL_WIDGETS in
+// apps/web/components/overlay/widgetLifecycle.ts.
+const VALID_WIDGETS = Object.freeze([
   "opponent",
   "match-result",
   "post-game",
@@ -20,6 +23,19 @@ const DEFAULT_WIDGETS = Object.freeze([
   "best-answer",
   "scouting",
   "session",
+]);
+
+// Widgets enabled out of the box. Trimmed to the streamer-requested core
+// layout — opponent identity + scouting dossier pre-game, the session
+// W/L HUD, and the centered match-result banner at game end. Every other
+// widget stays available and can be toggled on in Settings → Overlay;
+// it's just off by default so a fresh overlay isn't cluttered. Mirrors
+// DEFAULT_WIDGETS in apps/web/components/overlay/widgetLifecycle.ts.
+const DEFAULT_ENABLED_WIDGETS = Object.freeze([
+  "opponent",
+  "scouting",
+  "session",
+  "match-result",
 ]);
 
 /**
@@ -54,12 +70,12 @@ class OverlayTokensService {
           createdAt: now,
           lastSeenAt: null,
           revokedAt: null,
-          enabledWidgets: [...DEFAULT_WIDGETS],
+          enabledWidgets: [...DEFAULT_ENABLED_WIDGETS],
         },
         COLLECTIONS.OVERLAY_TOKENS,
       ),
     );
-    return { token, label, createdAt: now, enabledWidgets: [...DEFAULT_WIDGETS] };
+    return { token, label, createdAt: now, enabledWidgets: [...DEFAULT_ENABLED_WIDGETS] };
   }
 
   /**
@@ -76,7 +92,7 @@ class OverlayTokensService {
       ...it,
       enabledWidgets: Array.isArray(it.enabledWidgets)
         ? it.enabledWidgets
-        : [...DEFAULT_WIDGETS],
+        : [...DEFAULT_ENABLED_WIDGETS],
     }));
   }
 
@@ -95,7 +111,7 @@ class OverlayTokensService {
       label: row.label,
       enabledWidgets: Array.isArray(row.enabledWidgets)
         ? row.enabledWidgets
-        : [...DEFAULT_WIDGETS],
+        : [...DEFAULT_ENABLED_WIDGETS],
     };
   }
 
@@ -119,7 +135,7 @@ class OverlayTokensService {
    * @param {boolean} enabled
    */
   async setWidgetEnabled(userId, token, widget, enabled) {
-    if (!DEFAULT_WIDGETS.includes(widget)) {
+    if (!VALID_WIDGETS.includes(widget)) {
       const err = new Error("unknown_widget");
       /** @type {any} */ (err).status = 400;
       throw err;
@@ -137,7 +153,7 @@ class OverlayTokensService {
     return {
       enabledWidgets: Array.isArray(row?.enabledWidgets)
         ? row.enabledWidgets
-        : [...DEFAULT_WIDGETS],
+        : [...DEFAULT_ENABLED_WIDGETS],
     };
   }
 
@@ -158,4 +174,8 @@ class OverlayTokensService {
   }
 }
 
-module.exports = { OverlayTokensService, DEFAULT_WIDGETS };
+module.exports = {
+  OverlayTokensService,
+  VALID_WIDGETS,
+  DEFAULT_ENABLED_WIDGETS,
+};

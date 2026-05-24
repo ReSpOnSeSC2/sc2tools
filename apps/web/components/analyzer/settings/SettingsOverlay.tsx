@@ -15,6 +15,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
+import { DEFAULT_WIDGETS } from "@/components/overlay/widgetLifecycle";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
@@ -538,7 +539,7 @@ function WidgetList({
   testingWidget: string | null;
 }) {
   const enabled = useMemo(
-    () => new Set<string>(token.enabledWidgets ?? WIDGETS.map((w) => w.id)),
+    () => new Set<string>(token.enabledWidgets ?? DEFAULT_WIDGETS),
     [token.enabledWidgets],
   );
   return (

@@ -58,6 +58,22 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
 ];
 
 /**
+ * Widgets enabled by default in the all-in-one overlay when a token has
+ * not been explicitly configured (``enabledWidgets`` is null). Trimmed
+ * to the streamer-requested core layout: opponent identity + scouting
+ * dossier pre-game, the session W/L HUD, and the centered match-result
+ * banner at game end. Every other widget stays available — a streamer
+ * toggles it on in Settings → Overlay — but the out-of-the-box overlay
+ * is the uncluttered set, not all 15.
+ */
+export const DEFAULT_WIDGETS: ReadonlyArray<WidgetId> = [
+  "opponent",
+  "scouting",
+  "session",
+  "match-result",
+];
+
+/**
  * How long each widget stays on screen in production after the
  * `overlay:live` payload (or, for `session`, the dedicated
  * `overlay:session` event) lands. `null` = persistent — the widget

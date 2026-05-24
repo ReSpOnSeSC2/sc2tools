@@ -18,7 +18,7 @@ export function MatchResultWidget({ live }: { live: LiveGamePayload | null }) {
   const win = live.result === "win";
   return (
     <WidgetShell
-      slot="top-center"
+      slot="center"
       accent={win ? "green" : "red"}
       halo
       visible

@@ -9,6 +9,7 @@ type Slot =
   | "top-center-1"
   | "top-center-2"
   | "top-center-3"
+  | "center"
   | "top-right"
   | "top-right-mmr"
   | "bottom-center"
@@ -22,6 +23,10 @@ const SLOT_STYLE: Record<Slot, CSSProperties> = {
   "top-center-1": { top: 130, left: "50%", transform: "translateX(-50%)" },
   "top-center-2": { top: 220, left: "50%", transform: "translateX(-50%)" },
   "top-center-3": { top: 310, left: "50%", transform: "translateX(-50%)" },
+  // Dead-center of the 1920×1080 canvas — used by the end-of-game
+  // match-result banner so the Victory/Defeat card lands in the middle
+  // of the screen.
+  "center": { top: "50%", left: "50%", transform: "translate(-50%, -50%)" },
   "top-right": { top: 40, right: 40 },
   "top-right-mmr": { top: 150, right: 40 },
   "bottom-center": { bottom: 60, left: "50%", transform: "translateX(-50%)" },

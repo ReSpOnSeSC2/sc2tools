@@ -10,6 +10,7 @@ import type {
 import { clientTimezone } from "@/lib/timeseries";
 import {
   ALL_WIDGETS,
+  DEFAULT_WIDGETS,
   resolveWidgetDurationMs,
   type WidgetId,
 } from "@/components/overlay/widgetLifecycle";
@@ -64,8 +65,12 @@ export function OverlayClient({ token }: { token: string }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
+  // Default to the trimmed core layout until the server sends this
+  // token's saved ``enabledWidgets`` via ``overlay:config``. A token
+  // that was never customised keeps this set (opponent + scouting +
+  // session + centered match result).
   const [enabled, setEnabled] = useState<Set<WidgetId>>(
-    () => new Set(ALL_WIDGETS),
+    () => new Set(DEFAULT_WIDGETS),
   );
   const [voicePrefs, setVoicePrefs] = useState<VoicePrefs | null>(null);
   // Per-widget "currently visible" set. Cleared by the per-widget
