@@ -2,6 +2,41 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.8.2
+
+### Fixed — PvT DT Drop and fast-3rd macro Blink no longer mis-tagged "7 Gate Blink All-in"
+- **Two PvT replays were both labelled "7 Gate Blink All-in" when
+  they were not:** a DT Drop opener that macroed into a multi-Gate
+  Blink composition, and a fast-expand macro Blink that took a quick
+  3rd Nexus before adding the extra Gateways.
+- **DT Drop precedence.** The DT Drop rule sat BELOW the 7 Gate Blink
+  All-in rule. A DT drop is a Twilight-first opener (the Dark Shrine
+  requires a Twilight Council) that often researches Blink and keeps
+  adding Gateways as the game goes long, so by 9:00 a DT-drop macro
+  game satisfies the all-in signature (6+ Gateways + Blink +
+  Twilight-first) and the all-in rule fired first. The DT Drop
+  signature (Dark Shrine by 4:15, Robo by 4:30, real DT by 5:00, Warp
+  Prism by 5:15) is now checked BEFORE the Gateway-count Blink rules.
+  No genuine Blink all-in builds Dark Shrine + Robo + DT + Warp Prism
+  inside 5:15, so the reorder cannot steal a real all-in.
+- **Fast-3rd-Nexus guard on 7 Gate Blink All-in.** The
+  `fifth_gateway_started < third_nexus_time` discriminator leaks when
+  extra Gateways warp in around an already-fast 3rd Nexus. A 3rd Nexus
+  STARTED before 6:00 is a macro commitment, never an all-in, so it is
+  now excluded (`total_nexuses < 3 or third_nexus_time >= 360`). Those
+  builds fall through to the 3 / 4 Gate Blink (Macro) labels. A LATE
+  3rd Nexus (6:00 or later) after a 2-base Gateway commitment still
+  classifies as the all-in, so the canonical case is unaffected.
+- Mirror in `SC2Replay-Analyzer/detectors/user.py` in sync.
+- Catalog prose updated for the new criteria
+  (`core/build_definitions.py`, `data/build_definitions.json`,
+  `apps/web/lib/build-definitions/pvt.ts`).
+- Tests: 2 new regression cases in
+  `test_strategy_detector_pvt_gateway_opener_variants.py` reproduce
+  the reported replays — both classify as "7 Gate Blink All-in" on the
+  old code and as the correct DT Drop / macro Blink label after the
+  fix. All 121 strategy-detector tests pass.
+
 ## 0.8.1
 
 ### Fixed — Every PvT OPENER label now requires its labelled tech to be the FIRST tech building (full sweep)
