@@ -7,6 +7,7 @@ const { stampVersion } = require("../db/schemaVersioning");
 const EVENT_TYPES = Object.freeze({
   USER_SIGNUP: "user_signup",
   AGENT_DOWNLOAD: "agent_download",
+  USER_MESSAGE: "user_message",
 });
 
 const VALID_TYPES = new Set(Object.values(EVENT_TYPES));
@@ -15,6 +16,13 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const FEED_LIMIT_DEFAULT = 50;
 const FEED_LIMIT_MAX = 200;
 const SOCKET_ADMIN_ROOM = "admin";
+
+// Length caps for user-submitted bug reports / messages. Mirrored by
+// the POST /v1/messages route validation so an oversized body is
+// rejected with a 400 before it ever reaches record(); these are the
+// last line of defence that also keeps a row from growing unbounded.
+const MESSAGE_SUBJECT_MAX = 140;
+const MESSAGE_BODY_MAX = 4000;
 
 /**
  * AdminEventsService — durable, queryable feed of admin-facing
@@ -288,6 +296,18 @@ function sanitisePayload(type, raw) {
       country: toCleanString(payload.country, 2) || null,
     };
   }
+  if (type === EVENT_TYPES.USER_MESSAGE) {
+    // A logged-in user's bug report / message. Identity (userId,
+    // clerkUserId, email) is attached server-side from the auth
+    // context, never trusted from the client body.
+    return {
+      userId: toCleanString(payload.userId, 64) || null,
+      clerkUserId: toCleanString(payload.clerkUserId, 64) || null,
+      email: toCleanString(payload.email, 254) || null,
+      subject: toCleanString(payload.subject, MESSAGE_SUBJECT_MAX),
+      message: toCleanString(payload.message, MESSAGE_BODY_MAX),
+    };
+  }
   return payload;
 }
 
@@ -362,4 +382,6 @@ module.exports = {
   AdminEventsService,
   EVENT_TYPES,
   SOCKET_ADMIN_ROOM,
+  MESSAGE_SUBJECT_MAX,
+  MESSAGE_BODY_MAX,
 };

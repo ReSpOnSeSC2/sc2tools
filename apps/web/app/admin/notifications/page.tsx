@@ -23,6 +23,7 @@ const FILTER_LABEL: Record<Filter, string> = {
   all: "All",
   user_signup: "Signups",
   agent_download: "Downloads",
+  user_message: "Messages",
 };
 
 /**
@@ -124,8 +125,8 @@ export default function AdminNotificationsPage() {
         <div className="space-y-2">
           <h1 className="text-3xl font-bold">Notifications</h1>
           <p className="text-text-muted">
-            Live feed of new signups and agent downloads. Updates in
-            real time while this page is open.
+            Live feed of new signups, agent downloads, and user messages.
+            Updates in real time while this page is open.
           </p>
         </div>
         <button
@@ -147,7 +148,9 @@ export default function AdminNotificationsPage() {
           <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
             Filter
           </span>
-          {(["all", "user_signup", "agent_download"] as Filter[]).map((f) => {
+          {(
+            ["all", "user_signup", "agent_download", "user_message"] as Filter[]
+          ).map((f) => {
             const isActive = filter === f;
             return (
               <button
@@ -183,8 +186,8 @@ export default function AdminNotificationsPage() {
       ) : !merged || merged.length === 0 ? (
         <Card padded>
           <p className="text-text-muted">
-            No events yet. New signups and agent downloads will appear here
-            as they happen.
+            No events yet. New signups, agent downloads, and user messages
+            will appear here as they happen.
           </p>
         </Card>
       ) : (
