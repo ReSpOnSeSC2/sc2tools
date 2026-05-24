@@ -102,13 +102,21 @@ export type HealthResp = {
   };
 };
 
-export type AdminEventType = "user_signup" | "agent_download";
+export type AdminEventType = "user_signup" | "agent_download" | "user_message";
 
 export type AdminEventSignupPayload = {
   clerkUserId: string;
   userId: string | null;
   email: string | null;
   source: string;
+};
+
+export type AdminEventUserMessagePayload = {
+  userId: string | null;
+  clerkUserId: string | null;
+  email: string | null;
+  subject: string;
+  message: string;
 };
 
 export type AdminEventDownloadPayload = {
@@ -124,7 +132,10 @@ export type AdminEventDownloadPayload = {
 export type AdminEvent = {
   eventId: string;
   type: AdminEventType;
-  payload: AdminEventSignupPayload | AdminEventDownloadPayload;
+  payload:
+    | AdminEventSignupPayload
+    | AdminEventDownloadPayload
+    | AdminEventUserMessagePayload;
   createdAt: string;
   readAt: string | null;
 };

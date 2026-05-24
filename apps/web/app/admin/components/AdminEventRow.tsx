@@ -1,11 +1,12 @@
 "use client";
 
-import { Download, UserPlus } from "lucide-react";
+import { Download, MessageSquareWarning, UserPlus } from "lucide-react";
 import { timeSince } from "./format";
 import type {
   AdminEvent,
   AdminEventDownloadPayload,
   AdminEventSignupPayload,
+  AdminEventUserMessagePayload,
 } from "./adminTypes";
 
 /**
@@ -32,17 +33,11 @@ export function AdminEventRow({
       <span
         className={[
           "mt-0.5 inline-flex h-9 w-9 flex-none items-center justify-center rounded-full border",
-          event.type === "user_signup"
-            ? "border-accent/40 bg-accent/10 text-accent"
-            : "border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan",
+          ICON_CLASSES[event.type],
         ].join(" ")}
         aria-hidden
       >
-        {event.type === "user_signup" ? (
-          <UserPlus className="h-4 w-4" />
-        ) : (
-          <Download className="h-4 w-4" />
-        )}
+        <EventIcon type={event.type} />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -58,6 +53,11 @@ export function AdminEventRow({
             {meta.subtitle}
           </p>
         ) : null}
+        {meta.body ? (
+          <p className="mt-1.5 whitespace-pre-wrap break-words rounded-lg border border-border bg-bg-elevated/40 px-3 py-2 text-caption text-text-muted">
+            {meta.body}
+          </p>
+        ) : null}
       </div>
       <span className="flex-none whitespace-nowrap text-caption text-text-dim">
         {timeSince(event.createdAt)}
@@ -66,7 +66,24 @@ export function AdminEventRow({
   );
 }
 
-function describe(event: AdminEvent): { title: string; subtitle: string } {
+const ICON_CLASSES: Record<AdminEvent["type"], string> = {
+  user_signup: "border-accent/40 bg-accent/10 text-accent",
+  agent_download: "border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan",
+  user_message: "border-warning/40 bg-warning/10 text-warning",
+};
+
+function EventIcon({ type }: { type: AdminEvent["type"] }) {
+  if (type === "user_signup") return <UserPlus className="h-4 w-4" />;
+  if (type === "user_message")
+    return <MessageSquareWarning className="h-4 w-4" />;
+  return <Download className="h-4 w-4" />;
+}
+
+function describe(event: AdminEvent): {
+  title: string;
+  subtitle: string;
+  body?: string;
+} {
   if (event.type === "user_signup") {
     const p = event.payload as AdminEventSignupPayload;
     return {
@@ -74,6 +91,15 @@ function describe(event: AdminEvent): { title: string; subtitle: string } {
       subtitle: p.email
         ? `${p.email} · via ${humanSource(p.source)}`
         : `${p.clerkUserId} · via ${humanSource(p.source)}`,
+    };
+  }
+  if (event.type === "user_message") {
+    const p = event.payload as AdminEventUserMessagePayload;
+    const from = p.email || p.clerkUserId || "a signed-in user";
+    return {
+      title: p.subject || "User message",
+      subtitle: `from ${from}`,
+      body: p.message,
     };
   }
   const p = event.payload as AdminEventDownloadPayload;

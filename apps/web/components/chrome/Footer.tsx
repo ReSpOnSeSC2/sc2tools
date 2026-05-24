@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { ReactNode } from "react";
+import { ReportIssueLauncher } from "@/components/feedback/ReportIssueLauncher";
 
 /**
  * Footer — three-column site footer.
@@ -47,7 +48,11 @@ export function Footer() {
         <div className="grid gap-10 md:grid-cols-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <BrandStrip />
           <FooterColumn title="Product" links={PRODUCT_LINKS} />
-          <FooterColumn title="Resources" links={RESOURCES_LINKS} />
+          <FooterColumn
+            title="Resources"
+            links={RESOURCES_LINKS}
+            trailing={<ReportIssueLauncher />}
+          />
           <FooterColumn
             title="Legal"
             links={LEGAL_LINKS}
@@ -97,9 +102,11 @@ interface FooterColumnProps {
   title: string;
   links: readonly FooterLink[];
   extra?: ReactNode;
+  /** Optional interactive item appended as the last list entry (e.g. the report-a-bug launcher). */
+  trailing?: ReactNode;
 }
 
-function FooterColumn({ title, links, extra }: FooterColumnProps) {
+function FooterColumn({ title, links, extra, trailing }: FooterColumnProps) {
   return (
     <div>
       <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-dim">
@@ -126,6 +133,7 @@ function FooterColumn({ title, links, extra }: FooterColumnProps) {
             )}
           </li>
         ))}
+        {trailing ? <li>{trailing}</li> : null}
       </ul>
       {extra ? <div className="mt-4">{extra}</div> : null}
     </div>

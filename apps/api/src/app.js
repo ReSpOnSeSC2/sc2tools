@@ -76,6 +76,7 @@ const { buildPublicReplayRouter } = require("./routes/publicReplay");
 const { buildSeasonsRouter } = require("./routes/seasons");
 const { buildClerkWebhookRouter } = require("./routes/clerkWebhook");
 const { buildAdminRouter } = require("./routes/admin");
+const { buildMessagesRouter } = require("./routes/messages");
 const { buildArcadeRouter } = require("./routes/arcade");
 const {
   buildAgentLiveRouter,
@@ -438,6 +439,18 @@ function mountRoutes(app, deps, services, clerk) {
       auth,
       isAdmin,
       gameDetailsStoreKind: deps.config.gameDetailsStore,
+    }),
+  );
+  // User → admin messaging (bug reports). Auth-gated per-path inside
+  // the router; persists each message as a ``user_message`` admin
+  // event so it shares the /admin/notifications inbox.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildMessagesRouter({
+      adminEvents: services.adminEvents,
+      users: services.users,
+      auth,
+      maxPerWindow: deps.config.maxUserMessagesPerWindow,
     }),
   );
   app.use(
