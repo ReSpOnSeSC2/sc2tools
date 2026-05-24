@@ -69,9 +69,14 @@ export default function AdminUserDetailPage({
         >
           ← All users
         </Link>
-        <h1 className="break-all text-3xl font-bold">{data.userId}</h1>
+        <h1 className="break-all text-3xl font-bold">
+          {data.email ?? data.userId}
+        </h1>
+        <p className="break-all font-mono text-caption text-text-dim">
+          {data.userId}
+        </p>
         {data.clerkUserId ? (
-          <p className="font-mono text-caption text-text-dim">
+          <p className="break-all font-mono text-caption text-text-dim">
             clerk: {data.clerkUserId}
           </p>
         ) : null}

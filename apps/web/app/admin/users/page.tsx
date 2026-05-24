@@ -54,8 +54,9 @@ export default function AdminUsersPage() {
       <header className="space-y-2">
         <h1 className="text-3xl font-bold">Users</h1>
         <p className="text-text-muted">
-          Sorted by most recent activity. Click a row to open the
-          per-user detail with rebuild / wipe actions.
+          All users, sorted by most recent activity (users with no games
+          yet appear by last sign-in). Click a row to open the per-user
+          detail with rebuild / wipe actions.
         </p>
       </header>
 
@@ -72,7 +73,7 @@ export default function AdminUsersPage() {
               setBefore(null);
               setPageHistory([null]);
             }}
-            placeholder="userId or clerkUserId fragment…"
+            placeholder="email, userId, or clerkUserId fragment…"
             className="w-full rounded-lg border border-border bg-bg-surface px-3 py-2 font-mono text-sm text-text placeholder:text-text-dim focus:border-accent focus:outline-none"
             spellCheck={false}
             autoCapitalize="none"
@@ -104,18 +105,16 @@ export default function AdminUsersPage() {
                       className="flex flex-col gap-2 px-4 py-3 hover:bg-bg-elevated/40"
                     >
                       <div className="flex items-baseline justify-between gap-2">
-                        <span className="truncate font-mono text-body font-semibold text-text">
-                          {u.userId}
+                        <span className="truncate text-body font-semibold text-text">
+                          {u.email ?? "(no email on file)"}
                         </span>
                         <span className="text-caption text-text-dim">
                           {timeSince(u.lastActivity)}
                         </span>
                       </div>
-                      {u.clerkUserId ? (
-                        <span className="font-mono text-caption text-text-dim">
-                          {u.clerkUserId}
-                        </span>
-                      ) : null}
+                      <span className="truncate font-mono text-caption text-text-dim">
+                        {u.clerkUserId ?? u.userId}
+                      </span>
                       <div className="flex items-center gap-3 text-caption text-text-muted">
                         <span>
                           <strong className="text-text">
@@ -166,12 +165,12 @@ export default function AdminUsersPage() {
                           href={`/admin/users/${encodeURIComponent(u.userId)}`}
                           className="block"
                         >
-                          <div className="font-mono text-text">{u.userId}</div>
-                          {u.clerkUserId ? (
-                            <div className="font-mono text-caption text-text-dim">
-                              {u.clerkUserId}
-                            </div>
-                          ) : null}
+                          <div className="font-medium text-text">
+                            {u.email ?? "(no email on file)"}
+                          </div>
+                          <div className="font-mono text-caption text-text-dim">
+                            {u.clerkUserId ?? u.userId}
+                          </div>
                         </Link>
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums text-text">

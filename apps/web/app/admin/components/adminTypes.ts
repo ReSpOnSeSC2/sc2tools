@@ -25,6 +25,7 @@ export type StorageStatsResp = {
 export type AdminUserRow = {
   userId: string;
   clerkUserId: string | null;
+  email: string | null;
   gameCount: number;
   opponentCount: number;
   lastActivity: string | null;
@@ -40,6 +41,7 @@ export type UsersListResp = {
 export type AdminUserDetail = {
   userId: string;
   clerkUserId: string | null;
+  email: string | null;
   createdAt: string | null;
   lastSeenAt: string | null;
   games: {
@@ -148,5 +150,11 @@ export type AdminEventCountsResp = {
     linux: number;
   };
   unreadCount: number;
+  /** Connected-agent counters from the deviceTokens collection. */
+  agents: {
+    total: number;
+    active24h: number;
+    active7d: number;
+  };
   generatedAt: string;
 };

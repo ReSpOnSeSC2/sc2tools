@@ -1,13 +1,17 @@
 "use client";
 
-import { API_BASE } from "@/lib/clientApi";
-
 /**
- * Fire a one-shot "agent download started" beacon to the public
- * ``POST /v1/agent/download-event`` endpoint. Used by the
- * DownloadCard's onClick so admin counters and the notification
- * feed pick up each click without depending on the GitHub artifact
- * URL being routed through our backend.
+ * Fire a one-shot "agent download started" beacon to the SAME-ORIGIN
+ * ``POST /api/agent/download-event`` route, which forwards the event
+ * server-side to the backend so admin counters + the notification feed
+ * pick up each click.
+ *
+ * Why same-origin: ``navigator.sendBeacon`` with a JSON body is not a
+ * CORS-safelisted request, so a cross-origin beacon (web origin -> api
+ * subdomain) needs a preflight that sendBeacon can't perform — the
+ * browser drops it silently, which is why download counts could read 0.
+ * Posting to our own origin avoids CORS entirely; the Next route does
+ * the reliable server-to-server forward.
  *
  * Uses ``navigator.sendBeacon`` when available — that's the API
  * designed for exit-style analytics and is the only path that
@@ -31,7 +35,7 @@ export function reportDownloadStarted(payload: {
     version: payload.version || "",
     channel: payload.channel || "stable",
   });
-  const url = `${API_BASE}/v1/agent/download-event`;
+  const url = "/api/agent/download-event";
   try {
     if (
       typeof navigator !== "undefined" &&

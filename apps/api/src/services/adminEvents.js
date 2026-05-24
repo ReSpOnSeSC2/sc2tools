@@ -157,12 +157,14 @@ class AdminEventsService {
       downloadRange,
       downloadPlatforms,
       unreadCount,
+      agents,
     ] = await Promise.all([
       this.db.users.countDocuments({}),
       this._rangeCount(EVENT_TYPES.USER_SIGNUP, dayAgo, weekAgo),
       this._rangeCount(EVENT_TYPES.AGENT_DOWNLOAD, dayAgo, weekAgo),
       this._platformBreakdown(),
       this.db.adminEvents.countDocuments({ readAt: null }),
+      this._agentCounts(dayAgo, weekAgo),
     ]);
     return {
       totalUsers,
@@ -174,8 +176,33 @@ class AdminEventsService {
       downloadsThisWeek: downloadRange.week,
       downloadsByPlatform: downloadPlatforms,
       unreadCount,
+      agents,
       generatedAt: now.toISOString(),
     };
+  }
+
+  /**
+   * Connected-agent counters from the ``deviceTokens`` collection. Each
+   * device token is one paired agent install; ``lastSeenAt`` is bumped
+   * on every authenticated agent call / heartbeat, so a recent
+   * ``lastSeenAt`` is the real "an agent is running" signal (a far
+   * better answer to "is anyone using it?" than the download beacon,
+   * which only fires on a website Download click).
+   *
+   * @param {Date} dayAgo
+   * @param {Date} weekAgo
+   * @returns {Promise<{ total: number, active24h: number, active7d: number }>}
+   */
+  async _agentCounts(dayAgo, weekAgo) {
+    if (!this.db.deviceTokens) {
+      return { total: 0, active24h: 0, active7d: 0 };
+    }
+    const [total, active24h, active7d] = await Promise.all([
+      this.db.deviceTokens.countDocuments({}),
+      this.db.deviceTokens.countDocuments({ lastSeenAt: { $gte: dayAgo } }),
+      this.db.deviceTokens.countDocuments({ lastSeenAt: { $gte: weekAgo } }),
+    ]);
+    return { total, active24h, active7d };
   }
 
   /**
