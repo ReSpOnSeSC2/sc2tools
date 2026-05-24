@@ -33,6 +33,16 @@ const { COLLECTIONS } = require("../config/constants");
  * collections (mlJobs, importJobs, etc.) that the dashboard
  * doesn't render.
  */
+// Allowed values for the Users-tab segment filter. Anything outside
+// this set falls back to "all" so a bad query param can't inject a
+// pipeline stage or quietly skew the list.
+const USER_LIST_FILTERS = new Set([
+  "all",
+  "with_games",
+  "no_games",
+  "with_agent",
+]);
+
 const DASHBOARD_COLLECTIONS = Object.freeze([
   COLLECTIONS.USERS,
   COLLECTIONS.PROFILES,
@@ -145,15 +155,25 @@ class AdminService {
    * for ops review; the SPA paginates by passing ``before`` (the
    * lastActivity cursor of the previous page).
    *
-   * @param {{ limit?: number, before?: Date, search?: string }} [opts]
+   * Optional ``filter`` narrows the result set:
+   *   - ``"all"``        — every user (default)
+   *   - ``"with_games"`` — users who have uploaded at least one game
+   *   - ``"no_games"``   — signed-up users with zero games yet
+   *   - ``"with_agent"`` — users who have paired at least one agent
+   *
+   * @param {{ limit?: number, before?: Date, search?: string,
+   *   filter?: string }} [opts]
    * @returns {Promise<{
    *   items: Array<{
    *     userId: string,
    *     clerkUserId: string | null,
+   *     email: string | null,
    *     gameCount: number,
    *     opponentCount: number,
    *     lastActivity: Date | null,
    *     firstActivity: Date | null,
+   *     hasAgent: boolean,
+   *     agentLastSeenAt: Date | null,
    *     storageEstimateBytes: number,
    *   }>,
    *   nextBefore: Date | null,
@@ -161,51 +181,114 @@ class AdminService {
    */
   async listUsers(opts = {}) {
     const limit = clampLimit(opts.limit, 50);
-    /** @type {Record<string, any>} */
-    const userMatch = {};
+    // Whitelist the filter so an unknown value can never inject a stage
+    // or silently return the wrong set — anything unrecognised is "all".
+    const filter = USER_LIST_FILTERS.has(opts.filter) ? opts.filter : "all";
+    // Users-FIRST pipeline so signed-up users who have not uploaded any
+    // games yet still appear (they show with 0 games). The older
+    // games-first aggregation hid them entirely, which made the list
+    // disagree with the "total users" counter.
+    const pipeline = [];
     if (typeof opts.search === "string" && opts.search.length > 0) {
-      // Case-insensitive ID search. We never index against PII (only
-      // userId / clerkUserId) so the search surface is small.
+      // Case-insensitive match on userId / clerkUserId / email.
       const re = new RegExp(escapeRegex(opts.search), "i");
-      userMatch.$or = [{ userId: re }, { clerkUserId: re }];
+      pipeline.push({
+        $match: { $or: [{ userId: re }, { clerkUserId: re }, { email: re }] },
+      });
     }
-    // Aggregate game counts + activity bounds in one pipeline, then
-    // join the user docs back in for the displayable identifier.
-    const cursor = this.db.games.aggregate([
-      {
-        $group: {
-          _id: "$userId",
-          gameCount: { $sum: 1 },
-          firstActivity: { $min: "$date" },
-          lastActivity: { $max: "$date" },
-        },
-      },
-      { $sort: { lastActivity: -1 } },
-      ...(opts.before instanceof Date && !Number.isNaN(opts.before.getTime())
-        ? [{ $match: { lastActivity: { $lt: opts.before } } }]
-        : []),
-      { $limit: limit + 1 },
+    pipeline.push(
+      // Per-user game count + activity bounds. ``date`` on games is
+      // indexed per userId, so the correlated lookup is cheap at the
+      // admin's scale and keeps users with zero games in the result.
       {
         $lookup: {
-          from: COLLECTIONS.USERS,
-          localField: "_id",
-          foreignField: "userId",
-          as: "user",
+          from: COLLECTIONS.GAMES,
+          let: { uid: "$userId" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$userId", "$$uid"] } } },
+            {
+              $group: {
+                _id: null,
+                gameCount: { $sum: 1 },
+                firstActivity: { $min: "$date" },
+                lastActivity: { $max: "$date" },
+              },
+            },
+          ],
+          as: "gameStats",
         },
       },
-      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
-      ...(userMatch.$or
-        ? [{
-          $match: {
-            $or: [
-              { _id: userMatch.$or[0].userId },
-              { "user.clerkUserId": userMatch.$or[1].clerkUserId },
+      {
+        $addFields: {
+          gameStats: {
+            $ifNull: [
+              { $arrayElemAt: ["$gameStats", 0] },
+              { gameCount: 0, firstActivity: null, lastActivity: null },
             ],
           },
-        }]
-        : []),
-    ]);
-    const rows = await cursor.toArray();
+        },
+      },
+      // Per-user paired-agent status from deviceTokens (one token per
+      // agent install). ``count`` powers the "Has agent" filter/badge;
+      // ``lastSeenAt`` is the newest heartbeat across the user's agents.
+      {
+        $lookup: {
+          from: COLLECTIONS.DEVICE_TOKENS,
+          let: { uid: "$userId" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$userId", "$$uid"] } } },
+            {
+              $group: {
+                _id: null,
+                count: { $sum: 1 },
+                lastSeenAt: { $max: "$lastSeenAt" },
+              },
+            },
+          ],
+          as: "agentStats",
+        },
+      },
+      {
+        $addFields: {
+          agentStats: {
+            $ifNull: [
+              { $arrayElemAt: ["$agentStats", 0] },
+              { count: 0, lastSeenAt: null },
+            ],
+          },
+        },
+      },
+      // Coalesced sort key so game-less users (null lastActivity) still
+      // order deterministically — newest by last game, else last sign-in,
+      // else account creation. The cursor (`before`) compares against it.
+      {
+        $addFields: {
+          sortKey: {
+            $ifNull: [
+              "$gameStats.lastActivity",
+              { $ifNull: ["$lastSeenAt", "$createdAt"] },
+            ],
+          },
+        },
+      },
+    );
+    // Segment filter — applied after the stat lookups so it can key on
+    // the derived counts, and before the cursor/limit so pagination
+    // counts only matching rows.
+    if (filter === "with_games") {
+      pipeline.push({ $match: { "gameStats.gameCount": { $gt: 0 } } });
+    } else if (filter === "no_games") {
+      pipeline.push({ $match: { "gameStats.gameCount": { $eq: 0 } } });
+    } else if (filter === "with_agent") {
+      pipeline.push({ $match: { "agentStats.count": { $gt: 0 } } });
+    }
+    pipeline.push({ $sort: { sortKey: -1 } });
+    if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
+      pipeline.push({ $match: { sortKey: { $lt: opts.before } } });
+    }
+    pipeline.push({ $limit: limit + 1 });
+
+    const rows = await this.db.users.aggregate(pipeline).toArray();
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     if (page.length === 0) {
@@ -214,7 +297,7 @@ class AdminService {
     // Per-user opponent counts via a single grouped query — cheaper
     // than N round-trips. ``$in`` on the indexed ``userId`` field
     // makes this O(log N) per user.
-    const userIds = page.map((r) => r._id);
+    const userIds = page.map((r) => r.userId);
     const oppCounts = await this.db.opponents
       .aggregate([
         { $match: { userId: { $in: userIds } } },
@@ -222,21 +305,26 @@ class AdminService {
       ])
       .toArray();
     const oppCountByUser = new Map(oppCounts.map((c) => [c._id, c.count]));
-    const items = page.map((r) => ({
-      userId: String(r._id || ""),
-      clerkUserId: r.user && r.user.clerkUserId ? String(r.user.clerkUserId) : null,
-      gameCount: Number(r.gameCount) || 0,
-      opponentCount: oppCountByUser.get(r._id) || 0,
-      lastActivity: r.lastActivity instanceof Date ? r.lastActivity : null,
-      firstActivity: r.firstActivity instanceof Date ? r.firstActivity : null,
-      // Coarse storage estimate — average game-doc size × game count.
-      // Used only for sorting/triage in the admin UI; not a billing
-      // figure. Overhead from gameDetails is tracked separately in
-      // ``storageStats``.
-      storageEstimateBytes: 0,
-    }));
-    const nextBefore = hasMore && items.length > 0
-      ? items[items.length - 1].lastActivity
+    const items = page.map((r) => {
+      const g = r.gameStats || {};
+      const a = r.agentStats || {};
+      return {
+        userId: String(r.userId || ""),
+        clerkUserId: r.clerkUserId ? String(r.clerkUserId) : null,
+        email: r.email ? String(r.email) : null,
+        gameCount: Number(g.gameCount) || 0,
+        opponentCount: oppCountByUser.get(r.userId) || 0,
+        lastActivity: g.lastActivity instanceof Date ? g.lastActivity : null,
+        firstActivity: g.firstActivity instanceof Date ? g.firstActivity : null,
+        hasAgent: (Number(a.count) || 0) > 0,
+        agentLastSeenAt: a.lastSeenAt instanceof Date ? a.lastSeenAt : null,
+        // Coarse storage estimate placeholder — gameDetails overhead is
+        // tracked separately in ``storageStats``.
+        storageEstimateBytes: 0,
+      };
+    });
+    const nextBefore = hasMore && page.length > 0
+      ? page[page.length - 1].sortKey
       : null;
     return { items, nextBefore };
   }
@@ -306,6 +394,7 @@ class AdminService {
     return {
       userId,
       clerkUserId: user ? user.clerkUserId || null : null,
+      email: user ? user.email || null : null,
       createdAt: user ? user.createdAt || null : null,
       lastSeenAt: user ? user.lastSeenAt || null : null,
       games: {

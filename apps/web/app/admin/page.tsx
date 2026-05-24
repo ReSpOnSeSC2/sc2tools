@@ -125,15 +125,25 @@ function ActivitySection({
     macos: 0,
     linux: 0,
   };
+  const agents = c?.agents || { total: 0, active24h: 0, active7d: 0 };
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <MetricStat
           label="Total users"
           value={compactNumber(c?.totalUsers ?? 0)}
           caption={
             c
               ? `+${c.signupsToday} today · +${c.signupsThisWeek} this week`
+              : "—"
+          }
+        />
+        <MetricStat
+          label="Active agents"
+          value={compactNumber(agents.active24h)}
+          caption={
+            c
+              ? `running in 24h · ${compactNumber(agents.active7d)} in 7d · ${compactNumber(agents.total)} paired`
               : "—"
           }
         />

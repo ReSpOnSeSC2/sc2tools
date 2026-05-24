@@ -22,13 +22,18 @@ export type StorageStatsResp = {
   }>;
 };
 
+export type UserListFilter = "all" | "with_games" | "no_games" | "with_agent";
+
 export type AdminUserRow = {
   userId: string;
   clerkUserId: string | null;
+  email: string | null;
   gameCount: number;
   opponentCount: number;
   lastActivity: string | null;
   firstActivity: string | null;
+  hasAgent: boolean;
+  agentLastSeenAt: string | null;
   storageEstimateBytes: number;
 };
 
@@ -40,6 +45,7 @@ export type UsersListResp = {
 export type AdminUserDetail = {
   userId: string;
   clerkUserId: string | null;
+  email: string | null;
   createdAt: string | null;
   lastSeenAt: string | null;
   games: {
@@ -159,5 +165,11 @@ export type AdminEventCountsResp = {
     linux: number;
   };
   unreadCount: number;
+  /** Connected-agent counters from the deviceTokens collection. */
+  agents: {
+    total: number;
+    active24h: number;
+    active7d: number;
+  };
   generatedAt: string;
 };
