@@ -306,6 +306,27 @@ class UserBuildDetector(BaseStrategyDetector):
                 if len(gate_starts) >= 2 and gate_starts[1] < robo_time:
                     return "PvT - Phoenix Opener"
 
+            # DT Drop: fast tactical opener calibrated against a real
+            # PvT DT Drop replay (Peruano, Taito Citadel LE 2026-05-11)
+            # with ~60s buffer per signal. Observed timings: Dark
+            # Shrine 3:13, Robo 3:32, first DT 3:51, Warp Prism 4:11.
+            # Cutoffs (4:15 / 4:30 / 5:00 / 5:15) are observed + ~60s.
+            #
+            # Checked BEFORE the Gateway-count blink rules below: a DT
+            # drop is a Twilight-first opener that often picks up Blink
+            # and keeps adding Gateways as the game goes long, so a
+            # DT-drop game that transitioned into a macro Blink-Stalker
+            # composition can satisfy the 7-Gate Blink All-in signature
+            # by 9:00 and steal the replay. The opener was a DT drop, so
+            # its tight (all signals by ~5:15) window gets priority; no
+            # genuine Blink all-in builds Dark Shrine + Robo + DT + Warp
+            # Prism inside 5:15.
+            if (has_building("DarkShrine", 255)
+                    and has_building("RoboticsFacility", 270)
+                    and count_units("WarpPrism", 315) >= 1
+                    and count_units("DarkTemplar", 300) >= 1):
+                return "PvT - DT Drop"
+
             # 7-Gate Blink All-in vs 3-base Blink macro: the 5th
             # Gateway must be STARTED before the 3rd Nexus is STARTED.
             # "Taken" the 3rd Nexus means construction was initiated,
@@ -325,8 +346,18 @@ class UserBuildDetector(BaseStrategyDetector):
             fifth_gateway_started = (
                 gateway_starts[4] if len(gateway_starts) >= 5 else 9999
             )
+            # Fast-3rd-Nexus guard: a 3rd Nexus STARTED before 6:00
+            # (360s) is a macro decision, never an all-in. The
+            # ``fifth_gateway_started < third_nexus_time`` check is the
+            # primary discriminator, but it leaks when a build adds its
+            # extra Gateways FAST around an already-early 3rd Nexus.
+            # Excluding any sub-6:00 3rd Nexus keeps a fast-expand macro
+            # 3-Gate Blink out of the all-in bucket; it falls through to
+            # the 3 Gate Blink (Macro) rule. A LATE 3rd Nexus (>= 6:00)
+            # added after a 2-base Gateway commitment still classifies.
             if (has_upgrade_substr("Blink", 540) and gate_count_6min >= 6
                     and fifth_gateway_started < third_nexus_time
+                    and (total_nexuses < 3 or third_nexus_time >= 360)
                     and pvt_blink_time == pvt_first_twilight_upgrade
                     and twilight_time < robo_time
                     and twilight_time < sg_time):
@@ -405,20 +436,6 @@ class UserBuildDetector(BaseStrategyDetector):
                     and twilight_time < sg_time):
                 return "PvT - 2 Gate Blink (Fast 3rd Nexus)"
 
-            # DT Drop: fast tactical opener calibrated against a real
-            # PvT DT Drop replay (Peruano, Taito Citadel LE 2026-05-11)
-            # with ~60s buffer per signal. Observed timings: Dark
-            # Shrine 3:13, Robo 3:32, first DT 3:51, Warp Prism 4:11.
-            # Cutoffs (4:15 / 4:30 / 5:00 / 5:15) are observed + ~60s.
-            # Earlier 8-10 minute windows let in Robo First builds
-            # with late Dark Shrines for harass; the tighter cutoffs
-            # match the opener's intent while leaving room for slower
-            # variants.
-            if (has_building("DarkShrine", 255)
-                    and has_building("RoboticsFacility", 270)
-                    and count_units("WarpPrism", 315) >= 1
-                    and count_units("DarkTemplar", 300) >= 1):
-                return "PvT - DT Drop"
             if has_building("RoboticsFacility", 390):
                 if robo_time < sg_time and robo_time < twilight_time:
                     return "PvT - Robo First"

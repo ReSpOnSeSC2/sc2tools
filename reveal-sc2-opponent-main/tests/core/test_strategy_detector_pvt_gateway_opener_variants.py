@@ -1127,3 +1127,83 @@ def test_stargate_first_phoenix_into_robo_still_classifies():
         f"still classify as Phoenix into Robo; got {result!r}"
     )
 
+
+
+# -----------------------------------------------------------------------------
+# Reported bug (2026-05-24): two PvT replays mis-tagged "7 Gate Blink All-in"
+#   * Old Republic LE  (8:03) -- a macro 3-Gate Blink: fast 3rd Nexus taken
+#     BEFORE the extra Gateways were added. Must be "3 Gate Blink (Macro)".
+#   * White Rabbit LE (13:43) -- a DT Drop opener that macroed into a
+#     multi-Gate Blink composition. Must be "DT Drop".
+# -----------------------------------------------------------------------------
+def test_fast_third_nexus_macro_blink_is_not_seven_gate_allin():
+    """A fast-expand macro Blink build: the player takes a quick 3rd
+    Nexus before 6:00 and rallies up to 6+ Gateways by 9:00. Some of
+    those Gateways warp in just before the (fast) 3rd Nexus, so the old
+    ``fifth_gateway_started < third_nexus_time`` guard alone classified
+    it as a 7-Gate Blink All-in. But a sub-6:00 3rd Nexus is a macro
+    commitment, never an all-in -- the build must fall through to a
+    macro Blink label, not the all-in bucket.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),               # Gate 1
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),                # natural
+        _building("Gateway", 200),              # Gate 2
+        _building("TwilightCouncil", 220),      # FIRST tech building
+        _building("Gateway", 260),              # Gate 3
+        _building("Gateway", 320),              # Gate 4
+        _building("Gateway", 340),              # Gate 5 (before the fast 3rd)
+        _building("Nexus", 350),                # 3rd Nexus FAST (5:50, < 6:00)
+        _building("Gateway", 460),              # Gate 6 -- 6 Gates by 9:00
+        _upgrade("BlinkTech", 300),             # Blink first + by 9:00
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result != "PvT - 7 Gate Blink All-in", (
+        f"A fast (sub-6:00) 3rd Nexus marks a macro build, not a "
+        f"7-Gate Blink All-in; got {result!r}"
+    )
+    assert "Blink" in result, (
+        f"A Twilight-first Blink build with a fast 3rd Nexus must "
+        f"classify as a macro Blink label; got {result!r}"
+    )
+
+
+def test_dt_drop_that_macros_into_blink_is_not_seven_gate_allin():
+    """A DT Drop opener (Dark Shrine + Robo + DT + Warp Prism inside
+    ~5:15) that transitions into a long macro game with 6+ Gateways and
+    Blink by 9:00 must keep its opener label. Before the fix the
+    7-Gate Blink All-in rule sat above DT Drop and stole the replay
+    because the late-game composition matched the all-in signature.
+    """
+    events = [
+        _building("Nexus", 0),
+        _building("Pylon", 19),
+        _building("Gateway", 37),               # Gate 1
+        _building("Assimilator", 46),
+        _building("Nexus", 78),                 # natural
+        _building("CyberneticsCore", 90),
+        _building("TwilightCouncil", 148),      # FIRST tech building
+        _building("DarkShrine", 193),           # 3:13 -- DT-drop signal
+        _building("Gateway", 203),              # Gate 2
+        _building("RoboticsFacility", 212),     # 3:32
+        _unit("DarkTemplar", 231),              # 3:51 -- real DT
+        _unit("WarpPrism", 251),                # 4:11 -- the DT taxi
+        # ...game goes long: macros into a multi-Gate Blink composition
+        _building("Gateway", 300),              # Gate 3
+        _building("Gateway", 360),              # Gate 4
+        _building("Gateway", 420),              # Gate 5
+        _building("Gateway", 480),              # Gate 6 -- 6 Gates by 9:00
+        _upgrade("BlinkTech", 460),             # Blink by 9:00
+    ]
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Terran", events, my_race="Protoss")
+    assert result == "PvT - DT Drop", (
+        f"A DT Drop opener that macroed into a Blink composition must "
+        f"keep the DT Drop label, not flip to 7 Gate Blink All-in; "
+        f"got {result!r}"
+    )
