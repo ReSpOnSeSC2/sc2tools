@@ -33,6 +33,16 @@ const { COLLECTIONS } = require("../config/constants");
  * collections (mlJobs, importJobs, etc.) that the dashboard
  * doesn't render.
  */
+// Allowed values for the Users-tab segment filter. Anything outside
+// this set falls back to "all" so a bad query param can't inject a
+// pipeline stage or quietly skew the list.
+const USER_LIST_FILTERS = new Set([
+  "all",
+  "with_games",
+  "no_games",
+  "with_agent",
+]);
+
 const DASHBOARD_COLLECTIONS = Object.freeze([
   COLLECTIONS.USERS,
   COLLECTIONS.PROFILES,
@@ -145,7 +155,14 @@ class AdminService {
    * for ops review; the SPA paginates by passing ``before`` (the
    * lastActivity cursor of the previous page).
    *
-   * @param {{ limit?: number, before?: Date, search?: string }} [opts]
+   * Optional ``filter`` narrows the result set:
+   *   - ``"all"``        — every user (default)
+   *   - ``"with_games"`` — users who have uploaded at least one game
+   *   - ``"no_games"``   — signed-up users with zero games yet
+   *   - ``"with_agent"`` — users who have paired at least one agent
+   *
+   * @param {{ limit?: number, before?: Date, search?: string,
+   *   filter?: string }} [opts]
    * @returns {Promise<{
    *   items: Array<{
    *     userId: string,
@@ -155,6 +172,8 @@ class AdminService {
    *     opponentCount: number,
    *     lastActivity: Date | null,
    *     firstActivity: Date | null,
+   *     hasAgent: boolean,
+   *     agentLastSeenAt: Date | null,
    *     storageEstimateBytes: number,
    *   }>,
    *   nextBefore: Date | null,
@@ -162,6 +181,9 @@ class AdminService {
    */
   async listUsers(opts = {}) {
     const limit = clampLimit(opts.limit, 50);
+    // Whitelist the filter so an unknown value can never inject a stage
+    // or silently return the wrong set — anything unrecognised is "all".
+    const filter = USER_LIST_FILTERS.has(opts.filter) ? opts.filter : "all";
     // Users-FIRST pipeline so signed-up users who have not uploaded any
     // games yet still appear (they show with 0 games). The older
     // games-first aggregation hid them entirely, which made the list
@@ -206,6 +228,36 @@ class AdminService {
           },
         },
       },
+      // Per-user paired-agent status from deviceTokens (one token per
+      // agent install). ``count`` powers the "Has agent" filter/badge;
+      // ``lastSeenAt`` is the newest heartbeat across the user's agents.
+      {
+        $lookup: {
+          from: COLLECTIONS.DEVICE_TOKENS,
+          let: { uid: "$userId" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$userId", "$$uid"] } } },
+            {
+              $group: {
+                _id: null,
+                count: { $sum: 1 },
+                lastSeenAt: { $max: "$lastSeenAt" },
+              },
+            },
+          ],
+          as: "agentStats",
+        },
+      },
+      {
+        $addFields: {
+          agentStats: {
+            $ifNull: [
+              { $arrayElemAt: ["$agentStats", 0] },
+              { count: 0, lastSeenAt: null },
+            ],
+          },
+        },
+      },
       // Coalesced sort key so game-less users (null lastActivity) still
       // order deterministically — newest by last game, else last sign-in,
       // else account creation. The cursor (`before`) compares against it.
@@ -219,8 +271,18 @@ class AdminService {
           },
         },
       },
-      { $sort: { sortKey: -1 } },
     );
+    // Segment filter — applied after the stat lookups so it can key on
+    // the derived counts, and before the cursor/limit so pagination
+    // counts only matching rows.
+    if (filter === "with_games") {
+      pipeline.push({ $match: { "gameStats.gameCount": { $gt: 0 } } });
+    } else if (filter === "no_games") {
+      pipeline.push({ $match: { "gameStats.gameCount": { $eq: 0 } } });
+    } else if (filter === "with_agent") {
+      pipeline.push({ $match: { "agentStats.count": { $gt: 0 } } });
+    }
+    pipeline.push({ $sort: { sortKey: -1 } });
     if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
       pipeline.push({ $match: { sortKey: { $lt: opts.before } } });
     }
@@ -245,6 +307,7 @@ class AdminService {
     const oppCountByUser = new Map(oppCounts.map((c) => [c._id, c.count]));
     const items = page.map((r) => {
       const g = r.gameStats || {};
+      const a = r.agentStats || {};
       return {
         userId: String(r.userId || ""),
         clerkUserId: r.clerkUserId ? String(r.clerkUserId) : null,
@@ -253,6 +316,8 @@ class AdminService {
         opponentCount: oppCountByUser.get(r.userId) || 0,
         lastActivity: g.lastActivity instanceof Date ? g.lastActivity : null,
         firstActivity: g.firstActivity instanceof Date ? g.firstActivity : null,
+        hasAgent: (Number(a.count) || 0) > 0,
+        agentLastSeenAt: a.lastSeenAt instanceof Date ? a.lastSeenAt : null,
         // Coarse storage estimate placeholder — gameDetails overhead is
         // tracked separately in ``storageStats``.
         storageEstimateBytes: 0,

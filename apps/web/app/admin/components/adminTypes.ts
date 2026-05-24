@@ -22,6 +22,8 @@ export type StorageStatsResp = {
   }>;
 };
 
+export type UserListFilter = "all" | "with_games" | "no_games" | "with_agent";
+
 export type AdminUserRow = {
   userId: string;
   clerkUserId: string | null;
@@ -30,6 +32,8 @@ export type AdminUserRow = {
   opponentCount: number;
   lastActivity: string | null;
   firstActivity: string | null;
+  hasAgent: boolean;
+  agentLastSeenAt: string | null;
   storageEstimateBytes: number;
 };
 

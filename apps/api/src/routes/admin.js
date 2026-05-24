@@ -67,7 +67,8 @@ function buildAdminRouter(deps) {
       const limit = parseLimit(req.query.limit);
       const before = parseDate(req.query.before);
       const search = typeof req.query.search === "string" ? req.query.search : undefined;
-      res.json(await deps.admin.listUsers({ limit, before, search }));
+      const filter = typeof req.query.filter === "string" ? req.query.filter : undefined;
+      res.json(await deps.admin.listUsers({ limit, before, search, filter }));
     } catch (err) {
       next(err);
     }

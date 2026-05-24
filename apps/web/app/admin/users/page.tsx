@@ -7,7 +7,14 @@ import { useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
 import { compactNumber, timeSince } from "../components/format";
 import { ForbiddenCard, LoadingRows } from "../components/AdminFragments";
-import type { UsersListResp } from "../components/adminTypes";
+import type { UserListFilter, UsersListResp } from "../components/adminTypes";
+
+const FILTERS: ReadonlyArray<{ value: UserListFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "with_games", label: "Has games" },
+  { value: "no_games", label: "No games yet" },
+  { value: "with_agent", label: "Has agent" },
+];
 
 /**
  * /admin/users — paginated list of users sorted by lastActivity.
@@ -23,12 +30,20 @@ import type { UsersListResp } from "../components/adminTypes";
  */
 export default function AdminUsersPage() {
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<UserListFilter>("all");
   const [before, setBefore] = useState<string | null>(null);
   const [pageHistory, setPageHistory] = useState<Array<string | null>>([null]);
+
+  // Search / filter changes invalidate the cursor — jump back to page 1.
+  function resetPaging() {
+    setBefore(null);
+    setPageHistory([null]);
+  }
 
   const params = new URLSearchParams();
   params.set("limit", "50");
   if (search.trim()) params.set("search", search.trim());
+  if (filter !== "all") params.set("filter", filter);
   if (before) params.set("before", before);
   const path = `/v1/admin/users?${params.toString()}`;
 
@@ -61,25 +76,53 @@ export default function AdminUsersPage() {
       </header>
 
       <Card padded>
-        <label className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-          <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-            Search
-          </span>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setBefore(null);
-              setPageHistory([null]);
-            }}
-            placeholder="email, userId, or clerkUserId fragment…"
-            className="w-full rounded-lg border border-border bg-bg-surface px-3 py-2 font-mono text-sm text-text placeholder:text-text-dim focus:border-accent focus:outline-none"
-            spellCheck={false}
-            autoCapitalize="none"
-            autoCorrect="off"
-          />
-        </label>
+        <div className="space-y-3">
+          <label className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
+              Search
+            </span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                resetPaging();
+              }}
+              placeholder="email, userId, or clerkUserId fragment…"
+              className="w-full rounded-lg border border-border bg-bg-surface px-3 py-2 font-mono text-sm text-text placeholder:text-text-dim focus:border-accent focus:outline-none"
+              spellCheck={false}
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
+              Filter
+            </span>
+            {FILTERS.map((f) => {
+              const isActive = filter === f.value;
+              return (
+                <button
+                  key={f.value}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => {
+                    setFilter(f.value);
+                    resetPaging();
+                  }}
+                  className={[
+                    "rounded-full border px-3 py-1 text-caption transition-colors",
+                    isActive
+                      ? "border-accent-cyan/60 bg-accent-cyan/15 text-text"
+                      : "border-border bg-bg-surface text-text-muted hover:bg-bg-elevated hover:text-text",
+                  ].join(" ")}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </Card>
 
       {isLoading ? (
@@ -128,6 +171,9 @@ export default function AdminUsersPage() {
                           </strong>{" "}
                           opponents
                         </span>
+                        {u.hasAgent ? (
+                          <AgentBadge lastSeen={u.agentLastSeenAt} />
+                        ) : null}
                       </div>
                     </Link>
                   </li>
@@ -171,6 +217,9 @@ export default function AdminUsersPage() {
                           <div className="font-mono text-caption text-text-dim">
                             {u.clerkUserId ?? u.userId}
                           </div>
+                          {u.hasAgent ? (
+                            <AgentBadge lastSeen={u.agentLastSeenAt} />
+                          ) : null}
                         </Link>
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums text-text">
@@ -216,5 +265,22 @@ export default function AdminUsersPage() {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Small pill marking a user who has paired at least one agent, with the
+ * most recent agent heartbeat. Surfaces the "is this user actually
+ * running the agent?" signal right in the list.
+ */
+function AgentBadge({ lastSeen }: { lastSeen: string | null }) {
+  return (
+    <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+      <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
+      Agent
+      {lastSeen ? (
+        <span className="text-success/80">· {timeSince(lastSeen)}</span>
+      ) : null}
+    </span>
   );
 }
