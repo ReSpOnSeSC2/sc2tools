@@ -67,33 +67,40 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
-- **Strategy classifier · PvZ 2/3 Stargate Phoenix + 2 Stargate Void Ray
-  now disqualify themselves when Glaives is the first Twilight upgrade
-  (0.8.4)**: follow-up to the 0.8.3 Stargate-opener-guard work. A user-
-  reported replay (Taito Citadel LE, 2026-05-25 10:05:36) opened with
-  a Stargate FIRST (so the 0.8.3 `stargate_first_tech` guard correctly
-  passed it) but the player added a Twilight Council after the
-  Stargate and researched Glaives first — a textbook Stargate-into-
-  Glaives Adept timing with Phoenix as scouting / harass support.
-  The 2 SG Phoenix rule still mis-fired because the count-by-10:00
-  signature (`>=2 Stargates, >=2 Nexus, >=4 Phoenix by 10:00`) ran
-  BEFORE `Stargate into Glaives` and had no way to know the Glaives
-  upgrade was the player's actual intent. Fix hoists the existing
-  `glaive_first_off_twilight` flag to the top of `detect_pvz` and
-  adds `AND not glaive_first_off_twilight` to all three Phoenix-/VR-
-  count Stargate-rush rules. The Carrier / Tempest / AlphaStar rules
-  are intentionally NOT guarded — their Fleet Beacon + capital-ship
-  timing window is too tight for a Glaives-into-capital-ship
-  transition to fit inside 10:00, so the existing
-  `stargate_first_tech` guard already filters them correctly. Mirror
-  in `SC2Replay-Analyzer/detectors/user.py` in sync. Catalog prose
-  (`data/build_definitions.json`,
-  `apps/web/lib/build-definitions/pvz.ts`) updated for all three
-  affected rules. 3 new regression tests in
-  `test_strategy_detector_opener_guards.py` cover the reported case
-  plus positive controls (pure 2 SG Phoenix still matches;
-  Stargate-first-into-Blink still matches because Blink ≠ Glaives).
-  Full strategy-detector test suite: 133/133 passing.
+- **Strategy classifier · PvZ 2/3 SG Phoenix + 2 SG Void Ray refinements
+  (0.8.4)**: two follow-ups to the 0.8.3 Stargate-opener guard,
+  shipped together. **(1) Glaives-disqualifier on the Stargate-rush
+  rules** — user-reported replay (Taito Citadel LE, 2026-05-25
+  10:05:36) opened with Stargate FIRST (so the 0.8.3
+  `stargate_first_tech` guard correctly passed it) but the player
+  added a Twilight Council after the Stargate and researched Glaives
+  first — a textbook Stargate-into-Glaives Adept timing with Phoenix
+  as scouting / harass support. The 2 SG Phoenix rule still mis-fired
+  because its count-by-10:00 signature ran BEFORE
+  `Stargate into Glaives` and had no signal that distinguished pure
+  Phoenix builds from Glaives builds with Phoenix support. Fix hoists
+  `glaive_first_off_twilight` and adds
+  `AND not glaive_first_off_twilight` to all three Phoenix-/VR-count
+  Stargate-rush rules (2 SG Phoenix, 3 SG Phoenix, 2 SG Void Ray).
+  Carrier / Tempest / AlphaStar intentionally NOT guarded — their
+  Fleet Beacon + capital-ship window is too tight for a
+  Glaives-into-capital-ship transition. **(2) `stargate_first_tech`
+  is now pure ordering** — user feedback: a Stargate build is defined
+  by being the first tech building committed, period. The previous
+  `sg_time < 360` clause wrongly excluded slow-but-pure 2 SG Phoenix
+  openers (e.g. first Stargate at 7:00 with nothing else before it)
+  as "Macro Transition (Unclassified)". Tech-ordering already filters
+  transitions; the time threshold was double-counting. Guard is now
+  `sg_time < 9999 AND sg_time < twilight_time AND sg_time <
+  dark_shrine_time AND sg_time < robo_time`. Catalog prose for all
+  six Stargate-rush rules drops the "(built before 6:00 ...)"
+  qualifier accordingly. Mirror in
+  `SC2Replay-Analyzer/detectors/user.py` in sync. 4 new regression
+  tests in `test_strategy_detector_opener_guards.py` cover both
+  refinements plus positive controls (pure 2 SG Phoenix still
+  matches; Stargate-first-into-Blink still matches because Blink ≠
+  Glaives; slow Stargate with no earlier tech still classifies).
+  Full strategy-detector test suite: 134/134 passing.
 - **Strategy classifier · PvZ Stargate-rush labels now require Stargate
   to be the FIRST tech building + new PvZ - DT Opener path + Zerg
   Nydus check runs before Muta Rush (0.8.3)**: three user-reported

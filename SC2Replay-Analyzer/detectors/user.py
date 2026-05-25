@@ -138,22 +138,20 @@ class UserBuildDetector(BaseStrategyDetector):
             dt_count_10min        = count_units("DarkTemplar", 600)
 
             # OPENER ordering used by every Stargate-rush label below.
-            # A build only counts as a "Stargate opener" when the
-            # Stargate is the FIRST tech committed -- built before
-            # 6:00 AND before any Twilight Council / Dark Shrine /
-            # Robotics Facility. Without this guard, a DT opener that
-            # adds a Stargate at 6:30 for late Carriers, or a Glaive
-            # Adept timing that adds 2 Stargates at 7:00 to counter
-            # Lurkers, mis-fires here (Carrier Rush / 2 Stargate
-            # Phoenix) instead of landing on the correct DT / Glaives
-            # bucket further down the tree. Mirror of
+            # Pure ordering: a Stargate opener is one where Stargate is
+            # the FIRST tech committed (before any Twilight Council /
+            # Dark Shrine / Robotics Facility). If Twilight / Robo /
+            # DarkShrine came first, it's a transition INTO Stargate
+            # and must NOT mis-fire a "2 Stargate X" rush label. No
+            # time threshold -- a slow Stargate opener with nothing
+            # else built first is still a Stargate opener. Mirror of
             # reveal-sc2-opponent-main/core/strategy_detector_pvz.py.
             sg_time = building_time("Stargate")
             twilight_time = building_time("TwilightCouncil")
             robo_time = building_time("RoboticsFacility")
             dark_shrine_time = building_time("DarkShrine")
             stargate_first_tech = (
-                sg_time < 360
+                sg_time < 9999
                 and sg_time < twilight_time
                 and sg_time < dark_shrine_time
                 and sg_time < robo_time

@@ -267,6 +267,38 @@ def test_pure_2_stargate_phoenix_without_glaives_still_classifies():
     )
 
 
+def test_slow_2_stargate_phoenix_with_no_earlier_tech_still_classifies():
+    """User-feedback refinement: the stargate_first_tech guard is pure
+    ordering -- a Stargate that goes down "late" (e.g. 7:00) but with
+    NOTHING else built first (no Twilight / Robo / DarkShrine) is
+    still a Stargate opener, just a slow one. The earlier `sg_time <
+    360` time-threshold version of the guard wrongly excluded these
+    slow-but-pure Phoenix openers from the 2 SG Phoenix label.
+
+    Concretely: 2 Stargates starting at 7:00 / 7:40, no other tech,
+    4+ Phoenix by 10:00 -- this is fundamentally a 2 Stargate Phoenix
+    build (the only "intent" the player showed was Stargate). Without
+    the time-threshold drop it used to fall through to "PvZ - Macro
+    Transition (Unclassified)".
+    """
+    events = _base_protoss_opener()
+    # Slow first Stargate -- past the old 6:00 threshold, but NOTHING
+    # else was built before it.
+    events.append(_building("Stargate", 420))
+    events.append(_building("Stargate", 460))
+    # Phoenix produced after Stargates land (prereq must be satisfied).
+    for t in (470, 500, 530, 560):
+        events.append(_unit("Phoenix", t))
+    # Deliberately NO TwilightCouncil, NO RoboticsFacility, NO DarkShrine.
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - 2 Stargate Phoenix", (
+        f"Slow-but-pure 2 SG Phoenix (no earlier tech) should still "
+        f"classify as 2 Stargate Phoenix; got {result!r}"
+    )
+
+
 def test_stargate_first_into_blink_still_classifies_as_blink_macro():
     """Positive control on the discriminator: a Stargate-FIRST opener
     with 4+ Phoenix + Twilight that researches BLINK first (not

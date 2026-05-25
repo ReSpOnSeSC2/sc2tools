@@ -31,21 +31,27 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     sg_count_10min = count_started_before(buildings, "Stargate", 600)
     nexus_count_10min = base_count_at(buildings, "Nexus", 600)
 
-    # OPENER ordering used by every Stargate-rush label below. A
-    # build only counts as a "Stargate opener" when the Stargate is
-    # the FIRST tech committed -- built before 6:00 AND before any
-    # Twilight Council / Dark Shrine / Robotics Facility. Without
-    # this guard, a DT opener that adds a Stargate at 6:30 for late
-    # Carriers, or a Glaive Adept timing that adds 2 Stargates at
-    # 7:00 to counter Lurkers, mis-fires here (Carrier Rush / 2
-    # Stargate Phoenix) instead of landing on the correct DT /
-    # Glaives bucket further down the tree.
+    # OPENER ordering used by every Stargate-rush label below. A build
+    # only counts as a "Stargate opener" when the Stargate is the
+    # FIRST tech committed -- built before any Twilight Council / Dark
+    # Shrine / Robotics Facility. Pure ordering, no time threshold:
+    # if NOTHING else was built first, the build IS a Stargate opener
+    # even if the Stargate went down late (slow openers still count).
+    # If Twilight / Robo / DarkShrine came first, the build is a
+    # transition INTO Stargate from that tech path and should land on
+    # the correct opener label (Adept Glaives / Robo Opener / DT
+    # Opener) further down the tree -- never on a "2 Stargate X" rush
+    # label.
+    #
+    # ``sg_time < 9999`` keeps the sentinel-only case (no Stargate
+    # built at all) from satisfying the comparison trio via the 9999
+    # default on every side.
     sg_time = building_time("Stargate")
     twilight_time = building_time("TwilightCouncil")
     robo_time = building_time("RoboticsFacility")
     dark_shrine_time = building_time("DarkShrine")
     stargate_first_tech = (
-        sg_time < 360
+        sg_time < 9999
         and sg_time < twilight_time
         and sg_time < dark_shrine_time
         and sg_time < robo_time
