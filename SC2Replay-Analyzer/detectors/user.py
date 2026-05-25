@@ -138,25 +138,40 @@ class UserBuildDetector(BaseStrategyDetector):
             dt_count_10min        = count_units("DarkTemplar", 600)
 
             # OPENER ordering used by every Stargate-rush label below.
-            # A build only counts as a "Stargate opener" when the
-            # Stargate is the FIRST tech committed -- built before
-            # 6:00 AND before any Twilight Council / Dark Shrine /
-            # Robotics Facility. Without this guard, a DT opener that
-            # adds a Stargate at 6:30 for late Carriers, or a Glaive
-            # Adept timing that adds 2 Stargates at 7:00 to counter
-            # Lurkers, mis-fires here (Carrier Rush / 2 Stargate
-            # Phoenix) instead of landing on the correct DT / Glaives
-            # bucket further down the tree. Mirror of
+            # Pure ordering: a Stargate opener is one where Stargate is
+            # the FIRST tech committed (before any Twilight Council /
+            # Dark Shrine / Robotics Facility). If Twilight / Robo /
+            # DarkShrine came first, it's a transition INTO Stargate
+            # and must NOT mis-fire a "2 Stargate X" rush label. No
+            # time threshold -- a slow Stargate opener with nothing
+            # else built first is still a Stargate opener. Mirror of
             # reveal-sc2-opponent-main/core/strategy_detector_pvz.py.
             sg_time = building_time("Stargate")
             twilight_time = building_time("TwilightCouncil")
             robo_time = building_time("RoboticsFacility")
             dark_shrine_time = building_time("DarkShrine")
             stargate_first_tech = (
-                sg_time < 360
+                sg_time < 9999
                 and sg_time < twilight_time
                 and sg_time < dark_shrine_time
                 and sg_time < robo_time
+            )
+
+            # Hoisted Twilight-ordering signal: identifies WHICH upgrade
+            # is researched first out of the Twilight Council. The
+            # Stargate-rush rules below use this to disqualify themselves
+            # on builds that researched Glaives first -- those are
+            # fundamentally Glaives builds (Phoenix / Void Rays are
+            # support for the Adept timing), not pure Stargate-tech
+            # builds, and they should land on Stargate-into-Glaives
+            # further down the tree. Mirror of canonical detector.
+            glaive_time = upgrade_time("AdeptPiercing", "Glaive")
+            blink_time = upgrade_time("Blink")
+            charge_time = upgrade_time("Charge")
+            glaive_first_off_twilight = (
+                glaive_time < 9999
+                and glaive_time < blink_time
+                and glaive_time < charge_time
             )
 
             # Carrier / Tempest both require Stargate + Fleet Beacon.
@@ -169,20 +184,24 @@ class UserBuildDetector(BaseStrategyDetector):
             if (stargate_first_tech and has_building("FleetBeacon", 600)
                     and count_units("Tempest", 600) >= 1):
                 return "PvZ - Tempest Rush"
+            # Glaives-disqualified: see canonical detector for rationale.
             if (stargate_first_tech
                     and sg_count_10min == 2
                     and nexus_count_10min >= 2
                     and count_units("VoidRay", 600) >= 4
                     and not has_dark_shrine_10min
-                    and dt_count_10min == 0):
+                    and dt_count_10min == 0
+                    and not glaive_first_off_twilight):
                 return "PvZ - 2 Stargate Void Ray"
             if (stargate_first_tech and sg_count_10min >= 3
                     and nexus_count_10min >= 2
-                    and count_units("Phoenix", 600) >= 4):
+                    and count_units("Phoenix", 600) >= 4
+                    and not glaive_first_off_twilight):
                 return "PvZ - 3 Stargate Phoenix"
             if (stargate_first_tech and sg_count_10min >= 2
                     and nexus_count_10min >= 2
-                    and count_units("Phoenix", 600) >= 4):
+                    and count_units("Phoenix", 600) >= 4
+                    and not glaive_first_off_twilight):
                 return "PvZ - 2 Stargate Phoenix"
             # Disruptor needs Robo + Robo Bay; Warp Prism needs Robo.
             if (has_building("RoboticsFacility", 480) and has_building("RoboticsBay", 480)
@@ -212,7 +231,8 @@ class UserBuildDetector(BaseStrategyDetector):
             # ``sg_time`` / ``twilight_time`` / ``dark_shrine_time`` /
             # ``robo_time`` are hoisted to the top of the PvZ branch
             # for the Stargate-opener guard above.
-            if sg_time < 420 and twilight_time > sg_time and has_upgrade_substr("Glaive", 600) and (4 <= gate_count_6min <= 6):
+            # Pure ordering on the Stargate timing -- mirror of canonical.
+            if sg_time < 9999 and twilight_time > sg_time and has_upgrade_substr("Glaive", 600) and (4 <= gate_count_6min <= 6):
                 return "PvZ - Stargate into Glaives"
             if sg_time < twilight_time and has_building("TemplarArchive", 540) and count_units("Archon", 540) >= 2:
                 return "PvZ - Archon Drop"
@@ -222,12 +242,12 @@ class UserBuildDetector(BaseStrategyDetector):
                     and has_building("RoboticsFacility", 540)
                     and count_units("DarkTemplar", 540) >= 3 and count_units("WarpPrism", 540) >= 1):
                 return "PvZ - DT drop into Archon Drop"
-            # Standard DT Opener: Dark Shrine is built by 8:00 as the
-            # player's primary tech path (no earlier Stargate / Robo)
-            # and at least one real Dark Templar lands within the
-            # harass window. Mirror of
+            # Standard DT Opener: Dark Shrine is built BEFORE any
+            # Stargate / Robo (pure ordering, no time threshold) and at
+            # least one real Dark Templar lands within the harass
+            # window. Mirror of
             # reveal-sc2-opponent-main/core/strategy_detector_pvz.py.
-            if (dark_shrine_time < 480 and dark_shrine_time < sg_time
+            if (dark_shrine_time < 9999 and dark_shrine_time < sg_time
                     and dark_shrine_time < robo_time
                     and count_units("DarkTemplar", 540) >= 1):
                 return "PvZ - DT Opener"
@@ -236,10 +256,12 @@ class UserBuildDetector(BaseStrategyDetector):
             if sg_time < twilight_time and has_upgrade_substr("Charge", 540) and base_count_at(buildings, "Nexus", 540) >= 3:
                 return "PvZ - Standard charge Macro"
 
-            if has_building("RoboticsFacility", 420):
-                robo_t = building_time("RoboticsFacility")
-                if robo_t < sg_time and robo_t < twilight_time:
-                    return "PvZ - Robo Opener"
+            # Robo Opener: Robotics Facility is the FIRST tech building
+            # (pure ordering, no time threshold). Mirror of canonical.
+            robo_t = building_time("RoboticsFacility")
+            if (robo_t < 9999 and robo_t < sg_time and robo_t < twilight_time
+                    and robo_t < dark_shrine_time):
+                return "PvZ - Robo Opener"
             return "PvZ - Macro Transition (Unclassified)"
 
         # --- PvP ---

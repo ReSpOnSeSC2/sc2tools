@@ -2,6 +2,117 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.8.4
+
+### Fixed — PvZ 2/3 SG Phoenix + 2 SG Void Ray now key on pure tech-ordering (no time threshold) AND disqualify on Glaives-first opener
+Two refinements to the 0.8.3 Stargate-opener guard, shipped together
+in the same release because they fix the same underlying anti-pattern
+(`headline count by 10:00` running before more-specific tech-ordering
+rules in the decision tree).
+
+#### (1) Glaives-disqualifier on the Stargate-rush rules
+- **User-reported regression (Taito Citadel LE 2026-05-25 10:05:36).**
+  A Stargate-FIRST opener that added a Twilight Council after the
+  Stargate and researched Glaives FIRST off the Twilight Council was
+  labelled `PvZ - 2 Stargate Phoenix`. The replay's actual shape was a
+  Stargate-into-Glaives Adept timing: heavy Adept production from 6:18
+  onwards, Ground Weapons +1 at 6:23, 2 Phoenix visible off a Stargate
+  at 6:43-6:44, Glaives research kicked off at 6:46.
+- **Root cause**: the 0.8.3 `stargate_first_tech` guard correctly
+  identified the build as a Stargate opener, but the 2 SG Phoenix
+  headline rule (`>=2 Stargates, >=2 Nexus, >=4 Phoenix by 10:00`)
+  ran BEFORE `PvZ - Stargate into Glaives` in the decision tree, with
+  no signal that distinguished "pure 2 SG Phoenix" from "Stargate
+  opener that committed to Glaives and runs Phoenix as harass /
+  scouting support". The Glaives upgrade itself is the discriminator.
+- **Fix**: hoisted `glaive_first_off_twilight` to the top of
+  `detect_pvz` (alongside `stargate_first_tech`) and added
+  `AND not glaive_first_off_twilight` to all three Phoenix-/VR-count
+  Stargate-rush rules: `PvZ - 2 Stargate Phoenix`,
+  `PvZ - 3 Stargate Phoenix`, and `PvZ - 2 Stargate Void Ray`. A
+  Stargate-FIRST opener with Glaives as the first Twilight upgrade
+  now falls through to `PvZ - Stargate into Glaives` regardless of
+  late Phoenix / Void Ray count. The Carrier / Tempest / AlphaStar
+  rules are NOT guarded -- their Fleet Beacon + capital-ship timing
+  window is too tight for a Glaives-into-capital-ship transition to
+  fit inside 10:00.
+
+#### (2) Pure tech-ordering on EVERY opener guard -- no time thresholds
+- **User feedback**: an opener is defined by what tech building was
+  committed FIRST, period -- not by an arbitrary time threshold. If
+  Twilight / Robo / DarkShrine went down before Stargate, it's a
+  transition INTO Stargate; conversely a Stargate with nothing else
+  before it IS a Stargate opener even at 7:00 (just a slow one). A
+  slow opener is still an opener. Applied symmetrically to every
+  opener rule in `detect_pvz`:
+  - `stargate_first_tech` was `sg_time < 360 AND <ordering>`; now
+    `sg_time < 9999 AND <ordering>`.
+  - `twilight_first_tech` was `twilight_time < 480 AND <ordering>`;
+    now `twilight_time < 9999 AND <ordering>`.
+  - DT Opener rule was `dark_shrine_time < 480 AND <ordering> AND
+    >=1 DT by 9:00`; now `dark_shrine_time < 9999 AND <ordering> AND
+    >=1 DT by 9:00`.
+  - Robo Opener rule was `has_building("RoboticsFacility", 420) AND
+    <ordering>`; now `robo_time < 9999 AND <ordering>` (also added
+    the previously-missing `robo_time < dark_shrine_time` check for
+    symmetry).
+  - Stargate-into-Glaives rule was `sg_time < 420 AND <ordering> AND
+    Glaives-first AND 4-8 gates by 6:00`; now `sg_time < 9999 AND
+    <ordering> AND Glaives-first AND 4-8 gates by 6:00`.
+- **Symptoms under the old guards**: slow-but-pure openers fell
+  through to `PvZ - Macro Transition (Unclassified)` because the time
+  thresholds refused to call them openers. Tech-ordering already
+  excludes transitions; the time threshold was double-counting and
+  only ever excluding the slow-pure case. Downstream constraints
+  (gate count, unit count, upgrade research, base count) already
+  filter inappropriate matches.
+- **Catalog prose**: all six Stargate-rush rules (Carrier Rush,
+  Tempest Rush, 2 SG Void Ray, 3 SG Phoenix, 2 SG Phoenix, AlphaStar
+  Style) drop the "(built before 6:00 ...)" qualifier. The DT
+  Opener, Robo Opener, Stargate-into-Glaives, Adept Glaives (Robo),
+  and Adept Glaives (No Robo) descriptions drop their "before 8:00" /
+  "before 7:00" / "by 9:00" qualifiers (the Adept Glaives rules
+  actually use `gate_count_6min`, so the "by 9:00" Gateway-count
+  wording was always stale) and call out the pure-ordering principle.
+  Catalog files touched: `data/build_definitions.json` (canonical
+  Python catalog) AND `apps/web/lib/build-definitions/pvz.ts` (the
+  TS catalog that powers the `/definitions` page in the web app).
+
+#### Shared infrastructure
+- Mirror in `SC2Replay-Analyzer/detectors/user.py` in sync.
+- Catalog prose (`data/build_definitions.json`,
+  `apps/web/lib/build-definitions/pvz.ts`) updated for all six
+  affected rules (Carrier Rush, Tempest Rush, 2 SG Void Ray, 3 SG
+  Phoenix, 2 SG Phoenix, AlphaStar Style).
+- Tests: 7 new regression cases in
+  `test_strategy_detector_opener_guards.py`:
+  - `test_stargate_first_into_glaives_does_not_mis_fire_as_2_stargate_phoenix`
+    pins the reported replay shape (now resolves to Stargate into
+    Glaives).
+  - `test_pure_2_stargate_phoenix_without_glaives_still_classifies`
+    positive control -- pure Phoenix (no Twilight, no Glaives) still
+    matches.
+  - `test_slow_2_stargate_phoenix_with_no_earlier_tech_still_classifies`
+    locks in the pure-ordering refinement on Stargate -- a slow
+    Stargate opener (7:00 first SG) with no other tech still
+    classifies as 2 SG Phoenix.
+  - `test_slow_dt_opener_with_no_earlier_tech_still_classifies`
+    vice-versa: a slow Dark Shrine (7:30) with no earlier Stargate /
+    Robo still classifies as DT Opener.
+  - `test_slow_robo_opener_with_no_earlier_tech_still_classifies`
+    vice-versa: a slow Robotics Facility (7:30) with no earlier
+    Stargate / Twilight / Dark Shrine still classifies as Robo
+    Opener.
+  - `test_slow_twilight_first_glaives_still_classifies`
+    vice-versa: a slow Twilight Council (8:10) with no earlier
+    Stargate / Robo / DT plus Glaives first plus 4-8 Gateways by
+    6:00 still classifies as Adept Glaives (No Robo).
+  - `test_stargate_first_into_blink_still_classifies_as_blink_macro`
+    pins the Glaives discriminator -- Blink-first Stargate opener
+    still matches 2 SG Phoenix (the guard is keyed on Glaives, not
+    Twilight-existence).
+  Full strategy-detector test suite: 137/137 passing.
+
 ## 0.8.3
 
 ### Fixed — PvZ Stargate-rush labels require Stargate to be the FIRST tech building + new PvZ - DT Opener path + Zerg Nydus check runs before Muta Rush
