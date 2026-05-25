@@ -92,7 +92,7 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # Pure-Phoenix / pure-VR disqualifiers: a Stargate opener that
     # ALSO commits to a tech-switch (Glaives off Twilight, or a
     # Robotics Facility for Immortal / Observer / Disruptor) is a
-    # hybrid build (Phoenix into Robo, Stargate into Glaives), NOT a
+    # hybrid build (Stargate into Robo, Stargate into Glaives), NOT a
     # pure 2/3 SG Phoenix or 2 SG VR opener. The "pure" labels here
     # require the Phoenix / VRs to BE the build -- not Stargate-tech
     # support for a Robo / Twilight follow-up.
@@ -100,7 +100,7 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # `not glaive_first_off_twilight` blocks Glaives-first hybrids
     # (those fall through to PvZ - Stargate into Glaives). `not
     # has_building("RoboticsFacility", 600)` blocks Robo hybrids
-    # (those fall through to PvZ - Phoenix into Robo below).
+    # (those fall through to PvZ - Stargate into Robo below).
     if (
         stargate_first_tech
         and sg_count_10min >= 2
@@ -158,10 +158,10 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvZ - AlphaStar Style (Oracle/Robo)"
 
-    # Phoenix into Robo: Stargate-first opener (Phoenix / Oracle / VR
+    # Stargate into Robo: Stargate-first opener (Phoenix / Oracle / VR
     # harass) that adds a Robotics Facility for Immortal / Observer /
     # Disruptor support. The classic Stargate-into-Robo transition
-    # style. Mirror of PvT - Phoenix into Robo. Without this rule a
+    # style. Counterpart of PvT - Phoenix into Robo. Without this rule a
     # Stargate-first build with both Phoenix and Robo mis-fires the
     # 2/3 SG Phoenix rules above on the Phoenix-count signature alone
     # (now blocked by the `not has_building("RoboticsFacility", 600)`
@@ -181,7 +181,7 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
             or count_units("VoidRay", 600) >= 1
         )
     ):
-        return "PvZ - Phoenix into Robo"
+        return "PvZ - Stargate into Robo"
 
     # 7 Gate Glaive/Immortal all-in: Immortals require Robotics
     # Facility, Glaive research requires Twilight Council. The
@@ -334,7 +334,7 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # Stargate Opener (catch-all): a Stargate-first opener that didn't
     # match any of the more specific Stargate-prefixed rules above
     # (Carrier Rush, Tempest Rush, 2/3 SG Phoenix, 2 SG VR, AlphaStar,
-    # Phoenix into Robo, Stargate into Glaives, Standard Blink /
+    # Stargate into Robo, Stargate into Glaives, Standard Blink /
     # Charge Macro). Without this catch-all, a Stargate-first build
     # with no Phoenix / Oracle / VR (e.g. Stargate was harassed off
     # before producing) or with an unusual transition (Stargate into

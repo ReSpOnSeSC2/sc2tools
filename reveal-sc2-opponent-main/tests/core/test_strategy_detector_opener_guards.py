@@ -395,7 +395,7 @@ def test_stargate_first_into_blink_still_classifies_as_blink_macro():
     )
 
 
-def test_stargate_first_into_robo_classifies_as_phoenix_into_robo():
+def test_stargate_first_into_robo_classifies_as_stargate_into_robo():
     """User-reported regression (Ruby Rock LE 2026-04-01 10:39:06).
     A Stargate-FIRST opener (Stargate at 2:24) that produced Phoenix
     and added a Robotics Facility for Immortal / Observer / Disruptor
@@ -424,14 +424,14 @@ def test_stargate_first_into_robo_classifies_as_phoenix_into_robo():
         f"Stargate-first opener with Robo must NOT tag as 2 Stargate "
         f"Phoenix even with 4+ Phoenix by 10:00; got {result!r}"
     )
-    assert result == "PvZ - Phoenix into Robo", (
+    assert result == "PvZ - Stargate into Robo", (
         f"Stargate-first opener with Phoenix + Robo should tag as "
-        f"Phoenix into Robo; got {result!r}"
+        f"Stargate into Robo; got {result!r}"
     )
 
 
-def test_phoenix_into_robo_accepts_oracle_or_voidray_as_stargate_unit():
-    """The Phoenix into Robo rule keys on `Phoenix OR Oracle OR
+def test_stargate_into_robo_accepts_oracle_or_voidray_as_stargate_unit():
+    """The Stargate into Robo rule keys on `Phoenix OR Oracle OR
     VoidRay` so Stargate-Oracle into Robo and Stargate-VR into Robo
     builds both land here (rather than falling through to the
     Stargate Opener catch-all)."""
@@ -443,8 +443,8 @@ def test_phoenix_into_robo_accepts_oracle_or_voidray_as_stargate_unit():
     events.append(_building("RoboticsFacility", 360))
     detector = sd.UserBuildDetector(custom_builds=[])
     result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
-    assert result == "PvZ - Phoenix into Robo", (
-        f"Stargate-Oracle into Robo should tag as Phoenix into Robo; "
+    assert result == "PvZ - Stargate into Robo", (
+        f"Stargate-Oracle into Robo should tag as Stargate into Robo; "
         f"got {result!r}"
     )
 
@@ -456,8 +456,8 @@ def test_phoenix_into_robo_accepts_oracle_or_voidray_as_stargate_unit():
     events.append(_building("RoboticsFacility", 360))
     detector = sd.UserBuildDetector(custom_builds=[])
     result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
-    assert result == "PvZ - Phoenix into Robo", (
-        f"Stargate-VR into Robo should tag as Phoenix into Robo; "
+    assert result == "PvZ - Stargate into Robo", (
+        f"Stargate-VR into Robo should tag as Stargate into Robo; "
         f"got {result!r}"
     )
 
@@ -508,7 +508,7 @@ def test_stargate_opener_catch_all_when_no_specific_rule_matches():
 
 def test_stargate_opener_present_in_catalog():
     """Catalog presence check for the new PvZ - Stargate Opener and
-    PvZ - Phoenix into Robo entries."""
+    PvZ - Stargate into Robo entries."""
     import json
     with open(
         os.path.join(_ROOT, "data", "build_definitions.json"),
@@ -516,7 +516,7 @@ def test_stargate_opener_present_in_catalog():
         encoding="utf-8",
     ) as fh:
         defs = json.load(fh)
-    for name in ("PvZ - Phoenix into Robo", "PvZ - Stargate Opener"):
+    for name in ("PvZ - Stargate into Robo", "PvZ - Stargate Opener"):
         assert name in defs, f"Missing definition prose for {name!r}"
         desc = defs[name]
         assert isinstance(desc, str) and len(desc) > 80, (
