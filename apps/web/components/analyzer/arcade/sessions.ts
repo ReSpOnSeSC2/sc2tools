@@ -3,8 +3,8 @@
 // Build universe = the user's own played builds (from /v1/builds) PLUS
 // every community build returned by /v1/community/builds PLUS every
 // custom build the user has authored PLUS every entry from the bundled
-// BUILD_DEFINITIONS catalog (the same 102 strategy definitions surfaced
-// on /definitions). We deliberately do NOT filter community builds or
+// BUILD_DEFINITIONS catalog (the same strategy definitions surfaced on
+// /definitions; live count exposed as DEFINITIONS_TOTAL). We deliberately do NOT filter community builds or
 // catalog entries down to "ones the user has already played" — for a
 // Protoss main, that filter collapsed the universe to Protoss-only,
 // even though Stock Market is meant to be a speculation surface across

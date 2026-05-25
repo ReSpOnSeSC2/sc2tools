@@ -50,9 +50,10 @@ const MATCHUP_FILTERS_BY_RACE: Record<
 };
 
 /**
- * DefinitionsCatalog — interactive list of the 101 build / strategy
- * detection rules. The race + matchup pills compose with a free-text
- * search across name and description.
+ * DefinitionsCatalog — interactive list of every build / strategy
+ * detection rule in `BUILD_DEFINITIONS` (count surfaced via
+ * `DEFINITIONS_TOTAL`). The race + matchup pills compose with a free-
+ * text search across name and description.
  */
 export function DefinitionsCatalog() {
   const [query, setQuery] = useState("");
