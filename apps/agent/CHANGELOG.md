@@ -69,9 +69,14 @@ rules in the decision tree).
 - **Catalog prose**: all six Stargate-rush rules (Carrier Rush,
   Tempest Rush, 2 SG Void Ray, 3 SG Phoenix, 2 SG Phoenix, AlphaStar
   Style) drop the "(built before 6:00 ...)" qualifier. The DT
-  Opener, Robo Opener, and Stargate-into-Glaives descriptions drop
-  their "before 8:00" / "before 7:00" qualifiers and call out the
-  pure-ordering principle.
+  Opener, Robo Opener, Stargate-into-Glaives, Adept Glaives (Robo),
+  and Adept Glaives (No Robo) descriptions drop their "before 8:00" /
+  "before 7:00" / "by 9:00" qualifiers (the Adept Glaives rules
+  actually use `gate_count_6min`, so the "by 9:00" Gateway-count
+  wording was always stale) and call out the pure-ordering principle.
+  Catalog files touched: `data/build_definitions.json` (canonical
+  Python catalog) AND `apps/web/lib/build-definitions/pvz.ts` (the
+  TS catalog that powers the `/definitions` page in the web app).
 
 #### Shared infrastructure
 - Mirror in `SC2Replay-Analyzer/detectors/user.py` in sync.

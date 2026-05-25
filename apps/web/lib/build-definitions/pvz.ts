@@ -111,14 +111,14 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Adept Glaives (No Robo)",
     description:
-      "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), 4-8 Gateways exist by 9:00, AND no Robotics Facility is built -- a pure Gateway Adept Glaive Timing without Robo support.",
+      "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight -- pure ordering, no time threshold, so a slow Twilight with nothing else committed first still qualifies), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), 4-8 Gateways exist by 6:00, AND no Robotics Facility is built -- a pure Gateway Adept Glaive Timing without Robo support.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - Adept Glaives (Robo)",
     description:
-      "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate or Dark Shrine is started before Twilight), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), 4-8 Gateways exist by 9:00, AND a Robotics Facility is built -- the Robo variant of Adept Glaive Timing, using Observers for detection and Immortals for armor support.",
+      "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight -- pure ordering, no time threshold), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), 4-8 Gateways exist by 6:00, AND a Robotics Facility is built (after Twilight, as Observer / Immortal support) -- the Robo variant of Adept Glaive Timing.",
   },
   {
     race: "Protoss",

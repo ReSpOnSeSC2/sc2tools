@@ -98,9 +98,14 @@ workflow builds the Windows installer on each tag push and attaches the
   (Unclassified)"). Downstream constraints (gate count, unit count,
   upgrade research, base count) already filter inappropriate matches.
   Catalog prose for all six Stargate-rush rules + DT Opener + Robo
-  Opener + Stargate-into-Glaives updated to drop the "(built before
-  X:00 ...)" qualifiers. Mirror in
-  `SC2Replay-Analyzer/detectors/user.py` in sync. 7 new regression
+  Opener + Stargate-into-Glaives + Adept Glaives (Robo) + Adept
+  Glaives (No Robo) updated to drop the "(built before X:00 ...)"
+  / "by 9:00" qualifiers (the Adept Glaives rules actually use the
+  `gate_count_6min` window, so the "Gateways by 9:00" wording was
+  always stale). Updates applied to both the Python catalog
+  (`data/build_definitions.json`) and the TS catalog that powers
+  the `/definitions` page (`apps/web/lib/build-definitions/pvz.ts`).
+  Mirror in `SC2Replay-Analyzer/detectors/user.py` in sync. 7 new regression
   tests in `test_strategy_detector_opener_guards.py` cover both
   refinements plus positive controls (slow Stargate, slow DT, slow
   Robo, slow Twilight Glaives all classify correctly; pure 2 SG
