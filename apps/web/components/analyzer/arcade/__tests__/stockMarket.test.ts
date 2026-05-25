@@ -91,8 +91,8 @@ describe("Stock Market: build universe + price math", () => {
   });
 
   test("BUILD_DEFINITIONS catalog seeds the universe with every analyzer-detectable strategy", () => {
-    // The bundled catalog at apps/web/lib/build-definitions.ts has 102
-    // entries spanning every race and matchup. A Protoss main with no
+    // The bundled catalog at apps/web/lib/build-definitions.ts spans
+    // every race and matchup (live count via DEFINITIONS_TOTAL). A Protoss main with no
     // Z/T plays and no Z/T community/custom builds must still see Z/T
     // rows in the Stock Market — that's the whole point of folding the
     // catalog in. We don't pin the exact set here (the catalog evolves
@@ -209,9 +209,10 @@ describe("Stock Market: build universe + price math", () => {
       ],
     };
     const u = buildUniverse(dataset);
-    // The universe now also contains BUILD_DEFINITIONS catalog entries
-    // (~102 rows) — assert the custom build is present rather than
-    // pinning total length to 1.
+    // The universe now also contains every BUILD_DEFINITIONS catalog
+    // entry — assert the custom build is present rather than pinning
+    // total length to a hardcoded value (which would go stale every
+    // time a new detection rule lands).
     const row = u.find((b) => b.name === "Brand New Build");
     expect(row).toBeDefined();
     expect(row!.totalPlays).toBe(0);

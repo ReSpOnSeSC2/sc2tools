@@ -1,8 +1,11 @@
 /**
- * Build & Strategy definitions catalog — the 102 detection rules used
- * by the analyzer to label opponent strategies and the player's own
+ * Build & Strategy definitions catalog — every detection rule the
+ * analyzer uses to label opponent strategies and the player's own
  * builds. Surfaced on /definitions so users can interpret labels they
- * see on the dashboard, opponent profile, and builds page.
+ * see on the dashboard, opponent profile, and builds page. The
+ * exposed `DEFINITIONS_TOTAL` is the live count (= the assembled
+ * array's length) so new per-matchup entries don't require touching
+ * this comment.
  *
  * Source of truth: the rules implemented in
  * `apps/api/src/services/strategyClassifier.js` (and its predecessor
