@@ -223,7 +223,7 @@ class UserBuildDetector(BaseStrategyDetector):
                     and base_count_at(buildings, "Nexus", 510) >= 3):
                 return "PvZ - AlphaStar Style (Oracle/Robo)"
 
-            # Phoenix into Robo: Stargate-first opener + Robo for
+            # Stargate into Robo: Stargate-first opener + Robo for
             # Immortal / Observer / Disruptor support. Mirror of
             # canonical detector. Accepts Phoenix / Oracle / VoidRay
             # as the Stargate-unit signal.
@@ -232,7 +232,7 @@ class UserBuildDetector(BaseStrategyDetector):
                     and (count_units("Phoenix", 600) >= 1
                          or count_units("Oracle", 600) >= 1
                          or count_units("VoidRay", 600) >= 1)):
-                return "PvZ - Phoenix into Robo"
+                return "PvZ - Stargate into Robo"
 
             # 7 Gate Glaive/Immortal: Immortals require RoboticsFacility,
             # Glaives requires Twilight Council (covered by upgrade).

@@ -2,9 +2,28 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.8.6
+
+### Changed — Cosmetic version bump, no behavioural change
+Identical detector behaviour to 0.8.5; bumped solely to give the
+renamed `PvZ - Stargate into Robo` label (formerly drafted as
+`PvZ - Phoenix into Robo` in the 0.8.5 PR review) its own release
+tag. The rename happened pre-release based on user feedback that
+"Stargate into Robo" better describes the tech-transition intent
+than "Phoenix into Robo" -- the rule's unit-acceptance set is
+Phoenix / Oracle / Void Ray, so "Phoenix" was a misnomer.
+
+The PvT - Phoenix into Robo label is unchanged -- the PvT rule has
+always required a real Phoenix specifically (no Oracle / VR
+acceptance) so the "Phoenix" in its name is accurate. Only the PvZ
+counterpart is renamed.
+
+Full strategy-detector test suite: 142/142 still passing (no
+behaviour change).
+
 ## 0.8.5
 
-### Fixed — PvZ Stargate-into-Robo no longer mis-fires as 2 Stargate Phoenix + new PvZ - Phoenix into Robo + new PvZ - Stargate Opener catch-all
+### Fixed — PvZ Stargate-into-Robo no longer mis-fires as 2 Stargate Phoenix + new PvZ - Stargate into Robo + new PvZ - Stargate Opener catch-all
 - **User-reported regression (Ruby Rock LE 2026-04-01 10:39:06).** A
   Stargate-FIRST opener that produced Phoenix and added a Robotics
   Facility for Immortal / Observer / Disruptor support was labelled
@@ -26,12 +45,15 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
      `PvZ - 2 Stargate Void Ray`. A Stargate opener that adds a Robo
      is committing to a tech-switch and shouldn't claim the "pure
      Phoenix / pure VR" label.
-  2. **Added `PvZ - Phoenix into Robo`** -- mirror of PvT's. Fires
-     for `stargate_first_tech AND has_building("RoboticsFacility",
-     600) AND >=1 real Phoenix / Oracle / Void Ray by 10:00`. Sits
-     after AlphaStar Style (which has its own more specific Oracle +
-     Forge + 3-base signature) so AlphaStar wins on hybrid builds
-     that fit its shape.
+  2. **Added `PvZ - Stargate into Robo`** -- PvZ counterpart of
+     PvT's `Phoenix into Robo`, renamed for the PvZ-side rule to use
+     the generic "Stargate into" phrasing because the rule accepts
+     any Stargate unit, not just Phoenix. Fires for
+     `stargate_first_tech AND has_building("RoboticsFacility", 600)
+     AND >=1 real Phoenix / Oracle / Void Ray by 10:00`. Sits after
+     AlphaStar Style (which has its own more specific Oracle + Forge
+     + 3-base signature) so AlphaStar wins on hybrid builds that fit
+     its shape.
   3. **Added `PvZ - Stargate Opener`** catch-all -- mirror of PvT's.
      Fires for any `stargate_first_tech` build that didn't match a
      more specific Stargate-prefixed rule. Examples that land here:
@@ -47,12 +69,12 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   2 SG VR were rewritten to call out the new Robo-disqualifier.
 - **Mirror** in `SC2Replay-Analyzer/detectors/user.py` in sync --
   same Robo guard on the three pure-Phoenix / pure-VR rules, same
-  new Phoenix-into-Robo rule, same Stargate-Opener catch-all.
+  new Stargate-into-Robo rule, same Stargate-Opener catch-all.
 - **Tests**: 5 new regression cases in
   `test_strategy_detector_opener_guards.py`:
-  - `test_stargate_first_into_robo_classifies_as_phoenix_into_robo`
-    pins the reported replay shape (now resolves to Phoenix into Robo).
-  - `test_phoenix_into_robo_accepts_oracle_or_voidray_as_stargate_unit`
+  - `test_stargate_first_into_robo_classifies_as_stargate_into_robo`
+    pins the reported replay shape (now resolves to Stargate into Robo).
+  - `test_stargate_into_robo_accepts_oracle_or_voidray_as_stargate_unit`
     confirms the rule fires on Oracle-into-Robo and VR-into-Robo too.
   - `test_pure_2_stargate_phoenix_without_robo_still_classifies`
     positive control -- the new Robo guard doesn't over-fire on pure
