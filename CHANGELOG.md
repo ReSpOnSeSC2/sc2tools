@@ -67,23 +67,25 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
-- **Strategy classifier · PvZ - Phoenix into Robo + PvZ - Stargate
-  Opener (0.8.5)**: user-reported regression (Ruby Rock LE 2026-04-01
-  10:39:06) — a Stargate-FIRST opener that produced Phoenix and added
-  a Robotics Facility for Immortal / Observer / Disruptor support was
-  labelled `PvZ - 2 Stargate Phoenix`. The build was a classic
-  Stargate-into-Robo transition that the PvZ tree had no dedicated
-  label for, so the count-by-10:00 signature of 2 SG Phoenix won by
-  default. The PvT classifier already had `PvT - Phoenix into Robo`
-  and `PvT - Stargate Opener` — they were never mirrored into PvZ.
-  Fix adds three things: **(1)** `not has_building("RoboticsFacility",
-  600)` guard on the three pure-Phoenix / pure-VR Stargate-rush rules
-  (2/3 SG Phoenix, 2 SG VR) — a Stargate opener that adds Robo is a
-  hybrid and shouldn't claim the pure label. **(2)** New
-  `PvZ - Phoenix into Robo` label that fires for `stargate_first_tech
-  + Robo + >=1 real Phoenix / Oracle / Void Ray by 10:00` (accepts
-  any Stargate-unit signal so Stargate-Oracle into Robo and
-  Stargate-VR into Robo land here too). **(3)** New
+- **Strategy classifier · PvZ - Stargate into Robo + PvZ - Stargate
+  Opener (0.8.5 → 0.8.6 cosmetic rename)**: user-reported regression
+  (Ruby Rock LE 2026-04-01 10:39:06) — a Stargate-FIRST opener that
+  produced Phoenix and added a Robotics Facility for Immortal /
+  Observer / Disruptor support was labelled `PvZ - 2 Stargate
+  Phoenix`. The build was a classic Stargate-into-Robo transition
+  that the PvZ tree had no dedicated label for, so the count-by-10:00
+  signature of 2 SG Phoenix won by default. The PvT classifier
+  already had `PvT - Phoenix into Robo` and `PvT - Stargate Opener` —
+  they were never mirrored into PvZ. Fix adds three things: **(1)**
+  `not has_building("RoboticsFacility", 600)` guard on the three
+  pure-Phoenix / pure-VR Stargate-rush rules (2/3 SG Phoenix, 2 SG
+  VR) — a Stargate opener that adds Robo is a hybrid and shouldn't
+  claim the pure label. **(2)** New `PvZ - Stargate into Robo` label
+  (PvZ counterpart of the PvT - Phoenix into Robo rule; renamed in
+  PvZ to use the generic "Stargate into" phrasing because the rule
+  accepts any Stargate unit — Phoenix / Oracle / Void Ray — not just
+  Phoenix specifically) that fires for `stargate_first_tech + Robo +
+  >=1 real Phoenix / Oracle / Void Ray by 10:00`. **(3)** New
   `PvZ - Stargate Opener` catch-all for any Stargate-first build that
   didn't match a more specific Stargate-prefixed rule (e.g. a
   Stargate that got harassed off mid-construction, or an unusual
@@ -95,7 +97,10 @@ workflow builds the Windows installer on each tag push and attaches the
   tests in `test_strategy_detector_opener_guards.py` cover the
   reported case, Oracle / VR variants, the new catch-all, and a
   positive control (pure 2 SG Phoenix still matches). Full
-  strategy-detector test suite: 142/142 passing.
+  strategy-detector test suite: 142/142 passing. The 0.8.6 bump on
+  top of 0.8.5 is purely the cosmetic rename of the new label
+  ("Phoenix into Robo" → "Stargate into Robo") -- no behaviour
+  change.
 - **Strategy classifier · PvZ 2/3 SG Phoenix + 2 SG Void Ray refinements
   (0.8.4)**: two follow-ups to the 0.8.3 Stargate-opener guard,
   shipped together. **(1) Glaives-disqualifier on the Stargate-rush
