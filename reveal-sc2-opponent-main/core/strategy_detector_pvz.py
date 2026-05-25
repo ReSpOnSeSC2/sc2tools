@@ -51,6 +51,23 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and sg_time < robo_time
     )
 
+    # Hoisted from below: identifies WHICH upgrade is researched first
+    # out of the Twilight Council. The Stargate-rush rules below use
+    # this to disqualify themselves on builds that researched Glaives
+    # as the first Twilight upgrade -- those are fundamentally Glaives
+    # builds (the Phoenix / Void Rays are scouting / harass support),
+    # not pure Stargate-tech builds, and they should land on the
+    # Stargate-into-Glaives label further down the tree even when the
+    # late Phoenix count crosses the 2 SG Phoenix headline threshold.
+    glaive_time = upgrade_time("AdeptPiercing", "Glaive")
+    blink_time = upgrade_time("Blink")
+    charge_time = upgrade_time("Charge")
+    glaive_first_off_twilight = (
+        glaive_time < 9999
+        and glaive_time < blink_time
+        and glaive_time < charge_time
+    )
+
     # Carrier / Tempest both require Stargate + Fleet Beacon.
     # count_units already filters hallucinations, but document
     # the prerequisite so a future refactor can't drop it.
@@ -66,11 +83,20 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and count_units("Tempest", 600) >= 1
     ):
         return "PvZ - Tempest Rush"
+    # Glaives-disqualified: a Stargate opener that researches Glaives
+    # FIRST off the Twilight Council is a Stargate-into-Glaives build
+    # (Phoenix / Void Rays are support for the Adept timing), NOT a
+    # pure 2 SG Void Ray / 2 SG Phoenix / 3 SG Phoenix opener. Without
+    # this guard, a Stargate-Glaives build with 4+ Phoenix by 10:00
+    # mis-fires the headline Phoenix label here before
+    # Stargate-into-Glaives is reached further down. The Glaives-first
+    # signal is the same one the Adept-Glaives rules below key off.
     if (
         stargate_first_tech
         and sg_count_10min >= 2
         and nexus_count_10min >= 2
         and count_units("VoidRay", 600) >= 4
+        and not glaive_first_off_twilight
     ):
         return "PvZ - 2 Stargate Void Ray"
     if (
@@ -78,6 +104,7 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and sg_count_10min >= 3
         and nexus_count_10min >= 2
         and count_units("Phoenix", 600) >= 4
+        and not glaive_first_off_twilight
     ):
         return "PvZ - 3 Stargate Phoenix"
     # Strict exactly-2: the 3+ variant above catches the heavier
@@ -90,6 +117,7 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and sg_count_10min == 2
         and nexus_count_10min >= 2
         and count_units("Phoenix", 600) >= 4
+        and not glaive_first_off_twilight
     ):
         return "PvZ - 2 Stargate Phoenix"
     # Rail's Disruptor Drop: Disruptor needs Robo + Robo Bay,
@@ -138,24 +166,14 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         if not has_building("Stargate", 480) and not has_building("DarkShrine", 480):
             return "PvZ - Blink Stalker All-in (2 Base)"
 
-    # Identify WHICH upgrade is researched first out of the
-    # Twilight Council — the signal that separates Adept Glaive
-    # Timings (Glaives first) from Stargate-into-Blink (Blink
-    # first) and Charge openers (Charge first). sc2reader emits
-    # raw upgrade_type_name values, so "AdeptPiercingAttack" is
-    # the Glaive event; "Blink" matches "BlinkTech"; "Charge"
-    # matches itself. See ``upgrade_time`` at function scope.
-    # ``sg_time`` / ``twilight_time`` / ``robo_time`` /
-    # ``dark_shrine_time`` are hoisted to the top of the function
-    # so the Stargate-opener guard can use them above.
-    glaive_time = upgrade_time("AdeptPiercing", "Glaive")
-    blink_time = upgrade_time("Blink")
-    charge_time = upgrade_time("Charge")
-    glaive_first_off_twilight = (
-        glaive_time < 9999
-        and glaive_time < blink_time
-        and glaive_time < charge_time
-    )
+    # ``glaive_time`` / ``blink_time`` / ``charge_time`` / the
+    # ``glaive_first_off_twilight`` flag, plus ``sg_time`` /
+    # ``twilight_time`` / ``robo_time`` / ``dark_shrine_time`` are all
+    # hoisted to the top of the function so the Stargate-opener guard
+    # AND the Glaives-disqualifier guard on the 2/3 SG Phoenix and 2 SG
+    # Void Ray rules can use them above. sc2reader emits raw
+    # upgrade_type_name values: "AdeptPiercingAttack" is the Glaive
+    # event; "Blink" matches "BlinkTech"; "Charge" matches itself.
     # Twilight Council is the FIRST tech building after the
     # Cybernetics Core: no Stargate / Robotics Facility / Dark
     # Shrine has been started before it. (Templar Archives /

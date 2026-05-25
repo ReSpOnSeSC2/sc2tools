@@ -6,21 +6,21 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - 2 Stargate Phoenix",
     description:
-      "Detected if the Stargate is the FIRST tech building (built before 6:00 and before any Twilight Council / Dark Shrine / Robotics Facility), EXACTLY 2 Stargates and 2+ Nexuses are up by 10:00, and 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations). 3+ Stargates falls under PvZ - 3 Stargate Phoenix instead. A Glaive Adept opener that adds 2 Stargates around 7:00 to counter Lurkers tags as PvZ - Adept Glaives, NOT as 2 Stargate Phoenix.",
+      "Detected if the Stargate is the FIRST tech building (built before 6:00 and before any Twilight Council / Dark Shrine / Robotics Facility), EXACTLY 2 Stargates and 2+ Nexuses are up by 10:00, 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations), AND Glaives was NOT the first upgrade researched out of the Twilight Council. 3+ Stargates falls under PvZ - 3 Stargate Phoenix instead. A Glaive Adept opener that adds 2 Stargates around 7:00 to counter Lurkers tags as PvZ - Adept Glaives. A Stargate-FIRST opener that adds a Twilight Council and researches Glaives first tags as PvZ - Stargate into Glaives, NOT 2 Stargate Phoenix -- the Glaives-first signal means the Phoenix are scouting / harass support for an Adept timing, not the build's main damage.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - 2 Stargate Void Ray",
     description:
-      "Detected if the Stargate is the FIRST tech building (built before 6:00 and before any Twilight Council / Dark Shrine / Robotics Facility), 2+ Stargates and 2+ Nexuses are up by 10:00, and 4+ Void Rays have been produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations).",
+      "Detected if the Stargate is the FIRST tech building (built before 6:00 and before any Twilight Council / Dark Shrine / Robotics Facility), 2+ Stargates and 2+ Nexuses are up by 10:00, 4+ Void Rays have been produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations), AND Glaives was NOT the first upgrade researched out of the Twilight Council. A Stargate-into-Glaives build with Void Ray support tags as PvZ - Stargate into Glaives instead.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - 3 Stargate Phoenix",
     description:
-      "Detected if the Stargate is the FIRST tech building (built before 6:00 and before any Twilight Council / Dark Shrine / Robotics Facility), 3+ Stargates and 2+ Nexuses are up by 10:00, and 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations).",
+      "Detected if the Stargate is the FIRST tech building (built before 6:00 and before any Twilight Council / Dark Shrine / Robotics Facility), 3+ Stargates and 2+ Nexuses are up by 10:00, 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations), AND Glaives was NOT the first upgrade researched out of the Twilight Council. A Stargate-into-Glaives build with Phoenix support tags as PvZ - Stargate into Glaives instead.",
   },
   {
     race: "Protoss",

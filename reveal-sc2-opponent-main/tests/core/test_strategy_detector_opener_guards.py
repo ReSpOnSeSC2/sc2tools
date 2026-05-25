@@ -200,6 +200,99 @@ def test_glaives_with_late_2_stargate_phoenix_does_not_mis_fire():
     )
 
 
+def test_stargate_first_into_glaives_does_not_mis_fire_as_2_stargate_phoenix():
+    """User-reported regression (Taito Citadel LE 2026-05-25 10:05:36).
+
+    A Stargate-FIRST opener that adds a Twilight Council after the
+    Stargate, researches Glaives FIRST off Twilight, and produces a
+    handful of Phoenix off 2 Stargates while pumping Adepts was
+    mis-labelled as PvZ - 2 Stargate Phoenix. The stargate_first_tech
+    guard does NOT catch this (Stargate IS first here), so the rule
+    needs an additional "AND not glaive_first_off_twilight" guard --
+    the Glaives-first signal is a strong intent marker that means
+    this is a Stargate-into-Glaives build, NOT a pure Stargate
+    Phoenix one (the Phoenix are scouting / harass support).
+    """
+    events = _base_protoss_opener()
+    # Stargate is the FIRST tech building (~3:30).
+    events.append(_building("Stargate", 210))
+    # 2nd Stargate stays before 10:00 so the 2 SG Phoenix headline
+    # count check still wants to fire.
+    events.append(_building("Stargate", 280))
+    # Twilight comes AFTER Stargate -- this is "Stargate into X".
+    events.append(_building("TwilightCouncil", 250))
+    # 4-8 Gateways by 6:00 (canonical Stargate-into-Glaives range).
+    events.extend(_gates([240, 260, 300, 320, 340]))
+    # Glaives is the FIRST upgrade out of Twilight, BEFORE Blink /
+    # Charge -- the signal that marks intent.
+    events.append(_upgrade("AdeptPiercingAttack", 320))
+    # Plenty of Phoenix off 2 Stargates by 10:00 (the trigger that
+    # used to mis-fire the rule).
+    for t in (300, 340, 380, 420, 460, 500):
+        events.append(_unit("Phoenix", t))
+    # Adept production to fill out the gateway count and match the
+    # reported replay shape.
+    for t in (340, 370, 400, 430, 460):
+        events.append(_unit("Adept", t))
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result != "PvZ - 2 Stargate Phoenix", (
+        f"Stargate opener with Glaives-first upgrade must NOT tag as "
+        f"2 Stargate Phoenix even with 4+ Phoenix by 10:00; got {result!r}"
+    )
+    assert result == "PvZ - Stargate into Glaives", (
+        f"Stargate-first into Glaives should tag as Stargate into "
+        f"Glaives; got {result!r}"
+    )
+
+
+def test_pure_2_stargate_phoenix_without_glaives_still_classifies():
+    """Positive control: a TRUE 2 Stargate Phoenix build -- 2 Stargates,
+    4+ Phoenix, NO Twilight Council / NO Glaives research -- must still
+    classify as 2 Stargate Phoenix under the new Glaives-disqualifier
+    guard."""
+    events = _base_protoss_opener()
+    events.append(_building("Stargate", 220))
+    events.append(_building("Stargate", 260))
+    for t in (260, 300, 340, 380):
+        events.append(_unit("Phoenix", t))
+    # Deliberately NO Twilight Council, NO Glaives upgrade.
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - 2 Stargate Phoenix", (
+        f"True 2 Stargate Phoenix (no Twilight, no Glaives) must still "
+        f"tag as 2 Stargate Phoenix; got {result!r}"
+    )
+
+
+def test_stargate_first_into_blink_still_classifies_as_blink_macro():
+    """Positive control on the discriminator: a Stargate-FIRST opener
+    with 4+ Phoenix + Twilight that researches BLINK first (not
+    Glaives) must NOT be caught by the new Glaives guard -- it should
+    still resolve to a Phoenix or Blink-related label, not be falsely
+    blocked out of the 2 SG Phoenix bucket on a different upgrade
+    signal."""
+    events = _base_protoss_opener()
+    events.append(_building("Stargate", 220))
+    events.append(_building("Stargate", 280))
+    events.append(_building("TwilightCouncil", 260))
+    # Blink is FIRST off Twilight, NOT Glaives.
+    events.append(_upgrade("BlinkTech", 320))
+    for t in (260, 300, 340, 380):
+        events.append(_unit("Phoenix", t))
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    # The Glaives-disqualifier guard MUST NOT fire here (Blink, not
+    # Glaives), so 2 SG Phoenix is still the right headline.
+    assert result == "PvZ - 2 Stargate Phoenix", (
+        f"Stargate opener with Blink-first (NOT Glaives) and 4+ "
+        f"Phoenix should still tag as 2 Stargate Phoenix; got {result!r}"
+    )
+
+
 def test_dt_into_2_stargate_phoenix_does_not_mis_fire():
     """A DT opener (Dark Shrine FIRST) that picks up 2 Stargates + 4
     Phoenix late must NOT mis-fire as 2 Stargate Phoenix."""

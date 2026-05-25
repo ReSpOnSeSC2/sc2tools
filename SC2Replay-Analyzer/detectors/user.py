@@ -159,6 +159,23 @@ class UserBuildDetector(BaseStrategyDetector):
                 and sg_time < robo_time
             )
 
+            # Hoisted Twilight-ordering signal: identifies WHICH upgrade
+            # is researched first out of the Twilight Council. The
+            # Stargate-rush rules below use this to disqualify themselves
+            # on builds that researched Glaives first -- those are
+            # fundamentally Glaives builds (Phoenix / Void Rays are
+            # support for the Adept timing), not pure Stargate-tech
+            # builds, and they should land on Stargate-into-Glaives
+            # further down the tree. Mirror of canonical detector.
+            glaive_time = upgrade_time("AdeptPiercing", "Glaive")
+            blink_time = upgrade_time("Blink")
+            charge_time = upgrade_time("Charge")
+            glaive_first_off_twilight = (
+                glaive_time < 9999
+                and glaive_time < blink_time
+                and glaive_time < charge_time
+            )
+
             # Carrier / Tempest both require Stargate + Fleet Beacon.
             # count_units already filters hallucinations, but the
             # explicit head guard prevents a regression if count_units
@@ -169,20 +186,24 @@ class UserBuildDetector(BaseStrategyDetector):
             if (stargate_first_tech and has_building("FleetBeacon", 600)
                     and count_units("Tempest", 600) >= 1):
                 return "PvZ - Tempest Rush"
+            # Glaives-disqualified: see canonical detector for rationale.
             if (stargate_first_tech
                     and sg_count_10min == 2
                     and nexus_count_10min >= 2
                     and count_units("VoidRay", 600) >= 4
                     and not has_dark_shrine_10min
-                    and dt_count_10min == 0):
+                    and dt_count_10min == 0
+                    and not glaive_first_off_twilight):
                 return "PvZ - 2 Stargate Void Ray"
             if (stargate_first_tech and sg_count_10min >= 3
                     and nexus_count_10min >= 2
-                    and count_units("Phoenix", 600) >= 4):
+                    and count_units("Phoenix", 600) >= 4
+                    and not glaive_first_off_twilight):
                 return "PvZ - 3 Stargate Phoenix"
             if (stargate_first_tech and sg_count_10min >= 2
                     and nexus_count_10min >= 2
-                    and count_units("Phoenix", 600) >= 4):
+                    and count_units("Phoenix", 600) >= 4
+                    and not glaive_first_off_twilight):
                 return "PvZ - 2 Stargate Phoenix"
             # Disruptor needs Robo + Robo Bay; Warp Prism needs Robo.
             if (has_building("RoboticsFacility", 480) and has_building("RoboticsBay", 480)

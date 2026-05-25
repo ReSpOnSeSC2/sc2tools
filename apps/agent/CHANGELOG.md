@@ -2,6 +2,57 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.8.4
+
+### Fixed — PvZ 2/3 Stargate Phoenix + 2 Stargate Void Ray no longer mis-fire on Stargate-into-Glaives builds
+- **User-reported regression (Taito Citadel LE 2026-05-25 10:05:36).**
+  A Stargate-FIRST opener that added a Twilight Council after the
+  Stargate and researched Glaives FIRST off the Twilight Council was
+  labelled `PvZ - 2 Stargate Phoenix`. The replay's actual shape was a
+  Stargate-into-Glaives Adept timing: heavy Adept production from 6:18
+  onwards, Ground Weapons +1 at 6:23, 2 Phoenix visible off a Stargate
+  at 6:43-6:44, Glaives research kicked off at 6:46.
+- **Root cause**: the 0.8.3 `stargate_first_tech` guard correctly
+  identified the build as a Stargate opener, but the 2 SG Phoenix
+  headline rule (`>=2 Stargates, >=2 Nexus, >=4 Phoenix by 10:00`)
+  ran BEFORE `PvZ - Stargate into Glaives` in the decision tree, with
+  no signal that distinguished "pure 2 SG Phoenix" from "Stargate
+  opener that committed to Glaives and runs Phoenix as harass /
+  scouting support". The Glaives upgrade itself is the discriminator.
+- **Fix**: hoisted `glaive_first_off_twilight` to the top of
+  `detect_pvz` (alongside `stargate_first_tech`) and added
+  `AND not glaive_first_off_twilight` to all three Phoenix-/VR-count
+  Stargate-rush rules: `PvZ - 2 Stargate Phoenix`,
+  `PvZ - 3 Stargate Phoenix`, and `PvZ - 2 Stargate Void Ray`. A
+  Stargate-FIRST opener with Glaives as the first Twilight upgrade
+  now falls through to `PvZ - Stargate into Glaives` regardless of
+  late Phoenix / Void Ray count. The Carrier / Tempest / AlphaStar
+  rules are NOT guarded (Fleet Beacon + Capital Ship by 10:00 is a
+  much more specific commitment that doesn't fit the
+  Phoenix-as-support pattern).
+- **Why not Carrier Rush / Tempest Rush**: those rules require a Fleet
+  Beacon + capital ship by 10:00, which has its own opener-timing
+  constraint (Stargate by ~4:00 to land a Carrier by ~8:00). A
+  Glaives-into-Carrier transition wouldn't fit that window, so the
+  existing `stargate_first_tech` guard already filters them
+  correctly.
+- Mirror in `SC2Replay-Analyzer/detectors/user.py` in sync.
+- Catalog prose (`data/build_definitions.json`,
+  `apps/web/lib/build-definitions/pvz.ts`) updated for all three
+  affected rules to call out the new Glaives-disqualifier guard.
+- Tests: 3 new regression cases in
+  `test_strategy_detector_opener_guards.py`:
+  - `test_stargate_first_into_glaives_does_not_mis_fire_as_2_stargate_phoenix`
+    pins the reported replay shape.
+  - `test_pure_2_stargate_phoenix_without_glaives_still_classifies`
+    positive control -- pure Phoenix (no Twilight, no Glaives) still
+    matches.
+  - `test_stargate_first_into_blink_still_classifies_as_blink_macro`
+    pins the discriminator -- Blink-first Stargate opener still
+    matches 2 SG Phoenix (the guard is keyed on Glaives, not
+    Twilight-existence). Full strategy-detector test suite:
+    133/133 passing.
+
 ## 0.8.3
 
 ### Fixed — PvZ Stargate-rush labels require Stargate to be the FIRST tech building + new PvZ - DT Opener path + Zerg Nydus check runs before Muta Rush
