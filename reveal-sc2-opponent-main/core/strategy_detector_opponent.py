@@ -144,10 +144,17 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                     and (count_units("Roach", 360) + count_units("Ravager", 360) > 8)
                 ):
                     return "Zerg - 2 Base Roach/Ravager All-in"
-                if has_building("Spire", 420) and count_units("Drone", 420) < 45:
-                    return "Zerg - 2 Base Muta Rush"
+                # Nydus check comes BEFORE the Muta-rush check: a Nydus
+                # opener that also adds a Spire (for late air follow-up
+                # or Brood Lord prep) used to mis-fire as "2 Base Muta
+                # Rush" because the Muta rule only required a Spire by
+                # 7:00 with low drones. A Nydus Network by 7:00 is a
+                # stronger signal -- the build's whole purpose is a
+                # Nydus drop, regardless of secondary tech.
                 if has_building("NydusNetwork", 420):
                     return "Zerg - 2 Base Nydus"
+                if has_building("Spire", 420) and count_units("Drone", 420) < 45:
+                    return "Zerg - 2 Base Muta Rush"
 
                 if count_buildings("Hatchery", 390) >= 3:
                     if count_units("Zergling", 300) > 20 and count_units("Drone", 300) < 30:
@@ -163,6 +170,14 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                     and (count_units("Roach", 360) + count_units("Ravager", 360) > 8)
                 ):
                     return "Zerg - 2 Base Roach/Ravager All-in"
+                # Nydus check comes BEFORE Muta -- same reasoning as the
+                # Hatch-First branch. The original Pool-First branch had
+                # NO Nydus check at all so a Pool-First Nydus opener
+                # always either mis-fired as 2 Base Muta Rush (if a Spire
+                # was up) or fell through to "Pool First Opener" (a
+                # macro-flavored catch-all that obscures the all-in).
+                if has_building("NydusNetwork", 420):
+                    return "Zerg - 2 Base Nydus"
                 if has_building("Spire", 420) and count_units("Drone", 420) < 45:
                     return "Zerg - 2 Base Muta Rush"
                 if count_buildings("Hatchery", 390) >= 3:

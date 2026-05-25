@@ -1,0 +1,364 @@
+"""Regression tests for opener-ordering guards in the strategy detector.
+
+Three real user-reported mis-classifications motivated these guards:
+
+  1. A PvZ DT build that transitioned into Carriers/Mothership was
+     labelled "PvZ - Carrier Rush" because the Carrier rule only
+     required a Stargate + Fleet Beacon + 1 Carrier by 10:00 with no
+     opener-ordering check.
+
+  2. A PvZ Glaive Adept opener that added 2 Stargates around 7:00 to
+     counter Lurkers was labelled "PvZ - 2 Stargate Phoenix" for the
+     same reason -- the rule counted Stargates by 10:00 without
+     checking whether the Stargate was the FIRST tech committed.
+
+  3. A Zerg opponent Nydus build was labelled "Zerg - 2 Base Muta
+     Rush" because the Muta-rush check fired on any Spire by 7:00
+     with low drones and ran BEFORE the Nydus check. The Pool-First
+     branch had NO Nydus check at all.
+
+Pure-function tests -- no replay parsing -- so they run without
+sc2reader installed.
+"""
+from __future__ import annotations
+
+import importlib.util
+import os
+import sys
+import types
+from typing import Any, Dict, List
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(os.path.dirname(_HERE))  # reveal-sc2-opponent-main/
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
+
+def _load(mod_name: str, file_name: str):
+    spec = importlib.util.spec_from_file_location(
+        mod_name, os.path.join(_ROOT, "core", file_name),
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+if "core" not in sys.modules:
+    core_pkg = types.ModuleType("core")
+    core_pkg.__path__ = [os.path.join(_ROOT, "core")]
+    sys.modules["core"] = core_pkg
+_load("core.atomic_io", "atomic_io.py")
+_load("core.paths", "paths.py")
+_load("core.custom_builds", "custom_builds.py")
+_load("core.build_definitions", "build_definitions.py")
+_load("core.strategy_detector_helpers", "strategy_detector_helpers.py")
+_load("core.strategy_detector_base", "strategy_detector_base.py")
+_load("core.strategy_detector_opponent", "strategy_detector_opponent.py")
+_load("core.strategy_detector_pvz", "strategy_detector_pvz.py")
+_load("core.strategy_detector_pvp", "strategy_detector_pvp.py")
+_load("core.strategy_detector_pvt", "strategy_detector_pvt.py")
+_load("core.strategy_detector_tvp", "strategy_detector_tvp.py")
+_load("core.strategy_detector_tvt", "strategy_detector_tvt.py")
+_load("core.strategy_detector_tvz", "strategy_detector_tvz.py")
+_load("core.strategy_detector_zvp", "strategy_detector_zvp.py")
+_load("core.strategy_detector_zvt", "strategy_detector_zvt.py")
+_load("core.strategy_detector_zvz", "strategy_detector_zvz.py")
+_load("core.strategy_detector_user", "strategy_detector_user.py")
+sd = _load("core.strategy_detector", "strategy_detector.py")
+
+
+def _building(name: str, time: int) -> Dict[str, Any]:
+    return {
+        "type": "building", "name": name, "time": time, "x": 0.0, "y": 0.0,
+        "subtype": "init",
+    }
+
+
+def _unit(name: str, time: int) -> Dict[str, Any]:
+    return {"type": "unit", "name": name, "time": time, "x": 0.0, "y": 0.0}
+
+
+def _upgrade(name: str, time: int) -> Dict[str, Any]:
+    return {"type": "upgrade", "name": name, "time": time}
+
+
+def _gates(starts: List[int]) -> List[Dict[str, Any]]:
+    return [_building("Gateway", t) for t in starts]
+
+
+def _base_protoss_opener() -> List[Dict[str, Any]]:
+    """Standard Protoss opener shared by every PvZ test below."""
+    return [
+        _building("Nexus", 0),
+        _building("Pylon", 18),
+        _building("Gateway", 60),
+        _building("Assimilator", 72),
+        _building("CyberneticsCore", 115),
+        _building("Nexus", 130),       # 2nd Nexus
+        _building("Assimilator", 150),
+        _building("Pylon", 170),
+    ]
+
+
+# =============================================================================
+# Issue 1: DT-into-Carrier must not mis-fire as "PvZ - Carrier Rush"
+# =============================================================================
+def test_dt_into_carrier_does_not_classify_as_carrier_rush():
+    """DT opener that later builds a Stargate + Fleet Beacon + Carrier
+    (a tech-switch into Skytoss) used to mis-fire as Carrier Rush.
+
+    With the stargate_first_tech opener guard, Carrier Rush only fires
+    when the Stargate is the FIRST tech building; here the Dark Shrine
+    comes first, so the build correctly tags as PvZ - DT Opener.
+    """
+    events = _base_protoss_opener()
+    events.extend(_gates([240, 280, 320]))
+    # Twilight + Dark Shrine come FIRST -- this is a DT opener.
+    events.append(_building("TwilightCouncil", 200))
+    events.append(_building("DarkShrine", 240))
+    # Real Dark Templar lands within the harass window.
+    events.append(_unit("DarkTemplar", 360))
+    events.append(_unit("DarkTemplar", 380))
+    # Late tech-switch: Stargate + Fleet Beacon + Carrier all show up
+    # WELL after the Dark Shrine.
+    events.append(_building("Stargate", 420))
+    events.append(_building("FleetBeacon", 480))
+    events.append(_unit("Carrier", 580))
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result != "PvZ - Carrier Rush", (
+        f"DT opener with late Carrier transition must NOT tag as "
+        f"Carrier Rush; got {result!r}"
+    )
+    assert result == "PvZ - DT Opener", (
+        f"DT opener with late Carrier transition should tag as "
+        f"DT Opener; got {result!r}"
+    )
+
+
+def test_true_carrier_rush_still_classifies_as_carrier_rush():
+    """Positive control: a real Stargate-first Carrier rush -- Stargate
+    is the FIRST tech building (no Twilight / Dark Shrine / Robo before
+    it), Fleet Beacon goes up, Carrier on the field by 10:00 -- still
+    classifies as Carrier Rush."""
+    events = _base_protoss_opener()
+    events.extend(_gates([240]))
+    # Stargate is the ONLY tech building before 6:00.
+    events.append(_building("Stargate", 220))
+    events.append(_building("FleetBeacon", 330))
+    events.append(_unit("Carrier", 470))
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - Carrier Rush", (
+        f"True Stargate-first Carrier rush must classify as "
+        f"Carrier Rush; got {result!r}"
+    )
+
+
+# =============================================================================
+# Issue 2: Glaives + late 2-Stargate Phoenix must not mis-fire as
+# "PvZ - 2 Stargate Phoenix"
+# =============================================================================
+def test_glaives_with_late_2_stargate_phoenix_does_not_mis_fire():
+    """Glaive Adept opener (Twilight FIRST) that adds 2 Stargates and 4
+    Phoenix around 7:00 to counter Lurkers used to mis-fire as 2
+    Stargate Phoenix because the rule counted Stargates by 10:00 with
+    no opener-ordering check.
+
+    With the stargate_first_tech guard the Stargates added at 7:00 do
+    NOT count as the "Stargate opener" (Twilight was built first), and
+    the build correctly lands on PvZ - Adept Glaives (No Robo).
+    """
+    events = _base_protoss_opener()
+    # Twilight is the FIRST tech building (well before any Stargate).
+    events.append(_building("TwilightCouncil", 200))
+    events.extend(_gates([240, 260, 280, 300, 320]))
+    # Glaives is the FIRST upgrade out of Twilight.
+    events.append(_upgrade("AdeptPiercingAttack", 260))
+    events.append(_unit("Adept", 280))
+    events.append(_unit("Adept", 310))
+    # Late tech-switch to counter Lurkers: 2 Stargates around 7:00 with
+    # enough production time to land 4+ Phoenix before 10:00.
+    events.append(_building("Stargate", 420))
+    events.append(_building("Stargate", 450))
+    for t in (500, 530, 560, 590):
+        events.append(_unit("Phoenix", t))
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result != "PvZ - 2 Stargate Phoenix", (
+        f"Twilight-first Glaives opener with late 2 Stargates must "
+        f"NOT tag as 2 Stargate Phoenix; got {result!r}"
+    )
+    assert result == "PvZ - Adept Glaives (No Robo)", (
+        f"Glaives opener with late Stargate transition should tag as "
+        f"Adept Glaives (No Robo); got {result!r}"
+    )
+
+
+def test_dt_into_2_stargate_phoenix_does_not_mis_fire():
+    """A DT opener (Dark Shrine FIRST) that picks up 2 Stargates + 4
+    Phoenix late must NOT mis-fire as 2 Stargate Phoenix."""
+    events = _base_protoss_opener()
+    events.extend(_gates([240, 280]))
+    events.append(_building("TwilightCouncil", 200))
+    events.append(_building("DarkShrine", 240))
+    events.append(_unit("DarkTemplar", 360))
+    # Late Stargates + Phoenix.
+    events.append(_building("Stargate", 420))
+    events.append(_building("Stargate", 450))
+    for t in (500, 530, 560, 590):
+        events.append(_unit("Phoenix", t))
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result != "PvZ - 2 Stargate Phoenix", (
+        f"DT opener with late 2 Stargates must NOT tag as 2 Stargate "
+        f"Phoenix; got {result!r}"
+    )
+
+
+# =============================================================================
+# Issue 3: Nydus build must not mis-fire as "Zerg - 2 Base Muta Rush"
+# =============================================================================
+def _hatch_first_zerg_opener() -> List[Dict[str, Any]]:
+    """Hatch-First Zerg opener: 2nd Hatch before Pool."""
+    return [
+        _building("Hatchery", 0),
+        _building("Extractor", 15),
+        _building("Hatchery", 46),  # 2nd hatch BEFORE Pool
+        _building("Extractor", 66),
+        _building("SpawningPool", 72),
+        _building("Queen", 118),
+        _building("Queen", 119),
+    ]
+
+
+def _pool_first_zerg_opener() -> List[Dict[str, Any]]:
+    """Pool-First Zerg opener: Pool before 2nd Hatch, but not so early
+    that the "12 Pool" / "Early Pool" rules higher up the tree fire
+    first (pool_time must be >= 70 to reach the Pool-First branch).
+    """
+    return [
+        _building("Hatchery", 0),
+        _building("Extractor", 90),
+        _building("SpawningPool", 100),  # ~17 Pool; > 70 so we skip 12-Pool / Early Pool
+        _building("Hatchery", 150),       # 2nd hatch AFTER pool
+        _building("Extractor", 160),
+        _building("Queen", 200),
+        _building("Queen", 205),
+    ]
+
+
+def _drones(n: int, by_time: int) -> List[Dict[str, Any]]:
+    """Spread n Drones evenly between 30s and by_time."""
+    if n == 0:
+        return []
+    step = max(1, (by_time - 30) // n)
+    return [_unit("Drone", 30 + i * step) for i in range(n)]
+
+
+def test_hatch_first_nydus_with_spire_does_not_mis_fire_as_muta_rush():
+    """Hatch-First Nydus build that also adds a Spire (for late air
+    follow-up) used to mis-fire as 2 Base Muta Rush because the Muta
+    rule fired on any Spire by 7:00 with low drones and ran BEFORE the
+    Nydus check."""
+    events = _hatch_first_zerg_opener()
+    events.append(_building("NydusNetwork", 380))  # Nydus is the build
+    events.append(_building("Spire", 400))         # Spire for late air
+    events.extend(_drones(35, 420))  # < 45 drones at 7:00 -> Muta rule
+                                     # used to fire here.
+
+    detector = sd.OpponentStrategyDetector(custom_builds=[])
+    result = detector.get_strategy_name(
+        "Zerg", events, matchup="vs Zerg", my_race="Protoss",
+    )
+    assert result != "Zerg - 2 Base Muta Rush", (
+        f"Nydus opener with a Spire must NOT tag as 2 Base Muta Rush; "
+        f"got {result!r}"
+    )
+    assert result == "Zerg - 2 Base Nydus", (
+        f"Nydus opener should tag as 2 Base Nydus; got {result!r}"
+    )
+
+
+def test_pool_first_nydus_now_classifies_as_2_base_nydus():
+    """Pool-First branch had NO Nydus check at all -- a Pool-First
+    Nydus opener used to fall through to "Zerg - Pool First Opener"
+    (a macro-flavored catch-all that hid the all-in)."""
+    events = _pool_first_zerg_opener()
+    events.append(_building("NydusNetwork", 380))
+    events.extend(_drones(35, 420))
+
+    detector = sd.OpponentStrategyDetector(custom_builds=[])
+    result = detector.get_strategy_name(
+        "Zerg", events, matchup="vs Zerg", my_race="Protoss",
+    )
+    assert result == "Zerg - 2 Base Nydus", (
+        f"Pool-First Nydus opener should now classify as 2 Base Nydus; "
+        f"got {result!r}"
+    )
+
+
+def test_true_muta_rush_still_classifies_as_muta_rush():
+    """Positive control: a real Muta rush (Spire by 7:00, no Nydus,
+    drone count under 45) still classifies as 2 Base Muta Rush."""
+    events = _hatch_first_zerg_opener()
+    events.append(_building("Spire", 400))
+    events.extend(_drones(35, 420))
+
+    detector = sd.OpponentStrategyDetector(custom_builds=[])
+    result = detector.get_strategy_name(
+        "Zerg", events, matchup="vs Zerg", my_race="Protoss",
+    )
+    assert result == "Zerg - 2 Base Muta Rush", (
+        f"True Muta rush (Spire + low drones, no Nydus) must classify "
+        f"as 2 Base Muta Rush; got {result!r}"
+    )
+
+
+# =============================================================================
+# Issue 4: new PvZ - DT Opener path catches DT openers that fell
+# through to "Macro Transition (Unclassified)"
+# =============================================================================
+def test_dt_opener_without_transition_classifies_as_dt_opener():
+    """A clean DT opener (Dark Shrine first, DT lands, no further tech
+    switch) used to fall through to "Macro Transition (Unclassified)"
+    because the only DT rule (PvZ - DT drop into Archon Drop) required
+    a Warp Prism."""
+    events = _base_protoss_opener()
+    events.extend(_gates([240, 280, 320]))
+    events.append(_building("TwilightCouncil", 200))
+    events.append(_building("DarkShrine", 240))
+    events.append(_unit("DarkTemplar", 360))
+    events.append(_unit("DarkTemplar", 400))
+    events.append(_unit("DarkTemplar", 440))
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - DT Opener", (
+        f"A clean DT opener should classify as PvZ - DT Opener; "
+        f"got {result!r}"
+    )
+
+
+def test_dt_opener_present_in_catalog():
+    """The new label needs prose in the public build_definitions
+    catalog or the /definitions page silently drops it."""
+    import json
+    with open(
+        os.path.join(_ROOT, "data", "build_definitions.json"),
+        "r",
+        encoding="utf-8",
+    ) as fh:
+        defs = json.load(fh)
+    assert "PvZ - DT Opener" in defs, (
+        "Missing definition prose for 'PvZ - DT Opener'"
+    )
+    desc = defs["PvZ - DT Opener"]
+    assert isinstance(desc, str) and len(desc) > 60
+    assert "dark shrine" in desc.lower()

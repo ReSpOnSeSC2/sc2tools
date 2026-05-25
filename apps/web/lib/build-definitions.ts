@@ -1,5 +1,5 @@
 /**
- * Build & Strategy definitions catalog — the 101 detection rules used
+ * Build & Strategy definitions catalog — the 102 detection rules used
  * by the analyzer to label opponent strategies and the player's own
  * builds. Surfaced on /definitions so users can interpret labels they
  * see on the dashboard, opponent profile, and builds page.

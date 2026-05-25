@@ -137,32 +137,63 @@ class UserBuildDetector(BaseStrategyDetector):
             has_dark_shrine_10min = has_building("DarkShrine", 600)
             dt_count_10min        = count_units("DarkTemplar", 600)
 
+            # OPENER ordering used by every Stargate-rush label below.
+            # A build only counts as a "Stargate opener" when the
+            # Stargate is the FIRST tech committed -- built before
+            # 6:00 AND before any Twilight Council / Dark Shrine /
+            # Robotics Facility. Without this guard, a DT opener that
+            # adds a Stargate at 6:30 for late Carriers, or a Glaive
+            # Adept timing that adds 2 Stargates at 7:00 to counter
+            # Lurkers, mis-fires here (Carrier Rush / 2 Stargate
+            # Phoenix) instead of landing on the correct DT / Glaives
+            # bucket further down the tree. Mirror of
+            # reveal-sc2-opponent-main/core/strategy_detector_pvz.py.
+            sg_time = building_time("Stargate")
+            twilight_time = building_time("TwilightCouncil")
+            robo_time = building_time("RoboticsFacility")
+            dark_shrine_time = building_time("DarkShrine")
+            stargate_first_tech = (
+                sg_time < 360
+                and sg_time < twilight_time
+                and sg_time < dark_shrine_time
+                and sg_time < robo_time
+            )
+
             # Carrier / Tempest both require Stargate + Fleet Beacon.
             # count_units already filters hallucinations, but the
             # explicit head guard prevents a regression if count_units
             # is ever swapped for a raw count.
-            if (has_building("Stargate", 600) and has_building("FleetBeacon", 600)
+            if (stargate_first_tech and has_building("FleetBeacon", 600)
                     and count_units("Carrier", 600) >= 1):
                 return "PvZ - Carrier Rush"
-            if (has_building("Stargate", 600) and has_building("FleetBeacon", 600)
+            if (stargate_first_tech and has_building("FleetBeacon", 600)
                     and count_units("Tempest", 600) >= 1):
                 return "PvZ - Tempest Rush"
-            if (sg_count_10min == 2
+            if (stargate_first_tech
+                    and sg_count_10min == 2
                     and nexus_count_10min >= 2
                     and count_units("VoidRay", 600) >= 4
                     and not has_dark_shrine_10min
                     and dt_count_10min == 0):
                 return "PvZ - 2 Stargate Void Ray"
-            if sg_count_10min >= 3 and nexus_count_10min >= 2 and count_units("Phoenix", 600) >= 4:
+            if (stargate_first_tech and sg_count_10min >= 3
+                    and nexus_count_10min >= 2
+                    and count_units("Phoenix", 600) >= 4):
                 return "PvZ - 3 Stargate Phoenix"
-            if sg_count_10min >= 2 and nexus_count_10min >= 2 and count_units("Phoenix", 600) >= 4:
+            if (stargate_first_tech and sg_count_10min >= 2
+                    and nexus_count_10min >= 2
+                    and count_units("Phoenix", 600) >= 4):
                 return "PvZ - 2 Stargate Phoenix"
             # Disruptor needs Robo + Robo Bay; Warp Prism needs Robo.
             if (has_building("RoboticsFacility", 480) and has_building("RoboticsBay", 480)
                     and count_units("Disruptor", 480) >= 1 and count_units("WarpPrism", 480) >= 1):
                 return "PvZ - Rail's Disruptor Drop"
 
-            if (has_building("Stargate", 510) and count_units("Oracle", 510) >= 2
+            # AlphaStar style is a STARGATE-first build -- guard with
+            # ``stargate_first_tech`` so a Twilight-first build that
+            # later picks up a Stargate + 2 Oracles + Robo + Forge by
+            # 8:30 on 3 bases doesn't mis-fire here.
+            if (stargate_first_tech and count_units("Oracle", 510) >= 2
                     and has_building("RoboticsFacility", 510) and has_building("Forge", 510)
                     and base_count_at(buildings, "Nexus", 510) >= 3):
                 return "PvZ - AlphaStar Style (Oracle/Robo)"
@@ -178,8 +209,9 @@ class UserBuildDetector(BaseStrategyDetector):
                 if not has_building("Stargate", 480) and not has_building("DarkShrine", 480):
                     return "PvZ - Blink Stalker All-in (2 Base)"
 
-            sg_time = building_time("Stargate")
-            twilight_time = building_time("TwilightCouncil")
+            # ``sg_time`` / ``twilight_time`` / ``dark_shrine_time`` /
+            # ``robo_time`` are hoisted to the top of the PvZ branch
+            # for the Stargate-opener guard above.
             if sg_time < 420 and twilight_time > sg_time and has_upgrade_substr("Glaive", 600) and (4 <= gate_count_6min <= 6):
                 return "PvZ - Stargate into Glaives"
             if sg_time < twilight_time and has_building("TemplarArchive", 540) and count_units("Archon", 540) >= 2:
@@ -190,6 +222,15 @@ class UserBuildDetector(BaseStrategyDetector):
                     and has_building("RoboticsFacility", 540)
                     and count_units("DarkTemplar", 540) >= 3 and count_units("WarpPrism", 540) >= 1):
                 return "PvZ - DT drop into Archon Drop"
+            # Standard DT Opener: Dark Shrine is built by 8:00 as the
+            # player's primary tech path (no earlier Stargate / Robo)
+            # and at least one real Dark Templar lands within the
+            # harass window. Mirror of
+            # reveal-sc2-opponent-main/core/strategy_detector_pvz.py.
+            if (dark_shrine_time < 480 and dark_shrine_time < sg_time
+                    and dark_shrine_time < robo_time
+                    and count_units("DarkTemplar", 540) >= 1):
+                return "PvZ - DT Opener"
             if sg_time < twilight_time and has_upgrade_substr("Blink", 600) and base_count_at(buildings, "Nexus", 540) >= 3:
                 return "PvZ - Standard Blink Macro"
             if sg_time < twilight_time and has_upgrade_substr("Charge", 540) and base_count_at(buildings, "Nexus", 540) >= 3:

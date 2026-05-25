@@ -31,31 +31,66 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     sg_count_10min = count_started_before(buildings, "Stargate", 600)
     nexus_count_10min = base_count_at(buildings, "Nexus", 600)
 
+    # OPENER ordering used by every Stargate-rush label below. A
+    # build only counts as a "Stargate opener" when the Stargate is
+    # the FIRST tech committed -- built before 6:00 AND before any
+    # Twilight Council / Dark Shrine / Robotics Facility. Without
+    # this guard, a DT opener that adds a Stargate at 6:30 for late
+    # Carriers, or a Glaive Adept timing that adds 2 Stargates at
+    # 7:00 to counter Lurkers, mis-fires here (Carrier Rush / 2
+    # Stargate Phoenix) instead of landing on the correct DT /
+    # Glaives bucket further down the tree.
+    sg_time = building_time("Stargate")
+    twilight_time = building_time("TwilightCouncil")
+    robo_time = building_time("RoboticsFacility")
+    dark_shrine_time = building_time("DarkShrine")
+    stargate_first_tech = (
+        sg_time < 360
+        and sg_time < twilight_time
+        and sg_time < dark_shrine_time
+        and sg_time < robo_time
+    )
+
     # Carrier / Tempest both require Stargate + Fleet Beacon.
     # count_units already filters hallucinations, but document
     # the prerequisite so a future refactor can't drop it.
     if (
-        has_building("Stargate", 600)
+        stargate_first_tech
         and has_building("FleetBeacon", 600)
         and count_units("Carrier", 600) >= 1
     ):
         return "PvZ - Carrier Rush"
     if (
-        has_building("Stargate", 600)
+        stargate_first_tech
         and has_building("FleetBeacon", 600)
         and count_units("Tempest", 600) >= 1
     ):
         return "PvZ - Tempest Rush"
-    if sg_count_10min >= 2 and nexus_count_10min >= 2 and count_units("VoidRay", 600) >= 4:
+    if (
+        stargate_first_tech
+        and sg_count_10min >= 2
+        and nexus_count_10min >= 2
+        and count_units("VoidRay", 600) >= 4
+    ):
         return "PvZ - 2 Stargate Void Ray"
-    if sg_count_10min >= 3 and nexus_count_10min >= 2 and count_units("Phoenix", 600) >= 4:
+    if (
+        stargate_first_tech
+        and sg_count_10min >= 3
+        and nexus_count_10min >= 2
+        and count_units("Phoenix", 600) >= 4
+    ):
         return "PvZ - 3 Stargate Phoenix"
     # Strict exactly-2: the 3+ variant above catches the heavier
     # build, so anything still reaching here with 3+ Stargates
     # has already returned. The explicit equality guards against
     # someone reordering the rules later and accidentally letting
     # 3-Stargate replays fall through to the 2-Stargate label.
-    if sg_count_10min == 2 and nexus_count_10min >= 2 and count_units("Phoenix", 600) >= 4:
+    if (
+        stargate_first_tech
+        and sg_count_10min == 2
+        and nexus_count_10min >= 2
+        and count_units("Phoenix", 600) >= 4
+    ):
         return "PvZ - 2 Stargate Phoenix"
     # Rail's Disruptor Drop: Disruptor needs Robo + Robo Bay,
     # Warp Prism needs Robo. Robo presence is implied by the
@@ -68,9 +103,13 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvZ - Rail's Disruptor Drop"
 
-    # Oracle (Stargate) + Robo + Forge composition.
+    # Oracle (Stargate) + Robo + Forge composition. AlphaStar style is
+    # a STARGATE-first build (Oracles harass while Robo / Forge come up
+    # behind); without the opener guard a Twilight-first build that
+    # later picks up a Stargate + 2 Oracles + Robo + Forge by 8:30 on
+    # 3 bases would mis-fire here.
     if (
-        has_building("Stargate", 510)
+        stargate_first_tech
         and count_units("Oracle", 510) >= 2
         and has_building("RoboticsFacility", 510)
         and has_building("Forge", 510)
@@ -99,8 +138,6 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         if not has_building("Stargate", 480) and not has_building("DarkShrine", 480):
             return "PvZ - Blink Stalker All-in (2 Base)"
 
-    sg_time = building_time("Stargate")
-    twilight_time = building_time("TwilightCouncil")
     # Identify WHICH upgrade is researched first out of the
     # Twilight Council — the signal that separates Adept Glaive
     # Timings (Glaives first) from Stargate-into-Blink (Blink
@@ -108,8 +145,9 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # raw upgrade_type_name values, so "AdeptPiercingAttack" is
     # the Glaive event; "Blink" matches "BlinkTech"; "Charge"
     # matches itself. See ``upgrade_time`` at function scope.
-    robo_time = building_time("RoboticsFacility")
-    dark_shrine_time = building_time("DarkShrine")
+    # ``sg_time`` / ``twilight_time`` / ``robo_time`` /
+    # ``dark_shrine_time`` are hoisted to the top of the function
+    # so the Stargate-opener guard can use them above.
     glaive_time = upgrade_time("AdeptPiercing", "Glaive")
     blink_time = upgrade_time("Blink")
     charge_time = upgrade_time("Charge")
@@ -182,6 +220,21 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and count_units("WarpPrism", 540) >= 1
     ):
         return "PvZ - DT drop into Archon Drop"
+    # Standard DT Opener: Dark Shrine is built by 8:00 as the player's
+    # primary tech path (no earlier Stargate / Robo) and at least one
+    # real Dark Templar lands within the harass window. This is the
+    # catch-all for DT openers that transition into mid- or late-game
+    # tech (Skytoss, Templar, Mothership). Without this rule a DT
+    # build that later picks up a Stargate + Fleet Beacon + Carrier
+    # used to mis-fire as "PvZ - Carrier Rush" or fall through to
+    # "PvZ - Macro Transition (Unclassified)".
+    if (
+        dark_shrine_time < 480
+        and dark_shrine_time < sg_time
+        and dark_shrine_time < robo_time
+        and count_units("DarkTemplar", 540) >= 1
+    ):
+        return "PvZ - DT Opener"
     if (
         sg_time < twilight_time
         and has_upgrade_substr("Blink", 600)

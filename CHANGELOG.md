@@ -67,6 +67,58 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Strategy classifier · PvZ Stargate-rush labels now require Stargate
+  to be the FIRST tech building + new PvZ - DT Opener path + Zerg
+  Nydus check runs before Muta Rush (0.8.3)**: three user-reported
+  mis-classifications in the same session, all rooted in
+  count-by-10:00 rules with no opener-ordering check.
+  1. **PvZ - Carrier Rush, Tempest Rush, 2/3 Stargate Phoenix, 2
+     Stargate Void Ray, AlphaStar Style** all fired on "Stargate + X
+     by 10:00" with no guard that Stargate was the FIRST tech
+     committed. A DT opener (Dark Shrine first) that transitioned
+     into Carriers / Mothership in the midgame mis-fired as Carrier
+     Rush; a Glaive Adept timing (Twilight first) that added 2
+     Stargates around 7:00 to counter Lurkers mis-fired as 2 Stargate
+     Phoenix. Every Stargate-rush rule in
+     `core/strategy_detector_pvz.py` now requires
+     `sg_time < 360 AND sg_time < twilight_time AND sg_time <
+     dark_shrine_time AND sg_time < robo_time` so the label means
+     what it says: Stargate was the first tech building. Mirror of
+     the same OPENER-ordering principle applied across PvT in 0.8.1.
+  2. **New `PvZ - DT Opener` label**: a clean DT opener (Dark Shrine
+     first, real Dark Templar lands, no Warp Prism) had no home in
+     the PvZ tree — the only DT-related rule was
+     `PvZ - DT drop into Archon Drop` which requires a Warp Prism,
+     so plain DT builds fell through to
+     `PvZ - Macro Transition (Unclassified)` (or, before fix #1,
+     mis-fired as Carrier Rush when they added Stargate tech
+     later). New rule fires when `DarkShrine` is built before
+     8:00 AND before any Stargate / Robotics Facility, with ≥1
+     real Dark Templar by 9:00. Catalog entry shipped in
+     `data/build_definitions.json` and
+     `apps/web/lib/build-definitions/pvz.ts`; the public catalog
+     count goes from 101 to 102 entries. Mirrored in
+     `SC2Replay-Analyzer/detectors/user.py`.
+  3. **Zerg opponent classifier · Nydus check now runs BEFORE the
+     Muta-rush check in both Hatch-First and Pool-First branches.**
+     The Muta rule fired on any Spire by 7:00 with `<45` drones; a
+     Nydus opener that also added a Spire (late air follow-up,
+     Brood Lord prep) mis-fired as 2 Base Muta Rush because the
+     Muta check ran first and the Nydus check was dead code. The
+     Pool-First branch had NO Nydus check at all — a Pool-First
+     Nydus opener silently fell through to "Zerg - Pool First
+     Opener", a macro-flavored catch-all that hid the all-in.
+     Both branches in `core/strategy_detector_opponent.py` now
+     check `NydusNetwork` first and the Pool-First branch has a
+     real Nydus check. Mirrored in
+     `SC2Replay-Analyzer/detectors/opponent.py`.
+
+  9 new regression tests in
+  `tests/core/test_strategy_detector_opener_guards.py` cover all
+  three mis-classifications plus positive controls (true Carrier
+  Rush / true 2 Stargate Phoenix / true Muta Rush still match) plus
+  the clean DT Opener path plus catalog presence. All 128
+  strategy-detector tests pass.
 - **Strategies drill-down · build × strategy comparison now describes
   the same N games on both sides** (`#StrategiesTabBuildVs`). When the
   user clicked a cell in the build × strategy matrix, the resulting

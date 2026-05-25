@@ -6,21 +6,21 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - 2 Stargate Phoenix",
     description:
-      "Detected if EXACTLY 2 Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations). 3+ Stargates falls under PvZ - 3 Stargate Phoenix instead -- the two rules are mutually exclusive on Stargate count.",
+      "Detected if the Stargate is the FIRST tech building (built before 6:00 and before any Twilight Council / Dark Shrine / Robotics Facility), EXACTLY 2 Stargates and 2+ Nexuses are up by 10:00, and 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations). 3+ Stargates falls under PvZ - 3 Stargate Phoenix instead. A Glaive Adept opener that adds 2 Stargates around 7:00 to counter Lurkers tags as PvZ - Adept Glaives, NOT as 2 Stargate Phoenix.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - 2 Stargate Void Ray",
     description:
-      "Detected if 2+ Stargates and 2+ Nexuses by 10:00, plus 4+ Void Rays produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations).",
+      "Detected if the Stargate is the FIRST tech building (built before 6:00 and before any Twilight Council / Dark Shrine / Robotics Facility), 2+ Stargates and 2+ Nexuses are up by 10:00, and 4+ Void Rays have been produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations).",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - 3 Stargate Phoenix",
     description:
-      "Detected if 3+ Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations).",
+      "Detected if the Stargate is the FIRST tech building (built before 6:00 and before any Twilight Council / Dark Shrine / Robotics Facility), 3+ Stargates and 2+ Nexuses are up by 10:00, and 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations).",
   },
   {
     race: "Protoss",
@@ -34,7 +34,7 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - AlphaStar Style (Oracle/Robo)",
     description:
-      "Detected if a Stargate is built, 2+ Oracles plus a Robotics Facility plus a Forge are all in place by 8:30, with 3+ Nexuses by 8:30 -- the AlphaStar Oracle / Robo / fast 3rd composition.",
+      "Detected if the Stargate is the FIRST tech building (built before 6:00 and before any Twilight Council / Dark Shrine / Robotics Facility), 2+ Oracles plus a Robotics Facility plus a Forge are all in place by 8:30, with 3+ Nexuses by 8:30 -- the AlphaStar Oracle / Robo / fast 3rd composition.",
   },
   {
     race: "Protoss",
@@ -55,7 +55,7 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Carrier Rush",
     description:
-      "Detected if a Stargate AND a Fleet Beacon are built and at least 1 Carrier has been produced by 10:00 -- skytoss into Carriers. Carriers without a Stargate + Fleet Beacon are treated as hallucinations.",
+      "Detected if the Stargate is the FIRST tech building (built before 6:00 and before any Twilight Council / Dark Shrine / Robotics Facility), a Fleet Beacon is up by 10:00, and at least 1 Carrier has been produced by 10:00 -- a true Stargate-opener Carrier rush. A DT or Glaives opener that adds a Stargate / Fleet Beacon / Carrier late tags as PvZ - DT Opener or PvZ - Adept Glaives instead. Carriers without a Stargate + Fleet Beacon are treated as hallucinations.",
   },
   {
     race: "Protoss",
@@ -125,6 +125,13 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Tempest Rush",
     description:
-      "Detected if a Stargate AND a Fleet Beacon are built and at least 1 Tempest has been produced by 10:00 -- long-range Tempest harass / siege.",
+      "Detected if the Stargate is the FIRST tech building (built before 6:00 and before any Twilight Council / Dark Shrine / Robotics Facility), a Fleet Beacon is up by 10:00, and at least 1 Tempest has been produced by 10:00 -- long-range Tempest harass / siege opened off a Stargate.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvZ",
+    name: "PvZ - DT Opener",
+    description:
+      "Detected if a Dark Shrine is built before 8:00 AND it is the player's primary tech path (built before any Stargate or Robotics Facility), with at least 1 real Dark Templar on the field by 9:00. Catches DT openers that transition to mid- or late-game tech (Skytoss / Mothership / Templar) -- without this rule a DT build that later picked up a Stargate + Carrier used to mis-fire as PvZ - Carrier Rush.",
   },
 ];
