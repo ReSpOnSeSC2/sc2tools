@@ -144,10 +144,15 @@ class OpponentStrategyDetector(BaseStrategyDetector):
 
                 if has_building("RoachWarren", 300) and count_units("Drone", 360) < 40 and (count_units("Roach", 360) + count_units("Ravager", 360) > 8):
                     return "Zerg - 2 Base Roach/Ravager All-in"
-                if has_building("Spire", 420) and count_units("Drone", 420) < 45:
-                    return "Zerg - 2 Base Muta Rush"
+                # Nydus check comes BEFORE the Muta-rush check: a Nydus
+                # opener that also adds a Spire used to mis-fire as
+                # "2 Base Muta Rush" because the Muta rule only required
+                # a Spire by 7:00 with low drones. Kept in sync with
+                # reveal-sc2-opponent-main/core/strategy_detector_opponent.py.
                 if has_building("NydusNetwork", 420):
                     return "Zerg - 2 Base Nydus"
+                if has_building("Spire", 420) and count_units("Drone", 420) < 45:
+                    return "Zerg - 2 Base Muta Rush"
 
                 if count_buildings("Hatchery", 390) >= 3:
                     if count_units("Zergling", 300) > 20 and count_units("Drone", 300) < 30:
@@ -159,6 +164,11 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                 base_name = "Zerg - Pool First Opener"
                 if has_building("RoachWarren", 300) and count_units("Drone", 360) < 40 and (count_units("Roach", 360) + count_units("Ravager", 360) > 8):
                     return "Zerg - 2 Base Roach/Ravager All-in"
+                # Pool-First Nydus check (the original branch had NO
+                # Nydus check at all). Mirrored from
+                # reveal-sc2-opponent-main/core/strategy_detector_opponent.py.
+                if has_building("NydusNetwork", 420):
+                    return "Zerg - 2 Base Nydus"
                 if has_building("Spire", 420) and count_units("Drone", 420) < 45:
                     return "Zerg - 2 Base Muta Rush"
                 if count_buildings("Hatchery", 390) >= 3:

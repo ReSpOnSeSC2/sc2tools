@@ -2,6 +2,69 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.8.3
+
+### Fixed — PvZ Stargate-rush labels require Stargate to be the FIRST tech building + new PvZ - DT Opener path + Zerg Nydus check runs before Muta Rush
+- **Three user-reported mis-classifications in the same session, all
+  rooted in count-by-10:00 rules with no opener-ordering check.**
+- **User-visible symptom**:
+  - A PvZ DT build that transitioned into Carriers/Mothership was
+    labelled `PvZ - Carrier Rush`.
+  - A PvZ Glaive Adept opener (Twilight first) that added 2 Stargates
+    around 7:00 to counter Lurkers was labelled
+    `PvZ - 2 Stargate Phoenix`.
+  - A Zerg opponent Nydus build was labelled
+    `Zerg - 2 Base Muta Rush` (the opponent had also added a Spire
+    for late air follow-up).
+- **Fix #1 — PvZ Stargate-opener guard.** Every Stargate-rush rule
+  in `core/strategy_detector_pvz.py` now requires
+  `sg_time < 360 AND sg_time < twilight_time AND sg_time <
+  dark_shrine_time AND sg_time < robo_time` so the label means what
+  it says: Stargate was the first tech building. Affects
+  `PvZ - Carrier Rush`, `PvZ - Tempest Rush`,
+  `PvZ - 2 Stargate Void Ray`, `PvZ - 3 Stargate Phoenix`,
+  `PvZ - 2 Stargate Phoenix`, and `PvZ - AlphaStar Style
+  (Oracle/Robo)`. A DT-into-Carrier transition or a Glaives-into-
+  late-Stargate transition now falls through to the correct DT /
+  Glaives bucket further down the tree. Mirror of the same OPENER-
+  ordering principle applied across PvT in 0.8.1.
+- **Fix #2 — new `PvZ - DT Opener` label.** A clean DT opener
+  (Dark Shrine first, real Dark Templar lands, no Warp Prism) had
+  no home in the PvZ tree — the only DT-related rule was
+  `PvZ - DT drop into Archon Drop` which requires a Warp Prism, so
+  plain DT builds fell through to `PvZ - Macro Transition
+  (Unclassified)` (or, before fix #1, mis-fired as Carrier Rush
+  when they added Stargate tech later). New rule fires when
+  `DarkShrine` is built before 8:00 AND before any Stargate /
+  Robotics Facility, with ≥1 real Dark Templar by 9:00. Catalog
+  entry shipped in `data/build_definitions.json` and
+  `apps/web/lib/build-definitions/pvz.ts`; the public catalog
+  count goes from 101 to 102 entries.
+- **Fix #3 — Zerg Nydus check now runs BEFORE Muta-rush check.**
+  In `core/strategy_detector_opponent.py` the Muta rule fired on
+  any Spire by 7:00 with `<45` drones; a Nydus opener that also
+  added a Spire (late air follow-up, Brood Lord prep) mis-fired
+  as 2 Base Muta Rush because the Muta check ran first and the
+  Nydus check below it was dead code. The Pool-First branch had
+  NO Nydus check at all — a Pool-First Nydus opener silently fell
+  through to "Zerg - Pool First Opener", a macro-flavored catch-
+  all that hid the all-in. Both branches now check `NydusNetwork`
+  first, and the Pool-First branch has a real Nydus check.
+- **Mirrors**: `SC2Replay-Analyzer/detectors/user.py` and
+  `SC2Replay-Analyzer/detectors/opponent.py` in sync. Public
+  catalogs (`data/build_definitions.json`,
+  `apps/web/lib/build-definitions/pvz.ts`) updated to call out the
+  "FIRST tech building" requirement on all six affected Stargate
+  rules and to add the new DT Opener entry. The
+  `DEFINITIONS_TOTAL` doc comment and the two arcade-test
+  copy-paste references bumped from 101 to 102.
+- **Tests**: 9 new regression cases in
+  `tests/core/test_strategy_detector_opener_guards.py` cover all
+  three mis-classifications plus positive controls (true Carrier
+  Rush / true 2 Stargate Phoenix / true Muta Rush still match)
+  plus the clean DT Opener path plus catalog presence. Full
+  strategy-detector test suite: 128/128 passing.
+
 ## 0.8.2
 
 ### Fixed — PvT DT Drop and fast-3rd macro Blink no longer mis-tagged "7 Gate Blink All-in"
