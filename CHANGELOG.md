@@ -84,23 +84,29 @@ workflow builds the Windows installer on each tag push and attaches the
   Stargate-rush rules (2 SG Phoenix, 3 SG Phoenix, 2 SG Void Ray).
   Carrier / Tempest / AlphaStar intentionally NOT guarded — their
   Fleet Beacon + capital-ship window is too tight for a
-  Glaives-into-capital-ship transition. **(2) `stargate_first_tech`
-  is now pure ordering** — user feedback: a Stargate build is defined
-  by being the first tech building committed, period. The previous
-  `sg_time < 360` clause wrongly excluded slow-but-pure 2 SG Phoenix
-  openers (e.g. first Stargate at 7:00 with nothing else before it)
-  as "Macro Transition (Unclassified)". Tech-ordering already filters
-  transitions; the time threshold was double-counting. Guard is now
-  `sg_time < 9999 AND sg_time < twilight_time AND sg_time <
-  dark_shrine_time AND sg_time < robo_time`. Catalog prose for all
-  six Stargate-rush rules drops the "(built before 6:00 ...)"
-  qualifier accordingly. Mirror in
-  `SC2Replay-Analyzer/detectors/user.py` in sync. 4 new regression
+  Glaives-into-capital-ship transition. **(2) Every opener guard in
+  `detect_pvz` is now pure tech-ordering, no time thresholds** —
+  user feedback: an opener is defined by what tech building was
+  committed FIRST, period. Applied symmetrically across
+  `stargate_first_tech` (was `sg_time < 360`), `twilight_first_tech`
+  (was `twilight_time < 480`), DT Opener (was `dark_shrine_time <
+  480`), Robo Opener (was `has_building("RoboticsFacility", 420)`),
+  and Stargate-into-Glaives (was `sg_time < 420`). The time
+  thresholds were double-counting — tech-ordering already excludes
+  transitions, so the only thing the time clauses ever excluded was
+  slow-but-pure openers (which then fell through to "Macro Transition
+  (Unclassified)"). Downstream constraints (gate count, unit count,
+  upgrade research, base count) already filter inappropriate matches.
+  Catalog prose for all six Stargate-rush rules + DT Opener + Robo
+  Opener + Stargate-into-Glaives updated to drop the "(built before
+  X:00 ...)" qualifiers. Mirror in
+  `SC2Replay-Analyzer/detectors/user.py` in sync. 7 new regression
   tests in `test_strategy_detector_opener_guards.py` cover both
-  refinements plus positive controls (pure 2 SG Phoenix still
-  matches; Stargate-first-into-Blink still matches because Blink ≠
-  Glaives; slow Stargate with no earlier tech still classifies).
-  Full strategy-detector test suite: 134/134 passing.
+  refinements plus positive controls (slow Stargate, slow DT, slow
+  Robo, slow Twilight Glaives all classify correctly; pure 2 SG
+  Phoenix still matches; Stargate-first-into-Blink still matches
+  because Blink ≠ Glaives). Full strategy-detector test suite:
+  137/137 passing.
 - **Strategy classifier · PvZ Stargate-rush labels now require Stargate
   to be the FIRST tech building + new PvZ - DT Opener path + Zerg
   Nydus check runs before Muta Rush (0.8.3)**: three user-reported

@@ -267,6 +267,76 @@ def test_pure_2_stargate_phoenix_without_glaives_still_classifies():
     )
 
 
+def test_slow_dt_opener_with_no_earlier_tech_still_classifies():
+    """Vice-versa of the slow-Stargate refinement: a Dark Shrine that
+    goes down "late" (e.g. 7:30) but BEFORE any Stargate / Robotics
+    Facility is still a DT Opener -- pure tech-ordering, no time
+    threshold. Twilight Council is implicit (required as Dark Shrine's
+    prereq). Before this refinement the old `dark_shrine_time < 480`
+    clause wrongly excluded slow-but-pure DT openers."""
+    events = _base_protoss_opener()
+    events.extend(_gates([240, 280, 320]))
+    # Twilight goes down at 3:30 (required as Dark Shrine prereq).
+    events.append(_building("TwilightCouncil", 210))
+    # Slow Dark Shrine -- past the old 8:00 threshold but NOTHING else
+    # (Stargate / Robo) was built before it.
+    events.append(_building("DarkShrine", 450))
+    # Real Dark Templar lands within the harass window (by 9:00 = 540s).
+    events.append(_unit("DarkTemplar", 530))
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - DT Opener", (
+        f"Slow-but-pure DT opener (no earlier Stargate / Robo) should "
+        f"still classify as DT Opener; got {result!r}"
+    )
+
+
+def test_slow_robo_opener_with_no_earlier_tech_still_classifies():
+    """Vice-versa of the slow-Stargate refinement: a Robotics Facility
+    that goes down "late" (e.g. 7:30) but BEFORE any Stargate /
+    Twilight Council / Dark Shrine is still a Robo Opener -- pure
+    tech-ordering, no time threshold. Before this refinement the old
+    `has_building("RoboticsFacility", 420)` clause wrongly excluded
+    slow-but-pure Robo openers."""
+    events = _base_protoss_opener()
+    events.extend(_gates([240, 280, 320]))
+    # Slow Robo -- past the old 7:00 threshold, NOTHING else built first.
+    events.append(_building("RoboticsFacility", 450))
+    # Deliberately NO Stargate, NO Twilight, NO DarkShrine.
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - Robo Opener", (
+        f"Slow-but-pure Robo opener (no earlier Stargate / Twilight / "
+        f"DT) should still classify as Robo Opener; got {result!r}"
+    )
+
+
+def test_slow_twilight_first_glaives_still_classifies():
+    """Vice-versa: the Twilight-first guard is now pure ordering too.
+    A Twilight Council that goes down "late" (e.g. 8:00) but BEFORE
+    any Stargate / Robo / DarkShrine, with Glaives researched first
+    and 4-8 Gateways by 6:00, still classifies as Adept Glaives. The
+    old `twilight_time < 480` clause used to refuse to call this a
+    Twilight opener."""
+    events = _base_protoss_opener()
+    # 4-8 Gateways by 6:00 (the rule's pre-existing constraint).
+    events.extend(_gates([240, 260, 300, 320, 340]))
+    # Slow Twilight -- past the old 8:00 threshold, nothing else first.
+    events.append(_building("TwilightCouncil", 490))
+    # Glaives is the FIRST (and only) Twilight upgrade.
+    events.append(_upgrade("AdeptPiercingAttack", 540))
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - Adept Glaives (No Robo)", (
+        f"Slow-but-pure Twilight-first Adept Glaives (no earlier "
+        f"Stargate / Robo / DT) should still classify as Adept Glaives "
+        f"(No Robo); got {result!r}"
+    )
+
+
 def test_slow_2_stargate_phoenix_with_no_earlier_tech_still_classifies():
     """User-feedback refinement: the stargate_first_tech guard is pure
     ordering -- a Stargate that goes down "late" (e.g. 7:00) but with

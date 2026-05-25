@@ -185,8 +185,13 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # Shrine has been started before it. (Templar Archives /
     # Fleet Beacon / Robotics Bay each REQUIRE one of those,
     # so they cannot be earlier and need no separate guard.)
+    # Pure ordering, no time threshold -- same principle as
+    # ``stargate_first_tech``: if NOTHING else was tech'd first,
+    # the build IS a Twilight opener even if Twilight went down late.
+    # Downstream constraints (gate count, glaive_first_off_twilight)
+    # filter out non-Glaives Twilight openers.
     twilight_first_tech = (
-        twilight_time < 480
+        twilight_time < 9999
         and twilight_time < sg_time
         and twilight_time < robo_time
         and twilight_time < dark_shrine_time
@@ -195,10 +200,14 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # Stargate into Glaives (refined): Stargate goes down first
     # as the tech building, Twilight comes after it, and the
     # FIRST upgrade out of Twilight is Glaives (NOT Blink — that
-    # would be Stargate into Blink). 4-8 Gateways by 9:00 covers
-    # both Phoenix-and-Glaive and Oracle-and-Glaive variants.
+    # would be Stargate into Blink). 4-8 Gateways by 6:00 covers
+    # both Phoenix-and-Glaive and Oracle-and-Glaive variants. Pure
+    # ordering on the Stargate timing -- the ``twilight_time >
+    # sg_time`` clause already pins Stargate as first, and the
+    # ``gate_count_6min`` window already filters out builds where
+    # the Stargate landed too late to be an opener.
     if (
-        sg_time < 420
+        sg_time < 9999
         and twilight_time > sg_time
         and twilight_time < 9999
         and glaive_first_off_twilight
@@ -244,16 +253,20 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and count_units("WarpPrism", 540) >= 1
     ):
         return "PvZ - DT drop into Archon Drop"
-    # Standard DT Opener: Dark Shrine is built by 8:00 as the player's
-    # primary tech path (no earlier Stargate / Robo) and at least one
-    # real Dark Templar lands within the harass window. This is the
-    # catch-all for DT openers that transition into mid- or late-game
-    # tech (Skytoss, Templar, Mothership). Without this rule a DT
-    # build that later picks up a Stargate + Fleet Beacon + Carrier
-    # used to mis-fire as "PvZ - Carrier Rush" or fall through to
-    # "PvZ - Macro Transition (Unclassified)".
+    # Standard DT Opener: Dark Shrine is built BEFORE any Stargate /
+    # Robotics Facility (pure ordering -- no time threshold) and at
+    # least one real Dark Templar lands within the harass window. This
+    # is the catch-all for DT openers that transition into mid- or
+    # late-game tech (Skytoss, Templar, Mothership). Without this rule
+    # a DT build that later picks up a Stargate + Fleet Beacon +
+    # Carrier used to mis-fire as "PvZ - Carrier Rush" or fall through
+    # to "PvZ - Macro Transition (Unclassified)". DarkShrine requires
+    # Twilight Council as prereq, so a Twilight-first ordering is
+    # implicit and isn't checked separately -- DT Opener means
+    # "DarkShrine is the primary AlternaTIVE-tech committed", i.e.
+    # before Stargate / Robo.
     if (
-        dark_shrine_time < 480
+        dark_shrine_time < 9999
         and dark_shrine_time < sg_time
         and dark_shrine_time < robo_time
         and count_units("DarkTemplar", 540) >= 1
@@ -272,8 +285,18 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvZ - Standard charge Macro"
 
-    if has_building("RoboticsFacility", 420):
-        robo_t = building_time("RoboticsFacility")
-        if robo_t < sg_time and robo_t < twilight_time:
-            return "PvZ - Robo Opener"
+    # Robo Opener: Robotics Facility is the FIRST tech building (before
+    # any Stargate / Twilight Council / Dark Shrine). Pure ordering --
+    # no time threshold -- so a slow Robo opener with no other tech
+    # before it still classifies. Dark Shrine requires Twilight as
+    # prereq, so ``robo_time < dark_shrine_time`` is implied by
+    # ``robo_time < twilight_time`` but spelled out for symmetry with
+    # the other opener rules.
+    if (
+        robo_time < 9999
+        and robo_time < sg_time
+        and robo_time < twilight_time
+        and robo_time < dark_shrine_time
+    ):
+        return "PvZ - Robo Opener"
     return "PvZ - Macro Transition (Unclassified)"

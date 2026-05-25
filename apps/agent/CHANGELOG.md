@@ -37,27 +37,41 @@ rules in the decision tree).
   window is too tight for a Glaives-into-capital-ship transition to
   fit inside 10:00.
 
-#### (2) `stargate_first_tech` is now pure ordering -- no time threshold
-- **User feedback**: a Stargate build is defined by being the first
-  tech building committed, period. If Twilight or Robo or DarkShrine
-  went down first, the build is a transition INTO Stargate from that
-  tech path (Adept Glaives / Robo Opener / DT Opener) and shouldn't
-  be a "2 SG X" rush label. Conversely, a Stargate with NOTHING else
-  built before it IS a Stargate opener -- even if it goes down at
-  7:00 instead of 4:00. A slow opener is still an opener.
-- **Symptom under the old guard**: a `sg_time < 360` clause meant a
-  pure Stargate Phoenix build with a slow first Stargate (e.g.
-  7:00 / 7:40) wrongly fell through to `PvZ - Macro Transition
-  (Unclassified)` because the guard refused to call it a Stargate
-  opener. Tech-ordering already excludes transitions; the time
-  threshold was double-counting and accidentally excluding slow
-  pure openers.
-- **Fix**: dropped the `sg_time < 360` clause from
-  `stargate_first_tech`. The guard is now `sg_time < 9999 AND
-  sg_time < twilight_time AND sg_time < dark_shrine_time AND sg_time
-  < robo_time` -- pure ordering plus a sentinel guard. The catalog
-  prose for all six Stargate-rush rules drops the "(built before
-  6:00 ...)" qualifier accordingly.
+#### (2) Pure tech-ordering on EVERY opener guard -- no time thresholds
+- **User feedback**: an opener is defined by what tech building was
+  committed FIRST, period -- not by an arbitrary time threshold. If
+  Twilight / Robo / DarkShrine went down before Stargate, it's a
+  transition INTO Stargate; conversely a Stargate with nothing else
+  before it IS a Stargate opener even at 7:00 (just a slow one). A
+  slow opener is still an opener. Applied symmetrically to every
+  opener rule in `detect_pvz`:
+  - `stargate_first_tech` was `sg_time < 360 AND <ordering>`; now
+    `sg_time < 9999 AND <ordering>`.
+  - `twilight_first_tech` was `twilight_time < 480 AND <ordering>`;
+    now `twilight_time < 9999 AND <ordering>`.
+  - DT Opener rule was `dark_shrine_time < 480 AND <ordering> AND
+    >=1 DT by 9:00`; now `dark_shrine_time < 9999 AND <ordering> AND
+    >=1 DT by 9:00`.
+  - Robo Opener rule was `has_building("RoboticsFacility", 420) AND
+    <ordering>`; now `robo_time < 9999 AND <ordering>` (also added
+    the previously-missing `robo_time < dark_shrine_time` check for
+    symmetry).
+  - Stargate-into-Glaives rule was `sg_time < 420 AND <ordering> AND
+    Glaives-first AND 4-8 gates by 6:00`; now `sg_time < 9999 AND
+    <ordering> AND Glaives-first AND 4-8 gates by 6:00`.
+- **Symptoms under the old guards**: slow-but-pure openers fell
+  through to `PvZ - Macro Transition (Unclassified)` because the time
+  thresholds refused to call them openers. Tech-ordering already
+  excludes transitions; the time threshold was double-counting and
+  only ever excluding the slow-pure case. Downstream constraints
+  (gate count, unit count, upgrade research, base count) already
+  filter inappropriate matches.
+- **Catalog prose**: all six Stargate-rush rules (Carrier Rush,
+  Tempest Rush, 2 SG Void Ray, 3 SG Phoenix, 2 SG Phoenix, AlphaStar
+  Style) drop the "(built before 6:00 ...)" qualifier. The DT
+  Opener, Robo Opener, and Stargate-into-Glaives descriptions drop
+  their "before 8:00" / "before 7:00" qualifiers and call out the
+  pure-ordering principle.
 
 #### Shared infrastructure
 - Mirror in `SC2Replay-Analyzer/detectors/user.py` in sync.
@@ -65,7 +79,7 @@ rules in the decision tree).
   `apps/web/lib/build-definitions/pvz.ts`) updated for all six
   affected rules (Carrier Rush, Tempest Rush, 2 SG Void Ray, 3 SG
   Phoenix, 2 SG Phoenix, AlphaStar Style).
-- Tests: 4 new regression cases in
+- Tests: 7 new regression cases in
   `test_strategy_detector_opener_guards.py`:
   - `test_stargate_first_into_glaives_does_not_mis_fire_as_2_stargate_phoenix`
     pins the reported replay shape (now resolves to Stargate into
@@ -74,14 +88,25 @@ rules in the decision tree).
     positive control -- pure Phoenix (no Twilight, no Glaives) still
     matches.
   - `test_slow_2_stargate_phoenix_with_no_earlier_tech_still_classifies`
-    locks in the pure-ordering refinement -- a slow Stargate opener
-    (7:00 first SG) with no other tech still classifies as 2 SG
-    Phoenix.
+    locks in the pure-ordering refinement on Stargate -- a slow
+    Stargate opener (7:00 first SG) with no other tech still
+    classifies as 2 SG Phoenix.
+  - `test_slow_dt_opener_with_no_earlier_tech_still_classifies`
+    vice-versa: a slow Dark Shrine (7:30) with no earlier Stargate /
+    Robo still classifies as DT Opener.
+  - `test_slow_robo_opener_with_no_earlier_tech_still_classifies`
+    vice-versa: a slow Robotics Facility (7:30) with no earlier
+    Stargate / Twilight / Dark Shrine still classifies as Robo
+    Opener.
+  - `test_slow_twilight_first_glaives_still_classifies`
+    vice-versa: a slow Twilight Council (8:10) with no earlier
+    Stargate / Robo / DT plus Glaives first plus 4-8 Gateways by
+    6:00 still classifies as Adept Glaives (No Robo).
   - `test_stargate_first_into_blink_still_classifies_as_blink_macro`
-    pins the discriminator -- Blink-first Stargate opener still
-    matches 2 SG Phoenix (the guard is keyed on Glaives, not
-    Twilight-existence). Full strategy-detector test suite:
-    134/134 passing.
+    pins the Glaives discriminator -- Blink-first Stargate opener
+    still matches 2 SG Phoenix (the guard is keyed on Glaives, not
+    Twilight-existence).
+  Full strategy-detector test suite: 137/137 passing.
 
 ## 0.8.3
 

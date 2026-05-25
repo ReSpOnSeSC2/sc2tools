@@ -231,7 +231,8 @@ class UserBuildDetector(BaseStrategyDetector):
             # ``sg_time`` / ``twilight_time`` / ``dark_shrine_time`` /
             # ``robo_time`` are hoisted to the top of the PvZ branch
             # for the Stargate-opener guard above.
-            if sg_time < 420 and twilight_time > sg_time and has_upgrade_substr("Glaive", 600) and (4 <= gate_count_6min <= 6):
+            # Pure ordering on the Stargate timing -- mirror of canonical.
+            if sg_time < 9999 and twilight_time > sg_time and has_upgrade_substr("Glaive", 600) and (4 <= gate_count_6min <= 6):
                 return "PvZ - Stargate into Glaives"
             if sg_time < twilight_time and has_building("TemplarArchive", 540) and count_units("Archon", 540) >= 2:
                 return "PvZ - Archon Drop"
@@ -241,12 +242,12 @@ class UserBuildDetector(BaseStrategyDetector):
                     and has_building("RoboticsFacility", 540)
                     and count_units("DarkTemplar", 540) >= 3 and count_units("WarpPrism", 540) >= 1):
                 return "PvZ - DT drop into Archon Drop"
-            # Standard DT Opener: Dark Shrine is built by 8:00 as the
-            # player's primary tech path (no earlier Stargate / Robo)
-            # and at least one real Dark Templar lands within the
-            # harass window. Mirror of
+            # Standard DT Opener: Dark Shrine is built BEFORE any
+            # Stargate / Robo (pure ordering, no time threshold) and at
+            # least one real Dark Templar lands within the harass
+            # window. Mirror of
             # reveal-sc2-opponent-main/core/strategy_detector_pvz.py.
-            if (dark_shrine_time < 480 and dark_shrine_time < sg_time
+            if (dark_shrine_time < 9999 and dark_shrine_time < sg_time
                     and dark_shrine_time < robo_time
                     and count_units("DarkTemplar", 540) >= 1):
                 return "PvZ - DT Opener"
@@ -255,10 +256,12 @@ class UserBuildDetector(BaseStrategyDetector):
             if sg_time < twilight_time and has_upgrade_substr("Charge", 540) and base_count_at(buildings, "Nexus", 540) >= 3:
                 return "PvZ - Standard charge Macro"
 
-            if has_building("RoboticsFacility", 420):
-                robo_t = building_time("RoboticsFacility")
-                if robo_t < sg_time and robo_t < twilight_time:
-                    return "PvZ - Robo Opener"
+            # Robo Opener: Robotics Facility is the FIRST tech building
+            # (pure ordering, no time threshold). Mirror of canonical.
+            robo_t = building_time("RoboticsFacility")
+            if (robo_t < 9999 and robo_t < sg_time and robo_t < twilight_time
+                    and robo_t < dark_shrine_time):
+                return "PvZ - Robo Opener"
             return "PvZ - Macro Transition (Unclassified)"
 
         # --- PvP ---

@@ -83,7 +83,7 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Robo Opener",
     description:
-      "Detected if a Robotics Facility is built before 7:00 AND it is the FIRST tech building (built before any Stargate or Twilight Council).",
+      "Detected if a Robotics Facility is the FIRST tech building -- built BEFORE any Stargate / Twilight Council / Dark Shrine. Pure ordering, no time threshold: a slow Robo opener with no other tech first still counts.",
   },
   {
     race: "Protoss",
@@ -104,7 +104,7 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Stargate into Glaives",
     description:
-      "Detected if a Stargate is built before 7:00 (and before any Twilight Council), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), and the player has 4-8 Gateways by 9:00 -- a Phoenix or Oracle into Glaive Adept timing. The Glaives-first signal is what separates this from Stargate into Blink, where Blink would be researched first instead.",
+      "Detected if a Stargate is built BEFORE any Twilight Council (pure ordering, no time threshold -- a slow Stargate opener that transitioned to Glaives still counts), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), and the player has 4-8 Gateways by 6:00 -- a Phoenix or Oracle into Glaive Adept timing. The Glaives-first signal is what separates this from Stargate into Blink, where Blink would be researched first instead.",
   },
   {
     race: "Protoss",
@@ -132,6 +132,6 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - DT Opener",
     description:
-      "Detected if a Dark Shrine is built before 8:00 AND it is the player's primary tech path (built before any Stargate or Robotics Facility), with at least 1 real Dark Templar on the field by 9:00. Catches DT openers that transition to mid- or late-game tech (Skytoss / Mothership / Templar) -- without this rule a DT build that later picked up a Stargate + Carrier used to mis-fire as PvZ - Carrier Rush.",
+      "Detected if a Dark Shrine is the player's primary alternative-tech path -- built BEFORE any Stargate / Robotics Facility -- with at least 1 real Dark Templar on the field by 9:00. Pure ordering, no time threshold: a slow Shrine with no earlier Stargate / Robo still counts. (Twilight Council is required as Dark Shrine's prereq, so a Twilight-first ordering is implicit and isn't checked separately.) Catches DT openers that transition to mid- or late-game tech (Skytoss / Mothership / Templar) -- without this rule a DT build that later picked up a Stargate + Carrier used to mis-fire as PvZ - Carrier Rush.",
   },
 ];
