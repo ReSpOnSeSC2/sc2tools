@@ -395,6 +395,135 @@ def test_stargate_first_into_blink_still_classifies_as_blink_macro():
     )
 
 
+def test_stargate_first_into_robo_classifies_as_phoenix_into_robo():
+    """User-reported regression (Ruby Rock LE 2026-04-01 10:39:06).
+    A Stargate-FIRST opener (Stargate at 2:24) that produced Phoenix
+    and added a Robotics Facility for Immortal / Observer / Disruptor
+    support was mis-labelled "PvZ - 2 Stargate Phoenix" because the
+    2 SG Phoenix rule fired on the count signature alone with no
+    Robo-disqualifier guard. The build is a classic Stargate-into-
+    Robo transition -- it should land on the new PvZ - Phoenix into
+    Robo label, mirroring the existing PvT - Phoenix into Robo
+    rule."""
+    events = _base_protoss_opener()
+    # Stargate is the FIRST tech (~3:40).
+    events.append(_building("Stargate", 220))
+    events.append(_building("Stargate", 280))
+    events.extend(_gates([240, 280]))
+    # Real Phoenix on the field (Stargate prereq satisfied).
+    for t in (270, 320, 380, 440):
+        events.append(_unit("Phoenix", t))
+    # Robo for Immortal / Observer follow-up.
+    events.append(_building("RoboticsFacility", 360))
+    events.append(_unit("Immortal", 500))
+    events.append(_unit("Observer", 480))
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result != "PvZ - 2 Stargate Phoenix", (
+        f"Stargate-first opener with Robo must NOT tag as 2 Stargate "
+        f"Phoenix even with 4+ Phoenix by 10:00; got {result!r}"
+    )
+    assert result == "PvZ - Phoenix into Robo", (
+        f"Stargate-first opener with Phoenix + Robo should tag as "
+        f"Phoenix into Robo; got {result!r}"
+    )
+
+
+def test_phoenix_into_robo_accepts_oracle_or_voidray_as_stargate_unit():
+    """The Phoenix into Robo rule keys on `Phoenix OR Oracle OR
+    VoidRay` so Stargate-Oracle into Robo and Stargate-VR into Robo
+    builds both land here (rather than falling through to the
+    Stargate Opener catch-all)."""
+    # Oracle variant
+    events = _base_protoss_opener()
+    events.append(_building("Stargate", 220))
+    events.extend(_gates([240, 280]))
+    events.append(_unit("Oracle", 290))
+    events.append(_building("RoboticsFacility", 360))
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - Phoenix into Robo", (
+        f"Stargate-Oracle into Robo should tag as Phoenix into Robo; "
+        f"got {result!r}"
+    )
+
+    # Void Ray variant
+    events = _base_protoss_opener()
+    events.append(_building("Stargate", 220))
+    events.extend(_gates([240, 280]))
+    events.append(_unit("VoidRay", 320))
+    events.append(_building("RoboticsFacility", 360))
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - Phoenix into Robo", (
+        f"Stargate-VR into Robo should tag as Phoenix into Robo; "
+        f"got {result!r}"
+    )
+
+
+def test_pure_2_stargate_phoenix_without_robo_still_classifies():
+    """Positive control on the new Robo-disqualifier guard: a TRUE
+    pure 2 Stargate Phoenix build (no Twilight, no Robo, no
+    DarkShrine, just Stargates + Phoenix) still classifies as 2 SG
+    Phoenix. The Robo-disqualifier must NOT over-fire."""
+    events = _base_protoss_opener()
+    events.append(_building("Stargate", 220))
+    events.append(_building("Stargate", 260))
+    for t in (260, 300, 340, 380):
+        events.append(_unit("Phoenix", t))
+    # Deliberately NO Twilight, NO Robo, NO DarkShrine.
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - 2 Stargate Phoenix", (
+        f"Pure 2 SG Phoenix (no tech-switch) must still classify; "
+        f"got {result!r}"
+    )
+
+
+def test_stargate_opener_catch_all_when_no_specific_rule_matches():
+    """A Stargate-first build that produced no real Phoenix / Oracle /
+    VR (e.g. Stargate was harassed off mid-construction) and has no
+    Fleet Beacon / Robo / Twilight / DarkShrine commitment used to
+    fall through to "PvZ - Macro Transition (Unclassified)". The new
+    PvZ - Stargate Opener catch-all picks these up so the opener is
+    visible in the user's analytics even when the midgame composition
+    is unusual."""
+    events = _base_protoss_opener()
+    events.append(_building("Stargate", 220))
+    events.extend(_gates([240, 280, 320]))
+    # Deliberately NO Phoenix / Oracle / VR produced (Stargate was
+    # killed before producing). NO Fleet Beacon. NO Robo. NO Twilight.
+    # NO DarkShrine.
+
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - Stargate Opener", (
+        f"Stargate-first build with no specific rule match should tag "
+        f"as Stargate Opener (catch-all), not fall through to Macro "
+        f"Transition; got {result!r}"
+    )
+
+
+def test_stargate_opener_present_in_catalog():
+    """Catalog presence check for the new PvZ - Stargate Opener and
+    PvZ - Phoenix into Robo entries."""
+    import json
+    with open(
+        os.path.join(_ROOT, "data", "build_definitions.json"),
+        "r",
+        encoding="utf-8",
+    ) as fh:
+        defs = json.load(fh)
+    for name in ("PvZ - Phoenix into Robo", "PvZ - Stargate Opener"):
+        assert name in defs, f"Missing definition prose for {name!r}"
+        desc = defs[name]
+        assert isinstance(desc, str) and len(desc) > 80, (
+            f"{name!r} description too short: {desc!r}"
+        )
+
+
 def test_dt_into_2_stargate_phoenix_does_not_mis_fire():
     """A DT opener (Dark Shrine FIRST) that picks up 2 Stargates + 4
     Phoenix late must NOT mis-fire as 2 Stargate Phoenix."""

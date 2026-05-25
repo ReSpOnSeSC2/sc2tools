@@ -89,20 +89,25 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and count_units("Tempest", 600) >= 1
     ):
         return "PvZ - Tempest Rush"
-    # Glaives-disqualified: a Stargate opener that researches Glaives
-    # FIRST off the Twilight Council is a Stargate-into-Glaives build
-    # (Phoenix / Void Rays are support for the Adept timing), NOT a
-    # pure 2 SG Void Ray / 2 SG Phoenix / 3 SG Phoenix opener. Without
-    # this guard, a Stargate-Glaives build with 4+ Phoenix by 10:00
-    # mis-fires the headline Phoenix label here before
-    # Stargate-into-Glaives is reached further down. The Glaives-first
-    # signal is the same one the Adept-Glaives rules below key off.
+    # Pure-Phoenix / pure-VR disqualifiers: a Stargate opener that
+    # ALSO commits to a tech-switch (Glaives off Twilight, or a
+    # Robotics Facility for Immortal / Observer / Disruptor) is a
+    # hybrid build (Phoenix into Robo, Stargate into Glaives), NOT a
+    # pure 2/3 SG Phoenix or 2 SG VR opener. The "pure" labels here
+    # require the Phoenix / VRs to BE the build -- not Stargate-tech
+    # support for a Robo / Twilight follow-up.
+    #
+    # `not glaive_first_off_twilight` blocks Glaives-first hybrids
+    # (those fall through to PvZ - Stargate into Glaives). `not
+    # has_building("RoboticsFacility", 600)` blocks Robo hybrids
+    # (those fall through to PvZ - Phoenix into Robo below).
     if (
         stargate_first_tech
         and sg_count_10min >= 2
         and nexus_count_10min >= 2
         and count_units("VoidRay", 600) >= 4
         and not glaive_first_off_twilight
+        and not has_building("RoboticsFacility", 600)
     ):
         return "PvZ - 2 Stargate Void Ray"
     if (
@@ -111,6 +116,7 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and nexus_count_10min >= 2
         and count_units("Phoenix", 600) >= 4
         and not glaive_first_off_twilight
+        and not has_building("RoboticsFacility", 600)
     ):
         return "PvZ - 3 Stargate Phoenix"
     # Strict exactly-2: the 3+ variant above catches the heavier
@@ -124,6 +130,7 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and nexus_count_10min >= 2
         and count_units("Phoenix", 600) >= 4
         and not glaive_first_off_twilight
+        and not has_building("RoboticsFacility", 600)
     ):
         return "PvZ - 2 Stargate Phoenix"
     # Rail's Disruptor Drop: Disruptor needs Robo + Robo Bay,
@@ -150,6 +157,31 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and base_count_at(buildings, "Nexus", 510) >= 3
     ):
         return "PvZ - AlphaStar Style (Oracle/Robo)"
+
+    # Phoenix into Robo: Stargate-first opener (Phoenix / Oracle / VR
+    # harass) that adds a Robotics Facility for Immortal / Observer /
+    # Disruptor support. The classic Stargate-into-Robo transition
+    # style. Mirror of PvT - Phoenix into Robo. Without this rule a
+    # Stargate-first build with both Phoenix and Robo mis-fires the
+    # 2/3 SG Phoenix rules above on the Phoenix-count signature alone
+    # (now blocked by the `not has_building("RoboticsFacility", 600)`
+    # guard those rules picked up) and would otherwise fall through
+    # to "PvZ - Macro Transition (Unclassified)".
+    #
+    # Accepts Phoenix / Oracle / VoidRay as the Stargate-unit signal
+    # (any one suffices) so a Stargate-Oracle into Robo build (without
+    # 2 Oracles + Forge + 3 bases needed for AlphaStar Style) lands
+    # here too.
+    if (
+        stargate_first_tech
+        and has_building("RoboticsFacility", 600)
+        and (
+            count_units("Phoenix", 600) >= 1
+            or count_units("Oracle", 600) >= 1
+            or count_units("VoidRay", 600) >= 1
+        )
+    ):
+        return "PvZ - Phoenix into Robo"
 
     # 7 Gate Glaive/Immortal all-in: Immortals require Robotics
     # Facility, Glaive research requires Twilight Council. The
@@ -299,4 +331,16 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and robo_time < dark_shrine_time
     ):
         return "PvZ - Robo Opener"
+    # Stargate Opener (catch-all): a Stargate-first opener that didn't
+    # match any of the more specific Stargate-prefixed rules above
+    # (Carrier Rush, Tempest Rush, 2/3 SG Phoenix, 2 SG VR, AlphaStar,
+    # Phoenix into Robo, Stargate into Glaives, Standard Blink /
+    # Charge Macro). Without this catch-all, a Stargate-first build
+    # with no Phoenix / Oracle / VR (e.g. Stargate was harassed off
+    # before producing) or with an unusual transition (Stargate into
+    # Templar Archive without 2 Archons by 9:00, etc.) used to fall
+    # through to "Macro Transition (Unclassified)". Mirror of PvT -
+    # Stargate Opener.
+    if stargate_first_tech:
+        return "PvZ - Stargate Opener"
     return "PvZ - Macro Transition (Unclassified)"

@@ -2,6 +2,67 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.8.5
+
+### Fixed — PvZ Stargate-into-Robo no longer mis-fires as 2 Stargate Phoenix + new PvZ - Phoenix into Robo + new PvZ - Stargate Opener catch-all
+- **User-reported regression (Ruby Rock LE 2026-04-01 10:39:06).** A
+  Stargate-FIRST opener that produced Phoenix and added a Robotics
+  Facility for Immortal / Observer / Disruptor support was labelled
+  `PvZ - 2 Stargate Phoenix`. The user opened "Stargate into Robo" --
+  a classic transition style that the PvZ tree had no dedicated label
+  for, so the count-by-10:00 signature (`>=2 Stargates, >=2 Nexus,
+  >=4 Phoenix`) of 2 SG Phoenix won by default.
+- **Audit finding**: the PvT classifier already has the parallel
+  rules (`PvT - Phoenix into Robo`, `PvT - Stargate Opener`,
+  `PvT - Stargate into Charge / Glaives / Blink`) -- they were just
+  never mirrored into PvZ. The 0.8.4 Glaives-disqualifier work
+  introduced the pattern of "headline rules disqualify themselves
+  when a tech-switch signal is present"; the Robo case is the
+  natural symmetric companion.
+- **Fix**:
+  1. **Added `not has_building("RoboticsFacility", 600)`** to the
+     three pure-Phoenix / pure-VR Stargate-rush rules:
+     `PvZ - 2 Stargate Phoenix`, `PvZ - 3 Stargate Phoenix`,
+     `PvZ - 2 Stargate Void Ray`. A Stargate opener that adds a Robo
+     is committing to a tech-switch and shouldn't claim the "pure
+     Phoenix / pure VR" label.
+  2. **Added `PvZ - Phoenix into Robo`** -- mirror of PvT's. Fires
+     for `stargate_first_tech AND has_building("RoboticsFacility",
+     600) AND >=1 real Phoenix / Oracle / Void Ray by 10:00`. Sits
+     after AlphaStar Style (which has its own more specific Oracle +
+     Forge + 3-base signature) so AlphaStar wins on hybrid builds
+     that fit its shape.
+  3. **Added `PvZ - Stargate Opener`** catch-all -- mirror of PvT's.
+     Fires for any `stargate_first_tech` build that didn't match a
+     more specific Stargate-prefixed rule. Examples that land here:
+     a Stargate that got harassed off before producing a real unit,
+     a Stargate-into-Templar build without 2 Archons by 9:00, or any
+     Stargate opener with an unusual midgame composition the
+     analyzer doesn't have a named bucket for. Previously these all
+     fell through to `PvZ - Macro Transition (Unclassified)`.
+- **Catalog**: two new entries shipped in both
+  `data/build_definitions.json` (canonical Python catalog) AND
+  `apps/web/lib/build-definitions/pvz.ts` (TS catalog that powers
+  the `/definitions` page). The descriptions for 2/3 SG Phoenix and
+  2 SG VR were rewritten to call out the new Robo-disqualifier.
+- **Mirror** in `SC2Replay-Analyzer/detectors/user.py` in sync --
+  same Robo guard on the three pure-Phoenix / pure-VR rules, same
+  new Phoenix-into-Robo rule, same Stargate-Opener catch-all.
+- **Tests**: 5 new regression cases in
+  `test_strategy_detector_opener_guards.py`:
+  - `test_stargate_first_into_robo_classifies_as_phoenix_into_robo`
+    pins the reported replay shape (now resolves to Phoenix into Robo).
+  - `test_phoenix_into_robo_accepts_oracle_or_voidray_as_stargate_unit`
+    confirms the rule fires on Oracle-into-Robo and VR-into-Robo too.
+  - `test_pure_2_stargate_phoenix_without_robo_still_classifies`
+    positive control -- the new Robo guard doesn't over-fire on pure
+    2 SG Phoenix.
+  - `test_stargate_opener_catch_all_when_no_specific_rule_matches`
+    confirms the new catch-all label.
+  - `test_stargate_opener_present_in_catalog`
+    catalog-presence check for both new entries. Full strategy-detector
+  test suite: 142/142 passing.
+
 ## 0.8.4
 
 ### Fixed — PvZ 2/3 SG Phoenix + 2 SG Void Ray now key on pure tech-ordering (no time threshold) AND disqualify on Glaives-first opener
