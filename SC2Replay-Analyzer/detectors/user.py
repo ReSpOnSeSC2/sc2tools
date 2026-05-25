@@ -184,24 +184,30 @@ class UserBuildDetector(BaseStrategyDetector):
             if (stargate_first_tech and has_building("FleetBeacon", 600)
                     and count_units("Tempest", 600) >= 1):
                 return "PvZ - Tempest Rush"
-            # Glaives-disqualified: see canonical detector for rationale.
+            # Pure-Phoenix / pure-VR disqualifiers: see canonical
+            # detector. `not glaive_first_off_twilight` blocks
+            # Glaives-hybrid; `not has_building("RoboticsFacility",
+            # 600)` blocks Phoenix-into-Robo hybrid.
             if (stargate_first_tech
                     and sg_count_10min == 2
                     and nexus_count_10min >= 2
                     and count_units("VoidRay", 600) >= 4
                     and not has_dark_shrine_10min
                     and dt_count_10min == 0
-                    and not glaive_first_off_twilight):
+                    and not glaive_first_off_twilight
+                    and not has_building("RoboticsFacility", 600)):
                 return "PvZ - 2 Stargate Void Ray"
             if (stargate_first_tech and sg_count_10min >= 3
                     and nexus_count_10min >= 2
                     and count_units("Phoenix", 600) >= 4
-                    and not glaive_first_off_twilight):
+                    and not glaive_first_off_twilight
+                    and not has_building("RoboticsFacility", 600)):
                 return "PvZ - 3 Stargate Phoenix"
             if (stargate_first_tech and sg_count_10min >= 2
                     and nexus_count_10min >= 2
                     and count_units("Phoenix", 600) >= 4
-                    and not glaive_first_off_twilight):
+                    and not glaive_first_off_twilight
+                    and not has_building("RoboticsFacility", 600)):
                 return "PvZ - 2 Stargate Phoenix"
             # Disruptor needs Robo + Robo Bay; Warp Prism needs Robo.
             if (has_building("RoboticsFacility", 480) and has_building("RoboticsBay", 480)
@@ -216,6 +222,17 @@ class UserBuildDetector(BaseStrategyDetector):
                     and has_building("RoboticsFacility", 510) and has_building("Forge", 510)
                     and base_count_at(buildings, "Nexus", 510) >= 3):
                 return "PvZ - AlphaStar Style (Oracle/Robo)"
+
+            # Phoenix into Robo: Stargate-first opener + Robo for
+            # Immortal / Observer / Disruptor support. Mirror of
+            # canonical detector. Accepts Phoenix / Oracle / VoidRay
+            # as the Stargate-unit signal.
+            if (stargate_first_tech
+                    and has_building("RoboticsFacility", 600)
+                    and (count_units("Phoenix", 600) >= 1
+                         or count_units("Oracle", 600) >= 1
+                         or count_units("VoidRay", 600) >= 1)):
+                return "PvZ - Phoenix into Robo"
 
             # 7 Gate Glaive/Immortal: Immortals require RoboticsFacility,
             # Glaives requires Twilight Council (covered by upgrade).
@@ -262,6 +279,11 @@ class UserBuildDetector(BaseStrategyDetector):
             if (robo_t < 9999 and robo_t < sg_time and robo_t < twilight_time
                     and robo_t < dark_shrine_time):
                 return "PvZ - Robo Opener"
+            # Stargate Opener catch-all: any Stargate-first build that
+            # didn't match a more specific Stargate-prefixed rule.
+            # Mirror of canonical detector.
+            if stargate_first_tech:
+                return "PvZ - Stargate Opener"
             return "PvZ - Macro Transition (Unclassified)"
 
         # --- PvP ---

@@ -6,21 +6,21 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - 2 Stargate Phoenix",
     description:
-      "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), EXACTLY 2 Stargates and 2+ Nexuses are up by 10:00, 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations), AND Glaives was NOT the first upgrade researched out of the Twilight Council. 3+ Stargates falls under PvZ - 3 Stargate Phoenix instead. A Glaive Adept opener that adds 2 Stargates around 7:00 to counter Lurkers tags as PvZ - Adept Glaives. A Stargate-FIRST opener that adds a Twilight Council and researches Glaives first tags as PvZ - Stargate into Glaives, NOT 2 Stargate Phoenix -- the Glaives-first signal means the Phoenix are scouting / harass support for an Adept timing, not the build's main damage.",
+      "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), EXACTLY 2 Stargates and 2+ Nexuses are up by 10:00, 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations), AND the build did NOT commit to a tech-switch -- Glaives was NOT the first Twilight upgrade AND no Robotics Facility was built by 10:00. 3+ Stargates falls under PvZ - 3 Stargate Phoenix instead. A Stargate-into-Glaives hybrid (Phoenix as Glaive Adept support) tags as PvZ - Stargate into Glaives; a Stargate-into-Robo hybrid (Phoenix + Robo for Immortal / Observer / Disruptor) tags as PvZ - Phoenix into Robo. The Glaives-first signal and the Robo presence are both strong intent markers -- the Phoenix count alone isn't enough to claim the pure 2 SG Phoenix label.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - 2 Stargate Void Ray",
     description:
-      "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), 2+ Stargates and 2+ Nexuses are up by 10:00, 4+ Void Rays have been produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations), AND Glaives was NOT the first upgrade researched out of the Twilight Council. A Stargate-into-Glaives build with Void Ray support tags as PvZ - Stargate into Glaives instead.",
+      "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), 2+ Stargates and 2+ Nexuses are up by 10:00, 4+ Void Rays have been produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations), AND the build did NOT commit to a tech-switch -- Glaives was NOT the first Twilight upgrade AND no Robotics Facility was built by 10:00. A Stargate-into-Glaives hybrid tags as PvZ - Stargate into Glaives; a Stargate-into-Robo hybrid tags as PvZ - Phoenix into Robo.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - 3 Stargate Phoenix",
     description:
-      "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), 3+ Stargates and 2+ Nexuses are up by 10:00, 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations), AND Glaives was NOT the first upgrade researched out of the Twilight Council. A Stargate-into-Glaives build with Phoenix support tags as PvZ - Stargate into Glaives instead.",
+      "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), 3+ Stargates and 2+ Nexuses are up by 10:00, 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations), AND the build did NOT commit to a tech-switch -- Glaives was NOT the first Twilight upgrade AND no Robotics Facility was built by 10:00. A Stargate-into-Glaives hybrid tags as PvZ - Stargate into Glaives; a Stargate-into-Robo hybrid tags as PvZ - Phoenix into Robo.",
   },
   {
     race: "Protoss",
@@ -133,5 +133,19 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     name: "PvZ - DT Opener",
     description:
       "Detected if a Dark Shrine is the player's primary alternative-tech path -- built BEFORE any Stargate / Robotics Facility -- with at least 1 real Dark Templar on the field by 9:00. Pure ordering, no time threshold: a slow Shrine with no earlier Stargate / Robo still counts. (Twilight Council is required as Dark Shrine's prereq, so a Twilight-first ordering is implicit and isn't checked separately.) Catches DT openers that transition to mid- or late-game tech (Skytoss / Mothership / Templar) -- without this rule a DT build that later picked up a Stargate + Carrier used to mis-fire as PvZ - Carrier Rush.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvZ",
+    name: "PvZ - Phoenix into Robo",
+    description:
+      "Detected if the Stargate is the FIRST tech building (built BEFORE any Twilight Council / Dark Shrine / Robotics Facility), at least 1 real Phoenix / Oracle / Void Ray is on the field by 10:00 (confirms the player actually used the Stargate, not just dropped one), AND a Robotics Facility is built by 10:00. The classic Stargate-into-Robo transition: Phoenix / Oracle harass off the opener, Robo follow-up for Immortal / Observer / Disruptor support. Sits between the pure 2/3 SG Phoenix rules (no Robo allowed) and the catch-all PvZ - Stargate Opener -- if you opened Stargate and added Robo, this is your label. Mirror of PvT - Phoenix into Robo.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvZ",
+    name: "PvZ - Stargate Opener",
+    description:
+      "Catch-all for any Stargate-first opener (Stargate built BEFORE any Twilight Council / Dark Shrine / Robotics Facility) that didn't match a more specific Stargate-prefixed PvZ rule -- Carrier Rush, Tempest Rush, 2/3 Stargate Phoenix, 2 Stargate Void Ray, AlphaStar Style, Phoenix into Robo, Stargate into Glaives, Standard Blink Macro, Standard charge Macro, Archon Drop. Examples that land here: a Stargate that got harassed off before producing a real unit, a Stargate-into-Templar build without 2 Archons by 9:00, or any Stargate opener with an unusual midgame composition the analyzer doesn't have a named bucket for. Mirror of PvT - Stargate Opener.",
   },
 ];
