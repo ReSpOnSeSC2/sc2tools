@@ -29,9 +29,9 @@
  *   * refreshMetadata follows the same contract as recordGame.
  *   * The bingo-fix stamp lands on game.opponent.mmr +
  *     opponent.region when the agent didn't supply them, and
- *     SC2Pulse-resolved MMR overwrites an agent-supplied lobby
- *     value when both are present (barcode opponents often ship
- *     a stale placeholder MMR in the lobby; pulse is the truth).
+ *     respects an explicit agent-supplied lobby value when present
+ *     (the in-replay MMR is the at-game-time truth; pulse is only
+ *     the fill-the-gap backup).
  */
 
 const { MongoMemoryServer } = require("mongodb-memory-server");
@@ -290,13 +290,15 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
       expect(game.opponent.region).toBe("NA");
     });
 
-    test("pulse-resolved opponent.mmr wins over agent-supplied lobby value", async () => {
-      // sc2reader's lobby/init MMR for barcode + smurf opponents is
-      // often a stale placeholder (last-season floor, league average,
-      // etc.) until ladder placement settles. The opponent's CURRENT
-      // SC2Pulse MMR is the authoritative number for the
-      // win-rate-by-opponent-MMR chart, so it must overwrite the
-      // agent's value on the games row.
+    test("agent-supplied opponent.mmr wins over pulse (in-replay MMR is the truth)", async () => {
+      // The agent's value is read straight from the replay file's
+      // metadata — the opponent's MMR at the moment the match
+      // started. Pulse returns the opponent's CURRENT ladder MMR,
+      // which has drifted from at-game-time the moment they play
+      // another ranked match. Bucketing by pulse would distort
+      // old games (an opponent who was 4500 then but is 6000 now
+      // would push that year-old game into the wrong row). So the
+      // stamp preserves the agent's value when both are present.
       const pulseMmr = makePulseStub(async () => ({ mmr: 9999, region: "NA" }));
       const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
         pulseMmr,
@@ -305,34 +307,15 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
         ...baseGame,
         pulseCharacterId: "452727",
         gameId: "g1",
-        mmr: 4321, // agent's pre-game lobby value
+        mmr: 4321, // agent's in-replay value
       });
       const game = await db.games.findOne({ userId: "u1", gameId: "g1" });
-      expect(game.opponent.mmr).toBe(9999);
-    });
-
-    test("agent-supplied opponent.mmr is preserved on the games row when pulse didn't fire", async () => {
-      // No pulseCharacterId → no Pulse call → set.mmr stays undefined,
-      // so _stampGameOpponentMmr leaves the games row alone. The
-      // agent's lobby value (written earlier by games.upsert in the
-      // real flow) survives. Simulated here by pre-seeding the games
-      // row with the agent's mmr to mirror that ordering.
-      await db.games.updateOne(
-        { userId: "u1", gameId: "g1" },
-        { $set: { "opponent.mmr": 4321 } },
-      );
-      const pulseMmr = makePulseStub(async () => null);
-      const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
-        pulseMmr,
-      });
-      await opponents.recordGame("u1", {
-        ...baseGame,
-        // No pulseCharacterId — pulse call is skipped entirely.
-        gameId: "g1",
-        mmr: 4321,
-      });
-      const game = await db.games.findOne({ userId: "u1", gameId: "g1" });
-      expect(game.opponent.mmr).toBe(4321);
+      // The stamp doesn't overwrite. The agent's mmr survives via
+      // the games.upsert that the route performs BEFORE recordGame
+      // in the real flow (the in-memory test inserts the slim row
+      // without mmr in beforeEach, which is why the assertion is
+      // "undefined" — we're proving the stamp didn't write 9999).
+      expect(game.opponent.mmr).toBeUndefined();
     });
 
     test("no-op when gameId is omitted (defensive)", async () => {

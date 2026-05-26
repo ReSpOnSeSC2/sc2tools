@@ -276,14 +276,14 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
     ).rejects.toThrow(/pulseResolver/);
   });
 
-  test("on hit, fetches pulse MMR and back-stamps every game against the opponent", async () => {
-    // The "barcode finally got a pulseCharacterId" case: all prior
-    // games for this opponent were stuck without a usable MMR
-    // (either null or the agent's stale lobby guess). After the
+  test("on hit, fetches pulse MMR and back-stamps only games that lack an in-replay MMR", async () => {
+    // The "barcode finally got a pulseCharacterId" case. After the
     // backfill resolves the id, the freshly-fetched SC2Pulse MMR
-    // must land on the opponents row AND on every games row so the
-    // win-rate-by-opponent-MMR chart actually buckets these games
-    // instead of dumping them in the "missing MMR" bin.
+    // must land on the opponents row AND on games rows that were
+    // missing an MMR — but games that already carry the agent's
+    // in-replay value must be left alone (the in-replay value is
+    // the at-game-time truth; pulse is only the fill-the-gap
+    // backup).
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "1-S2-1-1",
@@ -301,8 +301,9 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
         userId: "u1",
         gameId: "g2",
         date: new Date("2026-05-02T12:00:00Z"),
-        // Pre-existing stale agent lobby MMR — must be overwritten
-        // by the freshly-fetched pulse value.
+        // Pre-existing in-replay agent MMR — must NOT be overwritten
+        // by pulse. The in-replay value is the at-game-time truth;
+        // pulse is only a backup for games that lack one.
         opponent: { pulseId: "1-S2-1-1", toonHandle: "1-S2-1-1", mmr: 3000 },
       },
       {
@@ -331,14 +332,16 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
     expect(oppRow.mmr).toBe(4800);
     expect(oppRow.region).toBe("NA");
     expect(oppRow.mmrFetchedAt).toBeInstanceOf(Date);
-    // Both games against this opponent now carry the pulse MMR,
-    // including the one that previously had a stale agent value.
+    // g1 had no in-replay MMR → pulse fills the gap.
+    // g2 already had the agent's in-replay MMR (3000) → preserved.
     const g1 = await db.games.findOne({ userId: "u1", gameId: "g1" });
     const g2 = await db.games.findOne({ userId: "u1", gameId: "g2" });
     expect(g1.opponent.mmr).toBe(4800);
     expect(g1.opponent.region).toBe("NA");
-    expect(g2.opponent.mmr).toBe(4800);
-    expect(g2.opponent.region).toBe("NA");
+    expect(g2.opponent.mmr).toBe(3000);
+    // Region stamping is gated by the same "lacks MMR" filter so
+    // we don't double-write — g2 keeps the values it had.
+    expect(g2.opponent.region).toBeUndefined();
     // Untouched opponent's game keeps its own values.
     const g3 = await db.games.findOne({ userId: "u1", gameId: "g3" });
     expect(g3.opponent.mmr).toBe(4000);

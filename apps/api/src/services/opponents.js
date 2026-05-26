@@ -1308,18 +1308,21 @@ class OpponentsService {
    * sc2reader doesn't carry an opponent's MMR for ranked ladder
    * replays.
    *
-   * MMR priority: SC2Pulse-resolved value (``set.mmr``) wins over the
-   * agent-supplied lobby value (``incomingGame.mmr``). sc2reader's
-   * lobby MMR can be a stale placeholder for barcode / smurf
-   * opponents whose ladder placement hasn't settled, so we prefer
-   * the opponent's CURRENT SC2Pulse MMR (fetched on every ingest in
-   * ``_fetchOpponentMmrFromPulse``). When pulse didn't fire (no
-   * pulseCharacterId, rate-limit, freshness window) the games row
-   * keeps whatever ``games.upsert`` wrote earlier in the same
-   * request, including the agent-supplied lobby value if it had one.
+   * MMR priority: the agent-supplied in-replay value
+   * (``incomingGame.mmr``) is the TRUTH — it's the opponent's MMR
+   * at the moment the match started, baked into the replay file
+   * itself. SC2Pulse's current ladder MMR (``set.mmr``) is only the
+   * BACKUP, used when the replay didn't carry one (the common case
+   * for current ranked 1v1 replays where Blizzard stopped reliably
+   * storing it). Why backup-only: Pulse returns the opponent's
+   * CURRENT MMR, which has drifted from at-game-time the moment the
+   * opponent plays another ranked match — bucketing a year-old game
+   * by today's pulse rating would systematically distort the
+   * win-rate-by-opponent-MMR chart for older games.
    *
-   * Region: still agent-wins-when-supplied, but in practice the
-   * agent never sends ``region`` so pulse always lands.
+   * Region: similarly fill-only — the agent never sends it today so
+   * pulse always lands, but if a future ingest path supplies one
+   * we respect it.
    *
    * No-op when ``gameId`` is missing (defensive — the route always
    * passes it but pre-route callers may not).
@@ -1335,7 +1338,10 @@ class OpponentsService {
     if (typeof gameId !== "string" || !gameId) return;
     /** @type {Record<string, any>} */
     const update = {};
-    if (typeof set.mmr === "number") {
+    if (
+      typeof incomingGame.mmr !== "number"
+      && typeof set.mmr === "number"
+    ) {
       update["opponent.mmr"] = set.mmr;
     }
     if (
@@ -1435,13 +1441,17 @@ class OpponentsService {
    *
    * On hit we ALSO fetch the opponent's current SC2Pulse MMR (now
    * that we finally have an id to query with) and back-stamp it
-   * onto every game we've recorded against them in the ``games``
-   * collection. Without this hop the win-rate-by-opponent-MMR chart
-   * and the bingo MMR predicates keep reading whatever the agent
-   * supplied at ingest time — which for barcode opponents is often
-   * a stale lobby placeholder, the exact thing this backfill is
-   * meant to heal. Fail-soft per row: an MMR-fetch or re-stamp
-   * failure logs and the cycle continues.
+   * onto games we've recorded against them that DON'T already
+   * carry an in-replay MMR. The agent's value is the truth (it's
+   * the opponent's MMR at the moment that game started, baked into
+   * the replay); pulse is only the backup that fills gaps —
+   * typically the current-ranked-1v1 replays where Blizzard
+   * stopped storing the value. Without this hop the
+   * win-rate-by-opponent-MMR chart and the bingo MMR predicates
+   * keep reading nothing for stuck barcode opponents whose
+   * pulseCharacterId never landed at first ingest. Fail-soft per
+   * row: an MMR-fetch or re-stamp failure logs and the cycle
+   * continues.
    *
    * Two cooperating bounds:
    *   * ``opts.limit`` (default 50) caps how many rows one cycle
@@ -1592,10 +1602,14 @@ class OpponentsService {
           },
           "opponent_pulse_character_id_upgraded",
         );
-        // Back-stamp every game we have against this opponent with
-        // the freshly-resolved MMR/region. One updateMany so a
-        // barcode with 50 prior games becomes one Mongo round-trip,
-        // not 50. Uses the {opponent.pulseId, userId, date} index.
+        // Back-stamp games against this opponent that DON'T already
+        // carry an in-replay MMR. Filter on
+        // ``opponent.mmr: { $not: { $type: "number" } }`` so any
+        // game that already has the agent's value is left alone —
+        // the in-replay value is the at-game-time truth; pulse is
+        // only the fill-the-gap backup. One updateMany so a barcode
+        // with 50 prior games becomes one Mongo round-trip, not 50.
+        // Uses the {opponent.pulseId, userId, date} index.
         /** @type {Record<string, any>} */
         const gameUpdate = {};
         if (typeof set.mmr === "number") gameUpdate["opponent.mmr"] = set.mmr;
@@ -1603,7 +1617,11 @@ class OpponentsService {
         if (Object.keys(gameUpdate).length > 0) {
           try {
             const gres = await this.db.games.updateMany(
-              { userId, "opponent.pulseId": row.pulseId },
+              {
+                userId,
+                "opponent.pulseId": row.pulseId,
+                "opponent.mmr": { $not: { $type: "number" } },
+              },
               { $set: gameUpdate },
             );
             if (gres.modifiedCount > 0) {
