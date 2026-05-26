@@ -43,6 +43,20 @@ const USER_LIST_FILTERS = new Set([
   "with_agent",
 ]);
 
+// Whitelisted sort columns for the per-user "all opponents" browser.
+// Anything outside this set falls back to ``gameCount`` so a bad query
+// param can never inject a field path into the sort stage. ``winRate``
+// is a computed field added in the aggregation, not a stored one.
+const OPPONENT_SORT_FIELDS = new Set([
+  "gameCount",
+  "wins",
+  "losses",
+  "winRate",
+  "lastSeen",
+  "firstSeen",
+  "mmr",
+]);
+
 const DASHBOARD_COLLECTIONS = Object.freeze([
   COLLECTIONS.USERS,
   COLLECTIONS.PROFILES,
@@ -408,6 +422,167 @@ class AdminService {
         total: opponentCount,
         top: topOpponents,
       },
+    };
+  }
+
+  /**
+   * Full, filterable, paginated opponent history for one user — the
+   * data behind the ``/admin/users/<id>/opponents`` browser. The
+   * per-user detail snapshot only carries the top-5; this is the
+   * "see everything" companion.
+   *
+   * Pagination is offset-based (``page`` * ``limit``) rather than the
+   * cursor scheme the users list uses: the sort column is
+   * caller-selectable here, and a single ``before`` cursor only works
+   * for one fixed sort key. At an admin's scale (a user has at most a
+   * few thousand distinct opponents, all on the indexed ``userId``)
+   * a skip/limit is cheap and keeps arbitrary sort orders correct.
+   *
+   * ``races`` is the distinct set of races across ALL of the user's
+   * opponents (not just the filtered page) so the UI's race dropdown
+   * stays stable regardless of the active filter — and is derived
+   * from real data, never a hard-coded enum.
+   *
+   * @param {string} userId
+   * @param {{
+   *   limit?: number,
+   *   page?: number,
+   *   search?: string,
+   *   race?: string,
+   *   minGames?: number,
+   *   sort?: string,
+   *   order?: string,
+   * }} [opts]
+   * @returns {Promise<{
+   *   items: Array<{
+   *     pulseId: string,
+   *     displayNameSample: string,
+   *     race: string,
+   *     gameCount: number,
+   *     wins: number,
+   *     losses: number,
+   *     winRate: number,
+   *     firstSeen: Date | null,
+   *     lastSeen: Date | null,
+   *     mmr: number | null,
+   *     leagueId: number | null,
+   *   }>,
+   *   total: number,
+   *   page: number,
+   *   limit: number,
+   *   hasMore: boolean,
+   *   races: string[],
+   * }>}
+   */
+  async listOpponents(userId, opts = {}) {
+    if (!userId) throw new Error("userId required");
+    const limit = clampLimit(opts.limit, 50);
+    const page =
+      typeof opts.page === "number" && Number.isInteger(opts.page) && opts.page > 0
+        ? opts.page
+        : 0;
+    const offset = page * limit;
+    const sortField =
+      typeof opts.sort === "string" && OPPONENT_SORT_FIELDS.has(opts.sort)
+        ? opts.sort
+        : "gameCount";
+    const order = opts.order === "asc" ? 1 : -1;
+
+    /** @type {Record<string, any>} */
+    const match = { userId };
+    if (typeof opts.search === "string" && opts.search.trim().length > 0) {
+      // Case-insensitive match on the display-name sample or the raw
+      // pulse id (so an admin can paste "1-S2-1-265393" and land it).
+      const re = new RegExp(escapeRegex(opts.search.trim()), "i");
+      match.$or = [{ displayNameSample: re }, { pulseId: re }];
+    }
+    if (
+      typeof opts.race === "string" &&
+      opts.race.length > 0 &&
+      opts.race !== "all"
+    ) {
+      match.race = opts.race;
+    }
+    if (typeof opts.minGames === "number" && opts.minGames > 0) {
+      match.gameCount = { $gte: opts.minGames };
+    }
+
+    // Deterministic tiebreaker on pulseId so rows with equal sort
+    // values keep a stable order across pages (skip/limit otherwise
+    // risks duplicating or dropping a row between page turns).
+    const sortSpec = { [sortField]: order, pulseId: 1 };
+
+    const [facet, races] = await Promise.all([
+      this.db.opponents
+        .aggregate([
+          { $match: match },
+          {
+            $addFields: {
+              winRate: {
+                $cond: [
+                  { $gt: ["$gameCount", 0] },
+                  { $divide: ["$wins", "$gameCount"] },
+                  0,
+                ],
+              },
+            },
+          },
+          {
+            $facet: {
+              items: [
+                { $sort: sortSpec },
+                { $skip: offset },
+                { $limit: limit },
+                {
+                  $project: {
+                    _id: 0,
+                    pulseId: 1,
+                    displayNameSample: 1,
+                    race: 1,
+                    gameCount: 1,
+                    wins: 1,
+                    losses: 1,
+                    winRate: 1,
+                    firstSeen: 1,
+                    lastSeen: 1,
+                    mmr: 1,
+                    leagueId: 1,
+                  },
+                },
+              ],
+              total: [{ $count: "n" }],
+            },
+          },
+        ])
+        .toArray(),
+      this.db.opponents.distinct("race", { userId }),
+    ]);
+
+    const block = facet[0] || { items: [], total: [] };
+    const total =
+      block.total && block.total[0] ? Number(block.total[0].n) || 0 : 0;
+    const items = (block.items || []).map((/** @type {any} */ o) => ({
+      pulseId: String(o.pulseId || ""),
+      displayNameSample: o.displayNameSample || "",
+      race: o.race || "",
+      gameCount: Number(o.gameCount) || 0,
+      wins: Number(o.wins) || 0,
+      losses: Number(o.losses) || 0,
+      winRate: Number(o.winRate) || 0,
+      firstSeen: o.firstSeen instanceof Date ? o.firstSeen : null,
+      lastSeen: o.lastSeen instanceof Date ? o.lastSeen : null,
+      mmr: typeof o.mmr === "number" ? o.mmr : null,
+      leagueId: typeof o.leagueId === "number" ? o.leagueId : null,
+    }));
+    return {
+      items,
+      total,
+      page,
+      limit,
+      hasMore: offset + items.length < total,
+      races: (races || [])
+        .filter((r) => typeof r === "string" && r.length > 0)
+        .sort(),
     };
   }
 

@@ -131,6 +131,7 @@ describe("/v1/admin", () => {
       ["GET", "/v1/admin/storage-stats"],
       ["GET", "/v1/admin/users"],
       ["GET", "/v1/admin/users/u_1"],
+      ["GET", "/v1/admin/users/u_1/opponents"],
       ["GET", "/v1/admin/health"],
       ["GET", "/v1/admin/events"],
       ["GET", "/v1/admin/events/counts"],
@@ -235,6 +236,81 @@ describe("/v1/admin", () => {
     expect(top.length).toBeGreaterThanOrEqual(1);
     // Top entries are projected — no raw HMAC hashes leak through.
     expect(top[0]).not.toHaveProperty("displayNameHash");
+  });
+
+  test("listOpponents paginates, filters, and sorts the full history", async () => {
+    // pulseId, name, race, result, date
+    const seed = [
+      ["1-S2-1-265393", "GoMeZ", "Zerg", "Victory", "2026-05-01T10:00:00.000Z"],
+      ["1-S2-1-265393", "GoMeZ", "Zerg", "Victory", "2026-05-01T11:00:00.000Z"],
+      ["1-S2-1-265393", "GoMeZ", "Zerg", "Defeat", "2026-05-01T12:00:00.000Z"],
+      ["1-S2-1-3740123", "Salt", "Protoss", "Victory", "2026-05-02T10:00:00.000Z"],
+      ["1-S2-1-3740123", "Salt", "Protoss", "Defeat", "2026-05-02T11:00:00.000Z"],
+      ["1-S2-1-4262731", "Captain", "Zerg", "Victory", "2026-05-03T10:00:00.000Z"],
+    ];
+    for (const [pulseId, name, race, result, date] of seed) {
+      const res = await request(app)
+        .post("/v1/games")
+        .set("authorization", "Bearer admin-token")
+        .send(
+          SAMPLE_GAME({
+            gameId: `${date}|${name}|Map|600`,
+            date,
+            result,
+            opponent: { pulseId, toonHandle: pulseId, displayName: name, race },
+          }),
+        );
+      expect(res.status).toBeLessThan(300);
+    }
+
+    const base = `/v1/admin/users/${adminUserId}/opponents`;
+
+    // Default: gameCount desc → GoMeZ(3), Salt(2), Captain(1).
+    const all = await asAdmin(request(app).get(base));
+    expect(all.status).toBe(200);
+    expect(all.body.total).toBe(3);
+    expect(all.body.items.map((o) => o.displayNameSample)).toEqual([
+      "GoMeZ",
+      "Salt",
+      "Captain",
+    ]);
+    expect(all.body.items[0].wins).toBe(2);
+    expect(all.body.items[0].losses).toBe(1);
+    expect(all.body.items[0].winRate).toBeCloseTo(2 / 3);
+    expect([...all.body.races].sort()).toEqual(["Protoss", "Zerg"]);
+    expect(all.body.hasMore).toBe(false);
+
+    // Race filter.
+    const zerg = await asAdmin(request(app).get(`${base}?race=Zerg`));
+    expect(zerg.body.total).toBe(2);
+    expect(zerg.body.items.every((o) => o.race === "Zerg")).toBe(true);
+
+    // Search by pulse-id fragment.
+    const search = await asAdmin(request(app).get(`${base}?search=3740123`));
+    expect(search.body.total).toBe(1);
+    expect(search.body.items[0].displayNameSample).toBe("Salt");
+
+    // minGames filter.
+    const min2 = await asAdmin(request(app).get(`${base}?minGames=2`));
+    expect(min2.body.total).toBe(2);
+
+    // Offset pagination — limit 2 → page 0 (2 rows, more) then page 1 (1 row).
+    const p0 = await asAdmin(request(app).get(`${base}?limit=2&page=0`));
+    expect(p0.body.items).toHaveLength(2);
+    expect(p0.body.hasMore).toBe(true);
+    const p1 = await asAdmin(request(app).get(`${base}?limit=2&page=1`));
+    expect(p1.body.items).toHaveLength(1);
+    expect(p1.body.hasMore).toBe(false);
+
+    // Sort by winRate asc → Salt(0.5), GoMeZ(0.667), Captain(1.0).
+    const byWr = await asAdmin(
+      request(app).get(`${base}?sort=winRate&order=asc`),
+    );
+    expect(byWr.body.items.map((o) => o.displayNameSample)).toEqual([
+      "Salt",
+      "GoMeZ",
+      "Captain",
+    ]);
   });
 
   test("rebuild-opponents drops + re-derives from games (counter fix)", async () => {

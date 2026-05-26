@@ -128,9 +128,17 @@ export default function AdminUserDetailPage({
           <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
             Top opponents
           </h3>
-          <span className="text-caption text-text-dim">
-            top 5 by gameCount
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-caption text-text-dim">
+              top 5 by gameCount
+            </span>
+            <Link
+              href={`/admin/users/${encodeURIComponent(data.userId)}/opponents`}
+              className="text-caption font-medium text-accent hover:underline"
+            >
+              View all {compactNumber(data.opponents.total)} →
+            </Link>
+          </div>
         </Card.Header>
         {data.opponents.top.length === 0 ? (
           <div className="px-4 py-8 text-center text-text-muted">

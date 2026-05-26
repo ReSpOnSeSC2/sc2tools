@@ -68,6 +68,40 @@ export type AdminUserDetail = {
   };
 };
 
+export type AdminOpponentRow = {
+  pulseId: string;
+  displayNameSample: string;
+  race: string;
+  gameCount: number;
+  wins: number;
+  losses: number;
+  /** Fraction in [0, 1] — wins / gameCount, computed server-side. */
+  winRate: number;
+  firstSeen: string | null;
+  lastSeen: string | null;
+  mmr: number | null;
+  leagueId: number | null;
+};
+
+export type OpponentSort =
+  | "gameCount"
+  | "wins"
+  | "losses"
+  | "winRate"
+  | "lastSeen"
+  | "firstSeen"
+  | "mmr";
+
+export type OpponentsListResp = {
+  items: AdminOpponentRow[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+  /** Distinct races present across all of the user's opponents. */
+  races: string[];
+};
+
 export type RebuildResp = {
   userId: string;
   droppedRows: number;
