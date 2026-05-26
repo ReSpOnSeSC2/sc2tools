@@ -28,6 +28,34 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Added
 
+- **Auto-Discover Builds** — a new discovery surface on `/app → Builds`
+  that scans each matchup's catch-all bucket ("Macro Transition
+  (Unclassified)" / "Unclassified - <Matchup>") for groups of replays
+  whose openings closely match each other, then proposes a named
+  custom build per group. Floors at **five games per group** so a
+  one-off cheese or a stray macro experiment never becomes a build.
+  Backed by the new `AutoClassifyService` and two HTTP routes —
+  `GET /v1/auto-classify/candidates` for the dry-run preview and
+  `POST /v1/auto-classify/apply` for promotion — sitting on top of
+  the existing `CustomBuildsService` rule engine. Promoted candidates
+  upsert as ordinary custom builds (same `(userId, slug)` keyspace, same
+  schemaVersion: 3 rule shape, same publish/edit/delete affordances)
+  with a `source: 'auto-classify'` provenance tag and a description
+  noting they were generated automatically. **Never re-tags a game an
+  existing detector or custom build already claims** — discovery scope
+  is filtered through `isAlreadyClassified` (which reuses the same
+  rule-match predicates as `/reclassify`) BEFORE clustering, so named
+  builds the agent stamped and rules the user already wrote are
+  untouched. The Auto-Discover panel sits above the build grid; the
+  build owner can toggle it off via Settings → Misc → Advanced →
+  "Show Auto-Discover Builds panel" without affecting the underlying
+  routes (the dossier and any future surfaces can still consume
+  discovery candidates). New scans return `[]` until enough lookalike
+  unclassified games accumulate, so a brand-new library is silent and
+  error-free rather than noisy. Wired through 6 new modules in
+  `apps/api/src/services/autoClassify/` + `apps/web/components/builds/
+  Auto*.tsx`; existing custom-builds + reclassify pipelines unchanged.
+
 - **Phase analytics rollout · build dossier, strategy drill-down,
   opponent profile, and pre-game scouting** — a single calibrated
   phase model (Early / Early-Mid / Mid / Mid-Late / Late) now drives
