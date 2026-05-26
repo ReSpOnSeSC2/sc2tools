@@ -23,6 +23,7 @@ const { GamesService } = require("./services/games");
 const { GameDetailsService } = require("./services/gameDetails");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { CustomBuildsService } = require("./services/customBuilds");
+const { AutoClassifyService } = require("./services/autoClassify");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { OverlayLiveService } = require("./services/overlayLive");
@@ -234,6 +235,10 @@ function makeServices(deps) {
     gameDetails,
   });
   const customBuilds = new CustomBuildsService(deps.db, { perGame });
+  // Discovery engine — dry-run brain that surfaces candidate custom
+  // builds from the user's unclassified games. Read-only; promotion
+  // to a real customBuilds row happens through a separate route.
+  const autoClassify = new AutoClassifyService({ customBuilds, perGame });
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io });
@@ -256,6 +261,7 @@ function makeServices(deps) {
     games,
     gameDetails,
     customBuilds,
+    autoClassify,
     pairings,
     overlayTokens,
     overlayLive,
