@@ -587,6 +587,95 @@ class AdminService {
   }
 
   /**
+   * Games one user played against a single opponent, newest first —
+   * the data behind clicking an opponent row in the admin browser.
+   *
+   * Matches on BOTH the denormalised top-level ``oppPulseId`` (what
+   * the agent uploads and ``GamesService.list`` filters on) AND the
+   * nested ``opponent.pulseId`` (the canonical field the opponents
+   * collection is keyed on). An ``$or`` keeps the drill-down correct
+   * regardless of which the ingest happened to write, so an opponent
+   * that appears in the list never shows an empty game history.
+   *
+   * Cursor-paginated by ``date`` to match the rest of the games
+   * surface. Returns slim rows only — build orders live in
+   * ``game_details`` and are fetched per-game on demand.
+   *
+   * @param {string} userId
+   * @param {string} pulseId
+   * @param {{ limit?: number, before?: Date }} [opts]
+   * @returns {Promise<{
+   *   items: Array<{
+   *     gameId: string,
+   *     date: Date | null,
+   *     result: string | null,
+   *     myRace: string | null,
+   *     map: string | null,
+   *     durationSec: number | null,
+   *     myMmr: number | null,
+   *     macroScore: number | null,
+   *     opponent: { displayName: string, race: string, mmr: number | null },
+   *   }>,
+   *   nextBefore: Date | null,
+   * }>}
+   */
+  async listGamesVsOpponent(userId, pulseId, opts = {}) {
+    if (!userId) throw new Error("userId required");
+    if (!pulseId) throw new Error("pulseId required");
+    const limit = clampLimit(opts.limit, 50);
+    /** @type {Record<string, any>} */
+    const filter = {
+      userId,
+      $or: [{ oppPulseId: pulseId }, { "opponent.pulseId": pulseId }],
+    };
+    if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
+      filter.date = { $lt: opts.before };
+    }
+    const rows = await this.db.games
+      .find(filter, {
+        projection: {
+          _id: 0,
+          gameId: 1,
+          date: 1,
+          result: 1,
+          myRace: 1,
+          map: 1,
+          durationSec: 1,
+          myMmr: 1,
+          macroScore: 1,
+          opponent: 1,
+        },
+      })
+      .sort({ date: -1 })
+      .limit(limit + 1)
+      .toArray();
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const items = page.map((/** @type {any} */ g) => {
+      const opp = g.opponent || {};
+      return {
+        gameId: String(g.gameId || ""),
+        date: g.date instanceof Date ? g.date : null,
+        result: g.result || null,
+        myRace: g.myRace || null,
+        map: g.map || null,
+        durationSec: typeof g.durationSec === "number" ? g.durationSec : null,
+        myMmr: typeof g.myMmr === "number" ? g.myMmr : null,
+        macroScore: typeof g.macroScore === "number" ? g.macroScore : null,
+        opponent: {
+          displayName: opp.displayName || "",
+          race: opp.race || "",
+          mmr: typeof opp.mmr === "number" ? opp.mmr : null,
+        },
+      };
+    });
+    return {
+      items,
+      nextBefore: hasMore && page.length > 0 ? page[page.length - 1].date : null,
+    };
+  }
+
+  /**
    * Drop every opponent row for one user, re-derive from games,
    * THEN heal any rows whose ``pulseCharacterId`` is missing by
    * resolving against SC2Pulse. Wraps the combined GDPR helper so

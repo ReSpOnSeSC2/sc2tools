@@ -436,6 +436,8 @@ function mountRoutes(app, deps, services, clerk) {
       admin: services.admin,
       adminEvents: services.adminEvents,
       gdpr: services.gdpr,
+      games: services.games,
+      perGame: services.perGame,
       auth,
       isAdmin,
       gameDetailsStoreKind: deps.config.gameDetailsStore,

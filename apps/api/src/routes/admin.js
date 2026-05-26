@@ -33,6 +33,8 @@ const express = require("express");
  *   admin: import('../services/admin').AdminService,
  *   adminEvents: import('../services/adminEvents').AdminEventsService,
  *   gdpr: import('../services/gdpr').GdprService,
+ *   games: import('../services/games').GamesService,
+ *   perGame: import('../services/types').PerGameComputeService,
  *   auth: import('express').RequestHandler,
  *   isAdmin: (req: any) => boolean,
  *   gameDetailsStoreKind?: string,
@@ -114,6 +116,50 @@ function buildAdminRouter(deps) {
       next(err);
     }
   });
+
+  // Games one user played vs a single opponent — drill-down from the
+  // opponents browser. Cursor-paginated by date (``before``).
+  router.get(
+    "/admin/users/:userId/opponents/:pulseId/games",
+    async (req, res, next) => {
+      try {
+        const limit = parseLimit(req.query.limit);
+        const before = parseDate(req.query.before);
+        const result = await deps.admin.listGamesVsOpponent(
+          String(req.params.userId),
+          String(req.params.pulseId),
+          { limit, before },
+        );
+        res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // Build order (player + opponent, parsed into timeline events) for a
+  // single game owned by an ARBITRARY user. Delegates to the same
+  // compute service the user-facing /v1/games/:gameId/build-order route
+  // uses, just with the target userId instead of the caller's — so the
+  // admin view renders identically to the owner's own replay.
+  router.get(
+    "/admin/users/:userId/games/:gameId/build-order",
+    async (req, res, next) => {
+      try {
+        const out = await deps.perGame.buildOrder(
+          String(req.params.userId),
+          String(req.params.gameId),
+        );
+        if (!out) {
+          res.status(404).json({ error: { code: "game_not_found" } });
+          return;
+        }
+        res.json(out);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   router.post(
     "/admin/users/:userId/rebuild-opponents",

@@ -102,6 +102,27 @@ export type OpponentsListResp = {
   races: string[];
 };
 
+export type AdminGameVsOpponentRow = {
+  gameId: string;
+  date: string | null;
+  result: string | null;
+  myRace: string | null;
+  map: string | null;
+  durationSec: number | null;
+  myMmr: number | null;
+  macroScore: number | null;
+  opponent: {
+    displayName: string;
+    race: string;
+    mmr: number | null;
+  };
+};
+
+export type OpponentGamesResp = {
+  items: AdminGameVsOpponentRow[];
+  nextBefore: string | null;
+};
+
 export type RebuildResp = {
   userId: string;
   droppedRows: number;
