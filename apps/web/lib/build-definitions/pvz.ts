@@ -104,7 +104,7 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Stargate into Glaives",
     description:
-      "Detected if a Stargate is built BEFORE any Twilight Council (pure ordering, no time threshold -- a slow Stargate opener that transitioned to Glaives still counts), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), and the player has 4-8 Gateways by 6:00 -- a Phoenix or Oracle into Glaive Adept timing. The Glaives-first signal is what separates this from Stargate into Blink, where Blink would be researched first instead.",
+      "Detected if a Stargate is built BEFORE any Twilight Council (pure ordering, no time threshold -- a slow Stargate opener that transitioned to Glaives still counts) and the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge) -- a Phoenix or Oracle into Glaive Adept timing. Classification is purely order-based with no Gateway-count window: the Glaives-first signal IS the build, whether the player backs it with a handful of Gateways or warps a heavy 9+ Gateway mass-Adept timing. That Glaives-first ordering is what separates this from Stargate into Blink (Blink researched first) and is what keeps a Glaives-then-Blink build from being demoted to Standard Blink Macro.",
   },
   {
     race: "Protoss",

@@ -2,6 +2,88 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.8.8
+
+### Added — PvP Glaive Adept classification (`Robo into Glaives` + `Adept Glaives`)
+- **User-reported gap.** PvP had no Glaive Adept label at all, so two
+  common builds were mis-tagged by the Blink-keyed rules: a Robo-first
+  Glaive build (Robo → Twilight → Glaives) fell into
+  `PvP - Rail's Blink Stalker (Robo 1st)` (which checks no upgrade at
+  all), and a Twilight-first Glaive build that later picked up Blink
+  fell into `PvP - Blink Stalker Style` (which keys on Blink merely
+  existing).
+- **Added `PvP - Robo into Glaives`**: Robotics Facility built BEFORE
+  the Twilight Council AND Glaives is the FIRST upgrade off that
+  Twilight (before Blink AND Charge). Sits above `Rail's Blink Stalker
+  (Robo 1st)` so the Glaives-first signal wins.
+- **Added `PvP - Adept Glaives`**: Twilight Council is the FIRST tech
+  building (before any Robotics Facility AND any Stargate, pure
+  ordering) AND Glaives is the first upgrade off it. Sits above
+  `Blink Stalker Style`.
+- **Order-based, no Gateway window** — same principle as the PvZ / PvT
+  Glaive rules. The generic `PvP - 1 Gate Expand` / `PvP - 2 Gate
+  Expand` opener labels now fall through on a Glaives-first transition
+  so these labels are reachable for builds that opened with a standard
+  expand.
+- **Mirror** `SC2Replay-Analyzer/detectors/user.py` updated in lockstep
+  with the canonical `core/strategy_detector_pvp.py`.
+- **Catalog**: two new entries in both `data/build_definitions.json`
+  and `apps/web/lib/build-definitions/pvp.ts` (which powers the
+  `/definitions` page); `Rail's Blink Stalker (Robo 1st)` description
+  updated to point at the new label.
+- **Tests**: 8 new cases in `test_strategy_detector_pvp_glaives.py`
+  (both labels classify, Glaives-first wins over a later Blink,
+  Blink-first negatives, Robo-vs-Twilight-first split, catalog
+  presence). Full self-contained strategy-detector suite: 135/135
+  passing.
+
+## 0.8.7
+
+### Fixed — PvZ Stargate into Glaives is order-based; drop the Gateway-count cap
+- **User-reported misclassification.** A `Stargate → Twilight →
+  Glaives-first → Blink-later` build (a Phoenix/Oracle into Glaive
+  Adept timing that warps a heavy Gateway count) was being labelled
+  `PvZ - Standard Blink Macro` instead of `PvZ - Stargate into
+  Glaives`. The user upgraded Glaives FIRST off the Twilight — Blink
+  only came later — so the build is unambiguously a Glaives build.
+- **Root cause**: the `PvZ - Stargate into Glaives` rule required
+  `4 <= gate_count_6min <= 8`. A real Glaive Adept timing routinely
+  warps 9+ Gateways (mass Adepts ARE the build), so it failed the
+  upper bound, skipped the Glaives label, and fell through to the
+  `Standard Blink Macro` rule once Blink was researched second and a
+  3rd Nexus was taken. The sibling `PvT - Stargate into Glaives` rule
+  has never had a Gateway-count window — it classifies purely on
+  ordering, which is correct.
+- **Fix**: removed the `4 <= gate_count_6min <= 8` window from
+  `PvZ - Stargate into Glaives` in
+  `reveal-sc2-opponent-main/core/strategy_detector_pvz.py`.
+  Classification is now purely order-based: Stargate built before
+  Twilight + Glaives is the FIRST upgrade off the Twilight (before
+  Blink AND Charge) ⇒ Stargate into Glaives, regardless of Gateway
+  count or a later Blink.
+- **Mirror brought back in sync**: the
+  `SC2Replay-Analyzer/detectors/user.py` copy was further out of date
+  — it still used a loose `has_upgrade_substr("Glaive", 600)`
+  *existence* check (any Glaives, even AFTER Blink) plus an even
+  tighter `4 <= gate_count_6min <= 6` cap. It now uses the same
+  `glaive_first_off_twilight` ordering signal as the canonical
+  detector with no Gateway window.
+- **Catalog**: the `PvZ - Stargate into Glaives` description was
+  refreshed in both `data/build_definitions.json` (canonical Python
+  catalog) AND `apps/web/lib/build-definitions/pvz.ts` (TS catalog
+  behind the `/definitions` page) to drop the "4-8 Gateways by 6:00"
+  qualifier and state the order-based, no-Gateway-window rule.
+- **Tests**: 2 new regression cases in
+  `test_strategy_detector_pvz_adept_glaives.py`:
+  - `test_stargate_into_glaives_classifies_with_heavy_gateway_count`
+    pins the reported shape (9 Gateways, 3 bases, Glaives-then-Blink →
+    Stargate into Glaives).
+  - `test_stargate_into_glaives_classifies_with_few_gateways`
+    confirms a low Gateway count still classifies on ordering.
+  Existing Blink-first negative tests still pass (Blink-first builds
+  must NOT tag as Glaives). Full self-contained strategy-detector
+  suite: 127/127 passing.
+
 ## 0.8.6
 
 ### Changed — Cosmetic version bump, no behavioural change

@@ -208,6 +208,55 @@ def test_stargate_into_glaives_classifies():
     )
 
 
+def test_stargate_into_glaives_classifies_with_heavy_gateway_count():
+    """Glaives is the FIRST upgrade off a Twilight that followed the
+    Stargate, then Blink is researched LATER, on 3 bases with a heavy
+    9+ Gateway mass-Adept timing. This is the build that used to fall
+    through the old ``4 <= gate_count_6min <= 8`` window and get
+    demoted to "PvZ - Standard Blink Macro". Order wins: Glaives first
+    => Stargate into Glaives, regardless of Gateway count or a later
+    Blink."""
+    events = _base_protoss_opener()
+    # Stargate is FIRST tech (before Twilight)
+    events.append(_building("Stargate", 200))
+    # Twilight comes AFTER Stargate
+    events.append(_building("TwilightCouncil", 280))
+    # Heavy mass-Adept commitment: 9 Gateways warped by 9:00
+    events.extend(_gates([240, 300, 320, 340, 360, 380, 400, 420, 440]))
+    # FIRST upgrade out of Twilight is Glaives; Blink comes LATER.
+    events.append(_upgrade("AdeptPiercingAttack", 320))
+    events.append(_upgrade("BlinkTech", 520))
+    # 3rd Nexus taken -- the signal that previously triggered the
+    # Standard Blink Macro fall-through.
+    events.append(_building("Nexus", 360))
+    events.append(_unit("Phoenix", 260))
+    events.append(_unit("Adept", 350))
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - Stargate into Glaives", (
+        f"Glaives-first must win over a later Blink even with 9 Gateways "
+        f"on 3 bases; got {result!r}"
+    )
+
+
+def test_stargate_into_glaives_classifies_with_few_gateways():
+    """A low Gateway count (below the old window's lower bound of 4)
+    must still classify on the Glaives-first ordering signal."""
+    events = _base_protoss_opener()
+    events.append(_building("Stargate", 200))
+    events.append(_building("TwilightCouncil", 280))
+    # Only the opener Gateway (t=60) plus one more -> 2 total.
+    events.extend(_gates([240]))
+    events.append(_upgrade("AdeptPiercingAttack", 320))
+    events.append(_unit("Phoenix", 260))
+    detector = sd.UserBuildDetector(custom_builds=[])
+    result = detector.detect_my_build("vs Zerg", events, my_race="Protoss")
+    assert result == "PvZ - Stargate into Glaives", (
+        f"Glaives-first off a post-Stargate Twilight is Stargate into "
+        f"Glaives even with few Gateways; got {result!r}"
+    )
+
+
 def test_stargate_into_blink_does_not_match_stargate_into_glaives():
     """The key separator: Blink starts BEFORE Glaives out of the
     Twilight Council. The build must NOT be tagged as Stargate into

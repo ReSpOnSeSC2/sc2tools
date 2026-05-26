@@ -74,9 +74,23 @@ export const PVP_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   {
     race: "Protoss",
     matchup: "PvP",
+    name: "PvP - Robo into Glaives",
+    description:
+      "Detected if a Robotics Facility is built BEFORE the Twilight Council and the FIRST upgrade researched out of that Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge) -- the common PvP Robo (Immortal / Observer) opening into a Glaive Adept timing. Classification is purely order-based: the Glaives-first signal is what separates this from Rail's Blink Stalker (Robo 1st), where Blink would be the upgrade instead.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvP",
+    name: "PvP - Adept Glaives",
+    description:
+      "Detected if the Twilight Council is the FIRST tech building (built before any Robotics Facility AND any Stargate -- pure ordering, no time threshold) and the FIRST upgrade researched out of it is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge) -- a pure Gateway Adept Glaive timing. The Glaives-first signal separates it from Blink Stalker Style, where Blink would be researched first.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvP",
     name: "PvP - Rail's Blink Stalker (Robo 1st)",
     description:
-      "Detected if Robotics Facility goes down BEFORE Twilight Council and BOTH go down before the natural Nexus -- a Robo-first Blink Stalker style.",
+      "Detected if Robotics Facility goes down BEFORE Twilight Council and BOTH go down before the natural Nexus -- a Robo-first Blink Stalker style. A Robo-first build whose FIRST Twilight upgrade is Glaives tags as PvP - Robo into Glaives instead.",
   },
   {
     race: "Protoss",
