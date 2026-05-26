@@ -258,7 +258,14 @@ already matches an existing named build or user custom build.
 >    perspective, schemaVersion: 3, description: <generated provenance line>,
 >    source: 'auto-classify' })`. Add `source` to the validation allow-list and
 >    schema (optional string enum `['manual','auto-classify','import']`,
->    defaulting `manual`).
+>    defaulting `manual`). **`source` is provenance metadata ONLY — it must
+>    never gate behaviour.** An auto-classified build is a first-class custom
+>    build: it must appear in `GET /v1/custom-builds` / the BuildsLibrary grid,
+>    be editable in the BuildEditor, and be publishable to the community through
+>    the existing publish flow (`isPublic` / `shareWithCommunity` +
+>    `BuildPublishModal` / the `community` service) exactly like a hand-authored
+>    build. Do not add any `source !== 'manual'` filter to the list, stats,
+>    publish, or community code paths.
 > 3. After all upserts, call `customBuilds.reclassifyAll(userId,
 >    { clearUnmatched: false })` **once** so most-specific-wins ownership is
 >    enforced globally — this guarantees a new auto build can't steal a game
@@ -362,6 +369,11 @@ already matches an existing named build or user custom build.
 > candidates; an inline error with retry on `error`. Fully keyboard-navigable;
 > `aria-label`s on icon buttons; respects reduced-motion.
 >
+> Note: once a candidate is applied it becomes an ordinary custom build, so the
+> standard build card's existing **Edit** and **Publish to community** actions
+> apply to it unchanged — do not build a parallel editor/publish path for
+> auto-builds.
+>
 > **Acceptance:** renders real candidates from the running API; editing a name
 > and clicking Create sends the edited value; no layout shift between
 > loading/loaded; matches the dark theme tokens. Add a Storybook/Jest render
@@ -392,25 +404,74 @@ already matches an existing named build or user custom build.
 
 ---
 
-## Prompt 10 — Feature flag, empty-DB safety, docs, changelog
+## Prompt 10 — Feature flag, empty-DB safety, changelog/versioning, docs
 
-> **Goal:** Ship-safe rollout and discoverability.
+> **Goal:** Ship-safe rollout, discoverability, and a correct changelog +
+> versioning pass that satisfies CI — without performing a release.
 >
-> - Gate the panel behind the repo's existing feature-flag mechanism (find how
->   other recent features flag themselves; reuse it) defaulting **on** for the
->   build owner. Backend routes stay available regardless.
-> - Guarantee graceful behaviour with sparse data: <5 games in every matchup →
->   `discover` returns `[]`, UI shows the empty state, zero errors.
-> - Update `CHANGELOG.md` (match the existing entry style and version-bump
->   convention) and add a short "Auto-Discover Builds" section to the user-
->   facing docs alongside the custom-builds docs.
-> - Final pass: confirm no touched file exceeds 800 lines, run the full
->   `apps/api` and `apps/web` test + typecheck suites, and list any follow-ups
->   (e.g. surfacing auto-discovery for opponent scouting) without implementing
->   them.
+> **A. Feature flag + empty-DB safety**
+> - Gate the Auto-Discover panel behind the repo's existing feature-flag
+>   mechanism (find how a recent feature flags itself; reuse it), defaulting
+>   **on** for the build owner. Backend routes stay available regardless of the
+>   flag.
+> - Guarantee graceful behaviour with sparse data: when no matchup has ≥5
+>   lookalike unclassified games, `discover` returns `[]`, the UI shows its
+>   empty state, and **zero** errors are thrown.
 >
-> **Acceptance:** flag toggles the panel; empty DB is silent; `CHANGELOG.md`
-> updated; all suites green.
+> **B. Changelog (always required)**
+> - Add an entry under the `## [Unreleased]` section of `CHANGELOG.md`,
+>   following the existing Keep-a-Changelog style already in that file
+>   (`### Added` / `### Changed` etc.). Describe the Auto-Discover Builds
+>   feature in user-facing terms (what it does, the min-5 rule, that it never
+>   re-tags already-classified games). Do **not** invent a release header or
+>   date — leave it under `[Unreleased]`.
+>
+> **C. Versioning — conditional, and CI-aware**
+> This feature is **cloud-only** (`apps/api` + `apps/web`). Determine which
+> case applies and act accordingly:
+>
+> - **If the change stays cloud-only (expected):** do **not** bump any version
+>   file and do **not** create a git tag. The cloud API/web deploy through their
+>   own pipeline; the suite version and installer tag are unrelated to it. The
+>   `CHANGELOG.md` entry from step B is the only release-adjacent edit.
+>
+> - **If, and only if, this feature also ships inside the desktop
+>   agent/installer:** bump the canonical suite version and keep its three
+>   mirrors in sync, because `.github/workflows/version-check.yml` hard-fails
+>   the PR if they diverge. Bump all three together (currently `1.4.7`):
+>   1. `reveal-sc2-opponent-main/stream-overlay-backend/package.json` →
+>      `"version"` (the canonical source).
+>   2. `SC2Replay-Analyzer/__init__.py` → reads the canonical value; confirm it
+>      resolves to the new version (no literal to edit unless the read path
+>      changed).
+>   3. `reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/components/settings-foundation.jsx`
+>      → `SETTINGS_VERSION` literal.
+>
+> - **If the agent's classifier/detector logic itself changed** (it should
+>   **not** for this cloud feature — classification of existing and future games
+>   is handled entirely cloud-side by `reclassifyAll` and the `tagSingleGame`
+>   ingest hook — but verify): bump the agent version
+>   `apps/agent/sc2tools_agent/__init__.py` → `__version__` (currently `0.8.8`),
+>   matching the repo's `chore(release): bump agent to …` commit convention.
+>
+> **D. Tagging / release is OUT OF SCOPE for this prompt.** Do **not** create or
+> push a `vX.Y.Z` git tag. Pushing such a tag triggers `release.yml`, which
+> builds the Windows installer and publishes a public GitHub Release — a
+> deliberate, human-gated step. Instead, if a version was bumped in step C, end
+> your summary with an explicit note: *"Ready to release: tag `vX.Y.Z` and push
+> to trigger the installer build."* and stop.
+>
+> **E. Docs + final pass**
+> - Add a short "Auto-Discover Builds" section to the user-facing docs alongside
+>   the custom-builds docs.
+> - Confirm no touched file exceeds 800 lines; run the full `apps/api` and
+>   `apps/web` test + typecheck suites; list any follow-ups (e.g. surfacing
+>   auto-discovery in opponent scouting) without implementing them.
+>
+> **Acceptance:** flag toggles the panel; empty DB is silent and error-free;
+> `CHANGELOG.md` has an `[Unreleased]` entry; **no** version files changed in
+> the cloud-only case (and if they were, all three suite mirrors agree so
+> `version-check` passes); **no** git tag created by the agent; all suites green.
 
 ---
 
