@@ -83,6 +83,38 @@ function buildAdminRouter(deps) {
     }
   });
 
+  // Full opponent history for one user — the "see all opponents"
+  // browser. ``:userId`` matches a single path segment, so this more
+  // specific route never collides with ``/admin/users/:userId`` above.
+  router.get("/admin/users/:userId/opponents", async (req, res, next) => {
+    try {
+      const limit = parseLimit(req.query.limit);
+      const page = parsePage(req.query.page);
+      const search =
+        typeof req.query.search === "string" ? req.query.search : undefined;
+      const race =
+        typeof req.query.race === "string" ? req.query.race : undefined;
+      const minGames = parseNonNegInt(req.query.minGames);
+      const sort =
+        typeof req.query.sort === "string" ? req.query.sort : undefined;
+      const order =
+        typeof req.query.order === "string" ? req.query.order : undefined;
+      res.json(
+        await deps.admin.listOpponents(String(req.params.userId), {
+          limit,
+          page,
+          search,
+          race,
+          minGames,
+          sort,
+          order,
+        }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post(
     "/admin/users/:userId/rebuild-opponents",
     async (req, res, next) => {
@@ -185,6 +217,20 @@ function parseLimit(raw) {
   if (raw === undefined) return undefined;
   const n = Number.parseInt(String(raw), 10);
   return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/** @param {unknown} raw — 0-based page index; negatives/garbage → 0. */
+function parsePage(raw) {
+  if (raw === undefined) return undefined;
+  const n = Number.parseInt(String(raw), 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** @param {unknown} raw — non-negative integer filter; garbage → undefined. */
+function parseNonNegInt(raw) {
+  if (raw === undefined) return undefined;
+  const n = Number.parseInt(String(raw), 10);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
 
 /** @param {unknown} raw */
