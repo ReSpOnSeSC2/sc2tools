@@ -8,6 +8,13 @@ export type SortState = {
   sortBy: string;
   sortDir: SortDir;
   setSort: (col: string) => void;
+  /**
+   * Deterministically set both the sort column and direction. Used by
+   * controls that own their own direction UI (e.g. a win-rate
+   * high→low / low→high toggle) where the click-to-flip semantics of
+   * ``setSort`` would be ambiguous.
+   */
+  setSortExplicit: (col: string, dir: SortDir) => void;
   sortRows: <T>(rows: T[], pick: (row: T, col: string) => unknown) => T[];
 };
 
@@ -25,6 +32,10 @@ export function useSort(initialCol: string, initialDir: SortDir = "desc"): SortS
     },
     [sortBy],
   );
+  const setSortExplicit = useCallback((col: string, dir: SortDir) => {
+    setSortBy(col);
+    setSortDir(dir);
+  }, []);
   const sortRows = useCallback(
     <T,>(rows: T[], pick: (row: T, col: string) => unknown): T[] => {
       const copy = [...rows];
@@ -42,7 +53,7 @@ export function useSort(initialCol: string, initialDir: SortDir = "desc"): SortS
     },
     [sortBy, sortDir],
   );
-  return { sortBy, sortDir, setSort, sortRows };
+  return { sortBy, sortDir, setSort, setSortExplicit, sortRows };
 }
 
 export function SortableTh({

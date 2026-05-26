@@ -12,6 +12,7 @@ import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
+import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { AllGamesTable } from "./AllGamesTable";
 import { StrategyMmrPanel } from "./mmr/StrategyMmrPanel";
 import { BuildMatchupHeatmap } from "./mmr/BuildMatchupHeatmap";
@@ -179,6 +180,11 @@ function ByOppStrategyView({
           onChange={(e) => setSearch(e.target.value)}
         />
         <MinGamesPicker value={minGames} onChange={setMinGames} />
+        <WinRateSortToggle
+          dir={sort.sortBy === "winRate" ? sort.sortDir : "desc"}
+          active={sort.sortBy === "winRate"}
+          onChange={(dir) => sort.setSortExplicit("winRate", dir)}
+        />
       </div>
       <div className="text-[11px] text-text-dim">
         Click any card to see the games where you faced that strategy.

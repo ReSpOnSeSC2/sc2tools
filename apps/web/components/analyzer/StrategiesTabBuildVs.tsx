@@ -6,6 +6,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
+import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { PhaseTrajectoryStrip } from "./PhaseTrajectoryStrip";
 import {
   PhaseCompositionTabs,
@@ -109,6 +110,13 @@ export function BuildVsStrategyView({
           onChange={(e) => setSearch(e.target.value)}
         />
         {renderMinGamesPicker(minGames, setMinGames)}
+        {view === "table" ? (
+          <WinRateSortToggle
+            dir={sort.sortBy === "winRate" ? sort.sortDir : "desc"}
+            active={sort.sortBy === "winRate"}
+            onChange={(dir) => sort.setSortExplicit("winRate", dir)}
+          />
+        ) : null}
         <div className="inline-flex overflow-hidden rounded border border-border">
           {(["table", "heatmap"] as const).map((v) => (
             <button
