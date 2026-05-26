@@ -305,6 +305,26 @@ class UserBuildDetector(BaseStrategyDetector):
 
             sec_nexus_time = nth_base_start(buildings, "Nexus", 2)
             total_nexuses = base_count_at(buildings, "Nexus")
+
+            # Glaives-first ordering signal (mirror of canonical
+            # reveal-sc2-opponent-main/core/strategy_detector_pvp.py).
+            # Resonating Glaives being the FIRST upgrade off the
+            # Twilight Council (before Blink AND Charge) marks an Adept
+            # Glaive build. Computed up front so the two Glaive labels
+            # below can override the generic 1/2 Gate Expand opener
+            # labels and pre-empt the Blink-keyed rules.
+            robo_time = building_time("RoboticsFacility")
+            twilight_time = building_time("TwilightCouncil")
+            sg_time = building_time("Stargate")
+            glaive_time = upgrade_time("AdeptPiercing", "Glaive")
+            blink_time = upgrade_time("Blink")
+            charge_time = upgrade_time("Charge")
+            glaive_first_off_twilight = (
+                glaive_time < 9999
+                and glaive_time < blink_time
+                and glaive_time < charge_time
+            )
+
             gate_times = start_times(buildings, "Gateway")
             # Count gateways STARTED before the second Nexus started --
             # this is what separates a 1-gate expand from a 2-gate
@@ -315,8 +335,10 @@ class UserBuildDetector(BaseStrategyDetector):
                 first_unit = next((u['name'] for u in sorted(units, key=lambda x: x['time']) if u['name'] in ("Stalker", "Adept", "Sentry", "Zealot")), None)
 
                 # 2 Gate Expand: 2+ gates started before the natural
-                # goes down (the "safe" PvP opener).
-                if gates_before_expand >= 2:
+                # goes down (the "safe" PvP opener). Falls through on a
+                # Glaives-first transition so the Glaive labels below
+                # can claim it.
+                if gates_before_expand >= 2 and not glaive_first_off_twilight:
                     return "PvP - 2 Gate Expand"
 
                 # Strange's 1 Gate Expand: exactly 1 gate before the natural
@@ -325,8 +347,12 @@ class UserBuildDetector(BaseStrategyDetector):
                     return "PvP - Strange's 1 Gate Expand"
 
                 # Standard 1 Gate Expand: exactly 1 gate before the natural,
-                # first unit is anything other than a Sentry.
-                if gates_before_expand == 1 and first_unit in ("Stalker", "Adept", "Zealot"):
+                # first unit is anything other than a Sentry. Falls through
+                # on a Glaives-first transition (a Glaive Adept build that
+                # opened 1-gate-expand is still a Glaive build).
+                if (gates_before_expand == 1
+                        and first_unit in ("Stalker", "Adept", "Zealot")
+                        and not glaive_first_off_twilight):
                     return "PvP - 1 Gate Expand"
 
             # AlphaStar 4 Adept / Oracle: Oracle requires Stargate.
@@ -337,8 +363,22 @@ class UserBuildDetector(BaseStrategyDetector):
                     and count_units("Oracle", 450) >= 1 and has_building("DarkShrine", 540)):
                 return "PvP - 4 Stalker Oracle into DT"
 
-            robo_time = building_time("RoboticsFacility")
-            twilight_time = building_time("TwilightCouncil")
+            # Robo into Glaives: Robo built BEFORE Twilight, Glaives is
+            # the FIRST upgrade off that Twilight. A common PvP Robo
+            # (Immortal / Observer) opening into a Glaive Adept timing.
+            # Sits ABOVE Rail's Blink Stalker (Robo 1st) -- also
+            # Robo-first but with no upgrade check -- so a Robo-first
+            # Glaives build isn't mis-tagged as Blink. Mirror of canonical.
+            if (robo_time < 9999 and robo_time < twilight_time
+                    and twilight_time < 9999 and glaive_first_off_twilight):
+                return "PvP - Robo into Glaives"
+            # Adept Glaives: Twilight is the FIRST tech (before Robo AND
+            # Stargate) and Glaives is the first upgrade off it. Pure
+            # Gateway Adept Glaive timing; sits ABOVE Blink Stalker Style
+            # (which keys on Blink merely existing). Mirror of canonical.
+            if (twilight_time < 9999 and twilight_time < robo_time
+                    and twilight_time < sg_time and glaive_first_off_twilight):
+                return "PvP - Adept Glaives"
             if robo_time < twilight_time and twilight_time < sec_nexus_time:
                 return "PvP - Rail's Blink Stalker (Robo 1st)"
             if has_building("Stargate", 510) and count_units("Phoenix", 510) >= 3:

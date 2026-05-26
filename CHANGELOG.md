@@ -65,6 +65,26 @@ workflow builds the Windows installer on each tag push and attaches the
     ALONGSIDE them. Triggered from `/settings/overlay` "Test
     widget" the same way the existing card is.
 
+### Added
+
+- **Strategy classifier · PvP Glaive Adept labels (0.8.8)**: PvP had
+  no Glaive Adept classification, so two common builds were mis-tagged
+  by the Blink-keyed rules — a Robo-first Glaive build (Robo →
+  Twilight → Glaives) fell into `PvP - Rail's Blink Stalker (Robo
+  1st)`, and a Twilight-first Glaive build that later picked up Blink
+  fell into `PvP - Blink Stalker Style`. Adds **`PvP - Robo into
+  Glaives`** (Robo before Twilight + Glaives is the first Twilight
+  upgrade) above Rail's Blink Stalker, and **`PvP - Adept Glaives`**
+  (Twilight is the first tech + Glaives first off it) above Blink
+  Stalker Style. Order-based with no Gateway window (same principle as
+  the PvZ / PvT Glaive rules); the generic `1/2 Gate Expand` opener
+  labels fall through on a Glaives-first transition so the new labels
+  are reachable. Mirror in `SC2Replay-Analyzer/detectors/user.py` in
+  sync; two catalog entries in `data/build_definitions.json` AND
+  `apps/web/lib/build-definitions/pvp.ts`. 8 new tests in
+  `test_strategy_detector_pvp_glaives.py`; self-contained
+  strategy-detector suite 135/135 passing.
+
 ### Fixed
 
 - **Strategy classifier · PvZ - Stargate into Glaives is order-based

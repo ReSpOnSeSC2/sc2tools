@@ -2,6 +2,41 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.8.8
+
+### Added — PvP Glaive Adept classification (`Robo into Glaives` + `Adept Glaives`)
+- **User-reported gap.** PvP had no Glaive Adept label at all, so two
+  common builds were mis-tagged by the Blink-keyed rules: a Robo-first
+  Glaive build (Robo → Twilight → Glaives) fell into
+  `PvP - Rail's Blink Stalker (Robo 1st)` (which checks no upgrade at
+  all), and a Twilight-first Glaive build that later picked up Blink
+  fell into `PvP - Blink Stalker Style` (which keys on Blink merely
+  existing).
+- **Added `PvP - Robo into Glaives`**: Robotics Facility built BEFORE
+  the Twilight Council AND Glaives is the FIRST upgrade off that
+  Twilight (before Blink AND Charge). Sits above `Rail's Blink Stalker
+  (Robo 1st)` so the Glaives-first signal wins.
+- **Added `PvP - Adept Glaives`**: Twilight Council is the FIRST tech
+  building (before any Robotics Facility AND any Stargate, pure
+  ordering) AND Glaives is the first upgrade off it. Sits above
+  `Blink Stalker Style`.
+- **Order-based, no Gateway window** — same principle as the PvZ / PvT
+  Glaive rules. The generic `PvP - 1 Gate Expand` / `PvP - 2 Gate
+  Expand` opener labels now fall through on a Glaives-first transition
+  so these labels are reachable for builds that opened with a standard
+  expand.
+- **Mirror** `SC2Replay-Analyzer/detectors/user.py` updated in lockstep
+  with the canonical `core/strategy_detector_pvp.py`.
+- **Catalog**: two new entries in both `data/build_definitions.json`
+  and `apps/web/lib/build-definitions/pvp.ts` (which powers the
+  `/definitions` page); `Rail's Blink Stalker (Robo 1st)` description
+  updated to point at the new label.
+- **Tests**: 8 new cases in `test_strategy_detector_pvp_glaives.py`
+  (both labels classify, Glaives-first wins over a later Blink,
+  Blink-first negatives, Robo-vs-Twilight-first split, catalog
+  presence). Full self-contained strategy-detector suite: 135/135
+  passing.
+
 ## 0.8.7
 
 ### Fixed — PvZ Stargate into Glaives is order-based; drop the Gateway-count cap
