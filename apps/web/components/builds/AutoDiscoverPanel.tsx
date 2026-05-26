@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import {
   AlertCircle,
+  Check,
   ChevronDown,
   ChevronUp,
   RefreshCw,
@@ -13,12 +14,13 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
+import type { ClientApiError } from "@/lib/clientApi";
 import {
   applyAutoCandidates,
   useAutoCandidates,
 } from "@/lib/autoClassifyApi";
 import { AutoCandidateCard } from "./AutoCandidateCard";
-import type { AutoCandidate, BuildPerspective } from "./types";
+import type { AutoApplyResult, AutoCandidate, BuildPerspective } from "./types";
 
 export interface AutoDiscoverPanelProps {
   /**
@@ -54,16 +56,29 @@ export function AutoDiscoverPanel({ onApplied }: AutoDiscoverPanelProps) {
   const [dismissed, setDismissed] = useState<Set<string>>(() =>
     loadDismissed(),
   );
+  // Cards that are currently mid-apply — we hide them immediately for
+  // an instant feel, then either let the SWR refresh drop them for
+  // real (success) or restore them (failure rollback). NOT persisted to
+  // sessionStorage: optimistic state is transient and must reset on reload.
+  const [optimisticallyHidden, setOptimisticallyHidden] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [creatingKey, setCreatingKey] = useState<string | null>(null);
+  const [creatingAll, setCreatingAll] = useState(false);
+  // Guard against double-submit even within the same render — the
+  // setState flips above happen on the next paint, so a rapid second
+  // click can fire before the disabled prop reaches the DOM.
+  const inFlightRef = useRef(false);
 
   const swr = useAutoCandidates(perspective);
 
   const visible = useMemo<AutoCandidate[]>(
     () =>
-      (swr.candidates || []).filter(
-        (c) => !dismissed.has(dismissKey(c)),
-      ),
-    [swr.candidates, dismissed],
+      (swr.candidates || []).filter((c) => {
+        const key = dismissKey(c);
+        return !dismissed.has(key) && !optimisticallyHidden.has(key);
+      }),
+    [swr.candidates, dismissed, optimisticallyHidden],
   );
 
   const dismissCandidate = useCallback(
@@ -83,6 +98,22 @@ export function AutoDiscoverPanel({ onApplied }: AutoDiscoverPanelProps) {
     persistDismissed(new Set());
   }, []);
 
+  const hideOptimistically = useCallback((keys: string[]) => {
+    setOptimisticallyHidden((prev) => {
+      const next = new Set(prev);
+      for (const k of keys) next.add(k);
+      return next;
+    });
+  }, []);
+
+  const restoreOptimistically = useCallback((keys: string[]) => {
+    setOptimisticallyHidden((prev) => {
+      const next = new Set(prev);
+      for (const k of keys) next.delete(k);
+      return next;
+    });
+  }, []);
+
   const handleScan = useCallback(async () => {
     try {
       await swr.mutate();
@@ -95,34 +126,86 @@ export function AutoDiscoverPanel({ onApplied }: AutoDiscoverPanelProps) {
 
   const handleCreate = useCallback(
     async (c: AutoCandidate, editedName: string) => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       const key = dismissKey(c);
       setCreatingKey(key);
+      hideOptimistically([key]);
+      let committed = false;
       try {
         const payload: AutoCandidate = { ...c, proposedName: editedName };
         const res = await applyAutoCandidates(getToken, [payload]);
-        toast.success(`Created “${editedName}”.`, {
-          description: describeApply(res.tagged, res.scanned),
-        });
+        committed = true;
+        toast.success(formatCreatedToastTitle(editedName, res.tagged));
         if (onApplied) await onApplied(res.created);
-        // Drop the just-applied candidate from the panel; the user
-        // shouldn't see it offered again until the next scan.
-        dismissCandidate(c);
+        // Re-fetch the discovery list — the server has already
+        // dropped this candidate, so the optimistic hide naturally
+        // becomes the new truth. Leaving the key in the set is fine:
+        // it can never match a real candidate again.
         await swr.mutate();
       } catch (err) {
-        toast.error("Couldn’t create build", {
-          description: extractErr(err),
-        });
+        // Only roll back the optimistic hide when the server-side
+        // apply itself failed. If we get here AFTER ``committed``
+        // flips, the new build is already persisted — surfacing a
+        // rollback would lie to the user.
+        if (!committed) {
+          restoreOptimistically([key]);
+          toast.error("Couldn’t create build", {
+            description: extractErrDetailed(err),
+          });
+        }
       } finally {
         setCreatingKey(null);
+        inFlightRef.current = false;
       }
     },
-    [dismissCandidate, getToken, onApplied, swr, toast],
+    [getToken, hideOptimistically, onApplied, restoreOptimistically, swr, toast],
   );
+
+  const handleCreateAll = useCallback(async () => {
+    if (inFlightRef.current || visible.length === 0) return;
+    inFlightRef.current = true;
+    const snapshot = visible.slice();
+    const keys = snapshot.map(dismissKey);
+    setCreatingAll(true);
+    hideOptimistically(keys);
+    let committed = false;
+    try {
+      const res: AutoApplyResult = await applyAutoCandidates(
+        getToken,
+        snapshot,
+      );
+      committed = true;
+      toast.success(formatCreatedAllToastTitle(res.created.length, res.tagged));
+      if (onApplied) await onApplied(res.created);
+      await swr.mutate();
+    } catch (err) {
+      if (!committed) {
+        restoreOptimistically(keys);
+        toast.error("Couldn’t create builds", {
+          description: extractErrDetailed(err),
+        });
+      }
+    } finally {
+      setCreatingAll(false);
+      inFlightRef.current = false;
+    }
+  }, [
+    getToken,
+    hideOptimistically,
+    onApplied,
+    restoreOptimistically,
+    swr,
+    toast,
+    visible,
+  ]);
 
   const isLoading = swr.isLoading && !swr.data;
   const errorMessage = swr.error?.message;
   const totalRaw = swr.candidates?.length ?? 0;
   const hiddenCount = totalRaw - visible.length;
+  const canCreateAll =
+    !isLoading && !errorMessage && visible.length > 0 && !creatingKey;
 
   return (
     <section
@@ -166,6 +249,27 @@ export function AutoDiscoverPanel({ onApplied }: AutoDiscoverPanelProps) {
           >
             Scan now
           </Button>
+          {visible.length > 0 ? (
+            <Button
+              size="sm"
+              onClick={handleCreateAll}
+              loading={creatingAll}
+              disabled={!canCreateAll || creatingAll}
+              iconLeft={<Check className="h-4 w-4" aria-hidden />}
+              title={`Promote every visible candidate into a custom build (${visible.length}).`}
+              // Bumped to 44px min-height so the primary bulk action
+              // meets the touch-target rule on mobile while the
+              // adjacent secondary "Scan now" button stays compact on
+              // desktop. min-h wins over Button's fixed h-8.
+              className="min-h-[44px]"
+              aria-label={`Create all ${visible.length} discovered builds`}
+            >
+              Create all
+              <span className="ml-1 tabular-nums opacity-80">
+                ({visible.length})
+              </span>
+            </Button>
+          ) : null}
         </div>
       </header>
 
@@ -203,13 +307,17 @@ export function AutoDiscoverPanel({ onApplied }: AutoDiscoverPanelProps) {
             >
               {visible.map((c) => {
                 const key = dismissKey(c);
+                // While "Create all" is in flight every card should
+                // present as busy so the user can't fire a single-card
+                // create at the same time.
+                const cardCreating = creatingAll || creatingKey === key;
                 return (
                   <li key={key} className="min-w-0">
                     <AutoCandidateCard
                       candidate={c}
                       onCreate={handleCreate}
                       onDismiss={dismissCandidate}
-                      creating={creatingKey === key}
+                      creating={cardCreating}
                     />
                   </li>
                 );
@@ -375,13 +483,19 @@ function persistDismissed(set: Set<string>): void {
   }
 }
 
-function describeApply(tagged: number, scanned: number): string {
-  if (tagged === 0) {
-    return scanned > 0
-      ? `Scanned ${scanned} games — no new tags applied.`
-      : "Build saved.";
+function formatCreatedToastTitle(name: string, tagged: number): string {
+  return `Created “${name}” — tagged ${tagged} game${tagged === 1 ? "" : "s"}.`;
+}
+
+function formatCreatedAllToastTitle(created: number, tagged: number): string {
+  if (created === 0) {
+    return tagged === 0
+      ? "No new builds created."
+      : `Re-tagged ${tagged} game${tagged === 1 ? "" : "s"}.`;
   }
-  return `Tagged ${tagged} game${tagged === 1 ? "" : "s"} with this build.`;
+  const buildsPart = `Created ${created} build${created === 1 ? "" : "s"}`;
+  const taggedPart = `tagged ${tagged} game${tagged === 1 ? "" : "s"}`;
+  return `${buildsPart} — ${taggedPart}.`;
 }
 
 function extractErr(err: unknown): string {
@@ -389,4 +503,22 @@ function extractErr(err: unknown): string {
     return String((err as { message: unknown }).message);
   }
   return "Something went wrong.";
+}
+
+/**
+ * Pull the most specific text out of an apply-time error. Validation
+ * failures from /v1/auto-classify/apply arrive with a `details: string[]`
+ * envelope (e.g. ["candidates[2].name must match …"]); surface those
+ * verbatim so the user can fix the offending field. Falls back to the
+ * humanised message for opaque server errors.
+ */
+function extractErrDetailed(err: unknown): string {
+  if (err && typeof err === "object") {
+    const e = err as ClientApiError;
+    if (Array.isArray(e.details) && e.details.length > 0) {
+      return e.details.length === 1 ? e.details[0] : e.details.join(" · ");
+    }
+    if (typeof e.message === "string" && e.message) return e.message;
+  }
+  return extractErr(err);
 }

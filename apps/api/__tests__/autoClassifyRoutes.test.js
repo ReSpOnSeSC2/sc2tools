@@ -367,6 +367,14 @@ describe("/v1/auto-classify", () => {
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("invalid_candidates");
       expect(Array.isArray(res.body.error.details)).toBe(true);
+      // Each detail is a flat human-readable string so the cloud UI
+      // can surface them verbatim in a toast (per-candidate field
+      // errors are prefixed with their slug when one is available).
+      expect(res.body.error.details.length).toBeGreaterThan(0);
+      for (const d of res.body.error.details) {
+        expect(typeof d).toBe("string");
+        expect(d.length).toBeGreaterThan(0);
+      }
     });
   });
 });

@@ -17,6 +17,8 @@ export type ClientApiError = {
   code?: string;
   /** API request id, useful for support. */
   requestId?: string;
+  /** Verbatim per-field error strings the API returned (validation errors). */
+  details?: string[];
 };
 
 /** SWR-style hook that auto-attaches the Clerk JWT. */
@@ -75,7 +77,13 @@ async function buildApiError(res: Response): Promise<ClientApiError> {
       status: res.status,
       code: parsed.code,
       requestId: parsed.requestId,
-      message: humanizeMessage(res.status, parsed.code, parsed.message),
+      details: parsed.details,
+      message: humanizeMessage(
+        res.status,
+        parsed.code,
+        parsed.message,
+        parsed.details,
+      ),
     };
   }
   return {
@@ -84,20 +92,35 @@ async function buildApiError(res: Response): Promise<ClientApiError> {
   };
 }
 
-function tryParseEnvelope(
-  text: string,
-): { code?: string; message?: string; requestId?: string } | null {
+function tryParseEnvelope(text: string): {
+  code?: string;
+  message?: string;
+  requestId?: string;
+  details?: string[];
+} | null {
   if (!text || text[0] !== "{") return null;
   try {
     const obj = JSON.parse(text) as unknown;
     if (!obj || typeof obj !== "object") return null;
     const env = (obj as { error?: unknown }).error;
     if (!env || typeof env !== "object") return null;
-    const e = env as { code?: unknown; message?: unknown; requestId?: unknown };
+    const e = env as {
+      code?: unknown;
+      message?: unknown;
+      requestId?: unknown;
+      details?: unknown;
+    };
+    let details: string[] | undefined;
+    if (Array.isArray(e.details)) {
+      const stringified = e.details
+        .filter((d): d is string => typeof d === "string" && d.length > 0);
+      if (stringified.length > 0) details = stringified;
+    }
     return {
       code: typeof e.code === "string" ? e.code : undefined,
       message: typeof e.message === "string" ? e.message : undefined,
       requestId: typeof e.requestId === "string" ? e.requestId : undefined,
+      details,
     };
   } catch {
     return null;
@@ -108,10 +131,17 @@ function humanizeMessage(
   status: number,
   code: string | undefined,
   message: string | undefined,
+  details?: string[],
 ): string {
   // If the server already gave a non-generic, non-code message, keep it.
   if (message && message !== code && message !== "internal_error") {
     return message;
+  }
+  // Validation-style errors often arrive with a code + details array but
+  // no humanised message. Surface the first detail verbatim so the user
+  // sees "name must match …" instead of a generic "Request failed".
+  if (details && details.length > 0) {
+    return details.length === 1 ? details[0] : details.join(" · ");
   }
   switch (code) {
     case "auth_required":

@@ -166,7 +166,7 @@ function buildAutoClassifyRouter(deps) {
           res.status(400).json({
             error: {
               code: /** @type {any} */ (e).message || "invalid_candidates",
-              details: /** @type {any} */ (e).details || undefined,
+              details: flattenApplyDetails(/** @type {any} */ (e).details),
             },
           });
           return;
@@ -197,6 +197,41 @@ function buildAutoClassifyRouter(deps) {
 function pickPerspective(raw) {
   if (raw === "opponent") return "opponent";
   return "you";
+}
+
+/**
+ * Normalise the apply-time validation ``details`` payload into a flat
+ * ``string[]`` so the UI can surface each error verbatim. The service
+ * throws with a per-candidate shape ({slug, errors[]}) when individual
+ * customBuild validations fail; the top-level guards (line 137 etc.)
+ * already throw with a plain ``string[]``. Flattening here keeps the
+ * API contract uniform: ``error.details`` is always ``string[] | undefined``.
+ *
+ * @param {unknown} raw
+ * @returns {string[] | undefined}
+ */
+function flattenApplyDetails(raw) {
+  if (!raw) return undefined;
+  if (!Array.isArray(raw)) return undefined;
+  /** @type {string[]} */
+  const out = [];
+  for (const entry of raw) {
+    if (typeof entry === "string" && entry.length > 0) {
+      out.push(entry);
+      continue;
+    }
+    if (entry && typeof entry === "object") {
+      const e = /** @type {{slug?: unknown, errors?: unknown}} */ (entry);
+      const slug = typeof e.slug === "string" && e.slug ? e.slug : null;
+      if (Array.isArray(e.errors)) {
+        for (const msg of e.errors) {
+          if (typeof msg !== "string" || msg.length === 0) continue;
+          out.push(slug ? `${slug}: ${msg}` : msg);
+        }
+      }
+    }
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 module.exports = { buildAutoClassifyRouter };
