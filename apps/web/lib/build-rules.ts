@@ -324,6 +324,78 @@ export function formatTime(t: number): string {
 }
 
 /**
+ * Plain-English breakdown of a v3 rule. Split into parts so the
+ * renderer can apply JetBrains Mono / tabular numerals to the time
+ * portion without re-parsing.
+ *
+ * Examples:
+ *   { type: "before", name: "BuildStargate", time_lt: 210 }
+ *     → { prefix: "",        entity: "Stargate",   connector: "before", time: "3:30" }
+ *   { type: "not_before", name: "BuildRoboticsFacility", time_lt: 240 }
+ *     → { prefix: "no ",     entity: "Robotics Facility", connector: "before", time: "4:00" }
+ *   { type: "count_max", name: "TrainPhoenix", time_lt: 300, count: 2 }
+ *     → { prefix: "≤ 2 ",    entity: "Phoenix",    connector: "by",     time: "5:00" }
+ */
+export interface FormattedRule {
+  /** Lead-in phrase: "", "no ", "≤ 2 ", "= 1 ", "≥ 3 ". */
+  prefix: string;
+  /** Humanised entity name, "Stargate" / "Robotics Facility". */
+  entity: string;
+  /** Connector word — "before" for time gates, "by" for count gates. */
+  connector: string;
+  /** Pre-formatted `m:ss` — render with `font-mono tabular-nums`. */
+  time: string;
+}
+
+export function formatRule(rule: BuildRule): FormattedRule {
+  const entity = humanizeRuleEntity(rule.name);
+  const time = formatTime(rule.time_lt);
+  switch (rule.type) {
+    case "before":
+      return { prefix: "", entity, connector: "before", time };
+    case "not_before":
+      return { prefix: "no ", entity, connector: "before", time };
+    case "count_max":
+      return {
+        prefix: `≤ ${rule.count} `,
+        entity,
+        connector: "by",
+        time,
+      };
+    case "count_exact":
+      return {
+        prefix: `= ${rule.count} `,
+        entity,
+        connector: "by",
+        time,
+      };
+    case "count_min":
+      return {
+        prefix: `≥ ${rule.count} `,
+        entity,
+        connector: "by",
+        time,
+      };
+  }
+}
+
+/**
+ * Strip the canonical action verb (Build/Train/Research/Morph) from a
+ * rule token and turn the rest into a spaced display name. Tokens that
+ * don't carry a verb prefix (rare — only happens when the user typed a
+ * raw entity name) are humanised as-is.
+ */
+function humanizeRuleEntity(name: string): string {
+  const raw = String(name || "").trim();
+  if (!raw) return "";
+  const stripped = raw.replace(
+    /^(Build|Train|Research|Morph)(?=[A-Z])/,
+    "",
+  );
+  return stripped.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+}
+
+/**
  * Parse the inline time-edit input. Accepts:
  *   "3:30" -> 210
  *   "3m30" -> 210
