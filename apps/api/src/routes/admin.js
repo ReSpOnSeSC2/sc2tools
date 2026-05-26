@@ -161,6 +161,61 @@ function buildAdminRouter(deps) {
     },
   );
 
+  // APM/SPM curve for an arbitrary user's game. Mirrors the
+  // not-computed handling of the user-facing /apm-curve route.
+  router.get(
+    "/admin/users/:userId/games/:gameId/apm-curve",
+    async (req, res, next) => {
+      try {
+        const out = /** @type {any} */ (
+          await deps.perGame.apmCurve(
+            String(req.params.userId),
+            String(req.params.gameId),
+          )
+        );
+        if (!out) {
+          res.status(404).json({ error: { code: "game_not_found" } });
+          return;
+        }
+        if (out.ok === false && out.code === "not_computed") {
+          res.status(404).json({ error: { code: "apm_not_computed" } });
+          return;
+        }
+        res.json(out);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // Macro breakdown (leaks, economy/army samples, unit timeline) for an
+  // arbitrary user's game. Mirrors the user-facing /macro-breakdown
+  // route's not-computed handling.
+  router.get(
+    "/admin/users/:userId/games/:gameId/macro-breakdown",
+    async (req, res, next) => {
+      try {
+        const out = /** @type {any} */ (
+          await deps.perGame.macroBreakdown(
+            String(req.params.userId),
+            String(req.params.gameId),
+          )
+        );
+        if (!out) {
+          res.status(404).json({ error: { code: "game_not_found" } });
+          return;
+        }
+        if (out.ok === false && out.code === "not_computed") {
+          res.status(404).json({ error: { code: "macro_not_computed" } });
+          return;
+        }
+        res.json(out);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
   router.post(
     "/admin/users/:userId/rebuild-opponents",
     async (req, res, next) => {

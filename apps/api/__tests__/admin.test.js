@@ -134,6 +134,8 @@ describe("/v1/admin", () => {
       ["GET", "/v1/admin/users/u_1/opponents"],
       ["GET", "/v1/admin/users/u_1/opponents/p_1/games"],
       ["GET", "/v1/admin/users/u_1/games/g_1/build-order"],
+      ["GET", "/v1/admin/users/u_1/games/g_1/apm-curve"],
+      ["GET", "/v1/admin/users/u_1/games/g_1/macro-breakdown"],
       ["GET", "/v1/admin/health"],
       ["GET", "/v1/admin/events"],
       ["GET", "/v1/admin/events/counts"],
@@ -375,6 +377,28 @@ describe("/v1/admin", () => {
       ),
     );
     expect(missing.status).toBe(404);
+
+    // APM + macro routes are wired and surface the not-computed state
+    // (this seed game carries no apmCurve / macroBreakdown blob).
+    const apm = await asAdmin(
+      request(app).get(
+        `/v1/admin/users/${adminUserId}/games/${encodeURIComponent(
+          g1.gameId,
+        )}/apm-curve`,
+      ),
+    );
+    expect(apm.status).toBe(404);
+    expect(apm.body.error.code).toBe("apm_not_computed");
+
+    const macro = await asAdmin(
+      request(app).get(
+        `/v1/admin/users/${adminUserId}/games/${encodeURIComponent(
+          g1.gameId,
+        )}/macro-breakdown`,
+      ),
+    );
+    expect(macro.status).toBe(404);
+    expect(macro.body.error.code).toBe("macro_not_computed");
   });
 
   test("rebuild-opponents drops + re-derives from games (counter fix)", async () => {

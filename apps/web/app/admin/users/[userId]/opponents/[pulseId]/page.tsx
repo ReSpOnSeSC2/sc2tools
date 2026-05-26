@@ -1,11 +1,22 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 
 import { useApi } from "@/lib/clientApi";
-import { Card } from "@/components/ui/Card";
+import { Card, Skeleton } from "@/components/ui/Card";
 import { BuildOrderTimeline } from "@/components/analyzer/charts/BuildOrderTimeline";
+import { ApmSpmChart, type ApmCurveData } from "@/components/analyzer/charts/ApmSpmChart";
+import { ResourcesOverTimeChart } from "@/components/analyzer/charts/ResourcesOverTimeChart";
+import { ChronoAllocationChart } from "@/components/analyzer/charts/ChronoAllocationChart";
+import { ActiveArmyChart } from "@/components/analyzer/macro/ActiveArmyChart";
+import { buildSeries } from "@/components/analyzer/macro/activeArmyLayout";
+import type {
+  LeakItem,
+  MacroBreakdownData,
+} from "@/components/analyzer/macro/MacroBreakdownPanel.types";
+import { computeEffectiveRace } from "@/lib/macro";
+import { coerceRace, type Race } from "@/lib/race";
 import type { BuildOrderEvent } from "@/lib/build-events";
 import { ForbiddenCard, LoadingRows } from "../../../../components/AdminFragments";
 import type {
@@ -227,12 +238,23 @@ function GameDetail({
   game: AdminGameVsOpponentRow;
   onBack: () => void;
 }) {
+  const base = `/v1/admin/users/${encodeURIComponent(
+    userId,
+  )}/games/${encodeURIComponent(game.gameId)}`;
+
   const { data, error, isLoading } = useApi<BuildOrderResp>(
-    `/v1/admin/users/${encodeURIComponent(
-      userId,
-    )}/games/${encodeURIComponent(game.gameId)}/build-order`,
+    `${base}/build-order`,
     { revalidateOnFocus: false },
   );
+  const apm = useApi<ApmCurveData>(`${base}/apm-curve`, {
+    revalidateOnFocus: false,
+  });
+  const macro = useApi<MacroBreakdownData>(`${base}/macro-breakdown`, {
+    revalidateOnFocus: false,
+  });
+
+  const myRace = coerceRace(data?.my_race || game.myRace);
+  const oppRace = coerceRace(data?.opp_race || game.opponent.race);
 
   return (
     <div className="space-y-4">
@@ -271,7 +293,7 @@ function GameDetail({
 
       {isLoading && !data ? (
         <Card padded>
-          <p className="text-caption text-text-muted">Loading build order…</p>
+          <Skeleton rows={4} />
         </Card>
       ) : error ? (
         <Card padded>
@@ -287,10 +309,145 @@ function GameDetail({
           oppEvents={data.opp_events || []}
           defaultPerspective="you"
           gameId={game.gameId}
-          race={data.my_race || game.myRace}
-          oppRace={data.opp_race || game.opponent.race}
+          race={myRace}
+          oppRace={oppRace}
           title={data.my_build ? `Build — ${data.my_build}` : "Build order"}
         />
+      ) : null}
+
+      <ApmPanel
+        data={apm.data ?? null}
+        isLoading={apm.isLoading}
+        notAvailable={apm.error?.status === 404}
+        error={apm.error && apm.error.status !== 404 ? apm.error.message : undefined}
+        myRace={myRace}
+      />
+
+      <MacroPanel
+        data={macro.data ?? null}
+        isLoading={macro.isLoading}
+        notAvailable={macro.error?.status === 404 || macro.data?.ok === false}
+        error={
+          macro.error && macro.error.status !== 404 ? macro.error.message : undefined
+        }
+        myRace={myRace}
+      />
+    </div>
+  );
+}
+
+function ApmPanel({
+  data,
+  isLoading,
+  notAvailable,
+  error,
+  myRace,
+}: {
+  data: ApmCurveData | null;
+  isLoading: boolean;
+  notAvailable: boolean;
+  error?: string;
+  myRace: Race;
+}) {
+  if (isLoading && !data) {
+    return (
+      <Card padded>
+        <Skeleton rows={4} />
+      </Card>
+    );
+  }
+  if (error) {
+    return (
+      <Card padded>
+        <p className="text-caption text-danger">APM / SPM: {error}</p>
+      </Card>
+    );
+  }
+  if (notAvailable || !data) {
+    return (
+      <Card padded>
+        <p className="text-caption text-text-muted">
+          No APM / SPM curve uploaded for this game.
+        </p>
+      </Card>
+    );
+  }
+  return (
+    <Card padded>
+      <ApmSpmChart data={data} myPlayerName={null} myRace={myRace} />
+    </Card>
+  );
+}
+
+function MacroPanel({
+  data,
+  isLoading,
+  notAvailable,
+  error,
+  myRace,
+}: {
+  data: MacroBreakdownData | null;
+  isLoading: boolean;
+  notAvailable: boolean;
+  error?: string;
+  myRace: Race;
+}) {
+  if (isLoading && !data) {
+    return (
+      <Card padded>
+        <Skeleton rows={5} />
+      </Card>
+    );
+  }
+  if (error) {
+    return (
+      <Card padded>
+        <p className="text-caption text-danger">Macro breakdown: {error}</p>
+      </Card>
+    );
+  }
+  if (notAvailable || !data) {
+    return (
+      <Card padded>
+        <p className="text-caption text-text-muted">
+          No macro breakdown stored for this game (synced before the field
+          existed, or not yet re-parsed by the agent).
+        </p>
+      </Card>
+    );
+  }
+
+  const samples = data.stats_events ?? [];
+  const oppSamples = data.opp_stats_events ?? [];
+  const leaks: LeakItem[] = data.all_leaks ?? data.top_3_leaks ?? [];
+  const effRace = computeEffectiveRace(myRace, data.raw);
+  const chronoTargets = data.raw?.chrono_targets ?? [];
+  const gameLengthSec = data.game_length_sec ?? 0;
+  const mySeries = buildSeries(samples, data.unit_timeline, "my");
+  const oppSeries = buildSeries(oppSamples, data.unit_timeline, "opp");
+
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <Card padded>
+        <ActiveArmyChart
+          mySeries={mySeries}
+          oppSeries={oppSeries}
+          gameLengthSec={gameLengthSec}
+          leaks={leaks}
+          highlightedKey={null}
+        />
+      </Card>
+      <Card padded>
+        <ResourcesOverTimeChart
+          samples={samples}
+          oppSamples={oppSamples}
+          gameLengthSec={gameLengthSec}
+        />
+      </Card>
+      {effRace === "Protoss" ? (
+        <Card padded className="xl:col-span-2">
+          <ChronoAllocationChart targets={chronoTargets} />
+        </Card>
       ) : null}
     </div>
   );
