@@ -13,6 +13,7 @@ import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { Skeleton } from "@/components/ui/Card";
 import { coerceRace } from "@/lib/race";
+import { AutoDiscoverPanel } from "./AutoDiscoverPanel";
 import { BuildCard } from "./BuildCard";
 import { BuildDossierModal } from "./BuildDossierModal";
 import { BuildEditorSheet } from "./BuildEditorSheet";
@@ -205,6 +206,14 @@ function BuildsLibraryInner() {
     [getToken, items, stats, builds, toast],
   );
 
+  const handleAutoApplied = useCallback(async () => {
+    // Apply already POSTed and the API echoed slugs of the new builds.
+    // Re-fetch the library + stats so the freshly created builds show
+    // up in the grid with their (just-computed) match counts.
+    await builds.mutate();
+    await stats.mutate();
+  }, [builds, stats]);
+
   const reclassifyAll = useCallback(async () => {
     setReclassifyAllPending(true);
     try {
@@ -272,6 +281,8 @@ function BuildsLibraryInner() {
           </div>
         }
       />
+
+      <AutoDiscoverPanel onApplied={handleAutoApplied} />
 
       {isInitialLoad ? (
         <div className="space-y-4">
