@@ -114,6 +114,15 @@ const BUILD_SCHEMA = {
     shareWithCommunity: { type: "boolean" },
     /** Schema version — server stores 3 for new editor saves. */
     schemaVersion: { type: "integer", minimum: 1, maximum: 10 },
+    /**
+     * Provenance label. ``manual`` for hand-authored saves (default),
+     * ``auto-classify`` for builds promoted by AutoClassifyService.apply,
+     * ``import`` reserved for future bulk-import flows. This field is
+     * metadata ONLY — read paths (list / stats / publish / community)
+     * must NEVER gate on it. An auto-classified build is a first-class
+     * custom build in every other respect.
+     */
+    source: { type: "string", enum: ["manual", "auto-classify", "import"] },
   },
 };
 

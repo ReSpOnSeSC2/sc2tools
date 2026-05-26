@@ -46,6 +46,7 @@
  */
 
 const { extractRules, STATS_GAME_SCAN_CAP } = require("./customBuilds");
+const { validateCustomBuild } = require("../validation/customBuild");
 const { clusterGames } = require("./autoClassify/cluster");
 const { deriveRules, deriveName } = require("./autoClassify/deriveBuild");
 const {
@@ -57,6 +58,7 @@ const {
   perspectiveRace,
   perspectiveVsRace,
   fullRaceName,
+  raceLetter,
 } = require("./autoClassify/scope");
 
 const DEFAULT_MIN_GAMES = 5;
@@ -256,6 +258,166 @@ class AutoClassifyService {
     }
     return out;
   }
+
+  /**
+   * Promote one or more discovery candidates into real custom builds.
+   *
+   * Validates every candidate first (a single malformed row aborts the
+   * whole batch — no partial-garbage writes), upserts each through
+   * CustomBuildsService.upsert so the new builds land in the same
+   * (userId, slug) keyspace as hand-authored ones, then runs
+   * reclassifyAll once with `clearUnmatched: false` so the closest-
+   * match ownership rule applies globally. A freshly-created auto
+   * build can never steal a game from a more-specific existing build —
+   * reclassifyAll's "most rules wins" pass enforces that across the
+   * full set of builds the user owns.
+   *
+   * Idempotent on (userId, slug): the orchestrator emits stable
+   * signature-derived slugs (see deriveName + applyCollisionGuard),
+   * so re-applying the same candidate updates the existing row in
+   * place and reclassifyAll re-stamps the same games under the same
+   * name. The `source: 'auto-classify'` field is provenance ONLY;
+   * list / stats / publish paths must never gate on it (an auto
+   * build is a first-class custom build everywhere else).
+   *
+   * @param {string} userId
+   * @param {ReadonlyArray<{
+   *   proposedName: string,
+   *   proposedSlug: string,
+   *   race: string,
+   *   vsRace: string,
+   *   rules: Array<{type: string, name: string, time_lt: number, count?: number}>,
+   *   perspective?: 'you'|'opponent',
+   * }>} candidates
+   * @returns {Promise<{
+   *   created: string[],
+   *   builds: number,
+   *   scanned: number,
+   *   tagged: number,
+   *   cleared: number,
+   *   perBuild: Array<{slug: string, name: string, matched: number, tagged: number}>,
+   * }>}
+   */
+  async apply(userId, candidates) {
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      const err = new Error("candidates_required");
+      /** @type {any} */ (err).status = 400;
+      throw err;
+    }
+    /** @type {Array<{slug: string, value: any}>} */
+    const docs = [];
+    /** @type {Array<{slug: string, errors: string[]}>} */
+    const fieldErrors = [];
+    for (const c of candidates) {
+      const draft = buildApplyDraft(c);
+      const v = validateCustomBuild(draft);
+      if (!v.valid) {
+        fieldErrors.push({
+          slug: typeof draft.slug === "string" ? draft.slug : "",
+          errors: v.errors,
+        });
+        continue;
+      }
+      const value = /** @type {any} */ (v.value);
+      docs.push({ slug: String(value.slug), value });
+    }
+    if (fieldErrors.length > 0) {
+      const err = new Error("invalid_candidates");
+      /** @type {any} */ (err).status = 400;
+      /** @type {any} */ (err).details = fieldErrors;
+      throw err;
+    }
+    /** @type {string[]} */
+    const created = [];
+    for (const { slug, value } of docs) {
+      await this.customBuilds.upsert(userId, value);
+      created.push(slug);
+    }
+    // Global most-specific-wins pass. clearUnmatched stays false on
+    // purpose — a game whose tag came from the agent's named catalog
+    // (not from any saved build) must keep that tag if no saved build
+    // claims it. reclassifyAll only clears tags it owns, and only
+    // when clearUnmatched is true.
+    const reclassify = await this.customBuilds.reclassifyAll(userId, {
+      clearUnmatched: false,
+    });
+    return { created, ...reclassify };
+  }
+}
+
+/**
+ * Build the document that goes into validateCustomBuild + upsert.
+ * Only the contract fields are copied — extra discovery metadata
+ * (gameCount, cohesion, sampleGames, …) never reaches the build doc.
+ * The provenance description and `source: 'auto-classify'` tag the
+ * row as discovery-engine output for the UI to badge; behaviour on
+ * read paths is unchanged.
+ *
+ * @param {any} c
+ * @returns {{
+ *   slug: string,
+ *   name: string,
+ *   race: string,
+ *   vsRace: string,
+ *   rules: any[],
+ *   perspective: 'you'|'opponent',
+ *   description: string,
+ *   schemaVersion: number,
+ *   source: 'auto-classify',
+ * }}
+ */
+function buildApplyDraft(c) {
+  const raw = c || {};
+  const perspective = raw.perspective === "opponent" ? "opponent" : "you";
+  return {
+    slug: typeof raw.proposedSlug === "string" ? raw.proposedSlug : "",
+    name: typeof raw.proposedName === "string" ? raw.proposedName : "",
+    race: typeof raw.race === "string" ? raw.race : "",
+    vsRace: typeof raw.vsRace === "string" ? raw.vsRace : "",
+    rules: Array.isArray(raw.rules) ? raw.rules : [],
+    perspective,
+    description: provenanceDescription(raw, perspective),
+    schemaVersion: 3,
+    source: "auto-classify",
+  };
+}
+
+/**
+ * Short provenance line stamped on every auto-classified build. The
+ * UI can surface this anywhere we already render `description`. The
+ * matchup is derived from race + vsRace + perspective so the string
+ * matches the cloud's myRace-first convention (`PvZ` not `ZvP`).
+ *
+ * @param {{race?: string, vsRace?: string}} c
+ * @param {'you'|'opponent'} perspective
+ * @returns {string}
+ */
+function provenanceDescription(c, perspective) {
+  const mu = matchupFromCandidate(c, perspective);
+  const muPart = mu ? `${mu} ` : "";
+  const side = perspective === "opponent" ? "opponent's " : "";
+  return (
+    `Auto-classified from ${side}${muPart}openings by the discovery engine. ` +
+    `Generated automatically from clusters of similar replays in your library — ` +
+    `you can edit the rules, rename, or delete this build at any time.`
+  );
+}
+
+/**
+ * Matchup string (myRace-first) for a candidate's race + vsRace pair.
+ * perspective='opponent' flips the sides so the build's stored race
+ * (the opponent's race) lands on the opp side of the matchup. Returns
+ * an empty string when either side can't be reduced to a P/T/Z letter.
+ *
+ * @param {{race?: string, vsRace?: string}} c
+ * @param {'you'|'opponent'} perspective
+ * @returns {string}
+ */
+function matchupFromCandidate(c, perspective) {
+  const r = raceLetter(c && c.race);
+  const v = raceLetter(c && c.vsRace);
+  if (r === "?" || v === "?") return "";
+  return perspective === "opponent" ? `${v}v${r}` : `${r}v${v}`;
 }
 
 /**
