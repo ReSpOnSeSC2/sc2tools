@@ -23,7 +23,6 @@ const { GamesService } = require("./services/games");
 const { GameDetailsService } = require("./services/gameDetails");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { CustomBuildsService } = require("./services/customBuilds");
-const { AutoClassifyService } = require("./services/autoClassify");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { OverlayLiveService } = require("./services/overlayLive");
@@ -57,7 +56,6 @@ const { buildMeRouter } = require("./routes/me");
 const { buildOpponentsRouter } = require("./routes/opponents");
 const { buildGamesRouter } = require("./routes/games");
 const { buildCustomBuildsRouter } = require("./routes/customBuilds");
-const { buildAutoClassifyRouter } = require("./routes/autoClassify");
 const { buildDevicePairingsRouter } = require("./routes/devicePairings");
 const { buildOverlayTokensRouter } = require("./routes/overlayTokens");
 const { buildAggregationsRouter } = require("./routes/aggregations");
@@ -236,10 +234,6 @@ function makeServices(deps) {
     gameDetails,
   });
   const customBuilds = new CustomBuildsService(deps.db, { perGame });
-  // Discovery engine — dry-run brain that surfaces candidate custom
-  // builds from the user's unclassified games. Read-only; promotion
-  // to a real customBuilds row happens through a separate route.
-  const autoClassify = new AutoClassifyService({ customBuilds, perGame });
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io });
@@ -262,7 +256,6 @@ function makeServices(deps) {
     games,
     gameDetails,
     customBuilds,
-    autoClassify,
     pairings,
     overlayTokens,
     overlayLive,
@@ -484,18 +477,6 @@ function mountRoutes(app, deps, services, clerk) {
     buildCustomBuildsRouter({
       customBuilds: services.customBuilds,
       perGame: services.perGame,
-      auth,
-    }),
-  );
-  // Discovery-engine surface — sits next to customBuilds because it
-  // is the dry-run twin (candidates) + promotion path (apply) for
-  // the same per-user library. AutoClassifyService composes the two
-  // services already constructed above.
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildAutoClassifyRouter({
-      autoClassify: services.autoClassify,
-      customBuilds: services.customBuilds,
       auth,
     }),
   );

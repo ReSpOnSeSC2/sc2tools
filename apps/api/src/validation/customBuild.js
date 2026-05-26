@@ -116,11 +116,10 @@ const BUILD_SCHEMA = {
     schemaVersion: { type: "integer", minimum: 1, maximum: 10 },
     /**
      * Provenance label. ``manual`` for hand-authored saves (default),
-     * ``auto-classify`` for builds promoted by AutoClassifyService.apply,
-     * ``import`` reserved for future bulk-import flows. This field is
-     * metadata ONLY — read paths (list / stats / publish / community)
-     * must NEVER gate on it. An auto-classified build is a first-class
-     * custom build in every other respect.
+     * ``import`` reserved for future bulk-import flows. ``auto-classify``
+     * is a legacy value kept so previously-saved builds still validate;
+     * nothing produces it anymore. This field is metadata ONLY — read
+     * paths (list / stats / publish / community) must NEVER gate on it.
      */
     source: { type: "string", enum: ["manual", "auto-classify", "import"] },
   },

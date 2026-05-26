@@ -30,8 +30,6 @@ All routes are mounted under `/v1`.
 | GET    | /v1/custom-builds/:slug           | clerk        | One build                     |
 | PUT    | /v1/custom-builds/:slug           | clerk        | Upsert                        |
 | DELETE | /v1/custom-builds/:slug           | clerk        | Soft delete                   |
-| GET    | /v1/auto-classify/candidates      | clerk        | Discover candidate builds (dry-run) |
-| POST   | /v1/auto-classify/apply           | clerk        | Promote candidates → custom builds  |
 | POST   | /v1/device-pairings/start         | none         | Agent: start pairing          |
 | GET    | /v1/device-pairings/:code         | none         | Agent: poll                   |
 | POST   | /v1/device-pairings/claim         | clerk        | Web: bind code to user        |

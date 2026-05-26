@@ -13,7 +13,6 @@ import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { Skeleton } from "@/components/ui/Card";
 import { coerceRace } from "@/lib/race";
-import { AutoDiscoverPanel } from "./AutoDiscoverPanel";
 import { BuildCard } from "./BuildCard";
 import { BuildDossierModal } from "./BuildDossierModal";
 import { BuildEditorSheet } from "./BuildEditorSheet";
@@ -23,15 +22,6 @@ import { BuildPublishModal } from "./BuildPublishModal";
 import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
 
 type ListResponse = { items: CustomBuild[] };
-
-/**
- * Slice of the user's /v1/me/preferences/misc bucket the builds page
- * cares about. `hideAutoDiscover` toggles the Auto-Discover panel; the
- * settings UI lives in `SettingsMisc.tsx`. SWR caches the response so a
- * settings save propagates here without a manual refresh. Undefined ===
- * panel shown (default-on for the build owner).
- */
-type MiscPrefs = { hideAutoDiscover?: boolean };
 
 type ReclassifyResult = {
   ok: true;
@@ -81,12 +71,6 @@ function BuildsLibraryInner() {
   // build's W/L appears immediately, instead of waiting for the agent
   // to reclassify games and tag `myBuild`.
   const stats = useApi<BuildStats[]>("/v1/custom-builds/stats");
-  // Misc preferences gate the Auto-Discover panel. Default-on: a slow
-  // network / pre-prefs error leaves the panel visible so the build
-  // owner never silently loses the feature. Only an explicit
-  // `hideAutoDiscover === true` from the server suppresses it.
-  const misc = useApi<MiscPrefs>("/v1/me/preferences/misc");
-  const autoDiscoverEnabled = misc.data?.hideAutoDiscover !== true;
 
   const [filters, setFilters] = useState<BuildFilterState>(DEFAULT_FILTERS);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -221,14 +205,6 @@ function BuildsLibraryInner() {
     [getToken, items, stats, builds, toast],
   );
 
-  const handleAutoApplied = useCallback(async () => {
-    // Apply already POSTed and the API echoed slugs of the new builds.
-    // Re-fetch the library + stats so the freshly created builds show
-    // up in the grid with their (just-computed) match counts.
-    await builds.mutate();
-    await stats.mutate();
-  }, [builds, stats]);
-
   const reclassifyAll = useCallback(async () => {
     setReclassifyAllPending(true);
     try {
@@ -296,10 +272,6 @@ function BuildsLibraryInner() {
           </div>
         }
       />
-
-      {autoDiscoverEnabled ? (
-        <AutoDiscoverPanel onApplied={handleAutoApplied} />
-      ) : null}
 
       {isInitialLoad ? (
         <div className="space-y-4">

@@ -915,13 +915,4 @@ function toRecent(g) {
 
 module.exports = {
   CustomBuildsService,
-  // Exposed so the auto-classifier (services/autoClassify.js) reuses
-  // the same matchup gate + rule-evaluation predicates the rest of
-  // the cloud already applies. Re-implementing them would let the
-  // discovered builds disagree with /reclassify on what counts as a
-  // match for the same rules.
-  extractRules,
-  gameMatchesBuildMatchup,
-  filterMatchingGames,
-  STATS_GAME_SCAN_CAP,
 };

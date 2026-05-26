@@ -18,14 +18,6 @@ type Misc = {
   defaultTab?: string;
   showWizardOnNextLogin?: boolean;
   analytics?: boolean;
-  /**
-   * Hide the Auto-Discover Builds panel on `/app → Builds`. Default
-   * undefined → panel is shown for everyone. Setting `true` opts the
-   * build owner out of the discovery surface without touching the
-   * underlying `/v1/auto-classify/*` routes (they stay reachable so
-   * scripts and the dossier can still apply candidates).
-   */
-  hideAutoDiscover?: boolean;
 };
 
 const DEFAULT_MISC: Misc = {};
@@ -137,14 +129,6 @@ export function SettingsMisc() {
                 description="Helps us catch regressions. No game data is sent — only client-side errors and feature usage counts."
                 checked={!!draft.analytics}
                 onChange={(on) => setDraft((d) => ({ ...d, analytics: on }))}
-              />
-              <ToggleRow
-                title="Show Auto-Discover Builds panel"
-                description="Surfaces candidate custom builds discovered from your unclassified games on /app → Builds. Off hides the panel; the underlying discovery routes remain available."
-                checked={!draft.hideAutoDiscover}
-                onChange={(on) =>
-                  setDraft((d) => ({ ...d, hideAutoDiscover: !on }))
-                }
               />
             </div>
           </Card>
