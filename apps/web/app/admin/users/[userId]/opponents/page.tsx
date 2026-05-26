@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
@@ -48,6 +49,11 @@ export default function AdminUserOpponentsPage({
   params: Promise<{ userId: string }>;
 }) {
   const { userId } = use(params);
+  const router = useRouter();
+
+  function opponentHref(pulseId: string): string {
+    return `/admin/users/${encodeURIComponent(userId)}/opponents/${encodeURIComponent(pulseId)}`;
+  }
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -235,35 +241,37 @@ export default function AdminUserOpponentsPage({
             <div className="block md:hidden">
               <ul className="divide-y divide-border">
                 {data.items.map((o) => (
-                  <li
-                    key={o.pulseId}
-                    className="flex flex-col gap-2 px-4 py-3"
-                  >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-body font-semibold text-text">
-                        {o.displayNameSample || "—"}
+                  <li key={o.pulseId}>
+                    <Link
+                      href={opponentHref(o.pulseId)}
+                      className="flex flex-col gap-2 px-4 py-3 hover:bg-bg-elevated/40"
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-body font-semibold text-text">
+                          {o.displayNameSample || "—"}
+                        </span>
+                        <span className="shrink-0 text-caption text-text-dim">
+                          {timeSince(o.lastSeen)}
+                        </span>
+                      </div>
+                      <span className="truncate font-mono text-caption text-text-dim">
+                        {o.pulseId}
                       </span>
-                      <span className="shrink-0 text-caption text-text-dim">
-                        {timeSince(o.lastSeen)}
-                      </span>
-                    </div>
-                    <span className="truncate font-mono text-caption text-text-dim">
-                      {o.pulseId}
-                    </span>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-text-muted">
-                      <span>{raceLabel(o.race)}</span>
-                      <span>
-                        <strong className="text-text">{o.gameCount}</strong>{" "}
-                        games
-                      </span>
-                      <span>
-                        <span className="text-success">{o.wins}</span>
-                        <span className="text-text-dim">–</span>
-                        <span className="text-danger">{o.losses}</span>
-                      </span>
-                      <span>{pctLabel(o.winRate)} WR</span>
-                      {o.mmr !== null ? <span>{o.mmr} MMR</span> : null}
-                    </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-text-muted">
+                        <span>{raceLabel(o.race)}</span>
+                        <span>
+                          <strong className="text-text">{o.gameCount}</strong>{" "}
+                          games
+                        </span>
+                        <span>
+                          <span className="text-success">{o.wins}</span>
+                          <span className="text-text-dim">–</span>
+                          <span className="text-danger">{o.losses}</span>
+                        </span>
+                        <span>{pctLabel(o.winRate)} WR</span>
+                        {o.mmr !== null ? <span>{o.mmr} MMR</span> : null}
+                      </div>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -289,7 +297,19 @@ export default function AdminUserOpponentsPage({
                 </thead>
                 <tbody className="divide-y divide-border">
                   {data.items.map((o) => (
-                    <tr key={o.pulseId} className="hover:bg-bg-elevated/30">
+                    <tr
+                      key={o.pulseId}
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => router.push(opponentHref(o.pulseId))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          router.push(opponentHref(o.pulseId));
+                        }
+                      }}
+                      className="cursor-pointer transition-colors hover:bg-bg-elevated/30 focus-visible:bg-bg-elevated/40 focus-visible:outline-none"
+                    >
                       <td className="px-4 py-2">
                         <div className="text-text">
                           {o.displayNameSample || "—"}

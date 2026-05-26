@@ -132,6 +132,8 @@ describe("/v1/admin", () => {
       ["GET", "/v1/admin/users"],
       ["GET", "/v1/admin/users/u_1"],
       ["GET", "/v1/admin/users/u_1/opponents"],
+      ["GET", "/v1/admin/users/u_1/opponents/p_1/games"],
+      ["GET", "/v1/admin/users/u_1/games/g_1/build-order"],
       ["GET", "/v1/admin/health"],
       ["GET", "/v1/admin/events"],
       ["GET", "/v1/admin/events/counts"],
@@ -311,6 +313,68 @@ describe("/v1/admin", () => {
       "GoMeZ",
       "Captain",
     ]);
+  });
+
+  test("opponent drill-down lists games and serves per-game build order", async () => {
+    const pulseId = "1-S2-1-265393";
+    const g1 = SAMPLE_GAME({
+      gameId: "2026-05-08T10:00:00|GoMeZ|Map|600",
+      date: "2026-05-08T10:00:00.000Z",
+      result: "Victory",
+      buildLog: ["[0:00] Nexus", "[0:17] Pylon", "[0:34] Gateway"],
+      oppBuildLog: ["[0:00] Hatchery", "[0:12] Drone", "[0:40] Spawning Pool"],
+      opponent: { pulseId, toonHandle: pulseId, displayName: "GoMeZ", race: "Zerg" },
+    });
+    const g2 = SAMPLE_GAME({
+      gameId: "2026-05-08T11:00:00|GoMeZ|Map|700",
+      date: "2026-05-08T11:00:00.000Z",
+      result: "Defeat",
+      opponent: { pulseId, toonHandle: pulseId, displayName: "GoMeZ", race: "Zerg" },
+    });
+    for (const g of [g1, g2]) {
+      const res = await request(app)
+        .post("/v1/games")
+        .set("authorization", "Bearer admin-token")
+        .send(g);
+      expect(res.status).toBeLessThan(300);
+    }
+
+    // Games vs opponent — matched on the nested opponent.pulseId (no
+    // top-level oppPulseId in this payload), newest first.
+    const list = await asAdmin(
+      request(app).get(
+        `/v1/admin/users/${adminUserId}/opponents/${pulseId}/games`,
+      ),
+    );
+    expect(list.status).toBe(200);
+    expect(list.body.items).toHaveLength(2);
+    expect(list.body.items[0].gameId).toBe(g2.gameId); // newest first
+    expect(list.body.items[0].opponent.displayName).toBe("GoMeZ");
+    expect(list.body.items[1].result).toBe("Victory");
+
+    // Per-game build order for an arbitrary user's game.
+    const bo = await asAdmin(
+      request(app).get(
+        `/v1/admin/users/${adminUserId}/games/${encodeURIComponent(
+          g1.gameId,
+        )}/build-order`,
+      ),
+    );
+    expect(bo.status).toBe(200);
+    expect(bo.body.ok).toBe(true);
+    expect(Array.isArray(bo.body.events)).toBe(true);
+    expect(bo.body.events.length).toBeGreaterThan(0);
+    expect(Array.isArray(bo.body.opp_events)).toBe(true);
+
+    // Unknown game → 404.
+    const missing = await asAdmin(
+      request(app).get(
+        `/v1/admin/users/${adminUserId}/games/${encodeURIComponent(
+          "nope|x|y|1",
+        )}/build-order`,
+      ),
+    );
+    expect(missing.status).toBe(404);
   });
 
   test("rebuild-opponents drops + re-derives from games (counter fix)", async () => {
