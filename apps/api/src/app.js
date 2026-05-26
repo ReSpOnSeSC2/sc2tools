@@ -57,6 +57,7 @@ const { buildMeRouter } = require("./routes/me");
 const { buildOpponentsRouter } = require("./routes/opponents");
 const { buildGamesRouter } = require("./routes/games");
 const { buildCustomBuildsRouter } = require("./routes/customBuilds");
+const { buildAutoClassifyRouter } = require("./routes/autoClassify");
 const { buildDevicePairingsRouter } = require("./routes/devicePairings");
 const { buildOverlayTokensRouter } = require("./routes/overlayTokens");
 const { buildAggregationsRouter } = require("./routes/aggregations");
@@ -483,6 +484,18 @@ function mountRoutes(app, deps, services, clerk) {
     buildCustomBuildsRouter({
       customBuilds: services.customBuilds,
       perGame: services.perGame,
+      auth,
+    }),
+  );
+  // Discovery-engine surface — sits next to customBuilds because it
+  // is the dry-run twin (candidates) + promotion path (apply) for
+  // the same per-user library. AutoClassifyService composes the two
+  // services already constructed above.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildAutoClassifyRouter({
+      autoClassify: services.autoClassify,
+      customBuilds: services.customBuilds,
       auth,
     }),
   );
