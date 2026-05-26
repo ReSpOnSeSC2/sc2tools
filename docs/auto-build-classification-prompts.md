@@ -374,10 +374,35 @@ already matches an existing named build or user custom build.
 > apply to it unchanged — do not build a parallel editor/publish path for
 > auto-builds.
 >
+> **Responsive — fully usable on mobile AND desktop (required).** This is a
+> lightweight review-and-name flow, so it must work end-to-end on a phone, not
+> just shrink. Use the same Tailwind breakpoint convention the rest of
+> `apps/web` uses (`sm`/`md`/`lg`); match how `BuildsLibrary`/`BuildCard`
+> already reflow.
+> - **Layout:** candidate cards stack **single-column** on mobile (`< sm`) and
+>   flow into the multi-column grid on `md+`. The panel header (title +
+>   perspective toggle + "Scan now" + optional "Create all") wraps gracefully —
+>   no horizontal scroll, no clipped controls — collapsing to a stacked/▾
+>   layout on narrow widths.
+> - **Touch:** every interactive element (name-edit pencil, Create, dismiss X,
+>   perspective toggle, sample-replay links) has a **≥44×44px** touch target and
+>   visible focus state. Do not hide any primary action behind hover-only — the
+>   dismiss/edit affordances must be tappable, shown by default on touch.
+> - **Inline rename on mobile:** tapping the name opens a real text input that
+>   plays well with the mobile soft keyboard (no zoom-jank: input font ≥16px),
+>   with explicit confirm/cancel controls rather than relying on blur.
+> - **Content:** rule preview and sample-replay rows reflow/wrap on small
+>   screens (timings in JetBrains Mono stay legible); long build names truncate
+>   with an accessible full-text title/`aria-label`.
+> - **No fixed pixel widths** that force horizontal scroll at 360px; test the
+>   panel at 360px, 768px, and 1280px.
+>
 > **Acceptance:** renders real candidates from the running API; editing a name
 > and clicking Create sends the edited value; no layout shift between
-> loading/loaded; matches the dark theme tokens. Add a Storybook/Jest render
-> test if the repo has the harness (`apps/web/components/builds/__tests__/`).
+> loading/loaded; matches the dark theme tokens; **fully operable at 360px,
+> 768px, and 1280px with no horizontal scroll and ≥44px touch targets**. Add a
+> Storybook/Jest render test if the repo has the harness
+> (`apps/web/components/builds/__tests__/`).
 
 ---
 
@@ -398,9 +423,17 @@ already matches an existing named build or user custom build.
 > - Disable the button + show a spinner while in flight; guard against
 >   double-submit.
 >
+> **Mobile parity (required):** the entire apply flow works on a phone — the
+> Create / "Create all" / dismiss controls are tappable (≥44px, not hover-only),
+> success/error toasts render where they're visible on small screens (don't let
+> them sit off-canvas or under a fixed mobile nav bar), and the optimistic card
+> removal + grid refresh behave identically on touch. No full-page reloads on
+> any breakpoint.
+>
 > **Acceptance:** creating a build from the panel makes it show up in the main
 > grid without a manual refresh; the candidate list shrinks by exactly one;
 > failure path restores the card and tells the user why. No full-page reloads.
+> Verified working on mobile (≤768px) and desktop.
 
 ---
 
