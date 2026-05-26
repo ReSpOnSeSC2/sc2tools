@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useLocalStorageState } from "@/lib/useLocalStorageState";
 
 export type SortDir = "asc" | "desc";
 
@@ -8,6 +9,13 @@ export type SortState = {
   sortBy: string;
   sortDir: SortDir;
   setSort: (col: string) => void;
+  /**
+   * Deterministically set both the sort column and direction. Used by
+   * controls that own their own direction UI (e.g. a win-rate
+   * high→low / low→high toggle) where the click-to-flip semantics of
+   * ``setSort`` would be ambiguous.
+   */
+  setSortExplicit: (col: string, dir: SortDir) => void;
   sortRows: <T>(rows: T[], pick: (row: T, col: string) => unknown) => T[];
 };
 
@@ -25,6 +33,10 @@ export function useSort(initialCol: string, initialDir: SortDir = "desc"): SortS
     },
     [sortBy],
   );
+  const setSortExplicit = useCallback((col: string, dir: SortDir) => {
+    setSortBy(col);
+    setSortDir(dir);
+  }, []);
   const sortRows = useCallback(
     <T,>(rows: T[], pick: (row: T, col: string) => unknown): T[] => {
       const copy = [...rows];
@@ -42,7 +54,63 @@ export function useSort(initialCol: string, initialDir: SortDir = "desc"): SortS
     },
     [sortBy, sortDir],
   );
-  return { sortBy, sortDir, setSort, sortRows };
+  return { sortBy, sortDir, setSort, setSortExplicit, sortRows };
+}
+
+type PersistedSort = { sortBy: string; sortDir: SortDir };
+
+function isPersistedSort(raw: unknown): raw is PersistedSort {
+  if (!raw || typeof raw !== "object") return false;
+  const r = raw as Record<string, unknown>;
+  return (
+    typeof r.sortBy === "string" &&
+    (r.sortDir === "asc" || r.sortDir === "desc")
+  );
+}
+
+/**
+ * ``useSort`` whose column + direction survive reloads via
+ * localStorage. SSR-safe: both the in-memory sort and the persisted
+ * store start at the same ``initial`` values, so the first client
+ * render matches the server render; the stored preference is applied
+ * in an effect after mount. The two effects settle on the first pass
+ * (the sync effect no-ops once the values already agree), so there's
+ * no render loop.
+ */
+export function usePersistentSort(
+  key: string,
+  initialCol: string,
+  initialDir: SortDir = "desc",
+): SortState {
+  const sort = useSort(initialCol, initialDir);
+  const { setSortExplicit } = sort;
+  const [stored, setStored] = useLocalStorageState<PersistedSort>(
+    key,
+    { sortBy: initialCol, sortDir: initialDir },
+    isPersistedSort,
+  );
+
+  // Apply the hydrated preference once it arrives (and whenever it
+  // changes); ``setSortExplicit`` no-ops when the live sort already
+  // agrees, so there's no render churn after the values converge.
+  useEffect(() => {
+    setSortExplicit(stored.sortBy, stored.sortDir);
+  }, [stored, setSortExplicit]);
+
+  // Persist every change the user makes through the table headers or a
+  // direction toggle. The first run is skipped so the pre-hydration
+  // default doesn't overwrite a stored preference before the read
+  // effect above has applied it.
+  const persistGuard = useRef(false);
+  useEffect(() => {
+    if (!persistGuard.current) {
+      persistGuard.current = true;
+      return;
+    }
+    setStored({ sortBy: sort.sortBy, sortDir: sort.sortDir });
+  }, [sort.sortBy, sort.sortDir, setStored]);
+
+  return sort;
 }
 
 export function SortableTh({
