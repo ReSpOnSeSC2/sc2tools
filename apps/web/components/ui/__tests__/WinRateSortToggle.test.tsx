@@ -1,7 +1,7 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup, renderHook, act } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { render, screen, fireEvent, cleanup, renderHook, act, waitFor } from "@testing-library/react";
 import { WinRateSortToggle } from "../WinRateSortToggle";
-import { useSort } from "../SortableTh";
+import { useSort, usePersistentSort } from "../SortableTh";
 
 describe("WinRateSortToggle", () => {
   afterEach(() => cleanup());
@@ -39,5 +39,38 @@ describe("useSort.setSortExplicit", () => {
     const rows = [{ winRate: 0.5 }, { winRate: 0.1 }, { winRate: 0.9 }];
     const sorted = result.current.sortRows(rows, (r, c) => (r as Record<string, unknown>)[c]);
     expect(sorted.map((r) => r.winRate)).toEqual([0.1, 0.5, 0.9]);
+  });
+});
+
+describe("usePersistentSort", () => {
+  const KEY = "test.persistent.sort";
+  beforeEach(() => localStorage.clear());
+  afterEach(() => localStorage.clear());
+
+  it("persists the user's sort choice to localStorage", async () => {
+    const { result } = renderHook(() => usePersistentSort(KEY, "total", "desc"));
+    act(() => result.current.setSortExplicit("winRate", "asc"));
+    await waitFor(() => {
+      const raw = localStorage.getItem(KEY);
+      expect(raw).not.toBeNull();
+      expect(JSON.parse(raw as string)).toEqual({ sortBy: "winRate", sortDir: "asc" });
+    });
+  });
+
+  it("hydrates from a previously stored preference", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ sortBy: "winRate", sortDir: "asc" }));
+    const { result } = renderHook(() => usePersistentSort(KEY, "total", "desc"));
+    await waitFor(() => {
+      expect(result.current.sortBy).toBe("winRate");
+      expect(result.current.sortDir).toBe("asc");
+    });
+  });
+
+  it("ignores a malformed stored value and keeps the default", async () => {
+    localStorage.setItem(KEY, "not json");
+    const { result } = renderHook(() => usePersistentSort(KEY, "total", "desc"));
+    await waitFor(() => expect(localStorage.getItem(KEY)).toBe(JSON.stringify({ sortBy: "total", sortDir: "desc" })));
+    expect(result.current.sortBy).toBe("total");
+    expect(result.current.sortDir).toBe("desc");
   });
 });

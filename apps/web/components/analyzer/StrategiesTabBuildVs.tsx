@@ -5,7 +5,7 @@ import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
-import { useSort, SortableTh } from "@/components/ui/SortableTh";
+import { usePersistentSort, SortableTh, type SortState } from "@/components/ui/SortableTh";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { PhaseTrajectoryStrip } from "./PhaseTrajectoryStrip";
 import {
@@ -24,6 +24,8 @@ import type { BuildPhasePayload } from "@/lib/serverApi";
  * persisted to localStorage by the parent — this file owns only the
  * presentational matrix + table renderers.
  */
+
+const LS_BVS_SORT = "analyzer.strategies.bvs.sort";
 
 export type BvsCell = {
   my_build: string;
@@ -72,7 +74,7 @@ export function BuildVsStrategyView({
   const setView = onViewChange;
   const minGames = initialMinGames;
   const setMinGames = onMinGamesChange;
-  const sort = useSort("total", "desc");
+  const sort = usePersistentSort(LS_BVS_SORT, "total", "desc");
 
   const { data, isLoading } = useApi<BvsCell[]>(
     `/v1/build-vs-strategy${filtersToQuery(filters)}#${dbRev}`,
@@ -670,7 +672,7 @@ function BvsTable({
   onOpenBvs,
 }: {
   rows: BvsCell[];
-  sort: ReturnType<typeof useSort>;
+  sort: SortState;
   onOpenBvs: (build: string, strategy: string) => void;
 }) {
   return (

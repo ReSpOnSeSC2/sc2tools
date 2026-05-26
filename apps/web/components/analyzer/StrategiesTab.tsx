@@ -10,7 +10,7 @@ import {
 } from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
-import { useSort, SortableTh } from "@/components/ui/SortableTh";
+import { usePersistentSort } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { AllGamesTable } from "./AllGamesTable";
@@ -58,6 +58,7 @@ type DrillFilter = { opp_strategy: string; build?: string };
 const LS_VIEW = "analyzer.strategies.view";
 const LS_MIN = "analyzer.strategies.minGames";
 const LS_BVS_VW = "analyzer.strategies.bvs.view";
+const LS_OPP_SORT = "analyzer.strategies.opp.sort";
 
 type StratView = "opp" | "bvs";
 type BvsView = "heatmap" | "table";
@@ -118,7 +119,7 @@ function ByOppStrategyView({
   const { filters, dbRev } = useFilters();
   const [search, setSearch] = useState("");
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN, 3);
-  const sort = useSort("winRate", "desc");
+  const sort = usePersistentSort(LS_OPP_SORT, "winRate", "desc");
 
   const { data, isLoading } = useApi<StratRow[]>(
     `/v1/opp-strategies${filtersToQuery(filters)}#${dbRev}`,
