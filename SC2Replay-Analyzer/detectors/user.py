@@ -248,8 +248,20 @@ class UserBuildDetector(BaseStrategyDetector):
             # ``sg_time`` / ``twilight_time`` / ``dark_shrine_time`` /
             # ``robo_time`` are hoisted to the top of the PvZ branch
             # for the Stargate-opener guard above.
-            # Pure ordering on the Stargate timing -- mirror of canonical.
-            if sg_time < 9999 and twilight_time > sg_time and has_upgrade_substr("Glaive", 600) and (4 <= gate_count_6min <= 6):
+            # Stargate into Glaives: Stargate is the first tech, Twilight
+            # comes after it, and Glaives is the FIRST upgrade off the
+            # Twilight (before Blink AND Charge). Classification is purely
+            # order-based -- no Gateway-count window -- so a heavy 9+
+            # Gateway mass-Adept timing or a light Gateway count both
+            # classify the same. Mirror of canonical
+            # reveal-sc2-opponent-main/core/strategy_detector_pvz.py: the
+            # old ``has_upgrade_substr("Glaive", 600)`` existence check
+            # (any Glaives, even AFTER Blink) plus the ``4 <=
+            # gate_count_6min <= 6`` cap dropped real Glaive Adept builds
+            # into Standard Blink Macro when Blink was researched second.
+            if (sg_time < 9999 and twilight_time > sg_time
+                    and twilight_time < 9999
+                    and glaive_first_off_twilight):
                 return "PvZ - Stargate into Glaives"
             if sg_time < twilight_time and has_building("TemplarArchive", 540) and count_units("Archon", 540) >= 2:
                 return "PvZ - Archon Drop"

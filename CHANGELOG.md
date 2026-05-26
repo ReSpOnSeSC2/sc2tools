@@ -67,6 +67,28 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Strategy classifier · PvZ - Stargate into Glaives is order-based
+  (0.8.7)**: user-reported misclassification — a `Stargate → Twilight
+  → Glaives-first → Blink-later` build (a Phoenix / Oracle into Glaive
+  Adept timing with a heavy Gateway count) was labelled `PvZ -
+  Standard Blink Macro` instead of `PvZ - Stargate into Glaives`. Root
+  cause: the rule required `4 <= gate_count_6min <= 8`, so a real
+  Glaive Adept timing (9+ Gateways for mass Adepts) failed the upper
+  bound, skipped the Glaives label, and fell through to the Blink-macro
+  rule once Blink was researched second on a 3rd base. The sibling
+  `PvT - Stargate into Glaives` rule never had a Gateway window. Fix
+  removes the window from `PvZ - Stargate into Glaives` so it
+  classifies purely on ordering (Stargate before Twilight + Glaives is
+  the FIRST upgrade off the Twilight, before Blink AND Charge). The
+  `SC2Replay-Analyzer/detectors/user.py` mirror — which was further
+  behind, using a loose Glaives-*exists* check plus an even tighter
+  `<= 6` cap — was brought back in sync to use the same
+  `glaive_first_off_twilight` signal. Catalog description refreshed in
+  `data/build_definitions.json` AND
+  `apps/web/lib/build-definitions/pvz.ts`. 2 new regression tests in
+  `test_strategy_detector_pvz_adept_glaives.py` (heavy 9-Gateway and
+  low-Gateway Glaives builds); self-contained strategy-detector suite
+  127/127 passing.
 - **Strategy classifier · PvZ - Stargate into Robo + PvZ - Stargate
   Opener (0.8.5 → 0.8.6 cosmetic rename)**: user-reported regression
   (Ruby Rock LE 2026-04-01 10:39:06) — a Stargate-FIRST opener that
