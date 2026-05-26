@@ -157,6 +157,7 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
 
   beforeEach(async () => {
     await db.opponents.deleteMany({});
+    await db.games.deleteMany({});
   });
 
   function fakeResolver(map) {
@@ -273,5 +274,144 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
     await expect(
       opponents.backfillPulseCharacterId("u1"),
     ).rejects.toThrow(/pulseResolver/);
+  });
+
+  test("on hit, fetches pulse MMR and fills games that lack an in-replay value", async () => {
+    // The "barcode finally got a pulseCharacterId" case. After the
+    // backfill resolves the id, the freshly-fetched SC2Pulse MMR
+    // must land on the opponents row AND on games rows that were
+    // missing an MMR — but games that already carry the agent's
+    // in-replay value must be left alone (in-replay is at-game-time
+    // truth; pulse is only the fill-the-gap backup).
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "1-S2-1-1",
+      toonHandle: "1-S2-1-1",
+      displayNameSample: "Barcode",
+    });
+    await db.games.insertMany([
+      {
+        userId: "u1",
+        gameId: "g1",
+        date: new Date("2026-05-01T12:00:00Z"),
+        opponent: { pulseId: "1-S2-1-1", toonHandle: "1-S2-1-1" },
+      },
+      {
+        userId: "u1",
+        gameId: "g2",
+        date: new Date("2026-05-02T12:00:00Z"),
+        // Pre-existing in-replay agent MMR — must NOT be overwritten.
+        opponent: { pulseId: "1-S2-1-1", toonHandle: "1-S2-1-1", mmr: 3000 },
+      },
+      {
+        // Different opponent — must NOT be touched by this backfill.
+        userId: "u1",
+        gameId: "g3",
+        date: new Date("2026-05-03T12:00:00Z"),
+        opponent: { pulseId: "2-S2-1-9", toonHandle: "2-S2-1-9", mmr: 4000 },
+      },
+    ]);
+    const resolver = fakeResolver({ "1-S2-1-1": "452727" });
+    const pulseMmr = {
+      getCurrentMmr: jest.fn(async () => ({ mmr: 4800, region: "NA" })),
+      getCurrentMmrForAny: jest.fn(async () => ({ mmr: 4800, region: "NA" })),
+    };
+    const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
+      pulseResolver: resolver,
+      pulseMmr,
+    });
+    const out = await opponents.backfillPulseCharacterId("u1", { limit: 10 });
+    expect(out.resolved).toBe(1);
+    // Region-aware path used because pulseMmr has getCurrentMmrForAny.
+    expect(pulseMmr.getCurrentMmrForAny).toHaveBeenCalledTimes(1);
+    const oppRow = await db.opponents.findOne({ userId: "u1", pulseId: "1-S2-1-1" });
+    expect(oppRow.pulseCharacterId).toBe("452727");
+    expect(oppRow.mmr).toBe(4800);
+    expect(oppRow.region).toBe("NA");
+    expect(oppRow.mmrFetchedAt).toBeInstanceOf(Date);
+    // g1 had no in-replay MMR → pulse fills the gap.
+    const g1 = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(g1.opponent.mmr).toBe(4800);
+    expect(g1.opponent.region).toBe("NA");
+    // g2 already had the agent's in-replay MMR (3000) → preserved.
+    // Region stamping is gated by the same "lacks MMR" filter so we
+    // don't double-write — g2 keeps the values it had.
+    const g2 = await db.games.findOne({ userId: "u1", gameId: "g2" });
+    expect(g2.opponent.mmr).toBe(3000);
+    expect(g2.opponent.region).toBeUndefined();
+    // Untouched opponent's game keeps its own values.
+    const g3 = await db.games.findOne({ userId: "u1", gameId: "g3" });
+    expect(g3.opponent.mmr).toBe(4000);
+    expect(g3.opponent.region).toBeUndefined();
+  });
+
+  test("on hit, still stamps region from toon_handle when pulse MMR fetch returns null", async () => {
+    // SC2Pulse can return null (no team in any region, rate-limit,
+    // network blip). We still resolved the pulseCharacterId, and
+    // the toon_handle gives us a reliable region — stamp that onto
+    // games that lack an MMR so the per-region filter starts working
+    // even before the next MMR fetch succeeds.
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "2-S2-1-1",
+      toonHandle: "2-S2-1-1",
+      displayNameSample: "Barcode",
+    });
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g1",
+      date: new Date("2026-05-01T12:00:00Z"),
+      opponent: { pulseId: "2-S2-1-1", toonHandle: "2-S2-1-1" },
+    });
+    const resolver = fakeResolver({ "2-S2-1-1": "452727" });
+    const pulseMmr = {
+      getCurrentMmr: jest.fn(async () => null),
+      getCurrentMmrForAny: jest.fn(async () => null),
+    };
+    const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
+      pulseResolver: resolver,
+      pulseMmr,
+    });
+    await opponents.backfillPulseCharacterId("u1", { limit: 10 });
+    const oppRow = await db.opponents.findOne({ userId: "u1", pulseId: "2-S2-1-1" });
+    expect(oppRow.pulseCharacterId).toBe("452727");
+    expect(oppRow.mmr).toBeUndefined();
+    expect(oppRow.region).toBe("EU"); // toon_handle leading byte 2
+    const game = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(game.opponent.mmr).toBeUndefined();
+    expect(game.opponent.region).toBe("EU");
+  });
+
+  test("works without a pulseMmr dep (MMR fetch silently skipped)", async () => {
+    // Backfill tick that ran before pulseMmr was injected: still
+    // useful for healing pulseCharacterId + region; the next ingest
+    // (or the next backfill tick when pulseMmr IS available) fills
+    // in MMR.
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "1-S2-1-1",
+      toonHandle: "1-S2-1-1",
+      displayNameSample: "Barcode",
+    });
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g1",
+      date: new Date("2026-05-01T12:00:00Z"),
+      opponent: { pulseId: "1-S2-1-1", toonHandle: "1-S2-1-1" },
+    });
+    const resolver = fakeResolver({ "1-S2-1-1": "452727" });
+    const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
+      pulseResolver: resolver,
+      // no pulseMmr
+    });
+    const out = await opponents.backfillPulseCharacterId("u1", { limit: 10 });
+    expect(out.resolved).toBe(1);
+    const oppRow = await db.opponents.findOne({ userId: "u1", pulseId: "1-S2-1-1" });
+    expect(oppRow.pulseCharacterId).toBe("452727");
+    expect(oppRow.region).toBe("NA");
+    expect(oppRow.mmr).toBeUndefined();
+    const game = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(game.opponent.region).toBe("NA");
+    expect(game.opponent.mmr).toBeUndefined();
   });
 });

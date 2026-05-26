@@ -1424,6 +1424,17 @@ class OpponentsService {
    * ``pulseResolveAttemptedAt`` so we don't re-hit Pulse on every
    * subsequent tick.
    *
+   * On hit we ALSO fetch the opponent's current SC2Pulse MMR (now
+   * that we finally have an id to query with) and back-stamp it
+   * onto games against them that DON'T already carry an in-replay
+   * MMR. The agent's in-replay value is the at-game-time truth and
+   * is always preserved — pulse only fills gaps (games where the
+   * replay didn't carry one and the SC2Pulse fetch was skipped at
+   * first ingest because the opponent had no pulseCharacterId
+   * yet). Without this hop, those barcode-opponent games stay in
+   * the chart's "missing MMR" rollup forever. Fail-soft per row:
+   * an MMR-fetch or re-stamp failure logs and the cycle continues.
+   *
    * Two cooperating bounds:
    *   * ``opts.limit`` (default 50) caps how many rows one cycle
    *     touches, keeping a single backfill tick cheap.
@@ -1523,12 +1534,39 @@ class OpponentsService {
         );
       }
       const now = new Date();
+      /** @type {Record<string, any>} */
       const set = {
         pulseResolveAttemptedAt: now,
       };
       if (typeof pulseCharacterId === "string" && pulseCharacterId.length > 0) {
         set.pulseCharacterId = pulseCharacterId;
         resolved += 1;
+        // Now that we finally have a pulseCharacterId, fetch the
+        // opponent's current SC2Pulse MMR. Region: derive from
+        // toon_handle as a cheap fallback; pulse overwrites with
+        // the authoritative team region on hit.
+        const derivedRegion = regionFromToonHandle(toon);
+        if (derivedRegion) set.region = derivedRegion;
+        // prior=null so the freshness window doesn't suppress this
+        // fetch — we JUST resolved the id and want the value now.
+        let pulseFetched = null;
+        try {
+          pulseFetched = await this._fetchOpponentMmrFromPulse(
+            pulseCharacterId,
+            null,
+            derivedRegion,
+          );
+        } catch (err) {
+          this.logger.warn(
+            { err, userId, pulseId: row.pulseId, pulseCharacterId },
+            "opponent_pulse_backfill_mmr_fetch_failed",
+          );
+        }
+        if (pulseFetched) {
+          set.mmr = pulseFetched.mmr;
+          set.mmrFetchedAt = now;
+          if (pulseFetched.region) set.region = pulseFetched.region;
+        }
       }
       const res = await this.db.opponents.updateOne(
         { userId, pulseId: row.pulseId },
@@ -1546,6 +1584,46 @@ class OpponentsService {
           },
           "opponent_pulse_character_id_upgraded",
         );
+        // Back-stamp games against this opponent that DON'T already
+        // carry an in-replay MMR. The filter on
+        // ``opponent.mmr: { $not: { $type: "number" } }`` is the
+        // priority guard — the agent's in-replay value is the
+        // at-game-time truth and must never be overwritten by
+        // pulse's current ladder MMR (which drifts the moment the
+        // opponent plays another ranked match). One updateMany so a
+        // barcode with 50 prior games becomes one Mongo round-trip,
+        // not 50. Uses the {opponent.pulseId, userId, date} index.
+        /** @type {Record<string, any>} */
+        const gameUpdate = {};
+        if (typeof set.mmr === "number") gameUpdate["opponent.mmr"] = set.mmr;
+        if (typeof set.region === "string") gameUpdate["opponent.region"] = set.region;
+        if (Object.keys(gameUpdate).length > 0) {
+          try {
+            const gres = await this.db.games.updateMany(
+              {
+                userId,
+                "opponent.pulseId": row.pulseId,
+                "opponent.mmr": { $not: { $type: "number" } },
+              },
+              { $set: gameUpdate },
+            );
+            if (gres.modifiedCount > 0) {
+              this.logger.info(
+                {
+                  userId,
+                  pulseId: row.pulseId,
+                  gameCount: gres.modifiedCount,
+                },
+                "opponent_pulse_backfill_games_restamped",
+              );
+            }
+          } catch (err) {
+            this.logger.warn(
+              { err, userId, pulseId: row.pulseId },
+              "opponent_pulse_backfill_games_restamp_failed",
+            );
+          }
+        }
       }
     }
     return { scanned: rows.length, resolved, updated, skipped };
