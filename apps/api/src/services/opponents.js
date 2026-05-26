@@ -1303,14 +1303,26 @@ class OpponentsService {
    * specific game's ``opponent.mmr`` / ``opponent.region`` sub-doc
    * in the games collection. The bingo MMR predicates
    * (``win_vs_higher_mmr`` / ``win_close_mmr`` in
-   * ``arcadePredicates.js``) read from games — without this hop they
-   * never tick because sc2reader doesn't carry an opponent's MMR for
-   * ranked ladder replays.
+   * ``arcadePredicates.js``) and the win-rate-by-opponent-MMR chart
+   * both read from games — without this hop they never tick because
+   * sc2reader doesn't carry an opponent's MMR for ranked ladder
+   * replays.
    *
-   * Only stamps fields the agent didn't supply (``incomingGame.mmr``
-   * / ``incomingGame.region``) so an explicit agent-provided value
-   * always wins. No-op when ``gameId`` is missing (defensive — the
-   * route always passes it but pre-route callers may not).
+   * MMR priority: SC2Pulse-resolved value (``set.mmr``) wins over the
+   * agent-supplied lobby value (``incomingGame.mmr``). sc2reader's
+   * lobby MMR can be a stale placeholder for barcode / smurf
+   * opponents whose ladder placement hasn't settled, so we prefer
+   * the opponent's CURRENT SC2Pulse MMR (fetched on every ingest in
+   * ``_fetchOpponentMmrFromPulse``). When pulse didn't fire (no
+   * pulseCharacterId, rate-limit, freshness window) the games row
+   * keeps whatever ``games.upsert`` wrote earlier in the same
+   * request, including the agent-supplied lobby value if it had one.
+   *
+   * Region: still agent-wins-when-supplied, but in practice the
+   * agent never sends ``region`` so pulse always lands.
+   *
+   * No-op when ``gameId`` is missing (defensive — the route always
+   * passes it but pre-route callers may not).
    *
    * @private
    * @param {string} userId
@@ -1323,10 +1335,7 @@ class OpponentsService {
     if (typeof gameId !== "string" || !gameId) return;
     /** @type {Record<string, any>} */
     const update = {};
-    if (
-      typeof incomingGame.mmr !== "number"
-      && typeof set.mmr === "number"
-    ) {
+    if (typeof set.mmr === "number") {
       update["opponent.mmr"] = set.mmr;
     }
     if (
@@ -1423,6 +1432,16 @@ class OpponentsService {
    * SC2Pulse. Successful resolutions are persisted; misses bump
    * ``pulseResolveAttemptedAt`` so we don't re-hit Pulse on every
    * subsequent tick.
+   *
+   * On hit we ALSO fetch the opponent's current SC2Pulse MMR (now
+   * that we finally have an id to query with) and back-stamp it
+   * onto every game we've recorded against them in the ``games``
+   * collection. Without this hop the win-rate-by-opponent-MMR chart
+   * and the bingo MMR predicates keep reading whatever the agent
+   * supplied at ingest time — which for barcode opponents is often
+   * a stale lobby placeholder, the exact thing this backfill is
+   * meant to heal. Fail-soft per row: an MMR-fetch or re-stamp
+   * failure logs and the cycle continues.
    *
    * Two cooperating bounds:
    *   * ``opts.limit`` (default 50) caps how many rows one cycle
@@ -1523,12 +1542,39 @@ class OpponentsService {
         );
       }
       const now = new Date();
+      /** @type {Record<string, any>} */
       const set = {
         pulseResolveAttemptedAt: now,
       };
       if (typeof pulseCharacterId === "string" && pulseCharacterId.length > 0) {
         set.pulseCharacterId = pulseCharacterId;
         resolved += 1;
+        // Now that we finally have a pulseCharacterId, fetch the
+        // opponent's current SC2Pulse MMR. Region: derive from
+        // toon_handle as a cheap fallback; pulse overwrites with the
+        // authoritative team region on hit.
+        const derivedRegion = regionFromToonHandle(toon);
+        if (derivedRegion) set.region = derivedRegion;
+        // prior=null so the freshness window doesn't suppress this
+        // fetch — we JUST resolved the id and want the value now.
+        let pulseFetched = null;
+        try {
+          pulseFetched = await this._fetchOpponentMmrFromPulse(
+            pulseCharacterId,
+            null,
+            derivedRegion,
+          );
+        } catch (err) {
+          this.logger.warn(
+            { err, userId, pulseId: row.pulseId, pulseCharacterId },
+            "opponent_pulse_backfill_mmr_fetch_failed",
+          );
+        }
+        if (pulseFetched) {
+          set.mmr = pulseFetched.mmr;
+          set.mmrFetchedAt = now;
+          if (pulseFetched.region) set.region = pulseFetched.region;
+        }
       }
       const res = await this.db.opponents.updateOne(
         { userId, pulseId: row.pulseId },
@@ -1546,6 +1592,37 @@ class OpponentsService {
           },
           "opponent_pulse_character_id_upgraded",
         );
+        // Back-stamp every game we have against this opponent with
+        // the freshly-resolved MMR/region. One updateMany so a
+        // barcode with 50 prior games becomes one Mongo round-trip,
+        // not 50. Uses the {opponent.pulseId, userId, date} index.
+        /** @type {Record<string, any>} */
+        const gameUpdate = {};
+        if (typeof set.mmr === "number") gameUpdate["opponent.mmr"] = set.mmr;
+        if (typeof set.region === "string") gameUpdate["opponent.region"] = set.region;
+        if (Object.keys(gameUpdate).length > 0) {
+          try {
+            const gres = await this.db.games.updateMany(
+              { userId, "opponent.pulseId": row.pulseId },
+              { $set: gameUpdate },
+            );
+            if (gres.modifiedCount > 0) {
+              this.logger.info(
+                {
+                  userId,
+                  pulseId: row.pulseId,
+                  gameCount: gres.modifiedCount,
+                },
+                "opponent_pulse_backfill_games_restamped",
+              );
+            }
+          } catch (err) {
+            this.logger.warn(
+              { err, userId, pulseId: row.pulseId },
+              "opponent_pulse_backfill_games_restamp_failed",
+            );
+          }
+        }
       }
     }
     return { scanned: rows.length, resolved, updated, skipped };
