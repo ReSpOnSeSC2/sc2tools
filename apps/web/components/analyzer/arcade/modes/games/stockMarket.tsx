@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { apiCall } from "@/lib/clientApi";
 import { pct1, wrColor } from "@/lib/format";
 import { GameStage } from "../../shells/GameStage";
@@ -208,6 +208,20 @@ function Render({
 }) {
   const { state, update, hydrated } = useArcadeState();
   const { getToken } = useAuth();
+  const { user, isLoaded: userLoaded } = useUser();
+  // The name we show by default so a player appears under their own
+  // identity rather than a faceless "Anonymous N". Falls back through
+  // username → first name → email local-part, matching how the rest of
+  // the app greets the user (see OnboardingWelcome).
+  const defaultDisplayName = useMemo(() => {
+    if (!userLoaded) return "";
+    const raw =
+      user?.username?.trim() ||
+      user?.firstName?.trim() ||
+      user?.primaryEmailAddress?.emailAddress?.split("@")[0] ||
+      "";
+    return raw.slice(0, 60);
+  }, [userLoaded, user]);
   // Render every quote (tradeable + untradeable) so the user sees the
   // full universe across all matchups. Untradeable rows are visually
   // labelled and the allocation input is disabled — they're stalls
@@ -242,19 +256,26 @@ function Render({
   // previous week's lock would otherwise silently make every future
   // lock private without the user realising.
   const [keepPrivate, setKeepPrivate] = useState(false);
-  const [name, setName] = useState(state.leaderboardDisplayName);
+  // Identity is opt-OUT, not opt-in: a public lock shows the player's
+  // name by default, and they have to actively tick "appear anonymous"
+  // to be listed as a faceless handle. Previously the name defaulted to
+  // blank, which silently posted everyone as "Anonymous N".
+  const [anonymous, setAnonymous] = useState(false);
+  const [name, setName] = useState("");
 
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Display name hydrates once from saved state so a returning user
-  // doesn't have to re-type it. The privacy flag is intentionally not
-  // hydrated (see useState above).
+  // Display name hydrates once: prefer a name the player saved on a
+  // previous lock, otherwise seed it with their account identity so the
+  // field is populated and they appear under their real id by default.
+  // The privacy/anonymous flags are intentionally not hydrated — each
+  // week starts public and named unless the user opts out again.
   const syncedFromHydrateRef = useRef(false);
   useEffect(() => {
-    if (!hydrated || syncedFromHydrateRef.current) return;
+    if (!hydrated || !userLoaded || syncedFromHydrateRef.current) return;
     syncedFromHydrateRef.current = true;
-    setName(state.leaderboardDisplayName);
-  }, [hydrated, state.leaderboardDisplayName]);
+    setName(state.leaderboardDisplayName.trim() || defaultDisplayName);
+  }, [hydrated, userLoaded, state.leaderboardDisplayName, defaultDisplayName]);
 
   const totalAlloc = Object.values(picks).reduce((s, v) => s + v, 0);
   const slotsUsed = Object.keys(picks).filter((k) => picks[k] > 0).length;
@@ -290,6 +311,9 @@ function Render({
       });
     const valid = portfolioPicks.length > 0 && portfolioPicks.length <= 5 && totalAlloc === 100;
     const goPublic = !keepPrivate;
+    // Blank name = anonymous server-side, so an explicit "appear
+    // anonymous" choice just submits an empty display name.
+    const submittedName = anonymous ? "" : name.trim();
     if (!valid) {
       ctx.onAnswer({ picks: portfolioPicks.map((p) => ({ id: p.slug, alloc: p.alloc })), submitToLeaderboard: goPublic });
       return;
@@ -302,7 +326,7 @@ function Render({
         picks: portfolioPicks,
       },
       leaderboardOptIn: goPublic,
-      leaderboardDisplayName: name,
+      leaderboardDisplayName: submittedName,
     }));
     ctx.onAnswer({ picks: portfolioPicks.map((p) => ({ id: p.slug, alloc: p.alloc })), submitToLeaderboard: goPublic });
     if (goPublic) {
@@ -318,7 +342,7 @@ function Render({
           body: JSON.stringify({
             weekKey: ctx.question.weekKey,
             pnlPct: 0,
-            displayName: name,
+            displayName: submittedName,
           }),
         });
         setSubmitError(null);
@@ -588,13 +612,32 @@ function Render({
             : "Public by default. Tick the box to keep this week's portfolio private."}
         </p>
         {!keepPrivate ? (
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value.slice(0, 60))}
-            placeholder="Display name (leave blank to stay anonymous)"
-            className="mt-2 h-9 w-full rounded border border-border bg-bg px-2 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          />
+          <div className="mt-2 space-y-2">
+            <label className="flex items-center gap-2 text-caption text-text">
+              <input
+                type="checkbox"
+                checked={anonymous}
+                onChange={(e) => setAnonymous(e.target.checked)}
+                className="h-4 w-4 rounded border-border bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              />
+              Appear anonymously (hide my name)
+            </label>
+            {anonymous ? (
+              <p className="text-caption text-text-muted">
+                You&apos;ll be listed under an anonymous handle (e.g.{" "}
+                <span className="text-text-dim">Anonymous 3</span>). Untick to
+                show your name.
+              </p>
+            ) : (
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value.slice(0, 60))}
+                placeholder="Display name"
+                className="h-9 w-full rounded border border-border bg-bg px-2 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              />
+            )}
+          </div>
         ) : null}
       </fieldset>
     </div>
