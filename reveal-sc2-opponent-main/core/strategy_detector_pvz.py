@@ -232,18 +232,27 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # Stargate into Glaives (refined): Stargate goes down first
     # as the tech building, Twilight comes after it, and the
     # FIRST upgrade out of Twilight is Glaives (NOT Blink — that
-    # would be Stargate into Blink). 4-8 Gateways by 6:00 covers
-    # both Phoenix-and-Glaive and Oracle-and-Glaive variants. Pure
-    # ordering on the Stargate timing -- the ``twilight_time >
-    # sg_time`` clause already pins Stargate as first, and the
-    # ``gate_count_6min`` window already filters out builds where
-    # the Stargate landed too late to be an opener.
+    # would be Stargate into Blink). Classification is purely
+    # order-based -- the build IS a Stargate-into-Glaives the
+    # moment Glaives is the first Twilight upgrade off a Twilight
+    # that followed the Stargate, regardless of how many Gateways
+    # back it. The old ``4 <= gate_count_6min <= 8`` window was an
+    # artificial cap that dropped legitimate Glaive Adept builds:
+    # heavier timings / all-ins routinely warp 9+ Gateways (mass
+    # Adepts ARE the build) and so fell through to Standard Blink
+    # Macro whenever Blink was researched second and a 3rd Nexus
+    # was taken. The PvT - Stargate into Glaives rule has no gate
+    # window for exactly this reason; this mirrors it. The
+    # ``twilight_time > sg_time`` clause pins Stargate as the first
+    # tech, ``glaive_first_off_twilight`` pins Glaives as the first
+    # upgrade (before Blink AND Charge), and a Robo follow-up has
+    # already been claimed by Stargate into Robo above -- so what
+    # reaches here is unambiguously a Glaives-first Stargate opener.
     if (
         sg_time < 9999
         and twilight_time > sg_time
         and twilight_time < 9999
         and glaive_first_off_twilight
-        and (4 <= gate_count_6min <= 8)
     ):
         return "PvZ - Stargate into Glaives"
 
