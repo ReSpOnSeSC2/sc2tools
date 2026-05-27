@@ -31,6 +31,14 @@ workflow builds the Windows installer on each tag push and attaches the
   `node apps/api/src/db/migrations/2026-05-27-backfill-is-ladder-map.js`
   remains for a manual run.
 
+  The map name is still a *proxy*, though — a custom game played on a
+  ladder map would look like ladder. The agent (v0.10.0+) now emits an
+  authoritative `isLadderGame` flag read from the replay's matchmaking
+  category; ingest, the backfill job, and the migration all **prefer
+  that flag** when present and fall back to the map-name proxy
+  otherwise. So games re-ingested by the new agent (via a Resync)
+  classify with 100% accuracy regardless of the map.
+
 - **Ladder-map backfill.** The new ladder / non-ladder map filter
   `$match`es on a stored `isLadderMap` boolean that only fresh ingests
   carry. Two ways to classify pre-existing games (both match the stored

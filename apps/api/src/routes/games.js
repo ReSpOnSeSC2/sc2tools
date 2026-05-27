@@ -181,14 +181,18 @@ function buildGamesRouter(deps) {
         // to remember to strip them.
         if ("earlyBuildLog" in game) delete game.earlyBuildLog;
         if ("oppEarlyBuildLog" in game) delete game.oppEarlyBuildLog;
-        // Classify the map against the all-seasons ladder set so the
-        // FilterBar's ladder / non-ladder filter has a stored boolean
-        // to $match on. Always stamped — the classifier set is never
-        // empty (the historical list is baked in), so every ingest gets
-        // a real true/false rather than an "unknown" gap. ``isLadderMapV``
+        // Classify ladder vs custom for the FilterBar filter. Prefer the
+        // agent's authoritative matchmaking flag (``isLadderGame``, from
+        // the replay's category) when present; otherwise fall back to
+        // the all-seasons map-name proxy. The proxy set is never empty
+        // (the historical list is baked in), so every ingest gets a real
+        // true/false rather than an "unknown" gap. ``isLadderMapV``
         // records which classifier version produced it so the startup
-        // backfill can reclassify only when the logic/list changes.
-        game.isLadderMap = isLadderMap(game.map, ladderMapSet);
+        // backfill reclassifies only when the logic/list changes.
+        game.isLadderMap =
+          typeof game.isLadderGame === "boolean"
+            ? game.isLadderGame
+            : isLadderMap(game.map, ladderMapSet);
         game.isLadderMapV = LADDER_CLASSIFY_VERSION;
         // GamesService.upsert now writes the slim row to ``games``
         // and forwards the heavy fields to GameDetailsService. A

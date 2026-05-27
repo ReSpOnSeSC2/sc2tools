@@ -26,6 +26,12 @@ const GAME_SCHEMA = {
     // global FilterBar's 1v1 / team game-size filter. Optional — games
     // uploaded by agents predating this field carry no count.
     playerCount: { type: "integer", minimum: 1, maximum: 16 },
+    // Authoritative ladder-vs-custom signal from the replay's
+    // matchmaking category. true = ranked ladder, false = custom. The
+    // ingest path prefers this over the map-name proxy when present.
+    // Optional — games from agents predating this field fall back to
+    // the proxy.
+    isLadderGame: { type: "boolean" },
     durationSec: { type: "integer", minimum: 0, maximum: 24 * 60 * 60 },
     macroScore: { type: "number", minimum: 0, maximum: 100 },
     apm: { type: "number", minimum: 0, maximum: 5000 },
