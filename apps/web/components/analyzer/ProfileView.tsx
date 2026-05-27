@@ -5,7 +5,6 @@ import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters } from "@/lib/filterContext";
-import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
@@ -14,12 +13,8 @@ import { OpponentDiagnosticsPanel } from "./OpponentDiagnosticsPanel";
 import {
   HeadlineMmrChip,
   RaceMmrPanel,
-  isMmrMode,
-  type MmrMode,
   type PulseRaceBreakdown,
 } from "./OpponentRaceMmr";
-
-const LS_MMR_MODE = "analyzer.opponentMmrMode";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import { MedianTimingsGrid } from "./MedianTimingsGrid";
 import type { MatchupTimings, TimingInfo } from "./MedianTimingsGrid";
@@ -114,11 +109,6 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
       `/v1/opponents/${encodeURIComponent(pulseId)}/pulse-races`,
       { revalidateOnFocus: false },
     );
-  const [mmrMode, setMmrMode] = useLocalStorageState<MmrMode>(
-    LS_MMR_MODE,
-    "top",
-    isMmrMode,
-  );
   // Lifted filter state — clicking a row label in the H2H "Maps"
   // view, or a cell in the "Builds" matrix, narrows the All-games
   // table and the by-map / by-strategy summary cards below it. The
@@ -191,11 +181,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-h2 font-semibold">{data.name || "unnamed"}</h1>
-            <HeadlineMmrChip
-              breakdown={races}
-              mode={mmrMode}
-              fallbackMmr={data.mmr}
-            />
+            <HeadlineMmrChip breakdown={races} fallbackMmr={data.mmr} />
             <MergedToonsChip handles={data.mergedToonHandles} />
           </div>
           <ProfilePulseLine
@@ -222,12 +208,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         </div>
       </div>
 
-      <RaceMmrPanel
-        breakdown={races}
-        isLoading={racesLoading}
-        mode={mmrMode}
-        onModeChange={setMmrMode}
-      />
+      <RaceMmrPanel breakdown={races} isLoading={racesLoading} />
 
       <OpponentDiagnosticsPanel
         collapsible

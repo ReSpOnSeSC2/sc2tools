@@ -92,8 +92,6 @@ export interface OpponentsService {
     }>;
     topRace: string | null;
     topMmr: number | null;
-    mostPlayedVsYouRace: string | null;
-    mostPlayedVsYouMmr: number | null;
   } | null>;
 }
 
