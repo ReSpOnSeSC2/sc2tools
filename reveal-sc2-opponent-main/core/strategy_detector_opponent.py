@@ -16,9 +16,11 @@ from .strategy_detector_helpers import (
     GAME_TOO_SHORT_THRESHOLD_SECONDS,
     _composition_fallback_name,
     _is_start_event,
+    base_count_at,
     count_real_units,
     count_started_before,
     start_times,
+    start_times_excluding_main,
     too_short_label,
 )
 
@@ -91,12 +93,6 @@ class OpponentStrategyDetector(BaseStrategyDetector):
 
         def count_buildings(name, time_limit=9999):
             return count_started_before(buildings, name, time_limit + 1)
-
-        # count_buildings_strict was an earlier attempt at the same
-        # filter (init+born only, excluding "morph"). Keep the name
-        # for compatibility with the few call-sites that use it, but
-        # alias it to the canonical start-time count.
-        count_buildings_strict = count_buildings
 
         def has_upgrade_substr(sub_name, time_limit=9999):
             return any(sub_name in u["name"] and u["time"] <= time_limit for u in upgrades)
@@ -276,15 +272,19 @@ class OpponentStrategyDetector(BaseStrategyDetector):
 
         # --- TERRAN ---
         elif race == "Terran":
-            # Count actual new Command Centers only — morphs of the
-            # main CC to OrbitalCommand / PlanetaryFortress emit
-            # separate events under those names but they're the SAME
-            # physical building, NOT a 2nd base. The 1-1-1 / Standard
-            # Bio Tank / Bio Comp branches below all key off
-            # ``second_cc_time`` to distinguish 1-base all-ins from
-            # expanding macro games, so this filter is load-bearing.
-            cc_starts = start_times(buildings, "CommandCenter")
-            second_cc_time = cc_starts[1] if len(cc_starts) >= 2 else 9999
+            # ``second_cc_time`` is the start time of the opponent's
+            # SECOND base (the natural expansion); the 1-1-1 / Standard
+            # Bio Tank / Bio Comp branches below all key off it to
+            # distinguish 1-base all-ins from expanding macro games.
+            # Exclude the pre-placed main: real replays fire only a
+            # "born" event (no init) for the game-start CC, so indexing
+            # raw start times as cc_starts[1] pointed one base too far
+            # (the 3rd base, or 9999) and mislabelled 2-base macro games
+            # as "1-1-1 One Base". Morphs of the main to OrbitalCommand /
+            # PlanetaryFortress carry their own names, so they never
+            # masquerade as a 2nd CC here.
+            expansion_cc_starts = start_times_excluding_main(buildings, "CommandCenter")
+            second_cc_time = expansion_cc_starts[0] if expansion_cc_starts else 9999
 
             gas_count_4min = count_buildings("Refinery", 330)
             reaper_count = count_units("Reaper", 330)
@@ -328,7 +328,14 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                 has_upgrade_substr("Cloak", 450) or has_upgrade_substr("Banshee", 450)
             ):
                 return "Terran - Banshee Rush"
-            if count_buildings_strict("CommandCenter", 420) >= 3:
+            # Count the pre-placed main too: real replays fire only a
+            # "born" event (no init) for the game-start CC, so the raw
+            # start-event count misses it and a true fast-3-CC (main +
+            # 2 expansions = 2 init events) read as only 2 and fell
+            # through to "Standard Bio Tank". base_count_at adds the
+            # main, matching the "3 Command Centers exist" definition
+            # and the Nexus/Hatchery counting in the other detectors.
+            if base_count_at(buildings, "CommandCenter", 420) >= 3:
                 return "Terran - Fast 3 CC"
 
             rax_count = count_buildings("Barracks", 390)
