@@ -1,8 +1,10 @@
 "use strict";
 
 const {
+  ALL_LADDER_MAPS,
   normalizeMapName,
   buildLadderMapSet,
+  buildClassifierSet,
   isLadderMap,
 } = require("../src/util/isLadderMap");
 
@@ -27,5 +29,28 @@ describe("util/isLadderMap", () => {
     expect(isLadderMap("Site Delta", new Set())).toBe(false);
     expect(isLadderMap("", buildLadderMapSet(["Site Delta"]))).toBe(false);
     expect(isLadderMap("Site Delta", null)).toBe(false);
+  });
+
+  test("ALL_LADDER_MAPS spans many seasons and stays sane", () => {
+    expect(ALL_LADDER_MAPS.length).toBeGreaterThan(150);
+    // No empties / dupes after normalization isn't required, but the
+    // list itself should have no blank entries.
+    expect(ALL_LADDER_MAPS.every((m) => typeof m === "string" && m.trim())).toBe(true);
+  });
+
+  test("buildClassifierSet recognises retired ladder maps without a live pool", () => {
+    const set = buildClassifierSet([]);
+    // Retired maps from past seasons — the whole point of the fix.
+    expect(isLadderMap("Catalyst LE", set)).toBe(true);
+    expect(isLadderMap("Acropolis LE", set)).toBe(true);
+    expect(isLadderMap("Cerulean Fall LE", set)).toBe(true);
+    // Genuinely-not-a-ladder-map stays false.
+    expect(isLadderMap("Marine Arena 9000", set)).toBe(false);
+  });
+
+  test("buildClassifierSet unions a brand-new live-pool map on top", () => {
+    const set = buildClassifierSet(["Hypothetical New Map S99"]);
+    expect(isLadderMap("Hypothetical New Map S99", set)).toBe(true);
+    expect(isLadderMap("Site Delta", set)).toBe(true); // still has history
   });
 });

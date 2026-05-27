@@ -3,7 +3,7 @@
 const express = require("express");
 const { validateGameRecord } = require("../validation/gameRecord");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
-const { buildLadderMapSet, isLadderMap } = require("../util/isLadderMap");
+const { buildClassifierSet, isLadderMap } = require("../util/isLadderMap");
 
 /**
  * /v1/games — list, get, ingest from agent.
@@ -133,25 +133,21 @@ function buildGamesRouter(deps) {
       // null EU result and vice-versa.
       /** @type {Map<string, number|null>} */
       const myMmrPerRegion = new Map();
-      // Resolve the live ladder pool once per batch so each game can be
-      // stamped with ``isLadderMap`` for the FilterBar's ladder /
-      // non-ladder filter. Fail-soft: a pool lookup failure leaves the
-      // flag unset (the game still ingests; it just won't match either
-      // ladder bucket until a later re-upload classifies it).
-      /** @type {Set<string>|null} */
-      let ladderMapSet = null;
+      // Build the ladder-map classifier set once per batch so each game
+      // can be stamped with ``isLadderMap`` for the FilterBar's ladder /
+      // non-ladder filter. The set is the all-seasons historical list
+      // (baked into the util) UNIONed with the live current pool when
+      // reachable — so it spans 1v1 AND team maps from every season, and
+      // still classifies correctly even if the pool lookup fails. The
+      // 1v1-only ``maps`` field stays the Bingo / season-catalog pool.
+      let livePoolMaps = [];
       if (deps.ladderMapPool && typeof deps.ladderMapPool.get === "function") {
         try {
           const pool = await deps.ladderMapPool.get();
-          // "Ladder map" spans 1v1 AND team (2v2/3v3/4v4) pools so the
-          // FilterBar's ladder bucket includes team-ladder games. The
-          // 1v1-only ``maps`` field stays the Bingo / season-catalog
-          // pool; ``teamMaps`` was added alongside it.
-          const all = [
+          livePoolMaps = [
             ...((pool && pool.maps) || []),
             ...((pool && pool.teamMaps) || []),
           ];
-          ladderMapSet = buildLadderMapSet(all);
         } catch (err) {
           if (req.log) {
             req.log.warn(
@@ -161,6 +157,7 @@ function buildGamesRouter(deps) {
           }
         }
       }
+      const ladderMapSet = buildClassifierSet(livePoolMaps);
       for (const raw of incoming) {
         const validation = validateGameRecord(raw);
         if (!validation.valid) {
@@ -180,13 +177,12 @@ function buildGamesRouter(deps) {
         // to remember to strip them.
         if ("earlyBuildLog" in game) delete game.earlyBuildLog;
         if ("oppEarlyBuildLog" in game) delete game.oppEarlyBuildLog;
-        // Classify the map against the live ladder pool so the
+        // Classify the map against the all-seasons ladder set so the
         // FilterBar's ladder / non-ladder filter has a stored boolean
-        // to $match on. Only stamp when we actually resolved a pool —
-        // a missing flag is "unknown", distinct from a real ``false``.
-        if (ladderMapSet) {
-          game.isLadderMap = isLadderMap(game.map, ladderMapSet);
-        }
+        // to $match on. Always stamped — the classifier set is never
+        // empty (the historical list is baked in), so every ingest gets
+        // a real true/false rather than an "unknown" gap.
+        game.isLadderMap = isLadderMap(game.map, ladderMapSet);
         // GamesService.upsert now writes the slim row to ``games``
         // and forwards the heavy fields to GameDetailsService. A
         // detail-store failure (R2 down, Mongo gameDetails write
