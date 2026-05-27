@@ -85,7 +85,16 @@ workflow builds the Windows installer on each tag push and attaches the
   race they've actually queued against you, broken down from your game
   history). New `GET /v1/opponents/:pulseId/pulse-races` endpoint +
   `PulseMmrService.getRaceBreakdown`. The single stored MMR remains the
-  fallback when SC2Pulse can't resolve the opponent.
+  fallback when SC2Pulse can't resolve the opponent. Per-race ratings
+  are current-season and region-correct: candidates are filtered to the
+  region whose current season was queried, so a colliding season
+  battlenetId (CN's current season number equals an ancient NA/EU/KR
+  season) can no longer surface a player's long-retired peak as their
+  headline MMR. The Top/Most-vs-you toggle shows whenever the opponent
+  has 2+ races, and the table labels its "Season games" column (live
+  current-season ladder count) and the opponents-list "Last MMR" column
+  (rating from the most recent game vs them) so the data sources read
+  clearly.
 
 - **Ladder-map and game-size filters in the global FilterBar** — two
   new segmented controls drive every analyzer tab (Opponents,

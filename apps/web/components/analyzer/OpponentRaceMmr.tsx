@@ -135,7 +135,7 @@ export function RaceMmrPanel({
 }) {
   if (isLoading && !breakdown) {
     return (
-      <Card title="Ladder MMR by race">
+      <Card title="MMR by race">
         <Skeleton rows={3} />
       </Card>
     );
@@ -144,28 +144,27 @@ export function RaceMmrPanel({
     return null;
   }
   const vsYouRace = breakdown.mostPlayedVsYouRace;
-  const canToggle = headlineModesDiffer(breakdown);
+  // Show the toggle whenever there's an actual choice to make (more
+  // than one race). It stays visible even when the two modes happen to
+  // resolve to the same race for this opponent — hiding it then just
+  // looked like the feature was missing.
+  const canToggle = breakdown.races.length >= 2;
   return (
     <Card
-      title="Ladder MMR by race"
+      title="MMR by race"
       right={
         canToggle ? (
           <div
-            className="inline-flex rounded-md border border-border bg-bg-elevated p-0.5 text-[11px]"
+            className="inline-flex shrink-0 rounded-md border border-border bg-bg-elevated p-0.5 text-[10px]"
             role="group"
-            aria-label="Headline MMR mode"
+            aria-label="Header MMR: their best race, or the race they play you most"
+            title="Sets which race's MMR shows next to their name above"
           >
-            <ModeButton
-              active={mode === "top"}
-              onClick={() => onModeChange("top")}
-            >
-              Top MMR
+            <ModeButton active={mode === "top"} onClick={() => onModeChange("top")}>
+              Top
             </ModeButton>
-            <ModeButton
-              active={mode === "vsYou"}
-              onClick={() => onModeChange("vsYou")}
-            >
-              Most vs you
+            <ModeButton active={mode === "vsYou"} onClick={() => onModeChange("vsYou")}>
+              Vs you
             </ModeButton>
           </div>
         ) : null
@@ -175,10 +174,15 @@ export function RaceMmrPanel({
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-wider text-text-dim">
-              <th className="py-1.5 pr-3 font-semibold">Race</th>
-              <th className="py-1.5 pr-3 text-right font-semibold">MMR</th>
-              <th className="py-1.5 pr-3 text-right font-semibold">Games</th>
-              <th className="py-1.5 text-right font-semibold">League</th>
+              <th className="py-2 pr-3 font-semibold">Race</th>
+              <th className="py-2 pr-3 text-right font-semibold">MMR</th>
+              <th
+                className="py-2 pr-3 text-right font-semibold"
+                title="Games played this ladder season (live from SC2Pulse)"
+              >
+                Season games
+              </th>
+              <th className="py-2 text-right font-semibold">League</th>
             </tr>
           </thead>
           <tbody>
@@ -188,7 +192,7 @@ export function RaceMmrPanel({
               const isVsYou = vsYouRace === r.race;
               return (
                 <tr key={r.race} className="border-t border-border">
-                  <td className="py-1.5 pr-3">
+                  <td className="py-2 pr-3">
                     <span className={`inline-flex items-center gap-1.5 ${tint.text}`}>
                       <Icon
                         name={raceIconName(race)}
@@ -199,20 +203,20 @@ export function RaceMmrPanel({
                       {isVsYou ? (
                         <span
                           title="The race they played you the most"
-                          className="rounded-sm bg-bg-elevated px-1 text-[9px] uppercase tracking-wider text-text-dim"
+                          className="rounded bg-bg-elevated px-1 py-px text-[9px] font-medium uppercase tracking-wider text-text-dim"
                         >
                           vs you
                         </span>
                       ) : null}
                     </span>
                   </td>
-                  <td className="py-1.5 pr-3 text-right font-mono tabular-nums text-text">
+                  <td className="py-2 pr-3 text-right font-mono tabular-nums text-text">
                     {fmtMmr(r.mmr)}
                   </td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">
+                  <td className="py-2 pr-3 text-right tabular-nums text-text-muted">
                     {r.games.toLocaleString()}
                   </td>
-                  <td className="py-1.5 text-right text-text-muted">
+                  <td className="py-2 text-right text-text-muted">
                     {r.league || "—"}
                   </td>
                 </tr>
@@ -221,9 +225,8 @@ export function RaceMmrPanel({
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-[10px] text-text-dim">
-        Live from SC2Pulse (1v1, current season). The header MMR shows
-        {mode === "vsYou" ? " the race they played you the most" : " their highest race"}.
+      <p className="mt-3 text-[10px] text-text-dim">
+        Live 1v1 ladder MMR from SC2Pulse · current season
       </p>
     </Card>
   );
@@ -244,10 +247,8 @@ function ModeButton({
       onClick={onClick}
       aria-pressed={active}
       className={[
-        "rounded px-2 py-0.5 font-medium uppercase tracking-wider transition-colors",
-        active
-          ? "bg-accent text-white"
-          : "text-text-muted hover:text-text",
+        "rounded px-2.5 py-0.5 font-medium uppercase tracking-wider transition-colors",
+        active ? "bg-accent text-white" : "text-text-muted hover:text-text",
       ].join(" ")}
     >
       {children}
