@@ -121,6 +121,7 @@ export function SortableTh({
   setSort,
   align = "left",
   width,
+  title,
 }: {
   col: string;
   label: string;
@@ -129,12 +130,15 @@ export function SortableTh({
   setSort: (col: string) => void;
   align?: "left" | "right";
   width?: string;
+  /** Optional hover tooltip clarifying what the column means. */
+  title?: string;
 }) {
   const active = sortBy === col;
   const arrow = active ? (sortDir === "asc" ? "↑" : "↓") : "";
   return (
     <th
       onClick={() => setSort(col)}
+      title={title}
       className={`cursor-pointer px-3 py-2 text-${align} text-[11px] uppercase tracking-wider hover:text-text ${
         active ? "text-text" : "text-text-muted"
       }`}
