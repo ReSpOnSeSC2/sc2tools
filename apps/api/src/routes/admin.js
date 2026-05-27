@@ -31,6 +31,7 @@ const express = require("express");
 /**
  * @param {{
  *   admin: import('../services/admin').AdminService,
+ *   adminGlobal: import('../services/adminGlobal').AdminGlobalService,
  *   adminEvents: import('../services/adminEvents').AdminEventsService,
  *   gdpr: import('../services/gdpr').GdprService,
  *   games: import('../services/games').GamesService,
@@ -60,6 +61,41 @@ function buildAdminRouter(deps) {
   router.get("/admin/storage-stats", async (_req, res, next) => {
     try {
       res.json(await deps.admin.storageStats());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Global tracking — platform-wide aggregates across every user.
+  router.get("/admin/global/summary", async (_req, res, next) => {
+    try {
+      res.json(await deps.adminGlobal.summary());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/admin/global/players", async (req, res, next) => {
+    try {
+      res.json(
+        await deps.adminGlobal.listPlayers({
+          limit: parseLimit(req.query.limit),
+          page: parsePage(req.query.page),
+          search: typeof req.query.search === "string" ? req.query.search : undefined,
+          race: typeof req.query.race === "string" ? req.query.race : undefined,
+          minGames: parseNonNegInt(req.query.minGames),
+          sort: typeof req.query.sort === "string" ? req.query.sort : undefined,
+          order: typeof req.query.order === "string" ? req.query.order : undefined,
+        }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/admin/global/breakdowns", async (_req, res, next) => {
+    try {
+      res.json(await deps.adminGlobal.breakdowns());
     } catch (err) {
       next(err);
     }

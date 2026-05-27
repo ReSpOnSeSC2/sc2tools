@@ -106,7 +106,13 @@ class OpponentsService {
   /**
    * @param {{opponents: import('mongodb').Collection, games: import('mongodb').Collection}} db
    * @param {Buffer} pepper
-   * @param {{ gameDetails?: import('./gameDetails').GameDetailsService }} [opts]
+   * @param {{
+   *   gameDetails?: import('./gameDetails').GameDetailsService,
+   *   logger?: any,
+   *   pulseResolver?: any,
+   *   pulseMmr?: any,
+   *   pulseDirectory?: import('./pulseDirectory').PulseDirectoryService | null,
+   * }} [opts]
    *        When provided, the profile loader hydrates ``buildLog`` /
    *        ``oppBuildLog`` from the detail store for any game whose
    *        slim row no longer carries them inline (post-cutover
@@ -142,6 +148,14 @@ class OpponentsService {
     // viable source. Best-effort: a Pulse failure leaves the prior
     // value untouched and the next encounter retries.
     this.pulseMmr = opts.pulseMmr || null;
+    // Global, cross-user SC2Pulse cache. When supplied, opponent MMR /
+    // per-race breakdowns pulled by ANY user are served from the
+    // shared ``pulse_accounts`` collection before we spend an SC2Pulse
+    // round-trip — so the first user to encounter an opponent does the
+    // heavy lifting and every later user gets a fully-filled profile
+    // instantly. Optional: unit tests that don't exercise sharing pass
+    // null and the live-fetch path is unchanged.
+    this.pulseDirectory = opts.pulseDirectory || null;
   }
 
   /**
@@ -1411,25 +1425,42 @@ class OpponentsService {
   async _raceCorrectCurrentMmr(incomingGame) {
     const race = canonicalRaceName(incomingGame && incomingGame.race);
     if (!race) return null;
+    const charId =
+      typeof incomingGame.pulseCharacterId === "string" && incomingGame.pulseCharacterId
+        ? incomingGame.pulseCharacterId
+        : null;
+    const toon =
+      typeof incomingGame.toonHandle === "string" && incomingGame.toonHandle
+        ? incomingGame.toonHandle
+        : null;
+    if (!charId && !toon) return null;
+
+    // Shared cross-user cache first — reuse a per-race breakdown another
+    // user already pulled for this opponent (and that the profile path
+    // populates), so a bulk re-upload across many users costs SC2Pulse
+    // a single breakdown fetch overall.
+    if (this.pulseDirectory) {
+      const shared = await this._directoryGetMmr(charId, toon);
+      if (shared && Array.isArray(shared.races) && shared.races.length > 0) {
+        return pickRaceMmr(shared.races, race);
+      }
+    }
+
     if (!this.pulseMmr || typeof this.pulseMmr.getRaceBreakdown !== "function") {
       return null;
     }
-    /** @type {string[]} */
-    const ids = [];
-    if (
-      typeof incomingGame.pulseCharacterId === "string"
-      && incomingGame.pulseCharacterId
-    ) {
-      ids.push(incomingGame.pulseCharacterId);
-    } else if (
-      typeof incomingGame.toonHandle === "string"
-      && incomingGame.toonHandle
-    ) {
-      ids.push(incomingGame.toonHandle);
-    }
-    if (ids.length === 0) return null;
+    const ids = [charId || toon];
     try {
-      const races = await this.pulseMmr.getRaceBreakdown(ids);
+      const races = (await this.pulseMmr.getRaceBreakdown(ids)) || [];
+      if (this.pulseDirectory && races.length > 0) {
+        await this._directoryRecordMmr({
+          pulseCharacterId: charId,
+          toonHandle: toon,
+          mmr: races[0].mmr,
+          region: races[0].region,
+          races,
+        });
+      }
       return pickRaceMmr(races, race);
     } catch {
       return null;
@@ -1567,7 +1598,6 @@ class OpponentsService {
    * @returns {Promise<{mmr: number, region: string|null}|null>}
    */
   async _fetchOpponentMmrFromPulse(pulseCharacterId, prior, preferredRegion, toonHandle) {
-    if (!this.pulseMmr) return null;
     const charId =
       typeof pulseCharacterId === "string" && pulseCharacterId.length > 0
         ? pulseCharacterId
@@ -1581,6 +1611,19 @@ class OpponentsService {
     // toon-only opponent (pulseCharacterId never resolved) still gets a
     // number instead of a permanent "—".
     if (!charId && !toon) return null;
+    // Shared cross-user cache FIRST — a cheap local Mongo read that
+    // costs no SC2Pulse round-trip. If another platform user pulled
+    // this opponent's MMR within the directory's freshness window we
+    // reuse it, which is the whole point of the shared layer (and it
+    // even bypasses this user's per-row freshness window, so a stale
+    // row gets re-stamped from a peer's fresh pull).
+    if (this.pulseDirectory) {
+      const shared = await this._directoryGetMmr(charId, toon);
+      if (shared && typeof shared.mmr === "number" && shared.mmr > 0) {
+        return { mmr: Math.round(shared.mmr), region: shared.region || null };
+      }
+    }
+    if (!this.pulseMmr) return null;
     const lastFetched = prior && prior.mmrFetchedAt instanceof Date
       ? prior.mmrFetchedAt.getTime()
       : null;
@@ -1607,12 +1650,66 @@ class OpponentsService {
       if (!result) return null;
       const mmr = Number(result.mmr);
       if (!Number.isFinite(mmr) || mmr <= 0) return null;
-      return {
-        mmr: Math.round(mmr),
-        region: typeof result.region === "string" ? result.region : null,
-      };
+      const region = typeof result.region === "string" ? result.region : null;
+      // Write-through to the shared cache so the next user who runs
+      // into this opponent reuses this pull. Best-effort — a directory
+      // write failure must never fail the ingest path.
+      if (this.pulseDirectory) {
+        await this._directoryRecordMmr({
+          pulseCharacterId: charId,
+          toonHandle: toon,
+          mmr: Math.round(mmr),
+          region,
+        });
+      }
+      return { mmr: Math.round(mmr), region };
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Read fresh shared MMR, swallowing any directory fault so a cache
+   * error degrades to a live SC2Pulse pull rather than throwing into
+   * ingest.
+   *
+   * @private
+   * @param {string|null} charId
+   * @param {string|null} toon
+   * @returns {Promise<{mmr: number|null, region: string|null, races: any[]}|null>}
+   */
+  async _directoryGetMmr(charId, toon) {
+    if (!this.pulseDirectory) return null;
+    try {
+      return await this.pulseDirectory.getFreshMmr({
+        pulseCharacterId: charId,
+        toonHandle: toon,
+      });
+    } catch (err) {
+      this.logger.warn({ err }, "opponent_pulse_directory_read_failed");
+      return null;
+    }
+  }
+
+  /**
+   * Write-through shared MMR / race breakdown, swallowing errors.
+   *
+   * @private
+   * @param {{
+   *   pulseCharacterId?: string|null,
+   *   toonHandle?: string|null,
+   *   mmr?: number|null,
+   *   region?: string|null,
+   *   races?: any[]|null,
+   * }} args
+   * @returns {Promise<void>}
+   */
+  async _directoryRecordMmr(args) {
+    if (!this.pulseDirectory) return;
+    try {
+      await this.pulseDirectory.recordMmr(args);
+    } catch (err) {
+      this.logger.warn({ err }, "opponent_pulse_directory_write_failed");
     }
   }
 
@@ -2172,10 +2269,32 @@ class OpponentsService {
       ids.push(row.toonHandle);
     }
 
+    const charId =
+      typeof row.pulseCharacterId === "string" && row.pulseCharacterId
+        ? row.pulseCharacterId
+        : null;
+    const toon =
+      typeof row.toonHandle === "string" && row.toonHandle
+        ? row.toonHandle
+        : null;
+
     /** @type {Array<{race: string, mmr: number, games: number, league: string|null, region: string|null}>} */
     let races = [];
+
+    // Shared cross-user cache first: a per-race breakdown another user
+    // already pulled for this opponent is served without any SC2Pulse
+    // traffic, so a profile opened for the first time by THIS user
+    // still renders the full table instantly.
+    if (this.pulseDirectory && (charId || toon)) {
+      const shared = await this._directoryGetMmr(charId, toon);
+      if (shared && Array.isArray(shared.races) && shared.races.length > 0) {
+        races = shared.races;
+      }
+    }
+
     if (
-      ids.length > 0
+      races.length === 0
+      && ids.length > 0
       && this.pulseMmr
       && typeof this.pulseMmr.getRaceBreakdown === "function"
     ) {
@@ -2190,6 +2309,16 @@ class OpponentsService {
         races = (await this.pulseMmr.getRaceBreakdown(ids, { preferredRegion })) || [];
       } catch {
         races = [];
+      }
+      // Write-through so the next viewer reuses this breakdown.
+      if (this.pulseDirectory && races.length > 0) {
+        await this._directoryRecordMmr({
+          pulseCharacterId: charId,
+          toonHandle: toon,
+          mmr: races[0].mmr,
+          region: races[0].region,
+          races,
+        });
       }
     }
 

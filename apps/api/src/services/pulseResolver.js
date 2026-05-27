@@ -62,6 +62,7 @@ const DEFAULT_TIMEOUT_MS = 8000;
  *   logger?: import('pino').Logger,
  *   baseUrl?: string,
  *   timeoutMs?: number,
+ *   directory?: import('./pulseDirectory').PulseDirectoryService | null,
  * }} [opts]
  */
 function buildPulseResolver(opts = {}) {
@@ -70,6 +71,13 @@ function buildPulseResolver(opts = {}) {
     throw new Error("buildPulseResolver: fetch implementation required");
   }
   const logger = opts.logger || NOOP_LOGGER;
+  // Global, cross-user resolution cache. When supplied, a toon already
+  // resolved by ANY user (or a prior boot of this process) is served
+  // from the shared ``pulse_accounts`` collection instead of re-running
+  // the SC2Pulse search — that's what makes the second user's opponent
+  // profile fill instantly. Optional so the unit suite (which builds
+  // the resolver with just a fetch stub) keeps working unchanged.
+  const directory = opts.directory || null;
   const baseUrl = (opts.baseUrl || PULSE_API_ROOT).replace(/\/+$/, "");
   const timeoutMs = clampTimeoutMs(opts.timeoutMs);
   const lookupCache = new LruCache(LRU_MAX_ENTRIES);
@@ -118,12 +126,38 @@ function buildPulseResolver(opts = {}) {
     if (existing) return existing;
     const promise = (async () => {
       try {
+        // Shared cross-user cache: a positive resolution from any user
+        // (or a previous process) short-circuits the SC2Pulse search.
+        // Consulted even on ``forceRefresh`` — that flag exists to
+        // bypass THIS process's negative LRU after a stuck miss, not to
+        // re-pull work another user already completed. The directory
+        // only serves positive hits, so a genuine miss still falls
+        // through to the live resolve below.
+        if (directory) {
+          const shared = await safeDirectoryGet(directory, toonHandle, logger);
+          if (shared) {
+            lookupCache.set(toonHandle, {
+              value: shared,
+              expiresAt: Date.now() + POSITIVE_TTL_MS,
+            });
+            return shared;
+          }
+        }
         const result = await doResolve(parsed, displayName);
         const ttl = result === null ? NEGATIVE_TTL_MS : POSITIVE_TTL_MS;
         lookupCache.set(toonHandle, {
           value: result,
           expiresAt: Date.now() + ttl,
         });
+        // Write-through so the NEXT user who faces this opponent reuses
+        // the resolution instead of re-hitting SC2Pulse. Best-effort.
+        if (directory && result !== null) {
+          await safeDirectoryPut(directory, {
+            toonHandle,
+            pulseCharacterId: result,
+            displayName,
+          }, logger);
+        }
         return result;
       } finally {
         inFlight.delete(key);
@@ -358,6 +392,42 @@ function retryAfterMs(res, attempt) {
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Read a positive shared resolution without ever letting a directory
+ * fault escape into the resolve path — a cache miss and a cache error
+ * are indistinguishable to the caller (both fall through to the live
+ * SC2Pulse resolve).
+ *
+ * @param {import('./pulseDirectory').PulseDirectoryService} directory
+ * @param {string} toonHandle
+ * @param {{ warn: Function }} logger
+ * @returns {Promise<string|null>}
+ */
+async function safeDirectoryGet(directory, toonHandle, logger) {
+  try {
+    return await directory.getFreshResolution(toonHandle);
+  } catch (err) {
+    logger.warn({ err, toonHandle }, "pulse_resolver_directory_get_failed");
+    return null;
+  }
+}
+
+/**
+ * Write-through a resolution to the shared cache, swallowing errors.
+ *
+ * @param {import('./pulseDirectory').PulseDirectoryService} directory
+ * @param {{ toonHandle: string, pulseCharacterId: string, displayName?: string }} args
+ * @param {{ warn: Function }} logger
+ * @returns {Promise<void>}
+ */
+async function safeDirectoryPut(directory, args, logger) {
+  try {
+    await directory.recordResolution(args);
+  } catch (err) {
+    logger.warn({ err, toonHandle: args.toonHandle }, "pulse_resolver_directory_put_failed");
+  }
 }
 
 /**
