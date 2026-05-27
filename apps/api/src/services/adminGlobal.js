@@ -324,6 +324,282 @@ class AdminGlobalService {
   }
 
   /**
+   * Full operator-facing profile for ONE global player (one real SC2
+   * account, identified by ``pulseId``), merged across every user who
+   * tracks them. This is the data behind the
+   * ``/admin/global/players/<pulseId>`` page: the same merged headline
+   * counters the player browser row shows, PLUS a per-user breakdown
+   * (which platform users have faced this player and their individual
+   * records) and the distribution of the strategies + maps seen across
+   * every user's games against them.
+   *
+   * Returns ``null`` when no user tracks the pulseId so the route can
+   * answer 404 cleanly.
+   *
+   * @param {string} pulseId
+   * @returns {Promise<{
+   *   pulseId: string,
+   *   pulseCharacterId: string | null,
+   *   displayNameSample: string,
+   *   race: string,
+   *   gameCount: number,
+   *   wins: number,
+   *   losses: number,
+   *   winRate: number,
+   *   trackedByUsers: number,
+   *   mmr: number | null,
+   *   leagueId: number | null,
+   *   firstSeen: Date | null,
+   *   lastSeen: Date | null,
+   *   perUser: Array<{
+   *     userId: string,
+   *     email: string | null,
+   *     displayNameSample: string,
+   *     race: string,
+   *     gameCount: number,
+   *     wins: number,
+   *     losses: number,
+   *     winRate: number,
+   *     mmr: number | null,
+   *     firstSeen: Date | null,
+   *     lastSeen: Date | null,
+   *   }>,
+   *   strategies: BreakdownRow[],
+   *   maps: BreakdownRow[],
+   *   generatedAt: string,
+   * } | null>}
+   */
+  async playerProfile(pulseId) {
+    if (!pulseId) throw new Error("pulseId required");
+    const rows = await this.db.opponents
+      .find(
+        { pulseId },
+        {
+          projection: {
+            _id: 0,
+            userId: 1,
+            displayNameSample: 1,
+            race: 1,
+            pulseCharacterId: 1,
+            gameCount: 1,
+            wins: 1,
+            losses: 1,
+            mmr: 1,
+            leagueId: 1,
+            firstSeen: 1,
+            lastSeen: 1,
+          },
+        },
+      )
+      .toArray();
+    if (rows.length === 0) return null;
+
+    // Merge every user's row for this toon into one record, tracking
+    // the most-recently-seen row as the representative for the
+    // display name / race / character id (same rule as listPlayers).
+    let gameCount = 0;
+    let wins = 0;
+    let losses = 0;
+    /** @type {number | null} */ let mmr = null;
+    /** @type {number | null} */ let leagueId = null;
+    /** @type {Date | null} */ let firstSeen = null;
+    /** @type {Date | null} */ let lastSeen = null;
+    /** @type {any} */ let rep = null;
+    for (const r of rows) {
+      gameCount += Number(r.gameCount) || 0;
+      wins += Number(r.wins) || 0;
+      losses += Number(r.losses) || 0;
+      if (typeof r.mmr === "number") mmr = mmr === null ? r.mmr : Math.max(mmr, r.mmr);
+      if (typeof r.leagueId === "number") {
+        leagueId = leagueId === null ? r.leagueId : Math.max(leagueId, r.leagueId);
+      }
+      const fs = r.firstSeen instanceof Date ? r.firstSeen : null;
+      const ls = r.lastSeen instanceof Date ? r.lastSeen : null;
+      if (fs && (!firstSeen || fs < firstSeen)) firstSeen = fs;
+      if (ls && (!lastSeen || ls > lastSeen)) lastSeen = ls;
+      if (!rep || (ls && (!rep.lastSeen || ls > rep.lastSeen))) rep = r;
+    }
+
+    const emails = await this._emailMap(rows.map((r) => String(r.userId)));
+    const perUser = rows
+      .map((/** @type {any} */ r) => {
+        const gc = Number(r.gameCount) || 0;
+        const w = Number(r.wins) || 0;
+        return {
+          userId: String(r.userId || ""),
+          email: emails.get(String(r.userId)) || null,
+          displayNameSample: r.displayNameSample || "",
+          race: r.race || "",
+          gameCount: gc,
+          wins: w,
+          losses: Number(r.losses) || 0,
+          winRate: gc > 0 ? w / gc : 0,
+          mmr: typeof r.mmr === "number" ? r.mmr : null,
+          firstSeen: r.firstSeen instanceof Date ? r.firstSeen : null,
+          lastSeen: r.lastSeen instanceof Date ? r.lastSeen : null,
+        };
+      })
+      .sort((a, b) => b.gameCount - a.gameCount);
+
+    // The opponent's own strategy distribution + the maps they've
+    // been faced on, across every user's games — computed in one pass
+    // over the games for this toon via ``$facet``.
+    const facet = await this.db.games
+      .aggregate(
+        [
+          { $match: pulseGamesMatch(pulseId) },
+          {
+            $facet: {
+              strategies: breakdownStage("$opponent.strategy"),
+              maps: breakdownStage("$map"),
+            },
+          },
+        ],
+        { allowDiskUse: true },
+      )
+      .toArray();
+    const block = facet[0] || { strategies: [], maps: [] };
+
+    return {
+      pulseId: String(pulseId),
+      pulseCharacterId:
+        rep && typeof rep.pulseCharacterId === "string" && rep.pulseCharacterId
+          ? rep.pulseCharacterId
+          : null,
+      displayNameSample: rep ? rep.displayNameSample || "" : "",
+      race: rep ? rep.race || "" : "",
+      gameCount,
+      wins,
+      losses,
+      winRate: gameCount > 0 ? wins / gameCount : 0,
+      trackedByUsers: rows.length,
+      mmr,
+      leagueId,
+      firstSeen,
+      lastSeen,
+      perUser,
+      strategies: mapBreakdownRows(block.strategies),
+      maps: mapBreakdownRows(block.maps),
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Every game ANY user played against one global player, newest
+   * first, cursor-paginated by ``date`` (``before``). Mirrors the
+   * per-user ``listGamesVsOpponent`` shape but drops the userId filter
+   * and carries the owning ``userId`` (+ that user's email) on each row
+   * so the admin UI can attribute each game and deep-link its build
+   * order via the existing ``/admin/users/<userId>/games/<gameId>``
+   * endpoints.
+   *
+   * @param {string} pulseId
+   * @param {{ limit?: number, before?: Date }} [opts]
+   * @returns {Promise<{
+   *   items: Array<{
+   *     gameId: string,
+   *     userId: string,
+   *     userEmail: string | null,
+   *     date: Date | null,
+   *     result: string | null,
+   *     myRace: string | null,
+   *     map: string | null,
+   *     durationSec: number | null,
+   *     myMmr: number | null,
+   *     macroScore: number | null,
+   *     opponent: {
+   *       displayName: string,
+   *       race: string,
+   *       mmr: number | null,
+   *       strategy: string | null,
+   *     },
+   *   }>,
+   *   nextBefore: Date | null,
+   * }>}
+   */
+  async listPlayerGames(pulseId, opts = {}) {
+    if (!pulseId) throw new Error("pulseId required");
+    const limit = clampLimit(opts.limit, 50);
+    /** @type {Record<string, any>} */
+    const filter = pulseGamesMatch(pulseId);
+    if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
+      filter.date = { $lt: opts.before };
+    }
+    const rows = await this.db.games
+      .find(filter, {
+        projection: {
+          _id: 0,
+          gameId: 1,
+          userId: 1,
+          date: 1,
+          result: 1,
+          myRace: 1,
+          map: 1,
+          durationSec: 1,
+          myMmr: 1,
+          macroScore: 1,
+          opponent: 1,
+        },
+      })
+      .sort({ date: -1 })
+      .limit(limit + 1)
+      .toArray();
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const emails = await this._emailMap(page.map((/** @type {any} */ g) => String(g.userId)));
+    const items = page.map((/** @type {any} */ g) => {
+      const opp = g.opponent || {};
+      return {
+        gameId: String(g.gameId || ""),
+        userId: String(g.userId || ""),
+        userEmail: emails.get(String(g.userId)) || null,
+        date: g.date instanceof Date ? g.date : null,
+        result: g.result || null,
+        myRace: g.myRace || null,
+        map: g.map || null,
+        durationSec: typeof g.durationSec === "number" ? g.durationSec : null,
+        myMmr: typeof g.myMmr === "number" ? g.myMmr : null,
+        macroScore: typeof g.macroScore === "number" ? g.macroScore : null,
+        opponent: {
+          displayName: opp.displayName || "",
+          race: opp.race || "",
+          mmr: typeof opp.mmr === "number" ? opp.mmr : null,
+          strategy: typeof opp.strategy === "string" ? opp.strategy : null,
+        },
+      };
+    });
+    return {
+      items,
+      nextBefore: hasMore && page.length > 0 ? page[page.length - 1].date : null,
+    };
+  }
+
+  /**
+   * Resolve a set of userIds to their account email in one query.
+   * Returns a Map keyed by userId; missing users simply aren't keyed.
+   *
+   * @private
+   * @param {string[]} userIds
+   * @returns {Promise<Map<string, string | null>>}
+   */
+  async _emailMap(userIds) {
+    /** @type {Map<string, string | null>} */
+    const map = new Map();
+    const distinct = [...new Set(userIds.filter((id) => id))];
+    if (distinct.length === 0 || !this.db.users) return map;
+    const users = await this.db.users
+      .find(
+        { userId: { $in: distinct } },
+        { projection: { _id: 0, userId: 1, email: 1 } },
+      )
+      .toArray();
+    for (const u of users) {
+      map.set(String(u.userId), typeof u.email === "string" ? u.email : null);
+    }
+    return map;
+  }
+
+  /**
    * @private
    * @param {import('mongodb').Collection} collection
    * @param {string} field — a ``$``-prefixed field path to group on.
@@ -335,6 +611,19 @@ class AdminGlobalService {
       .toArray();
     return rows[0] ? Number(rows[0].n) || 0 : 0;
   }
+}
+
+/**
+ * Match games against one real player by toon. A game stores the
+ * opponent's pulse id either at the top level (``oppPulseId``) or
+ * nested (``opponent.pulseId``) depending on the era it was synced, so
+ * both are checked — the same predicate the per-user drill-down uses.
+ *
+ * @param {string} pulseId
+ * @returns {Record<string, any>}
+ */
+function pulseGamesMatch(pulseId) {
+  return { $or: [{ oppPulseId: pulseId }, { "opponent.pulseId": pulseId }] };
 }
 
 /**

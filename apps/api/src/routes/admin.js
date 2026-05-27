@@ -101,6 +101,41 @@ function buildAdminRouter(deps) {
     }
   });
 
+  // Every game any user played vs one global player, newest first.
+  // Registered before the bare ``:pulseId`` profile route for clarity;
+  // the two never collide (this path carries an extra ``/games``
+  // segment), and ``:pulseId`` matches a single segment so a toon
+  // handle (``region-S2-realm-id``, no slashes) maps cleanly.
+  router.get("/admin/global/players/:pulseId/games", async (req, res, next) => {
+    try {
+      res.json(
+        await deps.adminGlobal.listPlayerGames(String(req.params.pulseId), {
+          limit: parseLimit(req.query.limit),
+          before: parseDate(req.query.before),
+        }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Operator-facing profile for one global player — merged stats,
+  // per-user breakdown, and the strategies/maps seen against them.
+  router.get("/admin/global/players/:pulseId", async (req, res, next) => {
+    try {
+      const profile = await deps.adminGlobal.playerProfile(
+        String(req.params.pulseId),
+      );
+      if (!profile) {
+        res.status(404).json({ error: { code: "player_not_found" } });
+        return;
+      }
+      res.json(profile);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/admin/users", async (req, res, next) => {
     try {
       const limit = parseLimit(req.query.limit);

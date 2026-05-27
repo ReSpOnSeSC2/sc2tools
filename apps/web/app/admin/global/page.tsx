@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
@@ -251,7 +253,12 @@ function BreakdownCard({
   );
 }
 
+function playerHref(pulseId: string): string {
+  return `/admin/global/players/${encodeURIComponent(pulseId)}`;
+}
+
 function PlayersSection() {
+  const router = useRouter();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [race, setRace] = useState("all");
@@ -417,32 +424,37 @@ function PlayersSection() {
             <div className="block md:hidden">
               <ul className="divide-y divide-border">
                 {data.items.map((p) => (
-                  <li key={p.pulseId} className="flex flex-col gap-2 px-4 py-3">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-body font-semibold text-text">
-                        {p.displayNameSample || "—"}
+                  <li key={p.pulseId}>
+                    <Link
+                      href={playerHref(p.pulseId)}
+                      className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-bg-elevated/40"
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-body font-semibold text-text">
+                          {p.displayNameSample || "—"}
+                        </span>
+                        <span className="shrink-0 text-caption text-text-dim">
+                          {timeSince(p.lastSeen)}
+                        </span>
+                      </div>
+                      <span className="truncate font-mono text-caption text-text-dim">
+                        {p.pulseId}
                       </span>
-                      <span className="shrink-0 text-caption text-text-dim">
-                        {timeSince(p.lastSeen)}
-                      </span>
-                    </div>
-                    <span className="truncate font-mono text-caption text-text-dim">
-                      {p.pulseId}
-                    </span>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-text-muted">
-                      <span>{raceLabel(p.race)}</span>
-                      <span>
-                        <strong className="text-text">{p.gameCount}</strong> games
-                      </span>
-                      <span>
-                        <span className="text-success">{p.wins}</span>
-                        <span className="text-text-dim">–</span>
-                        <span className="text-danger">{p.losses}</span>
-                      </span>
-                      <span>{pctLabel(p.winRate)} WR</span>
-                      {p.mmr !== null ? <span>{p.mmr} MMR</span> : null}
-                      <TrackedByBadge count={p.trackedByUsers} />
-                    </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-text-muted">
+                        <span>{raceLabel(p.race)}</span>
+                        <span>
+                          <strong className="text-text">{p.gameCount}</strong> games
+                        </span>
+                        <span>
+                          <span className="text-success">{p.wins}</span>
+                          <span className="text-text-dim">–</span>
+                          <span className="text-danger">{p.losses}</span>
+                        </span>
+                        <span>{pctLabel(p.winRate)} WR</span>
+                        {p.mmr !== null ? <span>{p.mmr} MMR</span> : null}
+                        <TrackedByBadge count={p.trackedByUsers} />
+                      </div>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -463,11 +475,19 @@ function PlayersSection() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {data.items.map((p) => (
-                    <tr key={p.pulseId} className="hover:bg-bg-elevated/30">
+                    <tr
+                      key={p.pulseId}
+                      onClick={() => router.push(playerHref(p.pulseId))}
+                      className="cursor-pointer hover:bg-bg-elevated/30"
+                    >
                       <td className="px-4 py-2">
-                        <div className="text-text">
+                        <Link
+                          href={playerHref(p.pulseId)}
+                          className="text-text hover:text-accent-cyan hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           {p.displayNameSample || "—"}
-                        </div>
+                        </Link>
                         <div className="font-mono text-caption text-text-dim">
                           {p.pulseId}
                         </div>

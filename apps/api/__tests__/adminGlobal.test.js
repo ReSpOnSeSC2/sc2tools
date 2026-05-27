@@ -34,12 +34,60 @@ describe("AdminGlobalService", () => {
   beforeEach(async () => {
     await db.opponents.deleteMany({});
     await db.games.deleteMany({});
+    await db.users.deleteMany({});
     await db.pulseAccounts.deleteMany({});
     svc = new AdminGlobalService({
       db,
       pulseDirectory: new PulseDirectoryService(db),
     });
   });
+
+  async function seedUsers() {
+    await db.users.insertMany([
+      { userId: "userA", clerkUserId: "clerkA", email: "a@example.com" },
+      { userId: "userB", clerkUserId: "clerkB", email: "b@example.com" },
+    ]);
+  }
+
+  // Games against P1 owned by two different users, plus an unrelated
+  // game vs P2. Carries dates + pulse ids so the player drill-down can
+  // filter + cursor-paginate them.
+  async function seedPlayerGames() {
+    await db.games.insertMany([
+      {
+        userId: "userA",
+        gameId: "p1g1",
+        oppPulseId: "P1",
+        date: new Date("2026-05-01"),
+        result: "Victory",
+        myRace: "P",
+        map: "Ladder A",
+        opponent: { displayName: "Rival", race: "Z", strategy: "2-base roach" },
+      },
+      {
+        userId: "userB",
+        gameId: "p1g2",
+        date: new Date("2026-06-01"),
+        result: "Defeat",
+        myRace: "T",
+        map: "Ladder B",
+        opponent: {
+          pulseId: "P1",
+          displayName: "RivalRenamed",
+          race: "Z",
+          strategy: "2-base roach",
+        },
+      },
+      {
+        userId: "userA",
+        gameId: "p2g1",
+        oppPulseId: "P2",
+        date: new Date("2026-03-02"),
+        result: "Victory",
+        opponent: { displayName: "Smurf", race: "T" },
+      },
+    ]);
+  }
 
   // Two users both track the same opponent (pulseId P1); user A also
   // tracks a second opponent (P2).
@@ -150,5 +198,66 @@ describe("AdminGlobalService", () => {
 
     const poolFirst = b.builds.find((r) => r.key === "Pool first");
     expect(poolFirst.count).toBe(2);
+  });
+
+  test("playerProfile merges one player across users with per-user breakdown", async () => {
+    await seedOpponents();
+    await seedUsers();
+    await seedPlayerGames();
+    const prof = await svc.playerProfile("P1");
+    expect(prof).toBeTruthy();
+    expect(prof.gameCount).toBe(14); // 10 + 4
+    expect(prof.wins).toBe(7);
+    expect(prof.losses).toBe(7);
+    expect(prof.winRate).toBeCloseTo(0.5, 5);
+    expect(prof.trackedByUsers).toBe(2);
+    expect(prof.mmr).toBe(5000); // max across users
+    // Representative is the most-recently-seen row (userB renamed).
+    expect(prof.displayNameSample).toBe("RivalRenamed");
+    expect(prof.pulseCharacterId).toBe("111");
+
+    // Per-user breakdown carries each user's record + resolved email,
+    // sorted by game count desc (userA: 10 before userB: 4).
+    expect(prof.perUser.map((u) => u.userId)).toEqual(["userA", "userB"]);
+    expect(prof.perUser[0].email).toBe("a@example.com");
+    expect(prof.perUser[0].gameCount).toBe(10);
+    expect(prof.perUser[1].email).toBe("b@example.com");
+
+    // Strategy + map distributions come from the games vs this player.
+    const roach = prof.strategies.find((r) => r.key === "2-base roach");
+    expect(roach.count).toBe(2);
+    expect(prof.maps.map((m) => m.key).sort()).toEqual(["Ladder A", "Ladder B"]);
+  });
+
+  test("playerProfile returns null for an untracked pulseId", async () => {
+    await seedOpponents();
+    expect(await svc.playerProfile("does-not-exist")).toBeNull();
+  });
+
+  test("listPlayerGames returns games across all users, newest first", async () => {
+    await seedUsers();
+    await seedPlayerGames();
+    const res = await svc.listPlayerGames("P1");
+    expect(res.items.map((g) => g.gameId)).toEqual(["p1g2", "p1g1"]);
+    // Each row attributes the owning user + resolved email so the UI
+    // can deep-link the build order.
+    expect(res.items[0].userId).toBe("userB");
+    expect(res.items[0].userEmail).toBe("b@example.com");
+    expect(res.items[0].opponent.strategy).toBe("2-base roach");
+    // P2's game must not leak into a P1 query.
+    expect(res.items.some((g) => g.gameId === "p2g1")).toBe(false);
+  });
+
+  test("listPlayerGames paginates with a before cursor", async () => {
+    await seedUsers();
+    await seedPlayerGames();
+    const firstPage = await svc.listPlayerGames("P1", { limit: 1 });
+    expect(firstPage.items.map((g) => g.gameId)).toEqual(["p1g2"]);
+    expect(firstPage.nextBefore).toBeInstanceOf(Date);
+    const secondPage = await svc.listPlayerGames("P1", {
+      limit: 1,
+      before: firstPage.nextBefore,
+    });
+    expect(secondPage.items.map((g) => g.gameId)).toEqual(["p1g1"]);
   });
 });

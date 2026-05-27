@@ -92,11 +92,27 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-bg/90 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-bg/70">
           <button
             type="button"
-            aria-label="Open admin navigation"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-bg-surface text-text"
+            aria-label={
+              unread > 0
+                ? `Open admin navigation (${unread} unread)`
+                : "Open admin navigation"
+            }
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-bg-surface text-text"
             onClick={() => setDrawerOpen(true)}
           >
             <HamburgerIcon />
+            {/* The unread badge otherwise lives only inside the drawer,
+                so on mobile a new signup / download / message left no
+                visible signal until you opened the menu. Surface it on
+                the header button itself. */}
+            {unread > 0 ? (
+              <span
+                className="absolute -right-1 -top-1 inline-flex min-w-[1.125rem] items-center justify-center rounded-full bg-accent-cyan px-1 py-0.5 text-[10px] font-bold leading-none text-white"
+                aria-hidden
+              >
+                {unread > 99 ? "99+" : unread}
+              </span>
+            ) : null}
           </button>
           <div className="flex min-w-0 flex-col">
             <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
