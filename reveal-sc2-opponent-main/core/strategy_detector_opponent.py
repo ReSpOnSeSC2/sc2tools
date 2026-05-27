@@ -16,9 +16,12 @@ from .strategy_detector_helpers import (
     GAME_TOO_SHORT_THRESHOLD_SECONDS,
     _composition_fallback_name,
     _is_start_event,
+    base_count_at,
     count_real_units,
     count_started_before,
+    nth_base_start,
     start_times,
+    start_times_excluding_main,
     too_short_label,
 )
 
@@ -92,23 +95,22 @@ class OpponentStrategyDetector(BaseStrategyDetector):
         def count_buildings(name, time_limit=9999):
             return count_started_before(buildings, name, time_limit + 1)
 
-        # count_buildings_strict was an earlier attempt at the same
-        # filter (init+born only, excluding "morph"). Keep the name
-        # for compatibility with the few call-sites that use it, but
-        # alias it to the canonical start-time count.
-        count_buildings_strict = count_buildings
-
         def has_upgrade_substr(sub_name, time_limit=9999):
             return any(sub_name in u["name"] and u["time"] <= time_limit for u in upgrades)
 
         # --- ZERG ---
         if race == "Zerg":
-            hatch_times = get_times("Hatchery")
             pool_times = get_times("SpawningPool")
             gas_times = get_times("Extractor")
 
             pool_time = pool_times[0] if pool_times else 9999
-            first_hatch_time = hatch_times[1] if len(hatch_times) >= 2 else 9999
+            # 2nd base (natural) Hatchery start. nth_base_start counts the
+            # pre-placed main as base #1, so this resolves to the first
+            # EXPANSION for both real-replay (main = born-only event) and
+            # test-fixture (main = init at t=0) shapes. A raw
+            # ``hatch_times[1]`` missed the main on real replays and made
+            # every Hatch-First opening look Pool-First.
+            first_hatch_time = nth_base_start(buildings, "Hatchery", 2)
             first_gas_time = gas_times[0] if gas_times else 9999
 
             # Proxy & extreme aggression
@@ -135,7 +137,7 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                     if first_gas_time < first_hatch_time + 15
                     else "Zerg - Hatch First"
                 )
-                if count_buildings("Hatchery", 200) >= 3:
+                if base_count_at(buildings, "Hatchery", 200) >= 3:
                     return "Zerg - 3 Hatch Before Pool"
 
                 if (
@@ -156,7 +158,7 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                 if has_building("Spire", 420) and count_units("Drone", 420) < 45:
                     return "Zerg - 2 Base Muta Rush"
 
-                if count_buildings("Hatchery", 390) >= 3:
+                if base_count_at(buildings, "Hatchery", 390) >= 3:
                     if count_units("Zergling", 300) > 20 and count_units("Drone", 300) < 30:
                         return "Zerg - 3 Hatch Ling Flood"
                     return "Zerg - 3 Base Macro (Hatch First)"
@@ -180,14 +182,20 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                     return "Zerg - 2 Base Nydus"
                 if has_building("Spire", 420) and count_units("Drone", 420) < 45:
                     return "Zerg - 2 Base Muta Rush"
-                if count_buildings("Hatchery", 390) >= 3:
+                if base_count_at(buildings, "Hatchery", 390) >= 3:
                     return "Zerg - 3 Base Macro (Pool First)"
                 return base_name
 
         # --- PROTOSS ---
         elif race == "Protoss":
-            nexus_times_local = get_times("Nexus")
-            second_nexus_time = nexus_times_local[1] if len(nexus_times_local) >= 2 else 9999
+            # Base counting that includes the pre-placed main: real
+            # replays fire only a "born" event (no init) for the
+            # game-start Nexus, so a raw ``nexus_times[1]`` / ``len(...)``
+            # missed the main and pointed one base too far. nth_base_start
+            # counts the main as base #1, so n=2 is the natural; base_count_at
+            # totals all bases including the main.
+            second_nexus_time = nth_base_start(buildings, "Nexus", 2)
+            total_nexuses = base_count_at(buildings, "Nexus")
 
             if has_proxy_building("PhotonCannon", 270):
                 return "Protoss - Cannon Rush"
@@ -253,9 +261,9 @@ class OpponentStrategyDetector(BaseStrategyDetector):
             if (3 <= count_buildings("Gateway", 390) <= 5) and has_blink and second_nexus_time > 390:
                 return "Protoss - Blink All-In"
 
-            if len(nexus_times_local) >= 3 and count_units("Probe", 400) > 40:
+            if total_nexuses >= 3 and count_units("Probe", 400) > 40:
                 return "Protoss - Standard Macro (CIA)"
-            if len(nexus_times_local) >= 2 and nexus_times_local[1] < 390:
+            if second_nexus_time < 390:
                 return "Protoss - Standard Expand"
 
             # Composition fallbacks. count_units is prereq-aware
@@ -276,15 +284,19 @@ class OpponentStrategyDetector(BaseStrategyDetector):
 
         # --- TERRAN ---
         elif race == "Terran":
-            # Count actual new Command Centers only — morphs of the
-            # main CC to OrbitalCommand / PlanetaryFortress emit
-            # separate events under those names but they're the SAME
-            # physical building, NOT a 2nd base. The 1-1-1 / Standard
-            # Bio Tank / Bio Comp branches below all key off
-            # ``second_cc_time`` to distinguish 1-base all-ins from
-            # expanding macro games, so this filter is load-bearing.
-            cc_starts = start_times(buildings, "CommandCenter")
-            second_cc_time = cc_starts[1] if len(cc_starts) >= 2 else 9999
+            # ``second_cc_time`` is the start time of the opponent's
+            # SECOND base (the natural expansion); the 1-1-1 / Standard
+            # Bio Tank / Bio Comp branches below all key off it to
+            # distinguish 1-base all-ins from expanding macro games.
+            # Exclude the pre-placed main: real replays fire only a
+            # "born" event (no init) for the game-start CC, so indexing
+            # raw start times as cc_starts[1] pointed one base too far
+            # (the 3rd base, or 9999) and mislabelled 2-base macro games
+            # as "1-1-1 One Base". Morphs of the main to OrbitalCommand /
+            # PlanetaryFortress carry their own names, so they never
+            # masquerade as a 2nd CC here.
+            expansion_cc_starts = start_times_excluding_main(buildings, "CommandCenter")
+            second_cc_time = expansion_cc_starts[0] if expansion_cc_starts else 9999
 
             gas_count_4min = count_buildings("Refinery", 330)
             reaper_count = count_units("Reaper", 330)
@@ -328,7 +340,14 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                 has_upgrade_substr("Cloak", 450) or has_upgrade_substr("Banshee", 450)
             ):
                 return "Terran - Banshee Rush"
-            if count_buildings_strict("CommandCenter", 420) >= 3:
+            # Count the pre-placed main too: real replays fire only a
+            # "born" event (no init) for the game-start CC, so the raw
+            # start-event count misses it and a true fast-3-CC (main +
+            # 2 expansions = 2 init events) read as only 2 and fell
+            # through to "Standard Bio Tank". base_count_at adds the
+            # main, matching the "3 Command Centers exist" definition
+            # and the Nexus/Hatchery counting in the other detectors.
+            if base_count_at(buildings, "CommandCenter", 420) >= 3:
                 return "Terran - Fast 3 CC"
 
             rax_count = count_buildings("Barracks", 390)
