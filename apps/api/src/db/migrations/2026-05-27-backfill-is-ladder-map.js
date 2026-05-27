@@ -83,7 +83,16 @@ async function backfillUser(db, userId, ladderSet, opts) {
   const games = db.collection(COLLECTIONS.GAMES);
   const cursor = games.find(
     { userId },
-    { projection: { _id: 0, gameId: 1, map: 1, isLadderMap: 1, isLadderMapV: 1 } },
+    {
+      projection: {
+        _id: 0,
+        gameId: 1,
+        map: 1,
+        isLadderMap: 1,
+        isLadderMapV: 1,
+        isLadderGame: 1,
+      },
+    },
   );
 
   /** @type {Array<{filter: object, update: object}>} */
@@ -107,7 +116,11 @@ async function backfillUser(db, userId, ladderSet, opts) {
   for await (const row of cursor) {
     scanned += 1;
     if (typeof row.gameId !== "string" || row.gameId.length === 0) continue;
-    const next = isLadderMap(row.map, ladderSet);
+    // Prefer the agent's authoritative ladder flag when present.
+    const next =
+      typeof row.isLadderGame === "boolean"
+        ? row.isLadderGame
+        : isLadderMap(row.map, ladderSet);
     // Skip only when both the boolean AND the classifier version are
     // already current — so a logic/list bump re-stamps even unchanged
     // booleans, keeping the per-doc version in lockstep with ingest +

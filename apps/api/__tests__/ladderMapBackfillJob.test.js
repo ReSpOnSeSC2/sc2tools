@@ -97,6 +97,23 @@ describe("ladderMapBackfillJob", () => {
     expect(g.isLadderMapV).toBe(V);
   });
 
+  test("prefers a re-ingested game's isLadderGame flag over the map proxy", async () => {
+    // Custom game played ON a ladder map: the proxy would say ladder,
+    // but the authoritative flag (present after a Resync) says custom.
+    await db.games.insertOne(
+      mk("rs", "Site Delta LE", { isLadderGame: false, isLadderMapV: 1 }),
+    );
+    const job = buildLadderMapBackfillJob({
+      db,
+      ladderMapPool: poolStub(["Site Delta"]),
+      logger,
+    });
+    await job.runOnce();
+    const g = await db.games.findOne({ gameId: "rs" });
+    expect(g.isLadderMap).toBe(false); // flag wins over the proxy
+    expect(g.isLadderMapV).toBe(V);
+  });
+
   test("uses the baked-in list even when the live pool fetch throws", async () => {
     await db.games.insertOne(mk("g1", "Acropolis LE")); // retired ladder map
     const job = buildLadderMapBackfillJob({

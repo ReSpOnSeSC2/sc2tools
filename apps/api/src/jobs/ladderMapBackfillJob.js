@@ -98,7 +98,7 @@ function buildLadderMapBackfillJob(deps) {
     );
 
     const cursor = games.find(STALE, {
-      projection: { _id: 0, userId: 1, gameId: 1, map: 1 },
+      projection: { _id: 0, userId: 1, gameId: 1, map: 1, isLadderGame: 1 },
     });
     /** @type {Array<{ updateOne: { filter: object, update: object } }>} */
     let ops = [];
@@ -115,7 +115,12 @@ function buildLadderMapBackfillJob(deps) {
     for await (const row of cursor) {
       scanned += 1;
       if (typeof row.gameId !== "string" || !row.gameId) continue;
-      const flag = isLadderMap(row.map, ladderSet);
+      // Prefer the agent's authoritative flag (present on re-ingested
+      // games) over the map-name proxy.
+      const flag =
+        typeof row.isLadderGame === "boolean"
+          ? row.isLadderGame
+          : isLadderMap(row.map, ladderSet);
       ops.push({
         updateOne: {
           filter: { userId: row.userId, gameId: row.gameId },
