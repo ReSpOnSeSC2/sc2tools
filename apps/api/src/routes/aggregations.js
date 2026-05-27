@@ -227,6 +227,23 @@ function buildAggregationsRouter(deps) {
     }
   });
 
+  // Drilldown behind a single opponent-MMR tile: the games whose
+  // effective opponent MMR lands in [lo, hi). Honours the same global
+  // filter set as the histogram so the count matches the tile exactly.
+  router.get("/opp-mmr-buckets/games", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      const lo = parseFiniteInt(req.query.lo);
+      const hi = parseFiniteInt(req.query.hi);
+      res.json(
+        await deps.aggregations.oppMmrBucketGames(userId, filters, { lo, hi }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Per-(bucket, myBuild) counts. Client picks top-N and renders a
   // 100% stacked area so build mix evolution is legible.
   router.get("/timeseries/my-builds", async (req, res, next) => {

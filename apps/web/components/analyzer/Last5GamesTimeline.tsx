@@ -13,9 +13,18 @@ export type ProfileGame = {
    *  built ProfileGame lists before this field existed and dropped it,
    *  which is why the Race column rendered "?" everywhere. */
   opp_race?: string | null;
+  /** Opponent's in-game display name. Lets the All-games list name
+   *  who each game was actually against. Optional — older drilldowns
+   *  didn't carry it. */
+  opponent?: string | null;
   my_build?: string | null;
   game_length?: number | null;
   macro_score?: number | null;
+  /** Your MMR at the time of the game (from the slim row's myMmr). */
+  my_mmr?: number | null;
+  /** Effective opponent MMR used to bucket the game — per-game
+   *  snapshot when present, else the opponents-collection fallback. */
+  opp_mmr?: number | null;
 };
 
 /**

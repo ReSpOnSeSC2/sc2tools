@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters } from "@/lib/filterContext";
+import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
@@ -97,6 +98,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   // strategies next", which the API resolves from the unfiltered
   // history regardless of since/until.
   const { filters } = useFilters();
+  const myName = useMyDisplayName();
   const profileQuery = buildProfileQuery(filters.since, filters.until);
   const { data, isLoading } = useApi<OpponentProfileResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}`,
@@ -323,9 +325,13 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         }
       >
         <AllGamesTable
-          games={filteredGames}
+          games={filteredGames.map((g) => ({
+            ...g,
+            opponent: g.opponent || opponentName,
+          }))}
           targetGameId={pendingGameId}
           targetGameSeq={pendingGameSeq}
+          myName={myName}
         />
       </Card>
     </div>

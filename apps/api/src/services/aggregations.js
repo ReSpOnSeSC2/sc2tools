@@ -498,6 +498,7 @@ class AggregationsService {
   async mmrProgression(userId, opts, filters) { return trendsInsights.mmrProgression(this._trendsDeps(), userId, opts, filters); }
   async momentum(userId, filters, opts) { return trendsInsights.momentum(this._trendsDeps(), userId, filters, opts); }
   async oppMmrBuckets(userId, filters, opts) { return trendsInsights.oppMmrBuckets(this._trendsDeps(), userId, filters, opts); }
+  async oppMmrBucketGames(userId, filters, opts) { return trendsInsights.oppMmrBucketGames(this._trendsDeps(), userId, filters, opts); }
   async myBuildMixOverTime(userId, opts, filters) { return trendsInsights.mixOverTime(this._trendsDeps(), userId, opts, filters, { field: "myBuild", fallback: "Unknown" }); }
   async oppStrategyMixOverTime(userId, opts, filters) { return trendsInsights.mixOverTime(this._trendsDeps(), userId, opts, filters, { field: "opponent.strategy", fallback: "Unknown" }); }
   async mapTrend(userId, opts, filters) { return trendsInsights.mapTrend(this._trendsDeps(), userId, opts, filters); }
