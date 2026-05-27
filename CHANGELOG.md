@@ -90,7 +90,12 @@ workflow builds the Windows installer on each tag push and attaches the
   long-retired peak as their headline MMR. The table labels its
   "Season games" column (live current-season ladder count) and the
   opponents-list "Last MMR" column (rating from the most recent game
-  vs them) so the data sources read clearly.
+  vs them) so the data sources read clearly. SC2Pulse load is kept low:
+  the breakdown is cached an hour per opponent (a ladder rating barely
+  moves within one), and since a characterId lives in exactly one
+  region the lookup is scoped to that region's current season — one
+  SC2Pulse call per opponent instead of one per region (with identical
+  season ids deduped for the unscoped/overlay path too).
 
 - **Ladder-map and game-size filters in the global FilterBar** — two
   new segmented controls drive every analyzer tab (Opponents,

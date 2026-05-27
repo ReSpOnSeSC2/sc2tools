@@ -28,6 +28,11 @@ const PULSE_API_ROOT = "https://sc2pulse.nephest.com/sc2/api";
 const PULSE_QUEUE = "LOTV_1V1";
 const REQUEST_TIMEOUT_MS = 8000;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+// Per-race breakdown TTL. Much longer than the overlay's single-MMR
+// cache: a ladder rating barely moves within an hour, opponent profiles
+// are opened far more often than that, and each miss costs an SC2Pulse
+// round-trip we'd rather not spend (shared server IP across all users).
+const RACE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 const REGION_CODE_TO_LABEL = {
   1: "NA",
@@ -55,6 +60,7 @@ class PulseMmrService {
    *   fetchImpl?: typeof fetch,
    *   now?: () => number,
    *   cacheTtlMs?: number,
+   *   raceCacheTtlMs?: number,
    * }} [opts]
    */
   constructor(opts = {}) {
@@ -62,6 +68,10 @@ class PulseMmrService {
     this.now = opts.now || (() => Date.now());
     this.cacheTtlMs =
       typeof opts.cacheTtlMs === "number" ? opts.cacheTtlMs : CACHE_TTL_MS;
+    this.raceCacheTtlMs =
+      typeof opts.raceCacheTtlMs === "number"
+        ? opts.raceCacheTtlMs
+        : RACE_CACHE_TTL_MS;
     /** @type {Map<string, PulseMmrEntry>} */
     this._cache = new Map();
     /** @type {Map<string, number>} */
@@ -385,12 +395,18 @@ class PulseMmrService {
    *
    * @private
    * @param {string[]} ids numeric SC2Pulse character ids
+   * @param {{onlyRegion?: string|null}} [opts] when ``onlyRegion`` maps
+   *   to a known SC2Pulse region, query ONLY that region's current
+   *   season. A characterId belongs to exactly one region, so when the
+   *   caller knows the opponent's region this is one HTTP call instead
+   *   of one per region. Ignored (all regions) when the hint is absent
+   *   or unrecognised.
    * @returns {Promise<Array<{
    *   rating: number, lastPlayedMs: number, region: string|null,
    *   race: string|null, games: number, league: string|null,
    * }>>}
    */
-  async _collectTeamCandidates(ids) {
+  async _collectTeamCandidates(ids, opts = {}) {
     if (!this.fetchImpl) return [];
     if (!Array.isArray(ids) || ids.length === 0) return [];
     // Probe per-region — SC2Pulse's /group/team returns nothing without
@@ -402,28 +418,42 @@ class PulseMmrService {
     /** @type {Array<{rating: number, lastPlayedMs: number, region: string|null, race: string|null, games: number, league: string|null}>} */
     const candidates = [];
     // SC2Pulse's /group/team accepts repeated ``characterId`` query
-    // params and returns the union — one HTTP call per region carries
-    // every id in the streamer's profile, so multi-region accounts
-    // don't multiply the round-trip count.
+    // params and returns the union — one HTTP call carries every id in
+    // the profile, so multi-id profiles don't multiply the round-trip.
     const idsParam = ids
       .map((id) => `characterId=${encodeURIComponent(id)}`)
       .join("&");
-    // Dedupe across region queries: SC2Pulse season IDs (battlenetId)
-    // are NOT globally unique — NA's season 67, EU's season 67 and
-    // KR's season 67 all share ``battlenetId=67``. The /group/team
-    // endpoint filters by that number, so each region query returns
-    // teams from EVERY region with the same season number, not just
-    // the queried one. Without dedup the same team lands in the
-    // candidate list multiple times (once per region we probed) and
-    // — worse — used to inherit the LOOP'S region label, which is how
-    // a NA 5459 and an EU 5172 both ended up tagged "KR" on the
-    // dashboard. Keying by ``team.id`` collapses the duplicates and
-    // reading region from ``team.region`` ensures every candidate
-    // carries its OWN region, not whichever season we happened to be
-    // iterating.
+    // Region scoping: a characterId lives in exactly one region, so when
+    // the caller knows it (the opponent deep-dive does, from the toon
+    // handle) we restrict to that region's current season — one call
+    // rather than four. An unknown / non-SC2Pulse region (e.g. "SEA")
+    // falls back to all regions.
+    const onlyRegionCode = pulseRegionCode(opts && opts.onlyRegion);
+    let scoped = [...seasons.entries()];
+    if (onlyRegionCode !== null) {
+      const restricted = scoped.filter(([rc]) => rc === onlyRegionCode);
+      if (restricted.length > 0) scoped = restricted;
+    }
+    // Dedupe the query by season id. SC2Pulse season battlenetIds are
+    // NOT unique across regions — NA's season 67, EU's 67 and KR's 67
+    // all share ``battlenetId=67``, and a single ``season=67`` query
+    // returns every region's season-67 teams for the supplied ids. So
+    // we query each DISTINCT season once (3 NA/EU/KR + 1 CN collapses
+    // from 4 calls to 2) and decide validity per team below.
+    const distinctSeasons = [...new Set(scoped.map(([, sid]) => sid))];
+    // For labelling teams that don't carry their own region (only test
+    // fixtures in practice — real Pulse rows always do): a season that
+    // maps to exactly one region can borrow that region's label.
+    /** @type {Map<number, number[]>} */
+    const seasonToRegions = new Map();
+    for (const [rc, sid] of seasons) {
+      const list = seasonToRegions.get(sid);
+      if (list) list.push(rc);
+      else seasonToRegions.set(sid, [rc]);
+    }
     /** @type {Set<string|number>} */
     const seenTeamIds = new Set();
-    for (const [regionCode, seasonId] of seasons) {
+    for (const seasonId of distinctSeasons) {
       const url =
         `${PULSE_API_ROOT}/group/team` +
         `?season=${seasonId}` +
@@ -434,48 +464,44 @@ class PulseMmrService {
       for (const team of teams) {
         const rating = Number(team && team.rating);
         if (!Number.isFinite(rating) || rating <= 0) continue;
-        // Reject teams that don't belong to the region whose CURRENT
-        // season we're querying. SC2Pulse season battlenetIds are NOT
-        // unique across regions OR time: CN's *current* season number
-        // (e.g. 54) equals an *ancient* NA/EU/KR season number, so a
-        // /group/team query for CN's season returns those regions'
-        // years-old teams for the same character. The single-MMR path
-        // tolerates this — it sorts by lastPlayed, so a stale team
-        // sorts last — but the per-race breakdown picks the highest
-        // rating per race and would otherwise surface a years-old peak
-        // (e.g. a 5920 Protoss from 2024 over the live 5584). Since we
-        // query each region's current season exactly once, keeping only
-        // teams whose own region matches the queried region guarantees
-        // current-season-only candidates. Teams missing a region (some
-        // test fixtures) fall through to the loop's regionCode.
+        // A team is valid iff the region it belongs to has THIS season
+        // as its CURRENT season. This both (a) rejects cross-region /
+        // cross-season contamination — CN's current season number (54)
+        // equals an ancient NA/EU/KR season, so a ``season=54`` query
+        // returns those regions' years-old teams, which the per-race
+        // breakdown would otherwise surface as a long-retired peak (a
+        // 5920 Protoss over the live 5584) — and (b) lets the NA/EU/KR
+        // season-67 collision collapse into one query while still
+        // keeping each region's real team. When the caller scoped to
+        // one region we additionally drop other regions' teams.
         const teamRegionCode = pulseRegionCode(team && team.region);
-        if (teamRegionCode !== null && teamRegionCode !== regionCode) {
-          continue;
+        if (teamRegionCode !== null) {
+          if (seasons.get(teamRegionCode) !== seasonId) continue;
+          if (onlyRegionCode !== null && teamRegionCode !== onlyRegionCode) {
+            continue;
+          }
         }
-        // Dedupe across region queries: SC2Pulse season IDs
-        // (battlenetId) are NOT globally unique — NA's season 67,
-        // EU's season 67 and KR's season 67 all share ``battlenetId
-        // = 67``. The /group/team endpoint filters by that number, so
-        // each region query returns teams from EVERY region with the
-        // same season number, not just the queried one. Keying by
-        // ``team.id`` collapses the duplicates so the same team
-        // doesn't land in candidates multiple times.
         const teamId = team && (team.id != null ? team.id : null);
         if (teamId != null) {
           if (seenTeamIds.has(teamId)) continue;
           seenTeamIds.add(teamId);
         }
         const lastPlayedMs = parseTimestamp(team.lastPlayed);
-        // Region from the team itself — this is what ensures a NA
-        // 5459 and an EU 5172 don't both end up tagged "KR" (the
-        // pre-2026-05 bug, where every candidate inherited the
-        // loop's region label even though the queried season number
-        // matches teams across regions). Falls back to the loop's
-        // regionCode only when the team row doesn't carry its own
-        // region — defensive, since real Pulse responses always do.
+        // Region from the team itself (real Pulse rows always carry it).
+        // Fallback only for region-less fixtures: the scoped region, or
+        // the lone region owning this season.
+        const regionsForSeason = seasonToRegions.get(seasonId) || [];
+        const fallbackRegionCode =
+          onlyRegionCode !== null
+            ? onlyRegionCode
+            : regionsForSeason.length === 1
+              ? regionsForSeason[0]
+              : null;
         const region =
           pulseRegionLabel(team && team.region)
-          || REGION_CODE_TO_LABEL[regionCode]
+          || (fallbackRegionCode !== null
+            ? REGION_CODE_TO_LABEL[fallbackRegionCode]
+            : null)
           || null;
         const { race, games } = teamRaceAndGames(team);
         candidates.push({
@@ -499,25 +525,40 @@ class PulseMmrService {
    * renders so a Protoss main who off-races Zerg shows BOTH ratings
    * instead of collapsing to whichever they queued most recently.
    *
-   * Cached 5 min keyed on the resolved id set; serves stale on a Pulse
-   * error so a blip doesn't blank the table.
+   * Cached keyed on the resolved id set (+ region hint); serves stale
+   * on a Pulse error so a blip doesn't blank the table. Uses a longer
+   * TTL than the overlay's single-MMR cache — a ladder rating barely
+   * moves within an hour, and the deep-dive is opened far more often
+   * than a streamer's own rating changes.
    *
    * @param {string[]} ids
+   * @param {{preferredRegion?: string|null}} [opts] when set, query only
+   *   that region's current season (the opponent's characterId lives in
+   *   exactly one region) — one SC2Pulse call instead of one per region.
    * @returns {Promise<Array<{
    *   race: string, mmr: number, games: number,
    *   league: string|null, region: string|null,
    * }>>}
    */
-  async getRaceBreakdown(ids) {
+  async getRaceBreakdown(ids, opts = {}) {
     const numericIds = await this._normaliseToNumericIds(ids);
     if (numericIds.length === 0) return [];
-    const cacheKey = "races:" + numericIds.slice().sort().join(",");
+    const preferredRegion =
+      typeof opts.preferredRegion === "string" && opts.preferredRegion
+        ? opts.preferredRegion.toUpperCase()
+        : null;
+    const cacheKey =
+      "races:" +
+      numericIds.slice().sort().join(",") +
+      (preferredRegion ? `:${preferredRegion}` : "");
     const now = this.now();
     const cached = this._raceCache.get(cacheKey);
-    if (cached && now - cached.fetchedAt < this.cacheTtlMs) {
+    if (cached && now - cached.fetchedAt < this.raceCacheTtlMs) {
       return cached.races;
     }
-    const candidates = await this._collectTeamCandidates(numericIds);
+    const candidates = await this._collectTeamCandidates(numericIds, {
+      onlyRegion: preferredRegion,
+    });
     if (candidates.length === 0) {
       // Stale-while-error: keep the last good breakdown on a miss.
       if (cached) return cached.races;
