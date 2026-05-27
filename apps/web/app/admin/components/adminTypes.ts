@@ -123,37 +123,6 @@ export type OpponentGamesResp = {
   nextBefore: string | null;
 };
 
-export type OpponentDiagnosticFinding = {
-  code: string;
-  severity: "ok" | "warn" | "info";
-  message: string;
-};
-
-export type OpponentDiagnosticsResp = {
-  pulseId: string;
-  toonHandle: string | null;
-  pulseCharacterId: string | null;
-  displayNameSample: string | null;
-  region: string | null;
-  mmr: number | null;
-  mmrFetchedAt: string | null;
-  pulseResolveAttemptedAt: string | null;
-  leagueId: number | null;
-  gameCount: number;
-  inReplayMmrCount: number;
-  pulseIdStatus: "resolved" | "unresolved" | "none";
-  mmrStatus: "present" | "missing";
-  findings: OpponentDiagnosticFinding[];
-};
-
-export type OpponentRetryPulseResp = {
-  resolvedPulseCharacterId: boolean;
-  pulseCharacterId: string | null;
-  mmr: number | null;
-  region: string | null;
-  gamesRestamped: number;
-};
-
 export type RebuildResp = {
   userId: string;
   droppedRows: number;

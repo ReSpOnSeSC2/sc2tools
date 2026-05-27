@@ -267,6 +267,45 @@ describe("HTTP integration", () => {
       expect(res.status).toBe(404);
     });
 
+    test("diagnostics endpoint returns the caller's own opponent diagnosis", async () => {
+      const game = Object.assign(makeGame("opp-diag-game-1", "Victory"), {
+        opponent: {
+          displayName: "DiagFoe",
+          race: "Zerg",
+          pulseId: "1-S2-1-555001",
+          toonHandle: "1-S2-1-555001",
+        },
+      });
+      const post = await withAuth(request(app).post("/v1/games"))
+        .send(game)
+        .set("content-type", "application/json");
+      expect(post.status).toBe(202);
+
+      const res = await withAuth(
+        request(app).get("/v1/opponents/1-S2-1-555001/diagnostics"),
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.pulseId).toBe("1-S2-1-555001");
+      // Toon handle present but no resolved character id → unresolved.
+      expect(res.body.pulseIdStatus).toBe("unresolved");
+      expect(Array.isArray(res.body.findings)).toBe(true);
+      expect(res.body.findings.length).toBeGreaterThan(0);
+    });
+
+    test("diagnostics endpoint 404s for an opponent the caller never played", async () => {
+      const res = await withAuth(
+        request(app).get("/v1/opponents/no-such-opp/diagnostics"),
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test("diagnostics endpoint requires auth", async () => {
+      const res = await request(app).get(
+        "/v1/opponents/1-S2-1-555001/diagnostics",
+      );
+      expect(res.status).toBe(401);
+    });
+
     test("persists toonHandle + pulseCharacterId round-trip", async () => {
       const game = Object.assign(makeGame("opp-cid-game-1", "Victory"), {
         opponent: {

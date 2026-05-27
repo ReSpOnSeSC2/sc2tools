@@ -33,6 +33,51 @@ function buildOpponentsRouter(deps) {
     }
   });
 
+  // Identity / MMR diagnostics for one of the caller's OWN opponents —
+  // "why is the Pulse ID or MMR missing?". Read-only, no SC2Pulse
+  // traffic. Scoped to ``auth.userId`` so a user only ever sees their
+  // own opponent rows (the admin variant under /admin can target any
+  // user). Mounted before ``/:pulseId`` would also match — Express
+  // routes the more specific ``/:pulseId/diagnostics`` first because it
+  // has more path segments.
+  router.get("/opponents/:pulseId/diagnostics", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const result = await deps.opponents.diagnoseIdentity(
+        auth.userId,
+        String(req.params.pulseId),
+      );
+      if (!result) {
+        res.status(404).json({ error: { code: "not_found" } });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Force a fresh SC2Pulse resolve + MMR refetch for one of the
+  // caller's own opponents, bypassing the throttle windows.
+  router.post("/opponents/:pulseId/retry-pulse", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const result = await deps.opponents.retryPulseResolution(
+        auth.userId,
+        String(req.params.pulseId),
+      );
+      if (!result) {
+        res.status(404).json({ error: { code: "not_found" } });
+        return;
+      }
+      res.status(202).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/opponents/:pulseId", async (req, res, next) => {
     try {
       const auth = req.auth;

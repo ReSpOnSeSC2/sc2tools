@@ -2,10 +2,10 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
 
-import { apiCall, useApi } from "@/lib/clientApi";
+import { useApi } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
+import { OpponentDiagnosticsPanel } from "@/components/analyzer/OpponentDiagnosticsPanel";
 import { BuildOrderTimeline } from "@/components/analyzer/charts/BuildOrderTimeline";
 import { ApmSpmChart, type ApmCurveData } from "@/components/analyzer/charts/ApmSpmChart";
 import { ResourcesOverTimeChart } from "@/components/analyzer/charts/ResourcesOverTimeChart";
@@ -22,18 +22,10 @@ import type { BuildOrderEvent } from "@/lib/build-events";
 import { ForbiddenCard, LoadingRows } from "../../../../components/AdminFragments";
 import type {
   AdminGameVsOpponentRow,
-  OpponentDiagnosticsResp,
   OpponentGamesResp,
-  OpponentRetryPulseResp,
 } from "../../../../components/adminTypes";
 
 const PAGE_SIZE = 50;
-
-const PULSE_ID_STATUS: Record<string, string> = {
-  resolved: "Resolved (linked)",
-  unresolved: "Unresolved (toon only)",
-  none: "No identity",
-};
 
 // Mirrors the /build-order response shape (same as the user-facing
 // /v1/games/:gameId/build-order endpoint the per-game inspector uses).
@@ -132,7 +124,14 @@ export default function AdminOpponentGamesPage({
         </p>
       </header>
 
-      <OpponentDiagnosticsPanel userId={userId} pulseId={pulseId} />
+      <OpponentDiagnosticsPanel
+        diagnosticsPath={`/v1/admin/users/${encodeURIComponent(
+          userId,
+        )}/opponents/${encodeURIComponent(pulseId)}/diagnostics`}
+        retryPath={`/v1/admin/users/${encodeURIComponent(
+          userId,
+        )}/opponents/${encodeURIComponent(pulseId)}/retry-pulse`}
+      />
 
       {isLoading ? (
         <LoadingRows rows={8} />
@@ -237,173 +236,6 @@ export default function AdminOpponentGamesPage({
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * "Why is data missing?" debug panel for one opponent. Surfaces the
- * stored identity / MMR state and a plain-language explanation of why
- * the Pulse ID shows "TOON" or the MMR shows "—", plus a Retry button
- * that forces a fresh SC2Pulse resolve + MMR refetch (bypassing the
- * cron throttle windows). Admin-only — mounted on the admin drill-down.
- */
-function OpponentDiagnosticsPanel({
-  userId,
-  pulseId,
-}: {
-  userId: string;
-  pulseId: string;
-}) {
-  const { getToken } = useAuth();
-  const path = `/v1/admin/users/${encodeURIComponent(
-    userId,
-  )}/opponents/${encodeURIComponent(pulseId)}/diagnostics`;
-  const { data, error, isLoading, mutate } = useApi<OpponentDiagnosticsResp>(
-    path,
-    { revalidateOnFocus: false },
-  );
-
-  const [retry, setRetry] = useState<
-    | { kind: "idle" }
-    | { kind: "busy" }
-    | { kind: "done"; resp: OpponentRetryPulseResp }
-    | { kind: "error"; message: string }
-  >({ kind: "idle" });
-
-  async function runRetry() {
-    setRetry({ kind: "busy" });
-    try {
-      const resp = await apiCall<OpponentRetryPulseResp>(
-        getToken,
-        `/v1/admin/users/${encodeURIComponent(
-          userId,
-        )}/opponents/${encodeURIComponent(pulseId)}/retry-pulse`,
-        { method: "POST" },
-      );
-      setRetry({ kind: "done", resp });
-      await mutate();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setRetry({ kind: "error", message });
-    }
-  }
-
-  if (error && error.status === 404) return null;
-
-  return (
-    <Card padded>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-body font-semibold text-text">
-          Identity &amp; MMR diagnostics
-        </h2>
-        <button
-          type="button"
-          className="btn btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={retry.kind === "busy" || isLoading}
-          onClick={runRetry}
-        >
-          {retry.kind === "busy" ? "Retrying…" : "Retry pulse resolve + MMR"}
-        </button>
-      </div>
-      <p className="mt-1 text-caption text-text-muted">
-        Why the Pulse ID or MMR is missing for this opponent. Inferred from
-        stored fields — Retry forces a fresh SC2Pulse lookup, bypassing the
-        usual throttle window.
-      </p>
-
-      {isLoading && !data ? (
-        <div className="mt-3">
-          <Skeleton rows={4} />
-        </div>
-      ) : error ? (
-        <p className="mt-3 text-caption text-danger">
-          Failed to load diagnostics: {error.message}
-        </p>
-      ) : data ? (
-        <div className="mt-3 space-y-3">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-caption sm:grid-cols-3">
-            <DiagField label="Pulse ID" value={PULSE_ID_STATUS[data.pulseIdStatus]} />
-            <DiagField label="MMR" value={data.mmrStatus === "present" ? "Present" : "Missing"} />
-            <DiagField label="Character id" value={data.pulseCharacterId || "—"} mono />
-            <DiagField label="Toon handle" value={data.toonHandle || "—"} mono />
-            <DiagField label="Region" value={data.region || "—"} />
-            <DiagField label="MMR value" value={data.mmr !== null ? String(data.mmr) : "—"} />
-            <DiagField
-              label="In-replay MMR games"
-              value={`${data.inReplayMmrCount} / ${data.gameCount}`}
-            />
-            <DiagField label="MMR fetched" value={fmtDate(data.mmrFetchedAt)} />
-            <DiagField
-              label="Resolve attempted"
-              value={fmtDate(data.pulseResolveAttemptedAt)}
-            />
-          </div>
-
-          <ul className="space-y-1.5">
-            {data.findings.map((f, i) => (
-              <li key={`${f.code}-${i}`} className="flex gap-2 text-caption">
-                <SeverityDot severity={f.severity} />
-                <span className="text-text-muted">{f.message}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {retry.kind === "done" ? (
-        <p className="mt-3 rounded-md border border-success/40 bg-success/10 p-2 text-caption text-success">
-          {retry.resp.resolvedPulseCharacterId
-            ? `Resolved character id ${retry.resp.pulseCharacterId}. `
-            : ""}
-          {retry.resp.mmr !== null
-            ? `MMR ${retry.resp.mmr}${retry.resp.region ? ` (${retry.resp.region})` : ""}. `
-            : "SC2Pulse returned no current 1v1 MMR. "}
-          {retry.resp.gamesRestamped > 0
-            ? `Back-stamped ${retry.resp.gamesRestamped} game(s).`
-            : ""}
-        </p>
-      ) : retry.kind === "error" ? (
-        <p className="mt-3 rounded-md border border-danger/40 bg-danger/10 p-2 text-caption text-danger">
-          Retry failed: {retry.message}
-        </p>
-      ) : null}
-    </Card>
-  );
-}
-
-function DiagField({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-wider text-text-dim">
-        {label}
-      </span>
-      <span className={mono ? "break-all font-mono text-text" : "text-text"}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function SeverityDot({ severity }: { severity: "ok" | "warn" | "info" }) {
-  const color =
-    severity === "ok"
-      ? "bg-success"
-      : severity === "warn"
-        ? "bg-warning"
-        : "bg-accent";
-  return (
-    <span
-      className={`mt-1 h-2 w-2 shrink-0 rounded-full ${color}`}
-      aria-hidden
-    />
   );
 }
 
