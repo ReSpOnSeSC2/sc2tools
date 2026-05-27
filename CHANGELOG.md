@@ -13,20 +13,18 @@ workflow builds the Windows installer on each tag push and attaches the
 ### Migration notes
 
 - **Ladder-map backfill.** The new ladder / non-ladder map filter
-  `$match`es on a stored `isLadderMap` boolean that only fresh ingests
-  carry. Two ways to classify pre-existing games (both match the stored
-  map name against the live ladder pool, 1v1 + team — no replay
-  re-upload needed):
-  - **Automatic (default):** the API runs a guarded, idempotent
-    backfill on startup (`jobs/ladderMapBackfillJob.js`). It only
-    touches games missing the field, self-skips once the dataset is
-    fully classified, never blocks boot, and refuses to write if the
-    pool resolves empty. Disable with
-    ``SC2TOOLS_LADDER_BACKFILL_DISABLED=1``.
-  - **Manual one-shot:**
-    ``node apps/api/src/db/migrations/2026-05-27-backfill-is-ladder-map.js``
-    (``--dry-run`` / ``--batch=N`` / ``--user=ID``), e.g. via Render's
-    Shell, for a controlled run or a re-classify after a pool rotation.
+  `$match`es on a stored `isLadderMap` boolean. New games get it stamped
+  automatically at ingest (`routes/games.js` matches the map name
+  against the live ladder pool, 1v1 + team), so no ongoing maintenance
+  is needed. To classify games that pre-date the field, run the one-shot
+  migration once (it matches the same pool — no replay re-upload
+  needed):
+  ``node apps/api/src/db/migrations/2026-05-27-backfill-is-ladder-map.js``
+  (``--dry-run`` / ``--batch=N`` / ``--user=ID`` / ``--allow-fallback``),
+  e.g. via Render's Shell. It's idempotent and refuses to run against an
+  empty or stale-fallback pool. (An earlier auto-run-on-boot variant was
+  removed once the one-time backfill completed — ingest-time stamping
+  covers every game going forward.)
   Note: the sibling 1v1 / team filter relies on `playerCount`, which
   was never stored historically and CANNOT be backfilled — only games
   re-ingested by the v0.9.0+ agent (e.g. via a Resync) gain it.
