@@ -12,6 +12,20 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Migration notes
 
+- **Ladder-map backfill** (PR #403 + the
+  `2026-05-27-backfill-is-ladder-map.js` one-shot migration). The new
+  ladder / non-ladder map filter `$match`es on a stored `isLadderMap`
+  boolean that only fresh ingests carry. Run
+  ``node apps/api/src/db/migrations/2026-05-27-backfill-is-ladder-map.js``
+  to classify existing games by matching their stored map name against
+  the live ladder pool (1v1 + team) — no replay re-upload needed. The
+  script supports ``--dry-run`` / ``--batch=N`` / ``--user=ID``, is
+  idempotent, and refuses to run if the pool resolves empty (so it
+  can't mass-mark everything non-ladder during a Liquipedia outage).
+  Note: the sibling 1v1 / team filter relies on `playerCount`, which
+  was never stored historically and CANNOT be backfilled — only games
+  re-ingested by the v0.9.0+ agent (e.g. via a Resync) gain it.
+
 - **Timebase rescale** (PR #309 + the 2026-05-17-rescale-timebase
   one-shot migration). After upgrading, run
   ``node apps/api/src/db/migrations/2026-05-17-rescale-timebase.js``
