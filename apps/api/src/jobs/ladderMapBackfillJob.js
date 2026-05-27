@@ -78,6 +78,17 @@ function buildLadderMapBackfillJob(deps) {
       );
       return { remaining, scanned: 0, written: 0, skipped: true };
     }
+    // Never classify a full history against the stale hardcoded
+    // fallback pool — that would wrongly mark current-ladder games
+    // "custom". Wait for a real Liquipedia fetch (or the persisted
+    // last-good file); a later boot retries once one is available.
+    if (pool.source === "fallback") {
+      logger.warn(
+        { remaining, ladderKeys: ladderSet.size },
+        "ladderMapBackfill_fallback_pool_skip",
+      );
+      return { remaining, scanned: 0, written: 0, skipped: true };
+    }
     logger.info(
       { remaining, poolSource: pool.source, ladderKeys: ladderSet.size },
       "ladderMapBackfill_start",

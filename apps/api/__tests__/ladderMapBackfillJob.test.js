@@ -107,6 +107,24 @@ describe("ladderMapBackfillJob", () => {
     expect(g1.isLadderMap).toBeUndefined(); // left unclassified, not false
   });
 
+  test("refuses to write against the stale fallback pool", async () => {
+    await db.games.insertMany([mk("g1", "Site Delta")]);
+    const job = buildLadderMapBackfillJob({
+      db,
+      // Non-empty list, but source=fallback (Liquipedia unreachable +
+      // no cached file) — classifying against it would mislabel games.
+      ladderMapPool: {
+        get: async () => ({ maps: ["Site Delta"], teamMaps: [], source: "fallback" }),
+      },
+      logger,
+    });
+    const r = await job.runOnce();
+    expect(r.skipped).toBe(true);
+    expect(r.written).toBe(0);
+    const g1 = await db.games.findOne({ gameId: "g1" });
+    expect(g1.isLadderMap).toBeUndefined();
+  });
+
   test("a second runOnce is a no-op after the first completes", async () => {
     await db.games.insertMany([mk("g1", "Site Delta"), mk("g2", "Arcade")]);
     const job = buildLadderMapBackfillJob({
