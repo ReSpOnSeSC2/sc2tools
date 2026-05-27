@@ -66,6 +66,13 @@ class PulseMmrService {
     this._cache = new Map();
     /** @type {Map<string, number>} */
     this._seasonCache = new Map();
+    /**
+     * Per-race breakdown cache, keyed like the ``any:`` MMR cache.
+     * Separate map because the payload shape differs (an array of
+     * per-race rows, not a single mmr/region pair).
+     * @type {Map<string, {races: Array<{race: string, mmr: number, games: number, league: string|null, region: string|null}>, fetchedAt: number}>}
+     */
+    this._raceCache = new Map();
   }
 
   /**
@@ -265,30 +272,10 @@ class PulseMmrService {
    */
   async getCurrentMmrForAny(ids, opts = {}) {
     if (!Array.isArray(ids) || ids.length === 0) return null;
-    /** @type {string[]} */
-    const numericIds = [];
-    const seen = new Set();
-    for (const raw of ids) {
-      if (typeof raw !== "string") continue;
-      const numeric = normalisePulseId(raw);
-      if (numeric) {
-        if (!seen.has(numeric)) {
-          seen.add(numeric);
-          numericIds.push(numeric);
-        }
-        continue;
-      }
-      const toon = normaliseToonHandle(raw);
-      if (!toon) continue;
-      // Reuse the toon→characterId memoisation so a 3-id profile
-      // doesn't spend three /character/search calls every overlay
-      // refresh once the mapping has been resolved once.
-      const resolved = await this._resolveCharacterIdFromToonCached(toon);
-      if (resolved && !seen.has(resolved)) {
-        seen.add(resolved);
-        numericIds.push(resolved);
-      }
-    }
+    // Reuse the toon→characterId memoisation so a 3-id profile doesn't
+    // spend three /character/search calls every overlay refresh once
+    // the mapping has been resolved once.
+    const numericIds = await this._normaliseToNumericIds(ids);
     if (numericIds.length === 0) return null;
     const preferredRegion =
       typeof opts.preferredRegion === "string" && opts.preferredRegion
@@ -353,16 +340,66 @@ class PulseMmrService {
    * @returns {Promise<{mmr: number, region: string|null}|null>}
    */
   async _fetchTeams(pulseIdOrIds, opts = {}) {
-    if (!this.fetchImpl) return null;
     const ids = Array.isArray(pulseIdOrIds) ? pulseIdOrIds : [pulseIdOrIds];
-    if (ids.length === 0) return null;
+    const candidates = await this._collectTeamCandidates(ids);
+    if (candidates.length === 0) return null;
+    // Region preference: if the caller pinned a region (from the
+    // streamer's most recent game), candidates from that region win
+    // over everything else. The user's last-played region is the
+    // strongest signal of "where they're currently grinding"; SC2Pulse's
+    // ``lastPlayed`` field can lag or point at a stale-but-touched
+    // account on a different ladder. Falls through to the global sort
+    // only when no team exists in the preferred region.
+    const preferredRegion =
+      typeof opts.preferredRegion === "string" && opts.preferredRegion
+        ? opts.preferredRegion.toUpperCase()
+        : null;
+    if (preferredRegion) {
+      const preferred = candidates.filter((c) => c.region === preferredRegion);
+      if (preferred.length > 0) {
+        preferred.sort(
+          (a, b) =>
+            b.lastPlayedMs - a.lastPlayedMs || b.rating - a.rating,
+        );
+        const best = preferred[0];
+        return { mmr: Math.round(best.rating), region: best.region };
+      }
+    }
+    // Pick the team played most recently; tie-break on highest rating
+    // so a streamer who hasn't queued today still sees their peak.
+    candidates.sort(
+      (a, b) =>
+        b.lastPlayedMs - a.lastPlayedMs || b.rating - a.rating,
+    );
+    const best = candidates[0];
+    return { mmr: Math.round(best.rating), region: best.region };
+  }
+
+  /**
+   * Fetch every 1v1 team carrying any of ``ids`` across all regions'
+   * current seasons and return the raw candidate rows (rating, region,
+   * race, games, league, lastPlayed). Shared by ``_fetchTeams`` (which
+   * collapses to a single most-recent pick) and ``getRaceBreakdown``
+   * (which groups by race). No collapsing / sorting here — callers
+   * apply their own policy.
+   *
+   * @private
+   * @param {string[]} ids numeric SC2Pulse character ids
+   * @returns {Promise<Array<{
+   *   rating: number, lastPlayedMs: number, region: string|null,
+   *   race: string|null, games: number, league: string|null,
+   * }>>}
+   */
+  async _collectTeamCandidates(ids) {
+    if (!this.fetchImpl) return [];
+    if (!Array.isArray(ids) || ids.length === 0) return [];
     // Probe per-region — SC2Pulse's /group/team returns nothing without
     // a season id, and seasons are scoped per region. The legacy SPA
     // walked every region's current season; we do the same so the
     // session widget tracks whichever region the streamer is on now.
     const seasons = await this._currentSeasonsByRegion();
-    if (seasons.size === 0) return null;
-    /** @type {Array<{rating: number, lastPlayedMs: number, region: string|null}>} */
+    if (seasons.size === 0) return [];
+    /** @type {Array<{rating: number, lastPlayedMs: number, region: string|null, race: string|null, games: number, league: string|null}>} */
     const candidates = [];
     // SC2Pulse's /group/team accepts repeated ``characterId`` query
     // params and returns the union — one HTTP call per region carries
@@ -422,40 +459,108 @@ class PulseMmrService {
           pulseRegionLabel(team && team.region)
           || REGION_CODE_TO_LABEL[regionCode]
           || null;
-        candidates.push({ rating, lastPlayedMs, region });
+        const { race, games } = teamRaceAndGames(team);
+        candidates.push({
+          rating,
+          lastPlayedMs,
+          region,
+          race,
+          games,
+          league: teamLeagueLabel(team),
+        });
       }
     }
-    if (candidates.length === 0) return null;
-    // Region preference: if the caller pinned a region (from the
-    // streamer's most recent game), candidates from that region win
-    // over everything else. The user's last-played region is the
-    // strongest signal of "where they're currently grinding"; SC2Pulse's
-    // ``lastPlayed`` field can lag or point at a stale-but-touched
-    // account on a different ladder. Falls through to the global sort
-    // only when no team exists in the preferred region.
-    const preferredRegion =
-      typeof opts.preferredRegion === "string" && opts.preferredRegion
-        ? opts.preferredRegion.toUpperCase()
-        : null;
-    if (preferredRegion) {
-      const preferred = candidates.filter((c) => c.region === preferredRegion);
-      if (preferred.length > 0) {
-        preferred.sort(
-          (a, b) =>
-            b.lastPlayedMs - a.lastPlayedMs || b.rating - a.rating,
-        );
-        const best = preferred[0];
-        return { mmr: Math.round(best.rating), region: best.region };
+    return candidates;
+  }
+
+  /**
+   * Per-race 1v1 MMR breakdown for an opponent (mixed numeric ids +
+   * toon handles, resolved like ``getCurrentMmrForAny``). Returns one
+   * row per race the character has a current-season 1v1 team for,
+   * sorted by MMR descending. This is the data the opponent profile
+   * renders so a Protoss main who off-races Zerg shows BOTH ratings
+   * instead of collapsing to whichever they queued most recently.
+   *
+   * Cached 5 min keyed on the resolved id set; serves stale on a Pulse
+   * error so a blip doesn't blank the table.
+   *
+   * @param {string[]} ids
+   * @returns {Promise<Array<{
+   *   race: string, mmr: number, games: number,
+   *   league: string|null, region: string|null,
+   * }>>}
+   */
+  async getRaceBreakdown(ids) {
+    const numericIds = await this._normaliseToNumericIds(ids);
+    if (numericIds.length === 0) return [];
+    const cacheKey = "races:" + numericIds.slice().sort().join(",");
+    const now = this.now();
+    const cached = this._raceCache.get(cacheKey);
+    if (cached && now - cached.fetchedAt < this.cacheTtlMs) {
+      return cached.races;
+    }
+    const candidates = await this._collectTeamCandidates(numericIds);
+    if (candidates.length === 0) {
+      // Stale-while-error: keep the last good breakdown on a miss.
+      if (cached) return cached.races;
+      return [];
+    }
+    // Group by race; keep the highest-rated team per race (a character
+    // can carry the same race across regions — surface their best).
+    /** @type {Map<string, {race: string, mmr: number, games: number, league: string|null, region: string|null}>} */
+    const byRace = new Map();
+    for (const c of candidates) {
+      if (!c.race) continue;
+      const existing = byRace.get(c.race);
+      if (!existing || c.rating > existing.mmr) {
+        byRace.set(c.race, {
+          race: c.race,
+          mmr: Math.round(c.rating),
+          games: c.games,
+          league: c.league,
+          region: c.region,
+        });
       }
     }
-    // Pick the team played most recently; tie-break on highest rating
-    // so a streamer who hasn't queued today still sees their peak.
-    candidates.sort(
-      (a, b) =>
-        b.lastPlayedMs - a.lastPlayedMs || b.rating - a.rating,
-    );
-    const best = candidates[0];
-    return { mmr: Math.round(best.rating), region: best.region };
+    const races = Array.from(byRace.values()).sort((a, b) => b.mmr - a.mmr);
+    this._raceCache.set(cacheKey, { races, fetchedAt: now });
+    return races;
+  }
+
+  /**
+   * Normalise a mixed list of SC2Pulse character ids + raw toon handles
+   * into a deduped list of numeric character ids (resolving toons via
+   * the cached ``/character/search`` mapping). Shared by
+   * ``getCurrentMmrForAny`` and ``getRaceBreakdown``.
+   *
+   * @private
+   * @param {Array<string|null|undefined>|string} ids
+   * @returns {Promise<string[]>}
+   */
+  async _normaliseToNumericIds(ids) {
+    const list = Array.isArray(ids) ? ids : [ids];
+    /** @type {string[]} */
+    const numericIds = [];
+    const seen = new Set();
+    for (const raw of list) {
+      if (typeof raw !== "string") continue;
+      const numeric = normalisePulseId(raw);
+      if (numeric) {
+        if (!seen.has(numeric)) {
+          seen.add(numeric);
+          numericIds.push(numeric);
+        }
+        continue;
+      }
+      const toon = normaliseToonHandle(raw);
+      if (!toon) continue;
+      const resolved = await this._resolveCharacterIdFromToonCached(toon);
+      if (resolved && !seen.has(resolved)) {
+        seen.add(resolved);
+        numericIds.push(resolved);
+      }
+    }
+    return numericIds;
   }
 
   /**
@@ -692,6 +797,71 @@ function parseTimestamp(raw) {
   if (typeof raw !== "string" || !raw) return 0;
   const t = Date.parse(raw);
   return Number.isFinite(t) ? t : 0;
+}
+
+// SC2Pulse encodes league as an integer 0..6 (Bronze..Grandmaster),
+// sometimes bare and sometimes wrapped as ``{ type: <int> }``.
+const LEAGUE_LABELS = [
+  "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster",
+];
+
+/**
+ * Human league label for a SC2Pulse team, or null when absent /
+ * out-of-range. Accepts the bare-int, ``{type}``-object, and numeric-
+ * string shapes Pulse has emitted across versions.
+ *
+ * @param {any} team
+ * @returns {string|null}
+ */
+function teamLeagueLabel(team) {
+  const raw = team && team.league;
+  let n = null;
+  if (typeof raw === "number") n = raw;
+  else if (raw && typeof raw === "object" && typeof raw.type === "number") {
+    n = raw.type;
+  } else if (typeof raw === "string" && raw.trim() !== "") {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) n = parsed;
+  }
+  if (n === null || n < 0 || n >= LEAGUE_LABELS.length) return null;
+  return LEAGUE_LABELS[n];
+}
+
+// 1v1 LotV teams are race-specific; the member carries per-race game
+// counts and exactly one is non-trivial for that team's race. argmax
+// gives the team's race + its game count (matches nephest's per-race
+// "Games" column). Mirrors the agent's ``_candidate_top_race``.
+const RACE_COUNT_FIELDS = [
+  ["Protoss", "protossGamesPlayed"],
+  ["Terran", "terranGamesPlayed"],
+  ["Zerg", "zergGamesPlayed"],
+  ["Random", "randomGamesPlayed"],
+];
+
+/**
+ * Resolve a SC2Pulse 1v1 team's race + game count from its member's
+ * per-race counters. Handles the ``members: [..]`` (modern) and
+ * ``members: {..}`` (legacy) shapes.
+ *
+ * @param {any} team
+ * @returns {{race: string|null, games: number}}
+ */
+function teamRaceAndGames(team) {
+  const members = team && team.members;
+  let m = null;
+  if (Array.isArray(members) && members.length) m = members[0];
+  else if (members && typeof members === "object") m = members;
+  if (!m || typeof m !== "object") return { race: null, games: 0 };
+  let bestRace = null;
+  let bestGames = -1;
+  for (const [race, field] of RACE_COUNT_FIELDS) {
+    const n = Number(m[field]);
+    if (Number.isFinite(n) && n > bestGames) {
+      bestGames = n;
+      bestRace = race;
+    }
+  }
+  return { race: bestRace, games: bestGames > 0 ? bestGames : 0 };
 }
 
 module.exports = { PulseMmrService };

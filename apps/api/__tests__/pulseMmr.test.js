@@ -732,4 +732,80 @@ describe("services/pulseMmr", () => {
     const out = await svc.getCurrentMmrByToon("2-S2-1-99999");
     expect(out?.mmr).toBe(4900);
   });
+
+  describe("getRaceBreakdown", () => {
+    test("groups 1v1 teams by race, best rating per race, sorted desc", async () => {
+      // Mirrors the real PiLiPiLi case: a Protoss main (highest MMR)
+      // who also queues Zerg + Terran. The single-number path would
+      // collapse to whichever was played most recently; the breakdown
+      // keeps every race so the UI can show the higher Protoss.
+      const fetchImpl = jest.fn(async (url) => {
+        if (url.includes("/season/list/all")) {
+          return jsonResponse([{ battlenetId: 60, region: "US" }]);
+        }
+        if (url.includes("/group/team")) {
+          return jsonResponse([
+            {
+              id: 1, rating: 5584, region: 1, league: 5,
+              lastPlayed: "2026-05-20T00:00:00Z",
+              members: [{ protossGamesPlayed: 7387 }],
+            },
+            {
+              id: 2, rating: 5081, region: 1, league: 5,
+              lastPlayed: "2026-05-25T00:00:00Z", // most recent, but lower
+              members: [{ zergGamesPlayed: 1163 }],
+            },
+            {
+              id: 3, rating: 4667, region: 1, league: 4,
+              lastPlayed: "2026-05-10T00:00:00Z",
+              members: [{ terranGamesPlayed: 509 }],
+            },
+          ]);
+        }
+        return jsonResponse([]);
+      });
+      const svc = new PulseMmrService({ fetchImpl });
+      const races = await svc.getRaceBreakdown(["994428"]);
+      expect(races.map((r) => r.race)).toEqual(["Protoss", "Zerg", "Terran"]);
+      expect(races[0]).toMatchObject({
+        race: "Protoss", mmr: 5584, games: 7387, league: "Master",
+      });
+      expect(races.find((r) => r.race === "Zerg")).toMatchObject({
+        mmr: 5081, games: 1163,
+      });
+      expect(races.find((r) => r.race === "Terran")).toMatchObject({
+        mmr: 4667, league: "Diamond",
+      });
+    });
+
+    test("keeps the highest-rated team when a race appears twice (multi-region)", async () => {
+      const fetchImpl = jest.fn(async (url) => {
+        if (url.includes("/season/list/all")) {
+          return jsonResponse([{ battlenetId: 60, region: "US" }]);
+        }
+        if (url.includes("/group/team")) {
+          return jsonResponse([
+            { id: 1, rating: 4800, region: 1, league: 4, members: [{ zergGamesPlayed: 100 }] },
+            { id: 2, rating: 5200, region: 2, league: 5, members: [{ zergGamesPlayed: 50 }] },
+          ]);
+        }
+        return jsonResponse([]);
+      });
+      const svc = new PulseMmrService({ fetchImpl });
+      const races = await svc.getRaceBreakdown(["994428"]);
+      expect(races).toHaveLength(1);
+      expect(races[0]).toMatchObject({ race: "Zerg", mmr: 5200 });
+    });
+
+    test("returns [] when the character has no 1v1 teams", async () => {
+      const fetchImpl = jest.fn(async (url) => {
+        if (url.includes("/season/list/all")) {
+          return jsonResponse([{ battlenetId: 60, region: "US" }]);
+        }
+        return jsonResponse([]);
+      });
+      const svc = new PulseMmrService({ fetchImpl });
+      expect(await svc.getRaceBreakdown(["994428"])).toEqual([]);
+    });
+  });
 });
