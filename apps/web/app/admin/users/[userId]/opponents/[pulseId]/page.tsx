@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { useApi } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
+import { OpponentDiagnosticsPanel } from "@/components/analyzer/OpponentDiagnosticsPanel";
 import { BuildOrderTimeline } from "@/components/analyzer/charts/BuildOrderTimeline";
 import { ApmSpmChart, type ApmCurveData } from "@/components/analyzer/charts/ApmSpmChart";
 import { ResourcesOverTimeChart } from "@/components/analyzer/charts/ResourcesOverTimeChart";
@@ -122,6 +123,15 @@ export default function AdminOpponentGamesPage({
           to see both build orders, just like the user&apos;s own replay.
         </p>
       </header>
+
+      <OpponentDiagnosticsPanel
+        diagnosticsPath={`/v1/admin/users/${encodeURIComponent(
+          userId,
+        )}/opponents/${encodeURIComponent(pulseId)}/diagnostics`}
+        retryPath={`/v1/admin/users/${encodeURIComponent(
+          userId,
+        )}/opponents/${encodeURIComponent(pulseId)}/retry-pulse`}
+      />
 
       {isLoading ? (
         <LoadingRows rows={8} />

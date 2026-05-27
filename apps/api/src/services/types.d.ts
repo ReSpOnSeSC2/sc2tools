@@ -49,6 +49,35 @@ export interface OpponentsService {
       playedAt: Date;
     },
   ): Promise<void>;
+  diagnoseIdentity(
+    userId: string,
+    pulseId: string,
+  ): Promise<{
+    pulseId: string;
+    toonHandle: string | null;
+    pulseCharacterId: string | null;
+    displayNameSample: string | null;
+    region: string | null;
+    mmr: number | null;
+    mmrFetchedAt: string | null;
+    pulseResolveAttemptedAt: string | null;
+    leagueId: number | null;
+    gameCount: number;
+    inReplayMmrCount: number;
+    pulseIdStatus: "resolved" | "unresolved" | "none";
+    mmrStatus: "present" | "missing";
+    findings: Array<{ code: string; severity: string; message: string }>;
+  } | null>;
+  retryPulseResolution(
+    userId: string,
+    pulseId: string,
+  ): Promise<{
+    resolvedPulseCharacterId: boolean;
+    pulseCharacterId: string | null;
+    mmr: number | null;
+    region: string | null;
+    gamesRestamped: number;
+  } | null>;
 }
 
 export interface GamesService {

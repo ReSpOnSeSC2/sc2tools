@@ -1079,10 +1079,17 @@ class OpponentsService {
         : (prior && typeof prior.pulseCharacterId === "string"
           ? prior.pulseCharacterId
           : null);
+    const toonForMmr =
+      (typeof game.toonHandle === "string" && game.toonHandle)
+        ? game.toonHandle
+        : (prior && typeof prior.toonHandle === "string"
+          ? prior.toonHandle
+          : null);
     const pulseFetched = await this._fetchOpponentMmrFromPulse(
       pulseCharIdForMmr,
       prior,
       derivedRegion,
+      toonForMmr,
     );
     if (pulseFetched) {
       set.mmr = pulseFetched.mmr;
@@ -1235,10 +1242,17 @@ class OpponentsService {
         : (prior && typeof prior.pulseCharacterId === "string"
           ? prior.pulseCharacterId
           : null);
+    const refreshToonForMmr =
+      (typeof game.toonHandle === "string" && game.toonHandle)
+        ? game.toonHandle
+        : (prior && typeof prior.toonHandle === "string"
+          ? prior.toonHandle
+          : null);
     const refreshPulseFetched = await this._fetchOpponentMmrFromPulse(
       refreshPulseCharId,
       prior,
       refreshDerivedRegion,
+      refreshToonForMmr,
     );
     if (refreshPulseFetched) {
       set.mmr = refreshPulseFetched.mmr;
@@ -1382,9 +1396,21 @@ class OpponentsService {
    * @param {string|null} [preferredRegion]
    * @returns {Promise<{mmr: number, region: string|null}|null>}
    */
-  async _fetchOpponentMmrFromPulse(pulseCharacterId, prior, preferredRegion) {
+  async _fetchOpponentMmrFromPulse(pulseCharacterId, prior, preferredRegion, toonHandle) {
     if (!this.pulseMmr) return null;
-    if (typeof pulseCharacterId !== "string" || !pulseCharacterId) return null;
+    const charId =
+      typeof pulseCharacterId === "string" && pulseCharacterId.length > 0
+        ? pulseCharacterId
+        : null;
+    const toon =
+      typeof toonHandle === "string" && toonHandle.length > 0
+        ? toonHandle
+        : null;
+    // Nothing to query with. Note: a toon handle alone is enough —
+    // SC2Pulse's /character/search resolves it to a character id, so a
+    // toon-only opponent (pulseCharacterId never resolved) still gets a
+    // number instead of a permanent "—".
+    if (!charId && !toon) return null;
     const lastFetched = prior && prior.mmrFetchedAt instanceof Date
       ? prior.mmrFetchedAt.getTime()
       : null;
@@ -1393,16 +1419,20 @@ class OpponentsService {
     }
     try {
       let result = null;
-      if (
-        typeof this.pulseMmr.getCurrentMmrForAny === "function"
-        && preferredRegion
-      ) {
-        result = await this.pulseMmr.getCurrentMmrForAny(
-          [pulseCharacterId],
-          { preferredRegion },
-        );
-      } else {
-        result = await this.pulseMmr.getCurrentMmr(pulseCharacterId);
+      if (charId) {
+        if (
+          typeof this.pulseMmr.getCurrentMmrForAny === "function"
+          && preferredRegion
+        ) {
+          result = await this.pulseMmr.getCurrentMmrForAny(
+            [charId],
+            { preferredRegion },
+          );
+        } else {
+          result = await this.pulseMmr.getCurrentMmr(charId);
+        }
+      } else if (typeof this.pulseMmr.getCurrentMmrByToon === "function") {
+        result = await this.pulseMmr.getCurrentMmrByToon(toon);
       }
       if (!result) return null;
       const mmr = Number(result.mmr);
@@ -1628,6 +1658,346 @@ class OpponentsService {
     }
     return { scanned: rows.length, resolved, updated, skipped };
   }
+
+  /**
+   * Admin diagnostics for ONE opponent: why is the Pulse ID and/or MMR
+   * missing? Read-only — reads the opponents row plus a cheap count of
+   * how many games carry an in-replay ``opponent.mmr`` — and turns the
+   * stored identity/MMR state into a human-readable list of findings.
+   *
+   * No SC2Pulse traffic: everything is inferred from fields already
+   * persisted at ingest / backfill time (``pulseCharacterId``,
+   * ``toonHandle``, ``mmr``, ``mmrFetchedAt``, ``pulseResolveAttemptedAt``).
+   * That's why the debug panel needs no agent update.
+   *
+   * @param {string} userId
+   * @param {string} pulseId
+   * @returns {Promise<null | {
+   *   pulseId: string,
+   *   toonHandle: string|null,
+   *   pulseCharacterId: string|null,
+   *   displayNameSample: string|null,
+   *   region: string|null,
+   *   mmr: number|null,
+   *   mmrFetchedAt: string|null,
+   *   pulseResolveAttemptedAt: string|null,
+   *   leagueId: number|null,
+   *   gameCount: number,
+   *   inReplayMmrCount: number,
+   *   pulseIdStatus: "resolved"|"unresolved"|"none",
+   *   mmrStatus: "present"|"missing",
+   *   findings: Array<{code: string, severity: string, message: string}>,
+   * }>}
+   */
+  async diagnoseIdentity(userId, pulseId) {
+    if (!userId) throw new Error("userId required");
+    if (typeof pulseId !== "string" || !pulseId) throw new Error("pulseId required");
+    const row = await this.db.opponents.findOne(
+      { userId, pulseId },
+      {
+        projection: {
+          _id: 0,
+          pulseId: 1,
+          toonHandle: 1,
+          pulseCharacterId: 1,
+          displayNameSample: 1,
+          region: 1,
+          mmr: 1,
+          mmrFetchedAt: 1,
+          pulseResolveAttemptedAt: 1,
+          leagueId: 1,
+          gameCount: 1,
+        },
+      },
+    );
+    if (!row) return null;
+    const inReplayMmrCount = await this.db.games.countDocuments({
+      userId,
+      "opponent.pulseId": pulseId,
+      "opponent.mmr": { $type: "number" },
+    });
+
+    const charId =
+      typeof row.pulseCharacterId === "string" && row.pulseCharacterId.length > 0
+        ? row.pulseCharacterId
+        : null;
+    const toon =
+      typeof row.toonHandle === "string" && row.toonHandle.length > 0
+        ? row.toonHandle
+        : null;
+    const name =
+      typeof row.displayNameSample === "string" ? row.displayNameSample : "";
+    const hasMmr = typeof row.mmr === "number" && row.mmr > 0;
+    const attemptedAt =
+      row.pulseResolveAttemptedAt instanceof Date
+        ? row.pulseResolveAttemptedAt
+        : null;
+    const fetchedAt =
+      row.mmrFetchedAt instanceof Date ? row.mmrFetchedAt : null;
+
+    const findings = [];
+    const add = (code, severity, message) =>
+      findings.push({ code, severity, message });
+
+    // --- Pulse ID ---
+    let pulseIdStatus;
+    if (charId) {
+      pulseIdStatus = "resolved";
+      add(
+        "pulse_id_resolved",
+        "ok",
+        `Resolved to SC2Pulse character id ${charId} — the "Pulse ID" column links to nephest.`,
+      );
+    } else if (toon) {
+      pulseIdStatus = "unresolved";
+      add(
+        "pulse_id_unresolved",
+        "warn",
+        `Only the raw toon handle (${toon}) is known — SC2Pulse never confirmed a character id, so the column shows "TOON" instead of a link.`,
+      );
+      if (attemptedAt) {
+        add(
+          "pulse_resolve_attempted",
+          "info",
+          `Resolution was attempted (last ${attemptedAt.toISOString()}) but no candidate matched this toon's bnid. SC2Pulse may have been unreachable, or the name search returned no confident match. The miss is negative-cached; "Retry" forces a fresh attempt.`,
+        );
+      } else {
+        add(
+          "pulse_resolve_not_attempted",
+          "info",
+          "Resolution hasn't been attempted yet — the backfill cron hasn't reached this opponent. \"Retry\" forces it now.",
+        );
+      }
+      if (isBarcodeLikeName(name)) {
+        add(
+          "pulse_resolve_barcode",
+          "warn",
+          `Display name "${name}" is a barcode (indistinguishable glyphs), so name-based search is unreliable for this opponent.`,
+        );
+      }
+    } else {
+      pulseIdStatus = "none";
+      add(
+        "pulse_id_none",
+        "warn",
+        "No toon handle and no character id on record — there's nothing to query SC2Pulse with. This row predates identity capture or was rebuilt from games without an opponent toon handle.",
+      );
+    }
+
+    // --- MMR ---
+    const mmrStatus = hasMmr ? "present" : "missing";
+    if (hasMmr) {
+      const src = fetchedAt
+        ? `from SC2Pulse (last fetched ${fetchedAt.toISOString()})`
+        : inReplayMmrCount > 0
+          ? "from an in-replay value"
+          : "from a stored value";
+      add("mmr_present", "ok", `MMR ${row.mmr} on record ${src}.`);
+    } else {
+      if (inReplayMmrCount === 0) {
+        add(
+          "mmr_no_in_replay",
+          "info",
+          "No recorded game carried an in-replay opponent MMR — normal for ranked 1v1, where sc2reader doesn't expose the opponent's MMR.",
+        );
+      }
+      if (!charId && !toon) {
+        add(
+          "mmr_no_id",
+          "warn",
+          "No id to query SC2Pulse with, so the current-ladder MMR can't be fetched.",
+        );
+      } else if (fetchedAt) {
+        add(
+          "mmr_pulse_empty",
+          "warn",
+          `SC2Pulse was queried (last ${fetchedAt.toISOString()}) but returned no current 1v1 team — the opponent likely hasn't played ranked 1v1 this season, or the lookup was rate-limited.`,
+        );
+      } else {
+        add(
+          "mmr_pulse_not_fetched",
+          "info",
+          "SC2Pulse MMR hasn't been fetched yet for this opponent. It'll be tried on the next backfill, or use \"Retry\" to fetch now.",
+        );
+      }
+    }
+
+    return {
+      pulseId: row.pulseId,
+      toonHandle: toon,
+      pulseCharacterId: charId,
+      displayNameSample: name || null,
+      region: typeof row.region === "string" ? row.region : null,
+      mmr: hasMmr ? row.mmr : null,
+      mmrFetchedAt: fetchedAt ? fetchedAt.toISOString() : null,
+      pulseResolveAttemptedAt: attemptedAt ? attemptedAt.toISOString() : null,
+      leagueId: typeof row.leagueId === "number" ? row.leagueId : null,
+      gameCount: typeof row.gameCount === "number" ? row.gameCount : 0,
+      inReplayMmrCount,
+      pulseIdStatus,
+      mmrStatus,
+      findings,
+    };
+  }
+
+  /**
+   * Force a fresh SC2Pulse resolve + MMR refetch for ONE opponent,
+   * bypassing the throttle windows the cron respects. Powers the admin
+   * debug panel's "Retry" button. Unlike ``backfillPulseCharacterId``
+   * (which only touches rows MISSING a character id), this also
+   * refetches MMR when the id is already resolved but the MMR is
+   * missing — and falls back to a toon-handle MMR lookup when no
+   * character id can be resolved at all.
+   *
+   * @param {string} userId
+   * @param {string} pulseId
+   * @returns {Promise<null | {
+   *   resolvedPulseCharacterId: boolean,
+   *   pulseCharacterId: string|null,
+   *   mmr: number|null,
+   *   region: string|null,
+   *   gamesRestamped: number,
+   * }>}
+   */
+  async retryPulseResolution(userId, pulseId) {
+    if (!userId) throw new Error("userId required");
+    if (typeof pulseId !== "string" || !pulseId) throw new Error("pulseId required");
+    const row = await this.db.opponents.findOne(
+      { userId, pulseId },
+      {
+        projection: {
+          _id: 0,
+          pulseId: 1,
+          toonHandle: 1,
+          pulseCharacterId: 1,
+          displayNameSample: 1,
+        },
+      },
+    );
+    if (!row) return null;
+    const toon =
+      typeof row.toonHandle === "string" && row.toonHandle.length > 0
+        ? row.toonHandle
+        : null;
+    let charId =
+      typeof row.pulseCharacterId === "string" && row.pulseCharacterId.length > 0
+        ? row.pulseCharacterId
+        : null;
+
+    const now = new Date();
+    /** @type {Record<string, any>} */
+    const set = { pulseResolveAttemptedAt: now };
+    let resolvedNow = false;
+
+    // Step 1 — resolve a character id if we don't have one yet.
+    if (!charId && toon && this.pulseResolver) {
+      try {
+        const resolved = await this.pulseResolver.resolve({
+          toonHandle: toon,
+          displayName:
+            typeof row.displayNameSample === "string"
+              ? row.displayNameSample
+              : "",
+          forceRefresh: true,
+        });
+        if (typeof resolved === "string" && resolved.length > 0) {
+          charId = resolved;
+          set.pulseCharacterId = resolved;
+          resolvedNow = true;
+        }
+      } catch (err) {
+        this.logger.warn(
+          { err, userId, pulseId, toonHandle: toon },
+          "opponent_pulse_retry_resolver_failed",
+        );
+      }
+    }
+
+    const derivedRegion = regionFromToonHandle(toon);
+    if (derivedRegion) set.region = derivedRegion;
+
+    // Step 2 — fetch MMR. prior=null bypasses the freshness window so a
+    // manual retry always hits SC2Pulse. Uses the character id if we
+    // have one, else the toon-handle fallback.
+    let pulseFetched = null;
+    try {
+      pulseFetched = await this._fetchOpponentMmrFromPulse(
+        charId,
+        null,
+        derivedRegion,
+        toon,
+      );
+    } catch (err) {
+      this.logger.warn(
+        { err, userId, pulseId, pulseCharacterId: charId },
+        "opponent_pulse_retry_mmr_fetch_failed",
+      );
+    }
+    if (pulseFetched) {
+      set.mmr = pulseFetched.mmr;
+      set.mmrFetchedAt = now;
+      if (pulseFetched.region) set.region = pulseFetched.region;
+    }
+
+    await this.db.opponents.updateOne({ userId, pulseId }, { $set: set });
+
+    // Step 3 — back-stamp games that lack an in-replay MMR, mirroring
+    // the backfill cron (the agent's in-replay value always wins).
+    let gamesRestamped = 0;
+    /** @type {Record<string, any>} */
+    const gameUpdate = {};
+    if (typeof set.mmr === "number") gameUpdate["opponent.mmr"] = set.mmr;
+    if (typeof set.region === "string") gameUpdate["opponent.region"] = set.region;
+    if (charId) gameUpdate["opponent.pulseCharacterId"] = charId;
+    if (Object.keys(gameUpdate).length > 0) {
+      try {
+        const gres = await this.db.games.updateMany(
+          {
+            userId,
+            "opponent.pulseId": pulseId,
+            "opponent.mmr": { $not: { $type: "number" } },
+          },
+          { $set: gameUpdate },
+        );
+        gamesRestamped = gres.modifiedCount || 0;
+      } catch (err) {
+        this.logger.warn(
+          { err, userId, pulseId },
+          "opponent_pulse_retry_games_restamp_failed",
+        );
+      }
+    }
+
+    this.logger.info(
+      { userId, pulseId, resolvedNow, pulseCharacterId: charId, mmr: set.mmr ?? null },
+      "opponent_pulse_retry",
+    );
+
+    return {
+      resolvedPulseCharacterId: resolvedNow,
+      pulseCharacterId: charId,
+      mmr: typeof set.mmr === "number" ? set.mmr : null,
+      region: typeof set.region === "string" ? set.region : null,
+      gamesRestamped,
+    };
+  }
+}
+
+/**
+ * Lightweight barcode-name detector for the diagnostics panel — names
+ * built entirely from visually indistinguishable glyphs (I, l, 1, i, |
+ * and common unicode lookalikes). Mirrors ``isBarcodeName`` in the web
+ * ``lib/sc2pulse.ts`` so the API's "why didn't name search work" hint
+ * matches what the UI considers a barcode.
+ *
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isBarcodeLikeName(name) {
+  if (typeof name !== "string") return false;
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return false;
+  return /^[Il1i|ⅠΙＩｌｉ１｜]+$/u.test(trimmed);
 }
 
 const NOOP_LOGGER = {

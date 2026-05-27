@@ -9,6 +9,7 @@ import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
 import { fmtMmr, pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import { AllGamesTable } from "./AllGamesTable";
+import { OpponentDiagnosticsPanel } from "./OpponentDiagnosticsPanel";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import { MedianTimingsGrid } from "./MedianTimingsGrid";
 import type { MatchupTimings, TimingInfo } from "./MedianTimingsGrid";
@@ -193,6 +194,12 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
           />
         </div>
       </div>
+
+      <OpponentDiagnosticsPanel
+        collapsible
+        diagnosticsPath={`/v1/opponents/${encodeURIComponent(pulseId)}/diagnostics`}
+        retryPath={`/v1/opponents/${encodeURIComponent(pulseId)}/retry-pulse`}
+      />
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <Card title="By map">
