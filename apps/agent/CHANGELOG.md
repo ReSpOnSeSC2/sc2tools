@@ -2,6 +2,31 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.10.1
+
+### Fixed — opponent build classification under-counted bases (pre-placed main)
+- **Symptom.** Opponent builds were mislabelled because the pre-placed
+  main town hall (Command Center / Nexus / Hatchery) was not being
+  counted. The reported case: a Terran fast 3 CC was tagged
+  `Terran - Standard Bio Tank`.
+- **Root cause.** Real replays emit only a `born` event (no `init`)
+  for the game-start town hall, but the classifier counted bases from
+  construction-START (`init`/`morph`) events only, so the main was
+  invisible. A true fast-3-CC (main + 2 expansions = 2 init events) read
+  as 2 and failed the `>= 3` test; the same gap skewed every
+  "second base" / "Nth base" heuristic across all three races (e.g. a
+  Zerg Hatch-First opening read as Pool-First, Protoss "Standard Expand"
+  / "Standard Macro" thresholds shifted by one base). Unit-test fixtures
+  modelled the main as a t=0 `init`, so the bug never surfaced in CI.
+- **Fix.** Base counting now goes through the shared
+  `base_count_at` / `nth_base_start` / `start_times_excluding_main`
+  helpers, which count the pre-placed main as base #1 and work for both
+  real-replay (`born`) and fixture (`init`) event shapes. Applied across
+  the Terran, Protoss, and Zerg opponent-classification branches.
+- **Effect.** Re-ingested games (via a Resync) classify the opponent's
+  build correctly; previously analysed games are unaffected until
+  re-ingested.
+
 ## 0.10.0
 
 ### Added — authoritative ladder/custom signal (`isLadderGame`)

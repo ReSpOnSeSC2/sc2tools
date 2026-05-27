@@ -19,6 +19,7 @@ from .strategy_detector_helpers import (
     base_count_at,
     count_real_units,
     count_started_before,
+    nth_base_start,
     start_times,
     start_times_excluding_main,
     too_short_label,
@@ -99,12 +100,17 @@ class OpponentStrategyDetector(BaseStrategyDetector):
 
         # --- ZERG ---
         if race == "Zerg":
-            hatch_times = get_times("Hatchery")
             pool_times = get_times("SpawningPool")
             gas_times = get_times("Extractor")
 
             pool_time = pool_times[0] if pool_times else 9999
-            first_hatch_time = hatch_times[1] if len(hatch_times) >= 2 else 9999
+            # 2nd base (natural) Hatchery start. nth_base_start counts the
+            # pre-placed main as base #1, so this resolves to the first
+            # EXPANSION for both real-replay (main = born-only event) and
+            # test-fixture (main = init at t=0) shapes. A raw
+            # ``hatch_times[1]`` missed the main on real replays and made
+            # every Hatch-First opening look Pool-First.
+            first_hatch_time = nth_base_start(buildings, "Hatchery", 2)
             first_gas_time = gas_times[0] if gas_times else 9999
 
             # Proxy & extreme aggression
@@ -131,7 +137,7 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                     if first_gas_time < first_hatch_time + 15
                     else "Zerg - Hatch First"
                 )
-                if count_buildings("Hatchery", 200) >= 3:
+                if base_count_at(buildings, "Hatchery", 200) >= 3:
                     return "Zerg - 3 Hatch Before Pool"
 
                 if (
@@ -152,7 +158,7 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                 if has_building("Spire", 420) and count_units("Drone", 420) < 45:
                     return "Zerg - 2 Base Muta Rush"
 
-                if count_buildings("Hatchery", 390) >= 3:
+                if base_count_at(buildings, "Hatchery", 390) >= 3:
                     if count_units("Zergling", 300) > 20 and count_units("Drone", 300) < 30:
                         return "Zerg - 3 Hatch Ling Flood"
                     return "Zerg - 3 Base Macro (Hatch First)"
@@ -176,14 +182,20 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                     return "Zerg - 2 Base Nydus"
                 if has_building("Spire", 420) and count_units("Drone", 420) < 45:
                     return "Zerg - 2 Base Muta Rush"
-                if count_buildings("Hatchery", 390) >= 3:
+                if base_count_at(buildings, "Hatchery", 390) >= 3:
                     return "Zerg - 3 Base Macro (Pool First)"
                 return base_name
 
         # --- PROTOSS ---
         elif race == "Protoss":
-            nexus_times_local = get_times("Nexus")
-            second_nexus_time = nexus_times_local[1] if len(nexus_times_local) >= 2 else 9999
+            # Base counting that includes the pre-placed main: real
+            # replays fire only a "born" event (no init) for the
+            # game-start Nexus, so a raw ``nexus_times[1]`` / ``len(...)``
+            # missed the main and pointed one base too far. nth_base_start
+            # counts the main as base #1, so n=2 is the natural; base_count_at
+            # totals all bases including the main.
+            second_nexus_time = nth_base_start(buildings, "Nexus", 2)
+            total_nexuses = base_count_at(buildings, "Nexus")
 
             if has_proxy_building("PhotonCannon", 270):
                 return "Protoss - Cannon Rush"
@@ -249,9 +261,9 @@ class OpponentStrategyDetector(BaseStrategyDetector):
             if (3 <= count_buildings("Gateway", 390) <= 5) and has_blink and second_nexus_time > 390:
                 return "Protoss - Blink All-In"
 
-            if len(nexus_times_local) >= 3 and count_units("Probe", 400) > 40:
+            if total_nexuses >= 3 and count_units("Probe", 400) > 40:
                 return "Protoss - Standard Macro (CIA)"
-            if len(nexus_times_local) >= 2 and nexus_times_local[1] < 390:
+            if second_nexus_time < 390:
                 return "Protoss - Standard Expand"
 
             # Composition fallbacks. count_units is prereq-aware
