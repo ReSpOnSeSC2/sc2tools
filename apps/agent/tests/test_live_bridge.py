@@ -186,6 +186,48 @@ def test_pulse_lookup_is_called_with_opponent_hints() -> None:
         bridge.stop()
 
 
+def test_pulse_lookup_passes_streamer_region_as_hint() -> None:
+    """In 1v1 the opponent shares the streamer's server. The bridge
+    forwards the streamer's region (derived from their toon handle) to
+    PulseClient so same-name accounts across regions disambiguate."""
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    pulse = _StubPulseClient(
+        profile=OpponentProfile(name="OppPlayer", mmr=3500),
+    )
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle,
+        pulse=pulse,
+        user_name_hint="Streamer",
+        user_toon_handle="1-S2-1-9999",  # region byte 1 → NA
+    )
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event())
+        assert _wait_for(lambda: len(pulse.calls) >= 1)
+        assert pulse.calls[0]["region"] == "NA"
+    finally:
+        bridge.stop()
+
+
+def test_pulse_lookup_region_hint_absent_without_handle() -> None:
+    """No streamer toon handle yet → region hint is None, not a wrong
+    guess. (Regression guard for the default arg.)"""
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    pulse = _StubPulseClient(
+        profile=OpponentProfile(name="OppPlayer", mmr=3500),
+    )
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle, pulse=pulse, user_name_hint="Streamer",
+    )
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event())
+        assert _wait_for(lambda: len(pulse.calls) >= 1)
+        assert pulse.calls[0]["region"] is None
+    finally:
+        bridge.stop()
+
+
 def test_in_progress_does_not_refetch_pulse() -> None:
     """A periodic MATCH_IN_PROGRESS tick re-emits opponent state from
     the cached context — it must NOT spam Pulse with one lookup per

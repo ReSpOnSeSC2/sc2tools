@@ -63,6 +63,14 @@ DEFAULT_RETRY_BASE_SEC = 0.4
 # output label.
 PULSE_REGION_CODE_TO_LABEL = {1: "US", 2: "EU", 3: "KR", 5: "CN"}
 PULSE_REGION_LABEL_TO_CODE = {v: k for k, v in PULSE_REGION_CODE_TO_LABEL.items()}
+# The agent's region helper (``live/region.py``, mirroring the cloud's
+# ``regionFromToonHandle.js``) labels the Americas server "NA", but
+# SC2Pulse's own label for region code 1 is "US". Accept "NA" as an
+# alias so a region hint derived from the streamer's toon handle still
+# resolves to code 1 and contributes to candidate scoring. (SEA — byte
+# 6 — has no distinct SC2Pulse region and intentionally stays unmapped,
+# so it degrades to "no region constraint" rather than mis-filtering.)
+PULSE_REGION_LABEL_TO_CODE["NA"] = 1
 
 _RACE_CANONICAL = {
     "z": "Zerg",
@@ -185,6 +193,27 @@ def _split_battletag(account_handle: Optional[str]) -> Optional[str]:
     return account_handle.split("#", 1)[0] or None
 
 
+def _strip_clan_tag(name: str) -> str:
+    """Drop a leading clan tag from an in-game name.
+
+    SC2 renders clan membership as a bracketed prefix, e.g.
+    ``[oM]Cure`` or ``[Clan] Player``. SC2Pulse indexes the bare
+    account name, so a ``/character/search?term=[oM]Cure`` query misses
+    while ``term=Cure`` hits. Mirror the post-game pipeline
+    (``replay_pipeline.py``), which already strips on the first ``]``.
+
+    Only strips when the name *starts* with ``[`` so a literal bracket
+    mid-name (rare, but legal) isn't mangled. Falls back to the
+    original when the de-tagged remainder would be empty (a name that
+    is nothing but a bracketed token).
+    """
+    if name.startswith("[") and "]" in name:
+        tail = name.split("]", 1)[1].strip()
+        if tail:
+            return tail
+    return name
+
+
 class _Cache:
     """Tiny TTL+LRU dict — 5-minute window, 256-entry cap.
 
@@ -303,7 +332,7 @@ class PulseClient:
         profile with the fields we have, so the widget can render
         opponent name + race even if MMR is missing.
         """
-        name_clean = (name or "").strip()
+        name_clean = _strip_clan_tag((name or "").strip())
         if not name_clean:
             return None
         cached = self._cache.get(name_clean, region, race)

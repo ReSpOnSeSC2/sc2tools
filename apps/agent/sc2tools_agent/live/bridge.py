@@ -310,10 +310,18 @@ class LiveBridge:
                 )
                 self._current = ctx
                 if opp and opp.name:
+                    # Region hint: in 1v1 the opponent shares the
+                    # streamer's server, so the streamer's own region
+                    # (derived from their toon handle) disambiguates
+                    # same-name accounts across regions and lifts the
+                    # candidate score. The local SC2 ``/game`` API never
+                    # exposes the opponent's region, so this is the only
+                    # region signal available at game start.
                     self._dispatch_pulse_lookup(
                         game_key=event.game_key,
                         name=opp.name,
                         race=opp.race,
+                        region=self._user_region,
                     )
             else:
                 # Same match — just refresh per-event fields.
@@ -350,9 +358,10 @@ class LiveBridge:
         game_key: str,
         name: str,
         race: Optional[str],
+        region: Optional[str] = None,
     ) -> Future:
         future = self._executor.submit(
-            self._pulse.resolve, name=name, race=race,
+            self._pulse.resolve, name=name, race=race, region=region,
         )
         future.add_done_callback(
             lambda f: self._on_pulse_done(game_key=game_key, future=f),
