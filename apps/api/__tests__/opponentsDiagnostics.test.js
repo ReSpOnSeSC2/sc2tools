@@ -294,9 +294,12 @@ describe("OpponentsService.getPulseRaceBreakdown", () => {
     expect(out.races).toHaveLength(3);
     expect(out.topRace).toBe("Protoss");
     expect(out.topMmr).toBe(5584);
-    // The id list passed to SC2Pulse prefers the resolved character id.
+    // The id list prefers the resolved character id, and the region
+    // hint is derived from the toon handle ("1-..." → NA) so the
+    // breakdown queries only that region's current season.
     expect(pulseMmr.getRaceBreakdown).toHaveBeenCalledWith(
       expect.arrayContaining(["107665"]),
+      { preferredRegion: "NA" },
     );
   });
 
