@@ -50,6 +50,7 @@ const {
 const {
   buildClassifierSet,
   isLadderMap,
+  LADDER_CLASSIFY_VERSION,
 } = require(path.join(__dirname, "..", "..", "util", "isLadderMap"));
 
 const DEFAULT_BATCH = 500;
@@ -82,7 +83,7 @@ async function backfillUser(db, userId, ladderSet, opts) {
   const games = db.collection(COLLECTIONS.GAMES);
   const cursor = games.find(
     { userId },
-    { projection: { _id: 0, gameId: 1, map: 1, isLadderMap: 1 } },
+    { projection: { _id: 0, gameId: 1, map: 1, isLadderMap: 1, isLadderMapV: 1 } },
   );
 
   /** @type {Array<{filter: object, update: object}>} */
@@ -107,11 +108,19 @@ async function backfillUser(db, userId, ladderSet, opts) {
     scanned += 1;
     if (typeof row.gameId !== "string" || row.gameId.length === 0) continue;
     const next = isLadderMap(row.map, ladderSet);
-    if (row.isLadderMap === next) continue; // already correct
+    // Skip only when both the boolean AND the classifier version are
+    // already current — so a logic/list bump re-stamps even unchanged
+    // booleans, keeping the per-doc version in lockstep with ingest +
+    // the startup job.
+    if (row.isLadderMap === next && row.isLadderMapV === LADDER_CLASSIFY_VERSION) {
+      continue;
+    }
     planned += 1;
     ops.push({
       filter: { userId, gameId: row.gameId },
-      update: { $set: { isLadderMap: next } },
+      update: {
+        $set: { isLadderMap: next, isLadderMapV: LADDER_CLASSIFY_VERSION },
+      },
     });
     if (ops.length >= opts.batch) await flush();
   }

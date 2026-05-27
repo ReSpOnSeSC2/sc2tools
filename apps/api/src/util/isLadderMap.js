@@ -22,6 +22,13 @@
  * variations without a brittle exact-string match.
  */
 
+// Bump whenever the classification logic or ALL_LADDER_MAPS changes in
+// a way that should re-stamp existing games. The startup backfill job
+// records this per game (``isLadderMapV``) and reclassifies any game
+// not at the current version on the next deploy, then self-skips. v1
+// was the current-pool-only classifier; v2 is the all-seasons set.
+const LADDER_CLASSIFY_VERSION = 2;
+
 // All LotV ladder maps (1v1 + 2v2/3v3/4v4) across every season, from
 // the Liquipedia Ladder Map Timeline. Over-inclusive by design: an
 // extra name only ever costs a false "ladder" on a custom game played
@@ -352,6 +359,7 @@ function isLadderMap(mapName, ladderSet) {
 
 module.exports = {
   ALL_LADDER_MAPS,
+  LADDER_CLASSIFY_VERSION,
   normalizeMapName,
   buildLadderMapSet,
   buildClassifierSet,

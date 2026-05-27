@@ -3,7 +3,11 @@
 const express = require("express");
 const { validateGameRecord } = require("../validation/gameRecord");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
-const { buildClassifierSet, isLadderMap } = require("../util/isLadderMap");
+const {
+  buildClassifierSet,
+  isLadderMap,
+  LADDER_CLASSIFY_VERSION,
+} = require("../util/isLadderMap");
 
 /**
  * /v1/games — list, get, ingest from agent.
@@ -181,8 +185,11 @@ function buildGamesRouter(deps) {
         // FilterBar's ladder / non-ladder filter has a stored boolean
         // to $match on. Always stamped — the classifier set is never
         // empty (the historical list is baked in), so every ingest gets
-        // a real true/false rather than an "unknown" gap.
+        // a real true/false rather than an "unknown" gap. ``isLadderMapV``
+        // records which classifier version produced it so the startup
+        // backfill can reclassify only when the logic/list changes.
         game.isLadderMap = isLadderMap(game.map, ladderMapSet);
+        game.isLadderMapV = LADDER_CLASSIFY_VERSION;
         // GamesService.upsert now writes the slim row to ``games``
         // and forwards the heavy fields to GameDetailsService. A
         // detail-store failure (R2 down, Mongo gameDetails write

@@ -12,7 +12,10 @@
 const { MongoMemoryServer } = require("mongodb-memory-server");
 
 const { connect } = require("../src/db/connect");
-const { buildLadderMapSet } = require("../src/util/isLadderMap");
+const {
+  buildLadderMapSet,
+  LADDER_CLASSIFY_VERSION,
+} = require("../src/util/isLadderMap");
 const {
   backfillUser,
 } = require("../src/db/migrations/2026-05-27-backfill-is-ladder-map");
@@ -53,7 +56,11 @@ describe("backfill-is-ladder-map migration", () => {
       mk("g1", "Site Delta LE"), // ladder (edition tag tolerated)
       mk("g2", "Some Arcade Map"), // non-ladder
       mk("g3", "Concord"), // team-ladder map -> ladder
-      mk("g4", "Site Delta", { isLadderMap: true }), // already correct
+      // Already correct AND at the current classifier version -> skipped.
+      mk("g4", "Site Delta", {
+        isLadderMap: true,
+        isLadderMapV: LADDER_CLASSIFY_VERSION,
+      }),
     ]);
 
     const r = await backfillUser(db.db, "u1", ladderSet, {
@@ -61,7 +68,7 @@ describe("backfill-is-ladder-map migration", () => {
       batch: 500,
     });
     expect(r.scanned).toBe(4);
-    expect(r.planned).toBe(3); // g4 skipped
+    expect(r.planned).toBe(3); // g4 skipped (correct + current version)
 
     const rows = Object.fromEntries(
       (await db.games.find({ userId: "u1" }).toArray()).map((g) => [

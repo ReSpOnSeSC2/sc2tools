@@ -12,21 +12,24 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Migration notes
 
-- **Ladder classification now spans all seasons.** The ladder /
-  non-ladder map filter was matching games only against the *current*
-  ladder rotation, so any game played on a ladder map from a past
-  season (since rotated out) was wrongly bucketed as "custom". The
-  classifier now uses `ALL_LADDER_MAPS` — the full LotV 1v1 + team
-  ladder history (sourced from Liquipedia's Ladder Map Timeline) —
-  unioned with the live current pool, baked into `util/isLadderMap.js`
-  so it works even when Liquipedia is unreachable. New ingests are
-  classified against this set automatically. **If you previously ran
-  the `isLadderMap` backfill against the current-pool-only logic,
-  re-run it once** to reclassify retired-map games from custom →
-  ladder:
-  ``node apps/api/src/db/migrations/2026-05-27-backfill-is-ladder-map.js``
-  (it re-evaluates every game and only writes the ones whose
-  classification changed).
+- **Ladder classification now spans all seasons (auto-reclassifies on
+  deploy).** The ladder / non-ladder map filter was matching games only
+  against the *current* ladder rotation, so any game played on a ladder
+  map from a past season (since rotated out) was wrongly bucketed as
+  "custom". The classifier now uses `ALL_LADDER_MAPS` — the full LotV
+  1v1 + team ladder history (sourced from Liquipedia's Ladder Map
+  Timeline) — unioned with the live current pool, baked into
+  `util/isLadderMap.js` so it works even when Liquipedia is unreachable.
+  Each game records the classifier version that stamped it
+  (`isLadderMapV`); the startup backfill job reclassifies any game not
+  at the current version (`LADDER_CLASSIFY_VERSION`) on the next deploy,
+  then self-skips. So **no manual step is needed** — merging + deploying
+  reclassifies existing history automatically (bump
+  `LADDER_CLASSIFY_VERSION` whenever the map list changes to trigger a
+  fresh pass). Disable the auto-pass with
+  `SC2TOOLS_LADDER_BACKFILL_DISABLED=1`; the one-shot
+  `node apps/api/src/db/migrations/2026-05-27-backfill-is-ladder-map.js`
+  remains for a manual run.
 
 - **Ladder-map backfill.** The new ladder / non-ladder map filter
   `$match`es on a stored `isLadderMap` boolean that only fresh ingests
