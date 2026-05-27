@@ -42,7 +42,7 @@ const { buildLadderMapSet, isLadderMap } = require("../util/isLadderMap");
  *   overlayLive?: import('../services/overlayLive').OverlayLiveService,
  *   overlayTokens?: import('../services/types').OverlayTokensService,
  *   liveGameBroker?: import('../services/liveGameBroker').LiveGameBroker,
- *   ladderMapPool?: { get(): Promise<{ maps: string[] }> },
+ *   ladderMapPool?: { get(): Promise<{ maps: string[], teamMaps?: string[] }> },
  *   io?: import('socket.io').Server,
  *   auth: import('express').RequestHandler,
  * }} deps
@@ -143,7 +143,15 @@ function buildGamesRouter(deps) {
       if (deps.ladderMapPool && typeof deps.ladderMapPool.get === "function") {
         try {
           const pool = await deps.ladderMapPool.get();
-          ladderMapSet = buildLadderMapSet(pool && pool.maps);
+          // "Ladder map" spans 1v1 AND team (2v2/3v3/4v4) pools so the
+          // FilterBar's ladder bucket includes team-ladder games. The
+          // 1v1-only ``maps`` field stays the Bingo / season-catalog
+          // pool; ``teamMaps`` was added alongside it.
+          const all = [
+            ...((pool && pool.maps) || []),
+            ...((pool && pool.teamMaps) || []),
+          ];
+          ladderMapSet = buildLadderMapSet(all);
         } catch (err) {
           if (req.log) {
             req.log.warn(
