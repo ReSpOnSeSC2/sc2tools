@@ -77,10 +77,14 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
         calls.push({ kind: "any", ids, preferredRegion: opts?.preferredRegion });
         return impl(ids[0], opts?.preferredRegion);
       }),
+      getCurrentMmrByToon: jest.fn(async (toon) => {
+        calls.push({ kind: "toon", toon });
+        return impl(toon, undefined);
+      }),
     };
   }
 
-  test("derives region from toonHandle without any Pulse call", async () => {
+  test("derives region from toonHandle even when the toon MMR fallback misses", async () => {
     const pulseMmr = makePulseStub(async () => null);
     const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
       pulseMmr,
@@ -91,8 +95,12 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
       pulseId: baseGame.pulseId,
     });
     expect(row.region).toBe("NA");
-    // No pulseCharacterId on the row → no Pulse call attempted.
-    expect(pulseMmr.calls).toEqual([]);
+    // No pulseCharacterId → the toon-handle fallback is attempted, but
+    // it returned null so no mmr lands. Region is still derived cheaply.
+    expect(pulseMmr.calls).toEqual([
+      { kind: "toon", toon: baseGame.toonHandle },
+    ]);
+    expect(row.mmr).toBeUndefined();
   });
 
   test("region derivation maps every Blizzard region byte", async () => {
@@ -188,13 +196,39 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
     expect(pulseMmr.calls.length).toBe(1);
   });
 
-  test("toon-only rows (no pulseCharacterId) skip Pulse entirely", async () => {
+  test("toon-only rows (no pulseCharacterId) fetch MMR via the toon-handle fallback", async () => {
     const pulseMmr = makePulseStub(async () => ({ mmr: 4321, region: "NA" }));
     const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
       pulseMmr,
     });
     await opponents.recordGame("u1", { ...baseGame });
-    expect(pulseMmr.calls).toEqual([]);
+    // No pulseCharacterId → resolves MMR straight from the toon handle
+    // so a toon-only opponent isn't stuck on "—" until the cron resolves
+    // a character id.
+    expect(pulseMmr.calls).toEqual([
+      { kind: "toon", toon: baseGame.toonHandle },
+    ]);
+    const row = await db.opponents.findOne({
+      userId: "u1",
+      pulseId: baseGame.pulseId,
+    });
+    expect(row.mmr).toBe(4321);
+    expect(row.region).toBe("NA");
+  });
+
+  test("toon-only fallback is skipped when the client lacks getCurrentMmrByToon", async () => {
+    // An older / partial pulseMmr without toon support must still be
+    // safe: no character id and no toon method → no fetch, no throw.
+    const pulseMmr = {
+      getCurrentMmr: jest.fn(async () => ({ mmr: 4321, region: "NA" })),
+      getCurrentMmrForAny: jest.fn(async () => ({ mmr: 4321, region: "NA" })),
+    };
+    const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
+      pulseMmr,
+    });
+    await opponents.recordGame("u1", { ...baseGame });
+    expect(pulseMmr.getCurrentMmr).not.toHaveBeenCalled();
+    expect(pulseMmr.getCurrentMmrForAny).not.toHaveBeenCalled();
     const row = await db.opponents.findOne({
       userId: "u1",
       pulseId: baseGame.pulseId,

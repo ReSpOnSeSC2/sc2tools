@@ -34,6 +34,7 @@ const express = require("express");
  *   adminEvents: import('../services/adminEvents').AdminEventsService,
  *   gdpr: import('../services/gdpr').GdprService,
  *   games: import('../services/games').GamesService,
+ *   opponents: import('../services/types').OpponentsService,
  *   perGame: import('../services/types').PerGameComputeService,
  *   auth: import('express').RequestHandler,
  *   isAdmin: (req: any) => boolean,
@@ -131,6 +132,49 @@ function buildAdminRouter(deps) {
           { limit, before },
         );
         res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // Identity / MMR diagnostics for a single opponent — "why is the
+  // Pulse ID or MMR missing?". Read-only; inferred from stored fields,
+  // no SC2Pulse traffic.
+  router.get(
+    "/admin/users/:userId/opponents/:pulseId/diagnostics",
+    async (req, res, next) => {
+      try {
+        const result = await deps.opponents.diagnoseIdentity(
+          String(req.params.userId),
+          String(req.params.pulseId),
+        );
+        if (!result) {
+          res.status(404).json({ error: { code: "opponent_not_found" } });
+          return;
+        }
+        res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // Force a fresh SC2Pulse resolve + MMR refetch for one opponent,
+  // bypassing the throttle windows. Powers the debug panel's "Retry".
+  router.post(
+    "/admin/users/:userId/opponents/:pulseId/retry-pulse",
+    async (req, res, next) => {
+      try {
+        const result = await deps.opponents.retryPulseResolution(
+          String(req.params.userId),
+          String(req.params.pulseId),
+        );
+        if (!result) {
+          res.status(404).json({ error: { code: "opponent_not_found" } });
+          return;
+        }
+        res.status(202).json(result);
       } catch (err) {
         next(err);
       }
