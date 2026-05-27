@@ -294,14 +294,14 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
         userId: "u1",
         gameId: "g1",
         date: new Date("2026-05-01T12:00:00Z"),
-        opponent: { pulseId: "1-S2-1-1", toonHandle: "1-S2-1-1" },
+        opponent: { pulseId: "1-S2-1-1", toonHandle: "1-S2-1-1", race: "Protoss" },
       },
       {
         userId: "u1",
         gameId: "g2",
         date: new Date("2026-05-02T12:00:00Z"),
         // Pre-existing in-replay agent MMR — must NOT be overwritten.
-        opponent: { pulseId: "1-S2-1-1", toonHandle: "1-S2-1-1", mmr: 3000 },
+        opponent: { pulseId: "1-S2-1-1", toonHandle: "1-S2-1-1", race: "Protoss", mmr: 3000 },
       },
       {
         // Different opponent — must NOT be touched by this backfill.
@@ -315,6 +315,12 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
     const pulseMmr = {
       getCurrentMmr: jest.fn(async () => ({ mmr: 4800, region: "NA" })),
       getCurrentMmrForAny: jest.fn(async () => ({ mmr: 4800, region: "NA" })),
+      // Per-race breakdown drives the race-correct game restamp. The
+      // opponent played Protoss in g1, so their Protoss rating is what
+      // gets stamped.
+      getRaceBreakdown: jest.fn(async () => [
+        { race: "Protoss", mmr: 4800, region: "NA" },
+      ]),
     };
     const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
       pulseResolver: resolver,

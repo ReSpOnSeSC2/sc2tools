@@ -170,6 +170,14 @@ async function resolveOppMmrBucketWidth(deps, match, requested, trustFloor) {
  * Those games fall into the "missing opponent MMR" rollup rather than
  * polluting a bracket they never belonged to.
  *
+ * Race guard on the fallback: the opponents row carries a *single* MMR
+ * (one race), but a player has a separate rating per race. We only let
+ * the opponents-row MMR stand in for a game when the row's race matches
+ * the race the opponent actually played that game (first-letter match,
+ * tolerant of "Protoss"/"P"). Otherwise a game vs their off-race would
+ * borrow their main-race rating. The per-game snapshot is stamped
+ * race-correctly upstream, so it needs no such check.
+ *
  * @param {Date} trustFloor
  */
 function oppMmrLookupStages(trustFloor) {
@@ -189,7 +197,7 @@ function oppMmrLookupStages(trustFloor) {
               },
             },
           },
-          { $project: { _id: 0, mmr: 1 } },
+          { $project: { _id: 0, mmr: 1, race: 1 } },
         ],
         as: "_opp",
       },
@@ -204,13 +212,37 @@ function oppMmrLookupStages(trustFloor) {
                 vars: {
                   snap: "$opponent.mmr",
                   fallback: { $first: "$_opp.mmr" },
+                  oppRowRace: {
+                    $toUpper: {
+                      $substrCP: [
+                        { $ifNull: [{ $first: "$_opp.race" }, ""] },
+                        0,
+                        1,
+                      ],
+                    },
+                  },
+                  gameRace: {
+                    $toUpper: {
+                      $substrCP: [{ $ifNull: ["$opponent.race", ""] }, 0, 1],
+                    },
+                  },
                 },
                 in: {
                   $cond: [
                     { $isNumber: "$$snap" },
                     "$$snap",
                     {
-                      $cond: [{ $isNumber: "$$fallback" }, "$$fallback", null],
+                      $cond: [
+                        {
+                          $and: [
+                            { $isNumber: "$$fallback" },
+                            { $ne: ["$$oppRowRace", ""] },
+                            { $eq: ["$$oppRowRace", "$$gameRace"] },
+                          ],
+                        },
+                        "$$fallback",
+                        null,
+                      ],
                     },
                   ],
                 },
