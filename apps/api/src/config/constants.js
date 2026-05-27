@@ -47,6 +47,14 @@ const COLLECTIONS = Object.freeze({
   // Admin notification feed — one row per signup/download event.
   // Drives the /admin Dashboard counters + /admin/notifications feed.
   ADMIN_EVENTS: "admin_events",
+  // Global, cross-user SC2Pulse cache. One row per real SC2 account
+  // (keyed by toon handle), shared by every platform user so the
+  // expensive toon→characterId resolution and the current MMR / per-
+  // race breakdown are pulled from sc2pulse.nephest.com ONCE and then
+  // served to everyone who later runs into that opponent. NOT keyed by
+  // userId — the per-user ``opponents`` rows stay private and read
+  // their public Pulse fields from here. See ``services/pulseDirectory.js``.
+  PULSE_ACCOUNTS: "pulse_accounts",
 });
 
 const LIMITS = Object.freeze({

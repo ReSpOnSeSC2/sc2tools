@@ -54,6 +54,12 @@ const NAV: ReadonlyArray<NavItem> = [
     icon: "M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM2 21a8 8 0 0 1 16 0",
   },
   {
+    href: "/admin/global",
+    label: "Global",
+    description: "Platform-wide players and trends",
+    icon: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 0c2.5 2.5 2.5 15.5 0 18m0-18C9.5 5.5 9.5 18.5 12 21M3.5 9h17M3.5 15h17",
+  },
+  {
     href: "/admin/tools",
     label: "Tools",
     description: "Rebuild opponents, wipe games",

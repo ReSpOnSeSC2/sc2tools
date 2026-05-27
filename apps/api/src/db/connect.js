@@ -26,6 +26,7 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   userBackups: import('mongodb').Collection,
  *   arcadeLeaderboard: import('mongodb').Collection,
  *   adminEvents: import('mongodb').Collection,
+ *   pulseAccounts: import('mongodb').Collection,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -69,6 +70,7 @@ async function connect({ uri, dbName }) {
     userBackups: db.collection(COLLECTIONS.USER_BACKUPS),
     arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
     adminEvents: db.collection(COLLECTIONS.ADMIN_EVENTS),
+    pulseAccounts: db.collection(COLLECTIONS.PULSE_ACCOUNTS),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -245,6 +247,20 @@ async function ensureIndexes(ctx) {
     },
   );
   await ctx.adminEvents.createIndex({ readAt: 1, createdAt: -1 });
+
+  // Global, cross-user SC2Pulse cache (services/pulseDirectory.js).
+  // ``toonHandle`` is the natural key — one row per real SC2 account,
+  // shared by every platform user. The unique index makes the
+  // write-through upsert atomic; ``pulseCharacterId`` is sparse
+  // because a row exists from the first MMR fetch even before a
+  // character id is resolved. ``updatedAt`` powers the admin Global
+  // tab's "recently refreshed" ordering.
+  await ctx.pulseAccounts.createIndex({ toonHandle: 1 }, { unique: true });
+  await ctx.pulseAccounts.createIndex(
+    { pulseCharacterId: 1 },
+    { sparse: true },
+  );
+  await ctx.pulseAccounts.createIndex({ updatedAt: -1 });
 }
 
 module.exports = { connect, ensureIndexes };

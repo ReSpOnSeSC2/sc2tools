@@ -163,6 +163,77 @@ export type HealthResp = {
   };
 };
 
+// ---- Global tracking (/admin/global) ----------------------------------
+
+export type GlobalSummaryResp = {
+  /** Distinct real players tracked across every user (merged by toon). */
+  trackedPlayers: number;
+  /** Raw per-user opponent rows (before the cross-user merge). */
+  opponentRows: number;
+  /** Distinct users who track at least one opponent. */
+  usersTracking: number;
+  totalGames: number;
+  /** Shared SC2Pulse cache coverage. */
+  cache: {
+    total: number;
+    resolved: number;
+    mmrCached: number;
+  };
+  generatedAt: string;
+};
+
+export type GlobalPlayerRow = {
+  pulseId: string;
+  pulseCharacterId: string | null;
+  displayNameSample: string;
+  race: string;
+  gameCount: number;
+  wins: number;
+  losses: number;
+  /** Fraction in [0, 1], computed server-side. */
+  winRate: number;
+  /** How many distinct platform users track this player. */
+  trackedByUsers: number;
+  mmr: number | null;
+  leagueId: number | null;
+  firstSeen: string | null;
+  lastSeen: string | null;
+};
+
+export type GlobalPlayerSort =
+  | "gameCount"
+  | "wins"
+  | "losses"
+  | "winRate"
+  | "trackedByUsers"
+  | "lastSeen"
+  | "firstSeen"
+  | "mmr";
+
+export type GlobalPlayersResp = {
+  items: GlobalPlayerRow[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+  races: string[];
+};
+
+export type GlobalBreakdownRow = {
+  key: string;
+  count: number;
+  wins: number;
+  /** Fraction in [0, 1] from the uploader's perspective. */
+  winRate: number;
+};
+
+export type GlobalBreakdownsResp = {
+  strategies: GlobalBreakdownRow[];
+  builds: GlobalBreakdownRow[];
+  maps: GlobalBreakdownRow[];
+  generatedAt: string;
+};
+
 export type AdminEventType = "user_signup" | "agent_download" | "user_message";
 
 export type AdminEventSignupPayload = {

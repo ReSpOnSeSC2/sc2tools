@@ -47,8 +47,10 @@ const { SeasonsService } = require("./services/seasons");
 const { ArcadeService } = require("./services/arcade");
 const { PulseMmrService } = require("./services/pulseMmr");
 const { AdminService } = require("./services/admin");
+const { AdminGlobalService } = require("./services/adminGlobal");
 const { AdminEventsService } = require("./services/adminEvents");
 const { buildPulseResolver } = require("./services/pulseResolver");
+const { PulseDirectoryService } = require("./services/pulseDirectory");
 const { loadAllMigrations } = require("./db/migrations");
 
 const { buildHealthRouter } = require("./routes/health");
@@ -155,7 +157,18 @@ function makeServices(deps) {
   // on first ingest (typically because sc2pulse.nephest.com was
   // unreachable / rate-limited at that moment). Built once and
   // shared so the in-process LRU cache survives across requests.
-  const pulseResolver = buildPulseResolver({ logger: deps.logger });
+  // Global, cross-user SC2Pulse cache. Built before the resolver +
+  // OpponentsService so both can write through to (and read from) it:
+  // the first user to encounter an opponent pays the SC2Pulse cost,
+  // and every later user — across replicas and process restarts —
+  // gets a fully-filled opponent profile from this shared collection.
+  const pulseDirectory = new PulseDirectoryService(deps.db, {
+    logger: deps.logger,
+  });
+  const pulseResolver = buildPulseResolver({
+    logger: deps.logger,
+    directory: pulseDirectory,
+  });
   // PulseMmrService — shared across services. Originally added as the
   // Tier-3 MMR fallback for the session widget; OpponentsService also
   // uses it to populate ``opponent.mmr`` / ``opponent.region`` on the
@@ -166,7 +179,7 @@ function makeServices(deps) {
   const opponents = new OpponentsService(
     deps.db,
     deps.config.serverPepper,
-    { gameDetails, logger: deps.logger, pulseResolver, pulseMmr },
+    { gameDetails, logger: deps.logger, pulseResolver, pulseMmr, pulseDirectory },
   );
   // GamesService persists heavy fields through GameDetailsService,
   // not directly to a collection — the indirection is what makes
@@ -250,6 +263,14 @@ function makeServices(deps) {
   // AdminService composes db + gdpr; deliberately near the bottom so
   // its dependencies are already constructed.
   const admin = new AdminService({ db: deps.db, gdpr });
+  // Cross-user global tracking for the admin Global tab — merges every
+  // user's opponents / games into platform-wide player, strategy,
+  // build, and map records. Reads the shared Pulse cache for resolve /
+  // MMR coverage counters.
+  const adminGlobal = new AdminGlobalService({
+    db: deps.db,
+    pulseDirectory,
+  });
   return {
     users,
     opponents,
@@ -277,8 +298,10 @@ function makeServices(deps) {
     seasons,
     arcade,
     admin,
+    adminGlobal,
     adminEvents,
     pulseMmr,
+    pulseDirectory,
   };
 }
 
@@ -434,6 +457,7 @@ function mountRoutes(app, deps, services, clerk) {
     SERVICE.ROUTE_PREFIX,
     buildAdminRouter({
       admin: services.admin,
+      adminGlobal: services.adminGlobal,
       adminEvents: services.adminEvents,
       gdpr: services.gdpr,
       games: services.games,
