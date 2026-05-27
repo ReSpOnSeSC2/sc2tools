@@ -16,6 +16,7 @@ const { buildKeepaliveWorker } = require("./services/keepalive");
 const { buildSessionRefresher } = require("./services/sessionRefresher");
 const { buildPulseBackfillJob } = require("./jobs/pulseBackfillJob");
 const { buildLadderMapPoolRefreshJob } = require("./jobs/ladderMapPoolRefreshJob");
+const { buildLadderMapBackfillJob } = require("./jobs/ladderMapBackfillJob");
 const sentry = require("./util/sentry");
 
 async function main() {
@@ -148,6 +149,19 @@ async function main() {
   });
   ladderMapPoolRefresh.start();
 
+  // One-time ladder-map backfill. Stamps ``isLadderMap`` on games that
+  // pre-date the ingest-time classifier so the FilterBar's ladder /
+  // non-ladder filter works on full history without a manual migration
+  // run. Self-skips once every game carries the field; fire-and-forget
+  // so it never blocks boot. Disable with
+  // ``SC2TOOLS_LADDER_BACKFILL_DISABLED=1``.
+  const ladderMapBackfill = buildLadderMapBackfillJob({
+    db,
+    ladderMapPool: /** @type {any} */ (services).seasons.ladderMapPool,
+    logger,
+  });
+  ladderMapBackfill.start();
+
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
@@ -160,6 +174,7 @@ async function main() {
     await pulseBackfill.stop();
     await sessionRefresher.stop();
     await ladderMapPoolRefresh.stop();
+    await ladderMapBackfill.stop();
     await db.close();
     logger.info("shutdown_complete");
     process.exit(0);
