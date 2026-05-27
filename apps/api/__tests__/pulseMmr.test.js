@@ -415,6 +415,35 @@ describe("services/pulseMmr", () => {
     expect(out?.mmr).toBe(5050);
   });
 
+  test("extractCharacterId handles the modern members{} singular-object response", async () => {
+    // The live ``/character/search`` endpoint returns a
+    // ``LadderDistinctCharacter`` whose ``members`` is a SINGULAR object
+    // (not an array), with the canonical id under ``members.character``.
+    // Before the fix this shape resolved to null and the toon-only MMR
+    // path returned "— MMR" until the cloud resolver healed it later.
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/character/search")) {
+        return jsonResponse([
+          {
+            leagueMax: 5,
+            ratingMax: 4600,
+            members: { character: { id: 455840, battlenetId: 4298860 } },
+          },
+        ]);
+      }
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      return jsonResponse([
+        { rating: 4508, region: 1, lastPlayed: "2026-05-24T10:00:00Z" },
+      ]);
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrByToon("1-S2-1-4298860");
+    expect(out?.mmr).toBe(4508);
+    expect(out?.region).toBe("NA");
+  });
+
   test("getCurrentMmrForAny batches every id into a single per-region team call", async () => {
     // The streamer has three saved chips: a NA toon and two numeric
     // SC2Pulse ids on EU. The session widget should pay one
