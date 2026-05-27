@@ -234,6 +234,72 @@ export type GlobalBreakdownsResp = {
   generatedAt: string;
 };
 
+// ---- Global player profile (/admin/global/players/[pulseId]) ----------
+
+/** One platform user's record against a single global player. */
+export type GlobalPlayerProfilePerUser = {
+  userId: string;
+  email: string | null;
+  displayNameSample: string;
+  race: string;
+  gameCount: number;
+  wins: number;
+  losses: number;
+  /** Fraction in [0, 1], computed server-side. */
+  winRate: number;
+  mmr: number | null;
+  firstSeen: string | null;
+  lastSeen: string | null;
+};
+
+export type GlobalPlayerProfileResp = {
+  pulseId: string;
+  pulseCharacterId: string | null;
+  displayNameSample: string;
+  race: string;
+  gameCount: number;
+  wins: number;
+  losses: number;
+  /** Fraction in [0, 1], merged across every user. */
+  winRate: number;
+  trackedByUsers: number;
+  mmr: number | null;
+  leagueId: number | null;
+  firstSeen: string | null;
+  lastSeen: string | null;
+  perUser: GlobalPlayerProfilePerUser[];
+  /** The opponent's own strategies, across all users' games. */
+  strategies: GlobalBreakdownRow[];
+  /** Maps this opponent has been faced on, across all users' games. */
+  maps: GlobalBreakdownRow[];
+  generatedAt: string;
+};
+
+/** One game (owned by some user) played against a global player. */
+export type GlobalPlayerGameRow = {
+  gameId: string;
+  userId: string;
+  userEmail: string | null;
+  date: string | null;
+  result: string | null;
+  myRace: string | null;
+  map: string | null;
+  durationSec: number | null;
+  myMmr: number | null;
+  macroScore: number | null;
+  opponent: {
+    displayName: string;
+    race: string;
+    mmr: number | null;
+    strategy: string | null;
+  };
+};
+
+export type GlobalPlayerGamesResp = {
+  items: GlobalPlayerGameRow[];
+  nextBefore: string | null;
+};
+
 export type AdminEventType = "user_signup" | "agent_download" | "user_message";
 
 export type AdminEventSignupPayload = {
