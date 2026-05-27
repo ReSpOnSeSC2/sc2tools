@@ -146,7 +146,14 @@ export function OpponentsTab({
                 {...sort}
                 width="9rem"
               />
-              <SortableTh col="mmr" label="MMR" {...sort} align="right" width="5.5rem" />
+              <SortableTh
+                col="mmr"
+                label="Last MMR"
+                title="MMR from the most recent game you played against this opponent"
+                {...sort}
+                align="right"
+                width="6.5rem"
+              />
               <SortableTh col="wins" label="W" {...sort} align="right" width="5rem" />
               <SortableTh col="losses" label="L" {...sort} align="right" width="5rem" />
               <SortableTh col="games" label="Games" {...sort} align="right" width="5rem" />
@@ -188,7 +195,7 @@ export function OpponentsTab({
                     className="px-3 py-1.5 text-right tabular-nums text-text-muted"
                     title={
                       typeof o.mmr === "number"
-                        ? "Last known MMR (most recent game)"
+                        ? "MMR from the most recent game you played against this opponent"
                         : "No MMR on record yet"
                     }
                   >
