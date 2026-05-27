@@ -78,6 +78,23 @@ export interface OpponentsService {
     region: string | null;
     gamesRestamped: number;
   } | null>;
+  getPulseRaceBreakdown(
+    userId: string,
+    pulseId: string,
+  ): Promise<{
+    resolved: boolean;
+    races: Array<{
+      race: string;
+      mmr: number;
+      games: number;
+      league: string | null;
+      region: string | null;
+    }>;
+    topRace: string | null;
+    topMmr: number | null;
+    mostPlayedVsYouRace: string | null;
+    mostPlayedVsYouMmr: number | null;
+  } | null>;
 }
 
 export interface GamesService {

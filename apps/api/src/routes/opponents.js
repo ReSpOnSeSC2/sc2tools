@@ -78,6 +78,28 @@ function buildOpponentsRouter(deps) {
     }
   });
 
+  // Per-race SC2Pulse 1v1 MMR breakdown for one of the caller's own
+  // opponents (live SC2Pulse fetch, cached). Powers the opponent
+  // deep-dive's per-race table + the Top-MMR / race-you-faced-most
+  // headline toggle.
+  router.get("/opponents/:pulseId/pulse-races", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const result = await deps.opponents.getPulseRaceBreakdown(
+        auth.userId,
+        String(req.params.pulseId),
+      );
+      if (!result) {
+        res.status(404).json({ error: { code: "not_found" } });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/opponents/:pulseId", async (req, res, next) => {
     try {
       const auth = req.auth;

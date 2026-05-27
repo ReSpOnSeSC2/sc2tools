@@ -47,6 +47,19 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Added
 
+- **Per-race ladder MMR on the opponent deep-dive** — the opponent
+  profile now shows a "Ladder MMR by race" table (current 1v1 MMR,
+  games, league per race) sourced live from SC2Pulse, instead of
+  collapsing an opponent to a single number. Fixes the confusing case
+  where a Protoss main who off-races Zerg surfaced only their (lower)
+  most-recently-played Zerg MMR. The header MMR pill gains a **Top MMR
+  ⇄ Most vs you** toggle (persisted): "Top" shows their highest-rated
+  race; "Most vs you" shows the race they played *you* the most (the
+  race they've actually queued against you, broken down from your game
+  history). New `GET /v1/opponents/:pulseId/pulse-races` endpoint +
+  `PulseMmrService.getRaceBreakdown`. The single stored MMR remains the
+  fallback when SC2Pulse can't resolve the opponent.
+
 - **Ladder-map and game-size filters in the global FilterBar** — two
   new segmented controls drive every analyzer tab (Opponents,
   Strategies, Trends, Maps, Builds) through the shared filter context:

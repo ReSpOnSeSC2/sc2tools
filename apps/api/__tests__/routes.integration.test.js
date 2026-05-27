@@ -306,6 +306,22 @@ describe("HTTP integration", () => {
       expect(res.status).toBe(401);
     });
 
+    test("pulse-races endpoint 404s for an opponent the caller never played", async () => {
+      // Short-circuits on the missing opponents row before any SC2Pulse
+      // call, so this is network-free.
+      const res = await withAuth(
+        request(app).get("/v1/opponents/no-such-opp/pulse-races"),
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test("pulse-races endpoint requires auth", async () => {
+      const res = await request(app).get(
+        "/v1/opponents/1-S2-1-555001/pulse-races",
+      );
+      expect(res.status).toBe(401);
+    });
+
     test("persists toonHandle + pulseCharacterId round-trip", async () => {
       const game = Object.assign(makeGame("opp-cid-game-1", "Victory"), {
         opponent: {

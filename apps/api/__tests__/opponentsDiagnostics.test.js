@@ -245,3 +245,83 @@ describe("OpponentsService.retryPulseResolution", () => {
     expect(res.mmr).toBe(4300);
   });
 });
+
+describe("OpponentsService.getPulseRaceBreakdown", () => {
+  let mongo;
+  let db;
+
+  beforeAll(async () => {
+    mongo = await MongoMemoryServer.create();
+    db = await connect({ uri: mongo.getUri(), dbName: "opp_races_test" });
+  });
+
+  afterAll(async () => {
+    if (db) await db.close();
+    if (mongo) await mongo.stop();
+  });
+
+  beforeEach(async () => {
+    await db.opponents.deleteMany({});
+    await db.games.deleteMany({});
+  });
+
+  test("returns null for an unknown opponent", async () => {
+    const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
+      pulseMmr: { getRaceBreakdown: jest.fn() },
+    });
+    expect(await opponents.getPulseRaceBreakdown("u1", "nope")).toBeNull();
+  });
+
+  test("returns per-race rows + top vs most-played-vs-you headline candidates", async () => {
+    const pulseMmr = {
+      getRaceBreakdown: jest.fn(async () => [
+        { race: "Protoss", mmr: 5584, games: 7387, league: "Master", region: "NA" },
+        { race: "Zerg", mmr: 5081, games: 1163, league: "Master", region: "NA" },
+        { race: "Terran", mmr: 4667, games: 509, league: "Diamond", region: "NA" },
+      ]),
+    };
+    const opponents = new OpponentsService(db, Buffer.alloc(32, 1), { pulseMmr });
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "1-S2-1-77",
+      pulseCharacterId: "107665",
+      toonHandle: "1-S2-1-77",
+      gameCount: 12,
+    });
+    // They went Zerg in all 12 games vs this user → most-played-vs-you
+    // is Zerg, even though Protoss is their higher (top) race.
+    await db.games.insertMany(
+      Array.from({ length: 12 }, (_, i) => ({
+        userId: "u1",
+        gameId: `g${i}`,
+        opponent: { pulseId: "1-S2-1-77", race: "Z" },
+      })),
+    );
+
+    const out = await opponents.getPulseRaceBreakdown("u1", "1-S2-1-77");
+    expect(out.resolved).toBe(true);
+    expect(out.races).toHaveLength(3);
+    expect(out.topRace).toBe("Protoss");
+    expect(out.topMmr).toBe(5584);
+    expect(out.mostPlayedVsYouRace).toBe("Zerg");
+    expect(out.mostPlayedVsYouMmr).toBe(5081);
+    // The id list passed to SC2Pulse prefers the resolved character id.
+    expect(pulseMmr.getRaceBreakdown).toHaveBeenCalledWith(
+      expect.arrayContaining(["107665"]),
+    );
+  });
+
+  test("degrades to resolved:false when SC2Pulse returns nothing", async () => {
+    const pulseMmr = { getRaceBreakdown: jest.fn(async () => []) };
+    const opponents = new OpponentsService(db, Buffer.alloc(32, 1), { pulseMmr });
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "1-S2-1-88",
+      toonHandle: "1-S2-1-88",
+    });
+    const out = await opponents.getPulseRaceBreakdown("u1", "1-S2-1-88");
+    expect(out.resolved).toBe(false);
+    expect(out.races).toEqual([]);
+    expect(out.topRace).toBeNull();
+  });
+});

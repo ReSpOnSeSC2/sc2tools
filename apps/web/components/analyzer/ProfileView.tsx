@@ -5,11 +5,21 @@ import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters } from "@/lib/filterContext";
+import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
-import { fmtMmr, pct1, wrColor } from "@/lib/format";
+import { pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import { AllGamesTable } from "./AllGamesTable";
 import { OpponentDiagnosticsPanel } from "./OpponentDiagnosticsPanel";
+import {
+  HeadlineMmrChip,
+  RaceMmrPanel,
+  isMmrMode,
+  type MmrMode,
+  type PulseRaceBreakdown,
+} from "./OpponentRaceMmr";
+
+const LS_MMR_MODE = "analyzer.opponentMmrMode";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import { MedianTimingsGrid } from "./MedianTimingsGrid";
 import type { MatchupTimings, TimingInfo } from "./MedianTimingsGrid";
@@ -96,6 +106,19 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   const { data, isLoading } = useApi<OpponentProfileResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}`,
   );
+  // Per-race SC2Pulse breakdown — fetched in parallel (live, cached
+  // server-side) so it doesn't block the main profile render. Drives
+  // the header MMR chip + the "Ladder MMR by race" panel.
+  const { data: races, isLoading: racesLoading } =
+    useApi<PulseRaceBreakdown>(
+      `/v1/opponents/${encodeURIComponent(pulseId)}/pulse-races`,
+      { revalidateOnFocus: false },
+    );
+  const [mmrMode, setMmrMode] = useLocalStorageState<MmrMode>(
+    LS_MMR_MODE,
+    "top",
+    isMmrMode,
+  );
   // Lifted filter state — clicking a row label in the H2H "Maps"
   // view, or a cell in the "Builds" matrix, narrows the All-games
   // table and the by-map / by-strategy summary cards below it. The
@@ -168,7 +191,11 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-h2 font-semibold">{data.name || "unnamed"}</h1>
-            <LastMmrChip mmr={data.mmr} />
+            <HeadlineMmrChip
+              breakdown={races}
+              mode={mmrMode}
+              fallbackMmr={data.mmr}
+            />
             <MergedToonsChip handles={data.mergedToonHandles} />
           </div>
           <ProfilePulseLine
@@ -194,6 +221,13 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
           />
         </div>
       </div>
+
+      <RaceMmrPanel
+        breakdown={races}
+        isLoading={racesLoading}
+        mode={mmrMode}
+        onModeChange={setMmrMode}
+      />
 
       <OpponentDiagnosticsPanel
         collapsible
@@ -414,36 +448,6 @@ function buildProfileQuery(since: string | undefined, until: string | undefined)
  * comfortably alongside the h1 on both mobile and desktop without
  * crowding the stat strip.
  */
-/**
- * Last-known MMR pill rendered in the profile header next to the
- * opponent's name. Sources the ``opponent.mmr`` stamped onto the most
- * recent game we've ingested — the agent prefers SC2Pulse at upload
- * time and falls back to the in-replay value, so this is the freshest
- * rating we have for them. Hidden entirely when null/missing so empty
- * profiles look identical to today.
- *
- * Visual: same pill primitive as ``MergedToonsChip`` for visual rhyme,
- * but accent-coloured so MMR reads as a stat (not a disclosure). Sits
- * inside the flex-wrap row, so it slots cleanly under the title on
- * narrow viewports and inline with the title on desktop.
- */
-function LastMmrChip({ mmr }: { mmr?: number | null }) {
-  if (typeof mmr !== "number" || !Number.isFinite(mmr) || mmr <= 0) {
-    return null;
-  }
-  return (
-    <span
-      role="note"
-      aria-label={`Last known MMR ${Math.round(mmr)}`}
-      title="Last known MMR — most recent game on record"
-      className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-accent tabular-nums"
-    >
-      <span className="text-accent/70">MMR</span>
-      <span>{fmtMmr(mmr)}</span>
-    </span>
-  );
-}
-
 function MergedToonsChip({
   handles,
 }: {
