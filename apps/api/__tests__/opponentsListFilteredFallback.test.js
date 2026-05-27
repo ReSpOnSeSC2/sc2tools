@@ -165,6 +165,66 @@ describe("OpponentsService._listFiltered identity fallback", () => {
     expect(out.items[0].pulseCharacterId).toBe("NEW_VALUE");
   });
 
+  test("map_pool / game_size route to the filtered path and narrow opponents", async () => {
+    // Regression for the Opponents-tab fast-path bug: picking only
+    // Maps=Ladder or Players=1v1 (no date/race/etc.) used to leave
+    // hasFilters() false, so the list served cached counters and
+    // ignored the filter — every opponent still showed.
+    const userId = "u_pool";
+    // Three opponents, each with one game carrying the classification
+    // fields the ingest/backfill stamps.
+    const mkOpp = (pulseId, name) => ({
+      userId,
+      pulseId,
+      toonHandle: pulseId,
+      displayNameSample: name,
+      race: "T",
+      gameCount: 1,
+      wins: 1,
+      losses: 0,
+      firstSeen: new Date("2026-05-01"),
+      lastSeen: new Date("2026-05-01"),
+    });
+    await db.opponents.insertMany([
+      mkOpp("1-S2-1-1", "LadderSolo"),
+      mkOpp("1-S2-1-2", "LadderTeam"),
+      mkOpp("1-S2-1-3", "Custom1v1"),
+    ]);
+    const mkGame = (gameId, pulseId, name, extra) => ({
+      userId,
+      gameId,
+      date: new Date("2026-05-01"),
+      result: "Victory",
+      myRace: "Protoss",
+      map: gameId,
+      durationSec: 600,
+      opponent: { pulseId, toonHandle: pulseId, displayName: name, race: "Terran" },
+      ...extra,
+    });
+    await db.games.insertMany([
+      mkGame("g1", "1-S2-1-1", "LadderSolo", { isLadderMap: true, playerCount: 2 }),
+      mkGame("g2", "1-S2-1-2", "LadderTeam", { isLadderMap: true, playerCount: 4 }),
+      mkGame("g3", "1-S2-1-3", "Custom1v1", { isLadderMap: false, playerCount: 2 }),
+    ]);
+
+    const opponents = new OpponentsService(db, Buffer.alloc(32, 1));
+    const names = async (filters) =>
+      (await opponents.list(userId, { filters })).items
+        .map((r) => r.displayNameSample)
+        .sort();
+
+    // No filters → fast path → all three.
+    expect(await names({})).toEqual(["Custom1v1", "LadderSolo", "LadderTeam"]);
+    // Ladder → only the two ladder-map opponents.
+    expect(await names({ mapPool: "ladder" })).toEqual(["LadderSolo", "LadderTeam"]);
+    // Custom → only the non-ladder opponent.
+    expect(await names({ mapPool: "nonladder" })).toEqual(["Custom1v1"]);
+    // Team → only the >2-player opponent.
+    expect(await names({ gameSize: "team" })).toEqual(["LadderTeam"]);
+    // Ladder + 1v1 → intersection.
+    expect(await names({ mapPool: "ladder", gameSize: "1v1" })).toEqual(["LadderSolo"]);
+  });
+
   test("filtered list leaves rows alone when neither source has the id", async () => {
     // Truly stuck row: opponents row has no pulseCharacterId, games
     // rows don't either. Filtered list returns null/undefined for

@@ -2038,7 +2038,19 @@ function clampLimit(raw, fallback) {
   return Math.min(n, ceiling);
 }
 
-/** True if any of the standard filter fields are set. */
+/**
+ * True if any filter that invalidates the cached opponent counters is
+ * set. When true, ``list`` re-aggregates from the games collection via
+ * ``_listFiltered`` (which runs ``gamesMatchStage``) instead of serving
+ * the lifetime counters off the opponents collection.
+ *
+ * ``regions`` is deliberately absent: it rides the unfiltered fast path
+ * with its own two-tier match (see ``list``), since region doesn't
+ * change a per-opponent total. ``mapPool`` and ``gameSize`` DO change
+ * totals (they slice games by map / player count), and those fields
+ * live on the games documents — not the opponents collection — so they
+ * must force the aggregation path or they'd be silently ignored.
+ */
 function hasFilters(f) {
   if (!f || typeof f !== "object") return false;
   return Boolean(
@@ -2050,7 +2062,9 @@ function hasFilters(f) {
       || typeof f.mmrMin === "number"
       || typeof f.mmrMax === "number"
       || f.oppStrategy
-      || f.build,
+      || f.build
+      || f.mapPool
+      || f.gameSize,
   );
 }
 
