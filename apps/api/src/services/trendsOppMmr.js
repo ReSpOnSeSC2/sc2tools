@@ -37,6 +37,37 @@ const OPP_MMR_MAX_BUCKETS = 80;
  *  under this. */
 const OPP_MMR_BAND_GAMES_MAX = 2000;
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+/**
+ * How recent a game must be for the opponent's *current / last-known*
+ * MMR to count as a fair proxy for their MMR *at game time*.
+ *
+ * Why this guard exists: sc2reader almost never records an opponent's
+ * MMR for ranked 1v1, so the histogram leans on a SC2Pulse-sourced
+ * "current MMR" (stamped onto the game at ingest, or joined from the
+ * opponents row). That value is the opponent's rating *today* — a fine
+ * stand-in for a game played last week, but flatly wrong for a game
+ * from years ago (a 2018 opponent who is 6159 today was nowhere near
+ * 6159 back then). Beyond this window we'd rather show the game as
+ * "missing MMR" than bucket it under a rating it never had. One year
+ * is the agreed trust horizon — roughly a few ladder seasons, where
+ * ratings haven't drifted into a different league.
+ */
+const OPP_MMR_TRUST_MAX_AGE_DAYS = 365;
+
+/**
+ * The cutoff date before which a current/last-known opponent MMR is no
+ * longer trusted as game-time MMR. Pure function of "now" so the
+ * histogram + drilldown + width probe all share one boundary per
+ * request.
+ *
+ * @param {number} [now]
+ * @returns {Date}
+ */
+function oppMmrTrustFloor(now = Date.now()) {
+  return new Date(now - OPP_MMR_TRUST_MAX_AGE_DAYS * DAY_MS);
+}
+
 /**
  * Win rate bucketed by **absolute opponent MMR**, in clean 50- or
  * 100-MMR bands.
@@ -71,8 +102,11 @@ const OPP_MMR_BAND_GAMES_MAX = 2000;
  */
 async function oppMmrBuckets(deps, userId, filters, opts = {}) {
   const match = deps.gamesMatchStage(userId, filters);
-  const width = await resolveOppMmrBucketWidth(deps, match, opts.bucketWidth);
-  const facet = await deps.games.aggregate(oppMmrPipeline(deps, match, width)).toArray();
+  const trustFloor = oppMmrTrustFloor();
+  const width = await resolveOppMmrBucketWidth(deps, match, opts.bucketWidth, trustFloor);
+  const facet = await deps.games
+    .aggregate(oppMmrPipeline(deps, match, width, trustFloor))
+    .toArray();
   return shapeOppMmrBuckets(facet[0], width);
 }
 
@@ -90,13 +124,14 @@ async function oppMmrBuckets(deps, userId, filters, opts = {}) {
  * @param {Deps} deps
  * @param {object} match
  * @param {number | "auto" | undefined} requested
+ * @param {Date} trustFloor Games older than this contribute no MMR.
  */
-async function resolveOppMmrBucketWidth(deps, match, requested) {
+async function resolveOppMmrBucketWidth(deps, match, requested, trustFloor) {
   if (requested === 50 || requested === 100) return requested;
   const rows = await deps.games
     .aggregate([
       { $match: match },
-      ...oppMmrLookupStages(),
+      ...oppMmrLookupStages(trustFloor),
       { $match: { _oppMmr: { $type: "number" } } },
       {
         $group: {
@@ -127,8 +162,17 @@ async function resolveOppMmrBucketWidth(deps, match, requested) {
  * ``{userId, pulseId}``) and skipped at the document level when the
  * snapshot already exists, so the cost is amortised across the
  * majority of games that already carry it.
+ *
+ * ``trustFloor`` gates the result: a game played before it gets
+ * ``_oppMmr: null`` regardless of snapshot/fallback, because the only
+ * MMR we have for it is a *current* rating that can't be trusted as
+ * game-time MMR that far back (see ``OPP_MMR_TRUST_MAX_AGE_DAYS``).
+ * Those games fall into the "missing opponent MMR" rollup rather than
+ * polluting a bracket they never belonged to.
+ *
+ * @param {Date} trustFloor
  */
-function oppMmrLookupStages() {
+function oppMmrLookupStages(trustFloor) {
   return [
     {
       $lookup: {
@@ -153,21 +197,27 @@ function oppMmrLookupStages() {
     {
       $addFields: {
         _oppMmr: {
-          $let: {
-            vars: {
-              snap: "$opponent.mmr",
-              fallback: { $first: "$_opp.mmr" },
-            },
-            in: {
-              $cond: [
-                { $isNumber: "$$snap" },
-                "$$snap",
-                {
-                  $cond: [{ $isNumber: "$$fallback" }, "$$fallback", null],
+          $cond: [
+            { $gte: ["$date", trustFloor] },
+            {
+              $let: {
+                vars: {
+                  snap: "$opponent.mmr",
+                  fallback: { $first: "$_opp.mmr" },
                 },
-              ],
+                in: {
+                  $cond: [
+                    { $isNumber: "$$snap" },
+                    "$$snap",
+                    {
+                      $cond: [{ $isNumber: "$$fallback" }, "$$fallback", null],
+                    },
+                  ],
+                },
+              },
             },
-          },
+            null,
+          ],
         },
       },
     },
@@ -179,12 +229,12 @@ function oppMmrLookupStages() {
  * plus an unknown rollup, in one $facet so the response is one
  * round trip.
  */
-function oppMmrPipeline(deps, match, width) {
+function oppMmrPipeline(deps, match, width, trustFloor) {
   return [
     { $match: match },
     { $addFields: { _bucket: deps.bucketSwitch() } },
     { $match: { _bucket: { $in: ["win", "loss"] } } },
-    ...oppMmrLookupStages(),
+    ...oppMmrLookupStages(trustFloor),
     {
       $facet: {
         bins: [
@@ -274,11 +324,12 @@ async function oppMmrBucketGames(deps, userId, filters, opts = {}) {
     return { ok: true, lo: null, hi: null, total: 0, count: 0, games: [] };
   }
   const match = deps.gamesMatchStage(userId, filters);
+  const trustFloor = oppMmrTrustFloor();
   const pipeline = [
     { $match: match },
     { $addFields: { _bucket: deps.bucketSwitch() } },
     { $match: { _bucket: { $in: ["win", "loss"] } } },
-    ...oppMmrLookupStages(),
+    ...oppMmrLookupStages(trustFloor),
     {
       $match: {
         _oppMmr: { $type: "number", $gte: lo, $lt: hi },
@@ -319,7 +370,9 @@ async function oppMmrBucketGames(deps, userId, filters, opts = {}) {
 module.exports = {
   oppMmrBuckets,
   oppMmrBucketGames,
+  oppMmrTrustFloor,
   OPP_MMR_BUCKET_WIDTHS,
   OPP_MMR_AUTO_WIDTH_CUTOFF,
   OPP_MMR_MAX_BUCKETS,
+  OPP_MMR_TRUST_MAX_AGE_DAYS,
 };
