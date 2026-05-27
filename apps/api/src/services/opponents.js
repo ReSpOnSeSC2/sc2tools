@@ -2179,8 +2179,15 @@ class OpponentsService {
       && this.pulseMmr
       && typeof this.pulseMmr.getRaceBreakdown === "function"
     ) {
+      // The opponent's characterId lives in exactly one region, so hand
+      // the breakdown a region hint (authoritative from the toon handle,
+      // falling back to the stored region) — it then queries only that
+      // region's current season instead of all four.
+      const preferredRegion =
+        regionFromToonHandle(row.toonHandle)
+        || (typeof row.region === "string" ? row.region : null);
       try {
-        races = (await this.pulseMmr.getRaceBreakdown(ids)) || [];
+        races = (await this.pulseMmr.getRaceBreakdown(ids, { preferredRegion })) || [];
       } catch {
         races = [];
       }
