@@ -54,9 +54,10 @@ const DEFAULT_BATCH = 500;
 
 function parseArgs() {
   /** @type {{ dryRun: boolean, batch: number, user: string|null }} */
-  const out = { dryRun: false, batch: DEFAULT_BATCH, user: null };
+  const out = { dryRun: false, batch: DEFAULT_BATCH, user: null, allowFallback: false };
   for (const arg of process.argv.slice(2)) {
     if (arg === "--dry-run") out.dryRun = true;
+    else if (arg === "--allow-fallback") out.allowFallback = true;
     else if (arg.startsWith("--batch=")) {
       const n = Number.parseInt(arg.slice("--batch=".length), 10);
       if (Number.isFinite(n) && n > 0) out.batch = n;
@@ -144,6 +145,17 @@ async function main() {
         "reachability and retry.",
     );
     process.exit(3);
+  }
+  if (pool.source === "fallback" && !args.allowFallback) {
+    console.error(
+      "Refusing to run: the ladder pool resolved to the STALE hardcoded " +
+        "fallback (Liquipedia unreachable AND no cached pool file). " +
+        "Classifying against it would mis-label current-ladder games as " +
+        "custom. Restore network / a persisted ladder-map-pool.json and " +
+        "retry, or pass --allow-fallback if you really intend to use the " +
+        "fallback list.",
+    );
+    process.exit(4);
   }
 
   const client = new MongoClient(uri);
