@@ -180,6 +180,29 @@ describe("util/parseQuery", () => {
       expect(parseFilters({}).excludeTooShort).toBeUndefined();
     });
 
+    test("mapPool ladder/nonladder match an isLadderMap boolean", () => {
+      expect(gamesMatchStage("u1", { mapPool: "ladder" }).isLadderMap).toBe(true);
+      expect(gamesMatchStage("u1", { mapPool: "nonladder" }).isLadderMap).toBe(false);
+      expect(gamesMatchStage("u1", {}).isLadderMap).toBeUndefined();
+    });
+
+    test("gameSize 1v1/team match playerCount", () => {
+      expect(gamesMatchStage("u1", { gameSize: "1v1" }).playerCount).toBe(2);
+      expect(gamesMatchStage("u1", { gameSize: "team" }).playerCount).toEqual({
+        $gt: 2,
+      });
+      expect(gamesMatchStage("u1", {}).playerCount).toBeUndefined();
+    });
+
+    test("parseFilters accepts map_pool and game_size enums, drops junk", () => {
+      expect(parseFilters({ map_pool: "ladder" }).mapPool).toBe("ladder");
+      expect(parseFilters({ map_pool: "nonladder" }).mapPool).toBe("nonladder");
+      expect(parseFilters({ map_pool: "bogus" }).mapPool).toBeUndefined();
+      expect(parseFilters({ game_size: "1v1" }).gameSize).toBe("1v1");
+      expect(parseFilters({ game_size: "team" }).gameSize).toBe("team");
+      expect(parseFilters({ game_size: "2v2" }).gameSize).toBeUndefined();
+    });
+
     test("regions filter parses CSV, drops unknown labels, dedupes", () => {
       expect(parseFilters({ regions: "NA,EU" }).regions).toEqual(["NA", "EU"]);
       expect(parseFilters({ regions: "na, eu, kr" }).regions).toEqual([

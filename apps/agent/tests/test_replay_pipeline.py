@@ -258,6 +258,20 @@ def test_to_payload_omits_my_toon_handle_when_unset():
     assert "myToonHandle" not in payload
 
 
+def test_to_payload_emits_player_count_when_set():
+    """Drives the cloud FilterBar's 1v1 / team game-size filter — the
+    server $matches on ``playerCount`` (2 for 1v1, >2 for team)."""
+    payload = _bare_cloud_game(player_count=4).to_payload()
+    assert payload["playerCount"] == 4
+
+
+def test_to_payload_omits_player_count_when_unset():
+    """Optional both on the agent and the cloud schema; absent count
+    means the cloud records the game as size-unknown."""
+    payload = _bare_cloud_game().to_payload()
+    assert "playerCount" not in payload
+
+
 # -------------------------------------------------------------------------
 # _resolve_my_mmr — streamer's MMR comes through Layer 1 (PlayerInfo.mmr)
 # OR Layer 2 (raw sc2reader player). v0.5.5 shipped a no-op fix that read
@@ -779,6 +793,10 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     # macroScore from the stub bubbles up as the headline number even
     # though ctx.macro_score was None.
     assert payload["macroScore"] == 78
+
+    # all_players had two entries (me + opp) → a 1v1; the cloud's
+    # game-size filter keys off this.
+    assert payload["playerCount"] == 2
 
 
 def test_parse_replay_for_cloud_ships_partial_macro_breakdown_on_score_failure(

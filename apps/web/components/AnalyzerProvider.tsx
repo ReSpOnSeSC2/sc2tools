@@ -17,6 +17,8 @@ type StoredFilters = {
   until?: string;
   regions?: string;
   exclude_too_short?: boolean;
+  map_pool?: "ladder" | "nonladder";
+  game_size?: "1v1" | "team";
 };
 
 // Only the globally-visible FilterBar controls persist across reloads.
@@ -39,6 +41,8 @@ const PERSISTED_KEYS = [
   "until",
   "regions",
   "exclude_too_short",
+  "map_pool",
+  "game_size",
 ] as const;
 
 export function pickPersisted(f: Partial<AnalyzerFilters>): StoredFilters {

@@ -28,6 +28,22 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Added
 
+- **Ladder-map and game-size filters in the global FilterBar** — two
+  new segmented controls drive every analyzer tab (Opponents,
+  Strategies, Trends, Maps, Builds) through the shared filter context:
+  - **Maps · Ladder / Custom**: keep only games on the current SC2
+    ladder map pool (1v1 and team ladder maps both count) or only games
+    on non-pool (custom / arcade) maps. The API stamps an
+    `isLadderMap` boolean on each game at ingest by matching the map
+    name against the live Liquipedia-sourced pool
+    (`LadderMapPoolService`); the FilterBar then `$match`es on it.
+  - **Players · 1v1 / Team**: keep only two-player games or only team
+    games (more than two players). Backed by a new `playerCount` the
+    agent records per replay from the parsed player list.
+  Both filters persist across reloads. Games uploaded before these
+  fields shipped carry no classification and fall out of both buckets
+  until re-uploaded.
+
 - **Phase analytics rollout · build dossier, strategy drill-down,
   opponent profile, and pre-game scouting** — a single calibrated
   phase model (Early / Early-Mid / Mid / Mid-Late / Late) now drives

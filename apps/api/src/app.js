@@ -470,6 +470,7 @@ function mountRoutes(app, deps, services, clerk) {
       overlayLive: services.overlayLive,
       overlayTokens: services.overlayTokens,
       liveGameBroker: services.liveGameBroker,
+      ladderMapPool: services.seasons ? services.seasons.ladderMapPool : undefined,
       io: deps.io,
       auth,
     }),

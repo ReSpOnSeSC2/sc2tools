@@ -46,6 +46,24 @@ export type AnalyzerFilters = {
    * toon_handle's leading byte for rows that pre-date the field.
    */
   regions?: string;
+  /**
+   * Ladder-map filter. "ladder" keeps only games played on a map that
+   * was in the SC2 ladder pool at ingest (1v1 and team ladder maps
+   * both count — the API stamps an ``isLadderMap`` boolean on each game
+   * using the live Liquipedia-sourced pool). "nonladder" keeps only
+   * games on a non-pool (custom / arcade / retired) map. Undefined =
+   * no constraint. Drives every analyzer tab via the shared filter
+   * context.
+   */
+  map_pool?: "ladder" | "nonladder";
+  /**
+   * Game-size filter. "1v1" keeps two-player games; "team" keeps games
+   * with more than two players (2v2 / 3v3 / 4v4). Backed by the
+   * ``playerCount`` the agent records per replay; games uploaded before
+   * that field shipped have no count and fall out of both buckets.
+   * Undefined = no constraint.
+   */
+  game_size?: "1v1" | "team";
   /** Preset id selected in the date filter; not sent to the API. */
   preset?: PresetId;
 };
