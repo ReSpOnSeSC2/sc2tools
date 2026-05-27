@@ -548,6 +548,63 @@ def test_resolve_handles_top_level_character_shape_legacy() -> None:
     assert profile.region == "EU"
 
 
+def test_resolve_strips_clan_tag_from_search_term() -> None:
+    """An in-game name carrying a clan-tag prefix (``[oM]Cure``) must be
+    searched on the bare account name — SC2Pulse indexes the de-tagged
+    name, so the tagged term misses. Regression: live lookups for
+    clan-tagged opponents returned confidence=0.0 / mmr=None."""
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 56}]))
+    session.queue(
+        "/character/search",
+        _ok([
+            {
+                "character": {"id": 55, "name": "Cure#1818", "region": 1},
+                "terranGamesPlayed": 900,
+            }
+        ]),
+    )
+    session.queue("/group/team", _ok([{"rating": 6500, "league": 6}]))
+    client = _make_client(session)
+    profile = client.resolve(name="[oM]Cure", region="NA", race="Terran")
+    assert profile is not None
+    assert profile.mmr == 6500
+    assert profile.name == "Cure"
+    # The search endpoint was queried with the de-tagged term.
+    search_calls = [
+        params for (url, params) in session.calls if url.endswith("/character/search")
+    ]
+    assert search_calls and search_calls[0]["term"] == "Cure"
+
+
+def test_resolve_accepts_na_region_alias() -> None:
+    """The agent's region helper labels region 1 "NA"; SC2Pulse calls
+    it "US". Passing "NA" must still apply the region score so a
+    same-name NA account beats an EU one."""
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 56}]))
+    session.queue(
+        "/character/search",
+        _ok([
+            {  # EU — should lose once the NA region hint applies
+                "character": {"id": 1, "name": "Clone#0001", "region": 2},
+                "terranGamesPlayed": 100,
+            },
+            {  # NA (region code 1) — should win on the region hint
+                "character": {"id": 2, "name": "Clone#0002", "region": 1},
+                "terranGamesPlayed": 100,
+            },
+        ]),
+    )
+    session.queue("/group/team", _ok([{"rating": 5200, "league": 5}]))
+    client = _make_client(session)
+    profile = client.resolve(name="Clone", region="NA", race="Terran")
+    assert profile is not None
+    assert profile.pulse_character_id == 2
+    assert profile.region == "US"  # canonical Pulse label for code 1
+    assert profile.mmr == 5200
+
+
 def test_candidate_label_uses_picked_character_for_modern_shape() -> None:
     """Disambiguation hint (rendered as 'best guess — also: …') must
     surface the real battletag, not '? (?)'. The user-visible bug was
