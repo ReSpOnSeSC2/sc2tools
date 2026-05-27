@@ -72,6 +72,27 @@ PULSE_REGION_LABEL_TO_CODE = {v: k for k, v in PULSE_REGION_CODE_TO_LABEL.items(
 # so it degrades to "no region constraint" rather than mis-filtering.)
 PULSE_REGION_LABEL_TO_CODE["NA"] = 1
 
+
+def _pulse_region_code(value: Any) -> Optional[int]:
+    """Normalise a SC2Pulse region — numeric code (1/2/3/5), label
+    ("US"/"EU"/"KR"/"CN"/"NA"), or numeric string — into a code, or
+    ``None`` when it isn't a region we recognise. Used to reject teams
+    that don't belong to the queried character's region (see
+    ``_fetch_team_for``)."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value in PULSE_REGION_CODE_TO_LABEL else None
+    if isinstance(value, str):
+        v = value.strip()
+        if not v:
+            return None
+        if v.isdigit():
+            code = int(v)
+            return code if code in PULSE_REGION_CODE_TO_LABEL else None
+        return PULSE_REGION_LABEL_TO_CODE.get(v.upper())
+    return None
+
 _RACE_CANONICAL = {
     "z": "Zerg",
     "p": "Protoss",
@@ -471,9 +492,28 @@ class PulseClient:
         # Highest rating wins among the candidate's 1v1 teams (one per
         # race). Pulse returns one entry per (queue, race) team the
         # character has touched this season.
+        #
+        # Region guard: SC2Pulse season battlenetIds are NOT unique
+        # across regions or time — CN's *current* season number can
+        # equal an *ancient* NA/EU/KR season, so a /group/team query
+        # for that number can surface a character's years-old teams
+        # (with a higher long-retired peak) alongside the live ones.
+        # We query a single ``max(battlenetId)`` season here, so the
+        # collision can't bite today, but since we pick the HIGHEST
+        # rating, a stale team would win outright if it ever did. Keep
+        # only teams that belong to the character's own region so the
+        # invariant matches the cloud ``pulseMmr`` path.
+        char_region_code = _pulse_region_code(ch.get("region"))
         best = None
         best_rating = -1
         for t in data:
+            if char_region_code is not None:
+                team_region_code = _pulse_region_code(t.get("region"))
+                if (
+                    team_region_code is not None
+                    and team_region_code != char_region_code
+                ):
+                    continue
             try:
                 r = int(t.get("rating") or -1)
             except (TypeError, ValueError):

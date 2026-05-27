@@ -144,7 +144,11 @@ export function RaceMmrPanel({
     return null;
   }
   const vsYouRace = breakdown.mostPlayedVsYouRace;
-  const canToggle = headlineModesDiffer(breakdown);
+  // Show the toggle whenever there's an actual choice to make (more
+  // than one race). It stays visible even when the two modes happen to
+  // resolve to the same race for this opponent — hiding it then just
+  // looked like the feature was missing.
+  const canToggle = breakdown.races.length >= 2;
   return (
     <Card
       title="Ladder MMR by race"

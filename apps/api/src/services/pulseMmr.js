@@ -434,6 +434,24 @@ class PulseMmrService {
       for (const team of teams) {
         const rating = Number(team && team.rating);
         if (!Number.isFinite(rating) || rating <= 0) continue;
+        // Reject teams that don't belong to the region whose CURRENT
+        // season we're querying. SC2Pulse season battlenetIds are NOT
+        // unique across regions OR time: CN's *current* season number
+        // (e.g. 54) equals an *ancient* NA/EU/KR season number, so a
+        // /group/team query for CN's season returns those regions'
+        // years-old teams for the same character. The single-MMR path
+        // tolerates this — it sorts by lastPlayed, so a stale team
+        // sorts last — but the per-race breakdown picks the highest
+        // rating per race and would otherwise surface a years-old peak
+        // (e.g. a 5920 Protoss from 2024 over the live 5584). Since we
+        // query each region's current season exactly once, keeping only
+        // teams whose own region matches the queried region guarantees
+        // current-season-only candidates. Teams missing a region (some
+        // test fixtures) fall through to the loop's regionCode.
+        const teamRegionCode = pulseRegionCode(team && team.region);
+        if (teamRegionCode !== null && teamRegionCode !== regionCode) {
+          continue;
+        }
         // Dedupe across region queries: SC2Pulse season IDs
         // (battlenetId) are NOT globally unique — NA's season 67,
         // EU's season 67 and KR's season 67 all share ``battlenetId

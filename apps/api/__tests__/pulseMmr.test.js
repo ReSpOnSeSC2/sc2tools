@@ -781,9 +781,15 @@ describe("services/pulseMmr", () => {
     test("keeps the highest-rated team when a race appears twice (multi-region)", async () => {
       const fetchImpl = jest.fn(async (url) => {
         if (url.includes("/season/list/all")) {
-          return jsonResponse([{ battlenetId: 60, region: "US" }]);
+          return jsonResponse([
+            { battlenetId: 60, region: "US" },
+            { battlenetId: 60, region: "EU" },
+          ]);
         }
         if (url.includes("/group/team")) {
+          // battlenetId collides across regions, so each region query
+          // returns both teams; the region-match filter keeps each in
+          // its own iteration.
           return jsonResponse([
             { id: 1, rating: 4800, region: 1, league: 4, members: [{ zergGamesPlayed: 100 }] },
             { id: 2, rating: 5200, region: 2, league: 5, members: [{ zergGamesPlayed: 50 }] },
@@ -795,6 +801,49 @@ describe("services/pulseMmr", () => {
       const races = await svc.getRaceBreakdown(["994428"]);
       expect(races).toHaveLength(1);
       expect(races[0]).toMatchObject({ race: "Zerg", mmr: 5200 });
+    });
+
+    test("ignores stale cross-region teams from a colliding season id (CN-season bug)", async () => {
+      // Regression for PiLiPiLi: CN's CURRENT season (battlenetId 54)
+      // equals an ANCIENT NA season number, so /group/team?season=54
+      // returns this NA character's years-old season-54 teams. Those
+      // had a higher Protoss peak (5920) than the live 5584 — and the
+      // per-race breakdown picks the highest rating per race, so
+      // without the region-match guard the headline showed the stale
+      // peak instead of the current rating.
+      const fetchImpl = jest.fn(async (url) => {
+        if (url.includes("/season/list/all")) {
+          return jsonResponse([
+            { battlenetId: 67, region: "US" },
+            { battlenetId: 54, region: "CN" },
+          ]);
+        }
+        if (url.includes("season=67")) {
+          return jsonResponse([
+            {
+              id: 10, rating: 5584, region: 1, league: 5,
+              lastPlayed: "2026-05-02T04:08:13Z",
+              members: [{ protossGamesPlayed: 23 }],
+            },
+          ]);
+        }
+        if (url.includes("season=54")) {
+          // The NA character's ancient season-54 team, surfaced only
+          // because CN's current season shares battlenetId 54.
+          return jsonResponse([
+            {
+              id: 11, rating: 5920, region: 1, league: 5,
+              lastPlayed: null,
+              members: [{ protossGamesPlayed: 104 }],
+            },
+          ]);
+        }
+        return jsonResponse([]);
+      });
+      const svc = new PulseMmrService({ fetchImpl });
+      const races = await svc.getRaceBreakdown(["107665"]);
+      expect(races).toHaveLength(1);
+      expect(races[0]).toMatchObject({ race: "Protoss", mmr: 5584, games: 23 });
     });
 
     test("returns [] when the character has no 1v1 teams", async () => {

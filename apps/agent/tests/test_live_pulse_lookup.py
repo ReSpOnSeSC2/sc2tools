@@ -649,3 +649,42 @@ def test_candidate_label_uses_picked_character_for_modern_shape() -> None:
     assert label != "? (?)"
     assert "(US)" in label
     assert "Player" in label
+
+
+# ------------------------------------------------- cross-region team guard
+
+
+def test_fetch_team_for_rejects_cross_region_team() -> None:
+    """``/group/team`` can return teams from a *different* region when
+    SC2Pulse season battlenetIds collide across regions/time (CN's
+    current season number equals an ancient NA/EU/KR season). Since we
+    pick the highest rating, a stale cross-region team with a long-
+    retired peak would win outright — so keep only teams that belong to
+    the queried character's own region. Mirrors the cloud ``pulseMmr``
+    region-match guard.
+    """
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 67}]))
+    session.queue(
+        "/group/team",
+        _ok([
+            {
+                "rating": 5584,
+                "region": "US",
+                "members": [{"protossGamesPlayed": 23}],
+            },
+            {
+                # Higher rating, but a different region — must be ignored.
+                "rating": 5920,
+                "region": "EU",
+                "members": [{"protossGamesPlayed": 104}],
+            },
+        ]),
+    )
+    client = _make_client(session)
+    candidate = {
+        "character": {"id": 107665, "region": "US", "name": "PiLiPiLi#411"},
+    }
+    team = client._fetch_team_for(candidate)
+    assert team is not None
+    assert int(team["rating"]) == 5584
