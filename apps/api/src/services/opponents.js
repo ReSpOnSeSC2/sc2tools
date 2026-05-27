@@ -1595,9 +1595,16 @@ class OpponentsService {
    * @param {string|null} pulseCharacterId
    * @param {{mmrFetchedAt?: Date}|null} prior
    * @param {string|null} [preferredRegion]
+   * @param {string|null} [toonHandle]
+   * @param {{ forceFresh?: boolean }} [opts] when ``forceFresh`` is set
+   *   (the admin "Retry" button) we skip the shared-cache READ and the
+   *   per-row freshness window so the pull genuinely hits SC2Pulse — but
+   *   still write the fresh result THROUGH to the shared cache so every
+   *   user gets the refreshed value.
    * @returns {Promise<{mmr: number, region: string|null}|null>}
    */
-  async _fetchOpponentMmrFromPulse(pulseCharacterId, prior, preferredRegion, toonHandle) {
+  async _fetchOpponentMmrFromPulse(pulseCharacterId, prior, preferredRegion, toonHandle, opts = {}) {
+    const forceFresh = opts && opts.forceFresh === true;
     const charId =
       typeof pulseCharacterId === "string" && pulseCharacterId.length > 0
         ? pulseCharacterId
@@ -1616,8 +1623,9 @@ class OpponentsService {
     // this opponent's MMR within the directory's freshness window we
     // reuse it, which is the whole point of the shared layer (and it
     // even bypasses this user's per-row freshness window, so a stale
-    // row gets re-stamped from a peer's fresh pull).
-    if (this.pulseDirectory) {
+    // row gets re-stamped from a peer's fresh pull). Skipped on a
+    // forced refresh so the admin "Retry" always hits SC2Pulse live.
+    if (this.pulseDirectory && !forceFresh) {
       const shared = await this._directoryGetMmr(charId, toon);
       if (shared && typeof shared.mmr === "number" && shared.mmr > 0) {
         return { mmr: Math.round(shared.mmr), region: shared.region || null };
@@ -2158,9 +2166,12 @@ class OpponentsService {
     const derivedRegion = regionFromToonHandle(toon);
     if (derivedRegion) set.region = derivedRegion;
 
-    // Step 2 — fetch MMR. prior=null bypasses the freshness window so a
-    // manual retry always hits SC2Pulse. Uses the character id if we
-    // have one, else the toon-handle fallback.
+    // Step 2 — fetch MMR. ``forceFresh`` bypasses BOTH the per-row
+    // freshness window AND the shared-cache read so a manual retry
+    // always hits SC2Pulse live; the fresh value is still written
+    // through to the shared cache, so this one admin click refreshes
+    // the opponent for every user who tracks them. Uses the character
+    // id if we have one, else the toon-handle fallback.
     let pulseFetched = null;
     try {
       pulseFetched = await this._fetchOpponentMmrFromPulse(
@@ -2168,6 +2179,7 @@ class OpponentsService {
         null,
         derivedRegion,
         toon,
+        { forceFresh: true },
       );
     } catch (err) {
       this.logger.warn(
