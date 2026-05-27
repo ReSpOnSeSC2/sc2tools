@@ -141,31 +141,14 @@ describe("services/pulseMmr", () => {
           { battlenetId: 60, region: "EU", year: 2026, number: 2 },
         ]);
       }
-      if (url.includes("season=60") && url.includes("characterId=994428")) {
-        if (url.includes("season=60")) {
-          // Both regions return one team each. EU is more recently played.
-          if (url.includes("&characterId=994428")) {
-            // Naive split: first call returns US team, second returns EU.
-            // We can disambiguate by checking call order via the mock.
-            const callIdx = fetchImpl.mock.calls.filter((c) =>
-              String(c[0]).includes("/group/team"),
-            ).length;
-            if (callIdx === 1) {
-              return jsonResponse([
-                {
-                  rating: 4800,
-                  lastPlayed: "2026-04-01T10:00:00Z",
-                },
-              ]);
-            }
-            return jsonResponse([
-              {
-                rating: 5343,
-                lastPlayed: "2026-05-01T10:00:00Z",
-              },
-            ]);
-          }
-        }
+      if (url.includes("/group/team") && url.includes("characterId=994428")) {
+        // US and EU share battlenetId 60, so a single ``season=60``
+        // query returns both regions' teams in one response — EU is
+        // more recently played and should win.
+        return jsonResponse([
+          { id: 1, rating: 4800, region: "US", lastPlayed: "2026-04-01T10:00:00Z" },
+          { id: 2, rating: 5343, region: "EU", lastPlayed: "2026-05-01T10:00:00Z" },
+        ]);
       }
       return failureResponse();
     });
@@ -174,6 +157,12 @@ describe("services/pulseMmr", () => {
     expect(result).not.toBeNull();
     expect(result?.mmr).toBe(5343);
     expect(result?.region).toBe("EU");
+    // The shared battlenetId is queried exactly once (deduped), not
+    // once per region.
+    const teamCalls = fetchImpl.mock.calls.filter((c) =>
+      String(c[0]).includes("/group/team"),
+    ).length;
+    expect(teamCalls).toBe(1);
   });
 
   test("uses team.region for the label so cross-region duplicates don't mis-tag (2026-05 fix)", async () => {
@@ -855,6 +844,92 @@ describe("services/pulseMmr", () => {
       });
       const svc = new PulseMmrService({ fetchImpl });
       expect(await svc.getRaceBreakdown(["994428"])).toEqual([]);
+    });
+
+    test("with a region hint, queries only that region's season (one call)", async () => {
+      const fetchImpl = jest.fn(async (url) => {
+        if (url.includes("/season/list/all")) {
+          return jsonResponse([
+            { battlenetId: 67, region: "US" },
+            { battlenetId: 67, region: "EU" },
+            { battlenetId: 67, region: "KR" },
+            { battlenetId: 54, region: "CN" },
+          ]);
+        }
+        if (url.includes("season=67")) {
+          return jsonResponse([
+            { id: 1, rating: 5584, region: 1, league: 5, members: [{ protossGamesPlayed: 23 }] },
+          ]);
+        }
+        return jsonResponse([]);
+      });
+      const svc = new PulseMmrService({ fetchImpl });
+      const races = await svc.getRaceBreakdown(["994428"], {
+        preferredRegion: "NA",
+      });
+      expect(races).toEqual([
+        { race: "Protoss", mmr: 5584, games: 23, league: "Master", region: "NA" },
+      ]);
+      // Exactly one /group/team call — NA's season 67 — not one per region.
+      const teamCalls = fetchImpl.mock.calls.filter((c) =>
+        String(c[0]).includes("/group/team"),
+      );
+      expect(teamCalls).toHaveLength(1);
+      expect(String(teamCalls[0][0])).toContain("season=67");
+    });
+
+    test("without a hint, dedupes the shared season id to one call per distinct season", async () => {
+      // NA/EU/KR all share battlenetId 67; CN is 54. That's 4 regions
+      // but only 2 distinct seasons, so 2 calls (not 4).
+      const fetchImpl = jest.fn(async (url) => {
+        if (url.includes("/season/list/all")) {
+          return jsonResponse([
+            { battlenetId: 67, region: "US" },
+            { battlenetId: 67, region: "EU" },
+            { battlenetId: 67, region: "KR" },
+            { battlenetId: 54, region: "CN" },
+          ]);
+        }
+        if (url.includes("season=67")) {
+          return jsonResponse([
+            { id: 1, rating: 5584, region: 1, league: 5, members: [{ protossGamesPlayed: 23 }] },
+          ]);
+        }
+        return jsonResponse([]);
+      });
+      const svc = new PulseMmrService({ fetchImpl });
+      const races = await svc.getRaceBreakdown(["994428"]);
+      expect(races).toEqual([
+        { race: "Protoss", mmr: 5584, games: 23, league: "Master", region: "NA" },
+      ]);
+      const teamCalls = fetchImpl.mock.calls.filter((c) =>
+        String(c[0]).includes("/group/team"),
+      );
+      expect(teamCalls).toHaveLength(2); // season 67 + season 54
+    });
+
+    test("caches the breakdown for the (long) race TTL", async () => {
+      const fetchImpl = jest.fn(async (url) => {
+        if (url.includes("/season/list/all")) {
+          return jsonResponse([{ battlenetId: 67, region: "US" }]);
+        }
+        return jsonResponse([
+          { id: 1, rating: 5584, region: 1, league: 5, members: [{ protossGamesPlayed: 23 }] },
+        ]);
+      });
+      let now = 1_000_000;
+      const svc = new PulseMmrService({
+        fetchImpl,
+        raceCacheTtlMs: 60 * 60 * 1000,
+        now: () => now,
+      });
+      await svc.getRaceBreakdown(["994428"], { preferredRegion: "NA" });
+      now += 30 * 60 * 1000; // +30 min, within the 1h TTL
+      await svc.getRaceBreakdown(["994428"], { preferredRegion: "NA" });
+      const teamCalls = fetchImpl.mock.calls.filter((c) =>
+        String(c[0]).includes("/group/team"),
+      );
+      expect(teamCalls).toHaveLength(1); // second open served from cache
     });
   });
 });
