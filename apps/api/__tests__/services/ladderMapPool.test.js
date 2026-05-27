@@ -5,9 +5,28 @@ const os = require("os");
 const path = require("path");
 const {
   LadderMapPoolService,
+  parseLadderMaps,
   parseCurrentMaps,
   FALLBACK_POOL,
 } = require("../../src/services/ladderMapPool");
+
+// Mirrors the live Liquipedia ``{{Ladder maps display}}`` template:
+// ``|<mode>_<n>=<Map Name>`` for names, ``|<mode>_<n>text=`` for blurbs.
+const SAMPLE_LADDER_DISPLAY = `
+==Battle.net Legacy of the Void Map Pool==
+{{Ladder maps display
+|1v1_1=10000 Feet
+|1v1_1text=A macro map blurb that must be ignored.
+|1v1_2=Mothership LE
+|1v1_2text=blurb
+|2v2_1=Arctic Flowers
+|2v2_1text=blurb
+|3v3_1=Arkadia
+|4v4_1=Ashen Cradle
+|4v4_2=Concord LE
+}}
+==References==
+`;
 
 const SAMPLE_WIKITEXT = `
 {{Infobox map collection}}
@@ -50,6 +69,29 @@ function buildResponse(wikitext) {
     },
   };
 }
+
+describe("parseLadderMaps (live {{Ladder maps display}} format)", () => {
+  test("splits 1v1 into solo and 2v2/3v3/4v4 into team, ignoring blurbs", () => {
+    const { solo, team } = parseLadderMaps(SAMPLE_LADDER_DISPLAY);
+    expect(solo).toEqual(["10000 Feet", "Mothership LE"]);
+    expect(team).toEqual(["Arctic Flowers", "Arkadia", "Ashen Cradle", "Concord LE"]);
+    // The ``_<n>text=`` description params must never leak in as maps.
+    expect(solo.join(" ")).not.toMatch(/blurb|macro map/i);
+  });
+
+  test("falls back to the legacy '== Current Maps ==' layout", () => {
+    const { solo, team } = parseLadderMaps(SAMPLE_WIKITEXT);
+    expect(solo).toContain("Equilibrium");
+    expect(solo).toContain("Frostline");
+    expect(team).toEqual([]);
+  });
+
+  test("returns empty buckets for bogus input", () => {
+    expect(parseLadderMaps("")).toEqual({ solo: [], team: [] });
+    // @ts-expect-error -- intentional bad input
+    expect(parseLadderMaps(null)).toEqual({ solo: [], team: [] });
+  });
+});
 
 describe("parseCurrentMaps", () => {
   test("extracts map names from the Current Maps section only", () => {

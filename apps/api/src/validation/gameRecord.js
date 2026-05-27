@@ -21,6 +21,11 @@ const GAME_SCHEMA = {
     myRace: { type: "string", minLength: 1, maxLength: 24 },
     myBuild: { type: "string", maxLength: 200 },
     map: { type: "string", minLength: 1, maxLength: 200 },
+    // Total players in the replay (2 for 1v1, >2 for team games).
+    // Emitted by the agent from the parsed player list; drives the
+    // global FilterBar's 1v1 / team game-size filter. Optional — games
+    // uploaded by agents predating this field carry no count.
+    playerCount: { type: "integer", minimum: 1, maximum: 16 },
     durationSec: { type: "integer", minimum: 0, maximum: 24 * 60 * 60 },
     macroScore: { type: "number", minimum: 0, maximum: 100 },
     apm: { type: "number", minimum: 0, maximum: 5000 },

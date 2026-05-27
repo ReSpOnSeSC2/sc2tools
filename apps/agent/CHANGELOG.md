@@ -2,6 +2,24 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.9.0
+
+### Added — per-replay `playerCount` for the cloud's 1v1 / team filter
+- **Emit `playerCount`** on every uploaded game, derived from the
+  parsed replay's player list (`len(ctx.all_players)` — humans + AI,
+  observers excluded; AI games are already dropped upstream). It is 2
+  for a 1v1 and 4/6/8 for 2v2/3v3/4v4.
+- **Why.** The cloud's new global FilterBar control (Players · 1v1 /
+  Team) `$match`es on this field across every analyzer tab (Opponents,
+  Strategies, Trends, Maps, Builds). Without it the team/1v1 buckets
+  have nothing to filter on.
+- **Backwards-compatible.** The field is optional on the wire and in
+  the cloud schema; games uploaded by older agents carry no count and
+  the cloud records them as size-unknown.
+- **Tests**: `to_payload` emits/omits `playerCount`; the
+  `parse_replay_for_cloud` end-to-end case asserts `playerCount == 2`
+  for a two-player replay.
+
 ## 0.8.8
 
 ### Added — PvP Glaive Adept classification (`Robo into Glaives` + `Adept Glaives`)

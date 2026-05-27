@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CalendarRange, ChevronDown, X } from "lucide-react";
 import { useFilters } from "@/lib/filterContext";
 import {
@@ -234,8 +234,153 @@ export function FilterBar() {
 
       <RegionToggleRow />
 
+      <MapPoolToggle />
+
+      <GameSizeToggle />
+
       <ExcludeTooShortToggle />
     </div>
+  );
+}
+
+/**
+ * Segmented control shared by the ladder-map and game-size filters.
+ * Three states: an "All" no-op plus two mutually-exclusive buckets.
+ * Picking the already-active bucket clears back to "All".
+ */
+function SegmentedFilter<T extends string>({
+  label,
+  ariaLabel,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  ariaLabel: string;
+  value: T | undefined;
+  options: { value: T; label: string; title: string }[];
+  onChange: (next: T | undefined) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className="inline-flex flex-wrap items-center gap-1.5"
+    >
+      <span className="text-xs uppercase tracking-wider text-text-dim">
+        {label}
+      </span>
+      <PillButton
+        active={value === undefined}
+        title={`All ${label.toLowerCase()}`}
+        onClick={() => onChange(undefined)}
+      >
+        All
+      </PillButton>
+      {options.map((opt) => {
+        const on = value === opt.value;
+        return (
+          <PillButton
+            key={opt.value}
+            active={on}
+            title={opt.title}
+            onClick={() => onChange(on ? undefined : opt.value)}
+          >
+            {opt.label}
+          </PillButton>
+        );
+      })}
+    </div>
+  );
+}
+
+function PillButton({
+  active,
+  title,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  title: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      title={title}
+      className={[
+        "inline-flex min-h-[28px] items-center rounded-full border px-2 py-0.5",
+        "text-[11px] font-medium uppercase tracking-wider tabular-nums",
+        "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+        active
+          ? "border-accent/40 bg-accent/10 text-accent"
+          : "border-border text-text-dim hover:bg-bg-elevated hover:text-text",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Ladder vs non-ladder map filter. "Ladder" keeps only games on a map
+ * that was in the SC2 ladder pool at ingest (1v1 and team ladder maps
+ * both count); "Custom" keeps only games on non-pool maps. Drives every
+ * analyzer tab (Opponents, Strategies, Trends, Maps, Builds) through the
+ * shared filter context. Default "All" so nothing changes for users who
+ * never touch it.
+ */
+function MapPoolToggle() {
+  const { filters, setFilters } = useFilters();
+  return (
+    <SegmentedFilter
+      label="Maps"
+      ariaLabel="Filter by ladder map pool"
+      value={filters.map_pool}
+      options={[
+        {
+          value: "ladder",
+          label: "Ladder",
+          title: "Only games on current SC2 ladder maps (1v1 + team)",
+        },
+        {
+          value: "nonladder",
+          label: "Custom",
+          title: "Only games on non-ladder (custom / arcade) maps",
+        },
+      ]}
+      onChange={(next) => setFilters({ ...filters, map_pool: next })}
+    />
+  );
+}
+
+/**
+ * 1v1 vs team game-size filter. "1v1" keeps two-player games; "Team"
+ * keeps games with more than two players (2v2 / 3v3 / 4v4). Backed by
+ * the per-replay ``playerCount`` the agent records — games uploaded by
+ * older agents carry no count and drop out of both buckets. Default
+ * "All".
+ */
+function GameSizeToggle() {
+  const { filters, setFilters } = useFilters();
+  return (
+    <SegmentedFilter
+      label="Players"
+      ariaLabel="Filter by game size"
+      value={filters.game_size}
+      options={[
+        { value: "1v1", label: "1v1", title: "Only 1v1 games" },
+        {
+          value: "team",
+          label: "Team",
+          title: "Only team games (more than two players)",
+        },
+      ]}
+      onChange={(next) => setFilters({ ...filters, game_size: next })}
+    />
   );
 }
 

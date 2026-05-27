@@ -68,6 +68,19 @@ function parseFilters(q) {
   }
   const regions = parseRegionList(q.regions);
   if (regions) out.regions = regions;
+  // Ladder-map filter. "ladder" keeps only games whose map was in the
+  // SC2 ladder pool at ingest (the API stamps ``isLadderMap`` on each
+  // game using LadderMapPoolService); "nonladder" keeps only games on
+  // a map that was NOT in the pool. Anything else is no constraint.
+  if (q.map_pool === "ladder" || q.map_pool === "nonladder") {
+    out.mapPool = q.map_pool;
+  }
+  // Game-size filter. "1v1" keeps two-player games; "team" keeps games
+  // with more than two players. Both rely on ``playerCount``, stamped
+  // by the agent from the parsed replay's player list.
+  if (q.game_size === "1v1" || q.game_size === "team") {
+    out.gameSize = q.game_size;
+  }
   return out;
 }
 
@@ -183,6 +196,27 @@ function gamesMatchStage(userId, filters) {
         },
       ];
     }
+  }
+  // Ladder-map filter, driving every analyzer tab. ``isLadderMap`` is a
+  // boolean stamped on each game at ingest from the live ladder pool
+  // (apps/api/data/ladder-map-pool.json, refreshed from Liquipedia).
+  // Games uploaded before this field shipped carry no flag and are
+  // intentionally excluded from BOTH buckets — we can't retroactively
+  // know whether a map was in the rotation when it was played, so a
+  // strict equality keeps the cohort honest rather than guessing.
+  if (f.mapPool === "ladder") {
+    match.isLadderMap = true;
+  } else if (f.mapPool === "nonladder") {
+    match.isLadderMap = false;
+  }
+  // Game-size filter. ``playerCount`` is the total number of players in
+  // the replay (2 for 1v1, >2 for team games). Older games predate the
+  // field and are excluded from both buckets for the same reason as
+  // above — no stored count means no honest classification.
+  if (f.gameSize === "1v1") {
+    match.playerCount = 2;
+  } else if (f.gameSize === "team") {
+    match.playerCount = { $gt: 2 };
   }
   return match;
 }

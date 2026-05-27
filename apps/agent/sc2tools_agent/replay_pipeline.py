@@ -364,6 +364,12 @@ class CloudGame:
     # attribute, and the cloud Tier-3 fallback already handles its
     # absence.
     my_toon_handle: Optional[str] = None
+    # Total players in the replay (2 for a 1v1, more for team games).
+    # Drives the cloud FilterBar's 1v1 / team game-size filter. Optional
+    # so the dataclass stays backwards-compatible with test fixtures
+    # that pre-date the field; the cloud treats an absent count as
+    # "unknown" and excludes the game from both size buckets.
+    player_count: Optional[int] = None
     # Optional structured outputs the cloud uses to render the Activity
     # tab's per-game charts and the macro-breakdown drilldown. Computing
     # these requires a deep parse + extra event walks; we attach them
@@ -407,6 +413,8 @@ class CloudGame:
             out["myMmr"] = int(self.my_mmr)
         if self.my_toon_handle:
             out["myToonHandle"] = str(self.my_toon_handle)
+        if self.player_count is not None:
+            out["playerCount"] = int(self.player_count)
         if self.opponent:
             out["opponent"] = self.opponent
         if self.macro_breakdown is not None:
@@ -416,6 +424,20 @@ class CloudGame:
         if self.spatial is not None:
             out["spatial"] = self.spatial
         return out
+
+
+def _player_count(ctx: Any) -> Optional[int]:
+    """Total players in the replay, for the cloud's 1v1 / team filter.
+
+    ``ctx.all_players`` is sc2reader's ``replay.players`` (humans + AI,
+    excluding observers) mapped to PlayerInfo. AI games are dropped
+    upstream, so on a real upload this is the human headcount: 2 for a
+    1v1, 4/6/8 for 2v2/3v3/4v4. Returns ``None`` when the list is
+    empty/absent so the cloud records "unknown" rather than a bogus 0.
+    """
+    players = getattr(ctx, "all_players", None) or []
+    n = len(players)
+    return n if n > 0 else None
 
 
 def parse_replay_for_cloud(
@@ -685,6 +707,7 @@ def parse_replay_for_cloud(
         spq=getattr(me, "spq", None),
         my_mmr=my_mmr,
         my_toon_handle=my_toon_handle,
+        player_count=_player_count(ctx),
         opponent=opponent,
         build_log=my_build_log,
         early_build_log=early_build_log,

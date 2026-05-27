@@ -75,7 +75,7 @@ class LadderMapPoolService {
     this.persistPath = opts.persistPath || PERSIST_PATH;
     this.userAgent = opts.userAgent || USER_AGENT_DEFAULT;
     this.logger = opts.logger || NOOP_LOGGER;
-    /** @type {{ maps: string[], fetchedAt: number, source: 'liquipedia' | 'persisted' | 'fallback' } | null} */
+    /** @type {{ maps: string[], teamMaps: string[], fetchedAt: number, source: 'liquipedia' | 'persisted' | 'fallback' } | null} */
     this._cache = null;
     /** @type {Promise<{ maps: string[], source: string, fetchedAt: number | null }> | null} */
     this._inflight = null;
@@ -88,13 +88,17 @@ class LadderMapPoolService {
    * NOT throwing on a stale read, since Bingo needs *some* answer to
    * generate the weekly card.
    *
-   * @returns {Promise<{ maps: string[], source: 'liquipedia' | 'persisted' | 'fallback', fetchedAt: number | null }>}
+   * ``maps`` is the 1v1 pool (the Bingo / season-catalog rotation);
+   * ``teamMaps`` is the combined 2v2/3v3/4v4 pool.
+   *
+   * @returns {Promise<{ maps: string[], teamMaps: string[], source: 'liquipedia' | 'persisted' | 'fallback', fetchedAt: number | null }>}
    */
   async get() {
     const now = this.now();
     if (this._cache && now - this._cache.fetchedAt < SEVEN_DAYS_MS) {
       return {
         maps: this._cache.maps.slice(),
+        teamMaps: (this._cache.teamMaps || []).slice(),
         source: this._cache.source,
         fetchedAt: this._cache.fetchedAt,
       };
@@ -114,74 +118,97 @@ class LadderMapPoolService {
    * success, returns the diff between the previous cache and the new
    * one for log lines. Safe to call from a cron job.
    *
-   * @param {{ force?: boolean }} [opts]
-   * @returns {Promise<{ maps: string[], added: string[], removed: string[], source: string }>}
+   * Always re-fetches (the cron passes through unconditionally).
+   *
+   * @returns {Promise<{ maps: string[], teamMaps: string[], added: string[], removed: string[], source: string }>}
    */
-  async refresh(opts = {}) {
+  async refresh() {
     const prevMaps = this._cache ? this._cache.maps.slice() : [];
-    let next = null;
-    if (opts.force || !this._cache) {
-      next = await this._fetchFromLiquipedia();
-    } else {
-      next = await this._fetchFromLiquipedia();
-    }
-    if (next && next.length > 0) {
+    const next = await this._fetchFromLiquipedia();
+    if (next && (next.solo.length > 0 || next.team.length > 0)) {
       const now = this.now();
-      this._cache = { maps: next, fetchedAt: now, source: "liquipedia" };
-      await this._writePersisted(next, now);
-      const added = next.filter((m) => !prevMaps.includes(m));
-      const removed = prevMaps.filter((m) => !next.includes(m));
+      this._cache = {
+        maps: next.solo,
+        teamMaps: next.team,
+        fetchedAt: now,
+        source: "liquipedia",
+      };
+      await this._writePersisted(next.solo, next.team, now);
+      // Diff reported on the 1v1 pool — that's the rotation Bingo and
+      // the season catalog care about.
+      const added = next.solo.filter((m) => !prevMaps.includes(m));
+      const removed = prevMaps.filter((m) => !next.solo.includes(m));
       this.logger.info(
-        { added, removed, count: next.length },
+        { added, removed, count: next.solo.length, teamCount: next.team.length },
         "ladderMapPool_refreshed",
       );
-      return { maps: next.slice(), added, removed, source: "liquipedia" };
+      return {
+        maps: next.solo.slice(),
+        teamMaps: next.team.slice(),
+        added,
+        removed,
+        source: "liquipedia",
+      };
     }
     // Network failed; keep whatever we had.
     return {
       maps: prevMaps,
+      teamMaps: this._cache ? (this._cache.teamMaps || []).slice() : [],
       added: [],
       removed: [],
       source: this._cache?.source || "fallback",
     };
   }
 
-  /** @returns {Promise<{ maps: string[], source: string, fetchedAt: number | null }>} */
+  /** @returns {Promise<{ maps: string[], teamMaps: string[], source: string, fetchedAt: number | null }>} */
   async _resolve() {
     // 1) Try Liquipedia.
     const fromNet = await this._fetchFromLiquipedia();
-    if (fromNet && fromNet.length > 0) {
+    if (fromNet && (fromNet.solo.length > 0 || fromNet.team.length > 0)) {
       const now = this.now();
-      this._cache = { maps: fromNet, fetchedAt: now, source: "liquipedia" };
+      this._cache = {
+        maps: fromNet.solo,
+        teamMaps: fromNet.team,
+        fetchedAt: now,
+        source: "liquipedia",
+      };
       // Await the persist so callers (and tests) can rely on the
       // file existing once get() resolves. _writePersisted is
       // exception-safe — never throws into _resolve.
-      await this._writePersisted(fromNet, now);
-      return { maps: fromNet.slice(), source: "liquipedia", fetchedAt: now };
+      await this._writePersisted(fromNet.solo, fromNet.team, now);
+      return {
+        maps: fromNet.solo.slice(),
+        teamMaps: fromNet.team.slice(),
+        source: "liquipedia",
+        fetchedAt: now,
+      };
     }
     // 2) Try the persisted last-good file.
     const persisted = await this._readPersisted();
-    if (persisted && persisted.maps.length > 0) {
+    if (persisted && (persisted.maps.length > 0 || persisted.teamMaps.length > 0)) {
       this._cache = {
         maps: persisted.maps,
+        teamMaps: persisted.teamMaps,
         fetchedAt: persisted.fetchedAt ?? this.now(),
         source: "persisted",
       };
       return {
         maps: persisted.maps.slice(),
+        teamMaps: persisted.teamMaps.slice(),
         source: "persisted",
         fetchedAt: persisted.fetchedAt ?? null,
       };
     }
-    // 3) Hardcoded last-resort.
+    // 3) Hardcoded last-resort (1v1 pool only; no team fallback list).
     return {
       maps: FALLBACK_POOL.slice(),
+      teamMaps: [],
       source: "fallback",
       fetchedAt: null,
     };
   }
 
-  /** @returns {Promise<string[] | null>} */
+  /** @returns {Promise<{ solo: string[], team: string[] } | null>} */
   async _fetchFromLiquipedia() {
     if (!this.fetchImpl) return null;
     const controller =
@@ -204,8 +231,8 @@ class LadderMapPoolService {
       const json = await res.json();
       const wikitext = json?.parse?.wikitext?.["*"];
       if (typeof wikitext !== "string" || wikitext.length === 0) return null;
-      const parsed = parseCurrentMaps(wikitext);
-      if (parsed.length === 0) {
+      const parsed = parseLadderMaps(wikitext);
+      if (parsed.solo.length === 0 && parsed.team.length === 0) {
         this.logger.warn({}, "ladderMapPool_no_maps_parsed");
         return null;
       }
@@ -221,19 +248,25 @@ class LadderMapPoolService {
     }
   }
 
-  /** @returns {Promise<{ maps: string[], fetchedAt: number | null } | null>} */
+  /** @returns {Promise<{ maps: string[], teamMaps: string[], fetchedAt: number | null } | null>} */
   async _readPersisted() {
     try {
       const raw = await fs.readFile(this.persistPath, "utf8");
       const parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.maps)) return null;
-      const maps = parsed.maps.filter(
-        (m) => typeof m === "string" && m.trim().length > 0,
-      );
-      if (maps.length === 0) return null;
+      const clean = (arr) =>
+        (Array.isArray(arr) ? arr : []).filter(
+          (m) => typeof m === "string" && m.trim().length > 0,
+        );
+      const maps = clean(parsed.maps);
+      // ``teamMaps`` was added in schema v2; v1 files (1v1-only) read
+      // back as an empty team pool, which is correct — they predate
+      // team-map tracking.
+      const teamMaps = clean(parsed.teamMaps);
+      if (maps.length === 0 && teamMaps.length === 0) return null;
       const fetchedAt =
         typeof parsed.fetchedAt === "number" ? parsed.fetchedAt : null;
-      return { maps, fetchedAt };
+      return { maps, teamMaps, fetchedAt };
     } catch {
       return null;
     }
@@ -245,11 +278,12 @@ class LadderMapPoolService {
    * start can't parse.
    *
    * @param {string[]} maps
+   * @param {string[]} teamMaps
    * @param {number} fetchedAt
    */
-  async _writePersisted(maps, fetchedAt) {
+  async _writePersisted(maps, teamMaps, fetchedAt) {
     const payload = JSON.stringify(
-      { maps, fetchedAt, schemaVersion: 1 },
+      { maps, teamMaps, fetchedAt, schemaVersion: 2 },
       null,
       2,
     );
@@ -277,11 +311,61 @@ const NOOP_LOGGER = {
 };
 
 /**
- * Parse the "Current Maps" section out of the Liquipedia
- * Maps/Ladder_Maps/Legacy_of_the_Void wikitext. The section ends at
- * the next `==` heading (or end of file). Inside the section we
- * extract every `|map=<name>` parameter value from MapList /
- * MapDisplay templates and dedupe preserving first-seen order.
+ * Parse the ladder map pool out of the Liquipedia
+ * Maps/Ladder_Maps/Legacy_of_the_Void wikitext, split into the 1v1
+ * ("solo") pool and the combined team (2v2 / 3v3 / 4v4) pool.
+ *
+ * The page's "Battle.net Legacy of the Void Map Pool" section renders a
+ * single ``{{Ladder maps display}}`` template whose parameters are
+ * ``|<mode>_<n>=<Map Name>`` for the map names and
+ * ``|<mode>_<n>text=<blurb>`` for the descriptions — e.g.
+ * ``|1v1_1=10000 Feet`` / ``|4v4_2=Concord LE``. We extract only the
+ * name params (the ``text`` siblings never match because a digit is
+ * not immediately followed by ``=``), deduped per-bucket preserving
+ * first-seen order.
+ *
+ * A legacy fallback handles the old ``== Current Maps ==`` + ``|map=``
+ * layout so a future template revert (or an offline fixture) still
+ * resolves; that path only ever fills the solo bucket.
+ *
+ * Exported for tests.
+ *
+ * @param {string} wikitext
+ * @returns {{ solo: string[], team: string[] }}
+ */
+function parseLadderMaps(wikitext) {
+  if (typeof wikitext !== "string") return { solo: [], team: [] };
+
+  const solo = [];
+  const team = [];
+  const seenSolo = new Set();
+  const seenTeam = new Set();
+  // ``|1v1_3=Mothership LE`` → mode "1v1", name "Mothership LE". The
+  // ``\d+=`` guard means ``|1v1_3text=...`` is skipped (after the digit
+  // comes "text", not "="). Names run to the next ``|`` or newline.
+  const modeRe = /\|\s*(1v1|2v2|3v3|4v4)_(\d+)\s*=\s*([^|\n}]+)/gi;
+  let m;
+  while ((m = modeRe.exec(wikitext)) !== null) {
+    const mode = m[1].toLowerCase();
+    const name = m[3].trim();
+    if (!name) continue;
+    const isSolo = mode === "1v1";
+    const seen = isSolo ? seenSolo : seenTeam;
+    const out = isSolo ? solo : team;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  if (solo.length > 0 || team.length > 0) return { solo, team };
+
+  // Legacy ``== Current Maps ==`` + ``|map=`` layout fallback.
+  return { solo: parseCurrentMaps(wikitext), team: [] };
+}
+
+/**
+ * Legacy parser: the "Current Maps" section's ``|map=`` params. Kept
+ * for the old page layout and as the ``parseLadderMaps`` fallback.
  *
  * Exported for tests.
  *
@@ -322,6 +406,7 @@ function parseCurrentMaps(wikitext) {
 
 module.exports = {
   LadderMapPoolService,
+  parseLadderMaps,
   parseCurrentMaps,
   FALLBACK_POOL,
 };
