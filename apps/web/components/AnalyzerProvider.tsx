@@ -15,30 +15,56 @@ type StoredFilters = {
   preset?: PresetId;
   since?: string;
   until?: string;
-  race?: string;
-  opp_race?: string;
-  map?: string;
-  mmr_min?: number;
-  mmr_max?: number;
-  build?: string;
-  opp_strategy?: string;
+  regions?: string;
   exclude_too_short?: boolean;
 };
+
+// Only the globally-visible FilterBar controls persist across reloads.
+//
+// The drill-down filters (race, opp_race, map, mmr_min, mmr_max, build,
+// opp_strategy) are deliberately NOT persisted. They get set by clicking
+// into a chart / build / MMR bucket / strategy, but the FilterBar has no
+// UI to display or clear them — so persisting them silently hid data
+// across sessions: an opponent would vanish from the Opponents tab (which
+// then runs the filtered aggregation path) because a stale opp_strategy /
+// mmr / build filter from an earlier drill-down stuck in localStorage,
+// with no visible indication and no way to reset short of clearing site
+// data. They still apply for the active session via the in-memory filter
+// state; they just reset on reload instead of becoming an invisible,
+// permanent constraint. Stripping on BOTH read and write also self-heals
+// any session that already has a stale value persisted.
+const PERSISTED_KEYS = [
+  "preset",
+  "since",
+  "until",
+  "regions",
+  "exclude_too_short",
+] as const;
+
+export function pickPersisted(f: Partial<AnalyzerFilters>): StoredFilters {
+  const out: Record<string, unknown> = {};
+  for (const k of PERSISTED_KEYS) {
+    const v = (f as Record<string, unknown>)[k];
+    if (v !== undefined) out[k] = v;
+  }
+  return out as StoredFilters;
+}
 
 function readStored(): StoredFilters | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(LS_KEY);
-    return raw ? (JSON.parse(raw) as StoredFilters) : null;
+    if (!raw) return null;
+    return pickPersisted(JSON.parse(raw) as Partial<AnalyzerFilters>);
   } catch {
     return null;
   }
 }
 
-function writeStored(value: StoredFilters): void {
+function writeStored(value: Partial<AnalyzerFilters>): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(LS_KEY, JSON.stringify(value));
+    window.localStorage.setItem(LS_KEY, JSON.stringify(pickPersisted(value)));
   } catch {
     /* non-fatal */
   }
