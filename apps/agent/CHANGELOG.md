@@ -2,6 +2,42 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.8.9
+
+### Fixed — live opponent Pulse/MMR misses at game start (region hint + clan-tag strip)
+- **Symptom.** During a real game the overlay frequently showed no
+  opponent MMR / Pulse profile, even though the on-demand diagnostics
+  "Retry" resolved the same opponent instantly. Root cause: the two
+  paths resolve by different keys. The diagnostics/post-game paths key
+  off the replay's **toon handle** (`region-realm-bnid`) and confirm the
+  exact account, while the live game-start path only has the **display
+  name** (Blizzard's local `/game` API never exposes the opponent's toon
+  handle or MMR), so it ran a fuzzy, region-blind name search that
+  missed on cross-region name collisions and clan-tagged names.
+- **Region hint.** `LiveBridge` now forwards the streamer's own region
+  (derived from their toon handle) to `PulseClient.resolve`. In 1v1 the
+  opponent shares the streamer's server, so this disambiguates
+  same-name accounts across regions and lifts the candidate score. The
+  hint is omitted (not guessed) until the streamer's handle is known.
+- **`NA` region alias.** `pulse_lookup` previously only knew SC2Pulse's
+  `US` label for region code 1, so a hint derived from a toon handle
+  (`NA`) wouldn't have matched. Added `NA → 1` so the hint actually
+  applies. `SEA` (byte 6) intentionally stays unmapped and degrades to
+  "no region constraint".
+- **Clan-tag strip.** Live name lookups now strip a leading clan tag
+  (`[oM]Cure` → `Cure`) before hitting `/character/search`, mirroring
+  the post-game pipeline — SC2Pulse indexes the bare account name, so
+  the tagged term was missing.
+- **Hard limit unchanged.** Pure barcodes (`IIIIIIII`) still cannot be
+  resolved by name at game start — only the post-game toon-handle path
+  can identify them — because the local SC2 API exposes no toon handle
+  mid-game.
+- **Tests.** 4 new cases (`test_live_pulse_lookup.py`,
+  `test_live_bridge.py`): clan-tag search-term strip, `NA` alias wins
+  the region tiebreak, region hint propagates from the streamer's
+  handle, and region stays `None` without a handle. Live + bridge
+  suites: 36/36 passing.
+
 ## 0.8.8
 
 ### Added — PvP Glaive Adept classification (`Robo into Glaives` + `Adept Glaives`)

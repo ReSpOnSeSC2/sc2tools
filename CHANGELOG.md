@@ -87,6 +87,29 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Live overlay · opponent Pulse/MMR misses at game start (agent
+  0.8.9)**: during a real game the overlay often showed no opponent MMR
+  / Pulse profile even though the on-demand diagnostics "Retry" resolved
+  the same opponent instantly. The paths resolve by different keys — the
+  diagnostics/post-game paths key off the replay's toon handle
+  (`region-realm-bnid`, exact) while the live game-start path only has
+  the display name (Blizzard's local `/game` API exposes no toon handle
+  or MMR mid-game), so it ran a fuzzy, region-blind name search. The
+  agent now (a) forwards the streamer's own region to the live Pulse
+  lookup (in 1v1 the opponent shares that server, so it disambiguates
+  cross-region name collisions), (b) accepts the `NA` region label as an
+  alias for SC2Pulse's `US`/code 1 so the hint actually applies, and
+  (c) strips a leading clan tag (`[oM]Cure` → `Cure`) before the name
+  search, mirroring the post-game pipeline. Pure barcodes still can't be
+  resolved by name mid-game — only the post-game toon-handle path can —
+  because the local SC2 API never exposes the opponent's toon handle.
+  Tests: 4 new cases; live + bridge suites 36/36.
+- **Admin + per-user opponent identity/MMR diagnostics** (cloud): new
+  "Identity & MMR diagnostics" panel (admin drill-down + the user's own
+  opponent deep-dive) explains why a Pulse ID shows `TOON` or an MMR
+  shows `—`, with a Retry that forces a fresh SC2Pulse resolve + MMR
+  refetch. Toon-only opponents now also attempt an MMR fetch by toon
+  handle at ingest instead of being skipped. See PR #404.
 - **Strategy classifier · PvZ - Stargate into Glaives is order-based
   (0.8.7)**: user-reported misclassification — a `Stargate → Twilight
   → Glaives-first → Blink-later` build (a Phoenix / Oracle into Glaive
