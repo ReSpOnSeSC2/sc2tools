@@ -11,20 +11,22 @@
  * Unlike ``playerCount`` (which was never captured and can only be
  * filled by re-uploading replays through the v0.9.0+ agent), the map
  * NAME is already stored on every game — so we CAN classify historical
- * games retroactively by matching that name against the current ladder
- * pool (1v1 + team), sourced from Liquipedia via LadderMapPoolService.
+ * games retroactively by matching that name against the ALL-SEASONS
+ * ladder map set (``buildClassifierSet``: the baked-in historical list
+ * of every LotV 1v1 + team ladder map, unioned with the live current
+ * pool). Matching against the full history — not just the current
+ * rotation — is what keeps a game played on a since-retired ladder map
+ * from being mislabeled "custom".
  *
  * Algorithm:
- *   1. Resolve the live ladder pool once (1v1 ``maps`` + ``teamMaps``)
- *      and build a normalized membership Set.
+ *   1. Build the classifier Set (historical list ∪ live pool).
  *   2. Stream every game per user, compute the boolean, and queue a
  *      bulk ``$set`` only when the stored value differs (or is absent).
  *   3. Flush in batches.
  *
- * Idempotent: re-running is a no-op once values match. The classifier
- * reflects the pool at run time — re-running after a Blizzard rotation
- * re-stamps games whose map left/entered the pool, which matches the
- * ingest-time semantics for fresh uploads.
+ * Idempotent: re-running is a no-op once values match. Safe + useful to
+ * re-run after the historical list grows (e.g. a new season's maps are
+ * added) — games whose classification changed get re-stamped.
  *
  * Run with:
  *   MONGODB_URI=... MONGODB_DB=... \
@@ -46,18 +48,18 @@ const {
   LadderMapPoolService,
 } = require(path.join(__dirname, "..", "..", "services", "ladderMapPool"));
 const {
-  buildLadderMapSet,
+  buildClassifierSet,
   isLadderMap,
+  LADDER_CLASSIFY_VERSION,
 } = require(path.join(__dirname, "..", "..", "util", "isLadderMap"));
 
 const DEFAULT_BATCH = 500;
 
 function parseArgs() {
   /** @type {{ dryRun: boolean, batch: number, user: string|null }} */
-  const out = { dryRun: false, batch: DEFAULT_BATCH, user: null, allowFallback: false };
+  const out = { dryRun: false, batch: DEFAULT_BATCH, user: null };
   for (const arg of process.argv.slice(2)) {
     if (arg === "--dry-run") out.dryRun = true;
-    else if (arg === "--allow-fallback") out.allowFallback = true;
     else if (arg.startsWith("--batch=")) {
       const n = Number.parseInt(arg.slice("--batch=".length), 10);
       if (Number.isFinite(n) && n > 0) out.batch = n;
@@ -81,7 +83,7 @@ async function backfillUser(db, userId, ladderSet, opts) {
   const games = db.collection(COLLECTIONS.GAMES);
   const cursor = games.find(
     { userId },
-    { projection: { _id: 0, gameId: 1, map: 1, isLadderMap: 1 } },
+    { projection: { _id: 0, gameId: 1, map: 1, isLadderMap: 1, isLadderMapV: 1 } },
   );
 
   /** @type {Array<{filter: object, update: object}>} */
@@ -106,11 +108,19 @@ async function backfillUser(db, userId, ladderSet, opts) {
     scanned += 1;
     if (typeof row.gameId !== "string" || row.gameId.length === 0) continue;
     const next = isLadderMap(row.map, ladderSet);
-    if (row.isLadderMap === next) continue; // already correct
+    // Skip only when both the boolean AND the classifier version are
+    // already current — so a logic/list bump re-stamps even unchanged
+    // booleans, keeping the per-doc version in lockstep with ingest +
+    // the startup job.
+    if (row.isLadderMap === next && row.isLadderMapV === LADDER_CLASSIFY_VERSION) {
+      continue;
+    }
     planned += 1;
     ops.push({
       filter: { userId, gameId: row.gameId },
-      update: { $set: { isLadderMap: next } },
+      update: {
+        $set: { isLadderMap: next, isLadderMapV: LADDER_CLASSIFY_VERSION },
+      },
     });
     if (ops.length >= opts.batch) await flush();
   }
@@ -128,35 +138,28 @@ async function main() {
     process.exit(2);
   }
 
-  const pool = await new LadderMapPoolService().get();
-  const ladderSet = buildLadderMapSet([
+  // Classifier set = baked-in all-seasons historical list UNIONed with
+  // the live current pool (when reachable). The historical list keeps
+  // the set comprehensive even if Liquipedia is down, so there's no
+  // empty-pool or stale-fallback failure mode to guard against here.
+  let pool = { maps: [], teamMaps: [], source: "unavailable" };
+  try {
+    pool = await new LadderMapPoolService().get();
+  } catch (err) {
+    console.warn(
+      `Live pool fetch failed (${err && err.message ? err.message : err}); ` +
+        "classifying against the baked-in all-seasons list only.",
+    );
+  }
+  const ladderSet = buildClassifierSet([
     ...(pool.maps || []),
     ...(pool.teamMaps || []),
   ]);
   console.log(
-    `Ladder pool: source=${pool.source} ` +
-      `1v1=${(pool.maps || []).length} team=${(pool.teamMaps || []).length} ` +
-      `normalizedKeys=${ladderSet.size}`,
+    `Ladder set: liveSource=${pool.source} ` +
+      `live1v1=${(pool.maps || []).length} liveTeam=${(pool.teamMaps || []).length} ` +
+      `totalKeys=${ladderSet.size}`,
   );
-  if (ladderSet.size === 0) {
-    console.error(
-      "Refusing to run: resolved an EMPTY ladder pool. A backfill now " +
-        "would mark every game non-ladder. Check network / Liquipedia " +
-        "reachability and retry.",
-    );
-    process.exit(3);
-  }
-  if (pool.source === "fallback" && !args.allowFallback) {
-    console.error(
-      "Refusing to run: the ladder pool resolved to the STALE hardcoded " +
-        "fallback (Liquipedia unreachable AND no cached pool file). " +
-        "Classifying against it would mis-label current-ladder games as " +
-        "custom. Restore network / a persisted ladder-map-pool.json and " +
-        "retry, or pass --allow-fallback if you really intend to use the " +
-        "fallback list.",
-    );
-    process.exit(4);
-  }
 
   const client = new MongoClient(uri);
   await client.connect();

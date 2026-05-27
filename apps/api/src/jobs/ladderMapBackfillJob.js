@@ -1,34 +1,38 @@
 "use strict";
 
 /**
- * One-time ladder-map backfill, run on API startup.
+ * Ladder-map (re)classification backfill, run on API startup.
  *
- * New uploads get ``isLadderMap`` stamped at ingest, but games uploaded
- * before that field shipped carry no flag — so the FilterBar's ladder /
- * non-ladder filter silently excludes them. This job classifies those
- * historical games in the background on boot by matching their stored
- * map name against the live ladder pool (1v1 + team), so deployers who
- * only ever merge + auto-deploy don't have to run the standalone
- * migration script by hand.
+ * Stamps ``isLadderMap`` (+ ``isLadderMapV``, the classifier version) on
+ * games that aren't at the CURRENT classifier version — i.e. games that
+ * pre-date the field AND games classified by an older version of the
+ * logic / map list. Matching uses the all-seasons ladder set
+ * (``buildClassifierSet``: the baked-in historical list ∪ the live
+ * current pool), so a game on a since-retired ladder map counts as
+ * ladder rather than leaking into the Custom bucket.
  *
- * Self-terminating + idempotent:
- *   * It only ever touches games WHERE ``isLadderMap`` is absent, so a
- *     completed dataset means zero work — the cheap pre-count short-
- *     circuits before any pool fetch or scan.
- *   * Once every game has the field, future boots skip immediately.
+ * Runs on every boot (so deployers who only merge + auto-deploy never
+ * touch a terminal), but version-gated so the work is bounded:
+ *   * A cheap pre-count of games not at ``LADDER_CLASSIFY_VERSION``
+ *     short-circuits to a no-op once the dataset is fully up to date.
+ *   * Bumping ``LADDER_CLASSIFY_VERSION`` (when the map list changes)
+ *     makes the next deploy reclassify exactly once, then self-skip.
  *
  * Safety:
  *   * Fire-and-forget — never blocks ``listen``; a failure is logged
- *     and swallowed so a backfill hiccup can't take the API down.
- *   * Refuses to write if the resolved pool is empty (Liquipedia
- *     unreachable AND no cached/seed file) — otherwise it would mark
- *     every historical game non-ladder.
+ *     and swallowed so a hiccup can't take the API down.
+ *   * The classifier set is never empty (the historical list is baked
+ *     in), so there's no empty/stale-fallback failure mode.
  *   * Soft-disable: ``SC2TOOLS_LADDER_BACKFILL_DISABLED=1``.
  *
  * Mirrors the structure of jobs/ladderMapPoolRefreshJob.js.
  */
 
-const { buildLadderMapSet, isLadderMap } = require("../util/isLadderMap");
+const {
+  buildClassifierSet,
+  isLadderMap,
+  LADDER_CLASSIFY_VERSION,
+} = require("../util/isLadderMap");
 
 const DEFAULT_BATCH = 500;
 
@@ -57,44 +61,43 @@ function buildLadderMapBackfillJob(deps) {
   /** @type {Promise<any> | null} */
   let inflight = null;
 
-  /** The query for games that still need classification. */
-  const MISSING = { isLadderMap: { $exists: false } };
+  // Games not yet classified by the current classifier version. ``$ne``
+  // also matches docs with no ``isLadderMapV`` at all (never stamped).
+  const STALE = { isLadderMapV: { $ne: LADDER_CLASSIFY_VERSION } };
 
   async function run() {
-    const remaining = await games.countDocuments(MISSING);
+    const remaining = await games.countDocuments(STALE);
     if (remaining === 0) {
-      logger.info("ladderMapBackfill_skip_complete");
+      logger.info({ version: LADDER_CLASSIFY_VERSION }, "ladderMapBackfill_skip_complete");
       return { remaining: 0, scanned: 0, written: 0, skipped: true };
     }
-    const pool = await deps.ladderMapPool.get();
-    const ladderSet = buildLadderMapSet([
+    let pool = { maps: [], teamMaps: [], source: "unavailable" };
+    try {
+      pool = await deps.ladderMapPool.get();
+    } catch (err) {
+      // The baked-in historical list still gives a comprehensive set,
+      // so a pool fetch failure is non-fatal — we just miss any map
+      // newer than the baked list until a later boot.
+      logger.warn(
+        { err: err && err.message ? err.message : String(err) },
+        "ladderMapBackfill_pool_unavailable",
+      );
+    }
+    const ladderSet = buildClassifierSet([
       ...((pool && pool.maps) || []),
       ...((pool && pool.teamMaps) || []),
     ]);
-    if (ladderSet.size === 0) {
-      logger.warn(
-        { remaining },
-        "ladderMapBackfill_empty_pool_skip",
-      );
-      return { remaining, scanned: 0, written: 0, skipped: true };
-    }
-    // Never classify a full history against the stale hardcoded
-    // fallback pool — that would wrongly mark current-ladder games
-    // "custom". Wait for a real Liquipedia fetch (or the persisted
-    // last-good file); a later boot retries once one is available.
-    if (pool.source === "fallback") {
-      logger.warn(
-        { remaining, ladderKeys: ladderSet.size },
-        "ladderMapBackfill_fallback_pool_skip",
-      );
-      return { remaining, scanned: 0, written: 0, skipped: true };
-    }
     logger.info(
-      { remaining, poolSource: pool.source, ladderKeys: ladderSet.size },
+      {
+        remaining,
+        version: LADDER_CLASSIFY_VERSION,
+        poolSource: pool.source,
+        ladderKeys: ladderSet.size,
+      },
       "ladderMapBackfill_start",
     );
 
-    const cursor = games.find(MISSING, {
+    const cursor = games.find(STALE, {
       projection: { _id: 0, userId: 1, gameId: 1, map: 1 },
     });
     /** @type {Array<{ updateOne: { filter: object, update: object } }>} */
@@ -116,7 +119,9 @@ function buildLadderMapBackfillJob(deps) {
       ops.push({
         updateOne: {
           filter: { userId: row.userId, gameId: row.gameId },
-          update: { $set: { isLadderMap: flag } },
+          update: {
+            $set: { isLadderMap: flag, isLadderMapV: LADDER_CLASSIFY_VERSION },
+          },
         },
       });
       if (ops.length >= batchSize) await flush();

@@ -62,16 +62,38 @@ describe("POST /games ladder-map + player-count stamping", () => {
     expect(byId.g2.playerCount).toBe(6);
   });
 
-  test("leaves isLadderMap unset when no pool is available", async () => {
+  test("classifies a retired ladder map as ladder (current pool need not list it)", async () => {
+    // Catalyst LE hasn't been in the rotation for years; the live pool
+    // stub doesn't list it, but the baked-in all-seasons set does — so
+    // it must still classify as ladder rather than leaking into Custom.
+    const ladderMapPool = {
+      get: jest.fn(async () => ({ maps: ["Site Delta"], teamMaps: [] })),
+    };
+    const { app, upserts } = buildTestApp({ ladderMapPool });
+    const res = await request(app)
+      .post("/games")
+      .send({ ...baseGame, gameId: "gRetired", map: "Catalyst LE" });
+    expect(res.status).toBe(202);
+    expect(upserts[0].isLadderMap).toBe(true);
+  });
+
+  test("classifies from the baked-in list even without a live pool", async () => {
     const { app, upserts } = buildTestApp({ ladderMapPool: undefined });
     const res = await request(app)
       .post("/games")
-      .send({ ...baseGame, gameId: "g3", map: "Site Delta" });
+      .send({
+        games: [
+          { ...baseGame, gameId: "g3", map: "Site Delta" },
+          { ...baseGame, gameId: "g3b", map: "My Custom Arcade Box" },
+        ],
+      });
     expect(res.status).toBe(202);
-    expect(upserts[0]).not.toHaveProperty("isLadderMap");
+    const byId = Object.fromEntries(upserts.map((g) => [g.gameId, g]));
+    expect(byId.g3.isLadderMap).toBe(true);
+    expect(byId.g3b.isLadderMap).toBe(false);
   });
 
-  test("ingest still succeeds when the pool lookup throws", async () => {
+  test("ingest still succeeds (and classifies) when the pool lookup throws", async () => {
     const ladderMapPool = {
       get: jest.fn(async () => {
         throw new Error("liquipedia down");
@@ -83,6 +105,7 @@ describe("POST /games ladder-map + player-count stamping", () => {
       .send({ ...baseGame, gameId: "g4", map: "Site Delta" });
     expect(res.status).toBe(202);
     expect(upserts[0].gameId).toBe("g4");
-    expect(upserts[0]).not.toHaveProperty("isLadderMap");
+    // Falls back to the baked-in list, so it's still classified.
+    expect(upserts[0].isLadderMap).toBe(true);
   });
 });
