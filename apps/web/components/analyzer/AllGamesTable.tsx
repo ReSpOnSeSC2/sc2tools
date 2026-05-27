@@ -55,6 +55,7 @@ const SORT_COLS = {
   macro: "macro_score",
   length: "game_length",
   result: "result",
+  oppMmr: "opp_mmr",
 } as const;
 
 /**
@@ -69,16 +70,32 @@ export function AllGamesTable({
   games,
   targetGameId,
   targetGameSeq,
+  myName,
 }: {
   games: ProfileGame[];
   targetGameId?: string | null;
   targetGameSeq?: number;
+  /** Logged-in user's display name, for the "you" side of the
+   *  Players column. Falls back to a neutral "You" label when absent. */
+  myName?: string | null;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const mobileListRef = useRef<HTMLUListElement>(null);
   const sort = useSort(SORT_COLS.date, "desc");
+
+  // Only surface the optional columns when the data is actually
+  // present, so the contexts that don't carry per-game names / MMR
+  // (older opponent-profile drilldowns) keep their tighter layout.
+  const showPlayers = useMemo(
+    () => !!myName || (games || []).some((g) => !!g.opponent),
+    [games, myName],
+  );
+  const showOppMmr = useMemo(
+    () => (games || []).some((g) => g.opp_mmr != null),
+    [games],
+  );
 
   const sortedGames = useMemo(() => {
     return sort.sortRows(
@@ -126,8 +143,19 @@ export function AllGamesTable({
             <tr>
               <th className="w-6 px-2 py-1 text-left" aria-hidden></th>
               <SortableTh col={SORT_COLS.date} label="Date" {...sort} />
+              {showPlayers ? (
+                <th className="px-2 py-1 text-left font-medium">Players</th>
+              ) : null}
               <SortableTh col={SORT_COLS.map} label="Map" {...sort} />
               <SortableTh col={SORT_COLS.race} label="Race" {...sort} />
+              {showOppMmr ? (
+                <SortableTh
+                  col={SORT_COLS.oppMmr}
+                  label="Opp MMR"
+                  {...sort}
+                  align="right"
+                />
+              ) : null}
               <SortableTh col={SORT_COLS.strategy} label="Strategy" {...sort} />
               <SortableTh col={SORT_COLS.build} label="My Build" {...sort} />
               <SortableTh col={SORT_COLS.macro} label="Macro" {...sort} align="right" />
@@ -143,6 +171,9 @@ export function AllGamesTable({
                 expanded={!!g.id && expandedId === g.id}
                 highlighted={!!g.id && highlightId === g.id}
                 onToggle={() => toggle(g.id)}
+                showPlayers={showPlayers}
+                showOppMmr={showOppMmr}
+                myName={myName}
               />
             ))}
           </tbody>
@@ -157,6 +188,7 @@ export function AllGamesTable({
             expanded={!!g.id && expandedId === g.id}
             highlighted={!!g.id && highlightId === g.id}
             onToggle={() => toggle(g.id)}
+            myName={myName}
           />
         ))}
       </ul>
@@ -169,15 +201,24 @@ function GameRow({
   expanded,
   highlighted,
   onToggle,
+  showPlayers,
+  showOppMmr,
+  myName,
 }: {
   game: GameRowData;
   expanded: boolean;
   highlighted: boolean;
   onToggle: () => void;
+  showPlayers: boolean;
+  showOppMmr: boolean;
+  myName?: string | null;
 }) {
   const expandable = !!game.id;
   const { macro, macroColour, resultBadge } = useGameMeta(game);
   const [macroOpen, setMacroOpen] = useState(false);
+  // base cols: toggle + date + map + race + strategy + build + macro
+  // + length + result = 9; plus the two optional columns.
+  const colSpan = 9 + (showPlayers ? 1 : 0) + (showOppMmr ? 1 : 0);
 
   return (
     <Fragment>
@@ -199,10 +240,20 @@ function GameRow({
         <td className="px-2 py-1 font-mono text-xs text-text-muted">
           {fmtDate(game.date)}
         </td>
+        {showPlayers ? (
+          <td className="px-2 py-1">
+            <PlayersCell myName={myName} opponent={game.opponent} />
+          </td>
+        ) : null}
         <td className="px-2 py-1 text-text">{game.map || "—"}</td>
         <td className="px-2 py-1">
           <RaceTag race={game.opp_race} strategy={game.opp_strategy} />
         </td>
+        {showOppMmr ? (
+          <td className="px-2 py-1 text-right tabular-nums text-text-muted">
+            {game.opp_mmr != null ? game.opp_mmr : "—"}
+          </td>
+        ) : null}
         <td className="px-2 py-1 text-text-muted">
           {game.opp_strategy || "—"}
         </td>
@@ -226,12 +277,41 @@ function GameRow({
       </tr>
       {expanded && game.id ? (
         <tr className="bg-bg-elevated/30">
-          <td colSpan={9} className="px-2 pb-3">
+          <td colSpan={colSpan} className="px-2 pb-3">
             <BuildOrderRow gameId={game.id} game={game} />
           </td>
         </tr>
       ) : null}
     </Fragment>
+  );
+}
+
+/**
+ * Players cell — shows who the game was between, "you vs opponent",
+ * so a list pulled from an MMR band (where every row is a different
+ * opponent) reads at a glance and the user can confirm the MMR tag
+ * belongs to the player they remember. Both sides degrade to neutral
+ * placeholders when a name is missing.
+ */
+function PlayersCell({
+  myName,
+  opponent,
+}: {
+  myName?: string | null;
+  opponent?: string | null;
+}) {
+  const me = (myName || "").trim() || "You";
+  const opp = (opponent || "").trim() || "Opponent";
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs">
+      <span className="max-w-[10ch] truncate text-text-muted" title={me}>
+        {me}
+      </span>
+      <span className="text-text-dim">vs</span>
+      <span className="max-w-[14ch] truncate font-medium text-text" title={opp}>
+        {opp}
+      </span>
+    </span>
   );
 }
 
@@ -305,15 +385,18 @@ function GameMobileCard({
   expanded,
   highlighted,
   onToggle,
+  myName,
 }: {
   game: GameRowData;
   expanded: boolean;
   highlighted: boolean;
   onToggle: () => void;
+  myName?: string | null;
 }) {
   const expandable = !!game.id;
   const { macro, macroColour, resultBadge } = useGameMeta(game);
   const [macroOpen, setMacroOpen] = useState(false);
+  const showPlayers = !!myName || !!game.opponent;
 
   return (
     <li
@@ -343,6 +426,11 @@ function GameMobileCard({
                 {fmtDate(game.date)}
               </span>
             </div>
+            {showPlayers ? (
+              <div className="text-[11px]">
+                <PlayersCell myName={myName} opponent={game.opponent} />
+              </div>
+            ) : null}
             <div className="text-caption text-text">{game.map || "—"}</div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-text-muted">
               <span>
@@ -357,6 +445,12 @@ function GameMobileCard({
                   {game.game_length ? fmtMinutes(game.game_length) : "—"}
                 </span>
               </span>
+              {game.opp_mmr != null ? (
+                <span>
+                  opp mmr:{" "}
+                  <span className="tabular-nums text-text">{game.opp_mmr}</span>
+                </span>
+              ) : null}
             </div>
           </div>
           {expandable ? (

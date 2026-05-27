@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import {
   useLocalStoragePositiveInt,
   useLocalStorageState,
@@ -260,6 +261,7 @@ function StrategyGamesView({
   onBack: () => void;
 }) {
   const { filters, dbRev } = useFilters();
+  const myName = useMyDisplayName();
   const queryStr = useMemo(() => {
     const merged: Record<string, unknown> = {
       ...filters,
@@ -295,6 +297,7 @@ function StrategyGamesView({
       map: g.map || null,
       opp_strategy: g.opp_strategy || null,
       opp_race: g.opp_race || null,
+      opponent: g.opponent || null,
       my_build: g.build || null,
       game_length: g.game_length ?? null,
       macro_score: g.macro_score ?? null,
@@ -370,7 +373,7 @@ function StrategyGamesView({
       ) : (
         <Card title={`All games (${games.length}) · newest first`}>
           <div className="-mx-2 max-h-[640px] overflow-x-auto">
-            <AllGamesTable games={games} />
+            <AllGamesTable games={games} myName={myName} />
           </div>
         </Card>
       )}

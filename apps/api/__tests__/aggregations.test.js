@@ -690,6 +690,75 @@ describe("services/aggregations", () => {
     expect(json).toContain('"$_oppMmr"');
   });
 
+  test("oppMmrBucketGames matches the band on the effective MMR and shapes rows", async () => {
+    let captured = null;
+    const games = {
+      aggregate(pipeline) {
+        captured = pipeline;
+        return {
+          toArray: () =>
+            Promise.resolve([
+              {
+                meta: [{ total: 2 }],
+                rows: [
+                  {
+                    id: "g1",
+                    date: new Date("2026-05-01"),
+                    map: "Goldenaura",
+                    opponent: "AngryBird",
+                    opp_race: "Z",
+                    opp_strategy: null,
+                    result: "Victory",
+                    my_build: "P - Stargate",
+                    game_length: 600,
+                    macro_score: 72,
+                    my_race: "Protoss",
+                    my_mmr: 5450,
+                    opp_mmr: 5412,
+                  },
+                ],
+              },
+            ]),
+        };
+      },
+    };
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.oppMmrBucketGames("u1", {}, { lo: 5400, hi: 5500 })
+    );
+    expect(out.ok).toBe(true);
+    expect(out.lo).toBe(5400);
+    expect(out.hi).toBe(5500);
+    expect(out.total).toBe(2);
+    expect(out.count).toBe(1);
+    expect(out.games[0].opponent).toBe("AngryBird");
+    expect(out.games[0].opp_mmr).toBe(5412);
+    const json = JSON.stringify(captured);
+    // Bands on the synthesised effective MMR (snapshot OR opponents
+    // fallback), exactly like the histogram, so the count matches.
+    expect(json).toContain('"$_oppMmr"');
+    expect(json).toContain('"from":"opponents"');
+    expect(json).toContain('"$gte":5400');
+    expect(json).toContain('"$lt":5500');
+  });
+
+  test("oppMmrBucketGames rejects a malformed band without touching the db", async () => {
+    let called = false;
+    const games = {
+      aggregate() {
+        called = true;
+        return { toArray: () => Promise.resolve([]) };
+      },
+    };
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.oppMmrBucketGames("u1", {}, { lo: undefined, hi: 5500 })
+    );
+    expect(out.total).toBe(0);
+    expect(out.games).toEqual([]);
+    expect(called).toBe(false);
+  });
+
   test("myBuildMixOverTime returns one row per (bucket, key)", async () => {
     const games = buildGames([
       () => [

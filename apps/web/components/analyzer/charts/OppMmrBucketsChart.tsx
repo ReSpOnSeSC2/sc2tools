@@ -17,6 +17,15 @@ import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { wrColor } from "@/lib/format";
+import { OppMmrBucketGamesModal } from "./OppMmrBucketGamesModal";
+
+type SelectedBand = {
+  lo: number;
+  hi: number;
+  wins: number;
+  losses: number;
+  total: number;
+};
 
 type OppMmrBucket = {
   lo: number;
@@ -62,6 +71,7 @@ const COLOR_BG_SURFACE = "#11141b";
 export function OppMmrBucketsChart() {
   const { filters, dbRev } = useFilters();
   const [widthMode, setWidthMode] = useState<WidthMode>("auto");
+  const [selectedBand, setSelectedBand] = useState<SelectedBand | null>(null);
   const query = useMemo(
     () => ({ ...filters, bucket_width: widthMode }),
     [filters, widthMode],
@@ -219,7 +229,16 @@ export function OppMmrBucketsChart() {
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <BucketTable rows={rows} unknown={data.unknown} totalKnown={totalKnown} />
+      <BucketTable
+        rows={rows}
+        unknown={data.unknown}
+        totalKnown={totalKnown}
+        onSelect={setSelectedBand}
+      />
+      <OppMmrBucketGamesModal
+        band={selectedBand}
+        onClose={() => setSelectedBand(null)}
+      />
     </Card>
   );
 }
@@ -270,21 +289,39 @@ function BucketTable({
   rows,
   unknown,
   totalKnown,
+  onSelect,
 }: {
   rows: Array<OppMmrBucket & { color: string }>;
   unknown: { total: number };
   totalKnown: number;
+  onSelect: (band: SelectedBand) => void;
 }) {
   // Hide buckets with no games to avoid a wall of "no games" tiles on
   // wide MMR ranges. The chart itself still spans the full range.
   const played = rows.filter((r) => r.total > 0);
   return (
     <div className="mt-3">
+      <p className="mb-1.5 text-[10px] text-text-dim">
+        Tap a band to list the games behind it.
+      </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
         {played.map((r) => (
-          <div
+          <button
             key={r.lo}
-            className="rounded border border-border bg-bg-elevated/50 px-2.5 py-2"
+            type="button"
+            onClick={() =>
+              onSelect({
+                lo: r.lo,
+                hi: r.hi,
+                wins: r.wins,
+                losses: r.losses,
+                total: r.total,
+              })
+            }
+            aria-label={`List the ${r.total} game${
+              r.total === 1 ? "" : "s"
+            } against ${r.lo}–${r.hi - 1} MMR opponents`}
+            className="rounded border border-border bg-bg-elevated/50 px-2.5 py-2 text-left transition-colors hover:border-border-strong hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-bg"
           >
             <div className="flex flex-wrap items-baseline justify-between gap-x-1.5">
               <span className="whitespace-nowrap text-[11px] font-semibold text-text">
@@ -300,7 +337,7 @@ function BucketTable({
             <div className="mt-0.5 text-[10px] tabular-nums text-text-dim">
               {r.wins}W · {r.losses}L · {r.total} game{r.total === 1 ? "" : "s"}
             </div>
-          </div>
+          </button>
         ))}
       </div>
       {unknown.total > 0 ? (
