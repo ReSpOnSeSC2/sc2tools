@@ -135,7 +135,10 @@ export function OppMmrBucketsChart() {
       <p className="-mt-1 mb-3 text-caption text-text-dim">
         Each bar = a {data.bucketWidth}-MMR band of opponents · bars = games
         played · line = win rate · dashed accent = your average across these
-        opponents ({baselinePct}%).
+        opponents ({baselinePct}%). Only games from the last 12 months are
+        bucketed — older ones lack a trustworthy game-time MMR (we&apos;d have
+        to borrow the opponent&apos;s rating today), so they fall into the
+        missing-MMR count below instead.
       </p>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">

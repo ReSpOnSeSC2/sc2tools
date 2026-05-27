@@ -6,6 +6,13 @@ const { expectedVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { opponentGamesFilter } = require("../util/opponentIdentity");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
+const {
+  isStampableDate,
+  stampFloor,
+  canonicalRaceName,
+  canonicalRaceLetter,
+  pickRaceMmr,
+} = require("./oppMmrStamp");
 const TimingCatalog = require("./timingCatalog");
 const Dna = require("./dnaTimings");
 const { computeCompositions } = require("./buildCompositions");
@@ -1335,16 +1342,34 @@ class OpponentsService {
    */
   async _stampGameOpponentMmr(userId, gameId, incomingGame, set) {
     if (typeof gameId !== "string" || !gameId) return;
+    // RECENCY GUARD. A current/last-known MMR is only a fair proxy for
+    // game-time MMR on recent games — never back-stamp it onto a game
+    // older than the trust window (that's how 2018 games ended up
+    // wearing a 2026 rating). Old games stay "missing MMR", which the
+    // Win-rate-by-opponent-MMR chart already handles honestly.
+    if (!isStampableDate(incomingGame && incomingGame.playedAt)) return;
     /** @type {Record<string, any>} */
     const update = {};
-    if (
-      typeof incomingGame.mmr !== "number"
-      && typeof set.mmr === "number"
-    ) {
-      update["opponent.mmr"] = set.mmr;
+    // Only fill MMR the agent didn't supply (the in-replay value is the
+    // at-game-time truth and always wins). When we do fill it, use the
+    // RACE-CORRECT current MMR — the opponent's rating in the race they
+    // played THIS game — never their highest / most-recent across races
+    // (which tagged a Protoss game with the opponent's Terran rating).
+    if (typeof incomingGame.mmr !== "number") {
+      const raceMmr = await this._raceCorrectCurrentMmr(incomingGame);
+      if (raceMmr && typeof raceMmr.mmr === "number") {
+        update["opponent.mmr"] = raceMmr.mmr;
+        if (
+          typeof incomingGame.region !== "string"
+          && typeof raceMmr.region === "string"
+        ) {
+          update["opponent.region"] = raceMmr.region;
+        }
+      }
     }
     if (
-      typeof incomingGame.region !== "string"
+      update["opponent.region"] === undefined
+      && typeof incomingGame.region !== "string"
       && typeof set.region === "string"
     ) {
       update["opponent.region"] = set.region;
@@ -1362,6 +1387,151 @@ class OpponentsService {
       this.logger.warn(
         { err, userId, gameId },
         "opponent_game_mmr_stamp_failed",
+      );
+    }
+  }
+
+  /**
+   * The opponent's *current* SC2Pulse MMR **for the race they played in
+   * this game** — or null when we don't have one. Uses the per-race
+   * breakdown (``getRaceBreakdown``) rather than the collapsed
+   * single-MMR pick, so a Protoss game never inherits the opponent's
+   * Terran rating. Returns null (→ stamp nothing) when:
+   *   - the game's race is unknown ("U" / missing) — we won't guess;
+   *   - we have no id/toon to query SC2Pulse with;
+   *   - SC2Pulse has no current-season team for that race.
+   *
+   * Cached at the SC2Pulse layer (``getRaceBreakdown`` memoises 5 min by
+   * id set), so a bulk re-upload against one opponent costs one fetch.
+   *
+   * @private
+   * @param {Record<string, any>} incomingGame
+   * @returns {Promise<{ mmr: number, region: string|null }|null>}
+   */
+  async _raceCorrectCurrentMmr(incomingGame) {
+    const race = canonicalRaceName(incomingGame && incomingGame.race);
+    if (!race) return null;
+    if (!this.pulseMmr || typeof this.pulseMmr.getRaceBreakdown !== "function") {
+      return null;
+    }
+    /** @type {string[]} */
+    const ids = [];
+    if (
+      typeof incomingGame.pulseCharacterId === "string"
+      && incomingGame.pulseCharacterId
+    ) {
+      ids.push(incomingGame.pulseCharacterId);
+    } else if (
+      typeof incomingGame.toonHandle === "string"
+      && incomingGame.toonHandle
+    ) {
+      ids.push(incomingGame.toonHandle);
+    }
+    if (ids.length === 0) return null;
+    try {
+      const races = await this.pulseMmr.getRaceBreakdown(ids);
+      return pickRaceMmr(races, race);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Bulk back-stamp a newly-resolved opponent's current MMR onto their
+   * prior games — race-correct and recency-bounded. One ``getRaceBreakdown``
+   * call (cached), then one ``updateMany`` per race, each scoped to:
+   *   - games against this opponent with no in-replay MMR,
+   *   - of the matching race ("opponent.race" begins with the race's
+   *     first letter — tolerant of "Protoss"/"P" spellings),
+   *   - played within the trust window (``stampFloor``).
+   * So a barcode's 2018 games are never touched, and a Protoss game
+   * only ever receives the opponent's Protoss rating.
+   *
+   * @private
+   * @param {string} userId
+   * @param {string} pulseId
+   * @param {Record<string, any>} set The opponents-row $set just written.
+   * @returns {Promise<void>}
+   */
+  async _backfillRestampGamesByRace(userId, pulseId, set) {
+    // Region first, and broadly: it's derived from the stable toon
+    // handle (it doesn't drift with time or race), so stamp it onto
+    // every game against this opponent that lacks an in-replay MMR —
+    // independent of SC2Pulse availability — so the per-region filter
+    // works even before any MMR lands.
+    const region = set && typeof set.region === "string" ? set.region : null;
+    if (region) {
+      try {
+        await this.db.games.updateMany(
+          {
+            userId,
+            "opponent.pulseId": pulseId,
+            "opponent.mmr": { $not: { $type: "number" } },
+          },
+          { $set: { "opponent.region": region } },
+        );
+      } catch (err) {
+        this.logger.warn(
+          { err, userId, pulseId },
+          "opponent_pulse_backfill_games_region_failed",
+        );
+      }
+    }
+    // MMR is the part that must be race-correct + recency-bounded.
+    const charId =
+      set && typeof set.pulseCharacterId === "string" && set.pulseCharacterId
+        ? set.pulseCharacterId
+        : null;
+    if (!charId) return;
+    if (!this.pulseMmr || typeof this.pulseMmr.getRaceBreakdown !== "function") {
+      return;
+    }
+    let races = [];
+    try {
+      races = await this.pulseMmr.getRaceBreakdown([charId]);
+    } catch (err) {
+      this.logger.warn(
+        { err, userId, pulseId },
+        "opponent_pulse_backfill_race_breakdown_failed",
+      );
+      return;
+    }
+    if (!Array.isArray(races) || races.length === 0) return;
+    const floor = stampFloor();
+    const fallbackRegion =
+      set && typeof set.region === "string" ? set.region : null;
+    let restamped = 0;
+    for (const r of races) {
+      const letter = canonicalRaceLetter(r && r.race);
+      const mmr = Number(r && r.mmr);
+      if (!letter || !Number.isFinite(mmr) || mmr <= 0) continue;
+      const region = typeof r.region === "string" ? r.region : fallbackRegion;
+      /** @type {Record<string, any>} */
+      const gameUpdate = { "opponent.mmr": Math.round(mmr) };
+      if (typeof region === "string") gameUpdate["opponent.region"] = region;
+      try {
+        const gres = await this.db.games.updateMany(
+          {
+            userId,
+            "opponent.pulseId": pulseId,
+            "opponent.mmr": { $not: { $type: "number" } },
+            "opponent.race": { $regex: `^${letter}`, $options: "i" },
+            date: { $gte: floor },
+          },
+          { $set: gameUpdate },
+        );
+        restamped += gres.modifiedCount || 0;
+      } catch (err) {
+        this.logger.warn(
+          { err, userId, pulseId, race: r.race },
+          "opponent_pulse_backfill_games_restamp_failed",
+        );
+      }
+    }
+    if (restamped > 0) {
+      this.logger.info(
+        { userId, pulseId, gameCount: restamped },
+        "opponent_pulse_backfill_games_restamped",
       );
     }
   }
@@ -1615,45 +1785,20 @@ class OpponentsService {
           "opponent_pulse_character_id_upgraded",
         );
         // Back-stamp games against this opponent that DON'T already
-        // carry an in-replay MMR. The filter on
-        // ``opponent.mmr: { $not: { $type: "number" } }`` is the
-        // priority guard — the agent's in-replay value is the
-        // at-game-time truth and must never be overwritten by
-        // pulse's current ladder MMR (which drifts the moment the
-        // opponent plays another ranked match). One updateMany so a
-        // barcode with 50 prior games becomes one Mongo round-trip,
-        // not 50. Uses the {opponent.pulseId, userId, date} index.
-        /** @type {Record<string, any>} */
-        const gameUpdate = {};
-        if (typeof set.mmr === "number") gameUpdate["opponent.mmr"] = set.mmr;
-        if (typeof set.region === "string") gameUpdate["opponent.region"] = set.region;
-        if (Object.keys(gameUpdate).length > 0) {
-          try {
-            const gres = await this.db.games.updateMany(
-              {
-                userId,
-                "opponent.pulseId": row.pulseId,
-                "opponent.mmr": { $not: { $type: "number" } },
-              },
-              { $set: gameUpdate },
-            );
-            if (gres.modifiedCount > 0) {
-              this.logger.info(
-                {
-                  userId,
-                  pulseId: row.pulseId,
-                  gameCount: gres.modifiedCount,
-                },
-                "opponent_pulse_backfill_games_restamped",
-              );
-            }
-          } catch (err) {
-            this.logger.warn(
-              { err, userId, pulseId: row.pulseId },
-              "opponent_pulse_backfill_games_restamp_failed",
-            );
-          }
-        }
+        // carry an in-replay MMR. Two priority guards:
+        //   * ``opponent.mmr: { $not: { $type: "number" } }`` — the
+        //     agent's in-replay value is the at-game-time truth and is
+        //     never overwritten by pulse's current ladder MMR.
+        //   * ``date >= stampFloor`` — current MMR is only a fair proxy
+        //     for game-time MMR on recent games; we never back-stamp it
+        //     onto years-old games (that's how a barcode's 2018 games
+        //     ended up tagged with its 2026 rating).
+        // And it's RACE-CORRECT: one updateMany per race, each scoped to
+        // games where the opponent actually played that race, stamping
+        // the opponent's MMR for THAT race — so a Protoss game can't
+        // inherit their Terran rating. The per-race breakdown is one
+        // cached SC2Pulse call regardless of how many games match.
+        await this._backfillRestampGamesByRace(userId, row.pulseId, set);
       }
     }
     return { scanned: rows.length, resolved, updated, skipped };

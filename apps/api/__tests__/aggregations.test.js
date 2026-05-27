@@ -742,6 +742,41 @@ describe("services/aggregations", () => {
     expect(json).toContain('"$lt":5500');
   });
 
+  test("oppMmrBucketGames gates opponent MMR by the 1-year trust floor", async () => {
+    // A current/last-known MMR is only a fair proxy for game-time MMR
+    // on recent games; beyond the trust window the effective MMR must
+    // collapse to null so an 8-year-old game can't be bucketed under
+    // today's rating. Assert the date gate is wired into the pipeline.
+    let captured = null;
+    const games = {
+      aggregate(pipeline) {
+        captured = pipeline;
+        return {
+          toArray: () => Promise.resolve([{ meta: [], rows: [] }]),
+        };
+      },
+    };
+    const svc = new AggregationsService({ games });
+    await svc.oppMmrBucketGames("u1", {}, { lo: 6100, hi: 6200 });
+    // The effective-MMR $addFields gates on the game date with a $gte
+    // against a Date floor before falling back to snapshot/opponents mmr.
+    const addFields = captured.find(
+      (s) => s.$addFields && s.$addFields._oppMmr,
+    );
+    expect(addFields).toBeTruthy();
+    const cond = addFields.$addFields._oppMmr.$cond;
+    expect(Array.isArray(cond)).toBe(true);
+    expect(cond[0]).toMatchObject({ $gte: ["$date", expect.any(Date)] });
+    // The far-side branch is a hard null (untrusted → missing MMR).
+    expect(cond[2]).toBeNull();
+    // Floor is ~365 days before now (allow a generous slack for clock
+    // drift / test runtime).
+    const floor = cond[0].$gte[1];
+    const ageDays = (Date.now() - floor.getTime()) / (24 * 60 * 60 * 1000);
+    expect(ageDays).toBeGreaterThan(364);
+    expect(ageDays).toBeLessThan(366);
+  });
+
   test("oppMmrBucketGames rejects a malformed band without touching the db", async () => {
     let called = false;
     const games = {

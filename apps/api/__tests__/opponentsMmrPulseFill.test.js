@@ -81,6 +81,15 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
         calls.push({ kind: "toon", toon });
         return impl(toon, undefined);
       }),
+      // Per-race breakdown drives the race-correct per-game stamp.
+      // baseGame.race is "P", so surface the impl's value under Protoss
+      // so the stamp picks it for these Protoss games.
+      getRaceBreakdown: jest.fn(async (ids) => {
+        calls.push({ kind: "races", ids });
+        const r = await impl(ids[0], undefined);
+        if (!r) return [];
+        return [{ race: "Protoss", mmr: r.mmr, region: r.region }];
+      }),
     };
   }
 
