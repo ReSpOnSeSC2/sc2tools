@@ -93,6 +93,27 @@ describe("POST /games ladder-map + player-count stamping", () => {
     expect(byId.g3b.isLadderMap).toBe(false);
   });
 
+  test("isLadderGame (authoritative) overrides the map-name proxy", async () => {
+    const ladderMapPool = {
+      get: jest.fn(async () => ({ maps: ["Site Delta"], teamMaps: [] })),
+    };
+    const { app, upserts } = buildTestApp({ ladderMapPool });
+    const res = await request(app)
+      .post("/games")
+      .send({
+        games: [
+          // Custom game ON a ladder map → proxy says ladder, flag says custom.
+          { ...baseGame, gameId: "customOnLadder", map: "Site Delta LE", isLadderGame: false },
+          // Ladder game on an unknown/new map → proxy says custom, flag says ladder.
+          { ...baseGame, gameId: "ladderOnUnknown", map: "Brand New Unlisted Map", isLadderGame: true },
+        ],
+      });
+    expect(res.status).toBe(202);
+    const byId = Object.fromEntries(upserts.map((g) => [g.gameId, g]));
+    expect(byId.customOnLadder.isLadderMap).toBe(false);
+    expect(byId.ladderOnUnknown.isLadderMap).toBe(true);
+  });
+
   test("ingest still succeeds (and classifies) when the pool lookup throws", async () => {
     const ladderMapPool = {
       get: jest.fn(async () => {

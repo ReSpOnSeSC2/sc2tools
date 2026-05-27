@@ -2,6 +2,23 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.10.0
+
+### Added — authoritative ladder/custom signal (`isLadderGame`)
+- **Emit `isLadderGame`** on every uploaded game, read from the replay's
+  matchmaking category (sc2reader `replay.category` == "Ladder", with an
+  `amm`/`ranked`/`competitive` boolean fallback). `true` = ranked ladder
+  game, `false` = custom/unranked, omitted when the replay doesn't
+  expose it.
+- **Why.** The cloud's ladder / Custom map filter has been classifying
+  games by matching the map name against the ladder pool — a proxy that
+  mislabels a custom game played on a ladder map (or a ladder game on a
+  since-retired map). The cloud now prefers this authoritative flag when
+  present and falls back to the map-name proxy otherwise, so re-ingested
+  games (via a Resync) classify with 100% accuracy.
+- **Backwards-compatible.** Optional on the wire and in the cloud
+  schema; games uploaded by older agents simply keep using the proxy.
+
 ## 0.9.1
 
 ### Fixed — live opponent Pulse/MMR misses at game start (region hint + clan-tag strip)

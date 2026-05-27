@@ -370,6 +370,14 @@ class CloudGame:
     # that pre-date the field; the cloud treats an absent count as
     # "unknown" and excludes the game from both size buckets.
     player_count: Optional[int] = None
+    # Authoritative ladder-vs-custom signal from the replay's matchmaking
+    # category (sc2reader ``replay.category``/``amm``). True = ranked
+    # ladder game, False = custom/unranked. The cloud prefers this over
+    # the map-name proxy for the FilterBar's ladder / Custom filter, so a
+    # custom game on a ladder map (or a ladder game on a since-retired
+    # map) classifies correctly. ``None`` when the replay doesn't expose
+    # the field — the cloud then falls back to the map-name proxy.
+    is_ladder_game: Optional[bool] = None
     # Optional structured outputs the cloud uses to render the Activity
     # tab's per-game charts and the macro-breakdown drilldown. Computing
     # these requires a deep parse + extra event walks; we attach them
@@ -415,6 +423,8 @@ class CloudGame:
             out["myToonHandle"] = str(self.my_toon_handle)
         if self.player_count is not None:
             out["playerCount"] = int(self.player_count)
+        if self.is_ladder_game is not None:
+            out["isLadderGame"] = bool(self.is_ladder_game)
         if self.opponent:
             out["opponent"] = self.opponent
         if self.macro_breakdown is not None:
@@ -438,6 +448,28 @@ def _player_count(ctx: Any) -> Optional[int]:
     players = getattr(ctx, "all_players", None) or []
     n = len(players)
     return n if n > 0 else None
+
+
+def _is_ladder_game(ctx: Any) -> Optional[bool]:
+    """Authoritative ladder-vs-custom signal from the raw replay.
+
+    sc2reader exposes the matchmaking category on the Replay object:
+    ``category`` is "Ladder" / "Private" / "Public"; older builds carry
+    an ``amm`` (automated match making) boolean. We trust those over the
+    cloud's map-name proxy. Returns ``None`` when neither is present so
+    the cloud falls back to the proxy rather than guessing.
+    """
+    raw = getattr(ctx, "raw", None)
+    if raw is None:
+        return None
+    category = getattr(raw, "category", None)
+    if isinstance(category, str) and category.strip():
+        return category.strip().lower() == "ladder"
+    for attr in ("amm", "ranked", "competitive"):
+        val = getattr(raw, attr, None)
+        if isinstance(val, bool):
+            return val
+    return None
 
 
 def parse_replay_for_cloud(
@@ -708,6 +740,7 @@ def parse_replay_for_cloud(
         my_mmr=my_mmr,
         my_toon_handle=my_toon_handle,
         player_count=_player_count(ctx),
+        is_ladder_game=_is_ladder_game(ctx),
         opponent=opponent,
         build_log=my_build_log,
         early_build_log=early_build_log,

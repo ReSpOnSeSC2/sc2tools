@@ -272,6 +272,34 @@ def test_to_payload_omits_player_count_when_unset():
     assert "playerCount" not in payload
 
 
+def test_to_payload_emits_is_ladder_game_both_values():
+    """Authoritative ladder/custom signal — the cloud prefers it over
+    the map-name proxy. Both True and False must survive to the wire
+    (a literal ``False`` is meaningful: 'this was a custom game')."""
+    assert _bare_cloud_game(is_ladder_game=True).to_payload()["isLadderGame"] is True
+    assert _bare_cloud_game(is_ladder_game=False).to_payload()["isLadderGame"] is False
+
+
+def test_to_payload_omits_is_ladder_game_when_unset():
+    """Absent when the replay didn't expose a matchmaking category — the
+    cloud falls back to the map-name proxy."""
+    assert "isLadderGame" not in _bare_cloud_game().to_payload()
+
+
+def test_is_ladder_game_reads_replay_category():
+    """``_is_ladder_game`` trusts sc2reader's category, with an amm
+    boolean fallback, and returns None when neither is present."""
+    from types import SimpleNamespace
+    from sc2tools_agent.replay_pipeline import _is_ladder_game
+
+    assert _is_ladder_game(SimpleNamespace(raw=SimpleNamespace(category="Ladder"))) is True
+    assert _is_ladder_game(SimpleNamespace(raw=SimpleNamespace(category="Private"))) is False
+    assert _is_ladder_game(SimpleNamespace(raw=SimpleNamespace(amm=True))) is True
+    assert _is_ladder_game(SimpleNamespace(raw=SimpleNamespace(amm=False))) is False
+    assert _is_ladder_game(SimpleNamespace(raw=SimpleNamespace())) is None
+    assert _is_ladder_game(SimpleNamespace(raw=None)) is None
+
+
 # -------------------------------------------------------------------------
 # _resolve_my_mmr — streamer's MMR comes through Layer 1 (PlayerInfo.mmr)
 # OR Layer 2 (raw sc2reader player). v0.5.5 shipped a no-op fix that read
