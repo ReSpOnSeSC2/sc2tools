@@ -732,8 +732,16 @@ function normaliseToonHandle(raw) {
  *   - ``{members: [{character: {id, ...}}], ...}`` — team-shaped, when
  *     the term matched via the ranked-team index instead of the
  *     character-only index.
+ *   - ``{members: {character: {id, ...}}, ...}`` — the modern
+ *     ``/character/search`` shape: a ``LadderDistinctCharacter`` whose
+ *     ``members`` is a SINGULAR object (not an array). This is what the
+ *     live endpoint returns for a profile-URL term, so without handling
+ *     it the toon→id resolution (``getCurrentMmrByToon`` / a raw toon
+ *     handle fed to ``getRaceBreakdown``) silently returned null and an
+ *     opponent's MMR only landed later via the cloud resolver's
+ *     separate ``/character/search/advanced`` path.
  *
- * We accept both so a future SC2Pulse refactor (or a search that
+ * We accept every shape so a SC2Pulse refactor (or a search that
  * happens to land on the team index) doesn't blank the session widget.
  *
  * @param {unknown} hit
@@ -751,6 +759,12 @@ function extractCharacterId(hit) {
       const id = pickIdFromCharacter(m.character);
       if (id) return id;
     }
+  } else if (obj.members && typeof obj.members === "object") {
+    // ``members`` (singular object) — the modern /character/search
+    // ``LadderDistinctCharacter`` carries the character one level down
+    // under ``members.character``.
+    const id = pickIdFromCharacter(obj.members.character);
+    if (id) return id;
   }
   // ``member`` (singular object) has appeared in some Pulse responses
   // and is exercised by an existing pulseMmr.test.js fixture; keep it
