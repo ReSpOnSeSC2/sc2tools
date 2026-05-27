@@ -129,6 +129,49 @@ describe("cross-user SC2Pulse sharing via the directory", () => {
     expect(calls.getRaceBreakdown).toBe(1);
   });
 
+  test("admin Retry forces a fresh pull and refreshes the shared cache for everyone", async () => {
+    const directory = new PulseDirectoryService(db);
+    // A peer's slightly-stale value is already cached (within TTL).
+    await directory.recordMmr({
+      toonHandle: TOON,
+      pulseCharacterId: "267727",
+      mmr: 4000,
+      region: "NA",
+    });
+    let breakdownCalls = 0;
+    const pulse = {
+      async getCurrentMmrForAny() {
+        return { mmr: 5000, region: "NA" };
+      },
+      async getCurrentMmr() {
+        return { mmr: 5000, region: "NA" };
+      },
+      async getRaceBreakdown() {
+        breakdownCalls += 1;
+        return [
+          { race: "Protoss", mmr: 5000, games: 50, league: "Master", region: "NA" },
+        ];
+      },
+    };
+    const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
+      pulseMmr: pulse,
+      pulseDirectory: directory,
+    });
+    // Seed an opponents row for the admin's target user.
+    await opponents.recordGame("userA", game({ gameId: "a1" }));
+
+    // Retry: must bypass the cached 4000 and pull the live 5000…
+    const retry = await opponents.retryPulseResolution("userA", TOON);
+    expect(retry).toBeTruthy();
+    expect(retry.mmr).toBe(5000);
+
+    // …and the fresh value must be written through so EVERY user now
+    // sees 5000 from the shared cache.
+    const shared = await directory.getFreshMmr({ toonHandle: TOON });
+    expect(shared.mmr).toBe(5000);
+    expect(breakdownCalls).toBeGreaterThan(0);
+  });
+
   test("resolver reuses another user's resolution without hitting SC2Pulse", async () => {
     const directory = new PulseDirectoryService(db);
     // Pre-seed as if user A already resolved this toon.
