@@ -272,7 +272,7 @@ describe("OpponentsService.getPulseRaceBreakdown", () => {
     expect(await opponents.getPulseRaceBreakdown("u1", "nope")).toBeNull();
   });
 
-  test("returns per-race rows + top vs most-played-vs-you headline candidates", async () => {
+  test("returns per-race rows + top-race headline", async () => {
     const pulseMmr = {
       getRaceBreakdown: jest.fn(async () => [
         { race: "Protoss", mmr: 5584, games: 7387, league: "Master", region: "NA" },
@@ -288,23 +288,12 @@ describe("OpponentsService.getPulseRaceBreakdown", () => {
       toonHandle: "1-S2-1-77",
       gameCount: 12,
     });
-    // They went Zerg in all 12 games vs this user → most-played-vs-you
-    // is Zerg, even though Protoss is their higher (top) race.
-    await db.games.insertMany(
-      Array.from({ length: 12 }, (_, i) => ({
-        userId: "u1",
-        gameId: `g${i}`,
-        opponent: { pulseId: "1-S2-1-77", race: "Z" },
-      })),
-    );
 
     const out = await opponents.getPulseRaceBreakdown("u1", "1-S2-1-77");
     expect(out.resolved).toBe(true);
     expect(out.races).toHaveLength(3);
     expect(out.topRace).toBe("Protoss");
     expect(out.topMmr).toBe(5584);
-    expect(out.mostPlayedVsYouRace).toBe("Zerg");
-    expect(out.mostPlayedVsYouMmr).toBe(5081);
     // The id list passed to SC2Pulse prefers the resolved character id.
     expect(pulseMmr.getRaceBreakdown).toHaveBeenCalledWith(
       expect.arrayContaining(["107665"]),

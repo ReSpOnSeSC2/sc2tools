@@ -1984,12 +1984,8 @@ class OpponentsService {
 
   /**
    * Per-race SC2Pulse 1v1 MMR breakdown for one of the caller's
-   * opponents, plus the two headline candidates:
-   *   * ``topRace`` / ``topMmr`` — the opponent's highest-rated race.
-   *   * ``mostPlayedVsYouRace`` / ``mostPlayedVsYouMmr`` — the race the
-   *     opponent played against THIS user the most (from the games
-   *     collection), so the headline can track matchup-relevant skill
-   *     rather than whichever ladder they queued last.
+   * opponents, plus ``topRace`` / ``topMmr`` (their highest-rated race)
+   * for the profile header.
    *
    * Live SC2Pulse fetch (cached 5 min in PulseMmrService). Returns
    * ``resolved: false`` with an empty ``races`` array when the
@@ -2003,8 +1999,6 @@ class OpponentsService {
    *   races: Array<{race: string, mmr: number, games: number, league: string|null, region: string|null}>,
    *   topRace: string|null,
    *   topMmr: number|null,
-   *   mostPlayedVsYouRace: string|null,
-   *   mostPlayedVsYouMmr: number|null,
    * }>}
    */
   async getPulseRaceBreakdown(userId, pulseId) {
@@ -2047,62 +2041,13 @@ class OpponentsService {
       }
     }
 
-    const mostPlayedVsYouRace = await this._mostPlayedRaceVsUser(userId, {
-      pulseId: row.pulseId,
-      pulseCharacterId: row.pulseCharacterId,
-    });
     const top = races.length > 0 ? races[0] : null;
-    let mostPlayedVsYouMmr = null;
-    if (mostPlayedVsYouRace) {
-      const match = races.find((r) => r.race === mostPlayedVsYouRace);
-      if (match) mostPlayedVsYouMmr = match.mmr;
-    }
     return {
       resolved: races.length > 0,
       races,
       topRace: top ? top.race : null,
       topMmr: top ? top.mmr : null,
-      mostPlayedVsYouRace,
-      mostPlayedVsYouMmr,
     };
-  }
-
-  /**
-   * The race this opponent played against ``userId`` the most, as a
-   * canonical race name ("Protoss"/"Terran"/"Zerg") or null. Reads the
-   * games collection (cross-toon via ``opponentGamesFilter``) so a
-   * Battle.net rebind doesn't split the count.
-   *
-   * @private
-   * @param {string} userId
-   * @param {{pulseId: string, pulseCharacterId?: string|null}} row
-   * @returns {Promise<string|null>}
-   */
-  async _mostPlayedRaceVsUser(userId, row) {
-    const idFilter = opponentGamesFilter({
-      pulseId: row.pulseId,
-      pulseCharacterId: row.pulseCharacterId,
-    });
-    const match = idFilter ? { userId, ...idFilter } : { userId, "opponent.pulseId": row.pulseId };
-    const cursor = this.db.games.aggregate([
-      { $match: match },
-      { $group: { _id: "$opponent.race", n: { $sum: 1 } } },
-    ]);
-    /** @type {Record<string, string>} */
-    const LETTER_TO_RACE = { P: "Protoss", T: "Terran", Z: "Zerg" };
-    let topRace = null;
-    let topN = -1;
-    for await (const doc of cursor) {
-      const letter = TimingCatalog.normalizeRace(doc._id);
-      const race = LETTER_TO_RACE[letter];
-      if (!race) continue;
-      const n = Number(doc.n) || 0;
-      if (n > topN) {
-        topN = n;
-        topRace = race;
-      }
-    }
-    return topRace;
   }
 }
 
