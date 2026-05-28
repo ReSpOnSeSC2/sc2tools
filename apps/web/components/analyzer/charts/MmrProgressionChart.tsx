@@ -294,6 +294,7 @@ export function MmrProgressionChart({
                   borderRadius: 8,
                   fontSize: 12,
                 }}
+                labelStyle={{ color: COLOR_ACCENT, fontWeight: 600, marginBottom: 4 }}
                 formatter={(value: number, name: string) => {
                   const series = multiSeries.find((s) => s.key === name);
                   return [
@@ -428,6 +429,7 @@ function SingleSeriesChart({
           borderRadius: 8,
           fontSize: 12,
         }}
+        labelStyle={{ color: COLOR_ACCENT, fontWeight: 600, marginBottom: 4 }}
         formatter={(value: number, name: string) => {
           if (name === "close") return [value.toLocaleString(), "Closing MMR"];
           if (name === "band") return [null, null];

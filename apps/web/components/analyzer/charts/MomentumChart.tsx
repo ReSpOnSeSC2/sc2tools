@@ -279,6 +279,7 @@ function SessionCurvePanel({
                   borderRadius: 8,
                   fontSize: 12,
                 }}
+                labelStyle={{ color: COLOR_ACCENT, fontWeight: 600, marginBottom: 4 }}
                 formatter={(value: number, _name: string, ctx) => {
                   const p = (ctx as { payload?: { total: number } }).payload;
                   const games = p?.total ?? 0;

@@ -194,6 +194,10 @@ export function OppMmrBucketsChart() {
                 fontWeight: 600,
                 marginBottom: 4,
               }}
+              // Force a legible row colour — the bars carry the WR colour
+              // ramp, and a dark bucket's fill bled into near-black tooltip
+              // text for the "Sample" row otherwise.
+              itemStyle={{ color: "#cbd5e1" }}
               // Win rate first so the selected band's MMR range header
               // sits directly above the WR readout the user is after.
               itemSorter={(item) => (item.dataKey === "winRatePct" ? 0 : 1)}
