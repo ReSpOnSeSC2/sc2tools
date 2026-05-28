@@ -51,7 +51,7 @@ from typing import Iterable, List, Tuple
 # to grep and update without scanning the whole script.
 # --------------------------------------------------------------------
 
-PROD_ROOTS = ("reveal-sc2-opponent-main", "SC2Replay-Analyzer")
+PROD_ROOTS = (os.path.join("apps", "replay-engine"),)
 
 EXCLUDE_DIR_NAMES = {
     "node_modules",
@@ -70,66 +70,24 @@ EXCLUDE_DIR_NAMES = {
 # Files whose explicit job is to BE the atomic helper. The grep ignores
 # these — the rule it enforces does not apply to its own implementation.
 HELPER_ALLOWLIST = {
-    os.path.join(
-        "reveal-sc2-opponent-main",
-        "stream-overlay-backend",
-        "lib",
-        "atomic-fs.js",
-    ),
-    os.path.join("reveal-sc2-opponent-main", "core", "atomic_io.py"),
+    # The atomic-write helper itself legitimately does the low-level
+    # temp-file + os.replace dance the guard otherwise flags.
+    os.path.join("apps", "replay-engine", "core", "atomic_io.py"),
 }
 
-# Specific files that have a documented reason to be exempt from a
-# specific rule. Keep this list short and reviewed in PR.
-NODE_BARE_WRITE_EXEMPT = {
-    # Map-tile image cache. Not a data file; readers tolerate partial PNGs
-    # by re-fetching. Tracked under audit follow-up A2 (see doc).
-    os.path.join(
-        "reveal-sc2-opponent-main",
-        "stream-overlay-backend",
-        "analyzer.js",
-    ),
-    # routes/doctor.js writes a tiny "probe" file (timestamp string) to
-    # verify the data dir is writable, then unlinks it. Not a data
-    # file -- it's a fs-permission probe. Documented as part of the
-    # bootstrap doctor banner (commit 68e50fe).
-    os.path.join(
-        "reveal-sc2-opponent-main",
-        "stream-overlay-backend",
-        "routes",
-        "doctor.js",
-    ),
-}
+# No Node sources live under the scanned roots, but the set is kept so
+# the rule machinery stays uniform.
+NODE_BARE_WRITE_EXEMPT = set()
 
 PYTHON_BARE_WRITE_EXEMPT = {
-    # data_store.py writes a one-off ``.corrupt`` quarantine dump after
-    # detecting bad input — best-effort and post-error by definition.
-    os.path.join("reveal-sc2-opponent-main", "core", "data_store.py"),
-    # The CSV / debug-report writers in analyzer_app.py go through
-    # atomic_write_text after Phase 2; the file legitimately uses
-    # ``open(path, "w")`` for log files in non-data paths. Whitelisted
-    # at the file level; the per-call review lives in PR.
-    os.path.join("reveal-sc2-opponent-main", "gui", "analyzer_app.py"),
-    # error_logger writes go through atomic_write_text since Phase 2.
-    os.path.join("reveal-sc2-opponent-main", "core", "error_logger.py"),
-    # Build-time scripts (extract icons, recon install, etc.) that emit
-    # manifest text files. They run once and are not a runtime data path.
-    os.path.join(
-        "reveal-sc2-opponent-main", "scripts", "extract_sc2_icons.py"
-    ),
-    os.path.join(
-        "reveal-sc2-opponent-main", "scripts", "extract_sc2_icons_casc.py"
-    ),
-    os.path.join("reveal-sc2-opponent-main", "scripts", "recon_sc2_install.py"),
     # Dev-only fake-data injector. Not run in production. The script
     # itself documents this in its module docstring.
     os.path.join(
-        "SC2Replay-Analyzer", "scripts", "fake_data_injector.py"
+        "apps", "replay-engine", "scripts", "fake_data_injector.py"
     ),
-    # The migrations CLI in SC2Replay-Analyzer's db/database.py uses
-    # ``open(path, "w", newline="")`` for CSV exports — same pattern as
-    # analyzer_app.py and equally low blast.
-    os.path.join("SC2Replay-Analyzer", "db", "database.py"),
+    # The migrations CLI in apps/replay-engine's db/database.py uses
+    # ``open(path, "w", newline="")`` for CSV exports — low blast.
+    os.path.join("apps", "replay-engine", "db", "database.py"),
 }
 
 # --------------------------------------------------------------------

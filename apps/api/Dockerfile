@@ -10,7 +10,7 @@
 #      out of /opt/sc2-analyzer using /opt/sc2-py/bin/python.
 #
 # Required build-time context: the repository root, so the COPY of
-# `SC2Replay-Analyzer/` resolves. In Render this means setting the
+# `apps/replay-engine/` resolves. In Render this means setting the
 # Dockerfile path to `apps/api/Dockerfile` and the build context to `.`
 # (the repo root) — see render.yaml.
 ARG PYTHON_IMAGE=python:3.12-slim-bookworm
@@ -29,7 +29,7 @@ RUN apt-get update \
         libgomp1 \
         python3-venv \
     && rm -rf /var/lib/apt/lists/*
-COPY SC2Replay-Analyzer/requirements.txt /tmp/sc2-requirements.txt
+COPY apps/replay-engine/requirements.txt /tmp/sc2-requirements.txt
 # Single self-verifying RUN: create the venv, install deps, prove
 # python+sc2reader work, all in one layer so a partial state can
 # never be cached as "successful". Render's layer cache had a stale
@@ -109,18 +109,14 @@ COPY --from=python-deps /opt/sc2-py /opt/sc2-py
 RUN /opt/sc2-py/bin/python --version \
     && /opt/sc2-py/bin/python -c "import sc2reader, sys; print('sc2reader', sc2reader.__version__, 'on', sys.version)"
 
-# The analyzer's CLIs and shared modules. Everything under
-# `scripts/`, `core/`, `analytics/`, `data/` is read at runtime.
-COPY SC2Replay-Analyzer /opt/sc2-analyzer
-
-# Map minimap thumbnails. SC2Replay-Analyzer/data/ doesn't ship the
-# per-map images itself; the canonical set lives in the legacy
-# reveal-sc2-opponent bundle at data/map-images/. Without these the
-# Map Intel page renders against an empty background (and 404s every
+# The engine's CLIs, shared modules, and data. Everything under
+# `scripts/`, `core/`, `analytics/`, `data/` is read at runtime. This
+# includes the minimap thumbnails at `data/map-images/` — without them
+# the Map Intel page renders against an empty background (and 404s every
 # /v1/map-image request). The CatalogService.resolveMapImageDirs probe
-# checks both ``data/map_assets`` and ``data/map-images`` so this
+# checks both ``data/map_assets`` and ``data/map-images`` so the
 # directory is picked up automatically once it lands on disk.
-COPY reveal-sc2-opponent-main/data/map-images /opt/sc2-analyzer/data/map-images
+COPY apps/replay-engine /opt/sc2-analyzer
 
 WORKDIR /app
 

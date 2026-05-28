@@ -1,8 +1,15 @@
-// Zerg-vs-Protoss build definitions. No matchup-specific entries
-// have been authored yet (Zerg-generic rules under `zerg.ts`
-// surface in ZvP via the `matchup: null` fall-through in
-// `filterDefinitions`). When the analyzer learns ZvP-specific
-// signatures, add them here and they'll be picked up by the facade.
+// Zerg-vs-Protoss matchup-specific build definitions. Detected by the
+// per-matchup detectors in core/strategy_detector_matchups.py; they take
+// precedence over the Zerg-generic rules (zerg.ts) and fall through to
+// them when no specific build matched.
 import type { BuildDefinition } from "../build-definitions";
 
-export const ZVP_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [];
+export const ZVP_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
+  {
+    race: "Zerg",
+    matchup: "ZvP",
+    name: "ZvP - Ling Bane Muta",
+    description:
+      "Detected when a Baneling Nest and Spire support Banelings and a wall of Zerglings -- the muta/ling/bane harass style vs Protoss.",
+  },
+];

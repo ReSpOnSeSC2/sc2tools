@@ -8,7 +8,7 @@
  * ----------
  * Game rows are deduped by the unique index ``{userId, gameId}``. The
  * agent constructs ``gameId`` in
- * ``SC2Replay-Analyzer/core/replay_loader.py`` as
+ * ``apps/replay-engine/core/replay_loader.py`` as
  *
  *   f"{date_str}|{opponent.name}|{replay.map_name or 'unknown'}|{length_sec}"
  *

@@ -32,10 +32,10 @@ import json
 import os
 import sys
 
-# Make the SC2Replay-Analyzer package importable.
+# Make the replay-engine package importable.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
-_ANALYZER = os.path.join(_ROOT, "SC2Replay-Analyzer")
+_ANALYZER = os.path.join(_ROOT, "apps", "replay-engine")
 if _ANALYZER not in sys.path:
     sys.path.insert(0, _ANALYZER)
 

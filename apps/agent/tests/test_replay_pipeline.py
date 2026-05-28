@@ -461,7 +461,7 @@ def test_load_sc2ra_module_skips_reveal_copy_pre_registered_in_sys_modules(
 
     The loader must detect when the cached entry is the reveal copy
     (``__file__`` containing ``reveal-sc2-opponent-main``) and skip it,
-    falling through to disk load from ``SC2Replay-Analyzer/``.
+    falling through to disk load from ``apps/replay-engine/``.
     """
     import sys
     from types import ModuleType
@@ -491,9 +491,9 @@ def test_load_sc2ra_module_skips_reveal_copy_pre_registered_in_sys_modules(
         "this is the v0.5.1 regression that broke macro breakdown for "
         "every uploaded replay"
     )
-    # And the resolved module must be the SC2Replay-Analyzer copy.
+    # And the resolved module must be the apps/replay-engine copy.
     file_attr = getattr(mod, "__file__", "") or ""
-    assert "SC2Replay-Analyzer" in file_attr, (
+    assert "replay-engine" in file_attr, (
         f"loader returned an unexpected module: {file_attr!r}"
     )
     # The v0.5+ Analyzer copy has the ``opp_pid`` parameter — without
@@ -710,7 +710,7 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     )
 
     # ---- Mock extract_macro_events / compute_macro_score. ----
-    # Signature mirrors the v0.5+ SC2Replay-Analyzer extractor:
+    # Signature mirrors the v0.5+ apps/replay-engine extractor:
     # ``(replay, my_pid, opp_pid=None)`` returning ``opp_stats_events``
     # and ``unit_timeline`` alongside the my-side samples. The agent's
     # _compute_macro_breakdown now passes both pids in one call so the
