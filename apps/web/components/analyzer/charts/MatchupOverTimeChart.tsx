@@ -31,7 +31,7 @@ type MatchupResponse = {
   points: MatchupPoint[];
 };
 
-type RaceKey = "P" | "T" | "Z" | "R";
+type RaceKey = "P" | "T" | "Z";
 
 type PanelPoint = {
   date: string;
@@ -52,7 +52,6 @@ const RACE_META: ReadonlyArray<{
   { key: "P", label: "vs Protoss", color: "#7c8cff" },
   { key: "T", label: "vs Terran", color: "#ff6b6b" },
   { key: "Z", label: "vs Zerg", color: "#a78bfa" },
-  { key: "R", label: "vs Random", color: "#9aa3b2" },
 ];
 
 const ROLL_BY_BUCKET: Record<"day" | "week" | "month", number> = {
@@ -93,7 +92,7 @@ export function MatchupOverTimeChart({
   const rollWindow = ROLL_BY_BUCKET[bucket];
 
   const seriesByRace = useMemo(() => {
-    const out: Record<RaceKey, PanelPoint[]> = { P: [], T: [], Z: [], R: [] };
+    const out: Record<RaceKey, PanelPoint[]> = { P: [], T: [], Z: [] };
     if (!data || !Array.isArray(data.points)) return out;
     const dateSet = new Set<string>();
     const byKey = new Map<string, MatchupPoint>();
@@ -318,6 +317,7 @@ function MatchupPanel({
                 fontSize: 12,
                 padding: "6px 8px",
               }}
+              labelStyle={{ color: "#7c8cff", fontWeight: 600, marginBottom: 4 }}
               labelFormatter={(v: string) => formatTick(v, true)}
               formatter={(value: number | string, name: string, ctx) => {
                 if (value === null || value === undefined) return ["—", name];
