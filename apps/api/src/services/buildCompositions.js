@@ -328,8 +328,21 @@ function computePerPhase(classifiedGames, phase, perspective) {
       }
       const b = bucket;
       b.sampleCount += 1;
-      if (isWonResult(game.result)) b.wins += 1;
-      else if (isLossResult(game.result)) b.losses += 1;
+      // ``game.result`` is always recorded from the USER's side. From
+      // the opponent's perspective a user Win is the opponent's loss
+      // (and vice-versa), so the W/L is mirrored — otherwise the "what
+      // they typically do" column reports the user's record verbatim
+      // and both columns of the comparison view show an identical
+      // (impossible) win rate.
+      const won = isWonResult(game.result);
+      const lost = isLossResult(game.result);
+      if (perspective === "opponent") {
+        if (won) b.losses += 1;
+        else if (lost) b.wins += 1;
+      } else {
+        if (won) b.wins += 1;
+        else if (lost) b.losses += 1;
+      }
       // Track every observed count per token across games in this
       // bucket. Top-3 are used for the headline display; the full set
       // is exposed for the "show all units" expansion so a roach into
