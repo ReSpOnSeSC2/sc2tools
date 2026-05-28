@@ -17,6 +17,7 @@ import {
   type RevealProps,
 } from "./revealShared";
 import { assignPoolSprites, BuildSprite, useElapsedReveal } from "./spriteShared";
+import { useRevealSound } from "./revealSound";
 
 const W = 560;
 const LANE_H = 38;
@@ -42,6 +43,7 @@ export function HorseRaceReveal({
 }: RevealProps) {
   const reducedMotion = useReducedMotion();
   const rarity = rarityFor(winnerProbability);
+  useRevealSound({ style: "race", spinId, durationMs: DURATION_MS, reducedMotion });
   const { elapsed, settled } = useElapsedReveal(
     spinId,
     DURATION_MS,

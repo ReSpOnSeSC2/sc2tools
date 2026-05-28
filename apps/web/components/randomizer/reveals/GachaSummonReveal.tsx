@@ -18,6 +18,7 @@ import {
   useRevealTimer,
   type RevealProps,
 } from "./revealShared";
+import { useRevealSound } from "./revealSound";
 
 const CHARGE_MS = 1500;
 const FLASH_MS = 320;
@@ -34,6 +35,7 @@ export function GachaSummonReveal({
   const reducedMotion = useReducedMotion();
   const settled = useRevealTimer(spinId, DURATION_MS, reducedMotion, onComplete);
   const rarity = rarityFor(winnerProbability);
+  useRevealSound({ style: "gacha", spinId, durationMs: DURATION_MS, reducedMotion });
   const flashOn = useFlashWindow(spinId, reducedMotion);
   const accent = raceHex(winner.race);
 

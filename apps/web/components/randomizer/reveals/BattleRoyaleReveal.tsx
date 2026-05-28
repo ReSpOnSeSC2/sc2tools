@@ -18,6 +18,7 @@ import {
   useReducedMotion,
   type RevealProps,
 } from "./revealShared";
+import { useRevealSound } from "./revealSound";
 
 const TICK_MS = 450;
 const FINAL_DELAY = 600;
@@ -42,6 +43,13 @@ export function BattleRoyaleReveal({
     reducedMotion,
     onComplete,
   );
+  useRevealSound({
+    style: "battle",
+    spinId,
+    durationMs: eliminationOrder.length * TICK_MS + FINAL_DELAY,
+    reducedMotion,
+    eliminationTimesMs: eliminationOrder.map((_, i) => (i + 1) * TICK_MS),
+  });
 
   return (
     <RevealFrame>

@@ -21,10 +21,12 @@ import {
   assignPoolSprites,
   BuildSprite,
   seededShuffle,
+  SPRITE_TOKEN_BG,
   SpriteLegend,
   useEliminationSchedule,
   useRaf,
 } from "./spriteShared";
+import { useRevealSound } from "./revealSound";
 
 const W = 540;
 const H = 300;
@@ -71,6 +73,13 @@ export function FighterBrawlReveal({
     reducedMotion,
     onComplete,
   );
+  useRevealSound({
+    style: "fighter",
+    spinId,
+    durationMs: DURATION_MS,
+    reducedMotion,
+    eliminationTimesMs: loserOrder.map((id) => deathAt.get(id) ?? DURATION_MS),
+  });
 
   const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
   const fightersRef = useRef<Fighter[]>([]);
@@ -228,7 +237,7 @@ function FighterChip({
           width: R * 2,
           height: R * 2,
           borderRadius: "50%",
-          background: fighter.hit > 0 ? "rgba(255,107,107,0.4)" : `${accent}22`,
+          background: fighter.hit > 0 ? "rgba(255,107,107,0.4)" : SPRITE_TOKEN_BG,
           border: `2px solid ${isWinner ? "#e6b450" : accent}`,
           boxShadow: isWinner ? `0 0 22px ${accent}` : fighter.hit > 0 ? "0 0 14px rgba(255,107,107,0.8)" : "none",
           display: "flex",

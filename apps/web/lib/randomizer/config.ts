@@ -20,10 +20,12 @@ export function emptyMatchupConfig(): MatchupConfig {
   return { enabled: false, useCustomWeights: false, builds: [] };
 }
 
+export const DEFAULT_SOUND = { enabled: true, volume: 0.6 } as const;
+
 export function defaultRandomizerConfig(): RandomizerConfig {
   const matchups = {} as Record<MatchupKey, MatchupConfig>;
   for (const m of MATCHUPS) matchups[m] = emptyMatchupConfig();
-  return { version: 1, matchups };
+  return { version: 1, matchups, sound: { ...DEFAULT_SOUND } };
 }
 
 function sanitizeBuild(raw: unknown): RandomizerBuild | null {
@@ -64,12 +66,24 @@ function sanitizeMatchup(raw: unknown): MatchupConfig {
 export function sanitizeRandomizerConfig(raw: unknown): RandomizerConfig {
   const cfg = defaultRandomizerConfig();
   if (!raw || typeof raw !== "object") return cfg;
-  const matchups = (raw as Record<string, unknown>).matchups;
+  const obj = raw as Record<string, unknown>;
+  cfg.sound = sanitizeSound(obj.sound);
+  const matchups = obj.matchups;
   if (!matchups || typeof matchups !== "object") return cfg;
   for (const m of MATCHUPS) {
     cfg.matchups[m] = sanitizeMatchup((matchups as Record<string, unknown>)[m]);
   }
   return cfg;
+}
+
+function sanitizeSound(raw: unknown): RandomizerConfig["sound"] {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_SOUND };
+  const r = raw as Record<string, unknown>;
+  const vol = Number(r.volume);
+  return {
+    enabled: r.enabled !== false,
+    volume: Number.isFinite(vol) ? Math.max(0, Math.min(1, vol)) : DEFAULT_SOUND.volume,
+  };
 }
 
 /** Replace one matchup's config, returning a new top-level config. */

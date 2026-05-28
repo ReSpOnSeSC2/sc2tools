@@ -74,10 +74,18 @@ export interface MatchupConfig {
   builds: RandomizerBuild[];
 }
 
+/** Reveal sound-effect settings. */
+export interface RandomizerSound {
+  enabled: boolean;
+  /** 0..1 master volume. */
+  volume: number;
+}
+
 /** Full randomizer config — one entry per matchup. */
 export interface RandomizerConfig {
   version: 1;
   matchups: Record<MatchupKey, MatchupConfig>;
+  sound: RandomizerSound;
 }
 
 /** Result of a single spin. */

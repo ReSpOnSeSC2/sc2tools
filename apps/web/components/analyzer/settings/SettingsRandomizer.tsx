@@ -10,11 +10,13 @@
  * randomly-chosen animation (case unboxing, slot machine, gacha
  * summon, battle royale, or wheel spin).
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { Volume2, VolumeX } from "lucide-react";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
+import { Toggle } from "@/components/ui/Toggle";
 import { SaveBar } from "@/components/ui/SaveBar";
 import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
@@ -29,7 +31,12 @@ import {
   MATCHUPS,
   type MatchupKey,
   type RandomizerConfig,
+  type RandomizerSound,
 } from "@/lib/randomizer/types";
+import {
+  setRevealSoundEnabled,
+  setRevealSoundVolume,
+} from "@/components/randomizer/reveals/revealSound";
 import { MatchupSelector } from "./randomizer/MatchupSelector";
 import { MatchupBuildPicker } from "./randomizer/MatchupBuildPicker";
 import { RandomizerPreview } from "./randomizer/RandomizerPreview";
@@ -56,6 +63,13 @@ export function SettingsRandomizer() {
     useDirtyForm<RandomizerConfig>(serverConfig, defaultRandomizerConfig());
 
   usePublishDirty("randomizer", dirty);
+
+  // Keep the audio engine in sync with the draft so the live preview
+  // reflects the sound toggle / volume immediately.
+  useEffect(() => {
+    setRevealSoundEnabled(draft.sound.enabled);
+    setRevealSoundVolume(draft.sound.volume);
+  }, [draft.sound.enabled, draft.sound.volume]);
 
   async function save() {
     if (saving) return;
@@ -114,6 +128,11 @@ export function SettingsRandomizer() {
         onChange={(next) => setDraft((d) => withMatchup(d, active, next))}
       />
 
+      <SoundSettings
+        sound={draft.sound}
+        onChange={(sound) => setDraft((d) => ({ ...d, sound }))}
+      />
+
       <RandomizerPreview matchup={active} config={matchupConfig} />
 
       <SaveBar
@@ -123,5 +142,73 @@ export function SettingsRandomizer() {
         onReset={reset}
       />
     </>
+  );
+}
+
+function SoundSettings({
+  sound,
+  onChange,
+}: {
+  sound: RandomizerSound;
+  onChange: (next: RandomizerSound) => void;
+}) {
+  const pct = Math.round(sound.volume * 100);
+  return (
+    <Section
+      title="Sound effects"
+      description="Procedural sound cues that play during the reveal (wheel ticks, lasers, gallop, bumps) plus a winner fanfare. Plays in OBS and in the preview below."
+    >
+      <Card>
+        <div className="space-y-4">
+          <label className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-bg-elevated px-3 py-2.5">
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-2 text-body font-medium text-text">
+                {sound.enabled ? (
+                  <Volume2 className="h-4 w-4 text-accent-cyan" aria-hidden />
+                ) : (
+                  <VolumeX className="h-4 w-4 text-text-muted" aria-hidden />
+                )}
+                Play sound effects
+              </span>
+              <span className="mt-0.5 block text-caption text-text-muted">
+                In OBS, audio is captured from the Browser Source — control it
+                from your mixer too.
+              </span>
+            </span>
+            <Toggle
+              checked={sound.enabled}
+              onChange={(on) => onChange({ ...sound, enabled: on })}
+              label="Play sound effects"
+            />
+          </label>
+          <div
+            className={[
+              "flex items-center gap-3 px-1",
+              sound.enabled ? "" : "opacity-50",
+            ].join(" ")}
+          >
+            <label htmlFor="rdz-volume" className="text-caption font-medium text-text">
+              Volume
+            </label>
+            <input
+              id="rdz-volume"
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={pct}
+              disabled={!sound.enabled}
+              onChange={(e) =>
+                onChange({ ...sound, volume: Number(e.target.value) / 100 })
+              }
+              className="h-1 flex-1 cursor-pointer accent-accent-cyan"
+            />
+            <span className="w-10 text-right text-caption tabular-nums text-text">
+              {pct}%
+            </span>
+          </div>
+        </div>
+      </Card>
+    </Section>
   );
 }

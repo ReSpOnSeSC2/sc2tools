@@ -20,10 +20,12 @@ import {
   assignPoolSprites,
   BuildSprite,
   seededShuffle,
+  SPRITE_TOKEN_BG,
   SpriteLegend,
   useEliminationSchedule,
   useRaf,
 } from "./spriteShared";
+import { useRevealSound } from "./revealSound";
 
 const SIZE = 360;
 const CENTER = SIZE / 2;
@@ -65,6 +67,15 @@ export function SumoShoveReveal({
     reducedMotion,
     onComplete,
   );
+  useRevealSound({
+    style: "sumo",
+    spinId,
+    durationMs: DURATION_MS,
+    reducedMotion,
+    eliminationTimesMs: loserOrder.map(
+      (_, i) => (DURATION_MS / (loserOrder.length + 1)) * (i + 1),
+    ),
+  });
 
   const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
   const sumosRef = useRef<Sumo[]>([]);
@@ -219,7 +230,7 @@ function SumoChip({
         transition: "opacity 500ms ease, transform 360ms ease",
         borderRadius: "50%",
         border: `2px solid ${isWinner ? "#e6b450" : accent}`,
-        background: sumo.hit > 0 ? "rgba(255,107,107,0.35)" : `${accent}22`,
+        background: sumo.hit > 0 ? "rgba(255,107,107,0.35)" : SPRITE_TOKEN_BG,
         boxShadow: isWinner
           ? `0 0 22px ${accent}`
           : sumo.hit > 0
