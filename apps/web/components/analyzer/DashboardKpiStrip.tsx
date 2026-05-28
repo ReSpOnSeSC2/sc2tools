@@ -429,144 +429,31 @@ function MmrPerRegionStat() {
       />
     );
   }
-  if (entries.length === 2 && groups.length === 2) {
-    // Two regions, one toon each — render both inline. No popover
-    // needed; the card stays a single visual unit.
-    return (
-      <StatCard
-        label="MMR"
-        value={
-          <ul className="flex flex-col gap-0.5 text-base font-semibold leading-tight">
-            {entries.map((e) => (
-              <li
-                key={e.pulseId}
-                className="flex items-baseline justify-between gap-2"
-              >
-                <span className="text-[11px] uppercase tracking-wider text-text-dim">
-                  {e.region || "—"}
-                </span>
-                <span className="tabular-nums">{fmtMmr(e.mmr)}</span>
-              </li>
-            ))}
-          </ul>
-        }
-        size="md"
-      />
-    );
-  }
-  // ≥3 entries OR same-region duplicates: fixed-height card with a
-  // disclosure popover. The headline is the highest MMR overall;
-  // ``details`` opens a grouped list that scrolls past ~8 rows.
-  return <MmrCardWithDetails entries={entries} groups={groups} />;
-}
-
-/**
- * Compact MMR card with a click-to-expand details popover. Keeps the
- * dashboard strip a fixed visual height regardless of how many toons
- * the user has on a single region — a streamer with 10 NA smurfs sees
- * the same card footprint as one with 1 NA toon.
- */
-function MmrCardWithDetails({
-  entries,
-  groups,
-}: {
-  entries: MmrEntry[];
-  groups: Array<[string, MmrEntry[]]>;
-}) {
-  const [open, setOpen] = useState(false);
-  const best = entries[0];
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  const summaryLabel =
-    groups.length === 1
-      ? `${entries.length} toons · ${groups[0][0]}`
-      : `${entries.length} toons · ${groups.length} regions`;
-
+  // Multiple regions: one compact REGION · MMR row each, highest
+  // first. The entries are already sorted desc by MMR, so the first
+  // entry in each region bucket is that region's best — show it. Every
+  // region reads inline (no disclosure popover): a small number next to
+  // its region is the at-a-glance view the dashboard wants.
   return (
-    <div className="relative">
-      <StatCard
-        label={
-          <span className="inline-flex items-center gap-1">
-            <span>MMR</span>
-            <button
-              type="button"
-              onClick={() => setOpen((v) => !v)}
-              aria-haspopup="dialog"
-              aria-expanded={open}
-              aria-label="Show all toons and regions"
-              className="inline-flex h-5 items-center rounded px-1 text-[10px] uppercase tracking-wider text-text-dim hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    <StatCard
+      label="MMR"
+      value={
+        <ul className="flex flex-col gap-0.5 text-base font-semibold leading-tight">
+          {groups.map(([region, rows]) => (
+            <li
+              key={region}
+              className="flex items-baseline justify-between gap-2"
             >
-              details
-              <ChevronDown
-                className={`ml-0.5 h-3 w-3 transition-transform ${
-                  open ? "rotate-180" : ""
-                }`}
-                aria-hidden
-              />
-            </button>
-          </span>
-        }
-        value={<span className="tabular-nums">{fmtMmr(best.mmr)}</span>}
-        hint={
-          <span>
-            <span className="uppercase tracking-wider">{best.region || "—"}</span>
-            <span className="ml-1 text-text-dim">· {summaryLabel}</span>
-          </span>
-        }
-        size="md"
-      />
-      {open ? (
-        <>
-          <button
-            type="button"
-            aria-label="Close MMR details"
-            className="fixed inset-0 z-30"
-            onClick={() => setOpen(false)}
-          />
-          <div
-            role="dialog"
-            aria-label="MMR by toon and region"
-            className="absolute left-0 right-0 top-full z-40 mt-1 max-h-[50vh] overflow-y-auto rounded-lg border border-border bg-bg-surface p-2 shadow-card sm:max-h-72 sm:w-[min(92vw,260px)]"
-          >
-            <ul className="space-y-2">
-              {groups.map(([region, rows]) => (
-                <li key={region}>
-                  <div className="flex items-baseline justify-between border-b border-border/60 pb-0.5 text-[10px] uppercase tracking-wider text-text-dim">
-                    <span>{region}</span>
-                    <span>
-                      {rows.length} toon{rows.length === 1 ? "" : "s"}
-                    </span>
-                  </div>
-                  <ul className="mt-1 space-y-0.5">
-                    {rows.map((r) => (
-                      <li
-                        key={r.pulseId}
-                        className="flex items-center justify-between gap-2 text-xs"
-                      >
-                        <span className="truncate font-mono text-text-dim">
-                          {r.pulseId}
-                        </span>
-                        <span className="tabular-nums font-semibold">
-                          {fmtMmr(r.mmr)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </>
-      ) : null}
-    </div>
+              <span className="text-[11px] uppercase tracking-wider text-text-dim">
+                {region}
+              </span>
+              <span className="tabular-nums">{fmtMmr(rows[0].mmr)}</span>
+            </li>
+          ))}
+        </ul>
+      }
+      size="md"
+    />
   );
 }
 

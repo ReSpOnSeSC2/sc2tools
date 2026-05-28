@@ -481,16 +481,39 @@ function buildMeRouter(deps) {
               pulseId: String(id),
               region: typeof r.region === "string" ? r.region : null,
               mmr: Math.round(Number(r.mmr)),
+              characterId:
+                typeof r.characterId === "string" && r.characterId
+                  ? r.characterId
+                  : null,
             };
           } catch {
             return null;
           }
         }),
       );
-      const entries = settled.filter((e) => e !== null);
       // Sort descending by MMR so the highest ladder always reads
       // first — that's what a streamer's chat asks about.
-      entries.sort((a, b) => b.mmr - a.mmr);
+      const resolved = settled
+        .filter((e) => e !== null)
+        .sort((a, b) => b.mmr - a.mmr);
+      // Collapse duplicate identifiers for the SAME real account. A
+      // profile commonly stores both the raw toon handle
+      // (``1-S2-1-267727``) AND the canonical SC2Pulse character id
+      // (``994428``) for one account — the toon-handle backfill on
+      // games ingest adds the former, manual Settings entry the latter
+      // — so the fan-out would otherwise report one account twice. Both
+      // resolve to the same ``characterId``, so dedupe on it. Running
+      // after the sort means the highest-MMR row wins per account.
+      const seen = new Set();
+      const entries = [];
+      for (const e of resolved) {
+        const key = e.characterId || `pulse:${e.pulseId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        // ``characterId`` was only needed for the dedupe key; keep the
+        // wire shape ``{ pulseId, region, mmr }`` the client expects.
+        entries.push({ pulseId: e.pulseId, region: e.region, mmr: e.mmr });
+      }
       res.json({ entries, truncated });
     } catch (err) {
       next(err);
