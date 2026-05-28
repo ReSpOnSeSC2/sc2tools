@@ -113,19 +113,37 @@ function deriveMatchup(
  * `gameKey`; test fires synthesise a key from the `live` object's
  * identity so each Test click triggers a fresh spin.
  */
-function deriveSpinKey(
+export function deriveSpinKey(
   matchup: MatchupKey | null,
   live: LiveGamePayload | null,
   liveGame: LiveGameEnvelope | null,
 ): string | null {
   if (!matchup) return null;
-  const liveKey = liveGame?.gameKey || live?.gameKey;
-  if (typeof liveKey === "string" && liveKey.length > 0) {
-    return `${matchup}:${liveKey}`;
-  }
-  // Test fires don't carry a gameKey — fall back to a synthetic id
-  // pinned to the test fire so a second Test still re-triggers the
-  // widget.
+  // Test fires don't carry a gameKey — synthesise one pinned to the test
+  // fire so a second Test re-triggers the widget. Checked first because a
+  // sample payload may carry a ``result`` and we still want it to spin.
   if (live?.isTest) return `${matchup}:test:${live.matchup ?? "x"}`;
+  // The randomizer reveals "what to build THIS game", so it must fire at
+  // game START only. The agent's pre/in-game envelope is the start
+  // signal — key off its gameKey while a match is live.
+  const envKey = liveGame?.gameKey;
+  if (typeof envKey === "string" && envKey.length > 0) {
+    return `${matchup}:${envKey}`;
+  }
+  // No agent envelope (agent offline / replay-only). Only a ``live``
+  // payload WITHOUT a result may start a spin: a post-game card always
+  // carries a ``result``, and firing off it is the game-END double-spin
+  // bug — the visibility timer unmounts the widget mid-match (resetting
+  // the spin-dedupe ref), then the match-end payload remounts it and it
+  // spins a second time. The agent gameKey and the cloud's replay-
+  // derived gameKey often differ, so dedupe-by-key can't catch this.
+  if (
+    live
+    && !live.result
+    && typeof live.gameKey === "string"
+    && live.gameKey.length > 0
+  ) {
+    return `${matchup}:${live.gameKey}`;
+  }
   return null;
 }
