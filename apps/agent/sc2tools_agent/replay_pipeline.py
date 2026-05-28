@@ -99,25 +99,18 @@ def _candidate_bases() -> list[Path]:
 
 
 def _ensure_analyzer_on_path() -> None:
-    """Add the analyzer source roots to sys.path so we can ``import core.*``.
+    """Add the replay engine source root to sys.path so we can ``import core.*``.
 
-    The actual ``core.sc2_replay_parser`` module lives in
-    ``reveal-sc2-opponent-main/core/`` — bundled alongside the agent in
-    the frozen exe and laid out at the repo root in source mode.
-
-    The replay engine (``apps/replay-engine``) is added too because some
-    auxiliary helpers historically resolved through it. The reveal
-    package is inserted LAST so it ends up FIRST on ``sys.path``:
-    ``from core.X`` must resolve through it (it owns
-    ``sc2_replay_parser``, ``pulse_resolver`` and the build-detector
-    modules the agent actually calls).
+    The replay engine (``apps/replay-engine``) owns the entire parse
+    surface the agent calls — ``core.sc2_replay_parser`` (parse_deep /
+    parse_live), ``core.pulse_resolver``, ``core.event_extractor``,
+    ``core.map_playback_data``, ``core.timebase``, the build-definition
+    and strategy-detector modules, and ``analytics.macro_score``. It is
+    bundled alongside the agent in the frozen exe and laid out under
+    ``apps/replay-engine`` at the repo root in source mode.
     """
     bases = _candidate_bases()
-    # Order matters: each insert prepends to sys.path[0], so the LAST
-    # entry inserted wins lookup priority. Probe apps/replay-engine
-    # first, then reveal-sc2-opponent-main, so reveal's ``core`` is
-    # what Python finds when resolving ``import core.sc2_replay_parser``.
-    for sub in ("apps/replay-engine", "reveal-sc2-opponent-main"):
+    for sub in ("apps/replay-engine",):
         for base in bases:
             candidate = base / sub
             if candidate.exists() and str(candidate) not in sys.path:
@@ -308,18 +301,19 @@ def probe_analyzer() -> tuple[bool, Optional[str]]:
         return True, None
     except Exception as exc:  # noqa: BLE001
         bases = [str(b) for b in _candidate_bases()]
-        # Synthesise a precise hint about which sibling root we did
-        # find — that's almost always what the user needs to fix.
-        found_reveal = any((Path(b) / "reveal-sc2-opponent-main" / "core" /
-                            "sc2_replay_parser.py").exists() for b in bases)
-        found_analyzer = any((Path(b) / "apps" / "replay-engine" / "core").exists()
-                             for b in bases)
+        # Synthesise a precise hint about whether the engine root we
+        # need was actually found — that's almost always what the user
+        # needs to fix.
+        found_engine = any(
+            (Path(b) / "apps" / "replay-engine" / "core" /
+             "sc2_replay_parser.py").exists()
+            for b in bases
+        )
         msg = (
             f"analyzer_import_failed exc_type={type(exc).__name__} "
             f"exc={exc!r} "
             f"frozen={getattr(sys, 'frozen', False)} "
-            f"reveal_core_present={found_reveal} "
-            f"analyzer_core_present={found_analyzer} "
+            f"engine_core_present={found_engine} "
             f"bases_probed={bases} "
             f"sys_path_head={sys.path[:6]}"
         )

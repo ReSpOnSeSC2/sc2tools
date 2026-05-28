@@ -1667,3 +1667,35 @@ def extract_unit_tracks(replay, my_pid):
         (my_units if rec["owner_pid"] == my_pid else opp_units).append(out)
 
     return {"my_units": my_units, "opp_units": opp_units}
+
+
+def build_log_lines(
+    my_events: List[Dict],
+    cutoff_seconds: Optional[int] = None,
+    dedupe_units: bool = False,
+) -> List[str]:
+    """Format a list of events as build-order log lines.
+
+    Each line is "[m:ss] Name". If cutoff_seconds is given, only events
+    at or before that game-time are included.
+
+    dedupe_units (default False) trims duplicate unit lines so a clean
+    build-order display shows only the FIRST time each unit type appears
+    (so we don't get 50 zergling lines). Buildings and upgrades are NOT
+    deduplicated -- each building is a meaningful tech step.
+    """
+    lines: List[str] = []
+    seen_units: set = set()
+    for e in sorted(my_events, key=lambda x: x.get("time", 0)):
+        t = e.get("time", 0)
+        if cutoff_seconds is not None and t > cutoff_seconds:
+            break
+        if dedupe_units and e.get("type") == "unit":
+            uname = e.get("name", "")
+            if uname in seen_units:
+                continue
+            seen_units.add(uname)
+        m = int(t // 60)
+        s = int(t % 60)
+        lines.append(f"[{m}:{s:02d}] {e.get('name', '?')}")
+    return lines

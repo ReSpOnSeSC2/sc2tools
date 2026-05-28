@@ -19,36 +19,27 @@ DB_FILE = os.path.join(APP_DIR, "meta_database.json")
 CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 ERROR_LOG_FILE = os.path.join(APP_DIR, "replay_errors.log")
 
-
-# Stage 7.5+: the Express SPA writes user-authored custom builds to its own
-# data directory (reveal-sc2-opponent-main/data/custom_builds.json). When
-# both the Python analyzer and the Express backend live under a shared
-# install root (the documented production layout: C:\SC2TOOLS\), the
-# Python detector should read the Express copy so the two engines never
-# disagree about which builds exist. Fallback chain:
-#   1. SC2T_CUSTOM_BUILDS_FILE env var (tests, dev overrides)
-#   2. ../reveal-sc2-opponent-main/data/custom_builds.json (production)
-#   3. <APP_DIR>/custom_builds.json (legacy / standalone)
-_LEGACY_CUSTOM_BUILDS_FILE = os.path.join(APP_DIR, "custom_builds.json")
-_EXPRESS_CUSTOM_BUILDS_FILE = os.path.normpath(os.path.join(
-    APP_DIR, "..", "reveal-sc2-opponent-main", "data", "custom_builds.json",
-))
+# The engine's bundled data directory: build/custom-build seeds, the
+# custom_builds schema, map images, and map bounds all live here. The
+# desktop agent bundles this directory alongside the engine and the API
+# Docker image COPYs it to /opt/sc2-analyzer/data.
+DATA_DIR = os.path.join(APP_DIR, "data")
 
 
 def _resolve_custom_builds_file() -> str:
     """Pick the canonical custom_builds.json for this install.
 
-    Resolution order is documented above. The function is called once at
-    import time; tests that need to point at a different file should set
-    `SC2T_CUSTOM_BUILDS_FILE` *before* importing this module, or
-    monkey-patch `detectors.definitions.CUSTOM_BUILDS_FILE` directly.
+    Both the engine's detectors and the replay parser read this single
+    file so the two never disagree about which builds exist. The
+    SC2T_CUSTOM_BUILDS_FILE env var (tests, dev overrides) wins;
+    otherwise the bundled DATA_DIR copy is used. The function is called
+    once at import time; tests that need a different file should set the
+    env var *before* importing this module.
     """
     override = os.environ.get("SC2T_CUSTOM_BUILDS_FILE")
     if override:
         return override
-    if os.path.isfile(_EXPRESS_CUSTOM_BUILDS_FILE):
-        return _EXPRESS_CUSTOM_BUILDS_FILE
-    return _LEGACY_CUSTOM_BUILDS_FILE
+    return os.path.join(DATA_DIR, "custom_builds.json")
 
 
 CUSTOM_BUILDS_FILE = _resolve_custom_builds_file()

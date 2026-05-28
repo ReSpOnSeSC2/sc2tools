@@ -54,34 +54,22 @@ ONE_FILE = False
 HERE = Path.cwd()
 REPO_ROOT = HERE / ".." / ".."
 ANALYZER_DIR = REPO_ROOT / "apps" / "replay-engine"
-REVEAL_DIR = REPO_ROOT / "reveal-sc2-opponent-main"
 ICON_DIR = HERE / "sc2tools_agent" / "ui"
 
-# Bring the engine source + its data dirs along so the bundled .exe
-# can ``import core.event_extractor`` exactly the same way the
-# source-run agent does. The actual parser entry point lives in
-# reveal-sc2-opponent-main/core/, but we still ship the replay-engine
-# package because the macro breakdown is pinned to its event_extractor
-# / macro_score copies. Both directories are added to sys.path at
-# runtime by replay_pipeline._ensure_analyzer_on_path; the *reveal*
-# layout wins for ``core.sc2_replay_parser``.
+# Bring the replay engine + its data dirs along so the bundled .exe can
+# ``import core.sc2_replay_parser`` / ``core.event_extractor`` / etc.
+# exactly the same way the source-run agent does. The engine owns the
+# entire parse surface (parser, pulse resolver, event extractor, build
+# definitions, strategy detectors) plus the build/custom-build seeds and
+# the custom_builds schema under ``data/`` that the parser reads at
+# startup. ``replay_pipeline._ensure_analyzer_on_path`` adds the engine
+# root to sys.path at runtime.
 DATAS = []
 if ANALYZER_DIR.exists():
     for sub in ("core", "analytics", "scripts", "detectors", "data"):
         src = ANALYZER_DIR / sub
         if src.exists():
             DATAS.append((str(src), f"apps/replay-engine/{sub}"))
-
-if REVEAL_DIR.exists():
-    # ``core`` is mandatory (sc2_replay_parser, pulse_resolver, build defs).
-    # ``data`` is optional but provides community build seeds and the
-    # custom_builds defaults the parser reads at startup; without it the
-    # parser still works (paths.py creates an empty data dir on demand)
-    # but the build-name DB is empty.
-    for sub in ("core", "data"):
-        src = REVEAL_DIR / sub
-        if src.exists():
-            DATAS.append((str(src), f"reveal-sc2-opponent-main/{sub}"))
 
 # Tray + GUI icon - referenced at runtime via Path(__file__).parent.
 TRAY_ICON = ICON_DIR / "tray_icon.png"
