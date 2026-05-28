@@ -20,6 +20,7 @@ import {
   useRevealTimer,
   type RevealProps,
 } from "./revealShared";
+import { useRevealSound } from "./revealSound";
 
 const REEL_W = 150;
 const REEL_H = 64;
@@ -40,6 +41,7 @@ export function SlotMachineReveal({
   const started = useRevealStart(spinId, reducedMotion);
   const settled = useRevealTimer(spinId, TOTAL_MS, reducedMotion, onComplete);
   const rarity = rarityFor(winnerProbability);
+  useRevealSound({ style: "slot", spinId, durationMs: TOTAL_MS, reducedMotion });
 
   const reels = useMemo(
     () => buildReels(pool, winner, spinId),

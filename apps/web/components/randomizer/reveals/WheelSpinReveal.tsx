@@ -19,6 +19,7 @@ import {
   useRevealTimer,
   type RevealProps,
 } from "./revealShared";
+import { useRevealSound } from "./revealSound";
 
 const DURATION_MS = 5000;
 const RADIUS = 130;
@@ -37,6 +38,7 @@ export function WheelSpinReveal({
   const started = useRevealStart(spinId, reducedMotion);
   const settled = useRevealTimer(spinId, DURATION_MS, reducedMotion, onComplete);
   const rarity = rarityFor(winnerProbability);
+  useRevealSound({ style: "wheel", spinId, durationMs: DURATION_MS, reducedMotion });
 
   const { segments, targetRotation } = useMemo(
     () => buildSegments(pool, probabilities, winner, spinId),

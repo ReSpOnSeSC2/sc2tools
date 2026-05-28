@@ -20,10 +20,12 @@ import {
   assignPoolSprites,
   BuildSprite,
   seededShuffle,
+  SPRITE_TOKEN_BG,
   SpriteLegend,
   useEliminationSchedule,
   useRaf,
 } from "./spriteShared";
+import { useRevealSound } from "./revealSound";
 
 const W = 540;
 const H = 300;
@@ -62,6 +64,15 @@ export function AsteroidLockReveal({
     reducedMotion,
     onComplete,
   );
+  useRevealSound({
+    style: "asteroid",
+    spinId,
+    durationMs: DURATION_MS,
+    reducedMotion,
+    eliminationTimesMs: loserOrder.map(
+      (_, i) => (DURATION_MS / (loserOrder.length + 1)) * (i + 1),
+    ),
+  });
 
   const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
   const rocksRef = useRef<Rock[]>([]);
@@ -183,7 +194,7 @@ function RockChip({
         transition: "opacity 320ms ease, transform 320ms ease",
         borderRadius: "50%",
         border: `2px solid ${isWinner ? "#e6b450" : accent}`,
-        background: `${accent}22`,
+        background: SPRITE_TOKEN_BG,
         boxShadow: isWinner ? `0 0 22px ${accent}` : "none",
         display: "flex",
         alignItems: "center",

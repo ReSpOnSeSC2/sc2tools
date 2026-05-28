@@ -18,6 +18,21 @@ describe("sanitizeRandomizerConfig", () => {
       expect(cfg.matchups[m].enabled).toBe(false);
       expect(cfg.matchups[m].builds).toEqual([]);
     }
+    // Sound defaults: on, 60%.
+    expect(cfg.matchups).toBeDefined();
+    expect(cfg.sound.enabled).toBe(true);
+    expect(cfg.sound.volume).toBeCloseTo(0.6);
+  });
+
+  it("sanitizes the sound block (clamps volume, defaults enabled)", () => {
+    const cfg = sanitizeRandomizerConfig({
+      sound: { enabled: false, volume: 5 },
+    });
+    expect(cfg.sound.enabled).toBe(false);
+    expect(cfg.sound.volume).toBe(1); // clamped to 0..1
+    const cfg2 = sanitizeRandomizerConfig({ sound: { volume: -3 } });
+    expect(cfg2.sound.enabled).toBe(true); // only `false` disables
+    expect(cfg2.sound.volume).toBe(0);
   });
 
   it("drops invalid builds and clamps weights", () => {

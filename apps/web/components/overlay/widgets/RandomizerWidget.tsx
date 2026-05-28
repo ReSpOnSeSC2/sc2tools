@@ -27,6 +27,10 @@ import type {
 import { isMatchupKey } from "@/lib/randomizer/types";
 import { spinResult } from "@/lib/randomizer/engine";
 import { RandomizerStage } from "@/components/randomizer/RandomizerStage";
+import {
+  setRevealSoundEnabled,
+  setRevealSoundVolume,
+} from "@/components/randomizer/reveals/revealSound";
 
 interface SpinState {
   outcome: SpinOutcome;
@@ -47,6 +51,13 @@ export function RandomizerWidget({
   const [spin, setSpin] = useState<SpinState | null>(null);
   const lastSpinKeyRef = useRef<string | null>(null);
   const spinIdRef = useRef(0);
+
+  // Mirror the streamer's sound preference into the audio engine.
+  useEffect(() => {
+    if (!config) return;
+    setRevealSoundEnabled(config.sound.enabled);
+    setRevealSoundVolume(config.sound.volume);
+  }, [config]);
 
   useEffect(() => {
     if (!matchup || !config || !spinKey) return;

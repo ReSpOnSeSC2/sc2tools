@@ -46,6 +46,15 @@ const RACE_UNITS: Record<Race, ReadonlyArray<string>> = {
 };
 
 /**
+ * Opaque dark disc that sits behind every arena sprite. SC2 unit icons
+ * vary a lot in brightness (a Phoenix is bright, a Void Ray is dark);
+ * framing them all on the same solid token keeps them visually
+ * consistent instead of some washing out and some vanishing into the
+ * background.
+ */
+export const SPRITE_TOKEN_BG = "rgba(10,12,18,0.95)";
+
+/**
  * Resolve a build to a single representative unit sprite. Prefers the
  * unit named in the build, falling back to the player's race's
  * signature unit. The race glyph is a last resort that should never
@@ -166,10 +175,10 @@ export function SpriteLegend({
       style={{
         display: "flex",
         flexWrap: "wrap",
-        gap: 6,
+        gap: 7,
         justifyContent: "center",
-        maxWidth: 560,
-        marginTop: 10,
+        maxWidth: 640,
+        marginTop: 12,
       }}
     >
       {pool.map((b) => {
@@ -181,23 +190,39 @@ export function SpriteLegend({
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 5,
-              padding: "3px 8px",
+              gap: 7,
+              padding: "5px 11px",
               borderRadius: 999,
-              fontSize: 11,
-              fontWeight: 600,
-              lineHeight: 1.1,
-              color: out ? "#6b7280" : "#cdd2db",
-              background: on ? "rgba(230,180,80,0.16)" : "rgba(255,255,255,0.05)",
-              border: `1px solid ${on ? "#e6b450" : "rgba(255,255,255,0.10)"}`,
+              fontSize: 13,
+              fontWeight: 700,
+              lineHeight: 1.15,
+              color: out ? "#7d8595" : "#f0f2f6",
+              background: on ? "rgba(230,180,80,0.22)" : "rgba(16,19,27,0.92)",
+              border: `1px solid ${on ? "#e6b450" : "rgba(255,255,255,0.14)"}`,
+              boxShadow: on
+                ? "0 0 12px rgba(230,180,80,0.4)"
+                : "0 1px 4px rgba(0,0,0,0.4)",
               textDecoration: out ? "line-through" : "none",
-              opacity: out ? 0.6 : 1,
+              opacity: out ? 0.55 : 1,
             }}
           >
-            <BuildSprite build={b} src={sprites.get(b.id) ?? null} size={16} />
             <span
               style={{
-                maxWidth: 150,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 24,
+                height: 24,
+                borderRadius: "50%",
+                background: SPRITE_TOKEN_BG,
+                flexShrink: 0,
+              }}
+            >
+              <BuildSprite build={b} src={sprites.get(b.id) ?? null} size={20} />
+            </span>
+            <span
+              style={{
+                maxWidth: 190,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",

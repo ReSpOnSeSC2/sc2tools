@@ -20,9 +20,11 @@ import {
   assignPoolSprites,
   BuildSprite,
   seededShuffle,
+  SPRITE_TOKEN_BG,
   SpriteLegend,
   useElapsedReveal,
 } from "./spriteShared";
+import { useRevealSound } from "./revealSound";
 
 const W = 460;
 const H = 320;
@@ -55,6 +57,7 @@ export function ClawMachineReveal({
     reducedMotion,
     onComplete,
   );
+  useRevealSound({ style: "claw", spinId, durationMs: DURATION_MS, reducedMotion });
 
   const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
   const toys = useMemo<Toy[]>(() => {
@@ -266,7 +269,7 @@ function ToyChip({
         transition: "left 120ms linear, top 120ms linear, transform 300ms ease",
         borderRadius: "50%",
         border: `2px solid ${isWinner && highlight ? "#e6b450" : accent}`,
-        background: `${accent}22`,
+        background: SPRITE_TOKEN_BG,
         boxShadow: highlight ? `0 0 22px ${accent}` : "none",
         display: "flex",
         alignItems: "center",

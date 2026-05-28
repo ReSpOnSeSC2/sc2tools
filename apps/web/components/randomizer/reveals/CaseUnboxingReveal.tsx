@@ -18,6 +18,7 @@ import {
   useRevealTimer,
   type RevealProps,
 } from "./revealShared";
+import { useRevealSound } from "./revealSound";
 
 const VIEWPORT_W = 520;
 const VIEWPORT_H = 130;
@@ -39,6 +40,7 @@ export function CaseUnboxingReveal({
   const started = useRevealStart(spinId, reducedMotion);
   const settled = useRevealTimer(spinId, DURATION_MS, reducedMotion, onComplete);
   const rarity = rarityFor(winnerProbability);
+  useRevealSound({ style: "case", spinId, durationMs: DURATION_MS, reducedMotion });
 
   const { strip, targetOffset } = useMemo(() => {
     return buildStrip(pool, winner, spinId);
