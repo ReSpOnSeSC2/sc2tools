@@ -35,8 +35,11 @@ import {
   BestAnswerWidget,
   ScoutingWidget,
   SessionWidget,
+  RandomizerWidget,
   type SessionSummary,
 } from "@/components/overlay/widgets/PrePostFlow";
+import type { RandomizerConfig } from "@/lib/randomizer/types";
+import { sanitizeRandomizerConfig } from "@/lib/randomizer/config";
 
 /**
  * Public OBS overlay (all-in-one). The token IS the auth — we trade
@@ -68,6 +71,7 @@ export function OverlayClient({ token }: { token: string }) {
     () => new Set(ALL_WIDGETS),
   );
   const [voicePrefs, setVoicePrefs] = useState<VoicePrefs | null>(null);
+  const [randomizer, setRandomizer] = useState<RandomizerConfig | null>(null);
   // Per-widget "currently visible" set. Cleared by the per-widget
   // timeouts scheduled in `useWidgetTimers`.
   const [visibleLive, setVisibleLive] = useState<Set<WidgetId>>(new Set());
@@ -91,6 +95,7 @@ export function OverlayClient({ token }: { token: string }) {
     setSession,
     setEnabled,
     setVoicePrefs,
+    setRandomizer,
     onClear,
   );
 
@@ -168,6 +173,9 @@ export function OverlayClient({ token }: { token: string }) {
       {shouldShow("session") && (
         <SessionWidget live={live} session={session} />
       )}
+      {shouldShow("randomizer") && (
+        <RandomizerWidget live={live} liveGame={liveGame} config={randomizer} />
+      )}
       {voice.needsGesture ? (
         <VoiceGestureBanner onClick={voice.onUserGesture} />
       ) : null}
@@ -199,6 +207,7 @@ function useOverlaySocket(
   setSession: (msg: SessionSummary | null) => void,
   setEnabled: (next: Set<WidgetId>) => void,
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
+  setRandomizer: (cfg: RandomizerConfig | null) => void,
   onClear: () => void,
 ) {
   // Sticky cache of the latest enriched ``streamerHistory`` keyed by
@@ -269,12 +278,19 @@ function useOverlaySocket(
     });
     socket.on(
       "overlay:config",
-      (msg: { enabledWidgets?: string[]; voicePrefs?: VoicePrefs }) => {
+      (msg: {
+        enabledWidgets?: string[];
+        voicePrefs?: VoicePrefs;
+        randomizer?: unknown;
+      }) => {
         if (msg && Array.isArray(msg.enabledWidgets)) {
           setEnabled(new Set(msg.enabledWidgets as WidgetId[]));
         }
         if (msg && msg.voicePrefs && typeof msg.voicePrefs === "object") {
           setVoicePrefs(msg.voicePrefs);
+        }
+        if (msg && msg.randomizer && typeof msg.randomizer === "object") {
+          setRandomizer(sanitizeRandomizerConfig(msg.randomizer));
         }
       },
     );
@@ -295,6 +311,7 @@ function useOverlaySocket(
     setSession,
     setEnabled,
     setVoicePrefs,
+    setRandomizer,
     onClear,
   ]);
 }
@@ -407,10 +424,16 @@ function useWidgetTimers({
       window.clearTimeout(scoutingTimer);
       liveTimers.current.delete("scouting");
     }
+    const randomizerTimer = liveTimers.current.get("randomizer");
+    if (randomizerTimer !== undefined) {
+      window.clearTimeout(randomizerTimer);
+      liveTimers.current.delete("randomizer");
+    }
     setVisibleLive((prev) => {
       const next = new Set(prev);
       next.add("opponent");
       next.add("scouting");
+      next.add("randomizer");
       return next;
     });
     const scoutingDuration = resolveWidgetDurationMs("scouting", false);
@@ -425,6 +448,19 @@ function useWidgetTimers({
         liveTimers.current.delete("scouting");
       }, scoutingDuration);
       liveTimers.current.set("scouting", handle);
+    }
+    const randomizerDuration = resolveWidgetDurationMs("randomizer", false);
+    if (randomizerDuration !== null) {
+      const handle = window.setTimeout(() => {
+        setVisibleLive((prev) => {
+          if (!prev.has("randomizer")) return prev;
+          const next = new Set(prev);
+          next.delete("randomizer");
+          return next;
+        });
+        liveTimers.current.delete("randomizer");
+      }, randomizerDuration);
+      liveTimers.current.set("randomizer", handle);
     }
   }, [isActivePhase, liveGameKey, setVisibleLive]);
 

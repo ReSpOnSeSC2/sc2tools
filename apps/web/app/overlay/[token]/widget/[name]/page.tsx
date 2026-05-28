@@ -36,6 +36,7 @@ const VALID_WIDGETS = new Set([
   "best-answer",
   "scouting",
   "session",
+  "randomizer",
 ]);
 
 export default async function OverlayWidgetPage({

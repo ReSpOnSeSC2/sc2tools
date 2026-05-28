@@ -200,6 +200,10 @@ const PER_WIDGET_KEYS = {
     "opponentPhases",
   ],
   "session": ["session"],
+  // Randomizer reads its build pool from overlay:config (not the live
+  // payload). SHARED_KEYS already plumb matchup + races, which is all
+  // the widget needs to spin during a Test fire.
+  "randomizer": [],
 };
 
 module.exports = { buildSamplePayload, PER_WIDGET_KEYS, SHARED_KEYS };

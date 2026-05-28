@@ -7,6 +7,7 @@ import {
 import { SettingsFoundation } from "@/components/analyzer/settings/SettingsFoundation";
 import { SettingsProfile } from "@/components/analyzer/settings/SettingsProfile";
 import { SettingsOverlay } from "@/components/analyzer/settings/SettingsOverlay";
+import { SettingsRandomizer } from "@/components/analyzer/settings/SettingsRandomizer";
 import { SettingsVoice } from "@/components/analyzer/settings/SettingsVoice";
 import { SettingsBackups } from "@/components/analyzer/settings/SettingsBackups";
 import { SettingsMisc } from "@/components/analyzer/settings/SettingsMisc";
@@ -32,6 +33,8 @@ export default function SettingsPage() {
                 return <SettingsProfile />;
               case "overlay":
                 return <SettingsOverlay origin={origin} />;
+              case "randomizer":
+                return <SettingsRandomizer />;
               case "voice":
                 return <SettingsVoice />;
               case "backups":

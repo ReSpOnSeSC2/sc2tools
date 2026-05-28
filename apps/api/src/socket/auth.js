@@ -69,6 +69,7 @@ const RESYNC_MIN_INTERVAL_MS = 2000;
  *     mmrStart?: number, mmrCurrent?: number,
  *   }>,
  *   resolveVoicePrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
+ *   resolveRandomizerPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveLiveSnapshot?: (userId: string) => {
  *     prelude?: object|null,
  *     envelope?: object|null,
@@ -193,7 +194,7 @@ function attachSocketAuth(io, opts) {
           .resolveOverlayToken(t)
           .then(async (info) => {
             if (!info) return;
-            /** @type {{ enabledWidgets?: string[], voicePrefs?: Record<string, unknown> }} */
+            /** @type {{ enabledWidgets?: string[], voicePrefs?: Record<string, unknown>, randomizer?: Record<string, unknown> }} */
             const config = {};
             if (Array.isArray(info.enabledWidgets)) {
               config.enabledWidgets = info.enabledWidgets;
@@ -209,7 +210,18 @@ function attachSocketAuth(io, opts) {
                 // a preferences-table miss.
               }
             }
-            if (config.enabledWidgets || config.voicePrefs) {
+            if (opts.resolveRandomizerPrefs) {
+              try {
+                const prefs = await opts.resolveRandomizerPrefs(info.userId);
+                if (prefs && typeof prefs === "object") {
+                  config.randomizer = prefs;
+                }
+              } catch {
+                // Randomizer prefs are optional — a missing config just
+                // means the OBS widget stays dormant for this streamer.
+              }
+            }
+            if (config.enabledWidgets || config.voicePrefs || config.randomizer) {
               socket.emit("overlay:config", config);
             }
           })

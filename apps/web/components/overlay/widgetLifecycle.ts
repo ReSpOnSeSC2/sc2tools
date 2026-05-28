@@ -37,7 +37,8 @@ export type WidgetId =
   | "fav-opening"
   | "best-answer"
   | "scouting"
-  | "session";
+  | "session"
+  | "randomizer";
 
 export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "opponent",
@@ -55,6 +56,7 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "best-answer",
   "scouting",
   "session",
+  "randomizer",
 ];
 
 /**
@@ -99,6 +101,9 @@ export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
   // Persistent panels — HUDs that should stay on screen.
   "topbuilds": null,
   "session": null,
+  // Randomizer plays a one-shot reveal animation (~5 s) and shows the
+  // winner card for the remaining window before clearing the scene.
+  "randomizer": 20 * 1000,
 };
 
 /**
