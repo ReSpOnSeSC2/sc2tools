@@ -6,10 +6,17 @@ import { Footer } from "@/components/chrome/Footer";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import "./globals.css";
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
+const SITE_TITLE = "SC2 Tools — opponent intel, build orders, live overlay";
+const SITE_DESCRIPTION =
+  "Sign in, install the agent, and your StarCraft II opponents tab loads in seconds — across every device.";
+
 export const metadata: Metadata = {
-  title: "SC2 Tools — opponent intel, build orders, live overlay",
-  description:
-    "Sign in, install the agent, and your StarCraft II opponents tab loads in seconds — across every device.",
+  // Resolves relative OG/Twitter image URLs (incl. the per-page ones) to
+  // absolute URLs. Without this, social cards point at localhost.
+  metadataBase: new URL(SITE_URL),
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
   applicationName: "SC2 Tools",
   appleWebApp: {
     capable: true,
@@ -22,6 +29,27 @@ export const metadata: Metadata = {
       { url: "/icons/pwa/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
     apple: [{ url: "/icons/pwa/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  openGraph: {
+    type: "website",
+    siteName: "SC2 Tools",
+    url: "/",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [
+      {
+        url: "/banner.png",
+        width: 2000,
+        height: 800,
+        alt: "SC2 Tools — StarCraft II opponent intel and build orders",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: ["/banner.png"],
   },
 };
 

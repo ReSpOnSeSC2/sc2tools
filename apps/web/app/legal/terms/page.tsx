@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export const metadata = {
   title: "Terms of Service — SC2 Tools",
   description: "Terms governing use of SC2 Tools.",
@@ -64,9 +66,9 @@ export default function TermsPage() {
           you grant SC2 Tools a non-exclusive, royalty-free licence to display
           and distribute it through the service. You retain ownership; you can
           retract published content from{" "}
-          <a href="/builds" className="underline">
+          <Link href="/builds" className="underline">
             /builds
-          </a>{" "}
+          </Link>{" "}
           at any time.
         </p>
       </section>
