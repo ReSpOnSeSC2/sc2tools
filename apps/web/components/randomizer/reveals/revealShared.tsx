@@ -201,20 +201,24 @@ export function WinnerCard({
   return (
     <div
       style={{
-        marginTop: 18,
-        minWidth: 300,
-        maxWidth: 480,
+        position: "absolute",
+        left: "50%",
+        top: "50%",
+        zIndex: 6,
+        width: "max-content",
+        minWidth: 280,
+        maxWidth: "min(440px, 92%)",
         padding: "18px 26px 20px",
         borderRadius: 18,
         textAlign: "center",
-        position: "relative",
         background:
           "linear-gradient(135deg, rgba(11,13,18,0.97) 0%, rgba(24,28,38,0.97) 100%)",
         border: `2px solid ${rarity.color}`,
         boxShadow: `0 12px 46px rgba(0,0,0,0.62), 0 0 44px ${rarity.glow}`,
         opacity: show ? 1 : 0,
-        transform: show ? "scale(1)" : "scale(0.7)",
+        transform: `translate(-50%, -50%) scale(${show ? 1 : 0.7})`,
         transition: "opacity 280ms ease, transform 360ms cubic-bezier(.34,1.8,.5,1)",
+        pointerEvents: "none",
       }}
     >
       <div
