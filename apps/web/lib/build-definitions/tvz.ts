@@ -8,6 +8,13 @@ export const TVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   {
     race: "Terran",
     matchup: "TvZ",
+    name: "TvZ - Proxy 4 Rax Reaper",
+    description:
+      "Detected when four Barracks (at least one proxied near the enemy) flood Reapers -- the all-in proxy reaper rush vs Zerg.",
+  },
+  {
+    race: "Terran",
+    matchup: "TvZ",
     name: "TvZ - 1-1-1 Banshee",
     description:
       "Detected when a Factory and Starport are built before any expansion and a Banshee reaches the field on one base -- the 1-base cloak-Banshee harass vs Zerg.",

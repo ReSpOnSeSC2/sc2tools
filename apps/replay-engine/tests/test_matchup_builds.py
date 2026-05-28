@@ -233,3 +233,219 @@ def test_custom_build_for_terran_vs_zerg():
     label = det.detect_my_build("vs Zerg", events, my_race="Terran",
                                 game_length_seconds=600)
     assert label == "TvZ - My Bunker Rush"
+
+
+def _pb(name: str, time: int) -> dict:
+    """A proxied building -- placed far from the main at (10, 10)."""
+    return _b(name, time, 200.0, 200.0)
+
+
+# --------------------------------------------------------------------------
+# Proxy 4 Rax Reaper -- shared across TvT / TvZ / TvP
+# --------------------------------------------------------------------------
+def test_proxy_4_rax_reaper_all_matchups():
+    events = [
+        _b("CommandCenter", 0),
+        _pb("Barracks", 90), _pb("Barracks", 120),
+        _pb("Barracks", 150), _pb("Barracks", 180),
+        *_n("Reaper", 240, 4),
+    ]
+    assert _classify("Terran", "Terran", events) == "TvT - Proxy 4 Rax Reaper"
+    assert _classify("Terran", "Zerg", events) == "TvZ - Proxy 4 Rax Reaper"
+    assert _classify("Terran", "Protoss", events) == "TvP - Proxy 4 Rax Reaper"
+
+
+# --------------------------------------------------------------------------
+# TvT
+# --------------------------------------------------------------------------
+def test_tvt_proxy_marauder():
+    events = [_b("CommandCenter", 0), _pb("Barracks", 150), *_n("Marauder", 300, 2)]
+    assert _classify("Terran", "Terran", events) == "TvT - Proxy Marauder"
+
+
+def test_tvt_cyclone_push():
+    events = [_b("CommandCenter", 0), _b("Factory", 200), *_n("Cyclone", 350, 2)]
+    assert _classify("Terran", "Terran", events) == "TvT - Cyclone Push"
+
+
+def test_tvt_banshee_into_raven():
+    events = [
+        _b("CommandCenter", 0), _b("Starport", 300),
+        _u("Banshee", 400), _u("Raven", 500),
+    ]
+    assert _classify("Terran", "Terran", events) == "TvT - Banshee into Raven"
+
+
+def test_tvt_battlecruiser_rush():
+    events = [
+        _b("CommandCenter", 0), _b("Starport", 300), _b("FusionCore", 380),
+        _u("Battlecruiser", 500),
+    ]
+    assert _classify("Terran", "Terran", events) == "TvT - Battlecruiser Rush"
+
+
+def test_tvt_tank_thor_mech():
+    events = [
+        _b("CommandCenter", 0), _b("Factory", 200), _b("Armory", 350),
+        _u("SiegeTank", 500), _u("Thor", 520),
+    ]
+    assert _classify("Terran", "Terran", events) == "TvT - Tank/Thor Mech"
+
+
+def test_tvt_2_1_1_marine_tank():
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 180),
+        _b("Barracks", 80), _b("Factory", 200), _b("Starport", 300),
+        _u("SiegeTank", 500), *_n("Marine", 250, 8),
+    ]
+    assert _classify("Terran", "Terran", events) == "TvT - 2-1-1 Marine Tank"
+
+
+def test_tvt_3_rax_marine():
+    events = [
+        _b("CommandCenter", 0),
+        _b("Barracks", 100), _b("Barracks", 180), _b("Barracks", 260),
+        *_n("Marine", 300, 10),
+    ]
+    assert _classify("Terran", "Terran", events) == "TvT - 3 Rax Marine"
+
+
+def test_tvt_mass_viking_air():
+    events = [_b("CommandCenter", 0), _b("Starport", 300), *_n("VikingFighter", 400, 6)]
+    assert _classify("Terran", "Terran", events) == "TvT - Mass Viking Air"
+
+
+# --------------------------------------------------------------------------
+# ZvT
+# --------------------------------------------------------------------------
+def test_zvt_ling_bane_bust():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180),
+        _b("SpawningPool", 60), _b("BanelingNest", 180),
+        *_n("Zergling", 240, 12, step=6), *_n("Baneling", 290, 4),
+    ]
+    assert _classify("Zerg", "Terran", events) == "ZvT - Ling Bane Bust"
+
+
+def test_zvt_2_base_nydus():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180),
+        _b("SpawningPool", 40), _b("NydusNetwork", 420),
+    ]
+    assert _classify("Zerg", "Terran", events) == "ZvT - 2 Base Nydus"
+
+
+def test_zvt_mass_queen_defensive():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180), _b("SpawningPool", 40),
+        *_n("Queen", 250, 6, step=20),
+    ]
+    assert _classify("Zerg", "Terran", events) == "ZvT - Mass Queen Defensive"
+
+
+def test_zvt_lurker_contain():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180), _b("SpawningPool", 40),
+        _b("LurkerDen", 490),
+    ]
+    assert _classify("Zerg", "Terran", events) == "ZvT - Lurker Contain"
+
+
+def test_zvt_mass_muta_harass():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180), _b("SpawningPool", 40),
+        _b("Spire", 450), *_n("Mutalisk", 500, 6),
+    ]
+    assert _classify("Zerg", "Terran", events) == "ZvT - Mass Muta Harass"
+
+
+def test_zvt_roach_hydra():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180), _b("SpawningPool", 40),
+        _b("RoachWarren", 300), _b("HydraliskDen", 450), *_n("Hydralisk", 500, 4),
+    ]
+    assert _classify("Zerg", "Terran", events) == "ZvT - Roach Hydra"
+
+
+def test_zvt_3_base_ling_flood():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 150), _b("Hatchery", 250),
+        _b("SpawningPool", 40), *_n("Drone", 60, 10), *_n("Zergling", 250, 20, step=5),
+    ]
+    assert _classify("Zerg", "Terran", events) == "ZvT - 3 Base Ling Flood"
+
+
+def test_zvt_hatch_first_macro():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 150), _b("Hatchery", 250),
+        _b("SpawningPool", 40), *_n("Drone", 60, 40, step=4),
+    ]
+    assert _classify("Zerg", "Terran", events) == "ZvT - Hatch First Macro"
+
+
+# --------------------------------------------------------------------------
+# ZvZ
+# --------------------------------------------------------------------------
+def test_zvz_12_pool_into_baneling():
+    events = [
+        _b("Hatchery", 0), _b("SpawningPool", 40), _b("BanelingNest", 200),
+        *_n("Baneling", 300, 2),
+    ]
+    assert _classify("Zerg", "Zerg", events) == "ZvZ - 12 Pool into Baneling"
+
+
+def test_zvz_ling_bane_all_in():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180),
+        _b("SpawningPool", 70), _b("BanelingNest", 150),
+        *_n("Zergling", 240, 10, step=5), *_n("Baneling", 255, 4),
+    ]
+    assert _classify("Zerg", "Zerg", events) == "ZvZ - Ling Bane All-in"
+
+
+def test_zvz_roach_ravager():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180), _b("SpawningPool", 40),
+        _b("RoachWarren", 200), *_n("Roach", 300, 4), *_n("Ravager", 400, 3),
+    ]
+    assert _classify("Zerg", "Zerg", events) == "ZvZ - Roach Ravager"
+
+
+def test_zvz_2_base_nydus():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180), _b("SpawningPool", 40),
+        _b("NydusNetwork", 420),
+    ]
+    assert _classify("Zerg", "Zerg", events) == "ZvZ - 2 Base Nydus"
+
+
+def test_zvz_mutalisk_vs_mutalisk():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180), _b("SpawningPool", 40),
+        _b("Spire", 400), *_n("Mutalisk", 440, 6),
+    ]
+    assert _classify("Zerg", "Zerg", events) == "ZvZ - Mutalisk vs Mutalisk"
+
+
+def test_zvz_hatch_first_muta():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 150), _b("SpawningPool", 70),
+        _b("Spire", 450),
+    ]
+    assert _classify("Zerg", "Zerg", events) == "ZvZ - Hatch First Muta"
+
+
+def test_zvz_zergling_flood():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180), _b("SpawningPool", 40),
+        *_n("Drone", 60, 10), *_n("Zergling", 250, 20, step=5),
+    ]
+    assert _classify("Zerg", "Zerg", events) == "ZvZ - Zergling Flood"
+
+
+def test_zvz_drone_macro_hatch_first():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 150), _b("SpawningPool", 70),
+        *_n("Drone", 60, 30, step=4),
+    ]
+    assert _classify("Zerg", "Zerg", events) == "ZvZ - Drone Macro (Hatch First)"

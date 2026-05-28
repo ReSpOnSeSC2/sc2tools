@@ -35,22 +35,38 @@ from .strategy_detector_helpers import (
 # Terran matchups
 # --------------------------------------------------------------------------
 def detect_tvt(ctx: DetectionContext) -> Optional[str]:
-    """Terran-vs-Terran: tank/viking positional and 1-base banshee."""
+    """Terran-vs-Terran: recognizable openings, specific -> general.
+
+    Returns ``None`` when none match so the generic Terran race tree in
+    ``classify_by_race`` provides the fallback label.
+    """
     cc_at_6 = base_count_at(ctx.buildings, "CommandCenter", 360)
+    cc450 = base_count_at(ctx.buildings, "CommandCenter", 450)
 
-    # Reaper FE into a 2-base Siege Tank / Viking contain -- the
-    # defining TvT macro opener: scout with the Reaper, expand, then
-    # mass Tanks behind Vikings for air control.
+    # 1. Proxy 4 Rax Reaper: 4 Barracks (at least one proxied near the
+    # enemy) flooding Reapers -- the all-in proxy reaper rush.
     if (
-        ctx.count_units("Reaper", 210) >= 1
-        and base_count_at(ctx.buildings, "CommandCenter", 240) >= 2
-        and ctx.count_units("SiegeTank", 540) >= 1
-        and ctx.count_units("VikingFighter", 540) >= 1
+        ctx.has_proxy("Barracks", 300)
+        and count_started_before(ctx.buildings, "Barracks", 330) >= 4
+        and ctx.count_units("Reaper", 390) >= 4
     ):
-        return "TvT - Reaper Expand into Tank/Viking"
+        return "TvT - Proxy 4 Rax Reaper"
 
-    # 1-base Cloak Banshee: Factory + Starport up before any expansion
-    # and a Banshee on the field -- the classic 1-1-1 banshee harass.
+    # 2. Proxy Marauder: proxied Barracks pumping Marauders -- the
+    # proxy Marauder rush.
+    if ctx.has_proxy("Barracks", 270) and ctx.count_units("Marauder", 360) >= 2:
+        return "TvT - Proxy Marauder"
+
+    # 3. Cyclone Push: an early Factory producing Cyclones off <=2 bases.
+    if (
+        ctx.has_building("Factory", 300)
+        and ctx.count_units("Cyclone", 390) >= 2
+        and cc450 <= 2
+    ):
+        return "TvT - Cyclone Push"
+
+    # 4. 1-base Cloak Banshee: Factory + Starport before any expansion
+    # with a Banshee on the field.
     if (
         ctx.has_building("Factory", 330)
         and ctx.has_building("Starport", 390)
@@ -59,17 +75,81 @@ def detect_tvt(ctx: DetectionContext) -> Optional[str]:
     ):
         return "TvT - 1-1-1 Cloak Banshee"
 
+    # 5. Banshee into Raven: cloak Banshees backed by a Raven for
+    # detection/anti-air control.
+    if ctx.count_units("Banshee", 450) >= 1 and ctx.count_units("Raven", 540) >= 1:
+        return "TvT - Banshee into Raven"
+
+    # 6. Battlecruiser Rush: a fast Fusion Core into Battlecruisers.
+    if (
+        ctx.has_building("FusionCore", 420)
+        and ctx.count_units("Battlecruiser", 540) >= 1
+    ):
+        return "TvT - Battlecruiser Rush"
+
+    # 7. Tank/Thor Mech: Armory-backed Thors and Siege Tanks -- the
+    # positional mech composition.
+    if (
+        ctx.has_building("Armory", 420)
+        and ctx.count_units("Thor", 540) >= 1
+        and ctx.count_units("SiegeTank", 540) >= 1
+    ):
+        return "TvT - Tank/Thor Mech"
+
+    # 8. Reaper Expand into Tank/Viking: Reaper-first scout, expand, then
+    # Siege Tanks behind Vikings for air control.
+    if (
+        ctx.count_units("Reaper", 210) >= 1
+        and base_count_at(ctx.buildings, "CommandCenter", 240) >= 2
+        and ctx.count_units("SiegeTank", 540) >= 1
+        and ctx.count_units("VikingFighter", 540) >= 1
+    ):
+        return "TvT - Reaper Expand into Tank/Viking"
+
+    # 9. 2-1-1 Marine Tank: a Starport build with Siege Tanks and Marines
+    # off two bases (no Viking -- that is the build above).
+    if (
+        ctx.has_building("Starport", 420)
+        and ctx.count_units("SiegeTank", 540) >= 1
+        and ctx.count_units("Marine", 480) >= 8
+        and cc450 <= 2
+    ):
+        return "TvT - 2-1-1 Marine Tank"
+
+    # 10. 3 Rax Marine: 3+ Barracks off one base with a Marine flood and
+    # no Factory -- a gas-light Marine all-in.
+    if (
+        count_started_before(ctx.buildings, "Barracks", 420) >= 3
+        and base_count_at(ctx.buildings, "CommandCenter", 420) <= 1
+        and ctx.count_units("Marine", 450) >= 10
+        and not ctx.has_building("Factory", 360)
+    ):
+        return "TvT - 3 Rax Marine"
+
+    # 11. Mass Viking Air: a Viking-heavy air-control composition.
+    if ctx.count_units("VikingFighter", 600) >= 6:
+        return "TvT - Mass Viking Air"
+
     return None
 
 
 def detect_tvz(ctx: DetectionContext) -> Optional[str]:
-    """Terran-vs-Zerg: 10 recognizable openings, specific -> general.
+    """Terran-vs-Zerg: recognizable openings, specific -> general.
 
     Returns ``None`` when none match so the generic Terran race tree in
     ``classify_by_race`` provides the fallback label.
     """
     cc2 = base_count_at(ctx.buildings, "CommandCenter", 360)
     cc450 = base_count_at(ctx.buildings, "CommandCenter", 450)
+
+    # 0. Proxy 4 Rax Reaper: 4 Barracks (at least one proxied near the
+    # enemy) flooding Reapers -- the all-in proxy reaper rush.
+    if (
+        ctx.has_proxy("Barracks", 300)
+        and count_started_before(ctx.buildings, "Barracks", 330) >= 4
+        and ctx.count_units("Reaper", 390) >= 4
+    ):
+        return "TvZ - Proxy 4 Rax Reaper"
 
     # 1. 1-1-1 Banshee: Factory + Starport before any expansion and a
     # Banshee on the field -- 1-base cloak-Banshee harass.
@@ -175,7 +255,16 @@ def detect_tvz(ctx: DetectionContext) -> Optional[str]:
 
 
 def detect_tvp(ctx: DetectionContext) -> Optional[str]:
-    """Terran-vs-Protoss: 2-base 2-1-1 reaper bio timing."""
+    """Terran-vs-Protoss: proxy reaper all-in and 2-base reaper bio."""
+    # Proxy 4 Rax Reaper: 4 Barracks (at least one proxied near the
+    # enemy) flooding Reapers -- the all-in proxy reaper rush.
+    if (
+        ctx.has_proxy("Barracks", 300)
+        and count_started_before(ctx.buildings, "Barracks", 330) >= 4
+        and ctx.count_units("Reaper", 390) >= 4
+    ):
+        return "TvP - Proxy 4 Rax Reaper"
+
     # 2-1-1 Reaper Expand: Reaper-first scout, a single expansion, then
     # a Factory + Starport for the Medivac drop / Stim bio timing off
     # TWO bases. The ``<= 2`` base cap keeps a greedy fast-3-CC macro
@@ -198,22 +287,26 @@ def detect_tvp(ctx: DetectionContext) -> Optional[str]:
 # Zerg matchups
 # --------------------------------------------------------------------------
 def detect_zvt(ctx: DetectionContext) -> Optional[str]:
-    """Zerg-vs-Terran: ling/bane/muta and 2-base roach/ravager."""
-    # 3-Hatch Ling Bane Muta: the textbook ZvT defensive macro style --
-    # three bases, a Baneling Nest and Spire, defending bio with
-    # Banelings and Zerglings while teching to Mutas.
-    if (
-        base_count_at(ctx.buildings, "Hatchery", 300) >= 3
-        and ctx.has_building("BanelingNest", 330)
-        and ctx.has_building("Spire", 480)
-        and ctx.count_units("Baneling", 480) >= 1
-        and ctx.count_units("Zergling", 420) >= 6
-    ):
-        return "ZvT - 3 Hatch Ling Bane Muta"
+    """Zerg-vs-Terran: recognizable openings, specific -> general.
 
-    # 2-base Roach/Ravager timing: a Roach Warren with a wall of
-    # Roaches and Ravagers off two bases on a low drone count -- the
-    # classic ZvT roach/ravager pressure timing.
+    Returns ``None`` when none match so the generic Zerg race tree in
+    ``classify_by_race`` provides the fallback label.
+    """
+    hatch3 = base_count_at(ctx.buildings, "Hatchery", 300)
+
+    # 1. Ling Bane Bust: an early Pool + Baneling Nest flooding Banelings
+    # and Zerglings off <=2 bases -- the all-in ling/bane bust.
+    if (
+        ctx.building_time("SpawningPool") < 75
+        and ctx.has_building("BanelingNest", 210)
+        and ctx.count_units("Baneling", 330) >= 4
+        and ctx.count_units("Zergling", 330) >= 12
+        and base_count_at(ctx.buildings, "Hatchery", 330) <= 2
+    ):
+        return "ZvT - Ling Bane Bust"
+
+    # 2. 2-base Roach/Ravager timing: a Roach Warren with a wall of
+    # Roaches and Ravagers off two bases on a low drone count.
     if (
         ctx.has_building("RoachWarren", 240)
         and (ctx.count_units("Roach", 450) + ctx.count_units("Ravager", 450)) >= 8
@@ -221,6 +314,74 @@ def detect_zvt(ctx: DetectionContext) -> Optional[str]:
         and base_count_at(ctx.buildings, "Hatchery", 450) <= 2
     ):
         return "ZvT - 2 Base Roach Ravager Timing"
+
+    # 3. 2 Base Nydus: a Nydus Network off two bases for a drop into the
+    # Terran's base.
+    if (
+        ctx.has_building("NydusNetwork", 450)
+        and base_count_at(ctx.buildings, "Hatchery", 450) <= 2
+    ):
+        return "ZvT - 2 Base Nydus"
+
+    # 4. Mass Queen Defensive: a queen-walk / queen-heavy defence with no
+    # Roach/Baneling/Spire aggression tech.
+    if (
+        ctx.count_units("Queen", 420) >= 6
+        and base_count_at(ctx.buildings, "Hatchery", 420) >= 2
+        and not ctx.has_building("RoachWarren", 360)
+        and not ctx.has_building("BanelingNest", 360)
+        and not ctx.has_building("Spire", 420)
+    ):
+        return "ZvT - Mass Queen Defensive"
+
+    # 5. Lurker Contain: a Lurker Den for a positional Lurker contain.
+    if ctx.has_building("LurkerDen", 510):
+        return "ZvT - Lurker Contain"
+
+    # 6. 3-Hatch Ling Bane Muta: three bases, a Baneling Nest and Spire,
+    # defending bio with Banelings/Zerglings while teching to Mutas.
+    if (
+        hatch3 >= 3
+        and ctx.has_building("BanelingNest", 330)
+        and ctx.has_building("Spire", 480)
+        and ctx.count_units("Baneling", 480) >= 1
+        and ctx.count_units("Zergling", 420) >= 6
+    ):
+        return "ZvT - 3 Hatch Ling Bane Muta"
+
+    # 7. Mass Muta Harass: a Spire into a flock of Mutalisks with no
+    # Baneling Nest -- pure muta harass.
+    if (
+        ctx.has_building("Spire", 480)
+        and ctx.count_units("Mutalisk", 540) >= 6
+        and not ctx.has_building("BanelingNest", 420)
+    ):
+        return "ZvT - Mass Muta Harass"
+
+    # 8. Roach Hydra: a Roach Warren + Hydralisk Den producing a
+    # roach/hydra ground army.
+    if (
+        ctx.has_building("RoachWarren", 360)
+        and ctx.has_building("HydraliskDen", 480)
+        and ctx.count_units("Hydralisk", 540) >= 4
+    ):
+        return "ZvT - Roach Hydra"
+
+    # 9. 3 Base Ling Flood: three bases pumping 20+ Zerglings on a low
+    # drone count -- a ling-flood timing.
+    if (
+        base_count_at(ctx.buildings, "Hatchery", 390) >= 3
+        and ctx.count_units("Zergling", 360) >= 20
+        and ctx.count_units("Drone", 360) < 35
+    ):
+        return "ZvT - 3 Base Ling Flood"
+
+    # 10. Hatch First Macro: a greedy three-base economy (40+ Drones).
+    if (
+        base_count_at(ctx.buildings, "Hatchery", 420) >= 3
+        and ctx.count_units("Drone", 420) >= 40
+    ):
+        return "ZvT - Hatch First Macro"
 
     return None
 
@@ -241,23 +402,90 @@ def detect_zvp(ctx: DetectionContext) -> Optional[str]:
 
 
 def detect_zvz(ctx: DetectionContext) -> Optional[str]:
-    """Zerg-vs-Zerg: 12-pool speedling and roach aggression."""
-    # 12 Pool Speedling: an early Spawning Pool (sub-55s start) into a
-    # wall of Zerglings on one base -- the aggressive ZvZ opener.
+    """Zerg-vs-Zerg: recognizable openings, specific -> general.
+
+    Returns ``None`` when none match so the generic Zerg race tree in
+    ``classify_by_race`` provides the fallback label.
+    """
+    pool = ctx.building_time("SpawningPool")
+
+    # 1. 12 Pool into Baneling: a sub-55s Pool straight into a Baneling
+    # Nest and Banelings -- the early ZvZ baneling all-in.
     if (
-        ctx.building_time("SpawningPool") < 55
+        pool < 55
+        and ctx.has_building("BanelingNest", 240)
+        and ctx.count_units("Baneling", 330) >= 2
+    ):
+        return "ZvZ - 12 Pool into Baneling"
+
+    # 2. 12 Pool Speedling: a sub-55s Pool into a wall of Zerglings on
+    # one base.
+    if (
+        pool < 55
         and ctx.count_units("Zergling", 240) >= 6
         and base_count_at(ctx.buildings, "Hatchery", 240) <= 1
     ):
         return "ZvZ - 12 Pool Speedling"
 
-    # Roach Aggression: a Roach Warren with a wall of Roaches off two
-    # bases -- the standard ZvZ roach pressure / all-in.
+    # 3. Ling Bane All-in: a Baneling Nest flooding Banelings + Zerglings
+    # off <=2 bases.
+    if (
+        ctx.has_building("BanelingNest", 180)
+        and ctx.count_units("Baneling", 300) >= 4
+        and ctx.count_units("Zergling", 300) >= 10
+        and base_count_at(ctx.buildings, "Hatchery", 300) <= 2
+    ):
+        return "ZvZ - Ling Bane All-in"
+
+    # 4. Roach Ravager: a Roach Warren with Roaches and Ravagers.
+    if (
+        ctx.has_building("RoachWarren", 240)
+        and ctx.count_units("Ravager", 420) >= 3
+        and ctx.count_units("Roach", 420) >= 4
+    ):
+        return "ZvZ - Roach Ravager"
+
+    # 5. Roach Aggression: a Roach Warren with a wall of Roaches off
+    # <=2 bases.
     if (
         ctx.has_building("RoachWarren", 240)
         and ctx.count_units("Roach", 360) >= 6
         and base_count_at(ctx.buildings, "Hatchery", 360) <= 2
     ):
         return "ZvZ - Roach Aggression"
+
+    # 6. 2 Base Nydus: a Nydus Network off two bases.
+    if (
+        ctx.has_building("NydusNetwork", 450)
+        and base_count_at(ctx.buildings, "Hatchery", 450) <= 2
+    ):
+        return "ZvZ - 2 Base Nydus"
+
+    # 7. Mutalisk vs Mutalisk: a Spire into a flock of Mutalisks -- the
+    # ZvZ muta war.
+    if ctx.has_building("Spire", 420) and ctx.count_units("Mutalisk", 510) >= 6:
+        return "ZvZ - Mutalisk vs Mutalisk"
+
+    # 8. Hatch First Muta: a hatch-first economy (slow Pool) teching to a
+    # Spire.
+    if (
+        ctx.has_building("Spire", 480)
+        and base_count_at(ctx.buildings, "Hatchery", 300) >= 2
+        and pool > 60
+    ):
+        return "ZvZ - Hatch First Muta"
+
+    # 9. Zergling Flood: 20+ Zerglings on a low drone count.
+    if ctx.count_units("Zergling", 360) >= 20 and ctx.count_units("Drone", 360) < 25:
+        return "ZvZ - Zergling Flood"
+
+    # 10. Drone Macro (Hatch First): a greedy hatch-first economy
+    # (30+ Drones, slow Pool).
+    if (
+        base_count_at(ctx.buildings, "Hatchery", 360) >= 2
+        and ctx.count_units("Drone", 360) >= 30
+        and pool > 60
+    ):
+        return "ZvZ - Drone Macro (Hatch First)"
 
     return None

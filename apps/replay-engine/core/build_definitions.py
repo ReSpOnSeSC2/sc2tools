@@ -123,8 +123,20 @@ BUILD_DEFINITIONS = {
     # ``core.strategy_detector_matchups`` (mirrors of the detailed
     # Protoss trees). They take precedence over the generic race tree
     # and fall through to it when no specific build matched.
-    "TvT - Reaper Expand into Tank/Viking": "Detected when a Reaper-first scout is followed by a single expansion and then Siege Tanks behind Vikings -- the standard TvT positional macro opener that masses tanks for the air-controlled contain.",
+    # --- TvT ---
+    "TvT - Proxy 4 Rax Reaper": "Detected when four Barracks (at least one proxied near the enemy) flood Reapers -- the all-in proxy reaper rush in TvT.",
+    "TvT - Proxy Marauder": "Detected when a proxied Barracks pumps Marauders into the enemy base -- the TvT proxy Marauder rush.",
+    "TvT - Cyclone Push": "Detected when an early Factory produces Cyclones off two or fewer bases -- the TvT Cyclone push.",
     "TvT - 1-1-1 Cloak Banshee": "Detected when a Factory and Starport are built before any expansion and a Banshee reaches the field on one base -- the classic 1-1-1 cloak-Banshee harass.",
+    "TvT - Banshee into Raven": "Detected when cloak Banshees are backed by a Raven for detection and anti-air -- the TvT Banshee/Raven harass.",
+    "TvT - Battlecruiser Rush": "Detected when a fast Fusion Core lands Battlecruisers -- the TvT Battlecruiser rush.",
+    "TvT - Tank/Thor Mech": "Detected when an Armory backs Thors and Siege Tanks -- the positional TvT mech composition.",
+    "TvT - Reaper Expand into Tank/Viking": "Detected when a Reaper-first scout is followed by a single expansion and then Siege Tanks behind Vikings -- the standard TvT positional macro opener that masses tanks for the air-controlled contain.",
+    "TvT - 2-1-1 Marine Tank": "Detected when a Starport build fields Siege Tanks and Marines off two bases (no Viking) -- the TvT bio-tank timing.",
+    "TvT - 3 Rax Marine": "Detected when 3+ Barracks off one base flood Marines with no Factory -- a gas-light TvT Marine all-in.",
+    "TvT - Mass Viking Air": "Detected when a Viking-heavy air composition dominates the skies -- the TvT mass-Viking late game.",
+    # --- TvZ ---
+    "TvZ - Proxy 4 Rax Reaper": "Detected when four Barracks (at least one proxied near the enemy) flood Reapers -- the all-in proxy reaper rush vs Zerg.",
     "TvZ - 1-1-1 Banshee": "Detected when a Factory and Starport are built before any expansion and a Banshee reaches the field on one base -- the 1-base cloak-Banshee harass vs Zerg.",
     "TvZ - 3 Rax Marine": "Detected when 3+ Barracks off a single base produce a Marine flood with no Factory -- a gas-light Marine all-in vs Zerg.",
     "TvZ - Reaper Hellion Expand": "Detected when a Reaper-first scout and early Hellions back a fast expansion before any air or mech-upgrade tech -- the standard economic Reaper/Hellion opener vs Zerg.",
@@ -133,14 +145,35 @@ BUILD_DEFINITIONS = {
     "TvZ - 2-1-1 Marine Hellbat Timing": "Detected when Armory-backed Hellbats and Marines push off two bases without a Thor -- the 2-1-1 marine/hellbat timing attack.",
     "TvZ - Battlecruiser Mech": "Detected when a Fusion Core produces Battlecruisers as the late-game mech finisher vs Zerg.",
     "TvZ - Hellion Liberator": "Detected when early Hellions plus a Liberator zone the Zerg's bases off two CCs -- the Hellion/Liberator harass opener.",
-    "TvZ - 2-1-1 Marine Drop": "Detected when a Starport Medivac drop carries Marines off two bases -- the committed 2-base drop timing (not 3-CC macro).",
     "TvZ - Widow Mine Marine": "Detected when a Marine ball with 2+ Widow Mines and a Medivac runs mobile mine drops vs Zerg.",
+    "TvZ - 2-1-1 Marine Drop": "Detected when a Starport Medivac drop carries Marines off two bases -- the committed 2-base drop timing (not 3-CC macro).",
+    # --- TvP ---
+    "TvP - Proxy 4 Rax Reaper": "Detected when four Barracks (at least one proxied near the enemy) flood Reapers -- the all-in proxy reaper rush vs Protoss.",
     "TvP - 2-1-1 Reaper Expand": "Detected when a Reaper-first scout takes a single expansion (no fast 3rd CC) and adds a Factory + Starport for the Medivac-drop / Stim bio timing off two bases vs Protoss.",
-    "ZvT - 3 Hatch Ling Bane Muta": "Detected when three bases go down with a Baneling Nest and Spire, defending bio with Banelings and Zerglings while teching to Mutalisks -- the textbook ZvT macro style.",
+    # --- ZvT ---
+    "ZvT - Ling Bane Bust": "Detected when an early Pool and Baneling Nest flood Banelings and Zerglings off two or fewer bases -- the ZvT ling/bane bust.",
     "ZvT - 2 Base Roach Ravager Timing": "Detected when a Roach Warren produces a wall of Roaches and Ravagers off two bases on a low drone count -- the ZvT roach/ravager pressure timing.",
+    "ZvT - 2 Base Nydus": "Detected when a Nydus Network goes down off two bases for a drop into the Terran main -- the ZvT Nydus all-in.",
+    "ZvT - Mass Queen Defensive": "Detected when a queen-heavy defence (6+ Queens) holds with no Roach/Baneling/Spire aggression -- the ZvT queen-walk / defensive style.",
+    "ZvT - Lurker Contain": "Detected when a Lurker Den enables a positional Lurker contain vs Terran.",
+    "ZvT - 3 Hatch Ling Bane Muta": "Detected when three bases go down with a Baneling Nest and Spire, defending bio with Banelings and Zerglings while teching to Mutalisks -- the textbook ZvT macro style.",
+    "ZvT - Mass Muta Harass": "Detected when a Spire into 6+ Mutalisks (no Baneling Nest) runs pure muta harass vs Terran.",
+    "ZvT - Roach Hydra": "Detected when a Roach Warren and Hydralisk Den field a roach/hydra ground army vs Terran.",
+    "ZvT - 3 Base Ling Flood": "Detected when three bases pump 20+ Zerglings on a low drone count -- the ZvT ling-flood timing.",
+    "ZvT - Hatch First Macro": "Detected when a greedy three-base economy (40+ Drones) opens hatch-first vs Terran.",
+    # --- ZvP ---
     "ZvP - Ling Bane Muta": "Detected when a Baneling Nest and Spire support Banelings and a wall of Zerglings -- the muta/ling/bane harass style vs Protoss.",
+    # --- ZvZ ---
+    "ZvZ - 12 Pool into Baneling": "Detected when a sub-55s Pool goes straight into a Baneling Nest and Banelings -- the early ZvZ baneling all-in.",
     "ZvZ - 12 Pool Speedling": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the aggressive ZvZ speedling opener.",
+    "ZvZ - Ling Bane All-in": "Detected when a Baneling Nest floods Banelings and Zerglings off two or fewer bases -- the ZvZ ling/bane all-in.",
+    "ZvZ - Roach Ravager": "Detected when a Roach Warren fields Roaches and Ravagers -- the ZvZ roach/ravager style.",
     "ZvZ - Roach Aggression": "Detected when a Roach Warren produces a wall of Roaches off two bases -- the standard ZvZ roach pressure / all-in.",
+    "ZvZ - 2 Base Nydus": "Detected when a Nydus Network goes down off two bases -- the ZvZ Nydus all-in.",
+    "ZvZ - Mutalisk vs Mutalisk": "Detected when a Spire into 6+ Mutalisks creates the classic ZvZ muta war.",
+    "ZvZ - Hatch First Muta": "Detected when a hatch-first economy (slow Pool) teches to a Spire -- the ZvZ hatch-first muta.",
+    "ZvZ - Zergling Flood": "Detected when 20+ Zerglings flood on a low drone count -- the ZvZ ling flood.",
+    "ZvZ - Drone Macro (Hatch First)": "Detected when a greedy hatch-first economy (30+ Drones, slow Pool) drones up in ZvZ.",
 }
 
 # =========================================================

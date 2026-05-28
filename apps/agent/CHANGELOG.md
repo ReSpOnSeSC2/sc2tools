@@ -26,6 +26,21 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   Protoss keeps its richer matchup-specific labels. Re-ingest (Resync) to
   re-label previously analysed games.
 
+### Added — detailed per-matchup build orders for Terran & Zerg
+- **What.** New matchup-specific detectors (`core.strategy_detector_matchups`)
+  add ~10 recognizable pro build orders each for TvT, TvZ, ZvT and ZvZ
+  (plus the proxy-reaper all-in for TvP and a ling/bane/muta for ZvP),
+  mirroring the detailed Protoss matchup trees — e.g. `TvZ - 3 CC Bio`,
+  `TvT - Tank/Thor Mech`, `ZvT - 3 Hatch Ling Bane Muta`,
+  `ZvZ - Mutalisk vs Mutalisk`, and a `Proxy 4 Rax Reaper` shared by all
+  three Terran matchups. They run for BOTH the player's and the opponent's
+  events, so a build classifies the same way whoever executed it.
+- **Effect.** Both your own and your opponent's Terran/Zerg games now carry
+  precise matchup labels when a known build is detected; anything else falls
+  back to the generic race label (no existing labels changed). All 45 builds
+  also appear on the Build & Strategy Definitions page, and custom builds can
+  be authored for these matchups exactly like Protoss.
+
 ### Fixed — build-log unit names use the canonical engine extractor
 - **What.** The build log is now produced by the engine's
   `event_extractor`, the same one the cloud API uses, instead of the older
