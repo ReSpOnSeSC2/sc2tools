@@ -178,6 +178,14 @@ export function GameLengthWrChart() {
                 borderRadius: 8,
                 fontSize: 12,
               }}
+              labelStyle={{
+                color: "#7c8cff",
+                fontWeight: 600,
+                marginBottom: 4,
+              }}
+              // Win rate first so the hovered bucket's time-frame header
+              // sits directly above the WR readout the user is after.
+              itemSorter={(item) => (item.dataKey === "winRatePct" ? 0 : 1)}
               formatter={(value: number, name: string) => {
                 if (name === "winRatePct") return [`${value}%`, "Win rate"];
                 if (name === "total") return [value, "Games"];
