@@ -500,35 +500,41 @@ class OpponentsService {
   }
 
   /**
-   * In-place overlay of ``mmr`` / ``region`` from the opponent's most
-   * recent game that actually carries those fields. Self-healing for
-   * the gap the Pulse-fill-at-ingest path leaves behind:
+   * In-place overlay of the "Last MMR" column: the opponent's MMR in
+   * the race they played in your MOST RECENT game against them.
    *
-   *   * If sc2reader extracted an opponent MMR for some game in the
-   *     past, ``game.opponent.mmr`` is set on that row even though
-   *     the opponents collection's ``mmr`` field may still be null
-   *     (rows pre-date the propagation guard, OR the ingest path
-   *     skipped the Pulse fetch because ``pulseCharacterId`` wasn't
-   *     resolved yet and was only filled in later by the backfill
-   *     cron).
-   *   * If the cloud-side Pulse fetch ever succeeded on a recent
-   *     game ingest, that game's ``opponent.mmr`` carries the value
-   *     authoritatively.
+   * Two-step, race-aware selection (this is the fix for the "shows the
+   * opponent's highest-race MMR, not the race I actually played" bug —
+   * e.g. a row whose last game was the opponent's Terran (5400) was
+   * showing their Protoss (6360) because that's the race they ladder
+   * most):
+   *   1. RECOGNISE the race — find the opponent's race in the most
+   *      recent game you have on record against them.
+   *   2. PICK the MMR for THAT race — the most recent game of that race
+   *      that carries an ``opponent.mmr`` (stamped race-correct at
+   *      ingest by ``_stampGameOpponentMmr`` via the SC2Pulse per-race
+   *      breakdown). A Protoss game's rating is therefore never lent to
+   *      a row whose last game was Terran.
    *
-   * Either way the data is already in our database — we just have to
-   * read it. Crucially this is a PURE-DATABASE overlay: zero outbound
-   * SC2Pulse traffic, so it adds no rate-limit pressure and runs on
-   * every list page without coordination.
+   * This is preferred over the opponents-row stored ``mmr``, which is
+   * SC2Pulse's *current* rating collapsed across races —
+   * ``_fetchTeams`` picks the team played most-recently-on-ladder
+   * (tie-break highest rating), i.e. race-AGNOSTIC. For a multi-race
+   * opponent that's the wrong number.
    *
-   * One aggregation per page. Uses the
-   * ``{opponent.pulseId, userId, date}`` index for the sort. Safe on
-   * an empty page; safe when every row already carries an ``mmr``
-   * (the ``$in`` set ends up empty and the aggregation short-circuits).
+   * Fallback to the opponents-row stored ``mmr`` only when no game of
+   * the latest race carries one (every such game pre-dates the stamp
+   * trust window, or sc2reader never carried it and the stamp couldn't
+   * resolve a team). That's the AngryBird case: ranked-1v1 replays are
+   * mmr-less, so the row holds the only number we have. The unfiltered
+   * path already carries the stored mmr on the row; the filtered path
+   * looks it up (its aggregation rows don't carry it).
    *
-   * Only overlays when the row's stored ``mmr`` is missing —
-   * non-null stored values are authoritative (they came from
-   * ``recordGame``'s SC2Pulse fetch, which beats anything the agent
-   * happened to extract from sc2reader).
+   * PURE-DATABASE overlay: zero outbound SC2Pulse traffic. Two games
+   * aggregations per page (latest race, then most-recent mmr per race —
+   * both ride the ``{opponent.pulseId, userId, date}`` index) plus at
+   * most one opponents ``find`` for the fallback tier. Safe on an empty
+   * page.
    *
    * @private
    * @param {string} userId
@@ -540,60 +546,105 @@ class OpponentsService {
    */
   async _overlayLatestMmrFromGames(userId, rows) {
     if (!Array.isArray(rows) || rows.length === 0) return;
-    const needIds = [];
+    const pulseIds = [];
     for (const r of rows) {
       if (!r || typeof r.pulseId !== "string" || r.pulseId.length === 0) {
         continue;
       }
-      if (typeof r.mmr === "number") continue;
-      needIds.push(r.pulseId);
+      pulseIds.push(r.pulseId);
     }
-    if (needIds.length === 0) return;
-    const cursor = this.db.games.aggregate([
+    if (pulseIds.length === 0) return;
+    // Step 1 — RECOGNISE the race: the opponent's race in the most
+    // recent game on record for each opponent. This is the race whose
+    // MMR the "Last MMR" column must show.
+    /** @type {Map<string, string>} */
+    const latestRaceByPulse = new Map();
+    const raceCursor = this.db.games.aggregate([
+      { $match: { userId, "opponent.pulseId": { $in: pulseIds } } },
+      { $sort: { date: -1 } },
+      {
+        $group: {
+          _id: "$opponent.pulseId",
+          latestRace: { $first: "$opponent.race" },
+        },
+      },
+    ]);
+    for await (const doc of raceCursor) {
+      if (typeof doc._id !== "string") continue;
+      if (typeof doc.latestRace === "string") {
+        latestRaceByPulse.set(doc._id, doc.latestRace);
+      }
+    }
+    // Step 2 — PICK the MMR for that race: the most recent game-with-mmr
+    // per (opponent, race). Keyed by the canonical race LETTER so the
+    // "Terran"/"T" spellings collapse together. Grouping by race here is
+    // what stops a Protoss game from lending its rating to a row whose
+    // last game was Terran.
+    /** @type {Map<string, {mmr: number, region?: string|null}>} */
+    const byPulseRace = new Map();
+    const mmrCursor = this.db.games.aggregate([
       {
         $match: {
           userId,
-          "opponent.pulseId": { $in: needIds },
+          "opponent.pulseId": { $in: pulseIds },
           "opponent.mmr": { $type: "number" },
         },
       },
       { $sort: { date: -1 } },
       {
         $group: {
-          _id: "$opponent.pulseId",
+          _id: {
+            pulseId: "$opponent.pulseId",
+            letter: {
+              $toUpper: {
+                $substrCP: [{ $ifNull: ["$opponent.race", ""] }, 0, 1],
+              },
+            },
+          },
           mmr: { $first: "$opponent.mmr" },
           region: { $first: "$opponent.region" },
         },
       },
     ]);
-    /** @type {Map<string, {mmr: number, region?: string|null}>} */
-    const byPulseId = new Map();
-    for await (const doc of cursor) {
-      if (typeof doc._id !== "string") continue;
+    for await (const doc of mmrCursor) {
+      const id = doc && doc._id;
+      if (!id || typeof id.pulseId !== "string" || typeof id.letter !== "string") {
+        continue;
+      }
       const mmr = Number(doc.mmr);
       if (!Number.isFinite(mmr) || mmr <= 0) continue;
-      byPulseId.set(doc._id, {
+      byPulseRace.set(`${id.pulseId}|${id.letter}`, {
         mmr: Math.round(mmr),
         region: typeof doc.region === "string" ? doc.region : null,
       });
     }
-    // Second tier: for any row still without an MMR, fall back to
-    // the opponents-collection row's stored ``mmr`` / ``region``.
-    // That's where the SC2Pulse current-MMR fetch in ``recordGame``
-    // lands — sc2reader almost never carries opponent.mmr for ranked
-    // 1v1 replays, so for high-ladder opponents the opponents-row
-    // value is the ONLY place we have the number. Without this
-    // fallback the filtered Opponents tab silently blanks the MMR
-    // column for anyone whose every game in the filter window was
-    // missing opponent.mmr (the bug surfaced as "the mmr disappeared
-    // for AngryBird"). Mirrors the same fallback the
-    // MMR-bucket charts use in trendsInsights.js.
+    // Resolve the race-correct mmr for each row.
+    /** @type {Map<string, {mmr: number, region?: string|null}>} */
+    const matched = new Map();
+    for (const r of rows) {
+      if (!r || typeof r.pulseId !== "string") continue;
+      const letter = canonicalRaceLetter(latestRaceByPulse.get(r.pulseId));
+      if (!letter) continue;
+      const hit = byPulseRace.get(`${r.pulseId}|${letter}`);
+      if (hit) matched.set(r.pulseId, hit);
+    }
+    // Fallback tier: for any row with NO race-matched game mmr AND no
+    // stored mmr already on it, fall back to the opponents-collection
+    // row's stored ``mmr`` / ``region``. That's where the SC2Pulse
+    // current-MMR fetch in ``recordGame`` lands — sc2reader almost never
+    // carries opponent.mmr for ranked 1v1 replays, so for high-ladder
+    // opponents the opponents-row value is the ONLY place we have the
+    // number. Without this fallback the filtered Opponents tab silently
+    // blanks the MMR column for anyone whose every game in the filter
+    // window was missing opponent.mmr (the bug surfaced as "the mmr
+    // disappeared for AngryBird"). The unfiltered path already carries
+    // the stored mmr on the row, so it never reaches this lookup.
     /** @type {string[]} */
     const stillMissing = [];
     for (const r of rows) {
       if (!r || typeof r.pulseId !== "string") continue;
+      if (matched.has(r.pulseId)) continue;
       if (typeof r.mmr === "number") continue;
-      if (byPulseId.has(r.pulseId)) continue;
       stillMissing.push(r.pulseId);
     }
     /** @type {Map<string, {mmr: number, region?: string|null}>} */
@@ -615,15 +666,30 @@ class OpponentsService {
     }
     for (const r of rows) {
       if (!r || typeof r.pulseId !== "string") continue;
+      // Race-correct most-recent-game mmr WINS over the row's stored
+      // (race-agnostic) value.
+      const found = matched.get(r.pulseId);
+      if (found) {
+        r.mmr = found.mmr;
+        if (
+          (r.region == null || r.region === "")
+          && typeof found.region === "string"
+        ) {
+          r.region = found.region;
+        }
+        continue;
+      }
+      // No same-race game carries an mmr — keep the stored value if the
+      // row already has one, else use the opponents-collection fallback.
       if (typeof r.mmr === "number") continue;
-      const found = byPulseId.get(r.pulseId) || opponentsFallback.get(r.pulseId);
-      if (!found) continue;
-      r.mmr = found.mmr;
+      const fb = opponentsFallback.get(r.pulseId);
+      if (!fb) continue;
+      r.mmr = fb.mmr;
       if (
         (r.region == null || r.region === "")
-        && typeof found.region === "string"
+        && typeof fb.region === "string"
       ) {
-        r.region = found.region;
+        r.region = fb.region;
       }
     }
   }
@@ -944,16 +1010,33 @@ class OpponentsService {
       .filter((envelope) => envelope !== null);
     const matchupTimingsLegacy = dna.matchupTimings;
     const matchupTimings = projectMatchupTimings(matchupTimingsLegacy);
-    // MMR + region overlay from the most recent game that carries
-    // those fields. Same self-healing pattern as the list path: if
-    // the opponents row doesn't have ``mmr`` stored (because Pulse
-    // was skipped at first ingest or sc2reader carried no value),
-    // but a recent game DOES, surface that value on the profile
-    // header instead of "—". Pure database read — no Pulse traffic.
+    // "Last MMR" overlay — same race-aware contract as the list path.
+    // The column means "the opponent's rating in the race they played
+    // in your most recent game against them". ``rawGames`` is sorted
+    // date desc, so rawGames[0] is the most recent game; we take its
+    // opponent race, then surface the MMR from the most recent game OF
+    // THAT RACE that carries one (stamped race-correct at ingest by
+    // ``_stampGameOpponentMmr``). It WINS over the opponents-row
+    // ``doc.mmr`` — SC2Pulse's race-AGNOSTIC current rating
+    // (``_fetchTeams`` collapses all races to the most-recently-played
+    // team), which would surface the wrong race for a multi-race
+    // opponent (their Protoss 6360 on a row whose last game was Terran
+    // 5400). Falls back to ``doc.mmr`` when no same-race game carries
+    // one (every such game pre-dates the stamp window, or sc2reader
+    // never had it). Pure database read — no Pulse traffic.
     /** @type {{mmr: number, region: string|null}|null} */
     let mmrOverlay = null;
-    if (typeof doc.mmr !== "number") {
+    const latestOppRace =
+      rawGames.length > 0 && rawGames[0] && rawGames[0].opponent
+        ? rawGames[0].opponent.race
+        : null;
+    const latestOppLetter = canonicalRaceLetter(latestOppRace);
+    if (latestOppLetter) {
       for (const g of rawGames) {
+        const gLetter = canonicalRaceLetter(
+          g && g.opponent && g.opponent.race,
+        );
+        if (gLetter !== latestOppLetter) continue;
         const m = Number(g && g.opponent && g.opponent.mmr);
         if (!Number.isFinite(m) || m <= 0) continue;
         mmrOverlay = {
