@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { resolveStrategyIcons } from "@/lib/sc2-icons";
-import { spriteFor } from "@/components/randomizer/reveals/spriteShared";
+import {
+  assignPoolSprites,
+  spriteFor,
+} from "@/components/randomizer/reveals/spriteShared";
 import { REVEAL_STYLES, type RandomizerBuild } from "@/lib/randomizer/types";
 
 /**
@@ -38,6 +41,34 @@ describe("spriteFor (unit-only)", () => {
     expect(spriteFor(build("My Secret Cheese", "Terran"))).toContain(
       "/units/marine",
     );
+  });
+});
+
+describe("assignPoolSprites (distinct race units)", () => {
+  function pool(names: string[], race: RandomizerBuild["race"] = "Protoss") {
+    return names.map((n) => build(n, race));
+  }
+
+  it("gives every build a distinct unit sprite when the race has enough", () => {
+    const builds = pool([
+      "PvT - A", "PvT - B", "PvT - C", "PvT - D", "PvT - E", "PvT - F",
+    ]);
+    const map = assignPoolSprites(builds);
+    const urls = builds.map((b) => map.get(b.id));
+    expect(new Set(urls).size).toBe(builds.length); // all distinct
+    expect(urls.every((u) => u && u.includes("/units/"))).toBe(true);
+  });
+
+  it("keeps the meaningful unit for a build that names one", () => {
+    const builds = pool(["Protoss - DT Rush", "PvT - A", "PvT - B"]);
+    const map = assignPoolSprites(builds);
+    expect(map.get("Protoss - DT Rush")).toContain("/units/darktemplar");
+  });
+
+  it("still assigns a sprite to every build when there are many", () => {
+    const builds = pool(Array.from({ length: 30 }, (_, i) => `PvT - ${i}`));
+    const map = assignPoolSprites(builds);
+    for (const b of builds) expect(map.get(b.id)).toBeTruthy();
   });
 });
 

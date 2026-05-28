@@ -16,7 +16,7 @@ import {
   useReducedMotion,
   type RevealProps,
 } from "./revealShared";
-import { BuildSprite, spriteFor, useElapsedReveal } from "./spriteShared";
+import { assignPoolSprites, BuildSprite, useElapsedReveal } from "./spriteShared";
 
 const W = 560;
 const LANE_H = 38;
@@ -49,6 +49,7 @@ export function HorseRaceReveal({
     onComplete,
   );
 
+  const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
   const racers = useMemo<Racer[]>(() => {
     let s = spinId | 0;
     const rng = () => {
@@ -57,13 +58,13 @@ export function HorseRaceReveal({
     };
     return pool.map((b) => ({
       build: b,
-      src: spriteFor(b),
+      src: sprites.get(b.id) ?? null,
       finalProgress: b.id === winner.id ? 1 : 0.7 + rng() * 0.24,
       wobbleAmp: 0.06 + rng() * 0.05,
       wobbleFreq: 5 + rng() * 4,
       phase: rng() * Math.PI * 2,
     }));
-  }, [pool, winner.id, spinId]);
+  }, [pool, winner.id, spinId, sprites]);
 
   const trackW = W - SPRITE - 28;
   const p = Math.min(1, elapsed / DURATION_MS);
@@ -110,7 +111,12 @@ export function HorseRaceReveal({
           />
         ))}
       </div>
-      <WinnerCard winner={winner} rarity={rarity} show={settled} />
+      <WinnerCard
+        winner={winner}
+        rarity={rarity}
+        show={settled}
+        src={sprites.get(winner.id) ?? null}
+      />
     </RevealFrame>
   );
 }

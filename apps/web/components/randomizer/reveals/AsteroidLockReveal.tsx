@@ -17,9 +17,10 @@ import {
   type RevealProps,
 } from "./revealShared";
 import {
+  assignPoolSprites,
   BuildSprite,
   seededShuffle,
-  spriteFor,
+  SpriteLegend,
   useEliminationSchedule,
   useRaf,
 } from "./spriteShared";
@@ -62,6 +63,7 @@ export function AsteroidLockReveal({
     onComplete,
   );
 
+  const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
   const rocksRef = useRef<Rock[]>([]);
   const reticleRef = useRef({ x: W / 2, y: H / 2 });
   const [, force] = useState(0);
@@ -72,7 +74,7 @@ export function AsteroidLockReveal({
       return {
         id: b.id,
         build: b,
-        src: spriteFor(b),
+        src: sprites.get(b.id) ?? null,
         x: W / 2 + Math.cos(angle) * (W / 4),
         y: H / 2 + Math.sin(angle) * (H / 4),
         vx: Math.cos(angle * 1.7 + i) * 0.14,
@@ -142,7 +144,18 @@ export function AsteroidLockReveal({
           color={settled ? rarity.color : "#3ec0c7"}
         />
       </div>
-      <WinnerCard winner={winner} rarity={rarity} show={settled} />
+      <SpriteLegend
+        pool={pool}
+        sprites={sprites}
+        eliminated={eliminated}
+        highlightId={settled ? winner.id : nextOutId}
+      />
+      <WinnerCard
+        winner={winner}
+        rarity={rarity}
+        show={settled}
+        src={sprites.get(winner.id) ?? null}
+      />
     </RevealFrame>
   );
 }

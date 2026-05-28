@@ -17,9 +17,10 @@ import {
   type RevealProps,
 } from "./revealShared";
 import {
+  assignPoolSprites,
   BuildSprite,
   seededShuffle,
-  spriteFor,
+  SpriteLegend,
   useEliminationSchedule,
   useRaf,
 } from "./spriteShared";
@@ -65,6 +66,7 @@ export function SumoShoveReveal({
     onComplete,
   );
 
+  const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
   const sumosRef = useRef<Sumo[]>([]);
   const [, force] = useState(0);
 
@@ -75,7 +77,7 @@ export function SumoShoveReveal({
       return {
         id: b.id,
         build: b,
-        src: spriteFor(b),
+        src: sprites.get(b.id) ?? null,
         x: CENTER + Math.cos(angle) * rad,
         y: CENTER + Math.sin(angle) * rad,
         vx: Math.cos(angle + i) * 0.16,
@@ -183,7 +185,13 @@ export function SumoShoveReveal({
           );
         })}
       </div>
-      <WinnerCard winner={winner} rarity={rarity} show={settled} />
+      <SpriteLegend pool={pool} sprites={sprites} eliminated={eliminated} />
+      <WinnerCard
+        winner={winner}
+        rarity={rarity}
+        show={settled}
+        src={sprites.get(winner.id) ?? null}
+      />
     </RevealFrame>
   );
 }

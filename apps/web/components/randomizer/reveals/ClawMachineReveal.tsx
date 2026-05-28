@@ -16,7 +16,13 @@ import {
   useReducedMotion,
   type RevealProps,
 } from "./revealShared";
-import { BuildSprite, seededShuffle, spriteFor, useElapsedReveal } from "./spriteShared";
+import {
+  assignPoolSprites,
+  BuildSprite,
+  seededShuffle,
+  SpriteLegend,
+  useElapsedReveal,
+} from "./spriteShared";
 
 const W = 460;
 const H = 320;
@@ -50,16 +56,17 @@ export function ClawMachineReveal({
     onComplete,
   );
 
+  const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
   const toys = useMemo<Toy[]>(() => {
     const order = seededShuffle(pool, spinId);
     const slotW = (W - 60) / Math.max(1, order.length);
     return order.map((b, i) => ({
       build: b,
-      src: spriteFor(b),
+      src: sprites.get(b.id) ?? null,
       x: 30 + slotW * (i + 0.5),
       rot: ((i * 47) % 30) - 15,
     }));
-  }, [pool, spinId]);
+  }, [pool, spinId, sprites]);
 
   const winnerToy = toys.find((t) => t.build.id === winner.id) ?? toys[0];
   const p = Math.min(1, elapsed / DURATION_MS);
@@ -130,7 +137,17 @@ export function ClawMachineReveal({
           }}
         />
       </div>
-      <WinnerCard winner={winner} rarity={rarity} show={settled} />
+      <SpriteLegend
+        pool={pool}
+        sprites={sprites}
+        highlightId={settled ? winner.id : null}
+      />
+      <WinnerCard
+        winner={winner}
+        rarity={rarity}
+        show={settled}
+        src={sprites.get(winner.id) ?? null}
+      />
     </RevealFrame>
   );
 }

@@ -18,9 +18,10 @@ import {
   type RevealProps,
 } from "./revealShared";
 import {
+  assignPoolSprites,
   BuildSprite,
   seededShuffle,
-  spriteFor,
+  SpriteLegend,
   useEliminationSchedule,
   useRaf,
 } from "./spriteShared";
@@ -71,6 +72,7 @@ export function FighterBrawlReveal({
     onComplete,
   );
 
+  const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
   const fightersRef = useRef<Fighter[]>([]);
   const [, force] = useState(0);
   const elapsedRef = useRef(0);
@@ -81,7 +83,7 @@ export function FighterBrawlReveal({
       return {
         id: b.id,
         build: b,
-        src: spriteFor(b),
+        src: sprites.get(b.id) ?? null,
         x: W / 2 + Math.cos(angle) * (W / 3.5),
         y: H / 2 + Math.sin(angle) * (H / 3.5),
         vx: Math.cos(angle * 2.7 + i) * 0.18,
@@ -163,7 +165,17 @@ export function FighterBrawlReveal({
           );
         })}
       </div>
-      <WinnerCard winner={winner} rarity={rarity} show={settled} />
+      <SpriteLegend
+        pool={pool}
+        sprites={sprites}
+        eliminated={eliminated}
+      />
+      <WinnerCard
+        winner={winner}
+        rarity={rarity}
+        show={settled}
+        src={sprites.get(winner.id) ?? null}
+      />
     </RevealFrame>
   );
 }

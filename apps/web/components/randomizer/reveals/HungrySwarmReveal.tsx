@@ -17,9 +17,10 @@ import {
   type RevealProps,
 } from "./revealShared";
 import {
+  assignPoolSprites,
   BuildSprite,
   seededShuffle,
-  spriteFor,
+  SpriteLegend,
   useEliminationSchedule,
   useRaf,
 } from "./spriteShared";
@@ -63,6 +64,7 @@ export function HungrySwarmReveal({
     onComplete,
   );
 
+  const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
   const blobsRef = useRef<Blob[]>([]);
   const [, force] = useState(0);
 
@@ -72,7 +74,7 @@ export function HungrySwarmReveal({
       return {
         id: b.id,
         build: b,
-        src: spriteFor(b),
+        src: sprites.get(b.id) ?? null,
         x: b.id === winner.id ? W / 2 : W / 2 + Math.cos(angle) * (W / 3.2),
         y: b.id === winner.id ? H / 2 : H / 2 + Math.sin(angle) * (H / 3.2),
         vx: Math.cos(angle * 1.3 + i) * 0.1,
@@ -146,7 +148,13 @@ export function HungrySwarmReveal({
             <BlobChip key={b.id} blob={b} r={winnerR} isOut={false} isWinner />
           ))}
       </div>
-      <WinnerCard winner={winner} rarity={rarity} show={settled} />
+      <SpriteLegend pool={pool} sprites={sprites} eliminated={eliminated} />
+      <WinnerCard
+        winner={winner}
+        rarity={rarity}
+        show={settled}
+        src={sprites.get(winner.id) ?? null}
+      />
     </RevealFrame>
   );
 }
