@@ -91,6 +91,40 @@ export function useRevealTimer(
   return settled;
 }
 
+/**
+ * Kick a CSS-transition reveal into motion. Returns `false` for the
+ * first painted frame (so the element renders at its start value) then
+ * flips `true` a couple of frames later so the transition to the target
+ * actually animates instead of being applied instantly. Reduced motion
+ * skips straight to the target.
+ *
+ * Pairing this with `useRevealTimer` is what keeps the spin animation
+ * and the winner reveal independent: the motion starts immediately on
+ * mount and the winner card only appears once the timer elapses.
+ */
+export function useRevealStart(
+  spinId: number,
+  reducedMotion: boolean,
+): boolean {
+  const [started, setStarted] = useState(false);
+  useEffect(() => {
+    if (reducedMotion) {
+      setStarted(true);
+      return;
+    }
+    setStarted(false);
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setStarted(true));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [spinId, reducedMotion]);
+  return started;
+}
+
 /** Props every reveal animation receives. */
 export interface RevealProps {
   pool: RandomizerBuild[];

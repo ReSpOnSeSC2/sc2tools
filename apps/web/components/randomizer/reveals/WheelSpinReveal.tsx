@@ -15,6 +15,7 @@ import {
   raceHex,
   rarityFor,
   useReducedMotion,
+  useRevealStart,
   useRevealTimer,
   type RevealProps,
 } from "./revealShared";
@@ -33,6 +34,7 @@ export function WheelSpinReveal({
   onComplete,
 }: RevealProps) {
   const reducedMotion = useReducedMotion();
+  const started = useRevealStart(spinId, reducedMotion);
   const settled = useRevealTimer(spinId, DURATION_MS, reducedMotion, onComplete);
   const rarity = rarityFor(winnerProbability);
 
@@ -41,7 +43,9 @@ export function WheelSpinReveal({
     [pool, probabilities, winner, spinId],
   );
 
-  const rotation = reducedMotion || settled ? targetRotation : 0;
+  // The wheel begins spinning the moment it mounts (`started`) and runs
+  // the full duration; the winner card only appears once `settled`.
+  const rotation = started ? targetRotation : 0;
 
   return (
     <RevealFrame>

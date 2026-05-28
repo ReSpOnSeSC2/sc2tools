@@ -2,8 +2,8 @@
 
 /**
  * RandomizerStage — picks the appropriate reveal animation for a spin
- * and renders it. The five styles share `RevealProps`, so swapping
- * between them is just a switch.
+ * and renders it. Every style shares `RevealProps`, so swapping between
+ * them is just a switch.
  */
 import type { SpinOutcome } from "@/lib/randomizer/types";
 import { BattleRoyaleReveal } from "./reveals/BattleRoyaleReveal";
@@ -12,6 +12,12 @@ import { GachaSummonReveal } from "./reveals/GachaSummonReveal";
 import { RevealKeyframes } from "./reveals/revealShared";
 import { SlotMachineReveal } from "./reveals/SlotMachineReveal";
 import { WheelSpinReveal } from "./reveals/WheelSpinReveal";
+import { FighterBrawlReveal } from "./reveals/FighterBrawlReveal";
+import { HorseRaceReveal } from "./reveals/HorseRaceReveal";
+import { SumoShoveReveal } from "./reveals/SumoShoveReveal";
+import { AsteroidLockReveal } from "./reveals/AsteroidLockReveal";
+import { HungrySwarmReveal } from "./reveals/HungrySwarmReveal";
+import { ClawMachineReveal } from "./reveals/ClawMachineReveal";
 
 export interface RandomizerStageProps {
   outcome: SpinOutcome;
@@ -63,6 +69,18 @@ function renderReveal(
       return <BattleRoyaleReveal {...common} />;
     case "wheel":
       return <WheelSpinReveal {...common} />;
+    case "fighter":
+      return <FighterBrawlReveal {...common} />;
+    case "race":
+      return <HorseRaceReveal {...common} />;
+    case "sumo":
+      return <SumoShoveReveal {...common} />;
+    case "asteroid":
+      return <AsteroidLockReveal {...common} />;
+    case "swarm":
+      return <HungrySwarmReveal {...common} />;
+    case "claw":
+      return <ClawMachineReveal {...common} />;
     default:
       return <WheelSpinReveal {...common} />;
   }

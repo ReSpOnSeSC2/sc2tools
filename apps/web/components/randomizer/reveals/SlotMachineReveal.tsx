@@ -16,6 +16,7 @@ import {
   raceHex,
   rarityFor,
   useReducedMotion,
+  useRevealStart,
   useRevealTimer,
   type RevealProps,
 } from "./revealShared";
@@ -36,6 +37,7 @@ export function SlotMachineReveal({
   onComplete,
 }: RevealProps) {
   const reducedMotion = useReducedMotion();
+  const started = useRevealStart(spinId, reducedMotion);
   const settled = useRevealTimer(spinId, TOTAL_MS, reducedMotion, onComplete);
   const rarity = rarityFor(winnerProbability);
 
@@ -67,6 +69,7 @@ export function SlotMachineReveal({
             kind={idx === 1 ? "name" : "race"}
             duration={REEL_DURATIONS[idx]}
             reducedMotion={reducedMotion}
+            started={started}
             settled={settled}
           />
         ))}
@@ -111,6 +114,7 @@ function Reel({
   kind,
   duration,
   reducedMotion,
+  started,
   settled,
 }: {
   items: RandomizerBuild[];
@@ -118,10 +122,13 @@ function Reel({
   kind: "race" | "name";
   duration: number;
   reducedMotion: boolean;
+  started: boolean;
   settled: boolean;
 }) {
   const targetY = stopIndex * ITEM_H;
-  const y = reducedMotion || settled ? targetY : 0;
+  // Each reel scrolls toward its stop the moment it mounts (`started`)
+  // over its own duration, so the reels visibly lock in sequence.
+  const y = started ? targetY : 0;
   return (
     <div
       style={{
