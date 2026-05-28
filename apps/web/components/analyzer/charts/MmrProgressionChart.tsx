@@ -18,6 +18,7 @@ import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
+import { ChartTooltip } from "./ChartTooltip";
 
 type MmrPoint = {
   bucket: string;
@@ -288,19 +289,21 @@ export function MmrProgressionChart({
               />
               <Tooltip
                 cursor={{ stroke: COLOR_ACCENT, strokeDasharray: "3 3" }}
-                contentStyle={{
-                  background: COLOR_BG_SURFACE,
-                  border: `1px solid ${COLOR_GRID}`,
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-                labelStyle={{ color: COLOR_ACCENT, fontWeight: 600, marginBottom: 4 }}
-                formatter={(value: number, name: string) => {
-                  const series = multiSeries.find((s) => s.key === name);
-                  return [
-                    value != null ? value.toLocaleString() : "—",
-                    series ? series.label : name,
-                  ];
+                content={({ active, payload, label }) => {
+                  if (!active || !payload || payload.length === 0) return null;
+                  const rows = payload
+                    .filter((p) => p.value != null)
+                    .map((p) => {
+                      const series = multiSeries.find((s) => s.key === p.name);
+                      return {
+                        key: String(p.name),
+                        label: series ? series.label : String(p.name),
+                        value: Number(p.value).toLocaleString(),
+                        dot: series?.color,
+                      };
+                    });
+                  if (!rows.length) return null;
+                  return <ChartTooltip header={String(label)} rows={rows} />;
                 }}
               />
               <Legend
@@ -423,17 +426,22 @@ function SingleSeriesChart({
       ) : null}
       <Tooltip
         cursor={{ stroke: COLOR_ACCENT, strokeDasharray: "3 3" }}
-        contentStyle={{
-          background: COLOR_BG_SURFACE,
-          border: `1px solid ${COLOR_GRID}`,
-          borderRadius: 8,
-          fontSize: 12,
-        }}
-        labelStyle={{ color: COLOR_ACCENT, fontWeight: 600, marginBottom: 4 }}
-        formatter={(value: number, name: string) => {
-          if (name === "close") return [value.toLocaleString(), "Closing MMR"];
-          if (name === "band") return [null, null];
-          return [value, name];
+        content={({ active, payload, label }) => {
+          if (!active || !payload || payload.length === 0) return null;
+          const row = payload[0].payload as { close: number };
+          if (row.close == null) return null;
+          return (
+            <ChartTooltip
+              header={String(label)}
+              rows={[
+                {
+                  key: "close",
+                  label: "Closing MMR",
+                  value: row.close.toLocaleString(),
+                },
+              ]}
+            />
+          );
         }}
       />
       <Area

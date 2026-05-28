@@ -18,6 +18,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { wrColor } from "@/lib/format";
 import { OppMmrBucketGamesModal } from "./OppMmrBucketGamesModal";
+import { ChartTooltip } from "./ChartTooltip";
 
 type SelectedBand = {
   lo: number;
@@ -52,7 +53,6 @@ const COLOR_ACCENT = "#7c8cff";
 const COLOR_GRID = "#1f2533";
 const COLOR_BORDER_STRONG = "#2a3142";
 const COLOR_TEXT_DIM = "#6b7280";
-const COLOR_BG_SURFACE = "#11141b";
 
 /**
  * Win rate by **absolute opponent MMR**, in clean 50- or 100-MMR
@@ -183,42 +183,25 @@ export function OppMmrBucketsChart() {
             ) : null}
             <Tooltip
               cursor={{ fill: "rgba(124,140,255,0.04)" }}
-              contentStyle={{
-                background: COLOR_BG_SURFACE,
-                border: `1px solid ${COLOR_GRID}`,
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              labelStyle={{
-                color: COLOR_ACCENT,
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-              // Force a legible row colour — the bars carry the WR colour
-              // ramp, and a dark bucket's fill bled into near-black tooltip
-              // text for the "Sample" row otherwise.
-              itemStyle={{ color: "#cbd5e1" }}
-              // Win rate first so the selected band's MMR range header
-              // sits directly above the WR readout the user is after.
-              itemSorter={(item) => (item.dataKey === "winRatePct" ? 0 : 1)}
-              labelFormatter={(_v: string, ctx) => {
-                const payload = Array.isArray(ctx) && ctx[0]?.payload;
-                if (!payload) return _v;
-                return `${payload.lo}–${payload.hi - 1} MMR`;
-              }}
-              formatter={(value, name, ctx) => {
-                const n = typeof value === "number" ? value : Number(value);
-                if (name === "winRatePct") {
-                  if (value == null || !Number.isFinite(n)) return ["—", "Win rate"];
-                  return [`${n}%`, "Win rate"];
-                }
-                if (name === "total") {
-                  const p = (ctx as { payload?: OppMmrBucket }).payload;
-                  const sub =
-                    p?.avgMmr != null ? ` · avg ${p.avgMmr} MMR` : "";
-                  return [`${n} games${sub}`, "Sample"];
-                }
-                return [String(value), String(name)];
+              content={({ active, payload }) => {
+                if (!active || !payload || payload.length === 0) return null;
+                const b = payload[0].payload as OppMmrBucket;
+                const wr =
+                  b.total > 0 ? `${Math.round(b.winRate * 100)}%` : "—";
+                const sub = b.avgMmr != null ? ` · avg ${b.avgMmr} MMR` : "";
+                return (
+                  <ChartTooltip
+                    header={`${b.lo}–${b.hi - 1} MMR`}
+                    rows={[
+                      { key: "wr", label: "Win rate", value: wr },
+                      {
+                        key: "sample",
+                        label: "Sample",
+                        value: `${b.total} game${b.total === 1 ? "" : "s"}${sub}`,
+                      },
+                    ]}
+                  />
+                );
               }}
             />
             <Bar
