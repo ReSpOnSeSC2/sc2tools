@@ -36,6 +36,12 @@ export const REVEAL_STYLES = [
   "gacha",
   "battle",
   "wheel",
+  "fighter",
+  "race",
+  "sumo",
+  "asteroid",
+  "swarm",
+  "claw",
 ] as const;
 
 export type RevealStyle = (typeof REVEAL_STYLES)[number];

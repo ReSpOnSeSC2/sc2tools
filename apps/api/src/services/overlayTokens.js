@@ -23,6 +23,14 @@ const DEFAULT_WIDGETS = Object.freeze([
 ]);
 
 /**
+ * Every widget id the toggle endpoint will accept. Kept separate from
+ * `DEFAULT_WIDGETS` (the set new tokens start with) so opt-in widgets
+ * like the build randomizer are togglable without being on by default
+ * for every streamer.
+ */
+const KNOWN_WIDGETS = Object.freeze([...DEFAULT_WIDGETS, "randomizer"]);
+
+/**
  * Overlay tokens are bearer tokens for the public OBS overlay route.
  * Each user can mint multiple (test/live/streamer-friend), revoke
  * individually. The token IS the auth — there's no Clerk session on
@@ -119,7 +127,7 @@ class OverlayTokensService {
    * @param {boolean} enabled
    */
   async setWidgetEnabled(userId, token, widget, enabled) {
-    if (!DEFAULT_WIDGETS.includes(widget)) {
+    if (!KNOWN_WIDGETS.includes(widget)) {
       const err = new Error("unknown_widget");
       /** @type {any} */ (err).status = 400;
       throw err;
@@ -158,4 +166,4 @@ class OverlayTokensService {
   }
 }
 
-module.exports = { OverlayTokensService, DEFAULT_WIDGETS };
+module.exports = { OverlayTokensService, DEFAULT_WIDGETS, KNOWN_WIDGETS };

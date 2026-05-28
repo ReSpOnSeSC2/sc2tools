@@ -12,6 +12,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { RaceIcon } from "@/components/overlay/WidgetShell";
 import type { RandomizerBuild } from "@/lib/randomizer/types";
+import { spriteFor } from "./spriteShared";
 
 /** Race → hex, matching the overlay WidgetShell palette. */
 export const RACE_HEX: Record<string, string> = {
@@ -91,6 +92,40 @@ export function useRevealTimer(
   return settled;
 }
 
+/**
+ * Kick a CSS-transition reveal into motion. Returns `false` for the
+ * first painted frame (so the element renders at its start value) then
+ * flips `true` a couple of frames later so the transition to the target
+ * actually animates instead of being applied instantly. Reduced motion
+ * skips straight to the target.
+ *
+ * Pairing this with `useRevealTimer` is what keeps the spin animation
+ * and the winner reveal independent: the motion starts immediately on
+ * mount and the winner card only appears once the timer elapses.
+ */
+export function useRevealStart(
+  spinId: number,
+  reducedMotion: boolean,
+): boolean {
+  const [started, setStarted] = useState(false);
+  useEffect(() => {
+    if (reducedMotion) {
+      setStarted(true);
+      return;
+    }
+    setStarted(false);
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setStarted(true));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [spinId, reducedMotion]);
+  return started;
+}
+
 /** Props every reveal animation receives. */
 export interface RevealProps {
   pool: RandomizerBuild[];
@@ -144,29 +179,39 @@ export function MatchupPill({ label }: { label: string }) {
   );
 }
 
-/** The final winner card every reveal lands on. */
+/**
+ * The final winner card every reveal lands on — a big zoomed-in reveal
+ * of the chosen build's unit sprite + name so it's instantly clear
+ * which build won. `src` is the winner's assigned sprite (so the card
+ * matches the icon shown during the animation); it defaults to the
+ * build's resolved unit sprite.
+ */
 export function WinnerCard({
   winner,
   rarity,
   show,
+  src,
 }: {
   winner: RandomizerBuild;
   rarity: Rarity;
   show: boolean;
+  src?: string | null;
 }) {
+  const resolvedSrc = src === undefined ? spriteFor(winner) : src;
   return (
     <div
       style={{
         marginTop: 18,
-        minWidth: 280,
-        maxWidth: 460,
-        padding: "16px 22px",
-        borderRadius: 16,
+        minWidth: 300,
+        maxWidth: 480,
+        padding: "18px 26px 20px",
+        borderRadius: 18,
         textAlign: "center",
+        position: "relative",
         background:
-          "linear-gradient(135deg, rgba(11,13,18,0.96) 0%, rgba(24,28,38,0.96) 100%)",
+          "linear-gradient(135deg, rgba(11,13,18,0.97) 0%, rgba(24,28,38,0.97) 100%)",
         border: `2px solid ${rarity.color}`,
-        boxShadow: `0 10px 40px rgba(0,0,0,0.6), 0 0 36px ${rarity.glow}`,
+        boxShadow: `0 12px 46px rgba(0,0,0,0.62), 0 0 44px ${rarity.glow}`,
         opacity: show ? 1 : 0,
         transform: show ? "scale(1)" : "scale(0.7)",
         transition: "opacity 280ms ease, transform 360ms cubic-bezier(.34,1.8,.5,1)",
@@ -186,30 +231,96 @@ export function WinnerCard({
           marginBottom: 12,
         }}
       >
-        {rarity.label}
+        {rarity.label} · Build Chosen
       </div>
+      {/* Large zoom-in of the winning unit. */}
       <div
         style={{
           display: "flex",
-          alignItems: "center",
           justifyContent: "center",
-          gap: 12,
+          marginBottom: 12,
         }}
       >
-        <RaceIcon race={winner.race} size={34} />
-        <span
-          style={{
-            fontSize: 24,
-            fontWeight: 800,
-            lineHeight: 1.15,
-            letterSpacing: "-0.01em",
-          }}
-        >
-          {winner.name}
-        </span>
+        {show ? (
+          <span
+            key="winzoom"
+            style={{
+              position: "relative",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 96,
+              height: 96,
+              borderRadius: "50%",
+              background: `radial-gradient(circle, ${rarity.color}33 0%, transparent 70%)`,
+              animation: "rdz-winzoom 560ms cubic-bezier(.2,1.4,.4,1) both",
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: "50%",
+                border: `2px solid ${rarity.color}`,
+                boxShadow: `0 0 26px ${rarity.glow}`,
+                animation: "rdz-pulse 1600ms ease-in-out infinite",
+              }}
+            />
+            <SpriteOrRace build={winner} src={resolvedSrc} size={72} />
+          </span>
+        ) : null}
+      </div>
+      <div
+        style={{
+          fontSize: 26,
+          fontWeight: 800,
+          lineHeight: 1.15,
+          letterSpacing: "-0.01em",
+        }}
+      >
+        {winner.name}
       </div>
       {show ? <Confetti color={rarity.color} /> : null}
     </div>
+  );
+}
+
+/**
+ * Render the winner's unit sprite, falling back to the race glyph.
+ * Lives here (rather than importing BuildSprite) so revealShared stays
+ * free of a dependency cycle with spriteShared.
+ */
+function SpriteOrRace({
+  build,
+  src,
+  size,
+}: {
+  build: RandomizerBuild;
+  src?: string | null;
+  size: number;
+}) {
+  const [errored, setErrored] = useState(false);
+  if (!src || errored) return <RaceIcon race={build.race} size={size} />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      width={size}
+      height={size}
+      loading="eager"
+      decoding="sync"
+      draggable={false}
+      onError={() => setErrored(true)}
+      style={{
+        width: size,
+        height: size,
+        objectFit: "contain",
+        display: "block",
+        position: "relative",
+      }}
+    />
   );
 }
 
@@ -285,6 +396,12 @@ export function RevealKeyframes() {
       @keyframes rdz-spin-in {
         0% { transform: scale(0.6) rotate(-12deg); opacity: 0; }
         100% { transform: scale(1) rotate(0deg); opacity: 1; }
+      }
+      @keyframes rdz-winzoom {
+        0%   { transform: scale(0.2); opacity: 0; }
+        55%  { transform: scale(1.22); opacity: 1; }
+        75%  { transform: scale(0.94); }
+        100% { transform: scale(1); opacity: 1; }
       }
       @media (prefers-reduced-motion: reduce) {
         .rdz-confetti { animation: none !important; opacity: 0 !important; }

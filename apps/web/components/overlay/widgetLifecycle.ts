@@ -101,9 +101,10 @@ export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
   // Persistent panels — HUDs that should stay on screen.
   "topbuilds": null,
   "session": null,
-  // Randomizer plays a one-shot reveal animation (~5 s) and shows the
-  // winner card for the remaining window before clearing the scene.
-  "randomizer": 20 * 1000,
+  // Randomizer plays a one-shot reveal animation (up to ~11 s for the
+  // fighter brawl / sumo styles) and shows the winner card for the
+  // remaining window before clearing the scene.
+  "randomizer": 26 * 1000,
 };
 
 /**

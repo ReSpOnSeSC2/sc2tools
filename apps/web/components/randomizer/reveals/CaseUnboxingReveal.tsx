@@ -14,6 +14,7 @@ import {
   raceHex,
   rarityFor,
   useReducedMotion,
+  useRevealStart,
   useRevealTimer,
   type RevealProps,
 } from "./revealShared";
@@ -35,6 +36,7 @@ export function CaseUnboxingReveal({
   onComplete,
 }: RevealProps) {
   const reducedMotion = useReducedMotion();
+  const started = useRevealStart(spinId, reducedMotion);
   const settled = useRevealTimer(spinId, DURATION_MS, reducedMotion, onComplete);
   const rarity = rarityFor(winnerProbability);
 
@@ -42,13 +44,11 @@ export function CaseUnboxingReveal({
     return buildStrip(pool, winner, spinId);
   }, [pool, winner, spinId]);
 
-  // Reduced motion: snap to a static centered winner so streamers with
-  // the OS-level accessibility flag never see the strip slide.
-  const offset = reducedMotion
-    ? targetOffset
-    : settled
-      ? targetOffset
-      : 0;
+  // The strip starts scrolling the moment it mounts (`started`) and
+  // decelerates over the full duration; the winner card only appears
+  // once `settled`. Reduced motion snaps straight to the centered
+  // winner with no slide.
+  const offset = started ? targetOffset : 0;
   const transition = reducedMotion
     ? "none"
     : `transform ${DURATION_MS}ms cubic-bezier(.12,.85,.2,1)`;
