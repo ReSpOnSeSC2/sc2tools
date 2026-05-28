@@ -254,6 +254,11 @@ export function TrendsTab() {
                       border: "1px solid #1f2533",
                       borderRadius: 8,
                     }}
+                    labelStyle={{
+                      color: COLOR.accent,
+                      fontWeight: 600,
+                      marginBottom: 4,
+                    }}
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="wins" stackId="g" fill="#3ec07a" />
@@ -315,6 +320,11 @@ export function TrendsTab() {
                       background: COLOR.bgSurface,
                       border: `1px solid ${COLOR.border}`,
                       borderRadius: 8,
+                    }}
+                    labelStyle={{
+                      color: COLOR.accent,
+                      fontWeight: 600,
+                      marginBottom: 4,
                     }}
                     cursor={{
                       stroke: COLOR.accent,

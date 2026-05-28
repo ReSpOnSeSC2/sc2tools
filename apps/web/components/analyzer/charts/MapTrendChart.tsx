@@ -234,6 +234,7 @@ function MapPanel({
                 fontSize: 11,
                 padding: "4px 8px",
               }}
+              labelStyle={{ color: COLOR_ACCENT, fontWeight: 600, marginBottom: 4 }}
               labelFormatter={(v: string) => formatTick(v, true)}
               formatter={(value: number, name: string, ctx) => {
                 if (value == null) return ["—", panel.label];
