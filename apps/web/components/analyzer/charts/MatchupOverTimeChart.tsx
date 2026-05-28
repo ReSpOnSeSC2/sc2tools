@@ -16,6 +16,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { wrColor } from "@/lib/format";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
+import { ChartTooltip } from "./ChartTooltip";
 
 type MatchupPoint = {
   bucket: string;
@@ -310,22 +311,33 @@ function MatchupPanel({
               />
             ) : null}
             <Tooltip
-              contentStyle={{
-                background: "#11141b",
-                border: "1px solid #1f2533",
-                borderRadius: 8,
-                fontSize: 12,
-                padding: "6px 8px",
-              }}
-              labelStyle={{ color: "#7c8cff", fontWeight: 600, marginBottom: 4 }}
-              labelFormatter={(v: string) => formatTick(v, true)}
-              formatter={(value: number | string, name: string, ctx) => {
-                if (value === null || value === undefined) return ["—", name];
-                const payload = (ctx as { payload?: PanelPoint }).payload;
-                const total = payload?.total ?? 0;
-                if (name === "rollingPct")
-                  return [`${value}% (rolling)`, label];
-                return [`${value}% (${total} games)`, label];
+              content={({ active, payload, label: axisLabel }) => {
+                if (!active || !payload || payload.length === 0) return null;
+                const p = payload[0].payload as PanelPoint;
+                const rows = [];
+                if (p.winRatePct != null) {
+                  rows.push({
+                    key: "period",
+                    label: "Win rate",
+                    value: `${p.winRatePct}% · ${p.total} game${
+                      p.total === 1 ? "" : "s"
+                    }`,
+                  });
+                }
+                if (p.rollingPct != null) {
+                  rows.push({
+                    key: "rolling",
+                    label: "Rolling",
+                    value: `${p.rollingPct}%`,
+                  });
+                }
+                if (!rows.length) return null;
+                return (
+                  <ChartTooltip
+                    header={`${label} · ${formatTick(String(axisLabel), true)}`}
+                    rows={rows}
+                  />
+                );
               }}
             />
             <Line

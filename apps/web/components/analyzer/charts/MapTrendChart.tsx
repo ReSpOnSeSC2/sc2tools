@@ -16,6 +16,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { wrColor } from "@/lib/format";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
+import { ChartTooltip } from "./ChartTooltip";
 
 type MapPoint = {
   bucket: string;
@@ -42,7 +43,6 @@ type PanelPoint = {
 const COLOR_GRID = "#1f2533";
 const COLOR_BORDER_STRONG = "#2a3142";
 const COLOR_TEXT_DIM = "#6b7280";
-const COLOR_BG_SURFACE = "#11141b";
 const COLOR_ACCENT = "#7c8cff";
 
 const TOP_N_OPTIONS = [4, 6, 8] as const;
@@ -227,21 +227,33 @@ function MapPanel({
             />
             <Tooltip
               cursor={{ stroke: COLOR_ACCENT, strokeDasharray: "3 3" }}
-              contentStyle={{
-                background: COLOR_BG_SURFACE,
-                border: `1px solid ${COLOR_GRID}`,
-                borderRadius: 8,
-                fontSize: 11,
-                padding: "4px 8px",
-              }}
-              labelStyle={{ color: COLOR_ACCENT, fontWeight: 600, marginBottom: 4 }}
-              labelFormatter={(v: string) => formatTick(v, true)}
-              formatter={(value: number, name: string, ctx) => {
-                if (value == null) return ["—", panel.label];
-                const p = (ctx as { payload?: PanelPoint }).payload;
-                const total = p?.total ?? 0;
-                if (name === "rollingPct") return [`${value}% (rolling)`, panel.label];
-                return [`${value}% (${total} games)`, panel.label];
+              content={({ active, payload, label }) => {
+                if (!active || !payload || payload.length === 0) return null;
+                const p = payload[0].payload as PanelPoint;
+                const rows = [];
+                if (p.winRatePct != null) {
+                  rows.push({
+                    key: "period",
+                    label: "Win rate",
+                    value: `${p.winRatePct}% · ${p.total} game${
+                      p.total === 1 ? "" : "s"
+                    }`,
+                  });
+                }
+                if (p.rollingPct != null) {
+                  rows.push({
+                    key: "rolling",
+                    label: "Rolling",
+                    value: `${p.rollingPct}%`,
+                  });
+                }
+                if (!rows.length) return null;
+                return (
+                  <ChartTooltip
+                    header={`${panel.label} · ${formatTick(String(label), true)}`}
+                    rows={rows}
+                  />
+                );
               }}
             />
             <Line

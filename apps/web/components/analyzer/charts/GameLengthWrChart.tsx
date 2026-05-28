@@ -17,6 +17,7 @@ import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { wrColor } from "@/lib/format";
+import { ChartTooltip } from "./ChartTooltip";
 
 type LengthBucket =
   | "0–3m"
@@ -172,24 +173,30 @@ export function GameLengthWrChart() {
               strokeDasharray="2 4"
             />
             <Tooltip
-              contentStyle={{
-                background: "#11141b",
-                border: "1px solid #1f2533",
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              labelStyle={{
-                color: "#7c8cff",
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-              // Win rate first so the hovered bucket's time-frame header
-              // sits directly above the WR readout the user is after.
-              itemSorter={(item) => (item.dataKey === "winRatePct" ? 0 : 1)}
-              formatter={(value: number, name: string) => {
-                if (name === "winRatePct") return [`${value}%`, "Win rate"];
-                if (name === "total") return [value, "Games"];
-                return [value, name];
+              content={({ active, payload }) => {
+                if (!active || !payload || payload.length === 0) return null;
+                const r = payload[0].payload as {
+                  bucket: string;
+                  total: number;
+                  winRatePct: number | null;
+                };
+                return (
+                  <ChartTooltip
+                    header={r.bucket}
+                    rows={[
+                      {
+                        key: "wr",
+                        label: "Win rate",
+                        value: r.winRatePct == null ? "—" : `${r.winRatePct}%`,
+                      },
+                      {
+                        key: "games",
+                        label: "Games",
+                        value: `${r.total} game${r.total === 1 ? "" : "s"}`,
+                      },
+                    ]}
+                  />
+                );
               }}
             />
             <Bar

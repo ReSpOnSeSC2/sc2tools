@@ -17,6 +17,7 @@ import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
+import { ChartTooltip } from "./ChartTooltip";
 
 type MomentumSplit = {
   wins: number;
@@ -273,18 +274,26 @@ function SessionCurvePanel({
               />
               <Tooltip
                 cursor={{ stroke: COLOR_ACCENT, strokeDasharray: "3 3" }}
-                contentStyle={{
-                  background: COLOR_BG_SURFACE,
-                  border: `1px solid ${COLOR_GRID}`,
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-                labelStyle={{ color: COLOR_ACCENT, fontWeight: 600, marginBottom: 4 }}
-                formatter={(value: number, _name: string, ctx) => {
-                  const p = (ctx as { payload?: { total: number } }).payload;
-                  const games = p?.total ?? 0;
-                  if (value == null) return [`— · ${games} games`, "Win rate"];
-                  return [`${value}% · ${games} games`, "Win rate"];
+                content={({ active, payload, label }) => {
+                  if (!active || !payload || payload.length === 0) return null;
+                  const p = payload[0].payload as {
+                    total: number;
+                    winRatePct: number | null;
+                  };
+                  const games = p.total ?? 0;
+                  const wr = p.winRatePct == null ? "—" : `${p.winRatePct}%`;
+                  return (
+                    <ChartTooltip
+                      header={`Game ${String(label).replace("#", "")} of session`}
+                      rows={[
+                        {
+                          key: "wr",
+                          label: "Win rate",
+                          value: `${wr} · ${games} game${games === 1 ? "" : "s"}`,
+                        },
+                      ]}
+                    />
+                  );
                 }}
               />
               <Line

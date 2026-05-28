@@ -34,6 +34,7 @@ import { OppMmrBucketsChart } from "./charts/OppMmrBucketsChart";
 import { MixOverTimeChart } from "./charts/MixOverTimeChart";
 import { MapTrendChart } from "./charts/MapTrendChart";
 import { NetMmrByMatchupChart } from "./charts/NetMmrByMatchupChart";
+import { ChartTooltip } from "./charts/ChartTooltip";
 
 const LS_BUCKET = "analyzer.trends.bucket";
 const LS_ROLL = "analyzer.trends.rollingOn";
@@ -249,15 +250,32 @@ export function TrendsTab() {
                   <XAxis dataKey="date" stroke="#6b7280" fontSize={11} />
                   <YAxis stroke="#6b7280" fontSize={11} />
                   <Tooltip
-                    contentStyle={{
-                      background: "#11141b",
-                      border: "1px solid #1f2533",
-                      borderRadius: 8,
-                    }}
-                    labelStyle={{
-                      color: COLOR.accent,
-                      fontWeight: 600,
-                      marginBottom: 4,
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload || payload.length === 0)
+                        return null;
+                      const p = payload[0].payload as {
+                        wins: number;
+                        losses: number;
+                      };
+                      return (
+                        <ChartTooltip
+                          header={String(label)}
+                          rows={[
+                            {
+                              key: "wins",
+                              label: "Wins",
+                              value: p.wins,
+                              dot: COLOR.success,
+                            },
+                            {
+                              key: "losses",
+                              label: "Losses",
+                              value: p.losses,
+                              dot: COLOR.danger,
+                            },
+                          ]}
+                        />
+                      );
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -316,27 +334,37 @@ export function TrendsTab() {
                     tickMargin={4}
                   />
                   <Tooltip
-                    contentStyle={{
-                      background: COLOR.bgSurface,
-                      border: `1px solid ${COLOR.border}`,
-                      borderRadius: 8,
-                    }}
-                    labelStyle={{
-                      color: COLOR.accent,
-                      fontWeight: 600,
-                      marginBottom: 4,
-                    }}
                     cursor={{
                       stroke: COLOR.accent,
                       strokeWidth: 1,
                       strokeDasharray: "3 3",
                     }}
-                    formatter={(value: number, name: string) => {
-                      if (name === "rollingPct")
-                        return [`${value}%`, `Rolling WR (${ROLL_N})`];
-                      if (name === "winRatePct")
-                        return [`${value}%`, "Win rate"];
-                      return [value, name];
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload || payload.length === 0)
+                        return null;
+                      const p = payload[0].payload as {
+                        winRatePct: number | null;
+                        rollingPct: number | null;
+                      };
+                      const rows = [];
+                      if (p.winRatePct != null) {
+                        rows.push({
+                          key: "wr",
+                          label: "Win rate",
+                          value: `${p.winRatePct}%`,
+                          dot: COLOR.accent,
+                        });
+                      }
+                      if (p.rollingPct != null) {
+                        rows.push({
+                          key: "rolling",
+                          label: `Rolling WR (${ROLL_N})`,
+                          value: `${p.rollingPct}%`,
+                          dot: COLOR.warning,
+                        });
+                      }
+                      if (!rows.length) return null;
+                      return <ChartTooltip header={String(label)} rows={rows} />;
                     }}
                   />
                   <ReferenceLine
