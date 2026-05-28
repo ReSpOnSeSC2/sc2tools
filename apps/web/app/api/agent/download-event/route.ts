@@ -59,6 +59,16 @@ export async function POST(req: NextRequest) {
   if (ua) headers["user-agent"] = ua;
   if (referer) headers["referer"] = referer;
   if (xff) headers["x-forwarded-for"] = xff;
+  // The edge (Vercel / Cloudflare) already resolves the visitor's
+  // country into a header; forward it under a stable name so the
+  // backend records it without running its own geo-IP lookup. Null
+  // when this deployment sits behind neither CDN — the field just
+  // stays empty, never blocks the beacon.
+  const country =
+    req.headers.get("x-vercel-ip-country") ||
+    req.headers.get("cf-ipcountry") ||
+    req.headers.get("x-country-code");
+  if (country) headers["x-geo-country"] = country;
 
   try {
     await fetch(`${API_BASE}/v1/agent/download-event`, {

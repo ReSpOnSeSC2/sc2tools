@@ -97,7 +97,7 @@ class PulseMmrService {
    *     available.
    *
    * @param {string|null|undefined} pulseId
-   * @returns {Promise<{mmr: number, region: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, characterId: string|null}|null>}
    */
   async getCurrentMmr(pulseId) {
     const id = normalisePulseId(pulseId);
@@ -113,17 +113,17 @@ class PulseMmrService {
     const cached = this._cache.get(id);
     const now = this.now();
     if (cached && now - cached.fetchedAt < this.cacheTtlMs) {
-      return { mmr: cached.mmr, region: cached.region };
+      return { mmr: cached.mmr, region: cached.region, characterId: id };
     }
     const fetched = await this._fetchTeams(id);
     if (fetched) {
       const entry = { ...fetched, fetchedAt: now };
       this._cache.set(id, entry);
-      return { mmr: entry.mmr, region: entry.region };
+      return { mmr: entry.mmr, region: entry.region, characterId: id };
     }
     // Stale-while-error: a network blip shouldn't strip the streamer's
     // MMR off the overlay if we already had a value cached.
-    if (cached) return { mmr: cached.mmr, region: cached.region };
+    if (cached) return { mmr: cached.mmr, region: cached.region, characterId: id };
     return null;
   }
 
@@ -147,7 +147,7 @@ class PulseMmrService {
    *   - The character has no team in the active season for any region.
    *
    * @param {string|null|undefined} toonHandle
-   * @returns {Promise<{mmr: number, region: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, characterId: string|null}|null>}
    */
   async getCurrentMmrByToon(toonHandle) {
     const handle = normaliseToonHandle(toonHandle);

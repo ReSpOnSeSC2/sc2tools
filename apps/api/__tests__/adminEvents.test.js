@@ -150,6 +150,17 @@ describe("admin notification events", () => {
     expect(events[0].payload.ip).toBe("203.0.113.0/24");
   });
 
+  test("download-event records the edge-provided country header", async () => {
+    const res = await request(app)
+      .post("/v1/agent/download-event")
+      .set("cf-ipcountry", "US")
+      .send({ platform: "windows", version: "0.3.11", channel: "stable" });
+    expect(res.status).toBe(204);
+    await flushMicroTasks();
+    const ev = await db.adminEvents.findOne({ type: "agent_download" });
+    expect(ev.payload.country).toBe("US");
+  });
+
   test("download-event rejects malformed platform to 'unknown'", async () => {
     const res = await request(app)
       .post("/v1/agent/download-event")
