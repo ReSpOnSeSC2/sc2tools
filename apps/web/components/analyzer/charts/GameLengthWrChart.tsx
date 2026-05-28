@@ -183,6 +183,10 @@ export function GameLengthWrChart() {
                 fontWeight: 600,
                 marginBottom: 4,
               }}
+              // Force a legible row colour — the bars carry the WR colour
+              // ramp, so the "Games" row would otherwise inherit a dark
+              // bucket's near-black fill.
+              itemStyle={{ color: "#cbd5e1" }}
               // Win rate first so the hovered bucket's time-frame header
               // sits directly above the WR readout the user is after.
               itemSorter={(item) => (item.dataKey === "winRatePct" ? 0 : 1)}
