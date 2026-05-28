@@ -90,6 +90,7 @@ function buildAgentVersionRouter(deps) {
         const ip = pickClientIp(req);
         const userAgent = headerStr(req, "user-agent");
         const referer = headerStr(req, "referer");
+        const country = pickCountry(req);
         await adminEvents.record("agent_download", {
           platform,
           version,
@@ -97,6 +98,7 @@ function buildAgentVersionRouter(deps) {
           ip,
           userAgent,
           referer,
+          country,
         });
       }
       res.status(204).end();
@@ -159,6 +161,26 @@ function pickClientIp(req) {
   const sock = /** @type {any} */ (req).socket;
   if (sock && typeof sock.remoteAddress === "string") return sock.remoteAddress;
   return "";
+}
+
+/**
+ * Best-effort 2-letter country for the download event. We never run a
+ * geo-IP lookup ourselves — the edge (Cloudflare / Vercel) already
+ * computes it and forwards it as a header, so we just read whichever is
+ * present. The same-origin web beacon route normalises its own edge
+ * header into ``x-geo-country`` before forwarding, so that's checked
+ * first; ``cf-ipcountry`` / ``x-vercel-ip-country`` cover a direct hit
+ * to the API behind one of those CDNs. ``AdminEventsService`` truncates
+ * to 2 chars, so a junk header can't bloat the row.
+ *
+ * @param {import('express').Request} req
+ */
+function pickCountry(req) {
+  return (
+    headerStr(req, "x-geo-country") ||
+    headerStr(req, "cf-ipcountry") ||
+    headerStr(req, "x-vercel-ip-country")
+  );
 }
 
 /**

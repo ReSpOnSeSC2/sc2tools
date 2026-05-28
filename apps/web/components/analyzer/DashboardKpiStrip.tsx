@@ -417,6 +417,11 @@ function MmrPerRegionStat() {
     else byRegion.set(key, [e]);
   }
   const groups = Array.from(byRegion.entries());
+  // The server caps the per-request fan-out, so a profile with more
+  // toons than the cap reports ``truncated``. Surface it so the user
+  // knows the list isn't their full account set rather than silently
+  // dropping the overflow.
+  const truncated = data?.truncated ?? false;
 
   if (entries.length === 1) {
     const e = entries[0];
@@ -424,7 +429,7 @@ function MmrPerRegionStat() {
       <StatCard
         label="MMR"
         value={<span className="tabular-nums">{fmtMmr(e.mmr)}</span>}
-        hint={e.region || "—"}
+        hint={truncated ? `${e.region || "—"} · +more` : e.region || "—"}
         size="md"
       />
     );
@@ -452,6 +457,7 @@ function MmrPerRegionStat() {
           ))}
         </ul>
       }
+      hint={truncated ? "+ more toons not shown" : undefined}
       size="md"
     />
   );
