@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from .build_definitions import candidate_signatures_for
 from .strategy_detector_base import BaseStrategyDetector
 from .strategy_detector_helpers import (
     GAME_TOO_SHORT_THRESHOLD_SECONDS,
@@ -23,12 +22,7 @@ from .strategy_detector_helpers import (
 from .strategy_detector_pvp import detect_pvp
 from .strategy_detector_pvt import detect_pvt
 from .strategy_detector_pvz import detect_pvz
-from .strategy_detector_tvp import detect_tvp
-from .strategy_detector_tvt import detect_tvt
-from .strategy_detector_tvz import detect_tvz
-from .strategy_detector_zvp import detect_zvp
-from .strategy_detector_zvt import detect_zvt
-from .strategy_detector_zvz import detect_zvz
+from .strategy_detector_race import classify_by_race
 
 
 class UserBuildDetector(BaseStrategyDetector):
@@ -86,107 +80,13 @@ class UserBuildDetector(BaseStrategyDetector):
             if self.check_custom_rules(rules, buildings, units, upgrades, main_loc):
                 return cb["name"]
 
-        # 2. Race-aware structured signature scan (Zerg / Terran).
-        # Stage 8 will populate BUILD_SIGNATURES with real opening rules;
-        # for now any non-Protoss replay flows through here and ends up
-        # tagged 'Unclassified - <Race>' so the UI can show a 'we don't
-        # have definitions for this matchup yet' hint instead of a
-        # misleading Protoss-tree label.
+        # 2. Zerg / Terran: delegate to the shared race classifier so the
+        # user's own build classifies exactly like the opponent's would,
+        # off the same build_definitions catalog (a fast-3-CC Terran ->
+        # "Terran - Fast 3 CC" instead of "Unclassified - Terran"). The
+        # opponent detector runs the same classify_by_race trees.
         if my_race in ("Zerg", "Terran"):
-            vs_race = _matchup_to_vs_race(matchup)
-
-            # TvP — 1-base 1-1-1 all-in: Barracks + Factory + Starport
-            # are ALL built before the 2nd Command Center, and none of
-            # them are proxied (the trio sits inside the player's
-            # main). This is the same structural signature as the
-            # opponent-side "Terran - 1-1-1 One Base" but emitted for
-            # the player's own build when they're the Terran in TvP.
-            if my_race == "Terran" and "vs Protoss" in matchup:
-                # Count actual new Command Centers only — morphs to
-                # OrbitalCommand / PlanetaryFortress emit separate
-                # events under those names but they're the SAME
-                # building so they cannot be the "2nd base".
-                cc_times_local = sorted(
-                    b["time"] for b in buildings if b["name"] == "CommandCenter"
-                )
-                second_cc_time_local = (
-                    cc_times_local[1] if len(cc_times_local) >= 2 else 9999
-                )
-                rax_t = min(
-                    (b["time"] for b in buildings if b["name"] == "Barracks"),
-                    default=9999,
-                )
-                fact_t = min(
-                    (b["time"] for b in buildings if b["name"] == "Factory"),
-                    default=9999,
-                )
-                star_t = min(
-                    (b["time"] for b in buildings if b["name"] == "Starport"),
-                    default=9999,
-                )
-
-                def _has_proxy_building(target_name: str) -> bool:
-                    return any(
-                        b["name"] == target_name
-                        and self._is_proxy(b, main_loc, 50)
-                        for b in buildings
-                    )
-
-                if (
-                    rax_t < 9999
-                    and fact_t < second_cc_time_local
-                    and star_t < second_cc_time_local
-                    and not _has_proxy_building("Factory")
-                    and not _has_proxy_building("Starport")
-                    and not _has_proxy_building("Barracks")
-                ):
-                    return "TvP - 1-1-1 One Base"
-
-            for name, meta in candidate_signatures_for(my_race, vs_race).items():
-                signature = meta.get("signature") or []
-                if not signature:
-                    # TODO(stage-8): skip stubs until real signatures land.
-                    continue
-                if self.check_custom_rules(
-                    signature, buildings, units, upgrades, main_loc,
-                ):
-                    return name
-
-            # Per-matchup decision-tree fallback for Terran / Zerg.
-            # All six detect_<matchup> functions are stubs that return
-            # None today, so this layer is a no-op until rules land in
-            # their respective ``strategy_detector_<matchup>.py`` file.
-            # Wiring them up now means a future rule author only has to
-            # edit the stub file — the dispatcher already calls it.
-            ctx = DetectionContext(
-                buildings=buildings,
-                units=units,
-                upgrades=upgrades,
-                main_loc=main_loc,
-                detector=self,
-            )
-            if my_race == "Terran":
-                if "vs Protoss" in matchup:
-                    label = detect_tvp(ctx)
-                elif "vs Terran" in matchup:
-                    label = detect_tvt(ctx)
-                elif "vs Zerg" in matchup:
-                    label = detect_tvz(ctx)
-                else:
-                    label = None
-            else:  # Zerg
-                if "vs Protoss" in matchup:
-                    label = detect_zvp(ctx)
-                elif "vs Terran" in matchup:
-                    label = detect_zvt(ctx)
-                elif "vs Zerg" in matchup:
-                    label = detect_zvz(ctx)
-                else:
-                    label = None
-            if label is not None:
-                return label
-
-            return f"Unclassified - {my_race}"
+            return classify_by_race(my_race, my_events, self)
 
         # 3. Protoss matchups dispatch to per-matchup decision trees.
         ctx = DetectionContext(
