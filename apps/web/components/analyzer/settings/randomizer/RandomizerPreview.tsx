@@ -64,8 +64,8 @@ export function RandomizerPreview({ matchup, config }: RandomizerPreviewProps) {
           ) : null}
           {spin ? (
             <div
-              className="w-full overflow-hidden rounded-xl border border-border bg-[#0b0d12] p-6"
-              style={{ minHeight: 360 }}
+              className="flex w-full items-center justify-center rounded-xl border border-border bg-[#0b0d12] p-6"
+              style={{ minHeight: 500 }}
             >
               <RandomizerStage outcome={spin.outcome} spinId={spin.id} />
             </div>
