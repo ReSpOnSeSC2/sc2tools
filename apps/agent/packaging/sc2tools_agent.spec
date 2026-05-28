@@ -5,7 +5,7 @@ Builds a Windows distribution that bundles:
 
   * Python 3.12 runtime
   * sc2tools_agent (this package)
-  * SC2Replay-Analyzer (sibling package, imported at runtime by
+  * apps/replay-engine (sibling package, imported at runtime by
     replay_pipeline.py for sc2reader-based parsing)
   * sc2reader, watchdog, pystray, Pillow, requests, sentry-sdk
   * PySide6 (Qt6) - production GUI window
@@ -53,23 +53,24 @@ ONE_FILE = False
 
 HERE = Path.cwd()
 REPO_ROOT = HERE / ".." / ".."
-ANALYZER_DIR = REPO_ROOT / "SC2Replay-Analyzer"
+ANALYZER_DIR = REPO_ROOT / "apps" / "replay-engine"
 REVEAL_DIR = REPO_ROOT / "reveal-sc2-opponent-main"
 ICON_DIR = HERE / "sc2tools_agent" / "ui"
 
-# Bring the analyzer source + its data dirs along so the bundled .exe
-# can ``import core.sc2_replay_parser`` exactly the same way the
+# Bring the engine source + its data dirs along so the bundled .exe
+# can ``import core.event_extractor`` exactly the same way the
 # source-run agent does. The actual parser entry point lives in
-# reveal-sc2-opponent-main/core/, but we still ship the legacy
-# SC2Replay-Analyzer companion package because some auxiliary helpers
-# fall back to it. Both directories are added to sys.path at runtime by
-# replay_pipeline._ensure_analyzer_on_path; the *reveal* layout wins.
+# reveal-sc2-opponent-main/core/, but we still ship the replay-engine
+# package because the macro breakdown is pinned to its event_extractor
+# / macro_score copies. Both directories are added to sys.path at
+# runtime by replay_pipeline._ensure_analyzer_on_path; the *reveal*
+# layout wins for ``core.sc2_replay_parser``.
 DATAS = []
 if ANALYZER_DIR.exists():
     for sub in ("core", "analytics", "scripts", "detectors", "data"):
         src = ANALYZER_DIR / sub
         if src.exists():
-            DATAS.append((str(src), f"SC2Replay-Analyzer/{sub}"))
+            DATAS.append((str(src), f"apps/replay-engine/{sub}"))
 
 if REVEAL_DIR.exists():
     # ``core`` is mandatory (sc2_replay_parser, pulse_resolver, build defs).

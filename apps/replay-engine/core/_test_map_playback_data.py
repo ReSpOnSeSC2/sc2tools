@@ -1,7 +1,7 @@
 import sys
 import os
 
-# Add the SC2Replay-Analyzer directory to sys.path
+# Add the replay-engine directory to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Mock sc2reader completely before any imports

@@ -15,7 +15,7 @@ function loadFixture(name) {
 
 describe("phaseClassifier — calibration snapshots", () => {
   // PvZ Adept timing (warpgate_adept_tracking, 7:50). The replay is
-  // the only one bundled in the SC2Replay-Analyzer test fixtures, so
+  // the only one bundled in the apps/replay-engine test fixtures, so
   // its JSON dump ships in this repo and the snapshot below is the
   // canonical regression anchor for the scoring formula.
   test("PvZ Adept timing (warpgate_adept_tracking) → finalPhase=mid", () => {

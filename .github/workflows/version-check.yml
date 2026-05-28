@@ -1,24 +1,20 @@
-# Verifies that the suite version is consistent across the three places
+# Verifies that the suite version is consistent across the two places
 # it's referenced:
 #
-#   1. stream-overlay-backend/package.json     "version" field (canonical)
-#   2. SC2Replay-Analyzer/__init__.py          __version__ (reads #1 at runtime)
-#   3. public/analyzer/components/settings-foundation.jsx
-#                                              SETTINGS_VERSION literal
-#                                              (offline fallback for the SPA)
+#   1. apps/replay-engine/VERSION       version string (canonical)
+#   2. apps/replay-engine/__init__.py   __version__ (reads #1 at runtime)
 #
-# A drift here means the Settings → About page lies, or the auto-updater
-# compares the wrong version against the GitHub release tag, so we hard-
-# fail PRs the moment the three values diverge.
+# A drift here means the engine reports a version that disagrees with the
+# canonical file, or the lookup fell back to the unknown sentinel, so we
+# hard-fail PRs the moment the two values diverge.
 
 name: version-check
 
 on:
   pull_request:
     paths:
-      - 'reveal-sc2-opponent-main/stream-overlay-backend/package.json'
-      - 'SC2Replay-Analyzer/__init__.py'
-      - 'reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/components/settings-foundation.jsx'
+      - 'apps/replay-engine/VERSION'
+      - 'apps/replay-engine/__init__.py'
       - '.github/workflows/version-check.yml'
   push:
     branches: [main]
@@ -52,34 +48,27 @@ jobs:
           set -euo pipefail
 
           python3 - <<'PY'
-          import json, re, sys
+          import sys
           from pathlib import Path
 
-          pkg_path  = Path('reveal-sc2-opponent-main/stream-overlay-backend/package.json')
-          init_path = Path('SC2Replay-Analyzer/__init__.py')
-          jsx_path  = Path('reveal-sc2-opponent-main/stream-overlay-backend'
-                           '/public/analyzer/components/settings-foundation.jsx')
+          version_path = Path('apps/replay-engine/VERSION')
+          init_path    = Path('apps/replay-engine/__init__.py')
 
-          pkg_version = json.loads(pkg_path.read_text(encoding='utf-8'))['version']
+          file_version = version_path.read_text(encoding='utf-8').strip()
 
-          # __init__.py reads package.json at import time, so we exec it.
+          # __init__.py reads the VERSION file at import time, so we exec it.
           ns = {'__file__': str(init_path)}
           exec(init_path.read_text(encoding='utf-8'), ns)
           py_version = ns.get('__version__', 'MISSING')
 
-          jsx_text = jsx_path.read_text(encoding='utf-8')
-          m = re.search(r'SETTINGS_VERSION\s*=\s*"([^"]+)"', jsx_text)
-          jsx_version = m.group(1) if m else 'MISSING'
+          print(f'VERSION      : {file_version}')
+          print(f'__init__.py  : {py_version}')
 
-          print(f'package.json     : {pkg_version}')
-          print(f'__init__.py      : {py_version}')
-          print(f'SETTINGS_VERSION : {jsx_version}')
-
-          versions = {pkg_version, py_version, jsx_version}
+          versions = {file_version, py_version}
           if len(versions) != 1:
               sys.exit(f'ERROR: version drift -- {sorted(versions)}')
-          if pkg_version == '0.0.0+unknown':
+          if file_version == '0.0.0+unknown':
               sys.exit('ERROR: __version__ fell back to UNKNOWN sentinel '
-                       '(package.json could not be read)')
-          print('OK -- all three sources agree on', pkg_version)
+                       '(VERSION file could not be read)')
+          print('OK -- both sources agree on', file_version)
           PY

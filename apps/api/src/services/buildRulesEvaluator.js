@@ -49,7 +49,7 @@ const VERB_PREFIX_RE = /^(Build|Train|Research|Morph)(?=[A-Z])/;
  *
  * Mirror of UNIT_TECH_PREREQUISITES in
  * reveal-sc2-opponent-main/core/strategy_detector.py and
- * SC2Replay-Analyzer/detectors/base.py — keep the three in sync.
+ * apps/replay-engine/detectors/base.py — keep the three in sync.
  */
 const UNIT_TECH_PREREQUISITES = {
   // Protoss Stargate path

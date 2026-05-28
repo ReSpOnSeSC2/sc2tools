@@ -51,7 +51,7 @@ from typing import Iterable, List, Tuple
 # to grep and update without scanning the whole script.
 # --------------------------------------------------------------------
 
-PROD_ROOTS = ("reveal-sc2-opponent-main", "SC2Replay-Analyzer")
+PROD_ROOTS = ("reveal-sc2-opponent-main", os.path.join("apps", "replay-engine"))
 
 EXCLUDE_DIR_NAMES = {
     "node_modules",
@@ -124,12 +124,12 @@ PYTHON_BARE_WRITE_EXEMPT = {
     # Dev-only fake-data injector. Not run in production. The script
     # itself documents this in its module docstring.
     os.path.join(
-        "SC2Replay-Analyzer", "scripts", "fake_data_injector.py"
+        "apps", "replay-engine", "scripts", "fake_data_injector.py"
     ),
-    # The migrations CLI in SC2Replay-Analyzer's db/database.py uses
+    # The migrations CLI in apps/replay-engine's db/database.py uses
     # ``open(path, "w", newline="")`` for CSV exports — same pattern as
     # analyzer_app.py and equally low blast.
-    os.path.join("SC2Replay-Analyzer", "db", "database.py"),
+    os.path.join("apps", "replay-engine", "db", "database.py"),
 }
 
 # --------------------------------------------------------------------

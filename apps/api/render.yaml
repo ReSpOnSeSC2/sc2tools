@@ -3,10 +3,10 @@
 # from "Blueprints → New Blueprint" and it provisions the service.
 #
 # IMPORTANT: the Docker build needs the repo ROOT as its context so it
-# can COPY SC2Replay-Analyzer/ into the image. We deliberately omit
+# can COPY apps/replay-engine/ into the image. We deliberately omit
 # `rootDir` (or set it to the repo root) and point dockerfilePath at
 # the API's Dockerfile. Setting rootDir: apps/api would scope the
-# build context to the API directory and the analyzer COPY would fail.
+# build context to the API directory and the engine COPY would fail.
 services:
   - type: web
     name: sc2tools-api

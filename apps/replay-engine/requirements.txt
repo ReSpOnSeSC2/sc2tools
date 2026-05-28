@@ -1,10 +1,9 @@
-# SC2Replay-Analyzer -- Python dependencies (pinned).
+# replay-engine -- Python dependencies (pinned).
 #
 # Pin policy: every dependency uses == exact versions for reproducible
-# installs. The Windows .exe installer (packaging/installer.nsi) ships
-# bundled Python 3.12 and runs `pip install --no-deps-by-default-no
-# -r SC2Replay-Analyzer/requirements.txt` on first install; floating
-# versions would make every machine slightly different.
+# installs. The API Docker build installs these into the runtime venv
+# (`pip install -r apps/replay-engine/requirements.txt`); floating
+# versions would make every build slightly different.
 #
 # To regenerate after a deliberate bump:
 #   1. Edit the version number on the line below.

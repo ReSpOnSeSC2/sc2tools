@@ -13,8 +13,8 @@ The agent runs on the user's gaming PC and:
   6. Reports unhandled crashes to Sentry with PII-redacted breadcrumbs.
 
 The actual replay parsers (event_extractor, macro_score, ...) live in
-the existing SC2Replay-Analyzer/ package — the agent imports them so we
-never duplicate parsing logic. See ``replay_pipeline.py``.
+the apps/replay-engine/ package — the agent imports them so we never
+duplicate parsing logic. See ``replay_pipeline.py``.
 """
 
 __version__ = "0.10.1"

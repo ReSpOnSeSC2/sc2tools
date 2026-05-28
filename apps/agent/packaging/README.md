@@ -68,7 +68,7 @@ The agent's startup poll picks this up within minutes.
 
 | File | Purpose |
 | ---- | ------- |
-| `sc2tools_agent.spec` | PyInstaller spec (one-file by default). Bundles the agent + `SC2Replay-Analyzer/` so sc2reader-based parsing works without a separate Python install. |
+| `sc2tools_agent.spec` | PyInstaller spec (one-file by default). Bundles the agent + `apps/replay-engine/` so sc2reader-based parsing works without a separate Python install. |
 | `installer.nsi` | NSIS script — installs to `%LOCALAPPDATA%\sc2tools`, registers a Startup-folder shortcut, writes an Add/Remove Programs entry. |
 | `build-installer.ps1` | End-to-end pipeline. Use this from CI; never run pyinstaller / makensis by hand for releases. |
 | `icon.ico` *(optional)* | 256×256 .ico for the .exe + installer. PyInstaller and NSIS both pick it up automatically when present. |

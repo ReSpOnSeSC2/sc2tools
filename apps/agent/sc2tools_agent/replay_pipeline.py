@@ -1,7 +1,7 @@
 """Replay → cloud-game-record pipeline.
 
 The actual parsing is delegated to the existing
-``SC2Replay-Analyzer/core/event_extractor.py`` (sc2reader-based, with
+``apps/replay-engine/core/event_extractor.py`` (sc2reader-based, with
 the chrono fix at c728ab0). The agent imports those modules so we
 never duplicate parsing logic. If the sibling package isn't on
 ``sys.path``, we add it on import.
@@ -105,7 +105,7 @@ def _ensure_analyzer_on_path() -> None:
     ``reveal-sc2-opponent-main/core/`` — bundled alongside the agent in
     the frozen exe and laid out at the repo root in source mode.
 
-    The legacy ``SC2Replay-Analyzer`` package is added too because some
+    The replay engine (``apps/replay-engine``) is added too because some
     auxiliary helpers historically resolved through it. The reveal
     package is inserted LAST so it ends up FIRST on ``sys.path``:
     ``from core.X`` must resolve through it (it owns
@@ -114,10 +114,10 @@ def _ensure_analyzer_on_path() -> None:
     """
     bases = _candidate_bases()
     # Order matters: each insert prepends to sys.path[0], so the LAST
-    # entry inserted wins lookup priority. Probe SC2Replay-Analyzer
+    # entry inserted wins lookup priority. Probe apps/replay-engine
     # first, then reveal-sc2-opponent-main, so reveal's ``core`` is
     # what Python finds when resolving ``import core.sc2_replay_parser``.
-    for sub in ("SC2Replay-Analyzer", "reveal-sc2-opponent-main"):
+    for sub in ("apps/replay-engine", "reveal-sc2-opponent-main"):
         for base in bases:
             candidate = base / sub
             if candidate.exists() and str(candidate) not in sys.path:
@@ -162,9 +162,9 @@ def bootstrap_analyzer_path() -> None:
 
 
 def _load_sc2ra_module(dotted_name: str) -> Any:
-    """Load a module by dotted name explicitly from ``SC2Replay-Analyzer/``.
+    """Load a module by dotted name explicitly from ``apps/replay-engine/``.
 
-    Both ``SC2Replay-Analyzer/`` and ``reveal-sc2-opponent-main/`` ship
+    Both ``apps/replay-engine/`` and ``reveal-sc2-opponent-main/`` ship
     a ``core/event_extractor.py`` and ``analytics/macro_score.py``.
     ``_ensure_analyzer_on_path`` puts reveal first on ``sys.path`` so
     ``core.sc2_replay_parser`` (which only exists in reveal) resolves —
@@ -182,7 +182,7 @@ def _load_sc2ra_module(dotted_name: str) -> Any:
     is exactly what the user sees on the SPA: macro card empty
     ("Macro breakdown not available for this game yet").
 
-    Loading SC2Replay-Analyzer's copy via ``importlib.util.spec_from_file_location``
+    Loading apps/replay-engine's copy via ``importlib.util.spec_from_file_location``
     sidesteps the ``sys.path`` ordering without touching it (so other
     reveal-only modules like ``sc2_replay_parser`` keep resolving).
     Both target modules have no internal cross-package imports — only
@@ -200,7 +200,7 @@ def _load_sc2ra_module(dotted_name: str) -> Any:
     Test stub support: tests still need a way to inject fake
     extractors without touching the real file. We honor a sys.modules
     entry at ``dotted_name`` when it has no ``__file__`` attribute or
-    when its ``__file__`` points inside ``SC2Replay-Analyzer`` — both
+    when its ``__file__`` points inside ``apps/replay-engine`` — both
     indicate the entry came from a deliberate inject (test stub or a
     prior call to this loader) rather than from Python's import
     machinery resolving reveal's relative import. A real reveal copy
@@ -211,7 +211,7 @@ def _load_sc2ra_module(dotted_name: str) -> Any:
     internal_name = f"_sc2ra_{dotted_name.replace('.', '_')}"
     cached = sys.modules.get(dotted_name)
     # Check sys.modules[dotted_name] FIRST, but only honor entries that
-    # are "safe" (test stubs without __file__, or SC2Replay-Analyzer's
+    # are "safe" (test stubs without __file__, or apps/replay-engine's
     # own loaded copy). The real reveal copy is rejected so disk load
     # runs even when reveal's relative import already populated this
     # key. Doing this check before the internal cache lookup means that
@@ -226,7 +226,7 @@ def _load_sc2ra_module(dotted_name: str) -> Any:
     parts = dotted_name.split(".")
     rel = Path(*parts[:-1]) / f"{parts[-1]}.py"
     for base in _candidate_bases():
-        candidate = base / "SC2Replay-Analyzer" / rel
+        candidate = base / "apps" / "replay-engine" / rel
         if not candidate.exists():
             continue
         spec = importlib.util.spec_from_file_location(
@@ -239,7 +239,7 @@ def _load_sc2ra_module(dotted_name: str) -> Any:
         spec.loader.exec_module(mod)
         return mod
     raise ImportError(
-        f"SC2Replay-Analyzer module not found on disk: {dotted_name}",
+        f"replay-engine module not found on disk: {dotted_name}",
     )
 
 
@@ -249,7 +249,7 @@ def _is_safe_cached_module(mod: Any) -> bool:
     Real reveal-sc2-opponent-main copies have ``__file__`` containing
     that directory name and the wrong signature — those must be
     rejected so disk load takes over. SimpleNamespace / MagicMock /
-    SC2Replay-Analyzer's own copy are all fine.
+    the replay engine's own copy are all fine.
 
     Compares against the directory name as a substring (case-insensitive
     on Windows-style paths) rather than a strict prefix so editable
@@ -312,7 +312,7 @@ def probe_analyzer() -> tuple[bool, Optional[str]]:
         # find — that's almost always what the user needs to fix.
         found_reveal = any((Path(b) / "reveal-sc2-opponent-main" / "core" /
                             "sc2_replay_parser.py").exists() for b in bases)
-        found_analyzer = any((Path(b) / "SC2Replay-Analyzer" / "core").exists()
+        found_analyzer = any((Path(b) / "apps" / "replay-engine" / "core").exists()
                              for b in bases)
         msg = (
             f"analyzer_import_failed exc_type={type(exc).__name__} "
@@ -1023,7 +1023,7 @@ def _compute_macro_breakdown(
     if me is None or replay is None:
         return None, None
     try:
-        # Pin to SC2Replay-Analyzer's copies — see _load_sc2ra_module
+        # Pin to apps/replay-engine's copies — see _load_sc2ra_module
         # for why ``from core.event_extractor import …`` would
         # otherwise serve the older reveal copy that omits
         # unit_timeline / opp_stats_events and reads the wrong
@@ -1055,7 +1055,7 @@ def _compute_macro_breakdown(
     if opp is not None and getattr(opp, "pid", None) is not None:
         # When extract_macro_events ran with both pids above we
         # already have the opp samples on ``my_macro`` — the new
-        # SC2Replay-Analyzer extractor returns them under
+        # apps/replay-engine extractor returns them under
         # ``opp_stats_events``. Fall back to a separate call against
         # the old extractor signature for safety.
         opp_stats = list(my_macro.get("opp_stats_events") or [])

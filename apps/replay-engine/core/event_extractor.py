@@ -22,7 +22,7 @@ except ImportError:
     # synthetic ``_sc2ra_core_event_extractor`` name with no parent
     # package, which breaks relative imports. Fall back to the
     # absolute path — at that point ``sys.path`` already contains
-    # ``SC2Replay-Analyzer`` so ``core.timebase`` resolves.
+    # ``apps/replay-engine`` so ``core.timebase`` resolves.
     from core.timebase import event_seconds, infer_fps  # type: ignore
 
 try:
