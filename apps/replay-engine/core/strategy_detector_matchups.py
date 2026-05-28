@@ -63,29 +63,113 @@ def detect_tvt(ctx: DetectionContext) -> Optional[str]:
 
 
 def detect_tvz(ctx: DetectionContext) -> Optional[str]:
-    """Terran-vs-Zerg: 3-CC bio and 2-base hellbat/thor mech."""
-    # 3-CC Bio: three Command Centers by 6:00 behind 3+ Barracks of
-    # Marine/Marauder, with no mech tech (Armory / Fusion Core). The
-    # standard macro bio opening vs Zerg.
+    """Terran-vs-Zerg: 10 recognizable openings, specific -> general.
+
+    Returns ``None`` when none match so the generic Terran race tree in
+    ``classify_by_race`` provides the fallback label.
+    """
+    cc2 = base_count_at(ctx.buildings, "CommandCenter", 360)
+    cc450 = base_count_at(ctx.buildings, "CommandCenter", 450)
+
+    # 1. 1-1-1 Banshee: Factory + Starport before any expansion and a
+    # Banshee on the field -- 1-base cloak-Banshee harass.
     if (
-        base_count_at(ctx.buildings, "CommandCenter", 360) >= 3
+        ctx.has_building("Factory", 360)
+        and ctx.has_building("Starport", 420)
+        and ctx.count_units("Banshee", 480) >= 1
+        and base_count_at(ctx.buildings, "CommandCenter", 420) <= 1
+    ):
+        return "TvZ - 1-1-1 Banshee"
+
+    # 2. 3 Rax Marine: 3+ Barracks off one base with a Marine flood and
+    # no Factory -- a gas-light all-in vs Zerg.
+    if (
+        count_started_before(ctx.buildings, "Barracks", 420) >= 3
+        and base_count_at(ctx.buildings, "CommandCenter", 420) <= 1
+        and ctx.count_units("Marine", 450) >= 10
+        and not ctx.has_building("Factory", 360)
+    ):
+        return "TvZ - 3 Rax Marine"
+
+    # 3. Reaper Hellion Expand: Reaper-first + early Hellions on two
+    # bases, before any air/mech-upgrade tech commitment.
+    if (
+        ctx.count_units("Reaper", 210) >= 1
+        and ctx.count_units("Hellion", 360) >= 2
+        and cc2 >= 2
+        and not ctx.has_building("Armory", 420)
+        and not ctx.has_building("Starport", 420)
+    ):
+        return "TvZ - Reaper Hellion Expand"
+
+    # 4. 2-base Hellbat/Thor mech: Armory + 2 Factories producing a Thor
+    # behind a wall of Hellions/Hellbats off two bases.
+    if (
+        ctx.has_building("Armory", 360)
+        and count_started_before(ctx.buildings, "Factory", 450) >= 2
+        and ctx.count_units("Thor", 540) >= 1
+        and ctx.count_units("Hellion", 450) >= 4
+        and cc450 <= 2
+    ):
+        return "TvZ - 2 Base Hellbat Thor"
+
+    # 5. 2-1-1 Marine Hellbat Timing: Armory-backed Hellbats + Marines
+    # off two bases (no Thor -- that is the mech build above).
+    if (
+        ctx.has_building("Armory", 480)
+        and ctx.count_units("Hellion", 480) >= 4
+        and ctx.count_units("Marine", 480) >= 8
+        and cc450 <= 2
+    ):
+        return "TvZ - 2-1-1 Marine Hellbat Timing"
+
+    # 6. Battlecruiser Mech: a Fusion Core into Battlecruisers as the
+    # late-game mech finisher.
+    if (
+        ctx.has_building("FusionCore", 540)
+        and ctx.count_units("Battlecruiser", 600) >= 1
+    ):
+        return "TvZ - Battlecruiser Mech"
+
+    # 7. Hellion Liberator: early Hellions plus a Liberator for zone
+    # control / mineral-line siege off two bases.
+    if (
+        ctx.count_units("Hellion", 360) >= 2
+        and ctx.count_units("Liberator", 510) >= 1
+        and cc2 >= 2
+    ):
+        return "TvZ - Hellion Liberator"
+
+    # 8. Widow Mine Marine: a Marine ball with 2+ Widow Mines and a
+    # Medivac for mobile mine drops (checked before the generic Medivac
+    # drop so the mine signature wins).
+    if (
+        ctx.count_units("WidowMine", 480) >= 2
+        and ctx.count_units("Marine", 480) >= 8
+        and ctx.count_units("Medivac", 480) >= 1
+    ):
+        return "TvZ - Widow Mine Marine"
+
+    # 9. 2-1-1 Marine Drop: a Starport Medivac drop with Marines off two
+    # bases (the committed 2-base drop timing, not 3-CC macro).
+    if (
+        ctx.has_building("Starport", 420)
+        and ctx.count_units("Medivac", 480) >= 1
+        and ctx.count_units("Marine", 480) >= 8
+        and cc450 <= 2
+    ):
+        return "TvZ - 2-1-1 Marine Drop"
+
+    # 10. 3 CC Bio: three Command Centers behind 3+ Barracks of
+    # Marine/Marauder with no mech tech -- the standard macro bio game.
+    if (
+        cc2 >= 3
         and count_started_before(ctx.buildings, "Barracks", 450) >= 3
         and ctx.count_units("Marine", 480) >= 8
         and not ctx.has_building("Armory", 450)
         and not ctx.has_building("FusionCore", 450)
     ):
         return "TvZ - 3 CC Bio"
-
-    # 2-base Hellbat/Thor mech: Armory + 2 Factories producing Thors and
-    # a wall of Hellions/Hellbats off two bases.
-    if (
-        ctx.has_building("Armory", 360)
-        and count_started_before(ctx.buildings, "Factory", 450) >= 2
-        and ctx.count_units("Thor", 540) >= 1
-        and ctx.count_units("Hellion", 450) >= 4
-        and base_count_at(ctx.buildings, "CommandCenter", 450) <= 2
-    ):
-        return "TvZ - 2 Base Hellbat Thor"
 
     return None
 

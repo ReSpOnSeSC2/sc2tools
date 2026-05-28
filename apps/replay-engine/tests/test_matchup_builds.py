@@ -81,6 +81,76 @@ def test_tvz_2_base_hellbat_thor():
     assert _classify("Terran", "Zerg", events) == "TvZ - 2 Base Hellbat Thor"
 
 
+def test_tvz_1_1_1_banshee():
+    events = [
+        _b("CommandCenter", 0), _b("Factory", 200), _b("Starport", 300),
+        _u("Banshee", 450),
+    ]
+    assert _classify("Terran", "Zerg", events) == "TvZ - 1-1-1 Banshee"
+
+
+def test_tvz_3_rax_marine():
+    events = [
+        _b("CommandCenter", 0),
+        _b("Barracks", 100), _b("Barracks", 180), _b("Barracks", 260),
+        *_n("Marine", 300, 10),
+    ]
+    assert _classify("Terran", "Zerg", events) == "TvZ - 3 Rax Marine"
+
+
+def test_tvz_reaper_hellion_expand():
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 180),
+        _b("Barracks", 60), _b("Factory", 200),
+        _u("Reaper", 150), *_n("Hellion", 300, 2),
+    ]
+    assert _classify("Terran", "Zerg", events) == "TvZ - Reaper Hellion Expand"
+
+
+def test_tvz_marine_hellbat_timing():
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 180),
+        _b("Barracks", 80), _b("Factory", 200), _b("Armory", 350),
+        *_n("Hellion", 250, 4), *_n("Marine", 250, 8),
+    ]
+    assert _classify("Terran", "Zerg", events) == "TvZ - 2-1-1 Marine Hellbat Timing"
+
+
+def test_tvz_battlecruiser_mech():
+    events = [
+        _b("CommandCenter", 0), _b("Starport", 300), _b("FusionCore", 500),
+        _u("Battlecruiser", 580),
+    ]
+    assert _classify("Terran", "Zerg", events) == "TvZ - Battlecruiser Mech"
+
+
+def test_tvz_hellion_liberator():
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 180),
+        _b("Factory", 200), _b("Starport", 300),
+        *_n("Hellion", 300, 2), _u("Liberator", 480),
+    ]
+    assert _classify("Terran", "Zerg", events) == "TvZ - Hellion Liberator"
+
+
+def test_tvz_widow_mine_marine():
+    events = [
+        _b("CommandCenter", 0),
+        _b("Barracks", 80), _b("Factory", 200), _b("Starport", 300),
+        *_n("WidowMine", 400, 2), *_n("Marine", 250, 8), _u("Medivac", 450),
+    ]
+    assert _classify("Terran", "Zerg", events) == "TvZ - Widow Mine Marine"
+
+
+def test_tvz_marine_drop():
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 180),
+        _b("Barracks", 80), _b("Factory", 200), _b("Starport", 300),
+        *_n("Marine", 250, 8), _u("Medivac", 450),
+    ]
+    assert _classify("Terran", "Zerg", events) == "TvZ - 2-1-1 Marine Drop"
+
+
 def test_tvp_2_1_1_reaper_expand():
     events = [
         _b("CommandCenter", 0), _b("CommandCenter", 180),
