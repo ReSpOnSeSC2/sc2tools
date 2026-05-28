@@ -6,10 +6,17 @@
  * reveal style gets its own short soundtrack (decelerating wheel ticks,
  * laser "pews", gallop, bumps, etc.) plus a shared winner fanfare.
  *
- * Audio is best-effort: if the browser has no Web Audio, or autoplay is
- * blocked with no user gesture, the calls quietly no-op. In OBS the CEF
- * runtime allows autoplay; in the in-app preview the spin is triggered
- * by a click, which satisfies the gesture requirement.
+ * Audio is best-effort: if the browser has no Web Audio the calls
+ * quietly no-op. The harder problem is autoplay. A Browser Source page
+ * that has never seen a user gesture starts its AudioContext
+ * "suspended", and a lone resume() at spin time silently fails — so a
+ * Test fired at a freshly-added source (the first audio activity on a
+ * cold page) is silent, while a real ladder game minutes later plays
+ * fine: by then the runtime has granted autoplay, or a later spin's
+ * resume() finally took. ``useRevealAudioUnlock`` closes that gap —
+ * mounted from the always-on overlay root, it warms the context on
+ * load, retries resume() while suspended, and resumes on the first user
+ * gesture, mirroring the voice readout's unlock flow.
  */
 import { useEffect } from "react";
 import type { RevealStyle } from "@/lib/randomizer/types";
@@ -57,6 +64,65 @@ function audio(): { ctx: AudioContext; master: GainNode } | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Unlock the reveal AudioContext for OBS / Streamlabs Browser Sources.
+ *
+ * Mount this from the always-on overlay root (not the spin component,
+ * which mounts only once a payload lands — too late to pre-warm). While
+ * ``active``:
+ *   - warms the context on mount and retries a bare ``resume()`` every
+ *     500 ms while it's suspended, so a runtime that grants autoplay a
+ *     beat after page load (or once media engagement accrues) flips the
+ *     context to "running" *before* the streamer fires a Test;
+ *   - resumes on the first user gesture (capture-phase, document-wide)
+ *     so interacting with the source once unlocks audio for the page's
+ *     lifetime — the same affordance the voice readout relies on.
+ *
+ * Each retry is bounded; per-spin ``audio()`` calls keep re-attempting
+ * resume() after the loop stops, so later spins still recover.
+ */
+export function useRevealAudioUnlock(active: boolean): void {
+  useEffect(() => {
+    if (!active) return;
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+
+    // resume() must run inside the gesture's call stack for the autoplay
+    // policy to credit it; audio() resumes synchronously.
+    const grant = () => {
+      audio();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") audio();
+    };
+    const opts: AddEventListenerOptions = { capture: true, passive: true };
+
+    audio();
+    let attempts = 0;
+    const retry = window.setInterval(() => {
+      attempts += 1;
+      const a = audio();
+      if (!a || a.ctx.state === "running" || attempts >= 60) {
+        window.clearInterval(retry);
+      }
+    }, 500);
+
+    window.addEventListener("pointerdown", grant, opts);
+    window.addEventListener("click", grant, opts);
+    window.addEventListener("keydown", grant, opts);
+    window.addEventListener("touchstart", grant, opts);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      window.clearInterval(retry);
+      window.removeEventListener("pointerdown", grant, opts);
+      window.removeEventListener("click", grant, opts);
+      window.removeEventListener("keydown", grant, opts);
+      window.removeEventListener("touchstart", grant, opts);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [active]);
 }
 
 function noiseBuffer(c: AudioContext): AudioBuffer {

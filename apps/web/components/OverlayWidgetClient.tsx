@@ -39,6 +39,7 @@ import {
 } from "@/components/overlay/widgets/PrePostFlow";
 import type { RandomizerConfig } from "@/lib/randomizer/types";
 import { sanitizeRandomizerConfig } from "@/lib/randomizer/config";
+import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSound";
 
 /**
  * Per-widget Browser Source.
@@ -97,6 +98,10 @@ export function OverlayWidgetClient({
     session,
     setVisible,
   );
+  // Pre-warm the reveal AudioContext the moment the randomizer source
+  // loads — well before a Test fire — so the streamer's first Test isn't
+  // silent on a cold page (see useRevealAudioUnlock).
+  useRevealAudioUnlock(widget === "randomizer");
 
   // Voice readout is only run from the scouting widget when each
   // widget is its own Browser Source — otherwise every Source would

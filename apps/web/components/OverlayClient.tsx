@@ -40,6 +40,7 @@ import {
 } from "@/components/overlay/widgets/PrePostFlow";
 import type { RandomizerConfig } from "@/lib/randomizer/types";
 import { sanitizeRandomizerConfig } from "@/lib/randomizer/config";
+import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSound";
 
 /**
  * Public OBS overlay (all-in-one). The token IS the auth — we trade
@@ -139,6 +140,11 @@ export function OverlayClient({ token }: { token: string }) {
     // scouting Browser Source.
     enableVoiceHere ? liveGame : null,
   );
+
+  // Pre-warm the reveal AudioContext whenever this overlay could render
+  // the randomizer, so the streamer's first Test fire isn't silent on a
+  // cold page (see useRevealAudioUnlock).
+  useRevealAudioUnlock(singleWidget === null || singleWidget === "randomizer");
 
   function shouldShow(id: WidgetId): boolean {
     if (singleWidget && singleWidget !== id) return false;
