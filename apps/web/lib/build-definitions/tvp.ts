@@ -1,11 +1,11 @@
+// Terran-vs-Protoss build definitions. No matchup-specific entries have
+// been authored yet -- Terran-generic rules under `terran.ts` surface in
+// TvP via the `matchup: null` fall-through in `filterDefinitions`. The
+// 1-base 1-1-1 all-in is detected by the shared race classifier and
+// labelled with its canonical name `Terran - 1-1-1 One Base` (see
+// `terran.ts`), so it is not duplicated here. When the analyzer learns
+// TvP-specific signatures, add them here and they'll be picked up by the
+// facade.
 import type { BuildDefinition } from "../build-definitions";
 
-export const TVP_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
-  {
-    race: "Terran",
-    matchup: "TvP",
-    name: "TvP - 1-1-1 One Base",
-    description:
-      "Detected when the player is Terran in TvP and a Barracks, Factory, and Starport are ALL built before the second Command Center -- and none of the three is proxied (they all sit inside the main). The classic 1-base 1-1-1 all-in vs Protoss: Cloak Banshee / Marine-Tank / Marine-Medivac-Tank pressure off a single base with no expansion.",
-  },
-];
+export const TVP_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [];

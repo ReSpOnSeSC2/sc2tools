@@ -66,16 +66,17 @@ export interface BuildDefinition {
 }
 
 // Concatenation order matches the original monolith section order
-// (Protoss-generic → PvP → PvT → PvZ → Terran → Zerg → Too-Short),
-// with the single Terran-TvP entry pulled into its own tvp.ts and
-// re-inserted right after the Terran-generic block so that the
-// resulting `BUILD_DEFINITIONS` array stays close to the original
-// ordering and slugified ids are produced in a stable sequence.
+// (Protoss-generic → PvP → PvT → PvZ → Terran → Zerg → Too-Short), so the
+// resulting `BUILD_DEFINITIONS` array stays close to the original ordering
+// and slugified ids are produced in a stable sequence.
 //
-// TvT / TvZ / ZvP / ZvT / ZvZ are scaffolded as empty arrays today
-// (the analyzer has no matchup-specific signatures for them yet).
-// Grouping the imports by race means a future TvT entry just needs to
-// land in tvt.ts and will appear in the catalog automatically.
+// TvP / TvT / TvZ / ZvP / ZvT / ZvZ are scaffolded as empty arrays today
+// (the analyzer has no matchup-specific signatures for them yet; the
+// Terran/Zerg-generic rules under terran.ts / zerg.ts are detected by the
+// shared race classifier and surface in every matchup via the
+// `matchup: null` fall-through in `filterDefinitions`). Grouping the
+// imports by race means a future TvP entry just needs to land in tvp.ts
+// and will appear in the catalog automatically.
 const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   ...PROTOSS_DEFINITIONS,
   ...PVP_DEFINITIONS,
