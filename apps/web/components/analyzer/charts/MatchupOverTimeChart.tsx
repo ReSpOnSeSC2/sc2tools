@@ -317,7 +317,7 @@ function MatchupPanel({
                 fontSize: 12,
                 padding: "6px 8px",
               }}
-              labelStyle={{ color: "#e5e7eb", fontWeight: 600, marginBottom: 4 }}
+              labelStyle={{ color: "#7c8cff", fontWeight: 600, marginBottom: 4 }}
               labelFormatter={(v: string) => formatTick(v, true)}
               formatter={(value: number | string, name: string, ctx) => {
                 if (value === null || value === undefined) return ["—", name];
