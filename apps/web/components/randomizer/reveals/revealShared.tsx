@@ -274,8 +274,8 @@ export function RevealKeyframes() {
       }
       @keyframes rdz-beam {
         0%   { transform: scaleY(0); opacity: 0; }
-        60%  { transform: scaleY(1); opacity: 0.9; }
-        100% { transform: scaleY(1); opacity: 0.25; }
+        55%  { transform: scaleY(1); opacity: 0.95; }
+        100% { transform: scaleY(1); opacity: 0.55; }
       }
       @keyframes rdz-shake {
         0%, 100% { transform: translateX(0); }
