@@ -2,6 +2,39 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.11.0
+
+### Changed — parsing now resolves entirely from `apps/replay-engine`
+- **What.** The replay-parsing engine moved from the legacy repo-root
+  `SC2Replay-Analyzer/` folder to `apps/replay-engine/`, and the agent's
+  parse closure (`core.sc2_replay_parser`, `core.pulse_resolver`,
+  `core.event_extractor`, the build-definition and strategy-detector
+  modules) is now sourced from that single engine. The retired
+  `reveal-sc2-opponent-main/` local product the agent used to fall back to
+  has been deleted; the agent no longer probes it.
+- **Effect.** No change to which games parse or upload. The bundled `.exe`
+  ships `apps/replay-engine/` (see `packaging/sc2tools_agent.spec`).
+
+### Added — your own build now classifies in every matchup
+- **What.** The user-side and opponent-side build detectors now share one
+  perspective-agnostic race classifier built from the same
+  `build_definitions` catalog. Previously only Protoss user builds were
+  classified; a user who played Terran or Zerg got `Unclassified - <race>`.
+- **Effect.** Your own Terran/Zerg builds now get real labels (e.g. a fast
+  three-Command-Center Terran uploads as `Terran - Fast 3 CC` instead of
+  `Unclassified - Terran`), matching how the opponent's build is labelled.
+  Protoss keeps its richer matchup-specific labels. Re-ingest (Resync) to
+  re-label previously analysed games.
+
+### Fixed — build-log unit names use the canonical engine extractor
+- **What.** The build log is now produced by the engine's
+  `event_extractor`, the same one the cloud API uses, instead of the older
+  divergent copy the agent carried.
+- **Effect.** Fixes the name-cleaning bug that corrupted
+  `SupplyDepotLowered` into `SupplyDepoted` and `Zergling` into `ling`,
+  drops the transient Reaper `KD8Charge` effect from build logs, and
+  includes Overlords — so the agent's build log now matches the cloud.
+
 ## 0.10.1
 
 ### Fixed — opponent build classification under-counted bases (pre-placed main)
