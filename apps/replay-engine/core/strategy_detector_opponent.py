@@ -70,5 +70,7 @@ class OpponentStrategyDetector(BaseStrategyDetector):
 
         # 2. Hardcoded race decision tree -- shared with the user-side
         # detector via classify_by_race so a build classifies the same
-        # way regardless of who built it.
-        return classify_by_race(race, enemy_events, self)
+        # way regardless of who built it. ``my_race`` is the opponent's
+        # matchup partner (the user), so the Terran/Zerg per-matchup
+        # detectors fire correctly.
+        return classify_by_race(race, enemy_events, self, opp_race=my_race)

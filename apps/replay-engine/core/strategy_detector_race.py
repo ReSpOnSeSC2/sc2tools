@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Dict, List
 
 from .strategy_detector_helpers import (
+    DetectionContext,
     _composition_fallback_name,
     _is_start_event,
     base_count_at,
@@ -23,19 +24,55 @@ from .strategy_detector_helpers import (
     start_times,
     start_times_excluding_main,
 )
+from .strategy_detector_matchups import (
+    detect_tvp,
+    detect_tvt,
+    detect_tvz,
+    detect_zvp,
+    detect_zvt,
+    detect_zvz,
+)
+
+# Terran/Zerg per-matchup detailed detectors, keyed by
+# (player_race, opponent_race). Protoss matchups are handled by the
+# detailed detect_pvX trees in the user detector, so they are not
+# duplicated here.
+_MATCHUP_DETECTORS = {
+    ("Terran", "Terran"): detect_tvt,
+    ("Terran", "Zerg"): detect_tvz,
+    ("Terran", "Protoss"): detect_tvp,
+    ("Zerg", "Terran"): detect_zvt,
+    ("Zerg", "Protoss"): detect_zvp,
+    ("Zerg", "Zerg"): detect_zvz,
+}
 
 
-def classify_by_race(race, events: List[Dict], detector) -> str:
+def classify_by_race(race, events: List[Dict], detector, opp_race=None) -> str:
     """Return the catalog build-order label for ``race``'s ``events``.
 
     ``detector`` is any ``BaseStrategyDetector`` (used for ``_is_proxy``
     spatial checks). Perspective-agnostic: pass the user's events to
     classify the user's build, or the opponent's events for theirs.
+    When ``opp_race`` is supplied, the Terran/Zerg per-matchup detectors
+    run first and a precise matchup label (e.g. ``"TvZ - 3 CC Bio"``)
+    takes precedence over the generic race tree.
     """
     buildings = [e for e in events if e["type"] == "building"]
     units = [e for e in events if e["type"] == "unit"]
     upgrades = [e for e in events if e["type"] == "upgrade"]
     main_loc = detector._get_main_base_loc(buildings)
+
+    # Matchup-specific pro builds take precedence over the generic race
+    # tree, mirroring how the user side dispatches to detect_pvX. A None
+    # result falls through to the generic race tree below.
+    if opp_race:
+        matchup_fn = _MATCHUP_DETECTORS.get((race, opp_race))
+        if matchup_fn is not None:
+            matchup_label = matchup_fn(
+                DetectionContext(buildings, units, upgrades, main_loc, detector)
+            )
+            if matchup_label is not None:
+                return matchup_label
 
     def get_times(name):
         return start_times(buildings, name)

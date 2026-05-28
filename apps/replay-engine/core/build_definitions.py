@@ -118,15 +118,21 @@ BUILD_DEFINITIONS = {
     "Terran - Widow Upgraded Mine Cheese": "Detected if a Medivac and 2+ Widow Mines are built BEFORE the second Command Center -- a 1-base Widow Mine drop cheese.",
     "Terran - Standard Play (Unclassified)": "Catch-all for unclassified Terran games.",
 
-    # ----- Matchup-prefixed Zerg & Terran stubs -----
-    # TODO(stage-8): replace placeholder signatures in BUILD_SIGNATURES below
-    # with real opening detectors and remove the 'Stub - TODO Stage 8' suffix.
-    "ZvP - Stub - TODO Stage 8": "Placeholder ZvP entry - real opening signatures land in Stage 8.",
-    "ZvT - Stub - TODO Stage 8": "Placeholder ZvT entry - real opening signatures land in Stage 8.",
-    "ZvZ - Stub - TODO Stage 8": "Placeholder ZvZ entry - real opening signatures land in Stage 8.",
-    "TvP - Stub - TODO Stage 8": "Placeholder TvP entry - real opening signatures land in Stage 8.",
-    "TvT - Stub - TODO Stage 8": "Placeholder TvT entry - real opening signatures land in Stage 8.",
-    "TvZ - Stub - TODO Stage 8": "Placeholder TvZ entry - real opening signatures land in Stage 8.",
+    # ----- Matchup-specific Zerg & Terran builds -----
+    # Detected by the per-matchup detectors in
+    # ``core.strategy_detector_matchups`` (mirrors of the detailed
+    # Protoss trees). They take precedence over the generic race tree
+    # and fall through to it when no specific build matched.
+    "TvT - Reaper Expand into Tank/Viking": "Detected when a Reaper-first scout is followed by a single expansion and then Siege Tanks behind Vikings -- the standard TvT positional macro opener that masses tanks for the air-controlled contain.",
+    "TvT - 1-1-1 Cloak Banshee": "Detected when a Factory and Starport are built before any expansion and a Banshee reaches the field on one base -- the classic 1-1-1 cloak-Banshee harass.",
+    "TvZ - 3 CC Bio": "Detected when three Command Centers are taken by 6:00 behind 3+ Barracks of Marine/Marauder with no mech tech (Armory / Fusion Core) -- the standard macro bio opening vs Zerg.",
+    "TvZ - 2 Base Hellbat Thor": "Detected when an Armory and two Factories produce Thors behind a wall of Hellions/Hellbats off two bases -- the 2-base mech timing vs Zerg.",
+    "TvP - 2-1-1 Reaper Expand": "Detected when a Reaper-first scout takes a single expansion (no fast 3rd CC) and adds a Factory + Starport for the Medivac-drop / Stim bio timing off two bases vs Protoss.",
+    "ZvT - 3 Hatch Ling Bane Muta": "Detected when three bases go down with a Baneling Nest and Spire, defending bio with Banelings and Zerglings while teching to Mutalisks -- the textbook ZvT macro style.",
+    "ZvT - 2 Base Roach Ravager Timing": "Detected when a Roach Warren produces a wall of Roaches and Ravagers off two bases on a low drone count -- the ZvT roach/ravager pressure timing.",
+    "ZvP - Ling Bane Muta": "Detected when a Baneling Nest and Spire support Banelings and a wall of Zerglings -- the muta/ling/bane harass style vs Protoss.",
+    "ZvZ - 12 Pool Speedling": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the aggressive ZvZ speedling opener.",
+    "ZvZ - Roach Aggression": "Detected when a Roach Warren produces a wall of Roaches off two bases -- the standard ZvZ roach pressure / all-in.",
 }
 
 # =========================================================
@@ -145,43 +151,31 @@ BUILD_DEFINITIONS = {
 #
 # TODO(stage-8): fill in real `signature` rules for each ZvX / TvX entry
 # below and replace the "?" tier with one of "S" / "A" / "B" / "C".
+# Detection for these matchup builds is performed by the hardcoded
+# decision trees in ``core.strategy_detector_matchups`` (keyed off
+# building/unit/timing signatures), not by the ``signature`` rule lists
+# here -- so ``signature`` stays empty. The entries document the catalog
+# metadata (race / vs_race / tier) that the rest of the app reads.
 BUILD_SIGNATURES: Dict[str, Dict[str, object]] = {
-    "ZvP - Stub - TODO Stage 8": {
-        "race": "Zerg", "vs_race": "Protoss",
-        "signature": [],  # TODO(stage-8): real rules land here.
-        "tier": "?",
-        "description": BUILD_DEFINITIONS["ZvP - Stub - TODO Stage 8"],
-    },
-    "ZvT - Stub - TODO Stage 8": {
-        "race": "Zerg", "vs_race": "Terran",
-        "signature": [],  # TODO(stage-8): real rules land here.
-        "tier": "?",
-        "description": BUILD_DEFINITIONS["ZvT - Stub - TODO Stage 8"],
-    },
-    "ZvZ - Stub - TODO Stage 8": {
-        "race": "Zerg", "vs_race": "Zerg",
-        "signature": [],  # TODO(stage-8): real rules land here.
-        "tier": "?",
-        "description": BUILD_DEFINITIONS["ZvZ - Stub - TODO Stage 8"],
-    },
-    "TvP - Stub - TODO Stage 8": {
-        "race": "Terran", "vs_race": "Protoss",
-        "signature": [],  # TODO(stage-8): real rules land here.
-        "tier": "?",
-        "description": BUILD_DEFINITIONS["TvP - Stub - TODO Stage 8"],
-    },
-    "TvT - Stub - TODO Stage 8": {
-        "race": "Terran", "vs_race": "Terran",
-        "signature": [],  # TODO(stage-8): real rules land here.
-        "tier": "?",
-        "description": BUILD_DEFINITIONS["TvT - Stub - TODO Stage 8"],
-    },
-    "TvZ - Stub - TODO Stage 8": {
-        "race": "Terran", "vs_race": "Zerg",
-        "signature": [],  # TODO(stage-8): real rules land here.
-        "tier": "?",
-        "description": BUILD_DEFINITIONS["TvZ - Stub - TODO Stage 8"],
-    },
+    name: {
+        "race": race,
+        "vs_race": vs_race,
+        "signature": [],
+        "tier": "A",
+        "description": BUILD_DEFINITIONS[name],
+    }
+    for name, race, vs_race in (
+        ("TvT - Reaper Expand into Tank/Viking", "Terran", "Terran"),
+        ("TvT - 1-1-1 Cloak Banshee", "Terran", "Terran"),
+        ("TvZ - 3 CC Bio", "Terran", "Zerg"),
+        ("TvZ - 2 Base Hellbat Thor", "Terran", "Zerg"),
+        ("TvP - 2-1-1 Reaper Expand", "Terran", "Protoss"),
+        ("ZvT - 3 Hatch Ling Bane Muta", "Zerg", "Terran"),
+        ("ZvT - 2 Base Roach Ravager Timing", "Zerg", "Terran"),
+        ("ZvP - Ling Bane Muta", "Zerg", "Protoss"),
+        ("ZvZ - 12 Pool Speedling", "Zerg", "Zerg"),
+        ("ZvZ - Roach Aggression", "Zerg", "Zerg"),
+    )
 }
 
 

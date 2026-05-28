@@ -1,11 +1,16 @@
-// Terran-vs-Protoss build definitions. No matchup-specific entries have
-// been authored yet -- Terran-generic rules under `terran.ts` surface in
-// TvP via the `matchup: null` fall-through in `filterDefinitions`. The
-// 1-base 1-1-1 all-in is detected by the shared race classifier and
-// labelled with its canonical name `Terran - 1-1-1 One Base` (see
-// `terran.ts`), so it is not duplicated here. When the analyzer learns
-// TvP-specific signatures, add them here and they'll be picked up by the
-// facade.
+// Terran-vs-Protoss matchup-specific build definitions. Detected by the
+// per-matchup detectors in core/strategy_detector_matchups.py; they take
+// precedence over the Terran-generic rules (terran.ts) and fall through
+// to them when no specific build matched. A greedy fast-3-CC macro stays
+// on the generic `Terran - Fast 3 CC` label.
 import type { BuildDefinition } from "../build-definitions";
 
-export const TVP_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [];
+export const TVP_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
+  {
+    race: "Terran",
+    matchup: "TvP",
+    name: "TvP - 2-1-1 Reaper Expand",
+    description:
+      "Detected when a Reaper-first scout takes a single expansion (no fast 3rd CC) and adds a Factory + Starport for the Medivac-drop / Stim bio timing off two bases vs Protoss.",
+  },
+];

@@ -86,7 +86,10 @@ class UserBuildDetector(BaseStrategyDetector):
         # "Terran - Fast 3 CC" instead of "Unclassified - Terran"). The
         # opponent detector runs the same classify_by_race trees.
         if my_race in ("Zerg", "Terran"):
-            return classify_by_race(my_race, my_events, self)
+            return classify_by_race(
+                my_race, my_events, self,
+                opp_race=_matchup_to_vs_race(matchup),
+            )
 
         # 3. Protoss matchups dispatch to per-matchup decision trees.
         ctx = DetectionContext(
