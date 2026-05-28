@@ -438,6 +438,50 @@ describe("buildCompositions — perspective='opponent'", () => {
     expect(sig.units.map((u) => u.token)).not.toContain("SCV");
   });
 
+  test("mirrors the W/L record to the opponent's side", () => {
+    // ``game.result`` is recorded from the USER's side; both fixture
+    // games are user Defeats. From the opponent's perspective those
+    // are wins, so the flipped signature must read 2–0 (winRate 1) —
+    // NOT the user's verbatim 0–2. This is the regression guard for
+    // the comparison view bug where "what they typically do" reported
+    // the user's win rate, making both columns show an identical
+    // (impossible) record.
+    const games = [
+      makeOppPerspectiveGame({
+        gameId: "g1",
+        oppUnitsAtMid: { SiegeTank: 6, Marauder: 4, Marine: 8 },
+      }),
+      makeOppPerspectiveGame({
+        gameId: "g2",
+        oppUnitsAtMid: { SiegeTank: 7, Marauder: 3, Marine: 9 },
+      }),
+    ];
+    const flipped = computeCompositions(games, { perspective: "opponent" });
+    const sig = flipped.perPhase.mid.signatures[0];
+    expect(sig).toBeDefined();
+    expect(sig.wins).toBe(2);
+    expect(sig.losses).toBe(0);
+    expect(sig.winRate).toBe(1);
+  });
+
+  test("user-perspective record is the user's verbatim W/L", () => {
+    // Companion to the flip guard above: scored from the user's side
+    // the same fixtures (user Defeats) must read as the user's losses.
+    // The user side carries real fighting units so an own-perspective
+    // signature actually forms at the mid phase.
+    const game = makeGame({
+      gameId: "g1",
+      result: "Defeat",
+      myUnitsAtMid: { Stalker: 5, Immortal: 2, Phoenix: 3, Probe: 60 },
+    });
+    const own = computeCompositions([game], { perspective: "you" });
+    const sig = own.perPhase.mid.signatures[0];
+    expect(sig).toBeDefined();
+    expect(sig.wins).toBe(0);
+    expect(sig.losses).toBe(1);
+    expect(sig.winRate).toBe(0);
+  });
+
   test("returns empty + 'opp_signals_sparse' when >50% of games have no opp_stats_events", () => {
     // 3 games, 2 of which carry no opp_stats_events (the sc2reader
     // Zerg tracker quirk). The empty-fallback fires at 67% missing,
