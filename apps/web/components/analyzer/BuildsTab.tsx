@@ -6,8 +6,9 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
-import { useSort, SortableTh } from "@/components/ui/SortableTh";
+import { usePersistentSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
+import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { BuildEditorModal } from "./BuildEditorModal";
 import { BuildMmrPanel } from "./mmr/BuildMmrPanel";
 import { BuildAgingCurve } from "./mmr/BuildAgingCurve";
@@ -23,6 +24,7 @@ type BuildRow = {
 };
 
 const LS_MIN_BUILDS = "analyzer.builds.minGames";
+const LS_BUILDS_SORT = "analyzer.builds.sort";
 
 /**
  * The full Builds analytics tab (separate from the personal-builds
@@ -34,7 +36,7 @@ export function BuildsTab() {
   const [search, setSearch] = useState("");
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_BUILDS, 1);
   const [editing, setEditing] = useState<string | null>(null);
-  const sort = useSort("total", "desc");
+  const sort = usePersistentSort(LS_BUILDS_SORT, "total", "desc");
 
   const { data, isLoading } = useApi<BuildRow[]>(
     `/v1/builds${filtersToQuery(filters)}#${dbRev}`,
@@ -70,6 +72,11 @@ export function BuildsTab() {
           onChange={(e) => setSearch(e.target.value)}
         />
         <MinGamesPicker value={minGames} onChange={setMinGames} />
+        <WinRateSortToggle
+          dir={sort.sortBy === "winRate" ? sort.sortDir : "desc"}
+          active={sort.sortBy === "winRate"}
+          onChange={(dir) => sort.setSortExplicit("winRate", dir)}
+        />
         <span className="text-xs text-text-dim">
           click a row to inspect or edit a build
         </span>
