@@ -73,6 +73,8 @@ async function main() {
       services.games.todaySession(userId, timezone),
     resolveVoicePrefs: (userId) =>
       /** @type {any} */ (services).users.getPreferences(userId, "voice"),
+    resolveRandomizerPrefs: (userId) =>
+      /** @type {any} */ (services).users.getPreferences(userId, "randomizer"),
     // Synchronous broker-snapshot accessor used by the overlay
     // connect-replay path AND the ``overlay:resync`` /
     // ``overlay:heartbeat`` handlers. Returns the latest

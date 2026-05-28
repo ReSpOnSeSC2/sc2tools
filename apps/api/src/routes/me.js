@@ -237,7 +237,7 @@ function buildMeRouter(deps) {
   // Allowlist of preference types the client may read/write.
   // "arcade" stores Arcade tab state (streak, XP/level, unlocked card slugs,
   // current Stock Market portfolio + week key, Bingo card state, badges).
-  const PREF_TYPES = new Set(["misc", "voice", "arcade"]);
+  const PREF_TYPES = new Set(["misc", "voice", "arcade", "randomizer"]);
 
   router.get("/me/preferences/:type", deps.auth, async (req, res, next) => {
     try {

@@ -34,8 +34,11 @@ import {
   BestAnswerWidget,
   ScoutingWidget,
   SessionWidget,
+  RandomizerWidget,
   type SessionSummary,
 } from "@/components/overlay/widgets/PrePostFlow";
+import type { RandomizerConfig } from "@/lib/randomizer/types";
+import { sanitizeRandomizerConfig } from "@/lib/randomizer/config";
 
 /**
  * Per-widget Browser Source.
@@ -74,6 +77,7 @@ export function OverlayWidgetClient({
   const [enabled, setEnabled] = useState<boolean>(true);
   const [visible, setVisible] = useState<boolean>(false);
   const [voicePrefs, setVoicePrefs] = useState<VoicePrefs | null>(null);
+  const [randomizer, setRandomizer] = useState<RandomizerConfig | null>(null);
 
   useOverlayWidgetSocket(
     token,
@@ -83,6 +87,7 @@ export function OverlayWidgetClient({
     setSession,
     setEnabled,
     setVoicePrefs,
+    setRandomizer,
   );
   useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
   useWidgetVisibility(
@@ -149,6 +154,7 @@ export function OverlayWidgetClient({
         live={live}
         liveGame={liveGame}
         session={session}
+        randomizer={randomizer}
       />
       {voice.needsGesture ? (
         <VoiceGestureBanner onClick={voice.onUserGesture} />
@@ -162,11 +168,13 @@ function WidgetRenderer({
   live,
   liveGame,
   session,
+  randomizer,
 }: {
   widget: WidgetId;
   live: LiveGamePayload | null;
   liveGame: LiveGameEnvelope | null;
   session: SessionSummary | null;
+  randomizer: RandomizerConfig | null;
 }) {
   switch (widget) {
     case "opponent":
@@ -206,6 +214,10 @@ function WidgetRenderer({
       return <ScoutingWidget live={live} liveGame={liveGame} />;
     case "session":
       return <SessionWidget live={live} session={session} />;
+    case "randomizer":
+      return (
+        <RandomizerWidget live={live} liveGame={liveGame} config={randomizer} />
+      );
     default:
       return null;
   }
@@ -225,6 +237,7 @@ function useOverlayWidgetSocket(
   setSession: (msg: SessionSummary | null) => void,
   setEnabled: (on: boolean) => void,
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
+  setRandomizer: (cfg: RandomizerConfig | null) => void,
 ) {
   // The latest gameKey we've observed in either ``live`` or
   // ``liveGame``. Used by the heartbeat reply handler to decide
@@ -343,12 +356,19 @@ function useOverlayWidgetSocket(
     });
     socket.on(
       "overlay:config",
-      (msg: { enabledWidgets?: string[]; voicePrefs?: VoicePrefs }) => {
+      (msg: {
+        enabledWidgets?: string[];
+        voicePrefs?: VoicePrefs;
+        randomizer?: unknown;
+      }) => {
         if (msg && Array.isArray(msg.enabledWidgets)) {
           setEnabled(msg.enabledWidgets.includes(widget));
         }
         if (msg && msg.voicePrefs && typeof msg.voicePrefs === "object") {
           setVoicePrefs(msg.voicePrefs);
+        }
+        if (msg && msg.randomizer && typeof msg.randomizer === "object") {
+          setRandomizer(sanitizeRandomizerConfig(msg.randomizer));
         }
       },
     );
@@ -431,6 +451,7 @@ function useOverlayWidgetSocket(
     setSession,
     setEnabled,
     setVoicePrefs,
+    setRandomizer,
   ]);
 }
 
@@ -483,7 +504,8 @@ export function useWidgetVisibility(
   // second source of visibility ("the bridge says we're in a match").
   // Other widgets continue to derive visibility purely from the
   // post-game ``overlay:live`` payload.
-  const consumesLiveGame = widget === "opponent" || widget === "scouting";
+  const consumesLiveGame =
+    widget === "opponent" || widget === "scouting" || widget === "randomizer";
   // Active match phases — used to count the live envelope as a
   // render source. ``match_ended`` deliberately drops out so the
   // widget falls through to the post-game ``live`` payload (or hides

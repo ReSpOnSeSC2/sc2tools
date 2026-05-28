@@ -70,6 +70,7 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
   { id: "best-answer", label: "Best answer", hint: "Your best counter vs that opening" },
   { id: "scouting", label: "Scouting tells", hint: "Predicted strategies + tell timings" },
   { id: "session", label: "Session record", hint: "Today's W-L + your current MMR" },
+  { id: "randomizer", label: "Build randomizer", hint: "Spins a weighted random build for each new matchup" },
 ];
 
 export function SettingsOverlay({ origin }: { origin?: string }) {

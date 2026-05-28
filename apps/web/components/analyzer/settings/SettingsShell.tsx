@@ -8,6 +8,7 @@ import {
   Volume2,
   Database,
   Settings2,
+  Dices,
 } from "lucide-react";
 import { Tabs } from "@/components/ui/Tabs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -28,6 +29,7 @@ const TABS: ReadonlyArray<TabDef> = [
   { id: "foundation", label: "Foundation", Icon: ServerCog },
   { id: "profile", label: "Profile", Icon: UserRound },
   { id: "overlay", label: "Overlay", Icon: MonitorPlay },
+  { id: "randomizer", label: "Randomizer", Icon: Dices },
   { id: "voice", label: "Voice", Icon: Volume2 },
   { id: "backups", label: "Backups", Icon: Database },
   { id: "misc", label: "Misc", Icon: Settings2 },
@@ -37,6 +39,7 @@ export type SettingsTabId =
   | "foundation"
   | "profile"
   | "overlay"
+  | "randomizer"
   | "voice"
   | "backups"
   | "misc";
