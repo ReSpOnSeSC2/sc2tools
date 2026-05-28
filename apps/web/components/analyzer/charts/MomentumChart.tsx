@@ -192,9 +192,14 @@ function TiltPanel({
             className="rounded border border-border bg-bg-elevated/60 px-2 py-1.5"
           >
             <div className="text-text-dim">{r.label}</div>
-            <div className="font-semibold" style={{ color: r.color }}>
-              {r.pct == null ? "—" : `${r.pct}%`}{" "}
-              <span className="text-text-dim">· {r.sample}</span>
+            <div>
+              <span className="font-semibold" style={{ color: r.color }}>
+                {r.pct == null ? "—" : `${r.pct}%`}
+              </span>{" "}
+              <span className="font-normal text-text-dim">
+                win rate · {r.sample.toLocaleString()} game
+                {r.sample === 1 ? "" : "s"}
+              </span>
             </div>
           </div>
         ))}
