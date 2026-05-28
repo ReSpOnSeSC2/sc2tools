@@ -189,6 +189,14 @@ export function OppMmrBucketsChart() {
                 borderRadius: 8,
                 fontSize: 12,
               }}
+              labelStyle={{
+                color: COLOR_ACCENT,
+                fontWeight: 600,
+                marginBottom: 4,
+              }}
+              // Win rate first so the selected band's MMR range header
+              // sits directly above the WR readout the user is after.
+              itemSorter={(item) => (item.dataKey === "winRatePct" ? 0 : 1)}
               labelFormatter={(_v: string, ctx) => {
                 const payload = Array.isArray(ctx) && ctx[0]?.payload;
                 if (!payload) return _v;
