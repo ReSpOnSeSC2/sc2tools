@@ -44,7 +44,7 @@ export async function generateMetadata({ params }: PageParams) {
     openGraph: {
       title: `${profile.displayName} — SC2 Tools community`,
       description,
-      images: [{ url: "/banner.png", width: 2000, height: 800 }],
+      images: [{ url: "/og.jpg", width: 1200, height: 630 }],
     },
   };
 }

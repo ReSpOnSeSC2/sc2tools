@@ -64,7 +64,7 @@ function WideArt() {
       src={`/${BANNER_REL_PATH}`}
       alt="SC2 Tools"
       width={2000}
-      height={800}
+      height={864}
       priority
       className="block h-auto w-full"
     />

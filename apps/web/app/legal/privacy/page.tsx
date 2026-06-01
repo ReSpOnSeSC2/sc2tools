@@ -1,4 +1,5 @@
 export const metadata = {
+  alternates: { canonical: "/legal/privacy" },
   title: "Privacy Policy — SC2 Tools",
   description:
     "How SC2 Tools collects, processes, and stores StarCraft II replay metadata.",

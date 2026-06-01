@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
+  alternates: { canonical: "/legal/terms" },
   title: "Terms of Service — SC2 Tools",
   description: "Terms governing use of SC2 Tools.",
 };

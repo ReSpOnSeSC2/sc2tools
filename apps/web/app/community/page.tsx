@@ -15,6 +15,7 @@ import {
 } from "@/components/community/types";
 
 export const metadata = {
+  alternates: { canonical: "/community" },
   title: "Community — SC2 Tools",
   description:
     "Player-published StarCraft II build orders + the Stock Market weekly P&L leaderboard. Filter by matchup, sort by top, new, or controversial, and save any build to your private library.",
@@ -22,7 +23,7 @@ export const metadata = {
     title: "Community — SC2 Tools",
     description:
       "Player-published StarCraft II build orders + the Stock Market weekly P&L leaderboard.",
-    images: [{ url: "/banner.png", width: 2000, height: 800 }],
+    images: [{ url: "/og.jpg", width: 1200, height: 630 }],
   },
 };
 

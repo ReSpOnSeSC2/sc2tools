@@ -8,6 +8,7 @@ import {
 import { DEFINITIONS_TOTAL } from "@/lib/build-definitions";
 
 export const metadata = {
+  alternates: { canonical: "/definitions" },
   title: "Build & Strategy Definitions · SC2 Tools",
   description:
     "The detection rules used by the SC2 Tools analyzer to label opponent strategies and your own builds.",
