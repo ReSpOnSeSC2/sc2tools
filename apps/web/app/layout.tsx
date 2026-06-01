@@ -1,10 +1,24 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { CookieBanner } from "@/components/CookieBanner";
 import { Header } from "@/components/chrome/Header";
 import { Footer } from "@/components/chrome/Footer";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import "./globals.css";
+
+/**
+ * Inter, self-hosted at build time via next/font (no render-blocking
+ * Google Fonts request, no layout shift). Exposed as the `--font-sans`
+ * CSS variable that tailwind.config.ts reads for `fontFamily.sans`, so
+ * the whole app actually renders in Inter instead of falling back to
+ * system-ui. `display: "swap"` keeps text visible during font load.
+ */
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
+});
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
 const SITE_TITLE = "SC2 Tools — opponent intel, build orders, live overlay";
@@ -74,7 +88,12 @@ export default function RootLayout({
 }) {
   return (
     <ClerkProvider>
-      <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <html
+        lang="en"
+        data-theme="dark"
+        className={inter.variable}
+        suppressHydrationWarning
+      >
         <head>
           <script
             // Synchronous theme bootstrap — must run before paint.

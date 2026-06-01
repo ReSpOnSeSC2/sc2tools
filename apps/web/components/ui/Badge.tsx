@@ -31,7 +31,7 @@ const VARIANT_CLASSES: Record<BadgeVariant, string> = {
 // build name in a narrow table column) grows to enclose the wrapped
 // text instead of clipping into a tiny stranded pill behind it.
 const SIZE_CLASSES: Record<BadgeSize, string> = {
-  sm: "min-h-5 py-0.5 px-1.5 text-[11px] gap-1",
+  sm: "min-h-5 py-0.5 px-1.5 text-micro gap-1",
   md: "min-h-6 py-0.5 px-2 text-caption gap-1.5",
 };
 

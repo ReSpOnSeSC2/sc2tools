@@ -55,8 +55,30 @@ const config: Config = {
         "halo-accent": "0 0 60px var(--halo-accent)",
       },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        // `--font-sans` is set by next/font (Inter) on <html> in
+        // app/layout.tsx. The literal "Inter" + system fallbacks cover
+        // the brief window before the variable resolves.
+        sans: [
+          "var(--font-sans)",
+          "Inter",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
+        ],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+      },
+      // Custom motion curves so transitions read intentional rather than
+      // using the browser-default ease. `--ease-*`/`--dur-*` live in
+      // globals.css; DEFAULT here means every `transition-*` utility and
+      // explicit `duration-*` inherits the smooth ease-out unless told
+      // otherwise.
+      transitionTimingFunction: {
+        DEFAULT: "var(--ease-out)",
+        out: "var(--ease-out)",
+        "in-out": "var(--ease-in-out)",
+      },
+      transitionDuration: {
+        DEFAULT: "var(--dur-base)",
       },
       fontSize: {
         "display-xl": ["64px", { lineHeight: "72px", letterSpacing: "-0.02em", fontWeight: "700" }],
@@ -68,6 +90,9 @@ const config: Config = {
         "body-lg": ["17px", { lineHeight: "26px" }],
         body: ["15px", { lineHeight: "24px" }],
         caption: ["13px", { lineHeight: "20px" }],
+        // Smallest token in the scale — for dense labels/overlines.
+        // Nothing should render below this (12px) floor.
+        micro: ["12px", { lineHeight: "16px", letterSpacing: "0.02em" }],
         mono: ["14px", { lineHeight: "22px" }],
       },
     },
