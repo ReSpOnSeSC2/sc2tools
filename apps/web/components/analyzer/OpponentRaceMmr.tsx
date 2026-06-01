@@ -58,7 +58,7 @@ export function HeadlineMmrChip({
         role="note"
         aria-label={`${race} MMR ${top.mmr}`}
         title="Highest-rated race (live from SC2Pulse)"
-        className={`inline-flex items-center gap-1.5 rounded-full border ${tint.border} ${tint.bg} px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider ${tint.text} tabular-nums`}
+        className={`inline-flex items-center gap-1.5 rounded-full border ${tint.border} ${tint.bg} px-2 py-0.5 text-micro font-medium uppercase tracking-wider ${tint.text} tabular-nums`}
       >
         <Icon name={raceIconName(race)} kind="race" className="h-3.5 w-3.5" />
         <span>{fmtMmr(top.mmr)}</span>
@@ -71,7 +71,7 @@ export function HeadlineMmrChip({
         role="note"
         aria-label={`Last known MMR ${Math.round(fallbackMmr)}`}
         title="Last known MMR — most recent game on record"
-        className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-accent tabular-nums"
+        className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-micro font-medium uppercase tracking-wider text-accent tabular-nums"
       >
         <span className="text-accent/70">MMR</span>
         <span>{fmtMmr(fallbackMmr)}</span>
@@ -109,7 +109,7 @@ export function RaceMmrPanel({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-[10px] uppercase tracking-wider text-text-dim">
+            <tr className="text-left text-micro uppercase tracking-wider text-text-dim">
               <th className="py-2 pr-3 font-semibold">Race</th>
               <th className="py-2 pr-3 text-right font-semibold">MMR</th>
               <th
@@ -152,7 +152,7 @@ export function RaceMmrPanel({
           </tbody>
         </table>
       </div>
-      <p className="mt-3 text-[10px] text-text-dim">
+      <p className="mt-3 text-micro text-text-dim">
         Live 1v1 ladder MMR from SC2Pulse · current season
       </p>
     </Card>

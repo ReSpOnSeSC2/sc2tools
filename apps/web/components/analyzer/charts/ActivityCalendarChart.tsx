@@ -115,7 +115,7 @@ export function ActivityCalendarChart({
       <div className="overflow-x-auto pb-1">
         <div className="flex gap-2">
           <div
-            className="flex flex-col text-[9px] uppercase tracking-wide text-text-dim"
+            className="flex flex-col text-micro uppercase tracking-wide text-text-dim"
             aria-hidden
           >
             {/* Spacer so day labels line up with the cell rows below the
@@ -133,7 +133,7 @@ export function ActivityCalendarChart({
           </div>
           <div className="flex flex-col">
             <div
-              className="flex text-[9px] uppercase tracking-wide text-text-dim"
+              className="flex text-micro uppercase tracking-wide text-text-dim"
               style={{ height: 12, marginBottom: 2 }}
               aria-hidden
             >
@@ -198,7 +198,7 @@ function CalendarCell({ cell }: { cell: CalCell }) {
 
 function Legend() {
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-text-dim">
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-micro text-text-dim">
       <span>Less ←</span>
       <span
         className="h-3 w-3 rounded-[3px]"

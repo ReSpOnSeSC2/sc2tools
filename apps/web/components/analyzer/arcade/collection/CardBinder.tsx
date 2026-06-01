@@ -46,7 +46,7 @@ export function CardBinder<T extends { slug: string; rarity: string; foil?: bool
           ].join(" ")}
         >
           {renderCardFace(c)}
-          <span className="mt-1 rounded-full border border-border bg-bg-surface px-2 py-0.5 text-[10px] uppercase tracking-wider text-text-dim">
+          <span className="mt-1 rounded-full border border-border bg-bg-surface px-2 py-0.5 text-micro uppercase tracking-wider text-text-dim">
             {RARITY_LABEL[c.rarity] ?? c.rarity}
             {c.foil ? " · Foil" : ""}
           </span>

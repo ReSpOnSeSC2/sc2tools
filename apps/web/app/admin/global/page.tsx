@@ -525,7 +525,7 @@ function PlayersSection() {
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
-              className="btn btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-sm disabled:cursor-not-allowed disabled:opacity-50"
               disabled={page === 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
             >
@@ -536,7 +536,7 @@ function PlayersSection() {
             </span>
             <button
               type="button"
-              className="btn btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-sm disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!data.hasMore}
               onClick={() => setPage((p) => p + 1)}
             >
@@ -556,7 +556,7 @@ function PlayersSection() {
 function TrackedByBadge({ count }: { count: number }) {
   if (count <= 1) return null;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-accent-cyan/40 bg-accent-cyan/10 px-2 py-0.5 text-[11px] font-medium text-accent-cyan">
+    <span className="inline-flex items-center gap-1 rounded-full border border-accent-cyan/40 bg-accent-cyan/10 px-2 py-0.5 text-micro font-medium text-accent-cyan">
       {count} users
     </span>
   );

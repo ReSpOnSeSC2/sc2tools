@@ -857,7 +857,7 @@ function CaseFile({
         <span className="text-caption font-mono uppercase tracking-wider text-text-dim">
           Case file
         </span>
-        <span className="rounded-full bg-bg-surface px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider text-text-dim">
+        <span className="rounded-full bg-bg-surface px-2 py-0.5 text-micro font-mono uppercase tracking-wider text-text-dim">
           1 fact redacted
         </span>
       </header>

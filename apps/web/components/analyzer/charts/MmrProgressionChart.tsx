@@ -532,7 +532,7 @@ function MmrHeadline({
               key={s.key}
               className="rounded-lg border border-border bg-bg-elevated/60 px-3 py-2"
             >
-              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-text-dim">
+              <div className="flex items-center gap-1.5 text-micro uppercase tracking-wider text-text-dim">
                 <span
                   aria-hidden
                   className="inline-block h-2 w-2 rounded-full"
@@ -547,7 +547,7 @@ function MmrHeadline({
                 {s.latest ? s.latest.mmr.toLocaleString() : "—"}
               </div>
               {sub ? (
-                <div className="text-[10px] tabular-nums text-text-dim">
+                <div className="text-micro tabular-nums text-text-dim">
                   {sub}
                 </div>
               ) : null}
@@ -595,7 +595,7 @@ function MmrHeadline({
           key={it.label}
           className="rounded-lg border border-border bg-bg-elevated/60 px-3 py-2"
         >
-          <div className="text-[10px] uppercase tracking-wider text-text-dim">
+          <div className="text-micro uppercase tracking-wider text-text-dim">
             {it.label}
           </div>
           <div
@@ -605,7 +605,7 @@ function MmrHeadline({
             {it.value}
           </div>
           {it.sub ? (
-            <div className="text-[10px] tabular-nums text-text-dim">{it.sub}</div>
+            <div className="text-micro tabular-nums text-text-dim">{it.sub}</div>
           ) : null}
         </div>
       ))}

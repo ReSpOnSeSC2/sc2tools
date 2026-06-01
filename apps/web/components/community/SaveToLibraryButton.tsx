@@ -107,7 +107,7 @@ export function SaveToLibraryButton({
       {error ? (
         <p
           role="alert"
-          className="text-[11px] text-danger"
+          className="text-micro text-danger"
         >
           {error}
         </p>

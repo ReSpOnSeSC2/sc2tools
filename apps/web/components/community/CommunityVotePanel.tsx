@@ -109,7 +109,7 @@ export function CommunityVotePanel({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-text-dim">
+        <span className="text-micro font-medium uppercase tracking-wider text-text-dim">
           Community votes
         </span>
         <span

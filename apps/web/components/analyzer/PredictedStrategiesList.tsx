@@ -43,7 +43,7 @@ export function PredictedStrategiesList({
           </div>
         </div>
       ))}
-      <div className="pt-2 text-[10px] text-text-dim">
+      <div className="pt-2 text-micro text-text-dim">
         recency-weighted: last 10 games count 2× · all others 1×
       </div>
     </div>

@@ -77,7 +77,7 @@ export function MmrRangeFilter({
       aria-label="Filter games by MMR range between players"
       className="flex flex-wrap items-center gap-1.5"
     >
-      <span className="text-[11px] uppercase tracking-wider text-text-dim">
+      <span className="text-micro uppercase tracking-wider text-text-dim">
         MMR Δ
       </span>
       {PRESETS.map((p) => {
@@ -93,7 +93,7 @@ export function MmrRangeFilter({
             aria-pressed={active}
             className={[
               "inline-flex min-h-[28px] items-center rounded-full border px-2 py-0.5",
-              "text-[11px] font-medium uppercase tracking-wider tabular-nums",
+              "text-micro font-medium uppercase tracking-wider tabular-nums",
               "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
               active
                 ? "border-accent/40 bg-accent/10 text-accent"
@@ -107,7 +107,7 @@ export function MmrRangeFilter({
       <label
         className={[
           "inline-flex min-h-[28px] items-center gap-1 rounded-full border px-2 py-0.5",
-          "text-[11px] font-medium uppercase tracking-wider",
+          "text-micro font-medium uppercase tracking-wider",
           "transition-colors focus-within:border-accent/40 focus-within:bg-accent/10",
           customActive
             ? "border-accent/40 bg-accent/10 text-accent"
@@ -115,7 +115,7 @@ export function MmrRangeFilter({
         ].join(" ")}
         title="Custom MMR window in points"
       >
-        <span className="text-[10px]">±</span>
+        <span className="text-micro">±</span>
         <input
           type="text"
           inputMode="numeric"
@@ -133,7 +133,7 @@ export function MmrRangeFilter({
           className="w-12 bg-transparent text-center tabular-nums outline-none placeholder:text-text-dim/60"
         />
       </label>
-      <span className="text-[10px] text-text-dim/70" aria-live="polite">
+      <span className="text-micro text-text-dim/70" aria-live="polite">
         {labelText}
       </span>
     </div>

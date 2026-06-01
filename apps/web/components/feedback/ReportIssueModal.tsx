@@ -82,14 +82,14 @@ export function ReportIssueModal({
 
   const footer =
     status === "sent" ? (
-      <button type="button" className="btn btn-primary" onClick={onClose}>
+      <button type="button" className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover" onClick={onClose}>
         Done
       </button>
     ) : (
       <>
         <button
           type="button"
-          className="btn btn-secondary"
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle"
           onClick={onClose}
           disabled={status === "sending"}
         >
@@ -98,7 +98,7 @@ export function ReportIssueModal({
         <button
           type="submit"
           form="report-issue-form"
-          className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
           disabled={!canSubmit}
         >
           {status === "sending" ? "Sending…" : "Send report"}

@@ -107,7 +107,7 @@ export function MapPeriodHeatmap({
 
       <div className="overflow-x-auto rounded-lg border border-border bg-bg-elevated/40">
         <table className="w-full text-sm">
-          <thead className="text-[10px] uppercase tracking-wider text-text-dim">
+          <thead className="text-micro uppercase tracking-wider text-text-dim">
             <tr>
               <th className="sticky left-0 bg-bg-elevated px-3 py-2 text-left">Map</th>
               {grid.columns.map((c) => (
@@ -179,7 +179,7 @@ function HeatmapRow({
           <span className="truncate font-medium">{row.map}</span>
           {isLowN ? (
             <span
-              className="ml-auto rounded-full border border-border px-1.5 text-[9px] uppercase tracking-wider text-text-dim"
+              className="ml-auto rounded-full border border-border px-1.5 text-micro uppercase tracking-wider text-text-dim"
               title="Low sample (< 2 games)"
             >
               low-n
@@ -241,10 +241,10 @@ function HeatCell({
       style={{ background: bg, color: tint }}
       title={`${wins}-${losses} (${total} games)`}
     >
-      <span className="text-[11px] font-semibold tabular-nums">
+      <span className="text-micro font-semibold tabular-nums">
         {wins}-{losses}
       </span>
-      <span className="text-[10px] tabular-nums">
+      <span className="text-micro tabular-nums">
         {Math.round(winRate * 100)}%
       </span>
     </span>

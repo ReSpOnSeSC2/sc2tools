@@ -207,7 +207,7 @@ export function CompositionSnapshot({
         <span className="font-semibold uppercase tracking-wider text-text">
           Unit &amp; building roster
         </span>
-        <span className="text-[11px] tabular-nums">
+        <span className="text-micro tabular-nums">
           {hoveredTime != null ? "Hovering " : "Game end "}
           <span className="text-text">{formatGameClock(snapshotTime)}</span>
         </span>
@@ -320,7 +320,7 @@ function PlayerStrip({
         </span>
         <span className="flex items-baseline gap-2 tabular-nums text-text-muted">
           <span>
-            <span className={`mr-1 text-[10px] uppercase tracking-wider ${labelTone}`}>
+            <span className={`mr-1 text-micro uppercase tracking-wider ${labelTone}`}>
               army
             </span>
             <span className="font-semibold text-text">
@@ -421,7 +421,7 @@ function RosterRow({
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2">
-        <span className="text-[10px] uppercase tracking-wider text-text-dim">
+        <span className="text-micro uppercase tracking-wider text-text-dim">
           {label}
         </span>
         {source && source !== "timeline" && source !== "empty" ? (
@@ -443,7 +443,7 @@ function SourceBadge({ source }: { source: CompositionSource }) {
   if (source === "hybrid") {
     return (
       <span
-        className="rounded bg-bg-elevated px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-text-muted"
+        className="rounded bg-bg-elevated px-1.5 py-0.5 text-micro uppercase tracking-wider text-text-muted"
         title="Counts come from the build order; deaths are derived from the unit timeline. Most accurate when the v0.5+ agent has uploaded both."
       >
         build order + deaths
@@ -453,7 +453,7 @@ function SourceBadge({ source }: { source: CompositionSource }) {
   if (source === "build_order") {
     return (
       <span
-        className="rounded bg-bg-elevated px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-warning"
+        className="rounded bg-bg-elevated px-1.5 py-0.5 text-micro uppercase tracking-wider text-warning"
         title="Counts come from the build order. Per-tick deaths aren't tracked for this game — re-upload via your v0.5+ agent for death-aware accuracy."
       >
         build order

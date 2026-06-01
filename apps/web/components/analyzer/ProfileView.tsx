@@ -309,7 +309,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
           matchupTimings={matchupTimings}
           opponentName={opponentName}
         />
-        <p className="mt-2 text-[10px] text-text-dim">
+        <p className="mt-2 text-micro text-text-dim">
           Opponent-tech cards come from the agent-uploaded opponent build
           log; your-tech cards come from your build log. Click a card with
           samples to see the contributing games. "-" means no samples in
@@ -450,7 +450,7 @@ function MergedToonsChip({
       role="note"
       aria-label={`${summary}: ${handles.join(", ")}`}
       title={`Same SC2Pulse character across:\n${handles.join("\n")}`}
-      className="inline-flex items-center rounded-full border border-accent-cyan/40 bg-accent-cyan/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-accent-cyan"
+      className="inline-flex items-center rounded-full border border-accent-cyan/40 bg-accent-cyan/10 px-2 py-0.5 text-micro font-medium uppercase tracking-wider text-accent-cyan"
     >
       {summary}
     </span>
@@ -501,7 +501,7 @@ function ProfilePulseLine({
   return (
     <div className="font-mono text-caption text-text-dim">
       Toon {label.value}
-      <span className="ml-2 text-[10px] uppercase tracking-wider text-text-dim/70">
+      <span className="ml-2 text-micro uppercase tracking-wider text-text-dim/70">
         sc2pulse id not resolved yet
       </span>
     </div>

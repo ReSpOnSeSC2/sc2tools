@@ -126,7 +126,7 @@ export function OpponentDiagnosticsPanel({
         {open ? (
           <button
             type="button"
-            className="btn btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-sm disabled:cursor-not-allowed disabled:opacity-50"
             disabled={retry.kind === "busy" || isLoading}
             onClick={runRetry}
           >
@@ -226,7 +226,7 @@ function DiagField({
 }) {
   return (
     <div className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-wider text-text-dim">
+      <span className="text-micro uppercase tracking-wider text-text-dim">
         {label}
       </span>
       <span className={mono ? "break-all font-mono text-text" : "text-text"}>

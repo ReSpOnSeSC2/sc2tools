@@ -103,22 +103,22 @@ function LeakRow({
         <TrendingDown className="h-3.5 w-3.5 flex-shrink-0 text-danger" aria-hidden />
         <span className="text-caption font-semibold text-text">{label}</span>
         {time ? (
-          <span className="inline-flex items-center gap-1 text-[11px] tabular-nums text-text-dim">
+          <span className="inline-flex items-center gap-1 text-micro tabular-nums text-text-dim">
             <Clock className="h-3 w-3" aria-hidden />
             {time}
           </span>
         ) : null}
         {points ? (
-          <span className="ml-auto text-[11px] font-semibold tabular-nums text-danger">
+          <span className="ml-auto text-micro font-semibold tabular-nums text-danger">
             -{points} pts
           </span>
         ) : null}
       </div>
       {detail ? (
-        <p className="mt-1 text-[11px] text-text-muted">{detail}</p>
+        <p className="mt-1 text-micro text-text-muted">{detail}</p>
       ) : null}
       {minerals != null ? (
-        <p className="mt-1 text-[11px] text-warning">~{minerals} min lost</p>
+        <p className="mt-1 text-micro text-warning">~{minerals} min lost</p>
       ) : null}
     </>
   );

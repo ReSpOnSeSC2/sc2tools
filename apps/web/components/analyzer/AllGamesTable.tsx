@@ -139,7 +139,7 @@ export function AllGamesTable({
     <div className="space-y-3">
       <div className="hidden overflow-x-auto md:block">
         <table ref={tableRef} className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-bg-elevated text-[11px] uppercase text-text-muted">
+          <thead className="sticky top-0 z-10 bg-bg-elevated text-micro uppercase text-text-muted">
             <tr>
               <th className="w-6 px-2 py-1 text-left" aria-hidden></th>
               <SortableTh col={SORT_COLS.date} label="Date" {...sort} />
@@ -422,17 +422,17 @@ function GameMobileCard({
             <div className="flex flex-wrap items-center gap-2">
               <RaceTag race={game.opp_race} strategy={game.opp_strategy} />
               {resultBadge}
-              <span className="font-mono text-[11px] text-text-dim">
+              <span className="font-mono text-micro text-text-dim">
                 {fmtDate(game.date)}
               </span>
             </div>
             {showPlayers ? (
-              <div className="text-[11px]">
+              <div className="text-micro">
                 <PlayersCell myName={myName} opponent={game.opponent} />
               </div>
             ) : null}
             <div className="text-caption text-text">{game.map || "—"}</div>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-text-muted">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-micro text-text-muted">
               <span>
                 opp: <span className="text-text">{game.opp_strategy || "—"}</span>
               </span>
@@ -460,7 +460,7 @@ function GameMobileCard({
           ) : null}
         </button>
         <div className="flex flex-shrink-0 flex-col items-end justify-between gap-1 pl-1">
-          <span className="text-[10px] uppercase tracking-wider text-text-dim">
+          <span className="text-micro uppercase tracking-wider text-text-dim">
             macro
           </span>
           <MacroCell
@@ -577,7 +577,7 @@ function RaceTag({
   const hasRace = !!resolved.full;
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-micro font-medium"
       style={{
         color: colour,
         borderColor: `${colour}55`,

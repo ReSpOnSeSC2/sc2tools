@@ -91,7 +91,7 @@ export function NoBuildOrder({
       description={
         <>
           for game{" "}
-          <span className="font-mono text-[11px] text-text-dim">{gameId}</span>
+          <span className="font-mono text-micro text-text-dim">{gameId}</span>
         </>
       }
       action={

@@ -260,7 +260,7 @@ function ActiveBreakdown({
           <span className="text-caption font-semibold text-text">{row.date}</span>
           <span
             className={[
-              "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider",
+              "rounded px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider",
               isFollowingCursor
                 ? "bg-accent/15 text-accent ring-1 ring-accent/30"
                 : "bg-bg-elevated text-text-dim ring-1 ring-border",
@@ -269,7 +269,7 @@ function ActiveBreakdown({
             {isFollowingCursor ? "Hovering" : "Latest period"}
           </span>
         </div>
-        <span className="text-[11px] tabular-nums text-text-dim">
+        <span className="text-micro tabular-nums text-text-dim">
           {total} game{total === 1 ? "" : "s"}
         </span>
       </div>
@@ -294,7 +294,7 @@ function ActiveBreakdown({
                 <span className="flex-none tabular-nums text-text">
                   {Math.round(share * 100)}%
                 </span>
-                <span className="flex-none text-[11px] tabular-nums text-text-dim">
+                <span className="flex-none text-micro tabular-nums text-text-dim">
                   · {e.count}
                 </span>
               </li>
@@ -314,7 +314,7 @@ function TopNToggle({
   onChange: (n: number) => void;
 }) {
   return (
-    <div className="flex items-center gap-1 text-[11px]">
+    <div className="flex items-center gap-1 text-micro">
       <span className="text-text-dim">Top</span>
       {TOP_N_OPTIONS.map((n) => (
         <button
@@ -342,7 +342,7 @@ function Legend({
 }) {
   if (series.length === 0) return null;
   return (
-    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-[11px]">
+    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-micro">
       {series.map((s) => (
         <span
           key={s.key}

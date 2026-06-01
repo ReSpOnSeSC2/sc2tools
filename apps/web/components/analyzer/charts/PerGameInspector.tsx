@@ -411,11 +411,11 @@ function GameSummaryCard({
             <Badge size="sm" variant={isWin ? "success" : "danger"}>
               {isWin ? "Win" : "Loss"}
             </Badge>
-            <span className="font-mono text-[11px] text-text-dim">
+            <span className="font-mono text-micro text-text-dim">
               {fmtDate(game.date)}
             </span>
             {game.game_length ? (
-              <span className="text-[11px] tabular-nums text-text-dim">
+              <span className="text-micro tabular-nums text-text-dim">
                 · {fmtMinutes(game.game_length)}
               </span>
             ) : null}
@@ -504,7 +504,7 @@ function SummaryStat({
           : "text-text";
   return (
     <div className="rounded-lg border border-border bg-bg-elevated px-3 py-2 text-right">
-      <div className="text-[10px] uppercase tracking-wider text-text-dim">
+      <div className="text-micro uppercase tracking-wider text-text-dim">
         {label}
       </div>
       <div

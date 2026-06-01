@@ -267,7 +267,7 @@ function PanelHeader({
                 <span>{meta.result}</span>
               </>
             ) : null}
-            <span className="hidden font-mono text-[11px] text-text-dim sm:ml-auto sm:inline">
+            <span className="hidden font-mono text-micro text-text-dim sm:ml-auto sm:inline">
               {gameId}
             </span>
           </p>
@@ -531,7 +531,7 @@ function RaceDisciplineCallout({
   const pct = Math.round((100 * actual) / Math.max(1, expected));
   return (
     <div className="rounded-md bg-bg-subtle p-3">
-      <div className="text-[10px] uppercase tracking-wider text-text-dim">
+      <div className="text-micro uppercase tracking-wider text-text-dim">
         {title}
       </div>
       <div className="mt-1 text-caption text-accent">

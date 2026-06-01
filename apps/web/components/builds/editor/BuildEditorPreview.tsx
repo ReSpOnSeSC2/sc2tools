@@ -213,7 +213,7 @@ function PreviewList({
   const pageItems = items.slice(start, start + PREVIEW_PAGE_SIZE);
   return (
     <div className="space-y-1.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+      <div className="text-micro font-semibold uppercase tracking-wider text-text-muted">
         {label}
       </div>
       <ul
@@ -328,7 +328,7 @@ function PreviewRow({
         >
           {row.build_name}
         </span>
-        <span className="hidden max-w-[140px] truncate font-mono text-[10px] tabular-nums text-text-dim sm:inline">
+        <span className="hidden max-w-[140px] truncate font-mono text-micro tabular-nums text-text-dim sm:inline">
           {row.game_id || "—"}
         </span>
         {isAlmost ? (
@@ -357,7 +357,7 @@ function PreviewRow({
         ) : null}
       </li>
       {expanded ? (
-        <li className="border-t border-border bg-bg-elevated/40 px-6 py-2 text-[11px]">
+        <li className="border-t border-border bg-bg-elevated/40 px-6 py-2 text-micro">
           {loading ? (
             <p className="text-text-dim">Loading game events…</p>
           ) : !events ? (
@@ -380,7 +380,7 @@ function InspectEvents({
 }) {
   return (
     <div>
-      <p className="mb-1 text-[10px] text-text-dim">
+      <p className="mb-1 text-micro text-text-dim">
         All {events.length} events from this game (scroll to see more):
       </p>
       <div className="grid max-h-[320px] gap-x-3 gap-y-0.5 overflow-y-auto pr-1 sm:grid-cols-2 md:grid-cols-3">
@@ -399,7 +399,7 @@ function InspectEvents({
                 matched ? "bg-accent-cyan/15" : "",
               ].join(" ")}
             >
-              <span className="w-10 font-mono tabular-nums text-[10px] text-text-dim">
+              <span className="w-10 font-mono tabular-nums text-micro text-text-dim">
                 {e.time_display || formatTime(e.time)}
               </span>
               <span

@@ -50,7 +50,7 @@ export interface HoverState {
 
 export function Legend() {
   return (
-    <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+    <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-micro">
       <Swatch color={COLOR_YOU} dashed={false} label="you army" />
       <Swatch color={COLOR_YOU} dashed label="you wkrs" />
       <Swatch color={COLOR_OPP} dashed={false} label="opp army" />
@@ -327,13 +327,13 @@ export function ChartTooltip({
         width: `${TOOLTIP_W}px`,
         pointerEvents: "none",
       }}
-      className="absolute z-10 rounded-md border border-border bg-bg-elevated/95 p-2 text-[11px] text-text shadow-lg backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85"
+      className="absolute z-10 rounded-md border border-border bg-bg-elevated/95 p-2 text-micro text-text shadow-lg backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85"
     >
       <div className="mb-1 flex items-center justify-between gap-2 text-text-muted">
         <span className="font-semibold uppercase tracking-wider">
           {formatGameClock(hover.t)}
         </span>
-        <span className="text-[10px]">army · workers</span>
+        <span className="text-micro">army · workers</span>
       </div>
       <PlayerRow
         color={COLOR_YOU}

@@ -362,7 +362,7 @@ function Render({
         <div
           role="grid"
           aria-label="Bingo card"
-          className="grid grid-cols-5 gap-1.5 text-center text-[11px]"
+          className="grid grid-cols-5 gap-1.5 text-center text-micro"
         >
           {card.cells.map((c, i) => (
             <div

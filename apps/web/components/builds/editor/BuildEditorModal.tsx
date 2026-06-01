@@ -149,7 +149,7 @@ export function BuildEditorModal({
         onClose={editor.saving ? () => undefined : onClose}
         title={
           <span className="flex items-center gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+            <span className="text-micro font-semibold uppercase tracking-wider text-text-muted">
               {mode === "edit" ? "Edit build" : "Save as new build"}
             </span>
             <span className="truncate text-h4 font-semibold text-text">

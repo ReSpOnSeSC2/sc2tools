@@ -37,7 +37,7 @@ export function BadgeGrid({
             <span className="text-body font-semibold text-text">{b.title}</span>
             <span className="text-caption">{b.desc}</span>
             {got ? (
-              <span className="text-[10px] font-mono uppercase tracking-wider text-warning">
+              <span className="text-micro font-mono uppercase tracking-wider text-warning">
                 Earned
               </span>
             ) : null}

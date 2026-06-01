@@ -50,7 +50,7 @@
   --race-zerg:    167 139 250;   /* #a78bfa — violet, ladder canon */
   --race-random:  154 163 178;   /* muted neutral */
 
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.02), 0 8px 24px rgba(0, 0, 0, 0.32);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.02), 0 4px 16px rgba(0, 0, 0, 0.24);
 }
 
 :root[data-theme="light"] {
@@ -84,7 +84,7 @@
   --race-zerg:    124 95 230;    /* #7c5fe6 — darker for AA on white */
   --race-random:  90 99 120;     /* matches text-muted */
 
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.6), 0 6px 20px rgba(15, 23, 42, 0.08);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.6), 0 3px 12px rgba(15, 23, 42, 0.06);
 }
 
 /* ============================================================
@@ -262,61 +262,4 @@ a:hover {
   font-family: theme("fontFamily.mono");
   font-size: 14px;
   line-height: 22px;
-}
-
-/* ============================================================
- * Legacy aliases — keep so existing pages render unchanged while
- * we migrate to the primitive library. Remove after Phase 17.
- * ============================================================ */
-.card {
-  background: rgb(var(--bg-surface));
-  border: 1px solid rgb(var(--border));
-  border-radius: 12px;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.55rem 1rem;
-  border-radius: 8px;
-  background: rgb(var(--accent));
-  color: rgb(var(--bg));
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  transition: background var(--dur-base) var(--ease-out);
-}
-.btn:hover {
-  background: rgb(var(--accent-hover));
-}
-.btn-secondary {
-  background: rgb(var(--bg-elevated));
-  color: rgb(var(--text));
-  border: 1px solid rgb(var(--border));
-}
-.btn-secondary:hover {
-  background: rgb(var(--bg-subtle));
-  color: rgb(var(--text));
-}
-.btn-danger {
-  background: rgb(var(--danger));
-  color: #ffffff;
-}
-
-.input {
-  background: rgb(var(--bg-elevated));
-  border: 1px solid rgb(var(--border));
-  border-radius: 8px;
-  padding: 0.55rem 0.75rem;
-  color: rgb(var(--text));
-  width: 100%;
-  transition: border-color var(--dur-base) var(--ease-out);
-}
-.input:focus {
-  border-color: rgb(var(--accent));
-  outline: none;
-}
-.input::placeholder {
-  color: rgb(var(--text-dim));
 }

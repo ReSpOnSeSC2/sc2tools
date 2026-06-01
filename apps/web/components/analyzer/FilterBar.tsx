@@ -182,7 +182,7 @@ export function FilterBar() {
                     Custom
                   </h4>
                   <label className="block">
-                    <span className="text-[11px] uppercase tracking-wider text-text-dim">
+                    <span className="text-micro uppercase tracking-wider text-text-dim">
                       Start
                     </span>
                     <input
@@ -190,11 +190,11 @@ export function FilterBar() {
                       value={customStart}
                       max={customEnd || undefined}
                       onChange={(e) => setCustomStart(e.target.value)}
-                      className="input mt-0.5 min-h-[44px] w-full"
+                      className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none mt-0.5 min-h-[44px]"
                     />
                   </label>
                   <label className="block">
-                    <span className="text-[11px] uppercase tracking-wider text-text-dim">
+                    <span className="text-micro uppercase tracking-wider text-text-dim">
                       End
                     </span>
                     <input
@@ -202,7 +202,7 @@ export function FilterBar() {
                       value={customEnd}
                       min={customStart || undefined}
                       onChange={(e) => setCustomEnd(e.target.value)}
-                      className="input mt-0.5 min-h-[44px] w-full"
+                      className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none mt-0.5 min-h-[44px]"
                     />
                   </label>
                   <button
@@ -313,7 +313,7 @@ function PillButton({
       title={title}
       className={[
         "inline-flex min-h-[28px] items-center rounded-full border px-2 py-0.5",
-        "text-[11px] font-medium uppercase tracking-wider tabular-nums",
+        "text-micro font-medium uppercase tracking-wider tabular-nums",
         "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         active
           ? "border-accent/40 bg-accent/10 text-accent"
@@ -455,7 +455,7 @@ function RegionToggleRow() {
             title={`${on ? "Hide" : "Show"} ${code} opponents`}
             className={[
               "inline-flex min-h-[28px] items-center rounded-full border px-2 py-0.5",
-              "text-[11px] font-medium uppercase tracking-wider tabular-nums",
+              "text-micro font-medium uppercase tracking-wider tabular-nums",
               "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
               on
                 ? "border-accent/40 bg-accent/10 text-accent"
@@ -598,7 +598,7 @@ function SeasonGroup({
         <h4 className="text-xs uppercase tracking-wider text-text-dim">{title}</h4>
         {usingFallback ? (
           <span
-            className="text-[10px] uppercase tracking-wider text-text-dim/70"
+            className="text-micro uppercase tracking-wider text-text-dim/70"
             title="Catalog not loaded yet — showing approximate boundaries. Real boundaries arrive once SC2Pulse responds."
           >
             approx
@@ -620,7 +620,7 @@ function SeasonGroup({
             ].join(" ")}
           >
             <span className="text-sm font-medium">Current season</span>
-            <span className="text-[11px] text-text-dim">Auto-tracks the live season</span>
+            <span className="text-micro text-text-dim">Auto-tracks the live season</span>
           </button>
         </li>
         {usingFallback
@@ -696,17 +696,17 @@ function SeasonRow({
         <span className="text-sm font-medium">
           Season {number}
           {isCurrent ? (
-            <span className="ml-1.5 align-middle text-[10px] uppercase tracking-wider text-accent-cyan">
+            <span className="ml-1.5 align-middle text-micro uppercase tracking-wider text-accent-cyan">
               current
             </span>
           ) : null}
           {approx ? (
-            <span className="ml-1.5 align-middle text-[10px] uppercase tracking-wider text-text-dim/70">
+            <span className="ml-1.5 align-middle text-micro uppercase tracking-wider text-text-dim/70">
               approx
             </span>
           ) : null}
         </span>
-        {label ? <span className="text-[11px] text-text-dim">{label}</span> : null}
+        {label ? <span className="text-micro text-text-dim">{label}</span> : null}
       </button>
     </li>
   );

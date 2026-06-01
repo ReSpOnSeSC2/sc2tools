@@ -82,7 +82,7 @@ function KpiStrip({ items }: { items: Kpi[] }) {
           key={i}
           className="rounded-lg border border-border bg-bg-surface p-3"
         >
-          <div className="truncate text-[10px] uppercase tracking-wider text-text-dim">
+          <div className="truncate text-micro uppercase tracking-wider text-text-dim">
             {k.label}
           </div>
           <div
@@ -92,7 +92,7 @@ function KpiStrip({ items }: { items: Kpi[] }) {
             {k.value || "—"}
           </div>
           {k.sub ? (
-            <div className="mt-0.5 text-[11px] tabular-nums text-text-dim">
+            <div className="mt-0.5 text-micro tabular-nums text-text-dim">
               {k.sub}
             </div>
           ) : null}
@@ -176,7 +176,7 @@ function ByOppStrategyView({
       <KpiStrip items={kpis} />
       <div className="flex flex-wrap items-center gap-3">
         <input
-          className="input w-72"
+          className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
           placeholder="search strategy name…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -188,7 +188,7 @@ function ByOppStrategyView({
           onChange={(dir) => sort.setSortExplicit("winRate", dir)}
         />
       </div>
-      <div className="text-[11px] text-text-dim">
+      <div className="text-micro text-text-dim">
         Click any card to see the games where you faced that strategy.
       </div>
 
@@ -234,7 +234,7 @@ function ByOppStrategyView({
                 </span>
               </div>
               <WrBar wins={s.wins} losses={s.losses} />
-              <div className="mt-2 flex items-center justify-between text-[11px] tabular-nums text-text-dim">
+              <div className="mt-2 flex items-center justify-between text-micro tabular-nums text-text-dim">
                 <span>{s.total} games</span>
                 <span className="opacity-0 transition group-hover:opacity-100">
                   view games →
@@ -511,7 +511,7 @@ function StrategyFiltersBar() {
       </div>
       {activeChips.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-text-dim">
+          <span className="text-micro uppercase tracking-wider text-text-dim">
             Active
           </span>
           {activeChips.map((c) => (
@@ -529,7 +529,7 @@ function StrategyFiltersBar() {
           <button
             type="button"
             onClick={clearAll}
-            className="ml-auto min-h-[32px] rounded px-2 text-[11px] uppercase tracking-wider text-text-muted transition hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="ml-auto min-h-[32px] rounded px-2 text-micro uppercase tracking-wider text-text-muted transition hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             Clear all
           </button>
@@ -554,7 +554,7 @@ function FilterSelect({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] uppercase tracking-wider text-text-dim">
+      <span className="text-micro uppercase tracking-wider text-text-dim">
         {label}
       </span>
       <select

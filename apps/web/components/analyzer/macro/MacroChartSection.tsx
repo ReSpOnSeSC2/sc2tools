@@ -186,7 +186,7 @@ export function MacroChartSection({
         oppName={oppName}
       />
       {hover.sticky ? (
-        <p className="text-[11px] text-text-muted">
+        <p className="text-micro text-text-muted">
           <span className="text-text">Locked</span> at this point. Tap
           another spot to move it, or tap outside the chart to clear.
         </p>

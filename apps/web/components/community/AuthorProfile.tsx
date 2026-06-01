@@ -82,7 +82,7 @@ export function AuthorProfile({ profile }: AuthorProfileProps) {
                     {race}
                   </Badge>
                 ) : null}
-                <span className="text-[11px] uppercase tracking-wider text-text-dim">
+                <span className="text-micro uppercase tracking-wider text-text-dim">
                   Member {fmtAgo(profile.joinedAt)}
                 </span>
               </span>
@@ -124,7 +124,7 @@ export function AuthorProfile({ profile }: AuthorProfileProps) {
                   <span className="block truncate text-body font-medium text-text group-hover:text-accent-cyan">
                     {profile.topBuild.title}
                   </span>
-                  <span className="mt-1 inline-flex items-center gap-2 text-[11px] text-text-muted">
+                  <span className="mt-1 inline-flex items-center gap-2 text-micro text-text-muted">
                     <span>{profile.topBuild.matchup || "—"}</span>
                     <span aria-hidden className="text-text-dim">
                       ·
@@ -153,7 +153,7 @@ export function AuthorProfile({ profile }: AuthorProfileProps) {
                       <span className="block truncate text-body text-text group-hover:text-accent-cyan">
                         {b.title}
                       </span>
-                      <span className="mt-0.5 block text-[11px] text-text-dim">
+                      <span className="mt-0.5 block text-micro text-text-dim">
                         Published {fmtAgo(b.publishedAt)}
                       </span>
                     </Link>

@@ -190,7 +190,7 @@ export function TrendsTab() {
       <div className="flex flex-wrap items-center gap-3">
         {kpis.streak.kind && kpis.streak.count > 0 && (
           <span
-            className={`rounded px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+            className={`rounded px-2 py-0.5 text-micro font-semibold tabular-nums ${
               kpis.streak.kind === "win"
                 ? "bg-success/15 text-success ring-1 ring-success/30"
                 : "bg-danger/15 text-danger ring-1 ring-danger/30"
@@ -215,7 +215,7 @@ export function TrendsTab() {
           <select
             value={bucket}
             onChange={(e) => setBucket(e.target.value)}
-            className="input w-auto py-1 text-sm"
+            className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none text-sm"
           >
             <option value="day">Day</option>
             <option value="week">Week</option>

@@ -127,7 +127,7 @@ export function ApmSpmChart({ data, myPlayerName, myRace }: ApmSpmChartProps) {
         <span className="font-semibold uppercase tracking-wider text-text">
           APM / SPM
         </span>
-        <span className="text-[11px] text-text-dim">
+        <span className="text-micro text-text-dim">
           {data?.window_sec
             ? `Sliding window · ${data.window_sec}s`
             : "Sliding window"}
@@ -250,7 +250,7 @@ function Legend({
   myIdx: number;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-muted">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-micro text-text-muted">
       {players.map((p, idx) => {
         const isMine = idx === myIdx || (myIdx === -1 && idx === 0);
         const color = isMine ? COLOR_YOU : COLOR_OPP;

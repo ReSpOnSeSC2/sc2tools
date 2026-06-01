@@ -109,7 +109,7 @@ interface FooterColumnProps {
 function FooterColumn({ title, links, extra, trailing }: FooterColumnProps) {
   return (
     <div>
-      <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-dim">
+      <h3 className="text-micro font-semibold uppercase tracking-[0.12em] text-text-dim">
         {title}
       </h3>
       <ul className="mt-3 space-y-2">
@@ -145,7 +145,7 @@ function StatusBadge() {
     <a
       href="https://status.sc2tools.com"
       rel="noopener"
-      className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-elevated px-2.5 py-1 text-[11px] font-medium text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-elevated px-2.5 py-1 text-micro font-medium text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <span className="relative inline-flex h-2 w-2 items-center justify-center" aria-hidden>
         <span className="absolute inline-flex h-2 w-2 rounded-full bg-success opacity-60 motion-safe:animate-ping" />

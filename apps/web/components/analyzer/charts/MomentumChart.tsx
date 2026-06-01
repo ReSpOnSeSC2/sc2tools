@@ -186,7 +186,7 @@ function TiltPanel({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] tabular-nums">
+      <div className="mt-2 grid grid-cols-2 gap-2 text-micro tabular-nums">
         {rows.map((r) => (
           <div
             key={r.label}
@@ -234,7 +234,7 @@ function SessionCurvePanel({
         <span className="text-caption font-semibold text-text">
           Win rate by game # in session
         </span>
-        <span className="text-[11px] text-text-dim">
+        <span className="text-micro text-text-dim">
           dots scale with sample size
         </span>
       </div>

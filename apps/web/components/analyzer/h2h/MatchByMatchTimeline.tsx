@@ -261,7 +261,7 @@ export function MatchByMatchTimeline({
       />
 
       {activePoint ? (
-        <p className="text-[11px] text-text-dim">
+        <p className="text-micro text-text-dim">
           Selected #{activePoint.index} ({activePoint.game.map || "—"}) ·{" "}
           {activePoint.cumulativeWrPct}% lifetime ·{" "}
           {activePoint.rollingWrPct == null
@@ -269,7 +269,7 @@ export function MatchByMatchTimeline({
             : `${activePoint.rollingWrPct}% rolling`}
         </p>
       ) : (
-        <p className="text-[11px] text-text-dim">
+        <p className="text-micro text-text-dim">
           Click a dot to highlight the matching row in the table below. Use
           arrow keys to step through games.
         </p>
@@ -311,7 +311,7 @@ function TimelineHeader({
         {rollingLabel}: {rollingWrPct == null ? "—" : `${rollingWrPct}%`}
       </span>
       <span
-        className="ml-auto inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-text-dim"
+        className="ml-auto inline-flex items-center gap-1.5 text-micro uppercase tracking-wider text-text-dim"
         title={`Race accent only — race: ${raceLabel}`}
       >
         <span

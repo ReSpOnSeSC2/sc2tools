@@ -246,7 +246,7 @@ export function PhaseCompositionTabs({
               <span
                 data-testid="phase-tab-count"
                 className={[
-                  "min-w-[1.5rem] rounded-full border px-1.5 text-center text-[10px] font-semibold tabular-nums",
+                  "min-w-[1.5rem] rounded-full border px-1.5 text-center text-micro font-semibold tabular-nums",
                   selected
                     ? "border-transparent bg-bg-elevated text-text"
                     : disabled
@@ -315,7 +315,7 @@ function ActivePhaseHeader({
   const showWr = denom > 0;
   const wrText = showWr ? `${Math.round(wr * 100)}%` : "—";
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-2 text-[11px] uppercase tracking-wider text-text-dim">
+    <div className="flex flex-wrap items-baseline justify-between gap-2 text-micro uppercase tracking-wider text-text-dim">
       <div className="flex items-baseline gap-2">
         <span
           className="inline-block h-2 w-2 rounded-full"
@@ -333,7 +333,7 @@ function ActivePhaseHeader({
       </div>
       {showWr ? (
         <span
-          className="rounded-md border border-border bg-bg-elevated px-2 py-0.5 font-mono text-[11px] normal-case tracking-normal tabular-nums"
+          className="rounded-md border border-border bg-bg-elevated px-2 py-0.5 font-mono text-micro normal-case tracking-normal tabular-nums"
           style={{ color: wrColor(wr, denom) }}
           title={`${wins} wins · ${losses} losses across ${denom} completed games`}
         >
@@ -520,7 +520,7 @@ function CompositionCard({
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between gap-2 text-[11px] text-text-dim">
+      <div className="flex items-center justify-between gap-2 text-micro text-text-dim">
         <span>
           {head.length > 0
             ? `Median across ${signature.sampleCount} game${signature.sampleCount === 1 ? "" : "s"}`
@@ -545,7 +545,7 @@ function CompositionCard({
       </div>
 
       {interactive ? (
-        <div className="-mb-1 -mr-1 flex items-center justify-end text-[11px] text-text-muted">
+        <div className="-mb-1 -mr-1 flex items-center justify-end text-micro text-text-muted">
           <span className="inline-flex items-center gap-1">
             Open games
             <ChevronRight className="h-3 w-3" aria-hidden />
@@ -591,10 +591,10 @@ function ExtrasGrid({
           >
             <Icon name={u.token} kind="unit" size={24} alt={u.token} />
             <div className="flex min-w-0 flex-col leading-tight">
-              <span className="truncate text-[11px] text-text" title={u.token}>
+              <span className="truncate text-micro text-text" title={u.token}>
                 {u.token}
               </span>
-              <span className="text-[10px] tabular-nums text-text-dim">
+              <span className="text-micro tabular-nums text-text-dim">
                 ~{u.count}
                 {seen > 0
                   ? totalGames > 0
@@ -633,7 +633,7 @@ function UnitBadge({ token, count }: { token: string; count: number }) {
         alt={token}
       />
       <span
-        className="absolute -bottom-1 -right-1 inline-flex min-w-[18px] items-center justify-center rounded-full border border-border bg-bg px-1 text-[10px] font-semibold tabular-nums text-text"
+        className="absolute -bottom-1 -right-1 inline-flex min-w-[18px] items-center justify-center rounded-full border border-border bg-bg px-1 text-micro font-semibold tabular-nums text-text"
         aria-hidden="true"
       >
         {count}
@@ -729,10 +729,10 @@ function StrategyBreakdown({
       className="space-y-3 border-t border-border pt-4"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+        <h3 className="text-micro font-semibold uppercase tracking-wider text-text-muted">
           Strategies that play out at {PHASE_LABELS[phase]}
         </h3>
-        <span className="text-[11px] text-text-dim">
+        <span className="text-micro text-text-dim">
           {relevant.length} strateg{relevant.length === 1 ? "y" : "ies"}
         </span>
       </div>
@@ -809,7 +809,7 @@ function StrategyCard({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span
-              className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-[12px] font-bold leading-none"
+              className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-micro font-bold leading-none"
               style={{
                 background: race ? RACE_BADGE_BG[race] : "rgb(var(--bg-surface))",
                 color: race ? RACE_RAIL_COLORS[race] : "rgb(var(--text-muted))",
@@ -836,7 +836,7 @@ function StrategyCard({
               >
                 {envelope.strategy}
               </div>
-              <div className="text-[10px] uppercase tracking-wider text-text-dim">
+              <div className="text-micro uppercase tracking-wider text-text-dim">
                 {envelope.games} game{envelope.games === 1 ? "" : "s"}
                 {" · "}
                 usually ends {PHASE_LABELS[finalPhase]}
@@ -845,7 +845,7 @@ function StrategyCard({
           </div>
           <div className="flex items-center gap-2">
             <span
-              className="rounded-md border border-border bg-bg-surface px-2 py-0.5 font-mono text-[11px] tabular-nums"
+              className="rounded-md border border-border bg-bg-surface px-2 py-0.5 font-mono text-micro tabular-nums"
               style={{ color: wrColor(wr, denom) }}
               data-testid="strategy-wr-pill"
               title={
@@ -911,7 +911,7 @@ function StrategyCard({
       </div>
 
       <div className="mt-2 flex items-center justify-between border-t border-border bg-bg-surface/50 px-3 py-2">
-        <span className="text-[11px] text-text-muted">
+        <span className="text-micro text-text-muted">
           Showing typical play across {envelope.games} game
           {envelope.games === 1 ? "" : "s"}
         </span>
@@ -921,13 +921,13 @@ function StrategyCard({
             data-testid="strategy-open-btn"
             data-strategy={envelope.strategy}
             onClick={() => onOpen?.(envelope.strategy)}
-            className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1 text-[11px] font-semibold text-white hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-elevated"
+            className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1 text-micro font-semibold text-white hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-elevated"
           >
             Open {envelope.games} game{envelope.games === 1 ? "" : "s"}
             <ChevronRight className="h-3.5 w-3.5" aria-hidden />
           </button>
         ) : (
-          <span className="text-[11px] text-text-dim">—</span>
+          <span className="text-micro text-text-dim">—</span>
         )}
       </div>
     </li>
@@ -972,22 +972,22 @@ function StrategyColumn({
       data-phase={phase ?? ""}
     >
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-dim">
+        <span className="text-micro font-semibold uppercase tracking-wider text-text-dim">
           {label}
         </span>
-        <span className="font-mono text-[9px] uppercase tracking-wider text-text-dim">
+        <span className="font-mono text-micro uppercase tracking-wider text-text-dim">
           {phase ? PHASE_SHORT_LABELS[phase] : "—"}
         </span>
       </div>
       {!hasContent ? (
-        <div className="text-[11px] text-text-dim">
+        <div className="text-micro text-text-dim">
           Usually ends before this point
         </div>
       ) : (
         <>
           <ul className="mb-1.5 flex flex-wrap gap-1">
             {topUnits.length === 0 ? (
-              <li className="text-[11px] text-text-dim">—</li>
+              <li className="text-micro text-text-dim">—</li>
             ) : (
               topUnits.map((u) => (
                 <li
@@ -997,7 +997,7 @@ function StrategyColumn({
                   className="inline-flex items-center gap-1 rounded border border-border bg-bg-elevated px-1.5 py-0.5"
                 >
                   <Icon name={u.token} kind="unit" size={16} alt={u.token} />
-                  <span className="font-mono text-[10px] tabular-nums text-text">
+                  <span className="font-mono text-micro tabular-nums text-text">
                     {u.count}
                   </span>
                 </li>
@@ -1006,7 +1006,7 @@ function StrategyColumn({
           </ul>
           {tech.length > 0 || upgrades.length > 0 ? (
             <ul
-              className="space-y-0.5 text-[10px] text-text-muted"
+              className="space-y-0.5 text-micro text-text-muted"
               data-testid="strategy-column-tech"
             >
               {tech.map((t) => (
@@ -1098,7 +1098,7 @@ function TechTimeline({
 
   return (
     <div className="space-y-1" data-testid="tech-timeline">
-      <div className="flex items-baseline justify-between text-[10px] uppercase tracking-wider text-text-dim">
+      <div className="flex items-baseline justify-between text-micro uppercase tracking-wider text-text-dim">
         <span className="font-semibold">Tech & upgrade timings</span>
         <span className="font-mono tabular-nums normal-case tracking-normal text-text-muted">
           {fmtMinutes(minBound)} – {fmtMinutes(minBound + span)}

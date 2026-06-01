@@ -46,7 +46,7 @@ export function WizardShell({
           <button
             type="button"
             onClick={onClose}
-            className="btn btn-secondary text-xs"
+            className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-xs"
           >
             Skip wizard
           </button>
@@ -71,23 +71,23 @@ export function WizardShell({
         ))}
       </ol>
 
-      <div className="card p-5">{renderStep(active, helpers)}</div>
+      <div className="rounded-xl border border-border bg-bg-surface p-5">{renderStep(active, helpers)}</div>
 
       <div className="flex justify-between">
         <button
           type="button"
-          className="btn btn-secondary"
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle"
           onClick={helpers.prev}
           disabled={helpers.isFirst}
         >
           ← Back
         </button>
         {helpers.isLast ? (
-          <Link href="/app" className="btn">
+          <Link href="/app" className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover">
             Go to analyzer →
           </Link>
         ) : (
-          <button type="button" className="btn" onClick={helpers.next}>
+          <button type="button" className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover" onClick={helpers.next}>
             Continue →
           </button>
         )}

@@ -229,7 +229,7 @@ export function GameLengthWrChart() {
             className="rounded border border-border bg-bg-elevated/50 px-2.5 py-2"
           >
             <div className="flex flex-wrap items-baseline justify-between gap-x-1.5 gap-y-0.5">
-              <span className="whitespace-nowrap text-[11px] font-semibold text-text">
+              <span className="whitespace-nowrap text-micro font-semibold text-text">
                 {r.bucket}
               </span>
               <span
@@ -239,7 +239,7 @@ export function GameLengthWrChart() {
                 {r.total > 0 ? `${r.winRatePct}%` : "—"}
               </span>
             </div>
-            <div className="mt-0.5 text-[10px] tabular-nums text-text-dim">
+            <div className="mt-0.5 text-micro tabular-nums text-text-dim">
               {r.total > 0
                 ? `${r.wins}W · ${r.losses}L · ${r.total} games`
                 : "no games"}

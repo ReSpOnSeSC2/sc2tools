@@ -56,7 +56,7 @@ export function StatCard({
         .filter(Boolean)
         .join(" ")}
     >
-      <div className="text-[10px] font-medium uppercase tracking-wider text-text-dim">
+      <div className="text-micro font-medium uppercase tracking-wider text-text-dim">
         {label}
       </div>
       <div

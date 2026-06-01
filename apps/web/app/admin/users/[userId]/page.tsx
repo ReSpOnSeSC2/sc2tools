@@ -228,7 +228,7 @@ function RebuildOpponentsAction({
       {state.kind === "idle" ? (
         <button
           type="button"
-          className="mt-3 btn bg-accent text-white hover:bg-accent/90"
+          className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover"
           onClick={() => setState({ kind: "confirm" })}
         >
           Rebuild
@@ -310,7 +310,7 @@ function WipeGamesAction({
       {state.kind === "idle" ? (
         <button
           type="button"
-          className="mt-3 btn btn-danger"
+          className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-danger text-white hover:opacity-90"
           onClick={() => setState({ kind: "confirm" })}
         >
           Wipe games

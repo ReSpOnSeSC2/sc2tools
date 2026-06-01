@@ -403,7 +403,7 @@ function GamesSection({ pulseId }: { pulseId: string }) {
             <div className="mt-3 flex items-center justify-between gap-3">
               <button
                 type="button"
-                className="btn btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={pageHistory.length <= 1}
                 onClick={prevPage}
               >
@@ -414,7 +414,7 @@ function GamesSection({ pulseId }: { pulseId: string }) {
               </span>
               <button
                 type="button"
-                className="btn btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={!data.nextBefore}
                 onClick={nextPage}
               >

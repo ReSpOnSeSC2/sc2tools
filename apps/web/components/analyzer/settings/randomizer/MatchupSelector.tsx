@@ -82,7 +82,7 @@ function MatchupChip({
       <div className={["text-caption font-bold", isActive ? tint.text : "text-text"].join(" ")}>
         {matchup}
       </div>
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-muted">
+      <div className="flex items-center gap-1 text-micro uppercase tracking-wider text-text-muted">
         <span>{buildCount} build{buildCount === 1 ? "" : "s"}</span>
         {enabled ? (
           <span aria-label="Enabled" className="h-1.5 w-1.5 rounded-full bg-accent-cyan" />

@@ -121,7 +121,7 @@ export function QuickPlaySurface() {
 
 function Pill({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-[10px] uppercase tracking-wider">
+    <span className="rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-micro uppercase tracking-wider">
       {children}
     </span>
   );

@@ -69,7 +69,7 @@ export function Icon({
         title={ariaLabel}
         style={{ height: px, lineHeight: `${px}px` } as CSSProperties}
         className={[
-          "inline-flex items-center justify-center rounded bg-bg-elevated px-1 text-[10px] font-medium uppercase tracking-wide text-text-dim",
+          "inline-flex items-center justify-center rounded bg-bg-elevated px-1 text-micro font-medium uppercase tracking-wide text-text-dim",
           className,
         ]
           .filter(Boolean)

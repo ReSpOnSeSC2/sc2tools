@@ -348,7 +348,7 @@ export default function AdminUserOpponentsPage({
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
-              className="btn btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-sm disabled:cursor-not-allowed disabled:opacity-50"
               disabled={page === 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
             >
@@ -359,7 +359,7 @@ export default function AdminUserOpponentsPage({
             </span>
             <button
               type="button"
-              className="btn btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-sm disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!data.hasMore}
               onClick={() => setPage((p) => p + 1)}
             >

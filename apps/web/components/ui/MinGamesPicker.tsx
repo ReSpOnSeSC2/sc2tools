@@ -78,7 +78,7 @@ export function MinGamesPicker({
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
       {!hideLabel && (
-        <span className="text-[11px] uppercase tracking-wider text-text-dim">
+        <span className="text-micro uppercase tracking-wider text-text-dim">
           Min games
         </span>
       )}
@@ -108,7 +108,7 @@ export function MinGamesPicker({
           );
         })}
       </div>
-      <label className="flex items-center gap-1.5 text-[11px] text-text-dim">
+      <label className="flex items-center gap-1.5 text-micro text-text-dim">
         <span className="uppercase tracking-wider">Custom</span>
         <input
           type="text"
