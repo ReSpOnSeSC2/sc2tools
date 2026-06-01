@@ -337,7 +337,7 @@ export const unitProfile: Mode<Q, A> = {
   depthTag: "hidden-derivation",
   title: "Unit Profile",
   blurb:
-    "Four angles on the units in your own build-logs. How well do you know your own army?",
+    "Four questions about the units you actually build. How well do you know your own army?",
   generate,
   score,
   share,

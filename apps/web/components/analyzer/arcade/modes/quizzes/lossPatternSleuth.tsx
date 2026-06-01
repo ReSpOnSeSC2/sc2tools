@@ -346,7 +346,7 @@ export const lossPatternSleuth: Mode<Q, A> = {
   depthTag: "conditional",
   title: "Loss-Pattern Sleuth",
   blurb:
-    "Three angles on what your history looks like in the wake of a defeat: tilt-build, bounce-back, blind-spot.",
+    "Three looks at how you play right after a loss: tilt build, bounce-back, and blind spot.",
   generate,
   score,
   share,

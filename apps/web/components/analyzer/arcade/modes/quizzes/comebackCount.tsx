@@ -495,7 +495,7 @@ export const comebackCount: Mode<Q, A> = {
   depthTag: "temporal",
   title: "Comeback Count",
   blurb:
-    "Five angles on the sessions you opened 0–2 but finished above 50%. Daily rotation keeps it fresh.",
+    "Five takes on the sessions you started 0–2 but finished above 50% win rate. A new one rotates in each day.",
   generate,
   score,
   share,

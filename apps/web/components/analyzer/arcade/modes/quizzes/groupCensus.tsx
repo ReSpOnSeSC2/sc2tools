@@ -530,7 +530,7 @@ export const groupCensus: Mode<Q, A> = {
   depthTag: "conditional",
   title: "Group Census",
   blurb:
-    "How many of your opponents, maps, or builds fit the WR profile? Pick the bucket — the rotation changes the group, window, and band daily.",
+    "How many of your opponents, maps, or builds land in the win-rate range? Pick the right count — the group, time window, and win-rate range rotate daily.",
   generate,
   score,
   share,
