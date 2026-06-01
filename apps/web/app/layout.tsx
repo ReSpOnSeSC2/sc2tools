@@ -38,9 +38,9 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: [
       {
-        url: "/banner.png",
-        width: 2000,
-        height: 800,
+        url: "/og.jpg",
+        width: 1200,
+        height: 630,
         alt: "SC2 Tools — StarCraft II opponent intel and build orders",
       },
     ],
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
-    images: ["/banner.png"],
+    images: ["/og.jpg"],
   },
 };
 
