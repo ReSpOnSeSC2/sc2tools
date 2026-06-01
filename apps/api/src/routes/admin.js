@@ -33,6 +33,7 @@ const express = require("express");
  *   admin: import('../services/admin').AdminService,
  *   adminGlobal: import('../services/adminGlobal').AdminGlobalService,
  *   adminEvents: import('../services/adminEvents').AdminEventsService,
+ *   analytics: import('../services/analytics').AnalyticsService,
  *   gdpr: import('../services/gdpr').GdprService,
  *   games: import('../services/games').GamesService,
  *   opponents: import('../services/types').OpponentsService,
@@ -404,6 +405,36 @@ function buildAdminRouter(deps) {
         ? typeRaw
         : undefined;
       res.json(await deps.adminEvents.list({ limit, before, type }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Google Analytics 4 — dashboard payload for the Analytics tab.
+  // When GA isn't configured we return ``{ configured: false }`` with a
+  // 200 so the UI renders a setup hint rather than treating it as an
+  // error. ``days`` selects the trailing window (default 28, clamped
+  // service-side to 1..365).
+  router.get("/admin/analytics/summary", async (req, res, next) => {
+    try {
+      if (!deps.analytics.isEnabled()) {
+        res.json({ configured: false });
+        return;
+      }
+      const days = parseLimit(req.query.days);
+      res.json(await deps.analytics.summary({ days }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/admin/analytics/realtime", async (_req, res, next) => {
+    try {
+      if (!deps.analytics.isEnabled()) {
+        res.json({ configured: false });
+        return;
+      }
+      res.json(await deps.analytics.realtime());
     } catch (err) {
       next(err);
     }

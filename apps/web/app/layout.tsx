@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { CookieBanner } from "@/components/CookieBanner";
+import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import { Header } from "@/components/chrome/Header";
 import { Footer } from "@/components/chrome/Footer";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
@@ -107,6 +108,7 @@ export default function RootLayout({
           </main>
           <Footer />
           <CookieBanner />
+          <GoogleAnalytics />
           <ServiceWorkerRegister />
         </body>
       </html>

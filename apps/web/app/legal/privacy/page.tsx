@@ -5,7 +5,7 @@ export const metadata = {
     "How SC2 Tools collects, processes, and stores StarCraft II replay metadata.",
 };
 
-const LAST_UPDATED = "May 4, 2026";
+const LAST_UPDATED = "June 1, 2026";
 
 export default function PrivacyPage() {
   return (
@@ -51,6 +51,18 @@ export default function PrivacyPage() {
             settings), unhandled exceptions are forwarded to Sentry with PII
             scrubbed.
           </li>
+          <li>
+            <strong>Usage analytics (opt-in).</strong> Only if you click
+            &quot;Accept&quot; on the cookie banner, we load Google Analytics 4
+            to understand which pages and features get used. It records
+            pseudonymous data such as pages viewed, approximate location
+            (country/region, from a truncated IP), device type, and referring
+            site. We enable IP anonymization and disable advertising signals.
+            Nothing analytics-related loads until you opt in, and you can
+            withdraw consent at any time by clicking &quot;Reject&quot; on the
+            banner (clear the banner choice in your browser storage to see it
+            again).
+          </li>
         </ul>
       </section>
 
@@ -79,7 +91,8 @@ export default function PrivacyPage() {
           We do not sell or rent your data. We share it only with the
           subprocessors above (Clerk for auth, MongoDB Atlas for database
           hosting, Render for API hosting, Vercel for the website, Sentry for
-          opt-in crash reporting).
+          opt-in crash reporting, and Google Analytics for opt-in usage
+          analytics).
         </p>
       </section>
 
@@ -119,10 +132,16 @@ export default function PrivacyPage() {
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Cookies</h2>
         <p>
-          We use cookies for session login (Clerk), CSRF protection, and a
-          single &quot;cookie consent&quot; cookie that records whether
-          you&apos;ve seen this banner. We do NOT use advertising or tracking
-          cookies.
+          By default we use only strictly-necessary cookies: session login
+          (Clerk) and CSRF protection. Your banner choice is stored in your
+          browser&apos;s local storage, not a cookie.
+        </p>
+        <p>
+          If — and only if — you opt in via the banner, Google Analytics sets
+          its own first-party analytics cookies (e.g.{" "}
+          <code className="font-mono">_ga</code>) to measure usage. These are
+          never set before you accept, and we do NOT use advertising or
+          cross-site tracking cookies.
         </p>
       </section>
 

@@ -1,24 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Cookie } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-
-const STORAGE_KEY = "sc2tools.cookieConsent.v1";
+import {
+  isAnalyticsConfigured,
+  readConsent,
+  setConsent,
+  subscribeConsent,
+} from "@/lib/analytics/consent";
 
 /**
- * Cookie banner — shown until the visitor acknowledges.
+ * Cookie / analytics consent banner — GDPR opt-in.
  *
- * We only set strictly-necessary cookies (Clerk session + this consent
- * record), so this banner is informational. The "decline by default"
- * posture is implicit: nothing beyond strictly-necessary is ever set,
- * with or without acknowledgement. The OK action just dismisses the
- * notice.
+ * Shown until the visitor makes a choice. Strictly-necessary cookies
+ * (Clerk session) are always set; the opt-in here governs ONLY Google
+ * Analytics, which never loads until "Accept" is clicked (see
+ * ``lib/analytics/consent`` and ``<GoogleAnalytics>``).
  *
- * Storage uses localStorage (NOT a cookie) so a still-unconsented
- * first paint doesn't risk a re-flash of the banner itself.
+ * The visible/hidden state is derived from the shared consent store via
+ * ``useSyncExternalStore`` so a choice made here (or in another tab)
+ * dismisses the banner everywhere and flips GA on/off instantly.
+ *
+ * When no GA measurement id is configured there's nothing to consent
+ * to, so the banner stays hidden entirely.
  *
  * Layout:
  *   - Mobile: full-width sheet pinned to the bottom, inset by
@@ -26,27 +33,14 @@ const STORAGE_KEY = "sc2tools.cookieConsent.v1";
  *   - ≥sm: floats as a card in the bottom-right corner.
  */
 export function CookieBanner() {
-  const [show, setShow] = useState(false);
+  const consent = useSyncExternalStore(
+    subscribeConsent,
+    readConsent,
+    () => "unset" as const,
+  );
 
-  useEffect(() => {
-    try {
-      const v = window.localStorage.getItem(STORAGE_KEY);
-      if (v !== "ack") setShow(true);
-    } catch {
-      setShow(true);
-    }
-  }, []);
-
-  if (!show) return null;
-
-  function ack() {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, "ack");
-    } catch {
-      // Private browsing / quota — ignore. The banner closes either way.
-    }
-    setShow(false);
-  }
+  // Hidden once a choice is made, and when there's no GA to gate.
+  if (!isAnalyticsConfigured() || consent !== "unset") return null;
 
   return (
     <div
@@ -73,22 +67,30 @@ export function CookieBanner() {
               id="cookie-title"
               className="text-caption font-semibold text-text"
             >
-              Strictly necessary cookies only
+              Cookies &amp; analytics
             </p>
             <p id="cookie-body" className="text-caption text-text-muted">
-              SC2 Tools uses session cookies to keep you signed in. We don&apos;t
-              run ads or third-party trackers. See our{" "}
+              We use a strictly-necessary session cookie to keep you signed in.
+              With your consent we also use Google Analytics to understand how
+              SC2 Tools is used — no ads, no data selling. See our{" "}
               <Link
                 href="/legal/privacy"
                 className="font-medium text-accent hover:text-accent-hover"
               >
                 Privacy Policy
-              </Link>{" "}
-              for details.
+              </Link>
+              .
             </p>
-            <div className="flex justify-end pt-1">
-              <Button size="sm" onClick={ack}>
-                Got it
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setConsent("denied")}
+              >
+                Reject
+              </Button>
+              <Button size="sm" onClick={() => setConsent("granted")}>
+                Accept
               </Button>
             </div>
           </div>
