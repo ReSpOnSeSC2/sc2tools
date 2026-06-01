@@ -228,7 +228,7 @@ const HERO_PEEK_SLIDES: ReadonlyArray<HeroPeek> = [
     id: "peek-overlay-rematch",
     eyebrow: "See it before you sign up",
     title: "Familiar-opponent flags, on stream",
-    body: "Run-it-back? The overlay calls out repeats with last-result, head-to-head record, and the games that got you there.",
+    body: "The scouting overlay shows your stats against this player — the build order they opened with, and whether you won or lost.",
     imageSrc: "/landing/overlay-rematch.png",
     imageAlt:
       "Stream overlay rematch widget — opponent name, MMR, FAMILIAR / Last Defeat tag, and a list of recent games",
@@ -246,7 +246,7 @@ const HERO_PEEK_SLIDES: ReadonlyArray<HeroPeek> = [
     id: "peek-build-editor",
     eyebrow: "See it before you sign up",
     title: "Save any replay as a custom build",
-    body: "Open a game, click ‘Save as new build’, promote starred events into rules — your library reclassifies in place.",
+    body: "Open a game, click ‘Save as new build’, set your rules — your replays reclassify under the new build-order name instantly.",
     imageSrc: "/landing/build-editor.png",
     imageAlt:
       "Save-as-new-build editor with the source replay timeline on the left and one-click rule promotion buttons",
@@ -363,7 +363,7 @@ const PILLARS: ReadonlyArray<PositionedPillar> = [
   {
     icon: BarChart3,
     title: "Build Recognizer",
-    body: "Per-opener W-L with map and MMR breakdowns.",
+    body: "Per-build W-L, with map and MMR breakdowns.",
     placement: "lg:col-span-2 lg:col-start-3",
   },
   {
@@ -618,8 +618,7 @@ function SocialProofSection() {
       </p>
       <p className="mx-auto mt-4 max-w-2xl text-body-lg text-text-muted">
         Every classifier rule, every overlay, every UI decision came from
-        someone trying to win their next game. Bug reports and feature
-        requests go straight into the build.
+        someone trying to win their next game.
       </p>
     </section>
   );

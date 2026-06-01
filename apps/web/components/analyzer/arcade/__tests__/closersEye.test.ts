@@ -198,7 +198,7 @@ describe("Closer's Eye share summary", () => {
       xp: 14,
       outcome: "correct",
     });
-    expect(summary.question).toMatch(/shortest average win length/i);
+    expect(summary.question).toMatch(/shortest average game length/i);
     expect(summary.answer[0]).toContain("Reaper FE");
     expect(summary.answer).toHaveLength(1 + q.candidates.length);
     // Every candidate appears as its own line in the breakdown.

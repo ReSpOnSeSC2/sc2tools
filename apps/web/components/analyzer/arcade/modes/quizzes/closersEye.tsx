@@ -131,7 +131,7 @@ function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
   ];
   return {
     question:
-      "Of these four builds (≥3 wins, cannon rush excluded), which has the shortest average win length?",
+      "Of these four builds (≥3 wins, cannon rush excluded), which has the shortest average game length in your wins?",
     answer,
   };
 }
@@ -144,7 +144,7 @@ export const closersEye: Mode<Q, A> = {
   ttp: "fast",
   depthTag: "hidden-derivation",
   title: "Closer's Eye",
-  blurb: "Which of your builds closes the door on opponents fastest? (Cannon-rush excluded.)",
+  blurb: "When you win with each build, which one ends the game fastest? (Cannon rush excluded.)",
   generate,
   score,
   share,
@@ -195,14 +195,14 @@ function Render({
     <QuizCard
       icon={IconFor(ID)}
       title={closersEye.title}
-      depthLabel="Hidden derivation: mean win-length per build"
+      depthLabel="Hidden derivation: average game length per build (wins only)"
       isDaily={ctx.isDaily}
       revealed={ctx.revealed}
       onKeyAnswer={onPick}
       question={
         <span>
           Of these four builds (each with ≥3 wins, cannon rush excluded), which has the{" "}
-          <span className="font-semibold text-warning">shortest average win length</span>?
+          <span className="font-semibold text-warning">shortest average game length in your wins</span>?
         </span>
       }
       answers={ctx.question.candidates.map((c, i) => (

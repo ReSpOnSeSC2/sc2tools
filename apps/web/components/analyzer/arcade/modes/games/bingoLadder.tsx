@@ -208,7 +208,7 @@ export const bingoLadder: Mode<Q, A> = {
   ttp: "long",
   depthTag: "forward",
   title: "Bingo: Ladder Edition",
-  blurb: "5×5 of forward objectives. Resolved from your real next-7-day games.",
+  blurb: "A 5×5 card of goals to hit. Squares check off from your games over the next 7 days.",
   generate,
   score,
   share,

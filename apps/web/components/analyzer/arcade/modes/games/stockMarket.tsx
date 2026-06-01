@@ -194,7 +194,7 @@ export const stockMarket: Mode<Q, A> = {
   ttp: "medium",
   depthTag: "generative",
   title: "Stock Market",
-  blurb: "Allocate 100 Mineral Credits across ≤5 builds. P&L = Σ(weight × Δprice).",
+  blurb: "Invest 100 Mineral Credits across up to 5 builds. You profit as their win rates climb.",
   generate,
   score,
   share,

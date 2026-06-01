@@ -234,8 +234,8 @@ export function TrendsTab() {
           value={pct1(kpis.wr)}
           color={wrColor(kpis.wr, kpis.totalGames)}
         />
-        <Stat label="Best period" value={kpis.bestLabel} />
-        <Stat label="Worst period" value={kpis.worstLabel} />
+        <Stat label={`Best ${bucket}`} value={kpis.bestLabel} />
+        <Stat label={`Worst ${bucket}`} value={kpis.worstLabel} />
       </div>
 
       {series.length === 0 ? (
