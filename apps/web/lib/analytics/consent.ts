@@ -22,8 +22,15 @@ export type ConsentState = "unset" | "granted" | "denied";
 const STORAGE_KEY = "sc2tools.analyticsConsent.v1";
 const EVENT_NAME = "sc2tools:analytics-consent";
 
-/** The GA4 Measurement ID (``G-XXXXXXXXXX``), injected at build time. */
-export const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "";
+/**
+ * The GA4 Measurement ID (``G-XXXXXXXXXX``). Defaults to the production
+ * property so analytics work out of the box on deploy; override per
+ * environment via ``NEXT_PUBLIC_GA_MEASUREMENT_ID`` (e.g. set it to a
+ * staging property, or blank to disable analytics entirely). Mirrors
+ * how ``NEXT_PUBLIC_SITE_URL`` is defaulted in the root layout.
+ */
+export const GA_MEASUREMENT_ID =
+  process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "G-Y90FRFK3D7";
 
 /** Whether a measurement id is configured at all. */
 export function isAnalyticsConfigured(): boolean {
