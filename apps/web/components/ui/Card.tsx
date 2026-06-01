@@ -144,7 +144,7 @@ export function Stat({
 }) {
   return (
     <div className="rounded-lg border border-border bg-bg-elevated p-3">
-      <div className="text-[10px] uppercase tracking-wider text-text-dim">
+      <div className="text-micro uppercase tracking-wider text-text-dim">
         {label}
       </div>
       <div
@@ -158,7 +158,7 @@ export function Stat({
 }
 
 export function EmptyState({
-  title = "No data",
+  title = "Nothing here yet",
   sub,
 }: {
   title?: string;

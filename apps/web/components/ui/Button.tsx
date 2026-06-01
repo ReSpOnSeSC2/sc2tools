@@ -60,7 +60,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         data-loading={loading || undefined}
         className={[
           "inline-flex items-center justify-center font-semibold",
-          "transition-colors transition-transform duration-100",
+          "transition-colors transition-transform duration-150",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           "disabled:cursor-not-allowed",
           VARIANT_CLASSES[variant],

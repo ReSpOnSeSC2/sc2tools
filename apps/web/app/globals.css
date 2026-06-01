@@ -29,7 +29,7 @@
 
   --text: 230 232 238;        /* #e6e8ee */
   --text-muted: 154 163 178;  /* #9aa3b2 */
-  --text-dim: 107 114 128;    /* #6b7280 */
+  --text-dim: 125 134 150;    /* #7d8696 — lifted from #6b7280 for AA on dark surfaces */
 
   --accent: 124 140 255;      /* #7c8cff */
   --accent-hover: 148 160 255;/* #94a0ff */
@@ -63,7 +63,7 @@
 
   --text: 14 17 24;           /* #0e1118 */
   --text-muted: 90 99 120;    /* #5a6378 */
-  --text-dim: 128 137 160;    /* #8089a0 */
+  --text-dim: 105 114 136;    /* #697288 — darkened from #8089a0 for AA on light surfaces */
 
   --accent: 91 109 255;       /* #5b6dff */
   --accent-hover: 68 88 240;  /* #4458f0 */
@@ -85,6 +85,17 @@
   --race-random:  90 99 120;     /* matches text-muted */
 
   --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.6), 0 6px 20px rgba(15, 23, 42, 0.08);
+}
+
+/* ============================================================
+ * Motion tokens — theme-independent. Custom ease-out curve instead
+ * of the browser default so transitions feel deliberate. Wired into
+ * Tailwind's DEFAULT timing-function + duration in tailwind.config.ts.
+ * ============================================================ */
+:root {
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-base: 150ms;
 }
 
 /* ============================================================
@@ -242,6 +253,11 @@ a:hover {
   font-size: 13px;
   line-height: 20px;
 }
+.t-micro {
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+}
 .t-mono {
   font-family: theme("fontFamily.mono");
   font-size: 14px;
@@ -269,7 +285,7 @@ a:hover {
   font-weight: 600;
   border: none;
   cursor: pointer;
-  transition: background 120ms ease;
+  transition: background var(--dur-base) var(--ease-out);
 }
 .btn:hover {
   background: rgb(var(--accent-hover));
@@ -295,6 +311,7 @@ a:hover {
   padding: 0.55rem 0.75rem;
   color: rgb(var(--text));
   width: 100%;
+  transition: border-color var(--dur-base) var(--ease-out);
 }
 .input:focus {
   border-color: rgb(var(--accent));
