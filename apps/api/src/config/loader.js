@@ -71,7 +71,78 @@ function loadConfig(env = process.env) {
     ),
     gameDetailsStore: parseGameDetailsStore(env.GAME_DETAILS_STORE),
     r2: parseR2Config(env),
+    analytics: parseAnalyticsConfig(env),
   };
+}
+
+/**
+ * Parse the Google Analytics 4 Data API block.
+ *
+ * The admin Analytics tab reads real GA4 metrics server-side via the
+ * Data API, which authenticates as a Google Cloud service account.
+ * Two credential delivery shapes are supported; whichever is set wins:
+ *
+ *   - ``GA_SERVICE_ACCOUNT_KEY_B64`` — the service-account JSON key,
+ *     base64-encoded into a single env var. Best for Vercel/serverless
+ *     where you can't ship a file. Decoded + parsed here.
+ *   - ``GOOGLE_APPLICATION_CREDENTIALS`` — a path to the JSON key file
+ *     on disk. The google-auth library picks this up automatically via
+ *     Application Default Credentials, so we only need to note that a
+ *     credential source exists.
+ *
+ * Returns ``{ enabled: false }`` when no property id is configured, so
+ * the API boots fine without GA wired up (the admin tab then renders a
+ * "not configured" setup hint instead of 500ing). ``enabled`` only
+ * flips true when we have BOTH a property id and a credential source.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {{
+ *   enabled: boolean,
+ *   propertyId: string|null,
+ *   credentials: { client_email: string, private_key: string }|null,
+ *   keyFile: string|null,
+ * }}
+ */
+function parseAnalyticsConfig(env) {
+  const propertyId = (env.GA4_PROPERTY_ID || "").trim() || null;
+  const keyFile = (env.GOOGLE_APPLICATION_CREDENTIALS || "").trim() || null;
+  const credentials = parseServiceAccountKey(env.GA_SERVICE_ACCOUNT_KEY_B64);
+  const enabled = Boolean(propertyId && (credentials || keyFile));
+  return { enabled, propertyId, credentials, keyFile };
+}
+
+/**
+ * Decode + validate a base64-encoded service-account JSON key. Throws
+ * a precise error (rather than a downstream auth failure) when the var
+ * is set but malformed, so a typo fails fast at boot. Returns ``null``
+ * when the var is absent — that's a valid state (the operator may be
+ * using a key FILE via GOOGLE_APPLICATION_CREDENTIALS instead).
+ *
+ * @param {string|undefined} raw
+ * @returns {{ client_email: string, private_key: string }|null}
+ */
+function parseServiceAccountKey(raw) {
+  if (!raw || raw.trim() === "") return null;
+  let json;
+  try {
+    json = Buffer.from(raw.trim(), "base64").toString("utf8");
+  } catch {
+    throw new Error("GA_SERVICE_ACCOUNT_KEY_B64 is not valid base64");
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new Error(
+      "GA_SERVICE_ACCOUNT_KEY_B64 did not decode to valid JSON — re-encode the service-account key file",
+    );
+  }
+  if (!parsed || typeof parsed !== "object" || !parsed.client_email || !parsed.private_key) {
+    throw new Error(
+      "GA_SERVICE_ACCOUNT_KEY_B64 is missing client_email / private_key — is this a service-account key?",
+    );
+  }
+  return { client_email: parsed.client_email, private_key: parsed.private_key };
 }
 
 /**
@@ -143,4 +214,9 @@ function parseCsv(raw) {
     .filter(Boolean);
 }
 
-module.exports = { loadConfig, parseGameDetailsStore, parseR2Config };
+module.exports = {
+  loadConfig,
+  parseGameDetailsStore,
+  parseR2Config,
+  parseAnalyticsConfig,
+};

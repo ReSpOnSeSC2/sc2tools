@@ -49,6 +49,7 @@ const { PulseMmrService } = require("./services/pulseMmr");
 const { AdminService } = require("./services/admin");
 const { AdminGlobalService } = require("./services/adminGlobal");
 const { AdminEventsService } = require("./services/adminEvents");
+const { AnalyticsService } = require("./services/analytics");
 const { buildPulseResolver } = require("./services/pulseResolver");
 const { PulseDirectoryService } = require("./services/pulseDirectory");
 const { loadAllMigrations } = require("./db/migrations");
@@ -271,6 +272,18 @@ function makeServices(deps) {
     db: deps.db,
     pulseDirectory,
   });
+  // Google Analytics 4 reader for the admin Analytics tab. Pure
+  // adapter over the GA4 Data API; ``config.analytics.enabled`` is
+  // false when GA isn't wired up, in which case the routes return a
+  // "not configured" payload instead of calling Google.
+  const analytics = new AnalyticsService({
+    config: deps.config.analytics || {
+      enabled: false,
+      propertyId: null,
+      credentials: null,
+      keyFile: null,
+    },
+  });
   return {
     users,
     opponents,
@@ -300,6 +313,7 @@ function makeServices(deps) {
     admin,
     adminGlobal,
     adminEvents,
+    analytics,
     pulseMmr,
     pulseDirectory,
   };
@@ -459,6 +473,7 @@ function mountRoutes(app, deps, services, clerk) {
       admin: services.admin,
       adminGlobal: services.adminGlobal,
       adminEvents: services.adminEvents,
+      analytics: services.analytics,
       gdpr: services.gdpr,
       games: services.games,
       opponents: services.opponents,
