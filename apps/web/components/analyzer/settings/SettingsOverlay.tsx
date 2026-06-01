@@ -628,7 +628,7 @@ function UrlRow({
       <code
         className={[
           "min-w-0 flex-1 break-all rounded bg-bg-elevated p-2 font-mono",
-          compact ? "text-[11px]" : "text-caption",
+          compact ? "text-micro" : "text-caption",
         ].join(" ")}
       >
         {url}

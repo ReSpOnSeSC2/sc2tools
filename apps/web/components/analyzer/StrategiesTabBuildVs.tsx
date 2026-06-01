@@ -106,7 +106,7 @@ export function BuildVsStrategyView({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <input
-          className="input w-72"
+          className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
           placeholder="search build or strategy…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -136,7 +136,7 @@ export function BuildVsStrategyView({
           ))}
         </div>
       </div>
-      <div className="text-[11px] text-text-dim">
+      <div className="text-micro text-text-dim">
         Click any cell or row to see the games for that build × strategy combo.
       </div>
 
@@ -230,7 +230,7 @@ function BvsHeatmap({
                       <button
                         type="button"
                         onClick={() => onOpenBvs(b, s)}
-                        className="flex h-9 w-full cursor-pointer items-center justify-center rounded text-[11px] font-semibold tabular-nums ring-1 ring-inset ring-black/30 transition hover:ring-2 hover:ring-accent/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        className="flex h-9 w-full cursor-pointer items-center justify-center rounded text-micro font-semibold tabular-nums ring-1 ring-inset ring-black/30 transition hover:ring-2 hover:ring-accent/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                         style={{
                           background: wrColor(c.winRate, c.total),
                           opacity: intensity,
@@ -247,7 +247,7 @@ function BvsHeatmap({
             ))}
           </tbody>
         </table>
-        <div className="mt-2 text-[10px] text-text-dim">
+        <div className="mt-2 text-micro text-text-dim">
           Cell color = win rate. Cell opacity = sample size. Click a cell to see the games.
         </div>
       </div>
@@ -358,7 +358,7 @@ export function BuildVsStrategyComparison({
 
   return (
     <Card title="Build vs strategy — phase comparison">
-      <p className="mb-3 text-[11px] text-text-dim">
+      <p className="mb-3 text-micro text-text-dim">
         Both sides describe the SAME games — the ones where you played
         this build and the opponent played this strategy. Left is your
         trajectory, right is theirs. Compare the crossings to see who
@@ -420,7 +420,7 @@ function ComparisonColumn({
         <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
           {title}
         </h3>
-        <p className="truncate text-[11px] text-text-muted" title={subtitle}>
+        <p className="truncate text-micro text-text-muted" title={subtitle}>
           {subtitle}
         </p>
       </header>
@@ -691,7 +691,7 @@ function BvsTable({
               className="flex w-full flex-col gap-1.5 rounded-lg border border-border bg-bg-surface px-3 py-2 text-left transition hover:bg-bg-elevated/40"
             >
               <div className="flex flex-col gap-0.5">
-                <span className="text-[10px] uppercase tracking-wider text-text-dim">
+                <span className="text-micro uppercase tracking-wider text-text-dim">
                   My build
                 </span>
                 <span className="text-sm font-semibold text-text">
@@ -699,7 +699,7 @@ function BvsTable({
                 </span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[10px] uppercase tracking-wider text-text-dim">
+                <span className="text-micro uppercase tracking-wider text-text-dim">
                   vs Opponent strategy
                 </span>
                 <span className="text-sm text-text-muted">

@@ -194,7 +194,7 @@ function FlowGrid({
           <FlowRowItem key={row.key} row={row} onEdgeClick={onEdgeClick} />
         ))}
       </ul>
-      <figcaption className="border-t border-border px-3 py-2 text-[11px] text-text-dim">
+      <figcaption className="border-t border-border px-3 py-2 text-micro text-text-dim">
         Each row is one path through the funnel. Counts come from games
         that followed that exact sequence; dim rows have fewer than{" "}
         {LOW_CONFIDENCE_GAMES} samples.
@@ -248,7 +248,7 @@ function FlowRowItem({
         <FlowSteps steps={row.steps} />
         <div className="flex flex-shrink-0 items-center gap-2 sm:ml-auto">
           <span
-            className="inline-flex h-7 items-center rounded-md border border-border bg-bg-elevated px-2 font-mono text-[11px] tabular-nums"
+            className="inline-flex h-7 items-center rounded-md border border-border bg-bg-elevated px-2 font-mono text-micro tabular-nums"
             style={{ color: wrTone }}
             title={
               denom > 0
@@ -260,7 +260,7 @@ function FlowRowItem({
             <span className="ml-1 text-text-dim">·</span>
             <span className="ml-1">{wrLabel}</span>
           </span>
-          <span className="whitespace-nowrap text-[11px] text-text-dim">
+          <span className="whitespace-nowrap text-micro text-text-dim">
             {row.games} game{row.games === 1 ? "" : "s"}
           </span>
           {interactive ? (
@@ -321,7 +321,7 @@ function FlowStepChip({ step }: { step: FlowStep }) {
     >
       <span
         aria-hidden
-        className="text-[9px] uppercase tracking-wider opacity-70"
+        className="text-micro uppercase tracking-wider opacity-70"
       >
         {chipPrefix(step.kind)}
       </span>

@@ -80,7 +80,7 @@ export function OppMmrBucketGamesModal({
         <>
           <AllGamesTable games={games} myName={myName} />
           {data && data.total > games.length ? (
-            <p className="mt-3 text-[11px] text-text-dim">
+            <p className="mt-3 text-micro text-text-dim">
               Showing the {games.length.toLocaleString()} most recent of{" "}
               {data.total.toLocaleString()} games in this band.
             </p>

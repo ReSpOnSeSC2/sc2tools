@@ -272,7 +272,7 @@ function OutcomeBar({
   const safeTotal = Math.max(1, totalFinal);
   return (
     <div data-testid="phase-histogram">
-      <div className="mb-1 flex items-baseline justify-between text-[11px] uppercase tracking-wider text-text-dim">
+      <div className="mb-1 flex items-baseline justify-between text-micro uppercase tracking-wider text-text-dim">
         <span className="font-semibold">Where games end</span>
         <span className="font-mono normal-case tracking-normal tabular-nums text-text-muted">
           {totalSamples} game{totalSamples === 1 ? "" : "s"}
@@ -299,7 +299,7 @@ function OutcomeBar({
             <div
               key={phase}
               className={[
-                "relative flex items-center justify-center text-[10px] font-semibold text-white/95 transition-[filter]",
+                "relative flex items-center justify-center text-micro font-semibold text-white/95 transition-[filter]",
                 count > 0 ? "hover:brightness-110" : "",
               ].join(" ")}
               style={{
@@ -320,7 +320,7 @@ function OutcomeBar({
         })}
       </div>
       <ul
-        className="mt-1.5 flex w-full justify-between gap-1 text-[10px] text-text-dim"
+        className="mt-1.5 flex w-full justify-between gap-1 text-micro text-text-dim"
         aria-hidden="true"
       >
         {PHASE_ORDER.map((phase) => {
@@ -387,7 +387,7 @@ function MedianTimingLine({
 
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between text-[11px] uppercase tracking-wider text-text-dim">
+      <div className="mb-1 flex items-baseline justify-between text-micro uppercase tracking-wider text-text-dim">
         <span className="font-semibold">Median phase timing</span>
         <span className="font-mono normal-case tracking-normal tabular-nums text-text-muted">
           0:00 – {fmtMinutes(ceiling)}
@@ -396,7 +396,7 @@ function MedianTimingLine({
       <div className="relative pt-7 md:pt-8">
         {medianCrossingPct !== null ? (
           <div
-            className="absolute top-0 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-accent px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm"
+            className="absolute top-0 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-accent px-2 py-0.5 text-micro font-semibold text-white shadow-sm"
             style={{ left: `${medianCrossingPct}%` }}
             title="Where the median game ends"
             data-testid="phase-median-pin"
@@ -479,7 +479,7 @@ function MedianTimingLine({
         </div>
 
         <div
-          className="relative mt-1.5 h-7 w-full text-[10px] tabular-nums text-text-dim"
+          className="relative mt-1.5 h-7 w-full text-micro tabular-nums text-text-dim"
           data-testid="phase-labels"
         >
           <span
@@ -502,7 +502,7 @@ function MedianTimingLine({
                 <span className="block font-mono font-semibold text-text">
                   {fmtMinutes(v)}
                 </span>
-                <span className="block text-[9px] uppercase tracking-wider">
+                <span className="block text-micro uppercase tracking-wider">
                   {label}
                 </span>
               </span>

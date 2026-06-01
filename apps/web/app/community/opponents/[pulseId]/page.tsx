@@ -45,7 +45,7 @@ export default async function CommunityOpponentPage({
           ← back to community
         </Link>
         <h1 className="text-2xl font-bold">Not enough data</h1>
-        <p className="card p-5 text-text-muted">
+        <p className="rounded-xl border border-border bg-bg-surface p-5 text-text-muted">
           We only publish aggregated profiles when at least 5 distinct SC2
           Tools users have faced this opponent. Below that threshold there
           isn&apos;t enough data to anonymise responsibly.
@@ -162,7 +162,7 @@ export default async function CommunityOpponentPage({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="card p-3">
+    <div className="rounded-xl border border-border bg-bg-surface p-3">
       <div className="text-xs uppercase tracking-wide text-text-dim">
         {label}
       </div>
@@ -179,7 +179,7 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div className="card space-y-2 p-4">
+    <div className="rounded-xl border border-border bg-bg-surface space-y-2 p-4">
       <h3 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
         {title}
       </h3>

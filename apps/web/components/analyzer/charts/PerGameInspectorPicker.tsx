@@ -58,7 +58,7 @@ export function GamePicker({
           <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
             Recent replays
           </h3>
-          <span className="text-[11px] tabular-nums text-text-dim">
+          <span className="text-micro tabular-nums text-text-dim">
             {totalGames}
           </span>
         </div>
@@ -142,7 +142,7 @@ function GamePickerRow({
         <Badge size="sm" variant={isWin ? "success" : "danger"}>
           {isWin ? "Win" : "Loss"}
         </Badge>
-        <span className="font-mono text-[11px] text-text-dim">
+        <span className="font-mono text-micro text-text-dim">
           {fmtDate(game.date)}
         </span>
       </div>
@@ -152,7 +152,7 @@ function GamePickerRow({
           {game.opponent || "Unknown"}
         </span>
       </div>
-      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-text-muted">
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-micro text-text-muted">
         <span className="inline-flex items-center gap-1 truncate">
           <MapPin className="h-3 w-3" aria-hidden />
           {game.map || "—"}

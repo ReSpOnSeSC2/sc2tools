@@ -117,7 +117,7 @@ export function MapTrendChart({
     <Card
       title="Map performance over time"
       right={
-        <div className="flex items-center gap-1 text-[11px]">
+        <div className="flex items-center gap-1 text-micro">
           <span className="text-text-dim">Top</span>
           {TOP_N_OPTIONS.map((n) => (
             <button

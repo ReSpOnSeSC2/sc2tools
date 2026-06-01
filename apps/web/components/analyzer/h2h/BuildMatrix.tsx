@@ -116,7 +116,7 @@ function MatrixTable({
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-bg-elevated/40">
       <table className="w-full text-sm">
-        <thead className="text-[10px] uppercase tracking-wider text-text-dim">
+        <thead className="text-micro uppercase tracking-wider text-text-dim">
           <tr>
             <th className="sticky left-0 bg-bg-elevated px-3 py-2 text-left">
               My build ↓ · Their strategy →
@@ -221,8 +221,8 @@ function MatrixCellButton({
         .join(" ")}
       style={{ background: bg, color: tint }}
     >
-      <span className="text-[12px] font-semibold tabular-nums">{wrPct}%</span>
-      <span className="text-[10px] tabular-nums opacity-80">
+      <span className="text-micro font-semibold tabular-nums">{wrPct}%</span>
+      <span className="text-micro tabular-nums opacity-80">
         {cell.wins}-{cell.losses}
       </span>
     </button>
@@ -238,7 +238,7 @@ function Legend({
 }) {
   if (oppStrategies.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-2 text-[11px]">
+    <div className="flex flex-wrap gap-2 text-micro">
       <span className="text-text-dim">Race accent (legend only):</span>
       {oppStrategies.map((opp) => {
         const race = (races.get(opp) || "U") as RaceLetter;

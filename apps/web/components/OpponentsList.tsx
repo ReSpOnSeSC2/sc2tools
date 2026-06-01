@@ -23,17 +23,17 @@ export function OpponentsList() {
   if (isLoading) return <SkeletonList />;
   if (error) {
     return (
-      <p className="card p-6 text-danger">
+      <p className="rounded-xl border border-border bg-bg-surface p-6 text-danger">
         Failed to load opponents: {error.message}
       </p>
     );
   }
   if (!data || data.items.length === 0) {
-    return <p className="card p-6 text-text-muted">No opponents yet.</p>;
+    return <p className="rounded-xl border border-border bg-bg-surface p-6 text-text-muted">No opponents yet.</p>;
   }
 
   return (
-    <div className="card overflow-hidden">
+    <div className="rounded-xl border border-border bg-bg-surface overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-bg-elevated text-left text-text-muted">
           <tr>
@@ -78,7 +78,7 @@ export function OpponentsList() {
 
 function SkeletonList() {
   return (
-    <div className="card divide-y divide-border">
+    <div className="rounded-xl border border-border bg-bg-surface divide-y divide-border">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="flex animate-pulse gap-4 p-4">
           <div className="h-4 w-32 rounded bg-bg-elevated" />

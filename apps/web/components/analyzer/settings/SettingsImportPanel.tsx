@@ -324,7 +324,7 @@ function JobRow({ job }: { job: ImportJob }) {
     <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-caption">
       <div className="flex min-w-0 items-center gap-2">
         <StatusBadge status={job.status} />
-        <span className="truncate font-mono text-[11px] text-text-muted">
+        <span className="truncate font-mono text-micro text-text-muted">
           {job.id}
         </span>
       </div>

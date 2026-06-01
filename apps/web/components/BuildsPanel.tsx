@@ -20,7 +20,7 @@ export function BuildsPanel() {
   if (error) return <p className="text-danger">Failed: {error.message}</p>;
   if (!data || data.items.length === 0) {
     return (
-      <p className="card p-6 text-text-muted">
+      <p className="rounded-xl border border-border bg-bg-surface p-6 text-text-muted">
         No custom builds yet. The agent will sync any local custom_builds.json
         on first run.
       </p>
@@ -29,7 +29,7 @@ export function BuildsPanel() {
   return (
     <div className="grid gap-3 md:grid-cols-2">
       {data.items.map((b) => (
-        <article key={b.slug} className="card space-y-1 p-5">
+        <article key={b.slug} className="rounded-xl border border-border bg-bg-surface space-y-1 p-5">
           <h3 className="text-lg font-semibold">{b.name}</h3>
           <p className="text-sm text-text-muted">
             {b.race}

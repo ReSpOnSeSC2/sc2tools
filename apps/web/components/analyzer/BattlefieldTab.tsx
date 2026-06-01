@@ -37,7 +37,7 @@ const LS_MIN_MAPS = "analyzer.battlefield.maps.minGames";
 
 function FormSparkline({ results }: { results?: ("win" | "loss")[] }) {
   if (!results || results.length === 0)
-    return <span className="text-[11px] text-text-dim">no recent</span>;
+    return <span className="text-micro text-text-dim">no recent</span>;
   return (
     <div className="flex items-center gap-[3px]">
       {results.map((r, i) => (
@@ -123,7 +123,7 @@ export function BattlefieldTab() {
                       {pct1(m.winRate)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-3 text-[11px] text-text-dim">
+                  <div className="flex items-center justify-between gap-3 text-micro text-text-dim">
                     <span>
                       <span className="text-success">{m.wins}W</span> ·{" "}
                       <span className="text-danger">{m.losses}L</span> ·{" "}
@@ -156,7 +156,7 @@ export function BattlefieldTab() {
                     <SortableTh col="losses" label="L" {...muSort} align="right" />
                     <SortableTh col="total" label="Games" {...muSort} align="right" />
                     <SortableTh col="winRate" label="WR" {...muSort} align="right" />
-                    <th className="px-3 py-2 text-right text-[11px] uppercase text-text-dim">
+                    <th className="px-3 py-2 text-right text-micro uppercase text-text-dim">
                       Recent
                     </th>
                   </tr>
@@ -192,7 +192,7 @@ export function BattlefieldTab() {
         title="Win rate by map"
         right={
           (mapsApi.data || []).length > sortedMaps.length ? (
-            <span className="text-[11px] text-text-dim">
+            <span className="text-micro text-text-dim">
               {sortedMaps.length} of {(mapsApi.data || []).length} maps
               shown · {((mapsApi.data || []).length - sortedMaps.length)}{" "}
               hidden by min games ≥ {minGames}
@@ -265,7 +265,7 @@ export function BattlefieldTab() {
                       {pct1(m.winRate)}
                     </span>
                   </div>
-                  <div className="text-[11px] text-text-dim">
+                  <div className="text-micro text-text-dim">
                     <span className="text-success">{m.wins}W</span> ·{" "}
                     <span className="text-danger">{m.losses}L</span> ·{" "}
                     {m.total} games

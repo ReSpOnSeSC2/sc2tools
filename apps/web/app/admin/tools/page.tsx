@@ -98,7 +98,7 @@ function RebuildMyOpponentsTool() {
       {state.kind === "idle" ? (
         <button
           type="button"
-          className="mt-3 btn bg-accent text-white hover:bg-accent/90"
+          className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover"
           onClick={() => setState({ kind: "confirm" })}
         >
           Rebuild my opponents
@@ -194,7 +194,7 @@ function RebuildUserOpponentsTool() {
       {state.kind === "idle" ? (
         <button
           type="button"
-          className="mt-3 btn bg-accent text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
           onClick={() => setState({ kind: "confirm" })}
           disabled={!canRun}
         >
@@ -298,7 +298,7 @@ function WipeUserGamesTool() {
       {state.kind === "idle" ? (
         <button
           type="button"
-          className="mt-3 btn btn-danger disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-danger text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           onClick={() => setState({ kind: "confirm" })}
           disabled={!canRun}
         >

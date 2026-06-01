@@ -59,7 +59,7 @@ export function PresetPill({ labels }: { labels: PresetLabels }) {
   const display = labels.customRange || labels.short;
   return (
     <span
-      className="inline-flex items-center rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-text-muted"
+      className="inline-flex items-center rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-micro font-medium uppercase tracking-wider text-text-muted"
       title={labels.customRange ? `Custom range: ${display}` : labels.long}
     >
       {display}

@@ -139,7 +139,7 @@ export function SortableTh({
     <th
       onClick={() => setSort(col)}
       title={title}
-      className={`cursor-pointer px-3 py-2 text-${align} text-[11px] uppercase tracking-wider hover:text-text ${
+      className={`cursor-pointer px-3 py-2 text-${align} text-micro uppercase tracking-wider hover:text-text ${
         active ? "text-text" : "text-text-muted"
       }`}
       style={width ? { width } : undefined}

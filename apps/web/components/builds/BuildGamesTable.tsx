@@ -77,7 +77,7 @@ export function BuildGamesTable({
       {chip}
       <div className="hidden md:block">
         <table className="w-full text-caption">
-          <thead className="bg-bg-elevated text-[11px] uppercase tracking-wider text-text-muted">
+          <thead className="bg-bg-elevated text-micro uppercase tracking-wider text-text-muted">
             <tr>
               <th className="w-6 px-2 py-1 text-left" aria-hidden />
               <th className="px-2 py-1 text-left">Date</th>
@@ -247,7 +247,7 @@ function GameMobile({
             <MacroCell value={game.macroScore ?? null} />
           </div>
           <div className="text-caption text-text">{game.map || "—"}</div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-text-muted">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-micro text-text-muted">
             <span className="truncate">opp: {game.opponent || "—"}</span>
             <span className="truncate">strat: {game.opp_strategy || "—"}</span>
             <span>

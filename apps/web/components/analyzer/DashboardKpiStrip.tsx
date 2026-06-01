@@ -449,7 +449,7 @@ function MmrPerRegionStat() {
               key={region}
               className="flex items-baseline justify-between gap-2"
             >
-              <span className="text-[11px] uppercase tracking-wider text-text-dim">
+              <span className="text-micro uppercase tracking-wider text-text-dim">
                 {region}
               </span>
               <span className="tabular-nums">{fmtMmr(rows[0].mmr)}</span>

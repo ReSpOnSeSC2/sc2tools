@@ -10,7 +10,7 @@ export interface AuthorChipProps {
 }
 
 const SIZE_CLASSES = {
-  sm: "h-6 px-2 text-[11px] gap-1.5",
+  sm: "h-6 px-2 text-micro gap-1.5",
   md: "h-7 px-2.5 text-caption gap-2",
 } as const;
 

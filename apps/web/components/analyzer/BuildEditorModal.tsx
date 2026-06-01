@@ -135,15 +135,15 @@ export function BuildEditorModal({
         className="w-full max-w-4xl space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="card flex items-center justify-between border-accent/40 px-4 py-3">
+        <div className="rounded-xl border border-border bg-bg-surface flex items-center justify-between px-4 py-3">
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold">{buildName}</h2>
-            <p className="text-[11px] text-text-dim">Build dossier</p>
+            <p className="text-micro text-text-dim">Build dossier</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="btn btn-secondary text-xs"
+            className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-xs"
           >
             ✕ close
           </button>
@@ -218,7 +218,7 @@ function NotesAndPublish({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
-          className="input min-h-[120px]"
+          className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[120px]"
           placeholder={
             notesLoaded
               ? "Personal notes, synonyms, scouting tells…"
@@ -226,13 +226,13 @@ function NotesAndPublish({
           }
         />
         <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-[11px] text-text-dim">
+          <span className="text-micro text-text-dim">
             {savedRecently ? "Saved." : "Notes are private to your account."}
           </span>
           <button
             type="button"
             onClick={onSaveNotes}
-            className="btn"
+            className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover"
             disabled={saving || !notesLoaded}
           >
             {saving ? "Saving…" : "Save notes"}
@@ -248,7 +248,7 @@ function NotesAndPublish({
         </p>
         <div className="space-y-2">
           <input
-            className="input"
+            className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
             placeholder="Title"
             value={publishMeta.title}
             onChange={(e) =>
@@ -256,7 +256,7 @@ function NotesAndPublish({
             }
           />
           <textarea
-            className="input min-h-[80px]"
+            className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[80px]"
             rows={3}
             placeholder="Description (optional)"
             value={publishMeta.description}
@@ -268,7 +268,7 @@ function NotesAndPublish({
             }
           />
           <input
-            className="input"
+            className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
             placeholder="Display name (optional)"
             value={publishMeta.authorName}
             onChange={(e) =>
@@ -282,7 +282,7 @@ function NotesAndPublish({
             <span className="text-xs text-text-muted">{publishMsg}</span>
             <button
               type="button"
-              className="btn"
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover"
               onClick={onPublish}
               disabled={publishing}
               title={

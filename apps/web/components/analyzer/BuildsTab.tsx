@@ -66,7 +66,7 @@ export function BuildsTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <input
-          className="input w-full sm:w-72"
+          className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
           placeholder="search build…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -153,7 +153,7 @@ export function BuildsTab() {
                     <SortableTh col="losses" label="L" {...sort} align="right" />
                     <SortableTh col="total" label="Games" {...sort} align="right" />
                     <SortableTh col="winRate" label="WR" {...sort} align="right" />
-                    <th className="px-3 py-2 text-left text-[11px] uppercase text-text-dim">
+                    <th className="px-3 py-2 text-left text-micro uppercase text-text-dim">
                       Trend
                     </th>
                   </tr>

@@ -107,7 +107,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 the header button itself. */}
             {unread > 0 ? (
               <span
-                className="absolute -right-1 -top-1 inline-flex min-w-[1.125rem] items-center justify-center rounded-full bg-accent-cyan px-1 py-0.5 text-[10px] font-bold leading-none text-white"
+                className="absolute -right-1 -top-1 inline-flex min-w-[1.125rem] items-center justify-center rounded-full bg-accent-cyan px-1 py-0.5 text-micro font-bold leading-none text-white"
                 aria-hidden
               >
                 {unread > 99 ? "99+" : unread}
@@ -188,7 +188,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                     <span className="truncate">{item.label}</span>
                     {badge > 0 ? (
                       <span
-                        className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-cyan px-1.5 py-0.5 text-[10px] font-bold leading-none text-white"
+                        className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-cyan px-1.5 py-0.5 text-micro font-bold leading-none text-white"
                         aria-label={`${badge} unread`}
                       >
                         {badge > 99 ? "99+" : badge}

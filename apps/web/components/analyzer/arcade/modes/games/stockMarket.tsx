@@ -396,7 +396,7 @@ function Render({
               <span className="font-mono tabular-nums text-text-dim">
                 {p.alloc}% @ {p.entryPrice}
                 {typeof p.entryPlays === "number" ? (
-                  <span className="ml-1 text-[10px] uppercase tracking-wider text-text-dim">
+                  <span className="ml-1 text-micro uppercase tracking-wider text-text-dim">
                     × {vol.toFixed(2)} vol
                   </span>
                 ) : null}{" "}
@@ -510,7 +510,7 @@ function Render({
               >
                 {q.name}
                 {q.source !== "own" ? (
-                  <span className="ml-1 rounded bg-accent/15 px-1 text-[10px] uppercase tracking-wider text-accent">
+                  <span className="ml-1 rounded bg-accent/15 px-1 text-micro uppercase tracking-wider text-accent">
                     {q.source}
                   </span>
                 ) : null}
@@ -523,12 +523,12 @@ function Render({
                   {q.price}
                 </span>
               ) : (
-                <span className="text-[10px] uppercase tracking-wider text-text-dim">
+                <span className="text-micro uppercase tracking-wider text-text-dim">
                   no price yet
                 </span>
               )}
               <span
-                className="font-mono tabular-nums text-[10px] uppercase tracking-wider"
+                className="font-mono tabular-nums text-micro uppercase tracking-wider"
                 title={`${q.plays} plays → ${volatility(q.plays).toFixed(2)}× P&L volatility`}
                 style={{
                   color:

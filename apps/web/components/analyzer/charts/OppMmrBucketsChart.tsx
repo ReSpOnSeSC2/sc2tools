@@ -258,7 +258,7 @@ function WidthToggle({
     { id: 100, label: "100" },
   ];
   return (
-    <div className="flex items-center gap-1 text-[11px]">
+    <div className="flex items-center gap-1 text-micro">
       <span className="text-text-dim">Width</span>
       {options.map((opt) => (
         <button
@@ -299,7 +299,7 @@ function BucketTable({
   const played = rows.filter((r) => r.total > 0);
   return (
     <div className="mt-3">
-      <p className="mb-1.5 text-[10px] text-text-dim">
+      <p className="mb-1.5 text-micro text-text-dim">
         Tap a band to list the games behind it.
       </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
@@ -322,7 +322,7 @@ function BucketTable({
             className="rounded border border-border bg-bg-elevated/50 px-2.5 py-2 text-left transition-colors hover:border-border-strong hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-bg"
           >
             <div className="flex flex-wrap items-baseline justify-between gap-x-1.5">
-              <span className="whitespace-nowrap text-[11px] font-semibold text-text">
+              <span className="whitespace-nowrap text-micro font-semibold text-text">
                 {r.lo}–{r.hi - 1}
               </span>
               <span
@@ -332,14 +332,14 @@ function BucketTable({
                 {Math.round(r.winRate * 100)}%
               </span>
             </div>
-            <div className="mt-0.5 text-[10px] tabular-nums text-text-dim">
+            <div className="mt-0.5 text-micro tabular-nums text-text-dim">
               {r.wins}W · {r.losses}L · {r.total} game{r.total === 1 ? "" : "s"}
             </div>
           </button>
         ))}
       </div>
       {unknown.total > 0 ? (
-        <div className="mt-2 text-[10px] text-text-dim">
+        <div className="mt-2 text-micro text-text-dim">
           Plus {unknown.total.toLocaleString()} game
           {unknown.total === 1 ? "" : "s"} with missing opponent MMR (not shown
           above) · {totalKnown.toLocaleString()} game

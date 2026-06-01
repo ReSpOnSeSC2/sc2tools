@@ -98,7 +98,7 @@ function OsTabs({
           >
             {t.label}
             {isDetected && !isActive ? (
-              <span className="rounded-full bg-accent-cyan/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent-cyan">
+              <span className="rounded-full bg-accent-cyan/15 px-1.5 py-0.5 text-micro font-semibold text-accent-cyan">
                 detected
               </span>
             ) : null}

@@ -178,13 +178,13 @@ function PanelControls({
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
       <div className="flex flex-col gap-1">
-        <span className="text-[10px] uppercase tracking-wider text-text-dim">
+        <span className="text-micro uppercase tracking-wider text-text-dim">
           Min games per bucket
         </span>
         <MinGamesPicker value={minGames} onChange={onMinGames} hideLabel />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-[10px] uppercase tracking-wider text-text-dim">
+        <span className="text-micro uppercase tracking-wider text-text-dim">
           {topNLabel} shown (top N by volume)
         </span>
         <MinGamesPicker
@@ -195,7 +195,7 @@ function PanelControls({
         />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-[10px] uppercase tracking-wider text-text-dim">
+        <span className="text-micro uppercase tracking-wider text-text-dim">
           MMR Δ between players
         </span>
         <MmrRangeFilter value={mmrDelta} onChange={onMmrDelta} />

@@ -479,7 +479,7 @@ function DetectedSuggestions({
               type="button"
               onClick={() => onAdd(id)}
               disabled={atCap}
-              className="inline-flex h-6 items-center gap-1 rounded-full bg-accent/15 px-2 text-[11px] font-semibold text-accent hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-6 items-center gap-1 rounded-full bg-accent/15 px-2 text-micro font-semibold text-accent hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
               aria-label={`Add ${id}`}
             >
               <Plus className="h-3 w-3" aria-hidden />
@@ -517,7 +517,7 @@ function PulseIdHelp() {
               and search your BattleTag.
             </li>
             <li>Click your character. Your URL will look like:</li>
-            <li className="ml-2 break-all rounded bg-bg-elevated px-2 py-1 font-mono text-[11px] text-text">
+            <li className="ml-2 break-all rounded bg-bg-elevated px-2 py-1 font-mono text-micro text-text">
               sc2pulse.nephest.com/sc2/?type=character&id=<span className="text-accent">994428</span>
             </li>
             <li>

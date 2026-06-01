@@ -248,7 +248,7 @@ function PerformanceTiles({
         />
       </div>
       {last ? (
-        <p className="mt-2 text-[11px] text-text-dim">
+        <p className="mt-2 text-micro text-text-dim">
           Last played {fmtAgo(last)}
         </p>
       ) : null}
@@ -359,7 +359,7 @@ function MacroAggregate({ macro }: { macro?: BuildDossierData["macro"] }) {
       </div>
       {dist ? (
         <div className="mt-3 space-y-1.5">
-          <div className="flex items-baseline justify-between text-[11px] text-text-dim">
+          <div className="flex items-baseline justify-between text-micro text-text-dim">
             <span>Macro score distribution</span>
             <span className="tabular-nums">
               n = {m!.gamesWithScore}
@@ -380,7 +380,7 @@ function MacroAggregate({ macro }: { macro?: BuildDossierData["macro"] }) {
               ) : null,
             )}
           </div>
-          <ul className="grid grid-cols-3 gap-2 text-[11px] text-text-muted">
+          <ul className="grid grid-cols-3 gap-2 text-micro text-text-muted">
             {dist.map((seg) => (
               <li key={seg.label} className="flex items-center gap-1.5">
                 <span

@@ -53,7 +53,7 @@ export function WizardApplyImport() {
 
       <button
         type="button"
-        className="btn"
+        className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover"
         onClick={start}
         disabled={busy || !!running}
       >

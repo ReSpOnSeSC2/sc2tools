@@ -143,7 +143,7 @@ export function Stat({
   color?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-bg-elevated p-3">
+    <div className="rounded-lg bg-bg-elevated p-3">
       <div className="text-micro uppercase tracking-wider text-text-dim">
         {label}
       </div>
@@ -174,7 +174,7 @@ export function EmptyState({
 
 export function Skeleton({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="card divide-y divide-border">
+    <div className="rounded-xl border border-border bg-bg-surface divide-y divide-border">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex animate-pulse gap-4 p-4">
           <div className="h-4 w-32 rounded bg-bg-elevated" />

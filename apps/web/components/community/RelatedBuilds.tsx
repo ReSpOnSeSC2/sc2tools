@@ -73,7 +73,7 @@ function RelatedRow({ build }: { build: CommunityBuildListItem }) {
           <span className="block truncate text-body font-medium text-text group-hover:text-accent-cyan">
             {build.title}
           </span>
-          <span className="mt-0.5 inline-flex items-center gap-2 text-[11px] text-text-muted">
+          <span className="mt-0.5 inline-flex items-center gap-2 text-micro text-text-muted">
             <span className={tint.text}>{build.matchup || "—"}</span>
             <span aria-hidden className="text-text-dim">
               ·

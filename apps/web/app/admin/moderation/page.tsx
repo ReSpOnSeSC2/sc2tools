@@ -118,7 +118,7 @@ export default function AdminModerationPage() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="btn btn-secondary text-sm"
+                    className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-sm"
                     onClick={() => resolve(r.id, "dismiss")}
                     disabled={busy}
                   >
@@ -126,7 +126,7 @@ export default function AdminModerationPage() {
                   </button>
                   <button
                     type="button"
-                    className="btn btn-danger text-sm"
+                    className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-danger text-white hover:opacity-90 text-sm"
                     onClick={() => resolve(r.id, "remove")}
                     disabled={busy}
                   >

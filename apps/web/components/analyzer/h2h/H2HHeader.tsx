@@ -40,7 +40,7 @@ export function H2HHeader({
         <>
           <div className="ml-auto flex items-center gap-2">
             <label className="flex items-center gap-1.5 text-caption text-text-muted">
-              <span className="text-[10px] uppercase tracking-wider text-text-dim">
+              <span className="text-micro uppercase tracking-wider text-text-dim">
                 Rolling
               </span>
               <select
@@ -56,7 +56,7 @@ export function H2HHeader({
               </select>
             </label>
             <label className="flex items-center gap-1.5 text-caption text-text-muted">
-              <span className="text-[10px] uppercase tracking-wider text-text-dim">
+              <span className="text-micro uppercase tracking-wider text-text-dim">
                 Bucket
               </span>
               <select

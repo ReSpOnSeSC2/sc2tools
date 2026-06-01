@@ -95,15 +95,15 @@ export function ConfirmInline({
 }) {
   const tone =
     variant === "danger"
-      ? "btn-danger"
-      : "bg-accent text-white hover:bg-accent/90";
+      ? "bg-danger text-white hover:opacity-90"
+      : "bg-accent text-bg hover:bg-accent-hover";
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg-elevated/40 p-3 sm:flex-row sm:items-center sm:gap-3">
       <p className="flex-1 text-caption text-text">{prompt}</p>
       <div className="flex gap-2">
         <button
           type="button"
-          className="btn btn-secondary text-sm"
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-sm"
           onClick={onCancel}
           disabled={busy}
         >
@@ -111,7 +111,7 @@ export function ConfirmInline({
         </button>
         <button
           type="button"
-          className={`btn text-sm ${tone}`}
+          className={`inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors text-sm ${tone}`}
           onClick={onConfirm}
           disabled={busy}
         >

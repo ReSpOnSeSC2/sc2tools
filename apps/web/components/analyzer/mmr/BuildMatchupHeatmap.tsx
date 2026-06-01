@@ -133,7 +133,7 @@ export function BuildMatchupHeatmap() {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-text-dim">
+          <span className="text-micro uppercase tracking-wider text-text-dim">
             MMR bucket
           </span>
           {bucketStats.length > 0 ? (
@@ -147,13 +147,13 @@ export function BuildMatchupHeatmap() {
           )}
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-text-dim">
+          <span className="text-micro uppercase tracking-wider text-text-dim">
             Min games per cell
           </span>
           <MinGamesPicker value={minGames} onChange={setMinGames} hideLabel />
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-text-dim">
+          <span className="text-micro uppercase tracking-wider text-text-dim">
             MMR Δ between players
           </span>
           <MmrRangeFilter value={mmrDelta} onChange={setMmrDelta} />
@@ -202,7 +202,7 @@ function BucketChips({
             aria-pressed={on}
             className={[
               "inline-flex min-h-[28px] items-center gap-1 rounded-full border px-2 py-0.5",
-              "text-[11px] font-medium tabular-nums",
+              "text-micro font-medium tabular-nums",
               "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
               on
                 ? "border-accent/40 bg-accent/10 text-accent"
@@ -210,7 +210,7 @@ function BucketChips({
             ].join(" ")}
           >
             <span className="uppercase tracking-wider">{b.label}</span>
-            <span className="text-[10px] text-text-dim/70">
+            <span className="text-micro text-text-dim/70">
               · {b.games}g
             </span>
           </button>
@@ -295,8 +295,8 @@ function HeatCell({
   if (cell.games < minGames) {
     return (
       <td className="min-h-[44px] border-b border-border px-2 py-1.5 text-center text-text-dim/50">
-        <div className="text-[11px] tabular-nums">{pct1(winRate)}</div>
-        <div className="text-[9px] text-text-dim/50">
+        <div className="text-micro tabular-nums">{pct1(winRate)}</div>
+        <div className="text-micro text-text-dim/50">
           {cell.games}g (low)
         </div>
       </td>
@@ -309,12 +309,12 @@ function HeatCell({
       title={`${cell.wins}W ${cell.losses}L · ${cell.games} games · @${fmtMmr(cell.bucket)} MMR`}
     >
       <div
-        className="text-[12px] font-semibold tabular-nums"
+        className="text-micro font-semibold tabular-nums"
         style={{ color }}
       >
         {pct1(winRate)}
       </div>
-      <div className="text-[10px] text-text-dim">
+      <div className="text-micro text-text-dim">
         {cell.wins}–{cell.losses} · {cell.games}g
       </div>
     </td>

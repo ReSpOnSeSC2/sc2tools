@@ -147,11 +147,11 @@ function SourceTimelinePanel({
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-bg-subtle/50">
       <div className="sticky top-0 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-bg-subtle/90 px-3 py-1.5 backdrop-blur">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+        <span className="text-micro font-semibold uppercase tracking-wider text-text-muted">
           Source replay timeline ({rows.length})
         </span>
         <span
-          className="inline-flex items-center gap-1 rounded-full border border-accent-cyan/40 bg-accent-cyan/10 px-2 py-0.5 text-[10px] font-semibold text-accent-cyan"
+          className="inline-flex items-center gap-1 rounded-full border border-accent-cyan/40 bg-accent-cyan/10 px-2 py-0.5 text-micro font-semibold text-accent-cyan"
           title="Tech-defining events are the strongest signal of a build's identity. Adding them as rules gives the cleanest matches."
         >
           <Star
@@ -201,11 +201,11 @@ function SourceTimelinePanel({
                   >
                     {r.display}
                   </span>
-                  <span className="hidden text-[10px] text-text-dim sm:inline">
+                  <span className="hidden text-micro text-text-dim sm:inline">
                     {r.what}
                   </span>
                   {inRules ? (
-                    <span className="text-[10px] font-semibold text-accent-cyan">
+                    <span className="text-micro font-semibold text-accent-cyan">
                       ✓ in rules
                     </span>
                   ) : (
@@ -223,7 +223,7 @@ function SourceTimelinePanel({
                       disabled={ruleCap}
                       title="Add as a rule"
                       aria-label={`Add ${r.what} as a rule`}
-                      className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-md bg-accent px-2 text-[10px] font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-md bg-accent px-2 text-micro font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Plus className="h-3 w-3" aria-hidden />
                     </button>
@@ -257,7 +257,7 @@ function RulesListPanel({
 }: RulesListPanelProps) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-bg-subtle/50">
-      <div className="sticky top-0 border-b border-border bg-bg-subtle/90 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted backdrop-blur">
+      <div className="sticky top-0 border-b border-border bg-bg-subtle/90 px-3 py-1.5 text-micro font-semibold uppercase tracking-wider text-text-muted backdrop-blur">
         Your rules ({rules.length})
         <span className="ml-2 font-normal normal-case text-text-dim">
           · click ⚙ to cycle type · click time to edit
@@ -319,7 +319,7 @@ function RuleRow({ rule, onUpdate, onCycle, onRemove }: RuleRowProps) {
         onChange={(e) => onUpdate({ name: e.target.value.trim() })}
         className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-caption text-text placeholder:text-text-dim focus:border-border-strong focus:outline-none"
       />
-      <span className="text-[10px] text-text-dim">by</span>
+      <span className="text-micro text-text-dim">by</span>
       <TimeField
         valueSec={rule.time_lt}
         onChange={(next) => onUpdate({ time_lt: next })}
@@ -410,7 +410,7 @@ function CycleBadge({
       ].join(" ")}
     >
       <span className="font-semibold leading-none">{icon}</span>
-      <span className="text-[10px]">{label}</span>
+      <span className="text-micro">{label}</span>
     </button>
   );
 }

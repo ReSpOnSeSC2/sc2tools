@@ -244,7 +244,7 @@ export default function AdminUsersPage() {
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
-              className="btn btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-sm disabled:cursor-not-allowed disabled:opacity-50"
               disabled={pageHistory.length <= 1}
               onClick={prevPage}
             >
@@ -255,7 +255,7 @@ export default function AdminUsersPage() {
             </span>
             <button
               type="button"
-              className="btn btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-sm disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!data.nextBefore}
               onClick={nextPage}
             >
@@ -275,7 +275,7 @@ export default function AdminUsersPage() {
  */
 function AgentBadge({ lastSeen }: { lastSeen: string | null }) {
   return (
-    <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+    <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-micro font-medium text-success">
       <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
       Agent
       {lastSeen ? (

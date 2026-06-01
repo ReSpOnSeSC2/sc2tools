@@ -159,7 +159,7 @@ export function TimeOfDayHeatmap() {
     <Card
       title="Performance by time of day"
       right={
-        <div className="flex items-center gap-1 text-[11px]">
+        <div className="flex items-center gap-1 text-micro">
           <button
             type="button"
             onClick={() => setMode("wr")}
@@ -194,7 +194,7 @@ export function TimeOfDayHeatmap() {
             return (
               <>
                 Times in your local timezone (
-                <code className="rounded bg-bg-elevated px-1 py-0.5 font-mono text-[12px] text-text-muted">
+                <code className="rounded bg-bg-elevated px-1 py-0.5 font-mono text-micro text-text-muted">
                   {apiTz}
                 </code>
                 ).
@@ -204,7 +204,7 @@ export function TimeOfDayHeatmap() {
           return (
             <>
               Times in{" "}
-              <code className="rounded bg-bg-elevated px-1 py-0.5 font-mono text-[12px] text-text-muted">
+              <code className="rounded bg-bg-elevated px-1 py-0.5 font-mono text-micro text-text-muted">
                 {apiTz}
               </code>{" "}
               (the API converted from your filters).
@@ -218,14 +218,14 @@ export function TimeOfDayHeatmap() {
           {formattedBlocks.map((label, blockIdx) => (
             <div
               key={blockIdx}
-              className="whitespace-nowrap px-1 pb-1 text-center text-[11px] tabular-nums tracking-wide text-text-dim"
+              className="whitespace-nowrap px-1 pb-1 text-center text-micro tabular-nums tracking-wide text-text-dim"
             >
               {label}
             </div>
           ))}
           {DAY_LABELS.map((day, dowIdx) => (
             <div className="contents" key={day}>
-              <div className="pr-2 text-right text-[11px] font-medium text-text-muted">
+              <div className="pr-2 text-right text-micro font-medium text-text-muted">
                 {day}
               </div>
               {grid[dowIdx].map((cell, blockIdx) => (
@@ -282,7 +282,7 @@ function HeatCell({
 
   return (
     <div
-      className="m-0.5 flex aspect-square items-center justify-center rounded text-[10px] font-semibold tabular-nums text-text"
+      className="m-0.5 flex aspect-square items-center justify-center rounded text-micro font-semibold tabular-nums text-text"
       style={{ background }}
       title={tooltipText}
       aria-label={tooltipText}
@@ -303,7 +303,7 @@ function Legend({
 }) {
   if (mode === "wr") {
     return (
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-text-dim">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-micro text-text-dim">
         <span>WR ramp:</span>
         <span className="rounded px-1.5 py-0.5" style={{ background: wrColor(0.2, 0.7), color: "#fff" }}>
           ≤30%
@@ -319,7 +319,7 @@ function Legend({
     );
   }
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-text-dim">
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-micro text-text-dim">
       <span>Volume ramp:</span>
       <span
         className="rounded px-1.5 py-0.5 text-text"

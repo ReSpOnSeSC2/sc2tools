@@ -30,7 +30,7 @@ export function CumulativeTooltip({
       className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-xs shadow-[var(--shadow-card)]"
     >
       <div className="mb-1 flex items-center justify-between gap-3">
-        <span className="font-mono text-[11px] text-text-dim">
+        <span className="font-mono text-micro text-text-dim">
           #{point.index} · {fmtDate(game.date)}
         </span>
         <span
@@ -92,7 +92,7 @@ export function PeriodTooltip({
       role="tooltip"
       className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-xs shadow-[var(--shadow-card)]"
     >
-      <div className="mb-1 font-mono text-[11px] text-text-dim">
+      <div className="mb-1 font-mono text-micro text-text-dim">
         {bucketLabel} · {point.date}
       </div>
       <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">

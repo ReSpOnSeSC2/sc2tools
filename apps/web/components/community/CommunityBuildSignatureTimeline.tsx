@@ -105,7 +105,7 @@ export function CommunityBuildSignatureTimeline({
                     ) : (
                       <span
                         aria-hidden
-                        className="inline-flex h-6 w-6 items-center justify-center rounded bg-bg-elevated text-[10px] font-semibold uppercase tracking-wider text-text-dim"
+                        className="inline-flex h-6 w-6 items-center justify-center rounded bg-bg-elevated text-micro font-semibold uppercase tracking-wider text-text-dim"
                       >
                         {(row.displayName || row.rawName).slice(0, 2)}
                       </span>

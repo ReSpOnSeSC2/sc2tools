@@ -104,7 +104,7 @@ export function DevicesPanel() {
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
-      <section className="card space-y-4 p-6">
+      <section className="rounded-xl border border-border bg-bg-surface space-y-4 p-6">
         <h2 className="text-lg font-semibold">Pair a new device</h2>
         <p className="text-text-muted">
           On your gaming PC, run <code>sc2tools-agent</code>. It will
@@ -121,11 +121,11 @@ export function DevicesPanel() {
             maxLength={6}
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            className="input font-mono text-2xl tracking-[0.4em]"
+            className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none font-mono text-2xl tracking-[0.4em]"
             placeholder="123456"
             aria-label="6-digit pairing code"
           />
-          <button type="submit" className="btn" disabled={submitting}>
+          <button type="submit" className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover" disabled={submitting}>
             {submitting ? "Pairing…" : "Pair device"}
           </button>
           {feedback && (
@@ -139,7 +139,7 @@ export function DevicesPanel() {
         </form>
       </section>
 
-      <section className="card space-y-4 p-6">
+      <section className="rounded-xl border border-border bg-bg-surface space-y-4 p-6">
         <h2 className="text-lg font-semibold">Connected devices</h2>
         {isLoading ? (
           <p className="text-text-muted">Loading…</p>
@@ -171,7 +171,7 @@ export function DevicesPanel() {
                   </div>
                   <button
                     type="button"
-                    className="btn btn-danger text-xs"
+                    className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-danger text-white hover:opacity-90 text-xs"
                     onClick={() => onUnpair(d)}
                     disabled={isBusy}
                     aria-label={`Unpair ${deviceLabel(d)}`}

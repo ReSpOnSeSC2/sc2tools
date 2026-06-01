@@ -114,7 +114,7 @@ export function OpponentsTab({
           onChange={(e) => setSearch(e.target.value)}
           placeholder="search opponent name or ID…"
           aria-label="Search opponents"
-          className="input min-h-[44px] w-full sm:w-72"
+          className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[44px]"
         />
         <MinGamesPicker value={minGames} onChange={setMinGames} />
         <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
@@ -135,7 +135,7 @@ export function OpponentsTab({
         </div>
       ) : null}
 
-      <div className="card overflow-x-auto">
+      <div className="rounded-xl border border-border bg-bg-surface overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-bg-elevated">
             <tr>
@@ -273,7 +273,7 @@ function PulseIdCell({ opp }: { opp: Opp }) {
       title={`${label.value} · sc2pulse character id not resolved yet`}
     >
       {label.value}
-      <span className="ml-1 text-[10px] uppercase tracking-wider text-text-dim/70">
+      <span className="ml-1 text-micro uppercase tracking-wider text-text-dim/70">
         toon
       </span>
     </td>

@@ -170,7 +170,7 @@ export function NetMmrByMatchupChart() {
           >
             <div className="flex items-baseline justify-between gap-2">
               <span
-                className="truncate text-[11px] font-semibold"
+                className="truncate text-micro font-semibold"
                 style={{ color: r.meta.color }}
               >
                 {r.meta.label}
@@ -183,7 +183,7 @@ export function NetMmrByMatchupChart() {
                 {r.netMmr}
               </span>
             </div>
-            <div className="mt-0.5 text-[10px] tabular-nums text-text-dim">
+            <div className="mt-0.5 text-micro tabular-nums text-text-dim">
               {r.games} games · {pct1(r.winRate)} WR · avg{" "}
               {r.avgDelta > 0 ? "+" : ""}
               {r.avgDelta}/game
@@ -241,7 +241,7 @@ function PairCoverageSummary({
       ? `${pairCount} pair${pairCount === 1 ? "" : "s"} from ${totalGames} game${totalGames === 1 ? "" : "s"}`
       : `${pairCount} pair${pairCount === 1 ? "" : "s"}`;
   return (
-    <p className="mt-2 text-[10px] text-text-dim">
+    <p className="mt-2 text-micro text-text-dim">
       {head}
       {reasons.length ? ` · ${reasons.join(" · ")}` : ""}
     </p>

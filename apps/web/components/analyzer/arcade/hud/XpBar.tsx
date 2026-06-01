@@ -28,7 +28,7 @@ export function XpBar({ xp, level }: { xp: number; level: number }) {
             style={{ width: `${pct}%` }}
           />
         </div>
-        <span className="font-mono text-[10px] tabular-nums text-text-dim">
+        <span className="font-mono text-micro tabular-nums text-text-dim">
           {current} / {needed} XP
         </span>
       </div>

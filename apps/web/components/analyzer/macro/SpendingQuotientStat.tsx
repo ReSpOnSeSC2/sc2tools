@@ -57,7 +57,7 @@ export function SpendingQuotientStat({
       ].join(" ")}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-text-dim">
+        <span className="text-micro font-medium uppercase tracking-wider text-text-dim">
           {label}
         </span>
         <button
@@ -65,7 +65,7 @@ export function SpendingQuotientStat({
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
           aria-label={expanded ? `Hide ${label} explanation` : `Show ${label} explanation`}
-          className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full border border-border text-[10px] font-semibold text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full border border-border text-micro font-semibold text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           ?
         </button>

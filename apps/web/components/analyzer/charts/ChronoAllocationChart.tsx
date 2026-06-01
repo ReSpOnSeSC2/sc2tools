@@ -133,7 +133,7 @@ export function ChronoAllocationChart({ targets }: ChronoAllocationChartProps) {
         <span className="font-semibold uppercase tracking-wider text-text">
           Chrono allocation
         </span>
-        <span className="text-[11px] text-text-dim tabular-nums">
+        <span className="text-micro text-text-dim tabular-nums">
           {view.total} cast{view.total === 1 ? "" : "s"}
         </span>
       </figcaption>
@@ -158,7 +158,7 @@ export function ChronoAllocationChart({ targets }: ChronoAllocationChartProps) {
 
         <div className="min-w-0 flex-1">
           <table className="w-full text-caption">
-            <thead className="border-b border-border text-[11px] uppercase tracking-wider text-text-dim">
+            <thead className="border-b border-border text-micro uppercase tracking-wider text-text-dim">
               <tr>
                 <th className="py-1 pr-2 text-left">Target</th>
                 <th className="py-1 pr-2 text-right">Casts</th>

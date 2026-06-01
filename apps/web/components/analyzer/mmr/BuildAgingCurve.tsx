@@ -74,13 +74,13 @@ export function BuildAgingCurve() {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-text-dim">
+          <span className="text-micro uppercase tracking-wider text-text-dim">
             Min plays per build
           </span>
           <MinGamesPicker value={minGames} onChange={setMinGames} hideLabel />
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-text-dim">
+          <span className="text-micro uppercase tracking-wider text-text-dim">
             Builds shown (top N by volume)
           </span>
           <MinGamesPicker

@@ -219,7 +219,7 @@ export function MedianTimingsGrid({
       </div>
       <div
         aria-live="polite"
-        className="mb-2 text-[11px] text-text-dim"
+        className="mb-2 text-micro text-text-dim"
         data-testid="median-timings-summary"
       >
         {summary}
@@ -323,7 +323,7 @@ function TimingCard({
           className={empty ? "opacity-50" : ""}
         />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[11px] uppercase tracking-wider text-text-dim">
+          <div className="truncate text-micro uppercase tracking-wider text-text-dim">
             {display}
           </div>
           <div
@@ -335,17 +335,17 @@ function TimingCard({
             {i.medianDisplay || "-"}
           </div>
         {!empty && i.sampleCount >= 2 && i.p25Display && i.p75Display ? (
-          <div className="text-[10px] tabular-nums text-text-dim">
+          <div className="text-micro tabular-nums text-text-dim">
             {i.p25Display} — {i.p75Display}
           </div>
         ) : empty ? (
-          <div className="text-[10px] text-text-dim">no samples</div>
+          <div className="text-micro text-text-dim">no samples</div>
         ) : (
-          <div className="text-[10px] text-text-dim">single sample</div>
+          <div className="text-micro text-text-dim">single sample</div>
         )}
         </div>
       </div>
-      <div className="mt-1 flex items-center gap-1 text-[10px]">
+      <div className="mt-1 flex items-center gap-1 text-micro">
         <span className="tabular-nums text-text-dim">n={i.sampleCount || 0}</span>
         {!empty ? (
           <span
@@ -422,7 +422,7 @@ function TimingsDrilldownDrawer({
             <div className="truncate text-sm font-semibold text-text">
               {display}
             </div>
-            <div className="truncate text-[11px] text-text-dim">
+            <div className="truncate text-micro text-text-dim">
               {matchupLabel ? `${matchupLabel} · ` : ""}n={info.sampleCount} · median {info.medianDisplay}
               {info.p25Display && info.p75Display && info.sampleCount >= 2
                 ? ` (${info.p25Display}–${info.p75Display})`
@@ -449,7 +449,7 @@ function TimingsDrilldownDrawer({
             Close
           </button>
         </header>
-        <div className="border-b border-border px-5 py-3 text-[11px] text-text-dim">
+        <div className="border-b border-border px-5 py-3 text-micro text-text-dim">
           {sourceLabel} · sorted newest first
         </div>
         <div className="flex-1 overflow-y-auto" data-testid="timings-drilldown-list">
@@ -532,20 +532,20 @@ function SampleRow({
           {(sample.oppRace || "?")[0]?.toUpperCase()}
         </span>
         <span
-          className="rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white"
+          className="rounded px-1.5 py-0.5 text-micro font-semibold tabular-nums text-white"
           style={{ background: pillBg }}
           title={isWin ? "Win" : isLoss ? "Loss" : "Result unknown"}
         >
           {isWin ? "W" : isLoss ? "L" : "?"}
         </span>
       </div>
-      <div className="mt-1 flex items-center justify-between text-[11px] text-text-dim">
+      <div className="mt-1 flex items-center justify-between text-micro text-text-dim">
         <span title={sample.date} className="font-mono">
           {String(sample.date || "").slice(0, 10) || "—"}
         </span>
         <span className="flex items-center gap-2">
           <span
-            className="rounded bg-bg-elevated px-1.5 py-0.5 text-[10px] uppercase tracking-wider"
+            className="rounded bg-bg-elevated px-1.5 py-0.5 text-micro uppercase tracking-wider"
             title={
               source === "opp_build_log"
                 ? "parsed from opponent's build log"

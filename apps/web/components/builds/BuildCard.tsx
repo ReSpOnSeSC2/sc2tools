@@ -160,7 +160,7 @@ function BuildStatsRow({
     <dl className="mt-4 flex flex-wrap items-end justify-between gap-3 text-caption">
       <div className="flex items-baseline gap-3">
         <div>
-          <dt className="text-[10px] uppercase tracking-wider text-text-dim">
+          <dt className="text-micro uppercase tracking-wider text-text-dim">
             Win rate
           </dt>
           <dd
@@ -175,7 +175,7 @@ function BuildStatsRow({
           </dd>
         </div>
         <div>
-          <dt className="text-[10px] uppercase tracking-wider text-text-dim">
+          <dt className="text-micro uppercase tracking-wider text-text-dim">
             Record
           </dt>
           <dd className="text-body tabular-nums text-text">
@@ -198,7 +198,7 @@ function BuildStatsRow({
           </Badge>
         ) : null}
         {updated ? (
-          <div className="mt-1 text-[11px] text-text-dim">
+          <div className="mt-1 text-micro text-text-dim">
             Updated {fmtAgo(updated)}
           </div>
         ) : null}

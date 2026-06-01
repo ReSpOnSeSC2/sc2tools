@@ -171,14 +171,14 @@ function MetricChip({
 }) {
   return (
     <div className="flex flex-col rounded-lg border border-border bg-bg-elevated/60 px-3 py-2 min-w-[120px]">
-      <span className="text-[10px] uppercase tracking-wider text-text-dim">
+      <span className="text-micro uppercase tracking-wider text-text-dim">
         {label}
       </span>
       <span className={`text-h3 font-semibold tabular-nums ${valueClass}`}>
         {glyph ? <span className="mr-1 text-base" aria-hidden>{glyph}</span> : null}
         {value}
       </span>
-      <span className="text-[10px] text-text-dim">{sub}</span>
+      <span className="text-micro text-text-dim">{sub}</span>
     </div>
   );
 }
@@ -206,7 +206,7 @@ function MomentumChip({
           : "text-text-dim";
   return (
     <div className="flex flex-col rounded-lg border border-border bg-bg-elevated/60 px-3 py-2 min-w-[200px]">
-      <span className="text-[10px] uppercase tracking-wider text-text-dim">
+      <span className="text-micro uppercase tracking-wider text-text-dim">
         Momentum
       </span>
       <div className="flex items-baseline gap-2">
@@ -259,7 +259,7 @@ function MomentumChip({
           strokeWidth="0.4"
         />
       </svg>
-      <span className="mt-0.5 text-[10px] text-text-dim">
+      <span className="mt-0.5 text-micro text-text-dim">
         last {MOMENTUM_WINDOW} games · {presetShort}
       </span>
     </div>
@@ -353,7 +353,7 @@ function RibbonCell({
           : undefined
       }
     >
-      <span aria-hidden className="block text-[8px] font-bold leading-none text-bg/0">
+      <span aria-hidden className="block text-micro font-bold leading-none text-bg/0">
         {isWin ? "▲" : "▼"}
       </span>
     </button>
@@ -404,7 +404,7 @@ function NotableRunsList({
                 {fmtDate(run.games[0]?.date)} →{" "}
                 {fmtDate(run.games[run.games.length - 1]?.date)}
               </span>
-              <span className="ml-auto text-[10px] text-text-dim">
+              <span className="ml-auto text-micro text-text-dim">
                 {distinctMaps(run)} map{distinctMaps(run) === 1 ? "" : "s"}
               </span>
             </button>

@@ -63,7 +63,7 @@ export function CommunityBuildCard({ build }: CommunityBuildCardProps) {
           >
             {matchup}
           </Badge>
-          <span className="text-[11px] uppercase tracking-wider text-text-dim">
+          <span className="text-micro uppercase tracking-wider text-text-dim">
             Published {fmtAgo(build.publishedAt)}
           </span>
         </div>
@@ -77,7 +77,7 @@ export function CommunityBuildCard({ build }: CommunityBuildCardProps) {
         ) : null}
         <div className="mt-auto flex items-baseline justify-between pt-2">
           <VoteScore votes={votes} />
-          <span className="inline-flex items-center gap-1 text-[11px] text-text-dim">
+          <span className="inline-flex items-center gap-1 text-micro text-text-dim">
             <MessageSquare className="h-3 w-3" aria-hidden />
             <span>Open</span>
           </span>

@@ -136,7 +136,7 @@ export default async function CommunityBuildPage({
               </Badge>
             ) : null}
             <AuthorChip build={data} size="sm" />
-            <span className="inline-flex items-center gap-1 text-[11px] uppercase tracking-wider text-text-dim">
+            <span className="inline-flex items-center gap-1 text-micro uppercase tracking-wider text-text-dim">
               <Calendar className="h-3 w-3" aria-hidden />
               {fmtAgo(data.publishedAt)}
             </span>

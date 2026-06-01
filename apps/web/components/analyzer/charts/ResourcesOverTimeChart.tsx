@@ -365,7 +365,7 @@ function ChartEmptyState() {
 
 function Legend() {
   return (
-    <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+    <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-micro">
       <LegendSwatch color={COLOR_INCOME} dashed label={SERIES_LABEL.income} suffix="(you)" />
       <LegendSwatch color={COLOR_UNSPENT} dashed label={SERIES_LABEL.unspent} suffix="(you)" />
       <LegendSwatch color={COLOR_PROGRESS} dashed label={SERIES_LABEL.in_progress} suffix="(you)" />

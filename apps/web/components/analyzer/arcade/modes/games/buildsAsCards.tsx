@@ -226,11 +226,11 @@ function Render({
                     {c.name}
                   </span>
                   {played ? (
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-text-dim">
+                    <span className="font-mono text-micro uppercase tracking-wider text-text-dim">
                       ATK {c.attack} · DEF {c.defense}
                     </span>
                   ) : (
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-text-dim">
+                    <span className="font-mono text-micro uppercase tracking-wider text-text-dim">
                       Not played yet
                     </span>
                   )}

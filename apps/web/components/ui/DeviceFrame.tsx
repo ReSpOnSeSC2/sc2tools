@@ -80,7 +80,7 @@ function Chrome({
       </span>
       {title ? (
         <div className="flex flex-1 justify-center">
-          <span className="rounded-md border border-border bg-bg-surface px-3 py-0.5 text-[11px] text-text-muted">
+          <span className="rounded-md border border-border bg-bg-surface px-3 py-0.5 text-micro text-text-muted">
             {title}
           </span>
         </div>

@@ -10,7 +10,7 @@ export function WizardStreamlabs() {
         a tip via Streamlabs keeps the lights on.
       </p>
       <a
-        className="btn btn-secondary"
+        className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle"
         href="https://streamlabs.com/sc2tools/tip"
         target="_blank"
         rel="noopener noreferrer"

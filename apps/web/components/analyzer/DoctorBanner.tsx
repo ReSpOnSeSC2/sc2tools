@@ -34,7 +34,7 @@ export function DoctorBanner() {
           >
             <span>{w.message}</span>
             {w.cta && (
-              <Link href={w.cta.href} className="btn btn-secondary text-xs">
+              <Link href={w.cta.href} className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-xs">
                 {w.cta.label}
               </Link>
             )}

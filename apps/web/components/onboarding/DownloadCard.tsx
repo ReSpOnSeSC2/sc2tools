@@ -145,7 +145,7 @@ function ShaSnippet({
             {fileSize ? ` (${formatBytes(fileSize)} expected)` : ""}.
           </p>
           <div className="mt-2 flex items-center gap-2">
-            <code className="min-w-0 flex-1 break-all rounded border border-border bg-bg-elevated px-2 py-1 font-mono text-[11px] text-text">
+            <code className="min-w-0 flex-1 break-all rounded border border-border bg-bg-elevated px-2 py-1 font-mono text-micro text-text">
               {sha}
             </code>
             <button
@@ -223,7 +223,7 @@ function NextSteps() {
         {steps.map((s, i) => (
           <li key={s.heading} className="flex gap-3">
             <span
-              className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-accent-cyan/15 text-[11px] font-semibold text-accent-cyan"
+              className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-accent-cyan/15 text-micro font-semibold text-accent-cyan"
               aria-hidden
             >
               {i + 1}

@@ -52,7 +52,7 @@ export function WinRateSortToggle({
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
       {!hideLabel && (
-        <span className="text-[11px] uppercase tracking-wider text-text-dim">
+        <span className="text-micro uppercase tracking-wider text-text-dim">
           Win rate
         </span>
       )}
