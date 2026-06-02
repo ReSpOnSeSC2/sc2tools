@@ -497,7 +497,7 @@ const ARCADE_TILES: ReadonlyArray<ArcadeTile> = [
   {
     iconSrc: "/arcade/icons/closers-eye.png",
     title: "Closer's Eye",
-    body: "Which of your builds closes wins the fastest? Mean win-length, blind.",
+    body: "When you win, which build ends games the fastest? Pick it blind.",
   },
   {
     iconSrc: "/arcade/icons/two-truths-lie.png",
@@ -507,12 +507,12 @@ const ARCADE_TILES: ReadonlyArray<ArcadeTile> = [
   {
     iconSrc: "/arcade/icons/bingo-ladder.png",
     title: "Bingo: Ladder Edition",
-    body: "A 5×5 of forward objectives. Your next-7-day games tick the cells.",
+    body: "A 5×5 card of goals. Your games over the next 7 days tick off the squares.",
   },
   {
     iconSrc: "/arcade/icons/stock-market.png",
     title: "Stock Market",
-    body: "Lock in a build portfolio. Weekly P&L feeds the leaderboard.",
+    body: "Invest in your builds. Your weekly gains feed the leaderboard.",
   },
 ];
 
