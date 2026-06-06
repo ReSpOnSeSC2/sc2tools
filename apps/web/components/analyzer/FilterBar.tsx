@@ -113,7 +113,7 @@ export function FilterBar() {
           onClick={() => setOpen((v) => !v)}
           aria-haspopup="dialog"
           aria-expanded={open}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-border bg-bg-surface px-3 py-2 text-sm text-text transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-line bg-bg-surface px-3 py-2 text-sm text-text transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
         >
           <span className="font-medium">{triggerLabel}</span>
           <ChevronDown className="h-3.5 w-3.5 text-text-muted" aria-hidden />
@@ -190,7 +190,7 @@ export function FilterBar() {
                       value={customStart}
                       max={customEnd || undefined}
                       onChange={(e) => setCustomStart(e.target.value)}
-                      className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none mt-0.5 min-h-[44px]"
+                      className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none mt-0.5 min-h-[44px]"
                     />
                   </label>
                   <label className="block">
@@ -202,7 +202,7 @@ export function FilterBar() {
                       value={customEnd}
                       min={customStart || undefined}
                       onChange={(e) => setCustomEnd(e.target.value)}
-                      className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none mt-0.5 min-h-[44px]"
+                      className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none mt-0.5 min-h-[44px]"
                     />
                   </label>
                   <button

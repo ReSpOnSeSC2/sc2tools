@@ -85,7 +85,7 @@ export function MinGamesPicker({
       <div
         role="radiogroup"
         aria-label="Minimum games preset"
-        className="inline-flex overflow-hidden rounded border border-border"
+        className="inline-flex overflow-hidden rounded-lg border-2 border-line"
       >
         {steps.map((n) => {
           const active = !isCustom && value === n;
@@ -119,7 +119,7 @@ export function MinGamesPicker({
           onBlur={handleCustomBlur}
           placeholder="—"
           aria-label="Custom minimum games"
-          className="min-h-[32px] w-16 rounded border border-border bg-bg-elevated px-2 text-xs tabular-nums text-text outline-none transition placeholder:text-text-dim focus:border-accent focus:ring-2 focus:ring-accent/40"
+          className="min-h-[32px] w-16 rounded-lg border-2 border-line bg-bg-surface px-2 text-xs tabular-nums text-text outline-none transition placeholder:text-text-dim focus:border-accent focus:ring-2 focus:ring-accent/40"
         />
       </label>
     </div>

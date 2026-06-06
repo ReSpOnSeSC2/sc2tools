@@ -64,7 +64,7 @@ export function BuildFilterBar({
   return (
     <section
       aria-label="Filter custom builds"
-      className="space-y-3 rounded-xl border border-border bg-bg-surface p-4"
+      className="space-y-3 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <Field

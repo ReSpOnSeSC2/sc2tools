@@ -114,7 +114,7 @@ export function OpponentsTab({
           onChange={(e) => setSearch(e.target.value)}
           placeholder="search opponent name or ID…"
           aria-label="Search opponents"
-          className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[44px]"
+          className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[44px]"
         />
         <MinGamesPicker value={minGames} onChange={setMinGames} />
         <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
@@ -135,7 +135,7 @@ export function OpponentsTab({
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-border bg-bg-surface overflow-x-auto">
+      <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-bg-elevated">
             <tr>
