@@ -264,9 +264,7 @@ function HeroPeekSlide({
     <div className="relative grid min-h-[260px] items-center gap-6 px-6 py-8 sm:min-h-[320px] sm:px-10 sm:py-12 md:min-h-[420px] md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] md:gap-10 md:py-14">
       <GlowHalo color="cyan" position="center" size={60} opacity={0.55} />
       <div className="relative space-y-3 text-center md:text-left">
-        <p className="text-caption font-semibold uppercase tracking-wider text-accent-cyan">
-          {eyebrow}
-        </p>
+        <p className="overline text-accent-cyan">{eyebrow}</p>
         <h2 className="text-h2 font-semibold text-text md:text-h1">{title}</h2>
         <p className="text-body-lg text-text-muted">{body}</p>
       </div>
@@ -403,7 +401,7 @@ function PillarCard({ icon: Icon, title, body, placement }: PositionedPillar) {
         <div className="flex h-full flex-col gap-3 p-5">
           <div
             aria-hidden
-            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
           >
             <Icon className="h-5 w-5" />
           </div>
@@ -460,7 +458,7 @@ function HowItWorksSection() {
             <li key={step.num}>
               <Card padded={false} className="h-full">
                 <div className="space-y-3 p-5">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-accent-cyan/40 bg-bg-surface font-mono text-caption font-semibold text-accent-cyan">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-accent-cyan/40 bg-bg-surface font-mono text-caption font-semibold text-accent-cyan">
                     {step.num}
                   </span>
                   <h3 className="text-h4 font-semibold text-text">
@@ -521,7 +519,7 @@ function ArcadeSection() {
     <section className="relative mx-auto max-w-6xl space-y-6">
       <header className="space-y-3 text-center">
         <Badge
-          variant="cyan"
+          variant="signal"
           iconLeft={<Sparkles className="h-3.5 w-3.5" aria-hidden />}
         >
           New · Arcade
@@ -561,7 +559,7 @@ function ArcadeTileCard({ iconSrc, title, body }: ArcadeTile) {
         <div className="flex h-full flex-col gap-3 p-5">
           <div
             aria-hidden
-            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-accent-cyan/30 bg-accent-cyan/10"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-accent-cyan/30 bg-accent-cyan/10"
           >
             <Image
               src={iconSrc}
@@ -587,7 +585,7 @@ function ArcadeMoreCard() {
         <div className="flex h-full flex-col gap-3 p-5">
           <div
             aria-hidden
-            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
           >
             <Gamepad2 className="h-5 w-5" />
           </div>
@@ -609,9 +607,7 @@ function ArcadeMoreCard() {
 function SocialProofSection() {
   return (
     <section className="mx-auto max-w-3xl text-center">
-      <p className="text-caption font-semibold uppercase tracking-wider text-accent-cyan">
-        Built in the open
-      </p>
+      <p className="overline text-accent-cyan">Built in the open</p>
       <p className="mt-3 text-h2 font-semibold text-text md:text-h1">
         Built by ladder players,
         <br className="hidden sm:inline" /> for ladder players.
@@ -670,7 +666,7 @@ function DonateBanner() {
 function FinalCtaSection() {
   return (
     <section className="relative">
-      <div className="gradient-backdrop relative mx-auto max-w-5xl overflow-hidden rounded-2xl border border-accent-cyan/30 px-6 py-12 shadow-halo-cyan md:px-12 md:py-16">
+      <div className="gradient-backdrop clip-notch scanlines hud-frame relative mx-auto max-w-5xl overflow-hidden border border-accent-cyan/30 px-6 py-12 shadow-halo-cyan md:px-12 md:py-16">
         <GlowHalo color="mixed" position="center" size={90} />
         <div className="relative mx-auto max-w-3xl space-y-5 text-center">
           <h2 className="text-h1 font-bold tracking-tight text-text md:text-display-lg">

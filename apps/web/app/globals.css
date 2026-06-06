@@ -18,71 +18,97 @@
  * localStorage('sc2tools.theme') and sets data-theme before paint.
  * ============================================================ */
 
+/* ------------------------------------------------------------------
+ * "Command Console" identity — a tactical, broadcast-grade system.
+ *
+ * The palette is deliberately monochromatic-cool (deep blue-black ground,
+ * teal/cyan primary) so the product reads like a StarCraft II command
+ * terminal rather than the generic indigo-glow look. A single warm AMBER
+ * "signal" colour is reserved for rare emphasis (new flags, key numbers),
+ * giving the warm/cool tension you see in esports broadcasts.
+ *
+ * `--accent` stays deep enough that white text on a filled accent keeps the
+ * same (or better) contrast it had before, so the ~90 existing
+ * `bg-accent text-white` call-sites need no edits.
+ * ------------------------------------------------------------------ */
 :root[data-theme="dark"],
 :root:not([data-theme]) {
   color-scheme: dark;
 
-  --bg: 11 13 18;             /* #0b0d12 */
-  --bg-surface: 17 20 27;     /* #11141b */
-  --bg-elevated: 22 26 35;    /* #161a23 */
-  --bg-subtle: 28 34 48;      /* #1c2230 */
+  --bg: 6 9 14;               /* #06090e — OLED-leaning ground */
+  --bg-surface: 12 16 23;     /* #0c1017 */
+  --bg-elevated: 17 23 32;    /* #111720 */
+  --bg-subtle: 26 33 46;      /* #1a212e */
 
-  --text: 230 232 238;        /* #e6e8ee */
-  --text-muted: 154 163 178;  /* #9aa3b2 */
-  --text-dim: 125 134 150;    /* #7d8696 — lifted from #6b7280 for AA on dark surfaces */
+  --text: 231 237 240;        /* #e7edf0 */
+  --text-muted: 150 164 176;  /* #96a4b0 */
+  --text-dim: 119 133 146;    /* #778592 — AA on dark surfaces */
 
-  --accent: 124 140 255;      /* #7c8cff */
-  --accent-hover: 148 160 255;/* #94a0ff */
-  --accent-cyan: 62 192 199;  /* #3ec0c7 */
+  --accent: 21 125 140;       /* #157d8c — deep teal, white text ~4:1 */
+  --accent-hover: 31 158 175; /* #1f9eaf */
+  --accent-cyan: 60 224 214;  /* #3ce0d6 — electric cyan, glows + eyebrows */
 
-  --success: 62 192 122;      /* #3ec07a */
-  --warning: 230 180 80;      /* #e6b450 */
+  --signal: 245 184 74;       /* #f5b84a — amber, rare emphasis only */
+  --signal-hover: 250 200 110;/* #fac86e */
+
+  --success: 62 200 132;      /* #3ec884 */
+  --warning: 232 156 56;      /* #e89c38 — nudged orange so it stays distinct from amber signal */
   --danger: 255 107 107;      /* #ff6b6b */
 
-  --border: 31 37 51;         /* #1f2533 */
-  --border-strong: 42 49 66;  /* #2a3142 */
+  --border: 28 36 49;         /* #1c2431 */
+  --border-strong: 44 56 72;  /* #2c3848 */
 
-  --halo-cyan: rgba(62, 192, 199, 0.18);
-  --halo-accent: rgba(124, 140, 255, 0.18);
+  --halo-cyan: rgba(60, 224, 214, 0.16);
+  --halo-accent: rgba(31, 158, 175, 0.18);
 
-  --race-protoss: 124 140 255;   /* #7c8cff — matches accent */
-  --race-terran:  255 107 107;   /* #ff6b6b — danger-ish ladder colour */
+  /* Blueprint grid + scanline overlays — alpha baked in (not channel triples). */
+  --grid-line: rgba(96, 188, 200, 0.045);
+  --scanline: rgba(255, 255, 255, 0.018);
+
+  --race-protoss: 124 140 255;   /* #7c8cff — azure, kept distinct in data viz */
+  --race-terran:  255 107 107;   /* #ff6b6b */
   --race-zerg:    167 139 250;   /* #a78bfa — violet, ladder canon */
-  --race-random:  154 163 178;   /* muted neutral */
+  --race-random:  150 164 176;   /* muted neutral */
 
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.02), 0 4px 16px rgba(0, 0, 0, 0.24);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.02), 0 8px 28px rgba(0, 0, 0, 0.36);
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg: 246 247 251;          /* #f6f7fb */
+  --bg: 244 246 250;          /* #f4f6fa */
   --bg-surface: 255 255 255;  /* #ffffff */
-  --bg-elevated: 250 251 255; /* #fafbff */
-  --bg-subtle: 238 240 247;   /* #eef0f7 */
+  --bg-elevated: 249 251 254; /* #f9fbfe */
+  --bg-subtle: 235 239 245;   /* #ebeff5 */
 
-  --text: 14 17 24;           /* #0e1118 */
-  --text-muted: 90 99 120;    /* #5a6378 */
-  --text-dim: 105 114 136;    /* #697288 — darkened from #8089a0 for AA on light surfaces */
+  --text: 13 18 26;           /* #0d121a */
+  --text-muted: 84 96 114;    /* #546072 */
+  --text-dim: 101 113 133;    /* #657185 — AA on light surfaces */
 
-  --accent: 91 109 255;       /* #5b6dff */
-  --accent-hover: 68 88 240;  /* #4458f0 */
-  --accent-cyan: 30 160 168;  /* #1ea0a8 */
+  --accent: 14 125 140;       /* #0e7d8c — deep teal, white text ~4.3:1 */
+  --accent-hover: 9 104 117;  /* #096875 */
+  --accent-cyan: 17 150 158;  /* #11969e */
 
-  --success: 34 163 90;       /* #22a35a */
-  --warning: 183 130 36;      /* #b78224 */
-  --danger: 214 73 78;        /* #d6494e */
+  --signal: 191 124 18;       /* #bf7c12 — amber darkened for AA on white */
+  --signal-hover: 166 106 12; /* #a66a0c */
 
-  --border: 223 227 238;      /* #dfe3ee */
-  --border-strong: 199 206 224;/* #c7cee0 */
+  --success: 28 156 86;       /* #1c9c56 */
+  --warning: 176 118 24;      /* #b07618 */
+  --danger: 210 68 73;        /* #d24449 */
 
-  --halo-cyan: rgba(30, 160, 168, 0.14);
-  --halo-accent: rgba(91, 109, 255, 0.14);
+  --border: 221 226 236;      /* #dde2ec */
+  --border-strong: 197 205 221;/* #c5cddd */
+
+  --halo-cyan: rgba(17, 150, 158, 0.12);
+  --halo-accent: rgba(14, 125, 140, 0.12);
+
+  --grid-line: rgba(18, 64, 78, 0.05);
+  --scanline: rgba(15, 30, 45, 0.015);
 
   --race-protoss: 91 109 255;    /* #5b6dff */
   --race-terran:  214 73 78;     /* #d6494e */
-  --race-zerg:    124 95 230;    /* #7c5fe6 — darker for AA on white */
-  --race-random:  90 99 120;     /* matches text-muted */
+  --race-zerg:    124 95 230;    /* #7c5fe6 */
+  --race-random:  84 96 114;     /* matches text-muted */
 
   --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.6), 0 3px 12px rgba(15, 23, 42, 0.06);
 }
@@ -109,6 +135,35 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* ============================================================
+ * Ambient "command console" backdrop — a faint blueprint grid
+ * that fades out toward the bottom, fixed behind all content.
+ * This is the single biggest tell that the UI is hand-built
+ * rather than a default styling sheet. Decorative + inert.
+ * ============================================================ */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 46px 46px;
+  background-position: center -1px;
+  -webkit-mask-image: radial-gradient(
+    ellipse 120% 75% at 50% -10%,
+    #000 0%,
+    transparent 72%
+  );
+  mask-image: radial-gradient(
+    ellipse 120% 75% at 50% -10%,
+    #000 0%,
+    transparent 72%
+  );
 }
 
 a {
@@ -262,4 +317,125 @@ a:hover {
   font-family: theme("fontFamily.mono");
   font-size: 14px;
   line-height: 22px;
+}
+
+/* ============================================================
+ * Command-console UI language
+ *
+ * A small kit of bespoke treatments that give the product its
+ * tactical identity without re-theming every component:
+ *   .overline     — monospace telemetry label (eyebrows, KPI labels)
+ *   .hud-frame    — corner-bracket targeting marks on a surface
+ *   .clip-notch   — angular bevelled panel (hero / final CTA)
+ *   .scanlines    — faint CRT scanline overlay on media surfaces
+ *   .sweep-hover  — light sweep that crosses a control on hover
+ *   .rule-tick    — short accent tick used before section titles
+ * ============================================================ */
+
+/* Monospace telemetry label — replaces the old uppercase eyebrow. */
+.overline {
+  font-family: theme("fontFamily.mono");
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* Corner targeting brackets (top-left + bottom-right) drawn with the
+ * brand cyan. Parent must establish a stacking/positioning context;
+ * applied on top of existing borders, so it layers cleanly. */
+.hud-frame {
+  position: relative;
+}
+.hud-frame::before,
+.hud-frame::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: rgb(var(--accent-cyan) / 0.55);
+  pointer-events: none;
+  z-index: 1;
+}
+.hud-frame::before {
+  top: 7px;
+  left: 7px;
+  border-top: 1.5px solid;
+  border-left: 1.5px solid;
+}
+.hud-frame::after {
+  right: 7px;
+  bottom: 7px;
+  border-right: 1.5px solid;
+  border-bottom: 1.5px solid;
+}
+
+/* Angular bevelled panel — cuts the top-right + bottom-left corners so a
+ * surface reads like a HUD plate instead of a rounded card. */
+.clip-notch {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 18px) 0,
+    100% 18px,
+    100% 100%,
+    18px 100%,
+    0 calc(100% - 18px)
+  );
+}
+
+/* Faint CRT scanlines for media surfaces (carousel, mockups). The host
+ * element needs position + overflow-hidden. */
+.scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    var(--scanline) 0,
+    var(--scanline) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  z-index: 2;
+}
+
+/* Light sweep that crosses a filled control on hover/focus. The host
+ * element needs position:relative + overflow-hidden (utility supplies
+ * both). Neutralised by the prefers-reduced-motion block above. */
+.sweep-hover {
+  position: relative;
+  overflow: hidden;
+}
+.sweep-hover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-130%) skewX(-12deg);
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 100%
+  );
+  transition: transform 0.6s var(--ease-out);
+  pointer-events: none;
+}
+.sweep-hover:hover::after,
+.sweep-hover:focus-visible::after {
+  transform: translateX(130%) skewX(-12deg);
+}
+
+/* Short accent tick used to lead a section title. */
+.rule-tick {
+  display: inline-block;
+  width: 22px;
+  height: 2px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    rgb(var(--accent-cyan)),
+    rgb(var(--accent-cyan) / 0)
+  );
 }

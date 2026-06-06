@@ -36,6 +36,12 @@ const config: Config = {
           hover: channel("--accent-hover"),
           cyan: channel("--accent-cyan"),
         },
+        // Warm "signal" colour — reserved for rare emphasis (NEW flags,
+        // hero numbers). The single warm note against the cool palette.
+        signal: {
+          DEFAULT: channel("--signal"),
+          hover: channel("--signal-hover"),
+        },
         success: channel("--success"),
         warning: channel("--warning"),
         danger: channel("--danger"),
@@ -65,7 +71,16 @@ const config: Config = {
           "system-ui",
           "sans-serif",
         ],
-        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        // `--font-mono` is JetBrains Mono, loaded by next/font in
+        // app/layout.tsx. It carries the "telemetry" voice — overlines,
+        // KPI values, step numbers — that defines the console aesthetic.
+        mono: [
+          "var(--font-mono)",
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "monospace",
+        ],
       },
       // Custom motion curves so transitions read intentional rather than
       // using the browser-default ease. `--ease-*`/`--dur-*` live in
