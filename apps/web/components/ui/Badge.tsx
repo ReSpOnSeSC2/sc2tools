@@ -6,6 +6,7 @@ export type BadgeVariant =
   | "neutral"
   | "accent"
   | "cyan"
+  | "signal"
   | "success"
   | "warning"
   | "danger";
@@ -22,6 +23,7 @@ const VARIANT_CLASSES: Record<BadgeVariant, string> = {
   neutral: "bg-bg-elevated text-text-muted border-border",
   accent: "bg-accent/15 text-accent border-accent/30",
   cyan: "bg-accent-cyan/15 text-accent-cyan border-accent-cyan/30",
+  signal: "bg-signal/15 text-signal border-signal/30",
   success: "bg-success/15 text-success border-success/30",
   warning: "bg-warning/15 text-warning border-warning/30",
   danger: "bg-danger/15 text-danger border-danger/30",
@@ -46,7 +48,9 @@ export function Badge({
   return (
     <span
       className={[
-        "inline-flex items-center rounded-full border font-medium",
+        // Squared chip (rounded-[5px], not a full pill) reads as a tactical
+        // telemetry tag and is the quiet through-line across the UI.
+        "inline-flex items-center rounded-[5px] border font-medium",
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],
         className,

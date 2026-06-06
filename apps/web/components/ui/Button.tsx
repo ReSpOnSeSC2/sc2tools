@@ -17,8 +17,11 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
+  // `sweep-hover` runs a light sweep across the fill on hover/focus and
+  // supplies position/overflow; the cyan glow on hover reinforces the
+  // tactical "powering up" read. Both are inert under reduced-motion.
   primary:
-    "bg-accent text-white hover:bg-accent-hover active:translate-y-px disabled:opacity-50",
+    "sweep-hover bg-accent text-white hover:bg-accent-hover hover:shadow-halo-cyan active:translate-y-px disabled:opacity-50",
   secondary:
     "bg-bg-elevated text-text border border-border hover:bg-bg-subtle hover:border-border-strong disabled:opacity-50",
   ghost:

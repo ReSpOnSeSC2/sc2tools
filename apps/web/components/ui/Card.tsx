@@ -17,8 +17,10 @@ const VARIANT_CLASSES: Record<CardVariant, string> = {
   default: "bg-bg-surface border border-border",
   elevated:
     "bg-bg-surface border border-border shadow-[var(--shadow-card)]",
+  // Feature surfaces get HUD corner-targeting brackets (.hud-frame) and a
+  // restrained cyan glow — the marquee "this is the thing to look at" card.
   feature:
-    "bg-bg-surface border border-accent/30 shadow-halo-cyan",
+    "bg-bg-surface border border-accent-cyan/25 shadow-halo-cyan hud-frame",
   interactive:
     "bg-bg-surface border border-border hover:border-border-strong hover:bg-bg-elevated transition-colors cursor-pointer",
 };

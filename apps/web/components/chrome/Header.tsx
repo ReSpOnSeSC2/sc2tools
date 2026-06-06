@@ -74,11 +74,23 @@ export function Header() {
         data-scrolled={scrolled || undefined}
         className={[
           "sticky top-0 z-40 w-full border-b border-border bg-bg/80",
+          "relative",
           "motion-safe:transition-[background-color,backdrop-filter] motion-safe:duration-150",
           "data-[scrolled]:bg-bg/90 data-[scrolled]:supports-[backdrop-filter]:backdrop-blur-md",
           "pt-[env(safe-area-inset-top,0px)]",
         ].join(" ")}
       >
+        {/* Faint cyan telemetry rule under the bar — brightens once scrolled. */}
+        <span
+          aria-hidden
+          className={[
+            "pointer-events-none absolute inset-x-0 bottom-[-1px] h-px",
+            "bg-gradient-to-r from-transparent via-accent-cyan/40 to-transparent",
+            "opacity-50 motion-safe:transition-opacity motion-safe:duration-150",
+            "data-[scrolled]:opacity-100",
+          ].join(" ")}
+          data-scrolled={scrolled || undefined}
+        />
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:h-16 sm:gap-4 sm:px-6 lg:px-8">
           <Brand />
           <nav
@@ -183,8 +195,13 @@ function Brand() {
         className="rounded-full motion-safe:transition-shadow motion-safe:duration-150 group-hover:shadow-[0_0_18px_var(--halo-cyan)] group-focus-visible:shadow-[0_0_18px_var(--halo-cyan)]"
         priority
       />
-      <span className="text-body font-semibold tracking-tight text-text motion-safe:transition-colors motion-safe:duration-150 group-hover:text-accent-cyan group-focus-visible:text-accent-cyan">
-        SC2 Tools
+      {/* Monospace callsign + a live status tick — the "console online" cue. */}
+      <span className="flex items-center gap-1.5 font-mono text-caption font-semibold uppercase tracking-[0.14em] text-text motion-safe:transition-colors motion-safe:duration-150 group-hover:text-accent-cyan group-focus-visible:text-accent-cyan">
+        SC2&nbsp;Tools
+        <span
+          aria-hidden
+          className="h-1.5 w-1.5 rounded-full bg-accent-cyan shadow-[0_0_8px_var(--halo-cyan)]"
+        />
       </span>
     </Link>
   );

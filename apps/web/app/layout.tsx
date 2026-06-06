@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { CookieBanner } from "@/components/CookieBanner";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
@@ -19,6 +19,20 @@ const inter = Inter({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-sans",
+});
+
+/**
+ * JetBrains Mono, self-hosted via next/font and exposed as `--font-mono`
+ * (read by tailwind.config.ts `fontFamily.mono`). It powers the
+ * "telemetry" voice of the Command Console aesthetic — overlines, KPI
+ * values, and step numbers — so monospace type is intentional, not a
+ * fallback. A tight subset of weights keeps the payload small.
+ */
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["500", "600", "700"],
+  variable: "--font-mono",
 });
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
@@ -69,7 +83,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b0d12",
+  themeColor: "#06090e",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -92,7 +106,7 @@ export default function RootLayout({
       <html
         lang="en"
         data-theme="dark"
-        className={inter.variable}
+        className={`${inter.variable} ${jetbrainsMono.variable}`}
         suppressHydrationWarning
       >
         <head>
