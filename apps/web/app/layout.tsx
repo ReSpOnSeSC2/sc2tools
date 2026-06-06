@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Hanken_Grotesk } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { CookieBanner } from "@/components/CookieBanner";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
@@ -15,24 +15,25 @@ import "./globals.css";
  * the whole app actually renders in Inter instead of falling back to
  * system-ui. `display: "swap"` keeps text visible during font load.
  */
-const inter = Inter({
+/**
+ * "Courtside" type system (adapted from RallyReady):
+ *   - Hanken Grotesk — clean humanist body/UI face (--font-sans)
+ *   - Bricolage Grotesque — confident grotesque DISPLAY face for headings,
+ *     wordmark, big numbers (--font-display)
+ * Both load via next/font (self-hosted at build, no layout shift). Numeric
+ * monospace falls back to the system mono stack in tailwind.config.ts.
+ */
+const sans = Hanken_Grotesk({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-sans",
 });
 
-/**
- * JetBrains Mono, self-hosted via next/font and exposed as `--font-mono`
- * (read by tailwind.config.ts `fontFamily.mono`). It powers the
- * "telemetry" voice of the Command Console aesthetic — overlines, KPI
- * values, and step numbers — so monospace type is intentional, not a
- * fallback. A tight subset of weights keeps the payload small.
- */
-const jetbrainsMono = JetBrains_Mono({
+const display = Bricolage_Grotesque({
   subsets: ["latin"],
   display: "swap",
-  weight: ["500", "600", "700"],
-  variable: "--font-mono",
+  weight: ["600", "700", "800"],
+  variable: "--font-display",
 });
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
@@ -106,7 +107,7 @@ export default function RootLayout({
       <html
         lang="en"
         data-theme="dark"
-        className={`${inter.variable} ${jetbrainsMono.variable}`}
+        className={`${sans.variable} ${display.variable}`}
         suppressHydrationWarning
       >
         <head>

@@ -13,16 +13,15 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 export type CardVariant = "default" | "elevated" | "feature" | "interactive";
 
+// Courtside cards: a bold 2px ink outline + a hard offset shadow (no blur) so
+// every surface reads like a physical "playbook sticker" rather than a soft
+// generic panel. The feature variant swaps the ink line for an accent outline.
 const VARIANT_CLASSES: Record<CardVariant, string> = {
-  default: "bg-bg-surface border border-border",
-  elevated:
-    "bg-bg-surface border border-border shadow-[var(--shadow-card)]",
-  // Feature surfaces get HUD corner-targeting brackets (.hud-frame) and a
-  // restrained cyan glow — the marquee "this is the thing to look at" card.
-  feature:
-    "bg-bg-surface border border-accent-cyan/25 shadow-halo-cyan hud-frame",
+  default: "bg-bg-surface border-2 border-line shadow-hard",
+  elevated: "bg-bg-surface border-2 border-line shadow-hard",
+  feature: "bg-bg-surface border-2 border-accent shadow-hard",
   interactive:
-    "bg-bg-surface border border-border hover:border-border-strong hover:bg-bg-elevated transition-colors cursor-pointer",
+    "bg-bg-surface border-2 border-line shadow-hard hover:border-accent hover:bg-bg-elevated transition-colors cursor-pointer",
 };
 
 interface CardBaseProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {

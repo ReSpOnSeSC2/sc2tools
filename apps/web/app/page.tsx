@@ -401,7 +401,7 @@ function PillarCard({ icon: Icon, title, body, placement }: PositionedPillar) {
         <div className="flex h-full flex-col gap-3 p-5">
           <div
             aria-hidden
-            className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border-2 border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan"
           >
             <Icon className="h-5 w-5" />
           </div>
@@ -559,7 +559,7 @@ function ArcadeTileCard({ iconSrc, title, body }: ArcadeTile) {
         <div className="flex h-full flex-col gap-3 p-5">
           <div
             aria-hidden
-            className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-accent-cyan/30 bg-accent-cyan/10"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border-2 border-accent-cyan/40 bg-accent-cyan/10"
           >
             <Image
               src={iconSrc}
@@ -585,7 +585,7 @@ function ArcadeMoreCard() {
         <div className="flex h-full flex-col gap-3 p-5">
           <div
             aria-hidden
-            className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border-2 border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan"
           >
             <Gamepad2 className="h-5 w-5" />
           </div>
@@ -666,7 +666,7 @@ function DonateBanner() {
 function FinalCtaSection() {
   return (
     <section className="relative">
-      <div className="gradient-backdrop clip-notch scanlines hud-frame relative mx-auto max-w-5xl overflow-hidden border border-accent-cyan/30 px-6 py-12 shadow-halo-cyan md:px-12 md:py-16">
+      <div className="gradient-backdrop relative mx-auto max-w-5xl overflow-hidden rounded-2xl border-2 border-accent px-6 py-12 shadow-hard md:px-12 md:py-16">
         <GlowHalo color="mixed" position="center" size={90} />
         <div className="relative mx-auto max-w-3xl space-y-5 text-center">
           <h2 className="text-h1 font-bold tracking-tight text-text md:text-display-lg">

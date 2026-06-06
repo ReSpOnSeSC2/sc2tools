@@ -55,32 +55,38 @@ const config: Config = {
           DEFAULT: channel("--border"),
           strong: channel("--border-strong"),
         },
+        // Courtside structural outline — the bold 2px line on cards/buttons.
+        line: channel("--line"),
       },
       boxShadow: {
         "halo-cyan": "0 0 60px var(--halo-cyan)",
         "halo-accent": "0 0 60px var(--halo-accent)",
+        // The Courtside signature: a hard offset shadow with no blur.
+        hard: "var(--shadow-hard)",
       },
       fontFamily: {
-        // `--font-sans` is set by next/font (Inter) on <html> in
-        // app/layout.tsx. The literal "Inter" + system fallbacks cover
-        // the brief window before the variable resolves.
+        // Body/UI face — Hanken Grotesk via next/font (`--font-sans`), set on
+        // <html> in app/layout.tsx, with a full system fallback.
         sans: [
           "var(--font-sans)",
-          "Inter",
+          "Hanken Grotesk",
           "ui-sans-serif",
           "system-ui",
           "sans-serif",
         ],
-        // `--font-mono` is JetBrains Mono, loaded by next/font in
-        // app/layout.tsx. It carries the "telemetry" voice — overlines,
-        // KPI values, step numbers — that defines the console aesthetic.
-        mono: [
-          "var(--font-mono)",
-          "ui-monospace",
-          "SFMono-Regular",
-          "Menlo",
-          "monospace",
+        // Display face — Bricolage Grotesque (`--font-display`). The athletic
+        // grotesque voice for headings, the wordmark, and big numbers.
+        display: [
+          "var(--font-display)",
+          "Bricolage Grotesque",
+          "Hanken Grotesk",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
         ],
+        // Numeric/tabular monospace — system stack (Courtside uses no custom
+        // mono face).
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       // Custom motion curves so transitions read intentional rather than
       // using the browser-default ease. `--ease-*`/`--dur-*` live in
@@ -96,12 +102,14 @@ const config: Config = {
         DEFAULT: "var(--dur-base)",
       },
       fontSize: {
-        "display-xl": ["64px", { lineHeight: "72px", letterSpacing: "-0.02em", fontWeight: "700" }],
-        "display-lg": ["48px", { lineHeight: "56px", letterSpacing: "-0.02em", fontWeight: "700" }],
-        h1: ["36px", { lineHeight: "44px", letterSpacing: "-0.01em", fontWeight: "600" }],
-        h2: ["28px", { lineHeight: "36px", letterSpacing: "-0.005em", fontWeight: "600" }],
-        h3: ["22px", { lineHeight: "30px", fontWeight: "600" }],
-        h4: ["18px", { lineHeight: "26px", fontWeight: "600" }],
+        // Courtside: heavier display weights + tighter tracking for the
+        // athletic-editorial voice.
+        "display-xl": ["64px", { lineHeight: "68px", letterSpacing: "-0.03em", fontWeight: "800" }],
+        "display-lg": ["48px", { lineHeight: "52px", letterSpacing: "-0.03em", fontWeight: "800" }],
+        h1: ["36px", { lineHeight: "42px", letterSpacing: "-0.02em", fontWeight: "700" }],
+        h2: ["28px", { lineHeight: "34px", letterSpacing: "-0.02em", fontWeight: "700" }],
+        h3: ["22px", { lineHeight: "28px", letterSpacing: "-0.015em", fontWeight: "700" }],
+        h4: ["18px", { lineHeight: "24px", letterSpacing: "-0.01em", fontWeight: "700" }],
         "body-lg": ["17px", { lineHeight: "26px" }],
         body: ["15px", { lineHeight: "24px" }],
         caption: ["13px", { lineHeight: "20px" }],
