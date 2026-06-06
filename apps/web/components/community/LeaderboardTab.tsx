@@ -54,7 +54,7 @@ export function LeaderboardTab() {
                 if (/^\d{4}-W\d{2}$/.test(v)) setWk(v);
               }}
               aria-label="ISO week key (e.g. 2026-W19)"
-              className="ml-2 h-9 w-28 rounded border border-border bg-bg-elevated px-2 font-mono text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="ml-2 h-9 w-28 rounded-lg border-2 border-line bg-bg-surface px-2 font-mono text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
           </label>
         </div>

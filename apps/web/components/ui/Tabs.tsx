@@ -114,7 +114,7 @@ Tabs.List = function TabsList({
       className={[
         orientation === "horizontal"
           ? "flex flex-wrap items-center gap-1 border-b border-border overflow-x-auto"
-          : "rounded-xl border border-border bg-bg-surface sticky top-4 flex h-fit flex-col gap-0.5 overflow-hidden p-1",
+          : "rounded-xl border-2 border-line bg-bg-surface shadow-hard sticky top-4 flex h-fit flex-col gap-0.5 overflow-hidden p-1",
         className,
       ]
         .filter(Boolean)

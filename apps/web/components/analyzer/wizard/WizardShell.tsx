@@ -46,7 +46,7 @@ export function WizardShell({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-xs"
+            className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-xs"
           >
             Skip wizard
           </button>
@@ -76,7 +76,7 @@ export function WizardShell({
       <div className="flex justify-between">
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle"
+          className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated"
           onClick={helpers.prev}
           disabled={helpers.isFirst}
         >

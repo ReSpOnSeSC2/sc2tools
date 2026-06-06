@@ -272,7 +272,7 @@ function SizeToggle({
     <div
       role="radiogroup"
       aria-label="Matrix size"
-      className="inline-flex rounded-md border border-border bg-bg-elevated/60 p-0.5"
+      className="inline-flex rounded-lg border-2 border-line bg-bg-elevated/60 p-0.5"
     >
       {SIZE_OPTIONS.map((opt) => (
         <button

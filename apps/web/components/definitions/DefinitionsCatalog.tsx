@@ -171,7 +171,7 @@ export function DefinitionsCatalog() {
               <button
                 type="button"
                 onClick={clear}
-                className="inline-flex min-h-[36px] items-center gap-1 rounded-md border border-border bg-bg-elevated px-3 text-caption text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="inline-flex min-h-[36px] items-center gap-1 rounded-full border-2 border-line bg-bg-surface px-3 text-caption text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 Clear filters
               </button>
