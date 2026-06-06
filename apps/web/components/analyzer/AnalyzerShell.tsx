@@ -40,7 +40,7 @@ export function AnalyzerShell({
 
         <DashboardKpiStrip totalGames={totalGames} />
 
-        <div className="rounded-lg border border-border bg-bg-surface px-3 py-3 sm:py-2">
+        <div className="rounded-xl border-2 border-line bg-bg-surface px-3 py-3 shadow-hard sm:py-2">
           <FilterBar />
         </div>
 

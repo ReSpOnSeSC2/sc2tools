@@ -35,7 +35,7 @@ export function BuildOrderPerspectiveToggle({
       role="radiogroup"
       aria-label="Build perspective"
       className={[
-        "inline-flex items-center gap-1 rounded-lg border border-border bg-bg-elevated p-0.5",
+        "inline-flex items-center gap-1 rounded-lg border-2 border-line bg-bg-elevated p-0.5",
         className,
       ]
         .filter(Boolean)

@@ -247,7 +247,7 @@ function BuildsLibraryInner() {
           <div className="flex flex-wrap gap-2">
             <Link
               href="/definitions"
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-border bg-bg-elevated px-4 text-body font-semibold text-text transition-colors hover:border-border-strong hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+              className="hard-press inline-flex min-h-[44px] items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
             >
               <BookOpen className="h-4 w-4" aria-hidden />
               Definitions
@@ -392,7 +392,7 @@ function extractErr(err: unknown): string {
 
 function FirstRunEmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-border bg-bg-surface p-8 sm:p-12">
+    <section className="relative overflow-hidden rounded-2xl border-2 border-line bg-bg-surface p-8 shadow-hard sm:p-12">
       <GlowHalo color="cyan" position="top" opacity={0.85} size={70} />
       <div className="relative">
         <EmptyStatePanel

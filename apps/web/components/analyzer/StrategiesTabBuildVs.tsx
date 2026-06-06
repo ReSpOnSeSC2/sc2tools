@@ -106,7 +106,7 @@ export function BuildVsStrategyView({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <input
-          className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
+          className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
           placeholder="search build or strategy…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -119,7 +119,7 @@ export function BuildVsStrategyView({
             onChange={(dir) => sort.setSortExplicit("winRate", dir)}
           />
         ) : null}
-        <div className="inline-flex overflow-hidden rounded border border-border">
+        <div className="inline-flex overflow-hidden rounded-lg border-2 border-line">
           {(["table", "heatmap"] as const).map((v) => (
             <button
               key={v}

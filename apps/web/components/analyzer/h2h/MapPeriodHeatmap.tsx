@@ -265,7 +265,7 @@ function SplitToggle({
     <div
       role="radiogroup"
       aria-label="Period split"
-      className="inline-flex rounded-md border border-border bg-bg-elevated/60 p-0.5"
+      className="inline-flex rounded-lg border-2 border-line bg-bg-elevated/60 p-0.5"
     >
       <ToggleButton
         active={split === "halves"}

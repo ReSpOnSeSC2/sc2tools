@@ -30,7 +30,7 @@ export function DashboardLayout({ me }: { me: Me }) {
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-h1 font-semibold">Dashboard</h1>
+          <h1 className="title-spine text-h1 font-bold">Dashboard</h1>
           <SyncStatus
             total={me.games.total}
             latest={me.games.latest}
@@ -46,7 +46,7 @@ export function DashboardLayout({ me }: { me: Me }) {
         ) : null}
         <Link
           href="/download"
-          className="inline-flex min-h-[44px] items-center gap-2 self-start rounded-lg border border-border bg-bg-elevated px-4 py-2 text-body font-semibold text-text transition-colors hover:bg-bg-subtle hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:self-auto"
+          className="hard-press inline-flex min-h-[44px] items-center gap-2 self-start rounded-full border-2 border-line bg-bg-surface px-5 py-2 font-display text-body font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:self-auto"
         >
           <Download className="h-4 w-4" aria-hidden />
           Get the agent

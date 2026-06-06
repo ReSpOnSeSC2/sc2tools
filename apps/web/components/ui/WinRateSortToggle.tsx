@@ -59,7 +59,7 @@ export function WinRateSortToggle({
       <div
         role="radiogroup"
         aria-label="Sort by win rate"
-        className="inline-flex overflow-hidden rounded border border-border"
+        className="inline-flex overflow-hidden rounded-lg border-2 border-line"
       >
         {OPTIONS.map((o) => {
           const selected = active && dir === o.dir;

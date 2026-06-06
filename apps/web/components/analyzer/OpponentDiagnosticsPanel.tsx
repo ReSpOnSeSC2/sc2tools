@@ -126,7 +126,7 @@ export function OpponentDiagnosticsPanel({
         {open ? (
           <button
             type="button"
-            className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors border border-border bg-bg-elevated text-text hover:bg-bg-subtle text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
             disabled={retry.kind === "busy" || isLoading}
             onClick={runRetry}
           >

@@ -46,7 +46,7 @@ export function H2HHeader({
               <select
                 value={String(rollingWindow)}
                 onChange={(e) => setRollingWindow(Number(e.target.value))}
-                className="min-h-[44px] rounded-md border border-border bg-bg-elevated px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="min-h-[44px] rounded-lg border-2 border-line bg-bg-surface px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 {rollingOptions.map((n) => (
                   <option key={n} value={n}>
@@ -62,7 +62,7 @@ export function H2HHeader({
               <select
                 value={bucket}
                 onChange={(e) => setBucket(e.target.value as Bucket)}
-                className="min-h-[44px] rounded-md border border-border bg-bg-elevated px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="min-h-[44px] rounded-lg border-2 border-line bg-bg-surface px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <option value="day" disabled={bucketDisabled.day}>
                   Day

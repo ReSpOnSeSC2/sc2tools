@@ -176,7 +176,7 @@ function ByOppStrategyView({
       <KpiStrip items={kpis} />
       <div className="flex flex-wrap items-center gap-3">
         <input
-          className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
+          className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
           placeholder="search strategy name…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -468,7 +468,7 @@ function StrategyFiltersBar() {
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-bg-surface p-3">
+    <div className="space-y-3 rounded-xl border-2 border-line bg-bg-surface p-3 shadow-hard">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <FilterSelect
           label="My race"
@@ -561,7 +561,7 @@ function FilterSelect({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="min-h-[44px] w-full rounded-md border border-border bg-bg-elevated px-2.5 text-sm text-text transition-colors hover:border-border-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
+        className="min-h-[44px] w-full rounded-lg border-2 border-line bg-bg-surface px-2.5 text-sm text-text transition-colors hover:border-border-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {options.map((o) => (
           <option key={o.value || "_any"} value={o.value}>
@@ -640,7 +640,7 @@ export function StrategiesTab() {
             ? "Win rate vs opponent strategies"
             : "My build × Their strategy"}
         </h2>
-        <div className="inline-flex self-start overflow-hidden rounded border border-border sm:self-auto">
+        <div className="inline-flex self-start overflow-hidden rounded-lg border-2 border-line sm:self-auto">
           {(["bvs", "opp"] as const).map((v) => (
             <button
               key={v}

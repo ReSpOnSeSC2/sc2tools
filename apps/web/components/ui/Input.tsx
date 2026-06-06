@@ -25,11 +25,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       ref={ref}
       aria-invalid={invalid || undefined}
       className={[
-        "block w-full bg-bg-elevated text-text border placeholder:text-text-dim",
+        "block w-full bg-bg-surface text-text border-2 placeholder:text-text-dim",
         "transition-colors",
         invalid
           ? "border-danger focus:border-danger focus:ring-danger"
-          : "border-border focus:border-accent",
+          : "border-line focus:border-accent",
         "focus:outline-none focus:ring-2 focus:ring-accent/40",
         "disabled:opacity-50 disabled:cursor-not-allowed",
         SIZE_CLASSES[inputSize],

@@ -163,7 +163,7 @@ export function CommunityVotePanel({
               rows={3}
               maxLength={80}
               placeholder="Spam, harassment, broken steps…"
-              className="block w-full rounded-md border border-border bg-bg-elevated p-2 text-caption text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
+              className="block w-full rounded-lg border-2 border-line bg-bg-surface p-2 text-caption text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
             />
             <div className="flex justify-end gap-2">
               <Button
