@@ -61,16 +61,27 @@
   --halo-cyan: rgba(60, 224, 214, 0.16);
   --halo-accent: rgba(31, 158, 175, 0.18);
 
-  /* Blueprint grid + scanline overlays — alpha baked in (not channel triples). */
-  --grid-line: rgba(96, 188, 200, 0.045);
-  --scanline: rgba(255, 255, 255, 0.018);
+  /* "Courtside" structural line — the bold outline weight worn by cards,
+     buttons, and inputs. In dark it must be a visible MID tone (a near-black
+     line would vanish on the near-black ground), echoing RallyReady's dark
+     outline treatment. */
+  --line: 92 105 124;              /* #5c697c — visible 2px outline on dark */
+
+  /* Hard offset shadow (no blur) — the signature "playbook sticker" depth.
+     A pure-black offset would vanish on the near-black ground, so on dark we
+     tint the hard offset with the brand cyan: the sticker lift stays visible
+     and on-palette while keeping RallyReady's crisp no-blur edge. */
+  --shadow-hard: 3px 3px 0 rgba(60, 224, 214, 0.22);
+
+  /* Dot-grid backdrop ink (alpha baked in, not a channel triple). */
+  --dot: rgba(150, 200, 205, 0.05);
 
   --race-protoss: 124 140 255;   /* #7c8cff — azure, kept distinct in data viz */
   --race-terran:  255 107 107;   /* #ff6b6b */
   --race-zerg:    167 139 250;   /* #a78bfa — violet, ladder canon */
   --race-random:  150 164 176;   /* muted neutral */
 
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.02), 0 8px 28px rgba(0, 0, 0, 0.36);
+  --shadow-card: var(--shadow-hard);
 }
 
 :root[data-theme="light"] {
@@ -102,15 +113,18 @@
   --halo-cyan: rgba(17, 150, 158, 0.12);
   --halo-accent: rgba(14, 125, 140, 0.12);
 
-  --grid-line: rgba(18, 64, 78, 0.05);
-  --scanline: rgba(15, 30, 45, 0.015);
+  /* Courtside: in light mode the structural outline is near-black ink and the
+     hard shadow is that same ink — the crisp "sticker" edge on white. */
+  --line: 13 18 26;                /* #0d121a — ink outline */
+  --shadow-hard: 3px 3px 0 rgba(13, 18, 26, 0.9);
+  --dot: rgba(15, 30, 45, 0.06);
 
   --race-protoss: 91 109 255;    /* #5b6dff */
   --race-terran:  214 73 78;     /* #d6494e */
   --race-zerg:    124 95 230;    /* #7c5fe6 */
   --race-random:  84 96 114;     /* matches text-muted */
 
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.6), 0 3px 12px rgba(15, 23, 42, 0.06);
+  --shadow-card: var(--shadow-hard);
 }
 
 /* ============================================================
@@ -138,10 +152,9 @@ body {
 }
 
 /* ============================================================
- * Ambient "command console" backdrop — a faint blueprint grid
- * that fades out toward the bottom, fixed behind all content.
- * This is the single biggest tell that the UI is hand-built
- * rather than a default styling sheet. Decorative + inert.
+ * Ambient "Courtside" backdrop — a faint ink dot-grid fixed behind
+ * all content, framing the app like a playbook sitting on paper
+ * (lifted from RallyReady's desktop dot-grid). Decorative + inert.
  * ============================================================ */
 body::before {
   content: "";
@@ -149,21 +162,33 @@ body::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 46px 46px;
-  background-position: center -1px;
+  background-image: radial-gradient(var(--dot) 1.5px, transparent 1.6px);
+  background-size: 22px 22px;
+  background-position: center;
   -webkit-mask-image: radial-gradient(
-    ellipse 120% 75% at 50% -10%,
+    ellipse 120% 80% at 50% -5%,
     #000 0%,
-    transparent 72%
+    transparent 78%
   );
   mask-image: radial-gradient(
-    ellipse 120% 75% at 50% -10%,
+    ellipse 120% 80% at 50% -5%,
     #000 0%,
-    transparent 72%
+    transparent 78%
   );
+}
+
+/* ============================================================
+ * Headings wear the display face (Bricolage Grotesque) — the
+ * confident athletic-editorial voice of the Courtside system.
+ * Per-element size/line-height utilities still win; this only
+ * sets the family + tight tracking app-wide.
+ * ============================================================ */
+h1,
+h2,
+h3,
+h4 {
+  font-family: theme("fontFamily.display");
+  letter-spacing: -0.02em;
 }
 
 a {
@@ -263,38 +288,46 @@ a:hover {
  * Typography utilities (mirror tailwind.config fontSize scale)
  * ============================================================ */
 .t-display-xl {
+  font-family: theme("fontFamily.display");
   font-size: 64px;
-  line-height: 72px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  line-height: 68px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 .t-display-lg {
+  font-family: theme("fontFamily.display");
   font-size: 48px;
-  line-height: 56px;
+  line-height: 52px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.t-h1 {
+  font-family: theme("fontFamily.display");
+  font-size: 36px;
+  line-height: 42px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
-.t-h1 {
-  font-size: 36px;
-  line-height: 44px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
 .t-h2 {
+  font-family: theme("fontFamily.display");
   font-size: 28px;
-  line-height: 36px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
+  line-height: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 .t-h3 {
+  font-family: theme("fontFamily.display");
   font-size: 22px;
-  line-height: 30px;
-  font-weight: 600;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
 }
 .t-h4 {
+  font-family: theme("fontFamily.display");
   font-size: 18px;
-  line-height: 26px;
-  font-weight: 600;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 .t-body-lg {
   font-size: 17px;
@@ -320,122 +353,60 @@ a:hover {
 }
 
 /* ============================================================
- * Command-console UI language
+ * "Courtside" UI language (adapted from RallyReady)
  *
- * A small kit of bespoke treatments that give the product its
- * tactical identity without re-theming every component:
- *   .overline     — monospace telemetry label (eyebrows, KPI labels)
- *   .hud-frame    — corner-bracket targeting marks on a surface
- *   .clip-notch   — angular bevelled panel (hero / final CTA)
- *   .scanlines    — faint CRT scanline overlay on media surfaces
- *   .sweep-hover  — light sweep that crosses a control on hover
- *   .rule-tick    — short accent tick used before section titles
+ * The athletic-editorial kit that gives the product its point of view:
+ *   .overline     — bold uppercase label (eyebrows, KPI labels)
+ *   .title-spine  — accent "spine" bar beside a screen/section title
+ *   .hard-press   — button that physically collapses into its shadow
+ *   .rule-tick    — legacy alias kept as the accent spine (back-compat)
  * ============================================================ */
 
-/* Monospace telemetry label — replaces the old uppercase eyebrow. */
+/* Bold uppercase label in the body face — the editorial eyebrow. */
 .overline {
-  font-family: theme("fontFamily.mono");
-  font-size: 11px;
+  font-family: theme("fontFamily.sans");
+  font-size: 12px;
   line-height: 16px;
-  font-weight: 600;
-  letter-spacing: 0.22em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-/* Corner targeting brackets (top-left + bottom-right) drawn with the
- * brand cyan. Parent must establish a stacking/positioning context;
- * applied on top of existing borders, so it layers cleanly. */
-.hud-frame {
+/* The signature title "spine": a short accent bar to the left of a title,
+ * tying every screen together as deliberate art-direction. */
+.title-spine {
   position: relative;
+  padding-left: 16px;
 }
-.hud-frame::before,
-.hud-frame::after {
+.title-spine::before {
   content: "";
   position: absolute;
-  width: 14px;
-  height: 14px;
-  border-color: rgb(var(--accent-cyan) / 0.55);
-  pointer-events: none;
-  z-index: 1;
+  left: 0;
+  top: 0.14em;
+  bottom: 0.14em;
+  width: 6px;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
 }
-.hud-frame::before {
-  top: 7px;
-  left: 7px;
-  border-top: 1.5px solid;
-  border-left: 1.5px solid;
-}
-.hud-frame::after {
-  right: 7px;
-  bottom: 7px;
-  border-right: 1.5px solid;
-  border-bottom: 1.5px solid;
-}
-
-/* Angular bevelled panel — cuts the top-right + bottom-left corners so a
- * surface reads like a HUD plate instead of a rounded card. */
-.clip-notch {
-  clip-path: polygon(
-    0 0,
-    calc(100% - 18px) 0,
-    100% 18px,
-    100% 100%,
-    18px 100%,
-    0 calc(100% - 18px)
-  );
-}
-
-/* Faint CRT scanlines for media surfaces (carousel, mockups). The host
- * element needs position + overflow-hidden. */
-.scanlines::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    0deg,
-    var(--scanline) 0,
-    var(--scanline) 1px,
-    transparent 1px,
-    transparent 3px
-  );
-  z-index: 2;
-}
-
-/* Light sweep that crosses a filled control on hover/focus. The host
- * element needs position:relative + overflow-hidden (utility supplies
- * both). Neutralised by the prefers-reduced-motion block above. */
-.sweep-hover {
-  position: relative;
-  overflow: hidden;
-}
-.sweep-hover::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-130%) skewX(-12deg);
-  background: linear-gradient(
-    100deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.22) 50%,
-    transparent 100%
-  );
-  transition: transform 0.6s var(--ease-out);
-  pointer-events: none;
-}
-.sweep-hover:hover::after,
-.sweep-hover:focus-visible::after {
-  transform: translateX(130%) skewX(-12deg);
-}
-
-/* Short accent tick used to lead a section title. */
+/* Back-compat: anything still asking for .rule-tick gets the spine bar. */
 .rule-tick {
   display: inline-block;
-  width: 22px;
-  height: 2px;
+  width: 6px;
+  align-self: stretch;
+  min-height: 1.1em;
   border-radius: 9999px;
-  background: linear-gradient(
-    90deg,
-    rgb(var(--accent-cyan)),
-    rgb(var(--accent-cyan) / 0)
-  );
+  background: rgb(var(--accent));
+}
+
+/* Tactile press: the hard offset shadow COLLAPSES as the control pushes
+ * 3px into the page — RallyReady's "playbook sticker" interaction.
+ * Neutralised under prefers-reduced-motion by the global block above. */
+.hard-press {
+  box-shadow: var(--shadow-hard);
+  transition: transform 0.08s var(--ease-out), box-shadow 0.08s var(--ease-out),
+    background-color 0.12s var(--ease-out);
+}
+.hard-press:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
 }

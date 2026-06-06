@@ -115,7 +115,7 @@ export function HeroCarousel({
     >
       <div
         aria-live="polite"
-        className="scanlines group relative overflow-hidden rounded-2xl border border-accent-cyan/25 bg-bg-elevated/40 shadow-halo-cyan"
+        className="group relative overflow-hidden rounded-2xl border-2 border-line bg-bg-elevated/40 shadow-hard"
       >
         <ul className="relative" role="list">
           {slides.map((slide, i) => {

@@ -33,11 +33,19 @@ export function PageHeader({
     >
       <div className="space-y-1.5">
         {eyebrow ? (
-          <div className="text-caption font-semibold uppercase tracking-wider text-accent-cyan">
-            {eyebrow}
-          </div>
+          <div className="overline text-accent-cyan">{eyebrow}</div>
         ) : null}
-        <h1 className="text-h1 font-semibold text-text">{title}</h1>
+        <h1
+          className={[
+            "text-h1 font-bold text-text",
+            // The accent "spine" only reads when the title is left-aligned.
+            align === "center" ? "" : "title-spine",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          {title}
+        </h1>
         {description ? (
           <p className="max-w-2xl text-body-lg text-text-muted">
             {description}

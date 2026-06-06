@@ -16,24 +16,24 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
 }
 
+// Courtside buttons are pills in the display face. Primary/secondary/danger
+// wear the 2px ink outline + hard offset shadow and physically COLLAPSE into
+// that shadow on press (`hard-press`). Ghost stays flat and quiet.
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  // `sweep-hover` runs a light sweep across the fill on hover/focus and
-  // supplies position/overflow; the cyan glow on hover reinforces the
-  // tactical "powering up" read. Both are inert under reduced-motion.
   primary:
-    "sweep-hover bg-accent text-white hover:bg-accent-hover hover:shadow-halo-cyan active:translate-y-px disabled:opacity-50",
+    "hard-press bg-accent text-white border-2 border-line hover:bg-accent-hover disabled:opacity-50",
   secondary:
-    "bg-bg-elevated text-text border border-border hover:bg-bg-subtle hover:border-border-strong disabled:opacity-50",
+    "hard-press bg-bg-surface text-text border-2 border-line hover:bg-bg-elevated disabled:opacity-50",
   ghost:
-    "bg-transparent text-text hover:bg-bg-elevated disabled:opacity-50",
+    "bg-transparent text-text border-2 border-transparent hover:bg-bg-elevated transition-colors disabled:opacity-50",
   danger:
-    "bg-danger text-white hover:opacity-90 active:translate-y-px disabled:opacity-50",
+    "hard-press bg-danger text-white border-2 border-line hover:bg-danger disabled:opacity-50",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-caption gap-1.5 rounded-md min-w-[44px]",
-  md: "h-10 px-4 text-body gap-2 rounded-lg min-w-[44px]",
-  lg: "h-12 px-5 text-body-lg gap-2.5 rounded-lg min-w-[44px]",
+  sm: "h-9 px-4 text-caption gap-1.5 rounded-full min-w-[44px]",
+  md: "h-11 px-5 text-body gap-2 rounded-full min-w-[44px]",
+  lg: "h-12 px-6 text-body-lg gap-2.5 rounded-full min-w-[44px]",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -62,8 +62,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         aria-busy={loading || undefined}
         data-loading={loading || undefined}
         className={[
-          "inline-flex items-center justify-center font-semibold",
-          "transition-colors transition-transform duration-150",
+          "inline-flex items-center justify-center font-display font-bold tracking-tight",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           "disabled:cursor-not-allowed",
           VARIANT_CLASSES[variant],

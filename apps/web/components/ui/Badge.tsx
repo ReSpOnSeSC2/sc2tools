@@ -48,9 +48,8 @@ export function Badge({
   return (
     <span
       className={[
-        // Squared chip (rounded-[5px], not a full pill) reads as a tactical
-        // telemetry tag and is the quiet through-line across the UI.
-        "inline-flex items-center rounded-[5px] border font-medium",
+        // Courtside "sticker" tag: a bold pill with a crisp outline.
+        "inline-flex items-center rounded-full border-[1.5px] font-bold",
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],
         className,
