@@ -62,7 +62,7 @@ export function StatCard({
       </div>
       <div
         className={[
-          "font-semibold tabular-nums leading-none",
+          "font-display font-bold tabular-nums leading-none",
           VALUE_CLASSES[size],
         ].join(" ")}
       >
