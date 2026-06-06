@@ -41,8 +41,8 @@
   --bg-subtle: 26 33 46;      /* #1a212e */
 
   --text: 231 237 240;        /* #e7edf0 */
-  --text-muted: 150 164 176;  /* #96a4b0 */
-  --text-dim: 119 133 146;    /* #778592 — AA on dark surfaces */
+  --text-muted: 159 173 185;  /* #9fadb9 — ~9.7:1 on ground */
+  --text-dim: 134 146 159;    /* #86929f — lifted to ~7.2:1 for comfortable reads */
 
   --accent: 21 125 140;       /* #157d8c — deep teal, white text ~4:1 */
   --accent-hover: 31 158 175; /* #1f9eaf */
@@ -81,9 +81,9 @@
   --bg-elevated: 249 251 254; /* #f9fbfe */
   --bg-subtle: 235 239 245;   /* #ebeff5 */
 
-  --text: 13 18 26;           /* #0d121a */
-  --text-muted: 84 96 114;    /* #546072 */
-  --text-dim: 101 113 133;    /* #657185 — AA on light surfaces */
+  --text: 13 18 26;           /* #0d121a — ~17:1 */
+  --text-muted: 63 72 86;     /* #3f4856 — darkened to ~8.6:1 for crisp secondary text */
+  --text-dim: 81 91 107;      /* #515b6b — darkened to ~6.6:1, no more washed-out labels */
 
   --accent: 14 125 140;       /* #0e7d8c — deep teal, white text ~4.3:1 */
   --accent-hover: 9 104 117;  /* #096875 */

@@ -598,7 +598,7 @@ function SeasonGroup({
         <h4 className="text-xs uppercase tracking-wider text-text-dim">{title}</h4>
         {usingFallback ? (
           <span
-            className="text-micro uppercase tracking-wider text-text-dim/70"
+            className="text-micro uppercase tracking-wider text-text-muted"
             title="Catalog not loaded yet — showing approximate boundaries. Real boundaries arrive once SC2Pulse responds."
           >
             approx
@@ -701,7 +701,7 @@ function SeasonRow({
             </span>
           ) : null}
           {approx ? (
-            <span className="ml-1.5 align-middle text-micro uppercase tracking-wider text-text-dim/70">
+            <span className="ml-1.5 align-middle text-micro uppercase tracking-wider text-text-muted">
               approx
             </span>
           ) : null}
