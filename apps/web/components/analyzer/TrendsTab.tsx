@@ -206,6 +206,7 @@ export function TrendsTab() {
               type="checkbox"
               checked={rolling}
               onChange={(e) => setRolling(e.target.checked)}
+              className="h-4 w-4 cursor-pointer accent-accent"
             />
             Rolling WR ({ROLL_N})
           </label>
@@ -215,7 +216,7 @@ export function TrendsTab() {
           <select
             value={bucket}
             onChange={(e) => setBucket(e.target.value)}
-            className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none text-sm"
+            className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none text-sm"
           >
             <option value="day">Day</option>
             <option value="week">Week</option>

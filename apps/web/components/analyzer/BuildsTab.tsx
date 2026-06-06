@@ -66,7 +66,7 @@ export function BuildsTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <input
-          className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
+          className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
           placeholder="search build…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -106,7 +106,7 @@ export function BuildsTab() {
                   <button
                     type="button"
                     onClick={() => setEditing(b.name)}
-                    className="flex w-full flex-col gap-1.5 rounded-lg border border-border bg-bg-surface px-3 py-2 text-left transition hover:bg-accent/10"
+                    className="flex w-full flex-col gap-1.5 rounded-xl border-2 border-line bg-bg-surface px-3 py-2 text-left shadow-hard transition hover:border-accent hover:bg-accent/10"
                   >
                     <div className="text-sm font-semibold text-text">
                       {b.name}

@@ -85,7 +85,7 @@ export function GameStage({
             <button
               type="button"
               onClick={onShare}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-border bg-bg-surface px-3 text-caption font-semibold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="hard-press inline-flex min-h-[44px] items-center gap-1.5 rounded-full border-2 border-line bg-bg-surface px-4 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               Share
             </button>
