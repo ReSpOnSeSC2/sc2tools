@@ -130,10 +130,10 @@ export function MmrRangeFilter({
           }}
           aria-label="Custom MMR delta"
           placeholder="—"
-          className="w-12 bg-transparent text-center tabular-nums outline-none placeholder:text-text-dim/60"
+          className="w-12 bg-transparent text-center tabular-nums outline-none placeholder:text-text-dim"
         />
       </label>
-      <span className="text-micro text-text-dim/70" aria-live="polite">
+      <span className="text-micro text-text-muted" aria-live="polite">
         {labelText}
       </span>
     </div>

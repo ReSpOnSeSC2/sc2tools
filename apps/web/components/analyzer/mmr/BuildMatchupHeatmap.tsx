@@ -210,7 +210,7 @@ function BucketChips({
             ].join(" ")}
           >
             <span className="uppercase tracking-wider">{b.label}</span>
-            <span className="text-micro text-text-dim/70">
+            <span className="text-micro text-text-muted">
               · {b.games}g
             </span>
           </button>
@@ -286,7 +286,7 @@ function HeatCell({
 }) {
   if (!cell) {
     return (
-      <td className="min-h-[44px] border-b border-border px-2 py-1.5 text-center text-text-dim/40">
+      <td className="min-h-[44px] border-b border-border px-2 py-1.5 text-center text-text-dim">
         —
       </td>
     );
@@ -294,9 +294,9 @@ function HeatCell({
   const winRate = cell.games > 0 ? cell.wins / cell.games : 0;
   if (cell.games < minGames) {
     return (
-      <td className="min-h-[44px] border-b border-border px-2 py-1.5 text-center text-text-dim/50">
+      <td className="min-h-[44px] border-b border-border px-2 py-1.5 text-center text-text-dim">
         <div className="text-micro tabular-nums">{pct1(winRate)}</div>
-        <div className="text-micro text-text-dim/50">
+        <div className="text-micro text-text-dim">
           {cell.games}g (low)
         </div>
       </td>

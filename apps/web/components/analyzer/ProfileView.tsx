@@ -493,7 +493,7 @@ function ProfilePulseLine({
           <ExternalLink className="h-3 w-3" aria-hidden />
         </a>
         {toonHandle ? (
-          <span className="text-text-dim/70">· toon {toonHandle}</span>
+          <span className="text-text-muted">· toon {toonHandle}</span>
         ) : null}
       </div>
     );
@@ -501,7 +501,7 @@ function ProfilePulseLine({
   return (
     <div className="font-mono text-caption text-text-dim">
       Toon {label.value}
-      <span className="ml-2 text-micro uppercase tracking-wider text-text-dim/70">
+      <span className="ml-2 text-micro uppercase tracking-wider text-text-muted">
         sc2pulse id not resolved yet
       </span>
     </div>

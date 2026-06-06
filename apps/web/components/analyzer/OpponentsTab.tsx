@@ -273,7 +273,7 @@ function PulseIdCell({ opp }: { opp: Opp }) {
       title={`${label.value} · sc2pulse character id not resolved yet`}
     >
       {label.value}
-      <span className="ml-1 text-micro uppercase tracking-wider text-text-dim/70">
+      <span className="ml-1 text-micro uppercase tracking-wider text-text-muted">
         toon
       </span>
     </td>
