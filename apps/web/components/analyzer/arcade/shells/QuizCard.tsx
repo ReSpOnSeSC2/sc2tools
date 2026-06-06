@@ -94,7 +94,7 @@ export function QuizCard({
             aria-live="polite"
             data-revealed={revealed ? "true" : "false"}
             className={[
-              "rounded-lg border border-border bg-bg-elevated p-3 transition-opacity duration-150",
+              "rounded-lg border-2 border-line bg-bg-surface p-3 transition-opacity duration-150",
               "motion-reduce:transition-none",
               revealed ? "opacity-100" : "pointer-events-none opacity-0",
             ].join(" ")}
@@ -110,7 +110,7 @@ export function QuizCard({
               <button
                 type="button"
                 onClick={onShare}
-                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-border bg-bg-surface px-3 text-caption font-semibold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="hard-press inline-flex min-h-[44px] items-center gap-1.5 rounded-full border-2 border-line bg-bg-surface px-4 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 Share
               </button>
@@ -119,7 +119,7 @@ export function QuizCard({
               <button
                 type="button"
                 onClick={onNext}
-                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md bg-accent px-4 text-caption font-semibold uppercase tracking-wider text-bg hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                className="hard-press inline-flex min-h-[44px] items-center gap-1.5 rounded-full border-2 border-line bg-accent px-5 font-display text-caption font-bold uppercase tracking-wider text-bg hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
               >
                 Next round →
               </button>
@@ -157,7 +157,7 @@ export function QuizAnswerButton({
         ? "border-danger/50 bg-danger/10 text-text"
         : selected
           ? "border-accent bg-accent/10 text-text"
-          : "border-border bg-bg-surface text-text hover:border-border-strong hover:bg-bg-elevated";
+          : "border-line bg-bg-surface text-text hover:border-accent hover:bg-bg-elevated";
   return (
     <button
       type="button"
@@ -165,7 +165,7 @@ export function QuizAnswerButton({
       disabled={disabled}
       aria-pressed={selected ? "true" : "false"}
       className={[
-        "flex w-full min-h-[44px] items-center gap-3 rounded-lg border px-3 py-2 text-left text-body transition-colors",
+        "flex w-full min-h-[44px] items-center gap-3 rounded-lg border-2 px-3 py-2 text-left text-body shadow-hard transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         "disabled:cursor-not-allowed disabled:opacity-60",
         tone,
@@ -181,7 +181,7 @@ export function KeyBadge({ n }: { n: number }) {
   return (
     <span
       aria-hidden
-      className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border border-border bg-bg-elevated text-caption font-mono text-text-muted"
+      className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border-2 border-line bg-bg-surface text-caption font-mono text-text-muted"
     >
       {n}
     </span>
