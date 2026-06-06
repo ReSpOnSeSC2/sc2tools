@@ -115,13 +115,13 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
         tabIndex={-1}
         className={[
           "absolute inset-y-0 right-0 flex w-[88vw] max-w-sm flex-col",
-          "bg-bg-surface text-text border-l border-border shadow-2xl",
+          "bg-bg-surface text-text border-l-2 border-line shadow-2xl",
           "pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]",
           "motion-safe:animate-[slideInRight_180ms_ease-out]",
           "focus:outline-none",
         ].join(" ")}
       >
-        <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <header className="flex items-center justify-between gap-3 border-b-2 border-line px-4 py-3">
           <Link
             href="/"
             onClick={onClose}
@@ -133,17 +133,18 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
               alt=""
               width={28}
               height={28}
-              className="rounded-full shadow-[0_0_14px_var(--halo-cyan)]"
+              className="rounded-full"
             />
-            <span className="text-body font-semibold tracking-tight text-text">
-              SC2 Tools
+            <span className="flex items-center gap-1.5 font-display text-h4 font-extrabold tracking-tight text-text">
+              SC2&nbsp;Tools
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
             </span>
           </Link>
           <button
             type="button"
             aria-label="Close menu"
             onClick={onClose}
-            className="-mr-1 inline-flex h-11 w-11 items-center justify-center rounded-lg text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface"
+            className="hard-press -mr-1 inline-flex h-11 w-11 items-center justify-center rounded-full border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface"
           >
             <X className="h-5 w-5" aria-hidden />
           </button>
@@ -182,21 +183,21 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
               <Link
                 href="/sign-in"
                 onClick={onClose}
-                className="flex h-12 w-full items-center justify-center rounded-lg border border-border bg-bg-elevated px-3 text-body font-medium text-text hover:bg-bg-subtle hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-bg-surface px-3 font-display text-body font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 Sign in
               </Link>
               <Link
                 href="/sign-up"
                 onClick={onClose}
-                className="flex h-12 w-full items-center justify-center rounded-lg bg-accent px-3 text-body font-semibold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-accent px-3 font-display text-body font-bold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 Get started
               </Link>
             </div>
           </SignedOut>
         </nav>
-        <footer className="flex items-center justify-between gap-3 border-t border-border px-4 py-3">
+        <footer className="flex items-center justify-between gap-3 border-t-2 border-line px-4 py-3">
           <span className="text-caption text-text-muted">Theme</span>
           <ThemeToggle />
         </footer>
@@ -221,11 +222,11 @@ function DrawerLink({ href, label, active, onSelect }: DrawerLinkProps) {
         aria-current={active ? "page" : undefined}
         onClick={onSelect}
         className={[
-          "flex h-12 items-center rounded-lg px-3 text-body font-medium",
+          "flex h-12 items-center rounded-full px-4 font-display text-body font-bold",
           "motion-safe:transition-colors motion-safe:duration-150",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface",
           active
-            ? "bg-accent/10 text-accent"
+            ? "bg-accent/15 text-accent"
             : "text-text-muted hover:bg-bg-elevated hover:text-text",
         ].join(" ")}
       >

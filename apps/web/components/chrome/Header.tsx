@@ -133,9 +133,9 @@ export function Header() {
               aria-controls="mobile-nav-drawer"
               onClick={() => setDrawerOpen(true)}
               className={[
-                "inline-flex h-11 w-11 items-center justify-center rounded-lg",
-                "border border-border bg-bg-elevated text-text-muted",
-                "hover:bg-bg-subtle hover:text-text",
+                "hard-press inline-flex h-11 w-11 items-center justify-center rounded-full",
+                "border-2 border-line bg-bg-surface text-text",
+                "hover:bg-bg-elevated",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                 "lg:hidden",
               ].join(" ")}
@@ -155,16 +155,17 @@ export function Header() {
   );
 }
 
+// Courtside header CTAs — display-face pills with the 2px line + hard-press.
 const SECONDARY_LINK_CLS = [
-  "inline-flex h-9 items-center rounded-lg border border-border bg-bg-elevated px-3",
-  "text-caption font-medium text-text",
-  "hover:bg-bg-subtle hover:border-border-strong",
+  "hard-press inline-flex h-9 items-center rounded-full border-2 border-line bg-bg-surface px-4",
+  "font-display text-caption font-bold text-text",
+  "hover:bg-bg-elevated",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
 ].join(" ");
 
 const PRIMARY_LINK_CLS = [
-  "inline-flex h-9 items-center rounded-lg bg-accent px-3",
-  "text-caption font-semibold text-white",
+  "hard-press inline-flex h-9 items-center rounded-full border-2 border-line bg-accent px-4",
+  "font-display text-caption font-bold text-white",
   "hover:bg-accent-hover",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
 ].join(" ");
@@ -208,21 +209,15 @@ function NavLink({ href, label, active }: NavLinkProps) {
       href={href}
       aria-current={active ? "page" : undefined}
       className={[
-        "relative inline-flex h-9 items-center rounded-md px-3 text-caption font-medium",
+        "relative inline-flex h-9 items-center rounded-full px-3.5 font-display text-caption font-bold",
         "motion-safe:transition-colors motion-safe:duration-150",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         active
-          ? "text-accent"
+          ? "bg-accent/15 text-accent"
           : "text-text-muted hover:bg-bg-elevated hover:text-text",
       ].join(" ")}
     >
       {label}
-      {active ? (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-3 -bottom-[1px] h-[2px] rounded-full bg-accent"
-        />
-      ) : null}
     </Link>
   );
 }

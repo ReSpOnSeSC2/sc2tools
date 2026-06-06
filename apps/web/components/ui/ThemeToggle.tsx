@@ -46,10 +46,9 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       aria-pressed={mounted ? !isDark : undefined}
       title={Label}
       className={[
-        "inline-flex h-9 w-9 items-center justify-center rounded-lg",
-        "border border-border bg-bg-elevated text-text-muted",
-        "hover:bg-bg-subtle hover:text-text",
-        "transition-colors",
+        "hard-press inline-flex h-9 w-9 items-center justify-center rounded-full",
+        "border-2 border-line bg-bg-surface text-text",
+        "hover:bg-bg-elevated",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         className,
       ]
