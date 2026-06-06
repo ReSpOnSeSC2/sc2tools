@@ -149,7 +149,7 @@ export function Stat({
         {label}
       </div>
       <div
-        className="mt-1 text-xl font-semibold tabular-nums"
+        className="mt-1 text-xl font-display font-bold tabular-nums"
         style={color ? { color } : undefined}
       >
         {value}
