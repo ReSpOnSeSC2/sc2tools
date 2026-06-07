@@ -83,6 +83,63 @@ function toHex(n: number): string {
   return Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
 }
 
+/**
+ * A single discrete win-rate band: an inclusive lower / exclusive upper
+ * bound (as fractions in [0, 1]), a base RGB colour, a short legend
+ * label, and whether the band is surfaced in the legend ramp.
+ */
+export type WrTier = {
+  min: number;
+  max: number;
+  label: string;
+  rgb: [number, number, number];
+  /** Surfaced as a swatch in the legend ramp (the neutral band isn't). */
+  inLegend: boolean;
+};
+
+/**
+ * Discrete win-rate tiers — a finer-grained alternative to the
+ * continuous {@link wrRamp} for the time-of-day heatmap. Eight bands
+ * carry the ramp from a heavy loss (deep red) through a neutral
+ * coin-flip zone (50–65%) up to a dominant win (deep green), so the
+ * legend can offer the full <10 / <25 / <35 / <50 / >65 / >75 / >90
+ * spread the continuous ramp flattens at its 30 % / 65 % clamps.
+ * Ordered low → high; `max` of the top band sits just past 1 so a
+ * perfect 100 % win rate still lands inside it.
+ */
+export const WR_TIERS: ReadonlyArray<WrTier> = [
+  { min: 0.0, max: 0.1, label: "<10%", rgb: [150, 25, 35], inLegend: true },
+  { min: 0.1, max: 0.25, label: "<25%", rgb: [190, 54, 48], inLegend: true },
+  { min: 0.25, max: 0.35, label: "<35%", rgb: [214, 110, 58], inLegend: true },
+  { min: 0.35, max: 0.5, label: "<50%", rgb: [224, 168, 70], inLegend: true },
+  { min: 0.5, max: 0.65, label: "50–65%", rgb: [176, 182, 120], inLegend: false },
+  { min: 0.65, max: 0.75, label: ">65%", rgb: [122, 180, 96], inLegend: true },
+  { min: 0.75, max: 0.9, label: ">75%", rgb: [58, 158, 84], inLegend: true },
+  { min: 0.9, max: 1.01, label: ">90%", rgb: [28, 124, 62], inLegend: true },
+];
+
+/**
+ * Map a win rate (fraction in [0, 1]) to its discrete {@link WrTier}.
+ * Out-of-range inputs clamp to the nearest end band.
+ */
+export function wrTier(rate: number): WrTier {
+  const r = Number.isFinite(rate) ? rate : 0;
+  for (const tier of WR_TIERS) {
+    if (r < tier.max) return tier;
+  }
+  return WR_TIERS[WR_TIERS.length - 1];
+}
+
+/**
+ * Pick a legible foreground colour (near-black or white) for text laid
+ * over one of the {@link WR_TIERS} swatches, via perceived luminance.
+ */
+export function wrTierTextColor(rgb: [number, number, number]): string {
+  const [r, g, b] = rgb;
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  return lum > 150 ? "#0b0d12" : "#ffffff";
+}
+
 export function raceColour(race: string | null | undefined): string {
   const r = (race || "").charAt(0).toUpperCase();
   if (r === "T") return "#ff6b6b";

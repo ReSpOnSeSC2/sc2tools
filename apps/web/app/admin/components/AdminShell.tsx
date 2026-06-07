@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import useSWR from "swr";
 import { useAuth } from "@clerk/nextjs";
+import { Menu, X } from "lucide-react";
 
 import { apiCall } from "@/lib/clientApi";
 import { useAdminEventsSocket } from "./useAdminEventsSocket";
@@ -103,10 +104,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 ? `Open admin navigation (${unread} unread)`
                 : "Open admin navigation"
             }
-            className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-bg-surface text-text"
+            className="hard-press relative inline-flex h-11 w-11 items-center justify-center rounded-full border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
             onClick={() => setDrawerOpen(true)}
           >
-            <HamburgerIcon />
+            <Menu className="h-5 w-5" aria-hidden />
             {/* The unread badge otherwise lives only inside the drawer,
                 so on mobile a new signup / download / message left no
                 visible signal until you opened the menu. Surface it on
@@ -154,10 +155,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <button
             type="button"
             aria-label="Close admin navigation"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-bg-surface text-text"
+            className="hard-press inline-flex h-11 w-11 items-center justify-center rounded-full border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface"
             onClick={() => setDrawerOpen(false)}
           >
-            <CloseIcon />
+            <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
         <nav className="space-y-1">
@@ -258,32 +259,6 @@ function pickActive(items: ReadonlyArray<NavItem>, pathname: string) {
     }
   }
   return best;
-}
-
-function HamburgerIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden>
-      <path
-        d="M4 7h16M4 12h16M4 17h16"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden>
-      <path
-        d="M6 6l12 12M18 6L6 18"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
 }
 
 function NavIcon({ path }: { path: string }) {
