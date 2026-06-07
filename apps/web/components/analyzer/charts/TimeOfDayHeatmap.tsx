@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
-import { wrRamp } from "@/lib/format";
+import { WR_TIERS, wrTier, wrTierTextColor } from "@/lib/format";
 import { clientTimezone } from "@/lib/timeseries";
 
 type HeatmapCell = {
@@ -261,11 +261,13 @@ function HeatCell({
   const vol = maxTotal ? cell.total / maxTotal : 0;
   const empty = cell.total === 0;
 
-  // Win-rate mode: hue ramps red→amber→green via the shared severe
-  // ramp (30% = deep red, 65% = deep green). Intensity stays a volume
-  // dial so a 1-0 cell doesn't blare at full saturation, but the floor
-  // is high enough that low-volume cells still read as clearly tinted
-  // instead of washing out to "dirty cream" against the light theme.
+  // Win-rate mode: hue comes from the discrete tier the cell's win rate
+  // falls into (see WR_TIERS), so the eight legend bands are each
+  // distinguishable on the grid instead of collapsing at the old 30/65
+  // clamps. Intensity stays a volume dial so a 1-0 cell doesn't blare at
+  // full saturation, but the floor is high enough that low-volume cells
+  // still read as clearly tinted instead of washing out against the
+  // light theme.
   const wrIntensity = empty ? 0 : 0.65 + Math.min(1, vol * 1.5) * 0.35;
   const volIntensity = empty ? 0 : 0.18 + vol * 0.7;
 
@@ -303,18 +305,25 @@ function Legend({
 }) {
   if (mode === "wr") {
     return (
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-micro text-text-dim">
-        <span>WR ramp:</span>
-        <span className="rounded px-1.5 py-0.5" style={{ background: wrColor(0.2, 0.7), color: "#fff" }}>
-          ≤30%
+      <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-micro text-text-dim">
+        <span className="mr-0.5">WR ramp:</span>
+        {WR_TIERS.filter((tier) => tier.inLegend).map((tier) => (
+          <span
+            key={tier.label}
+            className="rounded px-1.5 py-0.5 font-medium tabular-nums"
+            style={{
+              background: `rgb(${tier.rgb[0]}, ${tier.rgb[1]}, ${tier.rgb[2]})`,
+              color: wrTierTextColor(tier.rgb),
+            }}
+          >
+            {tier.label}
+          </span>
+        ))}
+        {/* Break to its own line on phones so seven swatches + the note
+            never crowd into an unreadable run; inline from sm up. */}
+        <span className="basis-full text-text-dim sm:ml-2 sm:basis-auto">
+          · cell number = games played
         </span>
-        <span className="rounded px-1.5 py-0.5" style={{ background: wrColor(0.45, 0.7), color: "#0b0d12" }}>
-          ~45%
-        </span>
-        <span className="rounded px-1.5 py-0.5" style={{ background: wrColor(0.7, 0.7), color: "#0b0d12" }}>
-          ≥65%
-        </span>
-        <span className="ml-2">· cell number = games played</span>
       </div>
     );
   }
@@ -347,9 +356,9 @@ function Legend({
 }
 
 function wrColor(rate: number, intensity: number): string {
-  // Severe ramp clamped at 30%/65%: two-stop gradient through amber
-  // so a 50/50 cell can't be mistaken for a winning cell. See
-  // `wrRamp` in lib/format.ts.
-  const [r, g, b] = wrRamp(rate);
+  // Discrete eight-band tier ramp (deep red → neutral → deep green)
+  // so each legend swatch is visible on the grid. See `WR_TIERS` /
+  // `wrTier` in lib/format.ts. Intensity carries the volume signal.
+  const [r, g, b] = wrTier(rate).rgb;
   return `rgba(${r}, ${g}, ${b}, ${intensity.toFixed(3)})`;
 }
