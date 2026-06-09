@@ -81,11 +81,11 @@ export default function LandingPage() {
       <Masthead />
       <LeadFeature />
       <MobileInstallSection />
+      <PullQuoteSection />
       <ReplaySection />
       <PillarsSection />
       <HowItWorksSection />
       <ArcadeSection />
-      <PullQuoteSection />
       <DonateBanner />
       <FinalCtaSection />
     </div>
