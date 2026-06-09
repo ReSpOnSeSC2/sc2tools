@@ -203,10 +203,10 @@ export function ReplayDemo() {
               file — build a custom build from it.
             </h2>
             <p className="text-body-lg text-text-muted">
-              Pick any replay from your StarCraft II folder. We&rsquo;ll parse
-              it on the spot, then drop you straight into the
-              save-as-new-build template — promote starred events into rules,
-              tweak the basics, and feel the real workflow before you sign up.
+              Pick any replay from your StarCraft II folder. We&rsquo;ll read it
+              right here in your browser and open the build editor with that
+              game loaded — so you can see exactly how saving a custom build
+              works before you sign up.
             </p>
             <div className="flex flex-wrap gap-3 pt-1">
               <Button

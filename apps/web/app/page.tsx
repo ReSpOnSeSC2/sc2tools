@@ -78,14 +78,16 @@ export default function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(WEBSITE_JSON_LD) }}
       />
+      {/* Narrative arc: promise → trust → what you get → try it →
+          how to start → install → support → close. */}
       <Masthead />
       <LeadFeature />
-      <MobileInstallSection />
-      <ReplaySection />
-      <PillarsSection />
-      <HowItWorksSection />
-      <ArcadeSection />
       <PullQuoteSection />
+      <PillarsSection />
+      <ArcadeSection />
+      <ReplaySection />
+      <HowItWorksSection />
+      <MobileInstallSection />
       <DonateBanner />
       <FinalCtaSection />
     </div>
@@ -100,9 +102,9 @@ function Masthead() {
   return (
     <header className="border-y border-border-strong">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3">
-        <span className="kicker">SC2 Tools — Field Manual</span>
+        <span className="kicker">SC2 Tools</span>
         <span className="font-mono text-caption text-text-dim">
-          Scouting Dept. · No. 01 · Free forever
+          Opponent scouting · Build orders · OBS overlay
         </span>
       </div>
     </header>
@@ -118,7 +120,7 @@ function LeadFeature() {
     <section className="grid gap-x-10 gap-y-10 pt-10 md:pt-16 lg:grid-cols-12">
       {/* Headline + standfirst — narrow editorial column, left rail */}
       <div className="lg:col-span-5 lg:pr-2">
-        <p className="kicker">Opponent Intelligence</p>
+        <p className="kicker">StarCraft II opponent scouting</p>
         <h1 className="mt-5 font-serif text-[44px] font-semibold leading-[1.02] tracking-[-0.01em] text-text md:text-[60px]">
           Your opponent&rsquo;s build,{" "}
           <em className="font-serif italic text-editorial">
@@ -126,9 +128,10 @@ function LeadFeature() {
           </em>
         </h1>
         <p className="drop-initial mt-6 max-w-prose text-body-lg text-text-muted">
-          Sign in, install a 219&nbsp;MB agent, and every replay you finish
-          surfaces an opponent dossier, a build classifier, and a live OBS
-          overlay — across every device. No tagging, no manual import.
+          Install the desktop app and play like you always do. After every
+          game, SC2 Tools reads your replay and shows you who you just played,
+          the builds they favour, and your record against them — on your PC,
+          your phone, and your stream overlay.
         </p>
 
         <div className="mt-7 flex flex-wrap gap-3">
@@ -143,7 +146,7 @@ function LeadFeature() {
             variant="secondary"
             iconLeft={<Download className="h-5 w-5" aria-hidden />}
           >
-            Download the agent
+            Download the app
           </CtaLink>
         </div>
 
@@ -184,7 +187,7 @@ function CarouselSection() {
 
 function MobileInstallSection() {
   return (
-    <section className="relative mt-12 md:hidden">
+    <section className="relative mt-24 md:hidden">
       <InstallPrompt />
     </section>
   );
@@ -288,10 +291,10 @@ function HeroPeekSlide({
 }
 
 const TRUST_BADGES: ReadonlyArray<{ icon: LucideIcon; label: string }> = [
-  { icon: Shield, label: "Free desktop" },
-  { icon: Cloud, label: "Cross-device cloud" },
-  { icon: Tv, label: "OBS overlay ready" },
-  { icon: CheckCircle2, label: "GDPR" },
+  { icon: Shield, label: "Free to use" },
+  { icon: Cloud, label: "Syncs across devices" },
+  { icon: Tv, label: "Works with OBS" },
+  { icon: CheckCircle2, label: "GDPR-compliant" },
 ];
 
 function TrustStrip() {
@@ -333,37 +336,37 @@ const PILLARS: ReadonlyArray<Pillar> = [
   {
     icon: Tv,
     title: "Live OBS Overlay",
-    body: "15 broadcast-ready widgets, per-widget URLs. Drop one URL into Browser Source and you're streaming.",
+    body: "Paste one link into an OBS Browser Source and your scouting info shows up on stream. 15 widgets, each with its own URL.",
   },
   {
     icon: Swords,
     title: "Strategy Detection",
-    body: "Per-matchup playbook with rule-based opener identification across 100+ builds.",
+    body: "SC2 Tools names the opener your opponent is going for — matchup by matchup, across 100+ known builds.",
   },
   {
     icon: Mic2,
     title: "Voice Readout",
-    body: "Optional in-ear scouting card before each game.",
+    body: "An optional voice line before each game that tells you who you're facing and how you've done against them.",
   },
   {
     icon: Wand2,
-    title: "Auto Replay Classification",
-    body: "Parse every game in seconds, no tagging.",
+    title: "Automatic Replay Reading",
+    body: "Every replay is read and sorted within seconds of the game ending. You never tag a game by hand.",
   },
   {
     icon: BarChart3,
-    title: "Build Recognizer",
-    body: "Per-build W-L, with map and MMR breakdowns.",
+    title: "Build Win Rates",
+    body: "Your win-loss for each build you play, broken down by map and by MMR.",
   },
   {
     icon: Map,
-    title: "Map Intel & Veto Planning",
-    body: "Per-map win rates and timing libraries.",
+    title: "Map Stats & Veto Help",
+    body: "Win rates and key timings for every map, so you know which ones to veto.",
   },
   {
     icon: Library,
     title: "Custom Build Library",
-    body: "Sync your openers, browse the community pool.",
+    body: "Save your own openers and browse builds shared by other players.",
   },
 ];
 
@@ -371,10 +374,10 @@ function PillarsSection() {
   return (
     <section className="mt-24 md:mt-32">
       <EditorialHead
-        folio="B"
-        kicker="The kit"
-        title="Seven instruments, one pipeline."
-        standfirst="Every cloud feature you'll use, all wired into the same replay-parsing pipeline."
+        folio="A"
+        kicker="What you get"
+        title="Seven tools, all fed by your replays."
+        standfirst="Finish a game and your replay is read automatically. Everything here works off that same data — no tagging, nothing to upload yourself."
       />
       {/* Asymmetric index: a numbered editorial list, not a card wall. */}
       <ol className="mt-10 grid gap-x-10 gap-y-px sm:grid-cols-2">
@@ -424,18 +427,18 @@ interface Step {
 const STEPS: ReadonlyArray<Step> = [
   {
     num: "01",
-    title: "Install the agent",
-    body: "Download the 219 MB installer and pair it with your account in 90 seconds.",
+    title: "Install the app",
+    body: "Download the desktop app and sign in. It takes about a minute.",
   },
   {
     num: "02",
     title: "Play normally",
-    body: "Every replay you finish parses and uploads in the background. No tagging, no manual import.",
+    body: "Play the ladder like you always do. Each replay is read and synced automatically once the game ends.",
   },
   {
     num: "03",
-    title: "Light it up",
-    body: "Your dashboard updates between games. Drop your overlay URL into OBS for stream-day reveal.",
+    title: "Review and stream",
+    body: "Your stats update between games. When you stream, paste the overlay link into OBS.",
   },
 ];
 
@@ -444,8 +447,8 @@ function HowItWorksSection() {
     <section className="mt-24 md:mt-32">
       <EditorialHead
         folio="C"
-        kicker="The routine"
-        title="Three steps. Then it stays out of your way."
+        kicker="Getting started"
+        title="Three steps, then it runs in the background."
       />
       <div className="mt-10 grid gap-x-10 gap-y-10 md:grid-cols-3">
         {STEPS.map((step) => (
@@ -479,27 +482,27 @@ const ARCADE_TILES: ReadonlyArray<ArcadeTile> = [
   {
     iconSrc: "/arcade/icons/buildle.png",
     title: "Buildle",
-    body: "Daily case file. One real game, one hidden fact, one shot to crack it.",
+    body: "A daily puzzle built from one of your real games. One hidden detail, one guess to get it right.",
   },
   {
     iconSrc: "/arcade/icons/closers-eye.png",
     title: "Closer's Eye",
-    body: "Which of your builds closes wins the fastest? Mean win-length, blind.",
+    body: "Guess which of your builds closes out wins the fastest, by average game length.",
   },
   {
     iconSrc: "/arcade/icons/two-truths-lie.png",
     title: "Two Truths & a Lie",
-    body: "Two real facts about your play, one fake. Spot the lie.",
+    body: "Two real facts about your play and one fake. Spot the lie.",
   },
   {
     iconSrc: "/arcade/icons/bingo-ladder.png",
     title: "Bingo: Ladder Edition",
-    body: "A 5×5 of forward objectives. Your next-7-day games tick the cells.",
+    body: "A 5×5 card of goals. Your games over the next week fill in the squares.",
   },
   {
     iconSrc: "/arcade/icons/stock-market.png",
     title: "Stock Market",
-    body: "Lock in a build portfolio. Weekly P&L feeds the leaderboard.",
+    body: "Pick a portfolio of builds. Their win rate that week moves your spot on the leaderboard.",
   },
 ];
 
@@ -507,10 +510,10 @@ function ArcadeSection() {
   return (
     <section className="mt-24 md:mt-32">
       <EditorialHead
-        folio="D"
+        folio="B"
         kicker="New · Arcade"
-        title="Your ladder data, playable."
-        standfirst="Thirteen modes — quizzes, games, weekly bingo — all generated from your real replays. Daily drop, XP, shareable score cards."
+        title="Mini-games made from your own games."
+        standfirst="Thirteen modes — quizzes, daily challenges, weekly bingo — all built from your real ladder games. Earn XP and share your score cards."
       />
       <ul className="mt-10 grid gap-x-10 gap-y-px sm:grid-cols-2 lg:grid-cols-3">
         {ARCADE_TILES.map((tile) => (
@@ -569,8 +572,8 @@ function ArcadeMoreEntry() {
           +8 more modes
         </h3>
         <p className="text-body text-text-muted">
-          Streaks, macro memory, rivalries, comebacks, build cards… Quick Play
-          any of them, or chase the Daily Drop.
+          Streaks, macro memory, rivalries, comebacks and more. Jump into any
+          of them, or play the daily challenge.
         </p>
       </div>
     </li>
@@ -584,12 +587,12 @@ function ArcadeMoreEntry() {
 function PullQuoteSection() {
   return (
     <section className="mt-24 grid gap-x-10 gap-y-6 md:mt-32 lg:grid-cols-12">
-      <p className="kicker self-start lg:col-span-3 lg:pt-3">Built in the open</p>
+      <p className="kicker self-start lg:col-span-3 lg:pt-3">Who makes this</p>
       <blockquote className="lg:col-span-9">
         <p className="border-l-2 border-editorial pl-6 font-serif text-[28px] font-normal italic leading-snug tracking-[-0.01em] text-text md:text-[36px]">
-          Built by ladder players, for ladder players. Every classifier rule,
-          every overlay, every UI decision came from someone trying to win
-          their next game.
+          Built by ladder players, for ladder players. Every build rule, every
+          overlay, every screen came from someone trying to win their next
+          game.
         </p>
       </blockquote>
     </section>
@@ -611,14 +614,14 @@ function DonateBanner() {
           <Heart className="h-7 w-7" />
         </span>
         <div className="space-y-1.5">
-          <p className="kicker">Donation-supported</p>
+          <p className="kicker">Why it&rsquo;s free</p>
           <h2 className="font-serif text-h3 font-semibold tracking-[-0.01em] text-text md:text-h2">
-            Free now, free forever — donations keep the servers up.
+            Free to use — donations keep the servers running.
           </h2>
           <p className="text-body text-text-muted">
-            One paid Render service, a MongoDB Atlas M10 cluster, and the
-            sc2tools.com domain run the cloud. If SC2 Tools is helping your
-            ladder grind, a one-time tip helps cover the bill.
+            No paywall and no ads. A handful of cloud bills keep it online — if
+            SC2 Tools is helping your ladder games, a one-time tip helps cover
+            them.
           </p>
         </div>
         <Link
@@ -641,14 +644,16 @@ function FinalCtaSection() {
   return (
     <section className="mt-24 md:mt-32">
       <div className="rounded-md border-2 border-accent bg-bg-surface px-6 py-12 shadow-hard md:px-12 md:py-16">
-        <p className="kicker">The bottom line</p>
+        <p className="kicker">Ready to start?</p>
         <h2 className="mt-4 max-w-3xl font-serif text-[40px] font-semibold leading-[1.04] tracking-[-0.01em] text-text md:text-display-lg">
-          Stop guessing.{" "}
-          <em className="font-serif italic text-editorial">Start knowing.</em>
+          Stop loading in blind.{" "}
+          <em className="font-serif italic text-editorial">
+            Know the matchup first.
+          </em>
         </h2>
         <p className="mt-5 max-w-2xl text-body-lg text-text-muted">
-          Free to start. No credit card. Your replays stay on your machine;
-          only the parsed metadata syncs.
+          Free to start, no card needed. Your replay files stay on your PC —
+          only the parsed stats sync to the cloud.
         </p>
         <div className="mt-7 flex flex-wrap items-center gap-3">
           <CtaLink
