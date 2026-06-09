@@ -25,6 +25,7 @@ import {
   type HeroCarouselSlide,
 } from "@/components/landing/HeroCarousel";
 import { ReplayDemo } from "@/components/landing/ReplayDemo";
+import { RealGameShowcase } from "@/components/landing/RealGameShowcase";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 
 /* =============================================================== */
@@ -78,11 +79,13 @@ export default function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(WEBSITE_JSON_LD) }}
       />
-      {/* Narrative arc: promise → trust → what you get → try it →
-          how to start → install → support → close. */}
+      {/* Narrative arc: promise → trust → see a real game read by the
+          app → what you get → try it yourself → how to start → install →
+          support → close. */}
       <Masthead />
       <LeadFeature />
       <PullQuoteSection />
+      <RealGameShowcase />
       <PillarsSection />
       <ArcadeSection />
       <ReplaySection />
