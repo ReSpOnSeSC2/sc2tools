@@ -78,14 +78,15 @@ export default function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(WEBSITE_JSON_LD) }}
       />
-      {/* Narrative arc: promise → trust → what you get → try it →
-          how to start → install → support → close. */}
+      {/* Narrative arc: promise → trust → try it → what you get →
+          how to start → install → support → close. Leading with the live
+          replay demo puts the product in the visitor's hands first. */}
       <Masthead />
       <LeadFeature />
       <PullQuoteSection />
+      <ReplaySection />
       <PillarsSection />
       <ArcadeSection />
-      <ReplaySection />
       <HowItWorksSection />
       <MobileInstallSection />
       <DonateBanner />
