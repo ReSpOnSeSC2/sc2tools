@@ -21,6 +21,8 @@ export type ApiTimeseriesPoint = {
   losses: number;
   total: number;
   winRate: number;
+  /** Mean macro score across the bucket's scored games; null when none carry a score. */
+  avgMacroScore?: number | null;
 };
 
 export type ApiTimeseriesResponse = {
@@ -34,6 +36,7 @@ export type Period = {
   wins: number;
   losses: number;
   winRate: number;
+  avgMacroScore?: number | null;
 };
 
 /**
@@ -138,5 +141,6 @@ export function apiToPeriods(
     wins: p.wins ?? 0,
     losses: p.losses ?? 0,
     winRate: p.winRate ?? 0,
+    avgMacroScore: typeof p.avgMacroScore === "number" ? p.avgMacroScore : null,
   }));
 }

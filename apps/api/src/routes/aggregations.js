@@ -323,6 +323,20 @@ function buildAggregationsRouter(deps) {
     }
   });
 
+  // Macro-tab header: average macro score, coverage, and the most
+  // expensive recurring leaks across the filtered game set. Reads the
+  // slim games rows only (macroScore + top3Leaks), never the detail
+  // store.
+  router.get("/macro/summary", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      res.json(await deps.aggregations.macroSummary(userId, filters));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Current consecutive same-result streak across the user's games.
   // Game-level (not day-bucketed) so a mixed day no longer drops a
   // mid-streak indicator to 0. See services/streak.js for the rationale.
