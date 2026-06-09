@@ -42,6 +42,13 @@ const config: Config = {
           DEFAULT: channel("--signal"),
           hover: channel("--signal-hover"),
         },
+        // Clay / dusty-rose editorial accent — the "1 unusual accent" of the
+        // landing palette. Warm and earthy against the cool teal/cyan so the
+        // marketing page escapes the stock 3-colour look.
+        editorial: {
+          DEFAULT: channel("--editorial"),
+          soft: channel("--editorial-soft"),
+        },
         success: channel("--success"),
         warning: channel("--warning"),
         danger: channel("--danger"),
@@ -83,6 +90,18 @@ const config: Config = {
           "ui-sans-serif",
           "system-ui",
           "sans-serif",
+        ],
+        // Editorial serif — Fraunces (`--font-serif`). The single serif that
+        // pairs with the Hanken sans on the magazine landing page (1 sans +
+        // 1 serif, not two grotesques). Loaded in app/layout.tsx.
+        serif: [
+          "var(--font-serif)",
+          "Fraunces",
+          "ui-serif",
+          "Georgia",
+          "Cambria",
+          "Times New Roman",
+          "serif",
         ],
         // Numeric/tabular monospace — system stack (Courtside uses no custom
         // mono face).

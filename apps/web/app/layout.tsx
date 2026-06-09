@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Hanken_Grotesk } from "next/font/google";
+import { Bricolage_Grotesque, Fraunces, Hanken_Grotesk } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { CookieBanner } from "@/components/CookieBanner";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
@@ -34,6 +34,22 @@ const display = Bricolage_Grotesque({
   display: "swap",
   weight: ["600", "700", "800"],
   variable: "--font-display",
+});
+
+/**
+ * Editorial serif — Fraunces. Deliberately NOT a third grotesque: the
+ * landing page pairs ONE sans (Hanken, body/UI) with ONE serif (Fraunces,
+ * headlines) instead of the two-sans default that gives AI-built sites
+ * their tell. Exposed as `--font-serif` and read by `fontFamily.serif`
+ * in tailwind.config.ts; only the marketing landing page opts into it, so
+ * the rest of the app keeps the established grotesque display voice.
+ */
+const serif = Fraunces({
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-serif",
 });
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
@@ -107,7 +123,7 @@ export default function RootLayout({
       <html
         lang="en"
         data-theme="dark"
-        className={`${sans.variable} ${display.variable}`}
+        className={`${sans.variable} ${display.variable} ${serif.variable}`}
         suppressHydrationWarning
       >
         <head>

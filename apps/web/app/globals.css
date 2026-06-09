@@ -51,6 +51,14 @@
   --signal: 245 184 74;       /* #f5b84a — amber, rare emphasis only */
   --signal-hover: 250 200 110;/* #fac86e */
 
+  /* Editorial accent — a clay / dusty-rose note that is deliberately the
+     "1 unusual accent" of the landing palette. It is NOT a default-tailwind
+     hue; sitting warm-and-earthy against the cool teal/cyan, it is what the
+     magazine layout uses for kickers, rules, and the drop-initial so the
+     page stops reading as the stock 3-colour AI gradient. */
+  --editorial: 214 132 110;       /* #d6846e — clay rose on dark */
+  --editorial-soft: 232 178 162;  /* #e8b2a2 — lifted tint for fine rules */
+
   --success: 62 200 132;      /* #3ec884 */
   --warning: 232 156 56;      /* #e89c38 — nudged orange so it stays distinct from amber signal */
   --danger: 255 107 107;      /* #ff6b6b */
@@ -102,6 +110,10 @@
 
   --signal: 191 124 18;       /* #bf7c12 — amber darkened for AA on white */
   --signal-hover: 166 106 12; /* #a66a0c */
+
+  /* Editorial clay-rose, darkened for AA on the light paper ground. */
+  --editorial: 178 79 58;         /* #b24f3a — clay rose on light */
+  --editorial-soft: 196 110 90;   /* #c46e5a */
 
   --success: 28 156 86;       /* #1c9c56 */
   --warning: 176 118 24;      /* #b07618 */
@@ -396,6 +408,52 @@ a:hover {
   min-height: 1.1em;
   border-radius: 9999px;
   background: rgb(var(--accent));
+}
+
+/* ============================================================
+ * Editorial / magazine kit — used only by the marketing landing page.
+ * These give the page its asymmetric, print-laid-out voice: an
+ * uppercase kicker, a hairline section rule, a serif drop-initial, and
+ * a clay-rose "folio" number. Deliberately squared (no soft 2xl radii)
+ * and free of the cyan glow that the rest of the product chrome uses.
+ * ============================================================ */
+.kicker {
+  font-family: theme("fontFamily.sans");
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgb(var(--editorial));
+}
+
+/* Thin full-bleed editorial rule with a short clay tick at the start. */
+.ed-rule {
+  border: 0;
+  height: 1px;
+  background: rgb(var(--border-strong));
+  position: relative;
+}
+.ed-rule::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -1px;
+  height: 3px;
+  width: 56px;
+  background: rgb(var(--editorial));
+}
+
+/* Serif drop-initial for the lead standfirst — the print "lead-in". */
+.drop-initial::first-letter {
+  font-family: theme("fontFamily.serif");
+  float: left;
+  font-weight: 600;
+  font-size: 3.6em;
+  line-height: 0.82;
+  padding-right: 0.08em;
+  margin-top: 0.04em;
+  color: rgb(var(--editorial));
 }
 
 /* Tactile press: the hard offset shadow COLLAPSES as the control pushes

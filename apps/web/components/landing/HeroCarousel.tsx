@@ -115,7 +115,7 @@ export function HeroCarousel({
     >
       <div
         aria-live="polite"
-        className="group relative overflow-hidden rounded-2xl border-2 border-line bg-bg-elevated/40 shadow-hard"
+        className="group relative overflow-hidden rounded-md border-2 border-line bg-bg-elevated/40 shadow-hard"
       >
         <ul className="relative" role="list">
           {slides.map((slide, i) => {
@@ -179,11 +179,11 @@ export function HeroCarousel({
                 aria-controls={`carousel-slide-${slide.id}`}
                 onClick={() => goTo(i)}
                 className={[
-                  "h-2 rounded-full transition-all motion-reduce:transition-none",
+                  "h-1.5 rounded-none transition-all motion-reduce:transition-none",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                   isActive
-                    ? "w-8 bg-accent-cyan shadow-halo-cyan"
-                    : "w-2 bg-border hover:bg-border-strong",
+                    ? "w-8 bg-editorial"
+                    : "w-3 bg-border hover:bg-border-strong",
                 ].join(" ")}
               >
                 <span className="sr-only">Go to {slide.label}</span>
@@ -198,8 +198,8 @@ export function HeroCarousel({
 
 const NAV_BTN_CLS = [
   "absolute top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center",
-  "rounded-full border border-border bg-bg-surface/80 text-text shadow-md backdrop-blur",
-  "hover:bg-bg-surface hover:border-accent-cyan",
+  "rounded-md border border-border bg-bg-surface/80 text-text shadow-md backdrop-blur",
+  "hover:bg-bg-surface hover:border-editorial",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
   // Hidden by default; fade in when the visitor hovers the carousel
   // or focuses any element inside it (so keyboard users can find them).
