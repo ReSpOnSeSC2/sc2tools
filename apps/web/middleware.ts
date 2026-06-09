@@ -6,6 +6,10 @@ const isProtected = createRouteMatcher([
   "/streaming(.*)",
   "/builds/new(.*)",
   "/builds/(.*)/edit",
+  // The onboarding wizard mints real pairing codes (POST
+  // /v1/device-pairings/start with a Clerk token), so it requires a
+  // signed-in user — sign-up redirects here.
+  "/welcome(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
