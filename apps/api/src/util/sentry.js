@@ -22,14 +22,23 @@ function tryRequireSentry() {
   }
 }
 
+/**
+ * Initialise Sentry. Returns whether reporting is actually live so the
+ * boot log can say so — a DSN configured in Render with the package
+ * missing from package.json silently no-ops otherwise, and that exact
+ * misconfiguration shipped for months.
+ *
+ * @returns {boolean} true when Sentry is installed AND a DSN is set
+ */
 function init() {
   const s = tryRequireSentry();
-  if (!s) return;
+  if (!s) return false;
   s.init({
     dsn: process.env.SENTRY_DSN,
     tracesSampleRate: 0.1,
     environment: process.env.SC2TOOLS_ENV || "production",
   });
+  return true;
 }
 
 /**
@@ -40,4 +49,22 @@ function captureException(err) {
   if (s) s.captureException(err);
 }
 
-module.exports = { init, captureException };
+/**
+ * Flush buffered events before the process exits — used by the
+ * uncaughtException handler, where exiting without a flush would drop
+ * the one event that explains the crash. Resolves on timeout too.
+ *
+ * @param {number} [timeoutMs]
+ * @returns {Promise<void>}
+ */
+async function flush(timeoutMs = 2000) {
+  const s = tryRequireSentry();
+  if (!s || typeof s.flush !== "function") return;
+  try {
+    await s.flush(timeoutMs);
+  } catch {
+    // Flushing is best-effort; the process is going down either way.
+  }
+}
+
+module.exports = { init, captureException, flush };

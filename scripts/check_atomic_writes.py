@@ -80,11 +80,6 @@ HELPER_ALLOWLIST = {
 NODE_BARE_WRITE_EXEMPT = set()
 
 PYTHON_BARE_WRITE_EXEMPT = {
-    # Dev-only fake-data injector. Not run in production. The script
-    # itself documents this in its module docstring.
-    os.path.join(
-        "apps", "replay-engine", "scripts", "fake_data_injector.py"
-    ),
     # The migrations CLI in apps/replay-engine's db/database.py uses
     # ``open(path, "w", newline="")`` for CSV exports — low blast.
     os.path.join("apps", "replay-engine", "db", "database.py"),
