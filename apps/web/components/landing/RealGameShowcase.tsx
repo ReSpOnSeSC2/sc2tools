@@ -1,16 +1,18 @@
+import Image from "next/image";
 import { Wand2 } from "lucide-react";
 
 /* =============================================================== */
 /* REAL-GAME SHOWCASE — one actual replay, read by the app          */
 /*                                                                  */
-/* Every value in this section is the genuine output of running the */
-/* desktop parser (apps/replay-engine/scripts/preview_replay_cli.py */
-/* — the same sc2reader path the agent uses) over the real fixture  */
-/* replay warpgate_adept_tracking.SC2Replay: a 1v1 ladder PvZ on    */
-/* Tourmaline LE. Names, races, result and build timings are exactly */
-/* as the parser read them — no mock data. Internal unit/upgrade    */
-/* ids are shown under their in-game names (e.g. AdeptPiercingAttack */
-/* → "Glaives"), the same relabelling the product does.             */
+/* Every value in the parsed-game panel is the genuine output of    */
+/* running the desktop parser                                       */
+/* (apps/replay-engine/scripts/preview_replay_cli.py — the same     */
+/* sc2reader path the agent uses) over the committed fixture replay */
+/* warpgate_adept_tracking.SC2Replay: a 1v1 ladder PvZ on Tourmaline */
+/* LE. Races, result and build timings are exactly as parsed — no   */
+/* mock data. Player gamertags are intentionally omitted (shown as  */
+/* "You" / "Opponent"). Internal unit/upgrade ids are shown under    */
+/* their in-game names (e.g. AdeptPiercingAttack → "Glaives").      */
 /* =============================================================== */
 
 interface BuildStep {
@@ -22,20 +24,16 @@ interface BuildStep {
 }
 
 interface ShowcasePlayer {
-  name: string;
   race: "Protoss" | "Zerg" | "Terran";
   result: "Win" | "Loss";
-  handle: string;
   /** Strategy read, derived from the parsed build log. */
   read: string;
   opener: ReadonlyArray<BuildStep>;
 }
 
 const SHOWCASE_YOU: ShowcasePlayer = {
-  name: "ReSpOnSe",
   race: "Protoss",
   result: "Win",
-  handle: "1-S2-1-267727",
   read: "Twilight Adept pressure — Glaives into Warp Prism harass",
   opener: [
     { t: "0:00", name: "Nexus" },
@@ -51,10 +49,8 @@ const SHOWCASE_YOU: ShowcasePlayer = {
 };
 
 const SHOWCASE_OPP: ShowcasePlayer = {
-  name: "Squirtuoz",
   race: "Zerg",
   result: "Loss",
-  handle: "1-S2-1-5079063",
   read: "Hatch-first three-base into Ling / Baneling",
   opener: [
     { t: "0:00", name: "Hatchery" },
@@ -74,6 +70,26 @@ const RACE_DOT: Record<ShowcasePlayer["race"], string> = {
   Terran: "bg-race-terran",
 };
 
+/** Real product screenshots of the stats/graph pages the games feed. */
+const TREND_SHOTS: ReadonlyArray<{
+  src: string;
+  alt: string;
+  caption: string;
+}> = [
+  {
+    src: "/landing/builds.png",
+    alt: "Custom Builds page in SC2 Tools showing per-build wins, losses, win rate, and trend sparklines",
+    caption:
+      "Per-build win rate, W-L and a trend sparkline for every opener you play — split by matchup and by map.",
+  },
+  {
+    src: "/landing/opponent-dna.png",
+    alt: "Opponent profile in SC2 Tools showing head-to-head record, build tendencies, and median key timings",
+    caption:
+      "Per-opponent dossier — your head-to-head record, the builds they lean on, and their median key timings.",
+  },
+];
+
 export function RealGameShowcase() {
   return (
     <section className="mt-24 md:mt-32">
@@ -85,12 +101,9 @@ export function RealGameShowcase() {
             One replay in. Your whole game, read back.
           </h2>
           <p className="mt-3 max-w-2xl text-body-lg text-text-muted">
-            Here&rsquo;s a real ladder game —{" "}
-            <span className="font-medium text-text">ReSpOnSe</span> vs{" "}
-            <span className="font-medium text-text">Squirtuoz</span> on
-            Tourmaline LE — after the desktop app read the replay. Both build
-            orders, both strategies, and the result. None of it was typed in by
-            hand.
+            Here&rsquo;s a real ladder game — Protoss vs Zerg on Tourmaline LE —
+            after the desktop app read the replay. Both build orders, both
+            strategies, and the result. None of it was typed in by hand.
           </p>
         </div>
       </div>
@@ -134,15 +147,52 @@ export function RealGameShowcase() {
           value="First Adept 5:45 · Glaives 6:33"
         />
         <ShowcaseFact
-          label="Next-game flag"
-          value="You beat Squirtuoz here — the overlay warns you if they queue up again"
+          label="Next time you meet them"
+          value="Queue into this opponent again and the overlay shows their past build orders and your win rate against them."
         />
       </dl>
 
-      <p className="mt-6 max-w-3xl text-body text-text-muted">
-        The desktop app does this after every game you finish — no tagging,
-        nothing to upload. Win rates stack up per build and per matchup, and the
-        OBS overlay flags a familiar opponent the moment they load in.
+      {/* Trends & graphs — the stats pages every parsed game feeds. */}
+      <div className="mt-16 grid gap-x-10 gap-y-4 lg:grid-cols-12">
+        <p className="kicker lg:col-span-4">And it stacks up over time</p>
+        <div className="lg:col-span-8">
+          <hr className="ed-rule mb-5" />
+          <h3 className="font-serif text-[26px] font-semibold leading-tight tracking-[-0.01em] text-text md:text-[32px]">
+            A few games in, the graphs do the talking.
+          </h3>
+          <p className="mt-3 max-w-2xl text-body-lg text-text-muted">
+            Every game you finish feeds the same stats pages: win rate week by
+            week with a rolling average, your MMR climb, the matchups and maps
+            you&rsquo;re strongest on, and how your build mix shifts — plus
+            per-build and per-opponent breakdowns.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-8 grid gap-6 md:grid-cols-2">
+        {TREND_SHOTS.map((shot) => (
+          <figure key={shot.src} className="space-y-3">
+            <div className="overflow-hidden rounded-md border-2 border-line bg-bg-elevated/40 shadow-hard">
+              <Image
+                src={shot.src}
+                alt={shot.alt}
+                width={1600}
+                height={900}
+                sizes="(min-width: 768px) 50vw, 100vw"
+                className="block h-auto w-full"
+              />
+            </div>
+            <figcaption className="text-body text-text-muted">
+              {shot.caption}
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+
+      <p className="mt-8 max-w-3xl text-body text-text-muted">
+        The desktop app does all of this after every game you finish — no
+        tagging, nothing to upload. And the OBS overlay flags a familiar
+        opponent the moment they load in.
       </p>
     </section>
   );
@@ -168,13 +218,8 @@ function ShowcasePlayerColumn({
             ].join(" ")}
           />
           <div className="min-w-0">
-            <p className="truncate font-serif text-h4 font-semibold text-text">
-              {player.name}
-            </p>
-            <p className="text-caption text-text-dim">
-              <span className="uppercase tracking-wider">{side}</span> ·{" "}
-              {player.race}
-            </p>
+            <p className="font-serif text-h4 font-semibold text-text">{side}</p>
+            <p className="text-caption text-text-dim">{player.race}</p>
           </div>
         </div>
         <span
