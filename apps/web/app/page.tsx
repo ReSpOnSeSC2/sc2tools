@@ -79,12 +79,11 @@ export default function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(WEBSITE_JSON_LD) }}
       />
-      {/* Narrative arc: promise → trust → see a real game read by the
-          app → what you get → try it yourself → how to start → install →
+      {/* Narrative arc: ethos hero → a real game read by the app →
+          what you get → try it yourself → how to start → install →
           support → close. */}
       <Masthead />
       <LeadFeature />
-      <PullQuoteSection />
       <RealGameShowcase />
       <PillarsSection />
       <ArcadeSection />
@@ -125,9 +124,9 @@ function LeadFeature() {
       <div className="lg:col-span-5 lg:pr-2">
         <p className="kicker">StarCraft II opponent scouting</p>
         <h1 className="mt-5 font-serif text-[44px] font-semibold leading-[1.02] tracking-[-0.01em] text-text md:text-[60px]">
-          Your opponent&rsquo;s build,{" "}
+          Built for ladder players,{" "}
           <em className="font-serif italic text-editorial">
-            before they build it.
+            by ladder players.
           </em>
         </h1>
         <p className="drop-initial mt-6 max-w-prose text-body-lg text-text-muted">
@@ -217,15 +216,6 @@ interface HeroPeek {
 
 const HERO_PEEK_SLIDES: ReadonlyArray<HeroPeek> = [
   {
-    id: "peek-dossier",
-    eyebrow: "See it before you sign up",
-    title: "Opponent dossier — auto-built",
-    body: "Race, MMR, build tendencies, recent matchup history — surfaced the moment a replay finishes parsing.",
-    imageSrc: "/landing/opponent-dna.png",
-    imageAlt:
-      "Opponent profile page in SC2 Tools showing matchup record, build tendencies, and median key timings",
-  },
-  {
     id: "peek-overlay-live",
     eyebrow: "See it before you sign up",
     title: "Live OBS overlay — copy & paste",
@@ -242,15 +232,6 @@ const HERO_PEEK_SLIDES: ReadonlyArray<HeroPeek> = [
     imageSrc: "/landing/overlay-rematch.png",
     imageAlt:
       "Stream overlay rematch widget — opponent name, MMR, FAMILIAR / Last Defeat tag, and a list of recent games",
-  },
-  {
-    id: "peek-builds",
-    eyebrow: "See it before you sign up",
-    title: "Build classifier — no tagging",
-    body: "Every replay auto-classified into your build library. Win-rate per opener, per matchup, per map.",
-    imageSrc: "/landing/builds.png",
-    imageAlt:
-      "Custom Builds page in SC2 Tools showing per-build wins, losses, win rate, and trend sparklines",
   },
   {
     id: "peek-build-editor",
@@ -580,25 +561,6 @@ function ArcadeMoreEntry() {
         </p>
       </div>
     </li>
-  );
-}
-
-/* =============================================================== */
-/* PULL QUOTE — editorial standfirst, replaces the centred blurb    */
-/* =============================================================== */
-
-function PullQuoteSection() {
-  return (
-    <section className="mt-24 grid gap-x-10 gap-y-6 md:mt-32 lg:grid-cols-12">
-      <p className="kicker self-start lg:col-span-3 lg:pt-3">Who makes this</p>
-      <blockquote className="lg:col-span-9">
-        <p className="border-l-2 border-editorial pl-6 font-serif text-[28px] font-normal italic leading-snug tracking-[-0.01em] text-text md:text-[36px]">
-          Built by ladder players, for ladder players. Every build rule, every
-          overlay, every screen came from someone trying to win their next
-          game.
-        </p>
-      </blockquote>
-    </section>
   );
 }
 
