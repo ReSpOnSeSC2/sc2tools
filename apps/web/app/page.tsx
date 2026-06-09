@@ -78,14 +78,16 @@ export default function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(WEBSITE_JSON_LD) }}
       />
+      {/* Narrative arc: promise → trust → what you get → try it →
+          how to start → install → support → close. */}
       <Masthead />
       <LeadFeature />
-      <MobileInstallSection />
       <PullQuoteSection />
-      <ReplaySection />
       <PillarsSection />
-      <HowItWorksSection />
       <ArcadeSection />
+      <ReplaySection />
+      <HowItWorksSection />
+      <MobileInstallSection />
       <DonateBanner />
       <FinalCtaSection />
     </div>
@@ -184,7 +186,7 @@ function CarouselSection() {
 
 function MobileInstallSection() {
   return (
-    <section className="relative mt-12 md:hidden">
+    <section className="relative mt-24 md:hidden">
       <InstallPrompt />
     </section>
   );
@@ -371,7 +373,7 @@ function PillarsSection() {
   return (
     <section className="mt-24 md:mt-32">
       <EditorialHead
-        folio="B"
+        folio="A"
         kicker="The kit"
         title="Seven instruments, one pipeline."
         standfirst="Every cloud feature you'll use, all wired into the same replay-parsing pipeline."
@@ -507,7 +509,7 @@ function ArcadeSection() {
   return (
     <section className="mt-24 md:mt-32">
       <EditorialHead
-        folio="D"
+        folio="B"
         kicker="New · Arcade"
         title="Your ladder data, playable."
         standfirst="Thirteen modes — quizzes, games, weekly bingo — all generated from your real replays. Daily drop, XP, shareable score cards."
