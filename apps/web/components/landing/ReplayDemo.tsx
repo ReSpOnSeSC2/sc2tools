@@ -25,7 +25,6 @@ import {
 } from "@/lib/build-events";
 import type { RaceLite, VsRaceLite } from "@/lib/build-rules";
 
-/* eslint-disable max-lines */
 /**
  * ReplayDemo — landing-page "drop a replay, see the real dossier" CTA.
  *
@@ -192,18 +191,16 @@ export function ReplayDemo() {
 
   return (
     <section className="mx-auto max-w-5xl">
-      <Card padded={false} className="overflow-hidden">
+      <Card padded={false} className="overflow-hidden !rounded-md">
         <div className="grid items-center gap-6 p-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:gap-10 md:p-10">
           <div className="space-y-4">
-            <Badge
-              variant="cyan"
-              iconLeft={<Sparkles className="h-3.5 w-3.5" aria-hidden />}
-            >
+            <p className="kicker flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
               Try it on a real replay
-            </Badge>
-            <h2 className="text-h2 font-semibold text-text md:text-h1">
-              Drop a <span className="text-accent-cyan">.SC2Replay</span> file —
-              build a custom build from it.
+            </p>
+            <h2 className="font-serif text-[28px] font-semibold tracking-[-0.01em] text-text md:text-[36px]">
+              Drop a <em className="font-serif not-italic text-editorial">.SC2Replay</em>{" "}
+              file — build a custom build from it.
             </h2>
             <p className="text-body-lg text-text-muted">
               Pick any replay from your StarCraft II folder. We&rsquo;ll parse
@@ -561,7 +558,7 @@ function ReplayDropPreview({ onActivate }: { onActivate: () => void }) {
       type="button"
       onClick={onActivate}
       aria-label="Choose a replay file to preview"
-      className="group relative flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-xl border border-dashed border-accent-cyan/40 bg-bg-elevated/40 p-6 text-center transition-colors hover:border-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      className="group relative flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-md border border-dashed border-accent-cyan/40 bg-bg-elevated/40 p-6 text-center transition-colors hover:border-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
     >
       <span
         aria-hidden
@@ -573,7 +570,7 @@ function ReplayDropPreview({ onActivate }: { onActivate: () => void }) {
       />
       <span
         aria-hidden
-        className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan motion-safe:transition-transform motion-safe:duration-200 group-hover:scale-110"
+        className="relative flex h-16 w-16 items-center justify-center rounded-md border border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan motion-safe:transition-transform motion-safe:duration-200 group-hover:scale-110"
       >
         <FileUp className="h-8 w-8" />
       </span>

@@ -14,19 +14,12 @@ import {
   Map,
   Mic2,
   Shield,
-  Sparkles,
   Swords,
   Tv,
   Wand2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Banner } from "@/components/Banner";
-import {
-  Badge,
-  Card,
-  GlowHalo,
-  Section,
-} from "@/components/ui";
 import {
   HeroCarousel,
   type HeroCarouselSlide,
@@ -36,6 +29,13 @@ import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 
 /* =============================================================== */
 /* PAGE                                                             */
+/*                                                                  */
+/* Art direction: this is laid out as a magazine "field manual",    */
+/* not a centred SaaS landing page. One sans (Hanken, body) + one   */
+/* serif (Fraunces, headlines); a clay-rose editorial accent as the */
+/* single unusual note against the cool teal/cyan; squared corners  */
+/* (rounded-md / none, never 2xl); and asymmetric, columnar spacing */
+/* with hairline rules instead of glowing cards.                    */
 /* =============================================================== */
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
@@ -69,7 +69,7 @@ const WEBSITE_JSON_LD = {
 
 export default function LandingPage() {
   return (
-    <div className="space-y-24 md:space-y-32">
+    <div className="mx-auto max-w-6xl">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
@@ -78,15 +78,14 @@ export default function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(WEBSITE_JSON_LD) }}
       />
-      <CarouselSection />
+      <Masthead />
+      <LeadFeature />
       <MobileInstallSection />
-      <SocialProofSection />
-      <ReplayDemo />
-      <AgentDownloadSection />
+      <ReplaySection />
       <PillarsSection />
       <HowItWorksSection />
       <ArcadeSection />
-      <HeroHeadlineSection />
+      <PullQuoteSection />
       <DonateBanner />
       <FinalCtaSection />
     </div>
@@ -94,8 +93,70 @@ export default function LandingPage() {
 }
 
 /* =============================================================== */
-/* CAROUSEL — top-of-page product peek                              */
+/* MASTHEAD — the editorial header bar (issue meta + folio)         */
 /* =============================================================== */
+
+function Masthead() {
+  return (
+    <header className="border-y border-border-strong">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3">
+        <span className="kicker">SC2 Tools — Field Manual</span>
+        <span className="font-mono text-caption text-text-dim">
+          Scouting Dept. · No. 01 · Free forever
+        </span>
+      </div>
+    </header>
+  );
+}
+
+/* =============================================================== */
+/* LEAD FEATURE — asymmetric hero: standfirst column + product peek */
+/* =============================================================== */
+
+function LeadFeature() {
+  return (
+    <section className="grid gap-x-10 gap-y-10 pt-10 md:pt-16 lg:grid-cols-12">
+      {/* Headline + standfirst — narrow editorial column, left rail */}
+      <div className="lg:col-span-5 lg:pr-2">
+        <p className="kicker">Opponent Intelligence</p>
+        <h1 className="mt-5 font-serif text-[44px] font-semibold leading-[1.02] tracking-[-0.01em] text-text md:text-[60px]">
+          Your opponent&rsquo;s build,{" "}
+          <em className="font-serif italic text-editorial">
+            before they build it.
+          </em>
+        </h1>
+        <p className="drop-initial mt-6 max-w-prose text-body-lg text-text-muted">
+          Sign in, install a 219&nbsp;MB agent, and every replay you finish
+          surfaces an opponent dossier, a build classifier, and a live OBS
+          overlay — across every device. No tagging, no manual import.
+        </p>
+
+        <div className="mt-7 flex flex-wrap gap-3">
+          <CtaLink
+            href="/sign-up"
+            iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}
+          >
+            Get started — it&apos;s free
+          </CtaLink>
+          <CtaLink
+            href="/download"
+            variant="secondary"
+            iconLeft={<Download className="h-5 w-5" aria-hidden />}
+          >
+            Download the agent
+          </CtaLink>
+        </div>
+
+        <TrustStrip />
+      </div>
+
+      {/* Product peek — the wider plate, pushed to the right rail */}
+      <div className="lg:col-span-7">
+        <CarouselSection />
+      </div>
+    </section>
+  );
+}
 
 function CarouselSection() {
   const slides: ReadonlyArray<HeroCarouselSlide> = [
@@ -111,12 +172,9 @@ function CarouselSection() {
     })),
   ];
   return (
-    <section className="relative pt-2">
-      <HeroCarousel
-        slides={slides}
-        ariaLabel="SC2 Tools landing carousel"
-      />
-    </section>
+    <div className="relative">
+      <HeroCarousel slides={slides} ariaLabel="SC2 Tools landing carousel" />
+    </div>
   );
 }
 
@@ -126,62 +184,8 @@ function CarouselSection() {
 
 function MobileInstallSection() {
   return (
-    <section className="relative md:hidden">
+    <section className="relative mt-12 md:hidden">
       <InstallPrompt />
-    </section>
-  );
-}
-
-/* =============================================================== */
-/* AGENT DOWNLOAD — the install / sign-up CTA cluster               */
-/* =============================================================== */
-
-function AgentDownloadSection() {
-  return (
-    <section className="relative">
-      <div className="relative mx-auto max-w-3xl space-y-4 text-center">
-        <p className="mx-auto max-w-2xl text-body-lg text-text-muted">
-          Sign in, install a 219&nbsp;MB agent, and every replay you finish
-          surfaces an opponent dossier, build classifier, and live OBS
-          overlay — across every device.
-        </p>
-        <div className="flex flex-wrap justify-center gap-3">
-          <CtaLink
-            href="/sign-up"
-            iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}
-          >
-            Get started — it&apos;s free
-          </CtaLink>
-          <CtaLink
-            href="/download"
-            variant="secondary"
-            iconLeft={<Download className="h-5 w-5" aria-hidden />}
-          >
-            Download the agent
-          </CtaLink>
-        </div>
-        <div className="flex justify-center">
-          <TrustStrip />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* =============================================================== */
-/* HERO HEADLINE — the brand promise, no carousel, no CTAs          */
-/* =============================================================== */
-
-function HeroHeadlineSection() {
-  return (
-    <section className="relative">
-      <div className="relative mx-auto max-w-3xl text-center">
-        <h1 className="text-[40px] font-bold leading-[44px] tracking-tight md:text-display-lg lg:text-display-xl">
-          Your opponent&apos;s build,
-          <br />
-          <span className="text-accent-cyan">before they build it.</span>
-        </h1>
-      </div>
     </section>
   );
 }
@@ -261,24 +265,23 @@ function HeroPeekSlide({
   imageAlt,
 }: HeroPeek) {
   return (
-    <div className="relative grid min-h-[260px] items-center gap-6 px-6 py-8 sm:min-h-[320px] sm:px-10 sm:py-12 md:min-h-[420px] md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] md:gap-10 md:py-14">
-      <GlowHalo color="cyan" position="center" size={60} opacity={0.55} />
-      <div className="relative space-y-3 text-center md:text-left">
-        <p className="overline text-accent-cyan">{eyebrow}</p>
-        <h2 className="text-h2 font-semibold text-text md:text-h1">{title}</h2>
+    <div className="grid min-h-[260px] items-center gap-6 px-6 py-8 sm:min-h-[320px] sm:px-9 sm:py-10 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:gap-9">
+      <div className="space-y-3">
+        <p className="kicker">{eyebrow}</p>
+        <h2 className="font-serif text-[26px] font-semibold leading-tight tracking-[-0.01em] text-text md:text-[30px]">
+          {title}
+        </h2>
         <p className="text-body-lg text-text-muted">{body}</p>
       </div>
-      <div className="relative">
-        <div className="overflow-hidden rounded-xl border border-border bg-bg-elevated/40 shadow-halo-cyan">
-          <Image
-            src={imageSrc}
-            alt={imageAlt}
-            width={1600}
-            height={900}
-            sizes="(min-width: 1024px) 60vw, 100vw"
-            className="block h-auto w-full"
-          />
-        </div>
+      <div className="overflow-hidden rounded-md border-2 border-line bg-bg-elevated/40">
+        <Image
+          src={imageSrc}
+          alt={imageAlt}
+          width={1600}
+          height={900}
+          sizes="(min-width: 1024px) 60vw, 100vw"
+          className="block h-auto w-full"
+        />
       </div>
     </div>
   );
@@ -293,10 +296,10 @@ const TRUST_BADGES: ReadonlyArray<{ icon: LucideIcon; label: string }> = [
 
 function TrustStrip() {
   return (
-    <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-4 text-text-muted">
+    <ul className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-4 text-text-muted">
       {TRUST_BADGES.map(({ icon: Icon, label }) => (
         <li key={label} className="flex items-center gap-1.5 text-caption">
-          <Icon className="h-4 w-4 text-accent-cyan" aria-hidden />
+          <Icon className="h-4 w-4 text-editorial" aria-hidden />
           <span>{label}</span>
         </li>
       ))}
@@ -305,7 +308,19 @@ function TrustStrip() {
 }
 
 /* =============================================================== */
-/* PILLARS                                                          */
+/* REPLAY DEMO — framed as a numbered editorial feature             */
+/* =============================================================== */
+
+function ReplaySection() {
+  return (
+    <section className="mt-24 md:mt-32">
+      <ReplayDemo />
+    </section>
+  );
+}
+
+/* =============================================================== */
+/* PILLARS — the feature index, set as a magazine list             */
 /* =============================================================== */
 
 interface Pillar {
@@ -314,107 +329,90 @@ interface Pillar {
   body: string;
 }
 
-interface PositionedPillar extends Pillar {
-  /** Tailwind grid placement classes for the lg+ triangle layout. */
-  placement: string;
-}
-
-/**
- * Pillars laid out as a 4 → 2 → 1 triangle on lg+, narrowing toward the
- * apex. Apex is the marquee feature (Live OBS Overlay); the middle band
- * carries the in-game analysis layer; the four-card base is the data
- * pipeline that feeds everything above it. On smaller viewports the
- * placement classes are ignored and pillars flow as a regular 2-col grid
- * (or stack on mobile), so the order below is also the read order.
- *
- * Apex sits at DOM top so the section reads top→bottom; the visual
- * "build up from the foundation" cue comes from the widening triangle.
- */
-const PILLARS: ReadonlyArray<PositionedPillar> = [
-  // Apex — marquee feature
+const PILLARS: ReadonlyArray<Pillar> = [
   {
     icon: Tv,
     title: "Live OBS Overlay",
     body: "15 broadcast-ready widgets, per-widget URLs. Drop one URL into Browser Source and you're streaming.",
-    placement: "lg:col-span-2 lg:col-start-4",
   },
-  // Middle band — analysis & in-game support
   {
     icon: Swords,
     title: "Strategy Detection",
     body: "Per-matchup playbook with rule-based opener identification across 100+ builds.",
-    placement: "lg:col-span-2 lg:col-start-3",
   },
   {
     icon: Mic2,
     title: "Voice Readout",
     body: "Optional in-ear scouting card before each game.",
-    placement: "lg:col-span-2 lg:col-start-5",
   },
-  // Base — the data pipeline
   {
     icon: Wand2,
     title: "Auto Replay Classification",
     body: "Parse every game in seconds, no tagging.",
-    placement: "lg:col-span-2 lg:col-start-1",
   },
   {
     icon: BarChart3,
     title: "Build Recognizer",
     body: "Per-build W-L, with map and MMR breakdowns.",
-    placement: "lg:col-span-2 lg:col-start-3",
   },
   {
     icon: Map,
     title: "Map Intel & Veto Planning",
     body: "Per-map win rates and timing libraries.",
-    placement: "lg:col-span-2 lg:col-start-5",
   },
   {
     icon: Library,
     title: "Custom Build Library",
     body: "Sync your openers, browse the community pool.",
-    placement: "lg:col-span-2 lg:col-start-7",
   },
 ];
 
 function PillarsSection() {
   return (
-    <Section
-      title="Seven pillars, one workflow"
-      description="Every cloud feature you'll use, all wired into the same data pipeline."
-      className="mx-auto max-w-6xl"
-    >
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-8">
-        {PILLARS.map((p) => (
-          <PillarCard key={p.title} {...p} />
+    <section className="mt-24 md:mt-32">
+      <EditorialHead
+        folio="B"
+        kicker="The kit"
+        title="Seven instruments, one pipeline."
+        standfirst="Every cloud feature you'll use, all wired into the same replay-parsing pipeline."
+      />
+      {/* Asymmetric index: a numbered editorial list, not a card wall. */}
+      <ol className="mt-10 grid gap-x-10 gap-y-px sm:grid-cols-2">
+        {PILLARS.map((p, i) => (
+          <PillarEntry key={p.title} index={i + 1} {...p} />
         ))}
-      </ul>
-    </Section>
+      </ol>
+    </section>
   );
 }
 
-function PillarCard({ icon: Icon, title, body, placement }: PositionedPillar) {
+function PillarEntry({
+  index,
+  icon: Icon,
+  title,
+  body,
+}: Pillar & { index: number }) {
   return (
-    <li className={["h-full", placement].filter(Boolean).join(" ")}>
-      <Card variant="feature" padded={false} className="h-full">
-        <div className="flex h-full flex-col gap-3 p-5">
-          <div
-            aria-hidden
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border-2 border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan"
-          >
-            <Icon className="h-5 w-5" />
-          </div>
-          <h3 className="text-h4 font-semibold text-text">{title}</h3>
-          <p className="text-body text-text-muted">{body}</p>
-        </div>
-      </Card>
+    <li className="flex gap-4 border-t border-border py-6">
+      <span
+        aria-hidden
+        className="select-none font-serif text-h2 font-normal leading-none text-editorial/70 tabular-nums"
+      >
+        {index.toString().padStart(2, "0")}
+      </span>
+      <div className="space-y-1.5">
+        <h3 className="flex items-center gap-2 font-serif text-h3 font-semibold tracking-[-0.01em] text-text">
+          <Icon className="h-5 w-5 text-accent-cyan" aria-hidden />
+          {title}
+        </h3>
+        <p className="text-body text-text-muted">{body}</p>
+      </div>
     </li>
   );
 }
 
 /* =============================================================== */
-/* HOW IT WORKS                                                     */
+/* HOW IT WORKS — three editorial steps with big serif folios       */
 /* =============================================================== */
 
 interface Step {
@@ -443,35 +441,26 @@ const STEPS: ReadonlyArray<Step> = [
 
 function HowItWorksSection() {
   return (
-    <Section
-      title="How it works"
-      description="Three steps. Stays out of your way after that."
-      className="mx-auto max-w-6xl"
-    >
-      <div className="relative">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-[16.67%] top-9 hidden h-px bg-gradient-to-r from-transparent via-accent-cyan/50 to-transparent md:block"
-        />
-        <ol className="relative grid gap-6 md:grid-cols-3">
-          {STEPS.map((step) => (
-            <li key={step.num}>
-              <Card padded={false} className="h-full">
-                <div className="space-y-3 p-5">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-accent-cyan/40 bg-bg-surface font-mono text-caption font-semibold text-accent-cyan">
-                    {step.num}
-                  </span>
-                  <h3 className="text-h4 font-semibold text-text">
-                    {step.title}
-                  </h3>
-                  <p className="text-body text-text-muted">{step.body}</p>
-                </div>
-              </Card>
-            </li>
-          ))}
-        </ol>
+    <section className="mt-24 md:mt-32">
+      <EditorialHead
+        folio="C"
+        kicker="The routine"
+        title="Three steps. Then it stays out of your way."
+      />
+      <div className="mt-10 grid gap-x-10 gap-y-10 md:grid-cols-3">
+        {STEPS.map((step) => (
+          <div key={step.num} className="border-t-2 border-line pt-5">
+            <span className="block font-serif text-display-lg font-normal leading-none text-editorial">
+              {step.num}
+            </span>
+            <h3 className="mt-4 font-serif text-h3 font-semibold tracking-[-0.01em] text-text">
+              {step.title}
+            </h3>
+            <p className="mt-2 text-body text-text-muted">{step.body}</p>
+          </div>
+        ))}
       </div>
-    </Section>
+    </section>
   );
 }
 
@@ -516,30 +505,20 @@ const ARCADE_TILES: ReadonlyArray<ArcadeTile> = [
 
 function ArcadeSection() {
   return (
-    <section className="relative mx-auto max-w-6xl space-y-6">
-      <header className="space-y-3 text-center">
-        <Badge
-          variant="signal"
-          iconLeft={<Sparkles className="h-3.5 w-3.5" aria-hidden />}
-        >
-          New · Arcade
-        </Badge>
-        <h2 className="text-h1 font-bold tracking-tight text-text md:text-display-lg">
-          Your ladder data,{" "}
-          <span className="text-accent-cyan">playable</span>
-        </h2>
-        <p className="mx-auto max-w-2xl text-body-lg text-text-muted">
-          Thirteen modes — quizzes, games, weekly bingo — all generated from
-          your real replays. Daily drop, XP, shareable score cards.
-        </p>
-      </header>
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <section className="mt-24 md:mt-32">
+      <EditorialHead
+        folio="D"
+        kicker="New · Arcade"
+        title="Your ladder data, playable."
+        standfirst="Thirteen modes — quizzes, games, weekly bingo — all generated from your real replays. Daily drop, XP, shareable score cards."
+      />
+      <ul className="mt-10 grid gap-x-10 gap-y-px sm:grid-cols-2 lg:grid-cols-3">
         {ARCADE_TILES.map((tile) => (
-          <ArcadeTileCard key={tile.title} {...tile} />
+          <ArcadeEntry key={tile.title} {...tile} />
         ))}
-        <ArcadeMoreCard />
+        <ArcadeMoreEntry />
       </ul>
-      <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+      <div className="mt-8 flex flex-wrap items-center gap-3">
         <CtaLink
           href="/sign-up"
           iconLeft={<Gamepad2 className="h-5 w-5" aria-hidden />}
@@ -552,70 +531,67 @@ function ArcadeSection() {
   );
 }
 
-function ArcadeTileCard({ iconSrc, title, body }: ArcadeTile) {
+function ArcadeEntry({ iconSrc, title, body }: ArcadeTile) {
   return (
-    <li className="h-full">
-      <Card variant="feature" padded={false} className="h-full">
-        <div className="flex h-full flex-col gap-3 p-5">
-          <div
-            aria-hidden
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border-2 border-accent-cyan/40 bg-accent-cyan/10"
-          >
-            <Image
-              src={iconSrc}
-              alt=""
-              width={28}
-              height={28}
-              className="h-7 w-7"
-              unoptimized
-            />
-          </div>
-          <h3 className="text-h4 font-semibold text-text">{title}</h3>
-          <p className="text-body text-text-muted">{body}</p>
-        </div>
-      </Card>
+    <li className="flex gap-4 border-t border-border py-6">
+      <span
+        aria-hidden
+        className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border-2 border-editorial/30 bg-editorial/10"
+      >
+        <Image
+          src={iconSrc}
+          alt=""
+          width={28}
+          height={28}
+          className="h-7 w-7"
+          unoptimized
+        />
+      </span>
+      <div className="space-y-1.5">
+        <h3 className="font-serif text-h4 font-semibold text-text">{title}</h3>
+        <p className="text-body text-text-muted">{body}</p>
+      </div>
     </li>
   );
 }
 
-function ArcadeMoreCard() {
+function ArcadeMoreEntry() {
   return (
-    <li className="h-full">
-      <Card variant="feature" padded={false} className="h-full">
-        <div className="flex h-full flex-col gap-3 p-5">
-          <div
-            aria-hidden
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border-2 border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan"
-          >
-            <Gamepad2 className="h-5 w-5" />
-          </div>
-          <h3 className="text-h4 font-semibold text-text">+8 more modes</h3>
-          <p className="text-body text-text-muted">
-            Streaks, macro memory, rivalries, comebacks, build cards… Quick
-            Play any of them, or chase the Daily Drop.
-          </p>
-        </div>
-      </Card>
+    <li className="flex gap-4 border-t border-border py-6">
+      <span
+        aria-hidden
+        className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border-2 border-editorial/30 bg-editorial/10 text-editorial"
+      >
+        <Gamepad2 className="h-5 w-5" />
+      </span>
+      <div className="space-y-1.5">
+        <h3 className="font-serif text-h4 font-semibold text-text">
+          +8 more modes
+        </h3>
+        <p className="text-body text-text-muted">
+          Streaks, macro memory, rivalries, comebacks, build cards… Quick Play
+          any of them, or chase the Daily Drop.
+        </p>
+      </div>
     </li>
   );
 }
 
 /* =============================================================== */
-/* SOCIAL PROOF                                                     */
+/* PULL QUOTE — editorial standfirst, replaces the centred blurb    */
 /* =============================================================== */
 
-function SocialProofSection() {
+function PullQuoteSection() {
   return (
-    <section className="mx-auto max-w-3xl text-center">
-      <p className="overline text-accent-cyan">Built in the open</p>
-      <p className="mt-3 text-h2 font-semibold text-text md:text-h1">
-        Built by ladder players,
-        <br className="hidden sm:inline" /> for ladder players.
-      </p>
-      <p className="mx-auto mt-4 max-w-2xl text-body-lg text-text-muted">
-        Every classifier rule, every overlay, every UI decision came from
-        someone trying to win their next game.
-      </p>
+    <section className="mt-24 grid gap-x-10 gap-y-6 md:mt-32 lg:grid-cols-12">
+      <p className="kicker self-start lg:col-span-3 lg:pt-3">Built in the open</p>
+      <blockquote className="lg:col-span-9">
+        <p className="border-l-2 border-editorial pl-6 font-serif text-[28px] font-normal italic leading-snug tracking-[-0.01em] text-text md:text-[36px]">
+          Built by ladder players, for ladder players. Every classifier rule,
+          every overlay, every UI decision came from someone trying to win
+          their next game.
+        </p>
+      </blockquote>
     </section>
   );
 }
@@ -626,72 +602,68 @@ function SocialProofSection() {
 
 function DonateBanner() {
   return (
-    <section className="mx-auto max-w-5xl">
-      <Card padded={false}>
-        <div className="grid items-center gap-6 p-6 md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-8 md:p-8">
-          <span
-            aria-hidden
-            className="inline-flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan shadow-halo-cyan"
-          >
-            <Heart className="h-7 w-7" />
-          </span>
-          <div className="space-y-1">
-            <Badge variant="cyan">Donation-supported</Badge>
-            <h2 className="text-h3 font-semibold text-text md:text-h2">
-              Free now, free forever — donations keep the servers up.
-            </h2>
-            <p className="text-body text-text-muted">
-              One paid Render service, a MongoDB Atlas M10 cluster, and the
-              sc2tools.com domain run the cloud. If SC2 Tools is helping your
-              ladder grind, a one-time tip helps cover the bill.
-            </p>
-          </div>
-          <Link
-            href="/donate"
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-accent px-5 text-body-lg font-semibold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:self-center"
-          >
-            See how to chip in
-            <ArrowRight className="h-5 w-5" aria-hidden />
-          </Link>
+    <section className="mt-24 md:mt-32">
+      <div className="grid items-center gap-6 rounded-md border-2 border-line bg-bg-surface p-6 shadow-hard md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-8 md:p-8">
+        <span
+          aria-hidden
+          className="inline-flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-md border-2 border-editorial/40 bg-editorial/10 text-editorial"
+        >
+          <Heart className="h-7 w-7" />
+        </span>
+        <div className="space-y-1.5">
+          <p className="kicker">Donation-supported</p>
+          <h2 className="font-serif text-h3 font-semibold tracking-[-0.01em] text-text md:text-h2">
+            Free now, free forever — donations keep the servers up.
+          </h2>
+          <p className="text-body text-text-muted">
+            One paid Render service, a MongoDB Atlas M10 cluster, and the
+            sc2tools.com domain run the cloud. If SC2 Tools is helping your
+            ladder grind, a one-time tip helps cover the bill.
+          </p>
         </div>
-      </Card>
+        <Link
+          href="/donate"
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-accent px-5 text-body-lg font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:self-center"
+        >
+          See how to chip in
+          <ArrowRight className="h-5 w-5" aria-hidden />
+        </Link>
+      </div>
     </section>
   );
 }
 
 /* =============================================================== */
-/* FINAL CTA                                                        */
+/* FINAL CTA — the closer, left-aligned editorial sign-off          */
 /* =============================================================== */
 
 function FinalCtaSection() {
   return (
-    <section className="relative">
-      <div className="gradient-backdrop relative mx-auto max-w-5xl overflow-hidden rounded-2xl border-2 border-accent px-6 py-12 shadow-hard md:px-12 md:py-16">
-        <GlowHalo color="mixed" position="center" size={90} />
-        <div className="relative mx-auto max-w-3xl space-y-5 text-center">
-          <h2 className="text-h1 font-bold tracking-tight text-text md:text-display-lg">
-            Stop guessing.{" "}
-            <span className="text-accent-cyan">Start knowing.</span>
-          </h2>
-          <p className="text-body-lg text-text-muted">
-            Free to start. No credit card. Your replays stay on your machine;
-            only the parsed metadata syncs.
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <CtaLink
-              href="/sign-up"
-              iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}
-            >
-              Create your account
-            </CtaLink>
-            <CtaLink
-              href="/community"
-              variant="secondary"
-              iconLeft={<Library className="h-5 w-5" aria-hidden />}
-            >
-              Browse community builds
-            </CtaLink>
-          </div>
+    <section className="mt-24 md:mt-32">
+      <div className="rounded-md border-2 border-accent bg-bg-surface px-6 py-12 shadow-hard md:px-12 md:py-16">
+        <p className="kicker">The bottom line</p>
+        <h2 className="mt-4 max-w-3xl font-serif text-[40px] font-semibold leading-[1.04] tracking-[-0.01em] text-text md:text-display-lg">
+          Stop guessing.{" "}
+          <em className="font-serif italic text-editorial">Start knowing.</em>
+        </h2>
+        <p className="mt-5 max-w-2xl text-body-lg text-text-muted">
+          Free to start. No credit card. Your replays stay on your machine;
+          only the parsed metadata syncs.
+        </p>
+        <div className="mt-7 flex flex-wrap items-center gap-3">
+          <CtaLink
+            href="/sign-up"
+            iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}
+          >
+            Create your account
+          </CtaLink>
+          <CtaLink
+            href="/community"
+            variant="secondary"
+            iconLeft={<Library className="h-5 w-5" aria-hidden />}
+          >
+            Browse community builds
+          </CtaLink>
         </div>
       </div>
     </section>
@@ -699,7 +671,46 @@ function FinalCtaSection() {
 }
 
 /* =============================================================== */
-/* CTA LINK — landing-page-only Button-styled <Link>                */
+/* EDITORIAL HEAD — shared section masthead (folio + kicker + head) */
+/* =============================================================== */
+
+interface EditorialHeadProps {
+  /** Single-letter section folio printed in the left rail. */
+  folio: string;
+  kicker: string;
+  title: ReactNode;
+  standfirst?: string;
+}
+
+function EditorialHead({ folio, kicker, title, standfirst }: EditorialHeadProps) {
+  return (
+    <div className="grid gap-x-10 gap-y-4 lg:grid-cols-12">
+      <div className="flex items-start gap-4 lg:col-span-4">
+        <span
+          aria-hidden
+          className="select-none font-serif text-display-lg font-normal leading-[0.8] text-editorial/30"
+        >
+          {folio}
+        </span>
+        <p className="kicker pt-2">{kicker}</p>
+      </div>
+      <div className="lg:col-span-8">
+        <hr className="ed-rule mb-5" />
+        <h2 className="font-serif text-[32px] font-semibold leading-tight tracking-[-0.01em] text-text md:text-[40px]">
+          {title}
+        </h2>
+        {standfirst ? (
+          <p className="mt-3 max-w-2xl text-body-lg text-text-muted">
+            {standfirst}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/* =============================================================== */
+/* CTA LINK — landing-page-only Button-styled <Link> (squared)      */
 /* =============================================================== */
 
 interface CtaLinkProps {
@@ -724,7 +735,7 @@ function CtaLink({
   const variantClass =
     variant === "primary"
       ? "bg-accent text-white hover:bg-accent-hover"
-      : "bg-bg-elevated text-text border border-border hover:bg-bg-subtle hover:border-border-strong";
+      : "bg-bg-elevated text-text border-2 border-line hover:bg-bg-subtle";
   const sizeClass =
     size === "lg"
       ? "h-12 px-5 text-body-lg gap-2.5"
@@ -733,7 +744,7 @@ function CtaLink({
     <Link
       href={href}
       className={[
-        "inline-flex min-w-[44px] items-center justify-center rounded-lg font-semibold",
+        "inline-flex min-w-[44px] items-center justify-center rounded-md font-semibold",
         "transition-colors duration-100",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         variantClass,
