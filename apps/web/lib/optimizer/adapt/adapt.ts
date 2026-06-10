@@ -101,6 +101,10 @@ export function actionForName(
 export interface ResolvedActions {
   actions: BuildAction[];
   unknownNames: string[];
+  /** True when derived from sparse v3 rules (milestones, not steps). */
+  fromRules?: boolean;
+  /** Latest milestone time the source carried (drives sim horizon). */
+  latestMilestoneSec?: number;
 }
 
 /** Step tokens with special meaning beyond unit/upgrade names. */
@@ -166,6 +170,28 @@ export function injectPrerequisites(
 ): BuildAction[] {
   const out: BuildAction[] = [];
   const present = new Set<string>();
+  // Milestone lists rarely mention gas buildings, but their tech is
+  // gas-priced — without income injection the sim stalls forever at
+  // the first gas cost (user's DT/3-stargate build froze at the
+  // cybernetics core). One collector for light gas needs, both
+  // geysers for real gas builds.
+  const race = actions
+    .map(
+      (a) =>
+        profile.units[a.name]?.race ?? profile.upgrades[a.name]?.race,
+    )
+    .find((r) => r !== undefined);
+  const gasName = Object.entries(profile.units).find(
+    ([, def]) => def.isGasBuilding && def.race === race,
+  )?.[0];
+  const totalGasCost = actions.reduce((sum, action) => {
+    if (action.kind === "research") {
+      return sum + (profile.upgrades[action.name]?.gas ?? 0);
+    }
+    const def = profile.units[action.name];
+    const count = def?.pairTrained ? 2 : 1;
+    return sum + (def?.gas ?? 0) * count;
+  }, 0);
   const ensure = (name: string, depth: number) => {
     if (depth > 8 || present.has(name)) return;
     const def = profile.units[name] ?? null;
@@ -202,6 +228,22 @@ export function injectPrerequisites(
     out.push(action);
     present.add(action.name);
   }
+  // Gas income goes right after the first structure (before any
+  // gas-costing tech, including injected ancestors like a twilight
+  // council) so nothing upstream of it can stall on an empty bank.
+  if (totalGasCost > 0 && gasName && !out.some((a) => a.name === gasName)) {
+    // after the second structure (pylon -> gateway -> gas), or as
+    // early as the list allows for very short skeletons
+    const buildIndices = out
+      .map((a, i) => (a.kind === "build" ? i : -1))
+      .filter((i) => i >= 0);
+    const anchor = buildIndices[1] ?? buildIndices[0] ?? -1;
+    const insertAt = anchor + 1;
+    const collectors = totalGasCost > 400 ? 2 : 1;
+    for (let i = 0; i < collectors; i += 1) {
+      out.splice(insertAt, 0, { kind: "build", name: gasName });
+    }
+  }
   return out;
 }
 
@@ -221,16 +263,23 @@ export function actionsFromCustomBuild(
   },
 ): ResolvedActions {
   if (build.signature && build.signature.length > 0) {
-    return actionsFromSignature(profile, build.signature);
+    const resolved = actionsFromSignature(profile, build.signature);
+    return {
+      ...resolved,
+      latestMilestoneSec: Math.max(
+        0,
+        ...build.signature.map((s) => s.beforeSec),
+      ),
+    };
   }
   if (build.rules && build.rules.length > 0) {
-    const resolved = actionsFromSignature(
-      profile,
-      rulesToSignature(build.rules),
-    );
+    const signature = rulesToSignature(build.rules);
+    const resolved = actionsFromSignature(profile, signature);
     return {
       actions: injectPrerequisites(profile, resolved.actions),
       unknownNames: resolved.unknownNames,
+      fromRules: true,
+      latestMilestoneSec: Math.max(0, ...signature.map((s) => s.beforeSec)),
     };
   }
   return { actions: [], unknownNames: [] };

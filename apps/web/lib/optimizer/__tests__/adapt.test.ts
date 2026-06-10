@@ -348,6 +348,40 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
     }
   });
 
+  it("gas-heavy rules builds get collectors injected and run to their milestones", () => {
+    // The user's "PvZ — DT into 3 Stargate Void Ray" shape: pure
+    // milestones, heavy gas, latest rule at 10:00. Without injected
+    // assimilators this froze at the cybernetics core forever.
+    const resolved = actionsFromCustomBuild(target, {
+      rules: [
+        { type: "before", name: "BuildDarkShrine", time_lt: 324 },
+        { type: "count_min", name: "BuildStargate", time_lt: 600, count: 3 },
+        { type: "count_min", name: "BuildVoidRay", time_lt: 660, count: 2 },
+      ],
+    });
+    expect(resolved.fromRules).toBe(true);
+    expect(resolved.latestMilestoneSec).toBe(660);
+    const gasCount = resolved.actions.filter(
+      (a) => a.name === "Assimilator",
+    ).length;
+    expect(gasCount).toBe(2); // > 400 total gas → both geysers
+    const result = adaptBuild({
+      baselineProfileId: "lotv-base",
+      profileId: "5.0.16",
+      race: "Protoss",
+      actions: resolved.actions,
+      referenceName: "DT into 3 Stargate Void Ray",
+      threats: [],
+      policies: defaultPolicies(),
+      safety: { hasWall: true, allowWorkerPull: true },
+      horizonSec: 750,
+    });
+    expect(result.sim.unexecutedActions).toBe(0);
+    expect((result.sim.completionTimes.Stargate ?? []).length).toBe(3);
+    expect((result.sim.completionTimes.VoidRay ?? []).length).toBe(2);
+    expect((result.sim.completionTimes.DarkShrine ?? []).length).toBe(1);
+  });
+
   it("is deterministic", () => {
     const a = adapt("z-pool-first", "Zerg");
     const b = adapt("z-pool-first", "Zerg");
