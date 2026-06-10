@@ -466,6 +466,9 @@ export function simulate(
       // they start the next few steps that are ready. Resource waits
       // are excluded (skipping ahead would steal the head's bank),
       // and lookahead steps must leave the head's cost untouched.
+      // The bank is strictly FIFO: the moment a scanned step can't be
+      // paid for, the scan stops — cheaper later steps (a 50/50
+      // research, say) must save up for it, not queue-jump it.
       if (outcome.blockedOn && outcome.blockedOn !== "resources") {
         const reserve = actionCost(profile, actions[firstPending]);
         let scanned = 0;
@@ -481,10 +484,11 @@ export function simulate(
             state.eco.minerals - cost.minerals < reserve.minerals ||
             state.eco.gas - cost.gas < reserve.gas
           ) {
-            continue;
+            break;
           }
           const ahead = tryDispatch(state, profile, race, actions[i]);
           if (ahead.status === "done") done[i] = true;
+          else if (ahead.blockedOn === "resources") break;
         }
       }
       break;

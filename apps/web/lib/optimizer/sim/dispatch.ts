@@ -73,7 +73,7 @@ export function tryDispatch(
     case "morph":
       return dispatchUnit(state, profile, race, action.name);
     case "research":
-      return dispatchResearch(state, profile, action.name);
+      return dispatchResearch(state, profile, action.name, action);
     case "chrono":
       return dispatchChrono(state, profile, action.target ?? action.name);
     case "transform-warpgate":
@@ -456,6 +456,7 @@ function dispatchResearch(
   state: SimState,
   profile: PatchProfile,
   name: string,
+  action?: BuildAction,
 ): DispatchOutcome {
   const def = profile.upgrades[name];
   if (!def) return { status: "impossible", reason: `unknown upgrade ${name}` };
@@ -466,6 +467,18 @@ function dispatchResearch(
     return { status: "impossible", reason: `tech path missing for ${name}` };
   }
   if (!prereqsMet(def.requires, state.completed, state.upgradesDone)) {
+    return { status: "wait", blockedOn: "tech" };
+  }
+  // Meta gate: when this research occupies one of the gated structure
+  // type, every previously-listed one must be standing first (5.0.16
+  // warpgate waits for the second gateway). On profiles where the
+  // research lives elsewhere the gate is moot and skipped.
+  const gate = action?.afterCompleted;
+  if (
+    gate &&
+    def.researchedAt.includes(gate.unit) &&
+    (state.completed.get(gate.unit) ?? 0) < gate.count
+  ) {
     return { status: "wait", blockedOn: "tech" };
   }
   // Non-blocking research runs alongside the structure's production

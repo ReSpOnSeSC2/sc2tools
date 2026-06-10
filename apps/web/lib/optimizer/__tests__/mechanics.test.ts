@@ -268,4 +268,56 @@ describe("build-order lookahead", () => {
     const forge = result.steps.find((s) => s.name === "Forge")!;
     expect(forge.startSec).toBeGreaterThanOrEqual(nexus.startSec);
   });
+
+  it("cheap later steps cannot queue-jump a money-blocked step", () => {
+    // The bank is FIFO: while phoenixes hold the head on a busy
+    // stargate and gateway #2 saves toward 150 minerals, the 50/50
+    // research listed after it must not slip onto the idle first
+    // gateway ahead of it.
+    const actions: BuildAction[] = [
+      act("build", "Pylon"),
+      act("build", "Gateway"),
+      act("build", "Assimilator"),
+      act("build", "CyberneticsCore"),
+      act("build", "Stargate"),
+      act("train", "Phoenix"),
+      act("train", "Phoenix"),
+      act("build", "Gateway"),
+      act("research", "WarpGateResearch"),
+    ];
+    const result = simulate(actions, profile, "Protoss", opts({ horizonSec: 600 }));
+    expect(result.unexecutedActions).toBe(0);
+    const gates = result.steps
+      .filter((s) => s.name === "Gateway")
+      .sort((a, b) => a.startSec - b.startSec);
+    const research = result.steps.find((s) => s.name === "WarpGateResearch")!;
+    expect(research.startSec).toBeGreaterThanOrEqual(gates[1].startSec - 0.01);
+  });
+
+  it("warpgate research waits for the gateways listed before it", () => {
+    // actionsFromSteps tags WarpGateResearch with afterCompleted —
+    // here we set it directly: with two gateways listed first, the
+    // research may only start once BOTH stand ("you cannot start
+    // warpgate until you get your second gateway up").
+    const actions: BuildAction[] = [
+      act("build", "Pylon"),
+      act("build", "Gateway"),
+      act("build", "Assimilator"),
+      act("build", "CyberneticsCore"),
+      act("train", "Adept"),
+      act("build", "Gateway"),
+      {
+        kind: "research",
+        name: "WarpGateResearch",
+        afterCompleted: { unit: "Gateway", count: 2 },
+      },
+    ];
+    const result = simulate(actions, profile, "Protoss", opts({ horizonSec: 600 }));
+    expect(result.unexecutedActions).toBe(0);
+    const gates = result.steps
+      .filter((s) => s.name === "Gateway")
+      .sort((a, b) => a.doneSec - b.doneSec);
+    const research = result.steps.find((s) => s.name === "WarpGateResearch")!;
+    expect(research.startSec).toBeGreaterThanOrEqual(gates[1].doneSec - 0.01);
+  });
 });

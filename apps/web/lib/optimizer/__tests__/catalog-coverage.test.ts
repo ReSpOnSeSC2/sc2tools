@@ -7,7 +7,7 @@ import {
   stepsForMatchup,
 } from "../adapt/adapt";
 import { resolveProfile } from "../patch/profiles";
-import { defaultPolicies } from "../sim/engine";
+import { defaultPolicies, simulate } from "../sim/engine";
 import type { SimRace } from "../types";
 
 /**
@@ -187,6 +187,115 @@ describe("PvT first-defense rule (user's PTR guidance)", () => {
     expect(pvt.indexOf("CyberneticsCore")).toBeLessThan(pvt.indexOf("Nexus"));
     const pvz = stepsForMatchup(gateExpand, "PvZ");
     expect(pvz.indexOf("Nexus")).toBeLessThan(pvz.indexOf("CyberneticsCore"));
+  });
+});
+
+describe("5.0.16 warpgate meta (user's PTR guidance)", () => {
+  // "You cannot start warpgate until you get your second gateway up"
+  // — the research occupies a gateway, so every gateway listed before
+  // it must be standing when it starts. The PvP proxy warpgate rush
+  // researches off its lone first gateway on purpose and is covered
+  // by the same rule (one listed gateway → no extra wait).
+
+  function simSteps(steps: string[]) {
+    const { actions } = actionsFromSteps(target, steps);
+    return simulate(actions, target, "Protoss", {
+      horizonSec: 600,
+      policies: defaultPolicies(),
+    });
+  }
+
+  it("research never starts before the gateways listed ahead of it", () => {
+    const seen = new Set<string>();
+    for (const build of referenceBuilds()) {
+      if (build.race !== "Protoss") continue;
+      for (const matchup of build.matchups) {
+        const steps = stepsForMatchup(build, matchup);
+        const key = steps.join("|");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const wgrIndex = steps.indexOf("WarpGateResearch");
+        if (wgrIndex < 0) continue;
+        const prior = steps
+          .slice(0, wgrIndex)
+          .filter((s) => s === "Gateway").length;
+        const sim = simSteps(steps);
+        const research = sim.steps.find(
+          (s) => s.name === "WarpGateResearch",
+        )!;
+        const gateDone = sim.steps
+          .filter((s) => s.name === "Gateway")
+          .map((s) => s.doneSec)
+          .sort((a, b) => a - b);
+        expect(
+          research.startSec,
+          `${build.id} (${matchup}): warpgate before gateway #${prior} finished`,
+        ).toBeGreaterThanOrEqual(gateDone[prior - 1] - 0.01);
+      }
+    }
+  });
+
+  it("the proxy warpgate rush still researches off one gateway", () => {
+    const rush = referenceBuilds().find(
+      (b) => b.id === "p-proxy-warpgate-rush",
+    )!;
+    const sim = simSteps(rush.steps);
+    const research = sim.steps.find((s) => s.name === "WarpGateResearch")!;
+    const gateDone = sim.steps
+      .filter((s) => s.name === "Gateway")
+      .map((s) => s.doneSec)
+      .sort((a, b) => a - b);
+    expect(research.startSec).toBeLessThan(gateDone[1]);
+  });
+
+  it("the 12-worker baseline keeps researching at the core, ungated", () => {
+    // Old patch: warpgate lives at the cybernetics core and occupies
+    // no gateway, so the meta gate must not delay the baseline sim.
+    const build = referenceBuilds().find((b) => b.id === "p-gate-expand")!;
+    const baseline = resolveProfile(build.native ?? "lotv-base");
+    const { actions } = actionsFromSteps(target, build.steps);
+    const sim = simulate(actions, baseline, "Protoss", {
+      horizonSec: 600,
+      policies: defaultPolicies(),
+    });
+    const research = sim.steps.find((s) => s.name === "WarpGateResearch")!;
+    const gateDone = sim.steps
+      .filter((s) => s.name === "Gateway")
+      .map((s) => s.doneSec)
+      .sort((a, b) => a - b);
+    expect(research.startSec).toBeLessThan(gateDone[1]);
+  });
+});
+
+describe("PvT shield battery coverage (user's PTR guidance)", () => {
+  // "Not every standard build, but 80-90% get a safety battery."
+  // All-ins, proxies and rushes spend every mineral on the punch.
+  const NO_BATTERY_ARCHETYPES = new Set([
+    "p-4gate",
+    "p-proxy-4gate",
+    "p-blink-allin",
+    "p-7gate-blink",
+    "p-cannon-rush",
+    "p-chargelot-allin",
+    "p-dt-rush",
+    "p-proxy-stargate",
+  ]);
+
+  it("80-90% of standard PvT openers include a shield battery", () => {
+    const standard = referenceBuilds().filter(
+      (b) =>
+        b.race === "Protoss" &&
+        b.matchups.includes("PvT") &&
+        !NO_BATTERY_ARCHETYPES.has(b.id),
+    );
+    expect(standard.length).toBeGreaterThan(10);
+    const withBattery = standard.filter((b) =>
+      stepsForMatchup(b, "PvT").includes("ShieldBattery"),
+    );
+    const fraction = withBattery.length / standard.length;
+    expect(fraction).toBeGreaterThanOrEqual(0.8);
+    // "not every" — a couple of openers legitimately skip it
+    expect(withBattery.length).toBeLessThan(standard.length);
   });
 });
 

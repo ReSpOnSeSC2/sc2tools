@@ -143,7 +143,21 @@ export function actionsFromSteps(
     }
     if (isPolicyOwned(profile, canonical)) continue;
     const action = actionForName(profile, canonical);
-    if (action) actions.push(action);
+    if (!action) continue;
+    if (canonical === "WarpGateResearch") {
+      // 5.0.16 meta: the research occupies a gateway, so it must wait
+      // for every gateway listed before it to finish — "you cannot
+      // start warpgate until you get your second gateway up". Rush
+      // builds that list only one gateway first keep researching
+      // immediately; old-patch baselines ignore the gate entirely.
+      const priorGateways = actions.filter(
+        (a) => a.kind === "build" && a.name === "Gateway",
+      ).length;
+      if (priorGateways > 0) {
+        action.afterCompleted = { unit: "Gateway", count: priorGateways };
+      }
+    }
+    actions.push(action);
   }
   return { actions, unknownNames };
 }
