@@ -136,6 +136,29 @@ class ApiClient:
             body["region"] = region
         return self._post("/v1/me/last-mmr", auth=True, body=body)
 
+    # ---------------- bulk import (job visibility) ----------------
+    def import_progress(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Report import-job progress (counters, breakdown, samples).
+
+        The cloud $sets the fields onto the ``import_jobs`` doc and
+        re-emits them to the user's sockets as ``import:progress`` so
+        the dashboard card updates live.
+        """
+        return self._post("/v1/import/progress", auth=True, body=body)
+
+    def import_agent_start(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Register an agent-initiated backfill as a visible job.
+
+        Used by the startup sweep when it finds a large un-uploaded
+        backlog: the cloud mints a job doc and returns ``{jobId}`` the
+        progress reports then reference.
+        """
+        return self._post("/v1/import/agent-start", auth=True, body=body)
+
+    def import_host_info(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Report host facts (cores, watched replay folders)."""
+        return self._post("/v1/import/host-info", auth=True, body=body)
+
     # ---------------- internals ----------------
     def _get(
         self,

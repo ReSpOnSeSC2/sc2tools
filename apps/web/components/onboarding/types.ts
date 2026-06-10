@@ -37,5 +37,5 @@ export interface DevicePairingPollResp {
   userId?: string;
 }
 
-/** Step ids for the 3-step onboarding wizard. */
-export type OnboardingStepId = "welcome" | "download" | "pair";
+/** Step ids for the 4-step onboarding wizard. */
+export type OnboardingStepId = "welcome" | "download" | "pair" | "import";

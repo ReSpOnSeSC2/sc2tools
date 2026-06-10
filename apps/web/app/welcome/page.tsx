@@ -4,18 +4,21 @@ import { useRouter } from "next/navigation";
 import { OnboardingShell } from "@/components/onboarding/OnboardingShell";
 import { OnboardingWelcome } from "@/components/onboarding/OnboardingWelcome";
 import { OnboardingDownload } from "@/components/onboarding/OnboardingDownload";
+import { OnboardingImport } from "@/components/onboarding/OnboardingImport";
 import { OnboardingPair } from "@/components/onboarding/OnboardingPair";
 
 /**
- * /welcome — 3-step onboarding wizard. Step 1 orients, Step 2 surfaces
+ * /welcome — 4-step onboarding wizard. Step 1 orients, Step 2 surfaces
  * the agent installer with real release metadata, Step 3 mints a real
- * pairing code and waits for the agent to claim it.
+ * pairing code and waits for the agent to claim it, Step 4 offers a
+ * one-click import of the user's existing replay history so the
+ * dashboard opens populated.
  *
  * Skip behaviour: every step has a "Skip for now" affordance in the
  * shell's bottom action bar. We send the user to /app — the same
  * destination the final CTA uses on success — so the dashboard's own
- * empty states guide them back to /settings or /devices when they
- * choose to finish onboarding later.
+ * onboarding checklist guides them back when they choose to finish
+ * later.
  */
 export default function WelcomePage() {
   const router = useRouter();
@@ -31,7 +34,9 @@ export default function WelcomePage() {
           case "download":
             return <OnboardingDownload helpers={helpers} />;
           case "pair":
-            return <OnboardingPair />;
+            return <OnboardingPair onContinue={() => helpers.next()} />;
+          case "import":
+            return <OnboardingImport />;
           default:
             return null;
         }

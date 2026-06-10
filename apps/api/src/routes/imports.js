@@ -40,6 +40,18 @@ function buildImportsRouter(deps) {
     }
   });
 
+  // Agent-initiated: register the startup sweep's backlog as a
+  // visible job. Device-token reachable (same combined auth the agent
+  // uses for /import/progress).
+  router.post("/import/agent-start", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      res.json(await deps.imports.agentStart(userId, req.body || {}));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post("/import/cancel", async (req, res, next) => {
     try {
       const userId = requireAuth(req).userId;

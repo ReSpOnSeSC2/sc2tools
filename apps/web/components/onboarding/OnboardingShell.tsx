@@ -9,6 +9,7 @@ const STEPS: ReadonlyArray<{ id: OnboardingStepId; label: string }> = [
   { id: "welcome", label: "Welcome" },
   { id: "download", label: "Download" },
   { id: "pair", label: "Pair" },
+  { id: "import", label: "Import" },
 ];
 
 export interface OnboardingHelpers {
