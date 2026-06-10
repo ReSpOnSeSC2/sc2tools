@@ -149,34 +149,47 @@ describe("terran orbital mechanics", () => {
 });
 
 describe("5.0.16 warpgate rework", () => {
-  it("research is non-blocking and post-research gateways run 35% faster", () => {
+  it("research occupies the gateway for its full 100s (PTR behavior)", () => {
     const actions: BuildAction[] = [
       act("build", "Pylon"),
       act("build", "Gateway"),
       act("build", "Assimilator"),
       act("research", "WarpGateResearch"),
-      ...Array.from({ length: 6 }, () => act("train", "Zealot")),
+      ...Array.from({ length: 2 }, () => act("train", "Zealot")),
     ];
     const result = simulate(actions, profile, "Protoss", opts({ horizonSec: 600 }));
     expect(result.unexecutedActions).toBe(0);
-    const wgDone = result.steps.find(
+    const research = result.steps.find(
       (s) => s.name === "WarpGateResearch",
-    )!.doneSec;
+    )!;
+    // PTR research time is 100s (5.0.16 delta over the 114s baseline)
+    expect(research.doneSec - research.startSec).toBeCloseTo(100, 1);
+    // the only gateway is researching — no unit can start during it
     const zealots = result.steps.filter((s) => s.name === "Zealot");
-    // research no longer freezes the gateway: the first zealot trains
-    // WHILE warpgate is researching, at normal speed
-    expect(zealots[0].startSec).toBeLessThan(wgDone);
+    expect(zealots[0].startSec).toBeGreaterThanOrEqual(research.doneSec - 0.01);
+    // post-research gateway production runs at the 1.35x speed
     expect(zealots[0].doneSec - zealots[0].startSec).toBeCloseTo(
-      profile.units.Zealot.buildTime,
-      1,
-    );
-    // a zealot started after research completes gets the 1.35x speed
-    const boosted = zealots.find((z) => z.startSec >= wgDone);
-    expect(boosted).toBeDefined();
-    expect(boosted!.doneSec - boosted!.startSec).toBeCloseTo(
       profile.units.Zealot.buildTime / 1.35,
       1,
     );
+  });
+
+  it("a second gateway keeps producing while the first researches", () => {
+    const actions: BuildAction[] = [
+      act("build", "Pylon"),
+      act("build", "Gateway"),
+      act("build", "Gateway"),
+      act("build", "Assimilator"),
+      act("research", "WarpGateResearch"),
+      act("train", "Zealot"),
+    ];
+    const result = simulate(actions, profile, "Protoss", opts({ horizonSec: 600 }));
+    expect(result.unexecutedActions).toBe(0);
+    const research = result.steps.find(
+      (s) => s.name === "WarpGateResearch",
+    )!;
+    const zealot = result.steps.find((s) => s.name === "Zealot")!;
+    expect(zealot.startSec).toBeLessThan(research.doneSec);
   });
 
   it("transformed warpgates warp in on cooldown semantics", () => {
