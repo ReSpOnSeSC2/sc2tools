@@ -294,6 +294,25 @@ describe("build-order lookahead", () => {
     expect(research.startSec).toBeGreaterThanOrEqual(gates[1].startSec - 0.01);
   });
 
+  it("stamps steps with pre-step supply (classic build-order notation)", () => {
+    // "21 Adept" means you're AT 21 when it starts; the unit's own
+    // supply lands after, so the next stamp off the same gateway
+    // reads at least +2.
+    const actions: BuildAction[] = [
+      act("build", "Pylon"),
+      act("build", "Gateway"),
+      act("train", "Zealot"),
+      act("train", "Zealot"),
+    ];
+    const result = simulate(actions, profile, "Protoss", opts());
+    const zealots = result.steps
+      .filter((s) => s.name === "Zealot")
+      .sort((a, b) => a.startSec - b.startSec);
+    expect(zealots[1].supply).toBeGreaterThanOrEqual(
+      zealots[0].supply + profile.units.Zealot.supply,
+    );
+  });
+
   it("warpgate research waits for the gateways listed before it", () => {
     // actionsFromSteps tags WarpGateResearch with afterCompleted —
     // here we set it directly: with two gateways listed first, the

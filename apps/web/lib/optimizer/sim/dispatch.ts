@@ -156,6 +156,7 @@ export function dispatchStructure(
   if ((state.completed.get(workerName) ?? 0) < 1) {
     return { status: "wait", blockedOn: "producer" };
   }
+  const supplyAtStart = state.supplyUsed;
   if (def.isGasBuilding) {
     let open = 0;
     for (const base of state.eco.bases) {
@@ -208,7 +209,7 @@ export function dispatchStructure(
   };
   state.producers.push(producer);
   bump(state.inProgress, name, 1);
-  recordStep(state, "build", name, doneAt);
+  recordStep(state, "build", name, doneAt, supplyAtStart);
   log(state, "start", name);
   scheduleTask(state, {
     completeAt: doneAt,
@@ -296,10 +297,12 @@ export function dispatchTrain(
     if (afford) return afford;
     spend(state, minerals, gas);
     consumeLarva(state, profile, pool);
-    state.supplyUsed += supplyNeed;
     const doneAt = state.time + def.buildTime;
     bump(state.inProgress, name, count);
+    // step stamped BEFORE the unit's own supply lands — classic
+    // build-order notation ("21 Adept" = you're at 21 when it starts)
     recordStep(state, "train", name, doneAt);
+    state.supplyUsed += supplyNeed;
     log(state, "start", name);
     scheduleTask(state, {
       completeAt: doneAt,
@@ -333,7 +336,6 @@ export function dispatchTrain(
   const afford = affordOutcome(state, profile, minerals, gas);
   if (afford) return afford;
   spend(state, minerals, gas);
-  state.supplyUsed += supplyNeed;
 
   const wg = profile.mechanics.warpgate;
   let doneAt: number;
@@ -361,7 +363,9 @@ export function dispatchTrain(
     else pick.producer.busyUntil = doneAt;
   }
   bump(state.inProgress, name, count);
+  // stamped pre-supply: "21 Adept" means you're at 21 when it starts
   recordStep(state, "train", name, doneAt);
+  state.supplyUsed += supplyNeed;
   log(state, "start", name);
   scheduleTask(state, {
     completeAt: doneAt,
@@ -435,10 +439,10 @@ function dispatchMorph(
   if (afford) return afford;
   spend(state, def.minerals, def.gas);
   bump(state.completed, source, -1);
-  state.supplyUsed += supplyDelta;
   const doneAt = state.time + def.buildTime;
   bump(state.inProgress, name, 1);
   recordStep(state, "morph", name, doneAt);
+  state.supplyUsed += supplyDelta;
   log(state, "start", name);
   scheduleTask(state, {
     completeAt: doneAt,
