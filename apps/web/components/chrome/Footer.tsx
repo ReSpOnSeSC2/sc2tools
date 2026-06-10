@@ -24,6 +24,7 @@ interface FooterLink {
 const PRODUCT_LINKS: readonly FooterLink[] = [
   { href: "/app", label: "Dashboard" },
   { href: "/builds", label: "Builds" },
+  { href: "/optimizer", label: "Optimizer" },
   { href: "/settings#overlay", label: "Overlay" },
   { href: "/devices", label: "Devices" },
   { href: "/download", label: "Download agent" },

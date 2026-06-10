@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "patchId": "5.0.16",
+  "threats": [
+    {
+      "id": "z-8pool",
+      "attackerRace": "Zerg",
+      "vsDefender": ["Protoss", "Terran", "Zerg"],
+      "name": "8-pool",
+      "description": "Spawning Pool on 8 supply before any economy. With the 8-worker start the first 6 lings hit your ramp around 2:05 — before most walls finish. Reinforcement pairs trickle every ~40s.",
+      "earliestArrivalSec": 125,
+      "priorProbability": 0.08,
+      "scoutingTells": [
+        { "id": "z8-early-pool", "observation": "Spawning Pool started by 0:45", "windowSec": [15, 50], "weight": 0.9 },
+        { "id": "z8-no-gas", "observation": "No Extractor by 1:10", "weight": 0.3 },
+        { "id": "z8-few-drones", "observation": "8 or fewer drones mining at 1:00", "weight": 0.6 },
+        { "id": "z8-late-pool", "observation": "Pool started after 1:15 (or not at all)", "weight": 0.9, "contradicts": true }
+      ],
+      "waves": [
+        { "timeSec": 125, "units": { "Zergling": 6 } },
+        { "timeSec": 170, "units": { "Zergling": 4 } },
+        { "timeSec": 210, "units": { "Zergling": 4 } }
+      ],
+      "dangerWindows": [
+        { "fromSec": 120, "toSec": 250, "note": "Lethal without a wall-off or 2+ completed defenders" }
+      ],
+      "defenderHints": { "wallRecommended": true, "workerPullViable": true }
+    },
+    {
+      "id": "z-12pool",
+      "attackerRace": "Zerg",
+      "vsDefender": ["Protoss", "Terran", "Zerg"],
+      "name": "12-pool",
+      "description": "Pool after a short drone round-out. Lings arrive ~2:45 in waves while the zerg still holds a small economy behind it.",
+      "earliestArrivalSec": 165,
+      "priorProbability": 0.15,
+      "scoutingTells": [
+        { "id": "z12-pool-timing", "observation": "Spawning Pool started between 0:45 and 1:15", "windowSec": [45, 75], "weight": 0.8 },
+        { "id": "z12-no-expand", "observation": "No second Hatchery by 2:00", "weight": 0.5 },
+        { "id": "z12-hatch-first", "observation": "Second Hatchery before pool", "weight": 0.85, "contradicts": true }
+      ],
+      "waves": [
+        { "timeSec": 165, "units": { "Zergling": 6 } },
+        { "timeSec": 205, "units": { "Zergling": 6 } },
+        { "timeSec": 250, "units": { "Zergling": 6 } }
+      ],
+      "dangerWindows": [
+        { "fromSec": 160, "toSec": 290, "note": "Sustained ling pressure; one defender is not enough" }
+      ],
+      "defenderHints": { "wallRecommended": true, "workerPullViable": true }
+    },
+    {
+      "id": "z-speedling-flood",
+      "attackerRace": "Zerg",
+      "vsDefender": ["Protoss", "Terran", "Zerg"],
+      "name": "Speedling flood",
+      "description": "Gas-first into Metabolic Boost, then mass lings. Speed finishes ~3:30; a flood of 12+ speedlings arrives ~4:00 and punishes open naturals.",
+      "earliestArrivalSec": 235,
+      "priorProbability": 0.12,
+      "scoutingTells": [
+        { "id": "zsf-early-gas", "observation": "Extractor before pool finishes", "windowSec": [30, 110], "weight": 0.55 },
+        { "id": "zsf-ling-count", "observation": "6+ lings massing at home by 3:00", "weight": 0.6 },
+        { "id": "zsf-no-drones", "observation": "Drone count frozen around 16 at 3:00", "weight": 0.45 },
+        { "id": "zsf-third-hatch", "observation": "Third Hatchery by 3:30", "weight": 0.7, "contradicts": true }
+      ],
+      "waves": [
+        { "timeSec": 235, "units": { "Zergling": 12 } },
+        { "timeSec": 280, "units": { "Zergling": 8 } },
+        { "timeSec": 330, "units": { "Zergling": 8 } }
+      ],
+      "dangerWindows": [
+        { "fromSec": 230, "toSec": 360, "note": "Speedlings run by static defense gaps — full wall required" }
+      ],
+      "defenderHints": { "wallRecommended": true, "workerPullViable": false }
+    },
+    {
+      "id": "z-roach-rush",
+      "attackerRace": "Zerg",
+      "vsDefender": ["Protoss", "Terran", "Zerg"],
+      "name": "Early roach rush",
+      "description": "Roach Warren off one base; ~5 roaches knock at ~4:10. Walls alone don't stop it — roaches out-range most early defense.",
+      "earliestArrivalSec": 250,
+      "priorProbability": 0.08,
+      "scoutingTells": [
+        { "id": "zrr-warren", "observation": "Roach Warren spotted by 2:40", "windowSec": [100, 160], "weight": 0.9 },
+        { "id": "zrr-gas-pair", "observation": "Both geysers taken by 2:00", "weight": 0.4 },
+        { "id": "zrr-no-warren", "observation": "No Roach Warren by 3:00", "weight": 0.85, "contradicts": true }
+      ],
+      "waves": [
+        { "timeSec": 250, "units": { "Roach": 5 } },
+        { "timeSec": 310, "units": { "Roach": 3 } }
+      ],
+      "dangerWindows": [
+        { "fromSec": 245, "toSec": 340, "note": "Needs real units or sieged defense, not just a wall" }
+      ],
+      "defenderHints": { "wallRecommended": false, "workerPullViable": false }
+    },
+    {
+      "id": "z-ravager-allin",
+      "attackerRace": "Zerg",
+      "vsDefender": ["Protoss", "Terran", "Zerg"],
+      "name": "Roach-ravager all-in",
+      "description": "Roaches morph into ravagers whose corrosive biles break walls and force-fields. Hits ~4:50 with 4 roaches + 3 ravagers.",
+      "earliestArrivalSec": 290,
+      "priorProbability": 0.06,
+      "scoutingTells": [
+        { "id": "zra-warren", "observation": "Roach Warren + double gas by 2:50", "windowSec": [110, 170], "weight": 0.75 },
+        { "id": "zra-lowdrone", "observation": "Drone production stops ~18 at 3:30", "weight": 0.5 },
+        { "id": "zra-macro", "observation": "Third base + ongoing drones at 4:00", "weight": 0.8, "contradicts": true }
+      ],
+      "waves": [
+        { "timeSec": 290, "units": { "Roach": 4, "Ravager": 3 } },
+        { "timeSec": 350, "units": { "Roach": 3, "Ravager": 2 } }
+      ],
+      "dangerWindows": [
+        { "fromSec": 285, "toSec": 400, "note": "Biles delete static defense — mobile army required" }
+      ],
+      "defenderHints": { "wallRecommended": false, "workerPullViable": false }
+    }
+  ]
+}
