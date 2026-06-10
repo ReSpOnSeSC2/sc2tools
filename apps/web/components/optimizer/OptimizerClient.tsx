@@ -53,6 +53,8 @@ export interface OptimizerSettings {
   vsRace: SimRace;
   objectiveId: ObjectiveSpec["id"];
   objectiveAtSec: number;
+  /** Tech goal for the "reach a tech goal fast" objective. */
+  targetName: string;
   profileId: string;
   hasWall: boolean;
   allowWorkerPull: boolean;
@@ -61,8 +63,9 @@ export interface OptimizerSettings {
 const DEFAULT_SETTINGS: OptimizerSettings = {
   race: "Protoss",
   vsRace: "Zerg",
-  objectiveId: "earliest-safe-expansion",
+  objectiveId: "balanced-development",
   objectiveAtSec: 360,
+  targetName: "",
   profileId: DEFAULT_PROFILE_ID,
   hasWall: true,
   allowWorkerPull: true,
@@ -133,7 +136,14 @@ function OptimizerInner() {
       profileId: settings.profileId,
       race: settings.race,
       vsRace: settings.vsRace,
-      objective: { id: settings.objectiveId, atSec: settings.objectiveAtSec },
+      objective: {
+        id: settings.objectiveId,
+        atSec: settings.objectiveAtSec,
+        targetName:
+          settings.objectiveId === "tech-rush-target" && settings.targetName
+            ? settings.targetName
+            : undefined,
+      },
       threats: activeThreats,
       policies: defaultPolicies(),
       safety: {

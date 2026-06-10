@@ -373,6 +373,8 @@ export interface SafetyOptions {
 /* ------------------------------------------------------------------ */
 
 export type ObjectiveId =
+  | "balanced-development"
+  | "tech-rush-target"
   | "earliest-safe-expansion"
   | "max-workers-at-t"
   | "max-army-value-at-t";
@@ -381,6 +383,12 @@ export interface ObjectiveSpec {
   id: ObjectiveId;
   /** Evaluation horizon (seconds) for the at-T objectives. */
   atSec: number;
+  /**
+   * Tech goal for "tech-rush-target": a structure, upgrade, or unit
+   * name to reach as early as possible (economy and safety still
+   * count — the search hunts shortcuts, not all-in tunnels).
+   */
+  targetName?: string;
 }
 
 export interface OptimizeRequest {
