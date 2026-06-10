@@ -5,6 +5,7 @@
  * optimizer. Race pickers reuse the shared race tint chrome so the
  * matchup reads the same as everywhere else in the app.
  */
+import { Check } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
@@ -43,14 +44,20 @@ function RacePicker({
               aria-checked={selected}
               onClick={() => onChange(race)}
               className={[
-                "flex flex-1 items-center justify-center gap-1.5 rounded-lg border-2 px-2 py-2 text-caption font-medium transition-colors",
+                "relative flex flex-1 items-center justify-center gap-1.5 rounded-lg border-2 px-2 py-2 text-caption transition-colors",
+                // Selected wears the bold ink outline + race tint + check;
+                // unselected stays visually quiet (faint border, muted text)
+                // so the highlighted option is unambiguous.
                 selected
-                  ? `${tint.bg} ${tint.border} ${tint.text}`
-                  : "border-line bg-bg-surface text-text-muted hover:bg-bg-elevated",
+                  ? `border-line shadow-hard font-semibold ${tint.bg} ${tint.text}`
+                  : "border-line/25 bg-bg-surface font-medium text-text-dim opacity-60 hover:opacity-100 hover:border-line/60 hover:text-text-muted",
               ].join(" ")}
             >
               <Icon name={race.toLowerCase()} kind="race" size="sm" decorative />
               {race}
+              {selected ? (
+                <Check aria-hidden className="h-3.5 w-3.5" strokeWidth={3} />
+              ) : null}
             </button>
           );
         })}
