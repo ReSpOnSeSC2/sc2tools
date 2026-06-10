@@ -410,26 +410,30 @@ function buildGamesRouter(deps) {
           }
         });
         // Derive and broadcast the full LiveGamePayload for every
-        // widget that depends on ``overlay:live``. Built off the LAST
-        // accepted game so a batch upload (Resync, large catch-up)
-        // doesn't fan out one event per game in the burst — the
-        // overlay only renders the current state, not the play-by-
-        // play. ``incoming`` is the validated, non-stripped game
-        // body; we still pass it through buildFromGame because the
-        // service hydrates H2H / streak / topbuilds from cloud
-        // history.
+        // widget that depends on ``overlay:live`` — but ONLY for a
+        // game the streamer just finished. Re-uploads of historical
+        // replays (full resync, the Builds-page reclassify, the Macro
+        // backfill, bulk imports) flow through this same ingest in
+        // 25-game batches; pre-gate, each batch fan-out fired the
+        // post-game widgets for a years-old game and overwrote the
+        // broker's cached payload with it, so the streamer's scene
+        // re-ran stale widgets for the whole duration of a backfill
+        // (and the resync replay kept re-showing the last one for
+        // 30 min after). ``date`` is the replay's UTC end time
+        // (sc2reader's replay.date, normalised with a Z by the
+        // agent), so a tight window cleanly separates "just played"
+        // from "re-uploaded history". We pick the FRESHEST accepted
+        // game of the batch (not the last array element) so a real
+        // game finishing mid-backfill still reaches the stream.
         if (deps.overlayLive && deps.overlayTokens) {
-          const lastAcceptedId = accepted[accepted.length - 1].gameId;
-          const lastGame = incoming.find(
-            (g) => g && g.gameId === lastAcceptedId,
-          );
-          if (lastGame) {
+          const freshGame = pickFreshOverlayGame(incoming, accepted);
+          if (freshGame) {
             emitOverlayLive(
               deps.io,
               deps.overlayLive,
               deps.overlayTokens,
               userId,
-              lastGame,
+              freshGame,
               deps.liveGameBroker || null,
             ).catch((err) => {
               if (req.log) {
@@ -439,6 +443,11 @@ function buildGamesRouter(deps) {
                 );
               }
             });
+          } else if (req.log) {
+            req.log.debug(
+              { userId, accepted: accepted.length },
+              "overlay_live_skipped_stale_batch",
+            );
           }
           // Invalidate the pre-game scouting cache for every opponent
           // touched by this ingest. Without this, a rematch against the
@@ -530,6 +539,44 @@ async function emitSessionUpdate(io, games, userId) {
       // one bad socket doesn't starve the others of their update.
     }
   }
+}
+
+// How recently a game must have ENDED for its ingest to fan out an
+// ``overlay:live`` post-game payload. A real game's upload lands
+// within seconds-to-a-couple-minutes of the score screen (file
+// settle + parse + POST); anything older is a historical re-upload
+// that must never hit the live stream. Generous enough to absorb a
+// slow parse queue on a potato PC, tight enough that backfill batches
+// (whole ladder histories) never qualify.
+const OVERLAY_LIVE_FRESHNESS_MS = 15 * 60 * 1000;
+
+/**
+ * Pick the game whose ingest should drive the ``overlay:live``
+ * fan-out: the most recently PLAYED accepted game of the batch,
+ * provided it ended within the freshness window. Returns null when
+ * the whole batch is historical (resync / reclassify / import) —
+ * the caller then skips the overlay entirely.
+ *
+ * @param {Array<Record<string, any>>} incoming  validated game bodies
+ * @param {Array<{gameId: string}>} accepted     ids the upsert accepted
+ * @returns {Record<string, any> | null}
+ */
+function pickFreshOverlayGame(incoming, accepted) {
+  const acceptedIds = new Set(accepted.map((a) => a.gameId));
+  let best = null;
+  let bestTime = -Infinity;
+  for (const g of incoming) {
+    if (!g || !acceptedIds.has(g.gameId)) continue;
+    const t = Date.parse(g.date);
+    if (!Number.isFinite(t)) continue;
+    if (t > bestTime) {
+      best = g;
+      bestTime = t;
+    }
+  }
+  if (!best) return null;
+  if (Date.now() - bestTime > OVERLAY_LIVE_FRESHNESS_MS) return null;
+  return best;
 }
 
 /**
