@@ -390,6 +390,10 @@ class AggregationsService {
             wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
             losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
             total: { $sum: 1 },
+            // $avg skips nulls/missing, so buckets whose games predate
+            // macro scoring simply come back null instead of dragging
+            // the average toward zero.
+            avgMacroScore: { $avg: "$macroScore" },
           },
         },
         // Keep the most recent N buckets (not the oldest). Users with
@@ -405,6 +409,7 @@ class AggregationsService {
             wins: 1,
             losses: 1,
             total: 1,
+            avgMacroScore: 1,
           },
         },
       ])
@@ -414,7 +419,99 @@ class AggregationsService {
       points: rows.map((r) => ({
         ...r,
         winRate: r.total ? r.wins / r.total : 0,
+        avgMacroScore:
+          typeof r.avgMacroScore === "number"
+            ? Math.round(r.avgMacroScore * 10) / 10
+            : null,
       })),
+    };
+  }
+
+  /**
+   * Aggregate macro-score overview for the Macro tab header: average
+   * score, coverage (how many games carry a score), and the most
+   * expensive recurring leaks summed across games.
+   *
+   * Reads only the slim ``games`` rows — ``macroScore`` and
+   * ``top3Leaks`` are stamped there at ingest/recompute precisely so
+   * this never has to touch the detail store (which may live in R2
+   * and is not Mongo-queryable).
+   *
+   * @param {string} userId
+   * @param {object} filters
+   */
+  async macroSummary(userId, filters) {
+    const match = gamesMatchStage(userId, filters);
+    const cursor = this.db.games.aggregate([
+      { $match: match },
+      {
+        $facet: {
+          coverage: [
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                withScore: {
+                  $sum: {
+                    $cond: [{ $isNumber: "$macroScore" }, 1, 0],
+                  },
+                },
+                avgScore: { $avg: "$macroScore" },
+              },
+            },
+          ],
+          leaks: [
+            { $match: { top3Leaks: { $type: "array" } } },
+            { $project: { leak: "$top3Leaks" } },
+            { $unwind: "$leak" },
+            {
+              $group: {
+                _id: { $ifNull: ["$leak.name", "Unknown"] },
+                count: { $sum: 1 },
+                totalMinerals: {
+                  $sum: {
+                    $cond: [
+                      { $isNumber: "$leak.mineral_cost" },
+                      "$leak.mineral_cost",
+                      0,
+                    ],
+                  },
+                },
+              },
+            },
+            { $sort: { totalMinerals: -1, count: -1 } },
+            { $limit: 5 },
+            {
+              $project: {
+                _id: 0,
+                name: "$_id",
+                count: 1,
+                totalMinerals: { $round: ["$totalMinerals", 0] },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+    const [doc] = await cursor.toArray();
+    const coverage = doc?.coverage?.[0] || {
+      total: 0,
+      withScore: 0,
+      avgScore: null,
+    };
+    return {
+      ok: true,
+      gamesTotal: coverage.total || 0,
+      gamesWithMacro: coverage.withScore || 0,
+      gamesMissingMacro: Math.max(
+        0,
+        (coverage.total || 0) - (coverage.withScore || 0),
+      ),
+      avgScore:
+        typeof coverage.avgScore === "number"
+          ? Math.round(coverage.avgScore * 10) / 10
+          : null,
+      leaks: doc?.leaks || [],
     };
   }
 

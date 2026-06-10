@@ -54,8 +54,16 @@ services:
       - key: AGENT_RELEASE_ADMIN_TOKEN
         sync: false
       # Optional. Set to enable Sentry error reporting; leave unset for
-      # local builds. Pair with `npm install @sentry/node` in apps/api.
+      # local builds. @sentry/node ships as a real dependency — boot
+      # logs `sentry_state: enabled|disabled` so the wiring is visible.
       - key: SENTRY_DSN
+        sync: false
+      # Optional. Bearer token for GET /v1/metrics (Prometheus scrape).
+      # Leave unset to keep the endpoint disabled.
+      - key: METRICS_TOKEN
+        sync: false
+      # Optional. Mongo slow-query log threshold in ms (default 100).
+      - key: SLOW_QUERY_MS
         sync: false
       # The Dockerfile pre-installs the analyzer + venv at these paths.
       # Override only if you've re-staged them somewhere else.

@@ -20,6 +20,11 @@ export default function SignUpPage() {
           key={theme}
           appearance={appearanceFor(theme)}
           signInUrl="/sign-in"
+          // New accounts land in the /welcome wizard (download → pair →
+          // first sync) instead of an empty dashboard. Returning users
+          // signing IN keep going straight to /app.
+          forceRedirectUrl="/welcome"
+          fallbackRedirectUrl="/welcome"
         />
       )}
     </AuthShell>

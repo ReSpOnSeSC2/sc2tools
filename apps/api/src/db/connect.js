@@ -35,17 +35,28 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  * Open the MongoDB connection and return collection handles.
  *
  * @param {{ uri: string, dbName: string }} opts
+ * @param {{ logger?: import('pino').Logger, slowQueryMs?: number }} [observability]
+ *        when a logger is supplied, driver command monitoring is
+ *        enabled and any command slower than ``slowQueryMs`` (default
+ *        100) is logged with its name, target collection, and
+ *        duration — the only way to answer "which query is slow" from
+ *        Render logs without an APM.
  * @returns {Promise<DbContext>}
  *
  * Example:
  *   const ctx = await connect({ uri: cfg.mongoUri, dbName: cfg.mongoDb });
  */
-async function connect({ uri, dbName }) {
+async function connect({ uri, dbName }, observability = {}) {
+  const logger = observability.logger || null;
   const client = new MongoClient(uri, {
     serverSelectionTimeoutMS: TIMEOUTS.MONGO_CONNECT_MS,
     socketTimeoutMS: TIMEOUTS.MONGO_SOCKET_MS,
     retryWrites: true,
+    monitorCommands: !!logger,
   });
+  if (logger) {
+    attachSlowQueryLogging(client, logger, observability.slowQueryMs);
+  }
   await client.connect();
   const db = client.db(dbName);
   const ctx = {
@@ -75,6 +86,85 @@ async function connect({ uri, dbName }) {
   };
   await ensureIndexes(ctx);
   return ctx;
+}
+
+// Commands that fire constantly as connection-pool chatter; logging
+// them as "slow" would bury the queries that matter.
+const SLOW_QUERY_IGNORED_COMMANDS = new Set([
+  "ping",
+  "hello",
+  "ismaster",
+  "isMaster",
+  "endSessions",
+  "saslStart",
+  "saslContinue",
+  "buildInfo",
+  "getParameter",
+]);
+
+/**
+ * Wire the driver's command-monitoring events into a slow-query log.
+ * ``commandStarted`` carries the command document (whose first key's
+ * value is the target collection); succeeded/failed only carry the
+ * requestId + duration, so we keep a bounded requestId → target map
+ * between the two events.
+ *
+ * @param {MongoClient} client
+ * @param {import('pino').Logger} logger
+ * @param {number} [thresholdMs]
+ */
+function attachSlowQueryLogging(client, logger, thresholdMs) {
+  const slowMs =
+    Number.isFinite(thresholdMs) && Number(thresholdMs) > 0
+      ? Number(thresholdMs)
+      : 100;
+  /** @type {Map<number, string>} */
+  const targets = new Map();
+  client.on("commandStarted", (ev) => {
+    if (SLOW_QUERY_IGNORED_COMMANDS.has(ev.commandName)) return;
+    // First value of the command doc names the collection for CRUD /
+    // aggregate commands ({find: "games", ...}); admin commands carry
+    // a number — keep only strings.
+    const target = ev.command ? ev.command[ev.commandName] : undefined;
+    targets.set(
+      ev.requestId,
+      typeof target === "string" ? target : "",
+    );
+    // Bound the map so a burst of long-running commands can't grow it
+    // unchecked if a terminal event is ever missed.
+    if (targets.size > 1000) {
+      const first = targets.keys().next().value;
+      targets.delete(first);
+    }
+  });
+  client.on("commandSucceeded", (ev) => {
+    const collection = targets.get(ev.requestId);
+    targets.delete(ev.requestId);
+    if (SLOW_QUERY_IGNORED_COMMANDS.has(ev.commandName)) return;
+    if (ev.duration < slowMs) return;
+    logger.warn(
+      {
+        commandName: ev.commandName,
+        collection: collection || undefined,
+        durationMs: Math.round(ev.duration),
+      },
+      "slow_query",
+    );
+  });
+  client.on("commandFailed", (ev) => {
+    const collection = targets.get(ev.requestId);
+    targets.delete(ev.requestId);
+    if (SLOW_QUERY_IGNORED_COMMANDS.has(ev.commandName)) return;
+    logger.warn(
+      {
+        commandName: ev.commandName,
+        collection: collection || undefined,
+        durationMs: Math.round(ev.duration),
+        err: ev.failure ? String(ev.failure.message || ev.failure) : undefined,
+      },
+      "mongo_command_failed",
+    );
+  });
 }
 
 /**
@@ -263,4 +353,4 @@ async function ensureIndexes(ctx) {
   await ctx.pulseAccounts.createIndex({ updatedAt: -1 });
 }
 
-module.exports = { connect, ensureIndexes };
+module.exports = { connect, ensureIndexes, attachSlowQueryLogging };

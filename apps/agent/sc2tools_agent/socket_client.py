@@ -1,11 +1,15 @@
 """Long-lived Socket.io client.
 
 Lets the cloud push live recompute requests to the agent without the
-agent having to poll. Three events the cloud emits today:
+agent having to poll. Events the cloud emits today:
 
   - ``macro:recompute_request``        {gameIds: string[]}
   - ``opp_build_order:recompute_request``  {gameId: string}
   - ``resync:request``                  {reason?: string}
+  - ``import:scan_request``             {jobId, folder?}
+  - ``import:start_request``            {jobId, folder?, force?}
+  - ``import:cancel_request``           {jobId}
+  - ``import:pick_folder_request``      {reqId}
 
 For the per-game events we look the .SC2Replay up by gameId in the
 upload state, re-parse it, and push the new payload up — same code
@@ -53,6 +57,10 @@ class SocketClient:
         on_recompute_games: Callable[[List[str]], None],
         on_recompute_opp_build: Callable[[str], None],
         on_full_resync: Optional[Callable[[Optional[str]], None]] = None,
+        on_import_scan: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_import_start: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_import_cancel: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_import_pick_folder: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._device_token = device_token
@@ -61,6 +69,14 @@ class SocketClient:
         # Optional — older callers that pre-date the resync:request event
         # can omit it; the handler is just skipped if not supplied.
         self._on_full_resync = on_full_resync
+        # Optional import-flow callbacks (ImportController). The cloud
+        # has emitted these events since the SaaS cutover; until these
+        # callbacks existed the agent simply never listened, which left
+        # web-triggered import jobs stuck in "running" forever.
+        self._on_import_scan = on_import_scan
+        self._on_import_start = on_import_start
+        self._on_import_cancel = on_import_cancel
+        self._on_import_pick_folder = on_import_pick_folder
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         # Lazily imported in start() so test environments that don't
@@ -147,6 +163,35 @@ class SocketClient:
                 self._on_recompute_opp_build(game_id)
             except Exception:  # noqa: BLE001
                 log.exception("opp_recompute_callback_failed")
+
+        def _bind_import_event(event: str, cb: Optional[Callable[[Dict[str, Any]], None]]) -> None:
+            """Register one import:* handler with shared guard rails.
+
+            Each handler tolerates a missing callback (older runner
+            wiring), a malformed payload, and a crashing callback —
+            an import-event problem must never take down the socket
+            loop that also carries recompute + resync traffic.
+            """
+            if cb is None:
+                return
+
+            @sio.on(event)
+            async def _handler(payload: Optional[Dict[str, Any]]) -> None:
+                data = payload if isinstance(payload, dict) else {}
+                log.info(
+                    "socket_client_import_event event=%s jobId=%s",
+                    event,
+                    data.get("jobId", "n/a"),
+                )
+                try:
+                    cb(data)
+                except Exception:  # noqa: BLE001
+                    log.exception("import_event_callback_failed event=%s", event)
+
+        _bind_import_event("import:scan_request", self._on_import_scan)
+        _bind_import_event("import:start_request", self._on_import_start)
+        _bind_import_event("import:cancel_request", self._on_import_cancel)
+        _bind_import_event("import:pick_folder_request", self._on_import_pick_folder)
 
         @sio.on("resync:request")
         async def _on_resync(payload: Optional[Dict[str, Any]]) -> None:  # noqa: ARG001

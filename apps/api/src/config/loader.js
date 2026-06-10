@@ -69,6 +69,11 @@ function loadConfig(env = process.env) {
       env.KEEPALIVE_INTERVAL_MS,
       DEFAULTS.KEEPALIVE_INTERVAL_MS,
     ),
+    // Mongo commands slower than this (ms) are logged as slow_query.
+    slowQueryMs: parseInteger(env.SLOW_QUERY_MS, 100),
+    // Bearer token guarding GET /v1/metrics (Prometheus scrape).
+    // Unset = endpoint disabled.
+    metricsToken: env.METRICS_TOKEN || null,
     gameDetailsStore: parseGameDetailsStore(env.GAME_DETAILS_STORE),
     r2: parseR2Config(env),
     analytics: parseAnalyticsConfig(env),

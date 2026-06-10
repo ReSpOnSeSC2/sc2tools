@@ -24,6 +24,41 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   old sentinel. `scripts/benchmark_builds_cli.py` (new) measures
   specific-label share per matchup against a real replay folder.
 
+## 0.12.0
+
+### Added — bulk imports are finally visible (and web-triggerable)
+- **What.** The agent now listens to the cloud's `import:*` socket
+  events (`scan`, `start`, `cancel`, `pick_folder`) and reports live
+  progress to `/v1/import/progress` while a job runs. The cloud has
+  emitted these events since the SaaS cutover; until now the agent
+  never subscribed, so the web app's "Start full import" created a job
+  that sat **running forever** with no progress.
+- **Effect.** Starting an import from the dashboard or Settings now
+  drives the agent for real: the web shows "980 / 4,200 replays ·
+  ~6 min left" with a live bar, per-file failure reasons, and a Cancel
+  button. (`ImportController` in `import_controller.py` — a thin
+  reporting layer over the existing watcher/uploader, not a second
+  parse pipeline.)
+
+### Added — the first-run history backfill announces itself
+- **What.** When the startup sweep finds 25+ un-uploaded replays (first
+  run, or a long offline stretch), the agent registers the backlog as a
+  visible job via `POST /v1/import/agent-start` before working through
+  it.
+- **Effect.** A new user who installs + pairs sees their entire ladder
+  history streaming into the dashboard with a progress card — the work
+  always happened; now it's visible.
+
+### Added — per-file skip reasons
+- **What.** `parse_replay_for_cloud_ex` distinguishes WHY a replay was
+  unusable (`ai_game`, `player_unresolved`, `no_result`,
+  `parse_failed`), the watcher persists the code
+  (`state.uploaded = "skipped:<reason>"`, prefix-compatible with old
+  entries), and import progress carries a breakdown + capped samples.
+- **Effect.** The web's import card can say "3 files: couldn't tell
+  which player is you — set your BattleTag in Settings" instead of a
+  bare failure count. vs-AI replays count as skipped, not failed.
+
 ## 0.11.0
 
 ### Changed — parsing now resolves entirely from `apps/replay-engine`

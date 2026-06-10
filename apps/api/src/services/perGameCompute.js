@@ -619,7 +619,13 @@ class MacroBackfillService {
     const limit = clampPositive(opts.limit, 0);
     /** @type {Record<string, any>} */
     const filter = { userId };
-    if (!force) filter.macroBreakdown = { $exists: false };
+    // "Needs macro" is detected via the slim row's macroScore — score
+    // and breakdown travel together, and post-v0.4.3 the breakdown
+    // blob never sits on the slim row (it's $unset on every upsert),
+    // so the old `macroBreakdown: {$exists: false}` filter matched
+    // EVERY game and a non-force backfill recomputed the whole
+    // history.
+    if (!force) filter.macroScore = { $exists: false };
     const candidatesCursor = this.db.games
       .find(filter, { projection: { _id: 0, gameId: 1 } })
       .sort({ date: -1 });

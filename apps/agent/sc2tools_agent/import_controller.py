@@ -1,0 +1,351 @@
+"""Import-job visibility layer.
+
+The cloud has had a complete bulk-import API (`/v1/import/*`,
+``import_jobs`` collection, ``import:progress`` socket fan-out) since
+the SaaS cutover — but the agent never listened, so web-triggered
+imports created jobs that sat "running" forever, and the agent's own
+first-run history backfill (the startup sweep parsing every replay on
+disk) happened invisibly.
+
+This module closes the loop WITHOUT building a second parse pipeline.
+The watcher + upload queue already do the work; the controller just
+counts it and reports it:
+
+  * counters are fed by three hooks the runner chains in —
+    ``UploadQueue.on_success`` / ``on_failure`` and the watcher's new
+    ``on_replay_skipped`` — so the numbers reflect exactly what the
+    real pipeline did;
+  * a throttled reporter thread POSTs ``/v1/import/progress`` (~2 s
+    cadence) while a job is active; the cloud re-emits each report to
+    the user's sockets as ``import:progress`` for the live card;
+  * ``maybe_start_auto_backfill()`` (called once after the watcher
+    starts) registers the organic startup sweep as a visible job via
+    ``POST /v1/import/agent-start`` when enough un-uploaded replays
+    are on disk to be worth a progress card.
+
+Skip-reason semantics: ``ai_game`` counts as *completed* (the file was
+processed and intentionally not uploaded — not a failure), but still
+appears in ``errorBreakdown`` so the UI can say "12 vs-AI replays
+skipped". Every other reason (``parse_failed``, ``player_unresolved``,
+``no_result``, upload rejections) counts as an error and contributes a
+capped ``errorSamples`` entry with the filename so the user can act.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+import time
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+log = logging.getLogger(__name__)
+
+# Reasons that are "the pipeline worked as intended", not failures.
+_BENIGN_REASONS = {"ai_game"}
+
+# Minimum un-uploaded replay count for the startup sweep to register
+# itself as a visible job. Below this the sweep finishes in seconds
+# and a progress card would just flash.
+AUTO_BACKFILL_MIN = 25
+
+_REPORT_INTERVAL_SEC = 2.0
+_IDLE_HEARTBEAT_SEC = 10.0
+_MAX_SAMPLES = 25
+
+
+class ImportController:
+    """Tracks one active import job and reports its progress."""
+
+    def __init__(
+        self,
+        *,
+        api: Any,
+        watcher: Any,
+        full_resync: Optional[Callable[[], None]] = None,
+        list_folders: Optional[Callable[[], List[str]]] = None,
+    ) -> None:
+        self._api = api
+        self._watcher = watcher
+        self._full_resync = full_resync
+        self._list_folders = list_folders or (lambda: [])
+        self._lock = threading.Lock()
+        self._job_id: Optional[str] = None
+        self._total = 0
+        self._completed = 0
+        self._errors = 0
+        self._breakdown: Dict[str, int] = {}
+        self._samples: List[Dict[str, str]] = []
+        self._dirty = False
+        self._cancelled = False
+        self._reporter: Optional[threading.Thread] = None
+        self._stop = threading.Event()
+
+    # ---------------- pipeline hooks ----------------
+    # Chained by the runner into the existing UploadQueue / watcher
+    # callbacks. No-ops while no job is active so steady-state play
+    # (one replay per game) costs one lock acquire per upload.
+
+    def on_upload_success(self, path: Path) -> None:  # noqa: ARG002
+        with self._lock:
+            if self._job_id is None:
+                return
+            self._completed += 1
+            self._dirty = True
+
+    def on_upload_failure(self, path: Path, exc: Exception) -> None:
+        with self._lock:
+            if self._job_id is None:
+                return
+            self._errors += 1
+            self._bump("rejected_by_server", path, str(exc))
+            self._dirty = True
+
+    def on_replay_skipped(self, path: Path, reason: Optional[str]) -> None:
+        code = reason or "parse_failed"
+        with self._lock:
+            if self._job_id is None:
+                return
+            if code in _BENIGN_REASONS:
+                self._completed += 1
+                self._breakdown[code] = self._breakdown.get(code, 0) + 1
+            else:
+                self._errors += 1
+                self._bump(code, path, None)
+            self._dirty = True
+
+    # ---------------- socket event handlers ----------------
+
+    def handle_scan_request(self, payload: Dict[str, Any]) -> None:
+        """``import:scan_request`` — count candidates, report, done."""
+        job_id = _job_id_of(payload)
+        if not job_id:
+            return
+        total = self._safe_count_pending()
+        log.info("import_scan jobId=%s candidates=%d", job_id, total)
+        self._post_progress({
+            "jobId": job_id,
+            "total": total,
+            "phase": "scan",
+            "message": f"{total} replays eligible for import",
+            "done": True,
+        })
+
+    def handle_start_request(self, payload: Dict[str, Any]) -> None:
+        """``import:start_request`` — adopt the cloud-minted job.
+
+        ``force`` re-imports everything: we run the same full-resync
+        flow the tray's Re-sync button uses (clears the uploaded
+        cursor, rediscovers roots). Without force, the job covers
+        whatever the cursor says is still un-uploaded.
+        """
+        job_id = _job_id_of(payload)
+        if not job_id:
+            return
+        force = bool(payload.get("force"))
+        if force and self._full_resync is not None:
+            try:
+                self._full_resync()
+            except Exception:  # noqa: BLE001
+                log.exception("import_start_force_resync_failed")
+        total = self._safe_count_pending()
+        log.info(
+            "import_start jobId=%s total=%d force=%s", job_id, total, force,
+        )
+        self._activate(job_id, total)
+        if total == 0:
+            self._post_progress({
+                "jobId": job_id,
+                "total": 0,
+                "phase": "import",
+                "message": "nothing_to_import",
+                "done": True,
+            })
+            self._deactivate()
+            return
+        self._post_progress({
+            "jobId": job_id,
+            "total": total,
+            "phase": "import",
+        })
+        try:
+            self._watcher.request_immediate_sweep()
+        except Exception:  # noqa: BLE001
+            log.exception("import_start_sweep_failed")
+
+    def handle_cancel_request(self, payload: Dict[str, Any]) -> None:
+        """``import:cancel_request`` — stop tracking the job.
+
+        The server already marked the job cancelled. We stop reporting;
+        the watcher's organic sweep keeps syncing at its own pace (it
+        always has — cancel stops the *job card*, not background sync).
+        """
+        job_id = _job_id_of(payload)
+        log.info("import_cancel jobId=%s", job_id or "unknown")
+        with self._lock:
+            self._cancelled = True
+        self._deactivate()
+
+    def handle_pick_folder_request(self, payload: Dict[str, Any]) -> None:  # noqa: ARG002
+        """``import:pick_folder_request`` — report the watched folders.
+
+        The headless agent can't open a native folder dialog; what the
+        web actually needs is "which folders is the agent watching",
+        which we already know. Reported via /v1/import/host-info.
+        """
+        folders = []
+        try:
+            folders = list(self._list_folders())[:16]
+        except Exception:  # noqa: BLE001
+            log.exception("import_pick_folder_list_failed")
+        try:
+            self._api.import_host_info({"replayFolders": folders})
+        except Exception:  # noqa: BLE001
+            log.exception("import_host_info_failed")
+
+    # ---------------- auto backfill ----------------
+
+    def maybe_start_auto_backfill(self) -> None:
+        """Register the startup sweep as a visible job when it's big.
+
+        Called once by the runner right after ``watcher.start()``. The
+        sweep itself runs regardless — this only decides whether the
+        user gets a live progress card for it.
+        """
+        with self._lock:
+            if self._job_id is not None:
+                return
+        total = self._safe_count_pending()
+        if total < AUTO_BACKFILL_MIN:
+            log.info(
+                "auto_backfill_not_registered candidates=%d threshold=%d",
+                total,
+                AUTO_BACKFILL_MIN,
+            )
+            return
+        try:
+            out = self._api.import_agent_start({"total": total})
+        except Exception as exc:  # noqa: BLE001
+            # Older API without the route (404) or offline — the sweep
+            # still runs, just without the card.
+            log.info("auto_backfill_register_failed: %s", exc)
+            return
+        job_id = out.get("jobId") if isinstance(out, dict) else None
+        if not job_id:
+            log.info("auto_backfill_register_no_job_id resp=%r", out)
+            return
+        log.info("auto_backfill_registered jobId=%s total=%d", job_id, total)
+        self._activate(str(job_id), total)
+
+    # ---------------- internals ----------------
+
+    def _bump(self, code: str, path: Path, message: Optional[str]) -> None:
+        """Record a non-benign failure (caller holds the lock)."""
+        self._breakdown[code] = self._breakdown.get(code, 0) + 1
+        if len(self._samples) < _MAX_SAMPLES:
+            sample: Dict[str, str] = {
+                "file": path.name,
+                "errorCode": code,
+            }
+            if message:
+                sample["message"] = message[:300]
+            self._samples.append(sample)
+
+    def _activate(self, job_id: str, total: int) -> None:
+        with self._lock:
+            self._job_id = job_id
+            self._total = total
+            self._completed = 0
+            self._errors = 0
+            self._breakdown = {}
+            self._samples = []
+            self._dirty = False
+            self._cancelled = False
+        self._stop.clear()
+        if self._reporter is None or not self._reporter.is_alive():
+            self._reporter = threading.Thread(
+                target=self._report_loop,
+                name="sc2tools-import-reporter",
+                daemon=True,
+            )
+            self._reporter.start()
+
+    def _deactivate(self) -> None:
+        with self._lock:
+            self._job_id = None
+        self._stop.set()
+
+    def stop(self) -> None:
+        self._deactivate()
+        thr = self._reporter
+        if thr is not None:
+            thr.join(timeout=3.0)
+
+    def _report_loop(self) -> None:
+        last_post = 0.0
+        while not self._stop.wait(_REPORT_INTERVAL_SEC):
+            with self._lock:
+                job_id = self._job_id
+                if job_id is None:
+                    break
+                processed = self._completed + self._errors
+                done = self._total > 0 and processed >= self._total
+                dirty = self._dirty
+                body = self._snapshot_body(job_id, done)
+                if dirty or done:
+                    self._dirty = False
+            now = time.monotonic()
+            if dirty or done or (now - last_post) >= _IDLE_HEARTBEAT_SEC:
+                self._post_progress(body)
+                last_post = now
+            if done:
+                log.info(
+                    "import_job_done jobId=%s completed=%d errors=%d total=%d",
+                    job_id,
+                    body.get("completed", 0),
+                    body.get("errors", 0),
+                    body.get("total", 0),
+                )
+                self._deactivate()
+                break
+
+    def _snapshot_body(self, job_id: str, done: bool) -> Dict[str, Any]:
+        """Build the progress payload (caller holds the lock)."""
+        body: Dict[str, Any] = {
+            "jobId": job_id,
+            "total": self._total,
+            "completed": self._completed,
+            "errors": self._errors,
+            "phase": "import",
+        }
+        if self._breakdown:
+            body["errorBreakdown"] = dict(self._breakdown)
+        if self._samples:
+            body["errorSamples"] = list(self._samples)
+        if done:
+            body["done"] = True
+        return body
+
+    def _post_progress(self, body: Dict[str, Any]) -> None:
+        try:
+            self._api.import_progress(body)
+        except Exception as exc:  # noqa: BLE001
+            # Reporting is best-effort: a flaky network must never
+            # disturb the parse/upload pipeline it's narrating.
+            log.debug("import_progress_post_failed: %s", exc)
+
+    def _safe_count_pending(self) -> int:
+        try:
+            return int(self._watcher.count_pending())
+        except Exception:  # noqa: BLE001
+            log.exception("count_pending_failed")
+            return 0
+
+
+def _job_id_of(payload: Any) -> Optional[str]:
+    if not isinstance(payload, dict):
+        return None
+    raw = payload.get("jobId")
+    if isinstance(raw, str) and raw:
+        return raw
+    return None
