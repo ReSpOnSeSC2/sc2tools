@@ -23,12 +23,35 @@ async function main() {
   const config = loadConfig();
   const logger = pino({ level: config.logLevel });
   // Initialise Sentry early so anything thrown during bootstrap is
-  // captured. No-op when SENTRY_DSN is unset or @sentry/node isn't
-  // installed yet.
-  sentry.init();
+  // captured. Log the resolved state once — "I set SENTRY_DSN, why is
+  // Sentry empty?" is only debuggable from Render logs.
+  const sentryEnabled = sentry.init();
+  logger.info(
+    { sentry: sentryEnabled ? "enabled" : "disabled" },
+    "sentry_state",
+  );
   logger.info({ port: config.port, db: config.mongoDb }, "boot_start");
 
-  const db = await connect({ uri: config.mongoUri, dbName: config.mongoDb });
+  // Process-level safety nets. Express's error middleware only covers
+  // the request path; rejections from background jobs, socket handlers,
+  // and fire-and-forget promises land here. A rejection is logged and
+  // reported but does NOT kill the process; an uncaught synchronous
+  // exception means undefined state, so capture, flush, and let Render
+  // restart the instance.
+  process.on("unhandledRejection", (reason) => {
+    logger.error({ err: reason }, "unhandled_rejection");
+    sentry.captureException(reason);
+  });
+  process.on("uncaughtException", (err) => {
+    logger.fatal({ err }, "uncaught_exception");
+    sentry.captureException(err);
+    void sentry.flush().finally(() => process.exit(1));
+  });
+
+  const db = await connect(
+    { uri: config.mongoUri, dbName: config.mongoDb },
+    { logger, slowQueryMs: config.slowQueryMs },
+  );
   logger.info("mongo_connected");
 
   const httpServer = http.createServer();

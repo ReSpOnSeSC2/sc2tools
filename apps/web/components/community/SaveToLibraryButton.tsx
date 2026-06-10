@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { CheckCircle2, Library, Plus } from "lucide-react";
+import { CheckCircle2, Library } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { apiCall } from "@/lib/clientApi";
 import { slugifyBuildName } from "@/lib/build-events";
@@ -33,10 +33,14 @@ export function SaveToLibraryButton({
   const [error, setError] = useState<string | null>(null);
 
   if (!build) {
+    // Only community docs published before the `build` snapshot field
+    // existed land here (publish() always stores it now). A permanently
+    // disabled button looked broken; say why saving isn't possible.
     return (
-      <Button variant="secondary" disabled iconLeft={<Plus className="h-4 w-4" aria-hidden />}>
-        Save to library
-      </Button>
+      <p className="rounded-lg border border-border bg-bg-elevated/60 px-3 py-2 text-micro text-text-dim">
+        This build predates library saving. If the author republishes it,
+        the save option appears here.
+      </p>
     );
   }
 

@@ -55,6 +55,7 @@ const { PulseDirectoryService } = require("./services/pulseDirectory");
 const { loadAllMigrations } = require("./db/migrations");
 
 const { buildHealthRouter } = require("./routes/health");
+const { buildMetricsRouter } = require("./routes/metrics");
 const { buildMeRouter } = require("./routes/me");
 const { buildOpponentsRouter } = require("./routes/opponents");
 const { buildGamesRouter } = require("./routes/games");
@@ -386,6 +387,17 @@ function mountRoutes(app, deps, services, clerk) {
   // ones the auth-using router won't even handle. Mounting public routes
   // first short-circuits before those auth-eager middlewares get a turn.
   app.use(SERVICE.ROUTE_PREFIX, buildHealthRouter({ db: deps.db }));
+  // Prometheus scrape endpoint. Mounted only when METRICS_TOKEN is
+  // configured (the route enforces the bearer token itself).
+  if (deps.config.metricsToken) {
+    app.use(
+      SERVICE.ROUTE_PREFIX,
+      buildMetricsRouter({
+        token: deps.config.metricsToken,
+        liveGameBroker: services.liveGameBroker,
+      }),
+    );
+  }
   app.use(SERVICE.ROUTE_PREFIX, buildSeasonsRouter({ seasons: services.seasons }));
   // Public marketing-page replay preview. Unauth'd by design — the
   // landing page demo accepts a single .SC2Replay upload and returns
