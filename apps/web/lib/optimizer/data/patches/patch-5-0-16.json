@@ -1,0 +1,53 @@
+{
+  "id": "5.0.16",
+  "label": "Patch 5.0.16 — 8-worker economy",
+  "extends": "lotv-base",
+  "starting": {
+    "workers": 8
+  },
+  "economy": {
+    "patchCapacity": { "large": 1600, "small": 1200 },
+    "geyserCapacity": 2500,
+    "richGasMultiplier": 1.5
+  },
+  "mechanics": {
+    "warpgate": {
+      "gatewaySpeedMultiplier": 1.35,
+      "transformCost": { "minerals": 50, "gas": 50 },
+      "warpInSec": 3,
+      "cooldowns": {
+        "Zealot": 22,
+        "Adept": 22,
+        "Stalker": 22,
+        "Sentry": 22,
+        "HighTemplar": 35,
+        "DarkTemplar": 35
+      }
+    }
+  },
+  "units": {
+    "Nexus": { "providesSupply": 13 },
+    "CommandCenter": { "providesSupply": 13 },
+    "OrbitalCommand": { "providesSupply": 13 },
+    "PlanetaryFortress": { "providesSupply": 13 },
+    "Hatchery": { "providesSupply": 4 },
+    "Lair": { "providesSupply": 4 },
+    "Hive": { "providesSupply": 4 },
+    "Zealot": { "buildTime": 28 },
+    "Stalker": { "buildTime": 28 },
+    "Adept": { "buildTime": 28 },
+    "Sentry": { "buildTime": 24 },
+    "HighTemplar": { "buildTime": 40 },
+    "DarkTemplar": { "buildTime": 40 },
+    "Ghost": {
+      "supply": 3,
+      "combat": { "hp": 100, "dpsGround": 11.4, "dpsAir": 11.4 }
+    }
+  },
+  "upgrades": {
+    "WarpGateResearch": { "researchedAt": ["Gateway"] },
+    "ZergGroundCarapaceLevel1": { "minerals": 100, "gas": 100 },
+    "ZergGroundCarapaceLevel2": { "minerals": 150, "gas": 150 },
+    "ZergGroundCarapaceLevel3": { "minerals": 200, "gas": 200 }
+  }
+}

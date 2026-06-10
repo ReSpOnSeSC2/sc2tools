@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "patchId": "5.0.16",
+  "threats": [
+    {
+      "id": "t-proxy-reaper",
+      "attackerRace": "Terran",
+      "vsDefender": ["Protoss", "Terran", "Zerg"],
+      "name": "Proxy reaper",
+      "description": "Barracks hidden near your base. On the 8-worker economy the first reaper pops ~2:20 and is in your mineral line seconds later, with a second reaper ~45s behind.",
+      "earliestArrivalSec": 150,
+      "priorProbability": 0.09,
+      "scoutingTells": [
+        { "id": "tpr-no-rax", "observation": "No Barracks in the terran main by 1:30", "windowSec": [60, 100], "weight": 0.85 },
+        { "id": "tpr-proxy-spotted", "observation": "Proxy Barracks / SCV near your base", "windowSec": [30, 130], "weight": 0.95 },
+        { "id": "tpr-gas-first", "observation": "Refinery before Barracks in main", "weight": 0.45 },
+        { "id": "tpr-rax-home", "observation": "Barracks building in the terran main", "weight": 0.85, "contradicts": true }
+      ],
+      "waves": [
+        { "timeSec": 150, "units": { "Reaper": 1 } },
+        { "timeSec": 195, "units": { "Reaper": 1 } },
+        { "timeSec": 245, "units": { "Reaper": 1 } }
+      ],
+      "dangerWindows": [
+        { "fromSec": 145, "toSec": 280, "note": "Reapers jump walls — you need a ranged defender or shield battery coverage, not just buildings" }
+      ],
+      "defenderHints": { "wallRecommended": false, "workerPullViable": true }
+    },
+    {
+      "id": "t-proxy-2rax",
+      "attackerRace": "Terran",
+      "vsDefender": ["Protoss", "Terran", "Zerg"],
+      "name": "Proxy 2-rax marines",
+      "description": "Two hidden barracks pumping marines that arrive ~2:55 and snowball with constant reinforcement. Backbreaking if your first defender is late.",
+      "earliestArrivalSec": 175,
+      "priorProbability": 0.07,
+      "scoutingTells": [
+        { "id": "t2r-empty-main", "observation": "Terran main has CC + depot only at 1:40", "windowSec": [70, 110], "weight": 0.85 },
+        { "id": "t2r-scv-leaving", "observation": "Two SCVs left the base early", "windowSec": [20, 80], "weight": 0.6 },
+        { "id": "t2r-rax-home", "observation": "Two Barracks visible in main", "weight": 0.9, "contradicts": true }
+      ],
+      "waves": [
+        { "timeSec": 175, "units": { "Marine": 2 } },
+        { "timeSec": 215, "units": { "Marine": 3 } },
+        { "timeSec": 260, "units": { "Marine": 4 } }
+      ],
+      "dangerWindows": [
+        { "fromSec": 170, "toSec": 300, "note": "Marine count compounds — margin must grow with each wave" }
+      ],
+      "defenderHints": { "wallRecommended": true, "workerPullViable": true }
+    },
+    {
+      "id": "t-marine-scv-allin",
+      "attackerRace": "Terran",
+      "vsDefender": ["Protoss", "Terran", "Zerg"],
+      "name": "Marine-SCV all-in",
+      "description": "One-base bunker rush: ~4 marines and 6+ SCVs arrive ~3:10 and try to plant a bunker in your natural. The SCV repair wall makes raw DPS misleading.",
+      "earliestArrivalSec": 190,
+      "priorProbability": 0.05,
+      "scoutingTells": [
+        { "id": "tms-early-rax", "observation": "Barracks started before 0:50", "windowSec": [30, 55], "weight": 0.6 },
+        { "id": "tms-no-gas", "observation": "No Refinery by 1:40", "weight": 0.5 },
+        { "id": "tms-no-expand", "observation": "No second CC by 2:30", "weight": 0.45 },
+        { "id": "tms-expand", "observation": "Second CC on time", "weight": 0.8, "contradicts": true }
+      ],
+      "waves": [
+        { "timeSec": 190, "units": { "Marine": 4, "SCV": 6 } },
+        { "timeSec": 240, "units": { "Marine": 3 } }
+      ],
+      "dangerWindows": [
+        { "fromSec": 185, "toSec": 300, "note": "Kill the bunker before it finishes or the margin flips" }
+      ],
+      "defenderHints": { "wallRecommended": true, "workerPullViable": true }
+    },
+    {
+      "id": "t-2-1-1-timing",
+      "attackerRace": "Terran",
+      "vsDefender": ["Protoss", "Terran", "Zerg"],
+      "name": "2-1-1 marine-medivac timing",
+      "description": "Classic stim timing rebased for 5.0.16: ~10 marines in 2 medivacs leave home ~6:00 and drop ~6:40. The first real mid-game test of a greedy opening.",
+      "earliestArrivalSec": 400,
+      "priorProbability": 0.16,
+      "scoutingTells": [
+        { "id": "t211-reactor", "observation": "Reactor on the first Barracks + early second Barracks", "windowSec": [150, 260], "weight": 0.6 },
+        { "id": "t211-onebase-gas", "observation": "Factory + Starport by 4:30", "weight": 0.65 },
+        { "id": "t211-third-cc", "observation": "Third CC by 5:30", "weight": 0.7, "contradicts": true }
+      ],
+      "waves": [
+        { "timeSec": 400, "units": { "Marine": 10, "Medivac": 2 } },
+        { "timeSec": 470, "units": { "Marine": 6 } }
+      ],
+      "dangerWindows": [
+        { "fromSec": 390, "toSec": 510, "note": "Drop can bypass your wall — anti-air or mobile defenders needed" }
+      ],
+      "defenderHints": { "wallRecommended": false, "workerPullViable": false }
+    },
+    {
+      "id": "t-bc-rush",
+      "attackerRace": "Terran",
+      "vsDefender": ["Protoss", "Terran", "Zerg"],
+      "name": "Battlecruiser rush",
+      "description": "One-base tech straight to Fusion Core; the first BC warps into your mineral line ~6:50. Ground armies don't answer it — anti-air does.",
+      "earliestArrivalSec": 410,
+      "priorProbability": 0.05,
+      "scoutingTells": [
+        { "id": "tbc-factory-fast", "observation": "Fast Factory into Starport, no second CC", "windowSec": [150, 280], "weight": 0.6 },
+        { "id": "tbc-fusion", "observation": "Fusion Core spotted", "windowSec": [240, 380], "weight": 0.95 },
+        { "id": "tbc-bio", "observation": "Multiple Barracks with addons", "weight": 0.75, "contradicts": true }
+      ],
+      "waves": [
+        { "timeSec": 410, "units": { "Battlecruiser": 1 } },
+        { "timeSec": 500, "units": { "Battlecruiser": 1 } }
+      ],
+      "dangerWindows": [
+        { "fromSec": 400, "toSec": 560, "note": "Requires dedicated anti-air; ground-only compositions auto-lose the window" }
+      ],
+      "defenderHints": { "wallRecommended": false, "workerPullViable": false }
+    }
+  ]
+}
