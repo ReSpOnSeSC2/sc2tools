@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useApi } from "@/lib/clientApi";
+import { useAuth } from "@clerk/nextjs";
+import { RefreshCcw } from "lucide-react";
+import { apiCall, useApi } from "@/lib/clientApi";
+import { Button } from "@/components/ui/Button";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
@@ -64,6 +67,7 @@ export function BuildsTab() {
 
   return (
     <div className="space-y-4">
+      <ReclassifyBanner rows={data || []} />
       <div className="flex flex-wrap items-center gap-3">
         <input
           className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
@@ -210,6 +214,87 @@ export function BuildsTab() {
           onClose={() => setEditing(null)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Offer a one-click relabel when stored games carry the
+ * "Unclassified - Zerg/Terran" sentinel — uploads that predate the
+ * Zerg/Terran build detectors (agent < 0.11) or the expanded ZvP/TvP
+ * trees. The existing force-backfill endpoint runs the same full
+ * resync the tray's Re-sync button does: the agent re-parses every
+ * replay on disk with the current classifier and the ingest upsert
+ * refreshes each game's build label.
+ */
+function ReclassifyBanner({ rows }: { rows: BuildRow[] }) {
+  const { getToken } = useAuth();
+  const [requested, setRequested] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const staleCount = useMemo(
+    () =>
+      rows
+        .filter((b) => b.name.startsWith("Unclassified - "))
+        .reduce((sum, b) => sum + (b.total || 0), 0),
+    [rows],
+  );
+
+  if (staleCount === 0) return null;
+
+  async function reclassify() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiCall(getToken, "/v1/macro/backfill/start", {
+        method: "POST",
+        body: JSON.stringify({ force: true, reason: "build_reclassify" }),
+      });
+      setRequested(true);
+    } catch (err) {
+      const e = err as { message?: string };
+      setError(e.message || "Couldn't request the reclassify.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-warning/40 bg-warning/5 px-4 py-3">
+      <p className="text-caption text-text">
+        <span className="font-semibold">
+          {staleCount.toLocaleString()} game{staleCount === 1 ? "" : "s"} have
+          no build classification.
+        </span>{" "}
+        <span className="text-text-muted">
+          They were uploaded before Zerg/Terran build detection existed —
+          your desktop agent can re-parse and relabel them.
+        </span>
+      </p>
+      {requested ? (
+        <span className="text-caption text-success">
+          Requested — if your agent is online it&apos;s re-uploading now.
+          Labels refresh as games land.
+        </span>
+      ) : (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => void reclassify()}
+          disabled={busy}
+          loading={busy}
+          iconLeft={<RefreshCcw className="h-3.5 w-3.5" aria-hidden />}
+        >
+          Reclassify my games
+        </Button>
+      )}
+      {error ? (
+        <p className="w-full text-caption text-danger" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

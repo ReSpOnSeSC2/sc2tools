@@ -1,9 +1,11 @@
-"""Detector for the user's own build (currently Protoss-only matchup trees).
+"""Detector for the user's own build.
 
-`detect_my_build(matchup, my_events, my_race)` runs custom builds first, then
-walks the matchup-specific decision tree (PvZ / PvP / PvT). Adding a new
-matchup or expanding to other races should be done by extending the
-appropriate branch here.
+`detect_my_build(matchup, my_events, my_race)` runs custom builds first.
+Protoss then walks the matchup-specific decision trees below (PvZ / PvP
+/ PvT); Zerg and Terran delegate to the shared perspective-agnostic
+classifier in ``core.strategy_detector_race`` (matchup trees + generic
+race trees + composition fallback) so both detector stacks label a
+build identically.
 """
 
 from typing import Dict, List
@@ -16,7 +18,6 @@ from .base import (
     nth_base_start,
     start_times,
 )
-from .definitions import candidate_signatures_for
 
 
 # Map a 'vs <Race>' matchup string to the bare race name. Used by the
@@ -74,24 +75,23 @@ class UserBuildDetector(BaseStrategyDetector):
             if self.check_custom_rules(cb.get("rules", []), buildings, units, upgrades, main_loc):
                 return cb["name"]
 
-        # 2. Race-aware structured signature scan (Zerg / Terran).
-        # Stage 8 will populate BUILD_SIGNATURES with real opening rules;
-        # for now any non-Protoss replay flows through here and ends up
-        # tagged 'Unclassified - <Race>' so the UI can show a 'we don't
-        # have definitions for this matchup yet' hint instead of a
-        # misleading Protoss-tree label.
+        # 2. Zerg / Terran: delegate to the shared perspective-agnostic
+        # classifier in ``core`` — the same matchup trees + generic race
+        # trees + composition fallback the cloud agent and the
+        # opponent-side detector use. This replaced the Stage-8 stub
+        # scan that returned 'Unclassified - <Race>' for every
+        # non-Protoss replay; keeping the two stacks on one classifier
+        # means a Zerg/Terran build labels identically whether it was
+        # parsed by the agent, the bulk-import CLI, or the legacy SPA.
         if my_race in ("Zerg", "Terran"):
             vs_race = _matchup_to_vs_race(matchup)
-            for name, meta in candidate_signatures_for(my_race, vs_race).items():
-                signature = meta.get("signature") or []
-                if not signature:
-                    # TODO(stage-8): skip stubs until real signatures land.
-                    continue
-                if self.check_custom_rules(
-                    signature, buildings, units, upgrades, main_loc,
-                ):
-                    return name
-            return f"Unclassified - {my_race}"
+            try:
+                from core.strategy_detector_race import classify_by_race
+            except ImportError:
+                # The engine core isn't importable (stripped install).
+                # Degrade to the old sentinel rather than crash parsing.
+                return f"Unclassified - {my_race}"
+            return classify_by_race(my_race, my_events, self, opp_race=vs_race)
 
         def has_building(name, time_limit=9999):
             return any(b['name'] == name and b['time'] <= time_limit for b in buildings)
