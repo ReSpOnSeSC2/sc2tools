@@ -84,17 +84,36 @@ export function attachOverlayResilience(
   // Heartbeat + gameKey drift detection. The cloud replies with
   // ``{gameKey, ts}``; a mismatch against our latest means envelopes
   // were dropped while the socket looked alive.
+  //
+  // Loop guard: resync AT MOST ONCE per distinct mismatched cloud
+  // key. A resync replays the cloud's snapshots — if the keys STILL
+  // disagree afterwards, the difference is structural (e.g. the
+  // cached post-game payload is stamped with its gameId fallback
+  // while the heartbeat advertises the envelope key), and repeating
+  // the resync would re-fire the same widgets on stream every 30 s
+  // forever. One attempt recovers every genuinely-missed-events case;
+  // the guard resets when the keys agree or the cloud moves on to a
+  // new game.
+  let resyncedForCloudKey: string | null = null;
   const heartbeatInterval = window.setInterval(() => {
-    socket.emit("overlay:heartbeat");
+    // Emits while disconnected get buffered by socket.io and flushed
+    // as a burst on reconnect — skip them; the connect handler's
+    // resync already covers reconnection recovery. Only an explicit
+    // ``false`` skips (test fakes may not define the property).
+    if (socket.connected !== false) socket.emit("overlay:heartbeat");
   }, heartbeatMs);
   socket.on(
     "overlay:heartbeat",
     (reply: { gameKey?: string | null } | undefined) => {
       const cloudKey =
         reply && typeof reply.gameKey === "string" ? reply.gameKey : null;
-      if (cloudKey && cloudKey !== opts.latestGameKey()) {
-        socket.emit("overlay:resync");
+      if (!cloudKey || cloudKey === opts.latestGameKey()) {
+        resyncedForCloudKey = null;
+        return;
       }
+      if (resyncedForCloudKey === cloudKey) return;
+      resyncedForCloudKey = cloudKey;
+      socket.emit("overlay:resync");
     },
   );
 

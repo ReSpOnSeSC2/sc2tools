@@ -191,6 +191,16 @@ class LiveGameBroker {
       : null;
     if (incomingKey) {
       this._currentGameKey.set(userId, incomingKey);
+    } else if (envelope.phase === "idle" || envelope.phase === "menu") {
+      // The agent reports keyless idle/menu envelopes at ~1 Hz between
+      // games. Pre-fix, the previous match's gameKey lingered in this
+      // map for as long as those ticks kept ``_latest`` fresh — so the
+      // ``overlay:heartbeat`` responder kept advertising a finished
+      // game's key for the agent's entire idle session, and any client
+      // whose own key differed (e.g. a post-game payload stamped with
+      // its gameId fallback) drifted into a resync-every-30s loop that
+      // re-fired the cached post-game widgets on stream.
+      this._currentGameKey.delete(userId);
     }
     // First fan-out: the partial envelope as-is. Streamers see the
     // basic opponent identity (name + race + Pulse MMR) within ms of

@@ -97,6 +97,31 @@ describe("LiveGameBroker (in-process pub/sub)", () => {
     broker._latest.set("u", { envelope: { phase: "x" }, ts: 0 });
     expect(broker.latest("u")).toBeNull();
   });
+
+  test("idle/menu envelopes clear currentGameKey (heartbeat must not advertise a finished game)", () => {
+    const broker = new LiveGameBroker();
+    broker.publish("u", { phase: "match_in_progress", gameKey: "K1" });
+    expect(broker.currentGameKey("u")).toBe("K1");
+    // The agent posts keyless idle ticks between games at ~1 Hz.
+    // Pre-fix these kept ``_latest`` fresh while the OLD key lingered,
+    // so overlay heartbeats advertised K1 for the whole idle session
+    // and drove clients into a resync-every-30s loop.
+    broker.publish("u", { phase: "idle" });
+    expect(broker.currentGameKey("u")).toBeNull();
+    broker.publish("u", { phase: "match_loading", gameKey: "K2" });
+    expect(broker.currentGameKey("u")).toBe("K2");
+    broker.publish("u", { phase: "menu" });
+    expect(broker.currentGameKey("u")).toBeNull();
+  });
+
+  test("a keyless mid-match envelope does NOT clear currentGameKey", () => {
+    const broker = new LiveGameBroker();
+    broker.publish("u", { phase: "match_in_progress", gameKey: "K1" });
+    // Partial/degraded tick without a key, still in a match phase —
+    // the current key must survive.
+    broker.publish("u", { phase: "match_in_progress" });
+    expect(broker.currentGameKey("u")).toBe("K1");
+  });
 });
 
 describe("GET /v1/me/live — SSE backpressure + cleanup hardening", () => {
