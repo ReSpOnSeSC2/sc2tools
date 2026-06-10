@@ -15,8 +15,10 @@ import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import { apiCall, useApi } from "@/lib/clientApi";
+import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
 import type { BuildRuleLike, BuildSignatureItem } from "@/lib/build-events";
 import { matchupLabel, type VsRace } from "@/lib/race";
 import {
@@ -82,6 +84,7 @@ export function BuildSourcePanel({
   adaptSource: (source: BuildSource) => AdaptResult;
 }) {
   const [selected, setSelected] = useState<string>("");
+  const [query, setQuery] = useState("");
   const [bulkState, setBulkState] = useState<{
     running: boolean;
     done: number;
@@ -131,14 +134,33 @@ export function BuildSourcePanel({
   const selectedSource = sources.get(selected) ?? null;
 
   // Current-matchup builds first, then the rest alphabetically — with
-  // every /definitions opener covered, the list is long.
+  // every /definitions opener covered, the list is long. Search also
+  // matches the DEFINITION names a build covers ("Phoenix into Robo"
+  // finds the build covering pvt-phoenix-into-robo even if its card
+  // wears a different title).
+  const definitionNamesById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const def of BUILD_DEFINITIONS) map.set(def.id, def.name);
+    return map;
+  }, []);
   const sortedReferences = useMemo(() => {
-    return [...references].sort((a, b) => {
-      const aIn = a.matchups.includes(matchup) ? 0 : 1;
-      const bIn = b.matchups.includes(matchup) ? 0 : 1;
-      return aIn - bIn || a.name.localeCompare(b.name);
-    });
-  }, [references, matchup]);
+    const q = query.trim().toLowerCase();
+    return [...references]
+      .filter((ref) => {
+        if (!q) return true;
+        const covered = (ref.definitionIds ?? [])
+          .map((id) => definitionNamesById.get(id) ?? id)
+          .join(" ");
+        return `${ref.name} ${ref.description} ${covered}`
+          .toLowerCase()
+          .includes(q);
+      })
+      .sort((a, b) => {
+        const aIn = a.matchups.includes(matchup) ? 0 : 1;
+        const bIn = b.matchups.includes(matchup) ? 0 : 1;
+        return aIn - bIn || a.name.localeCompare(b.name);
+      });
+  }, [references, matchup, query, definitionNamesById]);
   const matchupCount = references.filter((r) =>
     r.matchups.includes(matchup),
   ).length;
@@ -196,6 +218,14 @@ export function BuildSourcePanel({
               covers the full definitions catalog
             </span>
           </div>
+          <Input
+            inputSize="sm"
+            type="search"
+            placeholder="Search builds and the definitions they cover…"
+            aria-label="Search standard openers"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
           <ul
             className="max-h-[420px] space-y-1.5 overflow-y-auto pr-1"
             role="radiogroup"
@@ -241,6 +271,18 @@ export function BuildSourcePanel({
                     <p className="mt-0.5 text-caption text-text-muted">
                       {ref.description}
                     </p>
+                    {(ref.definitionIds?.length ?? 0) > 0 ? (
+                      <p className="mt-0.5 text-caption text-text-dim">
+                        covers:{" "}
+                        {(ref.definitionIds ?? [])
+                          .map((id) => definitionNamesById.get(id) ?? id)
+                          .slice(0, 3)
+                          .join(" · ")}
+                        {(ref.definitionIds?.length ?? 0) > 3
+                          ? ` · +${(ref.definitionIds?.length ?? 0) - 3} more`
+                          : ""}
+                      </p>
+                    ) : null}
                   </button>
                 </li>
               );

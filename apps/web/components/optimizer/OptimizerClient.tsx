@@ -150,6 +150,12 @@ function OptimizerInner() {
       source.type === "standard" && source.native
         ? source.native
         : BASELINE_PROFILE_ID;
+    // Builds whose milestones run past the default window (a saved
+    // "3 stargates by 10:00" build) get a longer simulation.
+    const horizonSec = Math.min(
+      900,
+      Math.max(480, (resolved.latestMilestoneSec ?? 0) + 90),
+    );
     const adapted = adaptBuild({
       baselineProfileId,
       profileId: settings.profileId,
@@ -163,9 +169,15 @@ function OptimizerInner() {
         hasWall: settings.hasWall,
         allowWorkerPull: settings.allowWorkerPull,
       },
-      horizonSec: 480,
+      horizonSec,
     });
-    return { ...adapted, unknownNames: resolved.unknownNames };
+    const adaptationNotes = resolved.fromRules
+      ? [
+          "Reconstructed from this build's detection rules — the milestones plus their implied tech and gas. Steps the rules don't mention (expansions, extra army) aren't included; save the build with a full signature for higher fidelity.",
+          ...adapted.adaptationNotes,
+        ]
+      : adapted.adaptationNotes;
+    return { ...adapted, unknownNames: resolved.unknownNames, adaptationNotes };
   };
 
   const handleAdapt = (source: BuildSource) => {

@@ -187,10 +187,10 @@
       "id": "p-stargate-robo",
       "name": "Stargate into Robo",
       "race": "Protoss",
-      "matchups": ["PvZ", "PvT"],
+      "matchups": ["PvZ"],
       "description": "Stargate harass into robo for immortals and detection.",
       "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "RoboticsFacility", "Gateway", "WarpGateResearch", "Observer", "Immortal", "Pylon", "Stalker", "Immortal"],
-      "definitionIds": ["pvz-stargate-into-robo", "pvt-phoenix-into-robo"]
+      "definitionIds": ["pvz-stargate-into-robo"]
     },
     {
       "id": "p-phoenix",
@@ -200,6 +200,15 @@
       "description": "Stargate phoenixes for lifts and scouting, gateway units behind.",
       "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Nexus", "Stargate", "Adept", "Phoenix", "Phoenix", "Pylon", "Gateway", "WarpGateResearch", "Phoenix", "Stalker", "Pylon", "Stalker", "Phoenix"],
       "definitionIds": ["pvp-phoenix-style", "pvt-phoenix-opener"]
+    },
+    {
+      "id": "p-phoenix-robo",
+      "name": "Phoenix into Robo",
+      "race": "Protoss",
+      "matchups": ["PvT"],
+      "description": "Stargate phoenixes for lifts and scouting, flowing into robo for observers and immortals. Warpgate research waits for the second gateway.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "Stargate", "Phoenix", "Phoenix", "Pylon", "RoboticsFacility", "Phoenix", "Gateway", "WarpGateResearch", "Observer", "Pylon", "Immortal", "Stalker"],
+      "definitionIds": ["pvt-phoenix-into-robo"]
     },
     {
       "id": "p-2stargate-phoenix",
