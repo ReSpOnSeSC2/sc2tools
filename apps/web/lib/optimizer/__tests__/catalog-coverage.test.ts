@@ -141,30 +141,42 @@ describe("PvT first-defense rule (user's PTR guidance)", () => {
         !RUSH_EXEMPT.has(b.id),
     );
     expect(pvtBuilds.length).toBeGreaterThan(10);
-    // No PvT opener builds a zealot — not even the proxy reaper
-    // response (user's final ruling).
+    // Standard play never opens zealot; the scouted proxy-reaper
+    // response is the lone exception (zealot beats the 2:15 reaper).
     for (const build of pvtBuilds) {
       const first = firstDefenseAt(build.id);
       expect(
         first.at,
         `${build.id} first defense too late`,
       ).toBeLessThanOrEqual(FIRST_DEFENSE_DEADLINE_SEC);
-      expect(first.name, `${build.id} opens with a zealot`).not.toBe("Zealot");
+      if (build.id !== "p-proxy-reaper-response") {
+        expect(
+          first.name,
+          `${build.id} opens with a zealot`,
+        ).not.toBe("Zealot");
+      }
     }
   });
 
-  it("the proxy reaper response opens core-first into a fast stalker", () => {
+  it("the proxy reaper response zealot beats the ~2:15 reaper", () => {
     const first = firstDefenseAt("p-proxy-reaper-response");
-    expect(first.name).toBe("Stalker");
-    expect(first.at).toBeLessThanOrEqual(FIRST_DEFENSE_DEADLINE_SEC);
-    // no zealot anywhere, and the nexus is delayed behind the core
+    expect(first.name).toBe("Zealot");
+    expect(first.at).toBeLessThanOrEqual(135);
+    // core first, then zealot, nexus delayed — and the second gas is
+    // pushed back to pay for the zealot (after the nexus in the list)
     const build = referenceBuilds().find(
       (b) => b.id === "p-proxy-reaper-response",
     )!;
-    expect(build.steps).not.toContain("Zealot");
-    expect(build.steps.indexOf("CyberneticsCore")).toBeLessThan(
-      build.steps.indexOf("Nexus"),
+    const steps = build.steps;
+    expect(steps.indexOf("CyberneticsCore")).toBeLessThan(
+      steps.indexOf("Zealot"),
     );
+    expect(steps.indexOf("Zealot")).toBeLessThan(steps.indexOf("Nexus"));
+    const secondGas = steps.indexOf(
+      "Assimilator",
+      steps.indexOf("Assimilator") + 1,
+    );
+    expect(secondGas).toBeGreaterThan(steps.indexOf("Nexus"));
   });
 
   it("PvT variants go core before nexus; base steps stay nexus-first", () => {

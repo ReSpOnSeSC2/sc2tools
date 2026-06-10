@@ -17,8 +17,8 @@
       "name": "Proxy Reaper Response (Core first)",
       "race": "Protoss",
       "matchups": ["PvT"],
-      "description": "When you scout a proxy reaper (no barracks in the terran main ~1:30), it can be in your mineral line by ~2:15 - delay the nexus: core before expand, stalker as the first unit, second stalker and shield battery behind it.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Pylon", "Stalker", "Nexus", "Assimilator", "Stalker", "Gateway", "WarpGateResearch", "ShieldBattery", "Pylon", "Stalker"],
+      "description": "When you scout a proxy reaper (no barracks in the terran main ~1:30), it can be in your mineral line by ~2:15 - delay the nexus AND the second gas: core first, zealot from the gateway while the core builds (the saved gas money pays for it), stalker at core finish, expand behind, second assimilator after.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Zealot", "Pylon", "Stalker", "Nexus", "Stalker", "Gateway", "Assimilator", "WarpGateResearch", "ShieldBattery", "Pylon", "Stalker"],
       "definitionIds": []
     },
     {
