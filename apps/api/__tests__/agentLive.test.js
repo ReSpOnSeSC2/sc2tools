@@ -99,6 +99,139 @@ describe("LiveGameBroker (in-process pub/sub)", () => {
   });
 });
 
+describe("GET /v1/me/live — SSE backpressure + cleanup hardening", () => {
+  const { EventEmitter } = require("events");
+  const { buildMeLiveRouter } = require("../src/routes/agentLive");
+
+  function makeRes({ writeReturns = true } = {}) {
+    const res = new EventEmitter();
+    res.statusCode = 0;
+    res.headers = {};
+    res.written = [];
+    res.ended = false;
+    res.destroyed = false;
+    res.writeReturns = writeReturns;
+    res.setHeader = (k, v) => {
+      res.headers[k] = v;
+    };
+    res.flushHeaders = () => {};
+    res.write = jest.fn((chunk) => {
+      res.written.push(String(chunk));
+      return res.writeReturns;
+    });
+    res.end = jest.fn(() => {
+      res.ended = true;
+    });
+    res.destroy = jest.fn(() => {
+      res.destroyed = true;
+    });
+    res.status = (code) => {
+      res.statusCode = code;
+      return res;
+    };
+    res.json = jest.fn();
+    return res;
+  }
+
+  function makeBroker() {
+    const subscribers = new Map();
+    return {
+      unsubscribeCalls: 0,
+      subscribe(userId, cb) {
+        subscribers.set(userId, cb);
+        return () => {
+          this.unsubscribeCalls += 1;
+          subscribers.delete(userId);
+        };
+      },
+      push(userId, envelope) {
+        const cb = subscribers.get(userId);
+        if (cb) cb(envelope);
+      },
+      has(userId) {
+        return subscribers.has(userId);
+      },
+    };
+  }
+
+  function dispatch(broker, res) {
+    const router = buildMeLiveRouter({
+      broker,
+      auth: (req, _res, next) => {
+        req.auth = { userId: "u1", source: "clerk" };
+        next();
+      },
+    });
+    const req = new EventEmitter();
+    req.method = "GET";
+    req.url = "/me/live";
+    router.handle(req, res, () => {});
+    return req;
+  }
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test("a stalled subscriber (write returns false, never drains) is dropped", () => {
+    const broker = makeBroker();
+    const res = makeRes({ writeReturns: false });
+    dispatch(broker, res);
+    expect(broker.has("u1")).toBe(true);
+
+    // An envelope write that reports backpressure arms the stall timer.
+    broker.push("u1", { phase: "match_in_progress" });
+    expect(broker.unsubscribeCalls).toBe(0);
+
+    // No drain within the stall window → subscriber dropped + socket
+    // destroyed so the buffered bytes are released.
+    jest.advanceTimersByTime(11_000);
+    expect(broker.unsubscribeCalls).toBe(1);
+    expect(broker.has("u1")).toBe(false);
+    expect(res.destroy).toHaveBeenCalled();
+  });
+
+  test("a drain within the window clears the stall timer", () => {
+    const broker = makeBroker();
+    const res = makeRes({ writeReturns: false });
+    dispatch(broker, res);
+    broker.push("u1", { phase: "match_in_progress" });
+    // Client catches up before the window expires.
+    res.emit("drain");
+    jest.advanceTimersByTime(11_000);
+    expect(broker.unsubscribeCalls).toBe(0);
+    expect(broker.has("u1")).toBe(true);
+  });
+
+  test("cleanup is idempotent across every teardown signal", () => {
+    const broker = makeBroker();
+    const res = makeRes();
+    const req = dispatch(broker, res);
+    req.emit("close");
+    res.emit("close");
+    req.emit("error", new Error("boom"));
+    res.emit("error", new Error("boom"));
+    expect(broker.unsubscribeCalls).toBe(1);
+    expect(res.end).toHaveBeenCalledTimes(1);
+  });
+
+  test("response-side errors tear the subscription down (not just req close)", () => {
+    const broker = makeBroker();
+    const res = makeRes();
+    dispatch(broker, res);
+    expect(broker.has("u1")).toBe(true);
+    res.emit("error", new Error("epipe"));
+    expect(broker.has("u1")).toBe(false);
+    // Envelopes after teardown must not write.
+    const writesBefore = res.write.mock.calls.length;
+    broker.push("u1", { phase: "late" });
+    expect(res.write.mock.calls.length).toBe(writesBefore);
+  });
+});
+
 describe("POST /v1/agent/live + GET /v1/me/live", () => {
   let mongo;
   let db;
