@@ -389,6 +389,11 @@ export interface ReferenceBuild {
   /** Ordered building/unit/upgrade names (no workers). */
   steps: string[];
   /**
+   * Matchup-specific step variants ("PvT" → core-before-nexus line).
+   * Falls back to `steps` for matchups without an override.
+   */
+  stepsByMatchup?: Record<string, string[]>;
+  /**
    * Patch the build was designed for. Absent = 12-worker baseline
    * (adapted with a before/after comparison); present = patch-native
    * (e.g. a 5.0.16 warpgate rush) — no baseline comparison shown.

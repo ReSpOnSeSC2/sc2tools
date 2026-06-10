@@ -25,6 +25,7 @@ import {
   CUSTOM_BUILD_PUT_PATH,
   toCustomBuildPayload,
 } from "@/lib/optimizer/export/toCustomBuild";
+import { stepsForMatchup } from "@/lib/optimizer/adapt/adapt";
 import type {
   AdaptResult,
   ReferenceBuild,
@@ -121,7 +122,7 @@ export function BuildSourcePanel({
         type: "standard",
         id: ref.id,
         name: ref.name,
-        steps: ref.steps,
+        steps: stepsForMatchup(ref, matchup),
         native: ref.native,
       });
     }
@@ -129,7 +130,7 @@ export function BuildSourcePanel({
       map.set(`custom:${build.slug}`, toSource(build));
     }
     return map;
-  }, [references, customBuilds]);
+  }, [references, customBuilds, matchup]);
 
   const selectedSource = sources.get(selected) ?? null;
 
@@ -265,6 +266,11 @@ export function BuildSourcePanel({
                       {ref.native ? (
                         <Badge variant="accent" size="sm">
                           {ref.native}-native
+                        </Badge>
+                      ) : null}
+                      {ref.stepsByMatchup?.[matchup] ? (
+                        <Badge variant="signal" size="sm">
+                          {matchup} variant
                         </Badge>
                       ) : null}
                     </div>
