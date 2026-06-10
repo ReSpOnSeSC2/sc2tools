@@ -92,6 +92,70 @@ describe("protoss gas timing convention", () => {
   });
 });
 
+describe("PvT first-defense rule (user's PTR guidance)", () => {
+  // "For PvT we need a unit out as close to 2:42 as possible — 2:47
+  // is fine." Proxied rushes are exempt (their units pop at the proxy
+  // on their own schedule); the cannon rush counts its first cannon.
+  const FIRST_DEFENSE_DEADLINE_SEC = 167; // 2:47
+  const RUSH_EXEMPT = new Set(["p-proxy-4gate"]);
+
+  function firstDefenseAt(buildId: string): number {
+    const build = referenceBuilds().find((b) => b.id === buildId)!;
+    const { actions } = actionsFromSteps(target, build.steps);
+    const sim = adaptBuild({
+      baselineProfileId: build.native ?? "lotv-base",
+      profileId: "5.0.16",
+      race: "Protoss",
+      actions,
+      referenceName: build.name,
+      threats: [],
+      policies: defaultPolicies(),
+      safety: { hasWall: true, allowWorkerPull: true },
+      horizonSec: 600,
+    }).sim;
+    let first = Infinity;
+    for (const [name, times] of Object.entries(sim.completionTimes)) {
+      const def = target.units[name];
+      const fights =
+        def?.combat &&
+        !def.isWorker &&
+        ((def.combat.dpsGround ?? 0) > 0 || (def.combat.dpsAir ?? 0) > 0);
+      if (fights && times[0] < first) first = times[0];
+    }
+    return first;
+  }
+
+  it("every standard PvT protoss opener fields defense by 2:47", () => {
+    const pvtBuilds = referenceBuilds().filter(
+      (b) =>
+        b.race === "Protoss" &&
+        b.matchups.includes("PvT") &&
+        !RUSH_EXEMPT.has(b.id),
+    );
+    expect(pvtBuilds.length).toBeGreaterThan(10);
+    for (const build of pvtBuilds) {
+      expect(
+        firstDefenseAt(build.id),
+        `${build.id} first defense too late`,
+      ).toBeLessThanOrEqual(FIRST_DEFENSE_DEADLINE_SEC);
+    }
+  });
+
+  it("the proxy reaper response has a zealot before the ~2:15 reaper", () => {
+    expect(firstDefenseAt("p-proxy-reaper-response")).toBeLessThanOrEqual(135);
+    // and it really is core-before-nexus
+    const build = referenceBuilds().find(
+      (b) => b.id === "p-proxy-reaper-response",
+    )!;
+    expect(build.steps.indexOf("CyberneticsCore")).toBeLessThan(
+      build.steps.indexOf("Nexus"),
+    );
+    expect(build.steps.indexOf("Zealot")).toBeLessThan(
+      build.steps.indexOf("Nexus"),
+    );
+  });
+});
+
 describe("every reference build adapts cleanly to 5.0.16", () => {
   for (const build of referenceBuilds()) {
     it(`${build.id} resolves and simulates with no dead steps`, () => {
