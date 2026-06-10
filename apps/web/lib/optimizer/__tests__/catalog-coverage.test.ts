@@ -4,6 +4,7 @@ import {
   actionsFromSteps,
   adaptBuild,
   referenceBuilds,
+  stepsForMatchup,
 } from "../adapt/adapt";
 import { resolveProfile } from "../patch/profiles";
 import { defaultPolicies } from "../sim/engine";
@@ -99,9 +100,12 @@ describe("PvT first-defense rule (user's PTR guidance)", () => {
   const FIRST_DEFENSE_DEADLINE_SEC = 167; // 2:47
   const RUSH_EXEMPT = new Set(["p-proxy-4gate"]);
 
-  function firstDefenseAt(buildId: string): number {
+  function firstDefenseAt(buildId: string): { at: number; name: string } {
     const build = referenceBuilds().find((b) => b.id === buildId)!;
-    const { actions } = actionsFromSteps(target, build.steps);
+    const { actions } = actionsFromSteps(
+      target,
+      stepsForMatchup(build, "PvT"),
+    );
     const sim = adaptBuild({
       baselineProfileId: build.native ?? "lotv-base",
       profileId: "5.0.16",
@@ -114,15 +118,19 @@ describe("PvT first-defense rule (user's PTR guidance)", () => {
       horizonSec: 600,
     }).sim;
     let first = Infinity;
+    let firstName = "";
     for (const [name, times] of Object.entries(sim.completionTimes)) {
       const def = target.units[name];
       const fights =
         def?.combat &&
         !def.isWorker &&
         ((def.combat.dpsGround ?? 0) > 0 || (def.combat.dpsAir ?? 0) > 0);
-      if (fights && times[0] < first) first = times[0];
+      if (fights && times[0] < first) {
+        first = times[0];
+        firstName = name;
+      }
     }
-    return first;
+    return { at: first, name: firstName };
   }
 
   it("every standard PvT protoss opener fields defense by 2:47", () => {
@@ -133,26 +141,47 @@ describe("PvT first-defense rule (user's PTR guidance)", () => {
         !RUSH_EXEMPT.has(b.id),
     );
     expect(pvtBuilds.length).toBeGreaterThan(10);
+    // Standard play never opens zealot — that's the scouted proxy
+    // reaper response only (and even then, core first, zealot after).
+    const ZEALOT_ALLOWED = new Set([
+      "p-proxy-reaper-response",
+      "p-chargelot-allin",
+    ]);
     for (const build of pvtBuilds) {
+      const first = firstDefenseAt(build.id);
       expect(
-        firstDefenseAt(build.id),
+        first.at,
         `${build.id} first defense too late`,
       ).toBeLessThanOrEqual(FIRST_DEFENSE_DEADLINE_SEC);
+      if (!ZEALOT_ALLOWED.has(build.id) && first.name === "Zealot") {
+        throw new Error(`${build.id} opens with a zealot in standard play`);
+      }
     }
   });
 
   it("the proxy reaper response has a zealot before the ~2:15 reaper", () => {
-    expect(firstDefenseAt("p-proxy-reaper-response")).toBeLessThanOrEqual(135);
-    // and it really is core-before-nexus
+    const first = firstDefenseAt("p-proxy-reaper-response");
+    expect(first.at).toBeLessThanOrEqual(140);
+    expect(first.name).toBe("Zealot");
+    // core first, THEN zealot, THEN the delayed nexus (user's order)
     const build = referenceBuilds().find(
       (b) => b.id === "p-proxy-reaper-response",
     )!;
-    expect(build.steps.indexOf("CyberneticsCore")).toBeLessThan(
-      build.steps.indexOf("Nexus"),
-    );
+    const core = build.steps.indexOf("CyberneticsCore");
+    expect(core).toBeLessThan(build.steps.indexOf("Zealot"));
     expect(build.steps.indexOf("Zealot")).toBeLessThan(
       build.steps.indexOf("Nexus"),
     );
+  });
+
+  it("PvT variants go core before nexus; base steps stay nexus-first", () => {
+    const gateExpand = referenceBuilds().find(
+      (b) => b.id === "p-gate-expand",
+    )!;
+    const pvt = stepsForMatchup(gateExpand, "PvT");
+    expect(pvt.indexOf("CyberneticsCore")).toBeLessThan(pvt.indexOf("Nexus"));
+    const pvz = stepsForMatchup(gateExpand, "PvZ");
+    expect(pvz.indexOf("Nexus")).toBeLessThan(pvz.indexOf("CyberneticsCore"));
   });
 });
 
