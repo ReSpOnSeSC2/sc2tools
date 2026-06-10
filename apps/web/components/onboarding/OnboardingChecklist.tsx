@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ImportProgressCard } from "@/components/imports/ImportProgressCard";
 import { useImportStatus } from "@/components/imports/useImportStatus";
-import { usePairCode } from "./usePairCode";
 
 const AGENT_ONLINE_WINDOW_MS = 3 * 60 * 1000;
 
@@ -164,12 +163,19 @@ export function OnboardingChecklist({
                   : "Agent paired — last seen a while ago. Make sure it's running."}
               </span>
             ) : (
-              "Run the agent and paste the code when it asks."
+              "The agent shows a 6-digit code when it starts — enter it on the Devices page."
+            )
+          }
+          action={
+            pairDone ? null : (
+              <CtaLink href="/devices">Open Devices</CtaLink>
             )
           }
           expanded={downloadDone && !pairDone}
           expandedContent={
-            downloadDone && !pairDone ? <InlinePairing onPaired={onRefresh} /> : null
+            downloadDone && !pairDone ? (
+              <PairHint onPaired={onRefresh} />
+            ) : null
           }
         />
 
@@ -266,60 +272,36 @@ function ChecklistRow({
   );
 }
 
+const PAIR_POLL_MS = 5000;
+
 /**
- * Compact inline pairing: mints a real code via the same hook the
- * /welcome wizard uses and polls until the agent claims it. When the
- * poll flips to ready we ask the parent to re-fetch /v1/me so the row
- * ticks green.
+ * The agent generates the pairing code (shown in its window on first
+ * run); the user enters it at /devices. While this hint is visible we
+ * re-fetch /v1/me every few seconds so the row ticks green on its own
+ * the moment the claim lands.
  */
-function InlinePairing({ onPaired }: { onPaired?: () => void }) {
-  const pair = usePairCode();
-
+function PairHint({ onPaired }: { onPaired?: () => void }) {
   useEffect(() => {
-    if (pair.status === "idle") void pair.start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!onPaired) return;
+    const id = window.setInterval(onPaired, PAIR_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [onPaired]);
 
-  useEffect(() => {
-    if (pair.status === "ready") onPaired?.();
-  }, [pair.status, onPaired]);
-
-  if (pair.status === "error" || pair.status === "expired") {
-    return (
-      <div className="flex flex-wrap items-center gap-3 text-caption">
-        <span className="text-danger">
-          {pair.error || "That code expired."}
-        </span>
-        <Button variant="secondary" size="sm" onClick={() => void pair.retry()}>
-          Generate new code
-        </Button>
-      </div>
-    );
-  }
-  if (pair.status === "ready") {
-    return (
-      <p className="inline-flex items-center gap-2 text-caption text-success">
-        <Check className="h-4 w-4" aria-hidden /> Paired — updating…
-      </p>
-    );
-  }
   return (
-    <div className="flex flex-wrap items-center gap-4">
-      <code
-        className="select-all font-mono text-2xl font-bold tracking-[0.25em] text-accent-cyan"
-        aria-label={
-          pair.code
-            ? `Pairing code ${pair.code.split("").join(" ")}`
-            : "Generating pairing code"
-        }
-      >
-        {pair.code || "······"}
-      </code>
-      <span className="inline-flex items-center gap-2 text-caption text-text-muted">
+    <ol className="ml-5 list-decimal space-y-1 text-caption text-text-muted">
+      <li>Run the agent — a 6-digit code appears in its window.</li>
+      <li>
+        Enter the code on the{" "}
+        <Link href="/devices" className="font-medium text-accent hover:text-accent-hover">
+          Devices page
+        </Link>
+        .
+      </li>
+      <li className="inline-flex items-center gap-1.5">
         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-        Paste this into the agent — this row ticks green automatically.
-      </span>
-    </div>
+        This row ticks green automatically once paired.
+      </li>
+    </ol>
   );
 }
 

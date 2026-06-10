@@ -468,3 +468,16 @@ a:hover {
   transform: translate(3px, 3px);
   box-shadow: 0 0 0 rgba(0, 0, 0, 0);
 }
+
+/* Clerk primary buttons: belt-and-braces against white-on-white. The
+ * appearance config (lib/clerk-appearance.ts) styles these via
+ * Tailwind classes, but Clerk's injected CSS occasionally outranks
+ * utility classes on sub-screens (the post-OAuth "fill in missing
+ * fields" task, modals). These token-backed rules always win. */
+.cl-formButtonPrimary {
+  background-color: rgb(var(--accent)) !important;
+  color: #fff !important;
+}
+.cl-formButtonPrimary:hover {
+  background-color: rgb(var(--accent-hover)) !important;
+}
