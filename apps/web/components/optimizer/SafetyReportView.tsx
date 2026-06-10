@@ -38,8 +38,7 @@ function ThreatReport({ report }: { report: ThreatSafetyReport }) {
           </Badge>
         </div>
         <span className="text-caption text-text-muted">
-          worst margin {marginText(report.worstMargin)} ·{" "}
-          {Math.round(report.probability * 100)}% likely
+          worst margin {marginText(report.worstMargin)}
         </span>
       </div>
       <ul className="mt-2 space-y-1.5">

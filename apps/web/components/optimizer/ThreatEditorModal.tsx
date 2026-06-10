@@ -22,12 +22,7 @@ import {
   validateThreat,
   type ThreatOverlay,
 } from "@/lib/optimizer/threats/store";
-import type {
-  ScoutingTell,
-  SimRace,
-  Threat,
-  ThreatWave,
-} from "@/lib/optimizer/types";
+import type { SimRace, Threat, ThreatWave } from "@/lib/optimizer/types";
 
 const SIM_RACES: SimRace[] = ["Protoss", "Terran", "Zerg"];
 
@@ -99,7 +94,6 @@ interface EditorState {
   arrival: string;
   prior: string;
   wavesText: string;
-  tellsJson: string;
   wallRecommended: boolean;
   workerPullViable: boolean;
 }
@@ -113,7 +107,6 @@ function stateFromThreat(threat: Threat | null, defenderRace: SimRace): EditorSt
       arrival: "2:30",
       prior: "0.1",
       wavesText: "2:30 Zergling x6",
-      tellsJson: "[]",
       wallRecommended: false,
       workerPullViable: false,
     };
@@ -125,7 +118,6 @@ function stateFromThreat(threat: Threat | null, defenderRace: SimRace): EditorSt
     arrival: formatBuildTime(threat.earliestArrivalSec),
     prior: String(threat.priorProbability),
     wavesText: wavesToText(threat.waves),
-    tellsJson: JSON.stringify(threat.scoutingTells, null, 2),
     wallRecommended: Boolean(threat.defenderHints.wallRecommended),
     workerPullViable: Boolean(threat.defenderHints.workerPullViable),
   };
@@ -174,17 +166,6 @@ export function ThreatEditorModal({
       setError(parsedWaves.error);
       return;
     }
-    let tells: ScoutingTell[];
-    try {
-      const parsed: unknown = JSON.parse(state.tellsJson);
-      if (!Array.isArray(parsed)) throw new Error("must be an array");
-      tells = parsed as ScoutingTell[];
-    } catch (e) {
-      setError(
-        `Scouting tells JSON: ${e instanceof Error ? e.message : String(e)}`,
-      );
-      return;
-    }
     const next: Threat = {
       id: threat?.id ?? slugify(state.name),
       attackerRace: state.attackerRace,
@@ -193,7 +174,7 @@ export function ThreatEditorModal({
       description: state.description.trim(),
       earliestArrivalSec: arrival,
       priorProbability: prior,
-      scoutingTells: tells,
+      scoutingTells: threat?.scoutingTells ?? [],
       waves: parsedWaves.waves,
       dangerWindows: threat?.dangerWindows ?? [],
       defenderHints: {
@@ -295,16 +276,6 @@ export function ThreatEditorModal({
             className="min-h-[90px] w-full rounded-lg border-2 border-line bg-bg-surface p-2 font-mono text-caption text-text focus:border-accent focus:outline-none"
             value={state.wavesText}
             onChange={(e) => setState({ ...state, wavesText: e.target.value })}
-          />
-        </Field>
-        <Field
-          label="Scouting tells (JSON)"
-          hint='Entries: { "id", "observation", "weight" 0-1, optional "windowSec": [from,to], optional "contradicts": true }'
-        >
-          <textarea
-            className="min-h-[120px] w-full rounded-lg border-2 border-line bg-bg-surface p-2 font-mono text-caption text-text focus:border-accent focus:outline-none"
-            value={state.tellsJson}
-            onChange={(e) => setState({ ...state, tellsJson: e.target.value })}
           />
         </Field>
         <div className="flex gap-6">

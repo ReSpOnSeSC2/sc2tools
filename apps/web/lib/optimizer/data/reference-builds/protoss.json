@@ -26,7 +26,7 @@
       "race": "Protoss",
       "matchups": ["PvZ", "PvT"],
       "description": "Double-gas stargate opener: oracles for harass, expansion behind it, warpgate after the second gateway.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Pylon", "Oracle", "ShieldBattery", "Oracle", "Pylon", "Gateway", "WarpGateResearch", "Stalker", "Stalker"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Nexus", "Stargate", "Adept", "Pylon", "Oracle", "ShieldBattery", "Oracle", "Pylon", "Gateway", "WarpGateResearch", "Stalker", "Stalker"],
       "definitionIds": ["protoss-stargate-opener", "pvp-standard-stargate-opener", "pvt-stargate-opener", "pvz-stargate-opener"]
     },
     {
@@ -90,7 +90,7 @@
       "race": "Protoss",
       "matchups": ["PvP", "PvT", "PvZ"],
       "description": "Twilight blink off 3-4 gateways without a fast third; mass stalkers jump the opponent's front.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Stalker", "TwilightCouncil", "Gateway", "WarpGateResearch", "BlinkTech", "Gateway", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker", "Stalker"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Stalker", "TwilightCouncil", "Gateway", "WarpGateResearch", "BlinkTech", "Gateway", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker", "Stalker"],
       "definitionIds": ["protoss-blink-all-in", "pvz-blink-stalker-all-in-2-base"]
     },
     {
@@ -126,7 +126,7 @@
       "race": "Protoss",
       "matchups": ["PvP", "PvT", "PvZ"],
       "description": "Hidden dark shrine off one or two bases; the first DTs hit before mobile detection.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Stalker", "TwilightCouncil", "Gateway", "WarpGateResearch", "DarkShrine", "Pylon", "Stalker", "DarkTemplar", "DarkTemplar", "Pylon", "DarkTemplar"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Stalker", "TwilightCouncil", "Gateway", "WarpGateResearch", "DarkShrine", "Pylon", "Stalker", "DarkTemplar", "DarkTemplar", "Pylon", "DarkTemplar"],
       "definitionIds": ["protoss-dt-rush", "pvz-dt-opener"]
     },
     {
@@ -162,7 +162,7 @@
       "race": "Protoss",
       "matchups": ["PvT", "PvZ"],
       "description": "Oracle opener flowing into twilight glaives and an adept-heavy mid game.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "ResonatingGlaives", "Adept", "Pylon", "Adept", "Adept", "Pylon", "Adept"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "ResonatingGlaives", "Adept", "Pylon", "Adept", "Adept", "Pylon", "Adept"],
       "definitionIds": ["pvt-stargate-into-glaives", "pvz-stargate-into-glaives"]
     },
     {
@@ -171,7 +171,7 @@
       "race": "Protoss",
       "matchups": ["PvT"],
       "description": "Oracle opener into twilight blink stalkers.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "BlinkTech", "Stalker", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "BlinkTech", "Stalker", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker"],
       "definitionIds": ["pvt-stargate-into-blink"]
     },
     {
@@ -180,7 +180,7 @@
       "race": "Protoss",
       "matchups": ["PvT", "PvZ"],
       "description": "Oracle opener into charge zealot macro off three gateways.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "Charge", "Gateway", "Zealot", "Pylon", "Zealot", "Zealot", "Pylon", "Zealot", "Zealot"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "Charge", "Gateway", "Zealot", "Pylon", "Zealot", "Zealot", "Pylon", "Zealot", "Zealot"],
       "definitionIds": ["pvt-stargate-into-charge", "pvt-3-gate-charge-opener", "pvt-standard-charge-macro", "pvz-standard-charge-macro"]
     },
     {
@@ -189,7 +189,7 @@
       "race": "Protoss",
       "matchups": ["PvZ", "PvT"],
       "description": "Stargate harass into robo for immortals and detection.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "RoboticsFacility", "Gateway", "WarpGateResearch", "Observer", "Immortal", "Pylon", "Stalker", "Immortal"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "RoboticsFacility", "Gateway", "WarpGateResearch", "Observer", "Immortal", "Pylon", "Stalker", "Immortal"],
       "definitionIds": ["pvz-stargate-into-robo", "pvt-phoenix-into-robo"]
     },
     {
@@ -198,7 +198,7 @@
       "race": "Protoss",
       "matchups": ["PvP", "PvT"],
       "description": "Stargate phoenixes for lifts and scouting, gateway units behind.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Phoenix", "Phoenix", "Pylon", "Gateway", "WarpGateResearch", "Phoenix", "Stalker", "Pylon", "Stalker", "Phoenix"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Nexus", "Stargate", "Adept", "Phoenix", "Phoenix", "Pylon", "Gateway", "WarpGateResearch", "Phoenix", "Stalker", "Pylon", "Stalker", "Phoenix"],
       "definitionIds": ["pvp-phoenix-style", "pvt-phoenix-opener"]
     },
     {
@@ -207,7 +207,7 @@
       "race": "Protoss",
       "matchups": ["PvZ"],
       "description": "Two (or three) stargates of phoenixes to own the air and pick queens.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Stargate", "Phoenix", "Phoenix", "Pylon", "Phoenix", "Phoenix", "Gateway", "WarpGateResearch", "Pylon", "Phoenix", "Phoenix", "Pylon", "Phoenix"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Nexus", "Stargate", "Adept", "Stargate", "Phoenix", "Phoenix", "Pylon", "Phoenix", "Phoenix", "Gateway", "WarpGateResearch", "Pylon", "Phoenix", "Phoenix", "Pylon", "Phoenix"],
       "definitionIds": ["pvz-2-stargate-phoenix", "pvz-3-stargate-phoenix"]
     },
     {
@@ -216,7 +216,7 @@
       "race": "Protoss",
       "matchups": ["PvZ"],
       "description": "Double stargate void rays against ground-heavy zerg.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Stargate", "VoidRay", "Pylon", "VoidRay", "Gateway", "WarpGateResearch", "Pylon", "VoidRay", "VoidRay", "Pylon", "VoidRay"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Nexus", "Stargate", "Adept", "Stargate", "VoidRay", "Pylon", "VoidRay", "Gateway", "WarpGateResearch", "Pylon", "VoidRay", "VoidRay", "Pylon", "VoidRay"],
       "definitionIds": ["pvz-2-stargate-void-ray"]
     },
     {
@@ -234,7 +234,7 @@
       "race": "Protoss",
       "matchups": ["PvT", "PvP"],
       "description": "Hidden stargate (positioning not simulated): oracles or void rays arrive before anti-air exists.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Stargate", "Adept", "Oracle", "Pylon", "Oracle", "Gateway", "WarpGateResearch", "Stalker", "Pylon", "VoidRay"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Stargate", "Adept", "Oracle", "Pylon", "Oracle", "Gateway", "WarpGateResearch", "Stalker", "Pylon", "VoidRay"],
       "definitionIds": ["protoss-proxy-stargate-opener", "pvt-proxy-void-ray-stargate"]
     },
     {
@@ -278,8 +278,8 @@
       "name": "Carrier Rush",
       "race": "Protoss",
       "matchups": ["PvZ"],
-      "description": "Fast fleet beacon and carriers off two bases.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Pylon", "FleetBeacon", "Gateway", "WarpGateResearch", "Carrier", "Pylon", "Carrier", "Stalker", "Pylon", "Carrier"],
+      "description": "Two-base carrier tech: a void ray from the first stargate covers the gap, then fleet beacon into carriers.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Nexus", "Stargate", "Adept", "Pylon", "VoidRay", "FleetBeacon", "Gateway", "WarpGateResearch", "Carrier", "Pylon", "Carrier", "Stalker", "Pylon", "Carrier"],
       "definitionIds": ["pvz-carrier-rush"]
     },
     {
@@ -287,8 +287,8 @@
       "name": "Tempest Rush",
       "race": "Protoss",
       "matchups": ["PvZ"],
-      "description": "Fleet beacon into tempests to siege from range.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Pylon", "FleetBeacon", "Gateway", "WarpGateResearch", "Tempest", "Pylon", "Tempest", "Stalker", "Pylon", "Tempest"],
+      "description": "Fleet beacon into tempests with an oracle out first - you never go straight to the beacon without a unit.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "Pylon", "Nexus", "Stargate", "Adept", "Pylon", "Oracle", "FleetBeacon", "Gateway", "WarpGateResearch", "Tempest", "Pylon", "Tempest", "Stalker", "Pylon", "Tempest"],
       "definitionIds": ["pvz-tempest-rush"]
     },
     {
