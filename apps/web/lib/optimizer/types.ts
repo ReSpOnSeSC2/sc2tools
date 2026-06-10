@@ -369,57 +369,60 @@ export interface SafetyOptions {
 }
 
 /* ------------------------------------------------------------------ */
-/* Optimizer                                                           */
+/* Build adaptation                                                    */
 /* ------------------------------------------------------------------ */
 
-export type ObjectiveId =
-  | "balanced-development"
-  | "tech-rush-target"
-  | "earliest-safe-expansion"
-  | "max-workers-at-t"
-  | "max-army-value-at-t";
-
-export interface ObjectiveSpec {
-  id: ObjectiveId;
-  /** Evaluation horizon (seconds) for the at-T objectives. */
-  atSec: number;
-  /**
-   * Tech goal for "tech-rush-target": a structure, upgrade, or unit
-   * name to reach as early as possible (economy and safety still
-   * count — the search hunts shortcuts, not all-in tunnels).
-   */
-  targetName?: string;
+/** A known-good 12-worker opener shipped with the app. */
+export interface ReferenceBuild {
+  id: string;
+  name: string;
+  race: SimRace;
+  /** Matchup labels this opener is played in ("PvZ", "TvT", …). */
+  matchups: string[];
+  description: string;
+  /** Ordered building/unit/upgrade names (no workers, no supply). */
+  steps: string[];
 }
 
-export interface OptimizeRequest {
+/** One step's timing on the old patch vs the adapted patch. */
+export interface ComparisonRow {
+  name: string;
+  kind: BuildActionKind;
+  baselineSupply?: number;
+  baselineStartSec?: number;
+  adaptedSupply?: number;
+  adaptedStartSec?: number;
+  /** adapted − baseline start (positive = later on the new patch). */
+  deltaSec?: number;
+}
+
+export interface AdaptRequest {
+  /** Patch the reference build was designed for. */
+  baselineProfileId: string;
+  /** Patch to adapt to. */
   profileId: string;
   race: SimRace;
-  vsRace: SimRace;
-  objective: ObjectiveSpec;
-  /** Threats with resolved probabilities (from scouting inference). */
+  actions: BuildAction[];
+  referenceName: string;
+  referenceId?: string;
   threats: { threat: Threat; probability: number }[];
   policies: MacroPolicies;
   safety: SafetyOptions;
-  seed: number;
-  budget: { maxGenerations: number; maxMillis: number };
   horizonSec: number;
 }
 
-export interface OptimizeProgress {
-  generation: number;
-  evaluations: number;
-  bestScore: number;
-  bestSummary: string;
-}
-
-export interface OptimizeResult {
+export interface AdaptResult {
+  referenceName: string;
+  referenceId?: string;
   actions: BuildAction[];
-  sim: SimResult;
-  safety: SafetyReport;
-  score: number;
-  generations: number;
-  evaluations: number;
-  seed: number;
-  objective: ObjectiveSpec;
+  baselineProfileId: string;
   profileId: string;
+  /** The build re-timed on the target patch. */
+  sim: SimResult;
+  /** The same build on its original patch, for comparison. */
+  baselineSim: SimResult;
+  safety: SafetyReport;
+  comparison: ComparisonRow[];
+  /** Reference entries that didn't resolve to known units/upgrades. */
+  unknownNames: string[];
 }

@@ -1,0 +1,203 @@
+/**
+ * Build adaptation: take a known 12-worker build order (a shipped
+ * reference opener or one of the user's saved custom builds), keep
+ * the same buildings in the same order, and re-time it under a
+ * different patch profile — "get to the same positions with the same
+ * buildings", with the simulator computing when those positions are
+ * actually reachable on the new economy.
+ *
+ * Worker production, supply, and gas saturation are macro policies
+ * the simulator re-derives per patch, so a 12-worker build's "14
+ * Pylon" naturally becomes whatever the 8-worker economy supports.
+ */
+import type { BuildSignatureItem } from "@/lib/build-events";
+import referenceData from "../data/reference-builds.json";
+import { resolveProfile } from "../patch/profiles";
+import { evaluateSafety } from "../safety/evaluate";
+import { simulate } from "../sim/engine";
+import type {
+  AdaptRequest,
+  AdaptResult,
+  BuildAction,
+  ComparisonRow,
+  PatchProfile,
+  ReferenceBuild,
+  SimRace,
+  SimResult,
+} from "../types";
+
+export function referenceBuilds(): ReferenceBuild[] {
+  return (referenceData.builds as ReferenceBuild[]).map((b) => ({ ...b }));
+}
+
+export function referenceBuildsForRace(race: SimRace): ReferenceBuild[] {
+  return referenceBuilds().filter((b) => b.race === race);
+}
+
+/**
+ * Names the policies own — never part of an adapted action list.
+ * Only workers: supply structures are real build-order steps (a
+ * gateway needs its pylon) and get re-timed like everything else;
+ * auto-supply just covers any gaps the reference leaves later on.
+ */
+function isPolicyOwned(profile: PatchProfile, name: string): boolean {
+  return Boolean(profile.units[name]?.isWorker);
+}
+
+/** Case-insensitive canonical-name index over units + upgrades. */
+function nameIndex(profile: PatchProfile): Map<string, string> {
+  const index = new Map<string, string>();
+  for (const name of Object.keys(profile.units)) {
+    index.set(name.toLowerCase(), name);
+  }
+  for (const name of Object.keys(profile.upgrades)) {
+    index.set(name.toLowerCase(), name);
+  }
+  return index;
+}
+
+export function actionForName(
+  profile: PatchProfile,
+  name: string,
+): BuildAction | null {
+  if (profile.upgrades[name]) return { kind: "research", name };
+  const def = profile.units[name];
+  if (!def) return null;
+  if (def.morphFrom) return { kind: "morph", name };
+  if (def.isStructure) return { kind: "build", name };
+  return { kind: "train", name };
+}
+
+export interface ResolvedActions {
+  actions: BuildAction[];
+  unknownNames: string[];
+}
+
+/** Reference steps (canonical names, in order) → executable actions. */
+export function actionsFromSteps(
+  profile: PatchProfile,
+  steps: string[],
+): ResolvedActions {
+  const index = nameIndex(profile);
+  const actions: BuildAction[] = [];
+  const unknownNames: string[] = [];
+  for (const raw of steps) {
+    const canonical = index.get(raw.trim().toLowerCase());
+    if (!canonical) {
+      unknownNames.push(raw);
+      continue;
+    }
+    if (isPolicyOwned(profile, canonical)) continue;
+    const action = actionForName(profile, canonical);
+    if (action) actions.push(action);
+  }
+  return { actions, unknownNames };
+}
+
+/**
+ * A saved custom build's signature ([{unit, count, beforeSec}]) →
+ * ordered actions. Signatures store icon-resolved lowercase names and
+ * earliest-seen times; sorting by time recovers the build order.
+ */
+export function actionsFromSignature(
+  profile: PatchProfile,
+  signature: BuildSignatureItem[],
+): ResolvedActions {
+  const expanded: string[] = [];
+  const sorted = [...signature].sort((a, b) => a.beforeSec - b.beforeSec);
+  for (const item of sorted) {
+    const count = Math.max(1, Math.min(20, Math.round(item.count)));
+    for (let i = 0; i < count; i += 1) expanded.push(item.unit);
+  }
+  return actionsFromSteps(profile, expanded);
+}
+
+/* ------------------------------------------------------------------ */
+/* Adaptation                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Match each reference action to its step in a sim by (name, nth
+ * occurrence). Policy-driven steps (workers, supply) never collide
+ * because policy-owned names are excluded from action lists.
+ */
+function stepLookup(
+  sim: SimResult,
+): Map<string, { supply: number; startSec: number }[]> {
+  const byName = new Map<string, { supply: number; startSec: number }[]>();
+  for (const step of sim.steps) {
+    const list = byName.get(step.name) ?? [];
+    list.push({ supply: step.supply, startSec: step.startSec });
+    byName.set(step.name, list);
+  }
+  return byName;
+}
+
+function buildComparison(
+  actions: BuildAction[],
+  baselineSim: SimResult,
+  adaptedSim: SimResult,
+): ComparisonRow[] {
+  const baseline = stepLookup(baselineSim);
+  const adapted = stepLookup(adaptedSim);
+  const seen = new Map<string, number>();
+  const rows: ComparisonRow[] = [];
+  for (const action of actions) {
+    const nth = seen.get(action.name) ?? 0;
+    seen.set(action.name, nth + 1);
+    const before = baseline.get(action.name)?.[nth];
+    const after = adapted.get(action.name)?.[nth];
+    rows.push({
+      name: action.name,
+      kind: action.kind,
+      baselineSupply: before?.supply,
+      baselineStartSec: before?.startSec,
+      adaptedSupply: after?.supply,
+      adaptedStartSec: after?.startSec,
+      deltaSec:
+        before && after
+          ? Math.round((after.startSec - before.startSec) * 10) / 10
+          : undefined,
+    });
+  }
+  return rows;
+}
+
+/**
+ * Re-time `actions` under the target patch, simulate the original
+ * patch alongside for the position-by-position comparison, and
+ * evaluate the adapted build against the selected threats.
+ */
+export function adaptBuild(request: AdaptRequest): AdaptResult {
+  const baselineProfile = resolveProfile(request.baselineProfileId);
+  const targetProfile = resolveProfile(request.profileId);
+  const opts = {
+    horizonSec: request.horizonSec,
+    policies: request.policies,
+  };
+  const baselineSim = simulate(
+    request.actions,
+    baselineProfile,
+    request.race,
+    opts,
+  );
+  const sim = simulate(request.actions, targetProfile, request.race, opts);
+  const safety = evaluateSafety(
+    sim,
+    targetProfile,
+    request.threats,
+    request.safety,
+  );
+  return {
+    referenceName: request.referenceName,
+    referenceId: request.referenceId,
+    actions: request.actions,
+    baselineProfileId: request.baselineProfileId,
+    profileId: request.profileId,
+    sim,
+    baselineSim,
+    safety,
+    comparison: buildComparison(request.actions, baselineSim, sim),
+    unknownNames: [],
+  };
+}

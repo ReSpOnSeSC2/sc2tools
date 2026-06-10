@@ -9,7 +9,7 @@ import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { formatBuildTime } from "@/lib/build-events";
 import type {
-  OptimizeResult,
+  AdaptResult,
   SafetyVerdict,
   ThreatSafetyReport,
 } from "@/lib/optimizer/types";
@@ -76,7 +76,7 @@ function ThreatReport({ report }: { report: ThreatSafetyReport }) {
   );
 }
 
-export function SafetyReportView({ result }: { result: OptimizeResult | null }) {
+export function SafetyReportView({ result }: { result: AdaptResult | null }) {
   if (!result || result.safety.threats.length === 0) return null;
   return (
     <Card

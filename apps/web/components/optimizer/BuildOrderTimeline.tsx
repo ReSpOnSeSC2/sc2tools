@@ -10,31 +10,20 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { buildOrderText, displaySteps } from "@/lib/optimizer/sim/format";
-import type { OptimizeResult } from "@/lib/optimizer/types";
-import type { OptimizerStatus } from "@/lib/optimizer/worker/useOptimizerWorker";
+import type { AdaptResult } from "@/lib/optimizer/types";
 
 export function BuildOrderTimeline({
   result,
-  status,
 }: {
-  result: OptimizeResult | null;
-  status: OptimizerStatus;
+  result: AdaptResult | null;
 }) {
   const [copied, setCopied] = useState(false);
   if (!result) {
     return (
       <Card title="Build order">
         <EmptyState
-          title={
-            status === "running"
-              ? "Searching for the safest build…"
-              : "No build yet"
-          }
-          sub={
-            status === "running"
-              ? "Best-so-far appears when the search finishes (or when you stop it)."
-              : "Pick your matchup, mark what you scouted, and run the optimizer."
-          }
+          title="No build yet"
+          sub="Pick a reference build on the left and re-time it for the selected patch."
         />
       </Card>
     );
@@ -51,7 +40,7 @@ export function BuildOrderTimeline({
   };
   return (
     <Card
-      title="Build order"
+      title={`Build order: ${result.referenceName} on ${result.profileId}`}
       right={
         <Button
           variant="ghost"
@@ -84,9 +73,13 @@ export function BuildOrderTimeline({
           ))}
         </ol>
         <p className="mt-3 text-caption text-text-dim">
-          Worker production is continuous (not listed). Steps stamped with the
-          supply you&apos;ll be at when each starts. {result.sim.finalWorkers}{" "}
-          workers by the end of the plan.
+          Worker production is continuous and supply is auto-timed for this
+          patch (pylons/depots/overlords shown where the sim placed them).
+          Steps stamped with the supply you&apos;ll be at when each starts.{" "}
+          {result.sim.finalWorkers} workers by the end of the plan.
+          {result.unknownNames.length > 0
+            ? ` Skipped unrecognized entries: ${result.unknownNames.join(", ")}.`
+            : ""}
         </p>
       </div>
     </Card>
