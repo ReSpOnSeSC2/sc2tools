@@ -1,0 +1,313 @@
+{
+  "version": 2,
+  "note": "Protoss reference openers. Step lists are canonical orders; the sim re-times them per patch. Warpgate research follows the 5.0.16 meta (after gateway #2) except dedicated rush builds. definitionIds map each build to the /definitions catalog entries it covers.",
+  "builds": [
+    {
+      "id": "p-gate-expand",
+      "name": "1-Gate Expand",
+      "race": "Protoss",
+      "matchups": ["PvZ", "PvT", "PvP"],
+      "description": "The standard macro opening: gateway, gas, expand, cybernetics into adept, warpgate after the second gateway, robo behind it.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Stalker", "ShieldBattery", "Gateway", "WarpGateResearch", "Stalker", "Pylon", "RoboticsFacility", "Stalker", "Observer", "Pylon", "Immortal"],
+      "definitionIds": ["protoss-standard-expand", "pvp-1-gate-expand", "pvp-strange-s-1-gate-expand"]
+    },
+    {
+      "id": "p-2gate-expand",
+      "name": "2-Gate Expand",
+      "race": "Protoss",
+      "matchups": ["PvP", "PvZ"],
+      "description": "Two gateways before the nexus for early defense, then expand and tech.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Gateway", "Pylon", "Zealot", "CyberneticsCore", "Nexus", "Adept", "Stalker", "WarpGateResearch", "Pylon", "Assimilator", "Stalker", "ShieldBattery", "Pylon", "RoboticsFacility", "Stalker"],
+      "definitionIds": ["pvp-2-gate-expand"]
+    },
+    {
+      "id": "p-stargate-oracle",
+      "name": "Stargate Oracle",
+      "race": "Protoss",
+      "matchups": ["PvZ", "PvT"],
+      "description": "Double-gas stargate opener: oracles for harass, expansion behind it, warpgate after the second gateway.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Pylon", "Oracle", "ShieldBattery", "Oracle", "Pylon", "Gateway", "WarpGateResearch", "Stalker", "Stalker"],
+      "definitionIds": ["protoss-stargate-opener", "pvp-standard-stargate-opener", "pvt-stargate-opener", "pvz-stargate-opener"]
+    },
+    {
+      "id": "p-robo-expand",
+      "name": "Robo Expand",
+      "race": "Protoss",
+      "matchups": ["PvP", "PvT"],
+      "description": "Gate expand into fast robotics: observer for scouting, immortal pressure, warpgate after the second gateway.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "RoboticsFacility", "Pylon", "Stalker", "Observer", "Gateway", "WarpGateResearch", "Gateway", "Pylon", "Immortal", "Stalker", "Pylon", "Stalker"],
+      "definitionIds": ["protoss-robo-opener", "pvt-robo-first", "pvz-robo-opener"]
+    },
+    {
+      "id": "p-proxy-warpgate-rush",
+      "name": "Proxy Warpgate Rush",
+      "race": "Protoss",
+      "matchups": ["PvP"],
+      "description": "Patch-native all-in: one gateway researches warpgate immediately (it stays occupied on purpose) while gateways two and three build, then all three transform and warp zealots/adepts onto proxy pylons on the opponent's side of the map. Map positioning isn't simulated - the proxy pylons appear as regular pylon steps.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Assimilator", "WarpGateResearch", "Gateway", "Gateway", "Pylon", "Pylon", "TransformWarpgate", "TransformWarpgate", "TransformWarpgate", "Zealot", "Zealot", "Adept", "Zealot", "Zealot", "Adept"],
+      "definitionIds": [],
+      "native": "5.0.16"
+    },
+    {
+      "id": "p-4gate",
+      "name": "4 Gate Rush",
+      "race": "Protoss",
+      "matchups": ["PvP", "PvT", "PvZ"],
+      "description": "One-base four-gateway all-in: warpgate as soon as the second gateway lets you, constant gateway units, hit before the opponent's tech pays off.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Pylon", "Adept", "Gateway", "WarpGateResearch", "Gateway", "Gateway", "Pylon", "Adept", "Stalker", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker", "Stalker"],
+      "definitionIds": ["protoss-4-gate-rush"]
+    },
+    {
+      "id": "p-1gate-nexus-4gate",
+      "name": "1 Gate Nexus into 4 Gate",
+      "race": "Protoss",
+      "matchups": ["PvP"],
+      "description": "Expand first, then swing all-in: three extra gateways and continuous warp-ins off two bases.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Gateway", "WarpGateResearch", "Gateway", "Gateway", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker", "Stalker"],
+      "definitionIds": ["pvp-1-gate-nexus-into-4-gate"]
+    },
+    {
+      "id": "p-proxy-4gate",
+      "name": "Proxy 4 Gate",
+      "race": "Protoss",
+      "matchups": ["PvP", "PvT", "PvZ"],
+      "description": "Gateways hidden on the map (positioning not simulated), warpgate rushed, reinforcements warp at the proxy.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Gateway", "WarpGateResearch", "Gateway", "Gateway", "Pylon", "Pylon", "Adept", "Stalker", "Pylon", "Stalker", "Stalker", "Stalker"],
+      "definitionIds": ["protoss-proxy-4-gate"]
+    },
+    {
+      "id": "p-proxy-2gate",
+      "name": "Proxy 2 Gate",
+      "race": "Protoss",
+      "matchups": ["PvP"],
+      "description": "Two proxied gateways with constant zealots from the opponent's doorstep.",
+      "steps": ["Pylon", "Gateway", "Gateway", "Pylon", "Zealot", "Zealot", "Pylon", "Zealot", "Zealot", "Zealot", "Zealot"],
+      "definitionIds": ["pvp-proxy-2-gate"]
+    },
+    {
+      "id": "p-blink-allin",
+      "name": "Blink All-In",
+      "race": "Protoss",
+      "matchups": ["PvP", "PvT", "PvZ"],
+      "description": "Twilight blink off 3-4 gateways without a fast third; mass stalkers jump the opponent's front.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Stalker", "TwilightCouncil", "Gateway", "WarpGateResearch", "BlinkTech", "Gateway", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker", "Stalker"],
+      "definitionIds": ["protoss-blink-all-in", "pvz-blink-stalker-all-in-2-base"]
+    },
+    {
+      "id": "p-7gate-blink",
+      "name": "7 Gate Blink All-in",
+      "race": "Protoss",
+      "matchups": ["PvT"],
+      "description": "Two-base blink with gateways added to seven before the push.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Stalker", "Assimilator", "TwilightCouncil", "Gateway", "WarpGateResearch", "BlinkTech", "Assimilator", "Gateway", "Gateway", "Pylon", "Gateway", "Gateway", "Gateway", "Stalker", "Stalker", "Pylon", "Stalker", "Stalker", "Stalker", "Pylon", "Stalker"],
+      "definitionIds": ["pvt-7-gate-blink-all-in"]
+    },
+    {
+      "id": "p-cannon-rush",
+      "name": "Cannon Rush",
+      "race": "Protoss",
+      "matchups": ["PvP", "PvT", "PvZ"],
+      "description": "Forge first, cannons walked into the opponent's base (proxy placement not simulated), gateway and economy behind it.",
+      "steps": ["Pylon", "Forge", "Pylon", "PhotonCannon", "PhotonCannon", "Gateway", "PhotonCannon", "Nexus", "Assimilator", "CyberneticsCore", "Adept", "Pylon", "Stalker"],
+      "definitionIds": ["protoss-cannon-rush"]
+    },
+    {
+      "id": "p-chargelot-allin",
+      "name": "Chargelot All-in",
+      "race": "Protoss",
+      "matchups": ["PvT", "PvZ"],
+      "description": "Charge plus seven-to-eight gateways and a flood of zealots, gas cut after charge starts.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Gateway", "WarpGateResearch", "TwilightCouncil", "Charge", "Gateway", "Gateway", "Pylon", "Gateway", "Gateway", "Gateway", "Gateway", "Zealot", "Zealot", "Pylon", "Zealot", "Zealot", "Zealot", "Zealot", "Pylon", "Zealot", "Zealot"],
+      "definitionIds": ["protoss-chargelot-all-in", "pvt-8-gate-charge-all-in"]
+    },
+    {
+      "id": "p-dt-rush",
+      "name": "DT Rush",
+      "race": "Protoss",
+      "matchups": ["PvP", "PvT", "PvZ"],
+      "description": "Hidden dark shrine off one or two bases; the first DTs hit before mobile detection.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Stalker", "TwilightCouncil", "Gateway", "WarpGateResearch", "DarkShrine", "Pylon", "Stalker", "DarkTemplar", "DarkTemplar", "Pylon", "DarkTemplar"],
+      "definitionIds": ["protoss-dt-rush", "pvz-dt-opener"]
+    },
+    {
+      "id": "p-dt-drop",
+      "name": "DT Drop into Archon Drop",
+      "race": "Protoss",
+      "matchups": ["PvT", "PvZ"],
+      "description": "Dark shrine plus robo: warp prism delivers DTs, later high templar pairs for archon drops.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "TwilightCouncil", "Gateway", "WarpGateResearch", "DarkShrine", "RoboticsFacility", "Pylon", "Stalker", "WarpPrism", "DarkTemplar", "DarkTemplar", "Pylon", "TemplarArchives", "HighTemplar", "HighTemplar"],
+      "definitionIds": ["pvt-dt-drop", "pvz-dt-drop-into-archon-drop", "pvz-archon-drop"]
+    },
+    {
+      "id": "p-glaive-adept",
+      "name": "Glaive Adept Timing",
+      "race": "Protoss",
+      "matchups": ["PvP", "PvT", "PvZ"],
+      "description": "Twilight glaives with constant adepts; the timing hits when glaives finish.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "TwilightCouncil", "Gateway", "WarpGateResearch", "ResonatingGlaives", "Adept", "Pylon", "Adept", "Adept", "Gateway", "Adept", "Pylon", "Adept", "Adept"],
+      "definitionIds": ["protoss-glaive-adept-timing", "pvp-adept-glaives", "pvz-adept-glaives-no-robo"]
+    },
+    {
+      "id": "p-glaive-adept-robo",
+      "name": "Adept Glaives (Robo)",
+      "race": "Protoss",
+      "matchups": ["PvZ"],
+      "description": "Glaive adepts with a robo for observers/immortals behind the poke.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "RoboticsFacility", "TwilightCouncil", "Gateway", "WarpGateResearch", "ResonatingGlaives", "Observer", "Pylon", "Adept", "Adept", "Immortal", "Pylon", "Adept", "Adept"],
+      "definitionIds": ["pvz-adept-glaives-robo", "pvp-robo-into-glaives"]
+    },
+    {
+      "id": "p-stargate-glaives",
+      "name": "Stargate into Glaives",
+      "race": "Protoss",
+      "matchups": ["PvT", "PvZ"],
+      "description": "Oracle opener flowing into twilight glaives and an adept-heavy mid game.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "ResonatingGlaives", "Adept", "Pylon", "Adept", "Adept", "Pylon", "Adept"],
+      "definitionIds": ["pvt-stargate-into-glaives", "pvz-stargate-into-glaives"]
+    },
+    {
+      "id": "p-stargate-blink",
+      "name": "Stargate into Blink",
+      "race": "Protoss",
+      "matchups": ["PvT"],
+      "description": "Oracle opener into twilight blink stalkers.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "BlinkTech", "Stalker", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker"],
+      "definitionIds": ["pvt-stargate-into-blink"]
+    },
+    {
+      "id": "p-stargate-charge",
+      "name": "Stargate into Charge",
+      "race": "Protoss",
+      "matchups": ["PvT", "PvZ"],
+      "description": "Oracle opener into charge zealot macro off three gateways.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "Charge", "Gateway", "Zealot", "Pylon", "Zealot", "Zealot", "Pylon", "Zealot", "Zealot"],
+      "definitionIds": ["pvt-stargate-into-charge", "pvt-3-gate-charge-opener", "pvt-standard-charge-macro", "pvz-standard-charge-macro"]
+    },
+    {
+      "id": "p-stargate-robo",
+      "name": "Stargate into Robo",
+      "race": "Protoss",
+      "matchups": ["PvZ", "PvT"],
+      "description": "Stargate harass into robo for immortals and detection.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Oracle", "Pylon", "RoboticsFacility", "Gateway", "WarpGateResearch", "Observer", "Immortal", "Pylon", "Stalker", "Immortal"],
+      "definitionIds": ["pvz-stargate-into-robo", "pvt-phoenix-into-robo"]
+    },
+    {
+      "id": "p-phoenix",
+      "name": "Phoenix Opener",
+      "race": "Protoss",
+      "matchups": ["PvP", "PvT"],
+      "description": "Stargate phoenixes for lifts and scouting, gateway units behind.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Phoenix", "Phoenix", "Pylon", "Gateway", "WarpGateResearch", "Phoenix", "Stalker", "Pylon", "Stalker", "Phoenix"],
+      "definitionIds": ["pvp-phoenix-style", "pvt-phoenix-opener"]
+    },
+    {
+      "id": "p-2stargate-phoenix",
+      "name": "2 Stargate Phoenix",
+      "race": "Protoss",
+      "matchups": ["PvZ"],
+      "description": "Two (or three) stargates of phoenixes to own the air and pick queens.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Stargate", "Phoenix", "Phoenix", "Pylon", "Phoenix", "Phoenix", "Gateway", "WarpGateResearch", "Pylon", "Phoenix", "Phoenix", "Pylon", "Phoenix"],
+      "definitionIds": ["pvz-2-stargate-phoenix", "pvz-3-stargate-phoenix"]
+    },
+    {
+      "id": "p-2stargate-voidray",
+      "name": "2 Stargate Void Ray",
+      "race": "Protoss",
+      "matchups": ["PvZ"],
+      "description": "Double stargate void rays against ground-heavy zerg.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Stargate", "VoidRay", "Pylon", "VoidRay", "Gateway", "WarpGateResearch", "Pylon", "VoidRay", "VoidRay", "Pylon", "VoidRay"],
+      "definitionIds": ["pvz-2-stargate-void-ray"]
+    },
+    {
+      "id": "p-proxy-robo",
+      "name": "Proxy Robo",
+      "race": "Protoss",
+      "matchups": ["PvP"],
+      "description": "Robo hidden on the map (positioning not simulated) for surprise immortal pressure.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Pylon", "RoboticsFacility", "Adept", "Assimilator", "Immortal", "Gateway", "WarpGateResearch", "Pylon", "Immortal", "Stalker", "Pylon", "Immortal"],
+      "definitionIds": ["protoss-proxy-robo-opener", "pvp-proxy-robo-opener"]
+    },
+    {
+      "id": "p-proxy-stargate",
+      "name": "Proxy Stargate",
+      "race": "Protoss",
+      "matchups": ["PvT", "PvP"],
+      "description": "Hidden stargate (positioning not simulated): oracles or void rays arrive before anti-air exists.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Stargate", "Adept", "Oracle", "Pylon", "Oracle", "Gateway", "WarpGateResearch", "Stalker", "Pylon", "VoidRay"],
+      "definitionIds": ["protoss-proxy-stargate-opener", "pvt-proxy-void-ray-stargate"]
+    },
+    {
+      "id": "p-blink-robo",
+      "name": "Blink Stalkers (Robo first)",
+      "race": "Protoss",
+      "matchups": ["PvP", "PvT", "PvZ"],
+      "description": "Robo for observers first, then twilight blink and stalker-heavy gateway play.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "RoboticsFacility", "Gateway", "WarpGateResearch", "Observer", "TwilightCouncil", "Stalker", "BlinkTech", "Pylon", "Stalker", "Stalker", "Gateway", "Pylon", "Stalker", "Stalker", "Immortal"],
+      "definitionIds": ["pvp-rail-s-blink-stalker-robo-1st", "pvp-blink-stalker-style", "pvt-2-gate-blink-fast-3rd-nexus", "pvt-3-gate-blink-macro", "pvt-4-gate-blink", "pvz-standard-blink-macro"]
+    },
+    {
+      "id": "p-4stalker-oracle",
+      "name": "4 Stalker Oracle into DT",
+      "race": "Protoss",
+      "matchups": ["PvP"],
+      "description": "Early stalker pressure with an oracle, flowing into dark templar.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Stalker", "Stargate", "Stalker", "Oracle", "Stalker", "Pylon", "Stalker", "Gateway", "WarpGateResearch", "TwilightCouncil", "DarkShrine", "Pylon", "DarkTemplar", "DarkTemplar"],
+      "definitionIds": ["pvp-4-stalker-oracle-into-dt", "pvp-alphastar-4-adept-oracle", "pvz-alphastar-style-oracle-robo"]
+    },
+    {
+      "id": "p-templar-2base",
+      "name": "2 Base Templar",
+      "race": "Protoss",
+      "matchups": ["PvT"],
+      "description": "Two-base templar tech with storm-ready high templar before a delayed third.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "Gateway", "WarpGateResearch", "TwilightCouncil", "Stalker", "Assimilator", "Pylon", "TemplarArchives", "Gateway", "Stalker", "HighTemplar", "Pylon", "HighTemplar", "HighTemplar"],
+      "definitionIds": ["pvt-2-base-templar-reactive-delayed-3rd"]
+    },
+    {
+      "id": "p-7gate-glaive-immortal",
+      "name": "7 Gate Glaive/Immortal All-in",
+      "race": "Protoss",
+      "matchups": ["PvZ"],
+      "description": "Two-base glaive adept + immortal all-in off seven gateways.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "RoboticsFacility", "TwilightCouncil", "Gateway", "WarpGateResearch", "ResonatingGlaives", "Assimilator", "Gateway", "Gateway", "Pylon", "Gateway", "Gateway", "Immortal", "Adept", "Adept", "Pylon", "Immortal", "Adept", "Adept", "Pylon", "Adept"],
+      "definitionIds": ["pvz-7-gate-glaive-immortal-all-in"]
+    },
+    {
+      "id": "p-carrier-rush",
+      "name": "Carrier Rush",
+      "race": "Protoss",
+      "matchups": ["PvZ"],
+      "description": "Fast fleet beacon and carriers off two bases.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Pylon", "FleetBeacon", "Gateway", "WarpGateResearch", "Carrier", "Pylon", "Carrier", "Stalker", "Pylon", "Carrier"],
+      "definitionIds": ["pvz-carrier-rush"]
+    },
+    {
+      "id": "p-tempest-rush",
+      "name": "Tempest Rush",
+      "race": "Protoss",
+      "matchups": ["PvZ"],
+      "description": "Fleet beacon into tempests to siege from range.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Assimilator", "CyberneticsCore", "Pylon", "Nexus", "Stargate", "Adept", "Pylon", "FleetBeacon", "Gateway", "WarpGateResearch", "Tempest", "Pylon", "Tempest", "Stalker", "Pylon", "Tempest"],
+      "definitionIds": ["pvz-tempest-rush"]
+    },
+    {
+      "id": "p-disruptor-drop",
+      "name": "Disruptor Drop",
+      "race": "Protoss",
+      "matchups": ["PvZ"],
+      "description": "Robo bay disruptors delivered by warp prism.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "RoboticsFacility", "Gateway", "WarpGateResearch", "RoboticsBay", "Stalker", "WarpPrism", "Pylon", "Disruptor", "Stalker", "Pylon", "Disruptor"],
+      "definitionIds": ["pvz-rail-s-disruptor-drop"]
+    },
+    {
+      "id": "p-macro-cia",
+      "name": "Standard Macro (CIA)",
+      "race": "Protoss",
+      "matchups": ["PvZ", "PvT", "PvP"],
+      "description": "Full macro line: gate expand, robo, third nexus, upgrades flowing.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "Gateway", "WarpGateResearch", "Stalker", "ShieldBattery", "Pylon", "RoboticsFacility", "Stalker", "Observer", "Pylon", "Nexus", "Forge", "Immortal", "ProtossGroundWeaponsLevel1", "Gateway", "Pylon", "Immortal"],
+      "definitionIds": ["protoss-standard-macro-cia"]
+    }
+  ]
+}

@@ -378,7 +378,7 @@ export interface SafetyOptions {
 /* Build adaptation                                                    */
 /* ------------------------------------------------------------------ */
 
-/** A known-good 12-worker opener shipped with the app. */
+/** A known-good opener shipped with the app. */
 export interface ReferenceBuild {
   id: string;
   name: string;
@@ -386,8 +386,20 @@ export interface ReferenceBuild {
   /** Matchup labels this opener is played in ("PvZ", "TvT", …). */
   matchups: string[];
   description: string;
-  /** Ordered building/unit/upgrade names (no workers, no supply). */
+  /** Ordered building/unit/upgrade names (no workers). */
   steps: string[];
+  /**
+   * Patch the build was designed for. Absent = 12-worker baseline
+   * (adapted with a before/after comparison); present = patch-native
+   * (e.g. a 5.0.16 warpgate rush) — no baseline comparison shown.
+   */
+  native?: string;
+  /**
+   * Slugs of /definitions catalog entries this opener covers, so the
+   * detection catalog and the adaptable reference list stay in sync
+   * (enforced by a coverage test).
+   */
+  definitionIds?: string[];
 }
 
 /** One step's timing on the old patch vs the adapted patch. */

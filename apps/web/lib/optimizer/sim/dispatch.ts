@@ -229,20 +229,29 @@ function dispatchAddon(
   name: string,
   def: UnitDef,
 ): DispatchOutcome {
-  const parent = pickProducer(state.producers, def, state.time);
+  // Pick the addon-FREE parent that frees up soonest — a barracks
+  // that already has a reactor must not block a tech lab meant for
+  // the second barracks.
+  let parent: { producer: Producer; startAt: number } | null = null;
+  for (const producer of state.producers) {
+    if (!def.builtFrom.includes(producer.name) || producer.addon) continue;
+    const startAt = Math.max(
+      state.time,
+      producer.readyAt,
+      producer.busyUntil,
+    );
+    if (!parent || startAt < parent.startAt) parent = { producer, startAt };
+  }
   if (!parent) {
     const anyBuilding = def.builtFrom.some(
       (b) => (state.inProgress.get(b) ?? 0) > 0,
     );
     return anyBuilding
       ? { status: "wait", blockedOn: "producer" }
-      : { status: "impossible", reason: `no ${def.builtFrom.join("/")}` };
-  }
-  if (parent.producer.addon) {
-    return {
-      status: "impossible",
-      reason: `${parent.producer.name} has addon`,
-    };
+      : {
+          status: "impossible",
+          reason: `no addon-free ${def.builtFrom.join("/")}`,
+        };
   }
   if (parent.startAt > state.time + EPSILON) {
     return { status: "wait", retryAt: parent.startAt, blockedOn: "producer" };

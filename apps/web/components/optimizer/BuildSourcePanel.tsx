@@ -35,6 +35,8 @@ export type BuildSource =
       id: string;
       name: string;
       steps: string[];
+      /** Patch the build was designed for (skips 12-worker baseline). */
+      native?: string;
     }
   | {
       type: "custom";
@@ -117,6 +119,7 @@ export function BuildSourcePanel({
         id: ref.id,
         name: ref.name,
         steps: ref.steps,
+        native: ref.native,
       });
     }
     for (const build of customBuilds) {
@@ -126,6 +129,19 @@ export function BuildSourcePanel({
   }, [references, customBuilds]);
 
   const selectedSource = sources.get(selected) ?? null;
+
+  // Current-matchup builds first, then the rest alphabetically — with
+  // every /definitions opener covered, the list is long.
+  const sortedReferences = useMemo(() => {
+    return [...references].sort((a, b) => {
+      const aIn = a.matchups.includes(matchup) ? 0 : 1;
+      const bIn = b.matchups.includes(matchup) ? 0 : 1;
+      return aIn - bIn || a.name.localeCompare(b.name);
+    });
+  }, [references, matchup]);
+  const matchupCount = references.filter((r) =>
+    r.matchups.includes(matchup),
+  ).length;
 
   const handleAdaptAll = async () => {
     if (bulkState.running || customBuilds.length === 0) return;
@@ -171,11 +187,21 @@ export function BuildSourcePanel({
     <Card title="Reference build (12-worker)">
       <div className="space-y-4 p-4">
         <div className="space-y-2">
-          <div className="text-caption font-medium text-text">
-            Standard openers
+          <div className="flex items-baseline justify-between gap-2">
+            <div className="text-caption font-medium text-text">
+              Standard openers
+            </div>
+            <span className="text-caption text-text-dim">
+              {references.length} builds · {matchupCount} for {matchup} ·
+              covers the full definitions catalog
+            </span>
           </div>
-          <ul className="space-y-1.5" role="radiogroup" aria-label="Standard openers">
-            {references.map((ref) => {
+          <ul
+            className="max-h-[420px] space-y-1.5 overflow-y-auto pr-1"
+            role="radiogroup"
+            aria-label="Standard openers"
+          >
+            {sortedReferences.map((ref) => {
               const key = `standard:${ref.id}`;
               const isSelected = selected === key;
               const playedInMatchup = ref.matchups.includes(matchup);
@@ -206,6 +232,11 @@ export function BuildSourcePanel({
                           {ref.matchups.join(" · ")}
                         </Badge>
                       )}
+                      {ref.native ? (
+                        <Badge variant="accent" size="sm">
+                          {ref.native}-native
+                        </Badge>
+                      ) : null}
                     </div>
                     <p className="mt-0.5 text-caption text-text-muted">
                       {ref.description}

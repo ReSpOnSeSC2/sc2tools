@@ -126,6 +126,20 @@ function completeStructure(
     if (parent) {
       parent.addon = task.name.endsWith("Reactor") ? "reactor" : "techlab";
     }
+    // The addon is also a producer in its own right — tech labs run
+    // research (Stimpack at the BarracksTechLab) independently of the
+    // parent's production queue.
+    state.producers.push({
+      id: state.nextId++,
+      name: task.name,
+      readyAt: state.time,
+      busyUntil: 0,
+      reactorBusyUntil: 0,
+      addon: null,
+      isWarpgate: false,
+      chronoUntil: 0,
+      baseId: null,
+    });
     return;
   }
   if (def?.isGasBuilding) {

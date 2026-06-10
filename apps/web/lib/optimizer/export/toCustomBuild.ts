@@ -43,6 +43,9 @@ function describeSafety(result: AdaptResult): string {
 }
 
 function describeShifts(result: AdaptResult): string {
+  if (result.baselineProfileId === result.profileId) {
+    return "(patch-native build — no baseline comparison)";
+  }
   const rows = result.comparison.filter((r) => r.deltaSec !== undefined);
   if (rows.length === 0) return "(no comparable steps)";
   return rows
