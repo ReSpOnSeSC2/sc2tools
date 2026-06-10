@@ -403,7 +403,7 @@ function buildAdaptationNotes(
     );
     if (speedPct > 0) {
       notes.push(
-        `On this patch, finished warpgate research makes gateways produce ${speedPct}% faster, and transforming to a warpgate costs ${cost.minerals}/${cost.gas} per gateway — transforming everything is no longer automatic. Keep home gateways producing; transform only where warp-ins beat the queue.`,
+        `On this patch, finished warpgate research makes gateways produce ${speedPct}% faster, and transforming to a warpgate costs ${cost.minerals}/${cost.gas} per gateway — transforming everything is no longer automatic. Keep gateways producing; transform when you want to get aggressive or quickly need an extra round of units, then change them to warpgates.`,
       );
     }
   }

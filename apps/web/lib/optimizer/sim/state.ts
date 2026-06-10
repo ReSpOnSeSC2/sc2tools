@@ -276,9 +276,12 @@ export function recordStep(
   kind: SimResult["steps"][number]["kind"],
   name: string,
   doneAt: number,
+  /** Pre-step supply when the dispatch already mutated supplyUsed
+   *  (zerg structures consume their drone before the step records). */
+  supplyAtStart?: number,
 ): void {
   state.steps.push({
-    supply: Math.floor(state.supplyUsed),
+    supply: Math.floor(supplyAtStart ?? state.supplyUsed),
     name,
     kind,
     startSec: round2(state.time),
