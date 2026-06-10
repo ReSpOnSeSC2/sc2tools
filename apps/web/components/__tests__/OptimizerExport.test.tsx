@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 /**
- * Export wiring test: the optimizer's "save to my builds" flow must
- * hit the same PUT /v1/custom-builds/:slug path manual builds use,
- * with an API-schema-valid payload. Clerk and the API client are
- * mocked; the OptimizeResult is produced by the real engine.
+ * Export wiring test: the build adapter's "save to my builds" flow
+ * must hit the same PUT /v1/custom-builds/:slug path manual builds
+ * use, with an API-schema-valid payload. Clerk and the API client are
+ * mocked; the AdaptResult comes from the real engine.
  */
 
 const apiCallMock = vi.fn();
@@ -22,11 +22,15 @@ vi.mock("@clerk/nextjs", () => ({
 }));
 
 import { ToastProvider } from "@/components/ui/Toast";
+import {
+  actionsFromSteps,
+  adaptBuild,
+  referenceBuilds,
+} from "@/lib/optimizer/adapt/adapt";
 import { resolveProfile } from "@/lib/optimizer/patch/profiles";
-import { evaluateCandidate } from "@/lib/optimizer/search/optimize";
 import { defaultPolicies } from "@/lib/optimizer/sim/engine";
 import { threatCatalog } from "@/lib/optimizer/threats/store";
-import type { BuildAction, OptimizeResult } from "@/lib/optimizer/types";
+import type { AdaptResult } from "@/lib/optimizer/types";
 import { ExportToBuildsButton } from "../optimizer/ExportToBuildsButton";
 
 afterEach(() => {
@@ -34,38 +38,23 @@ afterEach(() => {
   apiCallMock.mockReset();
 });
 
-function makeResult(): OptimizeResult {
+function makeResult(): AdaptResult {
   const profile = resolveProfile("5.0.16");
   const eightPool = threatCatalog(null).find((t) => t.id === "z-8pool")!;
-  const actions: BuildAction[] = [
-    { kind: "build", name: "Pylon" },
-    { kind: "build", name: "Gateway" },
-    { kind: "train", name: "Zealot" },
-    { kind: "build", name: "Nexus" },
-  ];
-  const candidate = evaluateCandidate(actions, profile, {
+  const reference = referenceBuilds().find((b) => b.id === "p-gate-expand")!;
+  const { actions } = actionsFromSteps(profile, reference.steps);
+  return adaptBuild({
+    baselineProfileId: "lotv-base",
     profileId: "5.0.16",
     race: "Protoss",
-    vsRace: "Zerg",
-    objective: { id: "earliest-safe-expansion", atSec: 360 },
+    actions,
+    referenceName: reference.name,
+    referenceId: reference.id,
     threats: [{ threat: eightPool, probability: 0.8 }],
     policies: defaultPolicies(),
     safety: { hasWall: true, allowWorkerPull: true },
-    seed: 1,
-    budget: { maxGenerations: 1, maxMillis: 1000 },
-    horizonSec: 300,
+    horizonSec: 480,
   });
-  return {
-    actions,
-    sim: candidate.sim,
-    safety: candidate.safety,
-    score: candidate.score,
-    generations: 1,
-    evaluations: 1,
-    seed: 1,
-    objective: { id: "earliest-safe-expansion", atSec: 360 },
-    profileId: "5.0.16",
-  };
 }
 
 describe("ExportToBuildsButton", () => {
@@ -80,7 +69,7 @@ describe("ExportToBuildsButton", () => {
     fireEvent.click(screen.getByRole("button", { name: /save to my builds/i }));
     const nameInput = await screen.findByLabelText(/name/i);
     fireEvent.change(nameInput, {
-      target: { value: "PvZ safe expand vs 8-pool" },
+      target: { value: "PvZ gate expand re-timed" },
     });
     fireEvent.click(screen.getByRole("button", { name: /^save build$/i }));
 
@@ -90,7 +79,7 @@ describe("ExportToBuildsButton", () => {
       string,
       { method: string; body: string },
     ];
-    expect(path).toBe("/v1/custom-builds/pvz-safe-expand-vs-8-pool");
+    expect(path).toBe("/v1/custom-builds/pvz-gate-expand-re-timed");
     expect(init.method).toBe("PUT");
     const payload = JSON.parse(init.body) as {
       slug: string;
@@ -107,6 +96,7 @@ describe("ExportToBuildsButton", () => {
     expect(payload.perspective).toBe("you");
     expect(payload.signature.length).toBeGreaterThan(0);
     expect(payload.notes).toContain("Build order:");
+    expect(payload.notes).toContain("Timing shifts");
   });
 
   it("renders nothing without a result", () => {

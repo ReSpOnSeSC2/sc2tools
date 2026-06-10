@@ -151,6 +151,26 @@ describe("simulate — zerg basics", () => {
   });
 });
 
+describe("auto-supply headroom", () => {
+  it("does not snowball pylons as non-producer structures pile up", () => {
+    // Lots of structures, only one real producer (the gateway):
+    // headroom must track producers, not pylons/forges/assimilators.
+    const actions: BuildAction[] = [
+      act("build", "Pylon"),
+      act("build", "Gateway"),
+      act("build", "Assimilator"),
+      act("build", "Forge"),
+      act("build", "Nexus"),
+      act("build", "Assimilator"),
+    ];
+    const result = simulate(actions, profile, "Protoss", opts({ horizonSec: 400 }));
+    const freeSupply = result.finalSupplyCap - result.finalSupplyUsed;
+    expect(freeSupply).toBeLessThanOrEqual(16);
+    const pylons = result.steps.filter((s) => s.name === "Pylon").length;
+    expect(pylons).toBeLessThanOrEqual(8);
+  });
+});
+
 describe("simulate — terran basics", () => {
   const TERRAN_OPENING: BuildAction[] = [
     act("build", "SupplyDepot"),

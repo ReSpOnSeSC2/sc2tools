@@ -1,50 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { defaultPolicies } from "../sim/engine";
-import { evaluateCandidate } from "../search/optimize";
+import {
+  actionsFromSteps,
+  adaptBuild,
+  referenceBuilds,
+} from "../adapt/adapt";
 import { resolveProfile } from "../patch/profiles";
+import { defaultPolicies } from "../sim/engine";
 import { threatCatalog } from "../threats/store";
 import {
   CUSTOM_BUILD_PUT_PATH,
   toCustomBuildPayload,
 } from "../export/toCustomBuild";
-import type { BuildAction, OptimizeRequest, OptimizeResult } from "../types";
+import type { AdaptResult } from "../types";
 
 const profile = resolveProfile("5.0.16");
 const eightPool = threatCatalog(null).find((t) => t.id === "z-8pool")!;
 
-function makeResult(): OptimizeResult {
-  const actions: BuildAction[] = [
-    { kind: "build", name: "Pylon" },
-    { kind: "build", name: "Gateway" },
-    { kind: "build", name: "Forge" },
-    { kind: "train", name: "Zealot" },
-    { kind: "build", name: "PhotonCannon" },
-    { kind: "build", name: "Nexus" },
-  ];
-  const request: OptimizeRequest = {
+function makeResult(): AdaptResult {
+  const reference = referenceBuilds().find((b) => b.id === "p-gate-expand")!;
+  const { actions } = actionsFromSteps(profile, reference.steps);
+  return adaptBuild({
+    baselineProfileId: "lotv-base",
     profileId: "5.0.16",
     race: "Protoss",
-    vsRace: "Zerg",
-    objective: { id: "earliest-safe-expansion", atSec: 360 },
+    actions,
+    referenceName: reference.name,
+    referenceId: reference.id,
     threats: [{ threat: eightPool, probability: 0.8 }],
     policies: defaultPolicies(),
     safety: { hasWall: true, allowWorkerPull: true },
-    seed: 7,
-    budget: { maxGenerations: 1, maxMillis: 1000 },
-    horizonSec: 360,
-  };
-  const candidate = evaluateCandidate(actions, profile, request);
-  return {
-    actions,
-    sim: candidate.sim,
-    safety: candidate.safety,
-    score: candidate.score,
-    generations: 1,
-    evaluations: 1,
-    seed: 7,
-    objective: request.objective,
-    profileId: "5.0.16",
-  };
+    horizonSec: 480,
+  });
 }
 
 // Mirror of the constraints in apps/api/src/validation/customBuild.js.
@@ -53,9 +39,9 @@ const SLUG_PATTERN = /^[a-zA-Z0-9._-]+$/;
 describe("export to custom builds", () => {
   const result = makeResult();
   const payload = toCustomBuildPayload(result, {
-    name: "PvZ safe expand vs 8-pool",
+    name: "1-Gate Expand (5.0.16)",
     vsRace: "Zerg",
-    description: "Optimizer output",
+    description: "Adapted from the 12-worker standard",
   });
 
   it("produces an API-valid slug, name, and races", () => {
@@ -84,18 +70,17 @@ describe("export to custom builds", () => {
   it("excludes workers and merges repeat units with earliest time", () => {
     const units = payload.signature.map((s) => s.unit);
     expect(units).not.toContain("probe");
-    // pylon appears multiple times in the sim (auto-supply) but the
-    // signature compresses to one entry with a count
-    const pylons = payload.signature.filter((s) => s.unit === "pylon");
-    expect(pylons).toHaveLength(1);
-    expect(pylons[0].count).toBeGreaterThanOrEqual(1);
+    const gateways = payload.signature.filter((s) => s.unit === "gateway");
+    expect(gateways).toHaveLength(1);
+    expect(gateways[0].count).toBeGreaterThanOrEqual(2);
   });
 
-  it("notes carry the build order, safety report, and provenance", () => {
+  it("notes carry the build order, timing shifts, and safety report", () => {
     expect(payload.notes).toContain("Build order:");
+    expect(payload.notes).toContain("Timing shifts vs lotv-base:");
     expect(payload.notes).toContain("Safety report:");
     expect(payload.notes).toContain("8-pool");
-    expect(payload.notes).toContain("Patch profile: 5.0.16");
+    expect(payload.notes).toContain('Adapted from "1-Gate Expand"');
     expect(payload.notes!.length).toBeLessThanOrEqual(8000);
   });
 

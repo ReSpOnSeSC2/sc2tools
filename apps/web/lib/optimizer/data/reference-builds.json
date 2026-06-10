@@ -1,0 +1,285 @@
+{
+  "version": 1,
+  "note": "Standard 12-worker (pre-5.0.16) ladder openers. Steps list buildings/units/upgrades INCLUDING supply at their 12-worker positions \u2014 only worker production and gas saturation are macro policies; supply steps get re-timed like everything else, with auto-supply covering any gaps the reference leaves.",
+  "builds": [
+    {
+      "id": "p-gate-expand",
+      "name": "1-Gate Expand",
+      "race": "Protoss",
+      "matchups": [
+        "PvZ",
+        "PvT",
+        "PvP"
+      ],
+      "description": "The standard protoss macro opening: gateway, gas, expand, cybernetics into adept + warpgate, then a second gas and gateway units behind a shield battery.",
+      "steps": [
+        "Pylon",
+        "Gateway",
+        "Assimilator",
+        "Nexus",
+        "Pylon",
+        "CyberneticsCore",
+        "Adept",
+        "WarpGateResearch",
+        "Assimilator",
+        "Pylon",
+        "Stalker",
+        "ShieldBattery",
+        "Gateway",
+        "Stalker",
+        "Pylon",
+        "RoboticsFacility",
+        "Stalker",
+        "Observer",
+        "Pylon",
+        "Immortal"
+      ]
+    },
+    {
+      "id": "p-stargate-oracle",
+      "name": "Stargate Oracle",
+      "race": "Protoss",
+      "matchups": [
+        "PvZ",
+        "PvT"
+      ],
+      "description": "Double-gas stargate opener: cybernetics into a fast stargate, oracles for harass, expansion behind it.",
+      "steps": [
+        "Pylon",
+        "Gateway",
+        "Assimilator",
+        "Assimilator",
+        "CyberneticsCore",
+        "Pylon",
+        "Nexus",
+        "Stargate",
+        "WarpGateResearch",
+        "Adept",
+        "Pylon",
+        "Oracle",
+        "ShieldBattery",
+        "Oracle",
+        "Pylon",
+        "Gateway",
+        "Stalker",
+        "Stalker"
+      ]
+    },
+    {
+      "id": "p-robo-expand",
+      "name": "Robo Expand",
+      "race": "Protoss",
+      "matchups": [
+        "PvP",
+        "PvT"
+      ],
+      "description": "Gate expand into fast robotics: observer for scouting/detection, immortal pressure, extra gateways for warp-in rounds.",
+      "steps": [
+        "Pylon",
+        "Gateway",
+        "Assimilator",
+        "Nexus",
+        "Pylon",
+        "CyberneticsCore",
+        "Adept",
+        "WarpGateResearch",
+        "Assimilator",
+        "RoboticsFacility",
+        "Pylon",
+        "Stalker",
+        "Observer",
+        "Gateway",
+        "Gateway",
+        "Pylon",
+        "Immortal",
+        "Stalker",
+        "Pylon",
+        "Stalker"
+      ]
+    },
+    {
+      "id": "t-reaper-111",
+      "name": "Reaper Expand 1-1-1",
+      "race": "Terran",
+      "matchups": [
+        "TvZ",
+        "TvT",
+        "TvP"
+      ],
+      "description": "The terran standard: reaper expand into factory and starport, one unit-producing structure of each kind with addons.",
+      "steps": [
+        "SupplyDepot",
+        "Barracks",
+        "Refinery",
+        "Reaper",
+        "OrbitalCommand",
+        "CommandCenter",
+        "SupplyDepot",
+        "Marine",
+        "Factory",
+        "Refinery",
+        "BarracksReactor",
+        "Marine",
+        "Marine",
+        "SupplyDepot",
+        "FactoryTechLab",
+        "Cyclone",
+        "Starport",
+        "Marine",
+        "Marine",
+        "SupplyDepot",
+        "Medivac"
+      ]
+    },
+    {
+      "id": "t-211-marine-drop",
+      "name": "2-1-1 Marine Drop",
+      "race": "Terran",
+      "matchups": [
+        "TvZ",
+        "TvP"
+      ],
+      "description": "Two barracks with reactor + tech lab, stim started, factory into starport for double medivac \u2014 the classic 16-marine drop timing.",
+      "steps": [
+        "SupplyDepot",
+        "Barracks",
+        "Refinery",
+        "Marine",
+        "OrbitalCommand",
+        "CommandCenter",
+        "SupplyDepot",
+        "Barracks",
+        "BarracksReactor",
+        "Marine",
+        "Marine",
+        "BarracksTechLab",
+        "Stimpack",
+        "SupplyDepot",
+        "Factory",
+        "Marine",
+        "Marine",
+        "SupplyDepot",
+        "Starport",
+        "Marine",
+        "Marine",
+        "Medivac",
+        "Medivac",
+        "CombatShield"
+      ]
+    },
+    {
+      "id": "t-1rax-gasless",
+      "name": "Gasless 1-Rax Expand",
+      "race": "Terran",
+      "matchups": [
+        "TvZ",
+        "TvT"
+      ],
+      "description": "Marine-first economic opening: fast second command center with a bunker for safety, gas and tech after.",
+      "steps": [
+        "SupplyDepot",
+        "Barracks",
+        "Marine",
+        "OrbitalCommand",
+        "CommandCenter",
+        "Marine",
+        "SupplyDepot",
+        "Bunker",
+        "Marine",
+        "Refinery",
+        "Barracks",
+        "Marine",
+        "SupplyDepot",
+        "Factory",
+        "BarracksReactor",
+        "Marine",
+        "Marine",
+        "EngineeringBay"
+      ]
+    },
+    {
+      "id": "z-hatch-first",
+      "name": "Hatch First",
+      "race": "Zerg",
+      "matchups": [
+        "ZvT",
+        "ZvP",
+        "ZvZ"
+      ],
+      "description": "The greedy standard: natural hatchery before pool, double queen, ling speed, third base behind queens.",
+      "steps": [
+        "Overlord",
+        "Hatchery",
+        "Extractor",
+        "SpawningPool",
+        "Overlord",
+        "Queen",
+        "Queen",
+        "Zergling",
+        "Zergling",
+        "MetabolicBoost",
+        "Overlord",
+        "Hatchery",
+        "Queen",
+        "Overlord",
+        "Zergling",
+        "Lair"
+      ]
+    },
+    {
+      "id": "z-pool-first",
+      "name": "Pool First Safe",
+      "race": "Zerg",
+      "matchups": [
+        "ZvZ",
+        "ZvP",
+        "ZvT"
+      ],
+      "description": "Pool before hatch: safe against early aggression, queen + lings before the natural, speed when gas allows.",
+      "steps": [
+        "SpawningPool",
+        "Extractor",
+        "Overlord",
+        "Hatchery",
+        "Queen",
+        "Zergling",
+        "Zergling",
+        "MetabolicBoost",
+        "Overlord",
+        "Queen",
+        "Zergling",
+        "Overlord",
+        "Queen"
+      ]
+    },
+    {
+      "id": "z-roach-warren",
+      "name": "Speedling into Roach Warren",
+      "race": "Zerg",
+      "matchups": [
+        "ZvZ",
+        "ZvP"
+      ],
+      "description": "Speedling opener that adds a roach warren for mid-game punch \u2014 holds early aggression then trades up into roaches.",
+      "steps": [
+        "SpawningPool",
+        "Extractor",
+        "Overlord",
+        "Hatchery",
+        "Queen",
+        "MetabolicBoost",
+        "Zergling",
+        "Zergling",
+        "Overlord",
+        "Queen",
+        "RoachWarren",
+        "Zergling",
+        "Overlord",
+        "Roach",
+        "Roach",
+        "Roach",
+        "Roach"
+      ]
+    }
+  ]
+}

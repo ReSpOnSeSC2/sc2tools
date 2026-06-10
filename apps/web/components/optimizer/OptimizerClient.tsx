@@ -1,22 +1,32 @@
 "use client";
 
 /**
- * Build-order optimizer page orchestrator.
+ * Build adapter page orchestrator.
  *
- * Left column: matchup/objective setup, threat selection driven by
- * scouting observations, run controls. Right column: the optimized
- * build order, per-threat safety report, and economy charts.
+ * Pick a proven 12-worker build order (a shipped standard opener or
+ * one of your saved custom builds), and the simulator re-times it for
+ * the selected balance patch: same buildings, same order, new supply
+ * stamps and timings, with a side-by-side comparison against the
+ * original patch and a safety report against the matchup's threats.
  *
- * The engine runs client-side in a Web Worker (lib/optimizer); no
- * server round-trips except the optional export to custom builds.
+ * Everything runs locally — the only server call is loading your
+ * custom builds and the optional export back into the library.
  */
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ToastProvider } from "@/components/ui/Toast";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
+import type { BuildSignatureItem } from "@/lib/build-events";
+import {
+  actionsFromSignature,
+  actionsFromSteps,
+  adaptBuild,
+  referenceBuildsForRace,
+} from "@/lib/optimizer/adapt/adapt";
 import {
   DEFAULT_PROFILE_ID,
   listProfiles,
+  resolveProfile,
 } from "@/lib/optimizer/patch/profiles";
 import {
   activeThreatSet,
@@ -32,29 +42,25 @@ import {
   type ThreatOverlay,
 } from "@/lib/optimizer/threats/store";
 import type {
-  ObjectiveSpec,
-  OptimizeRequest,
+  AdaptResult,
   ScoutingObservation,
   SimRace,
 } from "@/lib/optimizer/types";
-import { useOptimizerWorker } from "@/lib/optimizer/worker/useOptimizerWorker";
 import { BuildOrderTimeline } from "./BuildOrderTimeline";
+import { BuildSourcePanel, type BuildSource } from "./BuildSourcePanel";
+import { ComparisonView } from "./ComparisonView";
 import { EconomyCharts } from "./EconomyCharts";
 import { ExportToBuildsButton } from "./ExportToBuildsButton";
-import { RunControls } from "./RunControls";
 import { SafetyReportView } from "./SafetyReportView";
 import { SetupPanel } from "./SetupPanel";
 import { ThreatPanel } from "./ThreatPanel";
 
-const DEFAULT_BUDGET = { maxGenerations: 150, maxMillis: 8000 };
+/** Patch the shipped/user reference builds were designed on. */
+const BASELINE_PROFILE_ID = "lotv-base";
 
 export interface OptimizerSettings {
   race: SimRace;
   vsRace: SimRace;
-  objectiveId: ObjectiveSpec["id"];
-  objectiveAtSec: number;
-  /** Tech goal for the "reach a tech goal fast" objective. */
-  targetName: string;
   profileId: string;
   hasWall: boolean;
   allowWorkerPull: boolean;
@@ -63,9 +69,6 @@ export interface OptimizerSettings {
 const DEFAULT_SETTINGS: OptimizerSettings = {
   race: "Protoss",
   vsRace: "Zerg",
-  objectiveId: "balanced-development",
-  objectiveAtSec: 360,
-  targetName: "",
   profileId: DEFAULT_PROFILE_ID,
   hasWall: true,
   allowWorkerPull: true,
@@ -77,7 +80,6 @@ function isSettings(raw: unknown): raw is OptimizerSettings {
   return (
     typeof s.race === "string" &&
     typeof s.vsRace === "string" &&
-    typeof s.objectiveId === "string" &&
     typeof s.profileId === "string"
   );
 }
@@ -92,7 +94,7 @@ export function OptimizerClient() {
 
 function OptimizerInner() {
   const [settings, setSettings] = useLocalStorageState<OptimizerSettings>(
-    "optimizer.settings.v1",
+    "optimizer.settings.v2",
     DEFAULT_SETTINGS,
     isSettings,
   );
@@ -103,7 +105,8 @@ function OptimizerInner() {
   );
   const [observations, setObservations] = useState<ScoutingObservation[]>([]);
   const [pinnedThreatIds, setPinnedThreatIds] = useState<string[]>([]);
-  const worker = useOptimizerWorker();
+  const [result, setResult] = useState<AdaptResult | null>(null);
+  const [adaptError, setAdaptError] = useState<string | null>(null);
 
   const profiles = useMemo(() => listProfiles(), []);
   const catalog = useMemo(() => threatCatalog(overlay), [overlay]);
@@ -120,40 +123,47 @@ function OptimizerInner() {
       activeThreatSet(matchupThreats, assessments, new Set(pinnedThreatIds)),
     [matchupThreats, assessments, pinnedThreatIds],
   );
+  const references = useMemo(
+    () => referenceBuildsForRace(settings.race),
+    [settings.race],
+  );
 
-  const buildRequest = (): OptimizeRequest => {
-    const latestWave = activeThreats.reduce(
-      (max, { threat }) =>
-        Math.max(max, ...threat.waves.map((w) => w.timeSec)),
-      0,
-    );
-    const horizonSec = Math.max(
-      360,
-      latestWave + 60,
-      settings.objectiveAtSec + 30,
-    );
-    return {
-      profileId: settings.profileId,
-      race: settings.race,
-      vsRace: settings.vsRace,
-      objective: {
-        id: settings.objectiveId,
-        atSec: settings.objectiveAtSec,
-        targetName:
-          settings.objectiveId === "tech-rush-target" && settings.targetName
-            ? settings.targetName
-            : undefined,
-      },
-      threats: activeThreats,
-      policies: defaultPolicies(),
-      safety: {
-        hasWall: settings.hasWall,
-        allowWorkerPull: settings.allowWorkerPull,
-      },
-      seed: Math.floor(Math.random() * 2 ** 31),
-      budget: DEFAULT_BUDGET,
-      horizonSec,
-    };
+  const handleAdapt = (source: BuildSource) => {
+    setAdaptError(null);
+    try {
+      const profile = resolveProfile(settings.profileId);
+      const resolved =
+        source.type === "standard"
+          ? actionsFromSteps(profile, source.steps)
+          : actionsFromSignature(
+              profile,
+              source.signature as BuildSignatureItem[],
+            );
+      if (resolved.actions.length === 0) {
+        setAdaptError(
+          "That build has no adaptable steps (workers and supply are re-timed automatically — it needs structures, units, or upgrades).",
+        );
+        return;
+      }
+      const adapted = adaptBuild({
+        baselineProfileId: BASELINE_PROFILE_ID,
+        profileId: settings.profileId,
+        race: settings.race,
+        actions: resolved.actions,
+        referenceName: source.name,
+        referenceId: source.id,
+        threats: activeThreats,
+        policies: defaultPolicies(),
+        safety: {
+          hasWall: settings.hasWall,
+          allowWorkerPull: settings.allowWorkerPull,
+        },
+        horizonSec: 480,
+      });
+      setResult({ ...adapted, unknownNames: resolved.unknownNames });
+    } catch (err: unknown) {
+      setAdaptError(err instanceof Error ? err.message : String(err));
+    }
   };
 
   const updateSettings = (patch: Partial<OptimizerSettings>) => {
@@ -164,12 +174,13 @@ function OptimizerInner() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Patch-aware planning"
-        title="Build order optimizer"
+        title="Build adapter"
         description={
           <>
-            Search for the safest opening on the current balance patch given
-            what you scout. Safety margins are planning estimates from a
-            deterministic economy simulation — no positioning or micro.
+            Re-time your proven 12-worker build orders for the current balance
+            patch: same buildings, same order, new timings — computed by a
+            deterministic economy simulation, with a safety check against what
+            you scout.
           </>
         }
       />
@@ -179,6 +190,13 @@ function OptimizerInner() {
             settings={settings}
             profiles={profiles}
             onChange={updateSettings}
+          />
+          <BuildSourcePanel
+            race={settings.race}
+            vsRace={settings.vsRace}
+            references={references}
+            error={adaptError}
+            onAdapt={handleAdapt}
           />
           <ThreatPanel
             threats={matchupThreats}
@@ -191,26 +209,13 @@ function OptimizerInner() {
             onPinnedChange={setPinnedThreatIds}
             onOverlayChange={setOverlay}
           />
-          <RunControls
-            status={worker.status}
-            progress={worker.progress}
-            error={worker.error}
-            maxGenerations={DEFAULT_BUDGET.maxGenerations}
-            threatCount={activeThreats.length}
-            likelyCount={
-              assessments.filter(
-                (a) => a.active || pinnedThreatIds.includes(a.threatId),
-              ).length
-            }
-            onRun={() => worker.run(buildRequest())}
-            onCancel={worker.cancel}
-          />
         </div>
         <div className="space-y-6">
-          <BuildOrderTimeline result={worker.result} status={worker.status} />
-          <SafetyReportView result={worker.result} />
-          <EconomyCharts result={worker.result} />
-          <ExportToBuildsButton result={worker.result} vsRace={settings.vsRace} />
+          <BuildOrderTimeline result={result} />
+          <ComparisonView result={result} />
+          <SafetyReportView result={result} />
+          <EconomyCharts result={result} />
+          <ExportToBuildsButton result={result} vsRace={settings.vsRace} />
         </div>
       </div>
     </div>

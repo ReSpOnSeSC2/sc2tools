@@ -1,27 +1,19 @@
 "use client";
 
 /**
- * Matchup, objective, and patch-profile configuration for the
- * optimizer. Race pickers reuse the shared race tint chrome so the
- * matchup reads the same as everywhere else in the app.
+ * Matchup and patch configuration for the build adapter. Race pickers
+ * reuse the shared race tint chrome so the matchup reads the same as
+ * everywhere else in the app.
  */
 import { Check } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Field } from "@/components/ui/Field";
-import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Toggle } from "@/components/ui/Toggle";
 import { Icon } from "@/components/ui/Icon";
 import { raceTint } from "@/lib/race";
-import {
-  OBJECTIVES,
-  listTechTargets,
-} from "@/lib/optimizer/search/objectives";
-import { resolveProfile } from "@/lib/optimizer/patch/profiles";
 import type { ProfileSummary } from "@/lib/optimizer/patch/profiles";
 import type { SimRace } from "@/lib/optimizer/types";
-import { formatBuildTime, humanizeBuildName } from "@/lib/build-events";
-import { useMemo } from "react";
 import type { OptimizerSettings } from "./OptimizerClient";
 
 const SIM_RACES: SimRace[] = ["Protoss", "Terran", "Zerg"];
@@ -80,15 +72,6 @@ export function SetupPanel({
   profiles: ProfileSummary[];
   onChange: (patch: Partial<OptimizerSettings>) => void;
 }) {
-  const objective = OBJECTIVES.find((o) => o.id === settings.objectiveId);
-  const techTargets = useMemo(() => {
-    if (settings.objectiveId !== "tech-rush-target") return [];
-    try {
-      return listTechTargets(resolveProfile(settings.profileId), settings.race);
-    } catch {
-      return [];
-    }
-  }, [settings.objectiveId, settings.profileId, settings.race]);
   return (
     <Card title="Setup">
       <div className="space-y-4 p-4">
@@ -103,81 +86,7 @@ export function SetupPanel({
           onChange={(vsRace) => onChange({ vsRace })}
         />
         <Field
-          label="Objective"
-          hint={objective?.description}
-        >
-          <Select
-            value={settings.objectiveId}
-            onChange={(e) =>
-              onChange({
-                objectiveId: e.target.value as OptimizerSettings["objectiveId"],
-              })
-            }
-          >
-            {OBJECTIVES.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        {settings.objectiveId === "tech-rush-target" ? (
-          <Field
-            label="Tech goal"
-            hint="The optimizer builds the prerequisite chain automatically and races to finish this — while keeping workers flowing and threats held."
-          >
-            <Select
-              value={settings.targetName}
-              onChange={(e) => onChange({ targetName: e.target.value })}
-            >
-              <option value="">Pick a milestone…</option>
-              {(["structure", "upgrade", "unit"] as const).map((kind) => (
-                <optgroup
-                  key={kind}
-                  label={
-                    kind === "structure"
-                      ? "Tech structures"
-                      : kind === "upgrade"
-                        ? "Upgrades"
-                        : "Units"
-                  }
-                >
-                  {techTargets
-                    .filter((t) => t.kind === kind)
-                    .map((t) => (
-                      <option key={t.name} value={t.name}>
-                        {humanizeBuildName(t.name)} (tier {t.tier})
-                      </option>
-                    ))}
-                </optgroup>
-              ))}
-            </Select>
-          </Field>
-        ) : null}
-        {objective?.usesAtSec ? (
-          <Field
-            label="Target time (seconds)"
-            hint={`Evaluated at ${formatBuildTime(settings.objectiveAtSec)}`}
-          >
-            <Input
-              type="number"
-              min={120}
-              max={900}
-              step={10}
-              value={settings.objectiveAtSec}
-              onChange={(e) => {
-                const next = Number(e.target.value);
-                if (Number.isFinite(next)) {
-                  onChange({
-                    objectiveAtSec: Math.min(900, Math.max(120, next)),
-                  });
-                }
-              }}
-            />
-          </Field>
-        ) : null}
-        <Field
-          label="Balance patch"
+          label="Adapt to patch"
           hint="All costs, timings, and economy constants come from this profile. New patches are added as data files."
         >
           <Select

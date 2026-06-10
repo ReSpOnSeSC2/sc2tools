@@ -19,9 +19,9 @@ import {
 import { Card } from "@/components/ui/Card";
 import { formatBuildTime } from "@/lib/build-events";
 import { useChartTheme, useReducedMotion } from "@/lib/useChartTheme";
-import type { OptimizeResult } from "@/lib/optimizer/types";
+import type { AdaptResult } from "@/lib/optimizer/types";
 
-export function EconomyCharts({ result }: { result: OptimizeResult | null }) {
+export function EconomyCharts({ result }: { result: AdaptResult | null }) {
   const theme = useChartTheme();
   const reducedMotion = useReducedMotion();
   if (!result) return null;

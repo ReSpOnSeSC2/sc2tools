@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Save the optimized build into the user's custom builds library —
+ * Save the adapted build into the user's custom builds library —
  * the exact PUT /v1/custom-builds/:slug path manual builds use, so
  * the saved build shows up in /builds, syncs across devices, and
  * feeds the replay classifier.
@@ -23,13 +23,13 @@ import {
   defaultBuildName,
   toCustomBuildPayload,
 } from "@/lib/optimizer/export/toCustomBuild";
-import type { OptimizeResult, SimRace } from "@/lib/optimizer/types";
+import type { AdaptResult, SimRace } from "@/lib/optimizer/types";
 
 export function ExportToBuildsButton({
   result,
   vsRace,
 }: {
-  result: OptimizeResult | null;
+  result: AdaptResult | null;
   vsRace: SimRace;
 }) {
   const { getToken } = useAuth();
@@ -46,7 +46,7 @@ export function ExportToBuildsButton({
   const openModal = () => {
     setName(defaultBuildName(result));
     setDescription(
-      `Optimized for ${result.objective.id.replace(/-/g, " ")} on patch ${result.profileId}.`,
+      `"${result.referenceName}" re-timed from ${result.baselineProfileId} to patch ${result.profileId}.`,
     );
     setSavedSlug(null);
     setOpen(true);
@@ -88,7 +88,7 @@ export function ExportToBuildsButton({
     <Card title="Save this build">
       <div className="flex flex-wrap items-center justify-between gap-3 p-4">
         <p className="max-w-md text-caption text-text-muted">
-          Add the optimized opener to your custom builds library so it syncs
+          Add the re-timed opener to your custom builds library so it syncs
           across devices and your replays auto-classify against it.
         </p>
         <SignedIn>
