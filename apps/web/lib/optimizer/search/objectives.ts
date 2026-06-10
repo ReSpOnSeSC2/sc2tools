@@ -86,10 +86,13 @@ export function objectiveScore(
 ): number {
   const horizonWorkers = workersAt(sim, profile, sim.endTime);
   // Mild, capped — strong float penalties teach the search to dump
-  // money into useless structures instead of banking it.
+  // money into useless structures instead of banking it. Gas counts
+  // too: without it the search happily over-builds gas collectors
+  // and banks thousands of vespene it never spends.
   const floatPenalty = Math.min(
-    30,
-    Math.max(0, sim.finalMinerals - 600) * 0.02,
+    60,
+    Math.max(0, sim.finalMinerals - 600) * 0.02 +
+      Math.max(0, sim.finalGas - 300) * 0.03,
   );
   switch (objective.id) {
     case "earliest-safe-expansion": {

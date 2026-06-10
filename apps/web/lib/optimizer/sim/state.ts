@@ -80,6 +80,25 @@ export interface SimState {
   queenRoundRobin: number;
   lastSampleAt: number;
   policies: MacroPolicies;
+  /** Structure names that can train units (drives supply headroom). */
+  producerNames: Set<string>;
+}
+
+/**
+ * Structures that train units — town halls, gateways, barracks, etc.
+ * Pylons/assimilators/tech buildings are NOT producers; counting them
+ * toward supply headroom creates a feedback loop where every pylon
+ * raises the headroom that demands the next pylon.
+ */
+export function unitProducerNames(profile: PatchProfile): Set<string> {
+  const names = new Set<string>();
+  for (const def of Object.values(profile.units)) {
+    if (def.isStructure) continue;
+    for (const from of def.builtFrom) {
+      if (profile.units[from]?.isStructure) names.add(from);
+    }
+  }
+  return names;
 }
 
 export function bump(
@@ -131,6 +150,7 @@ export function makeState(
     queenRoundRobin: 0,
     lastSampleAt: -Infinity,
     policies,
+    producerNames: unitProducerNames(profile),
   };
   const thName = profile.starting.townHall[race];
   const th = profile.units[thName];

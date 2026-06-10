@@ -16,7 +16,8 @@ export function RunControls({
   progress,
   error,
   maxGenerations,
-  activeThreatCount,
+  threatCount,
+  likelyCount,
   onRun,
   onCancel,
 }: {
@@ -24,7 +25,10 @@ export function RunControls({
   progress: OptimizeProgress | null;
   error: string | null;
   maxGenerations: number;
-  activeThreatCount: number;
+  /** All enabled threats in the matchup (baseline constraints). */
+  threatCount: number;
+  /** Threats scouted-likely or pinned (high-weight constraints). */
+  likelyCount: number;
   onRun: () => void;
   onCancel: () => void;
 }) {
@@ -54,9 +58,11 @@ export function RunControls({
           ) : null}
         </div>
         <p className="text-caption text-text-dim">
-          {activeThreatCount === 0
-            ? "No active threats — the optimizer will purely chase the objective. Scout something or pin a threat to add safety constraints."
-            : `Defending against ${activeThreatCount} threat${activeThreatCount === 1 ? "" : "s"}.`}
+          {threatCount === 0
+            ? "No threats enabled for this matchup — the optimizer will purely chase the objective."
+            : likelyCount > 0
+              ? `Defending ${threatCount} matchup threat${threatCount === 1 ? "" : "s"} — ${likelyCount} scouted-likely or pinned (weighted heavily).`
+              : `Defending the ${threatCount}-threat matchup baseline at meta odds. Scout something to sharpen the weighting.`}
         </p>
         {running || progress ? (
           <div className="space-y-1.5">

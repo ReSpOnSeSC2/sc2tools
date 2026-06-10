@@ -328,7 +328,7 @@ function autoSupply(
   const effectiveCap = state.supplyCap + pending;
   if (effectiveCap >= profile.starting.maxSupply) return;
   const activeProducers = state.producers.filter(
-    (p) => p.readyAt <= state.time,
+    (p) => p.readyAt <= state.time && state.producerNames.has(p.name),
   ).length;
   let headroom = Math.max(
     2,

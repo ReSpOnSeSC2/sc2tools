@@ -186,7 +186,12 @@ function OptimizerInner() {
             progress={worker.progress}
             error={worker.error}
             maxGenerations={DEFAULT_BUDGET.maxGenerations}
-            activeThreatCount={activeThreats.length}
+            threatCount={activeThreats.length}
+            likelyCount={
+              assessments.filter(
+                (a) => a.active || pinnedThreatIds.includes(a.threatId),
+              ).length
+            }
             onRun={() => worker.run(buildRequest())}
             onCancel={worker.cancel}
           />

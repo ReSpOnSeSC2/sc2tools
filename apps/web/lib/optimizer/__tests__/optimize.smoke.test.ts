@@ -26,6 +26,39 @@ function request(overrides: Partial<OptimizeRequest> = {}): OptimizeRequest {
 
 describe("optimizer smoke", () => {
   it(
+    "unscouted baseline (all matchup threats at priors) still builds defense",
+    { timeout: 60_000 },
+    async () => {
+      const pvz = catalog.filter(
+        (t) => t.attackerRace === "Zerg" && t.vsDefender.includes("Protoss"),
+      );
+      const result = await optimize(
+        request({
+          threats: pvz.map((threat) => ({
+            threat,
+            probability: threat.priorProbability,
+          })),
+          budget: { maxGenerations: 25, maxMillis: 30_000 },
+          horizonSec: 420,
+        }),
+      );
+      // The reported degenerate output had zero combat capability
+      // until 5:56. With baseline threats the build must produce
+      // SOMETHING that fights before the early waves land.
+      const combatNames = Object.entries(result.sim.completionTimes)
+        .filter(([name]) => {
+          const def = resolveProfile("5.0.16").units[name];
+          return def?.combat && !def.isWorker &&
+            ((def.combat.dpsGround ?? 0) > 0 || (def.combat.dpsAir ?? 0) > 0);
+        })
+        .flatMap(([, times]) => times);
+      expect(combatNames.length).toBeGreaterThan(0);
+      expect(Math.min(...combatNames)).toBeLessThan(220);
+      expect(result.safety.overall).not.toBe("unsafe");
+    },
+  );
+
+  it(
     "converges on a safe expansion build vs 8-pool and reports honestly",
     { timeout: 60_000 },
     async () => {

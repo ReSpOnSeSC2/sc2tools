@@ -82,9 +82,15 @@ export function assessThreats(
 }
 
 /**
- * Threats the optimizer should defend against, with probabilities.
- * `forced` ids (user manually pinned a threat) are always included
- * at no less than the active threshold.
+ * Threats the optimizer defends against, with probabilities.
+ *
+ * EVERY enabled threat in the matchup participates — an unscouted
+ * game still has to respect the baseline meta, weighted by each
+ * threat's prior. Without this the empty-scouting case has zero
+ * safety constraints and the search degenerates into a pure-economy
+ * build with no defense at all. Scouting raises (or, for
+ * contradicted threats, collapses) the weights; `forced` ids (user
+ * pinned a threat) are floored at the active threshold.
  */
 export function activeThreatSet(
   threats: Threat[],
@@ -92,15 +98,12 @@ export function activeThreatSet(
   forced: ReadonlySet<string>,
 ): { threat: Threat; probability: number }[] {
   const byId = new Map(assessments.map((a) => [a.threatId, a]));
-  const out: { threat: Threat; probability: number }[] = [];
-  for (const threat of threats) {
+  return threats.map((threat) => {
     const assessment = byId.get(threat.id);
-    const probability = assessment?.probability ?? threat.priorProbability;
+    let probability = assessment?.probability ?? threat.priorProbability;
     if (forced.has(threat.id)) {
-      out.push({ threat, probability: Math.max(probability, ACTIVE_THRESHOLD) });
-    } else if (assessment?.active) {
-      out.push({ threat, probability });
+      probability = Math.max(probability, ACTIVE_THRESHOLD);
     }
-  }
-  return out;
+    return { threat, probability };
+  });
 }
