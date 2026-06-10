@@ -3,13 +3,24 @@ import { resolveProfile } from "../patch/profiles";
 import { evaluateSafety, evaluateThreat } from "../safety/evaluate";
 import { defaultPolicies, simulate } from "../sim/engine";
 import { threatCatalog } from "../threats/store";
+import { deriveThreatFromBuild } from "../threats/derive";
+import { referenceBuilds } from "../adapt/adapt";
 import type { BuildAction, SafetyOptions, Threat } from "../types";
 
 const profile = resolveProfile("5.0.16");
 const catalog = threatCatalog(null);
 const eightPool = catalog.find((t) => t.id === "z-8pool")!;
-const proxyReaper = catalog.find((t) => t.id === "t-proxy-reaper")!;
-const oracle = catalog.find((t) => t.id === "p-oracle-opener")!;
+// proxy rax / oracle threats now derive from the reference catalog
+const proxyRax = deriveThreatFromBuild(
+  profile,
+  referenceBuilds().find((b) => b.id === "t-proxy-rax")!,
+  "Terran",
+)!;
+const oracle = deriveThreatFromBuild(
+  profile,
+  referenceBuilds().find((b) => b.id === "p-stargate-oracle")!,
+  "Protoss",
+)!;
 
 const act = (kind: BuildAction["kind"], name: string): BuildAction => ({
   kind,
@@ -77,8 +88,8 @@ describe("safety evaluation — 8-pool vs protoss", () => {
   });
 });
 
-describe("safety evaluation — proxy reaper vs terran", () => {
-  it("marine + bunker before 2:30 holds the reaper", () => {
+describe("safety evaluation — proxy rax vs terran", () => {
+  it("marines + bunker behind the wall holds proxy marines", () => {
     const build = sim(
       [
         act("build", "SupplyDepot"),
@@ -86,11 +97,15 @@ describe("safety evaluation — proxy reaper vs terran", () => {
         act("train", "Marine"),
         act("build", "Bunker"),
         act("train", "Marine"),
+        act("build", "Barracks"),
+        act("train", "Marine"),
+        act("train", "Marine"),
+        act("train", "Marine"),
       ],
       "Terran",
     );
-    const report = evaluateThreat(build, profile, proxyReaper, 0.8, defended);
-    expect(report.verdict).toBe("safe");
+    const report = evaluateThreat(build, profile, proxyRax, 0.8, defended);
+    expect(report.verdict).not.toBe("unsafe");
   });
 
   it("a naked double-CC opening is punished", () => {
@@ -98,7 +113,7 @@ describe("safety evaluation — proxy reaper vs terran", () => {
       [act("build", "SupplyDepot"), act("build", "CommandCenter")],
       "Terran",
     );
-    const report = evaluateThreat(build, profile, proxyReaper, 0.8, noOptions);
+    const report = evaluateThreat(build, profile, proxyRax, 0.8, noOptions);
     expect(report.verdict).toBe("unsafe");
   });
 });

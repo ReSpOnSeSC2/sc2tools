@@ -27,10 +27,7 @@ import {
   listProfiles,
   resolveProfile,
 } from "@/lib/optimizer/patch/profiles";
-import {
-  activeThreatSet,
-  assessThreats,
-} from "@/lib/optimizer/scouting/infer";
+import { deriveThreatsForMatchup } from "@/lib/optimizer/threats/derive";
 import { defaultPolicies } from "@/lib/optimizer/sim/engine";
 import {
   THREAT_OVERLAY_STORAGE_KEY,
@@ -40,11 +37,7 @@ import {
   threatsForMatchup,
   type ThreatOverlay,
 } from "@/lib/optimizer/threats/store";
-import type {
-  AdaptResult,
-  ScoutingObservation,
-  SimRace,
-} from "@/lib/optimizer/types";
+import type { AdaptResult, SimRace, Threat } from "@/lib/optimizer/types";
 import { BuildOrderTimeline } from "./BuildOrderTimeline";
 import { BuildSourcePanel, type BuildSource } from "./BuildSourcePanel";
 import { ComparisonView } from "./ComparisonView";
@@ -102,25 +95,37 @@ function OptimizerInner() {
     emptyOverlay(),
     isThreatOverlay,
   );
-  const [observations, setObservations] = useState<ScoutingObservation[]>([]);
-  const [pinnedThreatIds, setPinnedThreatIds] = useState<string[]>([]);
+  const [disabledThreatIds, setDisabledThreatIds] = useState<string[]>([]);
   const [result, setResult] = useState<AdaptResult | null>(null);
   const [adaptError, setAdaptError] = useState<string | null>(null);
 
   const profiles = useMemo(() => listProfiles(), []);
   const catalog = useMemo(() => threatCatalog(overlay), [overlay]);
-  const matchupThreats = useMemo(
-    () => threatsForMatchup(catalog, settings.race, settings.vsRace),
-    [catalog, settings.race, settings.vsRace],
-  );
-  const assessments = useMemo(
-    () => assessThreats(matchupThreats, observations),
-    [matchupThreats, observations],
-  );
+  const matchupThreats = useMemo(() => {
+    // Derived threats: every catalog opener the opponent can play,
+    // simulated on the selected patch. Curated extras (8-pool etc.)
+    // cover cheeses that aren't catalog openers.
+    const curated = threatsForMatchup(catalog, settings.race, settings.vsRace);
+    let derived: Threat[] = [];
+    try {
+      derived = deriveThreatsForMatchup(
+        settings.profileId,
+        settings.race,
+        settings.vsRace,
+      );
+    } catch {
+      // a broken user profile edit shouldn't take down the page
+    }
+    return [...curated, ...derived].sort(
+      (a, b) => a.earliestArrivalSec - b.earliestArrivalSec,
+    );
+  }, [catalog, settings.race, settings.vsRace, settings.profileId]);
   const activeThreats = useMemo(
     () =>
-      activeThreatSet(matchupThreats, assessments, new Set(pinnedThreatIds)),
-    [matchupThreats, assessments, pinnedThreatIds],
+      matchupThreats
+        .filter((t) => !disabledThreatIds.includes(t.id))
+        .map((threat) => ({ threat, probability: 1 })),
+    [matchupThreats, disabledThreatIds],
   );
   const references = useMemo(
     () => referenceBuildsForRace(settings.race),
@@ -208,13 +213,10 @@ function OptimizerInner() {
           />
           <ThreatPanel
             threats={matchupThreats}
-            assessments={assessments}
-            observations={observations}
-            pinnedThreatIds={pinnedThreatIds}
+            disabledThreatIds={disabledThreatIds}
             overlay={overlay}
             defenderRace={settings.race}
-            onObservationsChange={setObservations}
-            onPinnedChange={setPinnedThreatIds}
+            onDisabledChange={setDisabledThreatIds}
             onOverlayChange={setOverlay}
           />
         </div>

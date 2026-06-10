@@ -71,6 +71,27 @@ describe("definitions catalog coverage", () => {
   });
 });
 
+describe("protoss gas timing convention", () => {
+  it("second assimilator waits for the cybernetics core outside PvP", () => {
+    // PTR meta guidance: standard protoss is gas -> core -> second
+    // gas; double gas before core is a PvP-specific pattern.
+    for (const build of referenceBuilds()) {
+      if (build.race !== "Protoss") continue;
+      if (build.matchups.length === 1 && build.matchups[0] === "PvP") continue;
+      const gasIndices = build.steps
+        .map((s, i) => (s === "Assimilator" ? i : -1))
+        .filter((i) => i >= 0);
+      if (gasIndices.length < 2) continue;
+      const coreIndex = build.steps.indexOf("CyberneticsCore");
+      if (coreIndex < 0) continue;
+      expect(
+        gasIndices[1],
+        `${build.id}: second assimilator before the core`,
+      ).toBeGreaterThan(coreIndex);
+    }
+  });
+});
+
 describe("every reference build adapts cleanly to 5.0.16", () => {
   for (const build of referenceBuilds()) {
     it(`${build.id} resolves and simulates with no dead steps`, () => {
