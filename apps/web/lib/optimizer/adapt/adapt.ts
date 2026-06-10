@@ -15,7 +15,9 @@ import {
   type BuildRuleLike,
   type BuildSignatureItem,
 } from "@/lib/build-events";
-import referenceData from "../data/reference-builds.json";
+import protossReferences from "../data/reference-builds/protoss.json";
+import terranReferences from "../data/reference-builds/terran.json";
+import zergReferences from "../data/reference-builds/zerg.json";
 import { resolveProfile } from "../patch/profiles";
 import { evaluateSafety } from "../safety/evaluate";
 import { simulate } from "../sim/engine";
@@ -31,7 +33,11 @@ import type {
 } from "../types";
 
 export function referenceBuilds(): ReferenceBuild[] {
-  return (referenceData.builds as ReferenceBuild[]).map((b) => ({ ...b }));
+  return [
+    ...(protossReferences.builds as ReferenceBuild[]),
+    ...(terranReferences.builds as ReferenceBuild[]),
+    ...(zergReferences.builds as ReferenceBuild[]),
+  ].map((b) => ({ ...b }));
 }
 
 export function referenceBuildsForRace(race: SimRace): ReferenceBuild[] {
@@ -97,6 +103,9 @@ export interface ResolvedActions {
   unknownNames: string[];
 }
 
+/** Step tokens with special meaning beyond unit/upgrade names. */
+const TRANSFORM_TOKENS = new Set(["transformwarpgate", "warpgatetransform"]);
+
 /** Reference steps (canonical names, in order) → executable actions. */
 export function actionsFromSteps(
   profile: PatchProfile,
@@ -106,7 +115,16 @@ export function actionsFromSteps(
   const actions: BuildAction[] = [];
   const unknownNames: string[] = [];
   for (const raw of steps) {
-    const canonical = index.get(raw.trim().toLowerCase());
+    const lowered = raw.trim().toLowerCase();
+    if (TRANSFORM_TOKENS.has(lowered)) {
+      actions.push({ kind: "transform-warpgate", name: "Gateway" });
+      continue;
+    }
+    // v3 rules name events with the agent's verb prefixes
+    // ("BuildVoidRay", "ResearchBlink") — strip and retry.
+    const canonical =
+      index.get(lowered) ??
+      index.get(lowered.replace(/^(build|train|research|morph|upgrade)/, ""));
     if (!canonical) {
       unknownNames.push(raw);
       continue;
@@ -137,11 +155,63 @@ export function actionsFromSignature(
 }
 
 /**
+ * Inject missing tech ancestors before their dependents. Rules-based
+ * builds are sparse milestone lists ("Dark Shrine by 5:24, 3
+ * Stargates by 10:00") — the chain of pylons/gateways/cybers that
+ * makes them buildable is implied, so the adapter fills it in.
+ */
+export function injectPrerequisites(
+  profile: PatchProfile,
+  actions: BuildAction[],
+): BuildAction[] {
+  const out: BuildAction[] = [];
+  const present = new Set<string>();
+  const ensure = (name: string, depth: number) => {
+    if (depth > 8 || present.has(name)) return;
+    const def = profile.units[name] ?? null;
+    const upgrade = profile.upgrades[name] ?? null;
+    const requires = def?.requires ?? upgrade?.requires ?? [];
+    const producers = (
+      def
+        ? def.builtFrom.filter(
+            (b) => profile.units[b]?.isStructure,
+          )
+        : (upgrade?.researchedAt ?? [])
+    ).slice(0, 1);
+    if (def?.morphFrom) producers.push(def.morphFrom);
+    for (const entry of [...requires, ...producers]) {
+      const alternatives = entry.split("|");
+      if (alternatives.some((alt) => present.has(alt))) continue;
+      const ancestor = alternatives[0];
+      const ancestorDef = profile.units[ancestor];
+      if (!ancestorDef?.isStructure) continue;
+      ensure(ancestor, depth + 1);
+      if (!present.has(ancestor)) {
+        const action = actionForName(profile, ancestor);
+        if (action) {
+          out.push(action);
+          present.add(ancestor);
+        }
+      }
+    }
+  };
+  for (const action of actions) {
+    if (action.kind !== "chrono" && action.kind !== "transform-warpgate") {
+      ensure(action.name, 0);
+    }
+    out.push(action);
+    present.add(action.name);
+  }
+  return out;
+}
+
+/**
  * A saved custom build, whichever shape it carries: the legacy
  * `signature` array, or v3 `rules` (the modern editor's format) via
  * the same compression the community timeline uses. Builds saved
  * through the rules editor have no signature — without this fallback
- * most of a user's library is invisible to the adapter.
+ * most of a user's library is invisible to the adapter. Rules builds
+ * additionally get their implied prerequisite chains injected.
  */
 export function actionsFromCustomBuild(
   profile: PatchProfile,
@@ -154,7 +224,14 @@ export function actionsFromCustomBuild(
     return actionsFromSignature(profile, build.signature);
   }
   if (build.rules && build.rules.length > 0) {
-    return actionsFromSignature(profile, rulesToSignature(build.rules));
+    const resolved = actionsFromSignature(
+      profile,
+      rulesToSignature(build.rules),
+    );
+    return {
+      actions: injectPrerequisites(profile, resolved.actions),
+      unknownNames: resolved.unknownNames,
+    };
   }
   return { actions: [], unknownNames: [] };
 }
@@ -240,7 +317,7 @@ function buildAdaptationNotes(
     );
     if (trainsUnits && labsAtStart <= 1) {
       notes.push(
-        `${humanize(step.name)} occupies your only ${humanize(labNames[0])} from ${mmss(step.startSec)} to ${mmss(step.doneSec)} — no units from it during the research. Add a second ${humanize(labNames[0])} first or research later.`,
+        `${humanize(step.name)} occupies your only ${humanize(labNames[0])} from ${mmss(step.startSec)} to ${mmss(step.doneSec)} — no units from it during the research. On this patch most builds wait until the second ${humanize(labNames[0])} finishes before starting it (units first, so you don't die to an attack); dedicated rush builds are the exception.`,
       );
     }
   }

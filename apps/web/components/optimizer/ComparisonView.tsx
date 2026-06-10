@@ -36,6 +36,8 @@ function deltaBadge(deltaSec: number | undefined) {
 
 export function ComparisonView({ result }: { result: AdaptResult | null }) {
   if (!result || result.comparison.length === 0) return null;
+  // Patch-native builds have no older incarnation to compare against.
+  if (result.baselineProfileId === result.profileId) return null;
   return (
     <Card title={`Timing shifts: ${result.baselineProfileId} → ${result.profileId}`}>
       <div className="p-4">

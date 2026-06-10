@@ -72,12 +72,42 @@ describe("action resolution", () => {
         { type: "not_before", name: "Nexus", time_lt: 100 },
       ],
     });
+    // pylon injected as the gateway's implied prerequisite
     expect(actions.map((a) => a.name)).toEqual([
+      "Pylon",
       "Gateway",
       "CyberneticsCore",
       "Zealot",
       "Zealot",
     ]);
+  });
+
+  it("strips agent verb prefixes from rules names (BuildVoidRay)", () => {
+    // the v3 editor stores the agent's event names — the user's
+    // "DT into 3 Stargate Void Ray" build failed to resolve entirely
+    const { actions, unknownNames } = actionsFromCustomBuild(target, {
+      rules: [
+        { type: "before", name: "BuildDarkShrine", time_lt: 324 },
+        { type: "count_min", name: "BuildStargate", time_lt: 600, count: 3 },
+        { type: "count_min", name: "BuildVoidRay", time_lt: 700, count: 2 },
+      ],
+    });
+    expect(unknownNames).toEqual([]);
+    const names = actions.map((a) => a.name);
+    // milestones resolved with verb prefixes stripped…
+    expect(names.filter((n) => n === "Stargate")).toHaveLength(3);
+    expect(names.filter((n) => n === "VoidRay")).toHaveLength(2);
+    // …and the implied tech chain injected before its dependents
+    expect(names.indexOf("Gateway")).toBeGreaterThanOrEqual(0);
+    expect(names.indexOf("CyberneticsCore")).toBeLessThan(
+      names.indexOf("DarkShrine"),
+    );
+    expect(names.indexOf("TwilightCouncil")).toBeLessThan(
+      names.indexOf("DarkShrine"),
+    );
+    expect(names.indexOf("CyberneticsCore")).toBeLessThan(
+      names.indexOf("Stargate"),
+    );
   });
 
   it("maps legacy 'warpgate' names from saved builds to Gateway", () => {
@@ -191,14 +221,37 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
   });
 
   it("warns when warpgate research occupies the only gateway (PTR)", () => {
-    // p-robo-expand researches warpgate while one gateway exists —
-    // on 5.0.16 that's 100s of lost production worth a loud note.
-    const result = adapt("p-robo-expand", "Protoss");
+    // The proxy warpgate rush researches off its only gateway ON
+    // PURPOSE — the note fires so the trade is explicit. Standard
+    // builds were reordered to research after gate #2 and stay quiet.
+    const reorderedStandard = adapt("p-robo-expand", "Protoss");
     expect(
-      result.adaptationNotes.some((n) =>
+      reorderedStandard.adaptationNotes.some((n) =>
+        n.includes("occupies your only Gateway"),
+      ),
+    ).toBe(false);
+    const rushRef = referenceBuilds().find(
+      (b) => b.id === "p-proxy-warpgate-rush",
+    )!;
+    const rushActions = actionsFromSteps(target, rushRef.steps).actions;
+    const rush = adaptBuild({
+      baselineProfileId: "5.0.16",
+      profileId: "5.0.16",
+      race: "Protoss",
+      actions: rushActions,
+      referenceName: rushRef.name,
+      referenceId: rushRef.id,
+      threats: [],
+      policies: defaultPolicies(),
+      safety: { hasWall: false, allowWorkerPull: true },
+      horizonSec: 480,
+    });
+    expect(
+      rush.adaptationNotes.some((n) =>
         n.includes("occupies your only Gateway"),
       ),
     ).toBe(true);
+    const result = adapt("p-robo-expand", "Protoss");
     // and the per-gateway transform economics note rides along
     expect(
       result.adaptationNotes.some((n) => n.includes("50/50 per gateway")),
@@ -225,6 +278,73 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
         ).length;
         expect(gatewaysAvailable).toBeGreaterThanOrEqual(2);
       }
+    }
+  });
+
+  it("standard protoss builds research warpgate after the second gateway", () => {
+    // PTR meta: research occupies a gateway, so units come first and
+    // research waits for gate #2 — except dedicated rush builds.
+    for (const id of ["p-gate-expand", "p-stargate-oracle", "p-robo-expand"]) {
+      const build = referenceBuilds().find((b) => b.id === id)!;
+      const gateIndices = build.steps
+        .map((s, i) => (s === "Gateway" ? i : -1))
+        .filter((i) => i >= 0);
+      const wgIndex = build.steps.indexOf("WarpGateResearch");
+      expect(wgIndex, id).toBeGreaterThan(gateIndices[1]);
+    }
+  });
+
+  it("adapts the patch-native proxy warpgate rush with transforms and warp-ins", () => {
+    const reference = referenceBuilds().find(
+      (b) => b.id === "p-proxy-warpgate-rush",
+    )!;
+    expect(reference.native).toBe("5.0.16");
+    const { actions, unknownNames } = actionsFromSteps(target, reference.steps);
+    expect(unknownNames).toEqual([]);
+    expect(
+      actions.filter((a) => a.kind === "transform-warpgate"),
+    ).toHaveLength(3);
+    const threats = threatsForMatchup(threatCatalog(null), "Protoss", "Protoss")
+      .map((threat) => ({ threat, probability: threat.priorProbability }));
+    const result = adaptBuild({
+      baselineProfileId: "5.0.16", // native — no 12-worker ancestor
+      profileId: "5.0.16",
+      race: "Protoss",
+      actions,
+      referenceName: reference.name,
+      referenceId: reference.id,
+      threats,
+      policies: defaultPolicies(),
+      safety: { hasWall: false, allowWorkerPull: true },
+      horizonSec: 480,
+    });
+    expect(result.sim.unexecutedActions).toBe(0);
+    // research starts once the cybernetics core is done (5.0.16 gates
+    // warpgate research on the core even though it runs at a gateway)
+    const research = result.sim.steps.find(
+      (s) => s.name === "WarpGateResearch",
+    )!;
+    const cyberDone = result.sim.completionTimes.CyberneticsCore[0];
+    expect(research.startSec).toBeGreaterThanOrEqual(cyberDone - 0.01);
+    // all six units execute; the ones after the transforms are warped
+    // (warpInSec, not the 28s gateway time). The lookahead may train
+    // a couple from gateways while research runs — that's real play.
+    const units = result.sim.steps.filter((s) =>
+      ["Zealot", "Adept"].includes(s.name),
+    );
+    expect(units).toHaveLength(6);
+    const transformDone = result.sim.events
+      .filter((e) => e.kind === "complete" && e.name === "WarpGate")
+      .map((e) => e.time);
+    expect(transformDone).toHaveLength(3);
+    const warped = units.filter(
+      (u) => u.startSec >= Math.min(...transformDone) - 0.01,
+    );
+    expect(warped.length).toBeGreaterThanOrEqual(2);
+    for (const unit of warped) {
+      expect(unit.doneSec - unit.startSec).toBeLessThanOrEqual(
+        target.mechanics.warpgate.warpInSec + 0.1,
+      );
     }
   });
 

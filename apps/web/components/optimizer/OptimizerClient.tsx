@@ -138,8 +138,15 @@ function OptimizerInner() {
         "That build has no adaptable steps (workers and supply are re-timed automatically — it needs structures, units, or upgrades).",
       );
     }
+    // Patch-native builds (e.g. the 5.0.16 proxy warpgate rush) have
+    // no 12-worker ancestor — baseline = their own patch, and the
+    // comparison view hides itself.
+    const baselineProfileId =
+      source.type === "standard" && source.native
+        ? source.native
+        : BASELINE_PROFILE_ID;
     const adapted = adaptBuild({
-      baselineProfileId: BASELINE_PROFILE_ID,
+      baselineProfileId,
       profileId: settings.profileId,
       race: settings.race,
       actions: resolved.actions,

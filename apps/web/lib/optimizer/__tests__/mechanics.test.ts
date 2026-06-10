@@ -154,6 +154,7 @@ describe("5.0.16 warpgate rework", () => {
       act("build", "Pylon"),
       act("build", "Gateway"),
       act("build", "Assimilator"),
+      act("build", "CyberneticsCore"),
       act("research", "WarpGateResearch"),
       ...Array.from({ length: 2 }, () => act("train", "Zealot")),
     ];
@@ -164,11 +165,22 @@ describe("5.0.16 warpgate rework", () => {
     )!;
     // PTR research time is 100s (5.0.16 delta over the 114s baseline)
     expect(research.doneSec - research.startSec).toBeCloseTo(100, 1);
-    // the only gateway is researching — no unit can start during it
+    // the only gateway is researching — no unit can START inside the
+    // research window (lookahead may legally train BEFORE it begins,
+    // while the cybernetics core is still building)
     const zealots = result.steps.filter((s) => s.name === "Zealot");
-    expect(zealots[0].startSec).toBeGreaterThanOrEqual(research.doneSec - 0.01);
-    // post-research gateway production runs at the 1.35x speed
-    expect(zealots[0].doneSec - zealots[0].startSec).toBeCloseTo(
+    for (const z of zealots) {
+      const inside =
+        z.startSec > research.startSec + 0.01 &&
+        z.startSec < research.doneSec - 0.01;
+      expect(inside).toBe(false);
+    }
+    // a post-research zealot exists and runs at the 1.35x speed
+    const boosted = zealots.find(
+      (z) => z.startSec >= research.doneSec - 0.01,
+    )!;
+    expect(boosted).toBeDefined();
+    expect(boosted.doneSec - boosted.startSec).toBeCloseTo(
       profile.units.Zealot.buildTime / 1.35,
       1,
     );
@@ -180,6 +192,7 @@ describe("5.0.16 warpgate rework", () => {
       act("build", "Gateway"),
       act("build", "Gateway"),
       act("build", "Assimilator"),
+      act("build", "CyberneticsCore"),
       act("research", "WarpGateResearch"),
       act("train", "Zealot"),
     ];
@@ -197,6 +210,7 @@ describe("5.0.16 warpgate rework", () => {
       act("build", "Pylon"),
       act("build", "Gateway"),
       act("build", "Assimilator"),
+      act("build", "CyberneticsCore"),
       act("research", "WarpGateResearch"),
       act("transform-warpgate", "Gateway"),
       ...Array.from({ length: 7 }, () => act("train", "Zealot")),
