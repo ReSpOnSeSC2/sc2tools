@@ -13,10 +13,15 @@ import { Select } from "@/components/ui/Select";
 import { Toggle } from "@/components/ui/Toggle";
 import { Icon } from "@/components/ui/Icon";
 import { raceTint } from "@/lib/race";
-import { OBJECTIVES } from "@/lib/optimizer/search/objectives";
+import {
+  OBJECTIVES,
+  listTechTargets,
+} from "@/lib/optimizer/search/objectives";
+import { resolveProfile } from "@/lib/optimizer/patch/profiles";
 import type { ProfileSummary } from "@/lib/optimizer/patch/profiles";
 import type { SimRace } from "@/lib/optimizer/types";
-import { formatBuildTime } from "@/lib/build-events";
+import { formatBuildTime, humanizeBuildName } from "@/lib/build-events";
+import { useMemo } from "react";
 import type { OptimizerSettings } from "./OptimizerClient";
 
 const SIM_RACES: SimRace[] = ["Protoss", "Terran", "Zerg"];
@@ -76,6 +81,14 @@ export function SetupPanel({
   onChange: (patch: Partial<OptimizerSettings>) => void;
 }) {
   const objective = OBJECTIVES.find((o) => o.id === settings.objectiveId);
+  const techTargets = useMemo(() => {
+    if (settings.objectiveId !== "tech-rush-target") return [];
+    try {
+      return listTechTargets(resolveProfile(settings.profileId), settings.race);
+    } catch {
+      return [];
+    }
+  }, [settings.objectiveId, settings.profileId, settings.race]);
   return (
     <Card title="Setup">
       <div className="space-y-4 p-4">
@@ -108,6 +121,39 @@ export function SetupPanel({
             ))}
           </Select>
         </Field>
+        {settings.objectiveId === "tech-rush-target" ? (
+          <Field
+            label="Tech goal"
+            hint="The optimizer builds the prerequisite chain automatically and races to finish this — while keeping workers flowing and threats held."
+          >
+            <Select
+              value={settings.targetName}
+              onChange={(e) => onChange({ targetName: e.target.value })}
+            >
+              <option value="">Pick a milestone…</option>
+              {(["structure", "upgrade", "unit"] as const).map((kind) => (
+                <optgroup
+                  key={kind}
+                  label={
+                    kind === "structure"
+                      ? "Tech structures"
+                      : kind === "upgrade"
+                        ? "Upgrades"
+                        : "Units"
+                  }
+                >
+                  {techTargets
+                    .filter((t) => t.kind === kind)
+                    .map((t) => (
+                      <option key={t.name} value={t.name}>
+                        {humanizeBuildName(t.name)} (tier {t.tier})
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
         {objective?.usesAtSec ? (
           <Field
             label="Target time (seconds)"

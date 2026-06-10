@@ -295,8 +295,11 @@ export function humanizeBuildName(name: string): string {
 /** Format seconds into "m:ss". */
 export function formatBuildTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
+  // Round the TOTAL first — rounding the remainder produces "4:60"
+  // for inputs like 299.6.
+  const total = Math.round(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 

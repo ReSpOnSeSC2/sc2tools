@@ -183,11 +183,26 @@ export function repair(
     }
   };
 
+  // First gas-costing step with no collector planned yet gets one
+  // injected — without this, "insert Factory" is a dead action until
+  // a separate "insert Refinery" mutation lands first, a two-step
+  // fitness valley the search reliably gets stuck in front of.
+  const gasBuildingName = Object.entries(profile.units).find(
+    ([, def]) => def.isGasBuilding && def.race === profile.units[workerName].race,
+  )?.[0];
+  const ensureGasIncome = (gasCost: number) => {
+    if (gasCost <= 0 || gasBuildings > 0 || !gasBuildingName) return;
+    if (gasBuildings >= 2 * townHalls) return;
+    out.push({ kind: "build", name: gasBuildingName });
+    gasBuildings += 1;
+  };
+
   for (const action of actions) {
     if (out.length >= maxLength) break;
     if (action.kind === "research") {
       if (seenResearch.has(action.name)) continue;
       ensurePrereqs(action.name, 0);
+      ensureGasIncome(profile.upgrades[action.name]?.gas ?? 0);
       seenResearch.add(action.name);
       out.push({ ...action });
       present.add(action.name);
@@ -204,7 +219,10 @@ export function repair(
       seenStructures.set(action.name, seen + 1);
       if (def.isTownHall) townHalls += 1;
     }
-    if (def) ensurePrereqs(action.name, 0);
+    if (def) {
+      ensurePrereqs(action.name, 0);
+      ensureGasIncome(def.gas);
+    }
     out.push({ ...action });
     present.add(action.name);
   }

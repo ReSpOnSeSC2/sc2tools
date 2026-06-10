@@ -68,6 +68,9 @@ function completeTask(
     state.upgradesInProgress.delete(task.name);
     state.upgradesDone.add(task.name);
     if (task.name === "WarpGateResearch") state.warpgateDone = true;
+    // Upgrades go into the completion timeline too so objectives can
+    // score tech progression at a point in time.
+    pushCompletion(state, task.name, 1);
     log(state, "complete", task.name);
     return;
   }

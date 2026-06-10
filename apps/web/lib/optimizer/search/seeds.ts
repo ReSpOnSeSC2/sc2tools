@@ -62,6 +62,23 @@ const PROTOSS_SEEDS: BuildAction[][] = [
     A("train", "Stalker"),
     A("build", "Nexus"),
   ],
+  // Standard macro: gate expand into robo, constant units behind it
+  [
+    A("build", "Pylon"),
+    A("build", "Gateway"),
+    A("build", "Assimilator"),
+    A("train", "Zealot"),
+    A("build", "Nexus"),
+    A("build", "CyberneticsCore"),
+    A("build", "Assimilator"),
+    A("research", "WarpGateResearch"),
+    A("train", "Stalker"),
+    A("train", "Stalker"),
+    A("build", "RoboticsFacility"),
+    A("build", "Gateway"),
+    A("train", "Sentry"),
+    A("train", "Immortal"),
+  ],
 ];
 
 const TERRAN_SEEDS: BuildAction[][] = [
@@ -99,6 +116,24 @@ const TERRAN_SEEDS: BuildAction[][] = [
     A("build", "Bunker"),
     A("build", "CommandCenter"),
   ],
+  // Standard 1-1-1: reaper expand into factory/starport tech
+  [
+    A("build", "SupplyDepot"),
+    A("build", "Barracks"),
+    A("build", "Refinery"),
+    A("train", "Reaper"),
+    A("morph", "OrbitalCommand"),
+    A("build", "CommandCenter"),
+    A("build", "Factory"),
+    A("train", "Marine"),
+    A("build", "BarracksReactor"),
+    A("build", "Refinery"),
+    A("build", "Starport"),
+    A("train", "Marine"),
+    A("train", "Marine"),
+    A("train", "Cyclone"),
+    A("train", "Medivac"),
+  ],
 ];
 
 const ZERG_SEEDS: BuildAction[][] = [
@@ -132,7 +167,35 @@ const ZERG_SEEDS: BuildAction[][] = [
     A("build", "Hatchery"),
     A("train", "Queen"),
   ],
+  // Standard macro: hatch-pool-gas into speed + lair tech
+  [
+    A("build", "Hatchery"),
+    A("build", "SpawningPool"),
+    A("build", "Extractor"),
+    A("train", "Queen"),
+    A("train", "Queen"),
+    A("train", "Zergling"),
+    A("research", "MetabolicBoost"),
+    A("build", "Extractor"),
+    A("morph", "Lair"),
+    A("build", "RoachWarren"),
+    A("train", "Roach"),
+    A("train", "Roach"),
+  ],
 ];
+
+/** Build the action that produces `name`, whatever it is. */
+export function actionForName(
+  profile: { units: Record<string, { morphFrom?: string; isStructure?: boolean }>; upgrades: Record<string, unknown> },
+  name: string,
+): BuildAction | null {
+  if (profile.upgrades[name]) return A("research", name);
+  const def = profile.units[name];
+  if (!def) return null;
+  if (def.morphFrom) return A("morph", name);
+  if (def.isStructure) return A("build", name);
+  return A("train", name);
+}
 
 export function seedsForRace(race: SimRace): BuildAction[][] {
   switch (race) {
@@ -165,12 +228,16 @@ export function insertableActions(race: SimRace): BuildAction[] {
         A("build", "TwilightCouncil"),
         A("build", "RoboticsFacility"),
         A("build", "Stargate"),
+        A("build", "RoboticsBay"),
         A("train", "Zealot"),
         A("train", "Adept"),
         A("train", "Stalker"),
         A("train", "Sentry"),
+        A("train", "Immortal"),
         A("train", "Oracle"),
         A("research", "WarpGateResearch"),
+        A("research", "Charge"),
+        A("research", "BlinkTech"),
         A("chrono", "Gateway"),
         A("transform-warpgate", "Gateway"),
       ];
@@ -191,7 +258,11 @@ export function insertableActions(race: SimRace): BuildAction[] {
         A("train", "Marauder"),
         A("train", "Reaper"),
         A("train", "Cyclone"),
+        A("train", "SiegeTank"),
+        A("train", "Medivac"),
         A("train", "Viking"),
+        A("research", "Stimpack"),
+        A("research", "CombatShield"),
         A("morph", "OrbitalCommand"),
       ];
     case "Zerg":
@@ -203,11 +274,15 @@ export function insertableActions(race: SimRace): BuildAction[] {
         A("build", "SporeCrawler"),
         A("build", "RoachWarren"),
         A("build", "BanelingNest"),
+        A("build", "HydraliskDen"),
         A("train", "Queen"),
         A("train", "Zergling"),
         A("train", "Roach"),
+        A("train", "Ravager"),
+        A("train", "Hydralisk"),
         A("train", "Overlord"),
         A("research", "MetabolicBoost"),
+        A("research", "GlialReconstitution"),
         A("morph", "Lair"),
       ];
   }

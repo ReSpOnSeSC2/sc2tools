@@ -13,7 +13,7 @@
  */
 import { mulberry32 } from "@/lib/randomizer/engine";
 import { resolveProfile } from "../patch/profiles";
-import { evaluateSafety } from "../safety/evaluate";
+import { UNSAFE_MARGIN, evaluateSafety } from "../safety/evaluate";
 import { simulate } from "../sim/engine";
 import type {
   BuildAction,
@@ -26,13 +26,15 @@ import type {
 } from "../types";
 import { objectiveScore } from "./objectives";
 import { crossover, mutate, repair, type Rng } from "./mutate";
-import { seedsForRace } from "./seeds";
+import { actionForName, seedsForRace } from "./seeds";
 
 const MU = 12;
 const LAMBDA = 36;
 const MAX_ACTIONS = 40;
 /** Per-unit-of-probability penalty scale for unsafe margins. */
 const SAFETY_PENALTY_SCALE = 900;
+/** Flat probability-weighted penalty for an outright unsafe verdict. */
+const UNSAFE_FLAT_PENALTY = 400;
 const SUPPLY_BLOCK_PENALTY_PER_SEC = 1.5;
 const DEAD_ACTION_PENALTY = 40;
 /** Slight pressure toward shorter builds so junk steps get deleted. */
@@ -58,6 +60,19 @@ function hinge(margin: number, safeAt: number): number {
   return Math.max(0, safeAt - margin);
 }
 
+/**
+ * Margin the optimizer must reach against a threat, scaled by its
+ * probability. A scouted-likely threat (p ≥ 0.6) demands the full
+ * safe margin; a baseline-prior threat only demands "not disastrous".
+ * Demanding full safety against every 6-15% prior simultaneously
+ * made the search buy maximum insurance (mass cheap units) and
+ * starve tech/economy — real players hedge proportionately.
+ */
+function requiredMargin(probability: number): number {
+  const t = Math.min(1, probability / 0.6);
+  return -0.1 + t * 0.3; // -0.1 → +0.2 as p goes 0 → 0.6
+}
+
 export function evaluateCandidate(
   actions: BuildAction[],
   profile: PatchProfile,
@@ -72,8 +87,14 @@ export function evaluateCandidate(
   for (const report of safety.threats) {
     penalty +=
       report.probability *
-      hinge(report.worstMargin, 0.2) *
+      hinge(report.worstMargin, requiredMargin(report.probability)) *
       SAFETY_PENALTY_SCALE;
+    // Hedging below the full safe margin is a legitimate trade for a
+    // low-probability threat; being outright DEAD to it is not. The
+    // flat term makes "unsafe" verdicts bite even at small priors.
+    if (report.worstMargin < UNSAFE_MARGIN) {
+      penalty += report.probability * UNSAFE_FLAT_PENALTY;
+    }
   }
   penalty += sim.supplyBlockedSec * SUPPLY_BLOCK_PENALTY_PER_SEC;
   penalty += sim.unexecutedActions * DEAD_ACTION_PENALTY;
@@ -101,6 +122,18 @@ function seedPopulation(
   rng: Rng,
 ): Candidate[] {
   const seeds = seedsForRace(request.race);
+  // Tech-goal runs start every seed already on the target's tech
+  // path (repair injects the prerequisite chain) — the search then
+  // optimizes the timing instead of having to discover the goal.
+  const target = request.objective.targetName;
+  if (request.objective.id === "tech-rush-target" && target) {
+    const action = actionForName(profile, target);
+    if (action) {
+      for (const seed of seeds) {
+        if (!seed.some((a) => a.name === target)) seed.push({ ...action });
+      }
+    }
+  }
   const population: Candidate[] = [];
   for (const seed of seeds) {
     const repaired = repair(seed, profile, request.race, MAX_ACTIONS);

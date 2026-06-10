@@ -24,6 +24,78 @@ function request(overrides: Partial<OptimizeRequest> = {}): OptimizeRequest {
   };
 }
 
+describe("balanced and tech-goal objectives", () => {
+  const profile = resolveProfile("5.0.16");
+  const pvzAtPriors = () =>
+    catalog
+      .filter(
+        (t) => t.attackerRace === "Zerg" && t.vsDefender.includes("Protoss"),
+      )
+      .map((threat) => ({ threat, probability: threat.priorProbability }));
+
+  it(
+    "balanced macro threads economy, tech, and army together",
+    { timeout: 60_000 },
+    async () => {
+      const result = await optimize(
+        request({
+          objective: { id: "balanced-development", atSec: 360 },
+          threats: pvzAtPriors(),
+          budget: { maxGenerations: 40, maxMillis: 30_000 },
+          horizonSec: 420,
+        }),
+      );
+      // economy: an expansion on a normal timing, healthy worker count
+      const expansions = result.sim.completionTimes.Nexus ?? [];
+      expect(expansions.length).toBeGreaterThan(0);
+      expect(expansions[0]).toBeLessThan(300);
+      expect(result.sim.finalWorkers).toBeGreaterThanOrEqual(30);
+      // tech: at least two gated tech structures completed
+      const techStructures = Object.keys(result.sim.completionTimes).filter(
+        (name) => {
+          const def = profile.units[name];
+          return def?.isStructure && (def.requires?.length ?? 0) > 0;
+        },
+      );
+      expect(techStructures.length).toBeGreaterThanOrEqual(2);
+      // army: actual combat units, not a worker-only corner build
+      const combatCount = Object.entries(result.sim.unitsAtEnd)
+        .filter(([name]) => {
+          const def = profile.units[name];
+          return def?.combat && !def.isWorker && !def.isStructure;
+        })
+        .reduce((sum, [, count]) => sum + count, 0);
+      expect(combatCount).toBeGreaterThanOrEqual(3);
+      expect(result.safety.overall).not.toBe("unsafe");
+    },
+  );
+
+  it(
+    "tech goal races to the target without stripping the economy",
+    { timeout: 60_000 },
+    async () => {
+      const result = await optimize(
+        request({
+          objective: {
+            id: "tech-rush-target",
+            atSec: 360,
+            targetName: "Stargate",
+          },
+          threats: pvzAtPriors(),
+          budget: { maxGenerations: 40, maxMillis: 30_000 },
+          horizonSec: 420,
+        }),
+      );
+      const stargate = result.sim.completionTimes.Stargate ?? [];
+      expect(stargate.length).toBeGreaterThan(0);
+      expect(stargate[0]).toBeLessThan(280);
+      // shortcuts, not all-ins: workers keep flowing
+      expect(result.sim.finalWorkers).toBeGreaterThanOrEqual(25);
+      expect(result.safety.overall).not.toBe("unsafe");
+    },
+  );
+});
+
 describe("optimizer smoke", () => {
   it(
     "unscouted baseline (all matchup threats at priors) still builds defense",
