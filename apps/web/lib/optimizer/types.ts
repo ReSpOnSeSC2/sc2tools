@@ -195,6 +195,14 @@ export interface BuildAction {
   name: string;
   /** Chrono target structure name (kind === "chrono"). */
   target?: string;
+  /**
+   * Meta gate for research that occupies a production structure:
+   * wait until `count` completed `unit`s stand, so the research never
+   * takes the only one offline (5.0.16 warpgate waits for every
+   * gateway listed before it). Ignored on profiles where the research
+   * doesn't occupy that structure type (old-patch baselines).
+   */
+  afterCompleted?: { unit: string; count: number };
 }
 
 export interface MacroPolicies {
