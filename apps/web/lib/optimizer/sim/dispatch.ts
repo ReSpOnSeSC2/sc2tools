@@ -39,6 +39,8 @@ export interface DispatchOutcome {
   status: "done" | "wait" | "impossible";
   retryAt?: number;
   reason?: string;
+  /** What a "wait" is stuck on — drives the engine's lookahead. */
+  blockedOn?: "resources" | "producer" | "tech" | "supply" | "larva";
 }
 
 function structuralPathExists(
@@ -91,7 +93,7 @@ function dispatchUnit(
     return { status: "impossible", reason: `tech path missing for ${name}` };
   }
   if (!prereqsMet(def.requires, state.completed, state.upgradesDone)) {
-    return { status: "wait" };
+    return { status: "wait", blockedOn: "tech" };
   }
   if (def.morphFrom) return dispatchMorph(state, profile, name, def);
   if (def.isStructure) {
@@ -109,11 +111,11 @@ function checkSupply(
   if (state.supplyUsed + needed <= state.supplyCap + EPSILON) return null;
   const pending = pendingSupply(state, profile);
   if (state.supplyUsed + needed <= state.supplyCap + pending + EPSILON) {
-    return { status: "wait" };
+    return { status: "wait", blockedOn: "supply" };
   }
   // No provider on the way — the caller's auto-supply policy (or an
   // explicit supply step later in the list) has to fix this.
-  return { status: "wait", reason: "supply-blocked" };
+  return { status: "wait", reason: "supply-blocked", blockedOn: "supply" };
 }
 
 function affordOutcome(
@@ -135,7 +137,11 @@ function affordOutcome(
     minerals,
     gas,
   );
-  return { status: "wait", retryAt: Number.isFinite(at) ? at : undefined };
+  return {
+    status: "wait",
+    retryAt: Number.isFinite(at) ? at : undefined,
+    blockedOn: "resources",
+  };
 }
 
 export function dispatchStructure(
@@ -148,7 +154,7 @@ export function dispatchStructure(
   const workerName = profile.starting.worker[race];
   if (def.isAddon) return dispatchAddon(state, profile, name, def);
   if ((state.completed.get(workerName) ?? 0) < 1) {
-    return { status: "wait" };
+    return { status: "wait", blockedOn: "producer" };
   }
   if (def.isGasBuilding) {
     let open = 0;
@@ -229,7 +235,7 @@ function dispatchAddon(
       (b) => (state.inProgress.get(b) ?? 0) > 0,
     );
     return anyBuilding
-      ? { status: "wait" }
+      ? { status: "wait", blockedOn: "producer" }
       : { status: "impossible", reason: `no ${def.builtFrom.join("/")}` };
   }
   if (parent.producer.addon) {
@@ -239,7 +245,7 @@ function dispatchAddon(
     };
   }
   if (parent.startAt > state.time + EPSILON) {
-    return { status: "wait", retryAt: parent.startAt };
+    return { status: "wait", retryAt: parent.startAt, blockedOn: "producer" };
   }
   const afford = affordOutcome(state, profile, def.minerals, def.gas);
   if (afford) return afford;
@@ -276,7 +282,7 @@ export function dispatchTrain(
 
   if (def.consumesLarva) {
     const pool = pickLarvaPool(state);
-    if (!pool) return { status: "wait" };
+    if (!pool) return { status: "wait", blockedOn: "larva" };
     const afford = affordOutcome(state, profile, minerals, gas);
     if (afford) return afford;
     spend(state, minerals, gas);
@@ -309,11 +315,11 @@ export function dispatchTrain(
         (b) => (state.inProgress.get(`${b}TechLab`) ?? 0) > 0,
       );
     return anyComing || addonComing
-      ? { status: "wait" }
+      ? { status: "wait", blockedOn: "producer" }
       : { status: "impossible", reason: `no producer for ${name}` };
   }
   if (pick.startAt > state.time + EPSILON) {
-    return { status: "wait", retryAt: pick.startAt };
+    return { status: "wait", retryAt: pick.startAt, blockedOn: "producer" };
   }
   const afford = affordOutcome(state, profile, minerals, gas);
   if (afford) return afford;
@@ -386,7 +392,7 @@ function dispatchMorph(
         (state.completed.get(source) ?? 0) > 0 ||
         (state.inProgress.get(source) ?? 0) > 0;
       return exists
-        ? { status: "wait" }
+        ? { status: "wait", blockedOn: "producer" }
         : { status: "impossible", reason: `no ${source} to morph` };
     }
     const afford = affordOutcome(state, profile, def.minerals, def.gas);
@@ -413,7 +419,7 @@ function dispatchMorph(
   if ((state.completed.get(source) ?? 0) < 1) {
     const coming = (state.inProgress.get(source) ?? 0) > 0;
     return coming
-      ? { status: "wait" }
+      ? { status: "wait", blockedOn: "producer" }
       : { status: "impossible", reason: `no ${source} to morph` };
   }
   const afford = affordOutcome(state, profile, def.minerals, def.gas);
@@ -451,13 +457,15 @@ function dispatchResearch(
     return { status: "impossible", reason: `tech path missing for ${name}` };
   }
   if (!prereqsMet(def.requires, state.completed, state.upgradesDone)) {
-    return { status: "wait" };
+    return { status: "wait", blockedOn: "tech" };
   }
+  // Non-blocking research runs alongside the structure's production
+  // queue, so any completed lab qualifies even mid-task.
   const lab = state.producers.find(
     (p) =>
       def.researchedAt.includes(p.name) &&
       p.readyAt <= state.time + EPSILON &&
-      p.busyUntil <= state.time + EPSILON,
+      (def.nonBlocking || p.busyUntil <= state.time + EPSILON),
   );
   if (!lab) {
     const anyComing = def.researchedAt.some(
@@ -466,7 +474,7 @@ function dispatchResearch(
         (state.completed.get(b) ?? 0) > 0,
     );
     return anyComing
-      ? { status: "wait" }
+      ? { status: "wait", blockedOn: "producer" }
       : { status: "impossible", reason: `nowhere to research ${name}` };
   }
   const afford = affordOutcome(state, profile, def.minerals, def.gas);
@@ -478,7 +486,7 @@ function dispatchResearch(
     Math.max(0, lab.chronoUntil - state.time),
     profile.mechanics.chrono.rateMultiplier,
   );
-  lab.busyUntil = doneAt;
+  if (!def.nonBlocking) lab.busyUntil = doneAt;
   state.upgradesInProgress.add(name);
   recordStep(state, "research", name, doneAt);
   log(state, "start", name);
@@ -510,6 +518,7 @@ function dispatchChrono(
   if (nexus.energy < mech.chrono.energy) {
     return {
       status: "wait",
+      blockedOn: "producer",
       retryAt: energyReadyAt(
         nexus,
         state.time,
@@ -521,7 +530,7 @@ function dispatchChrono(
   const target = state.producers
     .filter((p) => p.name === targetName && p.readyAt <= state.time)
     .sort((a, b) => b.busyUntil - a.busyUntil)[0];
-  if (!target) return { status: "wait" };
+  if (!target) return { status: "wait", blockedOn: "producer" };
   nexus.energy -= mech.chrono.energy;
   applyChrono(state, profile, target);
   return { status: "done" };
@@ -560,7 +569,7 @@ function dispatchTransform(
 ): DispatchOutcome {
   if (!state.warpgateDone) {
     return state.upgradesInProgress.has("WarpGateResearch")
-      ? { status: "wait" }
+      ? { status: "wait", blockedOn: "tech" }
       : { status: "impossible", reason: "warpgate not researched" };
   }
   const wg = profile.mechanics.warpgate;
@@ -574,7 +583,7 @@ function dispatchTransform(
   if (!gateway) {
     const any = state.producers.some((p) => p.name === "Gateway");
     return any
-      ? { status: "wait" }
+      ? { status: "wait", blockedOn: "producer" }
       : { status: "impossible", reason: "no gateway" };
   }
   const afford = affordOutcome(

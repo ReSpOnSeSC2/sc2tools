@@ -81,6 +81,12 @@ export interface UpgradeDef {
   /** Structures that can research this. */
   researchedAt: string[];
   requires?: string[];
+  /**
+   * Research runs without occupying the structure's production queue
+   * (5.0.16 warpgate research on the Gateway — blocking your only
+   * gateway for 114s would defeat the rework's stated purpose).
+   */
+  nonBlocking?: boolean;
 }
 
 export interface EconomyConfig {
