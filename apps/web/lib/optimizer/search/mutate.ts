@@ -154,6 +154,11 @@ export function repair(
   const seenResearch = new Set<string>();
   const present = new Set<string>();
   const workerName = profile.starting.worker[race];
+  // You start with one town hall; each extra one unlocks two more
+  // geysers. Without this cap the search drifts into gas-collector
+  // spam (cheap, no fitness upside, hard for mutation to clean up).
+  let townHalls = 1;
+  let gasBuildings = 0;
 
   const ensurePrereqs = (name: string, depth: number) => {
     if (depth > 6) return;
@@ -189,11 +194,15 @@ export function repair(
       continue;
     }
     const def = profile.units[action.name];
-    if (def?.isStructure && !def.isGasBuilding) {
+    if (def?.isGasBuilding) {
+      if (gasBuildings >= 2 * townHalls) continue;
+      gasBuildings += 1;
+    } else if (def?.isStructure) {
       const cap = structureCap(action.name, def.isTownHall);
       const seen = seenStructures.get(action.name) ?? 0;
       if (seen >= cap) continue;
       seenStructures.set(action.name, seen + 1);
+      if (def.isTownHall) townHalls += 1;
     }
     if (def) ensurePrereqs(action.name, 0);
     out.push({ ...action });

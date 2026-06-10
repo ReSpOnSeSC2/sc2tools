@@ -54,7 +54,17 @@ describe("scouting inference", () => {
     expect(suppressed.contradictedTells).toContain("z8-late-pool");
   });
 
-  it("active set includes scouted threats and pinned ones", () => {
+  it("threat set always covers the whole matchup baseline", () => {
+    // Even with zero scouting info, every threat participates at its
+    // prior — an unscouted optimizer run must still defend the meta.
+    const empty = activeThreatSet(pvzThreats, assessThreats(pvzThreats, []), new Set());
+    expect(empty).toHaveLength(pvzThreats.length);
+    for (const { threat, probability } of empty) {
+      expect(probability).toBeCloseTo(threat.priorProbability, 1);
+    }
+  });
+
+  it("scouting raises weights and pinning floors them", () => {
     const observations = [{ tellId: "z8-early-pool", atSec: 40 }];
     const assessments = assessThreats(pvzThreats, observations);
     const active = activeThreatSet(
@@ -62,10 +72,16 @@ describe("scouting inference", () => {
       assessments,
       new Set(["z-roach-rush"]),
     );
-    const ids = active.map((a) => a.threat.id);
-    expect(ids).toContain("z-8pool");
-    expect(ids).toContain("z-roach-rush"); // pinned despite low prior
-    const pinned = active.find((a) => a.threat.id === "z-roach-rush")!;
-    expect(pinned.probability).toBeGreaterThanOrEqual(ACTIVE_THRESHOLD);
+    const byId = new Map(active.map((a) => [a.threat.id, a]));
+    expect(byId.get("z-8pool")!.probability).toBeGreaterThan(0.4);
+    expect(byId.get("z-roach-rush")!.probability).toBeGreaterThanOrEqual(
+      ACTIVE_THRESHOLD,
+    );
+    // unscouted, unpinned threats stay at their priors
+    const flood = byId.get("z-speedling-flood")!;
+    expect(flood.probability).toBeCloseTo(
+      flood.threat.priorProbability,
+      1,
+    );
   });
 });
