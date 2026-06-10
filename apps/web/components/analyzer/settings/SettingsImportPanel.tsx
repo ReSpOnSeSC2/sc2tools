@@ -5,7 +5,6 @@ import { useAuth } from "@clerk/nextjs";
 import {
   Play,
   RefreshCw,
-  StopCircle,
   Inbox,
   CheckCircle2,
   AlertCircle,
@@ -20,39 +19,26 @@ import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { fmtAgo } from "@/lib/format";
+import { ImportProgressCard } from "@/components/imports/ImportProgressCard";
+import {
+  useImportStatus,
+  type ImportJob,
+} from "@/components/imports/useImportStatus";
 
-type ImportStatusValue =
-  | "queued"
-  | "scanning"
-  | "running"
-  | "done"
-  | "error"
-  | "cancelled";
-
-type ImportJob = {
-  id: string;
-  status: ImportStatusValue;
-  startedAt?: string;
-  finishedAt?: string;
-  totalReplays?: number;
-  scanned?: number;
-  inserted?: number;
-  failed?: number;
-  message?: string;
-};
-
-type ImportStatus = {
-  current?: ImportJob | null;
-  history?: ImportJob[];
-};
+// NOTE: this panel previously parsed a `{current: {...}}` envelope and
+// `id`/`totalReplays`/`scanned` fields that the API never returned —
+// so it permanently rendered "Idle", and its "Start full import"
+// posted `{}` to a route that then required `folder` and 400'd. It now
+// reads the real serialised-job shape via the shared useImportStatus
+// hook (same source as the dashboard card), and folder-less start is
+// supported server-side ("import from the folders the agent watches").
 
 const STATUS_VARIANT: Record<
-  ImportStatusValue,
+  string,
   "neutral" | "accent" | "cyan" | "success" | "warning" | "danger"
 > = {
-  queued: "neutral",
+  pending: "neutral",
   scanning: "cyan",
   running: "accent",
   done: "success",
@@ -60,8 +46,8 @@ const STATUS_VARIANT: Record<
   cancelled: "warning",
 };
 
-const STATUS_ICON: Record<ImportStatusValue, typeof Clock> = {
-  queued: Clock,
+const STATUS_ICON: Record<string, typeof Clock> = {
+  pending: Clock,
   scanning: RefreshCw,
   running: Play,
   done: CheckCircle2,
@@ -71,13 +57,10 @@ const STATUS_ICON: Record<ImportStatusValue, typeof Clock> = {
 
 export function SettingsImportPanel() {
   const { getToken } = useAuth();
-  const status = useApi<ImportStatus>("/v1/import/status", {
-    refreshInterval: 2000,
-  });
-  const jobs = useApi<{ items: ImportJob[] }>("/v1/import/jobs");
+  const importStatus = useImportStatus();
+  const jobs = useApi<{ ok: boolean; items: ImportJob[] }>("/v1/import/jobs");
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
-  const [confirmCancel, setConfirmCancel] = useState(false);
 
   async function call(path: string, action: string) {
     if (busy) return;
@@ -87,7 +70,8 @@ export function SettingsImportPanel() {
         method: "POST",
         body: "{}",
       });
-      await Promise.all([status.mutate(), jobs.mutate()]);
+      importStatus.refresh();
+      await jobs.mutate();
       toast.success(action);
     } catch (err) {
       const message =
@@ -98,10 +82,10 @@ export function SettingsImportPanel() {
     }
   }
 
-  if (status.isLoading) return <Skeleton rows={3} />;
-  const cur = status.data?.current ?? null;
+  if (importStatus.isLoading) return <Skeleton rows={3} />;
+  const job = importStatus.job;
+  const isRunning = importStatus.active;
   const items = jobs.data?.items ?? [];
-  const isRunning = cur && (cur.status === "running" || cur.status === "scanning");
 
   return (
     <div className="space-y-6">
@@ -114,7 +98,7 @@ export function SettingsImportPanel() {
             <Button
               variant="primary"
               onClick={() => call("/v1/import/start", "Import started")}
-              disabled={busy || !!isRunning}
+              disabled={busy || isRunning}
               loading={busy && !isRunning}
               iconLeft={<Play className="h-4 w-4" aria-hidden />}
             >
@@ -128,27 +112,32 @@ export function SettingsImportPanel() {
             >
               Re-scan only
             </Button>
-            {isRunning ? (
-              <Button
-                variant="danger"
-                onClick={() => setConfirmCancel(true)}
-                disabled={busy}
-                iconLeft={<StopCircle className="h-4 w-4" aria-hidden />}
-              >
-                Cancel
-              </Button>
-            ) : null}
           </div>
           <ImportDropZone
-            disabled={busy || !!isRunning}
+            disabled={busy || isRunning}
             onActivate={() =>
               call(
                 "/v1/import/pick-folder",
-                "Folder picker sent to your desktop agent",
+                "Folder request sent to your desktop agent",
               )
             }
           />
-          {cur ? <ImportProgress job={cur} /> : <ImportIdleHint />}
+          {job ? (
+            <div className="mt-4">
+              <ImportProgressCard
+                job={job}
+                active={isRunning}
+                pct={importStatus.pct}
+                etaSeconds={importStatus.etaSeconds}
+                onCancelled={() => {
+                  importStatus.refresh();
+                  void jobs.mutate();
+                }}
+              />
+            </div>
+          ) : (
+            <ImportIdleHint />
+          )}
         </Card>
       </Section>
 
@@ -166,26 +155,12 @@ export function SettingsImportPanel() {
           ) : (
             <ul className="divide-y divide-border">
               {items.map((j) => (
-                <JobRow key={j.id} job={j} />
+                <JobRow key={j.jobId} job={j} />
               ))}
             </ul>
           )}
         </Card>
       </Section>
-
-      <ConfirmDialog
-        open={confirmCancel}
-        onClose={() => setConfirmCancel(false)}
-        onConfirm={async () => {
-          setConfirmCancel(false);
-          await call("/v1/import/cancel", "Cancel signal sent");
-        }}
-        title="Cancel running import?"
-        description="Already-imported games stay in the cloud. The agent stops scanning and you can resume later."
-        confirmLabel="Cancel import"
-        cancelLabel="Keep running"
-        intent="danger"
-      />
     </div>
   );
 }
@@ -253,69 +228,11 @@ function ImportDropZone({
           Drop replays or click to browse
         </div>
         <p className="text-caption text-text-muted">
-          The desktop agent reads files from your machine — drop here to open
-          its folder picker on your computer.
+          The desktop agent reads files from your machine — drop here to ask
+          it which folders it&apos;s watching.
         </p>
       </div>
     </button>
-  );
-}
-
-function ImportProgress({ job }: { job: ImportJob }) {
-  const total = job.totalReplays ?? 0;
-  const done = job.scanned ?? 0;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-  const isDone = job.status === "done";
-  const isError = job.status === "error";
-  return (
-    <div className="mt-4 space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-caption">
-        <div className="flex items-center gap-2">
-          <span className="text-text-muted">Status</span>
-          <StatusBadge status={job.status} />
-        </div>
-        <span className="tabular-nums text-text-muted">
-          {done.toLocaleString()} / {total.toLocaleString()} ({pct}%)
-        </span>
-      </div>
-      <div
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={pct}
-        className="h-2 w-full overflow-hidden rounded-full bg-bg-elevated"
-      >
-        <div
-          className={[
-            "h-full rounded-full transition-[width] duration-300",
-            isError
-              ? "bg-danger"
-              : "bg-gradient-to-r from-accent-cyan to-accent shadow-halo-cyan",
-          ].join(" ")}
-          style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
-        />
-      </div>
-      <div className="flex flex-wrap gap-3 text-caption text-text-dim">
-        <span>inserted: {(job.inserted ?? 0).toLocaleString()}</span>
-        <span>failed: {(job.failed ?? 0).toLocaleString()}</span>
-      </div>
-      {job.message ? (
-        <p
-          className={[
-            "text-caption",
-            isError ? "text-danger" : "text-text-muted",
-          ].join(" ")}
-        >
-          {job.message}
-        </p>
-      ) : null}
-      {isDone ? (
-        <p className="text-caption text-success">
-          Imported {(job.inserted ?? 0).toLocaleString()} replays. Live sync
-          will keep things current from here.
-        </p>
-      ) : null}
-    </div>
   );
 }
 
@@ -323,10 +240,19 @@ function JobRow({ job }: { job: ImportJob }) {
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-caption">
       <div className="flex min-w-0 items-center gap-2">
-        <StatusBadge status={job.status} />
-        <span className="truncate font-mono text-micro text-text-muted">
-          {job.id}
+        <StatusBadge status={String(job.status)} />
+        <span className="tabular-nums text-text-muted">
+          {(job.completed || 0).toLocaleString()}/
+          {(job.total || 0).toLocaleString()}
+          {job.errors ? (
+            <span className="text-danger"> · {job.errors} failed</span>
+          ) : null}
         </span>
+        {job.kind ? (
+          <span className="text-micro uppercase tracking-wider text-text-dim">
+            {job.kind}
+          </span>
+        ) : null}
       </div>
       <span className="text-text-dim">
         {job.finishedAt
@@ -339,11 +265,11 @@ function JobRow({ job }: { job: ImportJob }) {
   );
 }
 
-function StatusBadge({ status }: { status: ImportStatusValue }) {
-  const Icon = STATUS_ICON[status];
+function StatusBadge({ status }: { status: string }) {
+  const Icon = STATUS_ICON[status] || Clock;
   return (
     <Badge
-      variant={STATUS_VARIANT[status]}
+      variant={STATUS_VARIANT[status] || "neutral"}
       size="sm"
       iconLeft={
         <Icon

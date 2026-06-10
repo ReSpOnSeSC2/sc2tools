@@ -57,7 +57,7 @@ from concurrent.futures import (
 )
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
-from typing import Iterable, Optional, Tuple
+from typing import Callable, Iterable, Optional, Tuple
 
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
@@ -69,7 +69,7 @@ from .replay_finder import (
     find_all_replays_roots,
     find_replays_root,
 )
-from .replay_pipeline import AnalyzerImportError, parse_replay_for_cloud
+from .replay_pipeline import AnalyzerImportError, parse_replay_for_cloud_ex
 from .state import AgentState
 from .sync_filter import SyncFilter
 from .uploader.queue import UploadJob, UploadQueue
@@ -247,8 +247,9 @@ def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
     object across the process boundary:
 
       * ``("game", path_str, CloudGame)`` → enqueue for upload
-      * ``("skipped", path_str, None)``    → mark as permanently
+      * ``("skipped", path_str, reason)``  → mark as permanently
                                               skipped in ``state.uploaded``
+                                              (reason = SKIP_* code or None)
       * ``("analyzer_error", path_str, str)`` → systemic import error;
                                               do NOT mark skipped
       * ``("settle_failed", path_str, None)`` → file size never
@@ -297,7 +298,7 @@ def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
     from pathlib import Path as _Path  # re-imported in child process
     from .replay_pipeline import (
         AnalyzerImportError as _AnalyzerImportError,
-        parse_replay_for_cloud as _parse,
+        parse_replay_for_cloud_ex as _parse_ex,
     )
 
     path = _Path(path_str)
@@ -305,11 +306,14 @@ def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
     if not _wait_for_file_ready(path, SETTLE_TIMEOUT_SEC):
         return ("settle_failed", path_str, None)
     try:
-        game = _parse(path, state_dir=state_dir)
+        game, reason = _parse_ex(path, state_dir=state_dir)
     except _AnalyzerImportError as exc:
         return ("analyzer_error", path_str, str(exc))
     if not game:
-        return ("skipped", path_str, None)
+        # Carry the skip-reason code over the IPC boundary so the
+        # parent can persist it (``skipped:<reason>``) and report it
+        # to the import-progress UI.
+        return ("skipped", path_str, reason)
     return ("game", path_str, game)
 
 
@@ -322,10 +326,16 @@ class ReplayWatcher:
         cfg: AgentConfig,
         state: AgentState,
         upload: UploadQueue,
+        on_replay_skipped: Optional[Callable[[Path, Optional[str]], None]] = None,
     ) -> None:
         self._cfg = cfg
         self._state = state
         self._upload = upload
+        # Optional observer for per-file skips (AI game, parse failure,
+        # unresolved player). The import controller uses it to feed the
+        # cloud's import-progress error breakdown; everything else can
+        # leave it unset.
+        self._on_replay_skipped = on_replay_skipped
         self._stop = threading.Event()
         self._observer: Optional[Observer] = None
         self._sweeper: Optional[threading.Thread] = None
@@ -493,6 +503,41 @@ class ReplayWatcher:
             name="sc2tools-immediate-sweep",
             daemon=True,
         ).start()
+
+    def count_pending(self) -> int:
+        """Count replays on disk not yet uploaded/skipped/filtered.
+
+        Read-only version of the sweep's eligibility walk: every
+        ``.SC2Replay`` under the watched roots whose path isn't in the
+        ``state.uploaded`` cursor and whose mtime passes the user's
+        sync filter. Used by the import controller to size a backfill
+        job (the ``total`` the progress UI counts toward) without
+        submitting any parses.
+        """
+        with self._roots_lock:
+            roots = list(self._roots)
+        if not roots:
+            roots = self._discover_roots()
+        sync_filter = self._sync_filter()
+        count = 0
+        for root in roots:
+            for path, mtime in _walk_replays(root):
+                if str(path) in self._state.uploaded:
+                    continue
+                if not sync_filter.mtime_in_range(mtime):
+                    continue
+                count += 1
+        return count
+
+    def _notify_skipped(self, path: Path, reason: Optional[str]) -> None:
+        """Invoke the optional skip observer; never let it break parsing."""
+        cb = self._on_replay_skipped
+        if cb is None:
+            return
+        try:
+            cb(path, reason)
+        except Exception:  # noqa: BLE001
+            log.exception("on_replay_skipped_callback_failed")
 
     def stop(self) -> None:
         self._stop.set()
@@ -883,8 +928,14 @@ class ReplayWatcher:
                     self._analyzer_unavailable = False
             elif kind == "skipped":
                 # AI / unresolved / per-file parse error — record so the
-                # next sweep doesn't re-attempt.
-                self._state.uploaded[path_str] = "skipped"
+                # next sweep doesn't re-attempt. The reason code rides
+                # along after a colon; readers prefix-match on
+                # "skipped" so pre-reason entries stay compatible.
+                reason = payload if isinstance(payload, str) else None
+                self._state.uploaded[path_str] = (
+                    f"skipped:{reason}" if reason else "skipped"
+                )
+                self._notify_skipped(path, reason)
                 if self._analyzer_unavailable:
                     log.info("analyzer_recovered")
                     self._analyzer_unavailable = False
@@ -917,7 +968,7 @@ class ReplayWatcher:
                 log.warning("file_never_settled %s", path.name)
                 return
             try:
-                game = parse_replay_for_cloud(
+                game, skip_reason = parse_replay_for_cloud_ex(
                     path, state_dir=self._cfg.state_dir,
                 )
             except AnalyzerImportError:
@@ -951,7 +1002,10 @@ class ReplayWatcher:
             if not game:
                 # AI / unresolved / per-file parse error — record so we
                 # don't re-attempt every sweep.
-                self._state.uploaded[str(path)] = "skipped"
+                self._state.uploaded[str(path)] = (
+                    f"skipped:{skip_reason}" if skip_reason else "skipped"
+                )
+                self._notify_skipped(path, skip_reason)
                 return
             # Post-parse date-range check (authoritative; the mtime
             # pre-filter only catches the obvious cases). Marking

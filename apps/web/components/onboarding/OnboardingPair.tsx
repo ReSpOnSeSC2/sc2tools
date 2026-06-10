@@ -19,10 +19,18 @@ import { usePairCode } from "./usePairCode";
  * UI states:
  *   - idle/starting: skeleton + "Generating code…"
  *   - waiting:       big code chip + animated cyan halo + paste hint
- *   - ready:         cyan pulse + check + "Open dashboard" CTA
+ *   - ready:         cyan pulse + check + continue/open-dashboard CTA
  *   - expired/error: callout + "Generate new code" retry
+ *
+ * ``onContinue`` (the wizard's next-step advance) takes precedence
+ * over the legacy "Open your dashboard" CTA when provided, so pairing
+ * flows into the import step instead of ending the wizard early.
  */
-export function OnboardingPair() {
+export function OnboardingPair({
+  onContinue,
+}: {
+  onContinue?: () => void;
+} = {}) {
   const router = useRouter();
   const pair = usePairCode();
   const [copied, setCopied] = useState(false);
@@ -68,13 +76,23 @@ export function OnboardingPair() {
 
       {pair.status === "ready" ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Button
-            size="lg"
-            onClick={() => router.push("/app")}
-            aria-label="Open the dashboard"
-          >
-            Open your dashboard →
-          </Button>
+          {onContinue ? (
+            <Button
+              size="lg"
+              onClick={onContinue}
+              aria-label="Continue to import"
+            >
+              Continue →
+            </Button>
+          ) : (
+            <Button
+              size="lg"
+              onClick={() => router.push("/app")}
+              aria-label="Open the dashboard"
+            >
+              Open your dashboard →
+            </Button>
+          )}
         </div>
       ) : null}
     </section>

@@ -200,22 +200,26 @@ class DevicePairingsService {
    * claim and the first heartbeat.
    *
    * @param {string} userId
-   * @returns {Promise<{paired: boolean, version: string|null}>}
+   * @returns {Promise<{paired: boolean, version: string|null, lastSeenAt: Date|null}>}
    */
   async latestAgent(userId) {
     const row = await this.db.deviceTokens.findOne(
       { userId, revokedAt: null },
       {
         sort: { lastSeenAt: -1 },
-        projection: { _id: 0, agentVersion: 1 },
+        projection: { _id: 0, agentVersion: 1, lastSeenAt: 1 },
       },
     );
-    if (!row) return { paired: false, version: null };
+    if (!row) return { paired: false, version: null, lastSeenAt: null };
     const version =
       typeof row.agentVersion === "string" && row.agentVersion.length > 0
         ? row.agentVersion
         : null;
-    return { paired: true, version };
+    // lastSeenAt is bumped by the agent's 60s heartbeat and on every
+    // device-token REST call, so "agent online" is derivable client-
+    // side as lastSeenAt within the last ~3 minutes.
+    const lastSeenAt = row.lastSeenAt instanceof Date ? row.lastSeenAt : null;
+    return { paired: true, version, lastSeenAt };
   }
 
   /**

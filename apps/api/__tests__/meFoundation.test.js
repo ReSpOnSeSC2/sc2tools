@@ -147,9 +147,53 @@ describe("Settings Foundation backing API", () => {
     const after = await withAuth(request(app).get("/v1/me"));
     expect(after.body.agentVersion).toBe("1.2.3");
     expect(after.body.agentPaired).toBe(true);
+    // The onboarding checklist derives "agent online" from this.
+    expect(typeof after.body.agentLastSeenAt).toBe("string");
 
     // Cleanup so the other tests start from a clean device-tokens slate.
     await db.deviceTokens.deleteOne({ tokenHash });
+  });
+
+  test("GET /v1/me carries onboarding prefs + the active import job", async () => {
+    // Defaults: no job, empty onboarding prefs, no last-seen.
+    const before = await withAuth(request(app).get("/v1/me"));
+    expect(before.body.activeImportJob).toBeNull();
+    expect(before.body.onboarding).toEqual({});
+    expect(before.body.agentLastSeenAt).toBeNull();
+
+    // Dismissal persists through the standard preferences route (the
+    // "onboarding" type is allowlisted).
+    const put = await withAuth(
+      request(app)
+        .put("/v1/me/preferences/onboarding")
+        .send({ dismissedAt: "2026-06-09T00:00:00.000Z" }),
+    );
+    expect(put.status).toBe(200);
+
+    // A running import job surfaces serialised on /v1/me.
+    const userDoc = await db.users.findOne({ clerkUserId: TEST_CLERK_USER_ID });
+    await db.importJobs.insertOne({
+      userId: userDoc.userId,
+      kind: "backfill",
+      status: "running",
+      total: 420,
+      completed: 69,
+      errors: 1,
+      startedAt: new Date(),
+    });
+
+    const res = await withAuth(request(app).get("/v1/me"));
+    expect(res.body.onboarding.dismissedAt).toBe("2026-06-09T00:00:00.000Z");
+    expect(res.body.activeImportJob).toMatchObject({
+      kind: "backfill",
+      status: "running",
+      total: 420,
+      completed: 69,
+      errors: 1,
+    });
+    expect(typeof res.body.activeImportJob.jobId).toBe("string");
+
+    await db.importJobs.deleteMany({ userId: userDoc.userId });
   });
 
   describe("POST /v1/webhooks/clerk", () => {

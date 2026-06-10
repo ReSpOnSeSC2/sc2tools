@@ -59,9 +59,14 @@ class ImportService {
   /**
    * Kick off the bulk-import worker on the agent.
    *
+   * ``folder`` is optional: ``null`` means "import from the folders
+   * the agent already watches" — which is what the dashboard's
+   * one-click "Import my history" CTA wants. A folder is only needed
+   * when the user explicitly points the import somewhere else.
+   *
    * @param {string} userId
    * @param {{
-   *   folder: string,
+   *   folder?: string,
    *   workers?: number,
    *   since_iso?: string,
    *   until_iso?: string,
@@ -69,7 +74,7 @@ class ImportService {
    * }} body
    */
   async start(userId, body) {
-    const validation = validateImportBody(body, { folderRequired: true });
+    const validation = validateImportBody(body, { folderRequired: false });
     if (validation.error) throw httpError(400, validation.error);
     const running = await this.db.importJobs.findOne({
       userId,
@@ -86,13 +91,69 @@ class ImportService {
     const jobId = String(res.insertedId);
     this.broadcast(userId, "import:start_request", {
       jobId,
-      folder: body.folder,
+      folder: body.folder || null,
       workers: cores,
       since_iso: body.since_iso || null,
       until_iso: body.until_iso || null,
       force: !!body.force,
     });
     return { jobId, status: "running", workers: cores };
+  }
+
+  /**
+   * Register an AGENT-initiated backfill as a visible job.
+   *
+   * The agent's startup sweep parses every un-uploaded replay on disk
+   * regardless; when that backlog is large the agent calls this to
+   * mint a job doc so the dashboard can show live progress for work
+   * that was previously invisible. Returns the existing running job
+   * instead of minting a duplicate when one is already active (e.g.
+   * the user clicked "Import my history" moments before the agent's
+   * own registration fired).
+   *
+   * @param {string} userId
+   * @param {{ total?: number, folder?: string }} body
+   */
+  async agentStart(userId, body) {
+    const running = await this.db.importJobs.findOne(
+      { userId, status: { $in: ["scanning", "running"] } },
+      { sort: { startedAt: -1 } },
+    );
+    if (running) {
+      return { ok: true, jobId: String(running._id), existing: true };
+    }
+    const job = makeJobDoc(userId, body || {}, "backfill");
+    job.status = "running";
+    if (typeof body?.total === "number" && body.total >= 0) {
+      job.total = Math.floor(body.total);
+    }
+    const res = await this.db.importJobs.insertOne(job);
+    const jobId = String(res.insertedId);
+    // Tell the user's open dashboard tabs a job appeared so the
+    // progress card mounts without a refresh.
+    this.broadcast(userId, "import:progress", {
+      jobId,
+      total: job.total,
+      completed: 0,
+      errors: 0,
+      phase: "import",
+    });
+    return { ok: true, jobId, existing: false };
+  }
+
+  /**
+   * The user's currently-active job (scanning/running), or null.
+   * Surfaced on /v1/me so the dashboard can mount the progress card
+   * on first paint without an extra round trip.
+   *
+   * @param {string} userId
+   */
+  async activeJob(userId) {
+    const job = await this.db.importJobs.findOne(
+      { userId, status: { $in: ["scanning", "running"] } },
+      { sort: { startedAt: -1 } },
+    );
+    return job ? serialiseJob(job) : null;
   }
 
   /**
