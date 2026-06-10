@@ -35,8 +35,8 @@
       "name": "Stargate Oracle",
       "race": "Protoss",
       "matchups": ["PvZ", "PvT"],
-      "description": "Double-gas stargate opener: oracles for harass, expansion behind it, warpgate after the second gateway.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Pylon", "Oracle", "ShieldBattery", "Stalker", "Oracle", "Pylon", "Gateway", "WarpGateResearch", "Stalker", "Stalker"],
+      "description": "Double-gas stargate opener: oracles for harass, expansion behind it, adepts from the gateways - their 25 gas keeps the stargate paid - warpgate after the second gateway.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Pylon", "Oracle", "ShieldBattery", "Adept", "Oracle", "Pylon", "Gateway", "WarpGateResearch", "Adept", "Adept"],
       "definitionIds": ["protoss-stargate-opener", "pvp-standard-stargate-opener", "pvt-stargate-opener", "pvz-stargate-opener"]
     },
     {
@@ -177,7 +177,7 @@
       "race": "Protoss",
       "matchups": ["PvT", "PvZ"],
       "description": "Oracle opener flowing into twilight glaives and an adept-heavy mid game.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Oracle", "Stalker", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "ShieldBattery", "ResonatingGlaives", "Adept", "Pylon", "Adept", "Adept", "Pylon", "Adept"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Oracle", "Adept", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "ShieldBattery", "ResonatingGlaives", "Adept", "Pylon", "Adept", "Adept", "Pylon", "Adept"],
       "definitionIds": ["pvt-stargate-into-glaives", "pvz-stargate-into-glaives"]
     },
     {
@@ -185,8 +185,8 @@
       "name": "Stargate into Blink",
       "race": "Protoss",
       "matchups": ["PvT"],
-      "description": "Oracle opener into twilight blink stalkers.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Oracle", "Stalker", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "ShieldBattery", "BlinkTech", "Stalker", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker"],
+      "description": "Oracle opener into twilight blink stalkers - the one stargate build that pays stalker gas, because blink IS the plan; adepts only bridge the early game.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Oracle", "Adept", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "ShieldBattery", "BlinkTech", "Stalker", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker"],
       "definitionIds": ["pvt-stargate-into-blink"]
     },
     {
@@ -195,7 +195,7 @@
       "race": "Protoss",
       "matchups": ["PvT", "PvZ"],
       "description": "Oracle opener into charge zealot macro off three gateways.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Oracle", "Stalker", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "ShieldBattery", "Charge", "Gateway", "Zealot", "Pylon", "Zealot", "Zealot", "Pylon", "Zealot", "Zealot"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Oracle", "Adept", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "ShieldBattery", "Charge", "Gateway", "Zealot", "Pylon", "Zealot", "Zealot", "Pylon", "Zealot", "Zealot"],
       "definitionIds": ["pvt-stargate-into-charge", "pvt-3-gate-charge-opener", "pvt-standard-charge-macro", "pvz-standard-charge-macro"]
     },
     {
@@ -204,7 +204,7 @@
       "race": "Protoss",
       "matchups": ["PvZ"],
       "description": "Stargate harass into robo for immortals and detection.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Oracle", "Pylon", "RoboticsFacility", "Gateway", "WarpGateResearch", "Observer", "Immortal", "Pylon", "Stalker", "Immortal"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Oracle", "Adept", "Pylon", "RoboticsFacility", "Gateway", "WarpGateResearch", "Observer", "Immortal", "Pylon", "Adept", "Immortal"],
       "definitionIds": ["pvz-stargate-into-robo"]
     },
     {
@@ -212,8 +212,8 @@
       "name": "Phoenix Opener",
       "race": "Protoss",
       "matchups": ["PvP", "PvT"],
-      "description": "Stargate phoenixes for lifts and scouting, gateway units behind.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Phoenix", "Phoenix", "Stalker", "Pylon", "Gateway", "WarpGateResearch", "Phoenix", "Stalker", "Pylon", "Stalker", "Phoenix"],
+      "description": "Stargate phoenixes for lifts and scouting, adepts behind - the phoenixes ARE your anti-air, so gateway minerals go into 25-gas adepts and the gas stays in the stargate.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Phoenix", "Phoenix", "Adept", "Pylon", "Gateway", "WarpGateResearch", "Phoenix", "Adept", "Pylon", "Adept", "Phoenix"],
       "definitionIds": ["pvp-phoenix-style", "pvt-phoenix-opener"]
     },
     {
@@ -221,18 +221,18 @@
       "name": "Phoenix into Robo",
       "race": "Protoss",
       "matchups": ["PvT"],
-      "description": "Stargate phoenixes for lifts and scouting, flowing into robo for observers and immortals. Warpgate research waits for the second gateway.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "Stargate", "Phoenix", "Phoenix", "Pylon", "RoboticsFacility", "Stalker", "Phoenix", "Gateway", "WarpGateResearch", "ShieldBattery", "Observer", "Pylon", "Immortal", "Stalker"],
+      "description": "Stargate phoenixes for lifts and scouting, flowing into robo for observers and immortals. Phoenixes cover the air, so the gateways pump low-gas adepts; warpgate research waits for the second gateway.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "Stargate", "Phoenix", "Phoenix", "Pylon", "RoboticsFacility", "Adept", "Phoenix", "Gateway", "WarpGateResearch", "ShieldBattery", "Observer", "Pylon", "Immortal", "Adept"],
       "definitionIds": ["pvt-phoenix-into-robo"],
-      "stepsByMatchup": {"PvT": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Pylon", "Nexus", "Assimilator", "Stargate", "Phoenix", "Phoenix", "Pylon", "RoboticsFacility", "Stalker", "Phoenix", "Gateway", "WarpGateResearch", "ShieldBattery", "Observer", "Pylon", "Immortal", "Stalker"]}
+      "stepsByMatchup": {"PvT": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Pylon", "Nexus", "Assimilator", "Stargate", "Phoenix", "Phoenix", "Pylon", "RoboticsFacility", "Adept", "Phoenix", "Gateway", "WarpGateResearch", "ShieldBattery", "Observer", "Pylon", "Immortal", "Adept"]}
     },
     {
       "id": "p-2stargate-phoenix",
       "name": "2 Stargate Phoenix",
       "race": "Protoss",
       "matchups": ["PvZ"],
-      "description": "Two (or three) stargates of phoenixes to own the air and pick queens.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Stargate", "Phoenix", "Phoenix", "Pylon", "Phoenix", "Phoenix", "Gateway", "WarpGateResearch", "Pylon", "Phoenix", "Phoenix", "Pylon", "Phoenix"],
+      "description": "Two (or three) stargates of phoenixes to own the air and pick queens; adepts hold the front door against ling runbys while every drop of gas feeds the stargates.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Stargate", "Phoenix", "Phoenix", "Adept", "Pylon", "Phoenix", "Phoenix", "Gateway", "WarpGateResearch", "Adept", "Pylon", "Phoenix", "Phoenix", "Pylon", "Phoenix"],
       "definitionIds": ["pvz-2-stargate-phoenix", "pvz-3-stargate-phoenix"]
     },
     {
@@ -240,8 +240,8 @@
       "name": "2 Stargate Void Ray",
       "race": "Protoss",
       "matchups": ["PvZ"],
-      "description": "Double stargate void rays against ground-heavy zerg.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Stargate", "VoidRay", "Pylon", "VoidRay", "Gateway", "WarpGateResearch", "Pylon", "VoidRay", "VoidRay", "Pylon", "VoidRay"],
+      "description": "Double stargate void rays against ground-heavy zerg; adepts plug the wall - at 25 gas they never touch the void ray money.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Stargate", "VoidRay", "Adept", "Pylon", "VoidRay", "Gateway", "WarpGateResearch", "Adept", "Pylon", "VoidRay", "VoidRay", "Pylon", "VoidRay"],
       "definitionIds": ["pvz-2-stargate-void-ray"]
     },
     {
@@ -259,7 +259,7 @@
       "race": "Protoss",
       "matchups": ["PvT", "PvP"],
       "description": "Hidden stargate (positioning not simulated): oracles or void rays arrive before anti-air exists.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Stargate", "Oracle", "Pylon", "Oracle", "Gateway", "WarpGateResearch", "Stalker", "Pylon", "VoidRay"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Stargate", "Oracle", "Pylon", "Oracle", "Gateway", "WarpGateResearch", "Adept", "Pylon", "VoidRay"],
       "definitionIds": ["protoss-proxy-stargate-opener", "pvt-proxy-void-ray-stargate"]
     },
     {
@@ -306,7 +306,7 @@
       "race": "Protoss",
       "matchups": ["PvZ"],
       "description": "Two-base carrier tech: a void ray from the first stargate covers the gap, then fleet beacon into carriers.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Pylon", "VoidRay", "FleetBeacon", "Gateway", "WarpGateResearch", "Carrier", "Pylon", "Carrier", "Stalker", "Pylon", "Carrier"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Pylon", "VoidRay", "FleetBeacon", "Gateway", "WarpGateResearch", "Adept", "Carrier", "Pylon", "Carrier", "Adept", "Pylon", "Carrier"],
       "definitionIds": ["pvz-carrier-rush"]
     },
     {
@@ -315,7 +315,7 @@
       "race": "Protoss",
       "matchups": ["PvZ"],
       "description": "Fleet beacon into tempests with an oracle out first - you never go straight to the beacon without a unit.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Pylon", "Oracle", "FleetBeacon", "Gateway", "WarpGateResearch", "Tempest", "Pylon", "Tempest", "Stalker", "Pylon", "Tempest"],
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Pylon", "Oracle", "FleetBeacon", "Gateway", "WarpGateResearch", "Adept", "Tempest", "Pylon", "Tempest", "Adept", "Pylon", "Tempest"],
       "definitionIds": ["pvz-tempest-rush"]
     },
     {

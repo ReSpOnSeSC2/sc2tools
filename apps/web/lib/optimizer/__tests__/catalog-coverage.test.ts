@@ -267,6 +267,41 @@ describe("5.0.16 warpgate meta (user's PTR guidance)", () => {
   });
 });
 
+describe("stargate openers favor adepts (user's PTR guidance)", () => {
+  // "You keep building adepts for most stargate builds — they're
+  // lower gas and the phoenixes are your anti-air." The gas stays in
+  // the stargate; gateway minerals buy 25-gas adepts. Exceptions:
+  // Stargate into Blink (blink stalkers ARE the plan) and the PvP
+  // 4 Stalker Oracle.
+  const STALKER_EXCEPTIONS = new Set([
+    "p-stargate-blink",
+    "p-4stalker-oracle",
+  ]);
+
+  it("gateway production behind a stargate is adept-heavy", () => {
+    let checked = 0;
+    for (const build of referenceBuilds()) {
+      if (build.race !== "Protoss") continue;
+      if (STALKER_EXCEPTIONS.has(build.id)) continue;
+      const lists = [
+        build.steps,
+        ...Object.values(build.stepsByMatchup ?? {}),
+      ];
+      for (const steps of lists) {
+        if (!steps.includes("Stargate")) continue;
+        checked += 1;
+        const adepts = steps.filter((s) => s === "Adept").length;
+        const stalkers = steps.filter((s) => s === "Stalker").length;
+        expect(
+          adepts,
+          `${build.id}: stalkers should not crowd out adepts`,
+        ).toBeGreaterThan(stalkers);
+      }
+    }
+    expect(checked).toBeGreaterThan(8);
+  });
+});
+
 describe("PvT shield battery coverage (user's PTR guidance)", () => {
   // "Not every standard build, but 80-90% get a safety battery."
   // All-ins, proxies and rushes spend every mineral on the punch.
