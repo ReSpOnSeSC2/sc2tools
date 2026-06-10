@@ -445,6 +445,7 @@ function mountRoutes(app, deps, services, clerk) {
       games: services.games,
       gdpr: services.gdpr,
       pairings: services.pairings,
+      imports: services.imports,
       clerk,
       pulseMmr: services.pulseMmr,
       auth,

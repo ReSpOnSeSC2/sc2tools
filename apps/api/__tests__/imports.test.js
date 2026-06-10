@@ -150,4 +150,52 @@ describe("services/import", () => {
     expect(out.cancelled).toBe(1);
     expect(events).toContain("import:cancel_request");
   });
+
+  test("start works without a folder (agent resolves its own roots)", async () => {
+    const mocks = makeMockJobs();
+    const events = [];
+    const io = {
+      to: () => ({
+        emit: (event, payload) => events.push({ event, payload }),
+      }),
+    };
+    const svc = new ImportService({ importJobs: mocks.collection }, { io });
+    const out = await svc.start("user-1", {});
+    expect(out.status).toBe("running");
+    const startEvent = events.find((e) => e.event === "import:start_request");
+    expect(startEvent.payload.folder).toBeNull();
+  });
+
+  test("agentStart mints a backfill job and reuses an active one", async () => {
+    const mocks = makeMockJobs();
+    const events = [];
+    const io = {
+      to: () => ({
+        emit: (event, payload) => events.push({ event, payload }),
+      }),
+    };
+    const svc = new ImportService({ importJobs: mocks.collection }, { io });
+    const first = await svc.agentStart("user-1", { total: 412 });
+    expect(first.existing).toBe(false);
+    expect(mocks.docs[0].kind).toBe("backfill");
+    expect(mocks.docs[0].total).toBe(412);
+    // The dashboard learns about the new job over the user socket.
+    expect(events.some((e) => e.event === "import:progress")).toBe(true);
+    // A second registration while the job runs returns the SAME job —
+    // the web "Import my history" click and the agent's auto-backfill
+    // must not double-mint.
+    const second = await svc.agentStart("user-1", { total: 9 });
+    expect(second.existing).toBe(true);
+    expect(second.jobId).toBe(first.jobId);
+  });
+
+  test("activeJob returns the running job serialised, null when idle", async () => {
+    const mocks = makeMockJobs();
+    const svc = new ImportService({ importJobs: mocks.collection });
+    expect(await svc.activeJob("user-1")).toBeNull();
+    await svc.start("user-1", {});
+    const active = await svc.activeJob("user-1");
+    expect(active.status).toBe("running");
+    expect(typeof active.jobId).toBe("string");
+  });
 });

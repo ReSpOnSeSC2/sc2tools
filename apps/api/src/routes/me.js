@@ -33,6 +33,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   games: import('../services/types').GamesService,
  *   gdpr: import('../services/gdpr').GdprService,
  *   pairings: import('../services/devicePairings').DevicePairingsService,
+ *   imports?: import('../services/import').ImportService,
  *   clerk?: import('../services/clerkClient').ClerkClient,
  *   pulseMmr?: {
  *     getCurrentMmr(pulseId: string): Promise<{
@@ -59,11 +60,16 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       await deps.users.touch(auth.userId);
-      const [stats, summary, agent] = await Promise.all([
-        deps.games.stats(auth.userId),
-        deps.users.getSummary(auth.userId),
-        deps.pairings.latestAgent(auth.userId),
-      ]);
+      const [stats, summary, agent, activeImportJob, onboarding] =
+        await Promise.all([
+          deps.games.stats(auth.userId),
+          deps.users.getSummary(auth.userId),
+          deps.pairings.latestAgent(auth.userId),
+          // Optional deps so narrow tests (and older wiring) that don't
+          // inject them keep working — the fields just come back null.
+          deps.imports ? deps.imports.activeJob(auth.userId) : null,
+          deps.users.getPreferences(auth.userId, "onboarding"),
+        ]);
       // Lazy email backfill: if the row pre-dates the webhook (or no
       // webhook is configured), pull the email from Clerk on first read
       // and cache it. Best-effort — clerk.getEmail returns null on
@@ -95,6 +101,14 @@ function buildMeRouter(deps) {
         email,
         agentVersion: agent.version,
         agentPaired: agent.paired,
+        // "Agent online" signal for the onboarding checklist — fresh
+        // within ~3min means the heartbeat is alive.
+        agentLastSeenAt: agent.lastSeenAt || null,
+        // Currently-active import job (if any) so the dashboard can
+        // mount the progress card on first paint.
+        activeImportJob: activeImportJob || null,
+        // Client-only onboarding bits (downloadStartedAt, dismissedAt).
+        onboarding: onboarding || {},
         isAdmin: isAdmin(req),
       });
     } catch (err) {
@@ -237,7 +251,15 @@ function buildMeRouter(deps) {
   // Allowlist of preference types the client may read/write.
   // "arcade" stores Arcade tab state (streak, XP/level, unlocked card slugs,
   // current Stock Market portfolio + week key, Bingo card state, badges).
-  const PREF_TYPES = new Set(["misc", "voice", "arcade", "randomizer"]);
+  // "onboarding" stores the checklist bits only the client knows
+  // (downloadStartedAt, dismissedAt).
+  const PREF_TYPES = new Set([
+    "misc",
+    "voice",
+    "arcade",
+    "randomizer",
+    "onboarding",
+  ]);
 
   router.get("/me/preferences/:type", deps.auth, async (req, res, next) => {
     try {

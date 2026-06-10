@@ -53,6 +53,7 @@ from .live.transport import (
     OverlayBackendTransport,
 )
 from .pairing import ensure_paired
+from .import_controller import ImportController
 from .socket_client import SocketClient, make_recompute_handlers
 from .player_handle import (
     auto_detect_from_replays,
@@ -361,15 +362,40 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
 
     _ensure_player_handle(api, cfg, state, initial_replay_folders, log)
 
+    # Forward-declared so the upload/watcher callbacks (constructed
+    # first) can late-bind it; assigned right after the watcher exists.
+    import_ctl: Optional[ImportController] = None
+
     upload = UploadQueue(
         cfg=cfg,
         state=state,
         api=api,
-        on_success=lambda p: ui.on_upload_success(p.name),
-        on_failure=lambda p, exc: ui.on_upload_failed(p.name, str(exc)),
+        on_success=lambda p: (
+            ui.on_upload_success(p.name),
+            import_ctl.on_upload_success(p) if import_ctl else None,
+        ),
+        on_failure=lambda p, exc: (
+            ui.on_upload_failed(p.name, str(exc)),
+            import_ctl.on_upload_failure(p, exc) if import_ctl else None,
+        ),
     )
     upload.set_paused(state.paused)
-    watcher = ReplayWatcher(cfg=cfg, state=state, upload=upload)
+    watcher = ReplayWatcher(
+        cfg=cfg,
+        state=state,
+        upload=upload,
+        on_replay_skipped=lambda p, reason: (
+            import_ctl.on_replay_skipped(p, reason) if import_ctl else None
+        ),
+    )
+    import_ctl = ImportController(
+        api=api,
+        watcher=watcher,
+        full_resync=lambda: _handle_resync(cfg, state, upload),
+        list_folders=lambda: [
+            str(p) for p in _discover_replay_folders(cfg, state)
+        ],
+    )
 
     updater = Updater(
         cfg=cfg,
@@ -399,6 +425,10 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
             on_recompute_games=on_macro,
             on_recompute_opp_build=on_opp,
             on_full_resync=on_full_resync,
+            on_import_scan=import_ctl.handle_scan_request,
+            on_import_start=import_ctl.handle_start_request,
+            on_import_cancel=import_ctl.handle_cancel_request,
+            on_import_pick_folder=import_ctl.handle_pick_folder_request,
         )
 
     live_transport: Optional[FanOutTransport] = None
@@ -422,6 +452,16 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
     try:
         upload.start()
         watcher.start()
+        # Register the startup sweep as a visible import job when the
+        # un-uploaded backlog is large (first run / long offline gap).
+        # On a thread: sizing the job walks every replay folder, which
+        # can take seconds on multi-thousand-replay libraries, and boot
+        # must not wait on it.
+        threading.Thread(
+            target=import_ctl.maybe_start_auto_backfill,
+            name="sc2tools-auto-backfill",
+            daemon=True,
+        ).start()
         updater.start()
         heartbeat.start()
         if socket_client is not None:
@@ -456,6 +496,8 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
             live_transport.shutdown()
         if socket_client:
             socket_client.stop()
+        if import_ctl:
+            import_ctl.stop()
         if heartbeat:
             heartbeat.stop()
         if updater:
@@ -608,6 +650,8 @@ def _run_with_gui(
         cell.live_transport.shutdown()
     if getattr(cell, "socket_client", None):
         cell.socket_client.stop()
+    if getattr(cell, "import_ctl", None):
+        cell.import_ctl.stop()
     if cell.heartbeat:
         cell.heartbeat.stop()
     if cell.updater:
@@ -669,15 +713,40 @@ def _gui_boot_worker(
         folders_for_detect = _discover_replay_folders(cfg, state)
         _ensure_player_handle(api, cfg, state, folders_for_detect, log)
 
+        # Forward-declared so the upload/watcher callbacks (constructed
+        # first) can late-bind it; assigned right after the watcher.
+        import_ctl: Optional[ImportController] = None
+
         upload = UploadQueue(
             cfg=cfg,
             state=state,
             api=api,
-            on_success=lambda p: ui.on_upload_success(p.name),
-            on_failure=lambda p, exc: ui.on_upload_failed(p.name, str(exc)),
+            on_success=lambda p: (
+                ui.on_upload_success(p.name),
+                import_ctl.on_upload_success(p) if import_ctl else None,
+            ),
+            on_failure=lambda p, exc: (
+                ui.on_upload_failed(p.name, str(exc)),
+                import_ctl.on_upload_failure(p, exc) if import_ctl else None,
+            ),
         )
         upload.set_paused(state.paused)
-        watcher = ReplayWatcher(cfg=cfg, state=state, upload=upload)
+        watcher = ReplayWatcher(
+            cfg=cfg,
+            state=state,
+            upload=upload,
+            on_replay_skipped=lambda p, reason: (
+                import_ctl.on_replay_skipped(p, reason) if import_ctl else None
+            ),
+        )
+        import_ctl = ImportController(
+            api=api,
+            watcher=watcher,
+            full_resync=lambda: _handle_resync(cfg, state, upload),
+            list_folders=lambda: [
+                str(p) for p in _discover_replay_folders(cfg, state)
+            ],
+        )
         updater = Updater(
             cfg=cfg,
             state=state,
@@ -691,6 +760,7 @@ def _gui_boot_worker(
         cell.watcher = watcher
         cell.updater = updater
         cell.heartbeat = heartbeat
+        cell.import_ctl = import_ctl
 
         socket_client: Optional[SocketClient] = None
         if state.device_token:
@@ -707,6 +777,10 @@ def _gui_boot_worker(
                 on_recompute_games=on_macro,
                 on_recompute_opp_build=on_opp,
                 on_full_resync=on_full_resync,
+                on_import_scan=import_ctl.handle_scan_request,
+                on_import_start=import_ctl.handle_start_request,
+                on_import_cancel=import_ctl.handle_cancel_request,
+                on_import_pick_folder=import_ctl.handle_pick_folder_request,
             )
         cell.socket_client = socket_client
 
@@ -738,6 +812,14 @@ def _gui_boot_worker(
 
         upload.start()
         watcher.start()
+        # Register the startup sweep as a visible import job when the
+        # un-uploaded backlog is large. Threaded: sizing the job walks
+        # every replay folder and boot must not wait on it.
+        threading.Thread(
+            target=import_ctl.maybe_start_auto_backfill,
+            name="sc2tools-auto-backfill",
+            daemon=True,
+        ).start()
         updater.start()
         heartbeat.start()
         if socket_client is not None:
@@ -1487,6 +1569,7 @@ class _RuntimeCell:
         "updater",
         "heartbeat",
         "socket_client",
+        "import_ctl",
         "live_bus",
         "live_poller",
         "live_bridge",
@@ -1504,6 +1587,7 @@ class _RuntimeCell:
         self.updater = None
         self.heartbeat = None
         self.socket_client = None
+        self.import_ctl = None
         self.live_bus = None
         self.live_poller = None
         self.live_bridge = None

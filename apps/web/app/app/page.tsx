@@ -6,6 +6,9 @@ type Me = {
   userId: string;
   source: string;
   games: { total: number; latest: string | null };
+  agentPaired: boolean;
+  agentLastSeenAt?: string | null;
+  onboarding?: { downloadStartedAt?: string; dismissedAt?: string } | null;
 };
 
 export default async function AnalyzerHome() {

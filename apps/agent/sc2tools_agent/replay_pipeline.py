@@ -466,14 +466,40 @@ def _is_ladder_game(ctx: Any) -> Optional[bool]:
     return None
 
 
+# Skip-reason codes for replays that parse to None. Shared contract
+# with the cloud import-progress UI (apps/web ImportProgressCard maps
+# each code to human copy), so changes here are wire-format changes.
+SKIP_AI_GAME = "ai_game"
+SKIP_PLAYER_UNRESOLVED = "player_unresolved"
+SKIP_NO_RESULT = "no_result"
+SKIP_PARSE_FAILED = "parse_failed"
+
+
 def parse_replay_for_cloud(
     file_path: Path,
     *,
     player_handle: Optional[str] = None,
     state_dir: Optional[Path] = None,
 ) -> Optional[CloudGame]:
-    """Parse one .SC2Replay and return a CloudGame, or None if the
-    replay is unusable (AI game, unresolved player, parse error).
+    """Back-compat wrapper around :func:`parse_replay_for_cloud_ex`
+    for callers that don't care WHY a replay was unusable."""
+    game, _reason = parse_replay_for_cloud_ex(
+        file_path, player_handle=player_handle, state_dir=state_dir,
+    )
+    return game
+
+
+def parse_replay_for_cloud_ex(
+    file_path: Path,
+    *,
+    player_handle: Optional[str] = None,
+    state_dir: Optional[Path] = None,
+) -> tuple[Optional[CloudGame], Optional[str]]:
+    """Parse one .SC2Replay and return ``(CloudGame, None)``, or
+    ``(None, reason)`` when the replay is unusable — reason is one of
+    the ``SKIP_*`` codes (AI game, unresolved player, no result, parse
+    error) so the import-progress UI can tell the user something
+    actionable instead of a bare failure count.
 
     ``player_handle`` is an optional explicit override (e.g. tests).
     Otherwise we resolve through ``state_dir``'s cached cloud value
@@ -508,10 +534,10 @@ def parse_replay_for_cloud(
         ctx = parse_deep(str(file_path), handle or "")
     except Exception as exc:  # noqa: BLE001
         log.warning("parse_deep_failed for %s: %s", file_path.name, exc)
-        return None
+        return None, SKIP_PARSE_FAILED
 
     if ctx.is_ai_game:
-        return None
+        return None, SKIP_AI_GAME
 
     # The configured handle didn't substring-match any player name in
     # this replay. Before giving up, derive the player toon from the
@@ -542,7 +568,7 @@ def parse_replay_for_cloud(
                         file_path.name,
                         exc,
                     )
-                    return None
+                    return None, SKIP_PARSE_FAILED
                 # Promote the discovered name into the local cache so
                 # the NEXT replay's first parse already picks up "us"
                 # without needing the toon-fallback re-parse. Without
@@ -568,13 +594,13 @@ def parse_replay_for_cloud(
                             )
 
     if not ctx.me or not ctx.opponent:
-        return None
+        return None, SKIP_PLAYER_UNRESOLVED
 
     me = ctx.me
     opp = ctx.opponent
     result = _result_str(me.result)
     if result is None:
-        return None
+        return None, SKIP_NO_RESULT
 
     macro_breakdown, derived_macro_score = _compute_macro_breakdown(ctx)
     apm_curve = _compute_apm_curve(ctx)
@@ -743,7 +769,7 @@ def parse_replay_for_cloud(
         macro_breakdown=macro_breakdown,
         apm_curve=apm_curve,
         spatial=spatial,
-    )
+    ), None
 
 
 def _build_log_from_events(
