@@ -45,7 +45,7 @@
     }
   },
   "upgrades": {
-    "WarpGateResearch": { "researchedAt": ["Gateway"] },
+    "WarpGateResearch": { "researchedAt": ["Gateway"], "nonBlocking": true },
     "ZergGroundCarapaceLevel1": { "minerals": 100, "gas": 100 },
     "ZergGroundCarapaceLevel2": { "minerals": 150, "gas": 150 },
     "ZergGroundCarapaceLevel3": { "minerals": 200, "gas": 200 }

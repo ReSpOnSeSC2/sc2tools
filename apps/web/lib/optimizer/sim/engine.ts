@@ -364,6 +364,28 @@ function autoSupply(
 /* Main loop                                                           */
 /* ------------------------------------------------------------------ */
 
+/** How many upcoming steps may start while the current one is stuck. */
+const LOOKAHEAD_STEPS = 4;
+
+/** Bank cost of an action (for the lookahead's resource reservation). */
+function actionCost(
+  profile: PatchProfile,
+  action: BuildAction,
+): { minerals: number; gas: number } {
+  if (action.kind === "chrono") return { minerals: 0, gas: 0 };
+  if (action.kind === "transform-warpgate") {
+    return { ...profile.mechanics.warpgate.transformCost };
+  }
+  if (action.kind === "research") {
+    const def = profile.upgrades[action.name];
+    return { minerals: def?.minerals ?? 0, gas: def?.gas ?? 0 };
+  }
+  const def = profile.units[action.name];
+  if (!def) return { minerals: 0, gas: 0 };
+  const count = def.pairTrained ? 2 : 1;
+  return { minerals: def.minerals * count, gas: def.gas * count };
+}
+
 export function simulate(
   actions: BuildAction[],
   profile: PatchProfile,
@@ -372,9 +394,15 @@ export function simulate(
 ): SimResult {
   const state = makeState(profile, race, opts.policies);
   const policies = opts.policies;
-  let actionIndex = 0;
+  const done: boolean[] = new Array(actions.length).fill(false);
+  let firstPending = 0;
   let unexecuted = 0;
   sample(state, profile, true);
+  const advancePending = () => {
+    while (firstPending < actions.length && done[firstPending]) {
+      firstPending += 1;
+    }
+  };
 
   const advanceTo = (t: number) => {
     const clamped = Math.min(t, opts.horizonSec);
@@ -392,35 +420,64 @@ export function simulate(
 
     // 1. Try to dispatch as many head actions as possible right now.
     let headRetryAt = Infinity;
-    while (actionIndex < actions.length) {
-      const outcome = tryDispatch(state, profile, race, actions[actionIndex]);
+    advancePending();
+    while (firstPending < actions.length) {
+      const outcome = tryDispatch(state, profile, race, actions[firstPending]);
       if (outcome.status === "done") {
-        actionIndex += 1;
+        done[firstPending] = true;
+        advancePending();
         continue;
       }
       if (outcome.status === "impossible") {
         log(
           state,
           "warning",
-          actions[actionIndex].name,
+          actions[firstPending].name,
           outcome.reason ?? "impossible",
         );
         unexecuted += 1;
-        actionIndex += 1;
+        done[firstPending] = true;
+        advancePending();
         continue;
       }
       headRetryAt = outcome.retryAt ?? Infinity;
       if (outcome.reason === "supply-blocked") {
         if (state.supplyBlockedSince === null) {
           state.supplyBlockedSince = state.time;
-          log(state, "supply-blocked", actions[actionIndex].name);
+          log(state, "supply-blocked", actions[firstPending].name);
+        }
+      }
+      // Lookahead: a player following a build order doesn't freeze
+      // while one step waits on a busy producer or finishing tech —
+      // they start the next few steps that are ready. Resource waits
+      // are excluded (skipping ahead would steal the head's bank),
+      // and lookahead steps must leave the head's cost untouched.
+      if (outcome.blockedOn && outcome.blockedOn !== "resources") {
+        const reserve = actionCost(profile, actions[firstPending]);
+        let scanned = 0;
+        for (
+          let i = firstPending + 1;
+          i < actions.length && scanned < LOOKAHEAD_STEPS;
+          i += 1
+        ) {
+          if (done[i]) continue;
+          scanned += 1;
+          const cost = actionCost(profile, actions[i]);
+          if (
+            state.eco.minerals - cost.minerals < reserve.minerals ||
+            state.eco.gas - cost.gas < reserve.gas
+          ) {
+            continue;
+          }
+          const ahead = tryDispatch(state, profile, race, actions[i]);
+          if (ahead.status === "done") done[i] = true;
         }
       }
       break;
     }
     if (
       state.supplyBlockedSince !== null &&
-      (actionIndex >= actions.length ||
+      (firstPending >= actions.length ||
         state.supplyUsed < state.supplyCap + pendingSupply(state, profile))
     ) {
       state.supplyBlockedSec += state.time - state.supplyBlockedSince;
@@ -440,7 +497,7 @@ export function simulate(
     const nextTime = Math.min(...candidates);
     if (nextTime > opts.horizonSec) break;
     if (
-      actionIndex >= actions.length &&
+      firstPending >= actions.length &&
       !nextEvent &&
       !policies.autoWorkers &&
       policies.autoSupplyLeadSec <= 0
@@ -498,7 +555,7 @@ export function simulate(
     Math.min(state.time, opts.horizonSec),
   );
   sample(state, profile, true);
-  unexecuted += actions.length - actionIndex;
+  unexecuted += done.filter((d) => !d).length;
 
   const unitsAtEnd: Record<string, number> = {};
   for (const [name, count] of state.completed) {

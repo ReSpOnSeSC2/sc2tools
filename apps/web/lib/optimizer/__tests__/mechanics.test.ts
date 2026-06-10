@@ -149,23 +149,31 @@ describe("terran orbital mechanics", () => {
 });
 
 describe("5.0.16 warpgate rework", () => {
-  it("researches warpgate at the gateway and speeds production 35%", () => {
+  it("research is non-blocking and post-research gateways run 35% faster", () => {
     const actions: BuildAction[] = [
       act("build", "Pylon"),
       act("build", "Gateway"),
       act("build", "Assimilator"),
       act("research", "WarpGateResearch"),
-      act("train", "Zealot"),
+      ...Array.from({ length: 6 }, () => act("train", "Zealot")),
     ];
     const result = simulate(actions, profile, "Protoss", opts({ horizonSec: 600 }));
     expect(result.unexecutedActions).toBe(0);
     const wgDone = result.steps.find(
       (s) => s.name === "WarpGateResearch",
     )!.doneSec;
-    const zealot = result.steps.find((s) => s.name === "Zealot")!;
-    // zealot trained after research completes gets the 1.35x speed
-    expect(zealot.startSec).toBeGreaterThanOrEqual(wgDone - 0.01);
-    expect(zealot.doneSec - zealot.startSec).toBeCloseTo(
+    const zealots = result.steps.filter((s) => s.name === "Zealot");
+    // research no longer freezes the gateway: the first zealot trains
+    // WHILE warpgate is researching, at normal speed
+    expect(zealots[0].startSec).toBeLessThan(wgDone);
+    expect(zealots[0].doneSec - zealots[0].startSec).toBeCloseTo(
+      profile.units.Zealot.buildTime,
+      1,
+    );
+    // a zealot started after research completes gets the 1.35x speed
+    const boosted = zealots.find((z) => z.startSec >= wgDone);
+    expect(boosted).toBeDefined();
+    expect(boosted!.doneSec - boosted!.startSec).toBeCloseTo(
       profile.units.Zealot.buildTime / 1.35,
       1,
     );
@@ -178,20 +186,59 @@ describe("5.0.16 warpgate rework", () => {
       act("build", "Assimilator"),
       act("research", "WarpGateResearch"),
       act("transform-warpgate", "Gateway"),
-      act("train", "Zealot"),
-      act("train", "Zealot"),
+      ...Array.from({ length: 7 }, () => act("train", "Zealot")),
     ];
     const result = simulate(actions, profile, "Protoss", opts({ horizonSec: 600 }));
     expect(result.unexecutedActions).toBe(0);
+    const transformDone = result.events.find(
+      (e) => e.kind === "complete" && e.name === "WarpGate",
+    )!.time;
     const zealots = result.steps.filter((s) => s.name === "Zealot");
+    // lookahead trains gateway zealots while the transform waits on
+    // the research; the ones AFTER the transform are warped
+    const warped = zealots.filter((z) => z.startSec >= transformDone - 0.01);
+    expect(warped.length).toBeGreaterThanOrEqual(2);
     // warp-in is near-instant…
-    expect(zealots[0].doneSec - zealots[0].startSec).toBeCloseTo(
+    expect(warped[0].doneSec - warped[0].startSec).toBeCloseTo(
       profile.mechanics.warpgate.warpInSec,
       1,
     );
-    // …but the second warp waits out the 22s cooldown
-    expect(zealots[1].startSec - zealots[0].startSec).toBeGreaterThanOrEqual(
+    // …but the next warp waits out the 22s cooldown
+    expect(warped[1].startSec - warped[0].startSec).toBeGreaterThanOrEqual(
       profile.mechanics.warpgate.cooldowns.Zealot - 0.01,
     );
+  });
+});
+
+describe("build-order lookahead", () => {
+  it("starts later mineral-only steps while the head waits on a producer", () => {
+    // zealot #2 is stuck behind a busy gateway; a player would start
+    // the forge in the meantime rather than freeze the build.
+    const actions: BuildAction[] = [
+      act("build", "Pylon"),
+      act("build", "Gateway"),
+      act("train", "Zealot"),
+      act("train", "Zealot"),
+      act("build", "Forge"),
+    ];
+    const result = simulate(actions, profile, "Protoss", opts());
+    expect(result.unexecutedActions).toBe(0);
+    const zealots = result.steps.filter((s) => s.name === "Zealot");
+    const forge = result.steps.find((s) => s.name === "Forge")!;
+    expect(forge.startSec).toBeLessThan(zealots[1].startSec);
+  });
+
+  it("never lets lookahead steal the head step's resources", () => {
+    // head nexus is blocked purely on minerals (saving to 400) — the
+    // forge behind it must NOT jump the queue and spend the savings.
+    const actions: BuildAction[] = [
+      act("build", "Pylon"),
+      act("build", "Nexus"),
+      act("build", "Forge"),
+    ];
+    const result = simulate(actions, profile, "Protoss", opts());
+    const nexus = result.steps.find((s) => s.name === "Nexus")!;
+    const forge = result.steps.find((s) => s.name === "Forge")!;
+    expect(forge.startSec).toBeGreaterThanOrEqual(nexus.startSec);
   });
 });
