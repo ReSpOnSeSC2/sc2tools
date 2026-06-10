@@ -86,6 +86,7 @@ export function BuildSourcePanel({
 }) {
   const [selected, setSelected] = useState<string>("");
   const [query, setQuery] = useState("");
+  const [showOtherMatchups, setShowOtherMatchups] = useState(false);
   const [bulkState, setBulkState] = useState<{
     running: boolean;
     done: number;
@@ -148,6 +149,11 @@ export function BuildSourcePanel({
     const q = query.trim().toLowerCase();
     return [...references]
       .filter((ref) => {
+        // Only the selected matchup's builds by default; searching or
+        // the "show more" expander widens to the whole race catalog.
+        if (!q && !showOtherMatchups && !ref.matchups.includes(matchup)) {
+          return false;
+        }
         if (!q) return true;
         const covered = (ref.definitionIds ?? [])
           .map((id) => definitionNamesById.get(id) ?? id)
@@ -161,10 +167,11 @@ export function BuildSourcePanel({
         const bIn = b.matchups.includes(matchup) ? 0 : 1;
         return aIn - bIn || a.name.localeCompare(b.name);
       });
-  }, [references, matchup, query, definitionNamesById]);
+  }, [references, matchup, query, definitionNamesById, showOtherMatchups]);
   const matchupCount = references.filter((r) =>
     r.matchups.includes(matchup),
   ).length;
+  const hiddenCount = references.length - matchupCount;
 
   const handleAdaptAll = async () => {
     if (bulkState.running || customBuilds.length === 0) return;
@@ -215,8 +222,8 @@ export function BuildSourcePanel({
               Standard openers
             </div>
             <span className="text-caption text-text-dim">
-              {references.length} builds · {matchupCount} for {matchup} ·
-              covers the full definitions catalog
+              {matchupCount} {matchup} builds · covers the full definitions
+              catalog
             </span>
           </div>
           <Input
@@ -294,6 +301,17 @@ export function BuildSourcePanel({
               );
             })}
           </ul>
+          {!query.trim() && hiddenCount > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowOtherMatchups((v) => !v)}
+            >
+              {showOtherMatchups
+                ? `Hide other matchups`
+                : `Show ${hiddenCount} openers from other matchups`}
+            </Button>
+          ) : null}
         </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
