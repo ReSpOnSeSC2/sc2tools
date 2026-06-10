@@ -18,7 +18,7 @@ import type { Appearance } from "@clerk/types";
 import type { Theme } from "@/lib/theme";
 
 const DARK_VARS = {
-  colorPrimary: "#7c8cff",
+  colorPrimary: "#157d8c",
   colorBackground: "#11141b",
   colorInputBackground: "#161a23",
   colorInputText: "#e6e8ee",
@@ -32,7 +32,7 @@ const DARK_VARS = {
 } as const;
 
 const LIGHT_VARS = {
-  colorPrimary: "#5b6dff",
+  colorPrimary: "#0e7d8c",
   colorBackground: "#ffffff",
   colorInputBackground: "#fafbff",
   colorInputText: "#0e1118",
@@ -100,6 +100,17 @@ const SHARED_ELEMENTS: Appearance["elements"] = {
   formResendCodeLink: "text-accent hover:text-accent-hover",
   otpCodeFieldInput:
     "bg-bg-elevated border border-border text-text rounded-lg",
+};
+
+/**
+ * Theme-agnostic baseline for the root ClerkProvider: element classes
+ * are CSS-variable backed so they adapt to data-theme on their own.
+ * This catches every Clerk surface the two auth PAGES don't wrap —
+ * modals, the post-OAuth "fill in missing fields" task screen, user
+ * menus — which previously fell back to Clerk's default styling.
+ */
+export const clerkAppearanceBase: Appearance = {
+  elements: SHARED_ELEMENTS,
 };
 
 export const clerkAppearanceDark: Appearance = {
