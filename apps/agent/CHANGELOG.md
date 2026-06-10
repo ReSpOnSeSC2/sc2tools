@@ -2,6 +2,28 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## Unreleased
+
+### Added — full ZvP and TvP build coverage (engine)
+- **What.** The bundled engine's per-matchup trees now cover ZvP with
+  10 builds (12 Pool Rush, Ling Bane Bust, Roach/Ravager All-in,
+  Nydus, Hydra Timing, Lurker Contain, Ling Bane Muta, Muta Harass,
+  Speedling Flood, Hatch First Macro) and TvP with 11 (proxy rax /
+  Marauder, Cyclone, 1-1-1 Banshee, 3 Rax, BC Rush, Tank/Thor Mech,
+  Widow Mine Drop, 2-1-1 Reaper Expand, 2 Base Tank Push, Fast 3 CC
+  Bio) — parity with the other four matchups. Thresholds are cloned
+  from the proven sibling-matchup rules.
+- **What, part 2.** The legacy `detectors/` stack (bulk-import CLI,
+  macro/apm CLIs, local SPA) no longer returns
+  `Unclassified - Zerg/Terran`: it delegates to the same shared
+  classifier the agent and opponent detector use, so the last
+  "Stub - TODO Stage 8" placeholders are gone.
+- **Effect.** Zerg and Terran players get precise matchup labels in
+  every matchup from every parse path. The Builds page offers a
+  one-click "Reclassify my games" for stored games still carrying the
+  old sentinel. `scripts/benchmark_builds_cli.py` (new) measures
+  specific-label share per matchup against a real replay folder.
+
 ## 0.11.0
 
 ### Changed — parsing now resolves entirely from `apps/replay-engine`

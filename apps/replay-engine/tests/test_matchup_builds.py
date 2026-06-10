@@ -161,14 +161,101 @@ def test_tvp_2_1_1_reaper_expand():
 
 
 def test_tvp_fast_3cc_is_not_misread_as_reaper_expand():
-    # A greedy fast-3-CC bio macro must fall through to the generic
-    # "Terran - Fast 3 CC" race label, NOT the 2-base reaper timing.
+    # A greedy fast-3-CC opening must NOT land on the 2-base reaper
+    # timing. With only one Barracks and no Marine ball it also misses
+    # the "TvP - Fast 3 CC Bio" matchup rule, falling through to the
+    # generic "Terran - Fast 3 CC" race label.
     events = [
         _b("CommandCenter", 0), _b("CommandCenter", 110), _b("CommandCenter", 160),
         _b("Barracks", 60), _b("Factory", 210), _b("Starport", 250),
         _u("Reaper", 120), _u("Medivac", 330),
     ]
     assert _classify("Terran", "Protoss", events) == "Terran - Fast 3 CC"
+
+
+def test_tvp_fast_3cc_bio():
+    # The full bio commitment (3 rax + marine ball, no mech tech) earns
+    # the matchup-specific label.
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 110), _b("CommandCenter", 160),
+        _b("Barracks", 60), _b("Barracks", 200), _b("Barracks", 300),
+        *_n("Marine", 250, 8),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - Fast 3 CC Bio"
+
+
+def test_tvp_proxy_marauder():
+    events = [_b("CommandCenter", 0), _pb("Barracks", 150), *_n("Marauder", 300, 2)]
+    assert _classify("Terran", "Protoss", events) == "TvP - Proxy Marauder"
+
+
+def test_tvp_cyclone_push():
+    events = [_b("CommandCenter", 0), _b("Factory", 200), *_n("Cyclone", 350, 2)]
+    assert _classify("Terran", "Protoss", events) == "TvP - Cyclone Push"
+
+
+def test_tvp_1_1_1_cloak_banshee():
+    events = [
+        _b("CommandCenter", 0), _b("Factory", 200), _b("Starport", 280),
+        _u("Banshee", 400),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - 1-1-1 Cloak Banshee"
+
+
+def test_tvp_3_rax_marine():
+    events = [
+        _b("CommandCenter", 0),
+        _b("Barracks", 100), _b("Barracks", 180), _b("Barracks", 260),
+        *_n("Marine", 300, 10),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - 3 Rax Marine"
+
+
+def test_tvp_battlecruiser_rush():
+    events = [
+        _b("CommandCenter", 0), _b("Starport", 300), _b("FusionCore", 380),
+        _u("Battlecruiser", 500),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - Battlecruiser Rush"
+
+
+def test_tvp_tank_thor_mech():
+    events = [
+        _b("CommandCenter", 0), _b("Factory", 200), _b("Armory", 350),
+        _u("SiegeTank", 500), _u("Thor", 520),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - Tank/Thor Mech"
+
+
+def test_tvp_widow_mine_drop():
+    events = [
+        _b("CommandCenter", 0),
+        _b("Barracks", 80), _b("Factory", 200), _b("Starport", 300),
+        *_n("WidowMine", 400, 2), *_n("Marine", 250, 8), _u("Medivac", 450),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - Widow Mine Drop"
+
+
+def test_tvp_widow_mine_drop_wins_over_reaper_expand():
+    # A reaper-expand opening that commits to mines must land on the
+    # mine label, not the generic 2-1-1 Medivac shape -- the mine
+    # signature is checked first by design.
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 180),
+        _b("Barracks", 60), _b("Factory", 300), _b("Starport", 380),
+        _u("Reaper", 150), *_n("WidowMine", 420, 2), *_n("Marine", 250, 8),
+        _u("Medivac", 460),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - Widow Mine Drop"
+
+
+def test_tvp_2_base_tank_push():
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 180),
+        _b("Barracks", 80), _b("Factory", 200), _b("Starport", 300),
+        _u("SiegeTank", 500), *_n("Marine", 250, 8),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - 2 Base Tank Push"
 
 
 # --------------------------------------------------------------------------
@@ -199,6 +286,92 @@ def test_zvp_ling_bane_muta():
         *_n("Zergling", 350, 6), _u("Baneling", 470),
     ]
     assert _classify("Zerg", "Protoss", events) == "ZvP - Ling Bane Muta"
+
+
+def test_zvp_12_pool_rush():
+    events = [
+        _b("Hatchery", 0), _b("SpawningPool", 40),
+        *_n("Zergling", 200, 6),
+    ]
+    assert _classify("Zerg", "Protoss", events) == "ZvP - 12 Pool Rush"
+
+
+def test_zvp_ling_bane_bust():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180),
+        _b("SpawningPool", 60), _b("BanelingNest", 180),
+        *_n("Zergling", 240, 12, step=6), *_n("Baneling", 290, 4),
+    ]
+    assert _classify("Zerg", "Protoss", events) == "ZvP - Ling Bane Bust"
+
+
+def test_zvp_2_base_roach_ravager_all_in():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180),
+        _b("SpawningPool", 40), _b("RoachWarren", 200),
+        *_n("Drone", 60, 10), *_n("Roach", 350, 5), *_n("Ravager", 420, 4),
+    ]
+    assert _classify("Zerg", "Protoss", events) == "ZvP - 2 Base Roach Ravager All-in"
+
+
+def test_zvp_2_base_nydus():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180),
+        _b("SpawningPool", 40), _b("NydusNetwork", 420),
+    ]
+    assert _classify("Zerg", "Protoss", events) == "ZvP - 2 Base Nydus"
+
+
+def test_zvp_hydra_timing():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 150), _b("Hatchery", 250),
+        _b("SpawningPool", 40), _b("HydraliskDen", 380),
+        *_n("Hydralisk", 440, 8),
+    ]
+    assert _classify("Zerg", "Protoss", events) == "ZvP - Hydra Timing (3 Base)"
+
+
+def test_zvp_hydra_into_lurker_lands_on_lurker_contain():
+    # Lurker tech disqualifies the hydra-timing label by design: the
+    # hydras were transitional, the contain is the build.
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 150), _b("Hatchery", 250),
+        _b("SpawningPool", 40), _b("HydraliskDen", 380),
+        *_n("Hydralisk", 440, 8), _b("LurkerDen", 500),
+    ]
+    assert _classify("Zerg", "Protoss", events) == "ZvP - Lurker Contain"
+
+
+def test_zvp_lurker_contain():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180), _b("SpawningPool", 40),
+        _b("LurkerDen", 490),
+    ]
+    assert _classify("Zerg", "Protoss", events) == "ZvP - Lurker Contain"
+
+
+def test_zvp_mutalisk_harass():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 180), _b("SpawningPool", 40),
+        _b("Spire", 450), *_n("Mutalisk", 500, 6),
+    ]
+    assert _classify("Zerg", "Protoss", events) == "ZvP - Mutalisk Harass"
+
+
+def test_zvp_speedling_flood():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 150), _b("Hatchery", 250),
+        _b("SpawningPool", 40), *_n("Drone", 60, 10), *_n("Zergling", 250, 20, step=5),
+    ]
+    assert _classify("Zerg", "Protoss", events) == "ZvP - Speedling Flood"
+
+
+def test_zvp_hatch_first_macro():
+    events = [
+        _b("Hatchery", 0), _b("Hatchery", 150), _b("Hatchery", 250),
+        _b("SpawningPool", 40), *_n("Drone", 60, 40, step=4),
+    ]
+    assert _classify("Zerg", "Protoss", events) == "ZvP - Hatch First Macro"
 
 
 def test_zvz_12_pool_speedling():

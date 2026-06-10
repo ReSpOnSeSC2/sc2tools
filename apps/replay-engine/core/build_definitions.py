@@ -149,7 +149,16 @@ BUILD_DEFINITIONS = {
     "TvZ - 2-1-1 Marine Drop": "Detected when a Starport Medivac drop carries Marines off two bases -- the committed 2-base drop timing (not 3-CC macro).",
     # --- TvP ---
     "TvP - Proxy 4 Rax Reaper": "Detected when four Barracks (at least one proxied near the enemy) flood Reapers -- the all-in proxy reaper rush vs Protoss.",
+    "TvP - Proxy Marauder": "Detected when a proxied Barracks pumps Marauders into the Protoss wall -- the proxy Marauder rush vs Protoss.",
+    "TvP - Cyclone Push": "Detected when an early Factory produces Cyclones off two or fewer bases -- the lock-on Cyclone pressure vs Protoss.",
+    "TvP - 1-1-1 Cloak Banshee": "Detected when a Factory and Starport are built before any expansion and a Banshee reaches the field on one base -- the 1-base cloak-Banshee harass vs Protoss.",
+    "TvP - 3 Rax Marine": "Detected when 3+ Barracks off one base flood Marines with no Factory -- a gas-light Marine all-in vs Protoss.",
+    "TvP - Battlecruiser Rush": "Detected when a fast Fusion Core lands Battlecruisers -- the Battlecruiser rush vs Protoss.",
+    "TvP - Tank/Thor Mech": "Detected when an Armory backs Thors and Siege Tanks -- the positional mech composition vs Protoss.",
+    "TvP - Widow Mine Drop": "Detected when a Marine ball with 2+ Widow Mines and a Medivac runs mobile mine drops into the Protoss mineral lines.",
     "TvP - 2-1-1 Reaper Expand": "Detected when a Reaper-first scout takes a single expansion (no fast 3rd CC) and adds a Factory + Starport for the Medivac-drop / Stim bio timing off two bases vs Protoss.",
+    "TvP - 2 Base Tank Push": "Detected when a Starport build fields Siege Tanks behind a Marine ball off two bases -- the classic tank-push timing vs Protoss.",
+    "TvP - Fast 3 CC Bio": "Detected when three Command Centers are taken by 6:00 behind 3+ Barracks of Marine/Marauder with no mech tech -- the greedy macro bio opening vs Protoss.",
     # --- ZvT ---
     "ZvT - Ling Bane Bust": "Detected when an early Pool and Baneling Nest flood Banelings and Zerglings off two or fewer bases -- the ZvT ling/bane bust.",
     "ZvT - 2 Base Roach Ravager Timing": "Detected when a Roach Warren produces a wall of Roaches and Ravagers off two bases on a low drone count -- the ZvT roach/ravager pressure timing.",
@@ -162,7 +171,16 @@ BUILD_DEFINITIONS = {
     "ZvT - 3 Base Ling Flood": "Detected when three bases pump 20+ Zerglings on a low drone count -- the ZvT ling-flood timing.",
     "ZvT - Hatch First Macro": "Detected when a greedy three-base economy (40+ Drones) opens hatch-first vs Terran.",
     # --- ZvP ---
+    "ZvP - 12 Pool Rush": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the cheese rush vs Protoss.",
+    "ZvP - Ling Bane Bust": "Detected when an early Pool and Baneling Nest flood Banelings and Zerglings off two or fewer bases -- the bust through the Protoss wall.",
+    "ZvP - 2 Base Roach Ravager All-in": "Detected when a Roach Warren produces a wall of Roaches and Ravagers off two bases on a low drone count -- the ZvP roach/ravager all-in.",
+    "ZvP - 2 Base Nydus": "Detected when a Nydus Network goes down off two bases for a worm into the Protoss main -- the ZvP Nydus all-in.",
+    "ZvP - Hydra Timing (3 Base)": "Detected when a Hydralisk Den fields a hydra wave off three bases -- the standard ZvP answer to Stargate openers.",
+    "ZvP - Lurker Contain": "Detected when a Lurker Den enables a positional Lurker contain vs Protoss.",
     "ZvP - Ling Bane Muta": "Detected when a Baneling Nest and Spire support Banelings and a wall of Zerglings -- the muta/ling/bane harass style vs Protoss.",
+    "ZvP - Mutalisk Harass": "Detected when a Spire into 6+ Mutalisks (no Baneling Nest) runs pure muta harass into the Protoss mineral lines.",
+    "ZvP - Speedling Flood": "Detected when three bases pump 20+ Zerglings on a low drone count -- the ZvP ling-flood timing against a greedy third.",
+    "ZvP - Hatch First Macro": "Detected when a greedy three-base economy (40+ Drones) opens hatch-first vs Protoss.",
     # --- ZvZ ---
     "ZvZ - 12 Pool into Baneling": "Detected when a sub-55s Pool goes straight into a Baneling Nest and Banelings -- the early ZvZ baneling all-in.",
     "ZvZ - 12 Pool Speedling": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the aggressive ZvZ speedling opener.",
@@ -210,10 +228,28 @@ BUILD_SIGNATURES: Dict[str, Dict[str, object]] = {
         ("TvT - 1-1-1 Cloak Banshee", "Terran", "Terran"),
         ("TvZ - 3 CC Bio", "Terran", "Zerg"),
         ("TvZ - 2 Base Hellbat Thor", "Terran", "Zerg"),
+        ("TvP - Proxy Marauder", "Terran", "Protoss"),
+        ("TvP - Cyclone Push", "Terran", "Protoss"),
+        ("TvP - 1-1-1 Cloak Banshee", "Terran", "Protoss"),
+        ("TvP - 3 Rax Marine", "Terran", "Protoss"),
+        ("TvP - Battlecruiser Rush", "Terran", "Protoss"),
+        ("TvP - Tank/Thor Mech", "Terran", "Protoss"),
+        ("TvP - Widow Mine Drop", "Terran", "Protoss"),
         ("TvP - 2-1-1 Reaper Expand", "Terran", "Protoss"),
+        ("TvP - 2 Base Tank Push", "Terran", "Protoss"),
+        ("TvP - Fast 3 CC Bio", "Terran", "Protoss"),
         ("ZvT - 3 Hatch Ling Bane Muta", "Zerg", "Terran"),
         ("ZvT - 2 Base Roach Ravager Timing", "Zerg", "Terran"),
+        ("ZvP - 12 Pool Rush", "Zerg", "Protoss"),
+        ("ZvP - Ling Bane Bust", "Zerg", "Protoss"),
+        ("ZvP - 2 Base Roach Ravager All-in", "Zerg", "Protoss"),
+        ("ZvP - 2 Base Nydus", "Zerg", "Protoss"),
+        ("ZvP - Hydra Timing (3 Base)", "Zerg", "Protoss"),
+        ("ZvP - Lurker Contain", "Zerg", "Protoss"),
         ("ZvP - Ling Bane Muta", "Zerg", "Protoss"),
+        ("ZvP - Mutalisk Harass", "Zerg", "Protoss"),
+        ("ZvP - Speedling Flood", "Zerg", "Protoss"),
+        ("ZvP - Hatch First Macro", "Zerg", "Protoss"),
         ("ZvZ - 12 Pool Speedling", "Zerg", "Zerg"),
         ("ZvZ - Roach Aggression", "Zerg", "Zerg"),
     )
@@ -230,8 +266,8 @@ def candidate_signatures_for(
     TvZ replay never gets compared against a ZvP rule.
 
     Example:
-        >>> list(candidate_signatures_for("Zerg", "Protoss"))
-        ['ZvP - Stub - TODO Stage 8']
+        >>> "ZvP - Ling Bane Muta" in candidate_signatures_for("Zerg", "Protoss")
+        True
     """
     return {
         name: meta

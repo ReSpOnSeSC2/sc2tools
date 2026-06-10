@@ -255,8 +255,19 @@ def detect_tvz(ctx: DetectionContext) -> Optional[str]:
 
 
 def detect_tvp(ctx: DetectionContext) -> Optional[str]:
-    """Terran-vs-Protoss: proxy reaper all-in and 2-base reaper bio."""
-    # Proxy 4 Rax Reaper: 4 Barracks (at least one proxied near the
+    """Terran-vs-Protoss: recognizable openings, specific -> general.
+
+    Thresholds for builds shared with other Terran matchups are cloned
+    from the proven ``detect_tvt`` / ``detect_tvz`` siblings (proxy rax,
+    Cyclone, 1-1-1 Banshee, 3 Rax, BC rush, mech) — the player's own
+    event signature for those openings is matchup-independent; only the
+    label prefix differs. Returns ``None`` when none match so the
+    generic Terran race tree provides the fallback label.
+    """
+    cc_at_6 = base_count_at(ctx.buildings, "CommandCenter", 360)
+    cc450 = base_count_at(ctx.buildings, "CommandCenter", 450)
+
+    # 1. Proxy 4 Rax Reaper: 4 Barracks (at least one proxied near the
     # enemy) flooding Reapers -- the all-in proxy reaper rush.
     if (
         ctx.has_proxy("Barracks", 300)
@@ -265,11 +276,74 @@ def detect_tvp(ctx: DetectionContext) -> Optional[str]:
     ):
         return "TvP - Proxy 4 Rax Reaper"
 
-    # 2-1-1 Reaper Expand: Reaper-first scout, a single expansion, then
-    # a Factory + Starport for the Medivac drop / Stim bio timing off
-    # TWO bases. The ``<= 2`` base cap keeps a greedy fast-3-CC macro
-    # opening on the generic "Terran - Fast 3 CC" label and reserves
-    # this label for the committed 2-base bio timing.
+    # 2. Proxy Marauder: proxied Barracks pumping Marauders into the
+    # Protoss wall -- the proxy Marauder rush.
+    if ctx.has_proxy("Barracks", 270) and ctx.count_units("Marauder", 360) >= 2:
+        return "TvP - Proxy Marauder"
+
+    # 3. Cyclone Push: an early Factory producing Cyclones off <=2
+    # bases -- the lock-on pressure opening.
+    if (
+        ctx.has_building("Factory", 300)
+        and ctx.count_units("Cyclone", 390) >= 2
+        and cc450 <= 2
+    ):
+        return "TvP - Cyclone Push"
+
+    # 4. 1-base Cloak Banshee: Factory + Starport before any expansion
+    # with a Banshee on the field.
+    if (
+        ctx.has_building("Factory", 330)
+        and ctx.has_building("Starport", 390)
+        and ctx.count_units("Banshee", 450) >= 1
+        and cc_at_6 <= 1
+    ):
+        return "TvP - 1-1-1 Cloak Banshee"
+
+    # 5. 3 Rax Marine: 3+ Barracks off one base with a Marine flood and
+    # no Factory -- a gas-light Marine all-in.
+    if (
+        count_started_before(ctx.buildings, "Barracks", 420) >= 3
+        and base_count_at(ctx.buildings, "CommandCenter", 420) <= 1
+        and ctx.count_units("Marine", 450) >= 10
+        and not ctx.has_building("Factory", 360)
+    ):
+        return "TvP - 3 Rax Marine"
+
+    # 6. Battlecruiser Rush: a fast Fusion Core into Battlecruisers.
+    if (
+        ctx.has_building("FusionCore", 420)
+        and ctx.count_units("Battlecruiser", 540) >= 1
+    ):
+        return "TvP - Battlecruiser Rush"
+
+    # 7. Tank/Thor Mech: Armory-backed Thors and Siege Tanks -- the
+    # positional mech composition. Checked before the 2-base timing
+    # rules below so a mech game with incidental Marines doesn't get
+    # claimed by the Tank Push label.
+    if (
+        ctx.has_building("Armory", 420)
+        and ctx.count_units("Thor", 540) >= 1
+        and ctx.count_units("SiegeTank", 540) >= 1
+    ):
+        return "TvP - Tank/Thor Mech"
+
+    # 8. Widow Mine Drop: 2+ Widow Mines with a Medivac behind a Marine
+    # ball -- the mine-drop harass opening. Checked before the 2-1-1
+    # Reaper Expand so the mine signature wins over the generic
+    # Medivac-timing shape.
+    if (
+        ctx.count_units("WidowMine", 480) >= 2
+        and ctx.count_units("Marine", 480) >= 8
+        and ctx.count_units("Medivac", 480) >= 1
+    ):
+        return "TvP - Widow Mine Drop"
+
+    # 9. 2-1-1 Reaper Expand: Reaper-first scout, a single expansion,
+    # then a Factory + Starport for the Medivac drop / Stim bio timing
+    # off TWO bases. The ``<= 2`` base cap keeps a greedy fast-3-CC
+    # macro opening off this label and reserves it for the committed
+    # 2-base bio timing.
     if (
         ctx.count_units("Reaper", 210) >= 1
         and base_count_at(ctx.buildings, "CommandCenter", 240) >= 2
@@ -279,6 +353,27 @@ def detect_tvp(ctx: DetectionContext) -> Optional[str]:
         and ctx.count_units("Medivac", 540) >= 1
     ):
         return "TvP - 2-1-1 Reaper Expand"
+
+    # 10. 2 Base Tank Push: a Starport build with Siege Tanks behind a
+    # Marine ball off two bases -- the classic tank-push timing.
+    if (
+        ctx.has_building("Starport", 420)
+        and ctx.count_units("SiegeTank", 540) >= 1
+        and ctx.count_units("Marine", 480) >= 8
+        and cc450 <= 2
+    ):
+        return "TvP - 2 Base Tank Push"
+
+    # 11. Fast 3 CC Bio: three Command Centers behind 3+ Barracks of
+    # Marine/Marauder with no mech tech -- the greedy macro bio game.
+    if (
+        base_count_at(ctx.buildings, "CommandCenter", 360) >= 3
+        and count_started_before(ctx.buildings, "Barracks", 450) >= 3
+        and ctx.count_units("Marine", 480) >= 8
+        and not ctx.has_building("Armory", 450)
+        and not ctx.has_building("FusionCore", 450)
+    ):
+        return "TvP - Fast 3 CC Bio"
 
     return None
 
@@ -387,9 +482,76 @@ def detect_zvt(ctx: DetectionContext) -> Optional[str]:
 
 
 def detect_zvp(ctx: DetectionContext) -> Optional[str]:
-    """Zerg-vs-Protoss: ling/bane/muta tech switch."""
-    # Ling Bane Muta: Baneling Nest + Spire with Banelings and a wall of
-    # Zerglings -- the muta/ling/bane harass style vs Protoss.
+    """Zerg-vs-Protoss: recognizable openings, specific -> general.
+
+    Thresholds for builds shared with other Zerg matchups are cloned
+    from the proven ``detect_zvt`` / ``detect_zvz`` siblings (pool rush,
+    ling/bane bust, roach timing, Nydus, muta, macro shapes) — the
+    Hydralisk Timing is the one genuinely ZvP-specific addition (the
+    standard answer to Stargate openers). Returns ``None`` when none
+    match so the generic Zerg race tree provides the fallback label.
+    """
+    pool = ctx.building_time("SpawningPool")
+
+    # 1. 12 Pool Rush: a sub-55s Pool into a wall of Zerglings on one
+    # base -- the cheese rush.
+    if (
+        pool < 55
+        and ctx.count_units("Zergling", 240) >= 6
+        and base_count_at(ctx.buildings, "Hatchery", 240) <= 1
+    ):
+        return "ZvP - 12 Pool Rush"
+
+    # 2. Ling Bane Bust: an early Pool + Baneling Nest flooding
+    # Banelings and Zerglings off <=2 bases -- the all-in bust through
+    # the Protoss wall.
+    if (
+        pool < 75
+        and ctx.has_building("BanelingNest", 210)
+        and ctx.count_units("Baneling", 330) >= 4
+        and ctx.count_units("Zergling", 330) >= 12
+        and base_count_at(ctx.buildings, "Hatchery", 330) <= 2
+    ):
+        return "ZvP - Ling Bane Bust"
+
+    # 3. 2-base Roach/Ravager all-in: a Roach Warren with a wall of
+    # Roaches and Ravagers off two bases on a low drone count.
+    if (
+        ctx.has_building("RoachWarren", 240)
+        and (ctx.count_units("Roach", 450) + ctx.count_units("Ravager", 450)) >= 8
+        and ctx.count_units("Drone", 450) < 42
+        and base_count_at(ctx.buildings, "Hatchery", 450) <= 2
+    ):
+        return "ZvP - 2 Base Roach Ravager All-in"
+
+    # 4. 2 Base Nydus: a Nydus Network off two bases for a worm into
+    # the Protoss main.
+    if (
+        ctx.has_building("NydusNetwork", 450)
+        and base_count_at(ctx.buildings, "Hatchery", 450) <= 2
+    ):
+        return "ZvP - 2 Base Nydus"
+
+    # 5. Hydra Timing (3 Base): a Hydralisk Den into a hydra wave off
+    # three bases -- the standard answer to Stargate openers. The
+    # LurkerDen guard hands lurker-tech games to the contain label
+    # below instead of mislabelling the (transitional) hydra count.
+    if (
+        ctx.has_building("HydraliskDen", 420)
+        and ctx.count_units("Hydralisk", 510) >= 8
+        and base_count_at(ctx.buildings, "Hatchery", 480) >= 3
+        and not ctx.has_building("LurkerDen", 510)
+    ):
+        return "ZvP - Hydra Timing (3 Base)"
+
+    # 6. Lurker Contain: a Lurker Den for a positional Lurker contain
+    # (slightly later window than ZvT -- the ZvP version comes off a
+    # hydra mid-game rather than a bio-defence opening).
+    if ctx.has_building("LurkerDen", 540):
+        return "ZvP - Lurker Contain"
+
+    # 7. Ling Bane Muta: Baneling Nest + Spire with Banelings and a
+    # wall of Zerglings -- the muta/ling/bane harass style vs Protoss.
     if (
         ctx.has_building("BanelingNest", 330)
         and ctx.has_building("Spire", 480)
@@ -397,6 +559,31 @@ def detect_zvp(ctx: DetectionContext) -> Optional[str]:
         and ctx.count_units("Zergling", 420) >= 6
     ):
         return "ZvP - Ling Bane Muta"
+
+    # 8. Mutalisk Harass: a Spire into a flock of Mutalisks with no
+    # Baneling Nest -- pure muta harass into the Protoss mineral lines.
+    if (
+        ctx.has_building("Spire", 480)
+        and ctx.count_units("Mutalisk", 540) >= 6
+        and not ctx.has_building("BanelingNest", 420)
+    ):
+        return "ZvP - Mutalisk Harass"
+
+    # 9. Speedling Flood: three bases pumping 20+ Zerglings on a low
+    # drone count -- the ling-flood timing against a greedy third.
+    if (
+        base_count_at(ctx.buildings, "Hatchery", 390) >= 3
+        and ctx.count_units("Zergling", 360) >= 20
+        and ctx.count_units("Drone", 360) < 35
+    ):
+        return "ZvP - Speedling Flood"
+
+    # 10. Hatch First Macro: a greedy three-base economy (40+ Drones).
+    if (
+        base_count_at(ctx.buildings, "Hatchery", 420) >= 3
+        and ctx.count_units("Drone", 420) >= 40
+    ):
+        return "ZvP - Hatch First Macro"
 
     return None
 
