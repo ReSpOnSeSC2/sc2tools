@@ -28,6 +28,7 @@ import { MatchupOverTimeChart } from "./charts/MatchupOverTimeChart";
 import { TimeOfDayHeatmap } from "./charts/TimeOfDayHeatmap";
 import { GameLengthWrChart } from "./charts/GameLengthWrChart";
 import { ActivityCalendarChart } from "./charts/ActivityCalendarChart";
+import { MacroTrendChart } from "./charts/MacroTrendChart";
 import { MmrProgressionChart } from "./charts/MmrProgressionChart";
 import { MomentumChart } from "./charts/MomentumChart";
 import { OppMmrBucketsChart } from "./charts/OppMmrBucketsChart";
@@ -454,6 +455,9 @@ export function TrendsTab() {
           />
           <div className="md:col-span-2">
             <MmrProgressionChart bucket={bucket as "day" | "week" | "month"} />
+          </div>
+          <div className="md:col-span-2">
+            <MacroTrendChart series={series} />
           </div>
           <NetMmrByMatchupChart />
           <OppMmrBucketsChart />

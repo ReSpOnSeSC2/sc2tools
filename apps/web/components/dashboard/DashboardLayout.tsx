@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Download } from "lucide-react";
 import { AnalyzerShell } from "@/components/analyzer/AnalyzerShell";
@@ -9,6 +9,7 @@ import { MobileSectionPicker } from "@/components/analyzer/MobileSectionPicker";
 import { TABS, type TabId } from "@/components/analyzer/tabs";
 import { SyncStatus } from "@/components/SyncStatus";
 import { LiveGamePanel } from "@/components/dashboard/LiveGamePanel";
+import { useApi } from "@/lib/clientApi";
 
 type Me = {
   userId: string;
@@ -18,8 +19,26 @@ type Me = {
 
 export function DashboardLayout({ me }: { me: Me }) {
   const [tab, setTab] = useState<TabId>("opponents");
+  const tabTouched = useRef(false);
+
+  // Honour Settings → "Default tab". The preference loads async, so
+  // apply it exactly once when it arrives — and never after the user
+  // has navigated, so a slow fetch can't yank them off a tab they
+  // already opened. Unknown values (e.g. the retired "ml" tab) are
+  // ignored.
+  const { data: misc } = useApi<{ defaultTab?: string }>(
+    "/v1/me/preferences/misc",
+  );
+  useEffect(() => {
+    if (tabTouched.current) return;
+    const pref = misc?.defaultTab;
+    if (pref && TABS.some((t) => t.id === pref)) {
+      setTab(pref as TabId);
+    }
+  }, [misc]);
 
   const onTabChange = (next: string) => {
+    tabTouched.current = true;
     setTab(next as TabId);
   };
 

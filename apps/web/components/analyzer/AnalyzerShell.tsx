@@ -10,6 +10,7 @@ import { BuildsTab } from "./BuildsTab";
 import { DashboardKpiStrip } from "./DashboardKpiStrip";
 import { DoctorBanner } from "./DoctorBanner";
 import { FilterBar } from "./FilterBar";
+import { MacroTab } from "./MacroTab";
 import { OpponentsTab } from "./OpponentsTab";
 import { ProfileView } from "./ProfileView";
 import { StrategiesTab } from "./StrategiesTab";
@@ -152,6 +153,8 @@ function TabPanel({
       return <StrategiesTab />;
     case "trends":
       return <TrendsTab />;
+    case "macro":
+      return <MacroTab />;
     case "battlefield":
       return <BattlefieldTab />;
     case "builds":

@@ -125,6 +125,62 @@ describe("services/aggregations", () => {
     expect(out.points[0].winRate).toBeCloseTo(2 / 3);
   });
 
+  test("timeseries rounds avgMacroScore to 1dp and nulls buckets without scores", async () => {
+    const games = buildGames([
+      () => [
+        {
+          bucket: new Date("2026-04-01"),
+          wins: 2,
+          losses: 1,
+          total: 3,
+          avgMacroScore: 71.2345,
+        },
+        // Bucket whose games all predate macro scoring — $avg over
+        // missing fields yields null and must stay null (not 0).
+        { bucket: new Date("2026-04-02"), wins: 1, losses: 1, total: 2, avgMacroScore: null },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.timeseries("u1", { interval: "day" }, {})
+    );
+    expect(out.points[0].avgMacroScore).toBeCloseTo(71.2);
+    expect(out.points[1].avgMacroScore).toBeNull();
+  });
+
+  test("macroSummary shapes coverage + leaks from the facet doc", async () => {
+    const games = buildGames([
+      () => [
+        {
+          coverage: [{ total: 50, withScore: 42, avgScore: 68.449 }],
+          leaks: [
+            { name: "Supply blocked", count: 30, totalMinerals: 14200 },
+            { name: "Idle production", count: 22, totalMinerals: 9100 },
+          ],
+        },
+      ],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (await svc.macroSummary("u1", {}));
+    expect(out.ok).toBe(true);
+    expect(out.gamesTotal).toBe(50);
+    expect(out.gamesWithMacro).toBe(42);
+    expect(out.gamesMissingMacro).toBe(8);
+    expect(out.avgScore).toBeCloseTo(68.4);
+    expect(out.leaks[0].name).toBe("Supply blocked");
+    expect(out.leaks[0].totalMinerals).toBe(14200);
+  });
+
+  test("macroSummary tolerates a user with zero games", async () => {
+    const games = buildGames([() => [{ coverage: [], leaks: [] }]]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (await svc.macroSummary("u1", {}));
+    expect(out.gamesTotal).toBe(0);
+    expect(out.gamesMissingMacro).toBe(0);
+    expect(out.avgScore).toBeNull();
+    expect(out.leaks).toEqual([]);
+  });
+
   test("timeseries keeps the most-recent buckets, not the oldest", async () => {
     let captured;
     const games = buildGames([

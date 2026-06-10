@@ -9,11 +9,12 @@ import type { SVGProps } from "react";
 //   Opponents    target-lock corner brackets framing a soldier head
 //   Strategies   crossed psi-blades with diamond emitter pommels
 //   Trends       HUD line graph rising across L-shaped axes
+//   Macro        efficiency gauge with needle pinned high
 //   Maps         3-hex honeycomb with an objective marker
 //   Builds       Protoss-pylon hex outline with warp-energy bars
 //   Arcade       tactical scope reticle with compass ticks
 //
-// All six share: 24x24 viewBox, currentColor stroke, 1.75 stroke
+// All seven share: 24x24 viewBox, currentColor stroke, 1.75 stroke
 // width, round caps + joins. That keeps them visually cohesive with
 // each other AND with the remaining lucide icons we still use in
 // other surfaces (settings cog, chevron, etc.). Filled accents use
@@ -82,6 +83,27 @@ export function TrendsIcon(props: IconProps) {
       <circle cx="7" cy="16" r="1" fill="currentColor" stroke="none" />
       <circle cx="14.5" cy="14" r="1" fill="currentColor" stroke="none" />
       <circle cx="20" cy="7" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/**
+ * Macro — a semicircular efficiency gauge with three tick marks and
+ * the needle pinned toward the high end. Reads as "score readout":
+ * the macro score is a 0–100 dial, so the gauge is the literal
+ * shape of the feature. The filled pivot dot anchors the needle the
+ * same way the Trends icon fills its data vertices.
+ */
+export function MacroIcon(props: IconProps) {
+  return (
+    <svg {...SVG_BASE} {...props}>
+      <path d="M4 16a8 8 0 0 1 16 0" />
+      <path d="M12 8v1.8" />
+      <path d="M6.34 10.34l1.27 1.27" />
+      <path d="M17.66 10.34l-1.27 1.27" />
+      <path d="M12 16l3.6-4.2" />
+      <circle cx="12" cy="16" r="1.1" fill="currentColor" stroke="none" />
+      <path d="M5 19h14" />
     </svg>
   );
 }

@@ -3,6 +3,7 @@ import { cleanup, render } from "@testing-library/react";
 import {
   ArcadeIcon,
   BuildsIcon,
+  MacroIcon,
   MapsIcon,
   OpponentsIcon,
   StrategiesIcon,
@@ -35,6 +36,7 @@ describe("NavIcons", () => {
     ["OpponentsIcon", OpponentsIcon],
     ["StrategiesIcon", StrategiesIcon],
     ["TrendsIcon", TrendsIcon],
+    ["MacroIcon", MacroIcon],
     ["MapsIcon", MapsIcon],
     ["BuildsIcon", BuildsIcon],
     ["ArcadeIcon", ArcadeIcon],
@@ -71,8 +73,8 @@ describe("NavIcons", () => {
       return count;
     });
     // We don't require every count to be unique (Builds + Strategies
-    // both happen to land at 4 shapes), but at least 4 of the 6 must
-    // have distinct shape counts.
+    // both happen to land at 4 shapes), but at least 4 of the set
+    // must have distinct shape counts.
     const uniqueCounts = new Set(shapeCounts).size;
     expect(uniqueCounts).toBeGreaterThanOrEqual(4);
   });

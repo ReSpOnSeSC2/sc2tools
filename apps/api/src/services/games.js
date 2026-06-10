@@ -108,6 +108,14 @@ class GamesService {
       if (doc[k] !== undefined) heavy[k] = doc[k];
       delete doc[k];
     }
+    // Surface the top-3 leaks on the slim row. The full breakdown
+    // lives in the detail store (possibly R2, not Mongo-queryable),
+    // but the Macro tab's aggregate leak summary and the Recent Games
+    // hover cards need leak names + mineral costs in an aggregation
+    // pipeline. ~300 bytes per row. The recompute write-back path
+    // (perGameCompute.writeMacroBreakdown) stamps the same field.
+    const leaks = sanitizeTopLeaks(heavy.macroBreakdown);
+    if (leaks) doc.top3Leaks = leaks;
     delete doc.earlyBuildLog;
     delete doc.oppEarlyBuildLog;
     stampVersion(doc, COLLECTIONS.GAMES);
@@ -827,6 +835,33 @@ function clampLimit(raw, fallback) {
   if (!Number.isFinite(n) || n <= 0) return fallback;
   const ceiling = LIMITS.GAMES_LIST_MAX || fallback;
   return Math.min(n, ceiling);
+}
+
+/**
+ * Extract a bounded, primitives-only copy of the breakdown's
+ * ``top_3_leaks`` for the slim games row. Returns null when the
+ * breakdown carries no usable leak array so the caller can skip the
+ * field entirely (older agents, AI games).
+ *
+ * @param {any} breakdown  incoming ``macroBreakdown`` payload
+ * @returns {Array<Record<string, any>> | null}
+ */
+function sanitizeTopLeaks(breakdown) {
+  const raw = breakdown && breakdown.top_3_leaks;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const out = [];
+  for (const item of raw.slice(0, 3)) {
+    if (!item || typeof item !== "object") continue;
+    /** @type {Record<string, any>} */
+    const leak = {};
+    if (typeof item.name === "string") leak.name = item.name.slice(0, 120);
+    if (typeof item.detail === "string") leak.detail = item.detail.slice(0, 300);
+    if (typeof item.quantity === "number") leak.quantity = item.quantity;
+    if (typeof item.mineral_cost === "number") leak.mineral_cost = item.mineral_cost;
+    if (typeof item.penalty === "number") leak.penalty = item.penalty;
+    if (Object.keys(leak).length > 0) out.push(leak);
+  }
+  return out.length > 0 ? out : null;
 }
 
 module.exports = { GamesService };

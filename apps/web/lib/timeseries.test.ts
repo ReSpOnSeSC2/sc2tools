@@ -78,7 +78,43 @@ describe("apiToPeriods", () => {
       "America/Chicago",
     );
     expect(result).toEqual([
-      { date: "2026-05-09", games: 4, wins: 3, losses: 1, winRate: 0.75 },
+      {
+        date: "2026-05-09",
+        games: 4,
+        wins: 3,
+        losses: 1,
+        winRate: 0.75,
+        avgMacroScore: null,
+      },
     ]);
+  });
+
+  test("passes avgMacroScore through and nulls non-numeric values", () => {
+    const result = apiToPeriods(
+      {
+        interval: "day",
+        points: [
+          {
+            bucket: "2026-05-09T05:00:00.000Z",
+            wins: 3,
+            losses: 1,
+            total: 4,
+            winRate: 0.75,
+            avgMacroScore: 71.2,
+          },
+          {
+            bucket: "2026-05-10T05:00:00.000Z",
+            wins: 1,
+            losses: 0,
+            total: 1,
+            winRate: 1,
+            avgMacroScore: null,
+          },
+        ],
+      },
+      "America/Chicago",
+    );
+    expect(result[0].avgMacroScore).toBe(71.2);
+    expect(result[1].avgMacroScore).toBeNull();
   });
 });
