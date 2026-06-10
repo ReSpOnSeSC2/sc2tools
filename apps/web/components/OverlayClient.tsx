@@ -18,6 +18,11 @@ import {
   type VoicePrefs,
 } from "@/components/overlay/useVoiceReadout";
 import { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useClearStalePostGameOnGameKeyChange";
+import {
+  attachOverlayResilience,
+  type OverlayConnectionStatus,
+} from "@/components/overlay/overlayResilience";
+import { ReconnectDot } from "@/components/overlay/ReconnectDot";
 import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
 import {
   OpponentWidget,
@@ -77,6 +82,8 @@ export function OverlayClient({ token }: { token: string }) {
   // timeouts scheduled in `useWidgetTimers`.
   const [visibleLive, setVisibleLive] = useState<Set<WidgetId>>(new Set());
   const [sessionVisible, setSessionVisible] = useState<boolean>(false);
+  const [connectionStatus, setConnectionStatus] =
+    useState<OverlayConnectionStatus>("connected");
 
   // Stable callback so the socket effect doesn't reconnect on every
   // render. State setters from useState are reference-stable, so this
@@ -98,6 +105,7 @@ export function OverlayClient({ token }: { token: string }) {
     setVoicePrefs,
     setRandomizer,
     onClear,
+    setConnectionStatus,
   );
 
   // Mirror the per-widget client's stale-clear behaviour so the
@@ -182,6 +190,13 @@ export function OverlayClient({ token }: { token: string }) {
       {shouldShow("randomizer") && (
         <RandomizerWidget live={live} liveGame={liveGame} config={randomizer} />
       )}
+      {/* Broadcast-safe degraded-connection dot: only while at least
+          one widget is on screen — a transparent between-games scene
+          stays fully transparent even when the socket is down. */}
+      {connectionStatus === "reconnecting" &&
+      (visibleLive.size > 0 || sessionVisible) ? (
+        <ReconnectDot />
+      ) : null}
       {voice.needsGesture ? (
         <VoiceGestureBanner onClick={voice.onUserGesture} />
       ) : null}
@@ -215,6 +230,7 @@ function useOverlaySocket(
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
   setRandomizer: (cfg: RandomizerConfig | null) => void,
   onClear: () => void,
+  setConnectionStatus: (status: OverlayConnectionStatus) => void,
 ) {
   // Sticky cache of the latest enriched ``streamerHistory`` keyed by
   // gameKey. The cloud's ``LiveGameBroker`` fans every 1 Hz envelope
@@ -227,6 +243,10 @@ function useOverlaySocket(
     gameKey: string;
     streamerHistory: NonNullable<LiveGameEnvelope["streamerHistory"]>;
   } | null>(null);
+  // Latest gameKey observed from either channel — the heartbeat drift
+  // check in ``attachOverlayResilience`` compares the cloud's view
+  // against this to detect silently-dropped events.
+  const gameKeyRef = useRef<string | null>(null);
   useEffect(() => {
     const socket: Socket = io(API_BASE, {
       // The OBS Browser Source has no Clerk session — the token IS the
@@ -240,7 +260,12 @@ function useOverlaySocket(
       reconnectionDelay: 500,
       reconnectionDelayMax: 5000,
     });
-    socket.on("overlay:live", (msg: LiveGamePayload) => setLive(msg));
+    socket.on("overlay:live", (msg: LiveGamePayload) => {
+      setLive(msg);
+      if (msg && typeof msg.gameKey === "string") {
+        gameKeyRef.current = msg.gameKey;
+      }
+    });
     socket.on("overlay:liveGame", (msg: LiveGameEnvelope) => {
       if (!msg || typeof msg !== "object") return;
       // IDLE/MENU phases mean "no game" — clear so the widgets and
@@ -249,6 +274,9 @@ function useOverlaySocket(
         setLiveGame(null);
         stickyHistoryRef.current = null;
         return;
+      }
+      if (typeof msg.gameKey === "string") {
+        gameKeyRef.current = msg.gameKey;
       }
       // Sticky ``streamerHistory`` merge — see ``stickyHistoryRef``
       // above for the partial+enriched flicker context.
@@ -307,7 +335,18 @@ function useOverlaySocket(
       stickyHistoryRef.current = null;
       onClear();
     });
+    // Reconnect resync + heartbeat/drift detection + connection
+    // status — shared with the per-widget OverlayWidgetClient via
+    // ``attachOverlayResilience``. This client previously had NONE of
+    // this and relied solely on the server's connect-replay, so a
+    // transient drop left every widget silently stale until the next
+    // game tick.
+    const detachResilience = attachOverlayResilience(socket, {
+      latestGameKey: () => gameKeyRef.current,
+      onStatus: setConnectionStatus,
+    });
     return () => {
+      detachResilience();
       socket.disconnect();
     };
   }, [
@@ -319,6 +358,7 @@ function useOverlaySocket(
     setVoicePrefs,
     setRandomizer,
     onClear,
+    setConnectionStatus,
   ]);
 }
 

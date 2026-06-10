@@ -17,6 +17,11 @@ import {
   type VoicePrefs,
 } from "@/components/overlay/useVoiceReadout";
 import { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useClearStalePostGameOnGameKeyChange";
+import {
+  attachOverlayResilience,
+  type OverlayConnectionStatus,
+} from "@/components/overlay/overlayResilience";
+import { ReconnectDot } from "@/components/overlay/ReconnectDot";
 import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
 import {
   OpponentWidget,
@@ -79,6 +84,8 @@ export function OverlayWidgetClient({
   const [visible, setVisible] = useState<boolean>(false);
   const [voicePrefs, setVoicePrefs] = useState<VoicePrefs | null>(null);
   const [randomizer, setRandomizer] = useState<RandomizerConfig | null>(null);
+  const [connectionStatus, setConnectionStatus] =
+    useState<OverlayConnectionStatus>("connected");
 
   useOverlayWidgetSocket(
     token,
@@ -89,6 +96,7 @@ export function OverlayWidgetClient({
     setEnabled,
     setVoicePrefs,
     setRandomizer,
+    setConnectionStatus,
   );
   useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
   useWidgetVisibility(
@@ -161,6 +169,10 @@ export function OverlayWidgetClient({
         session={session}
         randomizer={randomizer}
       />
+      {/* Only mounted while widget content is on screen (this branch)
+          — a transparent between-games scene stays fully transparent
+          even when the socket is down. */}
+      {connectionStatus === "reconnecting" ? <ReconnectDot /> : null}
       {voice.needsGesture ? (
         <VoiceGestureBanner onClick={voice.onUserGesture} />
       ) : null}
@@ -243,6 +255,7 @@ function useOverlayWidgetSocket(
   setEnabled: (on: boolean) => void,
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
   setRandomizer: (cfg: RandomizerConfig | null) => void,
+  setConnectionStatus: (status: OverlayConnectionStatus) => void,
 ) {
   // The latest gameKey we've observed in either ``live`` or
   // ``liveGame``. Used by the heartbeat reply handler to decide
@@ -401,51 +414,18 @@ function useOverlayWidgetSocket(
         }
       },
     );
-    // Reconnect resync. After a transient network drop, OBS / SLOBS
-    // socket.io clients auto-reconnect — but the cloud's broker would
-    // only replay its single cached envelope. That's enough on the
-    // happy path, but in practice the freshly-reconnected client also
-    // wants the latest ``overlay:session`` and a synthetic
-    // ``match_loading`` prelude (so the gameKey-change effect fires
-    // when ``match_loading`` was the missed event). The cloud's
-    // ``overlay:resync`` handler emits all three current snapshots in
-    // one round-trip; rate-limited cloud-side to once per 2 s per
-    // socket so a flapping connection can't pound the aggregations.
-    socket.on("connect", () => {
-      // ``connect`` fires for every successful (re-)connection,
-      // including the first. The handler is safe to call on first
-      // connect too — the cloud's resync emits the same data the
-      // initial connect replay would, just slightly later.
-      socket.emit("overlay:resync");
+    // Reconnect resync + heartbeat/drift detection + connection
+    // status — shared with the all-in-one OverlayClient via
+    // ``attachOverlayResilience`` (see that module for the rationale:
+    // resync on every (re-)connect, 30 s heartbeat with gameKey drift
+    // check for the Streamlabs backgrounded-page failure mode, and a
+    // debounced status for the broadcast-safe reconnect dot).
+    const detachResilience = attachOverlayResilience(socket, {
+      latestGameKey: () => gameKeyRef.current,
+      onStatus: setConnectionStatus,
     });
-    socket.on("reconnect", () => {
-      // Some socket.io versions emit ``reconnect`` instead of
-      // ``connect`` on a re-establishment; bind both to be safe.
-      socket.emit("overlay:resync");
-    });
-    // Heartbeat. The cloud responds with ``{gameKey, ts}``; if the
-    // gameKey doesn't match our latest, trigger a resync. This catches
-    // the Streamlabs-cache-held-page failure mode where the socket
-    // looks alive but somehow no recent envelope ever reached us
-    // (their internal proxy sometimes delays event delivery while the
-    // page is backgrounded). 30 s is gentle enough to be invisible
-    // and tight enough that a rolled-back state recovers within one
-    // game cycle.
-    const heartbeatInterval = window.setInterval(() => {
-      socket.emit("overlay:heartbeat");
-    }, 30_000);
-    socket.on(
-      "overlay:heartbeat",
-      (reply: { gameKey?: string | null } | undefined) => {
-        const cloudKey =
-          reply && typeof reply.gameKey === "string" ? reply.gameKey : null;
-        if (cloudKey && cloudKey !== gameKeyRef.current) {
-          socket.emit("overlay:resync");
-        }
-      },
-    );
     return () => {
-      window.clearInterval(heartbeatInterval);
+      detachResilience();
       socket.disconnect();
     };
   }, [
@@ -457,6 +437,7 @@ function useOverlayWidgetSocket(
     setEnabled,
     setVoicePrefs,
     setRandomizer,
+    setConnectionStatus,
   ]);
 }
 

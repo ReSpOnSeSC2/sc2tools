@@ -106,36 +106,108 @@ function buildMeLiveRouter(deps) {
     res.write(": ok\n\n");
     if (typeof res.flushHeaders === "function") res.flushHeaders();
 
-    const writeEnvelope = (envelope) => {
-      try {
-        res.write(`data: ${JSON.stringify(envelope)}\n\n`);
-      } catch (_err) {
-        // Connection died — the unsubscribe in 'close' will tidy.
-      }
-    };
-    const unsubscribe = deps.broker.subscribe(auth.userId, writeEnvelope);
+    // ---- Subscriber lifecycle ----
+    // One idempotent cleanup wired to EVERY way a subscriber can die.
+    // Pre-hardening, teardown hung solely on `req.on("close")`: a
+    // response-side error or a stalled client left the broker
+    // subscription (and its per-tick writes) alive indefinitely — the
+    // broker's "heartbeat will eventually detect a dead writer" note
+    // was aspirational; nothing actually dropped a stalled subscriber.
+    let done = false;
+    /** @type {NodeJS.Timeout | null} */
+    let stallTimer = null;
+    /** @type {NodeJS.Timeout | null} */
+    let heartbeat = null;
+    let unsubscribe = () => {};
 
-    // Heartbeat — SSE comment line, ignored by clients but keeps
-    // intermediaries from reaping the socket.
-    const heartbeatMs = 25000;
-    const heartbeat = setInterval(() => {
-      try {
-        res.write(": heartbeat\n\n");
-      } catch (_err) {
-        // ignore — client gone, the close handler will clean up.
+    const cleanup = (reason) => {
+      if (done) return;
+      done = true;
+      // ``heartbeat`` may still be null: the broker replays its cached
+      // envelope synchronously inside ``subscribe``, and a write
+      // failure there reaches cleanup before the interval is set.
+      if (heartbeat) clearInterval(heartbeat);
+      if (stallTimer) {
+        clearTimeout(stallTimer);
+        stallTimer = null;
       }
-    }, heartbeatMs);
-    if (typeof heartbeat.unref === "function") heartbeat.unref();
-
-    req.on("close", () => {
-      clearInterval(heartbeat);
       unsubscribe();
+      if (deps.logger && reason && reason !== "client_closed") {
+        deps.logger.warn(
+          { userId: auth.userId, reason },
+          "sse_subscriber_dropped",
+        );
+      }
       try {
         res.end();
       } catch (_) {
         // already closed
       }
-    });
+    };
+
+    // Backpressure: `res.write()` returning false means the client
+    // isn't reading and Node is buffering in memory. A healthy client
+    // drains within milliseconds; one that hasn't drained within the
+    // stall window is gone (OBS scene closed mid-write, dead NAT
+    // mapping, proxy black-holing) — drop it instead of buffering
+    // 1 Hz envelopes forever. The client's auto-reconnect + resync
+    // restores state if it ever comes back.
+    const STALL_TIMEOUT_MS = 10_000;
+    const armStallTimer = () => {
+      if (stallTimer || done) return;
+      stallTimer = setTimeout(() => {
+        cleanup("stalled_no_drain");
+        try {
+          res.destroy();
+        } catch (_) {
+          // already gone
+        }
+      }, STALL_TIMEOUT_MS);
+      if (typeof stallTimer.unref === "function") stallTimer.unref();
+      res.once("drain", () => {
+        if (stallTimer) {
+          clearTimeout(stallTimer);
+          stallTimer = null;
+        }
+      });
+    };
+
+    const writeChunk = (chunk) => {
+      if (done) return;
+      try {
+        const ok = res.write(chunk);
+        if (!ok) armStallTimer();
+      } catch (_err) {
+        cleanup("write_failed");
+      }
+    };
+
+    const writeEnvelope = (envelope) => {
+      writeChunk(`data: ${JSON.stringify(envelope)}\n\n`);
+    };
+    unsubscribe = deps.broker.subscribe(auth.userId, writeEnvelope);
+    if (done) {
+      // The broker's synchronous replay-on-subscribe hit a dead
+      // response and cleanup already ran with the no-op unsubscribe —
+      // release the real subscription it just created.
+      unsubscribe();
+      return;
+    }
+
+    // Heartbeat — SSE comment line, ignored by clients but keeps
+    // intermediaries from reaping the socket. Routed through the same
+    // backpressure-aware writer so a zombie socket gets detected even
+    // when no game is live (no envelopes flowing).
+    const heartbeatMs = 25000;
+    heartbeat = setInterval(() => {
+      writeChunk(": heartbeat\n\n");
+    }, heartbeatMs);
+    if (typeof heartbeat.unref === "function") heartbeat.unref();
+
+    req.on("close", () => cleanup("client_closed"));
+    req.on("error", () => cleanup("request_error"));
+    res.on("close", () => cleanup("client_closed"));
+    res.on("error", () => cleanup("response_error"));
   });
 
   return router;
