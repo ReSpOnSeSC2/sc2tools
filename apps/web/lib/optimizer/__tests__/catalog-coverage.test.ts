@@ -141,35 +141,28 @@ describe("PvT first-defense rule (user's PTR guidance)", () => {
         !RUSH_EXEMPT.has(b.id),
     );
     expect(pvtBuilds.length).toBeGreaterThan(10);
-    // Standard play never opens zealot — that's the scouted proxy
-    // reaper response only (and even then, core first, zealot after).
-    const ZEALOT_ALLOWED = new Set([
-      "p-proxy-reaper-response",
-      "p-chargelot-allin",
-    ]);
+    // No PvT opener builds a zealot — not even the proxy reaper
+    // response (user's final ruling).
     for (const build of pvtBuilds) {
       const first = firstDefenseAt(build.id);
       expect(
         first.at,
         `${build.id} first defense too late`,
       ).toBeLessThanOrEqual(FIRST_DEFENSE_DEADLINE_SEC);
-      if (!ZEALOT_ALLOWED.has(build.id) && first.name === "Zealot") {
-        throw new Error(`${build.id} opens with a zealot in standard play`);
-      }
+      expect(first.name, `${build.id} opens with a zealot`).not.toBe("Zealot");
     }
   });
 
-  it("the proxy reaper response has a zealot before the ~2:15 reaper", () => {
+  it("the proxy reaper response opens core-first into a fast stalker", () => {
     const first = firstDefenseAt("p-proxy-reaper-response");
-    expect(first.at).toBeLessThanOrEqual(140);
-    expect(first.name).toBe("Zealot");
-    // core first, THEN zealot, THEN the delayed nexus (user's order)
+    expect(first.name).toBe("Stalker");
+    expect(first.at).toBeLessThanOrEqual(FIRST_DEFENSE_DEADLINE_SEC);
+    // no zealot anywhere, and the nexus is delayed behind the core
     const build = referenceBuilds().find(
       (b) => b.id === "p-proxy-reaper-response",
     )!;
-    const core = build.steps.indexOf("CyberneticsCore");
-    expect(core).toBeLessThan(build.steps.indexOf("Zealot"));
-    expect(build.steps.indexOf("Zealot")).toBeLessThan(
+    expect(build.steps).not.toContain("Zealot");
+    expect(build.steps.indexOf("CyberneticsCore")).toBeLessThan(
       build.steps.indexOf("Nexus"),
     );
   });
