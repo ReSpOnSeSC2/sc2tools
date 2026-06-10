@@ -72,6 +72,18 @@ export function BuildOrderTimeline({
             </li>
           ))}
         </ol>
+        {result.adaptationNotes.length > 0 ? (
+          <ul className="mt-3 space-y-1.5">
+            {result.adaptationNotes.map((note, index) => (
+              <li
+                key={index}
+                className="rounded-lg border-2 border-warning/40 bg-warning/10 p-2 text-caption text-text"
+              >
+                ⚠ {note}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <p className="mt-3 text-caption text-text-dim">
           Worker production is continuous and supply is auto-timed for this
           patch (pylons/depots/overlords shown where the sim placed them).

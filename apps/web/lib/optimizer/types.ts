@@ -431,4 +431,9 @@ export interface AdaptResult {
   comparison: ComparisonRow[];
   /** Reference entries that didn't resolve to known units/upgrades. */
   unknownNames: string[];
+  /**
+   * Patch-specific guidance generated from the adapted sim — e.g.
+   * "warpgate research occupies your only Gateway until 4:08".
+   */
+  adaptationNotes: string[];
 }

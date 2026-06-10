@@ -16,9 +16,8 @@ import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ToastProvider } from "@/components/ui/Toast";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
-import type { BuildSignatureItem } from "@/lib/build-events";
 import {
-  actionsFromSignature,
+  actionsFromCustomBuild,
   actionsFromSteps,
   adaptBuild,
   referenceBuildsForRace,
@@ -128,39 +127,39 @@ function OptimizerInner() {
     [settings.race],
   );
 
+  const adaptSource = (source: BuildSource): AdaptResult => {
+    const profile = resolveProfile(settings.profileId);
+    const resolved =
+      source.type === "standard"
+        ? actionsFromSteps(profile, source.steps)
+        : actionsFromCustomBuild(profile, source);
+    if (resolved.actions.length === 0) {
+      throw new Error(
+        "That build has no adaptable steps (workers and supply are re-timed automatically — it needs structures, units, or upgrades).",
+      );
+    }
+    const adapted = adaptBuild({
+      baselineProfileId: BASELINE_PROFILE_ID,
+      profileId: settings.profileId,
+      race: settings.race,
+      actions: resolved.actions,
+      referenceName: source.name,
+      referenceId: source.id,
+      threats: activeThreats,
+      policies: defaultPolicies(),
+      safety: {
+        hasWall: settings.hasWall,
+        allowWorkerPull: settings.allowWorkerPull,
+      },
+      horizonSec: 480,
+    });
+    return { ...adapted, unknownNames: resolved.unknownNames };
+  };
+
   const handleAdapt = (source: BuildSource) => {
     setAdaptError(null);
     try {
-      const profile = resolveProfile(settings.profileId);
-      const resolved =
-        source.type === "standard"
-          ? actionsFromSteps(profile, source.steps)
-          : actionsFromSignature(
-              profile,
-              source.signature as BuildSignatureItem[],
-            );
-      if (resolved.actions.length === 0) {
-        setAdaptError(
-          "That build has no adaptable steps (workers and supply are re-timed automatically — it needs structures, units, or upgrades).",
-        );
-        return;
-      }
-      const adapted = adaptBuild({
-        baselineProfileId: BASELINE_PROFILE_ID,
-        profileId: settings.profileId,
-        race: settings.race,
-        actions: resolved.actions,
-        referenceName: source.name,
-        referenceId: source.id,
-        threats: activeThreats,
-        policies: defaultPolicies(),
-        safety: {
-          hasWall: settings.hasWall,
-          allowWorkerPull: settings.allowWorkerPull,
-        },
-        horizonSec: 480,
-      });
-      setResult({ ...adapted, unknownNames: resolved.unknownNames });
+      setResult(adaptSource(source));
     } catch (err: unknown) {
       setAdaptError(err instanceof Error ? err.message : String(err));
     }
@@ -194,9 +193,11 @@ function OptimizerInner() {
           <BuildSourcePanel
             race={settings.race}
             vsRace={settings.vsRace}
+            profileId={settings.profileId}
             references={references}
             error={adaptError}
             onAdapt={handleAdapt}
+            adaptSource={adaptSource}
           />
           <ThreatPanel
             threats={matchupThreats}

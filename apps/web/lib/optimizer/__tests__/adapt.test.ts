@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  actionsFromCustomBuild,
   actionsFromSignature,
   actionsFromSteps,
   adaptBuild,
@@ -59,6 +60,37 @@ describe("action resolution", () => {
       { kind: "build", name: "Barracks" },
       { kind: "morph", name: "OrbitalCommand" },
       { kind: "research", name: "Stimpack" },
+    ]);
+  });
+
+  it("resolves rules-only builds (v3 editor format) via rulesToSignature", () => {
+    const { actions } = actionsFromCustomBuild(target, {
+      rules: [
+        { type: "before", name: "Gateway", time_lt: 60 },
+        { type: "count_min", name: "Zealot", time_lt: 180, count: 2 },
+        { type: "before", name: "CyberneticsCore", time_lt: 150 },
+        { type: "not_before", name: "Nexus", time_lt: 100 },
+      ],
+    });
+    expect(actions.map((a) => a.name)).toEqual([
+      "Gateway",
+      "CyberneticsCore",
+      "Zealot",
+      "Zealot",
+    ]);
+  });
+
+  it("maps legacy 'warpgate' names from saved builds to Gateway", () => {
+    const { actions, unknownNames } = actionsFromSteps(target, [
+      "Pylon",
+      "warpgate",
+      "WarpGate",
+    ]);
+    expect(unknownNames).toEqual([]);
+    expect(actions.map((a) => a.name)).toEqual([
+      "Pylon",
+      "Gateway",
+      "Gateway",
     ]);
   });
 
@@ -155,6 +187,44 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
     for (const report of result.safety.threats) {
       expect(["safe", "risky", "unsafe"]).toContain(report.verdict);
       expect(report.waves.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("warns when warpgate research occupies the only gateway (PTR)", () => {
+    // p-robo-expand researches warpgate while one gateway exists —
+    // on 5.0.16 that's 100s of lost production worth a loud note.
+    const result = adapt("p-robo-expand", "Protoss");
+    expect(
+      result.adaptationNotes.some((n) =>
+        n.includes("occupies your only Gateway"),
+      ),
+    ).toBe(true);
+    // and the per-gateway transform economics note rides along
+    expect(
+      result.adaptationNotes.some((n) => n.includes("50/50 per gateway")),
+    ).toBe(true);
+    // the sim reflects reality: a gateway unit may only start during
+    // the research if ANOTHER gateway has finished by then (the
+    // researching one is fully occupied)
+    const research = result.sim.steps.find(
+      (s) => s.name === "WarpGateResearch",
+    )!;
+    const gatewayDone = (result.sim.completionTimes.Gateway ?? []).slice();
+    const gatewayUnits = result.sim.steps.filter(
+      (s) =>
+        s.kind === "train" &&
+        ["Zealot", "Adept", "Stalker", "Sentry"].includes(s.name),
+    );
+    for (const unit of gatewayUnits) {
+      const during =
+        unit.startSec > research.startSec + 0.01 &&
+        unit.startSec < research.doneSec - 0.01;
+      if (during) {
+        const gatewaysAvailable = gatewayDone.filter(
+          (t) => t <= unit.startSec,
+        ).length;
+        expect(gatewaysAvailable).toBeGreaterThanOrEqual(2);
+      }
     }
   });
 

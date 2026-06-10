@@ -10,7 +10,11 @@
  * the simulator re-derives per patch, so a 12-worker build's "14
  * Pylon" naturally becomes whatever the 8-worker economy supports.
  */
-import type { BuildSignatureItem } from "@/lib/build-events";
+import {
+  rulesToSignature,
+  type BuildRuleLike,
+  type BuildSignatureItem,
+} from "@/lib/build-events";
 import referenceData from "../data/reference-builds.json";
 import { resolveProfile } from "../patch/profiles";
 import { evaluateSafety } from "../safety/evaluate";
@@ -44,6 +48,21 @@ function isPolicyOwned(profile: PatchProfile, name: string): boolean {
   return Boolean(profile.units[name]?.isWorker);
 }
 
+/**
+ * Legacy names that appear in saved build signatures/rules but aren't
+ * profile entries. Warpgates especially: replay trackers record
+ * transformed gateways (and units warped from them) as "WarpGate".
+ */
+const NAME_ALIASES: Record<string, string> = {
+  warpgate: "Gateway",
+  templararchive: "TemplarArchives",
+  lurkerdenmp: "LurkerDen",
+  lurkermp: "Lurker",
+  swarmhostmp: "SwarmHost",
+  broodlord: "BroodLord",
+  blink: "BlinkTech",
+};
+
 /** Case-insensitive canonical-name index over units + upgrades. */
 function nameIndex(profile: PatchProfile): Map<string, string> {
   const index = new Map<string, string>();
@@ -52,6 +71,11 @@ function nameIndex(profile: PatchProfile): Map<string, string> {
   }
   for (const name of Object.keys(profile.upgrades)) {
     index.set(name.toLowerCase(), name);
+  }
+  for (const [alias, canonical] of Object.entries(NAME_ALIASES)) {
+    if (!index.has(alias) && index.has(canonical.toLowerCase())) {
+      index.set(alias, canonical);
+    }
   }
   return index;
 }
@@ -112,6 +136,29 @@ export function actionsFromSignature(
   return actionsFromSteps(profile, expanded);
 }
 
+/**
+ * A saved custom build, whichever shape it carries: the legacy
+ * `signature` array, or v3 `rules` (the modern editor's format) via
+ * the same compression the community timeline uses. Builds saved
+ * through the rules editor have no signature — without this fallback
+ * most of a user's library is invisible to the adapter.
+ */
+export function actionsFromCustomBuild(
+  profile: PatchProfile,
+  build: {
+    signature?: BuildSignatureItem[];
+    rules?: BuildRuleLike[];
+  },
+): ResolvedActions {
+  if (build.signature && build.signature.length > 0) {
+    return actionsFromSignature(profile, build.signature);
+  }
+  if (build.rules && build.rules.length > 0) {
+    return actionsFromSignature(profile, rulesToSignature(build.rules));
+  }
+  return { actions: [], unknownNames: [] };
+}
+
 /* ------------------------------------------------------------------ */
 /* Adaptation                                                          */
 /* ------------------------------------------------------------------ */
@@ -164,6 +211,67 @@ function buildComparison(
 }
 
 /**
+ * Patch-specific guidance from the adapted sim. The big one for
+ * 5.0.16: warpgate research now lives ON the Gateway and occupies it
+ * for the full research (PTR-verified), so a legacy build that
+ * researches early off one gateway silently loses ~100s of unit
+ * production — worth a loud note, not a mystery gap.
+ */
+function buildAdaptationNotes(
+  profile: PatchProfile,
+  sim: SimResult,
+): string[] {
+  const notes: string[] = [];
+  const researchSteps = sim.steps.filter((s) => s.kind === "research");
+  for (const step of researchSteps) {
+    const def = profile.upgrades[step.name];
+    if (!def || def.nonBlocking) continue;
+    // structures of this type completed when the research started
+    const labNames = def.researchedAt;
+    let labsAtStart = 0;
+    for (const lab of labNames) {
+      for (const doneAt of sim.completionTimes[lab] ?? []) {
+        if (doneAt <= step.startSec) labsAtStart += 1;
+      }
+    }
+    // does that structure type also train units?
+    const trainsUnits = Object.values(profile.units).some(
+      (u) => !u.isStructure && u.builtFrom.some((b) => labNames.includes(b)),
+    );
+    if (trainsUnits && labsAtStart <= 1) {
+      notes.push(
+        `${humanize(step.name)} occupies your only ${humanize(labNames[0])} from ${mmss(step.startSec)} to ${mmss(step.doneSec)} — no units from it during the research. Add a second ${humanize(labNames[0])} first or research later.`,
+      );
+    }
+  }
+  if (
+    sim.race === "Protoss" &&
+    (sim.completionTimes.WarpGateResearch?.length ?? 0) > 0 &&
+    profile.mechanics.warpgate.transformCost.minerals > 0
+  ) {
+    const cost = profile.mechanics.warpgate.transformCost;
+    const speedPct = Math.round(
+      (profile.mechanics.warpgate.gatewaySpeedMultiplier - 1) * 100,
+    );
+    if (speedPct > 0) {
+      notes.push(
+        `On this patch, finished warpgate research makes gateways produce ${speedPct}% faster, and transforming to a warpgate costs ${cost.minerals}/${cost.gas} per gateway — transforming everything is no longer automatic. Keep home gateways producing; transform only where warp-ins beat the queue.`,
+      );
+    }
+  }
+  return notes;
+}
+
+function mmss(seconds: number): string {
+  const total = Math.round(seconds);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function humanize(name: string): string {
+  return name.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+}
+
+/**
  * Re-time `actions` under the target patch, simulate the original
  * patch alongside for the position-by-position comparison, and
  * evaluate the adapted build against the selected threats.
@@ -199,5 +307,6 @@ export function adaptBuild(request: AdaptRequest): AdaptResult {
     safety,
     comparison: buildComparison(request.actions, baselineSim, sim),
     unknownNames: [],
+    adaptationNotes: buildAdaptationNotes(targetProfile, sim),
   };
 }

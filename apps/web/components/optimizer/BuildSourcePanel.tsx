@@ -2,20 +2,32 @@
 
 /**
  * Reference build picker: shipped standard 12-worker openers for the
- * selected race, plus the user's own saved custom builds (which carry
- * step signatures). The selected build is what gets re-timed for the
- * target patch.
+ * selected race, plus ALL of the user's saved custom builds — both
+ * legacy signature builds and modern rules-based (v3 editor) builds.
+ * The selected build is what gets re-timed for the target patch, and
+ * "Adapt & save all" writes a re-timed copy of every library build
+ * back into the library in one pass.
  */
 import { useMemo, useState } from "react";
-import { ArrowRightLeft } from "lucide-react";
-import { SignedIn, SignedOut } from "@clerk/nextjs";
+import Link from "next/link";
+import { ArrowRightLeft, CopyPlus } from "lucide-react";
+import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { useApi } from "@/lib/clientApi";
-import type { BuildSignatureItem } from "@/lib/build-events";
-import { matchupLabel } from "@/lib/race";
-import type { ReferenceBuild, SimRace } from "@/lib/optimizer/types";
+import { useToast } from "@/components/ui/Toast";
+import { apiCall, useApi } from "@/lib/clientApi";
+import type { BuildRuleLike, BuildSignatureItem } from "@/lib/build-events";
+import { matchupLabel, type VsRace } from "@/lib/race";
+import {
+  CUSTOM_BUILD_PUT_PATH,
+  toCustomBuildPayload,
+} from "@/lib/optimizer/export/toCustomBuild";
+import type {
+  AdaptResult,
+  ReferenceBuild,
+  SimRace,
+} from "@/lib/optimizer/types";
 
 export type BuildSource =
   | {
@@ -28,7 +40,9 @@ export type BuildSource =
       type: "custom";
       id: string;
       name: string;
-      signature: BuildSignatureItem[];
+      signature?: BuildSignatureItem[];
+      rules?: BuildRuleLike[];
+      vsRace?: string;
     };
 
 interface CustomBuildListItem {
@@ -37,22 +51,42 @@ interface CustomBuildListItem {
   race?: string;
   vsRace?: string;
   signature?: BuildSignatureItem[];
+  rules?: BuildRuleLike[];
+}
+
+function hasSteps(item: CustomBuildListItem): boolean {
+  return (
+    (Array.isArray(item.signature) && item.signature.length > 0) ||
+    (Array.isArray(item.rules) && item.rules.length > 0)
+  );
 }
 
 export function BuildSourcePanel({
   race,
   vsRace,
+  profileId,
   references,
   error,
   onAdapt,
+  adaptSource,
 }: {
   race: SimRace;
   vsRace: SimRace;
+  profileId: string;
   references: ReferenceBuild[];
   error: string | null;
   onAdapt: (source: BuildSource) => void;
+  /** Pure adaptation used by the bulk save (throws on bad builds). */
+  adaptSource: (source: BuildSource) => AdaptResult;
 }) {
   const [selected, setSelected] = useState<string>("");
+  const [bulkState, setBulkState] = useState<{
+    running: boolean;
+    done: number;
+    total: number;
+  }>({ running: false, done: 0, total: 0 });
+  const { getToken } = useAuth();
+  const { toast } = useToast();
   const { data: customData } = useApi<{ items: CustomBuildListItem[] }>(
     "/v1/custom-builds",
   );
@@ -61,13 +95,19 @@ export function BuildSourcePanel({
   const customBuilds = useMemo(
     () =>
       (customData?.items ?? []).filter(
-        (item) =>
-          item.race === race &&
-          Array.isArray(item.signature) &&
-          item.signature.length > 0,
+        (item) => item.race === race && hasSteps(item),
       ),
     [customData, race],
   );
+
+  const toSource = (build: CustomBuildListItem): BuildSource => ({
+    type: "custom",
+    id: build.slug,
+    name: build.name,
+    signature: build.signature,
+    rules: build.rules,
+    vsRace: build.vsRace,
+  });
 
   const sources = useMemo<Map<string, BuildSource>>(() => {
     const map = new Map<string, BuildSource>();
@@ -80,17 +120,52 @@ export function BuildSourcePanel({
       });
     }
     for (const build of customBuilds) {
-      map.set(`custom:${build.slug}`, {
-        type: "custom",
-        id: build.slug,
-        name: build.name,
-        signature: build.signature ?? [],
-      });
+      map.set(`custom:${build.slug}`, toSource(build));
     }
     return map;
   }, [references, customBuilds]);
 
   const selectedSource = sources.get(selected) ?? null;
+
+  const handleAdaptAll = async () => {
+    if (bulkState.running || customBuilds.length === 0) return;
+    setBulkState({ running: true, done: 0, total: customBuilds.length });
+    let saved = 0;
+    const failures: string[] = [];
+    for (const build of customBuilds) {
+      try {
+        const result = adaptSource(toSource(build));
+        const validVs = ["Protoss", "Terran", "Zerg", "Random", "Any"];
+        const buildVs = validVs.includes(build.vsRace ?? "")
+          ? (build.vsRace as VsRace)
+          : vsRace;
+        const payload = toCustomBuildPayload(result, {
+          name: `${build.name} (${profileId})`,
+          vsRace: buildVs,
+          description: `Re-timed from "${build.name}" for patch ${profileId}.`,
+        });
+        await apiCall<void>(getToken, CUSTOM_BUILD_PUT_PATH(payload.slug), {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        saved += 1;
+      } catch {
+        failures.push(build.name);
+      }
+      setBulkState((s) => ({ ...s, done: s.done + 1 }));
+    }
+    setBulkState({ running: false, done: 0, total: 0 });
+    if (saved > 0) {
+      toast.success(`Saved ${saved} adapted build${saved === 1 ? "" : "s"}`, {
+        description: `Each as "name (${profileId})" in your library.`,
+      });
+    }
+    if (failures.length > 0) {
+      toast.error(`Couldn't adapt ${failures.length}`, {
+        description: failures.slice(0, 4).join(", "),
+      });
+    }
+  };
 
   return (
     <Card title="Reference build (12-worker)">
@@ -142,18 +217,40 @@ export function BuildSourcePanel({
           </ul>
         </div>
         <div className="space-y-2">
-          <div className="text-caption font-medium text-text">My builds</div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-caption font-medium text-text">My builds</div>
+            <SignedIn>
+              {customBuilds.length > 0 ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  loading={bulkState.running}
+                  onClick={handleAdaptAll}
+                  iconLeft={<CopyPlus className="h-3.5 w-3.5" />}
+                >
+                  {bulkState.running
+                    ? `Adapting ${bulkState.done}/${bulkState.total}…`
+                    : "Adapt & save all"}
+                </Button>
+              ) : null}
+            </SignedIn>
+          </div>
           <SignedIn>
             {customBuilds.length === 0 ? (
               <p className="text-caption text-text-dim">
-                No saved {race} builds with step data yet — builds you save in
-                your library (with a build-order signature) appear here.
+                No saved {race} builds with step data yet — builds from your{" "}
+                <Link href="/builds" className="text-accent hover:underline">
+                  library
+                </Link>{" "}
+                (signature or rules) appear here.
               </p>
             ) : (
               <ul className="space-y-1.5" role="radiogroup" aria-label="My builds">
                 {customBuilds.map((build) => {
                   const key = `custom:${build.slug}`;
                   const isSelected = selected === key;
+                  const stepCount =
+                    build.signature?.length ?? build.rules?.length ?? 0;
                   return (
                     <li key={key}>
                       <button
@@ -172,7 +269,8 @@ export function BuildSourcePanel({
                           {build.name}
                         </span>
                         <span className="ml-2 text-caption text-text-dim">
-                          {build.signature?.length ?? 0} steps
+                          {stepCount} steps
+                          {build.signature?.length ? "" : " (from rules)"}
                         </span>
                       </button>
                     </li>
@@ -196,9 +294,9 @@ export function BuildSourcePanel({
             Re-time for selected patch
           </Button>
           <p className="text-caption text-text-dim">
-            Worker production, supply, and gas saturation are re-derived for
-            the target patch — the build&apos;s structures, units, and
-            upgrades keep their order.
+            Worker production and gas saturation are re-derived for the
+            target patch — the build&apos;s structures, units, upgrades, and
+            supply keep their order.
           </p>
           {error ? (
             <p role="alert" className="text-caption text-danger">
