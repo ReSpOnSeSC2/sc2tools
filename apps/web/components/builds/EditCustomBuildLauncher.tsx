@@ -14,7 +14,13 @@ import {
   type SkillLevelId,
   type VsRaceLite,
 } from "@/lib/build-rules";
-import type { BuildOrderEvent } from "@/lib/build-events";
+import {
+  humanizeBuildName,
+  normalizeBuildName,
+  rulesToSignature,
+  type BuildOrderEvent,
+  type BuildSignatureItem,
+} from "@/lib/build-events";
 import type { CustomBuild } from "./types";
 
 export interface EditCustomBuildLauncherProps {
@@ -34,6 +40,7 @@ interface SavedBuildDoc extends Record<string, unknown> {
   shareWithCommunity?: boolean;
   isPublic?: boolean;
   rules?: BuildRule[];
+  signature?: BuildSignatureItem[];
   winConditions?: string[];
   losesTo?: string[];
   transitionsInto?: string[];
@@ -99,6 +106,53 @@ function toInitialDraft(doc: SavedBuildDoc): Partial<BuildEditorDraft> {
 }
 
 /**
+ * Reconstruct source-timeline events for the editor from the saved doc.
+ *
+ * The original .SC2Replay isn't round-tripped, so we synthesise events
+ * from what the doc carries:
+ *   1. v3 `rules` — preferred: rule names ARE the canonical tokens
+ *      (BuildStargate, ResearchBlink), so the timeline rows map back
+ *      to rules exactly and render as "✓ in rules".
+ *   2. legacy `signature` — fallback for older docs / community forks
+ *      saved before rules were copied. Unit names are icon-ish
+ *      (lowercase) so we re-derive display + category via
+ *      normalizeBuildName; tokens are best-effort.
+ */
+function docToEvents(doc: SavedBuildDoc): BuildOrderEvent[] {
+  const fromRules = rulesToSignature(
+    Array.isArray(doc.rules) ? doc.rules : [],
+  );
+  if (fromRules.length > 0) {
+    return fromRules.map((item) => ({
+      time: Math.max(0, Math.floor(item.beforeSec)),
+      // Already a canonical Build/Train/Research/Morph token —
+      // spaEventToWhat passes it through unchanged.
+      name: item.unit,
+      display: humanizeBuildName(item.unit) || item.unit,
+    }));
+  }
+  const signature = Array.isArray(doc.signature) ? doc.signature : [];
+  const events: BuildOrderEvent[] = [];
+  for (const item of signature) {
+    const rawName = String(item?.unit ?? "").trim();
+    if (!rawName) continue;
+    const { displayName, category } = normalizeBuildName(rawName);
+    const token = (displayName || rawName).replace(/[^A-Za-z0-9]/g, "");
+    if (!token) continue;
+    const count = Math.max(1, Math.floor(Number(item.count) || 1));
+    events.push({
+      time: Math.max(0, Math.floor(Number(item.beforeSec) || 0)),
+      name: token,
+      display: count > 1 ? `${displayName} ×${count}` : displayName,
+      category,
+      is_building: category === "building",
+    });
+  }
+  events.sort((a, b) => a.time - b.time);
+  return events;
+}
+
+/**
  * EditCustomBuildLauncher — fetches the full saved-build document for
  * the row the user clicked Edit on, then opens the rich BuildEditorModal
  * pre-populated with rules, "Recommended for", strategy notes, and the
@@ -158,6 +212,13 @@ export function EditCustomBuildLauncher({
     [doc],
   );
 
+  // Source-timeline events synthesised from the saved doc (rules first,
+  // legacy signature as fallback) — see docToEvents above.
+  const events = useMemo<ReadonlyArray<BuildOrderEvent>>(
+    () => (doc ? docToEvents(doc) : []),
+    [doc],
+  );
+
   const open = !!build;
   if (!open) return null;
 
@@ -183,12 +244,6 @@ export function EditCustomBuildLauncher({
       </div>
     );
   }
-
-  // No source replay events at edit time — the original .SC2Replay
-  // isn't round-tripped through the saved doc. The rules column still
-  // works (custom rules + edit existing) so name / metadata / "Recommended
-  // for" / strategy notes are all editable.
-  const events: ReadonlyArray<BuildOrderEvent> = [];
 
   return (
     <BuildEditorModal
