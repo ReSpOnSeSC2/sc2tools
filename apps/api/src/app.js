@@ -101,8 +101,13 @@ const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
 /**
  * Build the Express app. Pure factory: no listen, no DB connect.
  *
+ * The returned ``adminClerkIds`` set is LIVE: the REST ``isAdmin``
+ * gate closes over it, so additions made after boot (e.g. the
+ * founder-admin bootstrap in server.js) take effect immediately for
+ * both REST and any caller sharing the set (the socket layer).
+ *
  * @param {AppDeps} deps
- * @returns {{app: import('express').Express, services: object}}
+ * @returns {{app: import('express').Express, services: object, adminClerkIds: Set<string>}}
  */
 function buildApp(deps) {
   // Register schema migrations BEFORE any service touches Mongo so
@@ -122,9 +127,10 @@ function buildApp(deps) {
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
   applyBaseMiddleware(app, deps);
-  mountRoutes(app, deps, services, clerk);
+  const adminClerkIds = new Set(deps.config.adminUserIds || []);
+  mountRoutes(app, deps, services, clerk, adminClerkIds);
   app.use(buildErrorHandler(deps.logger));
-  return { app, services };
+  return { app, services, adminClerkIds };
 }
 
 /**
@@ -371,7 +377,7 @@ function applyBaseMiddleware(app, deps) {
  * @param {ReturnType<typeof makeServices>} services
  * @param {import('./services/clerkClient').ClerkClient} clerk
  */
-function mountRoutes(app, deps, services, clerk) {
+function mountRoutes(app, deps, services, clerk, adminClerkIds) {
   const auth = buildAuth({
     secretKey: deps.config.clerkSecretKey,
     issuer: deps.config.clerkJwtIssuer,
@@ -434,7 +440,10 @@ function mountRoutes(app, deps, services, clerk) {
   // against `req.auth.clerkUserId`. Device-auth requests don't carry
   // a Clerk ID and therefore can never be admins, which is what we
   // want — moderation is a web-only surface.
-  const adminIds = new Set(deps.config.adminUserIds || []);
+  // Seeded from SC2TOOLS_ADMIN_USER_IDS in buildApp; the founder-admin
+  // bootstrap in server.js adds DB-granted admins after boot. The gate
+  // reads the live set, so those grants apply without a restart.
+  const adminIds = adminClerkIds || new Set(deps.config.adminUserIds || []);
   /** @param {import('express').Request} req */
   const isAdmin = (req) =>
     Boolean(req.auth && req.auth.clerkUserId && adminIds.has(req.auth.clerkUserId));

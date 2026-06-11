@@ -63,7 +63,7 @@ async function main() {
     },
   });
 
-  const { app, services } = /** @type {{
+  const { app, services, adminClerkIds } = /** @type {{
     app: import('express').Express,
     services: {
       overlayTokens: import('./services/types').OverlayTokensService,
@@ -71,12 +71,29 @@ async function main() {
       opponents: import('./services/opponents').OpponentsService,
       [k: string]: unknown,
     },
+    adminClerkIds: Set<string>,
   }} */ (buildApp({ db, logger, config, io }));
   httpServer.on("request", app);
-  // Admin allowlist used by the socket layer to scope ``admin:event``
-  // broadcasts to actual admins. Built once at boot from the same
-  // env var the REST middleware checks.
-  const adminClerkIds = new Set(config.adminUserIds || []);
+  // Admin allowlist shared by the REST gate (built inside buildApp
+  // from SC2TOOLS_ADMIN_USER_IDS) and the socket layer below —
+  // mutations here are visible to both, they read the live set.
+  //
+  // Founder bootstrap: when no user carries role:"admin" in the DB,
+  // promote the earliest signup (the founder) and merge every
+  // DB-granted admin into the allowlist. Failures are non-fatal —
+  // the env-var allowlist keeps working without it.
+  try {
+    const dbAdminIds = await /** @type {any} */ (services).users.ensureFounderAdmin();
+    for (const id of dbAdminIds) adminClerkIds.add(id);
+    if (dbAdminIds.length > 0) {
+      logger.info(
+        { count: dbAdminIds.length },
+        "admin_allowlist_merged_from_db",
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, "founder_admin_bootstrap_failed");
+  }
   attachSocketAuth(io, {
     secretKey: config.clerkSecretKey,
     issuer: config.clerkJwtIssuer,

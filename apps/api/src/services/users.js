@@ -63,6 +63,67 @@ class UsersService {
   }
 
   /**
+   * Founder bootstrap: make sure SOMEBODY is admin.
+   *
+   * Looks for users carrying ``role: "admin"`` in the collection. When
+   * none exists, the earliest-created user with a Clerk identity (the
+   * founder — the first person who ever signed up) is promoted and the
+   * grant is persisted on their user doc so it survives restarts and
+   * shows up in the admin user list.
+   *
+   * Returns the Clerk user IDs of every DB-granted admin so the boot
+   * sequence can merge them into the in-memory allowlist the REST and
+   * socket gates check (alongside ``SC2TOOLS_ADMIN_USER_IDS``).
+   *
+   * Concurrency: the promote filter requires ``role`` to be absent, so
+   * two instances racing at boot can't double-grant; the loser's
+   * update is a no-op and both re-read the same winner.
+   *
+   * @returns {Promise<string[]>}
+   */
+  async ensureFounderAdmin() {
+    const admins = await this.db.users
+      .find(
+        { role: "admin" },
+        { projection: { _id: 0, clerkUserId: 1 } },
+      )
+      .toArray();
+    if (admins.length > 0) {
+      return admins
+        .map((a) => a.clerkUserId)
+        .filter((c) => typeof c === "string" && c.length > 0);
+    }
+    // No admin on record — promote the founder. ``$type: "string"``
+    // skips webhook stubs / legacy rows without a Clerk identity:
+    // an admin who can't log in via Clerk would be useless.
+    const founder = await this.db.users.findOne(
+      { clerkUserId: { $type: "string", $ne: "" } },
+      { sort: { createdAt: 1 }, projection: { _id: 0, userId: 1, clerkUserId: 1 } },
+    );
+    if (!founder) return [];
+    await this.db.users.updateOne(
+      { userId: founder.userId, role: { $exists: false } },
+      {
+        $set: {
+          role: "admin",
+          roleGrantedAt: new Date(),
+          roleGrantedBy: "founder_bootstrap",
+        },
+      },
+    );
+    if (this.adminEvents) {
+      // Fire-and-forget audit trail, same contract as _recordSignup.
+      Promise.resolve(
+        this.adminEvents.record("founder_admin_granted", {
+          userId: founder.userId,
+          clerkUserId: founder.clerkUserId,
+        }),
+      ).catch(() => {});
+    }
+    return [founder.clerkUserId];
+  }
+
+  /**
    * Bump `lastSeenAt`. Cheap, fire-and-forget; failures are non-fatal.
    *
    * @param {string} userId
