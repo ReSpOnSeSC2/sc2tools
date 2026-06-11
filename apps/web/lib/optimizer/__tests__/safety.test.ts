@@ -13,12 +13,12 @@ const eightPool = catalog.find((t) => t.id === "z-8pool")!;
 // proxy rax / oracle threats now derive from the reference catalog
 const proxyRax = deriveThreatFromBuild(
   profile,
-  referenceBuilds().find((b) => b.id === "t-proxy-rax")!,
+  referenceBuilds().find((b) => b.id === "terran-proxy-rax")!,
   "Terran",
 )!;
 const oracle = deriveThreatFromBuild(
   profile,
-  referenceBuilds().find((b) => b.id === "p-stargate-oracle")!,
+  referenceBuilds().find((b) => b.id === "protoss-stargate-opener")!,
   "Protoss",
 )!;
 

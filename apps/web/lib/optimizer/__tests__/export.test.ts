@@ -17,7 +17,7 @@ const profile = resolveProfile("5.0.16");
 const eightPool = threatCatalog(null).find((t) => t.id === "z-8pool")!;
 
 function makeResult(): AdaptResult {
-  const reference = referenceBuilds().find((b) => b.id === "p-gate-expand")!;
+  const reference = referenceBuilds().find((b) => b.id === "protoss-standard-expand")!;
   const { actions } = actionsFromSteps(profile, reference.steps);
   return adaptBuild({
     baselineProfileId: "lotv-base",
@@ -80,7 +80,7 @@ describe("export to custom builds", () => {
     expect(payload.notes).toContain("Timing shifts vs lotv-base:");
     expect(payload.notes).toContain("Safety report:");
     expect(payload.notes).toContain("8-pool");
-    expect(payload.notes).toContain('Adapted from "1-Gate Expand"');
+    expect(payload.notes).toContain('Adapted from "Standard Expand (1 Gate)"');
     expect(payload.notes!.length).toBeLessThanOrEqual(8000);
   });
 

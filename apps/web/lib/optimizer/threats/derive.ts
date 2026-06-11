@@ -5,11 +5,7 @@
  * and read its army off the completion timeline. A patch change
  * automatically re-times every threat.
  */
-import {
-  actionsFromSteps,
-  referenceBuildsForRace,
-  stepsForMatchup,
-} from "../adapt/adapt";
+import { actionsFromSteps, referenceBuildsForRace } from "../adapt/adapt";
 import { resolveProfile } from "../patch/profiles";
 import { defaultPolicies, simulate } from "../sim/engine";
 import type { PatchProfile, SimRace, Threat, ThreatWave } from "../types";
@@ -52,16 +48,13 @@ export function deriveThreatFromBuild(
     name: string;
     description: string;
     steps: string[];
-    stepsByMatchup?: Record<string, string[]>;
     race: SimRace;
   },
   defender: SimRace,
 ): Threat | null {
-  // the attacker plays THEIR matchup variant (e.g. PvT steps vs terran)
-  const steps =
-    build.stepsByMatchup?.[matchupLabelFor(build.race, defender)] ??
-    build.steps;
-  const { actions } = actionsFromSteps(profile, steps);
+  // builds are individual per matchup, so `steps` IS the attacker's
+  // line vs this defender (the caller filters by `matchups`)
+  const { actions } = actionsFromSteps(profile, build.steps);
   if (actions.length === 0) return null;
   const sim = simulate(actions, profile, build.race, {
     horizonSec: SIM_HORIZON_SEC,

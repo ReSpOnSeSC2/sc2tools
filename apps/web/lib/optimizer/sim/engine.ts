@@ -318,12 +318,23 @@ function autoWorkers(
 ): void {
   const workerName = profile.starting.worker[race];
   const def = profile.units[workerName];
-  // Stop at comfortable saturation: 2 per patch + 3 per active geyser.
+  // Stop at comfortable saturation: 2 per patch + 3 per geyser. Bases
+  // still under construction count toward the target — workers for an
+  // expansion are produced WHILE it builds (real players never pause
+  // probes/SCVs waiting for the new town hall to finish), they
+  // transfer over on completion. Protoss/Terran count every geyser
+  // (full one-base saturation is 16 + 6 and production never stops on
+  // the way there); zerg drone targets follow actual extractors so
+  // low-economy zerg builds keep their deliberately frozen drone
+  // counts.
   let saturation = 0;
   for (const base of state.eco.bases) {
-    if (!base.active) continue;
     saturation += 2 * base.patches;
-    for (const geyser of base.geysers) if (geyser.active) saturation += 3;
+    if (race !== "Zerg") {
+      saturation += 3 * base.geysers.length;
+    } else if (base.active) {
+      for (const geyser of base.geysers) if (geyser.active) saturation += 3;
+    }
   }
   const current =
     (state.completed.get(workerName) ?? 0) +
@@ -431,6 +442,19 @@ export function simulate(
   while (state.time <= opts.horizonSec && guard < maxIterations) {
     guard += 1;
     integrateIncome(state.eco, profile.economy, state.time);
+
+    // 0. Continuous worker production outranks the build order's bank.
+    // A player following an opener never stops probe/SCV production to
+    // save for the next structure — the structure waits the extra few
+    // seconds instead. Running this BEFORE head dispatch gives workers
+    // first claim on the bank, so supply stamps reflect nonstop worker
+    // production ("17 Cybernetics Core" really means 17). Zerg is
+    // excluded: drones share larvae and supply with the build order's
+    // own units, so drone priority would silently eat the lings/roaches
+    // the build lists (zerg drones stay in runPolicies, after dispatch).
+    if (policies.autoWorkers && race !== "Zerg") {
+      autoWorkers(state, profile, race);
+    }
 
     // 1. Try to dispatch as many head actions as possible right now.
     let headRetryAt = Infinity;

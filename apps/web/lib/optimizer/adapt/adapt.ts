@@ -44,14 +44,6 @@ export function referenceBuildsForRace(race: SimRace): ReferenceBuild[] {
   return referenceBuilds().filter((b) => b.race === race);
 }
 
-/** Steps for a build in a given matchup (variant or base). */
-export function stepsForMatchup(
-  build: ReferenceBuild,
-  matchup: string,
-): string[] {
-  return build.stepsByMatchup?.[matchup] ?? build.steps;
-}
-
 /**
  * Names the policies own — never part of an adapted action list.
  * Only workers: supply structures are real build-order steps (a
