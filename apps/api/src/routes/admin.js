@@ -38,8 +38,10 @@ const express = require("express");
  *   games: import('../services/games').GamesService,
  *   opponents: import('../services/types').OpponentsService,
  *   perGame: import('../services/types').PerGameComputeService,
+ *   users: import('../services/users').UsersService,
  *   auth: import('express').RequestHandler,
  *   isAdmin: (req: any) => boolean,
+ *   onAdminGranted?: (clerkUserId: string) => void,
  *   gameDetailsStoreKind?: string,
  * }} deps
  */
@@ -153,6 +155,31 @@ function buildAdminRouter(deps) {
     try {
       const detail = await deps.admin.userDetail(String(req.params.userId));
       res.json(detail);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Promote another user to admin. The whole router is already gated on
+  // ``isAdmin``, so only an existing admin can reach this — that's the
+  // "only an admin can add other admins" rule. On success we push the
+  // grantee's Clerk id straight into the live allowlist so their next
+  // request is admin-authorized without a restart.
+  router.post("/admin/users/:userId/grant-admin", async (req, res, next) => {
+    try {
+      const grantedBy = req.auth && req.auth.clerkUserId;
+      const granted = await deps.users.grantAdmin(
+        String(req.params.userId),
+        typeof grantedBy === "string" ? grantedBy : "",
+      );
+      if (!granted) {
+        res.status(404).json({ error: { code: "user_not_grantable" } });
+        return;
+      }
+      if (typeof deps.onAdminGranted === "function") {
+        deps.onAdminGranted(granted.clerkUserId);
+      }
+      res.json({ ok: true, userId: granted.userId });
     } catch (err) {
       next(err);
     }

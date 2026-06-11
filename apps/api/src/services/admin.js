@@ -410,6 +410,10 @@ class AdminService {
       userId,
       clerkUserId: user ? user.clerkUserId || null : null,
       email: user ? user.email || null : null,
+      // ``admin`` when this user carries the DB-granted role (founder
+      // bootstrap or an explicit grant). Drives the "Grant admin" /
+      // "Already an admin" state on the user-detail page.
+      isAdmin: user ? user.role === "admin" : false,
       createdAt: user ? user.createdAt || null : null,
       lastSeenAt: user ? user.lastSeenAt || null : null,
       games: {

@@ -46,6 +46,8 @@ export type AdminUserDetail = {
   userId: string;
   clerkUserId: string | null;
   email: string | null;
+  /** True when this user carries the DB-granted ``admin`` role. */
+  isAdmin: boolean;
   createdAt: string | null;
   lastSeenAt: string | null;
   games: {
