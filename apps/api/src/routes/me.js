@@ -40,6 +40,7 @@ const ME_MMR_MAX_TOONS = 8;
  *       mmr: number,
  *       region: string | null,
  *     } | null>,
+ *     getBattleTags?(ids: string[]): Promise<string[]>,
  *   },
  *   auth: import('express').RequestHandler,
  *   isAdmin?: (req: import('express').Request) => boolean,
@@ -188,6 +189,59 @@ function buildMeRouter(deps) {
     },
   );
 
+  /**
+   * One-shot endpoint: resolve the BattleTag(s) behind the user's
+   * saved pulse ids via SC2Pulse and persist them. Replays never carry
+   * the ``#discriminator``, so SC2Pulse's account data is the only
+   * automated source short of Battle.net OAuth — and we were already
+   * hitting the same search endpoint for MMR lookups.
+   *
+   * One user can own several BattleTags (one per Battle.net account;
+   * multi-region/smurf profiles span accounts), so the full deduped
+   * list lands in ``battleTags`` while ``battleTag`` (singular) is only
+   * auto-filled when the user hasn't typed one — detection never
+   * clobbers a manual value.
+   *
+   * Called automatically by the Settings UI when the BattleTag field
+   * is empty and pulse ids exist. Best-effort: a Pulse outage returns
+   * the unchanged profile with ``detected: []``.
+   */
+  router.post(
+    "/me/profile/battletag/detect",
+    deps.auth,
+    async (req, res, next) => {
+      try {
+        const auth = req.auth;
+        if (!auth) throw new Error("auth_required");
+        const profile = await deps.users.getProfile(auth.userId);
+        const ids = Array.isArray(profile.pulseIds) ? profile.pulseIds : [];
+        if (
+          ids.length === 0 ||
+          !deps.pulseMmr ||
+          typeof deps.pulseMmr.getBattleTags !== "function"
+        ) {
+          res.json({ ...profile, detected: [] });
+          return;
+        }
+        /** @type {string[]} */
+        let tags = [];
+        try {
+          tags = await deps.pulseMmr.getBattleTags(ids);
+        } catch {
+          tags = [];
+        }
+        if (tags.length === 0) {
+          res.json({ ...profile, detected: [] });
+          return;
+        }
+        const updated = await deps.users.setBattleTags(auth.userId, tags);
+        res.json({ ...updated, detected: tags });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
   router.put("/me/profile", deps.auth, async (req, res, next) => {
     try {
       const auth = req.auth;
@@ -311,12 +365,23 @@ function buildMeRouter(deps) {
         deps.games.stats(auth.userId),
       ]);
 
-      if (!profile.battleTag) {
+      // Any one identity signal is enough: the replay matcher keys off
+      // displayName first, pulse ids drive MMR lookups, and battleTag
+      // is auto-backfilled from SC2Pulse once a pulse id exists. Only
+      // nag when ALL of them are missing — warning on a bare
+      // ``!battleTag`` produced a false positive for every user whose
+      // profile was populated by auto-detection.
+      const hasIdentity = Boolean(
+        profile.battleTag ||
+          profile.displayName ||
+          (Array.isArray(profile.pulseIds) && profile.pulseIds.length > 0),
+      );
+      if (!hasIdentity) {
         warnings.push({
           id: "no_profile",
           severity: "warn",
           message:
-            "Your SC2 profile isn't set up yet. Add your BattleTag to see opponent matchup stats.",
+            "Your SC2 profile isn't set up yet. Add your BattleTag or a Pulse ID to see opponent matchup stats.",
           cta: { label: "Set up profile", href: "/settings#profile" },
         });
       }

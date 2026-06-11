@@ -33,6 +33,11 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 // are opened far more often than that, and each miss costs an SC2Pulse
 // round-trip we'd rather not spend (shared server IP across all users).
 const RACE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+// BattleTag resolution TTL. A BattleTag effectively never changes
+// (Blizzard charges for renames), so we hold both hits AND misses for
+// a day — the miss caching is what bounds the retry cost when a
+// profile's pulse id simply doesn't resolve on SC2Pulse.
+const BTAG_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const REGION_CODE_TO_LABEL = {
   1: "NA",
@@ -72,6 +77,10 @@ class PulseMmrService {
       typeof opts.raceCacheTtlMs === "number"
         ? opts.raceCacheTtlMs
         : RACE_CACHE_TTL_MS;
+    this.btagCacheTtlMs =
+      typeof opts.btagCacheTtlMs === "number"
+        ? opts.btagCacheTtlMs
+        : BTAG_CACHE_TTL_MS;
     /** @type {Map<string, PulseMmrEntry>} */
     this._cache = new Map();
     /** @type {Map<string, number>} */
@@ -83,6 +92,14 @@ class PulseMmrService {
      * @type {Map<string, {races: Array<{race: string, mmr: number, games: number, league: string|null, region: string|null}>, fetchedAt: number}>}
      */
     this._raceCache = new Map();
+    /**
+     * BattleTag cache, keyed by the RAW profile identifier (numeric id
+     * or toon handle, as stored in ``users.pulseIds``). Caches misses
+     * too (``battleTag: null``) so an unresolvable id doesn't cost an
+     * SC2Pulse round-trip on every profile read.
+     * @type {Map<string, {battleTag: string|null, fetchedAt: number}>}
+     */
+    this._btagCache = new Map();
   }
 
   /**
@@ -587,6 +604,143 @@ class PulseMmrService {
   }
 
   /**
+   * Resolve the Battle.net BattleTag(s) behind a list of pulse
+   * identifiers (mixed numeric SC2Pulse character ids and raw toon
+   * handles — the exact shape of ``users.pulseIds``).
+   *
+   * SC2Pulse's ``/character/search`` response carries the owning
+   * account's BattleTag (``members.account.battleTag``) — data this
+   * service was already fetching for MMR lookups and throwing away.
+   * Replays never contain the ``#discriminator``, so this is the ONLY
+   * automated source for a real BattleTag short of Battle.net OAuth.
+   *
+   * One user can legitimately own several BattleTags: each Battle.net
+   * ACCOUNT has exactly one, but a profile with multiple pulse ids
+   * (multi-region streamers, smurf accounts) can span multiple
+   * accounts. We therefore resolve per-id and return the deduped list
+   * in input order — the caller decides which one is "primary".
+   *
+   * Best-effort throughout: an id that doesn't resolve (Pulse miss,
+   * network failure, fake/anonymised account) is simply skipped, and
+   * both hits and misses are cached for ``btagCacheTtlMs`` so repeated
+   * profile reads don't hammer SC2Pulse.
+   *
+   * @param {Array<string|null|undefined>|string|null|undefined} ids
+   * @returns {Promise<string[]>} deduped BattleTags, e.g. ["ReSpOnSe#1872"]
+   */
+  async getBattleTags(ids) {
+    const list = Array.isArray(ids) ? ids : [ids];
+    /** @type {string[]} */
+    const out = [];
+    const seen = new Set();
+    for (const raw of list) {
+      if (typeof raw !== "string" || !raw.trim()) continue;
+      let tag = null;
+      try {
+        tag = await this._resolveBattleTagForId(raw.trim());
+      } catch {
+        tag = null;
+      }
+      if (tag && !seen.has(tag)) {
+        seen.add(tag);
+        out.push(tag);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * TTL-cached single-id BattleTag resolution. Caches misses as well —
+   * see ``_btagCache``.
+   *
+   * @private
+   * @param {string} id trimmed pulse identifier
+   * @returns {Promise<string|null>}
+   */
+  async _resolveBattleTagForId(id) {
+    const now = this.now();
+    const cached = this._btagCache.get(id);
+    if (cached && now - cached.fetchedAt < this.btagCacheTtlMs) {
+      return cached.battleTag;
+    }
+    const fresh = await this._lookupBattleTag(id);
+    // Stale-while-error on hits: only overwrite a previously-good tag
+    // with null when there was no prior value (a genuine first miss).
+    if (fresh || !cached || !cached.battleTag) {
+      this._btagCache.set(id, { battleTag: fresh, fetchedAt: now });
+      return fresh;
+    }
+    return cached.battleTag;
+  }
+
+  /**
+   * Uncached BattleTag lookup for one identifier.
+   *
+   * Numeric SC2Pulse character ids need a two-step: ``/character/search``
+   * does NOT match a bare numeric id (verified against the live API —
+   * the docs' "numeric id" term type doesn't hit), but ``/character/{id}``
+   * returns the character's region/realm/battlenetId, from which we
+   * build the profile-URL search term that DOES match. Toon handles
+   * decompose directly into the same URL forms (mirroring
+   * ``_resolveCharacterIdFromToon``).
+   *
+   * @private
+   * @param {string} id
+   * @returns {Promise<string|null>}
+   */
+  async _lookupBattleTag(id) {
+    const numeric = normalisePulseId(id);
+    if (numeric) {
+      const res = await this._getJson(`${PULSE_API_ROOT}/character/${numeric}`);
+      const row = Array.isArray(res) ? res[0] : res;
+      if (!row || typeof row !== "object") return null;
+      const regionCode = pulseRegionCode(/** @type {any} */ (row).region);
+      const realm = Number(/** @type {any} */ (row).realm);
+      const bnid = Number(/** @type {any} */ (row).battlenetId);
+      if (regionCode === null || !Number.isFinite(realm) || !Number.isFinite(bnid)) {
+        return null;
+      }
+      return this._searchBattleTagByTerms(
+        profileUrlTerms(String(regionCode), String(realm), String(bnid)),
+      );
+    }
+    const handle = normaliseToonHandle(id);
+    if (!handle) return null;
+    const parsed = parseToonHandle(handle);
+    if (!parsed) return null;
+    // Bare handle first (cheapest when SC2Pulse's TOON_HANDLE matcher
+    // recognises it), then the URL forms — same fallback ladder as the
+    // character-id resolver.
+    return this._searchBattleTagByTerms([
+      handle,
+      ...profileUrlTerms(parsed.region, parsed.realm, parsed.id),
+    ]);
+  }
+
+  /**
+   * Run ``/character/search`` over each term until a hit carries a
+   * usable ``account.battleTag``.
+   *
+   * @private
+   * @param {string[]} terms
+   * @returns {Promise<string|null>}
+   */
+  async _searchBattleTagByTerms(terms) {
+    for (const term of terms) {
+      const url =
+        `${PULSE_API_ROOT}/character/search` +
+        `?term=${encodeURIComponent(term)}`;
+      const hits = await this._getJson(url);
+      if (!Array.isArray(hits)) continue;
+      for (const hit of hits) {
+        const tag = extractBattleTag(hit);
+        if (tag) return tag;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Normalise a mixed list of SC2Pulse character ids + raw toon handles
    * into a deduped list of numeric character ids (resolving toons via
    * the cached ``/character/search`` mapping). Shared by
@@ -814,6 +968,68 @@ function parseToonHandle(handle) {
   const m = /^([1-9])-S\d+-(\d+)-(\d+)$/.exec(handle);
   if (!m) return null;
   return { region: m[1], realm: m[2], id: m[3] };
+}
+
+/**
+ * The two Blizzard profile-URL spellings SC2Pulse's search accepts,
+ * current host first. Shared by the toon-handle and numeric-id
+ * BattleTag resolvers.
+ *
+ * @param {string} region numeric region byte ("1".."5")
+ * @param {string} realm
+ * @param {string} id Blizzard battlenetId
+ * @returns {string[]}
+ */
+function profileUrlTerms(region, realm, id) {
+  return [
+    `https://starcraft2.com/en-us/profile/${region}/${realm}/${id}`,
+    `https://starcraft2.blizzard.com/en-us/profile/${region}/${realm}/${id}`,
+  ];
+}
+
+/**
+ * Pluck ``account.battleTag`` out of a ``/character/search`` hit,
+ * accepting the same response shapes as ``extractCharacterId`` (flat,
+ * members-array, members-object, member-object).
+ *
+ * Two rejects beyond shape checks:
+ *   - SC2Pulse synthesises placeholder tags shaped like ``f#123456``
+ *     for accounts it couldn't resolve a real BattleTag for ("fake"
+ *     accounts in Pulse parlance). Backfilling one of those into a
+ *     user's profile would be worse than leaving the field empty.
+ *   - Anything without a ``#`` or longer than the profile schema's
+ *     80-char cap — never persist a value the PUT validator would
+ *     reject if the user re-saved Settings.
+ *
+ * @param {unknown} hit
+ * @returns {string|null}
+ */
+function extractBattleTag(hit) {
+  if (!hit || typeof hit !== "object") return null;
+  const obj = /** @type {any} */ (hit);
+  /** @type {any[]} */
+  const accounts = [];
+  if (obj.account) accounts.push(obj.account);
+  if (Array.isArray(obj.members)) {
+    for (const m of obj.members) {
+      if (m && typeof m === "object") accounts.push(m.account);
+    }
+  } else if (obj.members && typeof obj.members === "object") {
+    accounts.push(obj.members.account);
+  }
+  if (obj.member && typeof obj.member === "object") {
+    accounts.push(obj.member.account);
+  }
+  for (const account of accounts) {
+    if (!account || typeof account !== "object") continue;
+    const raw = account.battleTag;
+    if (typeof raw !== "string") continue;
+    const tag = raw.trim();
+    if (!tag.includes("#") || tag.startsWith("#") || tag.length > 80) continue;
+    if (/^f#\d+$/i.test(tag)) continue; // SC2Pulse placeholder
+    return tag;
+  }
+  return null;
 }
 
 /**

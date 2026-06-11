@@ -190,6 +190,7 @@ class UsersService {
    * @param {string} userId
    * @returns {Promise<{
    *   battleTag?: string,
+   *   battleTags?: string[],
    *   pulseId?: string,
    *   pulseIds?: string[],
    *   region?: string,
@@ -207,6 +208,7 @@ class UsersService {
         projection: {
           _id: 0,
           battleTag: 1,
+          battleTags: 1,
           pulseId: 1,
           pulseIds: 1,
           region: 1,
@@ -247,6 +249,11 @@ class UsersService {
       out.pulseIds = ids;
       out.pulseId = ids[0];
     }
+    // BattleTags resolved from SC2Pulse (one per Battle.net account
+    // behind the user's pulse ids — multi-account users have several).
+    // ``battleTag`` (singular, above) stays the primary/manual value.
+    const tags = normaliseBattleTagList(doc.battleTags);
+    if (tags.length > 0) out.battleTags = tags;
     // ``lastKnownMmr`` is the only numeric field — surface it as a
     // number so the session widget's tier-comparison code can use it
     // without parsing.
@@ -254,6 +261,53 @@ class UsersService {
       out.lastKnownMmr = doc.lastKnownMmr;
     }
     return out;
+  }
+
+  /**
+   * Persist SC2Pulse-detected BattleTags onto the user record.
+   *
+   * Semantics:
+   *   - ``battleTags`` (array) is replaced with the merged, deduped
+   *     list — a manually-typed ``battleTag`` (if any) is preserved as
+   *     the first entry so it's never lost to a detection pass.
+   *   - ``battleTag`` (singular) is only WRITTEN when currently unset:
+   *     detection must never clobber what the user typed into Settings.
+   *     When unset, it becomes the first detected tag — that's the
+   *     auto-fill the Settings UI and the agent's handle resolver see.
+   *
+   * Idempotent: skips the Mongo write when nothing would change, so
+   * the detect endpoint can be called liberally.
+   *
+   * @param {string} userId
+   * @param {string[]} tags detected BattleTags, e.g. ["ReSpOnSe#1872"]
+   * @returns {Promise<ReturnType<UsersService['getProfile']> extends Promise<infer T> ? T : never>}
+   */
+  async setBattleTags(userId, tags) {
+    const detected = normaliseBattleTagList(tags);
+    if (detected.length === 0) return this.getProfile(userId);
+    const doc = await this.db.users.findOne(
+      { userId },
+      { projection: { _id: 0, battleTag: 1, battleTags: 1 } },
+    );
+    if (!doc) return this.getProfile(userId);
+    const manual =
+      typeof doc.battleTag === "string" && doc.battleTag.trim().length > 0
+        ? doc.battleTag.trim()
+        : null;
+    const merged = normaliseBattleTagList(
+      manual ? [manual, ...detected] : detected,
+    );
+    const current = normaliseBattleTagList(doc.battleTags);
+    const sameList =
+      current.length === merged.length &&
+      current.every((v, i) => v === merged[i]);
+    if (sameList && manual) return this.getProfile(userId);
+    /** @type {Record<string, any>} */
+    const set = { battleTags: merged };
+    if (!manual) set.battleTag = merged[0];
+    stampVersion(set, COLLECTIONS.USERS);
+    await this.db.users.updateOne({ userId }, { $set: set });
+    return this.getProfile(userId);
   }
 
   /**
@@ -493,6 +547,32 @@ function applyPulseIdsUpdate(profile, set, unset) {
     set.pulseIds = nextPulseIds;
     set.pulseId = nextPulseIds[0];
   }
+}
+
+/**
+ * Trim, dedupe, and bound-check an array of BattleTags. Loose shape
+ * check (must contain a ``#`` after at least one name char, ≤ 80 chars
+ * to match the profile schema's ``battleTag`` cap) — Blizzard allows
+ * unicode names, so anything stricter would reject real tags.
+ *
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+function normaliseBattleTagList(raw) {
+  if (!Array.isArray(raw)) return [];
+  /** @type {string[]} */
+  const out = [];
+  for (const entry of raw) {
+    if (typeof entry !== "string") continue;
+    const tag = entry.trim();
+    if (!tag || tag.length > 80) continue;
+    const hash = tag.indexOf("#");
+    if (hash < 1) continue;
+    if (out.includes(tag)) continue;
+    out.push(tag);
+    if (out.length >= 20) break;
+  }
+  return out;
 }
 
 /**

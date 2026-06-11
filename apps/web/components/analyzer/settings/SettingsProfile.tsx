@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ExternalLink,
   HelpCircle,
@@ -24,6 +24,10 @@ import { usePublishDirty } from "./SettingsContext";
 
 type ProfileRead = {
   battleTag?: string;
+  // All BattleTags the API resolved from SC2Pulse via the user's
+  // Pulse IDs — one per Battle.net account, so multi-account users
+  // have several. Read-only; battleTag (singular) is the editable one.
+  battleTags?: string[];
   // Legacy single-string field. Mirrored from pulseIds[0] by the API
   // so older clients keep working; we don't read it directly here.
   pulseId?: string;
@@ -36,8 +40,12 @@ type ProfileRead = {
   displayName?: string;
 };
 
-// What we send back on PUT. Drop the read-only detectedPulseIds.
-type ProfileWrite = Omit<ProfileRead, "detectedPulseIds" | "pulseId">;
+// What we send back on PUT. Drop the read-only fields — the strict
+// API schema rejects unknown properties.
+type ProfileWrite = Omit<
+  ProfileRead,
+  "detectedPulseIds" | "pulseId" | "battleTags"
+>;
 
 type Draft = ProfileWrite & { pulseIds: string[] };
 
@@ -103,6 +111,39 @@ export function SettingsProfile() {
   );
 
   usePublishDirty("profile", dirty);
+
+  // Auto-fill BattleTag from SC2Pulse: when the field is empty but the
+  // user has Pulse IDs, ask the API to resolve the owning account's
+  // BattleTag(s). Once per mount, never while the form is dirty (a
+  // refetch would fight the user's in-progress edits), and silently
+  // best-effort — on failure the field simply stays manual.
+  const btagDetectAttempted = useRef(false);
+  useEffect(() => {
+    if (btagDetectAttempted.current) return;
+    if (isLoading || !data) return;
+    if (data.battleTag) return;
+    if (!data.pulseIds || data.pulseIds.length === 0) return;
+    if (dirty) return;
+    btagDetectAttempted.current = true;
+    void (async () => {
+      try {
+        await apiCall(getToken, "/v1/me/profile/battletag/detect", {
+          method: "POST",
+        });
+        await mutate();
+      } catch {
+        // Best-effort; the user can still type their tag.
+      }
+    })();
+  }, [data, isLoading, dirty, getToken, mutate]);
+
+  // Other BattleTags the API detected (multi-account users) that
+  // aren't the one currently in the input — rendered as one-click
+  // fill suggestions under the field.
+  const altBattleTags = useMemo(() => {
+    const current = (draft.battleTag ?? "").trim();
+    return (data?.battleTags ?? []).filter((t) => t !== current);
+  }, [data?.battleTags, draft.battleTag]);
 
   // Detected suggestions are server-side and aren't part of the dirty
   // baseline — they live alongside the form but never count as edits.
@@ -205,15 +246,39 @@ export function SettingsProfile() {
                 }
               />
             </Field>
-            <Field label="BattleTag" hint="e.g. PlayerName#1234">
-              <Input
-                value={draft.battleTag ?? ""}
-                placeholder="Name#1234"
-                autoComplete="off"
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, battleTag: e.target.value }))
-                }
-              />
+            <Field
+              label="BattleTag"
+              hint="e.g. PlayerName#1234 — auto-filled from SC2Pulse when you have a Pulse ID"
+            >
+              <div className="space-y-2">
+                <Input
+                  value={draft.battleTag ?? ""}
+                  placeholder="Name#1234"
+                  autoComplete="off"
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, battleTag: e.target.value }))
+                  }
+                />
+                {altBattleTags.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-1.5 text-caption text-text-dim">
+                    <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden />
+                    <span>Detected:</span>
+                    {altBattleTags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() =>
+                          setDraft((d) => ({ ...d, battleTag: tag }))
+                        }
+                        className="rounded-full border border-accent/40 bg-bg-elevated px-2 py-0.5 font-mono text-micro text-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        title={`Use ${tag}`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </Field>
             <Field label="Region" hint="Battle.net region used for ladder lookups">
               <Select
