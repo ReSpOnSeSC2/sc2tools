@@ -8,7 +8,10 @@ const DEFAULTS = Object.freeze({
   PORT: 8080,
   LOG_LEVEL: "info",
   DB_NAME: "sc2tools_saas",
-  RATE_LIMIT_PER_MINUTE: 120,
+  // 600 (was 120): agent initial-import bursts tripped 429s at 120/min,
+  // which also shrank the agent's adaptive upload batch size. The agent's
+  // Retry-After handling still bounds worst-case load.
+  RATE_LIMIT_PER_MINUTE: 600,
   // Keep-alive heartbeat for Render's "starter" idle timeout (15min). 13min
   // gives a healthy safety margin and stays just below typical CDN cache
   // windows so the upstream actually sees the request.

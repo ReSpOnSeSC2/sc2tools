@@ -50,7 +50,11 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         sync: false
       - key: RATE_LIMIT_PER_MINUTE
-        value: "120"
+        # 600 (was 120): the agent's initial-import burst exhausted 120/min
+        # within the first minute, tripping 429s that also halved its upload
+        # batch size. Client-side Retry-After + adaptive batching remain as
+        # the belt-and-suspenders bound on server load.
+        value: "600"
       - key: AGENT_RELEASE_ADMIN_TOKEN
         sync: false
       # Optional. Set to enable Sentry error reporting; leave unset for
