@@ -4,7 +4,7 @@ export const metadata = {
   alternates: { canonical: "/optimizer" },
   title: "Build adapter · SC2 Tools",
   description:
-    "Re-time your proven StarCraft II build orders for the current balance patch — same buildings, same order, new timings, with a safety check against what you scout.",
+    "Re-time any StarCraft II build between the 12-worker and 8-worker economies — pick one of your games, upload a replay, or use a saved build: same buildings, same order, new timings.",
 };
 
 export default function OptimizerPage() {

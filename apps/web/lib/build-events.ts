@@ -395,6 +395,43 @@ export function normalizeBuildEvents(
   return rows;
 }
 
+/**
+ * Convert the public preview parser's `[m:ss] EventName` build-log
+ * strings into {@link BuildOrderEvent} records. We don't get
+ * category/is_building hints from the public CLI, so each name runs
+ * through {@link normalizeBuildName} to recover them. Shared by the
+ * landing-page replay demo and the build adapter's upload panel.
+ */
+export function buildLogToEvents(
+  buildLog: ReadonlyArray<string>,
+  race: string | undefined,
+): BuildOrderEvent[] {
+  const events: BuildOrderEvent[] = [];
+  for (const line of buildLog) {
+    const m = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/.exec(line);
+    if (!m) continue;
+    const minutes = parseInt(m[1], 10);
+    const seconds = parseInt(m[2], 10);
+    if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) continue;
+    const time = minutes * 60 + seconds;
+    const name = m[3];
+    if (!name) continue;
+    const norm = normalizeBuildName(name);
+    const cat: BuildOrderEvent["category"] | undefined =
+      norm.category === "other" ? undefined : norm.category;
+    events.push({
+      time,
+      name,
+      time_display: `${minutes}:${seconds.toString().padStart(2, "0")}`,
+      display: norm.displayName,
+      category: cat,
+      is_building: norm.category === "building",
+      race,
+    });
+  }
+  return events;
+}
+
 /** Item in the `signature` array sent to /v1/custom-builds. */
 export interface BuildSignatureItem {
   unit: string;

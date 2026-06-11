@@ -19,10 +19,7 @@ import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { API_BASE } from "@/lib/clientApi";
 import { BuildEditorModal } from "@/components/builds/editor";
-import {
-  normalizeBuildName,
-  type BuildOrderEvent,
-} from "@/lib/build-events";
+import { buildLogToEvents } from "@/lib/build-events";
 import type { RaceLite, VsRaceLite } from "@/lib/build-rules";
 
 /**
@@ -302,43 +299,6 @@ export function ReplayDemo() {
 
 /* ---------------- Demo helpers ---------------- */
 
-/**
- * Convert the public preview's `[m:ss] EventName` build-log strings
- * into BuildOrderEvent records the BuildEditor's source-timeline
- * column understands. We don't have category/is_building hints from
- * the public CLI, so we run each name through normalizeBuildName to
- * recover them.
- */
-function buildLogToEvents(
-  buildLog: ReadonlyArray<string>,
-  race: string | undefined,
-): BuildOrderEvent[] {
-  const events: BuildOrderEvent[] = [];
-  for (const line of buildLog) {
-    const m = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/.exec(line);
-    if (!m) continue;
-    const minutes = parseInt(m[1], 10);
-    const seconds = parseInt(m[2], 10);
-    if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) continue;
-    const time = minutes * 60 + seconds;
-    const name = m[3];
-    if (!name) continue;
-    const norm = normalizeBuildName(name);
-    const cat: BuildOrderEvent["category"] | undefined =
-      norm.category === "other" ? undefined : norm.category;
-    events.push({
-      time,
-      name,
-      time_display: `${minutes}:${seconds.toString().padStart(2, "0")}`,
-      display: norm.displayName,
-      category: cat,
-      is_building: norm.category === "building",
-      race,
-    });
-  }
-  return events;
-}
-
 function coerceRace(r: string | undefined): RaceLite {
   if (r === "Protoss" || r === "Terran" || r === "Zerg" || r === "Random") {
     return r;
@@ -585,4 +545,3 @@ function ReplayDropPreview({ onActivate }: { onActivate: () => void }) {
     </button>
   );
 }
-

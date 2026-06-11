@@ -23,7 +23,7 @@ export function BuildOrderTimeline({
       <Card title="Build order">
         <EmptyState
           title="No build yet"
-          sub="Pick a reference build on the left and re-time it for the selected patch."
+          sub="Pick one of your games, upload a replay, or choose a saved build — then hit Adapt."
         />
       </Card>
     );

@@ -23,14 +23,16 @@ import {
   defaultBuildName,
   toCustomBuildPayload,
 } from "@/lib/optimizer/export/toCustomBuild";
-import type { AdaptResult, SimRace } from "@/lib/optimizer/types";
+import type { VsRace } from "@/lib/race";
+import type { AdaptResult } from "@/lib/optimizer/types";
 
 export function ExportToBuildsButton({
   result,
   vsRace,
 }: {
   result: AdaptResult | null;
-  vsRace: SimRace;
+  /** Matchup from the adapted source (its replay/build), "Any" if unknown. */
+  vsRace: VsRace;
 }) {
   const { getToken } = useAuth();
   const { toast } = useToast();
@@ -119,7 +121,7 @@ export function ExportToBuildsButton({
         open={open}
         onClose={saving ? () => undefined : () => setOpen(false)}
         title="Save to custom builds"
-        description="The full supply-stamped order and safety report go into the build's notes."
+        description="The full supply-stamped order and the old-vs-new timing shifts go into the build's notes."
         size="md"
         hideClose={saving}
         disableScrimClose={saving}

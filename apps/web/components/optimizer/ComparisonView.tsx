@@ -9,7 +9,16 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { formatBuildTime, humanizeBuildName } from "@/lib/build-events";
+import { resolveProfile } from "@/lib/optimizer/patch/profiles";
 import type { AdaptResult } from "@/lib/optimizer/types";
+
+function startingWorkers(profileId: string): number | null {
+  try {
+    return resolveProfile(profileId).starting.workers;
+  } catch {
+    return null;
+  }
+}
 
 function deltaBadge(deltaSec: number | undefined) {
   if (deltaSec === undefined) {
@@ -38,6 +47,8 @@ export function ComparisonView({ result }: { result: AdaptResult | null }) {
   if (!result || result.comparison.length === 0) return null;
   // Patch-native builds have no older incarnation to compare against.
   if (result.baselineProfileId === result.profileId) return null;
+  const baselineWorkers = startingWorkers(result.baselineProfileId);
+  const adaptedWorkers = startingWorkers(result.profileId);
   return (
     <Card title={`Timing shifts: ${result.baselineProfileId} → ${result.profileId}`}>
       <div className="p-4">
@@ -70,10 +81,12 @@ export function ComparisonView({ result }: { result: AdaptResult | null }) {
         </ul>
         <p className="mt-3 text-caption text-text-dim">
           Supply stamps and times on the left are the build on{" "}
-          {result.baselineProfileId} (12 workers); on the right, the same step
-          re-timed for {result.profileId}. &ldquo;Not reached&rdquo; means the
-          step didn&apos;t fit inside the simulated window on one of the
-          patches.
+          {result.baselineProfileId}
+          {baselineWorkers !== null ? ` (${baselineWorkers}-worker start)` : ""}
+          ; on the right, the same step re-timed for {result.profileId}
+          {adaptedWorkers !== null ? ` (${adaptedWorkers}-worker start)` : ""}.
+          &ldquo;Not reached&rdquo; means the step didn&apos;t fit inside the
+          simulated window on one of the patches.
         </p>
       </div>
     </Card>
