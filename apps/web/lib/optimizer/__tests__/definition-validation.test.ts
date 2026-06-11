@@ -141,10 +141,11 @@ const DEFINITION_CHECKS: Record<string, DefCheck> = {
     order: [
       ["TwilightCouncil", 0, "RoboticsFacility", 0],
       ["TemplarArchives", 0, "Nexus", 1],
+      ["TemplarArchives", 0, "PsiStorm", 0],
     ],
     startBy: [["Gateway", 3, 450]],
-    doneBy: [["Charge", 0, 660]],
-    units: [["HighTemplar", 4], ["Gateway", 6]],
+    doneBy: [["Charge", 0, 660], ["PsiStorm", 0, 660]],
+    units: [["HighTemplar", 4], ["Gateway", 6], ["WarpPrism", 1]],
     absent: ["Stargate"],
   },
   "pvt-2-gate-blink-fast-3rd-nexus": {

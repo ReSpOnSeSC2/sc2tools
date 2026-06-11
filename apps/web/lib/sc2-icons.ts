@@ -169,6 +169,8 @@ const SYNONYMS: Record<string, { kind: IconKind; key: string }> = {
   cannon: { kind: "building", key: "photoncannon" },
   turret: { kind: "building", key: "missileturret" },
   twilight: { kind: "building", key: "twilightcouncil" },
+  // sim/profile name is plural; the icon file is singular
+  templararchives: { kind: "building", key: "templararchive" },
   robo: { kind: "building", key: "roboticsfacility" },
   orbital: { kind: "building", key: "orbitalcommand" },
   planetary: { kind: "building", key: "planetaryfortress" },
