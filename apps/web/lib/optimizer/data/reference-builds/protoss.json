@@ -149,10 +149,10 @@
       "name": "DT Drop into Archon Drop",
       "race": "Protoss",
       "matchups": ["PvT", "PvZ"],
-      "description": "Dark shrine plus robo: warp prism delivers DTs, later high templar pairs for archon drops.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "TwilightCouncil", "Stalker", "Gateway", "WarpGateResearch", "ShieldBattery", "DarkShrine", "RoboticsFacility", "Pylon", "Stalker", "WarpPrism", "DarkTemplar", "DarkTemplar", "Pylon", "TemplarArchives", "HighTemplar", "HighTemplar"],
+      "description": "Dark shrine plus robo: warp prism delivers DTs, then extra dark templars morph in pairs into archons for the drop (no templar archives needed).",
+      "steps": ["Pylon", "Gateway", "Assimilator", "Nexus", "Pylon", "CyberneticsCore", "Adept", "Assimilator", "TwilightCouncil", "Stalker", "Gateway", "WarpGateResearch", "ShieldBattery", "DarkShrine", "RoboticsFacility", "Pylon", "Stalker", "WarpPrism", "DarkTemplar", "DarkTemplar", "Pylon", "DarkTemplar", "DarkTemplar"],
       "definitionIds": ["pvt-dt-drop", "pvz-dt-drop-into-archon-drop", "pvz-archon-drop"],
-      "stepsByMatchup": {"PvT": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Pylon", "Nexus", "Assimilator", "TwilightCouncil", "Stalker", "Gateway", "WarpGateResearch", "ShieldBattery", "DarkShrine", "RoboticsFacility", "Pylon", "Stalker", "WarpPrism", "DarkTemplar", "DarkTemplar", "Pylon", "TemplarArchives", "HighTemplar", "HighTemplar"]}
+      "stepsByMatchup": {"PvT": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Pylon", "Nexus", "Assimilator", "TwilightCouncil", "Stalker", "Gateway", "WarpGateResearch", "ShieldBattery", "DarkShrine", "RoboticsFacility", "Pylon", "Stalker", "WarpPrism", "DarkTemplar", "DarkTemplar", "Pylon", "DarkTemplar", "DarkTemplar"]}
     },
     {
       "id": "p-glaive-adept",
