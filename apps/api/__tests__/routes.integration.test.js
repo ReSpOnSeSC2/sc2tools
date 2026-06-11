@@ -84,16 +84,15 @@ describe("HTTP integration", () => {
       expect(res.status).toBe(401);
     });
 
-    test("returns user shell after Clerk auth, founder auto-promoted to admin", async () => {
+    test("returns user shell after Clerk auth", async () => {
       const res = await withAuth(request(app).get("/v1/me"));
       expect(res.status).toBe(200);
       expect(res.body.userId).toBeTruthy();
-      // adminUserIds is unset in this fixture, so the ONLY route to
-      // admin is the founder bootstrap: this is the first (and only)
-      // user to sign in, so they're promoted on this very request and
-      // /v1/me reports isAdmin:true without a restart. Proves the
-      // end-to-end founder-admin path through the live allowlist.
-      expect(res.body.isAdmin).toBe(true);
+      // No admin is configured in this fixture (adminUserIds and
+      // adminEmails both unset), and there's no first-signup heuristic —
+      // so the caller is never an admin. The flag still has to be
+      // present so the web client can rely on its shape.
+      expect(res.body.isAdmin).toBe(false);
     });
   });
 

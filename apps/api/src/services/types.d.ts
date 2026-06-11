@@ -26,6 +26,11 @@ export interface UsersService {
   getSummary(userId: string): Promise<UserSummary>;
   setEmail(userId: string, email: string): Promise<void>;
   upsertFromWebhook(clerkUserId: string, email: string | null): Promise<boolean>;
+  grantAdmin(
+    targetUserId: string,
+    grantedByClerkId: string,
+  ): Promise<{ userId: string; clerkUserId: string } | null>;
+  listDbAdminClerkIds(): Promise<string[]>;
 }
 
 export interface OpponentsService {

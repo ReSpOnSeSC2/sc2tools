@@ -117,13 +117,7 @@ function buildApp(deps) {
   // (or test harnesses calling buildApp many times in one process)
   // skip duplicate registrations.
   loadAllMigrations();
-  // Live admin allowlist — seeded from SC2TOOLS_ADMIN_USER_IDS and
-  // mutated in place by the founder bootstrap + admin-grant paths. Built
-  // BEFORE the services so UsersService can push founder promotions into
-  // it the instant they happen (no restart). The REST ``isAdmin`` gate
-  // and the socket layer both read this same live set.
-  const adminClerkIds = new Set(deps.config.adminUserIds || []);
-  const services = makeServices(deps, adminClerkIds);
+  const services = makeServices(deps);
   const clerk = deps.config.clerkSecretKey
     ? buildClerkClient({
         secretKey: deps.config.clerkSecretKey,
@@ -134,6 +128,11 @@ function buildApp(deps) {
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
   applyBaseMiddleware(app, deps);
+  // Live admin allowlist — seeded from SC2TOOLS_ADMIN_USER_IDS and
+  // mutated in place by the email-allowlist + admin-grant paths. The
+  // REST ``isAdmin`` gate and the socket layer both read this live set;
+  // the boot sequence also merges persisted DB admins into it.
+  const adminClerkIds = new Set(deps.config.adminUserIds || []);
   mountRoutes(app, deps, services, clerk, adminClerkIds);
   app.use(buildErrorHandler(deps.logger));
   return { app, services, adminClerkIds };
@@ -141,11 +140,8 @@ function buildApp(deps) {
 
 /**
  * @param {AppDeps} deps
- * @param {Set<string>} [adminClerkIds] live admin allowlist; founder
- *   promotions discovered on the authed path are pushed into it so the
- *   ``isAdmin`` gate flips without a restart.
  */
-function makeServices(deps, adminClerkIds) {
+function makeServices(deps) {
   // Admin notification stream — wired BEFORE UsersService so the
   // user-creation paths (ensureFromClerk first-touch, webhook upsert)
   // can fire signup events without a forward reference.
@@ -154,24 +150,7 @@ function makeServices(deps, adminClerkIds) {
     io: deps.io,
     logger: deps.logger,
   });
-  const users = new UsersService(deps.db, {
-    adminEvents,
-    onFounderPromoted: adminClerkIds
-      ? (clerkIds) => {
-          for (const id of clerkIds) adminClerkIds.add(id);
-          if (deps.logger && clerkIds.length > 0) {
-            deps.logger.info(
-              { count: clerkIds.length },
-              "founder_admin_promoted_live",
-            );
-          }
-        }
-      : null,
-    // The first-user-is-admin default only kicks in when nobody is
-    // already an admin — an operator-set SC2TOOLS_ADMIN_USER_IDS (which
-    // seeds this set) opts out of auto-promotion entirely.
-    hasConfiguredAdmins: adminClerkIds ? () => adminClerkIds.size > 0 : null,
-  });
+  const users = new UsersService(deps.db, { adminEvents });
   // Pluggable backend for the per-game heavy blob. Defaults to
   // ``MongoDetailsStore`` (in-database); flips to ``R2DetailsStore``
   // when ``GAME_DETAILS_STORE=r2`` is set with the R2 connection
@@ -475,6 +454,19 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
   /** @param {import('express').Request} req */
   const isAdmin = (req) =>
     Boolean(req.auth && req.auth.clerkUserId && adminIds.has(req.auth.clerkUserId));
+  // Email allowlist — the deterministic admin path. Lower-cased at load;
+  // an empty set disables it. ``isAdminEmail`` is what the /v1/me route
+  // consults to promote a matching user on sight; ``onAdminGranted``
+  // merges the freshly-granted Clerk id into the live allowlist so the
+  // /v1/admin gate + socket layer pick it up without a restart.
+  const adminEmails = new Set(deps.config.adminEmails || []);
+  /** @param {string} email */
+  const isAdminEmail = (email) =>
+    typeof email === "string" && adminEmails.has(email.toLowerCase());
+  /** @param {string} clerkUserId */
+  const onAdminGranted = (clerkUserId) => {
+    if (clerkUserId) adminIds.add(clerkUserId);
+  };
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMeRouter({
@@ -487,6 +479,8 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       pulseMmr: services.pulseMmr,
       auth,
       isAdmin,
+      isAdminEmail,
+      onAdminGranted,
       logger: deps.logger,
     }),
   );

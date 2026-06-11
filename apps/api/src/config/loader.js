@@ -30,6 +30,7 @@ const VALID_GAME_DETAILS_STORES = new Set(["mongo", "r2"]);
  *   pythonExe: string|null,
  *   pythonAnalyzerDir: string|null,
  *   adminUserIds: string[],
+ *   adminEmails: string[],
  *   keepaliveTargets: string[],
  *   keepaliveIntervalMs: number,
  * }}
@@ -64,6 +65,15 @@ function loadConfig(env = process.env) {
     pythonExe: env.SC2_PY_PYTHON || null,
     pythonAnalyzerDir: env.SC2_PY_ANALYZER_DIR || null,
     adminUserIds: parseCsv(env.SC2TOOLS_ADMIN_USER_IDS),
+    // Email allowlist — the deterministic, operator-controlled way to
+    // mint admins. Any signed-in user whose verified Clerk email matches
+    // (case-insensitively) is granted the admin role the first time we
+    // see their email, and that grant is persisted + merged into the
+    // live allowlist. CSV of emails; normalised to lower-case here so
+    // matching is case-insensitive.
+    adminEmails: parseCsv(env.SC2TOOLS_ADMIN_EMAILS).map((e) =>
+      e.toLowerCase(),
+    ),
     keepaliveTargets: parseCsv(env.KEEPALIVE_TARGETS),
     keepaliveIntervalMs: parseInteger(
       env.KEEPALIVE_INTERVAL_MS,
