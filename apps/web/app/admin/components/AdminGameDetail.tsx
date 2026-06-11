@@ -3,7 +3,6 @@
 import { useApi } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { BuildOrderTimeline } from "@/components/analyzer/charts/BuildOrderTimeline";
-import { ApmSpmChart, type ApmCurveData } from "@/components/analyzer/charts/ApmSpmChart";
 import { ResourcesOverTimeChart } from "@/components/analyzer/charts/ResourcesOverTimeChart";
 import { ChronoAllocationChart } from "@/components/analyzer/charts/ChronoAllocationChart";
 import { ActiveArmyChart } from "@/components/analyzer/macro/ActiveArmyChart";
@@ -17,8 +16,8 @@ import { coerceRace, type Race } from "@/lib/race";
 import type { BuildOrderEvent } from "@/lib/build-events";
 
 /**
- * Shared admin per-game detail renderer — build order, APM/SPM curve,
- * and macro breakdown for a single game owned by an arbitrary user.
+ * Shared admin per-game detail renderer — build order and macro
+ * breakdown for a single game owned by an arbitrary user.
  *
  * Used by both the per-user opponent drill-down
  * (``/admin/users/[userId]/opponents/[pulseId]``) and the platform-wide
@@ -90,9 +89,6 @@ export function AdminGameDetail({
     `${base}/build-order`,
     { revalidateOnFocus: false },
   );
-  const apm = useApi<ApmCurveData>(`${base}/apm-curve`, {
-    revalidateOnFocus: false,
-  });
   const macro = useApi<MacroBreakdownData>(`${base}/macro-breakdown`, {
     revalidateOnFocus: false,
   });
@@ -159,14 +155,6 @@ export function AdminGameDetail({
         />
       ) : null}
 
-      <ApmPanel
-        data={apm.data ?? null}
-        isLoading={apm.isLoading}
-        notAvailable={apm.error?.status === 404}
-        error={apm.error && apm.error.status !== 404 ? apm.error.message : undefined}
-        myRace={myRace}
-      />
-
       <MacroPanel
         data={macro.data ?? null}
         isLoading={macro.isLoading}
@@ -177,49 +165,6 @@ export function AdminGameDetail({
         myRace={myRace}
       />
     </div>
-  );
-}
-
-function ApmPanel({
-  data,
-  isLoading,
-  notAvailable,
-  error,
-  myRace,
-}: {
-  data: ApmCurveData | null;
-  isLoading: boolean;
-  notAvailable: boolean;
-  error?: string;
-  myRace: Race;
-}) {
-  if (isLoading && !data) {
-    return (
-      <Card padded>
-        <Skeleton rows={4} />
-      </Card>
-    );
-  }
-  if (error) {
-    return (
-      <Card padded>
-        <p className="text-caption text-danger">APM / SPM: {error}</p>
-      </Card>
-    );
-  }
-  if (notAvailable || !data) {
-    return (
-      <Card padded>
-        <p className="text-caption text-text-muted">
-          No APM / SPM curve uploaded for this game.
-        </p>
-      </Card>
-    );
-  }
-  return (
-    <Card padded>
-      <ApmSpmChart data={data} myPlayerName={null} myRace={myRace} />
-    </Card>
   );
 }
 

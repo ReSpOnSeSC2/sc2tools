@@ -337,6 +337,20 @@ function buildAggregationsRouter(deps) {
     }
   });
 
+  // Macro Report — the Macro tab's aggregate body: win rate by score
+  // bucket, the leak ledger (cost, with/without win rates, trend
+  // halves), and avg-score segments by matchup / game length / build.
+  // Same slim-row-only contract as /macro/summary.
+  router.get("/macro/report", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      res.json(await deps.macroReport.report(userId, filters));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Current consecutive same-result streak across the user's games.
   // Game-level (not day-bucketed) so a mixed day no longer drops a
   // mid-streak indicator to 0. See services/streak.js for the rationale.

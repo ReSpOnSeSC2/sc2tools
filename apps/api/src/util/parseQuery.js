@@ -63,6 +63,19 @@ function parseFilters(q) {
   if (typeof q.build === "string" && q.build.trim()) {
     out.build = q.build.trim();
   }
+  // Macro Report click-throughs. ``leak`` filters to games whose slim
+  // top3Leaks carries that category name (exact match — the agent
+  // emits a small fixed vocabulary: "Supply Blocked", "Mineral Float",
+  // "Chrono Efficiency", ...). ``macro_min`` / ``macro_max`` bound the
+  // game's macroScore: min is inclusive, max is EXCLUSIVE so adjacent
+  // score buckets (60–69, 70–79) tile without double-counting.
+  if (typeof q.leak === "string" && q.leak.trim()) {
+    out.leak = q.leak.trim().slice(0, 120);
+  }
+  const macroMin = parseFiniteInt(q.macro_min);
+  if (macroMin !== undefined) out.macroMin = macroMin;
+  const macroMax = parseFiniteInt(q.macro_max);
+  if (macroMax !== undefined) out.macroMax = macroMax;
   if (parseBool(q.exclude_too_short)) {
     out.excludeTooShort = true;
   }
@@ -150,6 +163,17 @@ function gamesMatchStage(userId, filters) {
   }
   if (f.build) {
     match.myBuild = f.build;
+  }
+  if (f.leak) {
+    match["top3Leaks.name"] = f.leak;
+  }
+  if (typeof f.macroMin === "number" || typeof f.macroMax === "number") {
+    /** @type {Record<string, number>} */
+    const score = {};
+    if (typeof f.macroMin === "number") score.$gte = f.macroMin;
+    // Exclusive upper bound — see parseFilters: score buckets tile.
+    if (typeof f.macroMax === "number") score.$lt = f.macroMax;
+    match.macroScore = score;
   }
   // "Exclude too-short games": the strategy detector emits a
   // matchup-prefixed "<X>v<Y> - Game Too Short" label (also surfaced

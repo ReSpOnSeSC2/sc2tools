@@ -10,6 +10,36 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Added
+
+- **Macro tab rebuilt as the Macro Report** — the per-game inspector
+  (which duplicated the macro-breakdown popover already reachable from
+  every game row) is replaced by aggregate analytics the app had
+  nowhere else: win rate by macro-score bucket ("does macro win you
+  games?"), a leak ledger pricing every leak category in minerals with
+  win-rate-with/without and an improving/worsening trend
+  (current-vs-previous half of the filtered range), avg-score segments
+  by matchup / game length / build with a flagged weak spot, and a
+  "fix this first" focus card. Every row clicks through to the exact
+  games behind the number (new `leak` / `macro_min` / `macro_max`
+  games-list filters) and from there into the existing per-game
+  breakdown. New `GET /v1/macro/report` endpoint
+  (`MacroReportService`) reads only slim game rows — one aggregation
+  round-trip, no synthesised data. The summary header (average score,
+  coverage, backfill) is unchanged.
+
+### Removed
+
+- **Per-game APM/SPM chart** — removed app-wide (Macro tab and admin
+  game detail). The curve it plotted counted command events only,
+  i.e. effective APM, while the legend claimed APM; rather than
+  relabel a redundant chart it's gone. The agent still uploads
+  `apmCurve` payloads and the API still stores/serves them, so the
+  chart can come back later without a data migration. The Resources
+  over time and Chrono allocation charts remain on the admin game
+  detail view.
+
+
 ### Migration notes
 
 - **Ladder classification now spans all seasons (auto-reclassifies on

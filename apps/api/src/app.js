@@ -28,6 +28,7 @@ const { OverlayTokensService } = require("./services/overlayTokens");
 const { OverlayLiveService } = require("./services/overlayLive");
 const { LiveGameBroker } = require("./services/liveGameBroker");
 const { AggregationsService } = require("./services/aggregations");
+const { MacroReportService } = require("./services/macroReport");
 const { StreakService } = require("./services/streak");
 const { BuildsService } = require("./services/builds");
 const { StrategyPhasesService } = require("./services/strategyPhases");
@@ -238,6 +239,7 @@ function makeServices(deps) {
       overlayLive.enrichEnvelope(userId, envelope),
   });
   const aggregations = new AggregationsService(deps.db);
+  const macroReport = new MacroReportService(deps.db);
   const streak = new StreakService(deps.db);
   const builds = new BuildsService(deps.db);
   const buildsMmrStats = new BuildsMmrStatsService(deps.db);
@@ -302,6 +304,7 @@ function makeServices(deps) {
     overlayLive,
     liveGameBroker,
     aggregations,
+    macroReport,
     streak,
     builds,
     strategyPhases,
@@ -558,6 +561,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
     SERVICE.ROUTE_PREFIX,
     buildAggregationsRouter({
       aggregations: services.aggregations,
+      macroReport: services.macroReport,
       streak: services.streak,
       auth,
     }),
