@@ -57,6 +57,15 @@ services:
         value: "600"
       - key: AGENT_RELEASE_ADMIN_TOKEN
         sync: false
+      # Admin access. CSV of emails (case-insensitive) — any signed-in
+      # user whose verified Clerk email matches is granted the admin
+      # role on their next page load. Set in the Render dashboard.
+      #   e.g. you@example.com,teammate@example.com
+      - key: SC2TOOLS_ADMIN_EMAILS
+        sync: false
+      # Optional alternative/companion: CSV of Clerk user IDs (user_xxx).
+      - key: SC2TOOLS_ADMIN_USER_IDS
+        sync: false
       # Optional. Set to enable Sentry error reporting; leave unset for
       # local builds. @sentry/node ships as a real dependency — boot
       # logs `sentry_state: enabled|disabled` so the wiring is visible.

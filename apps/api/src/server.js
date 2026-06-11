@@ -78,18 +78,13 @@ async function main() {
   // from SC2TOOLS_ADMIN_USER_IDS) and the socket layer below —
   // mutations here are visible to both, they read the live set.
   //
-  // Founder bootstrap: when no user carries role:"admin" in the DB,
-  // promote the earliest signup (the founder) and merge every
-  // DB-granted admin into the allowlist. Failures are non-fatal —
-  // the env-var allowlist keeps working without it.
+  // Merge persisted DB admins into the allowlist at boot: admins minted
+  // by the email allowlist (SC2TOOLS_ADMIN_EMAILS) or an explicit grant
+  // carry role:"admin" on their user doc, and this re-seeds the live set
+  // so they stay admin across restarts. Failures are non-fatal — the
+  // env-var allowlists keep working without it.
   try {
-    // Only auto-mint a founder when no admin is configured via env var
-    // (SC2TOOLS_ADMIN_USER_IDS seeds adminClerkIds at buildApp). With an
-    // explicit list set we still merge any hand-granted DB admins, but
-    // don't promote a surprise founder on top of the operator's choice.
-    const dbAdminIds = await /** @type {any} */ (services).users.ensureFounderAdmin({
-      promote: adminClerkIds.size === 0,
-    });
+    const dbAdminIds = await /** @type {any} */ (services).users.listDbAdminClerkIds();
     for (const id of dbAdminIds) adminClerkIds.add(id);
     if (dbAdminIds.length > 0) {
       logger.info(
@@ -98,7 +93,7 @@ async function main() {
       );
     }
   } catch (err) {
-    logger.error({ err }, "founder_admin_bootstrap_failed");
+    logger.error({ err }, "admin_allowlist_merge_failed");
   }
   attachSocketAuth(io, {
     secretKey: config.clerkSecretKey,

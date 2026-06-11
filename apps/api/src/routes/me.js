@@ -44,12 +44,15 @@ const ME_MMR_MAX_TOONS = 8;
  *   },
  *   auth: import('express').RequestHandler,
  *   isAdmin?: (req: import('express').Request) => boolean,
+ *   isAdminEmail?: (email: string) => boolean,
+ *   onAdminGranted?: (clerkUserId: string) => void,
  *   logger?: import('pino').Logger,
  * }} deps
  */
 function buildMeRouter(deps) {
   const router = express.Router();
   const isAdmin = deps.isAdmin || (() => false);
+  const isAdminEmail = deps.isAdminEmail || (() => false);
   const clerk = deps.clerk || null;
 
   // Auth applied per-route, NOT via router.use(). Router-level middleware
@@ -95,6 +98,35 @@ function buildMeRouter(deps) {
           }
         }
       }
+      // Email-allowlist admin grant. When the caller's verified email is
+      // on SC2TOOLS_ADMIN_EMAILS and they aren't an admin yet, persist
+      // the role and push their Clerk id into the live allowlist so this
+      // very response — and every later /v1/admin + socket check —
+      // reports admin. Deterministic and operator-controlled: no email
+      // is hard-coded, the grant is idempotent, and grantAdmin refuses
+      // rows without a Clerk identity.
+      let admin = isAdmin(req);
+      if (!admin && email && isAdminEmail(email)) {
+        try {
+          const granted = await deps.users.grantAdmin(
+            auth.userId,
+            "email_allowlist",
+          );
+          if (granted) {
+            if (typeof deps.onAdminGranted === "function") {
+              deps.onAdminGranted(granted.clerkUserId);
+            }
+            admin = true;
+          }
+        } catch (err) {
+          if (deps.logger) {
+            deps.logger.warn(
+              { err, userId: auth.userId },
+              "email_admin_grant_failed",
+            );
+          }
+        }
+      }
       res.json({
         userId: auth.userId,
         source: auth.source,
@@ -110,7 +142,7 @@ function buildMeRouter(deps) {
         activeImportJob: activeImportJob || null,
         // Client-only onboarding bits (downloadStartedAt, dismissedAt).
         onboarding: onboarding || {},
-        isAdmin: isAdmin(req),
+        isAdmin: admin,
       });
     } catch (err) {
       next(err);
