@@ -118,6 +118,15 @@ export interface ResolvedActions {
 /** Step tokens with special meaning beyond unit/upgrade names. */
 const TRANSFORM_TOKENS = new Set(["transformwarpgate", "warpgatetransform"]);
 
+/**
+ * Chrono step token: `"Chrono:Stargate"` spends 50 nexus energy on the
+ * named structure at this point in the order. Targets are replay-
+ * calibrated (see the replay-calibrated describe in
+ * catalog-coverage.test.ts) - the explicit tokens drive chrono so
+ * `MacroPolicies.autoChrono` stays "off" by default.
+ */
+const CHRONO_PREFIX = "chrono:";
+
 /** Reference steps (canonical names, in order) → executable actions. */
 export function actionsFromSteps(
   profile: PatchProfile,
@@ -130,6 +139,17 @@ export function actionsFromSteps(
     const lowered = raw.trim().toLowerCase();
     if (TRANSFORM_TOKENS.has(lowered)) {
       actions.push({ kind: "transform-warpgate", name: "Gateway" });
+      continue;
+    }
+    if (lowered.startsWith(CHRONO_PREFIX)) {
+      const target = index.get(lowered.slice(CHRONO_PREFIX.length).trim());
+      if (!target) {
+        unknownNames.push(raw);
+        continue;
+      }
+      // `name` is namespaced so comparison rows and step lookups never
+      // collide with the target structure's own build steps.
+      actions.push({ kind: "chrono", name: `Chrono:${target}`, target });
       continue;
     }
     // v3 rules name events with the agent's verb prefixes
