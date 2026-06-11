@@ -188,6 +188,7 @@
     "Charge": {"race":"Protoss","minerals":100,"gas":100,"researchTime":100,"researchedAt":["TwilightCouncil"]},
     "BlinkTech": {"race":"Protoss","minerals":100,"gas":100,"researchTime":121,"researchedAt":["TwilightCouncil"]},
     "ResonatingGlaives": {"race":"Protoss","minerals":100,"gas":100,"researchTime":100,"researchedAt":["TwilightCouncil"]},
+    "PsiStorm": {"race":"Protoss","minerals":200,"gas":200,"researchTime":79,"researchedAt":["TemplarArchives"]},
     "ProtossGroundWeaponsLevel1": {"race":"Protoss","minerals":100,"gas":100,"researchTime":114,"researchedAt":["Forge"]},
     "ProtossGroundArmorLevel1": {"race":"Protoss","minerals":100,"gas":100,"researchTime":114,"researchedAt":["Forge"]},
     "ProtossShieldsLevel1": {"race":"Protoss","minerals":150,"gas":150,"researchTime":114,"researchedAt":["Forge"]},

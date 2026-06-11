@@ -269,8 +269,8 @@
       "name": "2 Base Templar (Reactive/Delayed 3rd)",
       "race": "Protoss",
       "matchups": ["PvT"],
-      "description": "Two-base templar tech with a deliberately delayed third: twilight is the FIRST tech building, charge starts behind it, the templar archives finishes BEFORE the third nexus, gateways climb to six by 7:30, and a robo adds observers behind the storm-ready high templar.",
-      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Pylon", "Nexus", "Assimilator", "TwilightCouncil", "Stalker", "Gateway", "WarpGateResearch", "ShieldBattery", "Charge", "Assimilator", "Pylon", "TemplarArchives", "Gateway", "Assimilator", "Sentry", "Gateway", "Pylon", "RoboticsFacility", "Zealot", "HighTemplar", "HighTemplar", "Pylon", "Gateway", "Gateway", "Observer", "Zealot", "HighTemplar", "HighTemplar", "Pylon", "Zealot", "Zealot", "Nexus"],
+      "description": "Two-base templar tech with a deliberately delayed third: twilight is the FIRST tech building, charge starts behind it, the templar archives finishes BEFORE the third nexus, gateways climb to six by 7:30, psionic storm starts as soon as the first high templar pair warps in, and a robo adds a warp prism (templar drops/repositioning) plus an observer.",
+      "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Pylon", "Nexus", "Assimilator", "TwilightCouncil", "Stalker", "Gateway", "WarpGateResearch", "ShieldBattery", "Charge", "Assimilator", "Pylon", "TemplarArchives", "Gateway", "Assimilator", "Sentry", "Gateway", "Pylon", "RoboticsFacility", "Zealot", "HighTemplar", "HighTemplar", "PsiStorm", "Pylon", "Gateway", "Gateway", "WarpPrism", "Zealot", "HighTemplar", "HighTemplar", "Observer", "Pylon", "Zealot", "Zealot", "Nexus"],
       "definitionIds": ["pvt-2-base-templar-reactive-delayed-3rd"]
     },
     {

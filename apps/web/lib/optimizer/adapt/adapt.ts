@@ -62,6 +62,8 @@ function isPolicyOwned(profile: PatchProfile, name: string): boolean {
 const NAME_ALIASES: Record<string, string> = {
   warpgate: "Gateway",
   templararchive: "TemplarArchives",
+  psistormtech: "PsiStorm",
+  psionicstorm: "PsiStorm",
   lurkerdenmp: "LurkerDen",
   lurkermp: "Lurker",
   swarmhostmp: "SwarmHost",
