@@ -184,7 +184,7 @@
     "SporeCrawler": {"race":"Zerg","minerals":75,"gas":0,"supply":0,"buildTime":21,"builtFrom":["Drone"],"requires":["SpawningPool"],"isStructure":true,"combat":{"hp":400,"dpsAir":17.4,"isStatic":true}}
   },
   "upgrades": {
-    "WarpGateResearch": {"race":"Protoss","minerals":50,"gas":50,"researchTime":114,"researchedAt":["CyberneticsCore"]},
+    "WarpGateResearch": {"race":"Protoss","minerals":50,"gas":50,"researchTime":100,"researchedAt":["CyberneticsCore"]},
     "Charge": {"race":"Protoss","minerals":100,"gas":100,"researchTime":100,"researchedAt":["TwilightCouncil"]},
     "BlinkTech": {"race":"Protoss","minerals":100,"gas":100,"researchTime":121,"researchedAt":["TwilightCouncil"]},
     "ResonatingGlaives": {"race":"Protoss","minerals":100,"gas":100,"researchTime":100,"researchedAt":["TwilightCouncil"]},

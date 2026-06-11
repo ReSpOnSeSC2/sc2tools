@@ -164,3 +164,6 @@ nsa*.tmp
 # rename gate catches a wipe and the operator preserves the prior
 # state for forensics. Per-incident; never source-controlled.
 **/data/*.shrink-incident-*
+
+# Local replay corpus for optimizer calibration (not versioned)
+calibration-replays/
