@@ -32,7 +32,12 @@ export function actionsFromReplayEvents(
   cutoffSec?: number,
 ): ResolvedActions {
   const rows = normalizeBuildEvents(events)
-    .filter((row) => Number.isFinite(row.time) && row.time >= 0)
+    // time > 0, not >= 0: replay trackers record the STARTING town
+    // hall (and cosmetic 0:00 markers like beacons/reward dances) as
+    // born-events at second zero. Nothing can legitimately be built
+    // at 0:00, so dropping t=0 removes the phantom "Nexus first"
+    // without touching any real step.
+    .filter((row) => Number.isFinite(row.time) && row.time > 0)
     .filter((row) => cutoffSec === undefined || row.time <= cutoffSec)
     .sort((a, b) => a.time - b.time);
   // The icon-resolved name is already lowercase-canonical ("gateway",

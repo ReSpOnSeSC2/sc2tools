@@ -16,6 +16,10 @@ function ev(time: number, name: string): BuildOrderEvent {
 }
 
 const PROTOSS_OPENING: BuildOrderEvent[] = [
+  // Replay trackers emit the starting town hall (and cosmetic
+  // markers) as born-events at 0:00 - these must never become steps.
+  ev(0, "Nexus"),
+  ev(0, "BeaconArmy"),
   ev(12, "Probe"),
   ev(18, "Pylon"),
   ev(40, "Gateway"),
@@ -37,6 +41,7 @@ describe("actionsFromReplayEvents", () => {
       PROTOSS_OPENING,
     );
     expect(unknownNames).toEqual([]);
+    // the 0:00 starting Nexus and beacon marker are dropped entirely
     expect(actions.map((a) => a.name)).toEqual([
       "Pylon",
       "Gateway",
