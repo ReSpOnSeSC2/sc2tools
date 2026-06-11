@@ -50,6 +50,7 @@ import os
 import threading
 import time
 from concurrent.futures import (
+    CancelledError,
     Executor,
     Future,
     ProcessPoolExecutor,
@@ -94,6 +95,17 @@ _PROBE_TIMEOUT_SEC = 30.0
 # sc2reader on a malformed MPQ archive), so a single strike is not
 # evidence the pool is broken. Three in a row is.
 _PROCESS_CRASH_STRIKES_THRESHOLD = 3
+
+# Sweep-side congestion gate. When the upload queue is backed up past
+# this depth (slow / unreachable API), submitting more parses only
+# burns CPU on work that ``UploadQueue.submit`` will defer anyway —
+# and during the 2026-06-10 incident it buried the parse pool under
+# ~12k pending futures that all got cancelled at shutdown. Pausing
+# the sweep until the queue drains below the limit keeps the pipeline
+# responsive; nothing is lost because the next sweep cycle re-walks
+# the folders. Queue capacity is 1000, so 500 leaves headroom for
+# parses already in flight to land without hitting ``queue.Full``.
+_UPLOAD_QUEUE_SOFT_LIMIT = 500
 
 
 def _child_smoke_test() -> Tuple[str, str]:
@@ -663,6 +675,20 @@ class ReplayWatcher:
         sync_filter = self._sync_filter()
         for root in self._roots:
             for path, mtime in _walk_replays(root):
+                # Congestion gate: stop feeding the parse pool while
+                # the upload queue is backed up. Parsing ahead of a
+                # stalled uploader just creates work that gets
+                # deferred (or, pre-fix, wedged the pipeline). The
+                # next sweep cycle picks up exactly where this one
+                # stopped because nothing below was marked uploaded.
+                if self._upload.pending_count() >= _UPLOAD_QUEUE_SOFT_LIMIT:
+                    log.info(
+                        "sweep_paused_upload_queue_congested depth=%d "
+                        "limit=%d (will resume on a later sweep)",
+                        self._upload.pending_count(),
+                        _UPLOAD_QUEUE_SOFT_LIMIT,
+                    )
+                    return
                 key = str(path)
                 if key in self._state.uploaded:
                     continue
@@ -814,6 +840,20 @@ class ReplayWatcher:
         try:
             try:
                 kind, path_str, payload = future.result()
+            except CancelledError:
+                # Pending parse cancelled by executor shutdown
+                # (``stop()`` / runtime fallback both use
+                # ``cancel_futures=True``). Not a crash: the file was
+                # never parsed, is not marked uploaded, and the next
+                # session's sweep re-discovers it. Logged at DEBUG —
+                # a large backfill can have thousands of pending
+                # parses at shutdown and a WARNING per file floods
+                # agent.log (12,634 lines on 2026-06-10).
+                log.debug(
+                    "parse_cancelled path=%s",
+                    Path(submitted_path_str).name,
+                )
+                return
             except Exception as exc:  # noqa: BLE001
                 # ``BrokenProcessPool`` arrives with an empty str() in
                 # some cases — log the type + repr so silent crashes

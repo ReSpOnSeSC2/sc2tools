@@ -57,6 +57,14 @@ class _FakeUploadQueue:
         self.submitted.append(job)
         return True
 
+    def pending_count(self) -> int:
+        # Mirrors UploadQueue.pending_count — the sweep's congestion
+        # gate reads it before submitting parse work. The fake never
+        # drains, but reporting the real depth would trip the gate in
+        # tests that submit hundreds of jobs; report 0 so sweeps are
+        # never throttled under test unless a test overrides this.
+        return 0
+
     def is_resync_requested(self) -> bool:
         return self._resync
 

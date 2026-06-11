@@ -2,7 +2,32 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
-## Unreleased
+## 0.13.0
+
+### Fixed — dashboard "Synced" stat now shows the real total
+- **What.** The stat card counted uploads with a session-local
+  `+= 1` counter: it reset to 0 on every launch and double-counted
+  re-uploads after a mid-session Re-sync. It now reads the dated
+  entries in `state.uploaded` via `state.count_synced()` (sentinel
+  markers — `filtered` / `rejected` / `skipped[:reason]` — are
+  excluded), seeded at boot and re-queried on every repaint.
+- **Effect.** The number survives restarts, matches what actually
+  reached the cloud, and drops back honestly when a Re-sync wipes the
+  cursor.
+
+### Fixed — import job cards no longer heartbeat forever
+- **What.** `total` is a point-in-time estimate from
+  `count_pending()`; settle-failures, backpressure drops, and a
+  wedged upload worker never invoke a counted callback, so
+  `processed >= total` could NEVER become true and the reporter
+  posted `import:progress` every 10 s until the agent was restarted —
+  the web app refreshed continuously even with nothing left to sync
+  (observed 2026-06-10/11: job `total=12661` outlived its session).
+- **Effect.** After 10 minutes with zero counter movement the
+  reporter re-checks the disk and closes the job card — as
+  `import_complete` when nothing is pending, otherwise as
+  `import_stalled_card_closed` (logged with a WARNING). Background
+  sync itself is unaffected; only the narration stops.
 
 ### Added — full ZvP and TvP build coverage (engine)
 - **What.** The bundled engine's per-matchup trees now cover ZvP with

@@ -440,6 +440,7 @@ class GuiUI:
         initial_paired: bool,
         initial_user_id: Optional[str],
         initial_settings: SettingsPayload,
+        synced_count_provider: Optional[Callable[[], int]] = None,
         on_pause: Callable[[bool], None],
         on_resync: Callable[[], None],
         on_choose_folder: Callable[[Optional[Path]], None],
@@ -459,6 +460,12 @@ class GuiUI:
         self._initial_paired = initial_paired
         self._initial_user_id = initial_user_id
         self._initial_settings = initial_settings
+        # Authoritative "total replays synced" source. The runner wires
+        # this to a count over ``state.uploaded``'s dated entries so the
+        # dashboard stat survives agent restarts and stays truthful
+        # across resyncs (the old session-local += counter reset to 0
+        # on every launch and double-counted re-uploads).
+        self._synced_count_provider = synced_count_provider
         self._start_minimized = start_minimized
 
         self._on_pause = on_pause
@@ -643,7 +650,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._paused = ui._initial_paused
             self._paired = ui._initial_paired
             self._user_id = ui._initial_user_id
-            self._uploaded_count = 0
+            self._uploaded_count = self._query_synced_count(default=0)
             self._pending_count = 0
             self._last_upload: Optional[tuple[str, datetime]] = None
             self._update_pending: Optional[str] = None
@@ -666,6 +673,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._build_layout()
             self._wire_signals()
             self._refresh_status_card()
+            self._refresh_stats()
             self._refresh_pairing_card()
             self._populate_settings()
             self._tail_log_now()
@@ -1529,8 +1537,26 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._status = status
             self._refresh_status_card()
 
+        def _query_synced_count(self, default: int) -> int:
+            """Read the authoritative synced total from the provider.
+
+            The upload queue writes ``state.uploaded`` BEFORE invoking
+            the success callback, so re-querying here always includes
+            the upload that triggered the signal. Falls back to
+            ``default`` (the legacy increment) when no provider is
+            wired or the read fails."""
+            provider = ui._synced_count_provider
+            if provider is None:
+                return default
+            try:
+                return int(provider())
+            except Exception:  # noqa: BLE001
+                return default
+
         def _on_upload_success(self, filename: str) -> None:
-            self._uploaded_count += 1
+            self._uploaded_count = self._query_synced_count(
+                default=self._uploaded_count + 1,
+            )
             self._pending_count = max(0, self._pending_count - 1)
             self._last_upload = (filename, datetime.now())
             self._recent.appendleft(
@@ -1975,6 +2001,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._pairing_card.setVisible(not self._paired)
 
         def _refresh_stats(self) -> None:
+            # Re-query on every repaint so a mid-session Re-sync (which
+            # wipes the uploaded cursor) is reflected without waiting
+            # for the next upload to land.
+            self._uploaded_count = self._query_synced_count(
+                default=self._uploaded_count,
+            )
             self._stat_synced["value"].setText(str(self._uploaded_count))
             self._stat_queued["value"].setText(str(self._pending_count))
             if self._last_upload:

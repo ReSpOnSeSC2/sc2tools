@@ -5,7 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from sc2tools_agent.state import AgentState, load_state, save_state
+from sc2tools_agent.state import (
+    AgentState,
+    count_synced,
+    load_state,
+    save_state,
+)
 
 
 def test_load_state_returns_defaults_when_file_missing(tmp_path: Path) -> None:
@@ -351,6 +356,33 @@ def test_upload_overrides_default_to_none_when_missing_from_disk(
     assert loaded.upload_batch_size_override is None
     # Pre-existing field still respected.
     assert loaded.parse_concurrency_override == 4
+
+
+# ---------------- count_synced --------------------------------------
+#
+# Feeds the dashboard's "Synced" stat card. The number must reflect
+# only replays that actually reached the cloud — sentinel markers in
+# ``state.uploaded`` ("filtered" / "rejected" / "skipped[:<reason>]")
+# track files the agent deliberately did NOT ship and must not count.
+
+
+def test_count_synced_counts_only_dated_entries() -> None:
+    s = AgentState(
+        uploaded={
+            "a.SC2Replay": "2026-06-10T19:45:00+00:00",
+            "b.SC2Replay": "2026-06-10T19:46:00+00:00",
+            "c.SC2Replay": "filtered",
+            "d.SC2Replay": "rejected",
+            "e.SC2Replay": "skipped",
+            "f.SC2Replay": "skipped:ai_game",
+            "g.SC2Replay": "skipped:parse_failed",
+        },
+    )
+    assert count_synced(s) == 2
+
+
+def test_count_synced_empty_state_is_zero() -> None:
+    assert count_synced(AgentState()) == 0
 
 
 def test_upload_overrides_garbage_inputs_load_as_none(

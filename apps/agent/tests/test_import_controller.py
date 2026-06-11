@@ -186,3 +186,80 @@ def test_progress_post_failure_never_raises():
     # _post_progress swallows network errors (reporting is best-effort).
     ctl.handle_start_request({"jobId": "jx"})
     ctl.stop()
+
+
+# ---------------- stall guard ----------------------------------------
+#
+# ``total`` is a point-in-time estimate; settle-failures, backpressure
+# drops, and a wedged upload worker all leave ``processed < total``
+# forever. Pre-guard, the reporter heartbeated ``import:progress``
+# every 10 s until the agent was restarted — the web app refreshed
+# continuously even with nothing left to sync.
+
+
+def _speed_up_reporter(monkeypatch, stall_sec=0.1):
+    monkeypatch.setattr(
+        "sc2tools_agent.import_controller._REPORT_INTERVAL_SEC", 0.01,
+    )
+    monkeypatch.setattr(
+        "sc2tools_agent.import_controller._IDLE_HEARTBEAT_SEC", 0.02,
+    )
+    monkeypatch.setattr(
+        "sc2tools_agent.import_controller._STALL_TIMEOUT_SEC", stall_sec,
+    )
+
+
+def test_stalled_job_closes_with_done(monkeypatch):
+    """No counter movement for the stall window + files still pending
+    on disk → close the card honestly as stalled, deactivate, and stop
+    posting (the endless-refresh fix)."""
+    _speed_up_reporter(monkeypatch)
+    ctl, api, _w = make_controller(pending=7)
+    ctl.handle_start_request({"jobId": "stall1"})
+
+    assert wait_for(lambda: ctl._job_id is None), (
+        f"stalled job never closed: {api.progress_calls!r}"
+    )
+    final = api.progress_calls[-1]
+    assert final["done"] is True
+    assert final["message"] == "import_stalled_card_closed"
+
+    # Reporter must actually stop: no further posts after close-out.
+    n = len(api.progress_calls)
+    time.sleep(0.2)
+    assert len(api.progress_calls) == n
+
+
+def test_stalled_job_with_nothing_pending_closes_as_complete(monkeypatch):
+    """Counters under-count (settle-failures etc. are invisible), so a
+    stall with ZERO files left on disk means the import actually
+    finished — close it as complete, not stalled."""
+    _speed_up_reporter(monkeypatch)
+    ctl, api, w = make_controller(pending=5)
+    ctl.handle_start_request({"jobId": "stall2"})
+    # Everything on disk got handled, but only via uncounted paths.
+    w.pending = 0
+
+    assert wait_for(lambda: ctl._job_id is None), (
+        f"stalled job never closed: {api.progress_calls!r}"
+    )
+    final = api.progress_calls[-1]
+    assert final["done"] is True
+    assert final["message"] == "import_complete"
+
+
+def test_moving_job_does_not_trip_stall_guard(monkeypatch):
+    """Steady progress resets the stall clock — a healthy backfill
+    must complete via the normal processed >= total path."""
+    _speed_up_reporter(monkeypatch, stall_sec=10.0)
+    ctl, api, _w = make_controller(pending=2)
+    ctl.handle_start_request({"jobId": "move1"})
+    ctl.on_upload_success(Path("a.SC2Replay"))
+    ctl.on_upload_success(Path("b.SC2Replay"))
+
+    assert wait_for(lambda: ctl._job_id is None)
+    final = [c for c in api.progress_calls if c.get("done")][-1]
+    assert final["jobId"] == "move1"
+    assert "message" not in final or final["message"] != (
+        "import_stalled_card_closed"
+    )

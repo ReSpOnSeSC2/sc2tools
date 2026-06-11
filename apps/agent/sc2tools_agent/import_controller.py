@@ -53,6 +53,21 @@ _REPORT_INTERVAL_SEC = 2.0
 _IDLE_HEARTBEAT_SEC = 10.0
 _MAX_SAMPLES = 25
 
+# Stall guard. ``total`` is a point-in-time estimate from
+# ``count_pending()``; files that settle_fail, get dropped by queue
+# backpressure, or sit behind a wedged upload worker never invoke a
+# counted callback, so ``processed >= total`` may NEVER become true.
+# Pre-guard, the reporter heartbeated ``import:progress`` every 10 s
+# forever — the web app refreshed continuously even with nothing left
+# to sync (observed 2026-06-10/11: job total=12661 outlived the
+# session). After this long with zero counter movement we re-check
+# the disk; if nothing is actually pending the job is done, and if
+# something is pending but nothing has moved the pipeline is wedged —
+# either way we close the job card and stop narrating. Background
+# sync itself is unaffected (cancel semantics: the card stops, the
+# watcher keeps sweeping).
+_STALL_TIMEOUT_SEC = 600.0
+
 
 class ImportController:
     """Tracks one active import job and reports its progress."""
@@ -283,6 +298,8 @@ class ImportController:
 
     def _report_loop(self) -> None:
         last_post = 0.0
+        last_processed = -1
+        last_movement = time.monotonic()
         while not self._stop.wait(_REPORT_INTERVAL_SEC):
             with self._lock:
                 job_id = self._job_id
@@ -295,6 +312,31 @@ class ImportController:
                 if dirty or done:
                     self._dirty = False
             now = time.monotonic()
+            if processed != last_processed:
+                last_processed = processed
+                last_movement = now
+            elif not done and (now - last_movement) >= _STALL_TIMEOUT_SEC:
+                # No counter movement for the full stall window. Check
+                # what's actually left on disk before deciding how to
+                # word the close-out — but close out either way so the
+                # cloud stops fanning ``import:progress`` to the web.
+                remaining = self._safe_count_pending()
+                log.warning(
+                    "import_job_stalled jobId=%s processed=%d total=%d "
+                    "remaining_on_disk=%d stall_sec=%.0f — closing job "
+                    "card (background sync continues)",
+                    job_id, processed, self._total, remaining,
+                    now - last_movement,
+                )
+                body["done"] = True
+                body["message"] = (
+                    "import_complete"
+                    if remaining == 0
+                    else "import_stalled_card_closed"
+                )
+                self._post_progress(body)
+                self._deactivate()
+                break
             if dirty or done or (now - last_post) >= _IDLE_HEARTBEAT_SEC:
                 self._post_progress(body)
                 last_post = now

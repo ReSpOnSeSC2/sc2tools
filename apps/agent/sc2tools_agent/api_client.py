@@ -17,6 +17,15 @@ READ_TIMEOUT_SEC = 30.0
 DEFAULT_RETRIES = 3
 RETRY_BACKOFF_BASE_SEC = 0.5
 
+# Per-game read-timeout budget for batch uploads. The flat 30 s
+# READ_TIMEOUT_SEC was sized for single-game posts; a 50-game batch
+# routinely needs longer than that server-side (observed 2026-06-10:
+# every size=50 batch against the production API hit the 30 s read
+# timeout, the queue backed up, and the agent wedged). Scale the
+# budget with the batch so big batches get a proportionally longer
+# leash while single games keep the snappy default.
+BATCH_READ_TIMEOUT_PER_GAME_SEC = 3.0
+
 _USER_AGENT = "sc2tools-agent/0.1"
 
 
@@ -59,7 +68,21 @@ class ApiClient:
     def upload_games_batch(self, games: list[Dict[str, Any]]) -> Dict[str, Any]:
         if not self.device_token:
             raise PermissionError("agent_not_paired")
-        return self._post("/v1/games", auth=True, body={"games": games})
+        # Read timeout scales with batch size (floor: the single-game
+        # default). A size-50 batch gets 150 s instead of timing out
+        # at 30 s while the server is still happily processing it —
+        # which both wasted the server's work AND re-enqueued 50 jobs
+        # into an already-congested queue.
+        read_timeout = max(
+            READ_TIMEOUT_SEC,
+            BATCH_READ_TIMEOUT_PER_GAME_SEC * len(games),
+        )
+        return self._post(
+            "/v1/games",
+            auth=True,
+            body={"games": games},
+            read_timeout=read_timeout,
+        )
 
     # ---------------- Live game bridge ----------------
     def push_agent_live(self, *, envelope: Dict[str, Any]) -> Dict[str, Any]:
@@ -175,8 +198,11 @@ class ApiClient:
         *,
         auth: bool,
         body: Optional[Dict[str, Any]] = None,
+        read_timeout: Optional[float] = None,
     ) -> Dict[str, Any]:
-        return self._request("POST", path, auth=auth, body=body)
+        return self._request(
+            "POST", path, auth=auth, body=body, read_timeout=read_timeout,
+        )
 
     def _request(
         self,
@@ -186,6 +212,7 @@ class ApiClient:
         auth: bool,
         body: Optional[Dict[str, Any]] = None,
         allow_202: bool = False,
+        read_timeout: Optional[float] = None,
     ) -> Dict[str, Any]:
         url = f"{self.base_url}{path}"
         headers = {"user-agent": _USER_AGENT, "accept": "application/json"}
@@ -202,7 +229,10 @@ class ApiClient:
                     url,
                     json=body if body is not None else None,
                     headers=headers,
-                    timeout=(CONNECT_TIMEOUT_SEC, READ_TIMEOUT_SEC),
+                    timeout=(
+                        CONNECT_TIMEOUT_SEC,
+                        read_timeout if read_timeout else READ_TIMEOUT_SEC,
+                    ),
                 )
             except requests.RequestException as exc:
                 last_exc = exc

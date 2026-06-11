@@ -168,6 +168,34 @@ class AgentState:
         return bool(self.device_token)
 
 
+def count_synced(state: AgentState) -> int:
+    """Number of replays successfully uploaded to the cloud.
+
+    Counts only dated entries in ``state.uploaded`` — the sentinel
+    values (``"filtered"``, ``"rejected"``, ``"skipped"`` /
+    ``"skipped:<reason>"``) mark files the agent deliberately did NOT
+    ship, so they must not inflate the dashboard's "Synced" stat.
+
+    Thread-tolerant: the uploader and watcher mutate ``state.uploaded``
+    from worker threads while the GUI calls this on repaint. CPython
+    raises ``RuntimeError`` if the dict resizes mid-iteration, so we
+    retry a few times; a transient miss just means the stat updates on
+    the next repaint.
+    """
+    for _ in range(5):
+        try:
+            return sum(
+                1
+                for v in state.uploaded.values()
+                if isinstance(v, str)
+                and v not in ("filtered", "rejected")
+                and not v.startswith("skipped")
+            )
+        except RuntimeError:
+            continue
+    return 0
+
+
 def load_state(state_dir: Path) -> AgentState:
     """Read state from disk; return defaults on first run.
 

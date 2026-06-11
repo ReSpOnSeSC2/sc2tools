@@ -68,7 +68,7 @@ from .replay_finder import (
     find_replays_root,
 )
 from .replay_pipeline import probe_analyzer
-from .state import AgentState, load_state, save_state
+from .state import AgentState, count_synced, load_state, save_state
 from .sync_filter import SyncFilter
 from .ui import (
     ConsoleUI,
@@ -578,6 +578,10 @@ def _run_with_gui(
         initial_paired=state.is_paired,
         initial_user_id=state.user_id,
         initial_settings=initial_settings,
+        # Authoritative synced total for the dashboard stat card —
+        # counts dated entries in state.uploaded so the number survives
+        # restarts instead of resetting to 0 every launch.
+        synced_count_provider=lambda: count_synced(state),
         on_pause=lambda paused: _handle_pause(cfg, state, cell.upload, paused),
         on_resync=lambda: _handle_resync(cfg, state, cell.upload),
         on_choose_folder=lambda picked: _handle_choose_folder_gui(

@@ -26,15 +26,21 @@ from ..sync_filter import SyncFilter
 
 log = logging.getLogger(__name__)
 
-# Backpressure budget for ``UploadQueue.submit``. With a 32-worker
-# process-mode parse pool feeding into a single-threaded upload
-# worker, parses can outrun uploads by 5–10×. Blocking the parse
-# done-callback thread on a full queue is the right behaviour
-# (no data loss) but we cap the wait so a wedged upload worker
-# doesn't freeze the entire pipeline indefinitely. 5 minutes is
-# longer than any reasonable network blip but short enough that
-# a real outage is visible to the user via the resulting log line.
-_BACKPRESSURE_TIMEOUT_SEC = 300.0
+# Backpressure budget for ``UploadQueue.submit``. Was 300 s — that
+# turned out to be a pipeline-killer: ``submit()`` is called from the
+# parse pool's done-callback, which in process mode runs on the
+# executor's manager thread. Blocking that thread for 5 minutes
+# stalls ALL result processing AND pending-future cancellation
+# (observed 2026-06-10: a congested API filled the queue, the
+# manager thread blocked, and ~12.6k queued parses were eventually
+# mass-cancelled / never collected). A short wait absorbs normal
+# drain jitter; on timeout we return False WITHOUT marking the file
+# uploaded, so the next sweep re-parses it once the queue has
+# breathing room — slow-API congestion now costs wasted CPU instead
+# of a wedged agent. The sweep-side throttle in
+# ``watcher._sweep_once`` keeps re-parse churn rare by not
+# submitting new parses while the queue is congested.
+_BACKPRESSURE_TIMEOUT_SEC = 15.0
 
 
 class _ServerRejectedError(Exception):
@@ -111,6 +117,13 @@ class UploadQueue:
         self._batch_size: int = max(
             1, getattr(cfg, "upload_batch_size", 1),
         )
+        # User-configured ceiling for the adaptive batch sizing below.
+        # On a transient whole-batch failure (read timeout, 5xx) the
+        # effective ``_batch_size`` halves so the agent converges on a
+        # batch the server can actually process inside the timeout;
+        # each fully-successful batch nudges it back up toward this
+        # ceiling. ``set_batch_size`` resets both.
+        self._batch_ceiling: int = self._batch_size
         self._on_success = on_success or (lambda _p: None)
         self._on_failure = on_failure or (lambda _p, _e: None)
         self._lock = threading.Lock()
@@ -214,6 +227,10 @@ class UploadQueue:
         """
         new_size = max(1, int(new_size))
         if new_size == self._batch_size:
+            # Still pin the adaptive ceiling: the current size may be
+            # an adaptive shrink that happens to equal the user's new
+            # setting, and the ceiling must reflect the user's intent.
+            self._batch_ceiling = new_size
             return
         log.info(
             "upload_batch_size_change from=%d to=%d",
@@ -226,6 +243,10 @@ class UploadQueue:
         # in-flight batch uses the OLD size and the next one uses
         # the new size; that's the contract.
         self._batch_size = new_size
+        # An explicit user setting resets the adaptive ceiling too —
+        # otherwise a Save after a bad-network session would stay
+        # clamped to whatever the halving converged on.
+        self._batch_ceiling = new_size
 
     def submit(self, job: UploadJob) -> bool:
         """Enqueue a job. Returns False if already uploaded.
@@ -258,16 +279,12 @@ class UploadQueue:
             self._q.put(job, timeout=_BACKPRESSURE_TIMEOUT_SEC)
             return True
         except queue.Full:
-            # Reached only when the upload thread has been
-            # unresponsive for the full timeout window. By the time
-            # we hit this branch the agent is in a degraded state —
-            # log loudly so support can correlate it with whatever
-            # network / API outage caused it.
-            log.error(
-                "upload_queue_blocked_for_%ds; dropping %s "
-                "(upload worker likely stuck — investigate API "
-                "connectivity or restart the agent)",
-                int(_BACKPRESSURE_TIMEOUT_SEC),
+            # Queue saturated (slow / unreachable API). NOT a loss:
+            # the file is not marked uploaded, so a later sweep
+            # re-parses and re-submits it once the queue drains.
+            log.warning(
+                "upload_queue_saturated; deferring %s to a later sweep "
+                "(uploads not keeping up — API slow or unreachable)",
                 job.file_path.name,
             )
             return False
@@ -381,6 +398,46 @@ class UploadQueue:
         return len(dropped_jobs)
 
     # ---------------- internals ----------------
+    def _shrink_batch_size_after_failure(self, failed_size: int) -> None:
+        """Halve the effective batch size after a whole-batch
+        transient failure (read timeout, 5xx, network error).
+
+        Rationale: the dominant transient-failure mode in the field is
+        the server needing longer than the read timeout to process a
+        large batch (observed 2026-06-10 with size=50 batches). Naive
+        retry at the same size fails the same way every ~30 s while
+        re-enqueueing the full batch into a congested queue. Halving
+        converges on a size the server can handle within a few
+        failures (50 → 25 → 12 → …); successful batches grow it back
+        toward the user's configured ceiling.
+        """
+        if failed_size <= 1:
+            return
+        new_size = max(1, failed_size // 2)
+        if new_size < self._batch_size:
+            log.warning(
+                "upload_batch_size_auto_reduced from=%d to=%d "
+                "(transient batch failure; will grow back on success)",
+                self._batch_size, new_size,
+            )
+            self._batch_size = new_size
+
+    def _grow_batch_size_after_success(self, succeeded_size: int) -> None:
+        """Additive recovery for the adaptive batch sizing.
+
+        +1 per fully-successful batch, capped at the user-configured
+        ceiling. Asymmetric on purpose (halve on failure, +1 on
+        success) so a marginal server gets probed gently instead of
+        oscillating between timeout and full size.
+        """
+        if succeeded_size < self._batch_size:
+            # Partial drain (queue had fewer ready jobs than the cap)
+            # tells us nothing about the server's capacity at the
+            # current size — don't grow on it.
+            return
+        if self._batch_size < self._batch_ceiling:
+            self._batch_size = min(self._batch_ceiling, self._batch_size + 1)
+
     def _run(self) -> None:
         """Worker loop: drain a batch, post via ``upload_games_batch``.
 
@@ -432,6 +489,7 @@ class UploadQueue:
                     break
             try:
                 self._upload_batch(batch)
+                self._grow_batch_size_after_success(len(batch))
             except _ServerRejectedError as exc:
                 # Whole-batch envelope rejection (e.g. server returned
                 # a top-level error not per-game). Mark every job in
@@ -453,6 +511,7 @@ class UploadQueue:
                     "upload_batch_failed size=%d: %s",
                     len(batch), exc,
                 )
+                self._shrink_batch_size_after_failure(len(batch))
                 for job in batch:
                     self._on_failure(job.file_path, exc)
                 # Park briefly then retry the whole batch by
