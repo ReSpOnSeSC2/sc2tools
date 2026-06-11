@@ -113,6 +113,12 @@ export default function AdminUserDetailPage({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <GrantAdminAction
+          userId={data.userId}
+          isAdmin={data.isAdmin}
+          grantable={Boolean(data.clerkUserId)}
+          onDone={() => mutate()}
+        />
         <RebuildOpponentsAction
           userId={data.userId}
           onDone={() => mutate()}
@@ -181,6 +187,106 @@ export default function AdminUserDetailPage({
         )}
       </Card>
     </div>
+  );
+}
+
+/**
+ * Promote another user to admin. Only an existing admin reaches this
+ * page (the whole /admin surface is gated on isAdmin), so this is the
+ * "only an admin can add other admins" control. Hidden behavior:
+ *   - already-admin users show a settled "Already an admin" state;
+ *   - users without a Clerk identity can't be promoted (they could
+ *     never authenticate), so the action is disabled with a hint.
+ */
+function GrantAdminAction({
+  userId,
+  isAdmin,
+  grantable,
+  onDone,
+}: {
+  userId: string;
+  isAdmin: boolean;
+  grantable: boolean;
+  onDone: () => void;
+}) {
+  const { getToken } = useAuth();
+  const [state, setState] = useState<
+    | { kind: "idle" }
+    | { kind: "confirm" }
+    | { kind: "busy" }
+    | { kind: "done" }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
+
+  async function run() {
+    setState({ kind: "busy" });
+    try {
+      await apiCall(
+        getToken,
+        `/v1/admin/users/${encodeURIComponent(userId)}/grant-admin`,
+        { method: "POST" },
+      );
+      setState({ kind: "done" });
+      onDone();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setState({ kind: "error", message: msg });
+    }
+  }
+
+  const settled = isAdmin || state.kind === "done";
+
+  return (
+    <Card padded>
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h2 className="text-body font-semibold text-text">Admin access</h2>
+        {settled ? (
+          <span className="rounded-full bg-accent/15 px-2 py-0.5 text-caption font-semibold text-accent">
+            admin
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-1 text-caption text-text-muted">
+        Grants the <code>admin</code> role — full access to this console.
+        Only an admin can add other admins.
+      </p>
+      {settled ? (
+        <p className="mt-3 text-caption text-success">
+          This user is an admin.
+        </p>
+      ) : !grantable ? (
+        <p className="mt-3 text-caption text-text-muted">
+          Can&apos;t promote — this account has no linked sign-in identity.
+        </p>
+      ) : state.kind === "idle" ? (
+        <button
+          type="button"
+          className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover"
+          onClick={() => setState({ kind: "confirm" })}
+        >
+          Grant admin
+        </button>
+      ) : null}
+      {state.kind === "confirm" ? (
+        <div className="mt-3">
+          <ConfirmInline
+            prompt="Grant this user full admin access?"
+            confirmLabel="Grant admin"
+            variant="primary"
+            onConfirm={run}
+            onCancel={() => setState({ kind: "idle" })}
+          />
+        </div>
+      ) : null}
+      {state.kind === "busy" ? (
+        <p className="mt-3 text-caption text-text-muted">Granting…</p>
+      ) : null}
+      {state.kind === "error" ? (
+        <p className="mt-3 text-caption text-danger">
+          Failed: {state.message}
+        </p>
+      ) : null}
+    </Card>
   );
 }
 

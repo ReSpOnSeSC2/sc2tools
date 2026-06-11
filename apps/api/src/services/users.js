@@ -16,11 +16,28 @@ class UsersService {
    *   adminEvents?: {
    *     record: (type: string, payload: Record<string, unknown>) => Promise<unknown>,
    *   } | null,
+   *   onFounderPromoted?: ((clerkUserIds: string[]) => void) | null,
+   *   hasConfiguredAdmins?: (() => boolean) | null,
    * }} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
     this.adminEvents = opts.adminEvents || null;
+    // Notified with the Clerk user IDs of every DB-granted admin the
+    // moment the founder is auto-promoted on an authed request, so the
+    // live REST/socket allowlist picks up the grant WITHOUT a restart.
+    this.onFounderPromoted =
+      typeof opts.onFounderPromoted === "function" ? opts.onFounderPromoted : null;
+    // Predicate: are admins already configured (env-var allowlist or a
+    // prior grant)? When true the first-user-is-admin default is off —
+    // the operator has taken explicit control of who's an admin.
+    this.hasConfiguredAdmins =
+      typeof opts.hasConfiguredAdmins === "function" ? opts.hasConfiguredAdmins : null;
+    // Process-local latch. While false, the first authed requests probe
+    // the DB for an existing admin; the instant one is known to exist
+    // (founder just promoted, or an admin was already on record) we flip
+    // it and never query again — steady-state requests pay nothing.
+    this._founderResolved = false;
   }
 
   /**
@@ -34,6 +51,10 @@ class UsersService {
     if (!clerkUserId) throw new Error("clerkUserId required");
     const existing = await this.db.users.findOne({ clerkUserId });
     if (existing) {
+      // Founder safety net: an account that signed up BEFORE this
+      // process booted (or before the bootstrap ever ran) still gets
+      // promoted on its next authed request, no redeploy required.
+      await this._maybePromoteFounder();
       return { userId: existing.userId, clerkUserId };
     }
     const userId = crypto.randomUUID();
@@ -59,7 +80,42 @@ class UsersService {
       throw err;
     }
     this._recordSignup({ clerkUserId, userId, source: "first_touch" });
+    // Brand-new account: if nobody is admin yet, the earliest signup
+    // (which may well be this one) is promoted and pushed into the live
+    // allowlist so /v1/me reports isAdmin:true on this very request.
+    await this._maybePromoteFounder();
     return { userId, clerkUserId };
+  }
+
+  /**
+   * Founder safety net invoked from the authed-request path. While no
+   * admin is known, probe the DB and promote the founder; propagate the
+   * grant into the live allowlist via ``onFounderPromoted`` so it takes
+   * effect immediately. Latches off the moment an admin exists, so this
+   * is a no-op on every steady-state request. Failures are swallowed —
+   * the env-var allowlist and the boot-time bootstrap remain as
+   * fallbacks.
+   *
+   * @returns {Promise<void>}
+   */
+  async _maybePromoteFounder() {
+    if (this._founderResolved || !this.onFounderPromoted) return;
+    // Admins already configured out-of-band (env var) or minted by an
+    // earlier grant — the first-user default doesn't apply. Latch off
+    // so we stop probing entirely.
+    if (this.hasConfiguredAdmins && this.hasConfiguredAdmins()) {
+      this._founderResolved = true;
+      return;
+    }
+    try {
+      const granted = await this.ensureFounderAdmin();
+      if (granted.length > 0) {
+        this._founderResolved = true;
+        this.onFounderPromoted(granted);
+      }
+    } catch {
+      // Non-fatal: leave the latch unset so a later request retries.
+    }
   }
 
   /**
@@ -79,9 +135,18 @@ class UsersService {
    * two instances racing at boot can't double-grant; the loser's
    * update is a no-op and both re-read the same winner.
    *
+   * When ``promote`` is false the founder is NOT auto-minted — the call
+   * only reports the Clerk ids of admins already carrying the DB role
+   * (so boot can merge hand-granted admins into the live allowlist).
+   * Callers pass ``promote: false`` when admins are already configured
+   * out-of-band (e.g. ``SC2TOOLS_ADMIN_USER_IDS``), so the first-user
+   * default doesn't mint a surprise admin on top of an explicit list.
+   *
+   * @param {{promote?: boolean}} [opts]
    * @returns {Promise<string[]>}
    */
-  async ensureFounderAdmin() {
+  async ensureFounderAdmin(opts = {}) {
+    const promote = opts.promote !== false;
     const admins = await this.db.users
       .find(
         { role: "admin" },
@@ -93,6 +158,7 @@ class UsersService {
         .map((a) => a.clerkUserId)
         .filter((c) => typeof c === "string" && c.length > 0);
     }
+    if (!promote) return [];
     // No admin on record — promote the founder. ``$type: "string"``
     // skips webhook stubs / legacy rows without a Clerk identity:
     // an admin who can't log in via Clerk would be useless.
@@ -121,6 +187,62 @@ class UsersService {
       ).catch(() => {});
     }
     return [founder.clerkUserId];
+  }
+
+  /**
+   * Grant the ``admin`` role to another user. This is the ONLY way to
+   * mint a new admin once the founder exists — the endpoint that calls
+   * it is itself gated on ``isAdmin``, so "only an admin can add other
+   * admins" holds end to end.
+   *
+   * Idempotent: re-granting an existing admin is a no-op that still
+   * returns their Clerk id (so the live allowlist can be re-seeded).
+   * Refuses targets without a Clerk identity — an admin who can't log
+   * in via Clerk would be useless — and unknown user ids.
+   *
+   * @param {string} targetUserId internal UUID of the user to promote
+   * @param {string} grantedByClerkId Clerk id of the granting admin (audit)
+   * @returns {Promise<{userId: string, clerkUserId: string}|null>}
+   *   the promoted user's identity for live-allowlist propagation, or
+   *   null when the target is missing / has no Clerk identity.
+   */
+  async grantAdmin(targetUserId, grantedByClerkId) {
+    if (typeof targetUserId !== "string" || targetUserId.length === 0) {
+      return null;
+    }
+    const target = await this.db.users.findOne(
+      { userId: targetUserId },
+      { projection: { _id: 0, userId: 1, clerkUserId: 1, role: 1 } },
+    );
+    if (!target) return null;
+    if (typeof target.clerkUserId !== "string" || target.clerkUserId.length === 0) {
+      return null;
+    }
+    if (target.role !== "admin") {
+      await this.db.users.updateOne(
+        { userId: targetUserId },
+        {
+          $set: {
+            role: "admin",
+            roleGrantedAt: new Date(),
+            roleGrantedBy:
+              typeof grantedByClerkId === "string" && grantedByClerkId
+                ? grantedByClerkId
+                : "admin_grant",
+          },
+        },
+      );
+      if (this.adminEvents) {
+        Promise.resolve(
+          this.adminEvents.record("admin_granted", {
+            userId: target.userId,
+            clerkUserId: target.clerkUserId,
+            grantedBy: grantedByClerkId || null,
+          }),
+        ).catch(() => {});
+      }
+    }
+    return { userId: target.userId, clerkUserId: target.clerkUserId };
   }
 
   /**

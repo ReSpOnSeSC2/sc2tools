@@ -117,7 +117,13 @@ function buildApp(deps) {
   // (or test harnesses calling buildApp many times in one process)
   // skip duplicate registrations.
   loadAllMigrations();
-  const services = makeServices(deps);
+  // Live admin allowlist — seeded from SC2TOOLS_ADMIN_USER_IDS and
+  // mutated in place by the founder bootstrap + admin-grant paths. Built
+  // BEFORE the services so UsersService can push founder promotions into
+  // it the instant they happen (no restart). The REST ``isAdmin`` gate
+  // and the socket layer both read this same live set.
+  const adminClerkIds = new Set(deps.config.adminUserIds || []);
+  const services = makeServices(deps, adminClerkIds);
   const clerk = deps.config.clerkSecretKey
     ? buildClerkClient({
         secretKey: deps.config.clerkSecretKey,
@@ -128,7 +134,6 @@ function buildApp(deps) {
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
   applyBaseMiddleware(app, deps);
-  const adminClerkIds = new Set(deps.config.adminUserIds || []);
   mountRoutes(app, deps, services, clerk, adminClerkIds);
   app.use(buildErrorHandler(deps.logger));
   return { app, services, adminClerkIds };
@@ -136,8 +141,11 @@ function buildApp(deps) {
 
 /**
  * @param {AppDeps} deps
+ * @param {Set<string>} [adminClerkIds] live admin allowlist; founder
+ *   promotions discovered on the authed path are pushed into it so the
+ *   ``isAdmin`` gate flips without a restart.
  */
-function makeServices(deps) {
+function makeServices(deps, adminClerkIds) {
   // Admin notification stream — wired BEFORE UsersService so the
   // user-creation paths (ensureFromClerk first-touch, webhook upsert)
   // can fire signup events without a forward reference.
@@ -146,7 +154,24 @@ function makeServices(deps) {
     io: deps.io,
     logger: deps.logger,
   });
-  const users = new UsersService(deps.db, { adminEvents });
+  const users = new UsersService(deps.db, {
+    adminEvents,
+    onFounderPromoted: adminClerkIds
+      ? (clerkIds) => {
+          for (const id of clerkIds) adminClerkIds.add(id);
+          if (deps.logger && clerkIds.length > 0) {
+            deps.logger.info(
+              { count: clerkIds.length },
+              "founder_admin_promoted_live",
+            );
+          }
+        }
+      : null,
+    // The first-user-is-admin default only kicks in when nobody is
+    // already an admin — an operator-set SC2TOOLS_ADMIN_USER_IDS (which
+    // seeds this set) opts out of auto-promotion entirely.
+    hasConfiguredAdmins: adminClerkIds ? () => adminClerkIds.size > 0 : null,
+  });
   // Pluggable backend for the per-game heavy blob. Defaults to
   // ``MongoDetailsStore`` (in-database); flips to ``R2DetailsStore``
   // when ``GAME_DETAILS_STORE=r2`` is set with the R2 connection
@@ -503,8 +528,14 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       games: services.games,
       opponents: services.opponents,
       perGame: services.perGame,
+      users: services.users,
       auth,
       isAdmin,
+      // Push freshly-granted admins into the live allowlist so their
+      // next request is authorized without waiting for a restart.
+      onAdminGranted: (clerkUserId) => {
+        if (clerkUserId) adminClerkIds.add(clerkUserId);
+      },
       gameDetailsStoreKind: deps.config.gameDetailsStore,
     }),
   );

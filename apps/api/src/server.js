@@ -83,7 +83,13 @@ async function main() {
   // DB-granted admin into the allowlist. Failures are non-fatal —
   // the env-var allowlist keeps working without it.
   try {
-    const dbAdminIds = await /** @type {any} */ (services).users.ensureFounderAdmin();
+    // Only auto-mint a founder when no admin is configured via env var
+    // (SC2TOOLS_ADMIN_USER_IDS seeds adminClerkIds at buildApp). With an
+    // explicit list set we still merge any hand-granted DB admins, but
+    // don't promote a surprise founder on top of the operator's choice.
+    const dbAdminIds = await /** @type {any} */ (services).users.ensureFounderAdmin({
+      promote: adminClerkIds.size === 0,
+    });
     for (const id of dbAdminIds) adminClerkIds.add(id);
     if (dbAdminIds.length > 0) {
       logger.info(
