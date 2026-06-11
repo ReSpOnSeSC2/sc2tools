@@ -25,7 +25,6 @@ import {
   CUSTOM_BUILD_PUT_PATH,
   toCustomBuildPayload,
 } from "@/lib/optimizer/export/toCustomBuild";
-import { stepsForMatchup } from "@/lib/optimizer/adapt/adapt";
 import type {
   AdaptResult,
   ReferenceBuild,
@@ -123,7 +122,7 @@ export function BuildSourcePanel({
         type: "standard",
         id: ref.id,
         name: ref.name,
-        steps: stepsForMatchup(ref, matchup),
+        steps: ref.steps,
         native: ref.native,
       });
     }
@@ -131,7 +130,7 @@ export function BuildSourcePanel({
       map.set(`custom:${build.slug}`, toSource(build));
     }
     return map;
-  }, [references, customBuilds, matchup]);
+  }, [references, customBuilds]);
 
   const selectedSource = sources.get(selected) ?? null;
 
@@ -275,11 +274,6 @@ export function BuildSourcePanel({
                           {ref.native}-native
                         </Badge>
                       ) : null}
-                      {ref.stepsByMatchup?.[matchup] ? (
-                        <Badge variant="signal" size="sm">
-                          {matchup} variant
-                        </Badge>
-                      ) : null}
                     </div>
                     <p className="mt-0.5 text-caption text-text-muted">
                       {ref.description}
@@ -287,13 +281,8 @@ export function BuildSourcePanel({
                     {(ref.definitionIds?.length ?? 0) > 0 ? (
                       <p className="mt-0.5 text-caption text-text-dim">
                         covers:{" "}
-                        {(ref.definitionIds ?? [])
-                          .map((id) => definitionNamesById.get(id) ?? id)
-                          .slice(0, 3)
-                          .join(" · ")}
-                        {(ref.definitionIds?.length ?? 0) > 3
-                          ? ` · +${(ref.definitionIds?.length ?? 0) - 3} more`
-                          : ""}
+                        {definitionNamesById.get(ref.definitionIds![0]) ??
+                          ref.definitionIds![0]}
                       </p>
                     ) : null}
                   </button>

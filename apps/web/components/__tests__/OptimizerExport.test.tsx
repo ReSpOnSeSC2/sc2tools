@@ -41,7 +41,7 @@ afterEach(() => {
 function makeResult(): AdaptResult {
   const profile = resolveProfile("5.0.16");
   const eightPool = threatCatalog(null).find((t) => t.id === "z-8pool")!;
-  const reference = referenceBuilds().find((b) => b.id === "p-gate-expand")!;
+  const reference = referenceBuilds().find((b) => b.id === "protoss-standard-expand")!;
   const { actions } = actionsFromSteps(profile, reference.steps);
   return adaptBuild({
     baselineProfileId: "lotv-base",

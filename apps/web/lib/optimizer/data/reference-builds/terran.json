@@ -1,33 +1,177 @@
 {
-  "version": 2,
-  "note": "Terran reference openers. Step lists are canonical orders; the sim re-times them per patch. definitionIds map each build to the /definitions catalog entries it covers.",
+  "version": 3,
+  "note": "Terran reference openers, one build per /definitions catalog entry (definitionIds has exactly one id; builds with an empty list are utility builds outside the catalog). Step lists are canonical orders; the sim re-times them per patch.",
   "builds": [
     {
-      "id": "t-reaper-111",
+      "id": "terran-1-1-1-standard",
       "name": "Reaper Expand 1-1-1",
       "race": "Terran",
       "matchups": ["TvZ", "TvT", "TvP"],
-      "description": "The terran standard: reaper expand into factory and starport, one production structure of each kind with addons.",
+      "description": "The terran standard: reaper expand into factory and starport AFTER the second command center, one production structure of each kind with addons.",
       "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "BarracksReactor", "Marine", "Marine", "SupplyDepot", "FactoryTechLab", "Cyclone", "Starport", "Marine", "Marine", "SupplyDepot", "Medivac"],
       "definitionIds": ["terran-1-1-1-standard"]
     },
     {
-      "id": "t-111-onebase",
+      "id": "terran-1-1-1-one-base",
       "name": "1-1-1 One Base",
       "race": "Terran",
       "matchups": ["TvP", "TvT"],
-      "description": "One-base rax/factory/starport pressure \u2014 no expansion until the push leaves.",
+      "description": "One-base rax/factory/starport pressure - no expansion until the push leaves.",
       "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Marine", "Factory", "Refinery", "SupplyDepot", "BarracksReactor", "Marine", "Marine", "FactoryTechLab", "SiegeTank", "Starport", "SupplyDepot", "Marine", "Marine", "SiegeTank", "Medivac"],
       "definitionIds": ["terran-1-1-1-one-base"]
     },
     {
-      "id": "t-211",
-      "name": "2-1-1 Marine Drop",
+      "id": "terran-2-gas-3-reaper-2-hellion",
+      "name": "2 Gas 3 Reaper 2 Hellion",
+      "race": "Terran",
+      "matchups": ["TvT", "TvZ"],
+      "description": "Double-gas reaper trio into hellions before 5:30 - the classic TvT/TvZ harass opener.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Reaper", "SupplyDepot", "Reaper", "Hellion", "CommandCenter", "Hellion", "SupplyDepot", "Marine"],
+      "definitionIds": ["terran-2-gas-3-reaper-2-hellion"]
+    },
+    {
+      "id": "terran-2-3-rax-reaper-rush",
+      "name": "2-3 Rax Reaper Rush",
+      "race": "Terran",
+      "matchups": ["TvT", "TvZ", "TvP"],
+      "description": "Three barracks off a single command center pumping only reapers for early harassment; the expansion waits until the pressure is committed.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Barracks", "Reaper", "OrbitalCommand", "Reaper", "SupplyDepot", "Refinery", "Barracks", "Reaper", "Reaper", "SupplyDepot", "Reaper", "Reaper", "CommandCenter"],
+      "definitionIds": ["terran-2-3-rax-reaper-rush"]
+    },
+    {
+      "id": "terran-3-rax",
+      "name": "3 Rax",
+      "race": "Terran",
+      "matchups": ["TvP", "TvZ", "TvT"],
+      "description": "Three barracks of stimmed bio off two bases - the barracks land after the second command center and before any other tech.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Barracks", "BarracksTechLab", "Stimpack", "Barracks", "Marine", "Marine", "SupplyDepot", "BarracksReactor", "Marine", "Marine", "CombatShield", "SupplyDepot", "Marine", "Marine", "Marine", "SupplyDepot", "Marine"],
+      "definitionIds": ["terran-3-rax"]
+    },
+    {
+      "id": "terran-3-4-rax-marine-rush",
+      "name": "3-4 Rax Marine Rush",
+      "race": "Terran",
+      "matchups": ["TvP", "TvZ", "TvT"],
+      "description": "Gas-less mass marines off one base with constant production from up to four barracks.",
+      "steps": ["SupplyDepot", "Barracks", "Marine", "OrbitalCommand", "Barracks", "Marine", "SupplyDepot", "Barracks", "Marine", "Marine", "Barracks", "Marine", "Marine", "SupplyDepot", "Marine", "Marine", "SupplyDepot", "Marine", "Marine"],
+      "definitionIds": ["terran-3-4-rax-marine-rush"]
+    },
+    {
+      "id": "terran-bc-rush",
+      "name": "BC Rush",
+      "race": "Terran",
+      "matchups": ["TvT", "TvZ", "TvP"],
+      "description": "One-base fusion core tech before 6:30; the first battlecruiser warps into the mineral line.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Refinery", "OrbitalCommand", "Factory", "SupplyDepot", "Marine", "Starport", "StarportTechLab", "FusionCore", "SupplyDepot", "Battlecruiser", "Marine", "SupplyDepot", "Battlecruiser"],
+      "definitionIds": ["terran-bc-rush"]
+    },
+    {
+      "id": "terran-banshee-rush",
+      "name": "Banshee Rush (Cloak)",
+      "race": "Terran",
+      "matchups": ["TvT", "TvZ", "TvP"],
+      "description": "1-1-1 into cloaked banshees (cloak before 7:30) on the worker line.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "SupplyDepot", "Marine", "Starport", "StarportTechLab", "Banshee", "CloakingField", "SupplyDepot", "Banshee", "Marine", "SupplyDepot", "Banshee"],
+      "definitionIds": ["terran-banshee-rush"]
+    },
+    {
+      "id": "terran-cyclone-rush",
+      "name": "Cyclone Rush",
+      "race": "Terran",
+      "matchups": ["TvT", "TvP"],
+      "description": "Fast factory cyclones before 5:30 to lock onto everything that pokes out.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "SupplyDepot", "FactoryTechLab", "Cyclone", "Marine", "Cyclone", "SupplyDepot", "CommandCenter", "Cyclone", "Marine", "SupplyDepot", "Cyclone"],
+      "definitionIds": ["terran-cyclone-rush"]
+    },
+    {
+      "id": "terran-fast-3-cc",
+      "name": "Fast 3 CC",
       "race": "Terran",
       "matchups": ["TvZ", "TvP"],
-      "description": "Two barracks with reactor + tech lab, stim started, factory into starport for the 16-marine double medivac drop.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Marine", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Barracks", "BarracksReactor", "Marine", "Marine", "BarracksTechLab", "Stimpack", "SupplyDepot", "Factory", "Marine", "Marine", "SupplyDepot", "Starport", "Marine", "Marine", "Medivac", "Medivac", "CombatShield"],
-      "definitionIds": ["tvz-2-1-1-marine-drop", "tvp-2-1-1-reaper-expand"]
+      "description": "Three command centers before 7:00 and before heavy production - maximum greed into bio.",
+      "steps": ["SupplyDepot", "Barracks", "Marine", "OrbitalCommand", "CommandCenter", "Marine", "SupplyDepot", "CommandCenter", "Refinery", "Marine", "Barracks", "SupplyDepot", "BarracksReactor", "Marine", "Marine", "EngineeringBay", "Refinery", "Marine", "Marine", "SupplyDepot", "BarracksTechLab", "Stimpack"],
+      "definitionIds": ["terran-fast-3-cc"]
+    },
+    {
+      "id": "terran-ghost-rush",
+      "name": "Ghost Rush",
+      "race": "Terran",
+      "matchups": ["TvT", "TvP"],
+      "description": "Ghost academy within the first 6:30; cloaked ghosts snipe workers and key units.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Refinery", "OrbitalCommand", "Marine", "GhostAcademy", "BarracksTechLab", "SupplyDepot", "Ghost", "PersonalCloaking", "Marine", "SupplyDepot", "Ghost", "Ghost"],
+      "definitionIds": ["terran-ghost-rush"]
+    },
+    {
+      "id": "terran-hellbat-all-in",
+      "name": "Hellbat All-in",
+      "race": "Terran",
+      "matchups": ["TvT", "TvZ"],
+      "description": "Double factory hellbats with a fast armory (before 5:00) crashing the front - blue flame thor support behind.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Factory", "Refinery", "Armory", "Factory", "Hellion", "SupplyDepot", "Hellion", "Hellion", "Hellion", "SupplyDepot", "Hellion", "Hellion", "FactoryTechLab", "Thor"],
+      "definitionIds": ["terran-hellbat-all-in"]
+    },
+    {
+      "id": "terran-proxy-1-1-1",
+      "name": "Proxy 1-1-1",
+      "race": "Terran",
+      "matchups": ["TvT", "TvP"],
+      "description": "Factory and starport proxied (positioning not simulated) for sudden tank/banshee pressure.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "SupplyDepot", "Starport", "FactoryTechLab", "SiegeTank", "Marine", "SupplyDepot", "StarportTechLab", "Banshee", "SiegeTank"],
+      "definitionIds": ["terran-proxy-1-1-1"]
+    },
+    {
+      "id": "terran-proxy-starport-hellion-drop",
+      "name": "Proxy Starport Hellion Drop",
+      "race": "Terran",
+      "matchups": ["TvT", "TvZ"],
+      "description": "Expanding proxy starport: second command center taken, two hellions by 6:00, and a medivac as the FIRST starport unit ferries the hellions into the opponent's mineral line (Yoon-style).",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Factory", "Refinery", "Hellion", "Starport", "Hellion", "Medivac", "SupplyDepot", "Hellion", "Hellion", "Medivac"],
+      "definitionIds": ["terran-proxy-starport-hellion-drop"]
+    },
+    {
+      "id": "terran-proxy-rax",
+      "name": "Proxy Rax",
+      "race": "Terran",
+      "matchups": ["TvT", "TvP", "TvZ"],
+      "description": "Barracks hidden near the opponent before 4:30 (positioning not simulated) for the earliest possible marine pressure.",
+      "steps": ["SupplyDepot", "Barracks", "Barracks", "Marine", "Marine", "SupplyDepot", "Marine", "Marine", "Refinery", "OrbitalCommand", "Marine", "Marine"],
+      "definitionIds": ["terran-proxy-rax"]
+    },
+    {
+      "id": "terran-standard-bio-tank",
+      "name": "Standard Bio Tank",
+      "race": "Terran",
+      "matchups": ["TvP", "TvT", "TvZ"],
+      "description": "The full macro line: three command centers, engineering bay upgrades, and tanks with medivacs behind a stimmed bio core.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "BarracksTechLab", "Stimpack", "Marine", "FactoryTechLab", "SiegeTank", "EngineeringBay", "SupplyDepot", "TerranInfantryWeaponsLevel1", "Starport", "Marine", "Marine", "CommandCenter", "SiegeTank", "SupplyDepot", "Medivac", "Marine", "Marine", "SupplyDepot", "SiegeTank", "Medivac"],
+      "definitionIds": ["terran-standard-bio-tank"]
+    },
+    {
+      "id": "terran-widow-mine-drop",
+      "name": "Widow Mine Drop",
+      "race": "Terran",
+      "matchups": ["TvP", "TvZ", "TvT"],
+      "description": "Factory mines after the second command center, loaded into a fast medivac over the mineral line within 6:30.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "WidowMine", "Starport", "WidowMine", "SupplyDepot", "Medivac", "Marine", "Marine", "SupplyDepot", "WidowMine", "Marine"],
+      "definitionIds": ["terran-widow-mine-drop"]
+    },
+    {
+      "id": "terran-widow-mine-drop-into-thor-rush",
+      "name": "Widow Mine Drop into Thor Rush",
+      "race": "Terran",
+      "matchups": ["TvT", "TvZ"],
+      "description": "Mine drop opener (medivac + mines after the second command center) flowing into armory thors before ~8:10.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "WidowMine", "Starport", "WidowMine", "Medivac", "SupplyDepot", "Armory", "FactoryTechLab", "Thor", "Marine", "SupplyDepot", "Thor"],
+      "definitionIds": ["terran-widow-mine-drop-into-thor-rush"]
+    },
+    {
+      "id": "terran-widow-upgraded-mine-cheese",
+      "name": "Upgraded Mine Cheese",
+      "race": "Terran",
+      "matchups": ["TvT", "TvZ"],
+      "description": "One-base cheese: drilling-claws widow mines and a medivac BEFORE any second command center - the mines drop before detection is out.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "FactoryTechLab", "WidowMine", "DrillingClaws", "SupplyDepot", "WidowMine", "Starport", "WidowMine", "Marine", "SupplyDepot", "Medivac", "WidowMine"],
+      "definitionIds": ["terran-widow-upgraded-mine-cheese"]
     },
     {
       "id": "t-1rax-gasless",
@@ -39,205 +183,142 @@
       "definitionIds": []
     },
     {
-      "id": "t-3rax",
-      "name": "3 Rax",
-      "race": "Terran",
-      "matchups": ["TvP", "TvZ", "TvT"],
-      "description": "Three barracks of stimmed bio off two bases.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Barracks", "BarracksTechLab", "Stimpack", "Barracks", "Marine", "Marine", "SupplyDepot", "BarracksReactor", "Marine", "Marine", "CombatShield", "SupplyDepot", "Marine", "Marine", "Marine", "SupplyDepot", "Marine"],
-      "definitionIds": ["terran-3-rax", "tvp-3-rax-marine", "tvz-3-rax-marine", "tvt-3-rax-marine"]
-    },
-    {
-      "id": "t-2rax-reaper",
-      "name": "2-3 Rax Reaper Rush",
-      "race": "Terran",
-      "matchups": ["TvT", "TvZ", "TvP"],
-      "description": "Multiple barracks pumping only reapers for early harassment.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Barracks", "Reaper", "OrbitalCommand", "Reaper", "SupplyDepot", "Refinery", "Barracks", "Reaper", "Reaper", "SupplyDepot", "Reaper", "Reaper", "CommandCenter"],
-      "definitionIds": ["terran-2-3-rax-reaper-rush"]
-    },
-    {
-      "id": "t-proxy-4rax-reaper",
+      "id": "tvp-proxy-4-rax-reaper",
       "name": "Proxy 4 Rax Reaper",
       "race": "Terran",
-      "matchups": ["TvP", "TvZ", "TvT"],
-      "description": "Four proxied barracks (positioning not simulated) mass-producing reapers.",
+      "matchups": ["TvP"],
+      "description": "Four proxied barracks (positioning not simulated) mass-producing reapers into the protoss wall.",
       "steps": ["SupplyDepot", "Barracks", "Refinery", "Barracks", "Barracks", "Refinery", "Barracks", "Reaper", "Reaper", "SupplyDepot", "Reaper", "Reaper", "Reaper", "Reaper", "SupplyDepot", "Reaper", "Reaper"],
-      "definitionIds": ["tvp-proxy-4-rax-reaper", "tvz-proxy-4-rax-reaper", "tvt-proxy-4-rax-reaper"]
+      "definitionIds": ["tvp-proxy-4-rax-reaper"]
     },
     {
-      "id": "t-4rax-marine",
-      "name": "3-4 Rax Marine Rush",
-      "race": "Terran",
-      "matchups": ["TvP", "TvZ", "TvT"],
-      "description": "Mass marines off one base with constant production from up to four barracks.",
-      "steps": ["SupplyDepot", "Barracks", "Marine", "OrbitalCommand", "Barracks", "Marine", "SupplyDepot", "Barracks", "Marine", "Marine", "Barracks", "Marine", "Marine", "SupplyDepot", "Marine", "Marine", "SupplyDepot", "Marine", "Marine"],
-      "definitionIds": ["terran-3-4-rax-marine-rush"]
-    },
-    {
-      "id": "t-proxy-rax",
-      "name": "Proxy Rax",
-      "race": "Terran",
-      "matchups": ["TvT", "TvP", "TvZ"],
-      "description": "Barracks hidden near the opponent (positioning not simulated) for the earliest possible marine or reaper pressure.",
-      "steps": ["SupplyDepot", "Barracks", "Barracks", "Marine", "Marine", "SupplyDepot", "Marine", "Marine", "Refinery", "OrbitalCommand", "Marine", "Marine"],
-      "definitionIds": ["terran-proxy-rax"]
-    },
-    {
-      "id": "t-proxy-marauder",
+      "id": "tvp-proxy-marauder",
       "name": "Proxy Marauder",
       "race": "Terran",
-      "matchups": ["TvP", "TvT"],
-      "description": "Proxied tech-lab barracks producing marauders with concussive shells.",
+      "matchups": ["TvP"],
+      "description": "Proxied tech-lab barracks producing concussive-shell marauders into the protoss wall.",
       "steps": ["SupplyDepot", "Barracks", "Refinery", "Barracks", "BarracksTechLab", "Marauder", "ConcussiveShells", "SupplyDepot", "Marauder", "BarracksTechLab", "Marauder", "Marauder", "SupplyDepot", "Marauder"],
-      "definitionIds": ["tvp-proxy-marauder", "tvt-proxy-marauder"]
+      "definitionIds": ["tvp-proxy-marauder"]
     },
     {
-      "id": "t-bc-rush",
+      "id": "tvp-cyclone-push",
+      "name": "Cyclone Push",
+      "race": "Terran",
+      "matchups": ["TvP"],
+      "description": "Early factory cyclones off two bases locking onto adepts and stalkers as they poke out.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "SupplyDepot", "FactoryTechLab", "Cyclone", "Marine", "Cyclone", "SupplyDepot", "CommandCenter", "Cyclone", "Marine", "SupplyDepot", "Cyclone"],
+      "definitionIds": ["tvp-cyclone-push"]
+    },
+    {
+      "id": "tvp-1-1-1-cloak-banshee",
+      "name": "1-1-1 Cloak Banshee",
+      "race": "Terran",
+      "matchups": ["TvP"],
+      "description": "Factory and starport before any expansion: one-base cloak banshees on the protoss probe line before observers are out.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "SupplyDepot", "Marine", "Starport", "StarportTechLab", "Banshee", "CloakingField", "SupplyDepot", "Banshee", "Marine", "SupplyDepot", "Banshee"],
+      "definitionIds": ["tvp-1-1-1-cloak-banshee"]
+    },
+    {
+      "id": "tvp-3-rax-marine",
+      "name": "3 Rax Marine",
+      "race": "Terran",
+      "matchups": ["TvP"],
+      "description": "Three barracks off one base flooding marines with no factory - a gas-light marine all-in vs protoss.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Marine", "OrbitalCommand", "Barracks", "Marine", "SupplyDepot", "Barracks", "BarracksTechLab", "Marine", "Stimpack", "Marine", "BarracksReactor", "SupplyDepot", "Marine", "Marine", "Marine", "SupplyDepot", "Marine", "Marine", "Marine"],
+      "definitionIds": ["tvp-3-rax-marine"]
+    },
+    {
+      "id": "tvp-battlecruiser-rush",
       "name": "Battlecruiser Rush",
       "race": "Terran",
-      "matchups": ["TvT", "TvZ", "TvP"],
-      "description": "One-base fusion core tech; the first battlecruiser warps into the mineral line.",
+      "matchups": ["TvP"],
+      "description": "Fast fusion core into the first battlecruiser warping onto the protoss probe line.",
       "steps": ["SupplyDepot", "Barracks", "Refinery", "Refinery", "OrbitalCommand", "Factory", "SupplyDepot", "Marine", "Starport", "StarportTechLab", "FusionCore", "SupplyDepot", "Battlecruiser", "Marine", "SupplyDepot", "Battlecruiser"],
-      "definitionIds": ["terran-bc-rush", "tvp-battlecruiser-rush", "tvz-battlecruiser-mech", "tvt-battlecruiser-rush"]
+      "definitionIds": ["tvp-battlecruiser-rush"]
     },
     {
-      "id": "t-banshee",
-      "name": "Banshee Rush (Cloak)",
+      "id": "tvp-tank-thor-mech",
+      "name": "Tank/Thor Mech",
       "race": "Terran",
-      "matchups": ["TvT", "TvZ", "TvP"],
-      "description": "1-1-1 into cloaked banshees on the worker line.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "SupplyDepot", "Marine", "Starport", "StarportTechLab", "Banshee", "CloakingField", "SupplyDepot", "Banshee", "Marine", "SupplyDepot", "Banshee"],
-      "definitionIds": ["terran-banshee-rush", "tvz-1-1-1-banshee", "tvp-1-1-1-cloak-banshee", "tvt-1-1-1-cloak-banshee"]
+      "matchups": ["TvP"],
+      "description": "Armory-backed thors and siege tanks off two bases - the positional mech composition vs protoss.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "FactoryTechLab", "SiegeTank", "Armory", "SupplyDepot", "Refinery", "SiegeTank", "Factory", "SupplyDepot", "Thor", "FactoryTechLab", "SiegeTank", "SupplyDepot", "Thor"],
+      "definitionIds": ["tvp-tank-thor-mech"]
     },
     {
-      "id": "t-cyclone",
-      "name": "Cyclone Rush",
-      "race": "Terran",
-      "matchups": ["TvT", "TvP"],
-      "description": "Fast factory cyclones to lock onto everything that pokes out.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "SupplyDepot", "Cyclone", "Marine", "Cyclone", "SupplyDepot", "CommandCenter", "Cyclone", "Marine", "SupplyDepot", "Cyclone"],
-      "definitionIds": ["terran-cyclone-rush", "tvp-cyclone-push", "tvt-cyclone-push"]
-    },
-    {
-      "id": "t-fast-3cc",
-      "name": "Fast 3 CC",
-      "race": "Terran",
-      "matchups": ["TvZ", "TvP"],
-      "description": "Three command centers before heavy production \u2014 maximum greed into bio.",
-      "steps": ["SupplyDepot", "Barracks", "Marine", "OrbitalCommand", "CommandCenter", "Marine", "SupplyDepot", "CommandCenter", "Refinery", "Marine", "Barracks", "SupplyDepot", "BarracksReactor", "Marine", "Marine", "EngineeringBay", "Refinery", "Marine", "Marine", "SupplyDepot", "BarracksTechLab", "Stimpack"],
-      "definitionIds": ["terran-fast-3-cc", "tvz-3-cc-bio", "tvp-fast-3-cc-bio"]
-    },
-    {
-      "id": "t-ghost-rush",
-      "name": "Ghost Rush",
-      "race": "Terran",
-      "matchups": ["TvT", "TvP"],
-      "description": "Fast ghost academy; cloaked ghosts snipe workers and key units.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Refinery", "OrbitalCommand", "Marine", "GhostAcademy", "BarracksTechLab", "SupplyDepot", "Ghost", "PersonalCloaking", "Marine", "SupplyDepot", "Ghost", "Ghost"],
-      "definitionIds": ["terran-ghost-rush"]
-    },
-    {
-      "id": "t-hellbat-allin",
-      "name": "Hellbat All-in",
-      "race": "Terran",
-      "matchups": ["TvT", "TvZ"],
-      "description": "Double factory hellbats (with armory for blue flame thors behind) crashing the front.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "Factory", "SupplyDepot", "Hellion", "Hellion", "Armory", "Hellion", "Hellion", "SupplyDepot", "Hellion", "Hellion", "FactoryTechLab", "Thor"],
-      "definitionIds": ["terran-hellbat-all-in", "tvz-2-base-hellbat-thor"]
-    },
-    {
-      "id": "t-proxy-111",
-      "name": "Proxy 1-1-1",
-      "race": "Terran",
-      "matchups": ["TvT", "TvP"],
-      "description": "Factory and starport proxied (positioning not simulated) for sudden tank/banshee pressure.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "SupplyDepot", "Starport", "FactoryTechLab", "SiegeTank", "Marine", "SupplyDepot", "StarportTechLab", "Banshee", "SiegeTank"],
-      "definitionIds": ["terran-proxy-1-1-1"]
-    },
-    {
-      "id": "t-proxy-starport-hellion",
-      "name": "Proxy Starport Hellion Drop",
-      "race": "Terran",
-      "matchups": ["TvT", "TvZ"],
-      "description": "Hellions loaded into a medivac from a hidden starport, dropped in the main.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "SupplyDepot", "Hellion", "Starport", "Hellion", "Medivac", "SupplyDepot", "Hellion", "Hellion", "Medivac"],
-      "definitionIds": ["terran-proxy-starport-hellion-drop"]
-    },
-    {
-      "id": "t-widow-mine-drop",
+      "id": "tvp-widow-mine-drop",
       "name": "Widow Mine Drop",
       "race": "Terran",
-      "matchups": ["TvP", "TvZ", "TvT"],
-      "description": "Factory mines in a fast medivac over the mineral line.",
+      "matchups": ["TvP"],
+      "description": "Marine ball with widow mines and a medivac running mobile mine drops into the protoss mineral lines.",
       "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "WidowMine", "Starport", "WidowMine", "SupplyDepot", "Medivac", "Marine", "Marine", "SupplyDepot", "WidowMine", "Marine"],
-      "definitionIds": ["terran-widow-mine-drop", "tvp-widow-mine-drop", "tvz-widow-mine-marine"]
+      "definitionIds": ["tvp-widow-mine-drop"]
     },
     {
-      "id": "t-mine-thor",
-      "name": "Widow Mine Drop into Thor Rush",
+      "id": "tvp-2-1-1-reaper-expand",
+      "name": "2-1-1 Reaper Expand",
       "race": "Terran",
-      "matchups": ["TvT", "TvZ"],
-      "description": "Mine drop opener flowing into armory thors.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "WidowMine", "Starport", "WidowMine", "Medivac", "SupplyDepot", "Armory", "FactoryTechLab", "Thor", "Marine", "SupplyDepot", "Thor"],
-      "definitionIds": ["terran-widow-mine-drop-into-thor-rush"]
+      "matchups": ["TvP"],
+      "description": "Reaper-first scout into a single expansion (no fast third), two barracks with reactor + tech lab, stim started, factory into starport for the medivac-drop bio timing off two bases.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Barracks", "BarracksReactor", "Marine", "Marine", "BarracksTechLab", "Stimpack", "SupplyDepot", "Factory", "Marine", "Marine", "SupplyDepot", "Starport", "Marine", "Marine", "Medivac", "Medivac", "CombatShield"],
+      "definitionIds": ["tvp-2-1-1-reaper-expand"]
     },
     {
-      "id": "t-mine-cheese",
-      "name": "Upgraded Mine Cheese",
-      "race": "Terran",
-      "matchups": ["TvT", "TvZ"],
-      "description": "Drilling-claws widow mines planted aggressively before detection is out.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "FactoryTechLab", "WidowMine", "DrillingClaws", "SupplyDepot", "WidowMine", "WidowMine", "Marine", "SupplyDepot", "WidowMine"],
-      "definitionIds": ["terran-widow-upgraded-mine-cheese"]
-    },
-    {
-      "id": "t-2gas-3reaper-2hellion",
-      "name": "2 Gas 3 Reaper 2 Hellion",
-      "race": "Terran",
-      "matchups": ["TvT", "TvZ"],
-      "description": "Double-gas reaper trio into hellions \u2014 the classic TvT/TvZ harass opener.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Reaper", "SupplyDepot", "Reaper", "Hellion", "CommandCenter", "Hellion", "SupplyDepot", "Marine"],
-      "definitionIds": ["terran-2-gas-3-reaper-2-hellion"]
-    },
-    {
-      "id": "t-reaper-hellion-expand",
-      "name": "Reaper Hellion Expand",
-      "race": "Terran",
-      "matchups": ["TvZ"],
-      "description": "Reaper expand with hellion follow-up for ling control and creep denial.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Factory", "Marine", "Refinery", "Hellion", "Hellion", "SupplyDepot", "Hellion", "Hellion", "Starport", "Marine", "SupplyDepot", "Medivac"],
-      "definitionIds": ["tvz-reaper-hellion-expand"]
-    },
-    {
-      "id": "t-211-hellbat",
-      "name": "2-1-1 Marine Hellbat Timing",
-      "race": "Terran",
-      "matchups": ["TvZ"],
-      "description": "Marine drop pressure with hellbats converted at the timing.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Marine", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Barracks", "BarracksReactor", "Marine", "Marine", "Factory", "SupplyDepot", "Marine", "Marine", "Armory", "Starport", "Hellion", "Hellion", "SupplyDepot", "Medivac", "Marine", "Marine"],
-      "definitionIds": ["tvz-2-1-1-marine-hellbat-timing"]
-    },
-    {
-      "id": "t-hellion-liberator",
-      "name": "Hellion Liberator",
-      "race": "Terran",
-      "matchups": ["TvZ"],
-      "description": "Hellion map control plus liberators over the mineral lines.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Factory", "Marine", "Refinery", "Hellion", "Hellion", "Starport", "SupplyDepot", "Hellion", "Hellion", "Liberator", "SupplyDepot", "Marine", "Liberator"],
-      "definitionIds": ["tvz-hellion-liberator"]
-    },
-    {
-      "id": "t-2base-tank",
+      "id": "tvp-2-base-tank-push",
       "name": "2 Base Tank Push",
       "race": "Terran",
-      "matchups": ["TvP", "TvT"],
-      "description": "Bio-tank off two bases pushing when the third tank is out.",
-      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "FactoryTechLab", "Marine", "SiegeTank", "BarracksReactor", "SupplyDepot", "Marine", "Marine", "SiegeTank", "SupplyDepot", "Marine", "Marine", "SiegeTank", "SupplyDepot", "Marine"],
-      "definitionIds": ["tvp-2-base-tank-push", "terran-standard-bio-tank", "tvp-tank-thor-mech", "tvt-tank-thor-mech"]
+      "matchups": ["TvP"],
+      "description": "Bio-tank off two bases with a starport behind it, pushing when the third tank is out.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "FactoryTechLab", "Marine", "SiegeTank", "BarracksReactor", "SupplyDepot", "Starport", "Marine", "Marine", "SiegeTank", "SupplyDepot", "Marine", "Marine", "SiegeTank", "Medivac", "SupplyDepot", "Marine"],
+      "definitionIds": ["tvp-2-base-tank-push"]
     },
     {
-      "id": "t-banshee-raven",
+      "id": "tvp-fast-3-cc-bio",
+      "name": "Fast 3 CC Bio",
+      "race": "Terran",
+      "matchups": ["TvP"],
+      "description": "Three command centers by 6:00 behind three-plus barracks of marine/marauder with no mech tech - the greedy macro bio opening vs protoss.",
+      "steps": ["SupplyDepot", "Barracks", "Marine", "OrbitalCommand", "CommandCenter", "Marine", "SupplyDepot", "CommandCenter", "Refinery", "Marine", "Barracks", "SupplyDepot", "BarracksReactor", "Marine", "Marine", "Barracks", "EngineeringBay", "Refinery", "Marine", "Marine", "SupplyDepot", "BarracksTechLab", "Stimpack", "Marauder", "Marine", "SupplyDepot", "Marine", "Marine"],
+      "definitionIds": ["tvp-fast-3-cc-bio"]
+    },
+    {
+      "id": "tvt-proxy-4-rax-reaper",
+      "name": "Proxy 4 Rax Reaper",
+      "race": "Terran",
+      "matchups": ["TvT"],
+      "description": "Four proxied barracks (positioning not simulated) mass-producing reapers in TvT.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Barracks", "Barracks", "Refinery", "Barracks", "Reaper", "Reaper", "SupplyDepot", "Reaper", "Reaper", "Reaper", "Reaper", "SupplyDepot", "Reaper", "Reaper"],
+      "definitionIds": ["tvt-proxy-4-rax-reaper"]
+    },
+    {
+      "id": "tvt-proxy-marauder",
+      "name": "Proxy Marauder",
+      "race": "Terran",
+      "matchups": ["TvT"],
+      "description": "Proxied tech-lab barracks producing concussive-shell marauders into the enemy terran's base.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Barracks", "BarracksTechLab", "Marauder", "ConcussiveShells", "SupplyDepot", "Marauder", "BarracksTechLab", "Marauder", "Marauder", "SupplyDepot", "Marauder"],
+      "definitionIds": ["tvt-proxy-marauder"]
+    },
+    {
+      "id": "tvt-cyclone-push",
+      "name": "Cyclone Push",
+      "race": "Terran",
+      "matchups": ["TvT"],
+      "description": "Early factory cyclones off two or fewer bases - lock-on punishes the first tank or hellion that pokes out.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "SupplyDepot", "FactoryTechLab", "Cyclone", "Marine", "Cyclone", "SupplyDepot", "CommandCenter", "Cyclone", "Marine", "SupplyDepot", "Cyclone"],
+      "definitionIds": ["tvt-cyclone-push"]
+    },
+    {
+      "id": "tvt-1-1-1-cloak-banshee",
+      "name": "1-1-1 Cloak Banshee",
+      "race": "Terran",
+      "matchups": ["TvT"],
+      "description": "Factory and starport before any expansion: the classic one-base cloak banshee harass on the enemy SCV line.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "SupplyDepot", "Marine", "Starport", "StarportTechLab", "Banshee", "CloakingField", "SupplyDepot", "Banshee", "Marine", "SupplyDepot", "Banshee"],
+      "definitionIds": ["tvt-1-1-1-cloak-banshee"]
+    },
+    {
+      "id": "tvt-banshee-into-raven",
       "name": "Banshee into Raven",
       "race": "Terran",
       "matchups": ["TvT"],
@@ -246,31 +327,157 @@
       "definitionIds": ["tvt-banshee-into-raven"]
     },
     {
-      "id": "t-reaper-tank-viking",
+      "id": "tvt-battlecruiser-rush",
+      "name": "Battlecruiser Rush",
+      "race": "Terran",
+      "matchups": ["TvT"],
+      "description": "Fast fusion core into the first battlecruiser warping onto the enemy SCV line.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Refinery", "OrbitalCommand", "Factory", "SupplyDepot", "Marine", "Starport", "StarportTechLab", "FusionCore", "SupplyDepot", "Battlecruiser", "Marine", "SupplyDepot", "Battlecruiser"],
+      "definitionIds": ["tvt-battlecruiser-rush"]
+    },
+    {
+      "id": "tvt-tank-thor-mech",
+      "name": "Tank/Thor Mech",
+      "race": "Terran",
+      "matchups": ["TvT"],
+      "description": "Armory-backed thors and siege tanks - the positional TvT mech composition off two bases.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "FactoryTechLab", "SiegeTank", "Armory", "SupplyDepot", "Refinery", "SiegeTank", "Factory", "SupplyDepot", "Thor", "FactoryTechLab", "SiegeTank", "SupplyDepot", "Thor"],
+      "definitionIds": ["tvt-tank-thor-mech"]
+    },
+    {
+      "id": "tvt-reaper-expand-into-tank-viking",
       "name": "Reaper Expand into Tank/Viking",
       "race": "Terran",
       "matchups": ["TvT"],
-      "description": "The TvT standard: reaper expand, siege tanks for the ground, vikings for the air.",
+      "description": "The TvT standard: reaper expand, siege tanks for the ground, vikings for the air control that decides the contain.",
       "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "FactoryTechLab", "Marine", "SiegeTank", "Starport", "SupplyDepot", "SiegeTank", "Viking", "SupplyDepot", "Marine", "SiegeTank", "Viking"],
       "definitionIds": ["tvt-reaper-expand-into-tank-viking"]
     },
     {
-      "id": "t-211-marine-tank",
+      "id": "tvt-2-1-1-marine-tank",
       "name": "2-1-1 Marine Tank",
       "race": "Terran",
-      "matchups": ["TvT", "TvZ"],
-      "description": "Two-rax marines with sieged tanks for the push instead of pure drop play.",
+      "matchups": ["TvT"],
+      "description": "Two-rax marines with sieged tanks off two bases for the push - medivacs, no vikings.",
       "steps": ["SupplyDepot", "Barracks", "Refinery", "Marine", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Barracks", "BarracksReactor", "Marine", "Marine", "Factory", "FactoryTechLab", "SupplyDepot", "Marine", "Marine", "SiegeTank", "Starport", "SupplyDepot", "Marine", "Marine", "SiegeTank", "Medivac"],
       "definitionIds": ["tvt-2-1-1-marine-tank"]
     },
     {
-      "id": "t-mass-viking",
+      "id": "tvt-3-rax-marine",
+      "name": "3 Rax Marine",
+      "race": "Terran",
+      "matchups": ["TvT"],
+      "description": "Three barracks off one base flooding marines with no factory - a gas-light TvT marine all-in.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Marine", "OrbitalCommand", "Barracks", "Marine", "SupplyDepot", "Barracks", "BarracksTechLab", "Marine", "Stimpack", "Marine", "BarracksReactor", "SupplyDepot", "Marine", "Marine", "Marine", "SupplyDepot", "Marine", "Marine", "Marine"],
+      "definitionIds": ["tvt-3-rax-marine"]
+    },
+    {
+      "id": "tvt-mass-viking-air",
       "name": "Mass Viking Air",
       "race": "Terran",
       "matchups": ["TvT"],
       "description": "Double starport vikings to own TvT airspace.",
       "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "Starport", "Marine", "Starport", "SupplyDepot", "Viking", "Viking", "SupplyDepot", "Viking", "Viking", "SupplyDepot", "Viking", "Viking"],
       "definitionIds": ["tvt-mass-viking-air"]
+    },
+    {
+      "id": "tvz-proxy-4-rax-reaper",
+      "name": "Proxy 4 Rax Reaper",
+      "race": "Terran",
+      "matchups": ["TvZ"],
+      "description": "Four proxied barracks (positioning not simulated) mass-producing reapers before the zerg's lings can answer.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Barracks", "Barracks", "Refinery", "Barracks", "Reaper", "Reaper", "SupplyDepot", "Reaper", "Reaper", "Reaper", "Reaper", "SupplyDepot", "Reaper", "Reaper"],
+      "definitionIds": ["tvz-proxy-4-rax-reaper"]
+    },
+    {
+      "id": "tvz-1-1-1-banshee",
+      "name": "1-1-1 Banshee",
+      "race": "Terran",
+      "matchups": ["TvZ"],
+      "description": "Factory and starport before any expansion: one-base cloak banshees over the drone line before spores are up.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "Factory", "Refinery", "SupplyDepot", "Marine", "Starport", "StarportTechLab", "Banshee", "CloakingField", "SupplyDepot", "Banshee", "Marine", "SupplyDepot", "Banshee"],
+      "definitionIds": ["tvz-1-1-1-banshee"]
+    },
+    {
+      "id": "tvz-3-rax-marine",
+      "name": "3 Rax Marine",
+      "race": "Terran",
+      "matchups": ["TvZ"],
+      "description": "Three barracks off a single base producing a marine flood with no factory - hits before banes are massed.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Marine", "OrbitalCommand", "Barracks", "Marine", "SupplyDepot", "Barracks", "BarracksTechLab", "Marine", "Stimpack", "Marine", "BarracksReactor", "SupplyDepot", "Marine", "Marine", "Marine", "SupplyDepot", "Marine", "Marine", "Marine"],
+      "definitionIds": ["tvz-3-rax-marine"]
+    },
+    {
+      "id": "tvz-reaper-hellion-expand",
+      "name": "Reaper Hellion Expand",
+      "race": "Terran",
+      "matchups": ["TvZ"],
+      "description": "Reaper-first scout and early hellions backing a fast expansion before any air or mech-upgrade tech - ling control and creep denial.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Factory", "Marine", "Refinery", "Hellion", "Hellion", "SupplyDepot", "Hellion", "Hellion", "Starport", "Marine", "SupplyDepot", "Medivac"],
+      "definitionIds": ["tvz-reaper-hellion-expand"]
+    },
+    {
+      "id": "tvz-2-base-hellbat-thor",
+      "name": "2 Base Hellbat Thor",
+      "race": "Terran",
+      "matchups": ["TvZ"],
+      "description": "Armory and two factories producing thors behind a wall of hellions/hellbats off two bases - the 2-base mech timing vs zerg.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "Factory", "Armory", "Hellion", "SupplyDepot", "Hellion", "FactoryTechLab", "Hellion", "Hellion", "Thor", "SupplyDepot", "Hellion", "Thor"],
+      "definitionIds": ["tvz-2-base-hellbat-thor"]
+    },
+    {
+      "id": "tvz-2-1-1-marine-hellbat-timing",
+      "name": "2-1-1 Marine Hellbat Timing",
+      "race": "Terran",
+      "matchups": ["TvZ"],
+      "description": "Marine drop pressure with armory-backed hellbats converted at the timing - no thor.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Marine", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Barracks", "BarracksReactor", "Marine", "Marine", "Factory", "SupplyDepot", "Marine", "Marine", "Armory", "Starport", "Hellion", "Hellion", "SupplyDepot", "Medivac", "Marine", "Marine"],
+      "definitionIds": ["tvz-2-1-1-marine-hellbat-timing"]
+    },
+    {
+      "id": "tvz-battlecruiser-mech",
+      "name": "Battlecruiser Mech",
+      "race": "Terran",
+      "matchups": ["TvZ"],
+      "description": "Fusion core battlecruisers as the mech finisher vs zerg - hellions hold the ground while the first BC warps out.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Refinery", "OrbitalCommand", "Factory", "SupplyDepot", "Marine", "Hellion", "Starport", "StarportTechLab", "FusionCore", "Hellion", "SupplyDepot", "Battlecruiser", "CommandCenter", "SupplyDepot", "Battlecruiser"],
+      "definitionIds": ["tvz-battlecruiser-mech"]
+    },
+    {
+      "id": "tvz-hellion-liberator",
+      "name": "Hellion Liberator",
+      "race": "Terran",
+      "matchups": ["TvZ"],
+      "description": "Hellion map control plus liberators over the mineral lines, off two command centers.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Factory", "Marine", "Refinery", "Hellion", "Hellion", "Starport", "SupplyDepot", "Hellion", "Hellion", "Liberator", "SupplyDepot", "Marine", "Liberator"],
+      "definitionIds": ["tvz-hellion-liberator"]
+    },
+    {
+      "id": "tvz-2-1-1-marine-drop",
+      "name": "2-1-1 Marine Drop",
+      "race": "Terran",
+      "matchups": ["TvZ"],
+      "description": "Two barracks with reactor + tech lab, stim started, factory into starport for the 16-marine double medivac drop off two bases.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Marine", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Barracks", "BarracksReactor", "Marine", "Marine", "BarracksTechLab", "Stimpack", "SupplyDepot", "Factory", "Marine", "Marine", "SupplyDepot", "Starport", "Marine", "Marine", "Medivac", "Medivac", "CombatShield", "Marine", "Marine"],
+      "definitionIds": ["tvz-2-1-1-marine-drop"]
+    },
+    {
+      "id": "tvz-widow-mine-marine",
+      "name": "Widow Mine Marine",
+      "race": "Terran",
+      "matchups": ["TvZ"],
+      "description": "Marine ball with widow mines and a medivac running mobile mine drops over the zerg mineral lines.",
+      "steps": ["SupplyDepot", "Barracks", "Refinery", "Reaper", "OrbitalCommand", "CommandCenter", "SupplyDepot", "Marine", "Factory", "Refinery", "WidowMine", "Starport", "WidowMine", "SupplyDepot", "Medivac", "Marine", "Marine", "SupplyDepot", "WidowMine", "Marine"],
+      "definitionIds": ["tvz-widow-mine-marine"]
+    },
+    {
+      "id": "tvz-3-cc-bio",
+      "name": "3 CC Bio",
+      "race": "Terran",
+      "matchups": ["TvZ"],
+      "description": "Three command centers by 6:00 behind three-plus barracks of marine/marauder with no mech tech - the standard macro bio opening vs zerg.",
+      "steps": ["SupplyDepot", "Barracks", "Marine", "OrbitalCommand", "CommandCenter", "Marine", "SupplyDepot", "CommandCenter", "Refinery", "Marine", "Barracks", "SupplyDepot", "BarracksReactor", "Marine", "Marine", "Barracks", "EngineeringBay", "Refinery", "Marine", "Marine", "SupplyDepot", "BarracksTechLab", "Stimpack", "Marauder", "Marine", "SupplyDepot", "Marine", "Marine"],
+      "definitionIds": ["tvz-3-cc-bio"]
     }
   ]
 }

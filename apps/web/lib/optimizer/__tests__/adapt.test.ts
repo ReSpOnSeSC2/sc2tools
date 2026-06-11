@@ -168,7 +168,7 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
   }
 
   it("keeps the same buildings in the same order on both patches", () => {
-    const result = adapt("p-gate-expand", "Protoss");
+    const result = adapt("protoss-standard-expand", "Protoss");
     expect(result.sim.unexecutedActions).toBe(0);
     const orderOf = (sim: typeof result.sim) =>
       sim.steps
@@ -185,7 +185,7 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
   });
 
   it("re-times steps LATER on the 8-worker economy, not earlier", () => {
-    const result = adapt("p-gate-expand", "Protoss");
+    const result = adapt("protoss-standard-expand", "Protoss");
     // The 8-worker start mines slower, so the early build steps must
     // shift later than their 12-worker stamps. (Allow tiny jitter on
     // the very first step which is bank-limited on both patches.)
@@ -201,18 +201,18 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
   });
 
   it("adapts terran (morphs/addons) and zerg (larva) builds cleanly", () => {
-    const terran = adapt("t-reaper-111", "Terran");
+    const terran = adapt("terran-1-1-1-standard", "Terran");
     expect(terran.sim.unexecutedActions).toBe(0);
     expect(terran.sim.unitsAtEnd.OrbitalCommand).toBe(1);
     expect((terran.sim.completionTimes.Medivac ?? []).length).toBe(1);
-    const zerg = adapt("z-hatch-first", "Zerg");
+    const zerg = adapt("zerg-3-base-macro-hatch-first", "Zerg");
     expect(zerg.sim.unexecutedActions).toBe(0);
     expect((zerg.sim.completionTimes.Lair ?? []).length).toBe(1);
     expect(zerg.sim.unitsAtEnd.Queen).toBeGreaterThanOrEqual(2);
   });
 
   it("evaluates safety of the adapted build against matchup threats", () => {
-    const result = adapt("p-gate-expand", "Protoss");
+    const result = adapt("protoss-standard-expand", "Protoss");
     expect(result.safety.threats.length).toBeGreaterThan(0);
     for (const report of result.safety.threats) {
       expect(["safe", "risky", "unsafe"]).toContain(report.verdict);
@@ -224,7 +224,7 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
     // The proxy warpgate rush researches off its only gateway ON
     // PURPOSE — the note fires so the trade is explicit. Standard
     // builds were reordered to research after gate #2 and stay quiet.
-    const reorderedStandard = adapt("p-robo-expand", "Protoss");
+    const reorderedStandard = adapt("protoss-robo-opener", "Protoss");
     expect(
       reorderedStandard.adaptationNotes.some((n) =>
         n.includes("occupies your only Gateway"),
@@ -251,7 +251,7 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
         n.includes("occupies your only Gateway"),
       ),
     ).toBe(true);
-    const result = adapt("p-robo-expand", "Protoss");
+    const result = adapt("protoss-robo-opener", "Protoss");
     // and the per-gateway transform economics note rides along
     expect(
       result.adaptationNotes.some((n) => n.includes("50/50 per gateway")),
@@ -284,7 +284,7 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
   it("standard protoss builds research warpgate after the second gateway", () => {
     // PTR meta: research occupies a gateway, so units come first and
     // research waits for gate #2 — except dedicated rush builds.
-    for (const id of ["p-gate-expand", "p-stargate-oracle", "p-robo-expand"]) {
+    for (const id of ["protoss-standard-expand", "protoss-stargate-opener", "protoss-robo-opener"]) {
       const build = referenceBuilds().find((b) => b.id === id)!;
       const gateIndices = build.steps
         .map((s, i) => (s === "Gateway" ? i : -1))
@@ -383,8 +383,8 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
   });
 
   it("is deterministic", () => {
-    const a = adapt("z-pool-first", "Zerg");
-    const b = adapt("z-pool-first", "Zerg");
+    const a = adapt("zerg-3-base-macro-pool-first", "Zerg");
+    const b = adapt("zerg-3-base-macro-pool-first", "Zerg");
     expect(JSON.stringify(a)).toEqual(JSON.stringify(b));
   });
 });

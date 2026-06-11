@@ -1,78 +1,159 @@
 {
-  "version": 2,
-  "note": "Zerg reference openers. Step lists are canonical orders; the sim re-times them per patch. definitionIds map each build to the /definitions catalog entries it covers.",
+  "version": 3,
+  "note": "Zerg reference openers, one build per /definitions catalog entry (definitionIds has exactly one id; builds with an empty list are utility builds outside the catalog). Step lists are canonical orders; the sim re-times them per patch. Baneling/Ravager/Lurker steps morph from a previously listed Zergling/Roach/Hydralisk.",
   "builds": [
     {
-      "id": "z-hatch-first",
-      "name": "Hatch First",
+      "id": "zerg-17-hatch-18-gas-17-pool",
+      "name": "17 Hatch 18 Gas 17 Pool",
       "race": "Zerg",
       "matchups": ["ZvT", "ZvP", "ZvZ"],
-      "description": "The greedy standard: natural hatchery before pool, double queen, ling speed, third base behind queens.",
-      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "Zergling", "MetabolicBoost", "Overlord", "Hatchery", "Queen", "Overlord", "Zergling", "Lair"],
-      "definitionIds": ["zerg-3-base-macro-hatch-first", "zerg-17-hatch-18-gas-17-pool", "zvp-hatch-first-macro", "zvt-hatch-first-macro", "zvz-drone-macro-hatch-first"]
+      "description": "The standard modern macro opener: hatchery ~1:20, extractor ~1:30, pool ~1:40, double queen and ling speed behind it.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "Zergling", "MetabolicBoost", "Overlord", "Queen", "Overlord", "Zergling", "Lair"],
+      "definitionIds": ["zerg-17-hatch-18-gas-17-pool"]
     },
     {
-      "id": "z-pool-first",
-      "name": "Pool First Safe",
+      "id": "zerg-3-base-macro-hatch-first",
+      "name": "3 Base Macro (Hatch First)",
+      "race": "Zerg",
+      "matchups": ["ZvT", "ZvP", "ZvZ"],
+      "description": "The greedy standard: natural hatchery before pool, double queen, ling speed, third base by 6:30 behind queens.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "Zergling", "MetabolicBoost", "Overlord", "Hatchery", "Queen", "Overlord", "Zergling", "Lair"],
+      "definitionIds": ["zerg-3-base-macro-hatch-first"]
+    },
+    {
+      "id": "zerg-3-base-macro-pool-first",
+      "name": "3 Base Macro (Pool First)",
       "race": "Zerg",
       "matchups": ["ZvZ", "ZvP", "ZvT"],
-      "description": "Pool before hatch: safe against early aggression, queen + lings before the natural, speed when gas allows.",
-      "steps": ["SpawningPool", "Extractor", "Overlord", "Hatchery", "Queen", "Zergling", "Zergling", "MetabolicBoost", "Overlord", "Queen", "Zergling", "Overlord", "Queen"],
-      "definitionIds": ["zerg-3-base-macro-pool-first", "zerg-pool-first-opener"]
+      "description": "Pool before hatch for safety against early aggression, then the natural and a third base by 6:30 - queens and speed on the way.",
+      "steps": ["SpawningPool", "Extractor", "Overlord", "Hatchery", "Queen", "Zergling", "Zergling", "MetabolicBoost", "Overlord", "Queen", "Hatchery", "Zergling", "Overlord", "Queen"],
+      "definitionIds": ["zerg-3-base-macro-pool-first"]
     },
     {
-      "id": "z-12pool",
+      "id": "zerg-pool-first-opener",
+      "name": "Pool First Opener",
+      "race": "Zerg",
+      "matchups": ["ZvZ", "ZvP", "ZvT"],
+      "description": "Generic pool-first opener: queen + lings before the natural, speed when gas allows, transitioning into standard macro.",
+      "steps": ["SpawningPool", "Extractor", "Overlord", "Hatchery", "Queen", "Zergling", "Zergling", "MetabolicBoost", "Overlord", "Queen", "Zergling", "Overlord", "Queen"],
+      "definitionIds": ["zerg-pool-first-opener"]
+    },
+    {
+      "id": "zerg-12-pool",
       "name": "12 Pool",
       "race": "Zerg",
       "matchups": ["ZvZ", "ZvP", "ZvT"],
-      "description": "Early pool with the first six lings applying pressure while the natural follows.",
+      "description": "Pool started immediately (before 0:50) with the first six lings applying pressure while the natural follows.",
       "steps": ["SpawningPool", "Overlord", "Zergling", "Zergling", "Zergling", "Hatchery", "Queen", "Extractor", "Overlord", "Zergling", "MetabolicBoost", "Queen", "Overlord"],
-      "definitionIds": ["zerg-12-pool", "zvp-12-pool-rush", "zvz-12-pool-speedling"]
+      "definitionIds": ["zerg-12-pool"]
     },
     {
-      "id": "z-early-pool",
+      "id": "zerg-early-pool-14-14-or-15-pool",
       "name": "Early Pool (14/14)",
       "race": "Zerg",
       "matchups": ["ZvZ", "ZvP", "ZvT"],
-      "description": "Pool and gas before hatch \u2014 fast speedlings without full economic sacrifice.",
+      "description": "Pool and gas before hatch (pool under 1:10 with drones still made) - fast speedlings without full economic sacrifice.",
       "steps": ["SpawningPool", "Extractor", "Overlord", "Zergling", "Zergling", "MetabolicBoost", "Hatchery", "Queen", "Zergling", "Overlord", "Queen", "Zergling"],
       "definitionIds": ["zerg-early-pool-14-14-or-15-pool"]
     },
     {
-      "id": "z-banebust",
+      "id": "zerg-13-12-baneling-bust",
       "name": "13/12 Baneling Bust",
       "race": "Zerg",
       "matchups": ["ZvT", "ZvZ", "ZvP"],
-      "description": "Early pool/gas into a baneling nest; lings and banes crack the wall.",
+      "description": "Early pool and gas (before ~1:10) into a baneling nest before 3:20; lings and banes crack the wall.",
       "steps": ["SpawningPool", "Extractor", "Overlord", "Zergling", "Zergling", "Zergling", "MetabolicBoost", "BanelingNest", "Hatchery", "Overlord", "Zergling", "Zergling", "Baneling", "Baneling", "Overlord", "Baneling", "Baneling", "Zergling", "Zergling"],
-      "definitionIds": ["zerg-13-12-baneling-bust", "zvp-ling-bane-bust", "zvt-ling-bane-bust", "zvz-12-pool-into-baneling", "zvz-ling-bane-all-in"]
+      "definitionIds": ["zerg-13-12-baneling-bust"]
     },
     {
-      "id": "z-speedling-aggression",
+      "id": "zerg-13-12-speedling-aggression",
       "name": "13/12 Speedling Aggression",
       "race": "Zerg",
       "matchups": ["ZvZ", "ZvP", "ZvT"],
-      "description": "Early speed and a flood of zerglings before the opponent's wall completes.",
+      "description": "Early pool and gas (before ~1:10), speed started immediately, and a flood of zerglings before the opponent's wall completes.",
       "steps": ["SpawningPool", "Extractor", "Overlord", "Zergling", "Zergling", "Zergling", "MetabolicBoost", "Zergling", "Zergling", "Overlord", "Hatchery", "Zergling", "Zergling", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling"],
-      "definitionIds": ["zerg-13-12-speedling-aggression", "zvp-speedling-flood", "zvz-zergling-flood"]
+      "definitionIds": ["zerg-13-12-speedling-aggression"]
     },
     {
-      "id": "z-1base-roach",
+      "id": "zerg-1-base-roach-rush",
       "name": "1 Base Roach Rush",
       "race": "Zerg",
       "matchups": ["ZvZ", "ZvP"],
-      "description": "Roach warren on one base; five roaches knock before the natural would have paid for itself.",
+      "description": "Roach warren on one base before 3:40; five roaches knock before the natural would have paid for itself.",
       "steps": ["SpawningPool", "Extractor", "Overlord", "RoachWarren", "Queen", "Extractor", "Overlord", "Roach", "Roach", "Roach", "Overlord", "Roach", "Roach", "Overlord", "Roach"],
-      "definitionIds": ["zerg-1-base-roach-rush", "zvz-roach-aggression"]
+      "definitionIds": ["zerg-1-base-roach-rush"]
     },
     {
-      "id": "z-roach-ravager",
+      "id": "zerg-2-base-roach-ravager-all-in",
       "name": "2 Base Roach/Ravager All-in",
       "race": "Zerg",
       "matchups": ["ZvP", "ZvT", "ZvZ"],
-      "description": "Two-base roach ravager with biles breaking the front.",
-      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "RoachWarren", "Extractor", "Overlord", "Roach", "Roach", "Roach", "Overlord", "Ravager", "Ravager", "Roach", "Overlord", "Roach", "Ravager"],
-      "definitionIds": ["zerg-2-base-roach-ravager-all-in", "zvp-2-base-roach-ravager-all-in", "zerg-roach-ravager-comp", "zvt-2-base-roach-ravager-timing", "zvz-roach-ravager"]
+      "description": "Two-base roach ravager on a frozen drone count: lair for the speed upgrade path, biles breaking the front.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "RoachWarren", "Extractor", "Lair", "Overlord", "Roach", "Roach", "Roach", "Roach", "Overlord", "Roach", "Ravager", "Ravager", "Roach", "Overlord", "Roach", "Roach", "Ravager"],
+      "definitionIds": ["zerg-2-base-roach-ravager-all-in"]
+    },
+    {
+      "id": "zerg-roach-ravager-comp",
+      "name": "Roach/Ravager Composition",
+      "race": "Zerg",
+      "matchups": ["ZvP", "ZvT", "ZvZ"],
+      "description": "The roach/ravager core army on a standard two-into-three base economy: warren behind the second queen, constant roaches with ravager morphs at the front.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "RoachWarren", "Extractor", "Overlord", "Hatchery", "Queen", "Roach", "Roach", "Overlord", "Roach", "Roach", "Ravager", "Ravager", "Overlord", "Roach", "Roach", "Roach"],
+      "definitionIds": ["zerg-roach-ravager-comp"]
+    },
+    {
+      "id": "zerg-2-base-muta-rush",
+      "name": "2 Base Muta Rush",
+      "race": "Zerg",
+      "matchups": ["ZvZ", "ZvP", "ZvT"],
+      "description": "Fast lair and spire (before 7:00) off two bases on a lean drone count; mutas pick at everything.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "Lair", "Overlord", "Queen", "Spire", "Overlord", "Zergling", "Mutalisk", "Mutalisk", "Mutalisk", "Overlord", "Mutalisk", "Mutalisk"],
+      "definitionIds": ["zerg-2-base-muta-rush"]
+    },
+    {
+      "id": "zerg-2-base-nydus",
+      "name": "2 Base Nydus",
+      "race": "Zerg",
+      "matchups": ["ZvP", "ZvT", "ZvZ"],
+      "description": "Lair into a nydus network before 7:00 - the worm surfaces inside the opponent's main (placement not simulated).",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "Lair", "Overlord", "Queen", "NydusNetwork", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling", "Queen"],
+      "definitionIds": ["zerg-2-base-nydus"]
+    },
+    {
+      "id": "zerg-3-hatch-before-pool",
+      "name": "3 Hatch Before Pool",
+      "race": "Zerg",
+      "matchups": ["ZvP", "ZvT"],
+      "description": "Maximum greed: three hatcheries before the spawning pool.",
+      "steps": ["Overlord", "Hatchery", "Hatchery", "SpawningPool", "Extractor", "Overlord", "Queen", "Queen", "Queen", "Zergling", "MetabolicBoost", "Overlord", "Zergling", "Overlord"],
+      "definitionIds": ["zerg-3-hatch-before-pool"]
+    },
+    {
+      "id": "zerg-3-hatch-ling-flood",
+      "name": "3 Hatch Ling Flood",
+      "race": "Zerg",
+      "matchups": ["ZvP", "ZvT", "ZvZ"],
+      "description": "Three hatcheries of pure speedlings (20+ by 5:00 on a frozen drone count) overwhelming the natural.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Hatchery", "Queen", "Overlord", "Zergling", "Zergling", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling"],
+      "definitionIds": ["zerg-3-hatch-ling-flood"]
+    },
+    {
+      "id": "zerg-proxy-hatch",
+      "name": "Proxy Hatch",
+      "race": "Zerg",
+      "matchups": ["ZvP", "ZvT"],
+      "description": "A hatchery planted near the opponent before 4:30 (placement not simulated) for spines or constant ling reinforcement.",
+      "steps": ["SpawningPool", "Overlord", "Hatchery", "Zergling", "Zergling", "Queen", "SpineCrawler", "SpineCrawler", "Overlord", "Zergling", "Zergling", "SpineCrawler"],
+      "definitionIds": ["zerg-proxy-hatch"]
+    },
+    {
+      "id": "zerg-hydra-comp",
+      "name": "Hydralisk Composition",
+      "race": "Zerg",
+      "matchups": ["ZvP", "ZvT"],
+      "description": "The hydralisk core army on a standard three-base economy: lair into den with range started, constant hydras from the larva bank.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Hatchery", "Extractor", "Lair", "Queen", "Overlord", "HydraliskDen", "Extractor", "Overlord", "GroovedSpines", "Hydralisk", "Hydralisk", "Hydralisk", "Overlord", "Hydralisk", "Hydralisk"],
+      "definitionIds": ["zerg-hydra-comp"]
     },
     {
       "id": "z-roach-warren",
@@ -84,94 +165,274 @@
       "definitionIds": []
     },
     {
-      "id": "z-2base-muta",
-      "name": "2 Base Muta",
+      "id": "zvp-12-pool-rush",
+      "name": "12 Pool Rush",
       "race": "Zerg",
-      "matchups": ["ZvZ", "ZvP", "ZvT"],
-      "description": "Fast lair and spire off two bases; mutas pick at everything.",
-      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "Lair", "Overlord", "Queen", "Spire", "Overlord", "Zergling", "Mutalisk", "Mutalisk", "Mutalisk", "Overlord", "Mutalisk", "Mutalisk"],
-      "definitionIds": ["zerg-2-base-muta-rush", "zvp-mutalisk-harass", "zvp-ling-bane-muta", "zvt-mass-muta-harass", "zvz-mutalisk-vs-mutalisk", "zvz-hatch-first-muta"]
+      "matchups": ["ZvP"],
+      "description": "Pool before 0:55 into a wall of zerglings on one base - the cheese rush vs protoss; the hatchery only follows once the lings are out.",
+      "steps": ["SpawningPool", "Overlord", "Zergling", "Zergling", "Zergling", "Zergling", "Zergling", "Hatchery", "Queen", "Overlord", "Zergling", "Zergling"],
+      "definitionIds": ["zvp-12-pool-rush"]
     },
     {
-      "id": "z-2base-nydus",
+      "id": "zvp-ling-bane-bust",
+      "name": "Ling Bane Bust",
+      "race": "Zerg",
+      "matchups": ["ZvP"],
+      "description": "Early pool and baneling nest flooding banelings and zerglings off two bases - the bust through the protoss wall.",
+      "steps": ["SpawningPool", "Extractor", "Overlord", "Zergling", "Zergling", "Zergling", "MetabolicBoost", "BanelingNest", "Hatchery", "Overlord", "Zergling", "Zergling", "Baneling", "Baneling", "Overlord", "Baneling", "Baneling", "Zergling", "Zergling"],
+      "definitionIds": ["zvp-ling-bane-bust"]
+    },
+    {
+      "id": "zvp-2-base-roach-ravager-all-in",
+      "name": "2 Base Roach Ravager All-in",
+      "race": "Zerg",
+      "matchups": ["ZvP"],
+      "description": "Two-base roach ravager all-in on a low drone count: biles crack the protoss wall before the third immortal exists.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "RoachWarren", "Extractor", "Lair", "Overlord", "Roach", "Roach", "Roach", "Roach", "Overlord", "Roach", "Ravager", "Ravager", "Roach", "Overlord", "Roach", "Roach", "Ravager"],
+      "definitionIds": ["zvp-2-base-roach-ravager-all-in"]
+    },
+    {
+      "id": "zvp-2-base-nydus",
       "name": "2 Base Nydus",
       "race": "Zerg",
-      "matchups": ["ZvP", "ZvT", "ZvZ"],
-      "description": "Lair into a nydus network \u2014 the worm surfaces inside the opponent's main (placement not simulated).",
+      "matchups": ["ZvP"],
+      "description": "Lair into a nydus network off two bases - the worm surfaces inside the protoss main behind the army (placement not simulated).",
       "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "Lair", "Overlord", "Queen", "NydusNetwork", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling", "Queen"],
-      "definitionIds": ["zerg-2-base-nydus", "zvp-2-base-nydus", "zvt-2-base-nydus", "zvz-2-base-nydus"]
+      "definitionIds": ["zvp-2-base-nydus"]
     },
     {
-      "id": "z-3hatch-before-pool",
-      "name": "3 Hatch Before Pool",
-      "race": "Zerg",
-      "matchups": ["ZvP", "ZvT"],
-      "description": "Maximum greed: three hatcheries before the spawning pool.",
-      "steps": ["Overlord", "Hatchery", "Hatchery", "SpawningPool", "Extractor", "Overlord", "Queen", "Queen", "Queen", "Zergling", "MetabolicBoost", "Overlord", "Zergling", "Overlord"],
-      "definitionIds": ["zerg-3-hatch-before-pool"]
-    },
-    {
-      "id": "z-3hatch-ling-flood",
-      "name": "3 Hatch Ling Flood",
-      "race": "Zerg",
-      "matchups": ["ZvP", "ZvT", "ZvZ"],
-      "description": "Three hatcheries of pure speedlings overwhelming the natural.",
-      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Hatchery", "Queen", "Overlord", "Zergling", "Zergling", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling"],
-      "definitionIds": ["zerg-3-hatch-ling-flood", "zvt-3-base-ling-flood"]
-    },
-    {
-      "id": "z-proxy-hatch",
-      "name": "Proxy Hatch",
-      "race": "Zerg",
-      "matchups": ["ZvP", "ZvT"],
-      "description": "A hatchery planted near the opponent (placement not simulated) for spines or constant ling reinforcement.",
-      "steps": ["SpawningPool", "Overlord", "Hatchery", "Zergling", "Zergling", "Queen", "SpineCrawler", "SpineCrawler", "Overlord", "Zergling", "Zergling", "SpineCrawler"],
-      "definitionIds": ["zerg-proxy-hatch"]
-    },
-    {
-      "id": "z-hydra-timing",
+      "id": "zvp-hydra-timing-3-base",
       "name": "Hydra Timing (3 Base)",
       "race": "Zerg",
       "matchups": ["ZvP"],
-      "description": "Three-base hydra timing with range/speed started.",
+      "description": "Three-base hydra timing with range started - the standard ZvP answer to stargate openers.",
       "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Hatchery", "Extractor", "Lair", "Queen", "Overlord", "HydraliskDen", "Extractor", "Overlord", "GroovedSpines", "Hydralisk", "Hydralisk", "Hydralisk", "Overlord", "Hydralisk", "Hydralisk", "Overlord", "Hydralisk"],
-      "definitionIds": ["zvp-hydra-timing-3-base", "zerg-hydra-comp"]
+      "definitionIds": ["zvp-hydra-timing-3-base"]
     },
     {
-      "id": "z-lurker-contain",
+      "id": "zvp-lurker-contain",
       "name": "Lurker Contain",
       "race": "Zerg",
-      "matchups": ["ZvP", "ZvT"],
-      "description": "Hydra den into lurkers sieging the opponent's natural.",
+      "matchups": ["ZvP"],
+      "description": "Hydra den into lurkers sieging the protoss natural before storm is out.",
       "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "Lair", "Queen", "Overlord", "HydraliskDen", "Extractor", "Hydralisk", "Hydralisk", "LurkerDen", "Overlord", "Hydralisk", "Hydralisk", "Lurker", "Lurker", "Overlord", "Lurker"],
-      "definitionIds": ["zvp-lurker-contain", "zvt-lurker-contain"]
+      "definitionIds": ["zvp-lurker-contain"]
     },
     {
-      "id": "z-mass-queen",
+      "id": "zvp-ling-bane-muta",
+      "name": "Ling Bane Muta",
+      "race": "Zerg",
+      "matchups": ["ZvP"],
+      "description": "Baneling nest and spire supporting banelings and a wall of zerglings - the muta/ling/bane harass style vs protoss.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "BanelingNest", "Lair", "Overlord", "Zergling", "Zergling", "Baneling", "Baneling", "Spire", "Queen", "Overlord", "Zergling", "Zergling", "Overlord", "Mutalisk", "Mutalisk", "Mutalisk"],
+      "definitionIds": ["zvp-ling-bane-muta"]
+    },
+    {
+      "id": "zvp-mutalisk-harass",
+      "name": "Mutalisk Harass",
+      "race": "Zerg",
+      "matchups": ["ZvP"],
+      "description": "Spire into six-plus mutalisks (no baneling nest) running pure muta harass into the protoss mineral lines.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "Lair", "Overlord", "Queen", "Spire", "Overlord", "Zergling", "Mutalisk", "Mutalisk", "Mutalisk", "Overlord", "Mutalisk", "Mutalisk", "Mutalisk", "Overlord", "Mutalisk"],
+      "definitionIds": ["zvp-mutalisk-harass"]
+    },
+    {
+      "id": "zvp-speedling-flood",
+      "name": "Speedling Flood",
+      "race": "Zerg",
+      "matchups": ["ZvP"],
+      "description": "Three bases pumping 20+ zerglings on a low drone count - the ling-flood timing against a greedy protoss third.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Hatchery", "Queen", "Overlord", "Zergling", "Zergling", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling"],
+      "definitionIds": ["zvp-speedling-flood"]
+    },
+    {
+      "id": "zvp-hatch-first-macro",
+      "name": "Hatch First Macro",
+      "race": "Zerg",
+      "matchups": ["ZvP"],
+      "description": "Greedy three-base hatch-first economy droning toward 40+ before committing to tech - lair and a fourth queen behind it.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "Zergling", "MetabolicBoost", "Overlord", "Hatchery", "Queen", "Overlord", "Queen", "Lair", "Overlord", "Zergling", "EvolutionChamber"],
+      "definitionIds": ["zvp-hatch-first-macro"]
+    },
+    {
+      "id": "zvt-ling-bane-bust",
+      "name": "Ling Bane Bust",
+      "race": "Zerg",
+      "matchups": ["ZvT"],
+      "description": "Early pool and baneling nest flooding banelings and zerglings off two bases - the bust through the terran wall.",
+      "steps": ["SpawningPool", "Extractor", "Overlord", "Zergling", "Zergling", "Zergling", "MetabolicBoost", "BanelingNest", "Hatchery", "Overlord", "Zergling", "Zergling", "Baneling", "Baneling", "Overlord", "Baneling", "Baneling", "Zergling", "Zergling"],
+      "definitionIds": ["zvt-ling-bane-bust"]
+    },
+    {
+      "id": "zvt-2-base-roach-ravager-timing",
+      "name": "2 Base Roach Ravager Timing",
+      "race": "Zerg",
+      "matchups": ["ZvT"],
+      "description": "Two-base roach ravager pressure timing on a low drone count - biles for the bunker or wall, hitting before tanks are sieged.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "RoachWarren", "Extractor", "Lair", "Overlord", "Roach", "Roach", "Roach", "Roach", "Overlord", "Roach", "Ravager", "Ravager", "Roach", "Overlord", "Roach", "Roach", "Ravager"],
+      "definitionIds": ["zvt-2-base-roach-ravager-timing"]
+    },
+    {
+      "id": "zvt-2-base-nydus",
+      "name": "2 Base Nydus",
+      "race": "Zerg",
+      "matchups": ["ZvT"],
+      "description": "Lair into a nydus network off two bases - the worm surfaces inside the terran main behind the mineral line (placement not simulated).",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "Lair", "Overlord", "Queen", "NydusNetwork", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling", "Queen"],
+      "definitionIds": ["zvt-2-base-nydus"]
+    },
+    {
+      "id": "zvt-mass-queen-defensive",
       "name": "Mass Queen Defensive",
       "race": "Zerg",
       "matchups": ["ZvT"],
-      "description": "Queen wall with spores: absorb early terran pressure on pure economy.",
+      "description": "Queen wall (6+) with spores: absorb early terran pressure on pure economy - no roach, baneling, or spire aggression.",
       "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Queen", "Zergling", "MetabolicBoost", "Queen", "SporeCrawler", "Overlord", "Queen", "Hatchery", "Queen", "Overlord", "SporeCrawler", "Queen"],
       "definitionIds": ["zvt-mass-queen-defensive"]
     },
     {
-      "id": "z-ling-bane-muta",
+      "id": "zvt-lurker-contain",
+      "name": "Lurker Contain",
+      "race": "Zerg",
+      "matchups": ["ZvT"],
+      "description": "Hydra den into lurkers sieging the terran natural before scans and liberators can answer.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "Lair", "Queen", "Overlord", "HydraliskDen", "Extractor", "Hydralisk", "Hydralisk", "LurkerDen", "Overlord", "Hydralisk", "Hydralisk", "Lurker", "Lurker", "Overlord", "Lurker"],
+      "definitionIds": ["zvt-lurker-contain"]
+    },
+    {
+      "id": "zvt-3-hatch-ling-bane-muta",
       "name": "3 Hatch Ling Bane Muta",
       "race": "Zerg",
       "matchups": ["ZvT"],
-      "description": "The ZvT classic: three hatcheries of speedlings and banes into lair-spire mutas.",
+      "description": "The ZvT classic: three hatcheries of speedlings and banes defending bio while teching to lair-spire mutas.",
       "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Hatchery", "Queen", "Extractor", "Overlord", "BanelingNest", "Lair", "Zergling", "Zergling", "Baneling", "Baneling", "Overlord", "Spire", "Zergling", "Zergling", "Overlord", "Mutalisk", "Mutalisk", "Mutalisk"],
       "definitionIds": ["zvt-3-hatch-ling-bane-muta"]
     },
     {
-      "id": "z-roach-hydra",
+      "id": "zvt-mass-muta-harass",
+      "name": "Mass Muta Harass",
+      "race": "Zerg",
+      "matchups": ["ZvT"],
+      "description": "Spire into six-plus mutalisks (no baneling nest) running pure muta harass over the terran mineral lines.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "Lair", "Overlord", "Queen", "Spire", "Overlord", "Zergling", "Mutalisk", "Mutalisk", "Mutalisk", "Overlord", "Mutalisk", "Mutalisk", "Mutalisk", "Overlord", "Mutalisk"],
+      "definitionIds": ["zvt-mass-muta-harass"]
+    },
+    {
+      "id": "zvt-roach-hydra",
       "name": "Roach Hydra",
       "race": "Zerg",
       "matchups": ["ZvT"],
       "description": "Lair-tech roach hydra off three bases.",
       "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Hatchery", "Extractor", "RoachWarren", "Lair", "Queen", "Overlord", "Roach", "Roach", "HydraliskDen", "Extractor", "Overlord", "Roach", "Hydralisk", "Hydralisk", "Overlord", "Hydralisk", "Hydralisk"],
       "definitionIds": ["zvt-roach-hydra"]
+    },
+    {
+      "id": "zvt-3-base-ling-flood",
+      "name": "3 Base Ling Flood",
+      "race": "Zerg",
+      "matchups": ["ZvT"],
+      "description": "Three bases pumping 20+ speedlings on a low drone count - the ling-flood timing that punishes a greedy terran third.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Hatchery", "Queen", "Overlord", "Zergling", "Zergling", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling"],
+      "definitionIds": ["zvt-3-base-ling-flood"]
+    },
+    {
+      "id": "zvt-hatch-first-macro",
+      "name": "Hatch First Macro",
+      "race": "Zerg",
+      "matchups": ["ZvT"],
+      "description": "Greedy three-base hatch-first economy droning toward 40+ before committing to tech - lair and an evolution chamber behind it.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "Zergling", "MetabolicBoost", "Overlord", "Hatchery", "Queen", "Overlord", "Queen", "Lair", "Overlord", "Zergling", "EvolutionChamber"],
+      "definitionIds": ["zvt-hatch-first-macro"]
+    },
+    {
+      "id": "zvz-12-pool-into-baneling",
+      "name": "12 Pool into Baneling",
+      "race": "Zerg",
+      "matchups": ["ZvZ"],
+      "description": "Pool before 0:55 straight into a baneling nest - the early ZvZ baneling all-in on the opponent's drone line.",
+      "steps": ["SpawningPool", "Overlord", "Extractor", "Zergling", "Zergling", "Zergling", "BanelingNest", "MetabolicBoost", "Overlord", "Zergling", "Zergling", "Baneling", "Baneling", "Hatchery", "Overlord", "Baneling", "Baneling", "Zergling"],
+      "definitionIds": ["zvz-12-pool-into-baneling"]
+    },
+    {
+      "id": "zvz-12-pool-speedling",
+      "name": "12 Pool Speedling",
+      "race": "Zerg",
+      "matchups": ["ZvZ"],
+      "description": "Pool before 0:55 into a wall of zerglings on one base - the aggressive ZvZ speedling opener.",
+      "steps": ["SpawningPool", "Overlord", "Extractor", "Zergling", "Zergling", "Zergling", "MetabolicBoost", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling", "Hatchery", "Overlord", "Zergling", "Zergling"],
+      "definitionIds": ["zvz-12-pool-speedling"]
+    },
+    {
+      "id": "zvz-ling-bane-all-in",
+      "name": "Ling Bane All-in",
+      "race": "Zerg",
+      "matchups": ["ZvZ"],
+      "description": "Baneling nest flooding banelings and zerglings off two bases - the ZvZ ling/bane all-in.",
+      "steps": ["SpawningPool", "Extractor", "Overlord", "Zergling", "Zergling", "Zergling", "MetabolicBoost", "BanelingNest", "Hatchery", "Overlord", "Zergling", "Zergling", "Baneling", "Baneling", "Overlord", "Baneling", "Baneling", "Zergling", "Zergling"],
+      "definitionIds": ["zvz-ling-bane-all-in"]
+    },
+    {
+      "id": "zvz-roach-ravager",
+      "name": "Roach Ravager",
+      "race": "Zerg",
+      "matchups": ["ZvZ"],
+      "description": "Roach warren into roaches with ravager morphs - the ZvZ roach/ravager style that beats pure ling/bane.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "RoachWarren", "Extractor", "Lair", "Overlord", "Roach", "Roach", "Roach", "Roach", "Overlord", "Roach", "Ravager", "Ravager", "Roach", "Overlord", "Roach", "Roach", "Ravager"],
+      "definitionIds": ["zvz-roach-ravager"]
+    },
+    {
+      "id": "zvz-roach-aggression",
+      "name": "Roach Aggression",
+      "race": "Zerg",
+      "matchups": ["ZvZ"],
+      "description": "Roach warren producing a wall of roaches off two bases - the standard ZvZ roach pressure that punishes muta greed.",
+      "steps": ["SpawningPool", "Extractor", "Overlord", "Hatchery", "RoachWarren", "Queen", "Extractor", "Overlord", "Roach", "Roach", "Roach", "Overlord", "Roach", "Roach", "Overlord", "Roach", "Roach"],
+      "definitionIds": ["zvz-roach-aggression"]
+    },
+    {
+      "id": "zvz-2-base-nydus",
+      "name": "2 Base Nydus",
+      "race": "Zerg",
+      "matchups": ["ZvZ"],
+      "description": "Lair into a nydus network off two bases - the ZvZ nydus all-in into the opponent's main (placement not simulated).",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "Lair", "Overlord", "Queen", "NydusNetwork", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling", "Queen"],
+      "definitionIds": ["zvz-2-base-nydus"]
+    },
+    {
+      "id": "zvz-mutalisk-vs-mutalisk",
+      "name": "Mutalisk vs Mutalisk",
+      "race": "Zerg",
+      "matchups": ["ZvZ"],
+      "description": "Spire into six-plus mutalisks - the classic ZvZ muta war where the bigger flock wins the air.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "Lair", "Overlord", "Queen", "Spire", "Overlord", "Zergling", "Mutalisk", "Mutalisk", "Mutalisk", "Overlord", "Mutalisk", "Mutalisk", "Mutalisk", "Overlord", "Mutalisk"],
+      "definitionIds": ["zvz-mutalisk-vs-mutalisk"]
+    },
+    {
+      "id": "zvz-hatch-first-muta",
+      "name": "Hatch First Muta",
+      "race": "Zerg",
+      "matchups": ["ZvZ"],
+      "description": "Hatch-first economy (slow pool) teching to a spire - the greedier ZvZ muta line that banks larvae for the first flock.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "MetabolicBoost", "Extractor", "Overlord", "Lair", "Queen", "Spire", "Overlord", "Zergling", "Mutalisk", "Mutalisk", "Mutalisk", "Overlord", "Mutalisk", "Mutalisk"],
+      "definitionIds": ["zvz-hatch-first-muta"]
+    },
+    {
+      "id": "zvz-zergling-flood",
+      "name": "Zergling Flood",
+      "race": "Zerg",
+      "matchups": ["ZvZ"],
+      "description": "20+ speedlings on a low drone count flooding the opponent before banes are massed.",
+      "steps": ["SpawningPool", "Extractor", "Overlord", "Zergling", "Zergling", "Zergling", "MetabolicBoost", "Zergling", "Zergling", "Overlord", "Hatchery", "Zergling", "Zergling", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling", "Zergling"],
+      "definitionIds": ["zvz-zergling-flood"]
+    },
+    {
+      "id": "zvz-drone-macro-hatch-first",
+      "name": "Drone Macro (Hatch First)",
+      "race": "Zerg",
+      "matchups": ["ZvZ"],
+      "description": "Greedy hatch-first economy (slow pool) droning past 30 in ZvZ - lings only for safety while the bank converts to bases.",
+      "steps": ["Overlord", "Hatchery", "Extractor", "SpawningPool", "Overlord", "Queen", "Queen", "Zergling", "Zergling", "MetabolicBoost", "Overlord", "Hatchery", "Queen", "Overlord", "Queen", "Lair", "Overlord", "Zergling"],
+      "definitionIds": ["zvz-drone-macro-hatch-first"]
     }
   ]
 }
