@@ -232,6 +232,7 @@ function runPolicies(
   profile: PatchProfile,
   race: SimRace,
   policies: MacroPolicies,
+  headReserve: { minerals: number; gas: number } | null,
 ): void {
   const mech = profile.mechanics;
   if (policies.autoInject) {
@@ -279,7 +280,7 @@ function runPolicies(
     autoWorkers(state, profile, race);
   }
   if (policies.autoSupplyLeadSec > 0) {
-    autoSupply(state, profile, race, policies);
+    autoSupply(state, profile, race, policies, headReserve);
   }
 }
 
@@ -351,11 +352,23 @@ function autoWorkers(
   }
 }
 
+/**
+ * Supply gap (in supply) below which an auto supply structure may
+ * spend the bank even while the build's next step is saving for its
+ * cost. At ~2 supply of headroom the pylon/depot is already at risk
+ * of being late, so blocking the tech step is the lesser evil; above
+ * it, the build order keeps its bank and the supply structure waits
+ * (a player banking for a Nexus doesn't throw down a pylon a minute
+ * before the block).
+ */
+const EMERGENCY_SUPPLY_GAP = 2;
+
 function autoSupply(
   state: SimState,
   profile: PatchProfile,
   race: SimRace,
   policies: MacroPolicies,
+  headReserve: { minerals: number; gas: number } | null,
 ): void {
   const pending = pendingSupply(state, profile);
   const effectiveCap = state.supplyCap + pending;
@@ -383,6 +396,15 @@ function autoSupply(
         ? "SupplyDepot"
         : "Overlord";
   const def = profile.units[supplyUnit];
+  // Bank discipline: don't eat the minerals the build's pending step
+  // is saving unless the block is genuinely imminent.
+  if (
+    headReserve !== null &&
+    effectiveCap - state.supplyUsed > EMERGENCY_SUPPLY_GAP &&
+    state.eco.minerals - def.minerals < headReserve.minerals
+  ) {
+    return;
+  }
   if (def.isStructure) {
     dispatchStructure(state, profile, race, supplyUnit, def);
   } else {
@@ -555,7 +577,11 @@ export function simulate(
     }
 
     // 2. Macro policies (exact-time wakes come from events/ticks).
-    runPolicies(state, profile, race, policies);
+    const headReserve =
+      firstPending < actions.length
+        ? actionCost(profile, actions[firstPending])
+        : null;
+    runPolicies(state, profile, race, policies, headReserve);
     sample(state, profile);
 
     // 3. Advance to the next interesting moment.
