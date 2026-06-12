@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { MutableRefObject } from "react";
 import type { LiveGameEnvelope, LiveGamePayload } from "./types";
 import {
   buildScoutingLine,
@@ -85,6 +86,12 @@ const DEFAULTS = {
   pitch: 1,
   delayMs: 300,
 };
+
+const VOICE_CATALOG_RETRY_MS = 100;
+const VOICE_CATALOG_RETRY_LIMIT_MS = 2000;
+const VOICE_CATALOG_MAX_ATTEMPTS = Math.ceil(
+  VOICE_CATALOG_RETRY_LIMIT_MS / VOICE_CATALOG_RETRY_MS,
+);
 
 /**
  * Per-readiness-signal fallback windows. The hook waits for cloud
@@ -245,6 +252,7 @@ export function useVoiceReadout(
   // ref is read inside `speak` so we don't re-render on every voice
   // catalog update.
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  const speakRequestRef = useRef(0);
   useEffect(() => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     const synth = window.speechSynthesis;
@@ -305,58 +313,71 @@ export function useVoiceReadout(
       } catch {
         // Some browsers throw on cancel before any utterance has played.
       }
-      const utt = new SpeechSynthesisUtterance(sanitized);
-      utt.rate = clamp(prefs?.rate ?? DEFAULTS.rate, 0.5, 2);
-      utt.pitch = clamp(prefs?.pitch ?? DEFAULTS.pitch, 0, 2);
-      utt.volume = clamp(prefs?.volume ?? DEFAULTS.volume, 0, 1);
+      const requestId = ++speakRequestRef.current;
       const wantedVoice = prefs?.voice;
-      if (wantedVoice) {
-        const match = voicesRef.current.find((v) => v.name === wantedVoice);
+      const dispatch = (attempt = 0) => {
+        if (requestId !== speakRequestRef.current) return;
+        const match = resolvePreferredVoice(
+          synth,
+          voicesRef,
+          wantedVoice,
+        );
+        if (
+          wantedVoice
+          && !match
+          && attempt < VOICE_CATALOG_MAX_ATTEMPTS
+        ) {
+          log("waiting for preferred voice:", wantedVoice);
+          window.setTimeout(
+            () => dispatch(attempt + 1),
+            VOICE_CATALOG_RETRY_MS,
+          );
+          return;
+        }
+        const utt = new SpeechSynthesisUtterance(sanitized);
+        utt.rate = clamp(prefs?.rate ?? DEFAULTS.rate, 0.5, 2);
+        utt.pitch = clamp(prefs?.pitch ?? DEFAULTS.pitch, 0, 2);
+        utt.volume = clamp(prefs?.volume ?? DEFAULTS.volume, 0, 1);
         if (match) {
           utt.voice = match;
           utt.lang = match.lang || "en-US";
           log("voice =", match.name, match.lang);
-        } else {
+        } else if (wantedVoice) {
           log("preferred voice not found:", wantedVoice);
         }
-      }
-      utt.onerror = (ev) => {
-        const code = (ev as SpeechSynthesisErrorEvent).error || "unknown";
-        // 'interrupted' / 'canceled' fire whenever we proactively cancel
-        // the previous utterance; not a user-visible error.
-        if (code === "interrupted" || code === "canceled") return;
-        try {
-          // eslint-disable-next-line no-console
-          console.warn("[VoiceReadout] utterance error:", code);
-        } catch {
-          /* never let logging crash the renderer */
-        }
-        if (code === "not-allowed") {
-          // Browser revoked the unlock (e.g. session ended); restart
-          // the gesture flow on the next payload. Re-queue the text
-          // we just tried so the next gesture replays it instead of
-          // dropping the line silently.
-          clearPersistedUnlock();
-          setGestureGranted(false);
-          setPendingUtterance(sanitized);
-        }
-      };
-      const delay = clamp(prefs?.delayMs ?? DEFAULTS.delayMs, 0, 5000);
-      log("speak:", JSON.stringify(sanitized), "delay=" + delay);
-      if (delay > 0) {
-        window.setTimeout(() => {
+        utt.onerror = (ev) => {
+          const code = (ev as SpeechSynthesisErrorEvent).error || "unknown";
+          // 'interrupted' / 'canceled' fire whenever we proactively cancel
+          // the previous utterance; not a user-visible error.
+          if (code === "interrupted" || code === "canceled") return;
           try {
-            synth.speak(utt);
+            // eslint-disable-next-line no-console
+            console.warn("[VoiceReadout] utterance error:", code);
           } catch {
-            /* best-effort */
+            /* never let logging crash the renderer */
           }
-        }, delay);
-      } else {
+          if (code === "not-allowed") {
+            // Browser revoked the unlock (e.g. session ended); restart
+            // the gesture flow on the next payload. Re-queue the text
+            // we just tried so the next gesture replays it instead of
+            // dropping the line silently.
+            clearPersistedUnlock();
+            setGestureGranted(false);
+            setPendingUtterance(sanitized);
+          }
+        };
         try {
           synth.speak(utt);
         } catch {
           /* best-effort */
         }
+      };
+      const delay = clamp(prefs?.delayMs ?? DEFAULTS.delayMs, 0, 5000);
+      log("speak:", JSON.stringify(sanitized), "delay=" + delay);
+      if (delay > 0) {
+        window.setTimeout(() => dispatch(), delay);
+      } else {
+        dispatch();
       }
     },
     [prefs?.rate, prefs?.pitch, prefs?.voice, prefs?.volume, prefs?.delayMs, log],
@@ -682,6 +703,7 @@ export function useVoiceReadout(
   useEffect(() => {
     return () => {
       if (typeof window === "undefined" || !window.speechSynthesis) return;
+      speakRequestRef.current += 1;
       try {
         window.speechSynthesis.cancel();
       } catch {
@@ -716,6 +738,31 @@ function clamp(n: number, lo: number, hi: number): number {
   if (n < lo) return lo;
   if (n > hi) return hi;
   return n;
+}
+
+function resolvePreferredVoice(
+  synth: SpeechSynthesis,
+  voicesRef: MutableRefObject<SpeechSynthesisVoice[]>,
+  wantedVoice: string | undefined,
+): SpeechSynthesisVoice | null {
+  if (!wantedVoice) return null;
+  const latest = synth.getVoices();
+  if (latest.length > 0) voicesRef.current = latest;
+  return findVoice(latest.length > 0 ? latest : voicesRef.current, wantedVoice);
+}
+
+function findVoice(
+  voices: SpeechSynthesisVoice[],
+  wantedVoice: string,
+): SpeechSynthesisVoice | null {
+  const exact = voices.find((v) => v.name === wantedVoice);
+  if (exact) return exact;
+  const wanted = normalizeVoiceName(wantedVoice);
+  return voices.find((v) => normalizeVoiceName(v.name) === wanted) ?? null;
+}
+
+function normalizeVoiceName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function useDebugFlag(prefDebug: boolean | undefined): boolean {
