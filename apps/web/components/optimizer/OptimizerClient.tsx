@@ -55,12 +55,20 @@ export interface AdapterSettings {
   toProfileId: string;
   /** Replay opening window in seconds; 0 = whole game. */
   cutoffSec: number;
+  /**
+   * Never delay a worker for a structure (engine reserveWorkerCost).
+   * On = the economical "11 pylon" line; off = structures start the
+   * moment the bank covers them (slightly earlier tech, small worker
+   * drift).
+   */
+  strictEconomy: boolean;
 }
 
 const DEFAULT_SETTINGS: AdapterSettings = {
   fromProfileId: BASELINE_PROFILE_ID,
   toProfileId: DEFAULT_PROFILE_ID,
   cutoffSec: 420,
+  strictEconomy: true,
 };
 
 function isSettings(raw: unknown): raw is AdapterSettings {
@@ -70,6 +78,7 @@ function isSettings(raw: unknown): raw is AdapterSettings {
     typeof s.fromProfileId === "string" &&
     typeof s.toProfileId === "string" &&
     typeof s.cutoffSec === "number" &&
+    typeof s.strictEconomy === "boolean" &&
     s.fromProfileId !== s.toProfileId
   );
 }
@@ -86,7 +95,7 @@ export function OptimizerClient() {
 
 function OptimizerInner() {
   const [settings, setSettings] = useLocalStorageState<AdapterSettings>(
-    "optimizer.settings.v3",
+    "optimizer.settings.v4",
     DEFAULT_SETTINGS,
     isSettings,
   );
@@ -132,7 +141,10 @@ function OptimizerInner() {
       referenceName: source.name,
       referenceId: source.id,
       threats: [],
-      policies: defaultPolicies(),
+      policies: {
+        ...defaultPolicies(),
+        reserveWorkerCost: settings.strictEconomy,
+      },
       safety: { hasWall: true, allowWorkerPull: true },
       horizonSec,
     });
@@ -173,7 +185,7 @@ function OptimizerInner() {
       setAdaptError(err instanceof Error ? err.message : String(err));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.fromProfileId, settings.toProfileId, settings.cutoffSec]);
+  }, [settings.fromProfileId, settings.toProfileId, settings.cutoffSec, settings.strictEconomy]);
 
   const updateSettings = (patch: Partial<AdapterSettings>) => {
     setSettings({ ...settings, ...patch });

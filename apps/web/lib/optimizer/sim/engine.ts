@@ -311,6 +311,19 @@ function autoChrono(
   }
 }
 
+function workerSaturationTarget(state: SimState, race: SimRace): number {
+  let saturation = 0;
+  for (const base of state.eco.bases) {
+    saturation += 2 * base.patches;
+    if (race !== "Zerg") {
+      saturation += 3 * base.geysers.length;
+    } else if (base.active) {
+      for (const geyser of base.geysers) if (geyser.active) saturation += 3;
+    }
+  }
+  return saturation;
+}
+
 function autoWorkers(
   state: SimState,
   profile: PatchProfile,
@@ -327,15 +340,7 @@ function autoWorkers(
   // the way there); zerg drone targets follow actual extractors so
   // low-economy zerg builds keep their deliberately frozen drone
   // counts.
-  let saturation = 0;
-  for (const base of state.eco.bases) {
-    saturation += 2 * base.patches;
-    if (race !== "Zerg") {
-      saturation += 3 * base.geysers.length;
-    } else if (base.active) {
-      for (const geyser of base.geysers) if (geyser.active) saturation += 3;
-    }
-  }
+  const saturation = workerSaturationTarget(state, race);
   const current =
     (state.completed.get(workerName) ?? 0) +
     (state.inProgress.get(workerName) ?? 0);
@@ -456,6 +461,28 @@ export function simulate(
       autoWorkers(state, profile, race);
     }
 
+    // 0b. Strict-economy reservation: hold back the next worker's
+    // mineral cost so no head action can spend it, then restore it
+    // right after head dispatch. With the flag off, structures start
+    // the moment the bank covers them (a few seconds of worker drift
+    // in exchange for earlier tech).
+    let workerReserve = 0;
+    if (
+      policies.reserveWorkerCost &&
+      policies.autoWorkers &&
+      race !== "Zerg"
+    ) {
+      const workerName = profile.starting.worker[race];
+      const workerDef = profile.units[workerName];
+      const workerCount =
+        (state.completed.get(workerName) ?? 0) +
+        (state.inProgress.get(workerName) ?? 0);
+      if (workerDef && workerCount < workerSaturationTarget(state, race)) {
+        workerReserve = Math.min(workerDef.minerals, state.eco.minerals);
+        state.eco.minerals -= workerReserve;
+      }
+    }
+
     // 1. Try to dispatch as many head actions as possible right now.
     let headRetryAt = Infinity;
     advancePending();
@@ -517,6 +544,7 @@ export function simulate(
       }
       break;
     }
+    state.eco.minerals += workerReserve;
     if (
       state.supplyBlockedSince !== null &&
       (firstPending >= actions.length ||

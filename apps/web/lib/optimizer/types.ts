@@ -218,6 +218,14 @@ export interface MacroPolicies {
   autoInject: boolean;
   /** Saturate new geysers to 3 workers automatically. */
   autoSaturateGas: boolean;
+  /**
+   * Strict-economy mode: hold back one worker's mineral cost from
+   * build-order spending while still below saturation, so a structure
+   * can never delay the next probe/SCV even by a few seconds (the
+   * classic "11 pylon" discipline). Off = structures start the moment
+   * the bank covers them, accepting small worker-production drift.
+   */
+  reserveWorkerCost?: boolean;
 }
 
 export interface SimEvent {

@@ -11,6 +11,7 @@
  */
 import { ArrowDownUp } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { Toggle } from "@/components/ui/Toggle";
 import { Field } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Select";
 import {
@@ -120,6 +121,21 @@ export function AdaptDirectionPanel({
             ))}
           </Select>
         </Field>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-caption text-text">
+            Strict worker production
+            <span className="block text-caption text-text-dim">
+              Never delay a probe/SCV for a structure (the economical
+              &ldquo;11 pylon&rdquo; line). Off trades ~50 minerals by
+              2:00 for ~9s earlier tech.
+            </span>
+          </span>
+          <Toggle
+            checked={settings.strictEconomy}
+            onChange={(strictEconomy) => onChange({ strictEconomy })}
+            label="Strict worker production"
+          />
+        </div>
         <p className="text-caption text-text-dim">
           Ladder games are 12-worker starts, so the default direction
           re-times them for the 8-worker economy. Swap to convert an
