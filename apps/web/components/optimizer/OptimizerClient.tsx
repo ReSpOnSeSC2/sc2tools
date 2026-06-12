@@ -28,6 +28,7 @@ import {
   adaptBuild,
 } from "@/lib/optimizer/adapt/adapt";
 import { actionsFromReplayEvents } from "@/lib/optimizer/adapt/fromReplay";
+import { applyFirstUnitDefenseGuard } from "@/lib/optimizer/adapt/defense";
 import {
   DEFAULT_PROFILE_ID,
   listProfiles,
@@ -43,7 +44,7 @@ import { ExportToBuildsButton } from "./ExportToBuildsButton";
 import { MyGamesPanel } from "./MyGamesPanel";
 import { SavedBuildsPanel } from "./SavedBuildsPanel";
 import { UploadReplayPanel } from "./UploadReplayPanel";
-import type { BuildSource } from "./buildSource";
+import { coerceSimRace, type BuildSource } from "./buildSource";
 
 /** Patch real ladder replays + legacy reference builds live on. */
 const BASELINE_PROFILE_ID = "lotv-base";
@@ -133,7 +134,7 @@ function OptimizerInner() {
       900,
       Math.max(480, (resolved.latestMilestoneSec ?? 0) + 90),
     );
-    const adapted = adaptBuild({
+    const request = {
       baselineProfileId: settings.fromProfileId,
       profileId: settings.toProfileId,
       race: source.race,
@@ -147,7 +148,16 @@ function OptimizerInner() {
       },
       safety: { hasWall: true, allowWorkerPull: true },
       horizonSec,
-    });
+    };
+    // Defense guard: if the source ordering leaves no combat unit out
+    // by the matchup's standard pressure window (8-worker reaper
+    // ~2:42), pull the first unit to its earliest feasible slot and
+    // say so in a note.
+    const adapted = applyFirstUnitDefenseGuard(
+      adaptBuild(request),
+      request,
+      coerceSimRace(source.vsRace) ?? undefined,
+    );
     const adaptationNotes = resolved.fromRules
       ? [
           "Reconstructed from this build's detection rules — the milestones plus their implied tech and gas. Steps the rules don't mention (expansions, extra army) aren't included; save the build with a full signature for higher fidelity.",
