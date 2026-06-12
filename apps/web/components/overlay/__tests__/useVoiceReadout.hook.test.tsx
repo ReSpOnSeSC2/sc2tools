@@ -13,10 +13,16 @@ type Capture = {
   speak: ReturnType<typeof vi.fn>;
   cancel: ReturnType<typeof vi.fn>;
   utterances: SpeechSynthesisUtterance[];
+  setVoices: (next: SpeechSynthesisVoice[]) => void;
+  dispatchVoicesChanged: () => void;
 };
+
+const VOICE_RETRY_STEP_MS = 100;
 
 function installSpeechSynthMock(): Capture {
   const utterances: SpeechSynthesisUtterance[] = [];
+  let voices: SpeechSynthesisVoice[] = [];
+  const voiceListeners = new Set<() => void>();
   const speak = vi.fn((u: SpeechSynthesisUtterance) => {
     utterances.push(u);
   });
@@ -29,9 +35,15 @@ function installSpeechSynthMock(): Capture {
     pending: false,
     resume: vi.fn(),
     pause: vi.fn(),
-    getVoices: () => [],
-    addEventListener: () => {},
-    removeEventListener: () => {},
+    getVoices: () => voices,
+    addEventListener: (type: string, fn: EventListenerOrEventListenerObject) => {
+      if (type !== "voiceschanged") return;
+      if (typeof fn === "function") voiceListeners.add(fn as () => void);
+    },
+    removeEventListener: (type: string, fn: EventListenerOrEventListenerObject) => {
+      if (type !== "voiceschanged") return;
+      if (typeof fn === "function") voiceListeners.delete(fn as () => void);
+    },
     dispatchEvent: () => true,
     onvoiceschanged: null,
   } as unknown as SpeechSynthesis;
@@ -61,7 +73,30 @@ function installSpeechSynthMock(): Capture {
     (globalThis as unknown as { SpeechSynthesisUtterance: typeof FakeUtt })
       .SpeechSynthesisUtterance = FakeUtt;
   }
-  return { speak, cancel, utterances };
+  return {
+    speak,
+    cancel,
+    utterances,
+    setVoices: (next) => {
+      voices = next;
+    },
+    dispatchVoicesChanged: () => {
+      for (const listener of voiceListeners) listener();
+    },
+  };
+}
+
+function makeVoice(
+  name: string,
+  lang = "en-US",
+): SpeechSynthesisVoice {
+  return {
+    name,
+    lang,
+    voiceURI: name,
+    default: false,
+    localService: true,
+  } as SpeechSynthesisVoice;
 }
 
 function clearSessionUnlock() {
@@ -433,6 +468,34 @@ describe("useVoiceReadout (hook)", () => {
     flush();
     expect(cap.speak).toHaveBeenCalledTimes(1);
     expect(cap.utterances[0]?.text).toContain("Facing Alice, Zerg.");
+  });
+
+  it("waits for the preferred voice catalog before speaking", () => {
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    window.sessionStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const prefs = {
+      enabled: true,
+      events: { scouting: true },
+      voice: "Google UK English Female",
+      delayMs: 0,
+    };
+    render(
+      <Harness
+        live={{ oppName: "Alice", oppRace: "Zerg" }}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    expect(cap.speak).not.toHaveBeenCalled();
+    const chosen = makeVoice("Google UK English Female", "en-GB");
+    act(() => {
+      cap.setVoices([chosen]);
+      cap.dispatchVoicesChanged();
+      vi.advanceTimersByTime(VOICE_RETRY_STEP_MS);
+    });
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(cap.utterances[0]?.voice).toBe(chosen);
+    expect(cap.utterances[0]?.lang).toBe("en-GB");
   });
 
   it("queues until gesture, then replays the most recent payload", () => {
