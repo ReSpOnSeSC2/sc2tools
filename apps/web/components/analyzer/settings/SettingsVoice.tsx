@@ -30,6 +30,13 @@ import { usePublishDirty } from "./SettingsContext";
 type VoicePrefs = {
   enabled: boolean;
   voice?: string;
+  /**
+   * BCP-47 lang of the picked voice (e.g. ``en-US``). Captured here so
+   * the OBS overlay can fall back to a same-language local voice when
+   * the exact pick isn't installed in its embedded Chromium (CEF) — see
+   * ``useVoiceReadout`` ``findVoice``.
+   */
+  voiceLang?: string;
   rate?: number;
   pitch?: number;
   volume?: number;
@@ -235,12 +242,22 @@ export function SettingsVoice() {
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Voice" hint="Browser-installed voices only">
+            <Field
+              label="Voice"
+              hint={'"Google …" voices play in Chrome but not in OBS/Streamlabs — the overlay falls back to a same-language local voice there.'}
+            >
               <Select
                 value={draft.voice ?? ""}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, voice: e.target.value || undefined }))
-                }
+                onChange={(e) => {
+                  const name = e.target.value || undefined;
+                  // Capture the lang too so the overlay can fall back to
+                  // a same-language voice when this exact pick isn't
+                  // installed inside OBS/Streamlabs' CEF runtime.
+                  const lang = name
+                    ? voices.find((v) => v.name === name)?.lang || undefined
+                    : undefined;
+                  setDraft((d) => ({ ...d, voice: name, voiceLang: lang }));
+                }}
               >
                 <option value="">Default system voice</option>
                 {Object.entries(groupedVoices).map(([lang, vs]) => (
