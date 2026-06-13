@@ -498,6 +498,70 @@ describe("useVoiceReadout (hook)", () => {
     expect(cap.utterances[0]?.lang).toBe("en-GB");
   });
 
+  it("uses a same-language local voice when the pick isn't installed here (OBS/Streamlabs CEF)", () => {
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    window.sessionStorage.setItem("sc2tools.voiceUnlocked", "1");
+    // OBS / Streamlabs' Browser Source runs an embedded Chromium that
+    // ships only the local OS voices — the streamer's Chrome-only
+    // "Google US English" pick is simply absent from this catalog.
+    const david = makeVoice(
+      "Microsoft David - English (United States)",
+      "en-US",
+    );
+    const zira = makeVoice(
+      "Microsoft Zira - English (United States)",
+      "en-US",
+    );
+    cap.setVoices([david, zira]);
+    const prefs = {
+      enabled: true,
+      events: { scouting: true },
+      voice: "Google US English",
+      delayMs: 0,
+    };
+    render(
+      <Harness
+        live={{ oppName: "Alice", oppRace: "Zerg" }}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    // Speaks immediately — no 2 s retry stall — with an en-US fallback
+    // inferred from the picked voice's name.
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(cap.utterances[0]?.voice).toBe(david);
+    expect(cap.utterances[0]?.lang).toBe("en-US");
+  });
+
+  it("falls back via voiceLang when the voice name encodes no language", () => {
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    window.sessionStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const david = makeVoice(
+      "Microsoft David - English (United States)",
+      "en-US",
+    );
+    cap.setVoices([david]);
+    const prefs = {
+      enabled: true,
+      events: { scouting: true },
+      // A real voice on the streamer's box ("Daniel" on macOS) whose
+      // name gives no language hint — voiceLang carries it instead.
+      voice: "Daniel",
+      voiceLang: "en-US",
+      delayMs: 0,
+    };
+    render(
+      <Harness
+        live={{ oppName: "Bob", oppRace: "Terran" }}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(cap.utterances[0]?.voice).toBe(david);
+    expect(cap.utterances[0]?.lang).toBe("en-US");
+  });
+
   it("queues until gesture, then replays the most recent payload", () => {
     const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
     const prefs = { enabled: true, events: { scouting: true } };
