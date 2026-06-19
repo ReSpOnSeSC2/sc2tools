@@ -220,13 +220,13 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
     }
   });
 
-  it("warns when warpgate research occupies the only gateway (PTR)", () => {
-    // The proxy warpgate rush researches off its only gateway ON
-    // PURPOSE — the note fires so the trade is explicit. Standard
-    // builds were reordered to research after gate #2 and stay quiet.
-    const reorderedStandard = adapt("protoss-robo-opener", "Protoss");
+  it("research no longer occupies a gateway, but the transform note still fires (PTR2)", () => {
+    // PTR2 moved warpgate research back to the cybernetics core, which
+    // trains no units — so the gateway-occupancy warning never fires,
+    // not for standard builds nor for the proxy warpgate rush.
+    const standard = adapt("protoss-standard-expand", "Protoss");
     expect(
-      reorderedStandard.adaptationNotes.some((n) =>
+      standard.adaptationNotes.some((n) =>
         n.includes("occupies your only Gateway"),
       ),
     ).toBe(false);
@@ -250,47 +250,45 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
       rush.adaptationNotes.some((n) =>
         n.includes("occupies your only Gateway"),
       ),
-    ).toBe(true);
-    const result = adapt("protoss-robo-opener", "Protoss");
-    // and the per-gateway transform economics note rides along
+    ).toBe(false);
+    // the per-gateway transform economics note rides along (PTR2: 25/25)
     expect(
-      result.adaptationNotes.some((n) => n.includes("50/50 per gateway")),
+      standard.adaptationNotes.some((n) => n.includes("25/25 per gateway")),
     ).toBe(true);
-    // the sim reflects reality: a gateway unit may only start during
-    // the research if ANOTHER gateway has finished by then (the
-    // researching one is fully occupied)
-    const research = result.sim.steps.find(
+    // the sim reflects reality: gateways keep producing THROUGH the
+    // research (it runs at the core), so gateway units start during the
+    // research window off a single standing gateway.
+    const research = standard.sim.steps.find(
       (s) => s.name === "WarpGateResearch",
     )!;
-    const gatewayDone = (result.sim.completionTimes.Gateway ?? []).slice();
-    const gatewayUnits = result.sim.steps.filter(
+    const during = standard.sim.steps.filter(
       (s) =>
         s.kind === "train" &&
-        ["Zealot", "Adept", "Stalker", "Sentry"].includes(s.name),
+        ["Zealot", "Adept", "Stalker", "Sentry"].includes(s.name) &&
+        s.startSec > research.startSec + 0.01 &&
+        s.startSec < research.doneSec - 0.01,
     );
-    for (const unit of gatewayUnits) {
-      const during =
-        unit.startSec > research.startSec + 0.01 &&
-        unit.startSec < research.doneSec - 0.01;
-      if (during) {
-        const gatewaysAvailable = gatewayDone.filter(
-          (t) => t <= unit.startSec,
-        ).length;
-        expect(gatewaysAvailable).toBeGreaterThanOrEqual(2);
-      }
-    }
+    expect(during.length).toBeGreaterThan(0);
   });
 
-  it("standard protoss builds research warpgate after the second gateway", () => {
-    // PTR meta: research occupies a gateway, so units come first and
-    // research waits for gate #2 — except dedicated rush builds.
-    for (const id of ["protoss-standard-expand", "protoss-stargate-opener", "protoss-robo-opener"]) {
-      const build = referenceBuilds().find((b) => b.id === id)!;
-      const gateIndices = build.steps
-        .map((s, i) => (s === "Gateway" ? i : -1))
-        .filter((i) => i >= 0);
-      const wgIndex = build.steps.indexOf("WarpGateResearch");
-      expect(wgIndex, id).toBeGreaterThan(gateIndices[1]);
+  it("gateway openers research warpgate at the core; stargate openers after the stargate (PTR2)", () => {
+    // PTR2: research lives at the cybernetics core. Gateway openers
+    // research it right after the core; stargate openers spend the gas
+    // on the stargate first and research behind it.
+    const std = referenceBuilds().find(
+      (b) => b.id === "protoss-standard-expand",
+    )!;
+    const core = std.steps.indexOf("CyberneticsCore");
+    const wgr = std.steps.indexOf("WarpGateResearch");
+    const gate2 = std.steps.indexOf("Gateway", std.steps.indexOf("Gateway") + 1);
+    expect(wgr).toBeGreaterThan(core);
+    expect(wgr).toBeLessThan(gate2);
+    for (const id of ["protoss-stargate-opener", "pvt-stargate-opener"]) {
+      const sg = referenceBuilds().find((b) => b.id === id)!;
+      expect(
+        sg.steps.indexOf("WarpGateResearch"),
+        id,
+      ).toBeGreaterThan(sg.steps.indexOf("Stargate"));
     }
   });
 
@@ -319,16 +317,17 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
       horizonSec: 480,
     });
     expect(result.sim.unexecutedActions).toBe(0);
-    // research starts once the cybernetics core is done (5.0.16 gates
-    // warpgate research on the core even though it runs at a gateway)
+    // research starts once the cybernetics core is done (PTR2 runs it
+    // at the core)
     const research = result.sim.steps.find(
       (s) => s.name === "WarpGateResearch",
     )!;
     const cyberDone = result.sim.completionTimes.CyberneticsCore[0];
     expect(research.startSec).toBeGreaterThanOrEqual(cyberDone - 0.01);
     // all six units execute; the ones after the transforms are warped
-    // (warpInSec, not the 28s gateway time). The lookahead may train
-    // a couple from gateways while research runs — that's real play.
+    // (warpInSec, not the gateway time). PTR2 gateways are no longer
+    // tied up by research and produce fast, so the lookahead trains more
+    // from gateways before the transforms land — at least one still warps.
     const units = result.sim.steps.filter((s) =>
       ["Zealot", "Adept"].includes(s.name),
     );
@@ -340,7 +339,7 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
     const warped = units.filter(
       (u) => u.startSec >= Math.min(...transformDone) - 0.01,
     );
-    expect(warped.length).toBeGreaterThanOrEqual(2);
+    expect(warped.length).toBeGreaterThanOrEqual(1);
     for (const unit of warped) {
       expect(unit.doneSec - unit.startSec).toBeLessThanOrEqual(
         target.mechanics.warpgate.warpInSec + 0.1,

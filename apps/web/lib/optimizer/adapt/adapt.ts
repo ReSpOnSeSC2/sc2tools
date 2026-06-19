@@ -158,12 +158,18 @@ export function actionsFromSteps(
     if (isPolicyOwned(profile, canonical)) continue;
     const action = actionForName(profile, canonical);
     if (!action) continue;
-    if (canonical === "WarpGateResearch") {
-      // 5.0.16 meta: the research occupies a gateway, so it must wait
-      // for every gateway listed before it to finish — "you cannot
-      // start warpgate until you get your second gateway up". Rush
-      // builds that list only one gateway first keep researching
-      // immediately; old-patch baselines ignore the gate entirely.
+    if (
+      canonical === "WarpGateResearch" &&
+      profile.upgrades.WarpGateResearch?.researchedAt?.includes("Gateway")
+    ) {
+      // PTR1-only meta: when the research runs AT a gateway it occupies
+      // one, so it must wait for every gateway listed before it to
+      // finish — "you cannot start warpgate until you get your second
+      // gateway up". PTR2 reverted the research to the Cybernetics Core,
+      // which trains no units, so gateways keep producing throughout and
+      // this gate no longer applies (the check above keeps it dormant on
+      // cybercore profiles). Rush builds with one listed gateway keep
+      // researching immediately either way.
       const priorGateways = actions.filter(
         (a) => a.kind === "build" && a.name === "Gateway",
       ).length;
@@ -373,11 +379,12 @@ function buildComparison(
 }
 
 /**
- * Patch-specific guidance from the adapted sim. The big one for
- * 5.0.16: warpgate research now lives ON the Gateway and occupies it
- * for the full research (PTR-verified), so a legacy build that
- * researches early off one gateway silently loses ~100s of unit
- * production — worth a loud note, not a mystery gap.
+ * Patch-specific guidance from the adapted sim. The generic check below
+ * fires when a blocking research occupies the only structure of a type
+ * that also trains units (e.g. PTR1's warpgate-on-the-Gateway). 5.0.16
+ * PTR2 reverted warpgate research to the Cybernetics Core, which trains
+ * no units, so it no longer trips that note — but the per-gateway
+ * transform economics note below still applies.
  */
 function buildAdaptationNotes(
   profile: PatchProfile,

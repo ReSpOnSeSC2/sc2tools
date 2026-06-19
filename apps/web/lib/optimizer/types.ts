@@ -20,6 +20,11 @@ export interface CombatStats {
   dpsGround?: number;
   /** Sustained DPS vs air targets. */
   dpsAir?: number;
+  /** Movement speed (game units/sec). Recorded for completeness; the
+   *  macro/safety sim does not model movement. */
+  speed?: number;
+  /** Attack/ability range. Recorded for completeness; not consumed by the sim. */
+  range?: number;
   /** Static defense (cannon/spine/bunker/turret) — can't chase. */
   isStatic?: boolean;
   /** Flying unit — only defenders with dpsAir can hit it. */
@@ -70,6 +75,9 @@ export interface UnitDef {
    * per-unit; the engine doubles both for a single order.
    */
   pairTrained?: boolean;
+  /** Caster/structure energy capacity (Shield Battery). Recorded for
+   *  completeness; not consumed by the macro sim. */
+  energy?: number;
   combat?: CombatStats;
 }
 
@@ -82,9 +90,10 @@ export interface UpgradeDef {
   researchedAt: string[];
   requires?: string[];
   /**
-   * Research runs without occupying the structure's production queue
-   * (5.0.16 warpgate research on the Gateway — blocking your only
-   * gateway for 114s would defeat the rework's stated purpose).
+   * Research runs without occupying the structure's production queue.
+   * (Kept for research that lives on a unit-producing structure; 5.0.16
+   * PTR2 reverted warpgate research to the Cybernetics Core, which
+   * trains nothing, so it no longer needs this.)
    */
   nonBlocking?: boolean;
 }
@@ -118,10 +127,19 @@ export interface MechanicsConfig {
   maxEnergy: number;
   warpgate: {
     /**
-     * Gateway production speed multiplier once research completes
-     * (5.0.16: 1.35 — gateways produce 35% faster).
+     * Fallback gateway production speed multiplier once research
+     * completes (5.0.16 PTR2: 1.40 — gateways produce ~40% faster).
+     * Used only when `boostedBuildTimes` has no entry for a unit; also
+     * drives the "X% faster" adaptation note.
      */
     gatewaySpeedMultiplier: number;
+    /**
+     * Per-unit gateway production time AFTER warpgate research finishes.
+     * PTR2's boost is per-unit (Stalker 27→16 ≈1.69×, HT 39→26 =1.5×),
+     * so it can't be expressed as a single multiplier. When present for
+     * a unit it overrides `gatewaySpeedMultiplier`.
+     */
+    boostedBuildTimes?: Record<string, number>;
     transformCost: { minerals: number; gas: number };
     transformTime: number;
     warpInSec: number;
@@ -198,9 +216,10 @@ export interface BuildAction {
   /**
    * Meta gate for research that occupies a production structure:
    * wait until `count` completed `unit`s stand, so the research never
-   * takes the only one offline (5.0.16 warpgate waits for every
-   * gateway listed before it). Ignored on profiles where the research
-   * doesn't occupy that structure type (old-patch baselines).
+   * takes the only one offline. Ignored on profiles where the research
+   * doesn't occupy that structure type — including 5.0.16 PTR2, which
+   * researches warpgate at the Cybernetics Core (set only for the
+   * legacy on-the-Gateway PTR1 layout).
    */
   afterCompleted?: { unit: string; count: number };
 }
@@ -462,7 +481,8 @@ export interface AdaptResult {
   unknownNames: string[];
   /**
    * Patch-specific guidance generated from the adapted sim — e.g.
-   * "warpgate research occupies your only Gateway until 4:08".
+   * "transforming to a warpgate costs 25/25 per gateway; keep gateways
+   * producing".
    */
   adaptationNotes: string[];
 }
