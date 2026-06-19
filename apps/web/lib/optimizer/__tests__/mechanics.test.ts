@@ -148,15 +148,15 @@ describe("terran orbital mechanics", () => {
   });
 });
 
-describe("5.0.16 warpgate rework", () => {
-  it("research occupies the gateway for its full 100s (PTR behavior)", () => {
+describe("5.0.16 PTR2 warpgate rework", () => {
+  it("research runs at the cybernetics core; the gateway keeps producing", () => {
     const actions: BuildAction[] = [
       act("build", "Pylon"),
       act("build", "Gateway"),
       act("build", "Assimilator"),
       act("build", "CyberneticsCore"),
       act("research", "WarpGateResearch"),
-      ...Array.from({ length: 2 }, () => act("train", "Zealot")),
+      ...Array.from({ length: 8 }, () => act("train", "Zealot")),
     ];
     const result = simulate(actions, profile, "Protoss", opts({ horizonSec: 600 }));
     expect(result.unexecutedActions).toBe(0);
@@ -165,23 +165,22 @@ describe("5.0.16 warpgate rework", () => {
     )!;
     // PTR research time is 100s (5.0.16 delta over the 114s baseline)
     expect(research.doneSec - research.startSec).toBeCloseTo(100, 1);
-    // the only gateway is researching — no unit can START inside the
-    // research window (lookahead may legally train BEFORE it begins,
-    // while the cybernetics core is still building)
+    // PTR2: research is on the core, so the lone gateway keeps making
+    // zealots THROUGHOUT the research window.
     const zealots = result.steps.filter((s) => s.name === "Zealot");
-    for (const z of zealots) {
-      const inside =
+    const inside = zealots.filter(
+      (z) =>
         z.startSec > research.startSec + 0.01 &&
-        z.startSec < research.doneSec - 0.01;
-      expect(inside).toBe(false);
-    }
-    // a post-research zealot exists and runs at the 1.35x speed
+        z.startSec < research.doneSec - 0.01,
+    );
+    expect(inside.length).toBeGreaterThan(0);
+    // a post-research zealot runs at the per-unit boosted gateway time (16s)
     const boosted = zealots.find(
       (z) => z.startSec >= research.doneSec - 0.01,
     )!;
     expect(boosted).toBeDefined();
     expect(boosted.doneSec - boosted.startSec).toBeCloseTo(
-      profile.units.Zealot.buildTime / 1.35,
+      profile.mechanics.warpgate.boostedBuildTimes!.Zealot,
       1,
     );
   });
@@ -313,11 +312,11 @@ describe("build-order lookahead", () => {
     );
   });
 
-  it("warpgate research waits for the gateways listed before it", () => {
-    // actionsFromSteps tags WarpGateResearch with afterCompleted —
-    // here we set it directly: with two gateways listed first, the
-    // research may only start once BOTH stand ("you cannot start
-    // warpgate until you get your second gateway up").
+  it("warpgate research is moot-gated on the cybernetics-core profile (PTR2)", () => {
+    // On PTR2 the research runs at the cybernetics core, so the
+    // gateway-occupancy gate is skipped even when an afterCompleted hint
+    // is present: research starts once the CORE is up, without waiting
+    // for the second gateway listed ahead of it.
     const actions: BuildAction[] = [
       act("build", "Pylon"),
       act("build", "Gateway"),
@@ -336,7 +335,12 @@ describe("build-order lookahead", () => {
     const gates = result.steps
       .filter((s) => s.name === "Gateway")
       .sort((a, b) => a.doneSec - b.doneSec);
+    const coreDone = result.steps.find(
+      (s) => s.name === "CyberneticsCore",
+    )!.doneSec;
     const research = result.steps.find((s) => s.name === "WarpGateResearch")!;
-    expect(research.startSec).toBeGreaterThanOrEqual(gates[1].doneSec - 0.01);
+    expect(research.startSec).toBeGreaterThanOrEqual(coreDone - 0.01);
+    // it does NOT wait for the second gateway (gate is moot on the core)
+    expect(research.startSec).toBeLessThan(gates[1].doneSec);
   });
 });

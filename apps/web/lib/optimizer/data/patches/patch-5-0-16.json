@@ -1,6 +1,6 @@
 {
   "id": "5.0.16",
-  "label": "Patch 5.0.16 — 8-worker economy",
+  "label": "Patch 5.0.16 PTR2 — 8-worker economy, warpgate research on the Cybernetics Core",
   "extends": "lotv-base",
   "starting": {
     "workers": 8
@@ -11,10 +11,19 @@
     "richGasMultiplier": 1.5
   },
   "mechanics": {
+    "larva": { "intervalSec": 9 },
     "warpgate": {
-      "gatewaySpeedMultiplier": 1.35,
-      "transformCost": { "minerals": 50, "gas": 50 },
-      "warpInSec": 3,
+      "gatewaySpeedMultiplier": 1.4,
+      "boostedBuildTimes": {
+        "Zealot": 16,
+        "Sentry": 14,
+        "Stalker": 16,
+        "Adept": 18,
+        "HighTemplar": 26,
+        "DarkTemplar": 26
+      },
+      "transformCost": { "minerals": 25, "gas": 25 },
+      "warpInSec": 4,
       "cooldowns": {
         "Zealot": 22,
         "Adept": 22,
@@ -33,22 +42,25 @@
     "Hatchery": { "providesSupply": 4 },
     "Lair": { "providesSupply": 4 },
     "Hive": { "providesSupply": 4 },
-    "Zealot": { "buildTime": 28 },
-    "Stalker": { "buildTime": 28 },
-    "Adept": { "buildTime": 28 },
-    "Sentry": { "buildTime": 24 },
-    "HighTemplar": { "buildTime": 40 },
-    "DarkTemplar": { "buildTime": 40 },
+    "Queen": { "minerals": 150 },
     "Ghost": {
       "supply": 3,
-      "combat": { "hp": 100, "dpsGround": 11.4, "dpsAir": 11.4 }
+      "combat": { "hp": 100, "dpsGround": 8.55, "dpsAir": 8.55, "speed": 3.85 }
+    },
+    "Overlord": {
+      "combat": { "speed": 0.85 }
+    },
+    "Disruptor": {
+      "combat": { "range": 12.35 }
+    },
+    "ShieldBattery": {
+      "energy": 75
     }
   },
   "upgrades": {
     "WarpGateResearch": {
-      "researchedAt": ["Gateway"],
-      "researchTime": 100,
-      "requires": ["CyberneticsCore"]
+      "researchedAt": ["CyberneticsCore"],
+      "researchTime": 100
     },
     "ZergGroundCarapaceLevel1": { "minerals": 100, "gas": 100 },
     "ZergGroundCarapaceLevel2": { "minerals": 150, "gas": 150 },

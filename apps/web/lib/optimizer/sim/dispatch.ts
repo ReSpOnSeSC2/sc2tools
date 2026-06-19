@@ -351,7 +351,11 @@ export function dispatchTrain(
   } else {
     let duration = def.buildTime;
     if (pick.producer.name === "Gateway" && state.warpgateDone) {
-      duration /= wg.gatewaySpeedMultiplier;
+      // PTR2's post-research gateway boost is per-unit (Stalker 27→16,
+      // HT 39→26), so prefer the explicit boosted time; fall back to the
+      // uniform multiplier for profiles that don't list one.
+      duration =
+        wg.boostedBuildTimes?.[name] ?? def.buildTime / wg.gatewaySpeedMultiplier;
     }
     doneAt = applyChronoToTask(
       state.time,

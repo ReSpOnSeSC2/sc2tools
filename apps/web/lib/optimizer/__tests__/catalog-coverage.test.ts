@@ -230,12 +230,11 @@ describe("PvT first-defense rule (user's PTR guidance)", () => {
   });
 });
 
-describe("5.0.16 warpgate meta (user's PTR guidance)", () => {
-  // "You cannot start warpgate until you get your second gateway up"
-  // — the research occupies a gateway, so every gateway listed before
-  // it must be standing when it starts. The PvP proxy warpgate rush
-  // researches off its lone first gateway on purpose and is covered
-  // by the same rule (one listed gateway → no extra wait).
+describe("5.0.16 PTR2 warpgate meta (research on the cybernetics core)", () => {
+  // PTR2 reverted warpgate research to the Cybernetics Core. It no
+  // longer occupies a gateway, so gateways keep producing through it and
+  // it only has to wait for the core to finish. Gateway openers research
+  // it at the core; stargate openers research it behind the stargate.
 
   function simSteps(steps: string[]) {
     const { actions } = actionsFromSteps(target, steps);
@@ -245,46 +244,41 @@ describe("5.0.16 warpgate meta (user's PTR guidance)", () => {
     });
   }
 
-  it("research never starts before the gateways listed ahead of it", () => {
+  it("research starts once the cybernetics core is up", () => {
     for (const build of referenceBuilds()) {
       if (build.race !== "Protoss") continue;
-      const steps = build.steps;
-      const wgrIndex = steps.indexOf("WarpGateResearch");
-      if (wgrIndex < 0) continue;
-      const prior = steps
-        .slice(0, wgrIndex)
-        .filter((s) => s === "Gateway").length;
-      const sim = simSteps(steps);
-      const research = sim.steps.find(
-        (s) => s.name === "WarpGateResearch",
-      )!;
-      const gateDone = sim.steps
-        .filter((s) => s.name === "Gateway")
-        .map((s) => s.doneSec)
-        .sort((a, b) => a - b);
+      if (!build.steps.includes("WarpGateResearch")) continue;
+      const sim = simSteps(build.steps);
+      const research = sim.steps.find((s) => s.name === "WarpGateResearch");
+      if (!research) continue;
+      const cyberDone = (sim.completionTimes.CyberneticsCore ?? [])[0];
+      expect(cyberDone, `${build.id}: no cybernetics core`).toBeDefined();
       expect(
         research.startSec,
-        `${build.id}: warpgate before gateway #${prior} finished`,
-      ).toBeGreaterThanOrEqual(gateDone[prior - 1] - 0.01);
+        `${build.id}: warpgate research before the cybernetics core`,
+      ).toBeGreaterThanOrEqual(cyberDone - 0.01);
     }
   });
 
-  it("the proxy warpgate rush still researches off one gateway", () => {
-    const rush = referenceBuilds().find(
-      (b) => b.id === "p-proxy-warpgate-rush",
+  it("gateways keep producing through the research (core, not gateway)", () => {
+    // A gateway unit can start during the research window with only one
+    // gateway standing — the researching structure is the core.
+    const build = referenceBuilds().find(
+      (b) => b.id === "protoss-standard-expand",
     )!;
-    const sim = simSteps(rush.steps);
+    const sim = simSteps(build.steps);
     const research = sim.steps.find((s) => s.name === "WarpGateResearch")!;
-    const gateDone = sim.steps
-      .filter((s) => s.name === "Gateway")
-      .map((s) => s.doneSec)
-      .sort((a, b) => a - b);
-    expect(research.startSec).toBeLessThan(gateDone[1]);
+    const during = sim.steps.filter(
+      (s) =>
+        s.kind === "train" &&
+        ["Zealot", "Adept", "Stalker", "Sentry"].includes(s.name) &&
+        s.startSec > research.startSec + 0.01 &&
+        s.startSec < research.doneSec - 0.01,
+    );
+    expect(during.length).toBeGreaterThan(0);
   });
 
   it("the 12-worker baseline keeps researching at the core, ungated", () => {
-    // Old patch: warpgate lives at the cybernetics core and occupies
-    // no gateway, so the meta gate must not delay the baseline sim.
     const build = referenceBuilds().find(
       (b) => b.id === "protoss-standard-expand",
     )!;
@@ -295,11 +289,8 @@ describe("5.0.16 warpgate meta (user's PTR guidance)", () => {
       policies: defaultPolicies(),
     });
     const research = sim.steps.find((s) => s.name === "WarpGateResearch")!;
-    const gateDone = sim.steps
-      .filter((s) => s.name === "Gateway")
-      .map((s) => s.doneSec)
-      .sort((a, b) => a - b);
-    expect(research.startSec).toBeLessThan(gateDone[1]);
+    const cyberDone = (sim.completionTimes.CyberneticsCore ?? [])[0];
+    expect(research.startSec).toBeGreaterThanOrEqual(cyberDone - 0.01);
   });
 });
 

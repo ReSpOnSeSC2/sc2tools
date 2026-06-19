@@ -18,21 +18,30 @@ describe("patch profile layering", () => {
     expect(p.units.Nexus.providesSupply).toBe(13);
     expect(p.units.CommandCenter.providesSupply).toBe(13);
     expect(p.units.Hatchery.providesSupply).toBe(4);
-    // Warpgate rework
-    expect(p.upgrades.WarpGateResearch.researchedAt).toEqual(["Gateway"]);
-    expect(p.mechanics.warpgate.gatewaySpeedMultiplier).toBe(1.35);
+    // Warpgate rework (PTR2: research reverted to the cybernetics core)
+    expect(p.upgrades.WarpGateResearch.researchedAt).toEqual([
+      "CyberneticsCore",
+    ]);
+    expect(p.mechanics.warpgate.gatewaySpeedMultiplier).toBe(1.4);
     expect(p.mechanics.warpgate.transformCost).toEqual({
-      minerals: 50,
-      gas: 50,
+      minerals: 25,
+      gas: 25,
     });
-    expect(p.mechanics.warpgate.warpInSec).toBe(3);
+    expect(p.mechanics.warpgate.warpInSec).toBe(4);
     expect(p.mechanics.warpgate.cooldowns.Stalker).toBe(22);
     expect(p.mechanics.warpgate.cooldowns.DarkTemplar).toBe(35);
-    // Gateway unit timings
-    expect(p.units.Zealot.buildTime).toBe(28);
-    expect(p.units.Adept.buildTime).toBe(28);
-    expect(p.units.Sentry.buildTime).toBe(24);
-    expect(p.units.HighTemplar.buildTime).toBe(40);
+    // Per-unit post-research gateway production times
+    expect(p.mechanics.warpgate.boostedBuildTimes?.Stalker).toBe(16);
+    expect(p.mechanics.warpgate.boostedBuildTimes?.HighTemplar).toBe(26);
+    // Pre-research gateway timings inherit the (corrected) live values
+    expect(p.units.Zealot.buildTime).toBe(27);
+    expect(p.units.Adept.buildTime).toBe(30);
+    expect(p.units.Sentry.buildTime).toBe(23);
+    expect(p.units.HighTemplar.buildTime).toBe(39);
+    // Larva spawn speed-up
+    expect(p.mechanics.larva.intervalSec).toBe(9);
+    // Queen cost cut
+    expect(p.units.Queen.minerals).toBe(150);
     // Ghost nerfs
     expect(p.units.Ghost.supply).toBe(3);
     expect(p.units.Ghost.combat?.hp).toBe(100);
@@ -67,8 +76,8 @@ describe("patch profile layering", () => {
     });
     expect(p.starting.workers).toBe(10);
     expect(p.units.Zealot.minerals).toBe(125);
-    // untouched siblings survive the merge
-    expect(p.units.Zealot.buildTime).toBe(28);
+    // untouched siblings survive the merge (PTR2 inherits the live time)
+    expect(p.units.Zealot.buildTime).toBe(27);
   });
 
   it("deletes keys via null leaves", () => {
