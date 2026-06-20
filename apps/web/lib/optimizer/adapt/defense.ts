@@ -171,18 +171,24 @@ function humanize(name: string): string {
 }
 
 /**
- * Apply the first-unit defense guard to an adapted result. Returns
- * the original result untouched when the matchup is unknown, the
- * pressure window can't be derived, or the first unit is already out
- * in time.
+ * Apply the first-unit defense guard to an adapted result. When the
+ * matchup is unknown the guard still runs against the fastest standard
+ * pressure on the patch (Terran's ~2:42 reaper, the tightest window) so
+ * a greedy order never slips through unchecked - it just labels the note
+ * as an assumption. Returns the original result untouched only when the
+ * pressure window can't be derived or the first unit is already out in
+ * time.
  */
 export function applyFirstUnitDefenseGuard(
   result: AdaptResult,
   request: AdaptRequest,
   vsRace: SimRace | undefined,
 ): AdaptResult {
-  if (!vsRace) return result;
-  const arrival = earliestPressureArrivalSec(request.profileId, vsRace);
+  // Unknown matchup -> assume the worst standard case: Terran's reaper
+  // is the fastest standard pressure, so its window is the safe default.
+  const attacker: SimRace = vsRace ?? "Terran";
+  const matchupKnown = vsRace !== undefined;
+  const arrival = earliestPressureArrivalSec(request.profileId, attacker);
   if (arrival === null) return result;
   const deadline = arrival + GRACE_SEC;
   const profile = resolveProfile(request.profileId);
@@ -235,7 +241,9 @@ export function applyFirstUnitDefenseGuard(
   }
 
   const finalFirst = firstCombatUnitDone(profile, final.sim);
-  const windowText = `the earliest standard ${vsRace} pressure on this patch arrives ~${mmss(arrival)}`;
+  const windowText = matchupKnown
+    ? `the earliest standard ${attacker} pressure on this patch arrives ~${mmss(arrival)}`
+    : `with no matchup set, the fastest standard pressure (a ${attacker} reaper) arrives ~${mmss(arrival)}`;
   let note: string;
   if (finalFirst === null) {
     note = `No combat unit in the adapted window, and ${windowText}. This opening is undefended - add an early unit or wall.`;
