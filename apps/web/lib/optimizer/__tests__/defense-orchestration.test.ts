@@ -97,13 +97,14 @@ describe("defense guard orchestration", () => {
     expect(fixedWorkers).toBeGreaterThanOrEqual(baseWorkers - 3);
   });
 
-  it("doesn't probe-cut a build that simpler levers can't even defend", () => {
-    // The Stalker opener can't be defended by any lever, so the guard must
-    // NOT burn probes on it (cuts are only for builds a cut makes safe).
+  it("fields the ranged unit in time, never by inserting a Zealot", () => {
+    // The greedy Stalker opener is now made defensible (Stalker by the
+    // deadline) via reorder + chrono + a small probe-cut — and crucially
+    // the guard never substitutes a Zealot for the ranged unit.
     const { r } = guard(STALKER_GREEDY);
-    expect(r.defense?.verdict).not.toBe("safe");
-    expect(r.defense?.leversUsed.some((l) => l.startsWith("probe-cut"))).toBe(
-      false,
-    );
+    expect(r.defense?.verdict).toBe("safe");
+    expect(r.defense?.firstUnit?.name).toBe("Stalker");
+    expect(r.defense?.leversUsed).not.toContain("zealot-fallback");
+    expect(r.actions.some((a) => a.name === "Zealot")).toBe(false);
   });
 });

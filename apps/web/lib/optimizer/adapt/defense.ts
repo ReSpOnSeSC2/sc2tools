@@ -108,23 +108,6 @@ function firstCombatUnitDone(
   return null;
 }
 
-/** Index of the first combat-unit action in the list, or -1. */
-function firstCombatActionIndex(
-  profile: PatchProfile,
-  actions: BuildAction[],
-): number {
-  for (let i = 0; i < actions.length; i += 1) {
-    const a = actions[i];
-    if (
-      (a.kind === "train" || a.kind === "morph") &&
-      isCombatUnit(profile, a.name)
-    ) {
-      return i;
-    }
-  }
-  return -1;
-}
-
 /**
  * Earliest list position the action at `idx` could occupy with its
  * tech requirements (producer structure + requires entries) still
@@ -176,19 +159,112 @@ function humanize(name: string): string {
 /* Candidate optimizer: reorder + chrono + weighted probe-cut          */
 /* ------------------------------------------------------------------ */
 
-/** Macro horizon (5:00) at which a probe-cut's economic cost is judged. */
+/** Macro horizon (5:00) at which a probe-cut's long-term cost is judged. */
 const ECON_HORIZON_SEC = 300;
+/** Short horizon (~3:15) capturing a probe-cut's transient worker dip. */
+const SHORT_HORIZON_SEC = 195;
+/** Two-horizon economic weights: long-term weighted higher (a delayed
+ * expansion is a permanent loss; a 2-3 probe cut recovers by 5:00). */
+const W_SHORT = 1;
+const W_LONG = 1.5;
 /** A worker's mineral value, for the economic score. */
 const WORKER_VALUE = 50;
 /** Most minerals (at the horizon) a probe-cut may sacrifice to be eligible. */
 const ECON_TOLERANCE = 150;
+/** Hysteresis (~1.5 probes): only prefer a costlier-to-build option (e.g. a
+ * probe-cut) over a simpler one when it's economically better by this much. */
+const ECON_DECISION_MARGIN = 75;
 /** Freeze-window widths the guard tries when probe-cutting (seconds). */
 const PROBE_CUT_WIDTHS = [16, 28];
 /** Min first-unit improvement (sec) worth rewriting an order that still can't defend. */
 const MIN_IMPROVE_SEC = 3;
+/** Max seconds a Zealot fallback may delay the build's first ranged unit. */
+const ZEALOT_RANGED_DELAY_TOLERANCE_SEC = 10;
 
 function isCut(s: Scored): boolean {
   return s.candidate.levers.some((l) => l.startsWith("probe-cut"));
+}
+
+function isZealotFallback(s: Scored): boolean {
+  return s.candidate.levers.includes("zealot-fallback");
+}
+
+/**
+ * A "ranged" combat unit — one gated behind a tech structure (Adept,
+ * Stalker, Sentry all `requires` the Cybernetics Core). The basic
+ * Gateway unit (Zealot) has no `requires`. This is the exact split the
+ * product owner wants: the guard fields the ranged unit and never
+ * defaults to inserting a Zealot. (The data has no `range`/`dpsAir`
+ * field that reliably distinguishes them — the Adept has no `dpsAir`.)
+ */
+function isRangedCombatUnit(profile: PatchProfile, name: string): boolean {
+  const def = profile.units[name];
+  return isCombatUnit(profile, name) && (def?.requires?.length ?? 0) > 0;
+}
+
+/** Index of the first ranged-combat-unit action in the list, or -1. */
+function firstRangedActionIndex(
+  profile: PatchProfile,
+  actions: BuildAction[],
+): number {
+  for (let i = 0; i < actions.length; i += 1) {
+    const a = actions[i];
+    if (
+      (a.kind === "train" || a.kind === "morph") &&
+      isRangedCombatUnit(profile, a.name)
+    ) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/** Start second of the first ranged unit in a sim, or null. */
+function firstRangedUnitStart(
+  profile: PatchProfile,
+  sim: SimResult,
+): number | null {
+  for (const step of sim.steps) {
+    if (
+      (step.kind === "train" || step.kind === "morph") &&
+      isRangedCombatUnit(profile, step.name)
+    ) {
+      return step.startSec;
+    }
+  }
+  return null;
+}
+
+/** Completion of the first ranged unit in a sim, or Infinity. */
+function firstRangedDone(profile: PatchProfile, sim: SimResult): number {
+  for (const step of sim.steps) {
+    if (
+      (step.kind === "train" || step.kind === "morph") &&
+      isRangedCombatUnit(profile, step.name)
+    ) {
+      return step.doneSec;
+    }
+  }
+  return Infinity;
+}
+
+/** The race's basic Gateway melee unit (no tech requirement), e.g. Zealot. */
+function basicMeleeUnitName(
+  profile: PatchProfile,
+  actions: BuildAction[],
+): string | null {
+  let best: { name: string; cost: number } | null = null;
+  for (const [name, def] of Object.entries(profile.units)) {
+    if (
+      isCombatUnit(profile, name) &&
+      (def.requires?.length ?? 0) === 0 &&
+      def.builtFrom.some((b) => profile.units[b]?.isStructure)
+    ) {
+      const cost = def.minerals + def.gas;
+      if (!best || cost < best.cost) best = { name, cost };
+    }
+  }
+  return best?.name ?? null;
 }
 
 /** First expansion (a 2nd+ town hall build) in the list, or -1. */
@@ -271,15 +347,15 @@ function producerOf(profile: PatchProfile, unitName: string): string | null {
 }
 
 /**
- * Pull the first combat unit (carrying a supply structure if one sits
+ * Pull the unit at `idx` (carrying a supply structure if one sits
  * between) to its earliest feasible slot. Returns the rewritten list and
  * the names it passed, or null when it can't move.
  */
 function pullUnit(
   profile: PatchProfile,
   actions: BuildAction[],
+  idx: number,
 ): { actions: BuildAction[]; past: string[] } | null {
-  const idx = firstCombatActionIndex(profile, actions);
   if (idx <= 0) return null;
   const k = earliestFeasibleIndex(profile, actions, idx);
   if (k >= idx) return null;
@@ -308,12 +384,12 @@ function pullUnit(
   return { actions: reordered, past: [...new Set(past)].map(humanize) };
 }
 
-/** Insert a chrono cast on the first combat unit's producer, right before it. */
+/** Insert a chrono cast on the unit-at-`idx`'s producer, right before it. */
 function injectChronoBeforeUnit(
   profile: PatchProfile,
   actions: BuildAction[],
+  idx: number,
 ): BuildAction[] | null {
-  const idx = firstCombatActionIndex(profile, actions);
   if (idx < 0) return null;
   const producer = producerOf(profile, actions[idx].name);
   if (!producer) return null;
@@ -324,6 +400,36 @@ function injectChronoBeforeUnit(
     target: producer,
   });
   return out;
+}
+
+/** Start second of the structure named `name` in a sim, or null. */
+function structureStart(sim: SimResult, name: string): number | null {
+  for (const step of sim.steps) {
+    if (step.name === name) return step.startSec;
+  }
+  return null;
+}
+
+/**
+ * Insert the basic melee defender (a Zealot) right after the earliest
+ * Gateway it can come from. Returns the rewritten list + the unit name,
+ * or null when the race has no such unit or no producer in the build.
+ */
+function insertMeleeDefender(
+  profile: PatchProfile,
+  actions: BuildAction[],
+): { actions: BuildAction[]; name: string } | null {
+  const meleeName = basicMeleeUnitName(profile, actions);
+  if (!meleeName) return null;
+  const producer = producerOf(profile, meleeName);
+  if (!producer) return null;
+  const prodIdx = actions.findIndex(
+    (a) => a.kind === "build" && a.name === producer,
+  );
+  if (prodIdx < 0) return null;
+  const out = [...actions];
+  out.splice(prodIdx + 1, 0, { kind: "train", name: meleeName });
+  return { actions: out, name: meleeName };
 }
 
 /** Workers / banked minerals as a single mineral-equivalent at the horizon. */
@@ -346,6 +452,18 @@ function workersBy(sim: SimResult, race: SimRace, profile: PatchProfile, t: numb
   return (sim.completionTimes[worker] ?? []).filter((s) => s <= t).length;
 }
 
+/**
+ * Two-horizon economic strength: the short horizon captures a probe-cut's
+ * transient worker dip; the long horizon (weighted higher) captures a
+ * delayed expansion's permanent loss. Used only to choose between options
+ * that already field the unit in time — the deadline is a hard gate first.
+ */
+function dualEconScore(sim: SimResult, request: AdaptRequest): number {
+  const shortH = Math.min(request.horizonSec, SHORT_HORIZON_SEC);
+  const longH = Math.min(request.horizonSec, ECON_HORIZON_SEC);
+  return W_SHORT * econScore(sim, shortH) + W_LONG * econScore(sim, longH);
+}
+
 interface Candidate {
   actions: BuildAction[];
   policies?: MacroPolicies;
@@ -358,10 +476,17 @@ interface Candidate {
 interface Scored {
   candidate: Candidate;
   result: AdaptResult;
+  /** Completion of the first combat unit (any), for verdict/improvement. */
   firstDoneSec: number;
   hitsDeadline: boolean;
-  preExpandOk: boolean;
+  /** Higher = stronger economy (short + long horizon). */
+  dualEcon: number;
+  /** Long-horizon mineral loss vs the untouched build (probe-cut gate). */
   econLoss: number;
+  /** |pre-expand unit count − source's| — soft identity tiebreak. */
+  preExpandDelta: number;
+  /** Completion of the first RANGED unit (Infinity if none), for gating. */
+  rangedDoneSec: number;
 }
 
 /**
@@ -412,36 +537,54 @@ export function applyFirstUnitDefenseGuard(
     srcPreExpand,
   );
 
-  // Tier 1: a candidate that actually defends (unit out by the deadline) —
-  // pick the least-invasive one (probe-cuts only reach here when they buy
-  // the deadline and pass the economic test).
-  const defenders = scored.filter((s) => s.hitsDeadline && s.preExpandOk);
-  // Tier 2: nothing defends — apply the biggest non-cut improvement (don't
-  // spend probes on a build that still can't hold) and flag it honestly.
-  const improvers = scored
-    .filter(
-      (s) =>
-        s.preExpandOk &&
-        !isCut(s) &&
-        s.firstDoneSec < baseDone - MIN_IMPROVE_SEC,
-    )
-    .sort(
-      (a, b) =>
-        a.firstDoneSec - b.firstDoneSec ||
-        a.candidate.invasiveness - b.candidate.invasiveness,
-    );
+  // Tier 1: options that field the RANGED unit in time (Option A probe-cut
+  // or Option B nexus-delay). Choose the economically better one — the
+  // deadline is a hard gate, economics only decides between qualifiers.
+  const rangedDefenders = scored.filter(
+    (s) => !isZealotFallback(s) && s.rangedDoneSec <= deadline,
+  );
 
   let winner: Scored | undefined;
-  if (defenders.length > 0) {
-    defenders.sort(compareScored);
-    winner = defenders[0];
+  if (rangedDefenders.length > 0) {
+    winner = pickDefender(rangedDefenders);
   } else {
-    winner = improvers[0];
+    // No ranged option holds. A Zealot fallback is allowed ONLY when it
+    // defends AND it barely delays the ranged unit (<10s) vs the best we
+    // could do — otherwise we never default to a Zealot.
+    const bestRangedDone = Math.min(
+      Infinity,
+      ...scored
+        .filter((s) => !isZealotFallback(s))
+        .map((s) => s.rangedDoneSec),
+    );
+    const zealot = scored.find((s) => isZealotFallback(s));
+    if (
+      zealot &&
+      zealot.hitsDeadline &&
+      zealot.rangedDoneSec - bestRangedDone < ZEALOT_RANGED_DELAY_TOLERANCE_SEC
+    ) {
+      winner = zealot;
+    } else {
+      // Tier 2: nothing defends — apply the biggest non-cut, non-Zealot
+      // improvement (don't spend probes/units a build can't be saved by)
+      // and flag it honestly.
+      winner = scored
+        .filter(
+          (s) =>
+            !isCut(s) &&
+            !isZealotFallback(s) &&
+            s.firstDoneSec < baseDone - MIN_IMPROVE_SEC,
+        )
+        .sort(
+          (a, b) =>
+            a.firstDoneSec - b.firstDoneSec ||
+            a.candidate.invasiveness - b.candidate.invasiveness,
+        )[0];
+    }
   }
 
   const final = winner ? winner.result : result;
   const levers = winner ? winner.candidate.levers : [];
-  const past = winner ? winner.candidate.past : [];
 
   const assessment = assess(
     final,
@@ -452,7 +595,7 @@ export function applyFirstUnitDefenseGuard(
     deadline,
     levers,
   );
-  const note = defenseNote(assessment, matchupKnown, attacker, past);
+  const note = defenseNote(assessment, matchupKnown, attacker);
   return {
     ...final,
     adaptationNotes: [note, ...final.adaptationNotes],
@@ -471,108 +614,131 @@ function evaluateCandidates(
   srcPreExpand: number,
 ): Scored[] {
   const actions = request.actions;
-  const unitIdx = firstCombatActionIndex(profile, actions);
+  const rangedIdx = firstRangedActionIndex(profile, actions);
   const expIdx = expandIndex(profile, actions, request.race);
-  const techIdx = unitIdx >= 0 ? gatingTechIndex(profile, actions, unitIdx) : -1;
+  const techIdx =
+    rangedIdx >= 0 ? gatingTechIndex(profile, actions, rangedIdx) : -1;
+  const gatingTechName = techIdx >= 0 ? actions[techIdx].name : null;
 
-  const structural: Candidate[] = [];
+  const score = (c: Candidate) =>
+    scoreCandidate(c, profile, request, base, deadline, horizon, baseEcon, srcPreExpand);
 
-  // C1 — pull the first combat unit earlier.
-  const pulled = pullUnit(profile, actions);
-  if (pulled) {
-    structural.push({
-      actions: pulled.actions,
-      levers: ["pull"],
-      past: pulled.past,
-      invasiveness: 0.5,
-    });
-  }
+  const scored: Scored[] = [];
 
-  // C2 — tech-before-expand: move the gating tech ahead of the expansion.
-  // Identity-safe (moves a structure, not a unit), so preExpand is kept.
-  let reordered: BuildAction[] | null = null;
+  // ---- Option A base: keep the Nexus where it is, pull the ranged unit
+  // forward (it lands right after its tech). A probe-cut on this base is
+  // the user's "17 Nexus / 17 Core" — keeps the early expansion. ----
+  const pulledA = rangedIdx > 0 ? pullUnit(profile, actions, rangedIdx) : null;
+  const optionABase: Candidate = pulledA
+    ? { actions: pulledA.actions, levers: ["pull"], past: pulledA.past, invasiveness: 0.5 }
+    : { actions, levers: [], past: [], invasiveness: 0 };
+  if (pulledA) scored.push(score(optionABase));
+
+  // ---- Option B: core-before-nexus, and pull the ranged unit to right
+  // after the Core (before the Nexus) — the proper PvT opener. Generated
+  // always now (no pre-expand-identity gate). ----
+  let optionBBase: Candidate | null = null;
   if (expIdx >= 0 && techIdx > expIdx) {
-    const c2 = moveBefore(actions, techIdx, expIdx);
-    reordered = c2;
-    structural.push({ actions: c2, levers: ["core-before-nexus"], past: [], invasiveness: 1 });
-  }
-
-  // C3 — reorder + pull the unit too (only when the source already
-  // fielded a unit before expanding, to preserve identity).
-  if (reordered && srcPreExpand >= 1) {
-    const c3 = pullUnit(profile, reordered);
+    const reordered = moveBefore(actions, techIdx, expIdx);
+    scored.push(
+      score({ actions: reordered, levers: ["core-before-nexus"], past: [], invasiveness: 1 }),
+    );
+    const rIdx = firstRangedActionIndex(profile, reordered);
+    const c3 = rIdx > 0 ? pullUnit(profile, reordered, rIdx) : null;
     if (c3) {
-      structural.push({
+      optionBBase = {
         actions: c3.actions,
         levers: ["core-before-nexus", "pull"],
         past: c3.past,
         invasiveness: 1.5,
-      });
+      };
+      scored.push(score(optionBBase));
     }
   }
 
-  // C4/C5 — chrono the unit, on the source order and on the reorder.
-  for (const baseActions of [actions, reordered].filter(Boolean) as BuildAction[][]) {
-    const chronoed = injectChronoBeforeUnit(profile, baseActions);
+  // ---- Chrono the ranged unit, on the source order and on Option B. ----
+  for (const cb of [optionABase, optionBBase]) {
+    if (!cb) continue;
+    const rIdx = firstRangedActionIndex(profile, cb.actions);
+    const chronoed = rIdx >= 0 ? injectChronoBeforeUnit(profile, cb.actions, rIdx) : null;
     if (chronoed) {
-      const levers = baseActions === reordered ? ["core-before-nexus", "chrono"] : ["chrono"];
-      structural.push({
-        actions: chronoed,
-        levers,
-        past: [],
-        invasiveness: (baseActions === reordered ? 1 : 0) + 1,
-      });
+      scored.push(
+        score({
+          actions: chronoed,
+          levers: [...cb.levers, "chrono"],
+          past: cb.past,
+          invasiveness: cb.invasiveness + 1,
+        }),
+      );
     }
   }
 
-  const scored: Scored[] = structural.map((c) =>
-    scoreCandidate(c, profile, request, base, deadline, horizon, baseEcon, srcPreExpand),
-  );
-
-  // C6/C7 — probe-cut layered on the most promising structural base. Aim
-  // the freeze window at the first unit's save-up, sized a couple of ways,
-  // and keep only those whose economic loss is within tolerance.
-  const cutBase = bestSoFar(scored) ?? null;
-  if (cutBase) {
-    const uStart = firstUnitStart(profile, cutBase.result.sim);
-    if (uStart !== null) {
+  // ---- Probe-cut layered on Option A and Option B, aimed so the freeze
+  // window precedes the gating tech (Core) so its minerals come early.
+  // Kept only when the long-horizon economic loss is within tolerance. ----
+  for (const cb of [optionABase, optionBBase]) {
+    if (!cb) continue;
+    const cbScored = scored.find((s) => s.candidate === cb);
+    const cbSim = cbScored ? cbScored.result.sim : score(cb).result.sim;
+    // Aim windows at both the gating tech's save-up AND the unit's save-up
+    // (the unit is often the real mineral bottleneck once the Core is up),
+    // ending the window at the unit so probes resume once it's afforded.
+    const techAim = gatingTechName ? structureStart(cbSim, gatingTechName) : null;
+    const unitAim = firstRangedUnitStart(profile, cbSim);
+    const windows: Array<{ fromSec: number; untilSec: number }> = [];
+    for (const aim of [techAim, unitAim]) {
+      if (aim === null) continue;
       for (const width of PROBE_CUT_WIDTHS) {
-        const fromSec = Math.max(0, uStart - width);
-        const cutCandidate: Candidate = {
-          actions: cutBase.candidate.actions,
-          policies: {
-            ...request.policies,
-            workerCut: { fromSec, untilSec: uStart },
-          },
-          levers: [...cutBase.candidate.levers, "probe-cut"],
-          past: cutBase.candidate.past,
-          invasiveness: cutBase.candidate.invasiveness + 3,
-        };
-        const s = scoreCandidate(
-          cutCandidate,
-          profile,
-          request,
-          base,
-          deadline,
-          horizon,
-          baseEcon,
-          srcPreExpand,
-        );
+        windows.push({ fromSec: Math.max(0, aim - width), untilSec: aim });
+      }
+    }
+    // Also a single wide cut spanning the tech save-up through the unit.
+    if (techAim !== null && unitAim !== null && unitAim > techAim) {
+      windows.push({ fromSec: Math.max(0, techAim - 12), untilSec: unitAim });
+    }
+    const rIdx = firstRangedActionIndex(profile, cb.actions);
+    const cbChrono =
+      rIdx >= 0 ? injectChronoBeforeUnit(profile, cb.actions, rIdx) : null;
+    for (const window of windows) {
+      // Both a bare cut and a cut+chrono (chrono speeds the unit's
+      // production once the freed minerals have it training).
+      const variants: Array<{ actions: BuildAction[]; extra: string[] }> = [
+        { actions: cb.actions, extra: [] },
+      ];
+      if (cbChrono) variants.push({ actions: cbChrono, extra: ["chrono"] });
+      for (const variant of variants) {
+        const s = score({
+          actions: variant.actions,
+          policies: { ...request.policies, workerCut: window },
+          levers: [...cb.levers, ...variant.extra, "probe-cut"],
+          past: cb.past,
+          invasiveness: cb.invasiveness + variant.extra.length + 3,
+        });
         if (s.econLoss <= ECON_TOLERANCE) {
-          // Record the measured probe deficit in the lever label.
           const deficit = Math.max(
             1,
             workersBy(base.sim, request.race, profile, horizon) -
               workersBy(s.result.sim, request.race, profile, horizon),
           );
-          s.candidate.levers = [
-            ...cutBase.candidate.levers,
-            `probe-cut:${deficit}`,
-          ];
+          s.candidate.levers = [...cb.levers, ...variant.extra, `probe-cut:${deficit}`];
           scored.push(s);
         }
       }
     }
+  }
+
+  // ---- Zealot fallback: only built so the selector can consider it when
+  // no ranged option defends. Strictly gated at selection time. ----
+  const zealot = insertMeleeDefender(profile, actions);
+  if (zealot) {
+    scored.push(
+      score({
+        actions: zealot.actions,
+        levers: ["zealot-fallback"],
+        past: [],
+        invasiveness: 2,
+      }),
+    );
   }
 
   return scored;
@@ -603,42 +769,35 @@ function scoreCandidate(
     result,
     firstDoneSec,
     hitsDeadline: !stranded && first !== null && first.doneSec <= deadline,
-    preExpandOk:
-      preExpandUnitCount(profile, candidate.actions, request.race) === srcPreExpand,
+    dualEcon: dualEconScore(result.sim, request),
     econLoss: baseEcon - econScore(result.sim, horizon),
+    preExpandDelta: Math.abs(
+      preExpandUnitCount(profile, candidate.actions, request.race) - srcPreExpand,
+    ),
+    rangedDoneSec: firstRangedDone(profile, result.sim),
   };
 }
 
-/** Lowest first-unit time among structural candidates, as a cut base. */
-function bestSoFar(scored: Scored[]): Scored | null {
-  let best: Scored | null = null;
-  for (const s of scored) {
-    if (!best || s.firstDoneSec < best.firstDoneSec) best = s;
-  }
-  return best;
-}
-
-function firstUnitStart(profile: PatchProfile, sim: SimResult): number | null {
-  for (const step of sim.steps) {
-    if (
-      (step.kind === "train" || step.kind === "morph") &&
-      isCombatUnit(profile, step.name)
-    ) {
-      return step.startSec;
-    }
-  }
-  return null;
-}
-
-/** Best first: defends, keeps identity, least invasive, lower econ loss, earlier. */
-function compareScored(a: Scored, b: Scored): number {
-  if (a.hitsDeadline !== b.hitsDeadline) return a.hitsDeadline ? -1 : 1;
-  if (a.preExpandOk !== b.preExpandOk) return a.preExpandOk ? -1 : 1;
-  if (a.candidate.invasiveness !== b.candidate.invasiveness) {
-    return a.candidate.invasiveness - b.candidate.invasiveness;
-  }
-  if (a.econLoss !== b.econLoss) return a.econLoss - b.econLoss;
-  return a.firstDoneSec - b.firstDoneSec;
+/**
+ * Among options that field the ranged unit in time, take the
+ * economically strongest (two-horizon score) — but only let a costlier
+ * build (e.g. a probe-cut) beat a simpler one when it's better by more
+ * than the hysteresis margin. Within the margin, prefer the least
+ * invasive, then the closest to the source's pre-expand identity, then
+ * the earliest unit.
+ */
+function pickDefender(defenders: Scored[]): Scored {
+  const bestEcon = Math.max(...defenders.map((d) => d.dualEcon));
+  const econBest = defenders.filter(
+    (d) => d.dualEcon >= bestEcon - ECON_DECISION_MARGIN,
+  );
+  econBest.sort(
+    (a, b) =>
+      a.candidate.invasiveness - b.candidate.invasiveness ||
+      a.preExpandDelta - b.preExpandDelta ||
+      a.firstDoneSec - b.firstDoneSec,
+  );
+  return econBest[0];
 }
 
 function assess(
@@ -668,23 +827,25 @@ function assess(
   };
 }
 
-function describeLevers(levers: string[], past: string[]): string {
-  const parts: string[] = [];
-  if (levers.includes("core-before-nexus")) parts.push("teched core-before-nexus");
-  if (levers.includes("pull")) {
-    parts.push(
-      past.length > 0
-        ? `pulled your first unit ahead of ${past.join(", ")}`
-        : "pulled your first unit earlier",
-    );
-  }
-  if (levers.includes("chrono")) parts.push("chrono-boosted it");
+function describeLevers(levers: string[]): string {
+  if (levers.includes("zealot-fallback")) return "Added an early Zealot to hold";
   const cut = levers.find((l) => l.startsWith("probe-cut"));
-  if (cut) {
-    const n = cut.split(":")[1];
-    parts.push(`cut ${n ? `${n} ` : "a few "}probes to pull it forward`);
+  const n = Number(cut?.split(":")[1]);
+  const cutPhrase = cut
+    ? `cut ${Number.isFinite(n) && n > 0 ? `${n} probe${n === 1 ? "" : "s"}` : "a few probes"}`
+    : "";
+  const parts: string[] = [];
+  if (levers.includes("core-before-nexus")) {
+    parts.push("teched core-before-nexus");
+    if (cut) parts.push(cutPhrase);
+  } else if (cut) {
+    parts.push(`${cutPhrase} for a 17 Nexus / 17 Core`);
+  } else if (levers.includes("pull")) {
+    parts.push("pulled your ranged unit forward");
   }
-  const s = parts.join(" and ");
+  if (levers.includes("chrono")) parts.push("chrono-boosted the unit");
+  if (parts.length === 0) parts.push("reordered the build");
+  const s = parts.join(", ").replace(/,([^,]*)$/, " and$1");
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
@@ -692,20 +853,19 @@ function defenseNote(
   a: DefenseAssessment,
   matchupKnown: boolean,
   attacker: SimRace,
-  past: string[],
 ): string {
-  const windowText = matchupKnown
-    ? `the earliest standard ${attacker} pressure on this patch arrives ~${mmss(a.arrivalSec)}`
-    : `with no matchup set, the fastest standard pressure (a ${attacker} reaper) arrives ~${mmss(a.arrivalSec)}`;
+  const pressure = matchupKnown
+    ? `the ~${mmss(a.arrivalSec)} standard ${attacker} attack`
+    : `the ~${mmss(a.arrivalSec)} reaper (no matchup set — assuming Terran)`;
   if (!a.firstUnit) {
-    return `No combat unit in the adapted window, and ${windowText}. This opening is undefended - add an early unit or wall.`;
+    return `No combat unit before ${pressure}. This opening is undefended — add an early unit or a wall/battery.`;
   }
   const unit = humanize(a.firstUnit.name);
   const out = mmss(a.firstUnit.doneSec);
   if (a.leversUsed.length > 0) {
     return a.verdict === "safe"
-      ? `${describeLevers(a.leversUsed, past)}: your first ${unit} is out ${out}, in time for ${windowText}.`
-      : `${describeLevers(a.leversUsed, past)}, but your first ${unit} is still out ${out} - ${windowText}, ~${a.exposedSec}s exposed. Consider an earlier unit or a wall/battery.`;
+      ? `${describeLevers(a.leversUsed)} — your first ${unit} is out ${out}, in time for ${pressure}.`
+      : `${describeLevers(a.leversUsed)}, but your first ${unit} is still only out ${out} — ${pressure} hits first (~${a.exposedSec}s exposed). Consider an earlier unit or a wall/battery.`;
   }
-  return `Greedy opening: your first combat unit (${unit}) finishes ${out}, but ${windowText}. No reorder, chrono, or affordable probe-cut fields a unit in time - add an earlier unit or a wall/battery.`;
+  return `Greedy opening: your first ${unit} finishes ${out}, but ${pressure} hits first. No reorder, chrono, or affordable probe-cut fields a unit in time — add an earlier unit or a wall/battery.`;
 }

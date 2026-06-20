@@ -60,21 +60,23 @@ describe("first-unit defense guard", () => {
     expect(r.defense?.leversUsed).toContain("core-before-nexus");
   });
 
-  it("improves but honestly flags an un-defendable greedy Stalker opener", () => {
-    // A Stalker by 2:47 off a greedy nexus-first opener is infeasible on
-    // the 8-worker economy (gas-gated). The guard still pulls it as early
-    // as it can, but reports the build as exposed rather than pretending.
+  it("fields the ranged unit in time on a greedy nexus-first Stalker opener", () => {
+    // The user's build: nexus + stargate before the first gateway unit.
+    // The guard must field the Stalker (a RANGED unit, never a Zealot) by
+    // the deadline via Option A/B + chrono + a small probe-cut.
     const steps = [
       "Pylon", "Gateway", "Assimilator", "Nexus", "CyberneticsCore",
-      "Assimilator", "Pylon", "Stargate", "Stalker", "Phoenix",
+      "Pylon", "Assimilator", "Stargate", "Stalker", "Phoenix",
     ];
-    const request = makeRequest(steps);
-    const baseDone = adaptBuild(request).sim.completionTimes.Stalker?.[0] ?? 0;
-    const r = applyFirstUnitDefenseGuard(adaptBuild(request), request, "Terran");
-    expect(r.defense?.verdict).not.toBe("safe");
-    // Still pulled earlier than the untouched order.
-    expect(r.defense!.firstUnit!.doneSec).toBeLessThan(baseDone);
-    expect(r.adaptationNotes[0]).toMatch(/exposed|undefended/);
+    const r = guarded(steps, "Terran");
+    expect(r.defense?.verdict).toBe("safe");
+    expect(r.defense?.firstUnit?.name).toBe("Stalker");
+    expect(r.defense!.firstUnit!.doneSec).toBeLessThanOrEqual(
+      r.defense!.deadlineSec,
+    );
+    // Fixed by reorder/chrono/cut — never by inserting a Zealot.
+    expect(r.defense?.leversUsed).not.toContain("zealot-fallback");
+    expect(r.actions.some((a) => a.name === "Zealot")).toBe(false);
   });
 
   it("leaves the order alone (verdict safe) when the first unit is in time", () => {
