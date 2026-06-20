@@ -416,9 +416,18 @@ function useWidgetTimers({
     const isTest = Boolean(live.isTest);
     // Widgets the live payload feeds — every widget except `session`,
     // which is driven off its own socket event.
-    const liveWidgets: ReadonlyArray<WidgetId> = ALL_WIDGETS.filter(
-      (id) => id !== "session",
-    );
+    const liveWidgets: ReadonlyArray<WidgetId> = ALL_WIDGETS.filter((id) => {
+      if (id === "session") return false;
+      // The randomizer is a game-START reveal driven by the agent's
+      // active-phase envelope (see the liveGame effect below). A real
+      // post-game payload — one carrying a ``result`` — must NOT re-show
+      // it: the mid-match visibility timer already unmounted the widget,
+      // and re-showing it here remounts it with a fresh spin-dedupe ref,
+      // producing a second spin at game END. Test fires and the agent-
+      // offline pre-game path (a ``live`` with no result) still drive it.
+      if (id === "randomizer" && !isTest && Boolean(live.result)) return false;
+      return true;
+    });
     setVisibleLive(() => new Set(liveWidgets));
     for (const id of liveWidgets) {
       const existing = liveTimers.current.get(id);

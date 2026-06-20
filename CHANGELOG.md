@@ -39,6 +39,21 @@ workflow builds the Windows installer on each tag push and attaches the
   over time and Chrono allocation charts remain on the admin game
   detail view.
 
+### Fixed
+
+- **Build randomizer no longer re-spins at game end** — the overlay's
+  build roulette is a game-START reveal but was firing a second time when
+  a game finished. Its 26 s visibility timer unmounts the widget
+  mid-match (resetting the in-component spin-dedupe ref); when the
+  post-game `overlay:live` payload arrived after the replay parsed, both
+  overlay clients re-showed every widget — remounting the randomizer —
+  and `deriveSpinKey` still keyed off the lingering `match_ended`
+  envelope (the socket only clears `liveGame` on idle/menu). The spin key
+  now derives from the agent envelope only while the match phase is live
+  (loading / started / in-progress), and neither overlay client re-shows
+  the randomizer on a post-game payload carrying a result. Test fires and
+  the agent-offline pre-game path still drive it.
+
 
 ### Migration notes
 
