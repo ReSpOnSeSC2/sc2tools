@@ -277,7 +277,7 @@ function runPolicies(
     autoChrono(state, profile, policies.autoChrono);
   }
   if (policies.autoWorkers) {
-    autoWorkers(state, profile, race);
+    autoWorkers(state, profile, race, policies);
   }
   if (policies.autoSupplyLeadSec > 0) {
     autoSupply(state, profile, race, policies, headReserve);
@@ -325,13 +325,35 @@ function workerSaturationTarget(state: SimState, race: SimRace): number {
   return saturation;
 }
 
+/**
+ * Hard cap on a probe-cut freeze window so a stray policy can't starve
+ * the economy indefinitely. The guard stays well under this.
+ */
+const MAX_CUT_WINDOW_SEC = 30;
+
+/** True when `policies.workerCut` is freezing worker production right now. */
+function isWorkerCutActive(state: SimState): boolean {
+  const cut = state.policies.workerCut;
+  if (!cut) return false;
+  const end = Math.min(cut.untilSec, cut.fromSec + MAX_CUT_WINDOW_SEC);
+  return state.time >= cut.fromSec && state.time < end;
+}
+
 function autoWorkers(
   state: SimState,
   profile: PatchProfile,
   race: SimRace,
+  policies: MacroPolicies,
 ): void {
   const workerName = profile.starting.worker[race];
   const def = profile.units[workerName];
+  // Probe/SCV cut: freeze worker training inside the cut window so the
+  // build order claims the worker surplus and pulls a Nexus/tech/unit
+  // forward (cutting at t=0 just delays probes that catch up for free, so
+  // the guard aims the window at the target's save-up). The window is
+  // hard-capped at MAX_CUT_WINDOW_SEC so a bad policy can't starve the
+  // economy; after it, training resumes and re-saturates. Inert when unset.
+  if (isWorkerCutActive(state)) return;
   // Stop at comfortable saturation: 2 per patch + 3 per geyser. Bases
   // still under construction count toward the target — workers for an
   // expansion are produced WHILE it builds (real players never pause
@@ -480,7 +502,7 @@ export function simulate(
     // own units, so drone priority would silently eat the lings/roaches
     // the build lists (zerg drones stay in runPolicies, after dispatch).
     if (policies.autoWorkers && race !== "Zerg") {
-      autoWorkers(state, profile, race);
+      autoWorkers(state, profile, race, policies);
     }
 
     // 0b. Strict-economy reservation: hold back the next worker's
@@ -492,7 +514,8 @@ export function simulate(
     if (
       policies.reserveWorkerCost &&
       policies.autoWorkers &&
-      race !== "Zerg"
+      race !== "Zerg" &&
+      !isWorkerCutActive(state)
     ) {
       const workerName = profile.starting.worker[race];
       const workerDef = profile.units[workerName];

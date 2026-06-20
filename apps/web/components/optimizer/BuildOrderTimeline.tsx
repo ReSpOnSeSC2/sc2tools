@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { buildOrderText, displaySteps } from "@/lib/optimizer/sim/format";
 import type { AdaptResult } from "@/lib/optimizer/types";
+import { DefenseVerdictBadge } from "./DefenseVerdictBadge";
 
 export function BuildOrderTimeline({
   result,
@@ -76,6 +77,11 @@ export function BuildOrderTimeline({
             </li>
           ))}
         </ol>
+        {result.defense ? (
+          <div className="mt-3">
+            <DefenseVerdictBadge defense={result.defense} />
+          </div>
+        ) : null}
         {result.adaptationNotes.length > 0 ? (
           <ul className="mt-3 space-y-1.5">
             {result.adaptationNotes.map((note, index) => (
