@@ -37,35 +37,59 @@ describe("first-unit defense guard", () => {
     expect(arrival!).toBeLessThanOrEqual(170);
   });
 
-  it("pulls a greedy build's first unit ahead of later tech", () => {
-    // Phoenix-opener shape: stargate (and more) before the first
-    // gateway unit. The stalker should be pulled to right after the
-    // cybernetics core.
+  it("fixes a greedy nexus-first Adept opener with reorder + chrono + cut", () => {
+    // Nexus + stargate before the first gateway unit. The guard techs the
+    // core ahead of the expansion, chronos the unit, and cuts a probe to
+    // land the Adept inside the defensive window — without adding a unit
+    // before the expand (the source had zero).
     const r = guarded(
       [
         "Pylon", "Gateway", "Assimilator", "Nexus", "CyberneticsCore",
-        "Assimilator", "Pylon", "Stargate", "Stalker", "Phoenix",
+        "Adept", "Stargate", "Phoenix",
       ],
       "Terran",
     );
     const names = r.actions.map((a) => a.name);
-    expect(names.indexOf("Stalker")).toBeLessThan(names.indexOf("Stargate"));
-    expect(names.indexOf("Stalker")).toBeGreaterThan(
-      names.indexOf("CyberneticsCore"),
+    expect(names.indexOf("CyberneticsCore")).toBeLessThan(
+      names.indexOf("Nexus"),
     );
-    expect(r.adaptationNotes.some((n) => n.includes("Pulled your first"))).toBe(
-      true,
+    expect(r.defense?.verdict).toBe("safe");
+    expect(r.defense?.firstUnit?.doneSec).toBeLessThanOrEqual(
+      r.defense!.deadlineSec,
     );
+    expect(r.defense?.leversUsed).toContain("core-before-nexus");
   });
 
-  it("leaves a build alone when its first unit is already in time", () => {
+  it("fields the ranged unit in time on a greedy nexus-first Stalker opener", () => {
+    // The user's build: nexus + stargate before the first gateway unit.
+    // The guard must field the Stalker (a RANGED unit, never a Zealot) by
+    // the deadline via Option A/B + chrono + a small probe-cut.
+    const steps = [
+      "Pylon", "Gateway", "Assimilator", "Nexus", "CyberneticsCore",
+      "Pylon", "Assimilator", "Stargate", "Stalker", "Phoenix",
+    ];
+    const r = guarded(steps, "Terran");
+    expect(r.defense?.verdict).toBe("safe");
+    expect(r.defense?.firstUnit?.name).toBe("Stalker");
+    expect(r.defense!.firstUnit!.doneSec).toBeLessThanOrEqual(
+      r.defense!.deadlineSec,
+    );
+    // Fixed by reorder/chrono/cut — never by inserting a Zealot.
+    expect(r.defense?.leversUsed).not.toContain("zealot-fallback");
+    expect(r.actions.some((a) => a.name === "Zealot")).toBe(false);
+  });
+
+  it("leaves the order alone (verdict safe) when the first unit is in time", () => {
     const request = makeRequest([
       "Pylon", "Gateway", "Zealot", "Assimilator", "Nexus",
       "CyberneticsCore", "Stalker",
     ]);
     const base = adaptBuild(request);
     const r = applyFirstUnitDefenseGuard(base, request, "Terran");
-    expect(r).toBe(base);
+    // Order untouched and no new warning, but the verdict is recorded.
+    expect(r.actions).toBe(base.actions);
+    expect(r.adaptationNotes).toEqual(base.adaptationNotes);
+    expect(r.defense?.verdict).toBe("safe");
   });
 
   it("still guards (vs the fastest standard pressure) when the matchup is unknown", () => {
@@ -84,18 +108,15 @@ describe("first-unit defense guard", () => {
     ).toBe(true);
   });
 
-  it("warns (without reordering) when the unit is already earliest but late", () => {
+  it("flags a unit-less opening as undefended (exposed)", () => {
     const r = guarded(
-      ["Pylon", "Gateway", "Assimilator", "Nexus", "CyberneticsCore", "Stalker"],
+      ["Pylon", "Gateway", "Assimilator", "Nexus", "CyberneticsCore"],
       "Terran",
     );
-    const names = r.actions.map((a) => a.name);
-    // order unchanged: stalker already right after its tech
-    expect(names.indexOf("Stalker")).toBe(names.length - 1);
+    expect(r.defense?.verdict).toBe("unsafe");
+    expect(r.defense?.firstUnit).toBeNull();
     expect(
-      r.adaptationNotes.some(
-        (n) => n.includes("pressure") || n.includes("Greedy"),
-      ),
+      r.adaptationNotes.some((n) => n.includes("undefended")),
     ).toBe(true);
   });
 });

@@ -245,6 +245,18 @@ export interface MacroPolicies {
    * the bank covers them, accepting small worker-production drift.
    */
   reserveWorkerCost?: boolean;
+  /**
+   * Probe/SCV cut window — used ONLY by the defense guard's candidate
+   * re-sims to pull a Nexus/tech/unit earlier. Auto-worker training is
+   * frozen inside `[fromSec, untilSec)` (capped at MAX_CUT_WINDOW_SEC) so
+   * the build order claims the worker surplus and the target accelerates;
+   * after it, training resumes and re-saturates. The window is aimed at
+   * the target's save-up — freezing at t=0 just delays probes that catch
+   * up for free. The guard measures the resulting probe deficit and its
+   * economic cost rather than passing a cut count. Absent (the default) =
+   * no cut, the sim behaves exactly as before.
+   */
+  workerCut?: { fromSec: number; untilSec: number };
 }
 
 export interface SimEvent {
@@ -409,6 +421,29 @@ export interface SafetyOptions {
   allowWorkerPull: boolean;
 }
 
+/**
+ * First-unit defense assessment produced by the defense guard: can the
+ * adapted build field a combat unit before the opponent's fastest
+ * standard pressure arrives? "safe" = Defensible, "unsafe" = Exposed,
+ * "risky" = out just past the deadline.
+ */
+export interface DefenseAssessment {
+  verdict: SafetyVerdict;
+  /** Attacker race the window is computed for (Terran when unknown). */
+  attacker: SimRace;
+  /** False when no matchup was set and Terran was assumed. */
+  matchupKnown: boolean;
+  /** Pressure arrival (~2:42) and the done-by deadline (~2:47), seconds. */
+  arrivalSec: number;
+  deadlineSec: number;
+  /** First combat unit fielded and when it completes, or null if none. */
+  firstUnit: { name: string; doneSec: number } | null;
+  /** Seconds the base is exposed (max(0, doneSec − arrival)). */
+  exposedSec: number;
+  /** Levers the guard applied, e.g. ["core-before-nexus","chrono","probe-cut:2"]. */
+  leversUsed: string[];
+}
+
 /* ------------------------------------------------------------------ */
 /* Build adaptation                                                    */
 /* ------------------------------------------------------------------ */
@@ -485,4 +520,9 @@ export interface AdaptResult {
    * producing".
    */
   adaptationNotes: string[];
+  /**
+   * First-unit defense verdict from `applyFirstUnitDefenseGuard`. Always
+   * populated once the guard runs (including the already-safe fast path).
+   */
+  defense?: DefenseAssessment;
 }
