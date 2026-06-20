@@ -68,6 +68,10 @@ export function BuildOrderTimeline({
               <span className="flex-1 text-body text-text">{step.label}</span>
               <span className="font-mono text-caption text-text-muted">
                 {step.time}
+                <span className="text-text-dim">
+                  {" → "}
+                  {step.doneTime}
+                </span>
               </span>
             </li>
           ))}
@@ -87,7 +91,9 @@ export function BuildOrderTimeline({
         <p className="mt-3 text-caption text-text-dim">
           Worker production is continuous and supply is auto-timed for this
           patch (pylons/depots/overlords shown where the sim placed them).
-          Steps stamped with the supply you&apos;ll be at when each starts.{" "}
+          Each step shows the supply/time you&apos;ll be at when it{" "}
+          <span className="text-text-muted">starts</span> → when it&apos;s{" "}
+          <span className="text-text-muted">done</span> (on the field).{" "}
           {result.sim.finalWorkers} workers by the end of the plan.
           {result.unknownNames.length > 0
             ? ` Skipped unrecognized entries: ${result.unknownNames.join(", ")}.`

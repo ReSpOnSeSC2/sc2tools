@@ -68,13 +68,20 @@ describe("first-unit defense guard", () => {
     expect(r).toBe(base);
   });
 
-  it("does nothing when the matchup is unknown", () => {
+  it("still guards (vs the fastest standard pressure) when the matchup is unknown", () => {
     const request = makeRequest([
       "Pylon", "Gateway", "Assimilator", "Nexus", "CyberneticsCore",
       "Stargate", "Stalker",
     ]);
     const base = adaptBuild(request);
-    expect(applyFirstUnitDefenseGuard(base, request, undefined)).toBe(base);
+    const r = applyFirstUnitDefenseGuard(base, request, undefined);
+    // The guard runs instead of bailing out: it evaluates the greedy
+    // order against the fastest standard pressure and warns, with a note
+    // that's honest about the assumed matchup.
+    expect(r).not.toBe(base);
+    expect(
+      r.adaptationNotes.some((n) => n.includes("no matchup set")),
+    ).toBe(true);
   });
 
   it("warns (without reordering) when the unit is already earliest but late", () => {
