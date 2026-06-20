@@ -125,18 +125,28 @@ export function deriveSpinKey(
   if (live?.isTest) return `${matchup}:test:${live.matchup ?? "x"}`;
   // The randomizer reveals "what to build THIS game", so it must fire at
   // game START only. The agent's pre/in-game envelope is the start
-  // signal — key off its gameKey while a match is live.
+  // signal — key off its gameKey, but ONLY while the match is still LIVE
+  // (loading / started / in-progress). A ``match_ended`` envelope keeps
+  // arriving with the SAME gameKey (the socket only nulls ``liveGame`` on
+  // idle/menu), so treating it as a start signal is the game-END re-spin:
+  // the mid-match visibility timer unmounts the widget — resetting the
+  // spin-dedupe ref — and the lingering ended envelope (or the post-game
+  // payload that remounts the widget) would otherwise spin a SECOND time
+  // as the game finishes.
+  const phase = liveGame?.phase;
+  const envLive =
+    phase === "match_loading"
+    || phase === "match_started"
+    || phase === "match_in_progress";
   const envKey = liveGame?.gameKey;
-  if (typeof envKey === "string" && envKey.length > 0) {
+  if (envLive && typeof envKey === "string" && envKey.length > 0) {
     return `${matchup}:${envKey}`;
   }
   // No agent envelope (agent offline / replay-only). Only a ``live``
   // payload WITHOUT a result may start a spin: a post-game card always
-  // carries a ``result``, and firing off it is the game-END double-spin
-  // bug — the visibility timer unmounts the widget mid-match (resetting
-  // the spin-dedupe ref), then the match-end payload remounts it and it
-  // spins a second time. The agent gameKey and the cloud's replay-
-  // derived gameKey often differ, so dedupe-by-key can't catch this.
+  // carries a ``result``, and firing off it is the same game-END
+  // double-spin. The agent gameKey and the cloud's replay-derived gameKey
+  // often differ, so dedupe-by-key can't catch this.
   if (
     live
     && !live.result

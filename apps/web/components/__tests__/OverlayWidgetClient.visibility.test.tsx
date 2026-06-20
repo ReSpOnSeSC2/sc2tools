@@ -290,3 +290,74 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
     },
   );
 });
+
+/**
+ * Regression: a streamer reported the build randomizer reveal firing at
+ * the END of a game instead of only the start. The randomizer is a game-
+ * START reveal — it must be driven by the agent's active-phase envelope,
+ * never by the post-game ``live`` payload. Re-showing it on the post-game
+ * payload remounts the widget after the mid-match visibility timer
+ * unmounted it, resetting the in-component spin-dedupe ref and spinning a
+ * second time. So a real post-game ``live`` (carrying a ``result``) must
+ * NOT count as a visibility source for the randomizer.
+ */
+describe("useWidgetVisibility — randomizer is game-START only", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("does NOT show on a real post-game payload (game end)", () => {
+    const out = { value: false };
+    render(
+      <VisibilityProbe
+        widget="randomizer"
+        live={liveOf({ gameKey: "g1", result: "win" })}
+        liveGame={envelope({ phase: "match_ended", gameKey: "g1" })}
+        visibleOut={out}
+      />,
+    );
+    expect(out.value).toBe(false);
+  });
+
+  it("shows during the active phase (game start)", () => {
+    const out = { value: false };
+    render(
+      <VisibilityProbe
+        widget="randomizer"
+        live={null}
+        liveGame={envelope({ phase: "match_loading", gameKey: "g1" })}
+        visibleOut={out}
+      />,
+    );
+    expect(out.value).toBe(true);
+  });
+
+  it("shows on a Test fire even when the sample carries a result", () => {
+    const out = { value: false };
+    render(
+      <VisibilityProbe
+        widget="randomizer"
+        live={liveOf({ isTest: true, result: "win" })}
+        liveGame={null}
+        visibleOut={out}
+      />,
+    );
+    expect(out.value).toBe(true);
+  });
+
+  it("shows on an agent-offline pre-game live (no result)", () => {
+    const out = { value: false };
+    render(
+      <VisibilityProbe
+        widget="randomizer"
+        live={liveOf({ gameKey: "cloud-xyz" })}
+        liveGame={null}
+        visibleOut={out}
+      />,
+    );
+    expect(out.value).toBe(true);
+  });
+});

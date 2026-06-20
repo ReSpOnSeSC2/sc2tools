@@ -514,7 +514,17 @@ export function useWidgetVisibility(
   const isTest = Boolean(
     widget === "session" ? session?.isTest : live?.isTest,
   );
-  const hasAnySource = Boolean(sourceForWidget) || Boolean(liveGameActive);
+  // The randomizer is a game-START reveal driven by the agent's active-
+  // phase envelope (and test fires). A real post-game ``live`` payload —
+  // one carrying a ``result`` — must NOT count as a visibility source for
+  // it: the mid-match timer already unmounted the widget, and re-showing
+  // it on the post-game payload remounts it with a fresh spin-dedupe ref,
+  // producing a duplicate spin at game END. The agent-offline pre-game
+  // path (a ``live`` with no result) still shows it.
+  const liveCountsAsSource =
+    widget !== "randomizer" || isTest || !live?.result;
+  const hasAnySource =
+    (Boolean(sourceForWidget) && liveCountsAsSource) || Boolean(liveGameActive);
   // Identity of the current match. When this changes between renders
   // we MUST re-arm the visibility timer even if ``hasAnySource`` is
   // unchanged: the scouting widget's natural 15 s timer expires

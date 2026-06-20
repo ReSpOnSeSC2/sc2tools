@@ -27,6 +27,24 @@ describe("deriveSpinKey", () => {
     expect(deriveSpinKey("TvZ", live, lg)).toBe("TvZ:alice-bob-100");
   });
 
+  it("does NOT spin on a lingering match_ended envelope (game end)", () => {
+    // The socket only nulls ``liveGame`` on idle/menu, so a ``match_ended``
+    // envelope keeps arriving with the SAME gameKey after the game is over.
+    // Keying off it would re-spin at game end once the mid-match visibility
+    // timer has unmounted the widget and reset the spin-dedupe ref.
+    const lg = envelope({ gameKey: "alice-bob-100", phase: "match_ended" });
+    expect(deriveSpinKey("TvZ", null, lg)).toBeNull();
+  });
+
+  it("does NOT spin on a match_ended envelope + post-game payload", () => {
+    // The realistic game-end state: the post-game ``live`` (with a result)
+    // and the lingering ``match_ended`` envelope coexist. Neither may
+    // produce a spin key.
+    const live: LiveGamePayload = { gameKey: "alice-bob-100", result: "win" };
+    const lg = envelope({ gameKey: "alice-bob-100", phase: "match_ended" });
+    expect(deriveSpinKey("TvZ", live, lg)).toBeNull();
+  });
+
   it("spins on a pre-game live payload with no result (agent offline)", () => {
     expect(deriveSpinKey("TvZ", { gameKey: "cloud-xyz" }, null)).toBe(
       "TvZ:cloud-xyz",
