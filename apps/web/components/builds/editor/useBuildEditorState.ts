@@ -61,9 +61,17 @@ interface ReclassifyResponseSummary {
   ruleCount?: number;
 }
 
+interface ShareStateSummary {
+  action?: "published" | "updated" | "unpublished";
+  slug?: string;
+  error?: string;
+}
+
 interface SaveBuildResponse {
   ok: boolean;
   reclassify: ReclassifyResponseSummary | null;
+  /** Result of reconciling the "Share with community" toggle on save. */
+  community?: ShareStateSummary | null;
 }
 
 /**
@@ -399,6 +407,31 @@ export function useBuildEditorState(
         if (summary) pushToast("success", summary);
         else if (andReclassify) {
           pushToast("success", "Saved — no games matched yet.");
+        }
+        // Reflect what the "Share with community" toggle actually did.
+        // The private save already succeeded above, so a share failure is
+        // a soft warning, not a hard error.
+        const community = resp?.community;
+        if (community?.error) {
+          pushToast(
+            "warn",
+            `Saved privately — couldn't share to community: ${community.error}`,
+          );
+        } else if (
+          community?.action === "published" ||
+          community?.action === "updated"
+        ) {
+          pushToast(
+            "success",
+            community.action === "published"
+              ? "Shared to the community."
+              : "Community listing updated.",
+            community.slug
+              ? { label: "View", href: `/community/builds/${community.slug}` }
+              : undefined,
+          );
+        } else if (community?.action === "unpublished") {
+          pushToast("success", "Removed from the community.");
         }
         onSaved?.(slug, draft);
       } catch (err: unknown) {

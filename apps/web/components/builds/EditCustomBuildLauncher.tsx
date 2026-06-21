@@ -93,10 +93,14 @@ function toInitialDraft(doc: SavedBuildDoc): Partial<BuildEditorDraft> {
     race: coerceRace(doc.race),
     vsRace: coerceVsRace(doc.vsRace),
     skillLevel: coerceSkillLevel(doc.skillLevel),
+    // `isPublic` is the server-synced source of truth for community
+    // state (kept in lock-step by community.publish / unpublishBySource);
+    // prefer it, falling back to the legacy `shareWithCommunity` field
+    // for docs saved before the two were reconciled.
     shareWithCommunity:
-      typeof doc.shareWithCommunity === "boolean"
-        ? doc.shareWithCommunity
-        : !!doc.isPublic,
+      typeof doc.isPublic === "boolean"
+        ? doc.isPublic
+        : !!doc.shareWithCommunity,
     winConditions: toStringArray(doc.winConditions),
     losesTo: toStringArray(doc.losesTo),
     transitionsInto: toStringArray(doc.transitionsInto),

@@ -121,7 +121,10 @@ export function BuildEditorBasics({
           />
           <span className="text-caption text-text">
             <span className="block font-medium">Share with community</span>
-            <span className="block text-text-dim">Visible to all players</span>
+            <span className="block text-text-dim">
+              Publishes to the community on save. Personal notes &amp; source
+              replays stay private.
+            </span>
           </span>
         </label>
 

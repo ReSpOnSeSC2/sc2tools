@@ -76,6 +76,7 @@ function raceMatches(actual, requested, buildName, bucketPos) {
  * @param {{
  *   customBuilds: import('../services/types').CustomBuildsService,
  *   perGame?: import('../services/types').PerGameComputeService,
+ *   community?: import('../services/community').CommunityService,
  *   auth: import('express').RequestHandler,
  * }} deps
  */
@@ -507,7 +508,23 @@ function buildCustomBuildsRouter(deps) {
           }
         }
       }
-      res.status(200).json({ ok: true, reclassify });
+      // Honour the build's community-share state on every save. This is
+      // what makes the editor's "Share with community" toggle (and the
+      // sheet's "Build is public" toggle) actually do something — without
+      // it the flag was stored on the doc and silently ignored, so a
+      // build "shared" from a replay never reached the community tab.
+      //
+      // `isPublic` on the private doc is the single source of truth and
+      // is kept in lock-step with the community collection here. A
+      // publish hiccup is reported in the response but never fails the
+      // save itself (the private build is already persisted).
+      const community = await applyShareState(deps, auth.userId, slug, {
+        wantPublic: desiredShareState(req.body),
+        title: validation.value.name,
+        description: validation.value.description,
+        log: req.log,
+      });
+      res.status(200).json({ ok: true, reclassify, community });
     } catch (err) {
       next(err);
     }
@@ -593,6 +610,82 @@ function buildCustomBuildsRouter(deps) {
   });
 
   return router;
+}
+
+/**
+ * Read the caller's intended community-share state from a save body.
+ * Accepts either `shareWithCommunity` (the rich BuildEditor toggle) or
+ * `isPublic` (the BuildEditorSheet toggle) — they're two UIs for the
+ * same concept. Returns `undefined` when neither flag is present, so
+ * saves from callers that don't manage sharing (e.g. the
+ * "Save to my library" community fork) never accidentally publish or
+ * unpublish a build.
+ *
+ * @param {Record<string, any> | undefined} body
+ * @returns {boolean | undefined}
+ */
+function desiredShareState(body) {
+  if (!body || typeof body !== "object") return undefined;
+  if (typeof body.shareWithCommunity === "boolean") {
+    return body.shareWithCommunity;
+  }
+  if (typeof body.isPublic === "boolean") return body.isPublic;
+  return undefined;
+}
+
+/**
+ * Reconcile the community collection with the desired share state
+ * captured at save time. The community service mirrors the result back
+ * onto the private doc's `isPublic` flag, so this only orchestrates and
+ * reports. Resilient by design: any failure is logged and returned as
+ * `{ error }` but never thrown, because the private save has already
+ * succeeded and must not be rolled back over a publish glitch.
+ *
+ * @param {{
+ *   community?: import('../services/community').CommunityService,
+ * }} deps
+ * @param {string} userId
+ * @param {string} slug
+ * @param {{
+ *   wantPublic: boolean | undefined,
+ *   title?: string,
+ *   description?: string,
+ *   log?: { warn: Function } | undefined,
+ * }} opts
+ * @returns {Promise<
+ *   | null
+ *   | { action: 'published' | 'updated' | 'unpublished', slug?: string }
+ *   | { error: string }
+ * >}
+ */
+async function applyShareState(deps, userId, slug, opts) {
+  // No community service wired (e.g. unit tests build the router in
+  // isolation) or no share flag in the body → nothing to do.
+  if (!deps.community || opts.wantPublic === undefined) return null;
+  try {
+    if (opts.wantPublic) {
+      const { slug: publicSlug, created } = await deps.community.publish(
+        userId,
+        slug,
+        { title: opts.title, description: opts.description },
+      );
+      return { action: created ? "published" : "updated", slug: publicSlug };
+    }
+    await deps.community.unpublishBySource(userId, slug);
+    return { action: "unpublished" };
+  } catch (e) {
+    if (opts.log) {
+      opts.log.warn(
+        { err: e, slug, userId, wantPublic: opts.wantPublic },
+        "custom_build_share_state_failed",
+      );
+    }
+    const message =
+      e && typeof e === "object" && "message" in e
+        ? String(/** @type {any} */ (e).message)
+        : "share_failed";
+    return { error: message };
+  }
 }
 
 module.exports = { buildCustomBuildsRouter };

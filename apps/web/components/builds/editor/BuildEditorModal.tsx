@@ -105,7 +105,11 @@ export function BuildEditorModal({
       race: initialDraft?.race ?? race,
       vsRace: initialDraft?.vsRace ?? vsRace,
       skillLevel: initialDraft?.skillLevel ?? null,
-      shareWithCommunity: initialDraft?.shareWithCommunity ?? true,
+      // Default OFF for brand-new builds: publishing is an explicit
+      // opt-in, never a side effect of saving. The edit-existing flow
+      // seeds this from the saved doc so an already-public build keeps
+      // its toggle on.
+      shareWithCommunity: initialDraft?.shareWithCommunity ?? false,
       winConditions: initialDraft?.winConditions ?? [],
       losesTo: initialDraft?.losesTo ?? [],
       transitionsInto: initialDraft?.transitionsInto ?? [],

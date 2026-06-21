@@ -41,6 +41,29 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **"Share with community" now actually publishes** — the BuildEditor's
+  "Share with community" toggle (shown when you "Save as new build" from
+  a replay) and the build sheet's "Build is public" toggle stored a flag
+  the server then ignored, so a build shared this way never reached the
+  Community tab. `PUT /v1/custom-builds/:slug` now honours the flag:
+  publishing on save when it's on, unpublishing when off, and mirroring
+  the result onto the build's `isPublic` badge. Saving a build is never a
+  side-effect publish — the toggle defaults off for new builds and only
+  acts when you opt in. Re-publishing an edited build now **keeps its
+  public URL and vote count** instead of minting a new slug and resetting
+  votes to zero, and the published snapshot **strips private fields**
+  (personal notes, source-replay id, internal ids) so the
+  "personal notes stay private" promise holds. v3 builds also get a
+  derived `PvT`-style matchup tag so they show up under the right
+  community filter.
+- **Publishing from the analyzer Builds tab works** — clicking a build
+  row opened a dossier whose "Publish to community" posted the build's
+  display name where the slug-keyed API expected a slug (always
+  `build_not_found`), and whose "Save notes" hit a route that doesn't
+  exist. The modal now resolves the saved custom build behind the label
+  and reuses the same publish dialog and notes save as the Builds
+  library; auto-classified labels with no saved definition get a clear
+  "Save as new build first" explainer instead of a silent failure.
 - **Build randomizer no longer re-spins at game end** — the overlay's
   build roulette is a game-START reveal but was firing a second time when
   a game finished. Its 26 s visibility timer unmounts the widget
