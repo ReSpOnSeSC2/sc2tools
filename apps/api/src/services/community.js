@@ -85,12 +85,28 @@ class CommunityService {
   // ── Builds ──────────────────────────────────────────────────────
 
   /**
-   * Publish a custom build to the community. Idempotent on slug —
-   * republishing updates the public copy.
+   * Publish (or re-publish) a custom build to the community. Keyed on
+   * (ownerUserId, sourceSlug) so it's idempotent per private build —
+   * re-publishing updates the public copy in place.
+   *
+   * Re-publish preserves everything the public has already interacted
+   * with: the public ``slug`` (stable shareable URL), the ``votes``
+   * tally, and the original ``publishedAt`` date. Only the snapshot and
+   * any author-supplied metadata change. (The previous implementation
+   * regenerated the slug and reset votes to 0 on every save, which broke
+   * shared links and wiped vote counts whenever an author edited a
+   * build they'd already published.)
+   *
+   * The published ``build`` is a sanitised snapshot: private fields
+   * (personal notes, source-replay id, internal ids, the owner's
+   * userId) are stripped via {@link publicBuildSnapshot} so the public
+   * copy honours the "personal notes / source replays stay private"
+   * promise shown at publish time.
    *
    * @param {string} userId
    * @param {string} userSlug — the private build's slug
    * @param {{title?: string, description?: string, authorName?: string}} meta
+   * @returns {Promise<{slug: string, created: boolean}>}
    */
   async publish(userId, userSlug, meta) {
     const priv = await this.db.customBuilds.findOne({
@@ -103,21 +119,39 @@ class CommunityService {
       /** @type {any} */ (err).status = 404;
       throw err;
     }
-    const slug = await this._uniqueSlug(meta.title || priv.name || userSlug);
+    const existing = await this.db.communityBuilds.findOne({
+      ownerUserId: userId,
+      sourceSlug: userSlug,
+    });
     const now = new Date();
+    // Preserve the public slug across re-publishes so shared links keep
+    // working; only mint a new one for a first-time publish.
+    const slug = existing
+      ? existing.slug
+      : await this._uniqueSlug(meta.title || priv.name || userSlug);
+    const title =
+      meta.title || (existing && existing.title) || priv.name || userSlug;
+    // Only overwrite description / authorName when the caller actually
+    // supplied a value, so the lightweight "Share with community" toggle
+    // (which sends neither) never wipes metadata the author entered
+    // through the richer publish dialog.
+    const description =
+      meta.description || (existing && existing.description) || "";
+    const authorName =
+      meta.authorName || (existing && existing.authorName) || "";
     /** @type {Record<string, any>} */
     const doc = {
       slug,
       ownerUserId: userId,
       sourceSlug: userSlug,
-      title: meta.title || priv.name || userSlug,
-      description: meta.description || "",
-      authorName: meta.authorName || "",
-      matchup: priv.matchup || "",
-      build: priv,
-      publishedAt: now,
+      title,
+      description,
+      authorName,
+      matchup: priv.matchup || matchupFromRaces(priv.race, priv.vsRace),
+      build: publicBuildSnapshot(priv),
+      votes: existing && Number.isFinite(existing.votes) ? existing.votes : 0,
+      publishedAt: (existing && existing.publishedAt) || now,
       updatedAt: now,
-      votes: 0,
       removed: false,
     };
     stampVersion(doc, COLLECTIONS.COMMUNITY_BUILDS);
@@ -126,7 +160,58 @@ class CommunityService {
       { $set: doc, $setOnInsert: { createdAt: now } },
       { upsert: true },
     );
-    return { slug };
+    // Mirror published state onto the private doc so the "Published"
+    // badge + the editor's share toggle reflect reality across every
+    // publish entry point (this dialog, the save-time toggle, forks).
+    await this._setPrivateIsPublic(userId, userSlug, true);
+    return { slug, created: !existing };
+  }
+
+  /**
+   * Unpublish by the PRIVATE build slug (sourceSlug). Used by the
+   * save-time "Share with community" toggle when an author flips
+   * sharing back off — the editor knows only the private slug, not the
+   * public one. Soft-removes the public copy; the doc (with its slug +
+   * votes) is retained so re-publishing later restores the same
+   * listing. No-op when the build was never published.
+   *
+   * @param {string} userId
+   * @param {string} sourceSlug
+   * @returns {Promise<boolean>} true when a live public copy was removed
+   */
+  async unpublishBySource(userId, sourceSlug) {
+    const res = await this.db.communityBuilds.updateOne(
+      { ownerUserId: userId, sourceSlug, removed: { $ne: true } },
+      {
+        $set: {
+          removed: true,
+          removedAt: new Date(),
+          removedBy: userId,
+          removalReason: "owner_unpublish",
+        },
+      },
+    );
+    // Keep the private doc's badge in sync even when nothing was live to
+    // remove — the author's intent is "not shared".
+    await this._setPrivateIsPublic(userId, sourceSlug, false);
+    return res.matchedCount > 0;
+  }
+
+  /**
+   * Set `isPublic` on the owner's private custom-build doc. Best-effort
+   * mirror of community state; skips soft-deleted docs and never throws
+   * on a missing build (the community write is the source of truth).
+   *
+   * @private
+   * @param {string} userId
+   * @param {string} sourceSlug
+   * @param {boolean} isPublic
+   */
+  async _setPrivateIsPublic(userId, sourceSlug, isPublic) {
+    await this.db.customBuilds.updateOne(
+      { userId, slug: sourceSlug, deletedAt: { $exists: false } },
+      { $set: { isPublic: !!isPublic, updatedAt: new Date() } },
+    );
   }
 
   /**
@@ -651,6 +736,82 @@ class CommunityService {
     // Fallback — astronomically unlikely.
     return `build-${crypto.randomBytes(8).toString("hex")}`;
   }
+}
+
+/**
+ * Fields from a private custom-build doc that are safe to expose on the
+ * public community copy. A whitelist (not a blacklist) so a newly-added
+ * private field can never silently leak into the public snapshot:
+ * anything not listed here is dropped. Notably absent — ``notes``
+ * (personal scouting notes), ``sourceGameId`` (links to a private
+ * replay), ``userId`` / ``_id`` (internal), and the share/visibility
+ * flags (``isPublic`` / ``shareWithCommunity``).
+ */
+const PUBLIC_BUILD_FIELDS = Object.freeze([
+  "slug",
+  "name",
+  "race",
+  "vsRace",
+  "matchup",
+  "description",
+  "signature",
+  "rules",
+  "schemaVersion",
+  "skillLevel",
+  "winConditions",
+  "losesTo",
+  "transitionsInto",
+  "perspective",
+  "steps",
+]);
+
+/**
+ * Build the public snapshot stored under a community build's ``build``
+ * field. See {@link PUBLIC_BUILD_FIELDS}.
+ *
+ * @param {Record<string, any>} priv
+ * @returns {Record<string, any>}
+ */
+function publicBuildSnapshot(priv) {
+  /** @type {Record<string, any>} */
+  const out = {};
+  if (!priv || typeof priv !== "object") return out;
+  for (const key of PUBLIC_BUILD_FIELDS) {
+    if (priv[key] !== undefined) out[key] = priv[key];
+  }
+  return out;
+}
+
+/**
+ * Derive a "PvT"-style matchup tag from a build's own race + target
+ * race. v3 custom builds store ``race`` / ``vsRace`` rather than a
+ * ``matchup`` string; without this the community listing's matchup
+ * facet would be blank for every editor-authored build. Returns "" when
+ * either side isn't a concrete race (e.g. vsRace "Any" or "Random"),
+ * matching how the matchup filter treats unclassified rows.
+ *
+ * @param {string|undefined|null} race
+ * @param {string|undefined|null} vsRace
+ * @returns {string}
+ */
+function matchupFromRaces(race, vsRace) {
+  const a = raceLetter(race);
+  const b = raceLetter(vsRace);
+  if (!a || !b) return "";
+  return `${a}v${b}`;
+}
+
+/**
+ * First letter of a concrete race (P/T/Z), or "" for
+ * Random / Any / unknown — those don't define a matchup bucket.
+ *
+ * @param {string|undefined|null} race
+ * @returns {string}
+ */
+function raceLetter(race) {
+  if (typeof race !== "string") return "";
+  const c = race.charAt(0).toUpperCase();
+  return c === "P" || c === "T" || c === "Z" ? c : "";
 }
 
 module.exports = { CommunityService, K_ANONYMITY_THRESHOLD };

@@ -570,6 +570,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
     buildCustomBuildsRouter({
       customBuilds: services.customBuilds,
       perGame: services.perGame,
+      community: services.community,
       auth,
     }),
   );

@@ -5,24 +5,30 @@ import { useAuth } from "@clerk/nextjs";
 import { apiCall } from "@/lib/clientApi";
 import { useFilters } from "@/lib/filterContext";
 import { Card } from "@/components/ui/Card";
-import {
-  BuildDossier,
-  type BuildDossierData,
-} from "@/components/builds/BuildDossier";
+import { BuildDossier } from "@/components/builds/BuildDossier";
+import { BuildPublishModal } from "@/components/builds/BuildPublishModal";
+import type { CustomBuild } from "@/components/builds/types";
 
 /**
  * Modal that opens from the analyzer's Builds tab. Shows the same rich
- * dossier surface as the standalone /builds/[slug] page (Performance,
- * matchup/map breakdown, top opponents, build tendencies, predicted
- * strategies, median key timings, last 5 games, macro aggregate, recent
- * games table) plus the personal-notes textarea and publish-to-community
- * form.
+ * dossier surface as the standalone /builds/[slug] page plus a
+ * personal-notes editor and a publish-to-community action.
  *
- * The build is identified by display name here (the value of the
- * `myBuild` field on stored games). When the user has saved a custom
- * build with this name, Notes/Publish PATCH against
- * `/v1/custom-builds/:name`; otherwise these controls quietly stay
- * inert because the saved-build doc doesn't exist.
+ * The Builds tab aggregates games by display name (`myBuild`), NOT by
+ * slug, so this modal first resolves whether that label corresponds to a
+ * build in the user's library (`GET /v1/custom-builds`, matched by name
+ * then slug). Only a *saved* build carries the rules/snapshot needed to
+ * publish or to hold notes, so the controls adapt:
+ *   - saved   → notes PUT against the real slug; "Publish" opens the same
+ *               BuildPublishModal the /builds library uses (slug-keyed,
+ *               with the anonymisation acknowledgement + public title).
+ *   - unsaved → an explainer pointing at "Save as new build" — an
+ *               auto-classified label has no definition to share.
+ *
+ * This replaces the previous implementation, which addressed builds by
+ * display name and published with `slug: buildName`. The community API is
+ * slug-keyed, so that always 404'd ("build_not_found"); its notes save
+ * also PATCHed a route that doesn't exist. Both are fixed here.
  */
 export function BuildEditorModal({
   buildName,
@@ -35,39 +41,38 @@ export function BuildEditorModal({
   const { bumpRev } = useFilters();
   const apiPath = `/v1/builds/${encodeURIComponent(buildName)}`;
 
+  const [saved, setSaved] = useState<CustomBuild | null>(null);
+  const [lookupDone, setLookupDone] = useState(false);
   const [notes, setNotes] = useState("");
-  const [notesLoaded, setNotesLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notesSavedAt, setNotesSavedAt] = useState<number | null>(null);
-  const [publishMsg, setPublishMsg] = useState<string | null>(null);
-  const [publishing, setPublishing] = useState(false);
-  const [publishMeta, setPublishMeta] = useState({
-    title: buildName,
-    description: "",
-    authorName: "",
-  });
+  const [notesError, setNotesError] = useState<string | null>(null);
+  const [publishOpen, setPublishOpen] = useState(false);
 
-  // Pull the user's saved-build doc so the Notes textarea reflects the
-  // current value when the modal opens. /v1/custom-builds/:slug is
-  // keyed by slug; if the user saved this build with the same string
-  // as both name and slug, we'll get the doc back.
+  // Resolve the clicked label to a saved custom build, if the user owns
+  // one by that name. Falls back to a slug match for legacy builds whose
+  // name and slug coincided.
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      setLookupDone(false);
       try {
-        const doc = await apiCall<{ notes?: string; name?: string }>(
+        const resp = await apiCall<{ items: CustomBuild[] }>(
           getToken,
-          `/v1/custom-builds/${encodeURIComponent(buildName)}`,
+          "/v1/custom-builds",
         );
         if (cancelled) return;
-        setNotes(doc.notes || "");
-        if (doc.name && doc.name !== buildName) {
-          setPublishMeta((m) => ({ ...m, title: doc.name || buildName }));
-        }
+        const items = Array.isArray(resp.items) ? resp.items : [];
+        const match =
+          items.find((b) => b.name === buildName) ||
+          items.find((b) => b.slug === buildName) ||
+          null;
+        setSaved(match);
+        setNotes(match?.notes || "");
       } catch {
-        // 404 just means this isn't a saved custom build — keep notes blank.
+        if (!cancelled) setSaved(null);
       } finally {
-        if (!cancelled) setNotesLoaded(true);
+        if (!cancelled) setLookupDone(true);
       }
     }
     load();
@@ -77,225 +82,197 @@ export function BuildEditorModal({
   }, [buildName, getToken]);
 
   async function saveNotes() {
-    if (saving) return;
+    if (saving || !saved) return;
     setSaving(true);
+    setNotesError(null);
     setNotesSavedAt(null);
     try {
+      // Re-PUT the saved doc with updated notes. Share/visibility flags
+      // are intentionally omitted: the server only reconciles community
+      // state when a share flag is present, so a notes edit can never
+      // accidentally publish or unpublish the build.
+      const { isPublic: _ip, shareWithCommunity: _sc, ...rest } = saved as
+        CustomBuild & { shareWithCommunity?: boolean };
+      void _ip;
+      void _sc;
       await apiCall(
         getToken,
-        `/v1/custom-builds/${encodeURIComponent(buildName)}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ notes }),
-        },
+        `/v1/custom-builds/${encodeURIComponent(saved.slug)}`,
+        { method: "PUT", body: JSON.stringify({ ...rest, notes }) },
       );
+      setSaved((s) => (s ? { ...s, notes } : s));
       bumpRev();
       setNotesSavedAt(Date.now());
+    } catch (err: unknown) {
+      setNotesError(extractMessage(err) || "Couldn't save notes.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function publishToCommunity() {
-    if (publishing) return;
-    setPublishing(true);
-    setPublishMsg(null);
-    try {
-      const result = await apiCall<{ slug: string }>(
-        getToken,
-        "/v1/community/builds",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            slug: buildName,
-            title: publishMeta.title,
-            description: publishMeta.description,
-            authorName: publishMeta.authorName,
-          }),
-        },
-      );
-      setPublishMsg(`Published! /community/builds/${result.slug}`);
-    } catch (err: unknown) {
-      const message =
-        err && typeof err === "object" && "message" in err
-          ? String((err as { message: unknown }).message)
-          : "Could not publish.";
-      setPublishMsg(message);
-    } finally {
-      setPublishing(false);
-    }
-  }
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-6"
-      onClick={onClose}
-    >
+    <>
       <div
-        className="w-full max-w-4xl space-y-4"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-6"
+        onClick={onClose}
       >
-        <div className="rounded-xl border border-border bg-bg-surface flex items-center justify-between px-4 py-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold">{buildName}</h2>
-            <p className="text-micro text-text-dim">Build dossier</p>
+        <div
+          className="w-full max-w-4xl space-y-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="rounded-xl border border-border bg-bg-surface flex items-center justify-between px-4 py-3">
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-semibold">{buildName}</h2>
+              <p className="text-micro text-text-dim">Build dossier</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-xs"
+            >
+              ✕ close
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-xs"
-          >
-            ✕ close
-          </button>
-        </div>
 
-        <BuildDossier
-          apiPath={apiPath}
-          footerSlot={(data) => (
-            <NotesAndPublish
-              buildName={buildName}
-              data={data}
-              notes={notes}
-              setNotes={setNotes}
-              notesLoaded={notesLoaded}
-              saving={saving}
-              notesSavedAt={notesSavedAt}
-              onSaveNotes={saveNotes}
-              publishing={publishing}
-              publishMsg={publishMsg}
-              publishMeta={publishMeta}
-              setPublishMeta={setPublishMeta}
-              onPublish={publishToCommunity}
-            />
-          )}
-        />
+          <BuildDossier
+            apiPath={apiPath}
+            footerSlot={() => (
+              <NotesAndPublish
+                saved={saved}
+                lookupDone={lookupDone}
+                notes={notes}
+                setNotes={setNotes}
+                saving={saving}
+                notesSavedAt={notesSavedAt}
+                notesError={notesError}
+                onSaveNotes={saveNotes}
+                onOpenPublish={() => setPublishOpen(true)}
+              />
+            )}
+          />
+        </div>
       </div>
-    </div>
+
+      {/* Rendered as a sibling (not inside the click-to-close scrim) so
+          interacting with it never dismisses the dossier behind it. */}
+      {saved ? (
+        <BuildPublishModal
+          open={publishOpen}
+          onClose={() => setPublishOpen(false)}
+          build={saved}
+          onPublished={() => {
+            setSaved((s) => (s ? { ...s, isPublic: true } : s));
+            bumpRev();
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
 function NotesAndPublish({
-  buildName,
-  data,
+  saved,
+  lookupDone,
   notes,
   setNotes,
-  notesLoaded,
   saving,
   notesSavedAt,
+  notesError,
   onSaveNotes,
-  publishing,
-  publishMsg,
-  publishMeta,
-  setPublishMeta,
-  onPublish,
+  onOpenPublish,
 }: {
-  buildName: string;
-  data: BuildDossierData | null;
+  saved: CustomBuild | null;
+  lookupDone: boolean;
   notes: string;
   setNotes: (n: string) => void;
-  notesLoaded: boolean;
   saving: boolean;
   notesSavedAt: number | null;
+  notesError: string | null;
   onSaveNotes: () => Promise<void>;
-  publishing: boolean;
-  publishMsg: string | null;
-  publishMeta: { title: string; description: string; authorName: string };
-  setPublishMeta: (
-    next: (prev: {
-      title: string;
-      description: string;
-      authorName: string;
-    }) => { title: string; description: string; authorName: string },
-  ) => void;
-  onPublish: () => void;
+  onOpenPublish: () => void;
 }) {
   const savedRecently =
     notesSavedAt != null && Date.now() - notesSavedAt < 60_000;
+
   return (
     <div className="space-y-4">
       <Card title="Personal notes">
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={4}
-          className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[120px]"
-          placeholder={
-            notesLoaded
-              ? "Personal notes, synonyms, scouting tells…"
-              : "Loading saved notes…"
-          }
-        />
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-micro text-text-dim">
-            {savedRecently ? "Saved." : "Notes are private to your account."}
-          </span>
-          <button
-            type="button"
-            onClick={onSaveNotes}
-            className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover"
-            disabled={saving || !notesLoaded}
-          >
-            {saving ? "Saving…" : "Save notes"}
-          </button>
-        </div>
+        {saved ? (
+          <>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[120px]"
+              placeholder="Personal notes, synonyms, scouting tells…"
+            />
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="text-micro text-text-dim">
+                {savedRecently
+                  ? "Saved."
+                  : "Notes are private to your account."}
+              </span>
+              <button
+                type="button"
+                onClick={onSaveNotes}
+                className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover disabled:opacity-60"
+                disabled={saving}
+              >
+                {saving ? "Saving…" : "Save notes"}
+              </button>
+            </div>
+            {notesError ? (
+              <p role="alert" className="mt-2 text-micro text-danger">
+                {notesError}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <p className="text-caption text-text-muted">
+            {lookupDone
+              ? "This opener isn’t in your library yet, so there’s nowhere to keep private notes. Open a replay that uses it and choose “Save as new build” — notes then live on that build."
+              : "Checking your library…"}
+          </p>
+        )}
       </Card>
 
       <Card title="Publish to community">
-        <p className="mb-2 text-xs text-text-muted">
-          Share this build at <code>/community/builds/...</code>. You can
-          unpublish or edit at any time. Title and description are public; your
-          account name is shown unless you override it.
-        </p>
-        <div className="space-y-2">
-          <input
-            className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
-            placeholder="Title"
-            value={publishMeta.title}
-            onChange={(e) =>
-              setPublishMeta((m) => ({ ...m, title: e.target.value }))
-            }
-          />
-          <textarea
-            className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[80px]"
-            rows={3}
-            placeholder="Description (optional)"
-            value={publishMeta.description}
-            onChange={(e) =>
-              setPublishMeta((m) => ({
-                ...m,
-                description: e.target.value,
-              }))
-            }
-          />
-          <input
-            className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
-            placeholder="Display name (optional)"
-            value={publishMeta.authorName}
-            onChange={(e) =>
-              setPublishMeta((m) => ({
-                ...m,
-                authorName: e.target.value,
-              }))
-            }
-          />
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-text-muted">{publishMsg}</span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover"
-              onClick={onPublish}
-              disabled={publishing}
-              title={
-                data && data.totals.total === 0
-                  ? `${buildName} hasn't matched any games yet`
-                  : undefined
-              }
-            >
-              {publishing ? "Publishing…" : "Publish to community"}
-            </button>
+        {saved ? (
+          <div className="space-y-2">
+            <p className="text-xs text-text-muted">
+              Share this build at <code>/community/builds/…</code>. You choose
+              the public title, description, and display name, and can unpublish
+              at any time.
+            </p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={onOpenPublish}
+                className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover"
+              >
+                {saved.isPublic
+                  ? "Update community listing"
+                  : "Publish to community"}
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <p className="text-caption text-text-muted">
+            {lookupDone
+              ? "Only saved custom builds can be published. Save this opener to your library first (open a replay → “Save as new build”), then publish it from here or your library."
+              : "Checking your library…"}
+          </p>
+        )}
       </Card>
     </div>
   );
+}
+
+function extractMessage(err: unknown): string | null {
+  if (!err) return null;
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return null;
 }
