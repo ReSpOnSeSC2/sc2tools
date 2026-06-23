@@ -172,9 +172,22 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # (any one suffices) so a Stargate-Oracle into Robo build (without
     # 2 Oracles + Forge + 3 bases needed for AlphaStar Style) lands
     # here too.
+    #
+    # `not glaive_first_off_twilight` is the same Glaives-hybrid guard
+    # carried by the 2/3 SG Phoenix and 2 SG Void Ray rules above: a
+    # Stargate-first opener whose FIRST Twilight upgrade is Glaives is
+    # fundamentally a Glaive Adept build (the Robo is Observer /
+    # Immortal support behind the Glaives), NOT a Stargate-into-Robo
+    # transition. Those builds -- e.g. Stargate -> Twilight (Glaives)
+    # -> Robo -- must fall through to PvZ - Stargate into Glaives
+    # below. Without this guard a Glaives-first build that added a Robo
+    # was stolen here purely on the Robo + one Stargate unit, even
+    # though the Robo came AFTER the Twilight and Glaives was the
+    # defining tech choice.
     if (
         stargate_first_tech
         and has_building("RoboticsFacility", 600)
+        and not glaive_first_off_twilight
         and (
             count_units("Phoenix", 600) >= 1
             or count_units("Oracle", 600) >= 1
