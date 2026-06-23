@@ -2,6 +2,30 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.13.1
+
+### Fixed — PvZ Glaives-first Stargate openers no longer mislabeled "Stargate into Robo"
+- **What.** The bundled replay-engine classifier
+  (`core/strategy_detector_pvz.py`, frozen into the agent build) tagged
+  a Stargate-first PvZ build that researched Resonating Glaives as the
+  FIRST Twilight upgrade and only later added a Robotics Facility
+  (Observer / Immortal support behind a Glaive Adept timing) as
+  `PvZ - Stargate into Robo`. That rule fired on "Robo present + one
+  Stargate unit" and ran BEFORE `PvZ - Stargate into Glaives`, so a
+  build whose Robo came after the Twilight got pulled onto the Robo
+  label even though Glaives was the defining tech choice.
+- **Effect.** The `Stargate into Robo` rule now carries the same
+  `not glaive_first_off_twilight` guard its sibling Stargate rules
+  (2/3 SG Phoenix, 2 SG Void Ray) already had, so Glaives-first builds
+  fall through to `PvZ - Stargate into Glaives` while genuine
+  Stargate-into-Robo builds (no Glaives-first signal) are unchanged.
+  Fixed in both the canonical detector and the `detectors/user.py`
+  mirror, with a regression test covering both entry points. The agent
+  computes this label locally before upload, so the corrected label
+  ships only once this build is released and installed agents
+  auto-update; previously-uploaded games keep their old label until the
+  updated agent re-parses them.
+
 ## 0.13.0
 
 ### Fixed — dashboard "Synced" stat now shows the real total
