@@ -41,6 +41,22 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Strategy classifier · PvZ - Stargate into Robo no longer steals
+  Glaives-first builds** — a Stargate opener that researched Resonating
+  Glaives as the FIRST Twilight upgrade and only later added a Robotics
+  Facility (Observer / Immortal support behind a Glaive Adept timing)
+  was mis-labeled `PvZ - Stargate into Robo`. That rule fired purely on
+  "Robo present + one Stargate unit" and was checked before
+  `PvZ - Stargate into Glaives`, so a build whose Robo came AFTER the
+  Twilight got pulled onto the Robo label even though Glaives was the
+  defining tech choice. Added the `not glaive_first_off_twilight` guard
+  the sibling Stargate rules (2/3 SG Phoenix, 2 SG Void Ray) already
+  carry, so Glaives-first builds now fall through to
+  `PvZ - Stargate into Glaives` while genuine Stargate-into-Robo builds
+  (no Glaives-first signal) are unaffected. Fixed in both the canonical
+  detector (`core/strategy_detector_pvz.py`) and the `detectors/user.py`
+  mirror, with a regression test exercising both entry points.
+
 - **"Share with community" now actually publishes** — the BuildEditor's
   "Share with community" toggle (shown when you "Save as new build" from
   a replay) and the build sheet's "Build is public" toggle stored a flag

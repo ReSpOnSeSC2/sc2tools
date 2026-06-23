@@ -226,9 +226,17 @@ class UserBuildDetector(BaseStrategyDetector):
             # Stargate into Robo: Stargate-first opener + Robo for
             # Immortal / Observer / Disruptor support. Mirror of
             # canonical detector. Accepts Phoenix / Oracle / VoidRay
-            # as the Stargate-unit signal.
+            # as the Stargate-unit signal. `not glaive_first_off_twilight`
+            # is the same Glaives-hybrid guard the 2/3 SG Phoenix / 2 SG
+            # VR rules carry: a Stargate opener whose FIRST Twilight
+            # upgrade is Glaives is a Glaive Adept build (Robo is
+            # Observer / Immortal support behind the Glaives), so a
+            # Stargate -> Twilight (Glaives) -> Robo build falls through
+            # to PvZ - Stargate into Glaives below instead of being
+            # stolen here on the Robo + one Stargate unit alone.
             if (stargate_first_tech
                     and has_building("RoboticsFacility", 600)
+                    and not glaive_first_off_twilight
                     and (count_units("Phoenix", 600) >= 1
                          or count_units("Oracle", 600) >= 1
                          or count_units("VoidRay", 600) >= 1)):
