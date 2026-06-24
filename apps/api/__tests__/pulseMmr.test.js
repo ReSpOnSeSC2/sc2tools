@@ -165,6 +165,60 @@ describe("services/pulseMmr", () => {
     expect(teamCalls).toBe(1);
   });
 
+  test("surfaces the member's proNickname as revealedName (SC2Pulse barcode reveal)", async () => {
+    // A barcode opponent whose anonymised account the community linked
+    // to a known pro/main on sc2pulse.nephest.com — the /group/team
+    // member carries ``proNickname``. We pull it through as
+    // ``revealedName`` so the Opponents tab / overlay can label the
+    // bars with the real player.
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      if (url.includes("/group/team") && url.includes("characterId=4771238")) {
+        return jsonResponse([
+          {
+            id: 9,
+            rating: 5400,
+            region: "US",
+            lastPlayed: "2026-06-01T10:00:00Z",
+            members: [{ terranGamesPlayed: 1571, proNickname: "THERIDDLER" }],
+          },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const result = await svc.getCurrentMmr("4771238");
+    expect(result?.mmr).toBe(5400);
+    expect(result?.region).toBe("NA");
+    expect(result?.revealedName).toBe("THERIDDLER");
+  });
+
+  test("revealedName is null when no member carries a proNickname", async () => {
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      if (url.includes("/group/team")) {
+        return jsonResponse([
+          {
+            id: 1,
+            rating: 4800,
+            region: "US",
+            lastPlayed: "2026-05-01T10:00:00Z",
+            members: [{ protossGamesPlayed: 200 }],
+          },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const result = await svc.getCurrentMmr("994428");
+    expect(result?.mmr).toBe(4800);
+    expect(result?.revealedName).toBeNull();
+  });
+
   test("uses team.region for the label so cross-region duplicates don't mis-tag (2026-05 fix)", async () => {
     // SC2Pulse's /group/team filters by ``battlenetId``, which is the
     // SAME number across regions for the same season (NA's S67, EU's

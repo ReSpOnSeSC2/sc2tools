@@ -467,4 +467,23 @@ describe("ScoutingWidget — live envelope path", () => {
     expect(container.textContent).not.toContain("LAST GAMES");
     expect(container.textContent).not.toContain("RIVAL");
   });
+
+  it("labels a revealed barcode with its SC2Pulse pro name on the rich card", () => {
+    // Cloud-enriched history carries the reveal; the envelope's opponent
+    // name stays the raw bars. The rich scouting card surfaces both.
+    const env = envelope({
+      phase: "match_started",
+      opponent: { name: "llllllllll", race: "Terran" },
+      streamerHistory: {
+        oppName: "llllllllll",
+        oppRace: "Terran",
+        oppRevealedName: "THERIDDLER",
+        headToHead: { wins: 0, losses: 1 },
+      },
+    });
+    const { container } = render(
+      <ScoutingWidget live={null} liveGame={env} />,
+    );
+    expect(container.textContent).toContain("THERIDDLER");
+  });
 });

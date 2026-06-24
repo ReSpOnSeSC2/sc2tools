@@ -45,6 +45,15 @@ export type LiveGamePayload = {
   oppRace?: string;
   /** Opponent display name (battle tag without #1234 disambiguator). */
   oppName?: string;
+  /**
+   * SC2Pulse "revealed" identity behind a barcode / anonymised account
+   * — the pro/main nickname the community linked on
+   * sc2pulse.nephest.com (e.g. "THERIDDLER"). Absent for the vast
+   * majority of opponents who aren't revealed. Surfaced so the overlay
+   * can label an otherwise-unreadable barcode name with the real
+   * player.
+   */
+  oppRevealedName?: string | null;
   /** Map name. */
   map?: string;
   /** Matchup label, e.g. "PvT". */
@@ -475,6 +484,8 @@ export interface LiveGameEnvelope {
   opponent?: {
     name?: string | null;
     race?: string | null;
+    /** SC2Pulse "revealed" pro/main name behind a barcode, when known. */
+    revealedName?: string | null;
     profile?: LiveGameEnvelopeProfile;
   };
   /** Streamer's own name — purely cosmetic, never used for auth. */
@@ -497,6 +508,7 @@ export interface LiveGameEnvelope {
     | "myRace"
     | "oppRace"
     | "oppName"
+    | "oppRevealedName"
     | "oppMmr"
     | "matchup"
     | "headToHead"

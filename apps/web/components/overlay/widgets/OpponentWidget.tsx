@@ -4,6 +4,7 @@ import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 import {
   Dim,
   RaceIcon,
+  RevealedTag,
   WidgetFooter,
   WidgetHeader,
   WidgetShell,
@@ -77,6 +78,7 @@ export function OpponentWidget({
             >
               {live.oppName || "Opponent"}
             </span>
+            <RevealedTag name={live.oppRevealedName} />
           </span>
           <span
             style={{
@@ -107,6 +109,12 @@ export function OpponentWidget({
   const oppName = liveGame.opponent?.name || null;
   const oppRace = liveGame.opponent?.race || null;
   const profile = liveGame.opponent?.profile || null;
+  // Reveal: agent envelope (rare) → cloud-enriched history (the usual
+  // source — stored on the opponents row).
+  const oppRevealedName =
+    liveGame.opponent?.revealedName
+    || liveGame.streamerHistory?.oppRevealedName
+    || null;
   // MMR precedence: SC2Pulse's live profile MMR is the authoritative
   // "current season rating" → cloud-derived last-observed MMR from
   // the opponents row (stamped at the end of the most recent encounter
@@ -161,6 +169,7 @@ export function OpponentWidget({
           >
             {hasOpp ? oppName : "Opponent loading…"}
           </span>
+          {hasOpp ? <RevealedTag name={oppRevealedName} /> : null}
         </span>
         <span
           style={{

@@ -213,6 +213,52 @@ export function Dim({ children }: { children: ReactNode }) {
 }
 
 /**
+ * RevealedTag — small cyan pill surfacing an opponent's SC2Pulse
+ * "revealed" identity (the pro/main name behind a barcode). For a
+ * barcode opponent the bars are unreadable, so the revealed name is the
+ * single most useful label on the widget — render it inline next to the
+ * raw name. Renders nothing when there's no reveal or it's identical to
+ * the already-shown name. Inline styles only (OBS Browser Source-safe).
+ */
+export function RevealedTag({
+  name,
+  size = 13,
+}: {
+  name?: string | null;
+  rawName?: string | null;
+  size?: number;
+}) {
+  const tag = typeof name === "string" ? name.trim() : "";
+  if (!tag) return null;
+  return (
+    <span
+      title="Revealed identity (SC2Pulse)"
+      style={{
+        display: "inline-flex",
+        alignItems: "baseline",
+        gap: 4,
+        flexShrink: 0,
+        fontSize: size,
+        fontWeight: 700,
+        padding: "1px 8px",
+        borderRadius: 999,
+        background: "rgba(34, 211, 238, 0.16)",
+        color: "#67e8f9",
+        whiteSpace: "nowrap",
+        maxWidth: 220,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}
+    >
+      <span style={{ opacity: 0.65, fontSize: size - 2, fontWeight: 600 }}>
+        aka
+      </span>
+      {tag}
+    </span>
+  );
+}
+
+/**
  * RaceIcon — renders the SC2 race SVG inline via a plain ``<img>`` tag.
  *
  * Earlier revisions delegated to the shared ``Icon`` primitive (which

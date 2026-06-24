@@ -5,7 +5,7 @@ import type {
   LiveGameEnvelopeProfile,
   LiveGamePayload,
 } from "../types";
-import { Dim, WidgetShell } from "../WidgetShell";
+import { Dim, RevealedTag, WidgetShell } from "../WidgetShell";
 
 /**
  * Scouting Report card — visual rebuild matching the legacy SPA's
@@ -106,16 +106,26 @@ export function ScoutingWidget({
       >
         <span
           style={{
-            fontSize: 36,
-            fontWeight: 800,
-            letterSpacing: "-0.02em",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            display: "inline-flex",
+            alignItems: "baseline",
+            gap: 10,
             minWidth: 0,
           }}
         >
-          {effective.oppName || "Unknown opponent"}
+          <span
+            style={{
+              fontSize: 36,
+              fontWeight: 800,
+              letterSpacing: "-0.02em",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              minWidth: 0,
+            }}
+          >
+            {effective.oppName || "Unknown opponent"}
+          </span>
+          <RevealedTag name={effective.oppRevealedName} size={16} />
         </span>
         <span
           style={{
@@ -397,10 +407,18 @@ function chooseScoutingPayload(
   // the agent's display name is the freshest signal during gameplay.
   const oppName = liveGame.opponent?.name?.trim() || history.oppName;
   const oppRace = liveGame.opponent?.race?.trim() || history.oppRace;
+  // Reveal can arrive on either the agent envelope (rare) or the
+  // cloud-enriched history (the usual source — it's stored on the
+  // opponents row). Prefer the envelope's fresher value when present.
+  const oppRevealedName =
+    liveGame.opponent?.revealedName?.trim()
+    || history.oppRevealedName
+    || null;
   return {
     ...history,
     oppName,
     oppRace,
+    oppRevealedName,
   };
 }
 

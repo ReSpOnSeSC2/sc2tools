@@ -56,6 +56,7 @@ const REGION_CODE_TO_LABEL = {
  *   region: string | null,
  *   fetchedAt: number,
  *   characterId?: string,
+ *   revealedName?: string | null,
  * }} PulseMmrEntry
  */
 
@@ -114,7 +115,7 @@ class PulseMmrService {
    *     available.
    *
    * @param {string|null|undefined} pulseId
-   * @returns {Promise<{mmr: number, region: string|null, characterId: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, characterId: string|null, revealedName: string|null}|null>}
    */
   async getCurrentMmr(pulseId) {
     const id = normalisePulseId(pulseId);
@@ -130,17 +131,34 @@ class PulseMmrService {
     const cached = this._cache.get(id);
     const now = this.now();
     if (cached && now - cached.fetchedAt < this.cacheTtlMs) {
-      return { mmr: cached.mmr, region: cached.region, characterId: id };
+      return {
+        mmr: cached.mmr,
+        region: cached.region,
+        characterId: id,
+        revealedName: cached.revealedName ?? null,
+      };
     }
     const fetched = await this._fetchTeams(id);
     if (fetched) {
       const entry = { ...fetched, fetchedAt: now };
       this._cache.set(id, entry);
-      return { mmr: entry.mmr, region: entry.region, characterId: id };
+      return {
+        mmr: entry.mmr,
+        region: entry.region,
+        characterId: id,
+        revealedName: entry.revealedName ?? null,
+      };
     }
     // Stale-while-error: a network blip shouldn't strip the streamer's
     // MMR off the overlay if we already had a value cached.
-    if (cached) return { mmr: cached.mmr, region: cached.region, characterId: id };
+    if (cached) {
+      return {
+        mmr: cached.mmr,
+        region: cached.region,
+        characterId: id,
+        revealedName: cached.revealedName ?? null,
+      };
+    }
     return null;
   }
 
@@ -295,7 +313,7 @@ class PulseMmrService {
    *
    * @param {Array<string|null|undefined>|null|undefined} ids
    * @param {{preferredRegion?: string}} [opts]
-   * @returns {Promise<{mmr: number, region: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, revealedName: string|null}|null>}
    */
   async getCurrentMmrForAny(ids, opts = {}) {
     if (!Array.isArray(ids) || ids.length === 0) return null;
@@ -320,7 +338,11 @@ class PulseMmrService {
     const now = this.now();
     const cached = this._cache.get(cacheKey);
     if (cached && now - cached.fetchedAt < this.cacheTtlMs) {
-      return { mmr: cached.mmr, region: cached.region };
+      return {
+        mmr: cached.mmr,
+        region: cached.region,
+        revealedName: cached.revealedName ?? null,
+      };
     }
     const fetched = await this._fetchTeams(numericIds, { preferredRegion });
     if (fetched) {
@@ -329,7 +351,13 @@ class PulseMmrService {
     }
     // Stale-while-error: same contract as the single-id path. A network
     // blip shouldn't strip a previously-good MMR off the overlay.
-    if (cached) return { mmr: cached.mmr, region: cached.region };
+    if (cached) {
+      return {
+        mmr: cached.mmr,
+        region: cached.region,
+        revealedName: cached.revealedName ?? null,
+      };
+    }
     return null;
   }
 
@@ -364,7 +392,7 @@ class PulseMmrService {
    * @private
    * @param {string|string[]} pulseIdOrIds
    * @param {{preferredRegion?: string|null}} [opts]
-   * @returns {Promise<{mmr: number, region: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, revealedName: string|null}|null>}
    */
   async _fetchTeams(pulseIdOrIds, opts = {}) {
     const ids = Array.isArray(pulseIdOrIds) ? pulseIdOrIds : [pulseIdOrIds];
@@ -389,7 +417,11 @@ class PulseMmrService {
             b.lastPlayedMs - a.lastPlayedMs || b.rating - a.rating,
         );
         const best = preferred[0];
-        return { mmr: Math.round(best.rating), region: best.region };
+        return {
+          mmr: Math.round(best.rating),
+          region: best.region,
+          revealedName: pickRevealedName(preferred),
+        };
       }
     }
     // Pick the team played most recently; tie-break on highest rating
@@ -399,7 +431,11 @@ class PulseMmrService {
         b.lastPlayedMs - a.lastPlayedMs || b.rating - a.rating,
     );
     const best = candidates[0];
-    return { mmr: Math.round(best.rating), region: best.region };
+    return {
+      mmr: Math.round(best.rating),
+      region: best.region,
+      revealedName: pickRevealedName(candidates),
+    };
   }
 
   /**
@@ -421,6 +457,7 @@ class PulseMmrService {
    * @returns {Promise<Array<{
    *   rating: number, lastPlayedMs: number, region: string|null,
    *   race: string|null, games: number, league: string|null,
+   *   revealedName: string|null,
    * }>>}
    */
   async _collectTeamCandidates(ids, opts = {}) {
@@ -528,6 +565,7 @@ class PulseMmrService {
           race,
           games,
           league: teamLeagueLabel(team),
+          revealedName: teamProNickname(team),
         });
       }
     }
@@ -1151,6 +1189,54 @@ function teamRaceAndGames(team) {
     }
   }
   return { race: bestRace, games: bestGames > 0 ? bestGames : 0 };
+}
+
+/**
+ * Pull the SC2Pulse "revealed" name off a team's member. When a barcode
+ * (or any anonymised account) is linked to a known pro/main on
+ * sc2pulse.nephest.com, the ``LadderTeamMember`` carries a
+ * ``proNickname`` — the human-readable identity SC2Pulse shows behind
+ * the bars (e.g. "THERIDDLER"). Replays never carry this; it's a pure
+ * SC2Pulse community-curated overlay, so this is the only automated
+ * source for it. Handles the ``members: [..]`` (modern) and
+ * ``members: {..}`` (legacy) shapes, same as ``teamRaceAndGames``.
+ *
+ * @param {any} team
+ * @returns {string|null} sanitised pro nickname, or null when absent.
+ */
+function teamProNickname(team) {
+  const members = team && team.members;
+  let m = null;
+  if (Array.isArray(members) && members.length) m = members[0];
+  else if (members && typeof members === "object") m = members;
+  if (!m || typeof m !== "object") return null;
+  const raw = m.proNickname;
+  if (typeof raw !== "string") return null;
+  const tag = raw.trim();
+  // Cap length defensively so a malformed payload can't bloat the
+  // opponents row / overlay payload. 80 mirrors the BattleTag cap.
+  if (!tag || tag.length > 80) return null;
+  return tag;
+}
+
+/**
+ * First non-null ``revealedName`` across a candidate list. The pro
+ * nickname is character-bound, so any team carrying it identifies the
+ * same revealed player regardless of which team we ultimately pick for
+ * MMR — surface it even when the highest-MMR / most-recent team's
+ * member happened to omit it.
+ *
+ * @param {Array<{revealedName?: string|null}>} candidates
+ * @returns {string|null}
+ */
+function pickRevealedName(candidates) {
+  if (!Array.isArray(candidates)) return null;
+  for (const c of candidates) {
+    if (c && typeof c.revealedName === "string" && c.revealedName) {
+      return c.revealedName;
+    }
+  }
+  return null;
 }
 
 module.exports = { PulseMmrService };

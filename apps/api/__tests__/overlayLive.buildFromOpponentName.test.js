@@ -401,4 +401,33 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
     expect(await svc.buildFromOpponentName("u1", "")).toBeNull();
     expect(await svc.buildFromOpponentName("", "Foo")).toBeNull();
   });
+
+  test("surfaces the opponents row's SC2Pulse revealed name as oppRevealedName", async () => {
+    // A barcode opponent the cloud has captured a reveal for: the
+    // displayed name is unreadable bars, but the row carries the
+    // SC2Pulse proNickname. The pre-game scouting card uses
+    // oppRevealedName to label the bars with the real identity.
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "1-S2-1-10324554",
+      pulseCharacterId: "4771238",
+      displayNameSample: "IIIIIIIIII",
+      revealedName: "THERIDDLER",
+      race: "Terran",
+      gameCount: 1,
+      wins: 0,
+      losses: 1,
+      lastSeen: new Date(),
+    });
+    const p = await svc.buildFromOpponentName(
+      "u1",
+      "IIIIIIIIII",
+      "Terran",
+      4771238,
+      "Protoss",
+      "1-S2-1-10324554",
+    );
+    expect(p).toBeTruthy();
+    expect(p.oppRevealedName).toBe("THERIDDLER");
+  });
 });

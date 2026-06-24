@@ -242,4 +242,43 @@ describe("OpponentWidget — live envelope path", () => {
     expect(container.textContent).toContain("match over");
     expect(container.textContent).toContain("ByuN");
   });
+
+  it("labels a revealed barcode with its SC2Pulse pro name (live envelope)", () => {
+    // Barcode opponent: the displayed name is unreadable bars, but the
+    // cloud enriched the envelope's streamerHistory with the SC2Pulse
+    // proNickname. The widget shows "aka THERIDDLER" next to the bars.
+    const env = envelope({
+      phase: "match_loading",
+      opponent: { name: "llllllllll", race: "Terran" },
+      streamerHistory: { oppRevealedName: "THERIDDLER" },
+    });
+    const { container } = render(
+      <OpponentWidget live={null} liveGame={env} />,
+    );
+    expect(container.textContent).toContain("THERIDDLER");
+  });
+
+  it("labels a revealed barcode in the post-game payload path", () => {
+    const live: LiveGamePayload = {
+      oppName: "llllllllll",
+      oppRace: "Terran",
+      oppRevealedName: "THERIDDLER",
+      oppMmr: 5400,
+    };
+    const { container } = render(
+      <OpponentWidget live={live} liveGame={null} />,
+    );
+    expect(container.textContent).toContain("THERIDDLER");
+  });
+
+  it("renders no reveal tag for an unrevealed opponent", () => {
+    const env = envelope({
+      phase: "match_loading",
+      opponent: { name: "Serral", race: "Zerg" },
+    });
+    const { container } = render(
+      <OpponentWidget live={null} liveGame={env} />,
+    );
+    expect(container.textContent).not.toContain("aka");
+  });
 });

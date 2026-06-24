@@ -12,6 +12,22 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Added
 
+- **SC2Pulse "revealed" opponent names** — when a barcode (or otherwise
+  anonymised) opponent is linked to a known pro/main on
+  sc2pulse.nephest.com, that reveal now flows through to SC2 Tools. The
+  SC2Pulse `proNickname` is captured off the `/group/team` member during
+  the existing MMR pull (`PulseMmrService`) and persisted as
+  `revealedName` on the opponents row. Because a reveal can land long
+  after we first resolved an opponent's `pulseCharacterId` — which the
+  id-backfill cron never re-touches — a dedicated re-check pass
+  (`OpponentsService.backfillRevealedNames`, wired into the pulse
+  backfill job) re-probes already-resolved rows on a throttled 24 h
+  window and stores any reveal it finds. The revealed name is surfaced
+  in three places: the Opponents tab + opponent profile (an "aka /
+  revealed" chip next to the unreadable bars), the live Opponent overlay
+  widget, and the Scouting widget (via `oppRevealedName` on the overlay
+  payload). Opponents who aren't revealed are unaffected.
+
 - **Macro tab rebuilt as the Macro Report** — the per-game inspector
   (which duplicated the macro-breakdown popover already reachable from
   every game row) is replaced by aggregate analytics the app had
