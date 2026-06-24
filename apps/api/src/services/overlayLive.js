@@ -204,11 +204,18 @@ class OverlayLiveService {
                 losses: 1,
                 lastSeen: 1,
                 openings: 1,
+                revealedName: 1,
               },
             },
           )
           .catch(() => null)
       : null;
+
+    // SC2Pulse "revealed" name behind a barcode (when the community
+    // linked the anonymised account to a known pro/main). Persisted on
+    // the opponents row by the MMR / reveal re-check passes; surfaced so
+    // the overlay can label the bars with the real identity.
+    if (oppRow?.revealedName) payload.oppRevealedName = oppRow.revealedName;
 
     if (oppRow) {
       const wins = Number(oppRow.wins) || 0;
@@ -422,6 +429,7 @@ class OverlayLiveService {
       losses: 1,
       lastSeen: 1,
       openings: 1,
+      revealedName: 1,
     };
     /** @type {Record<string, any>|null} */
     let oppRow = null;
@@ -488,6 +496,10 @@ class OverlayLiveService {
       const wins = Number(oppRow.wins) || 0;
       const losses = Number(oppRow.losses) || 0;
       payload.headToHead = { wins, losses };
+      // SC2Pulse "revealed" identity behind a barcode, when we've
+      // captured it for this opponent. Lets the pre-game scouting card
+      // label the bars with the real name.
+      if (oppRow.revealedName) payload.oppRevealedName = oppRow.revealedName;
       // Last-observed MMR from the opponents row. The post-game card
       // surfaces ``oppMmr`` from the just-uploaded game; pre-game we
       // fall back to the most recent value the agent stamped on this

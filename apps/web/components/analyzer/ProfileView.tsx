@@ -41,6 +41,10 @@ type OpponentProfileResp = {
   mergedToonHandles?: string[] | null;
   name?: string;
   displayNameSample?: string;
+  // SC2Pulse "revealed" identity behind a barcode — the pro/main name
+  // the community linked on sc2pulse.nephest.com. Absent for opponents
+  // who aren't revealed.
+  revealedName?: string | null;
   // Last-known MMR — propagated from the most recent game's
   // ``opponent.mmr`` by ``recordGame`` / ``refreshMetadata``. The agent
   // sources this field SC2Pulse-first at upload time, falling back to
@@ -183,6 +187,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-h2 font-semibold">{data.name || "unnamed"}</h1>
+            <RevealedChip name={data.revealedName} />
             <HeadlineMmrChip breakdown={races} fallbackMmr={data.mmr} />
             <MergedToonsChip handles={data.mergedToonHandles} />
           </div>
@@ -453,6 +458,27 @@ function MergedToonsChip({
       className="inline-flex items-center rounded-full border border-accent-cyan/40 bg-accent-cyan/10 px-2 py-0.5 text-micro font-medium uppercase tracking-wider text-accent-cyan"
     >
       {summary}
+    </span>
+  );
+}
+
+/**
+ * SC2Pulse "revealed" identity pill for the profile heading. For a
+ * barcode opponent the heading is unreadable bars; the revealed pro/main
+ * name is the real identity. Renders nothing when not revealed.
+ */
+function RevealedChip({ name }: { name?: string | null }) {
+  const tag = typeof name === "string" ? name.trim() : "";
+  if (!tag) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-accent-cyan/15 px-2.5 py-0.5 text-caption font-semibold text-accent-cyan"
+      title={`Revealed on SC2Pulse as ${tag}`}
+    >
+      <span className="text-micro font-medium uppercase tracking-wider opacity-70">
+        revealed
+      </span>
+      {tag}
     </span>
   );
 }

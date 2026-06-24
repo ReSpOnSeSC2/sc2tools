@@ -357,6 +357,7 @@ class OpponentsService {
     //     windowed stat — always the player's most-recent name
     //     across all history.
     await this._overlayFromOpponents(userId, page);
+    await this._overlayRevealedNamesFromOpponents(userId, page);
     await this._overlayLatestNameFromGames(userId, page);
     // (3) ``mmr`` / ``region`` — safety net for rows whose ``$last``
     //     accumulator landed on a game without ``opponent.mmr`` (the
@@ -428,6 +429,48 @@ class OpponentsService {
       if (!r.toonHandle && opp.toonHandle) {
         r.toonHandle = opp.toonHandle;
       }
+    }
+  }
+
+  /**
+   * In-place splice of each opponent's SC2Pulse "revealed" name
+   * (``revealedName``) from the opponents collection onto an
+   * aggregation result page.
+   *
+   * Unlike ``pulseCharacterId`` / ``toonHandle``, ``revealedName`` is
+   * NEVER stamped onto games rows — it lives only on the opponents
+   * collection row (populated by the MMR fetch / reveal re-check
+   * passes). So the list aggregation (which reads off the embedded
+   * ``opponent`` sub-doc) can't surface it; we read it directly here.
+   * One indexed ``find`` round-trip regardless of page size. No-op on
+   * an empty page or when no row carries a reveal.
+   *
+   * @private
+   * @param {string} userId
+   * @param {Array<{ pulseId: string, revealedName?: string|null }>} rows
+   */
+  async _overlayRevealedNamesFromOpponents(userId, rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const ids = rows
+      .map((r) => (r && typeof r.pulseId === "string" ? r.pulseId : null))
+      .filter((id) => id);
+    if (ids.length === 0) return;
+    const cursor = this.db.opponents.find(
+      { userId, pulseId: { $in: ids }, revealedName: { $type: "string", $ne: "" } },
+      { projection: { _id: 0, pulseId: 1, revealedName: 1 } },
+    );
+    /** @type {Map<string, string>} */
+    const byPulseId = new Map();
+    for await (const doc of cursor) {
+      if (typeof doc.pulseId === "string" && typeof doc.revealedName === "string") {
+        byPulseId.set(doc.pulseId, doc.revealedName);
+      }
+    }
+    if (byPulseId.size === 0) return;
+    for (const r of rows) {
+      if (!r || typeof r.pulseId !== "string") continue;
+      const name = byPulseId.get(r.pulseId);
+      if (name) r.revealedName = name;
     }
   }
 
@@ -1199,6 +1242,11 @@ class OpponentsService {
       set.mmr = pulseFetched.mmr;
       set.mmrFetchedAt = new Date();
       if (pulseFetched.region) set.region = pulseFetched.region;
+      // SC2Pulse "revealed" name (proNickname). Sticky: only written
+      // when present so a later barcode-vs-barcode game can't blank a
+      // reveal we already captured. Re-check / refresh is the backfill
+      // cron's job.
+      if (pulseFetched.revealedName) set.revealedName = pulseFetched.revealedName;
     }
     // Identity: persist the raw toon_handle (always present from
     // sc2reader) and the resolved sc2pulse.nephest.com character id
@@ -1362,6 +1410,9 @@ class OpponentsService {
       set.mmr = refreshPulseFetched.mmr;
       set.mmrFetchedAt = new Date();
       if (refreshPulseFetched.region) set.region = refreshPulseFetched.region;
+      if (refreshPulseFetched.revealedName) {
+        set.revealedName = refreshPulseFetched.revealedName;
+      }
     }
     if (typeof game.toonHandle === "string" && game.toonHandle.length > 0) {
       set.toonHandle = game.toonHandle;
@@ -1684,7 +1735,7 @@ class OpponentsService {
    *   per-row freshness window so the pull genuinely hits SC2Pulse — but
    *   still write the fresh result THROUGH to the shared cache so every
    *   user gets the refreshed value.
-   * @returns {Promise<{mmr: number, region: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, revealedName: string|null}|null>}
    */
   async _fetchOpponentMmrFromPulse(pulseCharacterId, prior, preferredRegion, toonHandle, opts = {}) {
     const forceFresh = opts && opts.forceFresh === true;
@@ -1742,6 +1793,15 @@ class OpponentsService {
       const mmr = Number(result.mmr);
       if (!Number.isFinite(mmr) || mmr <= 0) return null;
       const region = typeof result.region === "string" ? result.region : null;
+      // SC2Pulse "revealed" identity (proNickname) — the human name
+      // behind a barcode when the community linked it to a known
+      // pro/main. Surfaced alongside MMR because the same /group/team
+      // pull already carries it; callers persist it onto the opponents
+      // row so the Opponents tab / overlay can label the bars.
+      const revealedName =
+        typeof result.revealedName === "string" && result.revealedName
+          ? result.revealedName
+          : null;
       // Write-through to the shared cache so the next user who runs
       // into this opponent reuses this pull. Best-effort — a directory
       // write failure must never fail the ingest path.
@@ -1753,7 +1813,7 @@ class OpponentsService {
           region,
         });
       }
-      return { mmr: Math.round(mmr), region };
+      return { mmr: Math.round(mmr), region, revealedName };
     } catch {
       return null;
     }
@@ -1954,6 +2014,14 @@ class OpponentsService {
           set.mmr = pulseFetched.mmr;
           set.mmrFetchedAt = now;
           if (pulseFetched.region) set.region = pulseFetched.region;
+          // We just made a live /group/team pull, so we know this
+          // opponent's reveal status — stamp it and store the
+          // proNickname when present. Saves the reveal re-check pass a
+          // round-trip for a freshly-resolved row.
+          set.revealedNameCheckedAt = now;
+          if (pulseFetched.revealedName) {
+            set.revealedName = pulseFetched.revealedName;
+          }
         }
       }
       const res = await this.db.opponents.updateOne(
@@ -1990,6 +2058,138 @@ class OpponentsService {
       }
     }
     return { scanned: rows.length, resolved, updated, skipped };
+  }
+
+  /**
+   * Re-check SC2Pulse "revealed" identity for opponents we've ALREADY
+   * resolved to a pulseCharacterId.
+   *
+   * Why a separate pass from ``backfillPulseCharacterId``: a barcode's
+   * reveal (the community linking the anonymised account to a known
+   * pro/main on sc2pulse.nephest.com) can land at ANY time after we
+   * first recorded the opponent — long after their pulseCharacterId was
+   * resolved. The id-backfill cron only touches rows whose
+   * ``pulseCharacterId`` is still empty, so without this pass a
+   * reveal that happens post-resolution would never surface in the
+   * Opponents tab / overlay. Here we re-probe resolved rows whose
+   * ``revealedNameCheckedAt`` is missing or older than the re-check
+   * window, force a live ``/group/team`` pull (which carries the
+   * member's ``proNickname``), and persist any reveal we find.
+   *
+   * Throttled by ``revealedNameCheckedAt`` so a non-revealed opponent
+   * (the overwhelming majority) is re-probed at most once per window
+   * rather than every cycle — keeping us under SC2Pulse's shared rate
+   * limit. Opportunistically refreshes MMR while the team data is in
+   * hand.
+   *
+   * No-op (returns zeroes) when the service was built without a
+   * ``pulseMmr`` dependency — there's nothing to query SC2Pulse with.
+   *
+   * @param {string} userId
+   * @param {{ limit?: number, recheckSec?: number, force?: boolean }} [opts]
+   * @returns {Promise<{scanned: number, revealed: number, updated: number}>}
+   */
+  async backfillRevealedNames(userId, opts = {}) {
+    if (!userId) throw new Error("userId required");
+    if (!this.pulseMmr) return { scanned: 0, revealed: 0, updated: 0 };
+    const limit = clampLimit(opts.limit, 50);
+    const recheckSec =
+      typeof opts.recheckSec === "number" && opts.recheckSec >= 0
+        ? opts.recheckSec
+        : 24 * 60 * 60;
+    const cutoff = new Date(Date.now() - recheckSec * 1000);
+    /** @type {Record<string, any>} */
+    const filter = {
+      userId,
+      pulseCharacterId: { $type: "string", $ne: "" },
+    };
+    if (!opts.force) {
+      filter.$or = [
+        { revealedNameCheckedAt: { $exists: false } },
+        { revealedNameCheckedAt: null },
+        { revealedNameCheckedAt: { $lt: cutoff } },
+      ];
+    }
+    const rows = await this.db.opponents
+      .find(filter, {
+        projection: {
+          _id: 0,
+          pulseId: 1,
+          pulseCharacterId: 1,
+          toonHandle: 1,
+          region: 1,
+          revealedName: 1,
+        },
+      })
+      .limit(limit)
+      .toArray();
+    let revealed = 0;
+    let updated = 0;
+    for (const row of rows) {
+      const charId =
+        typeof row.pulseCharacterId === "string" ? row.pulseCharacterId : "";
+      if (!charId) continue;
+      const toon =
+        typeof row.toonHandle === "string" && row.toonHandle
+          ? row.toonHandle
+          : null;
+      const region =
+        typeof row.region === "string" && row.region
+          ? row.region
+          : regionFromToonHandle(toon);
+      const now = new Date();
+      /** @type {Record<string, any>} */
+      const set = { revealedNameCheckedAt: now };
+      let pulseFetched = null;
+      try {
+        // forceFresh: bypass the shared-cache read AND the per-row
+        // freshness window so we genuinely pull /group/team and see the
+        // current proNickname (a reveal that landed since the last
+        // check).
+        pulseFetched = await this._fetchOpponentMmrFromPulse(
+          charId,
+          null,
+          region,
+          toon,
+          { forceFresh: true },
+        );
+      } catch (err) {
+        this.logger.warn(
+          { err, userId, pulseId: row.pulseId, pulseCharacterId: charId },
+          "opponent_revealed_name_fetch_failed",
+        );
+      }
+      if (pulseFetched) {
+        if (typeof pulseFetched.mmr === "number") {
+          set.mmr = pulseFetched.mmr;
+          set.mmrFetchedAt = now;
+        }
+        if (pulseFetched.region) set.region = pulseFetched.region;
+        if (
+          pulseFetched.revealedName
+          && pulseFetched.revealedName !== row.revealedName
+        ) {
+          set.revealedName = pulseFetched.revealedName;
+          revealed += 1;
+          this.logger.info(
+            {
+              userId,
+              pulseId: row.pulseId,
+              pulseCharacterId: charId,
+              from: row.revealedName || null,
+              to: pulseFetched.revealedName,
+            },
+            "opponent_revealed_name_resolved",
+          );
+        }
+      }
+      const res = await this.db.opponents.updateOne(
+        { userId, pulseId: row.pulseId },
+        { $set: set },
+      );
+      if (res.modifiedCount > 0) updated += 1;
+    }
+    return { scanned: rows.length, revealed, updated };
   }
 
   /**

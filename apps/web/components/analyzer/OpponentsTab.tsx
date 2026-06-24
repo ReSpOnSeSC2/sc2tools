@@ -19,6 +19,10 @@ type Opp = {
   toonHandle?: string | null;
   name?: string;
   displayNameSample?: string;
+  // SC2Pulse "revealed" identity behind a barcode — the pro/main name
+  // the community linked on sc2pulse.nephest.com. Absent for opponents
+  // who aren't revealed.
+  revealedName?: string | null;
   wins: number;
   losses: number;
   games: number;
@@ -183,12 +187,21 @@ export function OpponentsTab({
                   className="group cursor-pointer border-t border-border hover:bg-accent/10"
                 >
                   <td
-                    className="truncate px-3 py-1.5 text-text group-hover:text-accent"
-                    title={o.name || ""}
+                    className="px-3 py-1.5 text-text group-hover:text-accent"
+                    title={
+                      o.revealedName
+                        ? `${o.name || "unnamed"} · revealed as ${o.revealedName}`
+                        : o.name || ""
+                    }
                   >
-                    {o.name || (
-                      <span className="italic text-text-dim">unnamed</span>
-                    )}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate">
+                        {o.name || (
+                          <span className="italic text-text-dim">unnamed</span>
+                        )}
+                      </span>
+                      <RevealedChip name={o.revealedName} />
+                    </span>
                   </td>
                   <PulseIdCell opp={o} />
                   <td
@@ -240,6 +253,28 @@ export function OpponentsTab({
  * resolution hasn't happened yet (e.g. SC2Pulse was down during
  * the first ingest, or the opponent isn't ranked yet).
  */
+/**
+ * SC2Pulse "revealed" identity pill. For a barcode opponent the
+ * displayed name is unreadable bars, so the revealed pro/main name is
+ * the only human-legible identity — surface it inline next to the name.
+ * Renders nothing when the opponent isn't revealed.
+ */
+function RevealedChip({ name }: { name?: string | null }) {
+  const tag = typeof name === "string" ? name.trim() : "";
+  if (!tag) return null;
+  return (
+    <span
+      className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-accent-cyan/15 px-2 py-0.5 text-micro font-semibold text-accent-cyan"
+      title={`Revealed on SC2Pulse as ${tag}`}
+    >
+      <span className="text-[0.6rem] font-medium uppercase tracking-wider opacity-70">
+        aka
+      </span>
+      <span className="max-w-[10rem] truncate">{tag}</span>
+    </span>
+  );
+}
+
 function PulseIdCell({ opp }: { opp: Opp }) {
   const label = pickPulseLabel(opp);
   const stop = (e: React.MouseEvent) => e.stopPropagation();

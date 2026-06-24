@@ -185,6 +185,14 @@ function buildPulseBackfillJob(deps) {
         resolved: 0,
         updated: 0,
         skipped: 0,
+        // Reveal re-check pass (already-resolved opponents whose
+        // SC2Pulse "revealed" name we re-probe). Kept separate from the
+        // id-resolution counters above so each pass is independently
+        // observable.
+        revealUsers: 0,
+        revealScanned: 0,
+        revealed: 0,
+        revealUpdated: 0,
         elapsedMs: 0,
       };
       try {
@@ -204,6 +212,34 @@ function buildPulseBackfillJob(deps) {
               { err, userId },
               "pulse_backfill_user_failed",
             );
+          }
+        }
+        // Second pass: re-check the SC2Pulse "revealed" identity for
+        // opponents already resolved to a pulseCharacterId. A barcode's
+        // reveal can land long after we resolved its id, so the
+        // id-backfill loop above (which only touches unresolved rows)
+        // would never catch it — this pass does. Best-effort: a failure
+        // here never blocks the id-resolution work that already ran.
+        if (typeof deps.opponents.backfillRevealedNames === "function") {
+          const revealUserIds = await pickRevealRecheckUsers(
+            opponents,
+            usersPerTick,
+          );
+          summary.revealUsers = revealUserIds.length;
+          for (const userId of revealUserIds) {
+            try {
+              const r = await deps.opponents.backfillRevealedNames(userId, {
+                limit: userLimit,
+              });
+              summary.revealScanned += r.scanned;
+              summary.revealed += r.revealed;
+              summary.revealUpdated += r.updated;
+            } catch (err) {
+              logger.warn(
+                { err, userId },
+                "pulse_backfill_reveal_user_failed",
+              );
+            }
           }
         }
       } finally {
@@ -294,6 +330,36 @@ async function pickStuckUsers(opponents, limit) {
   return distinct.map((d) => d._id).filter((id) => typeof id === "string" && id);
 }
 
+/**
+ * Distinct user ids owning at least one ALREADY-RESOLVED opponent whose
+ * SC2Pulse reveal status is due for a re-check (``revealedNameCheckedAt``
+ * missing or older than the re-check window). These are the users the
+ * reveal pass (``backfillRevealedNames``) has work for — distinct from
+ * ``pickStuckUsers``, which targets opponents still missing a
+ * pulseCharacterId.
+ *
+ * @param {import('mongodb').Collection} opponents
+ * @param {number} limit
+ * @returns {Promise<string[]>}
+ */
+async function pickRevealRecheckUsers(opponents, limit) {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const filter = {
+    pulseCharacterId: { $type: "string", $ne: "" },
+    $or: [
+      { revealedNameCheckedAt: { $exists: false } },
+      { revealedNameCheckedAt: null },
+      { revealedNameCheckedAt: { $lt: cutoff } },
+    ],
+  };
+  const distinct = await opponents.aggregate([
+    { $match: filter },
+    { $group: { _id: "$userId" } },
+    { $limit: limit },
+  ]).toArray();
+  return distinct.map((d) => d._id).filter((id) => typeof id === "string" && id);
+}
+
 function parsePositiveInt(raw, fallback) {
   const n = Number.parseInt(String(raw || ""), 10);
   if (!Number.isFinite(n) || n <= 0) return fallback;
@@ -317,5 +383,10 @@ function clampInterval(ms) {
 module.exports = {
   buildPulseBackfillJob,
   // Exported for tests.
-  __internal: { pickStuckUsers, clampInterval, parseSeconds },
+  __internal: {
+    pickStuckUsers,
+    pickRevealRecheckUsers,
+    clampInterval,
+    parseSeconds,
+  },
 };
