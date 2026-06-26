@@ -2,6 +2,29 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.13.2
+
+### Fixed — PvZ 2 Stargate Void Ray no longer mislabeled "Stargate into Robo" on a late support Robo
+- **What.** The bundled replay-engine classifier
+  (`core/strategy_detector_pvz.py`, frozen into the agent build) tagged
+  a real 2-Stargate Void Ray opener (Stargate-first, 2 bases, 4+ Void
+  Rays by 10:00) as `PvZ - Stargate into Robo` whenever it added a
+  support Robotics Facility (Observer / Immortal) before 10:00. The
+  Void Ray rule rejected ANY Robo before 10:00, so the build failed it
+  and the next rule -- Stargate into Robo, which fires on "Robo present
+  + one Stargate unit" -- grabbed it instead.
+- **Effect.** The Void Ray rule's Robo guard now rejects only an EARLY
+  Robo (before 6:00). A later support Robo behind a 4+ Void Ray
+  commitment keeps the `PvZ - 2 Stargate Void Ray` label; genuine
+  Stargate-into-Robo builds (an early Robo, or fewer than 4 Void Rays)
+  are unchanged, as are the Phoenix rules (they keep the full 10:00
+  window). Fixed in both the canonical detector and the
+  `detectors/user.py` mirror, with a regression test covering both
+  entry points. The agent computes this label locally before upload,
+  so the corrected label ships only with this build and installed
+  agents auto-update; previously-uploaded games keep their old label
+  until the updated agent re-parses them.
+
 ## 0.13.1
 
 ### Fixed — PvZ Glaives-first Stargate openers no longer mislabeled "Stargate into Robo"
