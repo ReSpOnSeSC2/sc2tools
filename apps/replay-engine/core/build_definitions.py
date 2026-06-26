@@ -57,7 +57,7 @@ BUILD_DEFINITIONS = {
     "Protoss - Chargelot/Archon Comp": "Mid/Late game composition fallback based on Archons and Chargelots.",
     "PvZ - Carrier Rush": "Detected if a Stargate AND a Fleet Beacon are built and at least 1 Carrier has been produced by 10:00 -- skytoss into Carriers. Carriers without a Stargate + Fleet Beacon are treated as hallucinations.",
     "PvZ - Tempest Rush": "Detected if a Stargate AND a Fleet Beacon are built and at least 1 Tempest has been produced by 10:00 -- long-range Tempest harass / siege.",
-    "PvZ - 2 Stargate Void Ray": "Detected if 2+ Stargates and 2+ Nexuses by 10:00, plus 4+ Void Rays produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations).",
+    "PvZ - 2 Stargate Void Ray": "Detected if 2+ Stargates and 2+ Nexuses by 10:00, plus 4+ Void Rays produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations). An EARLY Robotics Facility (before 6:00) reroutes to Stargate into Robo; a later Robo is treated as Observer / Immortal support and still counts as Void Ray.",
     "PvZ - 3 Stargate Phoenix": "Detected if 3+ Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations).",
     "PvZ - 2 Stargate Phoenix": "Detected if 2+ Stargates and 2+ Nexuses by 10:00, plus 4+ Phoenix produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations).",
     "PvZ - Rail's Disruptor Drop": "Detected if a Robotics Facility AND a Robotics Bay are built and at least 1 Disruptor and 1 Warp Prism are produced by 8:00 -- an early Disruptor drop harass build.",

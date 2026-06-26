@@ -13,7 +13,7 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - 2 Stargate Void Ray",
     description:
-      "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), 2+ Stargates and 2+ Nexuses are up by 10:00, 4+ Void Rays have been produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations), AND the build did NOT commit to a tech-switch -- Glaives was NOT the first Twilight upgrade AND no Robotics Facility was built by 10:00. A Stargate-into-Glaives hybrid tags as PvZ - Stargate into Glaives; a Stargate-into-Robo hybrid tags as PvZ - Stargate into Robo.",
+      "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), 2+ Stargates and 2+ Nexuses are up by 10:00, 4+ Void Rays have been produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations), AND the build did NOT commit to a tech-switch -- Glaives was NOT the first Twilight upgrade AND no Robotics Facility was built before 6:00. A 4+ Void Ray commitment that adds a LATER Robo (after 6:00) for Observer / Immortal support still counts as Void Ray; only an EARLY Robo (before 6:00) reroutes to PvZ - Stargate into Robo. A Stargate-into-Glaives hybrid tags as PvZ - Stargate into Glaives.",
   },
   {
     race: "Protoss",

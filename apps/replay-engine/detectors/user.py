@@ -185,9 +185,13 @@ class UserBuildDetector(BaseStrategyDetector):
                     and count_units("Tempest", 600) >= 1):
                 return "PvZ - Tempest Rush"
             # Pure-Phoenix / pure-VR disqualifiers: see canonical
-            # detector. `not glaive_first_off_twilight` blocks
-            # Glaives-hybrid; `not has_building("RoboticsFacility",
-            # 600)` blocks Phoenix-into-Robo hybrid.
+            # detector. `not glaive_first_off_twilight` blocks the
+            # Glaives-hybrid. The 2 SG Void Ray rule rejects only an
+            # EARLY Robo (before 6:00) -- a 4+ Void Ray commitment that
+            # adds a LATER Robo is air-first with Observer / Immortal
+            # support, not a Robo transition, so a late Robo must not
+            # steal it. The Phoenix rules keep the full 10:00 Robo
+            # window (lighter harass that adds a Robo IS a transition).
             if (stargate_first_tech
                     and sg_count_10min == 2
                     and nexus_count_10min >= 2
@@ -195,7 +199,7 @@ class UserBuildDetector(BaseStrategyDetector):
                     and not has_dark_shrine_10min
                     and dt_count_10min == 0
                     and not glaive_first_off_twilight
-                    and not has_building("RoboticsFacility", 600)):
+                    and not has_building("RoboticsFacility", 360)):
                 return "PvZ - 2 Stargate Void Ray"
             if (stargate_first_tech and sg_count_10min >= 3
                     and nexus_count_10min >= 2

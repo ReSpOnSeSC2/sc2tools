@@ -90,24 +90,30 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvZ - Tempest Rush"
     # Pure-Phoenix / pure-VR disqualifiers: a Stargate opener that
-    # ALSO commits to a tech-switch (Glaives off Twilight, or a
-    # Robotics Facility for Immortal / Observer / Disruptor) is a
-    # hybrid build (Stargate into Robo, Stargate into Glaives), NOT a
-    # pure 2/3 SG Phoenix or 2 SG VR opener. The "pure" labels here
+    # ALSO commits to a tech-switch (Glaives off Twilight, or an
+    # EARLY Robotics Facility for Immortal / Observer / Disruptor) is
+    # a hybrid build (Stargate into Robo, Stargate into Glaives), NOT
+    # a pure 2/3 SG Phoenix or 2 SG VR opener. The "pure" labels here
     # require the Phoenix / VRs to BE the build -- not Stargate-tech
     # support for a Robo / Twilight follow-up.
     #
     # `not glaive_first_off_twilight` blocks Glaives-first hybrids
-    # (those fall through to PvZ - Stargate into Glaives). `not
-    # has_building("RoboticsFacility", 600)` blocks Robo hybrids
-    # (those fall through to PvZ - Stargate into Robo below).
+    # (those fall through to PvZ - Stargate into Glaives). The Robo
+    # guard blocks Robo hybrids (those fall through to PvZ - Stargate
+    # into Robo below). NOTE the windows differ: the 2 SG Void Ray
+    # rule rejects only an EARLY Robo (before 6:00) -- a heavy 4+ Void
+    # Ray commitment that adds a LATER Robo is air-first with Observer
+    # / Immortal support, not a Robo transition, so a late Robo must
+    # not steal it. The Phoenix rules keep the full 10:00 window:
+    # lighter Phoenix harass that picks up any Robo really is a
+    # Stargate-into-Robo transition.
     if (
         stargate_first_tech
         and sg_count_10min >= 2
         and nexus_count_10min >= 2
         and count_units("VoidRay", 600) >= 4
         and not glaive_first_off_twilight
-        and not has_building("RoboticsFacility", 600)
+        and not has_building("RoboticsFacility", 360)
     ):
         return "PvZ - 2 Stargate Void Ray"
     if (
