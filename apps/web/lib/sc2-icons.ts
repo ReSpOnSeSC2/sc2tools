@@ -25,8 +25,9 @@ const BUILDINGS = [
   "missileturret", "nexus", "nydusnetwork", "orbitalcommand",
   "photoncannon", "planetaryfortress", "pylon", "refinery",
   "roachwarren", "roboticsbay", "roboticsfacility", "shieldbattery",
-  "spawningpool", "spire", "stargate", "starport", "supplydepot",
-  "templararchive", "twilightcouncil", "ultraliskcavern", "warpgate",
+  "spawningpool", "spinecrawler", "spire", "sporecrawler", "stargate",
+  "starport", "supplydepot", "templararchive", "twilightcouncil",
+  "ultraliskcavern", "warpgate",
 ] as const;
 
 const UNITS = [
@@ -168,6 +169,10 @@ const SYNONYMS: Record<string, { kind: IconKind; key: string }> = {
   hatch: { kind: "building", key: "hatchery" },
   cannon: { kind: "building", key: "photoncannon" },
   turret: { kind: "building", key: "missileturret" },
+  spine: { kind: "building", key: "spinecrawler" },
+  spore: { kind: "building", key: "sporecrawler" },
+  spinecrawleruprooted: { kind: "building", key: "spinecrawler" },
+  sporecrawleruprooted: { kind: "building", key: "sporecrawler" },
   twilight: { kind: "building", key: "twilightcouncil" },
   // sim/profile name is plural; the icon file is singular
   templararchives: { kind: "building", key: "templararchive" },
@@ -459,6 +464,10 @@ const KEYWORDS: ReadonlyArray<{ kw: string; rel: string }> = [
   { kw: "hydralisk den", rel: "buildings/hydraliskden.png" },
   { kw: "lurkerden", rel: "buildings/lurkerden.png" },
   { kw: "spire", rel: "buildings/spire.png" },
+  { kw: "spinecrawler", rel: "buildings/spinecrawler.png" },
+  { kw: "spine crawler", rel: "buildings/spinecrawler.png" },
+  { kw: "sporecrawler", rel: "buildings/sporecrawler.png" },
+  { kw: "spore crawler", rel: "buildings/sporecrawler.png" },
   { kw: "nydus", rel: "buildings/nydusnetwork.png" },
   { kw: "hatchery", rel: "buildings/hatchery.png" },
   { kw: "hatch", rel: "buildings/hatchery.png" },
