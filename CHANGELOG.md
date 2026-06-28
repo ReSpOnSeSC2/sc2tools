@@ -57,6 +57,23 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Macro breakdown · Buildings roster now removes destroyed
+  structures** — the Unit & Building Roster's Buildings row counted
+  every structure ever built (cumulative), so a 27-minute game showed
+  inflated totals like "55 Pylons" / "38 Gateways" even after many had
+  been destroyed. The roster now starts from that cumulative
+  build-order count and subtracts each structure that was destroyed by
+  the hovered time, read from the macro breakdown's
+  `production_buildings` lifetimes (`born_time` / `died_time`) that the
+  extractor already records. Survivors are detected via the
+  game-end sentinel (every surviving structure shares the same
+  `died_time`), so the fix is immune to small timebase drift and works
+  on already-uploaded replays without a re-upload. Buildings that have
+  no per-structure lifetime data (older payloads) fall back to the
+  cumulative count and surface the same "build order" badge the Units
+  row uses. The death-aware derivation (`deriveBuildingComposition`) is
+  mirrored into the server-side scouting port so the opponent-profile
+  per-phase Buildings counts drop destroyed structures too.
 - **Strategy classifier · PvZ - Stargate into Robo no longer steals
   Glaives-first builds** — a Stargate opener that researched Resonating
   Glaives as the FIRST Twilight upgrade and only later added a Robotics

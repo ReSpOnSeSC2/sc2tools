@@ -428,6 +428,102 @@ function countBuildingsAt(events, t) {
 }
 
 /**
+ * Derive structure-death events from a ``production_buildings`` array.
+ * Mirrors ``derivedBuildingDeaths`` in compositionAt.ts.
+ *
+ * Each record carries a ``died_time``; structures that survived to the
+ * end of the game all share the same game-end timestamp (the extractor
+ * stamps it when no UnitDiedEvent fired). The maximum ``died_time``
+ * across the array is therefore the "survived" sentinel — any record
+ * below it was genuinely destroyed mid-game. Reading the sentinel from
+ * the data keeps this immune to drift between the stored game length
+ * and the extractor's internal game-end.
+ *
+ * @param {Array<{name:string,born_time:number,died_time:number}>} records
+ * @returns {Array<{time:number,name:string,count:number}>}
+ */
+function derivedBuildingDeaths(records) {
+  if (!Array.isArray(records) || records.length === 0) return [];
+  let sentinel = 0;
+  for (const r of records) {
+    const died = Number(r && r.died_time);
+    if (Number.isFinite(died) && died > sentinel) sentinel = died;
+  }
+  if (sentinel <= 0) return [];
+  /** @type {Array<{time:number,name:string,count:number}>} */
+  const out = [];
+  for (const r of records) {
+    if (!r) continue;
+    const died = Number(r.died_time);
+    const born = Number(r.born_time) || 0;
+    if (!Number.isFinite(died)) continue;
+    if (died >= sentinel) continue;
+    if (died < born) continue;
+    const canonical = canonicalizeName(r.name || "");
+    if (!canonical) continue;
+    out.push({ time: died, name: canonical, count: 1 });
+  }
+  out.sort((a, b) => a.time - b.time);
+  return out;
+}
+
+/**
+ * Decrement one structure death from the cumulative ``counts`` map,
+ * with a Gateway ↔ WarpGate fallback so a Gateway destroyed before
+ * WarpGate research (folded into WarpGate by ``countBuildingsAt`` at
+ * game end) still finds a bucket. Mirrors ``subtractBuildingDeath`` in
+ * compositionAt.ts.
+ *
+ * @param {Record<string, number>} counts
+ * @param {string} name
+ * @param {number} amount
+ * @returns {boolean}
+ */
+function subtractBuildingDeath(counts, name, amount) {
+  const tryBucket = (key) => {
+    const cur = counts[key] || 0;
+    if (cur <= 0) return false;
+    const next = Math.max(0, cur - amount);
+    if (next === 0) delete counts[key];
+    else counts[key] = next;
+    return true;
+  };
+  if (tryBucket(name)) return true;
+  if (name === "Gateway") return tryBucket("WarpGate");
+  if (name === "WarpGate") return tryBucket("Gateway");
+  return false;
+}
+
+/**
+ * Death-aware Buildings roster at time ``t``: the cumulative
+ * build-order count minus every structure destroyed at or before
+ * ``t`` (read from ``production_buildings``). Mirrors
+ * ``deriveBuildingComposition`` in compositionAt.ts. Falls back to the
+ * cumulative count (source ``build_order``) when no production-building
+ * lifetimes are available.
+ *
+ * @param {{
+ *   buildEvents: Array<object> | null | undefined,
+ *   productionBuildings: Array<{name:string,born_time:number,died_time:number}> | null | undefined,
+ *   t: number,
+ * }} opts
+ * @returns {{buildings: Record<string, number>, source: "alive"|"build_order"}}
+ */
+function deriveBuildingComposition(opts) {
+  const { buildEvents, productionBuildings, t } = opts;
+  const built = countBuildingsAt(buildEvents, t);
+  if (!Array.isArray(productionBuildings) || productionBuildings.length === 0) {
+    return { buildings: built, source: "build_order" };
+  }
+  const deaths = derivedBuildingDeaths(productionBuildings);
+  for (const death of deaths) {
+    if (death.time > t) break;
+    subtractBuildingDeath(built, death.name, death.count);
+  }
+  return { buildings: built, source: "alive" };
+}
+
+/**
  * Identify a tiered upgrade family. Returns {family, tier} for
  * weapons/armor/shields/carapace research events, null for everything
  * else. Mirrors ``tieredUpgradeFamily`` in compositionAt.ts.
@@ -531,6 +627,8 @@ module.exports = {
   nearestTimelineEntry,
   deriveUnitComposition,
   countBuildingsAt,
+  derivedBuildingDeaths,
+  deriveBuildingComposition,
   countUpgradesAt,
   tieredUpgradeFamily,
   sortByCountDesc,

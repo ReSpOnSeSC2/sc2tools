@@ -4,12 +4,17 @@ import {
   canonicalizeName,
   countBuildingsAt,
   countUpgradesAt,
+  deriveBuildingComposition,
   deriveUnitComposition,
+  derivedBuildingDeaths,
   derivedDeathsFromTimeline,
   nearestTimelineEntry,
   type BuildEvent,
 } from "../compositionAt";
-import type { UnitTimelineEntry } from "../MacroBreakdownPanel.types";
+import type {
+  ProductionBuildingRecord,
+  UnitTimelineEntry,
+} from "../MacroBreakdownPanel.types";
 
 /**
  * Locks in the cumulative-built semantics for the macro-breakdown
@@ -264,6 +269,141 @@ describe("countBuildingsAt — Buildings row parity", () => {
     const out = countBuildingsAt(events, 150);
     expect(out.Gateway).toBe(2);
     expect(out.WarpGate).toBeUndefined();
+  });
+});
+
+describe("derivedBuildingDeaths — structure destruction from production_buildings", () => {
+  it("emits one death per structure destroyed before game end", () => {
+    // Two Pylons survive to 27:01 (1621s); one Pylon dies at 12:00.
+    const records: ProductionBuildingRecord[] = [
+      { name: "Pylon", born_time: 60, died_time: 1621 },
+      { name: "Pylon", born_time: 90, died_time: 720 },
+      { name: "Pylon", born_time: 120, died_time: 1621 },
+    ];
+    const deaths = derivedBuildingDeaths(records);
+    expect(deaths).toEqual([{ time: 720, name: "Pylon", count: 1 }]);
+  });
+
+  it("treats the max died_time as the survived sentinel (no false deaths)", () => {
+    // Every structure survives — all share the game-end timestamp, so
+    // none of them should register as a death.
+    const records: ProductionBuildingRecord[] = [
+      { name: "Nexus", born_time: 0, died_time: 1500 },
+      { name: "Gateway", born_time: 120, died_time: 1500 },
+    ];
+    expect(derivedBuildingDeaths(records)).toEqual([]);
+  });
+
+  it("canonicalises the death name and sorts ascending by time", () => {
+    const records: ProductionBuildingRecord[] = [
+      { name: "Nexus", born_time: 0, died_time: 2000 },
+      { name: "SupplyDepotLowered", born_time: 200, died_time: 800 },
+      { name: "Barracks", born_time: 100, died_time: 400 },
+    ];
+    const deaths = derivedBuildingDeaths(records);
+    expect(deaths).toEqual([
+      { time: 400, name: "Barracks", count: 1 },
+      { time: 800, name: "SupplyDepot", count: 1 },
+    ]);
+  });
+
+  it("returns [] on empty / degenerate input", () => {
+    expect(derivedBuildingDeaths(undefined)).toEqual([]);
+    expect(derivedBuildingDeaths([])).toEqual([]);
+    // All-zero timestamps → no reliable game-end sentinel.
+    expect(
+      derivedBuildingDeaths([{ name: "Pylon", born_time: 0, died_time: 0 }]),
+    ).toEqual([]);
+  });
+});
+
+describe("deriveBuildingComposition — death-aware Buildings roster", () => {
+  it("removes destroyed structures from the cumulative count", () => {
+    // Built 3 Gateways; one was destroyed at 10:00 (600s).
+    const buildEvents: BuildEvent[] = [
+      { time: 60, name: "Gateway", is_building: true },
+      { time: 120, name: "Gateway", is_building: true },
+      { time: 180, name: "Gateway", is_building: true },
+    ];
+    const productionBuildings: ProductionBuildingRecord[] = [
+      { name: "Gateway", born_time: 60, died_time: 1200 },
+      { name: "Gateway", born_time: 120, died_time: 600 },
+      { name: "Gateway", born_time: 180, died_time: 1200 },
+    ];
+    const out = deriveBuildingComposition({
+      buildEvents,
+      productionBuildings,
+      t: 1200,
+    });
+    expect(out.buildings.Gateway).toBe(2);
+    expect(out.source).toBe("alive");
+  });
+
+  it("only subtracts deaths at or before the hovered time", () => {
+    const buildEvents: BuildEvent[] = [
+      { time: 60, name: "PhotonCannon", is_building: true },
+      { time: 120, name: "PhotonCannon", is_building: true },
+    ];
+    const productionBuildings: ProductionBuildingRecord[] = [
+      { name: "PhotonCannon", born_time: 60, died_time: 900 },
+      { name: "PhotonCannon", born_time: 120, died_time: 2000 },
+    ];
+    // At t=300 neither cannon has died yet → both alive.
+    expect(
+      deriveBuildingComposition({ buildEvents, productionBuildings, t: 300 })
+        .buildings.PhotonCannon,
+    ).toBe(2);
+    // At t=1000 the first cannon (died 900) is gone.
+    expect(
+      deriveBuildingComposition({ buildEvents, productionBuildings, t: 1000 })
+        .buildings.PhotonCannon,
+    ).toBe(1);
+  });
+
+  it("falls back to cumulative-built when no production_buildings", () => {
+    const buildEvents: BuildEvent[] = [
+      { time: 60, name: "Gateway", is_building: true },
+      { time: 120, name: "Gateway", is_building: true },
+    ];
+    const out = deriveBuildingComposition({
+      buildEvents,
+      productionBuildings: undefined,
+      t: 9999,
+    });
+    expect(out.buildings.Gateway).toBe(2);
+    expect(out.source).toBe("build_order");
+  });
+
+  it("subtracts a Gateway death folded into WarpGate at game end", () => {
+    // A Gateway destroyed before WarpGate research finishes is recorded
+    // as a Gateway death, but countBuildingsAt folds residual Gateways
+    // into WarpGate once research completes. The fallback must still
+    // find the WarpGate bucket so the dead Gateway is removed.
+    const buildEvents: BuildEvent[] = [
+      { time: 60, name: "Gateway", is_building: true },
+      { time: 120, name: "Gateway", is_building: true },
+      {
+        time: 100,
+        complete_time: 200,
+        name: "WarpGateResearch",
+        is_building: false,
+        category: "upgrade",
+      },
+    ];
+    const productionBuildings: ProductionBuildingRecord[] = [
+      // Gateway killed at 0:90 — before research, so recorded as Gateway.
+      { name: "Gateway", born_time: 60, died_time: 90 },
+      { name: "WarpGate", born_time: 120, died_time: 1500 },
+    ];
+    const out = deriveBuildingComposition({
+      buildEvents,
+      productionBuildings,
+      t: 1500,
+    });
+    // Two Gateways built, both fold to WarpGate at game end (=2), minus
+    // the one destroyed Gateway → 1 WarpGate.
+    expect(out.buildings.Gateway).toBeUndefined();
+    expect(out.buildings.WarpGate).toBe(1);
   });
 });
 

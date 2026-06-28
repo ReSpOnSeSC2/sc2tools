@@ -17,6 +17,8 @@ const {
   countBuildingsAt,
   countUpgradesAt,
   derivedDeathsFromTimeline,
+  derivedBuildingDeaths,
+  deriveBuildingComposition,
   nearestTimelineEntry,
   deriveUnitComposition,
   tieredUpgradeFamily,
@@ -193,6 +195,121 @@ describe("countBuildingsAt", () => {
       { time: 100, complete_time: 200, name: "WarpGateResearch", is_building: false, category: "upgrade" },
     ];
     expect(countBuildingsAt(events, 150)).toEqual({ Gateway: 2 });
+  });
+});
+
+describe("derivedBuildingDeaths — parity with compositionAt.ts", () => {
+  test("emits one death per structure destroyed before game end", () => {
+    const records = [
+      { name: "Pylon", born_time: 60, died_time: 1621 },
+      { name: "Pylon", born_time: 90, died_time: 720 },
+      { name: "Pylon", born_time: 120, died_time: 1621 },
+    ];
+    expect(derivedBuildingDeaths(records)).toEqual([
+      { time: 720, name: "Pylon", count: 1 },
+    ]);
+  });
+
+  test("max died_time is the survived sentinel (no false deaths)", () => {
+    const records = [
+      { name: "Nexus", born_time: 0, died_time: 1500 },
+      { name: "Gateway", born_time: 120, died_time: 1500 },
+    ];
+    expect(derivedBuildingDeaths(records)).toEqual([]);
+  });
+
+  test("canonicalises name and sorts ascending by time", () => {
+    const records = [
+      { name: "Nexus", born_time: 0, died_time: 2000 },
+      { name: "SupplyDepotLowered", born_time: 200, died_time: 800 },
+      { name: "Barracks", born_time: 100, died_time: 400 },
+    ];
+    expect(derivedBuildingDeaths(records)).toEqual([
+      { time: 400, name: "Barracks", count: 1 },
+      { time: 800, name: "SupplyDepot", count: 1 },
+    ]);
+  });
+
+  test("returns [] on empty / degenerate input", () => {
+    expect(derivedBuildingDeaths(undefined)).toEqual([]);
+    expect(derivedBuildingDeaths([])).toEqual([]);
+    expect(
+      derivedBuildingDeaths([{ name: "Pylon", born_time: 0, died_time: 0 }]),
+    ).toEqual([]);
+  });
+});
+
+describe("deriveBuildingComposition — parity with compositionAt.ts", () => {
+  test("removes destroyed structures from the cumulative count", () => {
+    const buildEvents = [
+      { time: 60, name: "Gateway", is_building: true },
+      { time: 120, name: "Gateway", is_building: true },
+      { time: 180, name: "Gateway", is_building: true },
+    ];
+    const productionBuildings = [
+      { name: "Gateway", born_time: 60, died_time: 1200 },
+      { name: "Gateway", born_time: 120, died_time: 600 },
+      { name: "Gateway", born_time: 180, died_time: 1200 },
+    ];
+    const out = deriveBuildingComposition({
+      buildEvents,
+      productionBuildings,
+      t: 1200,
+    });
+    expect(out.buildings.Gateway).toBe(2);
+    expect(out.source).toBe("alive");
+  });
+
+  test("only subtracts deaths at or before the sampled time", () => {
+    const buildEvents = [
+      { time: 60, name: "PhotonCannon", is_building: true },
+      { time: 120, name: "PhotonCannon", is_building: true },
+    ];
+    const productionBuildings = [
+      { name: "PhotonCannon", born_time: 60, died_time: 900 },
+      { name: "PhotonCannon", born_time: 120, died_time: 2000 },
+    ];
+    expect(
+      deriveBuildingComposition({ buildEvents, productionBuildings, t: 300 })
+        .buildings.PhotonCannon,
+    ).toBe(2);
+    expect(
+      deriveBuildingComposition({ buildEvents, productionBuildings, t: 1000 })
+        .buildings.PhotonCannon,
+    ).toBe(1);
+  });
+
+  test("falls back to cumulative when production_buildings absent", () => {
+    const buildEvents = [
+      { time: 60, name: "Gateway", is_building: true },
+      { time: 120, name: "Gateway", is_building: true },
+    ];
+    const out = deriveBuildingComposition({
+      buildEvents,
+      productionBuildings: null,
+      t: 9999,
+    });
+    expect(out.buildings.Gateway).toBe(2);
+    expect(out.source).toBe("build_order");
+  });
+
+  test("subtracts a Gateway death folded into WarpGate at game end", () => {
+    const buildEvents = [
+      { time: 60, name: "Gateway", is_building: true },
+      { time: 120, name: "Gateway", is_building: true },
+      { time: 100, complete_time: 200, name: "WarpGateResearch", is_building: false, category: "upgrade" },
+    ];
+    const productionBuildings = [
+      { name: "Gateway", born_time: 60, died_time: 90 },
+      { name: "WarpGate", born_time: 120, died_time: 1500 },
+    ];
+    const out = deriveBuildingComposition({
+      buildEvents,
+      productionBuildings,
+      t: 1500,
+    });
+    expect(out.buildings.Gateway).toBeUndefined();
+    expect(out.buildings.WarpGate).toBe(1);
   });
 });
 

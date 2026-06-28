@@ -19,6 +19,7 @@ import {
 } from "./CompositionSnapshot";
 import type {
   LeakItem,
+  ProductionBuildingRecord,
   StatsEvent,
   UnitTimelineEntry,
 } from "./MacroBreakdownPanel.types";
@@ -28,6 +29,10 @@ export interface MacroChartSectionProps {
   samples: StatsEvent[];
   oppSamples: StatsEvent[];
   unitTimeline?: UnitTimelineEntry[];
+  /** Per-structure lifetimes (born/died) used by the roster to drop
+   *  destroyed buildings. Opponent side is rarely emitted. */
+  myProductionBuildings?: ProductionBuildingRecord[];
+  oppProductionBuildings?: ProductionBuildingRecord[];
   gameLengthSec?: number;
   leaks: LeakItem[];
   /** Per-window supply-block annotations for the local player. */
@@ -84,6 +89,8 @@ export function MacroChartSection({
   samples,
   oppSamples,
   unitTimeline,
+  myProductionBuildings,
+  oppProductionBuildings,
   gameLengthSec,
   leaks,
   supplyBlockWindows,
@@ -204,6 +211,8 @@ export function MacroChartSection({
         buildOrderData={buildOrder.data}
         buildOrderLoading={buildOrder.isLoading}
         buildOrderError={Boolean(buildOrder.error)}
+        myProductionBuildings={myProductionBuildings}
+        oppProductionBuildings={oppProductionBuildings}
       />
     </div>
   );

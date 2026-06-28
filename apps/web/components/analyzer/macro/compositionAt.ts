@@ -39,7 +39,12 @@
  */
 
 import { isBuildingUnit, isWorkerUnit } from "@/lib/sc2-units";
-import type { UnitTimelineEntry } from "./MacroBreakdownPanel.types";
+import type {
+  ProductionBuildingRecord,
+  UnitTimelineEntry,
+} from "./MacroBreakdownPanel.types";
+
+export type { ProductionBuildingRecord };
 
 export interface BuildEvent {
   time: number;
@@ -567,6 +572,129 @@ export function countBuildingsAt(
     delete counts.Gateway;
   }
   return counts;
+}
+
+/**
+ * Where the Buildings roster count came from:
+ *   - ``alive``        the build-order cumulative count with destroyed
+ *                      structures subtracted via ``production_buildings``
+ *                      death timestamps. Death-aware — destroyed
+ *                      buildings drop off the roster.
+ *   - ``build_order``  cumulative-built only; no per-building death data
+ *                      was available for this game (older payload).
+ */
+export type BuildingSource = "alive" | "build_order";
+
+/**
+ * Derive structure-death events from ``production_buildings``.
+ *
+ * Each record carries a ``died_time``. Structures that survived to the
+ * end of the game all share the SAME timestamp — the extractor stamps
+ * the game-end second on every survivor (it has no UnitDiedEvent to
+ * read). We therefore treat the maximum ``died_time`` across the array
+ * as the "survived" sentinel: any record whose ``died_time`` is
+ * strictly below it was genuinely destroyed mid-game and yields a
+ * death event. This is immune to small drift between the stored
+ * ``game_length_sec`` and the extractor's internal game-end (they can
+ * differ by a second after timebase rescales), because the sentinel is
+ * read straight out of the data rather than passed in.
+ *
+ * Names are canonicalised so the death keys line up with the
+ * cumulative ``countBuildingsAt`` map (which is also canonicalised).
+ * Returns one event per destroyed structure, sorted ascending by time
+ * so the consumer can early-exit when scanning up to a target ``t``.
+ */
+export function derivedBuildingDeaths(
+  records: ProductionBuildingRecord[] | undefined | null,
+): DeathEvent[] {
+  if (!Array.isArray(records) || records.length === 0) return [];
+  let sentinel = 0;
+  for (const r of records) {
+    const died = Number(r?.died_time);
+    if (Number.isFinite(died) && died > sentinel) sentinel = died;
+  }
+  // Degenerate replay (no game length / all-zero timestamps): no
+  // reliable death signal, so emit nothing and let the caller fall
+  // back to the cumulative count.
+  if (sentinel <= 0) return [];
+  const out: DeathEvent[] = [];
+  for (const r of records) {
+    if (!r) continue;
+    const died = Number(r.died_time);
+    const born = Number(r.born_time) || 0;
+    if (!Number.isFinite(died)) continue;
+    // Survivors sit at the sentinel; only earlier deaths count.
+    if (died >= sentinel) continue;
+    if (died < born) continue;
+    const canonical = canonicalizeName(r.name || "");
+    if (!canonical) continue;
+    out.push({ time: died, name: canonical, count: 1 });
+  }
+  out.sort((a, b) => a.time - b.time);
+  return out;
+}
+
+/**
+ * Decrement one structure death from the cumulative ``counts`` map.
+ *
+ * Prefers the exact canonical bucket. When that bucket is empty,
+ * Gateway ↔ WarpGate are tried as each other's fallback: at game end
+ * ``countBuildingsAt`` folds every residual Gateway into WarpGate once
+ * WarpGate research has completed, so a Gateway destroyed BEFORE the
+ * research (recorded under the name ``Gateway``) would otherwise have
+ * no matching bucket to subtract from. Returns true when a unit was
+ * removed.
+ */
+function subtractBuildingDeath(
+  counts: Record<string, number>,
+  name: string,
+  amount: number,
+): boolean {
+  const tryBucket = (key: string): boolean => {
+    const cur = counts[key] || 0;
+    if (cur <= 0) return false;
+    const next = Math.max(0, cur - amount);
+    if (next === 0) delete counts[key];
+    else counts[key] = next;
+    return true;
+  };
+  if (tryBucket(name)) return true;
+  if (name === "Gateway") return tryBucket("WarpGate");
+  if (name === "WarpGate") return tryBucket("Gateway");
+  return false;
+}
+
+/**
+ * Death-aware Buildings roster at time ``t``.
+ *
+ * Starts from the cumulative build-order count (``countBuildingsAt``,
+ * which fixes the building SET and the morph/WarpGate folding) and
+ * subtracts every structure that was destroyed at or before ``t``,
+ * read from ``production_buildings``. This mirrors the death-aware
+ * hybrid path the unit roster already uses (build-order births minus
+ * timeline-derived deaths) — the difference is buildings get exact
+ * per-structure death timestamps rather than sampled diffs.
+ *
+ * When ``production_buildings`` is absent (older payload), falls back
+ * to the cumulative count unchanged and reports ``build_order`` so the
+ * UI can flag that destroyed buildings aren't being removed.
+ */
+export function deriveBuildingComposition(opts: {
+  buildEvents: BuildEvent[] | undefined | null;
+  productionBuildings: ProductionBuildingRecord[] | undefined | null;
+  t: number;
+}): { buildings: Record<string, number>; source: BuildingSource } {
+  const { buildEvents, productionBuildings, t } = opts;
+  const built = countBuildingsAt(buildEvents, t);
+  if (!Array.isArray(productionBuildings) || productionBuildings.length === 0) {
+    return { buildings: built, source: "build_order" };
+  }
+  const deaths = derivedBuildingDeaths(productionBuildings);
+  for (const death of deaths) {
+    if (death.time > t) break;
+    subtractBuildingDeath(built, death.name, death.count);
+  }
+  return { buildings: built, source: "alive" };
 }
 
 /**

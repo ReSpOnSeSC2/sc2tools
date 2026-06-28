@@ -98,6 +98,23 @@ export interface UnitTimelineEntry {
 }
 
 /**
+ * One structure's lifetime, from the agent's
+ * ``macroBreakdown.production_buildings`` array. Every building the
+ * local player owned appears once, keyed internally by ``unit_id`` and
+ * followed through morphs (Hatchery → Lair → Hive keeps a single
+ * record whose ``name`` is the final form). ``died_time`` is the
+ * destruction second; structures that survived to the end of the game
+ * share the game-end timestamp. Powers the death-aware Buildings
+ * roster — see ``deriveBuildingComposition`` in ``compositionAt.ts``.
+ */
+export interface ProductionBuildingRecord {
+  name: string;
+  unit_id?: number;
+  born_time: number;
+  died_time: number;
+}
+
+/**
  * One row of the Replay Player Unit Statistics table. The agent emits
  * one record under ``me`` and one under ``opponent`` on macroBreakdown
  * payloads from the v0.5+ pipeline; older payloads omit player_stats
@@ -144,6 +161,15 @@ export interface MacroBreakdownData {
   stats_events?: StatsEvent[];
   opp_stats_events?: StatsEvent[];
   unit_timeline?: UnitTimelineEntry[];
+  /**
+   * Per-structure lifetimes for the local player, with born/died
+   * timestamps. Present on v0.5+ agent uploads. Drives the death-aware
+   * Buildings roster (destroyed structures drop off the count). The
+   * opponent equivalent (``opp_production_buildings``) is rarely
+   * emitted, so the opponent roster falls back to cumulative-built.
+   */
+  production_buildings?: ProductionBuildingRecord[];
+  opp_production_buildings?: ProductionBuildingRecord[];
   /** Optional — only present on v0.5+ agent uploads. */
   player_stats?: PlayerStats | null;
 }

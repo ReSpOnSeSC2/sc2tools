@@ -4,13 +4,17 @@ import { useMemo } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { formatGameClock } from "@/lib/macro";
 import { sortedArmyComposition } from "@/lib/sc2-units";
-import type { UnitTimelineEntry } from "./MacroBreakdownPanel.types";
+import type {
+  ProductionBuildingRecord,
+  UnitTimelineEntry,
+} from "./MacroBreakdownPanel.types";
 import { nearestPriorPoint, type SeriesPoint } from "./activeArmyLayout";
 import {
-  countBuildingsAt,
   countUpgradesAt,
+  deriveBuildingComposition,
   sortByCountDesc,
   type BuildEvent,
+  type BuildingSource,
   type CompositionSource,
 } from "./compositionAt";
 
@@ -55,6 +59,15 @@ export interface CompositionSnapshotProps {
   buildOrderData?: BuildOrderResponse;
   buildOrderLoading?: boolean;
   buildOrderError?: boolean;
+  /**
+   * Per-structure lifetimes (born/died) for each side, from the macro
+   * breakdown payload. When present, the Buildings roster removes
+   * destroyed structures instead of showing the cumulative-ever-built
+   * count. The opponent array is rarely emitted, so that side usually
+   * falls back to cumulative-built.
+   */
+  myProductionBuildings?: ProductionBuildingRecord[];
+  oppProductionBuildings?: ProductionBuildingRecord[];
 }
 
 /** Pixel size for unit/building chip icons. Bumped from the catalog
@@ -98,6 +111,8 @@ export function CompositionSnapshot({
   buildOrderData,
   buildOrderLoading,
   buildOrderError,
+  myProductionBuildings,
+  oppProductionBuildings,
 }: CompositionSnapshotProps) {
   const hasMySeries = Array.isArray(mySeries) && mySeries.length > 0;
   const hasOppSeries = Array.isArray(oppSeries) && oppSeries.length > 0;
@@ -140,14 +155,26 @@ export function CompositionSnapshot({
   const myArmyValue = myPoint?.army ?? 0;
   const oppArmyValue = oppPoint?.army ?? 0;
 
-  const myBuildings = useMemo(
-    () => countBuildingsAt(buildOrderData?.events ?? [], targetT),
-    [buildOrderData, targetT],
+  const myBuildingComp = useMemo(
+    () =>
+      deriveBuildingComposition({
+        buildEvents: buildOrderData?.events ?? [],
+        productionBuildings: myProductionBuildings,
+        t: targetT,
+      }),
+    [buildOrderData, myProductionBuildings, targetT],
   );
-  const oppBuildings = useMemo(
-    () => countBuildingsAt(buildOrderData?.opp_events ?? [], targetT),
-    [buildOrderData, targetT],
+  const oppBuildingComp = useMemo(
+    () =>
+      deriveBuildingComposition({
+        buildEvents: buildOrderData?.opp_events ?? [],
+        productionBuildings: oppProductionBuildings,
+        t: targetT,
+      }),
+    [buildOrderData, oppProductionBuildings, targetT],
   );
+  const myBuildings = myBuildingComp.buildings;
+  const oppBuildings = oppBuildingComp.buildings;
   const myUpgrades = useMemo(
     () => countUpgradesAt(buildOrderData?.events ?? [], targetT),
     [buildOrderData, targetT],
@@ -232,6 +259,7 @@ export function CompositionSnapshot({
           workers={myWorkers}
           armyValue={myArmyValue}
           buildings={myBuildings}
+          buildingSource={myBuildingComp.source}
           upgrades={myUpgrades}
           time={snapshotTime}
           buildOrderState={buildOrderState}
@@ -245,6 +273,7 @@ export function CompositionSnapshot({
           workers={oppWorkers}
           armyValue={oppArmyValue}
           buildings={oppBuildings}
+          buildingSource={oppBuildingComp.source}
           upgrades={oppUpgrades}
           time={snapshotTime}
           buildOrderState={buildOrderState}
@@ -265,6 +294,7 @@ function PlayerStrip({
   workers,
   armyValue,
   buildings,
+  buildingSource,
   upgrades,
   time,
   buildOrderState,
@@ -277,6 +307,7 @@ function PlayerStrip({
   workers: number;
   armyValue: number;
   buildings: Record<string, number>;
+  buildingSource: BuildingSource;
   upgrades: Record<string, number>;
   time: number;
   buildOrderState: BuildOrderState;
@@ -358,6 +389,12 @@ function PlayerStrip({
         />
         <RosterRow
           label="Buildings"
+          // Map the building data source onto the shared badge: "alive"
+          // is death-aware (destroyed structures already removed) so it
+          // renders no badge, exactly like the unit "timeline" source;
+          // "build_order" surfaces the same "deaths not tracked" warning
+          // the units row uses.
+          source={buildingSource === "alive" ? "timeline" : "build_order"}
           empty={
             buildOrderState === "loading"
               ? "Loading…"
