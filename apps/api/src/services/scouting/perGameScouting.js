@@ -41,7 +41,7 @@ const { parseBuildLogLines } = require("../perGameCompute");
 const {
   canonicalizeName,
   deriveUnitComposition,
-  countBuildingsAt,
+  deriveBuildingComposition,
   countUpgradesAt,
   sortByCountDesc,
   peakAliveInWindow,
@@ -176,15 +176,28 @@ function computePerGameScouting(game) {
     durationSec,
     "my",
   );
+  // Structure lifetimes: ``production_buildings`` is always the stored
+  // game's my_pid side, which lines up with ``myBuildLog`` /
+  // ``myEvents``; ``opp_production_buildings`` (rarely emitted) lines up
+  // with the opponent side. When absent, deriveBuildingComposition
+  // falls back to the cumulative count.
+  const myProdBuildings = Array.isArray(macroBreakdown.production_buildings)
+    ? macroBreakdown.production_buildings
+    : null;
+  const oppProdBuildings = Array.isArray(macroBreakdown.opp_production_buildings)
+    ? macroBreakdown.opp_production_buildings
+    : null;
   const oppBuildingsByPhase = sampleBuildingsByPhase(
     oppEvents,
     classified.crossings,
     durationSec,
+    oppProdBuildings,
   );
   const myBuildingsByPhase = sampleBuildingsByPhase(
     myEvents,
     classifiedMy.crossings,
     durationSec,
+    myProdBuildings,
   );
   const oppUpgradesByPhase = sampleUpgradesByPhase(
     oppEvents,
@@ -417,14 +430,18 @@ function sampleCompositionsByPhase(
 }
 
 /**
- * Per-phase cumulative buildings map. Mirrors the macro panel's
- * ``countBuildingsAt`` snapshot, sampled at the phase end.
+ * Per-phase buildings map. Mirrors the macro panel's death-aware
+ * Buildings roster (``deriveBuildingComposition``): cumulative-built
+ * minus structures destroyed by the phase-end sample time, when
+ * ``productionBuildings`` lifetimes are available. Falls back to the
+ * cumulative-built count when they aren't.
  *
  * @param {Array<object>} buildEvents
  * @param {{earlyMidAt:number|null,midAt:number|null,midLateAt:number|null,lateAt:number|null}} crossings
  * @param {number} durationSec
+ * @param {Array<{name:string,born_time:number,died_time:number}>} [productionBuildings]
  */
-function sampleBuildingsByPhase(buildEvents, crossings, durationSec) {
+function sampleBuildingsByPhase(buildEvents, crossings, durationSec, productionBuildings) {
   /** @type {Record<string,{reached:boolean,atTime:number|null,buildings:Array<{token:string,count:number}>}>} */
   const out = {};
   for (const phase of PHASE_LIST) {
@@ -434,7 +451,11 @@ function sampleBuildingsByPhase(buildEvents, crossings, durationSec) {
       continue;
     }
     const sampleAt = Math.max(window.end, window.start);
-    const counts = countBuildingsAt(buildEvents, sampleAt);
+    const { buildings: counts } = deriveBuildingComposition({
+      buildEvents,
+      productionBuildings,
+      t: sampleAt,
+    });
     const buildings = sortByCountDesc(counts)
       .slice(0, MAX_BUILDINGS_PER_PHASE)
       .map((row) => ({ token: row.name, count: row.count }));

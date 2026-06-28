@@ -378,6 +378,8 @@ function BreakdownBody({
             samples={data.stats_events || []}
             oppSamples={data.opp_stats_events || []}
             unitTimeline={data.unit_timeline}
+            myProductionBuildings={data.production_buildings}
+            oppProductionBuildings={data.opp_production_buildings}
             gameLengthSec={data.game_length_sec}
             leaks={leaks}
             supplyBlockWindows={raw.supply_block_windows || []}
