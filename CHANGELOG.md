@@ -57,6 +57,16 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Macro breakdown · Terran add-on icons** — the Unit & Building
+  Roster's Buildings row rendered a two-letter text badge ("BA", "FA")
+  for Terran add-on structures because the icon registry had no entry
+  for their sc2reader names (`BarracksReactor`, `FactoryTechLab`,
+  `StarportReactor`, …). Added dedicated `reactor.png` / `techlab.png`
+  building icons and folded every `*Reactor` name onto the reactor icon
+  and every `*TechLab` name onto the tech-lab icon (mirroring how the
+  crawler and WarpGate variants already resolve). Each add-on chip now
+  shows its actual image icon, with reactor vs tech lab kept visually
+  distinct.
 - **Macro breakdown · Buildings roster now removes destroyed
   structures** — the Unit & Building Roster's Buildings row counted
   every structure ever built (cumulative), so a 27-minute game showed
