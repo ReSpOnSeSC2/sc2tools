@@ -27,3 +27,32 @@ describe("sc2-icons - crawler building icons", () => {
     ]);
   });
 });
+
+describe("sc2-icons - Terran add-ons", () => {
+  it("resolves every *Reactor name onto the shared reactor PNG", () => {
+    const expected = "/icons/sc2/buildings/reactor.png";
+    expect(getIconPath("Reactor", "building")).toBe(expected);
+    expect(getIconPath("BarracksReactor", "building")).toBe(expected);
+    expect(getIconPath("FactoryReactor", "building")).toBe(expected);
+    expect(getIconPath("StarportReactor", "building")).toBe(expected);
+  });
+
+  it("resolves every *TechLab name onto the shared tech-lab PNG", () => {
+    const expected = "/icons/sc2/buildings/techlab.png";
+    expect(getIconPath("TechLab", "building")).toBe(expected);
+    expect(getIconPath("BarracksTechLab", "building")).toBe(expected);
+    expect(getIconPath("FactoryTechLab", "building")).toBe(expected);
+    expect(getIconPath("StarportTechLab", "building")).toBe(expected);
+  });
+
+  it("resolves add-on names without a kind hint (roster passes 'building')", () => {
+    // The macro roster always passes kind="building", but the resolver
+    // should also work bare so future callers don't regress.
+    expect(getIconPath("BarracksReactor")).toBe(
+      "/icons/sc2/buildings/reactor.png",
+    );
+    expect(getIconPath("FactoryTechLab")).toBe(
+      "/icons/sc2/buildings/techlab.png",
+    );
+  });
+});
