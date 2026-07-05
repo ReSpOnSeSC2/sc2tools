@@ -23,11 +23,11 @@ const BUILDINGS = [
   "fusioncore", "gateway", "ghostacademy", "greaterspire", "hatchery",
   "hive", "hydraliskden", "infestationpit", "lair", "lurkerden",
   "missileturret", "nexus", "nydusnetwork", "orbitalcommand",
-  "photoncannon", "planetaryfortress", "pylon", "refinery",
+  "photoncannon", "planetaryfortress", "pylon", "reactor", "refinery",
   "roachwarren", "roboticsbay", "roboticsfacility", "shieldbattery",
   "spawningpool", "spinecrawler", "spire", "sporecrawler", "stargate",
-  "starport", "supplydepot", "templararchive", "twilightcouncil",
-  "ultraliskcavern", "warpgate",
+  "starport", "supplydepot", "techlab", "templararchive",
+  "twilightcouncil", "ultraliskcavern", "warpgate",
 ] as const;
 
 const UNITS = [
@@ -180,6 +180,21 @@ const SYNONYMS: Record<string, { kind: IconKind; key: string }> = {
   orbital: { kind: "building", key: "orbitalcommand" },
   planetary: { kind: "building", key: "planetaryfortress" },
   nydus: { kind: "building", key: "nydusnetwork" },
+  // Terran add-ons. sc2reader / the build log name these per parent
+  // structure (BarracksReactor, FactoryTechLab, StarportReactor, …).
+  // They all share the same in-game add-on model, so every *Reactor
+  // folds onto the reactor icon and every *TechLab onto the tech-lab
+  // icon. Without these the roster fell back to the "BA" / "FA" text
+  // badge (first two letters of the parent name).
+  reactor: { kind: "building", key: "reactor" },
+  techlab: { kind: "building", key: "techlab" },
+  techlabreactor: { kind: "building", key: "reactor" },
+  barracksreactor: { kind: "building", key: "reactor" },
+  barrackstechlab: { kind: "building", key: "techlab" },
+  factoryreactor: { kind: "building", key: "reactor" },
+  factorytechlab: { kind: "building", key: "techlab" },
+  starportreactor: { kind: "building", key: "reactor" },
+  starporttechlab: { kind: "building", key: "techlab" },
   // ---- Protoss upgrades ----
   blinktech: { kind: "upgrade", key: "blink" },
   psistormtech: { kind: "upgrade", key: "psistorm" },
