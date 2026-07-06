@@ -33,6 +33,26 @@ type Row = {
 type MapRow = Row;
 type MatchupRow = Row;
 
+/** One (map, matchup) cell from /v1/maps/matchups. */
+type MapMatchupRow = {
+  map: string;
+  matchup: string;
+  wins: number;
+  losses: number;
+  total: number;
+  winRate: number;
+};
+
+/** A map with its per-matchup breakdown, grouped client-side. */
+type MapMatchupGroup = {
+  map: string;
+  wins: number;
+  losses: number;
+  total: number;
+  winRate: number;
+  cells: MapMatchupRow[];
+};
+
 const LS_MIN_MAPS = "analyzer.battlefield.maps.minGames";
 
 function FormSparkline({ results }: { results?: ("win" | "loss")[] }) {
@@ -67,6 +87,9 @@ export function BattlefieldTab() {
   const muApi = useApi<MatchupRow[]>(
     `/v1/matchups${filtersToQuery(filters)}#${dbRev}`,
   );
+  const mapMuApi = useApi<MapMatchupRow[]>(
+    `/v1/maps/matchups${filtersToQuery(filters)}#${dbRev}`,
+  );
 
   const mapRows = useMemo(
     () => (mapsApi.data || []).filter((m) => (m.total || 0) >= minGames),
@@ -76,6 +99,34 @@ export function BattlefieldTab() {
     () => (muApi.data || []).filter((m) => (m.total || 0) >= minGames),
     [muApi.data, minGames],
   );
+
+  // Group the flat (map, matchup) cells by map. A cell must clear the
+  // Min games threshold to be shown; a map appears only if at least one
+  // of its matchup cells qualifies. Map-level totals sum every cell
+  // (shown or not) so the header reflects the map's full record.
+  const mapMatchupGroups = useMemo<MapMatchupGroup[]>(() => {
+    const byMap = new Map<string, MapMatchupGroup>();
+    for (const r of mapMuApi.data || []) {
+      let g = byMap.get(r.map);
+      if (!g) {
+        g = { map: r.map, wins: 0, losses: 0, total: 0, winRate: 0, cells: [] };
+        byMap.set(r.map, g);
+      }
+      g.wins += r.wins || 0;
+      g.losses += r.losses || 0;
+      g.total += r.total || 0;
+      if ((r.total || 0) >= minGames) g.cells.push(r);
+    }
+    const groups: MapMatchupGroup[] = [];
+    for (const g of byMap.values()) {
+      if (g.cells.length === 0) continue;
+      g.winRate = g.total ? g.wins / g.total : 0;
+      g.cells.sort((a, b) => b.total - a.total);
+      groups.push(g);
+    }
+    groups.sort((a, b) => b.total - a.total);
+    return groups;
+  }, [mapMuApi.data, minGames]);
 
   const mapSort = useSort("winRate", "desc");
   const muSort = useSort("total", "desc");
@@ -95,7 +146,8 @@ export function BattlefieldTab() {
     [muRows, muSort],
   );
 
-  if (mapsApi.isLoading || muApi.isLoading) return <Skeleton rows={6} />;
+  if (mapsApi.isLoading || muApi.isLoading || mapMuApi.isLoading)
+    return <Skeleton rows={6} />;
 
   return (
     <div className="space-y-5">
@@ -317,6 +369,81 @@ export function BattlefieldTab() {
               </table>
             </div>
           </>
+        )}
+      </Card>
+
+      <Card
+        title="Win rate by map by matchup"
+        right={
+          mapMatchupGroups.length > 0 ? (
+            <span className="text-micro text-text-dim">
+              matchup cells with ≥ {minGames} games
+            </span>
+          ) : null
+        }
+      >
+        {mapMatchupGroups.length === 0 ? (
+          <EmptyState
+            title="No map matchups match"
+            sub={
+              (mapMuApi.data || []).length > 0
+                ? `Every map-matchup cell is hidden by the Min games ≥ ${minGames} filter. Drop it to 1 to see them all.`
+                : undefined
+            }
+          />
+        ) : (
+          <ul className="space-y-4">
+            {mapMatchupGroups.map((g) => (
+              <li key={g.map} className="space-y-2">
+                <div className="flex items-baseline justify-between gap-2 border-b border-border pb-1.5">
+                  <span
+                    className="truncate text-sm font-semibold text-text"
+                    title={g.map}
+                  >
+                    {g.map}
+                  </span>
+                  <span className="shrink-0 text-micro text-text-dim">
+                    <span className="text-success">{g.wins}W</span> ·{" "}
+                    <span className="text-danger">{g.losses}L</span> ·{" "}
+                    <span
+                      className="font-mono tabular-nums"
+                      style={{ color: wrColor(g.winRate, g.total) }}
+                    >
+                      {pct1(g.winRate)}
+                    </span>
+                  </span>
+                </div>
+                <ul className="space-y-2 pl-1">
+                  {g.cells.map((c) => (
+                    <li
+                      key={c.matchup}
+                      className="flex flex-col gap-1"
+                    >
+                      <div className="flex items-baseline justify-between gap-2 text-micro">
+                        <span className="font-medium text-text-dim">
+                          {c.matchup}
+                        </span>
+                        <span className="flex items-baseline gap-2">
+                          <span className="text-text-dim">
+                            <span className="text-success">{c.wins}W</span> ·{" "}
+                            <span className="text-danger">{c.losses}L</span> ·{" "}
+                            {c.total}
+                          </span>
+                          <span
+                            className="w-12 text-right font-mono tabular-nums"
+                            style={{ color: wrColor(c.winRate, c.total) }}
+                          >
+                            {pct1(c.winRate)}
+                          </span>
+                        </span>
+                      </div>
+                      <WrBar wins={c.wins} losses={c.losses} />
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
         )}
       </Card>
     </div>

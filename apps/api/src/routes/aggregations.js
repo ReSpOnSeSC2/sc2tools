@@ -46,6 +46,18 @@ function buildAggregationsRouter(deps) {
     }
   });
 
+  // Cross-tab of (map, matchup): per-map win rate split by opponent
+  // race. Backs the "Win rate by map by matchup" section of the Maps tab.
+  router.get("/maps/matchups", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      res.json(await deps.aggregations.mapMatchups(userId, filters));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Diagnostic: every distinct value of the `map` field across the
   // user's games. Surfaces data-quality issues (e.g. an agent that
   // uploads the same map name for every replay) without filters or

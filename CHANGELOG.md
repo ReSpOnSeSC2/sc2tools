@@ -12,6 +12,16 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Added
 
+- **Win rate by map by matchup** — the Maps tab gains a new section that
+  cross-tabs each map against opponent race, so you can see (for example)
+  that a map is strong PvZ but weak PvT rather than just its overall win
+  rate. Backed by a new `/v1/maps/matchups` aggregation
+  (`AggregationsService.mapMatchups`) that groups the filtered games by
+  `(map, matchup)`; the UI groups the cells under each map header, honours
+  the existing Min games picker per cell, and shows the map's full record
+  in the header. Respects the same `map_pool` / `game_size` / race
+  filters as the rest of the tab.
+
 - **SC2Pulse "revealed" opponent names** — when a barcode (or otherwise
   anonymised) opponent is linked to a known pro/main on
   sc2pulse.nephest.com, that reveal now flows through to SC2 Tools. The
