@@ -119,6 +119,36 @@ describe("analyzer tabs honour map_pool / game_size", () => {
     expect(team.length).toBe(1); // only the 4-player ZvP game
   });
 
+  test("/v1/maps/matchups cross-tabs map x matchup and narrows by filters", async () => {
+    // Two games, two distinct maps, one matchup cell each.
+    const all = await get("/v1/maps/matchups");
+    expect(all.length).toBe(2);
+    const acro = all.find((r) => r.map === "Acro Ladder");
+    expect(acro).toMatchObject({
+      map: "Acro Ladder",
+      matchup: "vs T",
+      wins: 1,
+      losses: 0,
+      total: 1,
+      winRate: 1,
+    });
+    const custom = all.find((r) => r.map === "Custom Arena");
+    expect(custom).toMatchObject({
+      map: "Custom Arena",
+      matchup: "vs P",
+      wins: 0,
+      losses: 1,
+      total: 1,
+      winRate: 0,
+    });
+
+    // Filters narrow the cross-tab just like the flat endpoints.
+    const ladder = await get("/v1/maps/matchups?map_pool=ladder");
+    expect(ladder.map((r) => r.map)).toEqual(["Acro Ladder"]);
+    const team = await get("/v1/maps/matchups?game_size=team");
+    expect(team.map((r) => r.map)).toEqual(["Custom Arena"]);
+  });
+
   test("/v1/builds narrows by map_pool", async () => {
     expect((await get("/v1/builds")).length).toBe(2);
     const ladder = await get("/v1/builds?map_pool=ladder");

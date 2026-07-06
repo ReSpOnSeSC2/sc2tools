@@ -7,6 +7,7 @@ const trendsInsights = require("./trendsInsights");
 const {
   attachRecentByMap,
   attachRecentByMatchup,
+  matchupLabelExpr,
 } = require("./recentResults");
 
 const RACES_PLAYED = ["Protoss", "Terran", "Zerg"];
@@ -201,6 +202,57 @@ class AggregationsService {
     return finalizeRows(
       await attachRecentByMap(this.db, userId, filters, rows),
     );
+  }
+
+  /**
+   * Cross-tab of (map, matchup). One row per (map, "vs P/T/Z/…") cell
+   * with wins/losses/total/winRate — lets the UI show how each map
+   * performs split by opponent race. Sorted by map then volume so the
+   * client can group cells under their map header.
+   *
+   * @param {string} userId
+   * @param {object} filters
+   */
+  async mapMatchups(userId, filters) {
+    return applyRaceGrouping(filters, (f) => this._mapMatchupsOnce(userId, f));
+  }
+
+  /**
+   * @private
+   * @param {string} userId
+   * @param {object} filters
+   */
+  async _mapMatchupsOnce(userId, filters) {
+    const match = gamesMatchStage(userId, filters);
+    const rows = await this.db.games
+      .aggregate([
+        { $match: match },
+        { $addFields: { _bucket: bucketSwitch() } },
+        {
+          $group: {
+            _id: {
+              map: { $ifNull: ["$map", "Unknown"] },
+              matchup: matchupLabelExpr(),
+            },
+            wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
+            losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
+            total: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            map: "$_id.map",
+            matchup: "$_id.matchup",
+            wins: 1,
+            losses: 1,
+            total: 1,
+          },
+        },
+        { $sort: { map: 1, total: -1 } },
+      ])
+      .toArray();
+    return rows.map(addWinRate);
   }
 
   /**
