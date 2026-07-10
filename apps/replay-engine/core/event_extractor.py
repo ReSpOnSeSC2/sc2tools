@@ -819,10 +819,27 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                                Production buildings (Barracks, Gateway, etc.)
                                and town-halls. ``died_time`` defaults to
                                game_length when no death event was seen.
+                               Also includes structures destroyed or
+                               cancelled DURING construction (born_time =
+                               construction start) so death-aware building
+                               rosters can subtract them.
 
       ``bases``                List of the same shape, filtered to town-halls
                                (Hatchery/Lair/Hive, Nexus, CC/OC/PF). Used by
-                               inject / chrono / MULE expectations.
+                               inject / chrono / MULE expectations. Never
+                               includes in-progress deaths — a town hall
+                               that never finished can't be injected /
+                               chrono'd / MULE'd.
+
+      ``opp_production_buildings`` / ``opp_bases``
+                               Opponent mirrors of the two lists above.
+                               Death-aware Buildings rosters need the
+                               opponent's structure lifetimes too —
+                               without them the SPA's opponent panel falls
+                               back to the cumulative build-order count
+                               and destroyed spines / spores / cannons
+                               never drop off. Empty when ``opp_pid`` is
+                               None.
 
       ``unit_births``          List[{name, time, unit_id}] of every non-
                                building unit owned by ``my_pid``. Used for
@@ -844,6 +861,10 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
         "opp_stats_events": [],
         "production_buildings": [],
         "bases": [],
+        # Opponent mirrors — materialized from ``opp_lifetimes`` after
+        # the tracker walk. Stay empty when no opp_pid was provided.
+        "opp_production_buildings": [],
+        "opp_bases": [],
         "unit_births": [],
         # unit_timeline is populated after the tracker walk below. Each
         # entry: { time, my: {UnitName: count, ...}, opp: {...} }. Only
@@ -900,6 +921,23 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     # (Hatch→Lair→Hive, CC→OC→PF) resolve to the destroyed canonical
     # name. Empty dict when ``opp_pid is None``.
     opp_lifetimes: Dict[int, Dict] = {}
+    # Structures that STARTED construction (UnitInitEvent), keyed by
+    # uid, for both sides. A building destroyed or cancelled before its
+    # UnitDoneEvent never joins lifetimes / opp_lifetimes — but the
+    # build log DOES record its init event, so a death-aware Buildings
+    # roster (build-log births minus production_buildings deaths) would
+    # count it alive forever. Cannons / spines sniped while warping /
+    # morphing are the common case. The death branch below turns these
+    # into in-progress death records; completed buildings resolve via
+    # lifetimes / opp_lifetimes first, so stale entries are harmless.
+    started_buildings: Dict[int, Dict] = {}
+    # In-progress structure deaths, materialized straight into
+    # production_buildings / opp_production_buildings at the end. Kept
+    # OUT of bases / opp_bases: a town hall that never finished can't
+    # be injected / chrono'd, so it must not widen the macro engine's
+    # expectation windows.
+    my_inprogress_deaths: List[Dict] = []
+    opp_inprogress_deaths: List[Dict] = []
     # building_name_by_uid mirrors lifetimes for chrono target
     # naming: it captures the canonical name of EVERY building seen
     # for my_pid (including in-progress targets that have not fired
@@ -1016,6 +1054,19 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                         }
                         if pid in player_counters:
                             player_counters[pid]["units_produced"] += 1
+
+                    # Remember construction STARTS for both sides so the
+                    # death branch can emit a record for structures that
+                    # die (or get cancelled) before completing.
+                    if (isinstance(event, UnitInitEvent)
+                            and pid in (my_pid, opp_pid)
+                            and pid is not None
+                            and clean in KNOWN_BUILDINGS
+                            and uid is not None
+                            and uid not in started_buildings):
+                        started_buildings[uid] = {
+                            "pid": pid, "name": clean, "born": t,
+                        }
 
                     # Workers (Probe/SCV/Drone) are produced via Nexus /
                     # CommandCenter / Larva-morph and ALWAYS fire
@@ -1219,6 +1270,27 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                             else my_pid
                         if cred in player_counters and cred != opp_pid:
                             player_counters[cred]["structures_killed"] += 1
+                    # Structure died while still under construction
+                    # (never fired UnitDoneEvent, so it's in neither
+                    # lifetimes dict). Record it so the Buildings
+                    # roster — which counts births off the build log's
+                    # init events — can subtract it. Player counters
+                    # stay untouched: structures_built/lost only track
+                    # completed structures.
+                    if (uid not in lifetimes
+                            and uid not in opp_lifetimes
+                            and uid in started_buildings):
+                        info = started_buildings.pop(uid)
+                        record = {
+                            "unit_id": uid,
+                            "name": info.get("name", "?"),
+                            "born_time": int(info.get("born") or 0),
+                            "died_time": int(died_t),
+                        }
+                        if info.get("pid") == my_pid:
+                            my_inprogress_deaths.append(record)
+                        else:
+                            opp_inprogress_deaths.append(record)
                     if uid in unit_lifetimes:
                         unit_lifetimes[uid]["died"] = died_t
                         victim_pid = unit_lifetimes[uid].get("pid")
@@ -1350,7 +1422,10 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     out["chrono_targets"] = _build_chrono_targets(
         out["ability_events"], building_name_by_uid)
 
-    # Materialize lifetime records.
+    # Materialize lifetime records. Survivors get the game-end second
+    # stamped as died_time — the SPA's death derivation treats the
+    # maximum died_time as the "survived" sentinel, so every record
+    # below it counts as a real mid-game death.
     for uid, info in lifetimes.items():
         born = int(info.get("born") or 0)
         died = info.get("died")
@@ -1364,6 +1439,27 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
         out["production_buildings"].append(record)
         if record["name"] in _BASE_TYPES:
             out["bases"].append(record)
+    out["production_buildings"].extend(my_inprogress_deaths)
+
+    # Opponent mirror — same materialization, sourced from
+    # opp_lifetimes. Without this the SPA's opponent Buildings roster
+    # has no death data at all and falls back to the cumulative
+    # build-order count (destroyed spines / spores / cannons never
+    # drop off — the "43 Spine Crawlers" symptom).
+    for uid, info in opp_lifetimes.items():
+        born = int(info.get("born") or 0)
+        died = info.get("died")
+        died_time = int(died) if died is not None else int(game_end or born)
+        record = {
+            "unit_id": uid,
+            "name": info.get("name", "?"),
+            "born_time": born,
+            "died_time": died_time,
+        }
+        out["opp_production_buildings"].append(record)
+        if record["name"] in _BASE_TYPES:
+            out["opp_bases"].append(record)
+    out["opp_production_buildings"].extend(opp_inprogress_deaths)
 
     # Sample the unit timeline at each my-stats sample time so the chart
     # x-axis aligns 1:1 with the resource curves. Each entry counts alive

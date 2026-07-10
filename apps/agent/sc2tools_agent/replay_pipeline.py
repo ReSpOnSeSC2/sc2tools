@@ -1136,6 +1136,22 @@ def _compute_macro_breakdown(
         "stats_events": my_stats_ds,
         "opp_stats_events": opp_stats_ds,
         "unit_timeline": unit_timeline,
+        # Structure lifetimes ({name, unit_id, born_time, died_time})
+        # for BOTH sides. The SPA's Buildings roster subtracts
+        # destroyed structures using these records
+        # (deriveBuildingComposition in compositionAt.ts); without
+        # them it falls back to the cumulative build-order count and
+        # killed spines / spores / cannons never leave the roster.
+        # ``bases`` / ``opp_bases`` are the town-hall subset the API's
+        # phase classifier and scouting surfaces prefer. Each record
+        # is ~4 small fields, bounded by structures-built-per-game
+        # (~100s), so the wire cost is a few kB per game.
+        "production_buildings": list(
+            my_macro.get("production_buildings") or []),
+        "opp_production_buildings": list(
+            my_macro.get("opp_production_buildings") or []),
+        "bases": list(my_macro.get("bases") or []),
+        "opp_bases": list(my_macro.get("opp_bases") or []),
         "player_stats": _build_player_stats_summary(
             ctx, my_macro, score_raw or {},
         ),

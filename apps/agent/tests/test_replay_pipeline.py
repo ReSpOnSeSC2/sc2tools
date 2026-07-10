@@ -737,8 +737,30 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
             ],
             "player_stats": {},
             "ability_events": [],
-            "production_buildings": [],
-            "bases": [],
+            # Structure lifetimes for both sides — the SPA's
+            # death-aware Buildings roster subtracts destroyed
+            # structures from these, so they must survive the trip
+            # onto the macroBreakdown payload verbatim.
+            "production_buildings": [
+                {"unit_id": 7, "name": "Gateway",
+                 "born_time": 95, "died_time": 600},
+                {"unit_id": 9, "name": "PhotonCannon",
+                 "born_time": 200, "died_time": 220},
+            ],
+            "bases": [
+                {"unit_id": 1, "name": "Nexus",
+                 "born_time": 0, "died_time": 600},
+            ],
+            "opp_production_buildings": [
+                {"unit_id": 30, "name": "SpineCrawler",
+                 "born_time": 125, "died_time": 300},
+                {"unit_id": 50, "name": "Hatchery",
+                 "born_time": 0, "died_time": 600},
+            ],
+            "opp_bases": [
+                {"unit_id": 50, "name": "Hatchery",
+                 "born_time": 0, "died_time": 600},
+            ],
             "unit_births": [],
             "game_length_sec": 600,
         }
@@ -800,6 +822,17 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     assert isinstance(mb.get("stats_events"), list)
     assert len(mb["stats_events"]) >= 1
     assert "raw" in mb
+    # Structure lifetimes pass through for BOTH sides. Without these
+    # the SPA's Buildings roster falls back to cumulative build-order
+    # counts and destroyed spines / cannons never leave the roster.
+    assert [r["name"] for r in mb["production_buildings"]] == [
+        "Gateway", "PhotonCannon",
+    ]
+    assert [r["name"] for r in mb["opp_production_buildings"]] == [
+        "SpineCrawler", "Hatchery",
+    ]
+    assert [r["name"] for r in mb["bases"]] == ["Nexus"]
+    assert [r["name"] for r in mb["opp_bases"]] == ["Hatchery"]
 
     assert payload["oppBuildLog"], (
         "oppBuildLog empty — SPA's dual build timeline shows "
@@ -952,6 +985,10 @@ def test_parse_replay_for_cloud_ships_partial_macro_breakdown_on_score_failure(
     assert len(mb["stats_events"]) >= 1
     assert len(mb["opp_stats_events"]) >= 1
     assert len(mb["unit_timeline"]) >= 1
+    # Extractor output without the opponent lifetime mirrors (older
+    # replay-engine copy) degrades to empty lists, not a KeyError.
+    assert mb["production_buildings"] == []
+    assert mb["opp_production_buildings"] == []
     # No headline macroScore — the dossier shows "—" rather than 0.
     assert "macroScore" not in payload
 

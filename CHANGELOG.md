@@ -10,6 +10,40 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Fixed
+
+- **Macro breakdown · destroyed buildings now come off BOTH rosters,
+  including mid-construction kills** — the death-aware Buildings roster
+  shipped earlier only worked when the stored game carried
+  per-structure lifetimes, and in practice they were almost never
+  there: the agent's `macroBreakdown` payload didn't include the
+  extractor's `production_buildings` array at all, and the extractor
+  never emitted an opponent-side mirror in the first place (opponent
+  building lifetimes were tracked internally for kill attribution,
+  then discarded). Both rosters therefore fell back to the cumulative
+  build-order count, so killed sunkens/spines, spores, and cannons
+  stayed on the count forever ("43 Spine Crawlers" late-game). Three
+  fixes, one per layer:
+  - the extractor (`core/event_extractor.py`) now materialises
+    `opp_production_buildings` / `opp_bases` from the opponent
+    lifetime tracker, mirroring the my-side arrays;
+  - structures destroyed **or cancelled while still under
+    construction** (a sniped warping cannon / morphing spine — they
+    never fire `UnitDoneEvent`, so they previously produced no death
+    record even though the build log counts their construction start)
+    now yield a lifetime record too, on both sides. They're kept out
+    of `bases` / `opp_bases` so inject/chrono/MULE expectation windows
+    and phase detection are unaffected;
+  - the agent (`replay_pipeline._compute_macro_breakdown`) now ships
+    `production_buildings`, `opp_production_buildings`, `bases`, and
+    `opp_bases` on every upload, and the API's game-record schema
+    documents the new fields with size caps.
+  The SPA needs no changes — `deriveBuildingComposition` already
+  subtracts deaths whenever the arrays are present. Existing uploads
+  keep their cumulative fallback until re-uploaded (Recompute /
+  Resync), after which both panels drop destroyed structures at the
+  hovered time, exactly like the Units roster.
+
 ### Added
 
 - **Win rate by map by matchup** — the Maps tab gains a new section that

@@ -104,8 +104,11 @@ export interface UnitTimelineEntry {
  * followed through morphs (Hatchery → Lair → Hive keeps a single
  * record whose ``name`` is the final form). ``died_time`` is the
  * destruction second; structures that survived to the end of the game
- * share the game-end timestamp. Powers the death-aware Buildings
- * roster — see ``deriveBuildingComposition`` in ``compositionAt.ts``.
+ * share the game-end timestamp. Structures destroyed or cancelled
+ * while still under construction also appear (born_time = construction
+ * start) so the roster can subtract them. Powers the death-aware
+ * Buildings roster — see ``deriveBuildingComposition`` in
+ * ``compositionAt.ts``.
  */
 export interface ProductionBuildingRecord {
   name: string;
@@ -162,11 +165,12 @@ export interface MacroBreakdownData {
   opp_stats_events?: StatsEvent[];
   unit_timeline?: UnitTimelineEntry[];
   /**
-   * Per-structure lifetimes for the local player, with born/died
-   * timestamps. Present on v0.5+ agent uploads. Drives the death-aware
-   * Buildings roster (destroyed structures drop off the count). The
-   * opponent equivalent (``opp_production_buildings``) is rarely
-   * emitted, so the opponent roster falls back to cumulative-built.
+   * Per-structure lifetimes with born/died timestamps, one array per
+   * side. Drive the death-aware Buildings roster (destroyed structures
+   * drop off the count). Both sides are emitted by current agent
+   * uploads; older payloads may carry only ``production_buildings``
+   * (or neither), in which case the affected roster falls back to
+   * cumulative-built and shows the "build order" badge.
    */
   production_buildings?: ProductionBuildingRecord[];
   opp_production_buildings?: ProductionBuildingRecord[];

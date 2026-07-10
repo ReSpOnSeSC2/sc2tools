@@ -107,6 +107,15 @@ const GAME_SCHEMA = {
         // average APM/SPM merged from the apmCurve. Drives the SPA's
         // Replay Player Unit Statistics table.
         player_stats: { type: "object", additionalProperties: true },
+        // Structure lifetimes ({name, unit_id, born_time, died_time})
+        // for both sides. The SPA's Buildings roster and the API's
+        // scouting / phase surfaces subtract destroyed structures
+        // using these. Caps sit far above what a real game produces
+        // (a heavy Zerg game tops out around ~200 structures).
+        production_buildings: { type: "array", maxItems: 2000 },
+        opp_production_buildings: { type: "array", maxItems: 2000 },
+        bases: { type: "array", maxItems: 200 },
+        opp_bases: { type: "array", maxItems: 200 },
       },
     },
     apmCurve: {
