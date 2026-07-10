@@ -431,15 +431,11 @@ function countBuildingsAt(events, t) {
  * Derive structure-death events from a ``production_buildings`` array.
  * Mirrors ``derivedBuildingDeaths`` in compositionAt.ts.
  *
- * Each record carries a ``died_time``; structures that survived to the
- * end of the game all share the same game-end timestamp (the extractor
- * stamps it when no UnitDiedEvent fired). The maximum ``died_time``
- * across the array is therefore the "survived" sentinel — any record
- * below it was genuinely destroyed mid-game. Reading the sentinel from
- * the data keeps this immune to drift between the stored game length
- * and the extractor's internal game-end.
+ * Current records carry an explicit ``destroyed`` bit. Older records lack
+ * it, so they retain the maximum-``died_time`` sentinel fallback used by
+ * the browser implementation.
  *
- * @param {Array<{name:string,born_time:number,died_time:number}>} records
+ * @param {Array<{name:string,born_time:number,died_time:number,destroyed?:boolean}>} records
  * @returns {Array<{time:number,name:string,count:number}>}
  */
 function derivedBuildingDeaths(records) {
@@ -449,7 +445,6 @@ function derivedBuildingDeaths(records) {
     const died = Number(r && r.died_time);
     if (Number.isFinite(died) && died > sentinel) sentinel = died;
   }
-  if (sentinel <= 0) return [];
   /** @type {Array<{time:number,name:string,count:number}>} */
   const out = [];
   for (const r of records) {
@@ -457,7 +452,11 @@ function derivedBuildingDeaths(records) {
     const died = Number(r.died_time);
     const born = Number(r.born_time) || 0;
     if (!Number.isFinite(died)) continue;
-    if (died >= sentinel) continue;
+    const isDestroyed =
+      typeof r.destroyed === "boolean"
+        ? r.destroyed
+        : sentinel > 0 && died < sentinel;
+    if (!isDestroyed) continue;
     if (died < born) continue;
     const canonical = canonicalizeName(r.name || "");
     if (!canonical) continue;
@@ -504,7 +503,7 @@ function subtractBuildingDeath(counts, name, amount) {
  *
  * @param {{
  *   buildEvents: Array<object> | null | undefined,
- *   productionBuildings: Array<{name:string,born_time:number,died_time:number}> | null | undefined,
+ *   productionBuildings: Array<{name:string,born_time:number,died_time:number,destroyed?:boolean}> | null | undefined,
  *   t: number,
  * }} opts
  * @returns {{buildings: Record<string, number>, source: "alive"|"build_order"}}

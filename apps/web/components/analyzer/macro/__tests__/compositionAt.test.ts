@@ -294,6 +294,27 @@ describe("derivedBuildingDeaths — structure destruction from production_buildi
     expect(derivedBuildingDeaths(records)).toEqual([]);
   });
 
+  it("uses explicit lifecycle flags when every structure is destroyed", () => {
+    const records: ProductionBuildingRecord[] = [
+      { name: "Pylon", born_time: 60, died_time: 300, destroyed: true },
+      { name: "Gateway", born_time: 120, died_time: 500, destroyed: true },
+    ];
+    expect(derivedBuildingDeaths(records)).toEqual([
+      { time: 300, name: "Pylon", count: 1 },
+      { time: 500, name: "Gateway", count: 1 },
+    ]);
+  });
+
+  it("honours explicit destroyed and survivor flags at a zero timestamp", () => {
+    const records: ProductionBuildingRecord[] = [
+      { name: "Pylon", born_time: 0, died_time: 0, destroyed: true },
+      { name: "Nexus", born_time: 0, died_time: 0, destroyed: false },
+    ];
+    expect(derivedBuildingDeaths(records)).toEqual([
+      { time: 0, name: "Pylon", count: 1 },
+    ]);
+  });
+
   it("canonicalises the death name and sorts ascending by time", () => {
     const records: ProductionBuildingRecord[] = [
       { name: "Nexus", born_time: 0, died_time: 2000 },
@@ -336,6 +357,24 @@ describe("deriveBuildingComposition — death-aware Buildings roster", () => {
       t: 1200,
     });
     expect(out.buildings.Gateway).toBe(2);
+    expect(out.source).toBe("alive");
+  });
+
+  it("reaches an empty roster after the final structure is destroyed", () => {
+    const buildEvents: BuildEvent[] = [
+      { time: 0, name: "Nexus", is_building: true },
+      { time: 30, name: "Pylon", is_building: true },
+    ];
+    const productionBuildings: ProductionBuildingRecord[] = [
+      { name: "Nexus", born_time: 0, died_time: 100, destroyed: true },
+      { name: "Pylon", born_time: 30, died_time: 200, destroyed: true },
+    ];
+    const out = deriveBuildingComposition({
+      buildEvents,
+      productionBuildings,
+      t: 200,
+    });
+    expect(out.buildings).toEqual({});
     expect(out.source).toBe("alive");
   });
 

@@ -743,23 +743,23 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
             # onto the macroBreakdown payload verbatim.
             "production_buildings": [
                 {"unit_id": 7, "name": "Gateway",
-                 "born_time": 95, "died_time": 600},
+                 "born_time": 95, "died_time": 600, "destroyed": False},
                 {"unit_id": 9, "name": "PhotonCannon",
-                 "born_time": 200, "died_time": 220},
+                 "born_time": 200, "died_time": 220, "destroyed": True},
             ],
             "bases": [
                 {"unit_id": 1, "name": "Nexus",
-                 "born_time": 0, "died_time": 600},
+                 "born_time": 0, "died_time": 600, "destroyed": False},
             ],
             "opp_production_buildings": [
                 {"unit_id": 30, "name": "SpineCrawler",
-                 "born_time": 125, "died_time": 300},
+                 "born_time": 125, "died_time": 300, "destroyed": True},
                 {"unit_id": 50, "name": "Hatchery",
-                 "born_time": 0, "died_time": 600},
+                 "born_time": 0, "died_time": 600, "destroyed": False},
             ],
             "opp_bases": [
                 {"unit_id": 50, "name": "Hatchery",
-                 "born_time": 0, "died_time": 600},
+                 "born_time": 0, "died_time": 600, "destroyed": False},
             ],
             "unit_births": [],
             "game_length_sec": 600,
@@ -830,6 +830,12 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     ]
     assert [r["name"] for r in mb["opp_production_buildings"]] == [
         "SpineCrawler", "Hatchery",
+    ]
+    assert [r["destroyed"] for r in mb["production_buildings"]] == [
+        False, True,
+    ]
+    assert [r["destroyed"] for r in mb["opp_production_buildings"]] == [
+        True, False,
     ]
     assert [r["name"] for r in mb["bases"]] == ["Nexus"]
     assert [r["name"] for r in mb["opp_bases"]] == ["Hatchery"]

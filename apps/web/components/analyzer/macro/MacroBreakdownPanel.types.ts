@@ -104,17 +104,20 @@ export interface UnitTimelineEntry {
  * followed through morphs (Hatchery → Lair → Hive keeps a single
  * record whose ``name`` is the final form). ``died_time`` is the
  * destruction second; structures that survived to the end of the game
- * share the game-end timestamp. Structures destroyed or cancelled
- * while still under construction also appear (born_time = construction
- * start) so the roster can subtract them. Powers the death-aware
- * Buildings roster — see ``deriveBuildingComposition`` in
- * ``compositionAt.ts``.
+ * share the game-end timestamp. Current payloads also carry ``destroyed``
+ * so a complete wipe is unambiguous even when the last real death is the
+ * maximum timestamp. Structures destroyed or cancelled while still under
+ * construction also appear (born_time = construction start) so the roster
+ * can subtract them. Powers the death-aware Buildings roster — see
+ * ``deriveBuildingComposition`` in ``compositionAt.ts``.
  */
 export interface ProductionBuildingRecord {
   name: string;
   unit_id?: number;
   born_time: number;
   died_time: number;
+  /** Explicit lifecycle result on current payloads; absent on legacy data. */
+  destroyed?: boolean;
 }
 
 /**

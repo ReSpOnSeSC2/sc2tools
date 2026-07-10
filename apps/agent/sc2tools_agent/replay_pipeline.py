@@ -1144,7 +1144,7 @@ def _compute_macro_breakdown(
         # killed spines / spores / cannons never leave the roster.
         # ``bases`` / ``opp_bases`` are the town-hall subset the API's
         # phase classifier and scouting surfaces prefer. Each record
-        # is ~4 small fields, bounded by structures-built-per-game
+        # is ~5 small fields, bounded by structures-built-per-game
         # (~100s), so the wire cost is a few kB per game.
         "production_buildings": list(
             my_macro.get("production_buildings") or []),

@@ -60,11 +60,10 @@ export interface CompositionSnapshotProps {
   buildOrderLoading?: boolean;
   buildOrderError?: boolean;
   /**
-   * Per-structure lifetimes (born/died) for each side, from the macro
-   * breakdown payload. When present, the Buildings roster removes
-   * destroyed structures instead of showing the cumulative-ever-built
-   * count. The opponent array is rarely emitted, so that side usually
-   * falls back to cumulative-built.
+   * Per-structure lifetimes (born/died plus lifecycle result) for each
+   * side, from the macro breakdown payload. When present, both Buildings
+   * rosters remove destroyed structures instead of showing the
+   * cumulative-ever-built count.
    */
   myProductionBuildings?: ProductionBuildingRecord[];
   oppProductionBuildings?: ProductionBuildingRecord[];
@@ -402,7 +401,9 @@ function PlayerStrip({
                 ? "Couldn't load build order"
                 : buildOrderState === "absent"
                   ? "Buildings unavailable for this game"
-                  : "No buildings yet"
+                  : buildingSource === "alive"
+                    ? "No buildings on the field at this time"
+                    : "No buildings yet"
           }
           chips={sortedBuildings.map(({ name: buildingName, count }) => (
             <UnitChip

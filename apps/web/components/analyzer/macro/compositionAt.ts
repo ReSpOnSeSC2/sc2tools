@@ -588,16 +588,12 @@ export type BuildingSource = "alive" | "build_order";
 /**
  * Derive structure-death events from ``production_buildings``.
  *
- * Each record carries a ``died_time``. Structures that survived to the
- * end of the game all share the SAME timestamp — the extractor stamps
- * the game-end second on every survivor (it has no UnitDiedEvent to
- * read). We therefore treat the maximum ``died_time`` across the array
- * as the "survived" sentinel: any record whose ``died_time`` is
- * strictly below it was genuinely destroyed mid-game and yields a
- * death event. This is immune to small drift between the stored
- * ``game_length_sec`` and the extractor's internal game-end (they can
- * differ by a second after timebase rescales), because the sentinel is
- * read straight out of the data rather than passed in.
+ * Current records carry an explicit ``destroyed`` bit, which is the
+ * authoritative lifecycle result. This matters after a complete wipe:
+ * without it, the last real death is also the maximum ``died_time`` and
+ * would be mistaken for a survivor. Older records lack the bit, so they
+ * retain the legacy maximum-``died_time`` sentinel fallback (survivors all
+ * share the extractor's game-end timestamp).
  *
  * Names are canonicalised so the death keys line up with the
  * cumulative ``countBuildingsAt`` map (which is also canonicalised).
@@ -613,18 +609,17 @@ export function derivedBuildingDeaths(
     const died = Number(r?.died_time);
     if (Number.isFinite(died) && died > sentinel) sentinel = died;
   }
-  // Degenerate replay (no game length / all-zero timestamps): no
-  // reliable death signal, so emit nothing and let the caller fall
-  // back to the cumulative count.
-  if (sentinel <= 0) return [];
   const out: DeathEvent[] = [];
   for (const r of records) {
     if (!r) continue;
     const died = Number(r.died_time);
     const born = Number(r.born_time) || 0;
     if (!Number.isFinite(died)) continue;
-    // Survivors sit at the sentinel; only earlier deaths count.
-    if (died >= sentinel) continue;
+    const isDestroyed =
+      typeof r.destroyed === "boolean"
+        ? r.destroyed
+        : sentinel > 0 && died < sentinel;
+    if (!isDestroyed) continue;
     if (died < born) continue;
     const canonical = canonicalizeName(r.name || "");
     if (!canonical) continue;

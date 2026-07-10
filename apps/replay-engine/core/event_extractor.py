@@ -815,10 +815,13 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                                minerals_collection_rate,
                                vespene_collection_rate}] for ``my_pid``.
 
-      ``production_buildings`` List[{name, unit_id, born_time, died_time}]
+      ``production_buildings`` List[{name, unit_id, born_time, died_time,
+                               destroyed}]
                                Production buildings (Barracks, Gateway, etc.)
                                and town-halls. ``died_time`` defaults to
-                               game_length when no death event was seen.
+                               game_length when no death event was seen;
+                               ``destroyed`` explicitly distinguishes that
+                               survivor sentinel from a real final death.
                                Also includes structures destroyed or
                                cancelled DURING construction (born_time =
                                construction start) so death-aware building
@@ -1286,6 +1289,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                             "name": info.get("name", "?"),
                             "born_time": int(info.get("born") or 0),
                             "died_time": int(died_t),
+                            "destroyed": True,
                         }
                         if info.get("pid") == my_pid:
                             my_inprogress_deaths.append(record)
@@ -1422,10 +1426,10 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     out["chrono_targets"] = _build_chrono_targets(
         out["ability_events"], building_name_by_uid)
 
-    # Materialize lifetime records. Survivors get the game-end second
-    # stamped as died_time — the SPA's death derivation treats the
-    # maximum died_time as the "survived" sentinel, so every record
-    # below it counts as a real mid-game death.
+    # Materialize lifetime records. Keep the historical game-end
+    # ``died_time`` sentinel for compatibility, and also emit an explicit
+    # ``destroyed`` bit so a complete structure wipe remains distinguishable
+    # from a game where the final structure survived to that timestamp.
     for uid, info in lifetimes.items():
         born = int(info.get("born") or 0)
         died = info.get("died")
@@ -1435,6 +1439,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
             "name": info.get("name", "?"),
             "born_time": born,
             "died_time": died_time,
+            "destroyed": died is not None,
         }
         out["production_buildings"].append(record)
         if record["name"] in _BASE_TYPES:
@@ -1455,6 +1460,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
             "name": info.get("name", "?"),
             "born_time": born,
             "died_time": died_time,
+            "destroyed": died is not None,
         }
         out["opp_production_buildings"].append(record)
         if record["name"] in _BASE_TYPES:

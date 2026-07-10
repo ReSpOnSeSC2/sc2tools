@@ -29,8 +29,8 @@ export interface MacroChartSectionProps {
   samples: StatsEvent[];
   oppSamples: StatsEvent[];
   unitTimeline?: UnitTimelineEntry[];
-  /** Per-structure lifetimes (born/died) used by the roster to drop
-   *  destroyed buildings. Opponent side is rarely emitted. */
+  /** Per-structure lifetimes (born/died plus lifecycle result) used by
+   *  both rosters to drop destroyed buildings. */
   myProductionBuildings?: ProductionBuildingRecord[];
   oppProductionBuildings?: ProductionBuildingRecord[];
   gameLengthSec?: number;

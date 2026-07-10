@@ -218,6 +218,27 @@ describe("derivedBuildingDeaths — parity with compositionAt.ts", () => {
     expect(derivedBuildingDeaths(records)).toEqual([]);
   });
 
+  test("uses explicit lifecycle flags when every structure is destroyed", () => {
+    const records = [
+      { name: "Pylon", born_time: 60, died_time: 300, destroyed: true },
+      { name: "Gateway", born_time: 120, died_time: 500, destroyed: true },
+    ];
+    expect(derivedBuildingDeaths(records)).toEqual([
+      { time: 300, name: "Pylon", count: 1 },
+      { time: 500, name: "Gateway", count: 1 },
+    ]);
+  });
+
+  test("honours explicit destroyed and survivor flags at a zero timestamp", () => {
+    const records = [
+      { name: "Pylon", born_time: 0, died_time: 0, destroyed: true },
+      { name: "Nexus", born_time: 0, died_time: 0, destroyed: false },
+    ];
+    expect(derivedBuildingDeaths(records)).toEqual([
+      { time: 0, name: "Pylon", count: 1 },
+    ]);
+  });
+
   test("canonicalises name and sorts ascending by time", () => {
     const records = [
       { name: "Nexus", born_time: 0, died_time: 2000 },
@@ -257,6 +278,24 @@ describe("deriveBuildingComposition — parity with compositionAt.ts", () => {
       t: 1200,
     });
     expect(out.buildings.Gateway).toBe(2);
+    expect(out.source).toBe("alive");
+  });
+
+  test("reaches an empty roster after the final structure is destroyed", () => {
+    const buildEvents = [
+      { time: 0, name: "Nexus", is_building: true },
+      { time: 30, name: "Pylon", is_building: true },
+    ];
+    const productionBuildings = [
+      { name: "Nexus", born_time: 0, died_time: 100, destroyed: true },
+      { name: "Pylon", born_time: 30, died_time: 200, destroyed: true },
+    ];
+    const out = deriveBuildingComposition({
+      buildEvents,
+      productionBuildings,
+      t: 200,
+    });
+    expect(out.buildings).toEqual({});
     expect(out.source).toBe("alive");
   });
 

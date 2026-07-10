@@ -12,6 +12,12 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Macro breakdown · total building wipes now reach zero** — structure
+  lifetime records now carry an explicit destroyed/survived result. This
+  prevents the latest (or only) real death from being mistaken for the
+  legacy game-end survivor timestamp, while older replay payloads retain
+  their existing sentinel fallback in both the browser and scouting API.
+
 - **Macro breakdown · destroyed buildings now come off BOTH rosters,
   including mid-construction kills** — the death-aware Buildings roster
   shipped earlier only worked when the stored game carried
@@ -38,8 +44,8 @@ workflow builds the Windows installer on each tag push and attaches the
     `production_buildings`, `opp_production_buildings`, `bases`, and
     `opp_bases` on every upload, and the API's game-record schema
     documents the new fields with size caps.
-  The SPA needs no changes — `deriveBuildingComposition` already
-  subtracts deaths whenever the arrays are present. Existing uploads
+  The SPA's `deriveBuildingComposition` consumes those arrays and
+  subtracts deaths whenever they are present. Existing uploads
   keep their cumulative fallback until re-uploaded (Recompute /
   Resync), after which both panels drop destroyed structures at the
   hovered time, exactly like the Units roster.

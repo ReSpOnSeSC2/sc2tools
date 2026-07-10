@@ -18,8 +18,10 @@ behaviours have to hold for that subtraction to work:
      without a death record a cannon or spine sniped mid-warp counts
      alive forever.
 
-  3. Survivors carry the game-end second as ``died_time`` (the SPA
-     derives its "survived" sentinel from the max died_time).
+  3. Every record carries an explicit ``destroyed`` result. Survivors
+     still use the game-end second as ``died_time`` for compatibility,
+     but the flag prevents a complete wipe's last death from looking
+     like that legacy sentinel.
 
 These tests run without sc2reader or a real replay by stubbing the
 tracker event classes, matching test_extract_macro_events_army_value.py.
@@ -186,8 +188,13 @@ def test_opp_production_buildings_emitted_with_death_times():
         "killed spine carries its real death second; the survivor is "
         "stamped with the game-end sentinel"
     )
+    spines_by_death = {s["died_time"]: s for s in spines}
+    assert spines_by_death[300]["destroyed"] is True
+    assert spines_by_death[GAME_END]["destroyed"] is False
     # The hatchery lands in both the mirror array and opp_bases.
-    assert len(_by_name(out["opp_production_buildings"], "Hatchery")) == 1
+    hatches = _by_name(out["opp_production_buildings"], "Hatchery")
+    assert len(hatches) == 1
+    assert hatches[0]["destroyed"] is False
     assert len(_by_name(out["opp_bases"], "Hatchery")) == 1
     # Kill attribution keeps working alongside the new export.
     assert out["player_stats"]["1"]["structures_killed"] == 1
@@ -224,18 +231,22 @@ def test_in_progress_structure_death_recorded_both_sides():
     assert len(cannons) == 1
     assert cannons[0]["born_time"] == 200
     assert cannons[0]["died_time"] == 220
+    assert cannons[0]["destroyed"] is True
 
     gateways = _by_name(out["production_buildings"], "Gateway")
     assert len(gateways) == 1
     assert gateways[0]["died_time"] == GAME_END  # survivor sentinel
+    assert gateways[0]["destroyed"] is False
 
     spines = _by_name(out["opp_production_buildings"], "SpineCrawler")
     assert len(spines) == 1
     assert spines[0]["died_time"] == 250
+    assert spines[0]["destroyed"] is True
 
     hatches = _by_name(out["opp_production_buildings"], "Hatchery")
     assert len(hatches) == 1
     assert hatches[0]["died_time"] == 330
+    assert hatches[0]["destroyed"] is True
     assert _by_name(out["opp_bases"], "Hatchery") == [], (
         "an in-progress hatchery death must not widen the opponent "
         "base list — it never finished, so it was never injectable"
@@ -255,4 +266,6 @@ def test_no_opp_pid_leaves_opp_arrays_empty():
     out = ee.extract_macro_events(_make_replay(events), my_pid=1)
     assert out["opp_production_buildings"] == []
     assert out["opp_bases"] == []
-    assert len(_by_name(out["production_buildings"], "Forge")) == 1
+    forges = _by_name(out["production_buildings"], "Forge")
+    assert len(forges) == 1
+    assert forges[0]["destroyed"] is False
