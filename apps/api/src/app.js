@@ -58,6 +58,8 @@ const { LadderMetaService } = require("./services/ladderMeta");
 const { buildLadderMetaRouter } = require("./routes/ladderMeta");
 const { PublicProfileService } = require("./services/publicProfile");
 const { buildPublicProfileRouter } = require("./routes/publicProfile");
+const { ChatbotService } = require("./services/chatbot");
+const { buildChatbotRouter } = require("./routes/chatbot");
 const {
   SkillFingerprintService,
 } = require("./services/skillFingerprint");
@@ -284,6 +286,15 @@ function makeServices(deps) {
     enrich: (userId, envelope) =>
       overlayLive.enrichEnvelope(userId, envelope),
   });
+  // Nightbot/StreamElements custom-API lines (!opponent/!mmr/!build) —
+  // the overlay token in the URL path is the credential, same trust
+  // model as the OBS Browser Source.
+  const chatbot = new ChatbotService(deps.db, {
+    overlayTokens,
+    liveGameBroker,
+    games,
+    logger: deps.logger,
+  });
   const aggregations = new AggregationsService(deps.db);
   const macroReport = new MacroReportService(deps.db);
   const streak = new StreakService(deps.db);
@@ -388,6 +399,7 @@ function makeServices(deps) {
     skillFingerprint,
     ladderMeta,
     publicProfile,
+    chatbot,
     pulseDirectory,
   };
 }
@@ -483,6 +495,12 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildPublicReplayRouter({ logger: deps.logger }),
+  );
+  // Chat-bot lines — PUBLIC bundle (Nightbot's urlfetch can't send
+  // headers; the overlay token in the path is the credential).
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildChatbotRouter({ chatbot: services.chatbot, logger: deps.logger }),
   );
   // Map minimaps (used by <img src> in the SPA). MUST sit with the
   // public routers — bearer tokens can't be attached to image
