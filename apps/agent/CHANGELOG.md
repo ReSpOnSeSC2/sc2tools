@@ -2,6 +2,31 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.13.3
+
+### Fixed — destroyed buildings finally drop off the Macro Breakdown rosters (release cut)
+- **What.** The death-aware Buildings roster needs per-structure
+  lifetime records (`production_buildings` /
+  `opp_production_buildings`, with `born_time` / `died_time` /
+  `destroyed`) in the `macroBreakdown` payload the agent uploads. The
+  code that ships them landed in the repo (extractor opponent-side
+  mirror, mid-construction death records, explicit `destroyed` bit,
+  and the payload fields themselves) **after** the 0.13.2 installer
+  was built — but the version was never bumped, so no 0.13.3 release
+  existed and installed agents kept uploading payloads without the
+  arrays. The web app then fell back to the cumulative build-order
+  count and showed the "BUILD ORDER" badge, and clicking Recompute
+  changed nothing because the recompute is performed by the same
+  outdated installed agent.
+- **Effect.** This release actually delivers the pipeline to users.
+  Once the agent auto-updates (or the installer is run manually),
+  every new upload carries both sides' structure lifetimes, and the
+  Macro Breakdown Buildings roster removes destroyed structures at the
+  hovered time exactly like the Units row. **Previously uploaded games
+  still show cumulative counts until re-parsed** — click Recompute on
+  the game's Macro Breakdown panel, or run a full Resync from the
+  agent app, after updating.
+
 ## 0.13.2
 
 ### Fixed — PvZ 2 Stargate Void Ray no longer mislabeled "Stargate into Robo" on a late support Robo

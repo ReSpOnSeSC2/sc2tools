@@ -12,6 +12,21 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Agent 0.13.3 · building-death pipeline actually released** — the
+  two earlier fixes below (structure lifetimes on the upload payload,
+  opponent-side mirror, explicit destroyed bit) landed in source after
+  the 0.13.2 installer was built, and the agent version was never
+  bumped — so no release carried them and installed agents kept
+  uploading `macroBreakdown` payloads without `production_buildings` /
+  `opp_production_buildings`. The Macro Breakdown Buildings roster
+  therefore still fell back to cumulative build-order counts (the
+  "BUILD ORDER" badge), and the panel's Recompute button couldn't help
+  because the recompute runs on the same outdated installed agent.
+  Bumped the agent to 0.13.3 so a release can be cut
+  (`git tag agent-v0.13.3 && git push --tags`, then publish to the
+  release feed); after the agent updates, affected games need a
+  one-time Recompute (or agent Resync) to re-upload with lifetimes.
+
 - **Macro breakdown · total building wipes now reach zero** — structure
   lifetime records now carry an explicit destroyed/survived result. This
   prevents the latest (or only) real death from being mistaken for the
