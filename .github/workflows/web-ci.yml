@@ -56,9 +56,16 @@ jobs:
       run:
         working-directory: apps/web
     env:
-      # Format-valid dummy — public pages never call Clerk's API.
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
-      CLERK_SECRET_KEY: sk_test_dummy
+      # Format-valid dummies — public pages never call Clerk's API.
+      # PRODUCTION-format (pk_live/sk_live) on purpose: a pk_test key
+      # makes clerkMiddleware run the dev-instance "dev browser"
+      # handshake, redirecting every real-browser document request to
+      # the key's frontend-API domain — here the nonexistent
+      # clerk.example.com — so Chromium/Firefox die with
+      # ERR_NAME_NOT_RESOLVED while curl (not a browser) gets a 200.
+      # Production instances skip that handshake entirely.
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmsuZXhhbXBsZS5jb20k
+      CLERK_SECRET_KEY: sk_live_dummy
       NEXT_PUBLIC_API_BASE: http://localhost:8080
     steps:
       - uses: actions/checkout@v4
@@ -73,35 +80,21 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Build
         run: npm run build
-      # TEMPORARY diagnostic for the ERR_NAME_NOT_RESOLVED failures:
-      # separates server-side behavior (curl: status + any redirect)
-      # from Chromium-outside-the-test-runner (playwright CLI) and
-      # dumps proxy-related env. Remove once the e2e job is green.
-      - name: Network debug probe
+      # TEMPORARY proof-of-diagnosis probe (remove once green): a
+      # browser-shaped curl records whether the middleware issues the
+      # Clerk dev-browser redirect that killed the suite under pk_test
+      # keys. With pk_live keys it must stay 200 / no Location.
+      - name: Clerk handshake probe
         run: |
-          echo "--- proxy-ish env ---"
-          env | sort | grep -iE 'proxy' || echo "(no proxy env)"
-          echo "--- /etc/resolv.conf ---"; cat /etc/resolv.conf || true
-          echo "--- /etc/hosts ---"; cat /etc/hosts || true
           nohup npx next start -p 3210 >/tmp/next.log 2>&1 &
           for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:3210/ && break; sleep 1; done
-          echo "--- curl -I / (headers incl. any redirect) ---"
-          curl -sSi --max-time 10 http://127.0.0.1:3210/ -o /dev/null -D - || true
-          echo "--- curl body first 300 bytes ---"
-          curl -sS --max-time 10 http://127.0.0.1:3210/ | head -c 300; echo
-          echo "--- PW chromium launch args (DEBUG=pw:browser) ---"
-          DEBUG=pw:browser npx playwright screenshot --browser chromium http://127.0.0.1:3210/ /tmp/shot.png 2>&1 | grep -E "<launching>|proxy" | head -5 || true
-          echo "--- PW chromium plain ---"
-          npx playwright screenshot --browser chromium http://127.0.0.1:3210/ /tmp/shot1.png && echo "CHROMIUM-OK" || echo "CHROMIUM-FAILED"
-          echo "--- PW chromium with PLAYWRIGHT_DISABLE_FORCED_CHROMIUM_PROXIED_LOOPBACK=1 ---"
-          PLAYWRIGHT_DISABLE_FORCED_CHROMIUM_PROXIED_LOOPBACK=1 npx playwright screenshot --browser chromium http://127.0.0.1:3210/ /tmp/shot2.png && echo "CHROMIUM-NOLOOPBACKFORCE-OK" || echo "CHROMIUM-NOLOOPBACKFORCE-FAILED"
-          echo "--- runner's stock google-chrome headless ---"
-          (google-chrome --headless=new --no-sandbox --dump-dom http://127.0.0.1:3210/ 2>&1 | head -c 200; echo) || echo "STOCK-CHROME-FAILED"
-          echo "--- PW firefox ---"
-          npx playwright install --with-deps firefox >/dev/null 2>&1 || true
-          npx playwright screenshot --browser firefox http://127.0.0.1:3210/ /tmp/shot3.png && echo "FIREFOX-OK" || echo "FIREFOX-FAILED"
-          echo "--- next server log ---"; tail -5 /tmp/next.log || true
-          fuser -k 3210/tcp 2>/dev/null || pkill -f "next-server" || pkill -f "next start" || true
+          echo "--- browser-shaped curl: status + redirect headers ---"
+          curl -sS --max-time 10 -o /dev/null -D - \
+            -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" \
+            -H "Accept: text/html,application/xhtml+xml" \
+            -H "Sec-Fetch-Dest: document" -H "Sec-Fetch-Mode: navigate" -H "Sec-Fetch-Site: none" \
+            http://127.0.0.1:3210/ | grep -iE "^HTTP|^location|clerk" || true
+          fuser -k 3210/tcp 2>/dev/null || pkill -f "next-server" || true
           sleep 2
       - name: Run responsive smoke
         run: npx playwright test
