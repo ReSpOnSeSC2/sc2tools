@@ -56,6 +56,8 @@ const {
 const { buildBenchmarksRouter } = require("./routes/benchmarks");
 const { LadderMetaService } = require("./services/ladderMeta");
 const { buildLadderMetaRouter } = require("./routes/ladderMeta");
+const { PublicProfileService } = require("./services/publicProfile");
+const { buildPublicProfileRouter } = require("./routes/publicProfile");
 const {
   SkillFingerprintService,
 } = require("./services/skillFingerprint");
@@ -315,6 +317,15 @@ function makeServices(deps) {
     gameDetails,
   });
   const community = new CommunityService(deps.db);
+  // Opt-in public player pages (/p/:handle). Derives entirely from
+  // existing services — a public profile exists iff the user published
+  // a community build under a public authorName (the community opt-in),
+  // so no new user state and no GDPR change.
+  const publicProfile = new PublicProfileService(deps.db, {
+    community,
+    aggregations,
+    builds,
+  });
   const seasons = new SeasonsService();
   const arcade = new ArcadeService(deps.db, { games, gameDetails });
   // AdminService composes db + gdpr; deliberately near the bottom so
@@ -376,6 +387,7 @@ function makeServices(deps) {
     leaguePercentiles,
     skillFingerprint,
     ladderMeta,
+    publicProfile,
     pulseDirectory,
   };
 }
@@ -560,6 +572,12 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       auth,
       isAdmin,
     }),
+  );
+  // Opt-in public player pages — unauth GET /v1/public/profile/:handle,
+  // rate-limited in the router. Public bundle (before authed routers).
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildPublicProfileRouter({ publicProfile: services.publicProfile }),
   );
   // Operational admin router — gated on isAdmin(req) inside the
   // router. Mounted alongside the rest of the v1 prefix so
