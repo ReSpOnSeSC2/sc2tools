@@ -6,6 +6,7 @@ Pystray draws a tiny indicator with a context menu:
     Last upload: foo.SC2Replay  (12:34:56)
     Watching: C:\\Users\\…\\Replays\\Multiplayer
     ─────────────────
+    Open agent window      (default — double-click the icon)
     Open dashboard
     Pause syncing
     Open log folder
@@ -62,6 +63,8 @@ class TrayUI:
         on_resync: Optional[Callable[[], None]] = None,
         on_choose_folder: Optional[Callable[[Optional[Path]], None]] = None,
         on_check_updates: Optional[Callable[[], None]] = None,
+        on_show_window: Optional[Callable[[], None]] = None,
+        synced_count_provider: Optional[Callable[[], int]] = None,
     ) -> None:
         self._dashboard_url = dashboard_url
         self._log_dir = log_dir
@@ -70,11 +73,21 @@ class TrayUI:
         self._on_resync_cb = on_resync
         self._on_choose_folder_cb = on_choose_folder
         self._on_check_updates_cb = on_check_updates
+        # Brings the main window back after a hide-to-tray close. When
+        # provided it becomes the menu's first item AND the icon's
+        # default action (double-click). Without it (no-GUI installs)
+        # the item is omitted.
+        self._on_show_window_cb = on_show_window
+        # Same authoritative synced-total source the GUI stat card
+        # uses (count over state.uploaded's dated entries). Without it
+        # the tooltip falls back to the legacy session-local counter,
+        # which starts at 0 every launch.
+        self._synced_count_provider = synced_count_provider
         self._stop_cb: Optional[Callable[[], None]] = None
         self._icon: Optional[object] = None
         self._lock = threading.Lock()
         self._status = "starting"
-        self._uploaded = 0
+        self._uploaded = self._query_synced(default=0)
         self._pending = 0
         self._paired = False
         self._paused = False
@@ -139,6 +152,17 @@ class TrayUI:
         draw.text((18, 16), "SC2", fill=(11, 13, 18))
         return icon_img
 
+    def _query_synced(self, default: int) -> int:
+        """Read the authoritative synced total; fall back to the
+        session-local counter when no provider is wired."""
+        provider = self._synced_count_provider
+        if provider is None:
+            return default
+        try:
+            return int(provider())
+        except Exception:  # noqa: BLE001
+            return default
+
     # ---------------- callbacks from the runner ----------------
 
     def show_pairing_code(self, code: str) -> None:
@@ -159,7 +183,7 @@ class TrayUI:
 
     def on_upload_success(self, filename: str) -> None:
         with self._lock:
-            self._uploaded += 1
+            self._uploaded = self._query_synced(default=self._uploaded + 1)
             self._pending = max(0, self._pending - 1)
             self._last_upload_name = filename
             self._last_upload_at = datetime.now()
@@ -186,24 +210,45 @@ class TrayUI:
     # ---------------- menu builders ----------------
 
     def _build_menu(self, pystray):
-        return pystray.Menu(
+        items = [
             pystray.MenuItem(self._title, None, enabled=False),
             pystray.MenuItem(self._second_line, None, enabled=False),
             pystray.MenuItem(self._third_line, None, enabled=False),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Open dashboard", self._open_dashboard),
-            pystray.MenuItem(self._pause_label, self._toggle_pause),
-            pystray.MenuItem(
-                "Open log folder",
-                self._open_log_folder,
-                enabled=self._log_dir_enabled,
-            ),
-            pystray.MenuItem("Re-sync from scratch", self._resync_clicked),
-            pystray.MenuItem("Choose replay folder…", self._choose_folder_clicked),
-            pystray.MenuItem(self._check_updates_label, self._check_updates_clicked),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Quit", self._quit_clicked),
+        ]
+        if self._on_show_window_cb is not None:
+            # ``default=True`` also makes a double-click on the tray
+            # icon fire this item. Without an explicit entry the main
+            # window was UNREACHABLE after a hide-to-tray close — the
+            # only way back was killing and relaunching the agent.
+            items.append(
+                pystray.MenuItem(
+                    "Open agent window",
+                    self._show_window_clicked,
+                    default=True,
+                ),
+            )
+        items.extend(
+            [
+                pystray.MenuItem("Open dashboard", self._open_dashboard),
+                pystray.MenuItem(self._pause_label, self._toggle_pause),
+                pystray.MenuItem(
+                    "Open log folder",
+                    self._open_log_folder,
+                    enabled=self._log_dir_enabled,
+                ),
+                pystray.MenuItem("Re-sync from scratch", self._resync_clicked),
+                pystray.MenuItem(
+                    "Choose replay folder…", self._choose_folder_clicked,
+                ),
+                pystray.MenuItem(
+                    "Check for updates", self._check_updates_clicked,
+                ),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("Quit", self._quit_clicked),
+            ],
         )
+        return pystray.Menu(*items)
 
     # ---------------- per-menu-item helpers ----------------
 
@@ -244,16 +289,18 @@ class TrayUI:
         with self._lock:
             return "Resume syncing" if self._paused else "Pause syncing"
 
-    def _check_updates_label(self, _icon) -> str:
-        with self._lock:
-            if self._update_pending:
-                return f"Install update {self._update_pending}"
-            return "Check for updates"
-
     def _log_dir_enabled(self, _menu_item) -> bool:
         return self._log_dir is not None and Path(self._log_dir).exists()
 
     # ---------------- click handlers ----------------
+
+    def _show_window_clicked(self, _icon, _item) -> None:
+        if not self._on_show_window_cb:
+            return
+        try:
+            self._on_show_window_cb()
+        except Exception:  # noqa: BLE001
+            log.exception("show_window_failed")
 
     def _open_dashboard(self, _icon, _item) -> None:
         try:
