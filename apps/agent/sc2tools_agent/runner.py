@@ -327,6 +327,8 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
                 cfg, state, picked, tray, log, upload=upload,
             ),
             on_check_updates=lambda: updater.check_now() if updater else None,
+            # No GUI in this mode — the tray omits its window item.
+            synced_count_provider=lambda: count_synced(state),
         )
 
     ui = _Multiplexer(console, tray)
@@ -566,6 +568,7 @@ def _run_with_gui(
         sync_filter_preset=state.sync_filter_preset,
         sync_filter_since=state.sync_filter_since,
         sync_filter_until=state.sync_filter_until,
+        auto_update_enabled=state.auto_update_enabled,
     )
 
     gui = GuiUI(
@@ -610,6 +613,10 @@ def _run_with_gui(
                 cfg, state, picked, cell, log,
             ),
             on_check_updates=lambda: cell.updater.check_now() if cell.updater else None,
+            # Route back to the Qt window after a hide-to-tray close —
+            # first menu item and the icon's double-click default.
+            on_show_window=lambda: cell.gui.show_window() if cell.gui else None,
+            synced_count_provider=lambda: count_synced(state),
         )
         cell.tray = tray
         tray.start(on_quit=request_stop)
@@ -1085,6 +1092,11 @@ def _handle_save_settings(
         state.replay_folder_override = cleaned[0] if cleaned else None
     if payload.start_minimized is not None:
         state.start_minimized = bool(payload.start_minimized)
+    if payload.auto_update_enabled is not None:
+        # Hot-applies: the updater reads this flag from state on every
+        # poll (``_handle_update_available``'s consent gate), so no
+        # restart is needed for the opt-in/opt-out to take effect.
+        state.auto_update_enabled = bool(payload.auto_update_enabled)
     if payload.autostart_enabled is not None:
         ok = autostart.set_enabled(bool(payload.autostart_enabled))
         if ok:
@@ -1246,10 +1258,21 @@ def _handle_update_available(
     if gui and release.latest:
         gui.on_update_available(release.latest)
 
+    def _notify_gui(message: str) -> None:
+        # Sticky: a pending update stays on the status card until the
+        # install (or the user) resolves it.
+        if gui and hasattr(gui, "show_update_notice"):
+            gui.show_update_notice(message, sticky=True)
+
     if not (release.artifact and _running_frozen()):
-        if release.latest and console:
-            console.on_status(
-                f"update available: {release.latest} (run installer manually)",
+        if release.latest:
+            if console:
+                console.on_status(
+                    f"update available: {release.latest} (run installer manually)",
+                )
+            _notify_gui(
+                f"Update v{release.latest} is available — download the "
+                "installer from the website to update this build.",
             )
         return
 
@@ -1264,6 +1287,11 @@ def _handle_update_available(
                 f"update available: {release.latest} — auto-update is "
                 "disabled; run the installer manually",
             )
+        _notify_gui(
+            f"Update v{release.latest} is available — automatic install "
+            "is turned off. Enable it in Settings or run the installer "
+            "manually.",
+        )
         return
 
     try:
@@ -1271,6 +1299,10 @@ def _handle_update_available(
             "update_install_starting artifact=%s mandatory=%s",
             release.artifact.platform,
             mandatory,
+        )
+        _notify_gui(
+            f"Update v{release.latest} is downloading — the agent will "
+            "restart itself once in-flight uploads finish.",
         )
         # Only the API host and GitHub release hosts may serve the
         # installer — a compromised feed can't point us elsewhere.
@@ -1289,6 +1321,10 @@ def _handle_update_available(
             request_stop()
     except Exception:  # noqa: BLE001
         log.exception("update_install_failed")
+        _notify_gui(
+            f"Update v{release.latest} failed to install — see the "
+            "activity log, or download the installer from the website.",
+        )
 
 
 # ---------------- helpers ----------------

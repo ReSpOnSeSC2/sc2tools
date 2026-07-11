@@ -4,6 +4,34 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## 0.13.4
 
+### Changed — desktop window & tray polish (every control audited)
+- **What.** A full pass over the agent's window and tray: several
+  controls were broken or silent. The window was UNREACHABLE after a
+  hide-to-tray close (no tray item brought it back); Settings →
+  Auto-detect crashed on a brand-new SC2 install (undefined variable
+  on the no-Multiplayer-folders path); "Check for updates" froze the
+  window during the HTTP round-trip and gave no feedback at all;
+  double-clicking a recent upload only ever opened the FIRST watched
+  folder; the Settings form clipped its bottom rows (and the Save
+  button) off-screen at small window sizes; and the tray's "synced"
+  tooltip reset to 0 every launch (the 0.13.0 stat fix never reached
+  the tray). The updater's auto-update opt-out (added in this
+  release) also had no UI — the only way to disable installs was
+  hand-editing `agent.json`.
+- **Effect.** The tray menu gains "Open agent window" as its default
+  item (double-clicking the tray icon opens the window). Auto-detect
+  falls back to the detected Accounts roots instead of crashing.
+  "Check for updates" runs off-thread with live feedback on the
+  status card — "Checking…", then "You're up to date — v0.13.4" or a
+  branch-accurate update notice ("downloading — the agent will
+  restart itself", "automatic install is turned off", installer
+  failure). Settings gains an "Install agent updates automatically"
+  checkbox that hot-applies (no restart). The Settings tab scrolls,
+  reveal-in-Explorer probes every watched folder, the Recent tab
+  explains itself when empty, "Copy code" confirms on the button,
+  and the tray tooltip seeds its synced count from the same
+  restart-proof source as the window's stat card.
+
 ### Changed — build classifier single-sourced (mirror tree collapsed)
 - **What.** The bundled replay-engine carried two hand-synced copies of
   the build classifier: the canonical `core/strategy_detector_*` tree

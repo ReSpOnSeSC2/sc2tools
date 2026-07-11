@@ -115,6 +115,16 @@ QWidget {{
     font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, Arial, sans-serif;
     font-size: 13px;
 }}
+/* Labels inherit the window background from the QWidget rule above,
+   which paints a darker box behind every caption sitting on a card.
+   Make them transparent by default; the badge / code styles below
+   win via higher specificity where they set explicit backgrounds. */
+QLabel {{
+    background: transparent;
+}}
+QCheckBox {{
+    background: transparent;
+}}
 QFrame#card {{
     background-color: {_SURFACE};
     border: 1px solid {_BORDER};
@@ -353,6 +363,7 @@ class SettingsPayload:
         "sync_filter_preset",
         "sync_filter_since",
         "sync_filter_until",
+        "auto_update_enabled",
     )
 
     def __init__(
@@ -371,6 +382,7 @@ class SettingsPayload:
         sync_filter_preset: Optional[str] = None,
         sync_filter_since: Optional[str] = None,
         sync_filter_until: Optional[str] = None,
+        auto_update_enabled: Optional[bool] = None,
     ) -> None:
         self.api_base = api_base
         self.log_level = log_level
@@ -404,6 +416,11 @@ class SettingsPayload:
         self.sync_filter_preset = sync_filter_preset
         self.sync_filter_since = sync_filter_since
         self.sync_filter_until = sync_filter_until
+        # Auto-update consent. ``None`` means "no change"; ``True``
+        # restores the default install-when-released behaviour and
+        # ``False`` turns the updater notify-only (the compatibility
+        # floor in ``updater.update_is_mandatory`` still overrides).
+        self.auto_update_enabled = auto_update_enabled
 
 
 # ---------------------------------------------------------------------
@@ -528,6 +545,18 @@ class GuiUI:
         if self._signals:
             self._signals.settingsStatus.emit(str(status))
 
+    def show_update_notice(self, message: str, *, sticky: bool = False) -> None:
+        """Surface an update-flow notice on the dashboard status card.
+
+        The runner calls this from ``_handle_update_available`` so the
+        window states exactly what the updater is doing — installing
+        now, waiting because auto-update is off, or (source installs)
+        needing a manual installer run. ``sticky`` notices persist
+        until replaced; transient ones self-clear after a few seconds.
+        """
+        if self._signals:
+            self._signals.updateNotice.emit(str(message), bool(sticky))
+
     # ---------------- lifecycle ----------------
 
     def run(self) -> int:
@@ -608,6 +637,12 @@ def _make_signals():
         uploadFailed = QtCore.Signal(str, str)
         pendingChanged = QtCore.Signal(int)
         updateAvailable = QtCore.Signal(str)
+        # Free-text update-flow notice for the status card. ``sticky``
+        # notices persist (pending update); transient ones self-clear.
+        updateNotice = QtCore.Signal(str, bool)
+        # Result of a user-initiated "Check for updates" round-trip —
+        # re-enables the button and surfaces the outcome.
+        updateCheckDone = QtCore.Signal(str)
         foldersChanged = QtCore.Signal(list)
         settingsStatus = QtCore.Signal(str)
         quitRequested = QtCore.Signal()
@@ -809,8 +844,36 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._update_badge, 0, 2, alignment=QtCore.Qt.AlignRight,
             )
 
+            # Update-flow notice line — populated by the runner's
+            # update handler ("installing now…", "auto-update off",
+            # "run installer manually") and by the Check-for-updates
+            # round-trip result. Hidden while empty so the card stays
+            # two rows tall in the common case.
+            self._update_notice = QtWidgets.QLabel("")
+            self._update_notice.setObjectName("muted")
+            self._update_notice.setWordWrap(True)
+            self._update_notice.hide()
+            grid.addWidget(self._update_notice, 2, 1, 1, 2)
+            self._notice_timer = QtCore.QTimer(self)
+            self._notice_timer.setSingleShot(True)
+            self._notice_timer.timeout.connect(self._clear_update_notice)
+
             grid.setColumnStretch(1, 1)
             return card
+
+        def _set_update_notice(self, message: str, *, sticky: bool) -> None:
+            self._notice_timer.stop()
+            if not message:
+                self._clear_update_notice()
+                return
+            self._update_notice.setText(message)
+            self._update_notice.show()
+            if not sticky:
+                self._notice_timer.start(8000)
+
+        def _clear_update_notice(self) -> None:
+            self._update_notice.clear()
+            self._update_notice.hide()
 
         def _build_pairing_card(self) -> QtWidgets.QFrame:
             card = QtWidgets.QFrame()
@@ -841,9 +904,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             row = QtWidgets.QHBoxLayout()
             row.setSpacing(8)
 
-            copy_btn = QtWidgets.QPushButton("Copy code")
-            copy_btn.clicked.connect(self._copy_pairing_code)
-            row.addWidget(copy_btn)
+            self._copy_btn = QtWidgets.QPushButton("Copy code")
+            self._copy_btn.clicked.connect(self._copy_pairing_code)
+            row.addWidget(self._copy_btn)
 
             open_btn = QtWidgets.QPushButton("Open pairing page")
             open_btn.setObjectName("primary")
@@ -956,12 +1019,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             ext_row.setContentsMargins(0, 0, 0, 0)
             ext_row.addStretch(1)
 
-            updates_btn = QtWidgets.QPushButton("Check for updates")
-            updates_btn.setSizePolicy(
+            self._updates_btn = QtWidgets.QPushButton("Check for updates")
+            self._updates_btn.setSizePolicy(
                 QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed,
             )
-            updates_btn.clicked.connect(self._click_check_updates)
-            ext_row.addWidget(updates_btn)
+            self._updates_btn.setToolTip(
+                "Ask the release feed whether a newer agent build "
+                "exists. The result appears on the status card above.",
+            )
+            self._updates_btn.clicked.connect(self._click_check_updates)
+            ext_row.addWidget(self._updates_btn)
 
             dash_btn = QtWidgets.QPushButton("Open dashboard")
             dash_btn.setObjectName("primary")
@@ -1017,6 +1084,21 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._recent_table.itemDoubleClicked.connect(self._reveal_replay)
             v.addWidget(self._recent_table, stretch=1)
 
+            # Empty state — a bare table reads as "broken"; say what
+            # will appear here and when. Swapped out by _refresh_recent
+            # the moment the first upload lands.
+            self._recent_empty = QtWidgets.QLabel(
+                "No uploads yet this session.\n"
+                "Play a ladder game (or drop a replay into a watched "
+                "folder) and it will appear here seconds later.",
+            )
+            self._recent_empty.setObjectName("muted")
+            self._recent_empty.setAlignment(QtCore.Qt.AlignCenter)
+            self._recent_empty.setWordWrap(True)
+            v.addWidget(self._recent_empty, stretch=2)
+            # Session starts with no rows — lead with the explanation.
+            self._recent_table.hide()
+
             return page
 
         # ---- Logs tab ----
@@ -1064,6 +1146,18 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         # ---- Settings tab ----
 
         def _build_settings_tab(self) -> QtWidgets.QWidget:
+            # The form is taller than the window's minimum height, so
+            # everything lives inside a scroll area — otherwise the
+            # bottom rows (and the Save button with them) are simply
+            # clipped off-screen at small window sizes with no way to
+            # reach them.
+            scroller = QtWidgets.QScrollArea()
+            scroller.setWidgetResizable(True)
+            scroller.setFrameShape(QtWidgets.QFrame.NoFrame)
+            scroller.setHorizontalScrollBarPolicy(
+                QtCore.Qt.ScrollBarAlwaysOff,
+            )
+
             page = QtWidgets.QWidget()
             v = QtWidgets.QVBoxLayout(page)
             v.setContentsMargins(28, 24, 28, 24)
@@ -1482,6 +1576,23 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             form.addRow("", self._minimized_check)
 
+            # Auto-update consent — the state flag shipped in 0.13.4's
+            # updater hardening but had no UI surface, so the only way
+            # to opt out was hand-editing agent.json. Unchecking turns
+            # the updater notify-only (the badge + notice still appear;
+            # nothing installs behind the user's back).
+            self._autoupdate_check = QtWidgets.QCheckBox(
+                "Install agent updates automatically (recommended)",
+            )
+            self._autoupdate_check.setToolTip(
+                "When enabled, new releases download and install "
+                "silently and the agent restarts minimised. When "
+                "disabled, the agent only notifies — except below the "
+                "cloud's minimum supported version, where the update "
+                "is required to keep working.",
+            )
+            form.addRow("", self._autoupdate_check)
+
             v.addWidget(form_card)
 
             row = QtWidgets.QHBoxLayout()
@@ -1496,7 +1607,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             v.addLayout(row)
 
             v.addStretch(1)
-            return page
+            scroller.setWidget(page)
+            return scroller
 
         # ---- signal wiring ----
 
@@ -1508,6 +1620,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             signals.uploadFailed.connect(self._on_upload_failed)
             signals.pendingChanged.connect(self._on_pending_changed)
             signals.updateAvailable.connect(self._on_update_available)
+            signals.updateNotice.connect(self._on_update_notice)
+            signals.updateCheckDone.connect(self._on_update_check_done)
             signals.foldersChanged.connect(self._on_folders_changed)
             signals.settingsStatus.connect(self._on_settings_status)
             signals.quitRequested.connect(self._on_quit_requested)
@@ -1580,6 +1694,17 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._update_pending = latest
             self._update_badge.setText(f"Update available: v{latest}")
             self._update_badge.show()
+
+        def _on_update_notice(self, message: str, sticky: bool) -> None:
+            self._set_update_notice(message, sticky=sticky)
+
+        def _on_update_check_done(self, message: str) -> None:
+            self._updates_btn.setEnabled(True)
+            self._updates_btn.setText("Check for updates")
+            # Empty message = an update was found and the runner's
+            # handler owns the (sticky) notice — leave it alone.
+            if message:
+                self._set_update_notice(message, sticky=False)
 
         def _on_folders_changed(self, folders: List[str]) -> None:
             ui._replay_folders = [Path(p) for p in folders]
@@ -1667,10 +1792,41 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 log.exception("gui_choose_folder_failed")
 
         def _click_check_updates(self) -> None:
-            try:
-                ui._on_check_updates()
-            except Exception:  # noqa: BLE001
-                log.exception("gui_check_updates_failed")
+            # The update check is a blocking HTTP round-trip (up to the
+            # urllib timeout). Running it on the Qt thread froze the
+            # whole window for the duration — spawn a worker and land
+            # the outcome back on the GUI thread via updateCheckDone.
+            self._updates_btn.setEnabled(False)
+            self._updates_btn.setText("Checking…")
+            self._set_update_notice("Checking for updates…", sticky=True)
+
+            def _worker() -> None:
+                message = "Update check failed — see the activity log."
+                try:
+                    release = ui._on_check_updates()
+                    if release is not None:
+                        latest = getattr(release, "latest", None)
+                        current = getattr(release, "current", None) or ui._version
+                        if getattr(release, "update_available", False) and latest:
+                            # The runner's update handler has already
+                            # posted a branch-accurate sticky notice
+                            # ("installing now…" / "auto-update is
+                            # off…") via show_update_notice — emit an
+                            # empty message so we re-enable the button
+                            # without stomping it.
+                            message = ""
+                        else:
+                            message = (
+                                f"You're up to date — v{current} is the "
+                                "latest release."
+                            )
+                except Exception:  # noqa: BLE001
+                    log.exception("gui_check_updates_failed")
+                signals.updateCheckDone.emit(message)
+
+            threading.Thread(
+                target=_worker, name="sc2tools-gui-update-check", daemon=True,
+            ).start()
 
         def _click_save_settings(self) -> None:
             folders: List[Path] = []
@@ -1700,6 +1856,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 replay_folder=folders[0] if folders else None,
                 autostart_enabled=self._autostart_check.isChecked(),
                 start_minimized=self._minimized_check.isChecked(),
+                auto_update_enabled=self._autoupdate_check.isChecked(),
                 player_handle=self._handle_input.text().strip(),
                 parse_concurrency=int(self._concurrency_slider.value()),
                 upload_concurrency=checked_upload_conc,
@@ -1741,7 +1898,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if not code or "-" in code and len(set(code)) <= 1:
                 return
             QtWidgets.QApplication.clipboard().setText(code)
-            self._status_sub.setText("Pairing code copied to clipboard")
+            # Confirm on the button itself — the status-card line is
+            # in a different card and easy to miss mid-pairing.
+            self._copy_btn.setText("Copied ✓")
+            QtCore.QTimer.singleShot(
+                2000, lambda: self._copy_btn.setText("Copy code"),
+            )
 
         def _open_pairing_page(self) -> None:
             try:
@@ -1852,10 +2014,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 new_entries.append(str(mp))
 
             # If neither the existing list nor the scan found anything,
-            # fall back to the Accounts root so the user has a place to
-            # start.
+            # fall back to the detected Accounts roots so the user has a
+            # place to start. (This path previously referenced an
+            # undefined variable and crashed the button on brand-new
+            # SC2 installs with no replays yet.)
             if not existing and not new_entries:
-                new_entries.append(str(root))
+                new_entries.extend(str(r) for r in roots)
 
             combined = existing + new_entries
             self._folder_list.clear()
@@ -1883,17 +2047,21 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             name_item = self._recent_table.item(row, 1)
             if not name_item:
                 return
-            payload = name_item.data(QtCore.Qt.UserRole)
-            if not payload:
+            name = name_item.text()
+            if not name:
                 return
-            target = Path(payload)
             # The recent list stores filenames, not full paths, so we
-            # fall back to opening the watched folder if we can't find
-            # the file. (We don't keep a path-resolved cache to avoid
-            # leaking absolute paths in the GUI's in-memory state.)
-            if target.exists():
-                _open_path_in_explorer(target.parent)
-            elif ui._replay_folders:
+            # probe every watched folder — the previous folder[0]-only
+            # lookup opened the wrong folder for multi-region players
+            # whose replay came from the second or third entry.
+            for folder in ui._replay_folders or []:
+                try:
+                    if (Path(folder) / name).exists():
+                        _open_path_in_explorer(Path(folder))
+                        return
+                except OSError:
+                    continue
+            if ui._replay_folders:
                 _open_path_in_explorer(ui._replay_folders[0])
 
         # ---- close behaviour ----
@@ -2016,6 +2184,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._stat_last["value"].setText("—")
 
         def _refresh_recent(self) -> None:
+            has_rows = bool(self._recent)
+            self._recent_empty.setVisible(not has_rows)
+            self._recent_table.setVisible(has_rows)
             self._recent_table.setRowCount(len(self._recent))
             for row, (ts, name, ok, detail) in enumerate(self._recent):
                 ts_item = QtWidgets.QTableWidgetItem(
@@ -2024,13 +2195,6 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 ts_item.setForeground(QtGui.QColor(_TEXT_MUTED))
 
                 name_item = QtWidgets.QTableWidgetItem(name)
-                # Stash the filename so doubleClick can resolve it
-                # against the watched folder.
-                if ui._replay_folders:
-                    name_item.setData(
-                        QtCore.Qt.UserRole,
-                        str(ui._replay_folders[0] / name),
-                    )
 
                 status_item = QtWidgets.QTableWidgetItem(
                     "✓ " + detail if ok else "✗ " + detail,
@@ -2106,6 +2270,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             self._minimized_check.setChecked(
                 bool(initial.start_minimized),
+            )
+            # Default ON when the runner didn't say otherwise — matches
+            # the state field's default so a fresh install reads true.
+            self._autoupdate_check.setChecked(
+                initial.auto_update_enabled is not False,
             )
             # Date-range filter — match the saved preset id back to the
             # combo entry. Unknown values silently fall through to "All

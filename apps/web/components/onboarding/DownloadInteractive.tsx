@@ -177,7 +177,10 @@ function RecapCard() {
         role="list"
         className="ml-5 list-disc space-y-1 text-caption text-text-muted"
       >
-        <li>Watches your StarCraft II replay folder for new files.</li>
+        <li>
+          Watches every StarCraft II replay folder you add — one per
+          region or account.
+        </li>
         <li>
           Parses each new <code>.SC2Replay</code> with sc2reader (~150–500&nbsp;ms
           per replay).
@@ -185,6 +188,15 @@ function RecapCard() {
         <li>
           Uploads the parsed JSON record to your account. The replay
           file itself never leaves your machine.
+        </li>
+        <li>
+          Desktop control panel: live sync status, pause / resume,
+          re-sync, date-range sync filters, and a recent-uploads view —
+          all from the system tray.
+        </li>
+        <li>
+          Keeps itself current: new releases install automatically, or
+          flip auto-update off in Settings and the agent only notifies.
         </li>
       </ul>
       <p className="pt-1 text-caption text-text-dim">
