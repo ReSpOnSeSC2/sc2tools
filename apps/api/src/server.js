@@ -17,6 +17,9 @@ const { buildSessionRefresher } = require("./services/sessionRefresher");
 const { buildPulseBackfillJob } = require("./jobs/pulseBackfillJob");
 const { buildLadderMapPoolRefreshJob } = require("./jobs/ladderMapPoolRefreshJob");
 const { buildLadderMapBackfillJob } = require("./jobs/ladderMapBackfillJob");
+const {
+  buildLeaguePercentilesRecomputeJob,
+} = require("./jobs/leaguePercentilesRecomputeJob");
 const sentry = require("./util/sentry");
 
 async function main() {
@@ -205,6 +208,13 @@ async function main() {
   });
   ladderMapBackfill.start();
 
+  // Nightly league-percentile benchmark rebuild (Macro tab framing).
+  const leaguePercentilesJob = buildLeaguePercentilesRecomputeJob({
+    leaguePercentiles: /** @type {any} */ (services).leaguePercentiles,
+    logger,
+  });
+  leaguePercentilesJob.start();
+
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
@@ -239,6 +249,7 @@ async function main() {
     await sessionRefresher.stop();
     await ladderMapPoolRefresh.stop();
     await ladderMapBackfill.stop();
+    await leaguePercentilesJob.stop();
     await db.close();
     logger.info("shutdown_complete");
     process.exit(0);

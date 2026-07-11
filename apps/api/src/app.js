@@ -50,6 +50,10 @@ const { PulseMmrService } = require("./services/pulseMmr");
 const {
   PulseOpponentIntelService,
 } = require("./services/pulseOpponentIntel");
+const {
+  LeaguePercentilesService,
+} = require("./services/leaguePercentiles");
+const { buildBenchmarksRouter } = require("./routes/benchmarks");
 const { AdminService } = require("./services/admin");
 const { AdminGlobalService } = require("./services/adminGlobal");
 const { AdminEventsService } = require("./services/adminEvents");
@@ -202,6 +206,12 @@ function makeServices(deps) {
   const pulseIntel =
     deps.pulseIntel ||
     new PulseOpponentIntelService({ logger: deps.logger });
+  // League-percentile benchmark tables — nightly aggregate over slim
+  // game rows (jobs/leaguePercentilesRecomputeJob), served by
+  // routes/benchmarks.js for the Macro tab's percentile framing.
+  const leaguePercentiles = new LeaguePercentilesService(deps.db, {
+    logger: deps.logger,
+  });
   const opponents = new OpponentsService(
     deps.db,
     deps.config.serverPepper,
@@ -346,6 +356,7 @@ function makeServices(deps) {
     analytics,
     pulseMmr,
     pulseIntel,
+    leaguePercentiles,
     pulseDirectory,
   };
 }
@@ -560,6 +571,13 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       users: services.users,
       auth,
       maxPerWindow: deps.config.maxUserMessagesPerWindow,
+    }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildBenchmarksRouter({
+      leaguePercentiles: services.leaguePercentiles,
+      auth,
     }),
   );
   app.use(
