@@ -54,6 +54,10 @@ const {
   LeaguePercentilesService,
 } = require("./services/leaguePercentiles");
 const { buildBenchmarksRouter } = require("./routes/benchmarks");
+const {
+  SkillFingerprintService,
+} = require("./services/skillFingerprint");
+const { buildFingerprintRouter } = require("./routes/fingerprint");
 const { AdminService } = require("./services/admin");
 const { AdminGlobalService } = require("./services/adminGlobal");
 const { AdminEventsService } = require("./services/adminEvents");
@@ -212,6 +216,13 @@ function makeServices(deps) {
   const leaguePercentiles = new LeaguePercentilesService(deps.db, {
     logger: deps.logger,
   });
+  // Skill Fingerprint — per-user multi-axis skill radar (percentiles
+  // against the leaguePercentiles band tables + playstyle label),
+  // served by routes/fingerprint.js for the Trends tab.
+  const skillFingerprint = new SkillFingerprintService(deps.db, {
+    leaguePercentiles,
+    logger: deps.logger,
+  });
   const opponents = new OpponentsService(
     deps.db,
     deps.config.serverPepper,
@@ -357,6 +368,7 @@ function makeServices(deps) {
     pulseMmr,
     pulseIntel,
     leaguePercentiles,
+    skillFingerprint,
     pulseDirectory,
   };
 }
@@ -577,6 +589,13 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
     SERVICE.ROUTE_PREFIX,
     buildBenchmarksRouter({
       leaguePercentiles: services.leaguePercentiles,
+      auth,
+    }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildFingerprintRouter({
+      skillFingerprint: services.skillFingerprint,
       auth,
     }),
   );

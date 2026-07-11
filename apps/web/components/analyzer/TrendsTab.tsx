@@ -24,6 +24,7 @@ import {
   type ApiTimeseriesResponse,
   type Period,
 } from "@/lib/timeseries";
+import { FingerprintCard } from "./FingerprintCard";
 import { MatchupOverTimeChart } from "./charts/MatchupOverTimeChart";
 import { TimeOfDayHeatmap } from "./charts/TimeOfDayHeatmap";
 import { GameLengthWrChart } from "./charts/GameLengthWrChart";
@@ -188,6 +189,8 @@ export function TrendsTab() {
 
   return (
     <div className="space-y-4">
+      {/* Skill Fingerprint — the identity artifact leading the tab. */}
+      <FingerprintCard />
       <div className="flex flex-wrap items-center gap-3">
         {kpis.streak.kind && kpis.streak.count > 0 && (
           <span
