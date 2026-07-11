@@ -4,7 +4,7 @@
  * GhostGradeCard — the closing move of the Ghost Build practice loop.
  *
  * When a target build is armed (localStorage mirror written by the
- * "Arm" affordances — Build adapter results or a game's own build log)
+ * "Arm" affordance on a game's own build log)
  * AND this game has a my-side build log, the card grades the executed
  * build against the target: letter grade, per-step timing drift, and
  * the first point of divergence. Grading is lib/ghostGrade.ts — pure

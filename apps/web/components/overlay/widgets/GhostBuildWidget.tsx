@@ -67,7 +67,7 @@ export function GhostBuildWidget({
             <Dim>not armed</Dim>
           </WidgetHeader>
           <p style={{ margin: "6px 0 0", fontSize: 13, opacity: 0.8 }}>
-            Arm a build from the Build adapter or a game page, then
+            Arm a build from a game page&apos;s build log, then
             re-copy this widget URL from Settings → Overlay.
           </p>
         </WidgetShell>

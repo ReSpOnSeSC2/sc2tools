@@ -204,7 +204,15 @@ export function LadderContextCard({ pulseId }: { pulseId: string }) {
             }`}
             className="min-w-0"
           >
-            <div className="h-24 w-full md:h-full md:min-h-[96px]">
+            {/* Fixed height on purpose. ``md:h-full`` here created a
+                feedback loop: the grid row's height comes from this
+                column's content, so ResponsiveContainer measured the
+                parent, rendered that tall, the parent grew, it
+                re-measured — the card inflated without bound (the
+                "infinitely tall dossier" bug). A chart inside a
+                percentage-height box must sit under a fixed-height
+                ancestor. */}
+            <div className="h-24 w-full md:h-28">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
                   data={spark}
