@@ -26,6 +26,7 @@ const pino = require("pino");
 
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
+const { PulseMmrService } = require("../src/services/pulseMmr");
 
 jest.mock("@clerk/backend", () => ({
   verifyToken: jest.fn(async (token) => {
@@ -82,7 +83,22 @@ describe("/v1/games ingest does not double-count opponent counters on re-upload"
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create();
     db = await connect({ uri: mongo.getUri(), dbName: config.mongoDb });
-    const built = buildApp({ db, logger: pino({ level: "silent" }), config });
+    const built = buildApp({
+      db,
+      logger: pino({ level: "silent" }),
+      config,
+      // Network-disabled pulse service: ingest's refreshMetadata does
+      // a best-effort live SC2Pulse fetch, and this suite's fixture
+      // carries a REAL pulseCharacterId — on any online machine the
+      // player's actual current rating overwrote the fixture's mmr and
+      // flaked the metadata-refresh test. The service treats a fetch
+      // failure as "SC2Pulse unavailable" and keeps the uploaded value.
+      pulseMmr: new PulseMmrService({
+        fetchImpl: async () => {
+          throw new Error("network_disabled_in_tests");
+        },
+      }),
+    });
     app = built.app;
   });
 

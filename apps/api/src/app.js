@@ -47,6 +47,9 @@ const { CommunityService } = require("./services/community");
 const { SeasonsService } = require("./services/seasons");
 const { ArcadeService } = require("./services/arcade");
 const { PulseMmrService } = require("./services/pulseMmr");
+const {
+  PulseOpponentIntelService,
+} = require("./services/pulseOpponentIntel");
 const { AdminService } = require("./services/admin");
 const { AdminGlobalService } = require("./services/adminGlobal");
 const { AdminEventsService } = require("./services/adminEvents");
@@ -187,8 +190,18 @@ function makeServices(deps) {
   // uses it to populate ``opponent.mmr`` / ``opponent.region`` on the
   // opponents row at game ingest, since sc2reader almost never carries
   // those for ranked ladder replays. Constructed once so the in-process
-  // 5-minute cache survives across requests.
-  const pulseMmr = new PulseMmrService();
+  // 5-minute cache survives across requests. Tests inject their own
+  // (with a disabled fetch) so ingest suites never hit live SC2Pulse —
+  // a real fetch mid-test overwrites fixture MMRs with the actual
+  // player's current ladder rating.
+  const pulseMmr = deps.pulseMmr || new PulseMmrService();
+  // SC2Pulse ladder-context intel for opponent dossiers (league,
+  // percentile, MMR history, pro identity). Separate client from
+  // PulseMmrService because it hits a different endpoint family with a
+  // much longer cache TTL; also injectable for tests.
+  const pulseIntel =
+    deps.pulseIntel ||
+    new PulseOpponentIntelService({ logger: deps.logger });
   const opponents = new OpponentsService(
     deps.db,
     deps.config.serverPepper,
@@ -270,6 +283,9 @@ function makeServices(deps) {
   const gdpr = new GdprService(deps.db, {
     opponents,
     logger: deps.logger,
+    // Store-aware heavy-blob deleter: without it, delete-account and
+    // wipe-history leave R2 objects behind when GAME_DETAILS_STORE=r2.
+    gameDetails,
   });
   const community = new CommunityService(deps.db);
   const seasons = new SeasonsService();
@@ -329,6 +345,7 @@ function makeServices(deps) {
     adminEvents,
     analytics,
     pulseMmr,
+    pulseIntel,
     pulseDirectory,
   };
 }
@@ -547,7 +564,24 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildOpponentsRouter({ opponents: services.opponents, auth }),
+    buildOpponentsRouter({
+      opponents: services.opponents,
+      auth,
+      pulseIntel: services.pulseIntel,
+      // Lean ownership + identity lookup for the pulse-intel route:
+      // undefined = not the caller's opponent (404), null = theirs but
+      // the SC2Pulse character id hasn't resolved yet (card hidden).
+      resolvePulseCharacterId: async (userId, pulseId) => {
+        const row = await deps.db.opponents.findOne(
+          { userId, pulseId },
+          { projection: { _id: 0, pulseCharacterId: 1 } },
+        );
+        if (!row) return undefined;
+        return typeof row.pulseCharacterId === "string" && row.pulseCharacterId
+          ? row.pulseCharacterId
+          : null;
+      },
+    }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,

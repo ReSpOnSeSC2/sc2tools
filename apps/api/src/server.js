@@ -211,8 +211,29 @@ async function main() {
   /** @param {string} signal */
   async function shutdown(signal) {
     logger.info({ signal }, "shutdown_start");
-    httpServer.close();
+    // True drain, in order: stop accepting connections, let in-flight
+    // requests finish, THEN close Mongo — the old fire-and-forget
+    // close() left handlers mid-query when the client shut down. Long-
+    // lived streams (the /v1/me/live SSE) hold close() open, so after
+    // a grace period we force-close whatever sockets remain.
+    const drained = new Promise((resolve) => {
+      httpServer.close(() => resolve(true));
+    });
     io.close();
+    httpServer.closeIdleConnections?.();
+    const graceMs = 8000;
+    const timedOut = await Promise.race([
+      drained.then(() => false),
+      new Promise((resolve) => {
+        const t = setTimeout(() => resolve(true), graceMs);
+        if (typeof t.unref === "function") t.unref();
+      }),
+    ]);
+    if (timedOut) {
+      logger.warn({ graceMs }, "shutdown_forcing_remaining_connections");
+      httpServer.closeAllConnections?.();
+      await drained;
+    }
     await keepalive.stop();
     await pulseBackfill.stop();
     await sessionRefresher.stop();

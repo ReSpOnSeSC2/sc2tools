@@ -1,6 +1,10 @@
 "use strict";
 
 const express = require("express");
+const rateLimitModule = require("express-rate-limit");
+
+const rateLimit =
+  /** @type {any} */ (rateLimitModule).default || rateLimitModule;
 
 /**
  * /v1/community/* — public-read + auth'd-write community endpoints.
@@ -32,6 +36,40 @@ const express = require("express");
  */
 function buildCommunityRouter(deps) {
   const router = express.Router();
+
+  // Per-user write limits. These sit AFTER deps.auth in each chain, so
+  // the key is the authenticated userId (IP fallback covers the
+  // theoretical unauthenticated hit before auth 401s it). Publishing
+  // and reporting are rare human actions — tight hourly caps stop a
+  // single account from flooding the public feed or the moderation
+  // queue without bothering anyone legitimate.
+  /** @param {import('express').Request} req */
+  const userKey = (req) =>
+    `community-write:${req.auth?.userId || req.ip || "anon"}`;
+  const publishLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: userKey,
+    message: { error: { code: "rate_limited", message: "rate_limited" } },
+  });
+  const voteLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: userKey,
+    message: { error: { code: "rate_limited", message: "rate_limited" } },
+  });
+  const reportLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: userKey,
+    message: { error: { code: "rate_limited", message: "rate_limited" } },
+  });
 
   // ── Public ───────────────────────────────────────────────────────
   router.get("/community/builds", async (req, res, next) => {
@@ -145,6 +183,7 @@ function buildCommunityRouter(deps) {
   router.post(
     "/community/builds",
     deps.auth,
+    publishLimiter,
     async (req, res, next) => {
       try {
         const auth = req.auth;
@@ -195,6 +234,7 @@ function buildCommunityRouter(deps) {
   router.post(
     "/community/builds/:slug/vote",
     deps.auth,
+    voteLimiter,
     async (req, res, next) => {
       try {
         const auth = req.auth;
@@ -212,21 +252,31 @@ function buildCommunityRouter(deps) {
     },
   );
 
-  router.post("/community/reports", deps.auth, async (req, res, next) => {
-    try {
-      const auth = req.auth;
-      if (!auth) throw new Error("auth_required");
-      await deps.community.report(auth.userId, {
-        targetType: String(req.body?.targetType || ""),
-        targetId: String(req.body?.targetId || ""),
-        reason: String(req.body?.reason || ""),
-        note: req.body?.note ? String(req.body.note) : "",
-      });
-      res.status(202).json({ ok: true });
-    } catch (err) {
-      next(err);
-    }
-  });
+  router.post(
+    "/community/reports",
+    deps.auth,
+    reportLimiter,
+    async (req, res, next) => {
+      try {
+        const auth = req.auth;
+        if (!auth) throw new Error("auth_required");
+        const result = await deps.community.report(auth.userId, {
+          targetType: String(req.body?.targetType || ""),
+          targetId: String(req.body?.targetId || ""),
+          reason: String(req.body?.reason || ""),
+          note: req.body?.note ? String(req.body.note) : "",
+        });
+        // alreadyReported lets the client show "you already reported
+        // this" instead of silently stacking queue rows.
+        res.status(202).json({
+          ok: true,
+          alreadyReported: Boolean(result && result.alreadyReported),
+        });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   // ── Admin ────────────────────────────────────────────────────────
   router.get(

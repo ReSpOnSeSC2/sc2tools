@@ -286,6 +286,56 @@ describe("community + gdpr integration", () => {
     });
   });
 
+  describe("community write protection", () => {
+    test("publish rejects blocked terms and strips links from author names", async () => {
+      await services.customBuilds.upsert("u_a", {
+        slug: "filter-test-build",
+        name: "Filter Test",
+        race: "P",
+        vsRace: "Z",
+        steps: [],
+      });
+      await expect(
+        services.community.publish("u_a", "filter-test-build", {
+          title: "N1gg3r rush build",
+          description: "",
+          authorName: "",
+        }),
+      ).rejects.toThrow(/content_rejected/);
+
+      const ok = await services.community.publish("u_a", "filter-test-build", {
+        title: "Clean Title",
+        description: "line1\n\n\n\nline2",
+        authorName: "Author https://spam.example",
+      });
+      const row = await db.communityBuilds.findOne({ slug: ok.slug });
+      expect(row.authorName).toBe("Author");
+      expect(row.description).toBe("line1\n\nline2");
+    });
+
+    test("duplicate reports dedupe per (reporter, target)", async () => {
+      const first = await services.community.report("u_a", {
+        targetType: "build",
+        targetId: "some-build",
+        reason: "spam",
+        note: "",
+      });
+      expect(first.alreadyReported).toBe(false);
+      const second = await services.community.report("u_a", {
+        targetType: "build",
+        targetId: "some-build",
+        reason: "spam again",
+        note: "",
+      });
+      expect(second.alreadyReported).toBe(true);
+      const rows = await db.communityReports.countDocuments({
+        reporterUserId: "u_a",
+        targetId: "some-build",
+      });
+      expect(rows).toBe(1);
+    });
+  });
+
   describe("GDPR export + delete", () => {
     test("export bundles per-user collections", async () => {
       await services.games.upsert("u_a", {
@@ -330,6 +380,102 @@ describe("community + gdpr integration", () => {
       expect(counts.users).toBe(1);
       const after = await db.games.countDocuments({ userId: "u_del" });
       expect(after).toBe(0);
+    });
+
+    test("delete purges backups, community content, pairings, leaderboard + scrubs admin events", async () => {
+      const userId = "u_del_full";
+      const clerkUserId = "clerk_del_full";
+      await db.users.insertOne({
+        userId,
+        clerkUserId,
+        createdAt: new Date(),
+        lastSeenAt: new Date(),
+      });
+      await services.games.upsert(userId, {
+        gameId: "g_del_full",
+        date: new Date().toISOString(),
+        result: "Victory",
+        myRace: "Zerg",
+        map: "M",
+      });
+
+      // user_backups hold a FULL export blob — the most sensitive leak.
+      await services.gdpr.snapshot(userId);
+      expect(
+        await db.db.collection("user_backups").countDocuments({ userId }),
+      ).toBe(1);
+
+      // Published community build owned by the user.
+      await db.communityBuilds.insertOne({
+        slug: "del-full-build",
+        ownerUserId: userId,
+        name: "Del Full Build",
+        matchup: "ZvP",
+        removed: false,
+        votes: 0,
+        createdAt: new Date(),
+      });
+      // A report they filed, a pairing they claimed, a leaderboard row.
+      await db.communityReports.insertOne({
+        id: "rep_del_full",
+        reporterUserId: userId,
+        targetType: "build",
+        targetId: "someone-elses-build",
+        createdAt: new Date(),
+      });
+      await db.devicePairings.insertOne({
+        code: "990011",
+        userId,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      await db.arcadeLeaderboard.insertOne({
+        userId,
+        weekKey: "2026-W28",
+        pnlPct: 12.5,
+        updatedAt: new Date(),
+      });
+      // Admin events carrying PII (email + clerk id).
+      await db.adminEvents.insertOne({
+        type: "user_signup",
+        createdAt: new Date(),
+        payload: {
+          clerkUserId,
+          userId,
+          email: "delete-me@example.com",
+          source: "test",
+        },
+      });
+
+      const counts = await services.gdpr.deleteAll(userId);
+      expect(counts.userBackups).toBe(1);
+      expect(counts.communityBuilds).toBe(1);
+      expect(counts.communityReports).toBe(1);
+      expect(counts.devicePairings).toBe(1);
+      expect(counts.arcadeLeaderboard).toBe(1);
+      expect(counts.adminEventsScrubbed).toBe(1);
+
+      expect(
+        await db.db.collection("user_backups").countDocuments({ userId }),
+      ).toBe(0);
+      expect(
+        await db.communityBuilds.countDocuments({ ownerUserId: userId }),
+      ).toBe(0);
+      expect(
+        await db.communityReports.countDocuments({ reporterUserId: userId }),
+      ).toBe(0);
+      expect(await db.devicePairings.countDocuments({ userId })).toBe(0);
+      expect(await db.arcadeLeaderboard.countDocuments({ userId })).toBe(0);
+      expect(await db.gameDetails.countDocuments({ userId })).toBe(0);
+
+      // Event row survives for aggregate stats, but the PII is gone.
+      const ev = await db.adminEvents.findOne({
+        "payload.userId": userId,
+      });
+      expect(ev).toBeTruthy();
+      expect(ev.payload.email).toBeNull();
+      expect(ev.payload.clerkUserId).toBeNull();
+      expect(ev.anonymizedAt).toBeInstanceOf(Date);
     });
 
     test("wipeGames clears games + rebuilds opponents from the survivors", async () => {

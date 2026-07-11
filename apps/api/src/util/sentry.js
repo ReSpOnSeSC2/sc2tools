@@ -8,6 +8,7 @@
  * production deploys keep working.
  */
 
+/** @type {typeof import("@sentry/node") | false | null} */
 let cached = null;
 
 function tryRequireSentry() {
