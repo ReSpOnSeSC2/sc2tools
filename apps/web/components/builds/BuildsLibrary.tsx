@@ -9,7 +9,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { GlowHalo } from "@/components/ui/GlowHalo";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { ToastProvider, useToast } from "@/components/ui/Toast";
+import { useToast } from "@/components/ui/Toast";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { Skeleton } from "@/components/ui/Card";
 import { coerceRace } from "@/lib/race";
@@ -51,15 +51,11 @@ const DEFAULT_FILTERS: BuildFilterState = {
 };
 
 /**
- * Phase 7 builds library — wrapped in ToastProvider so kebab actions
- * can fire ephemeral status messages without bubbling state up.
+ * Phase 7 builds library. Toast context comes from the app-wide
+ * ToastProvider in the root layout.
  */
 export function BuildsLibrary() {
-  return (
-    <ToastProvider>
-      <BuildsLibraryInner />
-    </ToastProvider>
-  );
+  return <BuildsLibraryInner />;
 }
 
 function BuildsLibraryInner() {

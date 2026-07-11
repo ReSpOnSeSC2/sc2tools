@@ -6,6 +6,7 @@ import Link from "next/link";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall } from "@/lib/clientApi";
+import { gaEvent } from "@/lib/analytics/gtag";
 import { Button } from "@/components/ui/Button";
 
 /**
@@ -50,6 +51,7 @@ export function OnboardingPair({
         body: JSON.stringify({ code: trimmed }),
       });
       setPaired(true);
+      gaEvent("device_paired");
     } catch (err: unknown) {
       const m =
         typeof err === "object" && err !== null && "message" in err

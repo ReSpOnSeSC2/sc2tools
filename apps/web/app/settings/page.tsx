@@ -12,13 +12,11 @@ import { SettingsVoice } from "@/components/analyzer/settings/SettingsVoice";
 import { SettingsBackups } from "@/components/analyzer/settings/SettingsBackups";
 import { SettingsMisc } from "@/components/analyzer/settings/SettingsMisc";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { ToastProvider } from "@/components/ui/Toast";
 
 export default function SettingsPage() {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   return (
-    <ToastProvider>
-      <div className="space-y-6">
+    <div className="space-y-6">
         <PageHeader
           eyebrow="Configuration"
           title="Settings"
@@ -46,7 +44,6 @@ export default function SettingsPage() {
             }
           }}
         />
-      </div>
-    </ToastProvider>
+    </div>
   );
 }

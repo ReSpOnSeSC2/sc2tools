@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { apiCall, useApi, API_BASE, type ClientApiError } from "@/lib/clientApi";
+import { gaEvent } from "@/lib/analytics/gtag";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
@@ -624,6 +625,7 @@ function UrlRow({
     if (!navigator.clipboard) return;
     await navigator.clipboard.writeText(url);
     setCopied(true);
+    gaEvent("overlay_url_copied");
     window.setTimeout(() => setCopied(false), 1500);
   };
   return (

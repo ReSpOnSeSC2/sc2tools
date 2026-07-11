@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { gaEvent } from "@/lib/analytics/gtag";
 import type { OnboardingStepId } from "./types";
 
 const STEPS: ReadonlyArray<{ id: OnboardingStepId; label: string }> = [
@@ -59,6 +60,12 @@ export function OnboardingShell({
 }: OnboardingShellProps) {
   const [active, setActive] = useState<OnboardingStepId>(initial);
   const idx = STEPS.findIndex((s) => s.id === active);
+
+  // Funnel: one event per wizard mount, one per step transition. GA
+  // only receives these after cookie consent (gaEvent no-ops before).
+  useEffect(() => {
+    gaEvent("onboarding_step", { step: active });
+  }, [active]);
 
   const helpers = useMemo<OnboardingHelpers>(
     () => ({

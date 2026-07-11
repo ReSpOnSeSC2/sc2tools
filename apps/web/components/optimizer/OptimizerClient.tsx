@@ -20,7 +20,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Tabs } from "@/components/ui/Tabs";
-import { ToastProvider } from "@/components/ui/Toast";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { coerceVsRace } from "@/lib/race";
 import {
@@ -86,12 +85,9 @@ function isSettings(raw: unknown): raw is AdapterSettings {
 
 type SourceTab = "games" | "upload" | "saved";
 
+// Toast context comes from the app-wide provider in the root layout.
 export function OptimizerClient() {
-  return (
-    <ToastProvider>
-      <OptimizerInner />
-    </ToastProvider>
-  );
+  return <OptimizerInner />;
 }
 
 function OptimizerInner() {
