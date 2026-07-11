@@ -36,9 +36,9 @@ export interface TimelinePoint {
   oppArmy: number | null;
   /** My current mineral bank. */
   myMinerals: number | null;
-  /** My supply used (food_used). */
+  /** My supply used (food_used, clamped to the game's 200 ceiling). */
   mySupply: number | null;
-  /** My supply cap (food_made). */
+  /** My supply cap (food_made, clamped to the game's 200 ceiling). */
   mySupplyCap: number | null;
   /** My worker supply (food_workers). */
   myWorkers: number | null;
@@ -94,6 +94,20 @@ function numOrNull(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+/** The game's hard supply ceiling. Tracker events report raw
+ *  ``food_made``/``food_used``, which keep counting past 200 when a
+ *  player overbuilds overlords/depots — but in-game supply never
+ *  exceeds 200, so a readout like "180/212" reads as a bug to any
+ *  SC2 player. Clamp at ingestion so every downstream surface
+ *  (chart line, tooltip, readout bar, aria labels) agrees with what
+ *  the game itself would have displayed. */
+const SC2_MAX_SUPPLY = 200;
+
+function supplyOrNull(v: unknown): number | null {
+  const n = numOrNull(v);
+  return n === null ? null : Math.min(n, SC2_MAX_SUPPLY);
+}
+
 /**
  * Merge the two stats-event streams into one time-sorted point list.
  * Missing streams (slim payloads, pre-v0.5.11 agents) simply leave
@@ -127,8 +141,8 @@ export function buildTimelinePoints(
     const p = pointAt(t);
     p.myArmy = numOrNull(ev.army_value);
     p.myMinerals = numOrNull(ev.minerals_current);
-    p.mySupply = numOrNull(ev.food_used);
-    p.mySupplyCap = numOrNull(ev.food_made);
+    p.mySupply = supplyOrNull(ev.food_used);
+    p.mySupplyCap = supplyOrNull(ev.food_made);
     p.myWorkers = numOrNull(ev.food_workers);
   }
   for (const ev of oppStatsEvents ?? []) {
@@ -136,7 +150,7 @@ export function buildTimelinePoints(
     if (t === null || t < 0) continue;
     const p = pointAt(t);
     p.oppArmy = numOrNull(ev.army_value);
-    p.oppSupply = numOrNull(ev.food_used);
+    p.oppSupply = supplyOrNull(ev.food_used);
   }
   return [...byTime.values()].sort((a, b) => a.time - b.time);
 }

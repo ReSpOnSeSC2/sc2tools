@@ -865,6 +865,15 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     # game-size filter keys off this.
     assert payload["playerCount"] == 2
 
+    # The opponent's league reaches the wire. The cloud's Ladder Meta
+    # Radar and league-percentile benchmarks band the whole corpus on
+    # ``opponent.leagueId`` — if this field silently drops off the
+    # payload again, every (league, matchup) stays below its
+    # k-anonymity floor and the /meta page shows "Not enough games"
+    # forever. ``raw`` here is a bare object() → ladder-ness unknown →
+    # the field is trusted and shipped.
+    assert payload["opponent"]["leagueId"] == 5
+
 
 def test_parse_replay_for_cloud_ships_partial_macro_breakdown_on_score_failure(
     monkeypatch, tmp_path,
@@ -997,6 +1006,69 @@ def test_parse_replay_for_cloud_ships_partial_macro_breakdown_on_score_failure(
     assert mb["opp_production_buildings"] == []
     # No headline macroScore — the dossier shows "—" rather than 0.
     assert "macroScore" not in payload
+
+
+def test_parse_replay_for_cloud_omits_league_id_for_non_ladder_games(
+    monkeypatch, tmp_path,
+):
+    """A Private/Public (custom) game must NOT stamp opponent.leagueId.
+
+    The cloud bands its ladder-meta / benchmark aggregations on
+    ``opponent.leagueId`` under the assumption that matchmaking put the
+    two players in the same bracket. A custom-lobby opponent's season
+    league says nothing about the bracket the game was played in, so
+    the field stays off the payload when the replay says non-ladder.
+    """
+    import sys
+    from types import SimpleNamespace
+
+    me = SimpleNamespace(
+        pid=1, name="Me", race="Protoss", result="Win",
+        handle="1-S2-1-267727", mmr=4500, apm=180.0, spq=82.0,
+    )
+    opp = SimpleNamespace(
+        pid=2, name="Opp", race="Zerg", result="Loss",
+        handle="1-S2-2-690921", mmr=4400, league_id=6,
+    )
+    fake_ctx = SimpleNamespace(
+        game_id="2026-05-08T10:00:00|Opp|Goldenaura|300",
+        date_iso="2026-05-08T10:00:00",
+        map_name="Goldenaura",
+        length_seconds=300,
+        is_ai_game=False,
+        me=me,
+        opponent=opp,
+        all_players=[me, opp],
+        my_events=[],
+        opp_events=[],
+        my_build="PvZ - Gate Expand",
+        opp_strategy=None,
+        build_log=["[0:00] Nexus"],
+        early_build_log=["[0:00] Nexus"],
+        opp_build_log=[],
+        opp_early_build_log=[],
+        macro_score=None,
+        raw=SimpleNamespace(category="Private"),
+        file_path=str(tmp_path / "custom.SC2Replay"),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "core.sc2_replay_parser",
+        SimpleNamespace(parse_deep=lambda _p, _h: fake_ctx),
+    )
+
+    from sc2tools_agent.replay_pipeline import parse_replay_for_cloud
+    fake_path = tmp_path / "custom.SC2Replay"
+    fake_path.write_bytes(b"")
+    result = parse_replay_for_cloud(fake_path, player_handle="Me")
+    assert result is not None
+    payload = result.to_payload()
+
+    assert payload["isLadderGame"] is False
+    # MMR still ships (it's real replay data either way); the league
+    # banding signal does not.
+    assert payload["opponent"]["mmr"] == 4400
+    assert "leagueId" not in payload["opponent"]
 
 
 def _minutes_in(line: str) -> int:

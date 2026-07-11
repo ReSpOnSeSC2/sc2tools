@@ -2,6 +2,52 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.13.5
+
+### Fixed — chrono counter self-calibrates across SC2 data patches
+- **What.** The Mechanics card read "0 / N chronos · 0%" on new-patch
+  Protoss games. The extractor classifies macro casts by numeric
+  ability link with a hardcoded per-build table (722 pre-5.0.14, 723
+  after), and every time Blizzard shifts the ability table the chrono
+  link moves and the counter silently zeroes until a new cutoff is
+  hand-derived from a fresh replay — this had already happened once
+  (the 722→723 saga) and was happening again.
+- **Effect.** The bundled replay-engine (1.5.1) now self-calibrates
+  instead of trusting the table blindly: when a Protoss game counts
+  zero chronos (or the table's chrono link is out-cast 3:1 by a better
+  candidate — a shifted neighbor like mass recall inheriting chrono's
+  old slot), it finds the real link structurally. Chrono boost is the
+  only Protoss ability repeatedly cast on the player's OWN buildings;
+  Battery Overcharge, the sole other own-building-targeted cast, can
+  only hit a Shield Battery, which chrono never can — so the
+  distinction is exact. Verified against the build-96883 reference
+  replay: with the table deliberately mis-pointed, the engine recovers
+  the identical 6 casts and per-building target breakdown. Future
+  ability-table shifts no longer need a code change.
+
+### Fixed — uploads now carry the opponent's league (Ladder Meta Radar unblocked)
+- **What.** The upload payload has always had a slot for
+  `opponent.leagueId`, and `replay_pipeline` has always tried to fill
+  it from `opp.league_id` — but the bundled parser's `PlayerInfo`
+  never had a `league_id` field, so the `getattr` silently returned
+  `None` for every replay ever synced. No upload from any agent
+  version has ever carried a league.
+- **Effect.** The cloud bands its two corpus-wide aggregations — the
+  public Ladder Meta Radar (`/meta`, "which openers actually win") and
+  the league-percentile benchmarks — on `opponent.leagueId`. With the
+  field missing corpus-wide, every (league, matchup) bucket sat at
+  zero games, below the k-anonymity serve floor, and the /meta page
+  showed "Not enough games yet" no matter how many replays users
+  synced. The parser (replay-engine 1.5.1) now reads sc2reader's
+  `highest_league` from the replay's initData (1=Bronze..7=Grandmaster,
+  0/8 = unranked) and normalizes it onto the ladder enum the cloud and
+  SC2Pulse use (0=Bronze..6=Grandmaster). The pipeline stamps it for
+  ladder games only — matchmaking is what makes the opponent's league
+  a valid proxy for the game's bracket; custom lobbies don't get one.
+  Re-syncing existing replays backfills the field (game upserts
+  overwrite slim rows), after which the next nightly recompute
+  populates the radar.
+
 ## 0.13.4
 
 ### Changed — desktop window & tray polish (every control audited)

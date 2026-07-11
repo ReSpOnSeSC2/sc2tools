@@ -542,6 +542,193 @@ def _macro_link_table(build: int) -> Dict[int, str]:
     return _MACRO_LINKS_NEW if build >= _LINK_SHIFT_BUILD else _MACRO_LINKS_OLD
 
 
+# Self-calibration guardrails for _detect_chrono_link. Chrono boost has
+# lived at links 722/723 across every LotV data patch we've calibrated;
+# table inserts/removals only nudge it a few slots, so any candidate far
+# below that region is right-click / rally / return-cargo noise, never a
+# shifted chrono. Three head casts is the floor for promoting a
+# candidate — a Protoss game with real chronos has many, and one-off
+# misreads (a stray targeted cast on a building) never reach it.
+_CHRONO_LINK_FLOOR: int = 700
+_CHRONO_CALIBRATION_MIN_HEADS: int = 3
+
+
+def _detect_chrono_link(
+    game_events,
+    my_pid: int,
+    link_table: Dict[int, str],
+    building_name_by_uid: Dict[int, str],
+) -> Optional[Tuple[int, int]]:
+    """Empirically locate the chrono-boost link on an uncalibrated build.
+
+    Every SC2 data patch can shift the ability table (722 → 723 across
+    5.0.13 → 5.0.14 was the last one we hardcoded), and each shift used
+    to zero the chrono counter until someone re-derived the link from a
+    fresh replay ("0/N chronos" on every new-patch game). Instead of
+    hardcoding a third cutoff, find the link structurally: chrono boost
+    is the only Protoss ability repeatedly TARGETED at the caster's OWN
+    buildings. Battery Overcharge — the one other own-building-targeted
+    Nexus ability — can ONLY hit a Shield Battery, which chrono can
+    never target (no production/research queue), so excluding
+    ShieldBattery targets separates them exactly.
+
+    Verified against the build-96883 reference replay
+    (``warpgate_adept_tracking.SC2Replay``): the only my-side link with
+    own-building targets across the whole game is chrono's, even before
+    the ``_CHRONO_LINK_FLOOR`` guard is applied.
+
+    Returns ``(link, head_cast_count)`` for the winning candidate, or
+    None when nothing clears the guardrails (non-Protoss games, no
+    chronos cast, corrupted events).
+    """
+    counts: Dict[int, int] = {}
+    for event in game_events:
+        try:
+            if not isinstance(event, CommandEvent):
+                continue
+            if _resolve_command_pid(event) != my_pid:
+                continue
+            link = _ability_link(event)
+            if not link or link < _CHRONO_LINK_FLOOR or link in link_table:
+                continue
+            target = _resolve_target_unit_id(event)
+            if not target:
+                continue
+            name = building_name_by_uid.get(target)
+            if not name or name == "ShieldBattery":
+                continue
+            counts[link] = counts.get(link, 0) + 1
+        except Exception:
+            continue
+    if not counts:
+        return None
+    # Most casts wins; lower link breaks ties for determinism.
+    link = min(counts, key=lambda k: (-counts[k], k))
+    if counts[link] < _CHRONO_CALIBRATION_MIN_HEADS:
+        return None
+    return link, counts[link]
+
+
+def _player_race(replay, pid: int) -> Optional[str]:
+    """``play_race`` of the player at slot ``pid``, or None."""
+    for p in getattr(replay, "players", None) or []:
+        if getattr(p, "pid", None) == pid:
+            race = getattr(p, "play_race", None)
+            return str(race) if race else None
+    return None
+
+
+def _run_ability_pass(
+    game_events,
+    my_pid: int,
+    link_table: Dict[int, str],
+    replay,
+) -> Tuple[List[Dict[str, Any]], Dict[str, int], Dict[str, int]]:
+    """One classification pass over the game events for ``my_pid``.
+
+    Classifies macro casts by numeric ability_link via ``link_table``
+    (robust to sc2reader's stale datapack names), falling back to
+    ability-name classification, and folds in CommandManagerStateEvent
+    re-executions of the preceding macro CommandEvent (chained casts —
+    without them modern replays under-count by 70-80%).
+
+    Returns ``(ability_events, ability_counts, head_counts)`` —
+    ``head_counts`` is per-bucket fresh CommandEvents only (no chained
+    re-executions), which the chrono self-calibration trigger compares
+    against candidate-link head casts so it never mixes units.
+
+    Pulled out of ``extract_macro_events`` so the chrono link
+    self-calibration can re-run the identical pass with a corrected
+    table when the replay's build post-dates our hardcoded cutoffs.
+    """
+    ability_events: List[Dict[str, Any]] = []
+    ability_counts: Dict[str, int] = {
+        "inject": 0, "chrono": 0, "mule": 0, "other": 0,
+    }
+    head_counts: Dict[str, int] = {
+        "inject": 0, "chrono": 0, "mule": 0, "other": 0,
+    }
+    # last_bucket_per_pid: pid -> bucket name of the most recent macro
+    # CommandEvent that player issued. Reset to None whenever they issue a
+    # non-macro command so a chained state event doesn't get misattributed.
+    last_bucket_per_pid: Dict[int, Optional[str]] = {}
+    # last_chrono_target_per_pid runs in lock-step with
+    # last_bucket_per_pid, exactly as the inject-target tracking
+    # works in the missed-injects pattern: when the head
+    # CommandEvent of a chrono chain has target_unit_id N, every
+    # subsequent CommandManagerStateEvent re-execution attaches
+    # to the same target. Cleared whenever the player issues a
+    # non-chrono macro cast or any non-macro CommandEvent.
+    last_chrono_target_per_pid: Dict[int, int] = {}
+    try:
+        for event in game_events:
+            try:
+                pid = _resolve_command_pid(event)
+                if pid != my_pid:
+                    continue
+                cls_name = type(event).__name__
+                # Re-execution of the previous CommandEvent. State 1 is
+                # "executed" (the only state we count); state 2+ are
+                # cancellations and we leave them out.
+                if cls_name == "CommandManagerStateEvent":
+                    if (getattr(event, "state", None) == 1
+                            and last_bucket_per_pid.get(pid)):
+                        bucket = last_bucket_per_pid[pid]
+                        record = {
+                            "ability_name": bucket,
+                            "category": bucket,
+                            "time": event_seconds(event, replay),
+                            "via": "state_event",
+                        }
+                        if bucket == "chrono":
+                            record["target_unit_id"] = (
+                                last_chrono_target_per_pid.get(pid, 0))
+                        ability_events.append(record)
+                        ability_counts[bucket] += 1
+                    continue
+                # Anything that isn't a CommandEvent shouldn't reset the
+                # chain (selection / camera / control-group events are
+                # noise between casts).
+                if not isinstance(event, CommandEvent):
+                    continue
+                # Classify by ability_link first (build-aware, robust to
+                # stale datapack), then by name as a fallback.
+                link = _ability_link(event)
+                bucket = link_table.get(link) if link else None
+                if bucket is None:
+                    name = _normalize_ability_name(event)
+                    bucket = _classify_macro_ability(name) if name else None
+                if bucket is None:
+                    # Non-macro CommandEvent: forget the previous macro
+                    # chain so subsequent state events don't attach to it.
+                    last_bucket_per_pid[pid] = None
+                    last_chrono_target_per_pid.pop(pid, None)
+                    continue
+                last_bucket_per_pid[pid] = bucket
+                record = {
+                    "ability_name": _normalize_ability_name(event) or bucket,
+                    "category": bucket,
+                    "time": event_seconds(event, replay),
+                }
+                if bucket == "chrono":
+                    target = _resolve_target_unit_id(event)
+                    record["target_unit_id"] = target
+                    if target:
+                        last_chrono_target_per_pid[pid] = target
+                    else:
+                        last_chrono_target_per_pid.pop(pid, None)
+                else:
+                    last_chrono_target_per_pid.pop(pid, None)
+                ability_events.append(record)
+                ability_counts[bucket] += 1
+                head_counts[bucket] += 1
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return ability_events, ability_counts, head_counts
+
+
 def _ability_link(event) -> Optional[int]:
     """Pull the integer ability_link off a CommandEvent, or None."""
     link = getattr(event, "ability_link", None)
@@ -1340,85 +1527,41 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     build = int(getattr(replay, "build", 0) or 0)
     link_table = _macro_link_table(build)
     game_events = getattr(replay, "events", None) or []
+    ability_events, ability_counts, head_counts = _run_ability_pass(
+        game_events, my_pid, link_table, replay)
+
+    # Self-calibrating chrono link. When the game's data patch is newer
+    # than the last hardcoded cutoff, the table can classify the wrong
+    # link as chrono (or nothing at all) and the whole pass reports
+    # 0/N chronos. Detect the real link structurally and re-run the
+    # pass with the recalibrated table. Two triggers:
+    #   * zero chronos in a Protoss game — the plain "table missed"
+    #     case;
+    #   * a candidate link with ≥3× the head casts of whatever the
+    #     table called chrono — the sneakier "table hit a shifted
+    #     neighbor" case (e.g. mass recall inheriting chrono's old
+    #     slot), where a handful of misclassified casts would
+    #     otherwise mask the miss.
+    if _player_race(replay, my_pid) == "Protoss":
+        chrono_heads = head_counts.get("chrono", 0)
+        candidate = _detect_chrono_link(
+            game_events, my_pid, link_table, building_name_by_uid)
+        if candidate is not None and (
+            ability_counts.get("chrono", 0) == 0
+            or candidate[1] >= 3 * max(1, chrono_heads)
+        ):
+            recalibrated = {
+                k: v for k, v in link_table.items() if v != "chrono"
+            }
+            recalibrated[candidate[0]] = "chrono"
+            ability_events, ability_counts, head_counts = _run_ability_pass(
+                game_events, my_pid, recalibrated, replay)
+
+    out["ability_events"].extend(ability_events)
     out.setdefault("ability_counts",
                    {"inject": 0, "chrono": 0, "mule": 0, "other": 0})
-    # last_bucket_per_pid: pid -> bucket name of the most recent macro
-    # CommandEvent that player issued. Reset to None whenever they issue a
-    # non-macro command so a chained state event doesn't get misattributed.
-    last_bucket_per_pid: Dict[int, Optional[str]] = {}
-    # last_chrono_target_per_pid runs in lock-step with
-    # last_bucket_per_pid, exactly as the inject-target tracking
-    # works in the missed-injects pattern: when the head
-    # CommandEvent of a chrono chain has target_unit_id N, every
-    # subsequent CommandManagerStateEvent re-execution attaches
-    # to the same target. Cleared whenever the player issues a
-    # non-chrono macro cast or any non-macro CommandEvent.
-    last_chrono_target_per_pid: Dict[int, int] = {}
-    try:
-        for event in game_events:
-            try:
-                pid = _resolve_command_pid(event)
-                if pid != my_pid:
-                    continue
-                cls_name = type(event).__name__
-                # Re-execution of the previous CommandEvent. State 1 is
-                # "executed" (the only state we count); state 2+ are
-                # cancellations and we leave them out.
-                if cls_name == "CommandManagerStateEvent":
-                    if (getattr(event, "state", None) == 1
-                            and last_bucket_per_pid.get(pid)):
-                        bucket = last_bucket_per_pid[pid]
-                        record = {
-                            "ability_name": bucket,
-                            "category": bucket,
-                            "time": event_seconds(event, replay),
-                            "via": "state_event",
-                        }
-                        if bucket == "chrono":
-                            record["target_unit_id"] = (
-                                last_chrono_target_per_pid.get(pid, 0))
-                        out["ability_events"].append(record)
-                        out["ability_counts"][bucket] += 1
-                    continue
-                # Anything that isn't a CommandEvent shouldn't reset the
-                # chain (selection / camera / control-group events are
-                # noise between casts).
-                if not isinstance(event, CommandEvent):
-                    continue
-                # Classify by ability_link first (build-aware, robust to
-                # stale datapack), then by name as a fallback.
-                link = _ability_link(event)
-                bucket = link_table.get(link) if link else None
-                if bucket is None:
-                    name = _normalize_ability_name(event)
-                    bucket = _classify_macro_ability(name) if name else None
-                if bucket is None:
-                    # Non-macro CommandEvent: forget the previous macro
-                    # chain so subsequent state events don't attach to it.
-                    last_bucket_per_pid[pid] = None
-                    last_chrono_target_per_pid.pop(pid, None)
-                    continue
-                last_bucket_per_pid[pid] = bucket
-                record = {
-                    "ability_name": _normalize_ability_name(event) or bucket,
-                    "category": bucket,
-                    "time": event_seconds(event, replay),
-                }
-                if bucket == "chrono":
-                    target = _resolve_target_unit_id(event)
-                    record["target_unit_id"] = target
-                    if target:
-                        last_chrono_target_per_pid[pid] = target
-                    else:
-                        last_chrono_target_per_pid.pop(pid, None)
-                else:
-                    last_chrono_target_per_pid.pop(pid, None)
-                out["ability_events"].append(record)
-                out["ability_counts"][bucket] += 1
-            except Exception:
-                continue
-    except Exception:
-        pass
+    for bucket, n in ability_counts.items():
+        out["ability_counts"][bucket] = out["ability_counts"].get(bucket, 0) + n
 
     # Aggregate chrono casts by target building. Empty list on
     # non-Protoss replays (no chrono casts → nothing to bucket);

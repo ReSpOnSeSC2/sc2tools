@@ -44,6 +44,7 @@ class PlayerInfo:
     result: str  # 'Win' / 'Loss' / 'Tie' / 'Unknown'
     handle: Optional[str] = None  # toon_handle if available
     mmr: Optional[int] = None
+    league_id: Optional[int] = None  # 0=Bronze .. 6=Grandmaster
     is_human: bool = True
     is_observer: bool = False
 
@@ -132,6 +133,32 @@ def _get_player_mmr(p) -> Optional[int]:
     return None
 
 
+def _get_player_league_id(p) -> Optional[int]:
+    """
+    Return the player's current-season 1v1 league on the ladder enum
+    (0=Bronze .. 6=Grandmaster), or None when the replay carries no
+    ranking for them.
+
+    sc2reader exposes ``highest_league`` from the replay's initData
+    block on a DIFFERENT enum: 1=Bronze .. 7=Grandmaster, with 0 and 8
+    both meaning "no current-season 1v1 ranking". Everything downstream
+    (the cloud's ``opponent.leagueId`` banding in ladderMeta /
+    leaguePercentiles, and SC2Pulse) uses the 0-based enum, so shift by
+    one here — at the only point where the replay-file value enters the
+    system.
+
+    Example:
+        >>> class P: highest_league = 7  # Grandmaster in the replay
+        >>> _get_player_league_id(P())
+        6
+    """
+    val = getattr(p, "highest_league", None)
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
+        return None
+    n = int(val)
+    return n - 1 if 1 <= n <= 7 else None
+
+
 def _player_to_info(p) -> PlayerInfo:
     return PlayerInfo(
         pid=getattr(p, "pid", 0) or 0,
@@ -140,6 +167,7 @@ def _player_to_info(p) -> PlayerInfo:
         result=getattr(p, "result", "Unknown") or "Unknown",
         handle=getattr(p, "toon_handle", None),
         mmr=_get_player_mmr(p),
+        league_id=_get_player_league_id(p),
         is_human=getattr(p, "is_human", True),
         is_observer=getattr(p, "is_observer", False),
     )

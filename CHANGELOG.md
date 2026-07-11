@@ -12,6 +12,54 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Macro engine · chrono counter self-calibrates across SC2 patches** —
+  the Mechanics card showed "0 / N chronos · 0%" for Protoss games on
+  new game-data patches. Macro casts are classified by numeric
+  ability link against a hardcoded per-build table
+  (`core/event_extractor.py`), and every table shift Blizzard ships
+  moves the chrono link and zeroes the counter until a new cutoff is
+  hand-derived — the 722→723 (5.0.13→5.0.14) shift already required
+  one such fix. `extract_macro_events` now detects the chrono link
+  structurally when the table misses (zero chronos in a Protoss game,
+  or a candidate link out-casting the table's chrono 3:1): chrono
+  boost is the only Protoss ability repeatedly targeted at the
+  caster's own buildings, and Battery Overcharge — the only other
+  own-building-targeted cast — can exclusively hit Shield Batteries,
+  which chrono never can. Pinned against the real build-96883
+  reference replay under three simulated table shifts
+  (`test_chrono_link_self_calibration.py`).
+
+- **Game timeline · supply readout capped at the game's 200 ceiling** —
+  the deep-dive timeline tooltip/readout showed values like
+  "Supply 180/212". Raw tracker events keep counting `food_made` (and
+  `food_used`) past 200 when a player overbuilds overlords/depots,
+  but in-game supply never exceeds 200. `lib/gameTimeline.ts` now
+  clamps both fields at ingestion so the chart line, tooltip, readout
+  bar, and aria labels all agree with what the game displays.
+
+- **Ladder Meta Radar · agent finally uploads the opponent's league** —
+  the /meta page ("which openers actually win") showed "Not enough
+  games yet" for every league and matchup regardless of corpus size.
+  Root cause was on the agent side, not the API: the ladder-meta and
+  league-percentile aggregations band the games corpus on
+  `opponent.leagueId`, and `replay_pipeline` has always tried to stamp
+  that field from `opp.league_id` — but the replay-engine's
+  `PlayerInfo` never had a `league_id` field, so the `getattr`
+  silently produced `None` for every replay and no upload ever
+  carried a league (the pipeline test faked the opponent with a
+  `SimpleNamespace(league_id=5)`, which is why it never caught this).
+  With the field missing corpus-wide, every (league, matchup) bucket
+  held zero games — permanently below the k-anonymity serve floors in
+  `services/ladderMeta.js` / `services/leaguePercentiles.js`. The
+  parser (replay-engine 1.5.1, agent 0.13.5) now extracts sc2reader's
+  `highest_league` from replay initData and normalizes its enum
+  (1=Bronze..7=GM, 0/8=unranked) onto the ladder enum everything else
+  uses (0=Bronze..6=GM); the pipeline stamps it for ladder games only,
+  since matchmaking is what makes the opponent's league a valid proxy
+  for the game's bracket. Existing uploads backfill on resync (game
+  upserts overwrite slim rows), then the nightly recompute fills the
+  radar.
+
 - **Agent auto-update · a tag push is now a complete release** — the
   installed agent's updater polls the API's `GET /v1/agent/version`,
   which only served rows manually POSTed to `/v1/agent/releases`; the
