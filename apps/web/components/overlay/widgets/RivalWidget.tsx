@@ -2,6 +2,7 @@
 
 import type { LiveGamePayload } from "../types";
 import { Dim, WidgetFooter, WidgetHeader, WidgetShell } from "../WidgetShell";
+import { GrudgeLineRow } from "./GrudgeLine";
 
 export function RivalWidget({ live }: { live: LiveGamePayload | null }) {
   if (!live?.rival) return null;
@@ -20,6 +21,8 @@ export function RivalWidget({ live }: { live: LiveGamePayload | null }) {
         </span>
         {r.note && <Dim>{r.note}</Dim>}
       </WidgetFooter>
+      {/* Additive rivalry storyline — renders nothing when there's no story. */}
+      <GrudgeLineRow live={live} />
     </WidgetShell>
   );
 }

@@ -20,7 +20,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Tabs } from "@/components/ui/Tabs";
-import { ToastProvider } from "@/components/ui/Toast";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { coerceVsRace } from "@/lib/race";
 import {
@@ -41,6 +40,8 @@ import { BuildOrderTimeline } from "./BuildOrderTimeline";
 import { ComparisonView } from "./ComparisonView";
 import { EconomyCharts } from "./EconomyCharts";
 import { ExportToBuildsButton } from "./ExportToBuildsButton";
+import { CopySaltButton } from "./CopySaltButton";
+import { ArmGhostBuildButton } from "./ArmGhostBuildButton";
 import { MyGamesPanel } from "./MyGamesPanel";
 import { SavedBuildsPanel } from "./SavedBuildsPanel";
 import { UploadReplayPanel } from "./UploadReplayPanel";
@@ -86,12 +87,9 @@ function isSettings(raw: unknown): raw is AdapterSettings {
 
 type SourceTab = "games" | "upload" | "saved";
 
+// Toast context comes from the app-wide provider in the root layout.
 export function OptimizerClient() {
-  return (
-    <ToastProvider>
-      <OptimizerInner />
-    </ToastProvider>
-  );
+  return <OptimizerInner />;
 }
 
 function OptimizerInner() {
@@ -262,6 +260,8 @@ function OptimizerInner() {
           <ComparisonView result={result} />
           <EconomyCharts result={result} />
           <ExportToBuildsButton result={result} vsRace={exportVsRace} />
+          <CopySaltButton result={result} />
+          <ArmGhostBuildButton result={result} />
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Tabs } from "@/components/ui/Tabs";
+import { SeasonRecap } from "./arcade/SeasonRecap";
 import { TodaySurface } from "./arcade/surfaces/Today";
 import { QuickPlaySurface } from "./arcade/surfaces/QuickPlay";
 import { CollectionSurface } from "./arcade/surfaces/Collection";
@@ -25,6 +26,11 @@ export function ArcadeTab() {
   const [sub, setSub] = useState<Sub>("today");
   return (
     <div className="space-y-4">
+      {/* Season Recap — the shareable "Wrapped" card, surfaced above the
+          sub-nav so it's the first thing you see when a season winds
+          down. Self-gating: shows an unlock prompt below 10 games. */}
+      <SeasonRecap />
+
       <Tabs value={sub} onValueChange={(v) => setSub(v as Sub)} orientation="horizontal">
         <Tabs.List ariaLabel="Arcade sections" className="!flex-nowrap overflow-x-auto">
           {SUBS.map((s) => (

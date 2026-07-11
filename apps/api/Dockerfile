@@ -126,6 +126,15 @@ RUN npm ci --omit=dev
 
 COPY apps/api/ ./
 
+# Drop root: the server shells out to a Python interpreter on the
+# public replay-preview path, so an exploited parser must not hand out
+# root in the container. The node base image ships a `node` user; the
+# app needs read access to /app + /opt, its own tmpdir, and write
+# access to /app/data (ladderMapPool persists its last-good map list
+# there via atomic tmp+rename, which needs a writable directory).
+RUN mkdir -p /app/data && chown -R node:node /app/data
+USER node
+
 EXPOSE 8080
 
 # tini handles SIGTERM cleanly so Render shutdowns drain in-flight

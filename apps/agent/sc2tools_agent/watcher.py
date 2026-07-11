@@ -45,6 +45,7 @@ ThreadPoolExecutor mid-session if a worker dies unexpectedly.
 from __future__ import annotations
 
 import logging
+import logging.handlers
 import multiprocessing
 import os
 import threading
@@ -76,6 +77,11 @@ from .sync_filter import SyncFilter
 from .uploader.queue import UploadJob, UploadQueue
 
 log = logging.getLogger(__name__)
+
+# Per-worker log cap. Workers mostly emit one throughput line per parse
+# plus sc2reader warnings, so 2 MB x (1 backup) per process is plenty;
+# the parent prunes stale files from previous sessions at startup.
+WORKER_LOG_MAX_BYTES = 2 * 1024 * 1024
 
 REPLAY_SUFFIX = ".SC2Replay"
 SETTLE_TIMEOUT_SEC = 15
@@ -196,8 +202,8 @@ def _parse_pool_use_processes_env() -> bool:
 
 
 def _install_worker_log_handler(state_dir_str: str) -> None:
-    """Wire the child's root logger to the same ``agent.log`` the parent
-    uses. Idempotent and safe to call from any number of workers.
+    """Wire the child's root logger to a per-process worker log file.
+    Idempotent and safe to call from any number of workers.
 
     Why this exists: ``ProcessPoolExecutor`` children don't inherit the
     parent's log handlers (spawn-mode start method re-runs ``__main__``
@@ -208,17 +214,16 @@ def _install_worker_log_handler(state_dir_str: str) -> None:
     points at the void. Throughput is invisible and worker-side
     diagnostics are unrecoverable on a user install.
 
-    Why a plain ``FileHandler`` instead of the parent's
-    ``RotatingFileHandler``: rotating handlers do a rename+reopen on
-    rollover that isn't process-safe — two workers attempting rollover
-    simultaneously can corrupt the on-disk index of which file is
-    "active". The non-rotating ``FileHandler`` opens once with
-    ``mode='a'`` (FILE_APPEND_DATA on Windows), and the OS serialises
-    appends across handles so concurrent writes from N workers + the
-    parent never interleave mid-line. Rollover stays the parent's job;
-    if rollover fires while a worker has the file open, the worker's
-    handle keeps writing to the now-renamed ``agent.log.1`` until its
-    next reconnect — acceptable for a few seconds of overlap.
+    Why a per-process ``agent-worker-<pid>.log`` instead of the shared
+    ``agent.log``: an earlier revision appended straight to the
+    parent's file, but on Windows ``RotatingFileHandler.doRollover``'s
+    ``os.rename`` fails with ``PermissionError`` while ANY handle is
+    open — and the workers held theirs for the pool's whole lifetime,
+    so during a heavy backfill the main log could never rotate and grew
+    without bound (logging swallows the error silently). Each worker
+    owning its own small rotating file makes rollover single-process
+    (safe) on both sides. The parent prunes stale worker logs at
+    startup (see runner ``_prune_worker_logs``).
     """
     # Idempotency guard. The first call sets the marker; later calls
     # in the same child (e.g. multiple parses dispatched to the same
@@ -233,9 +238,14 @@ def _install_worker_log_handler(state_dir_str: str) -> None:
         # Don't crash the worker if log dir creation races; the worst
         # case is the worker's diagnostics stay silent for this call.
         return
-    log_path = log_dir / "agent.log"
+    log_path = log_dir / f"agent-worker-{os.getpid()}.log"
     try:
-        handler = logging.FileHandler(str(log_path), mode="a", encoding="utf-8")
+        handler = logging.handlers.RotatingFileHandler(
+            str(log_path),
+            maxBytes=WORKER_LOG_MAX_BYTES,
+            backupCount=1,
+            encoding="utf-8",
+        )
     except OSError:
         return
     formatter = logging.Formatter(
@@ -299,11 +309,10 @@ def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
     # the analyzer-side ``my_mmr_unresolved`` diagnostics, sc2reader's
     # tracker-bug warnings) silently vanishes. ``_install_worker_log_handler``
     # is idempotent (only adds the handler on the first call within
-    # the child) and routes every log record into the same
-    # ``state_dir/logs/agent.log`` the parent writes to. Concurrent
-    # appends from multiple workers + the parent are safe on Windows
-    # because the OS serialises FILE_APPEND_DATA writes when each
-    # handle is opened with O_APPEND (Python's FileHandler does this).
+    # the child) and routes every log record into a per-process
+    # ``state_dir/logs/agent-worker-<pid>.log`` — deliberately NOT the
+    # parent's agent.log, whose Windows rotation breaks while another
+    # process holds a handle open (see the handler's docstring).
     if state_dir_str:
         _install_worker_log_handler(state_dir_str)
 

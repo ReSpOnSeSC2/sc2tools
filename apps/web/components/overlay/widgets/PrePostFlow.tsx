@@ -1,7 +1,7 @@
 "use client";
 
-// Drop-in barrel for `OverlayClient` so it can render any subset of
-// the 16 widgets based on the user's enabled-widgets list.
+// Drop-in barrel for the overlay clients so they can render any subset
+// of the widget registry based on the user's enabled-widgets list.
 
 export { OpponentWidget } from "./OpponentWidget";
 export { MatchResultWidget } from "./MatchResultWidget";
@@ -19,3 +19,4 @@ export { BestAnswerWidget } from "./BestAnswerWidget";
 export { ScoutingWidget } from "./ScoutingWidget";
 export { SessionWidget, type SessionSummary } from "./SessionWidget";
 export { RandomizerWidget } from "./RandomizerWidget";
+export { GhostBuildWidget } from "./GhostBuildWidget";

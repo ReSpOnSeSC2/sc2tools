@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, replace
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -163,6 +163,19 @@ class AgentState:
     """Upper bound for ``sync_filter_preset="custom"`` (YYYY-MM-DD or
     full ISO). Ignored for non-custom presets."""
 
+    release_seen: Dict[str, str] = field(default_factory=dict)
+    """Update channel -> latest version the updater has already
+    announced. Used to avoid re-notifying every poll. Earlier versions
+    stored this as ``_release_seen_<channel>`` markers inside
+    ``uploaded`` — those are migrated out at load time because
+    ``count_synced`` counted them as synced replays."""
+
+    auto_update_enabled: bool = True
+    """When False, the updater only notifies about new releases instead
+    of downloading + launching the installer. Ignored (treated as True)
+    when the running version is below the feed's minSupportedVersion —
+    a build the cloud no longer supports must update to keep working."""
+
     @property
     def is_paired(self) -> bool:
         return bool(self.device_token)
@@ -186,8 +199,13 @@ def count_synced(state: AgentState) -> int:
         try:
             return sum(
                 1
-                for v in state.uploaded.values()
-                if isinstance(v, str)
+                for k, v in state.uploaded.items()
+                # Underscore-prefixed keys are internal markers, not
+                # replay paths (e.g. the legacy _release_seen_<channel>
+                # entries written by pre-0.14 updaters).
+                if isinstance(k, str)
+                and not k.startswith("_")
+                and isinstance(v, str)
                 and v not in ("filtered", "rejected")
                 and not v.startswith("skipped")
             )
@@ -229,11 +247,26 @@ def load_state(state_dir: Path) -> AgentState:
         if isinstance(gid, str) and isinstance(pth, str) and gid and pth:
             path_by_game_id[gid] = pth
 
+    uploaded = dict(raw.get("uploaded") or {})
+    release_seen: Dict[str, str] = {}
+    raw_release_seen = raw.get("release_seen")
+    if isinstance(raw_release_seen, dict):
+        for channel, latest in raw_release_seen.items():
+            if isinstance(channel, str) and isinstance(latest, str):
+                release_seen[channel] = latest
+    # Migrate the legacy _release_seen_<channel> markers pre-0.14
+    # updaters stashed inside `uploaded` (they inflated count_synced).
+    for key in [k for k in uploaded if isinstance(k, str) and k.startswith("_release_seen_")]:
+        channel = key[len("_release_seen_"):]
+        value = uploaded.pop(key)
+        if channel and isinstance(value, str) and channel not in release_seen:
+            release_seen[channel] = value
+
     return AgentState(
         device_token=raw.get("device_token"),
         user_id=raw.get("user_id"),
         paired_at=raw.get("paired_at"),
-        uploaded=dict(raw.get("uploaded") or {}),
+        uploaded=uploaded,
         path_by_game_id=path_by_game_id,
         paused=bool(raw.get("paused") or False),
         replay_folder_override=legacy_single,
@@ -257,17 +290,20 @@ def load_state(state_dir: Path) -> AgentState:
         sync_filter_preset=_coerce_str(raw.get("sync_filter_preset")),
         sync_filter_since=_coerce_str(raw.get("sync_filter_since")),
         sync_filter_until=_coerce_str(raw.get("sync_filter_until")),
+        release_seen=release_seen,
+        auto_update_enabled=raw.get("auto_update_enabled") is not False,
     )
 
 
 def save_state(state_dir: Path, state: AgentState) -> None:
     """Atomic write: tmp -> fsync -> rename."""
     state_dir.mkdir(parents=True, exist_ok=True)
+    payload = _snapshot(state)
     target = state_dir / STATE_FILENAME
     fd, tmp_path = tempfile.mkstemp(prefix="agent.", suffix=".tmp", dir=str(state_dir))
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(asdict(state), fh, indent=2, sort_keys=True)
+            json.dump(payload, fh, indent=2, sort_keys=True)
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp_path, target)
@@ -277,6 +313,33 @@ def save_state(state_dir: Path, state: AgentState) -> None:
         except OSError:
             pass
         raise
+
+
+def _snapshot(state: AgentState) -> dict:
+    """Deep-copy the state for serialisation, tolerating concurrent
+    mutation.
+
+    The watcher's FS-event/parse-callback threads write ``filtered`` /
+    ``skipped`` markers into ``state.uploaded`` without holding the
+    upload queue's lock, so ``asdict`` (whose Python-level recursion
+    yields the GIL between bytecodes) can hit ``RuntimeError:
+    dictionary changed size during iteration`` while an upload worker
+    persists a batch — and under a hot writer a bounded retry of
+    ``asdict`` itself can keep losing that race. Instead, copy each
+    shared mutable container first: ``dict()`` / ``list()`` on
+    str-keyed/str-valued containers are single C-level calls that hold
+    the GIL, so they cannot interleave with another thread's insert.
+    ``asdict`` then walks only private copies. A marker that lands
+    after the copy is simply picked up by the next save.
+    """
+    stable = replace(
+        state,
+        uploaded=dict(state.uploaded),
+        path_by_game_id=dict(state.path_by_game_id),
+        release_seen=dict(state.release_seen),
+        replay_folders_override=list(state.replay_folders_override),
+    )
+    return asdict(stable)
 
 
 def _coerce_mmr(value: object) -> Optional[int]:

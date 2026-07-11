@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import platform
+import re
 import shutil
 import ssl
 import subprocess
@@ -39,7 +40,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Iterable, Optional
 
 from . import __version__
 from .config import AgentConfig
@@ -52,6 +53,14 @@ USER_AGENT = f"sc2tools-agent/{__version__} updater"
 HTTP_TIMEOUT_SEC = 30
 DOWNLOAD_CHUNK = 1024 * 256
 INSTALLER_LAUNCH_DELAY_SEC = 3
+
+# Hosts an installer may be downloaded from when the caller doesn't
+# extend the allowlist. Releases ship via GitHub Releases; the
+# redirect target is *.githubusercontent.com. Anything else — even if
+# the (attacker-controlled) version feed asks for it — is refused, so
+# a compromised feed alone cannot point agents at an arbitrary exe.
+GITHUB_DOWNLOAD_HOSTS = ("github.com",)
+GITHUB_DOWNLOAD_HOST_SUFFIXES = (".github.com", ".githubusercontent.com")
 
 
 @dataclass(frozen=True)
@@ -189,14 +198,67 @@ class Updater:
     def _record_seen(self, release: ReleaseInfo) -> None:
         if not release.latest:
             return
-        # Mutating AgentState (a frozen dataclass) requires a small
-        # workaround: write through `__dict__` since the field isn't
-        # part of the formal schema. Persist via save_state.
+        # Dedicated state field — earlier versions stashed a
+        # ``_release_seen_<channel>`` marker inside ``state.uploaded``,
+        # which count_synced() then counted as a synced replay.
         try:
-            self._state.uploaded[f"_release_seen_{release.channel}"] = release.latest
+            self._state.release_seen[release.channel] = release.latest
             save_state(self._cfg.state_dir, self._state)
         except Exception:  # noqa: BLE001
             log.debug("record_seen_failed", exc_info=True)
+
+
+def update_is_mandatory(release: ReleaseInfo) -> bool:
+    """True when the running version is below the feed's compatibility
+    floor (``minSupportedVersion``) — the cloud no longer supports it,
+    so the auto-update opt-out does not apply."""
+    if not release.min_supported_version:
+        return False
+    return _version_lt(release.current, release.min_supported_version)
+
+
+def _version_lt(a: str, b: str) -> bool:
+    """Numeric dot-version comparison. Unparseable versions compare
+    equal (never force an update off garbage input)."""
+    ta, tb = _version_tuple(a), _version_tuple(b)
+    if ta is None or tb is None:
+        return False
+    length = max(len(ta), len(tb))
+    ta += (0,) * (length - len(ta))
+    tb += (0,) * (length - len(tb))
+    return ta < tb
+
+
+def _version_tuple(v: str) -> Optional[tuple]:
+    m = re.match(r"\s*v?(\d+(?:\.\d+)*)", v or "")
+    if not m:
+        return None
+    return tuple(int(p) for p in m.group(1).split("."))
+
+
+def _assert_trusted_download(
+    artifact: ReleaseArtifact,
+    trusted_hosts: Optional[Iterable[str]],
+) -> None:
+    """Refuse download URLs outside the allowlist.
+
+    Trusted by default: github.com and *.githubusercontent.com over
+    https. ``trusted_hosts`` extends the set (the runner passes the API
+    host; tests pass loopback). Extra hosts are exempt from the https
+    requirement so the localhost test fixtures keep working — GitHub
+    hosts always require https.
+    """
+    parsed = urllib.parse.urlparse(artifact.download_url)
+    host = (parsed.hostname or "").lower()
+    extra = {h.lower() for h in (trusted_hosts or ()) if h}
+    if host in extra:
+        return
+    github_host = host in GITHUB_DOWNLOAD_HOSTS or any(
+        host.endswith(suffix) for suffix in GITHUB_DOWNLOAD_HOST_SUFFIXES
+    )
+    if github_host and parsed.scheme == "https":
+        return
+    raise UpdateError(f"untrusted_download_host: {host or '<none>'}")
 
 
 def install_release(
@@ -204,16 +266,19 @@ def install_release(
     *,
     download_dir: Optional[Path] = None,
     launch_installer: bool = True,
+    trusted_hosts: Optional[Iterable[str]] = None,
 ) -> Path:
     """Download + verify + (optionally) launch the installer.
 
     Returns the path to the downloaded artifact. Raises
-    :class:`UpdateError` on any failure. The caller is responsible for
+    :class:`UpdateError` on any failure — including a download URL
+    outside the trusted-host allowlist. The caller is responsible for
     quitting the running agent so the installer can replace files.
     """
     if not release.artifact:
         raise UpdateError("no artifact for current platform")
     artifact = release.artifact
+    _assert_trusted_download(artifact, trusted_hosts)
     target = (download_dir or Path(tempfile.gettempdir())) / _artifact_filename(artifact)
     _download_with_progress(artifact, target)
     digest = _sha256_file(target)
@@ -377,4 +442,5 @@ __all__ = [
     "ReleaseArtifact",
     "UpdateError",
     "install_release",
+    "update_is_mandatory",
 ]

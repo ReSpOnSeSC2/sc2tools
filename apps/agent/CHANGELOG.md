@@ -2,6 +2,73 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## [Unreleased]
+
+### Changed — build classifier single-sourced (mirror tree collapsed)
+- **What.** The bundled replay-engine carried two hand-synced copies of
+  the build classifier: the canonical `core/strategy_detector_*` tree
+  (agent deep-parse path) and a fork under `detectors/` (bulk-import
+  path). The fork had drifted: it was missing the two
+  `PvZ - Adept Glaives` labels, its `PvZ - 7 Gate Glaive/Immortal
+  All-in` guard matched an upgrade-name spelling sc2reader never emits
+  (dead rule), it never produced the `… - Game Too Short` bucket, and
+  its opponent tree stopped at generic race labels instead of the
+  matchup-specific ones.
+- **Effect.** `detectors/` is now a thin re-export of the canonical
+  tree, so every rule fix lands exactly once. Bulk-imported replays
+  gain the missing labels, matchup-prefixed opponent strategies
+  (`Zerg - …` → e.g. `ZvT - Ling Bane Bust`) and the Game-Too-Short
+  bucket — an intentional relabel that aligns bulk imports with what
+  live parses have produced all along. The bulk importer also now
+  honours v3 (SPA-authored) custom builds like the live path does.
+
+### Security — auto-updater hardening
+- **What.** The updater installed any release the version feed offered:
+  the download host was unrestricted, `minSupportedVersion` was parsed
+  but never enforced, installs were unconditional, and the NSIS
+  installer `taskkill /F`'d the running agent mid-parse.
+- **Effect.** `install_release` now refuses download URLs outside a
+  trusted-host allowlist (github.com / *.githubusercontent.com over
+  https, plus the configured API host) — a compromised or spoofed feed
+  can no longer point agents at an arbitrary executable. A new
+  `auto_update_enabled` state flag (default on) turns the updater into
+  notify-only when disabled, except when the running version is below
+  the feed's `minSupportedVersion` compatibility floor, which now
+  actually forces the update. After launching the installer the agent
+  requests its own graceful shutdown during the installer's launch
+  delay, so in-flight parses/uploads finish and the NSIS taskkill
+  backstop is a no-op; silent (auto-update) installs relaunch the agent
+  minimized instead of popping the main window mid-session.
+
+### Fixed — "Synced" stat no longer inflated by updater bookkeeping
+- **What.** The updater stored a `_release_seen_<channel>` marker inside
+  `state.uploaded`, which `count_synced` counted as one synced replay
+  per channel.
+- **Effect.** Release bookkeeping moved to a dedicated `release_seen`
+  state field; legacy markers are migrated out of `uploaded` at load
+  time, and `count_synced` additionally ignores underscore-prefixed
+  internal keys.
+
+### Fixed — state save no longer races the watcher's markers
+- **What.** Watcher threads write `filtered`/`skipped` markers into
+  `state.uploaded` without the upload queue's lock, so `save_state`'s
+  `asdict()` could hit `RuntimeError: dictionary changed size during
+  iteration` under backfill load and fail a batch's state commit.
+- **Effect.** `save_state` snapshots with the same bounded-retry
+  pattern `count_synced` already used; a marker landing mid-copy is
+  picked up by the next save.
+
+### Fixed — main log can always rotate during heavy backfills
+- **What.** Parse-pool workers appended to the parent's `agent.log`
+  with long-lived handles; on Windows `RotatingFileHandler.doRollover`
+  fails (`PermissionError`, silently swallowed by logging) while any
+  handle is open, so during a big backfill the log never rotated and
+  grew without bound.
+- **Effect.** Each worker now writes a small self-rotating
+  `agent-worker-<pid>.log` (2 MB × 2), keeping the parent's rotation
+  single-process and reliable; stale worker logs from previous sessions
+  are pruned at startup.
+
 ## 0.13.3
 
 ### Fixed — destroyed buildings now drop off the Macro Breakdown rosters

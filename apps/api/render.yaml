@@ -17,14 +17,21 @@ services:
     dockerfilePath: ./apps/api/Dockerfile
     healthCheckPath: /v1/health
     autoDeploy: true
-    # Autoscaling: scale 1→3 instances based on CPU. /v1/health is a
-    # cheap Mongo ping so it's safe as a load probe. Combined with
-    # sessionAffinity below, a sudden burst (50 agents reconnect after
-    # a deploy) doesn't 503.
+    # PINNED TO ONE INSTANCE — do not raise maxInstances until the
+    # realtime layer is multi-instance safe. Socket.io runs on the
+    # default in-memory adapter and LiveGameBroker is in-process
+    # pub/sub: with N instances, the agent's POST /v1/agent/live, the
+    # web dashboard's SSE subscriber, and each OBS Browser Source
+    # socket land on DIFFERENT instances (session affinity pins a
+    # client, not the user), so live/overlay events silently reach only
+    # a fraction of clients. Prereqs for scaling out:
+    #   1. @socket.io/redis-adapter on a shared Redis/Key Value store
+    #   2. LiveGameBroker snapshots + pub/sub moved to that store
+    #   3. express-rate-limit moved off its per-process MemoryStore
     numInstances: 1
     scaling:
       minInstances: 1
-      maxInstances: 3
+      maxInstances: 1
       targetCPUPercent: 70
     # Sticky sessions are required for Socket.io once we scale beyond a
     # single instance: the client opens an XHR-poll handshake against

@@ -31,9 +31,13 @@ except ImportError:  # pragma: no cover
 
 from .event_extractor import extract_events, extract_macro_events, PlayerStatsEvent
 from analytics.macro_score import compute_macro_score
-from detectors.definitions import load_custom_builds
-from detectors.opponent import OpponentStrategyDetector
-from detectors.user import UserBuildDetector
+# Canonical detector stack — the detectors/ package is now a
+# compatibility shim over these, so import the source directly. The
+# v1+v3 custom-build loaders match the agent deep-parse path
+# (core/sc2_replay_parser.py) so a bulk-imported replay classifies
+# identically to a live-parsed one.
+from .custom_builds import load_custom_builds, load_custom_builds_v2
+from .strategy_detector import OpponentStrategyDetector, UserBuildDetector
 
 
 def load_replay_with_fallback(file_path: str):
@@ -112,12 +116,30 @@ def process_replay_task(file_path: str, player_name: str) -> dict:
             return {'status': 'error', 'file_path': file_path, 'error': "No events extracted."}
 
         custom_data = load_custom_builds()
+        v3_payload = load_custom_builds_v2()
+        v3_user_builds = (
+            v3_payload.get("builds", []) if isinstance(v3_payload, dict) else []
+        )
         opp_detector = OpponentStrategyDetector(custom_data["Opponent"])
-        my_detector = UserBuildDetector(custom_data["Self"])
+        my_detector = UserBuildDetector(custom_data["Self"] + v3_user_builds)
 
         matchup = f"vs {opponent.play_race}"
-        opp_strat = opp_detector.get_strategy_name(opponent.play_race, opp_events, matchup)
-        my_build = my_detector.detect_my_build(matchup, my_events, me.play_race)
+        # Same kwargs as the agent deep-parse path: the game length
+        # enables the "<XvY> - Game Too Short" bucket, my_race gives
+        # the opponent bucket its user-perspective matchup prefix.
+        opp_strat = opp_detector.get_strategy_name(
+            opponent.play_race,
+            opp_events,
+            matchup,
+            game_length_seconds=length_sec,
+            my_race=me.play_race,
+        )
+        my_build = my_detector.detect_my_build(
+            matchup,
+            my_events,
+            me.play_race,
+            game_length_seconds=length_sec,
+        )
 
         build_log = []
         for e in sorted(my_events, key=lambda x: x['time']):

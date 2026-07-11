@@ -4,11 +4,22 @@ const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const {
+  cleanText,
+  cleanDisplayName,
+  containsBlockedTerm,
+} = require("../util/contentFilter");
+const {
   publicBuildSnapshot,
   matchupFromRaces,
 } = require("./communityBuildSnapshot");
 
 const K_ANONYMITY_THRESHOLD = 5;
+
+// Public opponent aggregates load at most this many game rows. The
+// endpoint is unauthenticated; without a cap, a celebrity opponent
+// faced by thousands of users becomes an anonymous memory-exhaustion
+// lever.
+const AGGREGATE_OPPONENT_MAX_GAMES = 20000;
 
 /**
  * Projection used for every public listing/detail of a community
@@ -113,6 +124,20 @@ class CommunityService {
    * @returns {Promise<{slug: string, created: boolean}>}
    */
   async publish(userId, userSlug, meta) {
+    // Content hygiene on everything that renders publicly. Blocked
+    // terms reject outright; names/links are silently cleaned.
+    meta = {
+      title: cleanText(meta.title || ""),
+      description: cleanText(meta.description || "", { multiline: true }),
+      authorName: cleanDisplayName(meta.authorName || ""),
+    };
+    for (const [field, value] of Object.entries(meta)) {
+      if (containsBlockedTerm(value)) {
+        const err = new Error(`content_rejected: ${field}`);
+        /** @type {any} */ (err).status = 400;
+        throw err;
+      }
+    }
     const priv = await this.db.customBuilds.findOne({
       userId,
       slug: userSlug,
@@ -579,6 +604,16 @@ class CommunityService {
           ],
         }
       : { "opponent.pulseId": pulseId };
+    // Check the k-anonymity floor BEFORE materializing rows. This is a
+    // public, unauthenticated endpoint: for a heavily-faced opponent
+    // (a pro / streamer) the old load-then-count shape let any
+    // anonymous caller trigger an unbounded scan+load of every user's
+    // games. ``distinct`` resolves from the index without shipping
+    // documents.
+    const distinctUserIds = await this.db.games.distinct("userId", filter);
+    if (distinctUserIds.length < K_ANONYMITY_THRESHOLD) {
+      return null;
+    }
     const games = await this.db.games
       .find(filter, {
         projection: {
@@ -591,11 +626,12 @@ class CommunityService {
           _id: 0,
         },
       })
+      // Hard cap: aggregate quality saturates long before this, and it
+      // bounds memory for celebrity opponents. Most recent-inserted
+      // rows win (natural order); counts below reflect the capped set.
+      .limit(AGGREGATE_OPPONENT_MAX_GAMES)
       .toArray();
     const distinctUsers = new Set(games.map((g) => g.userId));
-    if (distinctUsers.size < K_ANONYMITY_THRESHOLD) {
-      return null;
-    }
     let wins = 0;
     let losses = 0;
     /** @type {Record<string, number>} */
@@ -657,13 +693,30 @@ class CommunityService {
       /** @type {any} */ (err).status = 400;
       throw err;
     }
+    const targetId = String(input.targetId);
+    // Per-(reporter, target) dedup: one open report per user per
+    // target. Without it a single user could flood the moderation
+    // queue with duplicate rows; the caller can also tell the user
+    // "already reported" instead of silently stacking.
+    const existing = await this.db.communityReports.findOne(
+      {
+        reporterUserId: userId,
+        targetType: input.targetType,
+        targetId,
+        resolvedAt: null,
+      },
+      { projection: { _id: 1 } },
+    );
+    if (existing) {
+      return { alreadyReported: true };
+    }
     await this.db.communityReports.insertOne(
       stampVersion(
         {
           id: crypto.randomUUID(),
           reporterUserId: userId,
           targetType: input.targetType,
-          targetId: String(input.targetId),
+          targetId,
           reason,
           note: String(input.note || "").slice(0, 1000),
           createdAt: new Date(),
@@ -673,6 +726,7 @@ class CommunityService {
         COLLECTIONS.COMMUNITY_REPORTS,
       ),
     );
+    return { alreadyReported: false };
   }
 
   /** @returns {Promise<{items: object[]}>} */

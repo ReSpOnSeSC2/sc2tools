@@ -312,7 +312,12 @@ function raceMatcher(letter) {
  * @returns {RegExp}
  */
 function caseInsensitiveContains(value) {
-  const escaped = String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Length cap: metacharacters are escaped below, but a very long
+  // input still compiles (and scans with) a costly case-insensitive
+  // pattern per document. No legitimate map/filter string approaches
+  // this bound.
+  const capped = String(value).slice(0, 128);
+  const escaped = capped.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(escaped, "i");
 }
 

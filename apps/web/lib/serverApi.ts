@@ -98,3 +98,31 @@ export async function getJson<T>(
     return null;
   }
 }
+
+/**
+ * Like ``getJson`` but preserves WHY there's no data: ``status`` is the
+ * HTTP status (404 = the API positively said "doesn't exist") or
+ * ``null`` when the API was unreachable. Pages that must return a real
+ * 404 for missing resources — but must NOT 404 real content during a
+ * transient API outage — need the distinction; ``getJson`` collapses
+ * both cases to ``null``.
+ */
+export async function getJsonWithStatus<T>(
+  path: string,
+  opts: { revalidateSec?: number } = {},
+): Promise<{ data: T | null; status: number | null }> {
+  const revalidate =
+    typeof opts.revalidateSec === "number" && opts.revalidateSec > 0
+      ? opts.revalidateSec
+      : 0;
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: { accept: "application/json" },
+      next: { revalidate },
+    });
+    if (!res.ok) return { data: null, status: res.status };
+    return { data: (await res.json()) as T, status: res.status };
+  } catch {
+    return { data: null, status: null };
+  }
+}

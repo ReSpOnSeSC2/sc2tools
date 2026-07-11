@@ -4,6 +4,7 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { useArcadeData } from "../hooks/useArcadeData";
 import { useArcadeState } from "../hooks/useArcadeState";
 import { useEligibleDailyPicks } from "../hooks/useEligibleDailyPicks";
+import { DailyQuests } from "../DailyQuests";
 import { ModeRunner } from "../ModeRunner";
 import { StreakHUD } from "../hud/StreakHUD";
 import { XpBar } from "../hud/XpBar";
@@ -33,6 +34,10 @@ export function TodaySurface() {
           </span>
         </div>
       </Card>
+
+      <section aria-label="Daily Quests">
+        <DailyQuests />
+      </section>
 
       <section aria-label="Daily Drop" className="space-y-2">
         <h2 className="text-caption font-semibold uppercase tracking-wider text-text-muted">

@@ -48,6 +48,23 @@ const { CommunityService } = require("./services/community");
 const { SeasonsService } = require("./services/seasons");
 const { ArcadeService } = require("./services/arcade");
 const { PulseMmrService } = require("./services/pulseMmr");
+const {
+  PulseOpponentIntelService,
+} = require("./services/pulseOpponentIntel");
+const {
+  LeaguePercentilesService,
+} = require("./services/leaguePercentiles");
+const { buildBenchmarksRouter } = require("./routes/benchmarks");
+const { LadderMetaService } = require("./services/ladderMeta");
+const { buildLadderMetaRouter } = require("./routes/ladderMeta");
+const { PublicProfileService } = require("./services/publicProfile");
+const { buildPublicProfileRouter } = require("./routes/publicProfile");
+const { ChatbotService } = require("./services/chatbot");
+const { buildChatbotRouter } = require("./routes/chatbot");
+const {
+  SkillFingerprintService,
+} = require("./services/skillFingerprint");
+const { buildFingerprintRouter } = require("./routes/fingerprint");
 const { AdminService } = require("./services/admin");
 const { AdminGlobalService } = require("./services/adminGlobal");
 const { AdminEventsService } = require("./services/adminEvents");
@@ -95,7 +112,9 @@ const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
  * ``maxUserMessagesPerWindow`` is a test-injected override for the
  * messages route's rate window (see __tests__/userMessages.test.js);
  * loadConfig never produces it, so production always uses the route's
- * built-in default.
+ * built-in default. ``pulseMmr`` / ``pulseIntel`` are likewise
+ * test-injected stand-ins (fetch disabled) so ingest suites never hit
+ * live SC2Pulse; production builds the real services below.
  *
  * @typedef {{
  *   db: import('./db/connect').DbContext,
@@ -103,6 +122,8 @@ const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
  *   config: ReturnType<typeof import('./config/loader').loadConfig>
  *     & { maxUserMessagesPerWindow?: number },
  *   io?: import('socket.io').Server,
+ *   pulseMmr?: import('./services/pulseMmr').PulseMmrService,
+ *   pulseIntel?: import('./services/pulseOpponentIntel').PulseOpponentIntelService,
  * }} AppDeps
  */
 
@@ -194,8 +215,35 @@ function makeServices(deps) {
   // uses it to populate ``opponent.mmr`` / ``opponent.region`` on the
   // opponents row at game ingest, since sc2reader almost never carries
   // those for ranked ladder replays. Constructed once so the in-process
-  // 5-minute cache survives across requests.
-  const pulseMmr = new PulseMmrService();
+  // 5-minute cache survives across requests. Tests inject their own
+  // (with a disabled fetch) so ingest suites never hit live SC2Pulse —
+  // a real fetch mid-test overwrites fixture MMRs with the actual
+  // player's current ladder rating.
+  const pulseMmr = deps.pulseMmr || new PulseMmrService();
+  // SC2Pulse ladder-context intel for opponent dossiers (league,
+  // percentile, MMR history, pro identity). Separate client from
+  // PulseMmrService because it hits a different endpoint family with a
+  // much longer cache TTL; also injectable for tests.
+  const pulseIntel =
+    deps.pulseIntel ||
+    new PulseOpponentIntelService({ logger: deps.logger });
+  // League-percentile benchmark tables — nightly aggregate over slim
+  // game rows (jobs/leaguePercentilesRecomputeJob), served by
+  // routes/benchmarks.js for the Macro tab's percentile framing.
+  const leaguePercentiles = new LeaguePercentilesService(deps.db, {
+    logger: deps.logger,
+  });
+  // Ladder Meta Radar — effectiveness-weighted opener meta by league
+  // band + matchup from the corpus (jobs/ladderMetaRecomputeJob),
+  // served PUBLICLY by routes/ladderMeta.js for the /meta SEO page.
+  const ladderMeta = new LadderMetaService(deps.db, { logger: deps.logger });
+  // Skill Fingerprint — per-user multi-axis skill radar (percentiles
+  // against the leaguePercentiles band tables + playstyle label),
+  // served by routes/fingerprint.js for the Trends tab.
+  const skillFingerprint = new SkillFingerprintService(deps.db, {
+    leaguePercentiles,
+    logger: deps.logger,
+  });
   const opponents = new OpponentsService(
     deps.db,
     deps.config.serverPepper,
@@ -249,6 +297,15 @@ function makeServices(deps) {
     enrich: (userId, envelope) =>
       overlayLive.enrichEnvelope(userId, envelope),
   });
+  // Nightbot/StreamElements custom-API lines (!opponent/!mmr/!build) —
+  // the overlay token in the URL path is the credential, same trust
+  // model as the OBS Browser Source.
+  const chatbot = new ChatbotService(deps.db, {
+    overlayTokens,
+    liveGameBroker,
+    games,
+    logger: deps.logger,
+  });
   const aggregations = new AggregationsService(deps.db);
   const macroReport = new MacroReportService(deps.db);
   const streak = new StreakService(deps.db);
@@ -301,8 +358,20 @@ function makeServices(deps) {
   const gdpr = new GdprService(deps.db, {
     opponents,
     logger: deps.logger,
+    // Store-aware heavy-blob deleter: without it, delete-account and
+    // wipe-history leave R2 objects behind when GAME_DETAILS_STORE=r2.
+    gameDetails,
   });
   const community = new CommunityService(deps.db);
+  // Opt-in public player pages (/p/:handle). Derives entirely from
+  // existing services — a public profile exists iff the user published
+  // a community build under a public authorName (the community opt-in),
+  // so no new user state and no GDPR change.
+  const publicProfile = new PublicProfileService(deps.db, {
+    community,
+    aggregations,
+    builds,
+  });
   const seasons = new SeasonsService();
   const arcade = new ArcadeService(deps.db, { games, gameDetails });
   // AdminService composes db + gdpr; deliberately near the bottom so
@@ -360,6 +429,12 @@ function makeServices(deps) {
     adminEvents,
     analytics,
     pulseMmr,
+    pulseIntel,
+    leaguePercentiles,
+    skillFingerprint,
+    ladderMeta,
+    publicProfile,
+    chatbot,
     pulseDirectory,
   };
 }
@@ -444,12 +519,24 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
     );
   }
   app.use(SERVICE.ROUTE_PREFIX, buildSeasonsRouter({ seasons: services.seasons }));
+  // Public, corpus-wide, k-anonymous meta report (no user data) — SEO
+  // surface, mounts with the public routers.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildLadderMetaRouter({ ladderMeta: services.ladderMeta }),
+  );
   // Public marketing-page replay preview. Unauth'd by design — the
   // landing page demo accepts a single .SC2Replay upload and returns
   // a parsed dossier. Rate-limited per IP inside the router.
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildPublicReplayRouter({ logger: deps.logger }),
+  );
+  // Chat-bot lines — PUBLIC bundle (Nightbot's urlfetch can't send
+  // headers; the overlay token in the path is the credential).
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildChatbotRouter({ chatbot: services.chatbot, logger: deps.logger }),
   );
   // Map minimaps (used by <img src> in the SPA). MUST sit with the
   // public routers — bearer tokens can't be attached to image
@@ -540,6 +627,12 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       isAdmin,
     }),
   );
+  // Opt-in public player pages — unauth GET /v1/public/profile/:handle,
+  // rate-limited in the router. Public bundle (before authed routers).
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildPublicProfileRouter({ publicProfile: services.publicProfile }),
+  );
   // Operational admin router — gated on isAdmin(req) inside the
   // router. Mounted alongside the rest of the v1 prefix so
   // /v1/admin/* shares CORS, rate-limit, and JSON parsing config.
@@ -579,7 +672,38 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildOpponentsRouter({ opponents: services.opponents, auth }),
+    buildBenchmarksRouter({
+      leaguePercentiles: services.leaguePercentiles,
+      auth,
+    }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildFingerprintRouter({
+      skillFingerprint: services.skillFingerprint,
+      auth,
+    }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildOpponentsRouter({
+      opponents: services.opponents,
+      auth,
+      pulseIntel: services.pulseIntel,
+      // Lean ownership + identity lookup for the pulse-intel route:
+      // undefined = not the caller's opponent (404), null = theirs but
+      // the SC2Pulse character id hasn't resolved yet (card hidden).
+      resolvePulseCharacterId: async (userId, pulseId) => {
+        const row = await deps.db.opponents.findOne(
+          { userId, pulseId },
+          { projection: { _id: 0, pulseCharacterId: 1 } },
+        );
+        if (!row) return undefined;
+        return typeof row.pulseCharacterId === "string" && row.pulseCharacterId
+          ? row.pulseCharacterId
+          : null;
+      },
+    }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,

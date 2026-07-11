@@ -62,6 +62,18 @@ function loadConfig(env = process.env) {
   if (!HEX_64_REGEX.test(pepperHex)) {
     throw new Error("SERVER_PEPPER_HEX must be 64 hex characters (32 bytes)");
   }
+  // Fail fast instead of silently reflecting any origin: both the
+  // Express CORS middleware and the Socket.io server fall back to
+  // allow-all when the allowlist is empty. Fine for dev/test; a
+  // misconfigured production deploy must not boot that way.
+  const corsAllowedOrigins = parseCsv(env.CORS_ALLOWED_ORIGINS);
+  if ((env.NODE_ENV || "development") === "production"
+    && corsAllowedOrigins.length === 0) {
+    throw new Error(
+      "CORS_ALLOWED_ORIGINS must be set in production — an empty "
+      + "allowlist makes the API reflect any origin",
+    );
+  }
   return {
     port: parseInteger(env.PORT, DEFAULTS.PORT),
     nodeEnv: env.NODE_ENV || "development",
@@ -73,7 +85,7 @@ function loadConfig(env = process.env) {
     clerkJwtAudience: env.CLERK_JWT_AUDIENCE || undefined,
     clerkWebhookSecret: env.CLERK_WEBHOOK_SECRET || null,
     serverPepper: Buffer.from(pepperHex, "hex"),
-    corsAllowedOrigins: parseCsv(env.CORS_ALLOWED_ORIGINS),
+    corsAllowedOrigins,
     rateLimitPerMinute: parseInteger(
       env.RATE_LIMIT_PER_MINUTE,
       DEFAULTS.RATE_LIMIT_PER_MINUTE,

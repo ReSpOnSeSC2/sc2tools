@@ -34,12 +34,29 @@ const USER_SCOPED_COLLECTIONS = [
   ["profiles", "profiles"],
 ];
 
+/**
+ * Collections purged on account deletion but deliberately NOT part of
+ * the export/restore round-trip (USER_SCOPED_COLLECTIONS): pairings
+ * and leaderboard rows are device/derived state a restore should not
+ * resurrect, and community content is public-facing — restoring it
+ * would re-publish content the user may have deleted in between.
+ *
+ * (db key, filter field holding the user's id)
+ */
+const PURGE_ONLY_COLLECTIONS = [
+  ["devicePairings", "userId"],
+  ["arcadeLeaderboard", "userId"],
+  ["communityBuilds", "ownerUserId"],
+  ["communityReports", "reporterUserId"],
+];
+
 class GdprService {
   /**
    * @param {import('../db/connect').DbContext} db
    * @param {{
    *   opponents?: import('./opponents').OpponentsService,
    *   logger?: import('pino').Logger,
+   *   gameDetails?: import('./gameDetails').GameDetailsService,
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
    *   chain a pulse-character-id backfill so the admin "Rebuild
@@ -51,6 +68,11 @@ class GdprService {
     this.db = db;
     this.opponents = (opts && opts.opponents) || null;
     this.logger = (opts && opts.logger) || null;
+    // GameDetailsService — the store-aware deleter for the heavy
+    // per-game blobs. Required so delete/wipe also removes R2/S3
+    // objects when GAME_DETAILS_STORE=r2; a bare
+    // ``db.gameDetails.deleteMany`` only covers the Mongo backend.
+    this.gameDetails = (opts && opts.gameDetails) || null;
   }
 
   /**
@@ -92,12 +114,67 @@ class GdprService {
   async deleteAll(userId) {
     /** @type {Record<string, number>} */
     const counts = {};
+
+    // Resolve identity BEFORE deleting the user doc — the admin-events
+    // scrub below needs the clerkUserId to find signup/message rows.
+    const user = await this.db.users.findOne(
+      { userId },
+      { projection: { _id: 0, clerkUserId: 1 } },
+    );
+
     for (const [key] of USER_SCOPED_COLLECTIONS) {
       const coll = /** @type {any} */ (this.db)[key];
       if (!coll) continue;
       const res = await coll.deleteMany({ userId });
       counts[key] = res.deletedCount || 0;
     }
+
+    // Heavy per-game blobs. Store-aware: removes R2/S3 objects when
+    // that backend is active; falls back to the Mongo collection when
+    // the service wasn't injected (older callers / focused tests).
+    if (this.gameDetails) {
+      await this.gameDetails.deleteAllForUser(userId);
+      counts.gameDetails = -1; // store contract doesn't report counts
+    } else if (this.db.gameDetails) {
+      const res = await this.db.gameDetails.deleteMany({ userId });
+      counts.gameDetails = res.deletedCount || 0;
+    }
+
+    for (const [key, field] of PURGE_ONLY_COLLECTIONS) {
+      const coll = /** @type {any} */ (this.db)[key];
+      if (!coll) continue;
+      const res = await coll.deleteMany({ [field]: userId });
+      counts[key] = res.deletedCount || 0;
+    }
+
+    // Manual snapshots hold a FULL export of the user's data — the
+    // single most sensitive thing to leave behind.
+    const backups = this.db.db.collection("user_backups");
+    const backupsRes = await backups.deleteMany({ userId });
+    counts.userBackups = backupsRes.deletedCount || 0;
+
+    // Admin events keep their (now-orphaned, random) userId for
+    // aggregate counts, but the PII riding on signup/message payloads
+    // (email, clerk id) is scrubbed in place.
+    if (this.db.adminEvents) {
+      /** @type {Record<string, string>[]} */
+      const identityFilters = [{ "payload.userId": userId }];
+      if (user && user.clerkUserId) {
+        identityFilters.push({ "payload.clerkUserId": user.clerkUserId });
+      }
+      const scrubRes = await this.db.adminEvents.updateMany(
+        { $or: identityFilters },
+        {
+          $set: {
+            "payload.email": null,
+            "payload.clerkUserId": null,
+            anonymizedAt: new Date(),
+          },
+        },
+      );
+      counts.adminEventsScrubbed = scrubRes.modifiedCount || 0;
+    }
+
     const userRes = await this.db.users.deleteOne({ userId });
     counts.users = userRes.deletedCount || 0;
     return counts;
@@ -139,16 +216,27 @@ class GdprService {
     }
 
     const gamesRes = await this.db.games.deleteMany(filter);
-    // Mirror the delete on the split-out ``game_details`` collection
-    // so heavy per-game fields (build logs, macro breakdown, apm
-    // curve, spatial extracts) are removed in lockstep with the
-    // slim row. Without this, GDPR purges would leave a sidecar
-    // detail row for every deleted game — a data-residency bug as
-    // soon as the v0.4.3 dual-write makes detail rows a real thing.
-    // The same filter applies (userId + optional date range), since
-    // detail rows duplicate the ``date`` field for exactly this kind
-    // of scoped delete.
-    if (this.db.gameDetails) {
+    // Mirror the delete on the split-out ``game_details`` storage so
+    // heavy per-game fields (build logs, macro breakdown, apm curve,
+    // spatial extracts) are removed in lockstep with the slim row.
+    // Store-aware: in R2 mode the Mongo collection only holds index
+    // rows — the blobs live as objects, and deleting just the rows
+    // would orphan every object. Detail rows duplicate the ``date``
+    // field precisely so this ranged filter works.
+    if (this.gameDetails && (since || until)) {
+      // Ranged wipe: resolve the affected gameIds from the detail
+      // index rows, then delete blob+row per game through the store.
+      const rows = await this.db.gameDetails
+        .find(filter, { projection: { _id: 0, gameId: 1 } })
+        .toArray();
+      for (const row of rows) {
+        if (row && typeof row.gameId === "string" && row.gameId) {
+          await this.gameDetails.delete(userId, row.gameId);
+        }
+      }
+    } else if (this.gameDetails) {
+      await this.gameDetails.deleteAllForUser(userId);
+    } else if (this.db.gameDetails) {
       await this.db.gameDetails.deleteMany(filter);
     }
     const macroJobsRes = await this.db.macroJobs.deleteMany({ userId });
@@ -430,4 +518,8 @@ function countsOf(data) {
   return out;
 }
 
-module.exports = { GdprService, USER_SCOPED_COLLECTIONS };
+module.exports = {
+  GdprService,
+  USER_SCOPED_COLLECTIONS,
+  PURGE_ONLY_COLLECTIONS,
+};

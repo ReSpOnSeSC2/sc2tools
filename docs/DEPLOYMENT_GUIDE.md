@@ -1,5 +1,14 @@
 # SC2Tools — Cloud Deployment Guide
 
+> **Reality check (2026-07):** production currently runs on Render's
+> **starter** plan (see `apps/api/render.yaml` and
+> `cloud/community-builds/render.yaml`) with a free-tier Atlas cluster —
+> NOT the M10 dedicated cluster this guide prescribes. The
+> `api-keepalive.yml` workflow exists solely to keep the starter
+> instance awake. The M10 sizing below is the target once donations
+> cover it; until then treat the M10 references as aspirational, and do
+> not assume M10-only index/perf headroom in code.
+
 This guide walks you through wiring the three pieces of cloud infrastructure
 together so the community-builds feature works end-to-end:
 

@@ -21,7 +21,9 @@ from sc2tools_agent.updater import (
     Updater,
     _coerce_release,
     _detect_platform,
+    _version_lt,
     install_release,
+    update_is_mandatory,
 )
 
 
@@ -117,6 +119,7 @@ def test_install_release_verifies_sha256(tmp_path: Path) -> None:
             release,
             download_dir=tmp_path,
             launch_installer=False,
+            trusted_hosts={"127.0.0.1"},
         )
         assert out.exists()
         assert out.read_bytes() == payload
@@ -149,9 +152,78 @@ def test_install_release_rejects_bad_sha256(tmp_path: Path) -> None:
                 release,
                 download_dir=tmp_path,
                 launch_installer=False,
+                trusted_hosts={"127.0.0.1"},
             )
     finally:
         stop()
+
+
+def _release_with_url(url: str, current: str = "0.1.0") -> ReleaseInfo:
+    return ReleaseInfo(
+        channel="stable",
+        update_available=True,
+        current=current,
+        latest="0.2.0",
+        published_at=None,
+        release_notes="",
+        min_supported_version=None,
+        artifact=ReleaseArtifact(
+            platform="windows",
+            download_url=url,
+            sha256="a" * 64,
+            size_bytes=1,
+            signature=None,
+        ),
+    )
+
+
+def test_install_release_rejects_untrusted_host(tmp_path: Path) -> None:
+    """A (possibly compromised) feed cannot point the agent at an
+    arbitrary download host — only GitHub + explicitly-trusted hosts."""
+    release = _release_with_url("https://evil.example.com/agent.exe")
+    with pytest.raises(UpdateError, match="untrusted_download_host"):
+        install_release(release, download_dir=tmp_path, launch_installer=False)
+
+
+def test_install_release_rejects_lookalike_github_host(tmp_path: Path) -> None:
+    release = _release_with_url("https://evilgithub.com/agent.exe")
+    with pytest.raises(UpdateError, match="untrusted_download_host"):
+        install_release(release, download_dir=tmp_path, launch_installer=False)
+
+
+def test_install_release_rejects_plain_http_github(tmp_path: Path) -> None:
+    release = _release_with_url("http://github.com/agent.exe")
+    with pytest.raises(UpdateError, match="untrusted_download_host"):
+        install_release(release, download_dir=tmp_path, launch_installer=False)
+
+
+def test_version_lt_orders_numeric_versions() -> None:
+    assert _version_lt("0.9.9", "0.10.0")
+    assert _version_lt("0.13.2", "1.0")
+    assert not _version_lt("1.0.0", "1.0")
+    assert not _version_lt("2.0", "1.9.9")
+    # Unparseable input must never force an update.
+    assert not _version_lt("garbage", "1.0.0")
+    assert not _version_lt("1.0.0", "garbage")
+
+
+def test_update_is_mandatory_only_below_floor() -> None:
+    def rel(current: str, floor: Optional[str]) -> ReleaseInfo:
+        return ReleaseInfo(
+            channel="stable",
+            update_available=True,
+            current=current,
+            latest="9.9.9",
+            published_at=None,
+            release_notes="",
+            min_supported_version=floor,
+            artifact=None,
+        )
+
+    assert update_is_mandatory(rel("0.9.0", "0.10.0"))
+    assert not update_is_mandatory(rel("0.10.0", "0.10.0"))
+    assert not update_is_mandatory(rel("0.11.0", "0.10.0"))
+    assert not update_is_mandatory(rel("0.9.0", None))
 
 
 def test_check_now_returns_release_when_server_responds(tmp_path: Path) -> None:

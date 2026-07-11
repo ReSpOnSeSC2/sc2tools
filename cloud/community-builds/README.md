@@ -1,5 +1,16 @@
 # sc2-community-builds
 
+> **DEPRECATED — kept for the legacy desktop app's build sync only.**
+> The canonical community-build system is the Clerk-authenticated one
+> in `apps/api` (`/v1/community/*`), which the web app uses. This
+> service's trust model is weak by design (HMAC pepper + self-asserted
+> client ids: votes/authorship are forgeable), so treat everything it
+> stores as untrusted input. New features go in `apps/api`; plan is to
+> retire this service once the legacy sync path is migrated. Note:
+> flags no longer auto-hide builds (that was a censorship lever —
+> N forged client ids could disappear any build); hiding now requires
+> an operator setting `removed: true` directly in the database.
+
 Shared community database for SC2 build definitions. Express + MongoDB.
 Runs as a Render Web Service against a MongoDB Atlas free-tier cluster.
 

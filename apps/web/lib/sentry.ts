@@ -1,13 +1,14 @@
 /**
- * Optional Sentry wiring. The `@sentry/nextjs` package is NOT a hard
- * dependency — install it later with:
+ * Sentry wiring. `@sentry/nextjs` is installed; capture activates only
+ * when NEXT_PUBLIC_SENTRY_DSN is set (Vercel env), so DSN-less deploys
+ * and local dev stay no-op. Client init happens in
+ * instrumentation-client.ts, server init + request-error forwarding in
+ * instrumentation.ts, render-crash capture in components/ui/ErrorBoundary
+ * plus app/error.tsx and app/global-error.tsx.
  *
- *   npm install --workspace apps/web @sentry/nextjs
- *
- * Then set NEXT_PUBLIC_SENTRY_DSN + SENTRY_AUTH_TOKEN in Vercel and
- * source-map upload happens during `next build`.
- *
- * Until then, these helpers are no-ops so production keeps working.
+ * The dynamic import is kept deliberately: the SDK chunk is only
+ * fetched when a DSN exists, and a missing/broken dep can never crash
+ * the app.
  */
 
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;

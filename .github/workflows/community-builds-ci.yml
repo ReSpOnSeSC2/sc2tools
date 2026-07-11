@@ -1,0 +1,50 @@
+# Lint + typecheck + test gate for the community-builds service
+# (cloud/community-builds). Runs on every PR + push that touches the
+# service. Failure of any step blocks the merge.
+
+name: community-builds-ci
+
+on:
+  pull_request:
+    paths:
+      - 'cloud/community-builds/**'
+      - '.github/workflows/community-builds-ci.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: community-builds-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint + typecheck + test (cloud/community-builds)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: cloud/community-builds
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: cloud/community-builds/package-lock.json
+      - name: Cache mongodb-memory-server binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test

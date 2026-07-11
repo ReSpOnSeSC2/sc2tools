@@ -17,7 +17,7 @@ import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { ToastProvider, useToast } from "@/components/ui/Toast";
+import { useToast } from "@/components/ui/Toast";
 import { apiCall, useApi } from "@/lib/clientApi";
 import {
   coerceRace,
@@ -35,13 +35,9 @@ export interface BuildDetailViewProps {
   slug: string;
 }
 
-/** Outer wrapper providing a toast context for the inner panel. */
+/** Toast context comes from the app-wide provider in the root layout. */
 export function BuildDetailView(props: BuildDetailViewProps) {
-  return (
-    <ToastProvider>
-      <BuildDetailInner {...props} />
-    </ToastProvider>
-  );
+  return <BuildDetailInner {...props} />;
 }
 
 function BuildDetailInner({ slug }: BuildDetailViewProps) {

@@ -7,6 +7,7 @@ import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import { Header } from "@/components/chrome/Header";
 import { Footer } from "@/components/chrome/Footer";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
+import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
 /**
@@ -134,14 +135,18 @@ export default function RootLayout({
           />
         </head>
         <body className="flex min-h-dvh flex-col overflow-x-clip">
-          <Header />
-          <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-            {children}
-          </main>
-          <Footer />
-          <CookieBanner />
-          <GoogleAnalytics />
-          <ServiceWorkerRegister />
+          {/* Single app-wide toast context — every surface can call
+              useToast() without remembering to mount its own provider. */}
+          <ToastProvider>
+            <Header />
+            <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+              {children}
+            </main>
+            <Footer />
+            <CookieBanner />
+            <GoogleAnalytics />
+            <ServiceWorkerRegister />
+          </ToastProvider>
         </body>
       </html>
     </ClerkProvider>

@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { io, type Socket } from "socket.io-client";
 import { API_BASE } from "@/lib/clientApi";
 import type {
@@ -40,11 +46,14 @@ import {
   ScoutingWidget,
   SessionWidget,
   RandomizerWidget,
+  GhostBuildWidget,
   type SessionSummary,
 } from "@/components/overlay/widgets/PrePostFlow";
 import type { RandomizerConfig } from "@/lib/randomizer/types";
 import { sanitizeRandomizerConfig } from "@/lib/randomizer/config";
 import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSound";
+import { decodeOverlayTheme, themeToCssVars } from "@/lib/overlayTheme";
+import { decodeGhostTarget } from "@/lib/ghostBuild";
 
 /**
  * Per-widget Browser Source.
@@ -73,9 +82,25 @@ import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSoun
 export function OverlayWidgetClient({
   token,
   widget,
+  themeParam = null,
+  ghostParam = null,
 }: {
   token: string;
   widget: string;
+  /**
+   * Raw ``?theme=`` search param forwarded by the server page. Decoded
+   * once (strict validation — hostile/malformed values fall back to the
+   * stock look) and applied as ``--ov-*`` CSS custom properties on the
+   * widget frame, where WidgetShell picks them up.
+   */
+  themeParam?: string | null;
+  /**
+   * Raw ``?ghost=`` search param forwarded by the server page — the
+   * armed Ghost Build target (see lib/ghostBuild.ts). Strict-validated;
+   * malformed values behave exactly like "not armed". Only the
+   * ``ghost-build`` widget consumes it.
+   */
+  ghostParam?: string | null;
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
@@ -111,6 +136,28 @@ export function OverlayWidgetClient({
   // silent on a cold page (see useRevealAudioUnlock).
   useRevealAudioUnlock(widget === "randomizer");
 
+  // Theme vars, decoded once at mount. Default theme → empty object →
+  // zero style overrides, so untouched URLs render exactly as before.
+  const themeVars = useMemo(() => {
+    return themeToCssVars(decodeOverlayTheme(themeParam));
+  }, [themeParam]);
+
+  // Ghost Build is a URL-armed persistent HUD: a valid ``?ghost=``
+  // param IS the opt-in, so it bypasses two gates the other widgets
+  // sit behind —
+  //   * the payload-driven visibility timer (it must render its idle
+  //     "armed" card between games, when no payload exists at all);
+  //   * the server's enabledWidgets list (the cloud's widget registry
+  //     predates this widget and, by design, needed zero server
+  //     changes to ship it).
+  // Without a valid target the widget follows the normal machinery
+  // (a Test fire shows its placement hint for the standard window).
+  const ghostArmed = useMemo(
+    () => widget === "ghost-build" && decodeGhostTarget(ghostParam) !== null,
+    [widget, ghostParam],
+  );
+  const effectiveEnabled = widget === "ghost-build" ? true : enabled;
+
   // Voice readout is only run from the scouting widget when each
   // widget is its own Browser Source — otherwise every Source would
   // race to speak the same payload and the streamer would hear the
@@ -128,7 +175,7 @@ export function OverlayWidgetClient({
     enableVoiceHere ? liveGame : null,
   );
 
-  if (!enabled || !visible) {
+  if (!effectiveEnabled || (!visible && !ghostArmed)) {
     return (
       <>
         <div style={{ background: "transparent" }} />
@@ -145,12 +192,15 @@ export function OverlayWidgetClient({
   // shifting it down 40px or centring it inside an invisible frame.
   return (
     <div
-      style={{
-        position: "relative",
-        minHeight: "100vh",
-        width: "100%",
-        background: "transparent",
-      }}
+      style={
+        {
+          position: "relative",
+          minHeight: "100vh",
+          width: "100%",
+          background: "transparent",
+          ...themeVars,
+        } as CSSProperties
+      }
       className="overlay-widget-frame"
     >
       <style>{`
@@ -168,6 +218,7 @@ export function OverlayWidgetClient({
         liveGame={liveGame}
         session={session}
         randomizer={randomizer}
+        ghostParam={ghostParam}
       />
       {/* Only mounted while widget content is on screen (this branch)
           — a transparent between-games scene stays fully transparent
@@ -186,12 +237,14 @@ function WidgetRenderer({
   liveGame,
   session,
   randomizer,
+  ghostParam,
 }: {
   widget: WidgetId;
   live: LiveGamePayload | null;
   liveGame: LiveGameEnvelope | null;
   session: SessionSummary | null;
   randomizer: RandomizerConfig | null;
+  ghostParam: string | null;
 }) {
   switch (widget) {
     case "opponent":
@@ -234,6 +287,12 @@ function WidgetRenderer({
     case "randomizer":
       return (
         <RandomizerWidget live={live} liveGame={liveGame} config={randomizer} />
+      );
+    case "ghost-build":
+      // Practice coach — the target build rides in this Browser
+      // Source's own ``?ghost=`` URL param, not in any payload.
+      return (
+        <GhostBuildWidget live={live} liveGame={liveGame} ghostParam={ghostParam} />
       );
     default:
       return null;

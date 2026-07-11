@@ -9,6 +9,8 @@ const { parseFilters } = require("../util/parseQuery");
  * @param {{
  *   opponents: import('../services/types').OpponentsService,
  *   auth: import('express').RequestHandler,
+ *   pulseIntel?: import('../services/pulseOpponentIntel').PulseOpponentIntelService,
+ *   resolvePulseCharacterId?: (userId: string, pulseId: string) => Promise<string|null|undefined>,
  * }} deps
  */
 function buildOpponentsRouter(deps) {
@@ -95,6 +97,37 @@ function buildOpponentsRouter(deps) {
         return;
       }
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // SC2Pulse ladder context for the dossier's "Ladder context" card:
+  // league/tier + percentile, season record, peak MMR, 90-day rating
+  // history, pro identity + linked accounts. One cached upstream call
+  // per opponent (PulseOpponentIntelService). ``intel: null`` (200)
+  // means the opponent's character id hasn't resolved yet — the card
+  // renders nothing; 404 is reserved for "not your opponent".
+  router.get("/opponents/:pulseId/pulse-intel", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      if (!deps.pulseIntel || !deps.resolvePulseCharacterId) {
+        res.json({ intel: null });
+        return;
+      }
+      const characterId = await deps.resolvePulseCharacterId(
+        auth.userId,
+        String(req.params.pulseId),
+      );
+      if (characterId === undefined) {
+        res.status(404).json({ error: { code: "not_found" } });
+        return;
+      }
+      const intel = characterId
+        ? await deps.pulseIntel.getIntel(characterId)
+        : null;
+      res.json({ intel });
     } catch (err) {
       next(err);
     }

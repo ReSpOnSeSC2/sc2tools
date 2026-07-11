@@ -52,6 +52,11 @@ function regionLabelsToHandlePrefixes(labels) {
 
 const OPPONENTS_VERSION = expectedVersion(COLLECTIONS.OPPONENTS);
 
+// Profile views load at most this many games (most recent first). An
+// opponent faced thousands of times would otherwise pull their entire
+// shared history — plus a detail blob per game — into memory per view.
+const OPPONENT_PROFILE_MAX_GAMES = 1000;
+
 const PROFILE_GAME_PROJECTION = {
   _id: 0,
   gameId: 1,
@@ -889,6 +894,12 @@ class OpponentsService {
     const rawGames = await this.db.games
       .find(gamesFilter, { projection: PROFILE_GAME_PROJECTION })
       .sort({ date: -1 })
+      // Hard cap: an opponent faced hundreds/thousands of times would
+      // otherwise load every shared game — plus a detail-blob fetch
+      // per game below — into memory on every profile view. date:-1
+      // keeps the most recent games, which are the ones the profile's
+      // tendency stats should weight anyway.
+      .limit(OPPONENT_PROFILE_MAX_GAMES)
       .toArray();
     // dnaTimings reads ``buildLog`` / ``oppBuildLog`` off each game
     // object to compute first-occurrence-of-token timings, and the

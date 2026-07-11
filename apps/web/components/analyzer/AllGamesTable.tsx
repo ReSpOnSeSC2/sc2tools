@@ -1,6 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { fmtDate, fmtMinutes, raceColour } from "@/lib/format";
 import { Badge } from "@/components/ui/Badge";
@@ -161,6 +163,7 @@ export function AllGamesTable({
               <SortableTh col={SORT_COLS.macro} label="Macro" {...sort} align="right" />
               <SortableTh col={SORT_COLS.length} label="Length" {...sort} align="right" />
               <SortableTh col={SORT_COLS.result} label="Result" {...sort} align="right" />
+              <th className="w-8 px-2 py-1" aria-hidden></th>
             </tr>
           </thead>
           <tbody>
@@ -217,8 +220,8 @@ function GameRow({
   const { macro, macroColour, resultBadge } = useGameMeta(game);
   const [macroOpen, setMacroOpen] = useState(false);
   // base cols: toggle + date + map + race + strategy + build + macro
-  // + length + result = 9; plus the two optional columns.
-  const colSpan = 9 + (showPlayers ? 1 : 0) + (showOppMmr ? 1 : 0);
+  // + length + result + open-link = 10; plus the two optional columns.
+  const colSpan = 10 + (showPlayers ? 1 : 0) + (showOppMmr ? 1 : 0);
 
   return (
     <Fragment>
@@ -274,6 +277,9 @@ function GameRow({
           {game.game_length ? fmtMinutes(game.game_length) : "—"}
         </td>
         <td className="px-2 py-1 text-right">{resultBadge}</td>
+        <td className="px-2 py-1 text-right">
+          <GameDeepDiveLink gameId={game.id} />
+        </td>
       </tr>
       {expanded && game.id ? (
         <tr className="bg-bg-elevated/30">
@@ -315,6 +321,35 @@ function PlayersCell({
   );
 }
 
+
+/**
+ * Unobtrusive per-row "open" affordance → the game's deep-dive page
+ * (/app/game/:id). stopPropagation keeps the existing row-click
+ * (build-order expand) behaviour intact.
+ */
+function GameDeepDiveLink({
+  gameId,
+  large,
+}: {
+  gameId?: string | null;
+  large?: boolean;
+}) {
+  if (!gameId) return null;
+  return (
+    <Link
+      href={`/app/game/${encodeURIComponent(gameId)}`}
+      onClick={(e) => e.stopPropagation()}
+      aria-label="Open game deep dive"
+      title="Open game deep dive"
+      className={[
+        "inline-flex items-center justify-center rounded text-text-dim transition-colors hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        large ? "min-h-[44px] min-w-[44px]" : "h-7 w-7",
+      ].join(" ")}
+    >
+      <ArrowUpRight className="h-4 w-4" aria-hidden />
+    </Link>
+  );
+}
 
 function MacroCell({
   game,
@@ -471,6 +506,7 @@ function GameMobileCard({
             onOpen={() => setMacroOpen(true)}
             onClose={() => setMacroOpen(false)}
           />
+          <GameDeepDiveLink gameId={game.id} large />
         </div>
       </div>
       {expanded && game.id ? (

@@ -385,6 +385,87 @@ def test_count_synced_empty_state_is_zero() -> None:
     assert count_synced(AgentState()) == 0
 
 
+def test_count_synced_ignores_internal_marker_keys() -> None:
+    """Pre-0.14 updaters wrote _release_seen_<channel> markers into
+    ``uploaded``; they must not count as synced replays."""
+    s = AgentState(
+        uploaded={
+            "a.SC2Replay": "2026-06-10T19:45:00+00:00",
+            "_release_seen_stable": "0.13.2",
+        },
+    )
+    assert count_synced(s) == 1
+
+
+def test_load_state_migrates_legacy_release_seen_markers(
+    tmp_path: Path,
+) -> None:
+    """Legacy in-``uploaded`` markers move to the dedicated
+    ``release_seen`` field on load, healing the inflated Synced stat."""
+    (tmp_path / "agent.json").write_text(
+        json.dumps(
+            {
+                "uploaded": {
+                    "a.SC2Replay": "2026-06-10T19:45:00+00:00",
+                    "_release_seen_stable": "0.13.2",
+                },
+            },
+        ),
+        encoding="utf-8",
+    )
+    loaded = load_state(tmp_path)
+    assert "_release_seen_stable" not in loaded.uploaded
+    assert loaded.release_seen == {"stable": "0.13.2"}
+    assert count_synced(loaded) == 1
+
+
+def test_save_state_tolerates_concurrent_uploaded_writes(
+    tmp_path: Path,
+) -> None:
+    """The watcher's threads mark entries in ``state.uploaded`` without
+    the upload queue's lock while save_state serialises the dataclass;
+    a resize mid-``asdict`` used to raise RuntimeError and fail the
+    batch's state commit. save_state now snapshots with a retry."""
+    import threading
+
+    s = AgentState(uploaded={f"seed{i}.SC2Replay": "filtered" for i in range(50)})
+    stop = threading.Event()
+
+    def writer() -> None:
+        # Insert + delete a rotating window of keys: forces continual
+        # dict resizes (what triggers the RuntimeError) WITHOUT growing
+        # the dict unboundedly — an earlier version of this test let
+        # the dict grow hot-loop-fast and each save serialised the
+        # ever-larger dict, ballooning the test to minutes and GBs.
+        i = 0
+        while not stop.is_set():
+            s.uploaded[f"w{i % 512}.SC2Replay"] = "filtered"
+            stale = f"w{(i + 256) % 512}.SC2Replay"
+            s.uploaded.pop(stale, None)
+            i += 1
+
+    t = threading.Thread(target=writer, daemon=True)
+    t.start()
+    try:
+        for _ in range(50):
+            save_state(tmp_path, s)  # must never raise RuntimeError
+    finally:
+        stop.set()
+        t.join(timeout=2)
+    assert (tmp_path / "agent.json").exists()
+
+
+def test_load_state_reads_auto_update_flag(tmp_path: Path) -> None:
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"auto_update_enabled": False}),
+        encoding="utf-8",
+    )
+    assert load_state(tmp_path).auto_update_enabled is False
+    # Default (absent key) is enabled.
+    (tmp_path / "agent.json").write_text(json.dumps({}), encoding="utf-8")
+    assert load_state(tmp_path).auto_update_enabled is True
+
+
 def test_upload_overrides_garbage_inputs_load_as_none(
     tmp_path: Path,
 ) -> None:

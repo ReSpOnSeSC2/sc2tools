@@ -1,6 +1,10 @@
 # Lint + typecheck + test gate for the Express API (apps/api). Runs on
 # every PR + push that touches the API. Failure of any step blocks the
 # merge.
+#
+# The Jest suite uses mongodb-memory-server, which downloads a mongod
+# binary on first run; the download is cached between runs via the
+# actions cache below.
 
 name: api-ci
 
@@ -24,7 +28,7 @@ jobs:
   check:
     name: Lint + typecheck + test (apps/api)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: apps/api
@@ -35,6 +39,11 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/api/package-lock.json
+      - name: Cache mongodb-memory-server binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}
       - name: Install dependencies
         run: npm ci
       - name: Typecheck
