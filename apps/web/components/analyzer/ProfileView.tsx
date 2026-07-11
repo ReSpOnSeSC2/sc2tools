@@ -10,6 +10,7 @@ import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import { AllGamesTable } from "./AllGamesTable";
+import { LadderContextCard } from "./LadderContextCard";
 import { OpponentDiagnosticsPanel } from "./OpponentDiagnosticsPanel";
 import {
   HeadlineMmrChip,
@@ -216,6 +217,12 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
       </div>
 
       <RaceMmrPanel breakdown={races} isLoading={racesLoading} />
+
+      {/* SC2Pulse ladder context — league/percentile, season record,
+          peak, 90-day MMR sparkline, pro identity + linked accounts.
+          Fetched in parallel with the profile; renders nothing while
+          the opponent's pulseCharacterId is still unresolved. */}
+      <LadderContextCard pulseId={pulseId} />
 
       <OpponentDiagnosticsPanel
         collapsible
