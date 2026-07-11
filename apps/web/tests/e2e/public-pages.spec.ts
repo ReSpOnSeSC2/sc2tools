@@ -15,7 +15,6 @@ import { expect, test } from "@playwright/test";
 const PAGES: Array<{ path: string; expectText: RegExp }> = [
   { path: "/", expectText: /opponent|build|replay/i },
   { path: "/meta", expectText: /meta/i },
-  { path: "/optimizer", expectText: /adapt|build/i },
   { path: "/download", expectText: /download|agent/i },
   { path: "/community", expectText: /community|build/i },
   { path: "/donate", expectText: /donate|chip in|free/i },

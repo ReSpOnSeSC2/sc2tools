@@ -399,8 +399,8 @@ export function normalizeBuildEvents(
  * Convert the public preview parser's `[m:ss] EventName` build-log
  * strings into {@link BuildOrderEvent} records. We don't get
  * category/is_building hints from the public CLI, so each name runs
- * through {@link normalizeBuildName} to recover them. Shared by the
- * landing-page replay demo and the build adapter's upload panel.
+ * through {@link normalizeBuildName} to recover them. Used by the
+ * landing-page replay demo.
  */
 export function buildLogToEvents(
   buildLog: ReadonlyArray<string>,

@@ -154,7 +154,7 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
     setStoredTheme(normalizeOverlayTheme(next));
 
   // Armed Ghost Build target — mirrored into localStorage by the "Arm"
-  // affordances (Build adapter / game page). Read client-side after
+  // affordance on a game page's build log. Read client-side after
   // mount (SSR-safe) so the Ghost Build widget URL below carries the
   // armed target as its ?ghost= param. Like the theme, the target
   // travels in the URL itself — zero server state.
@@ -644,7 +644,7 @@ function WidgetList({
             w.id === "ghost-build"
               ? ghostTarget
                 ? `Armed: ${ghostTarget.name} (${ghostTarget.steps.length} steps) — copy the URL again after re-arming`
-                : "Nothing armed yet — arm a build from the Build adapter or a game page, then copy this URL"
+                : "Nothing armed yet — arm a build from a game page's build log, then copy this URL"
               : w.hint;
           return (
             <li
