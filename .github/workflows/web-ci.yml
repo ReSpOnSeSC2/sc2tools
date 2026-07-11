@@ -1,5 +1,6 @@
-# Lint + typecheck gate for the Next.js web app (apps/web). Runs on every
-# PR + push that touches the web app. Failure of any step blocks the merge.
+# Lint + typecheck + test gate for the Next.js web app (apps/web). Runs on
+# every PR + push that touches the web app. Failure of any step blocks the
+# merge.
 
 name: web-ci
 
@@ -21,9 +22,9 @@ concurrency:
 
 jobs:
   lint-typecheck:
-    name: Lint + typecheck (apps/web)
+    name: Lint + typecheck + test (apps/web)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/web
@@ -40,3 +41,5 @@ jobs:
         run: npm run typecheck
       - name: Lint
         run: npm run lint
+      - name: Test
+        run: npm test
