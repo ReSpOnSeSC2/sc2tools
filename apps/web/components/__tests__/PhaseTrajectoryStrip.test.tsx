@@ -1,12 +1,17 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, render } from "@testing-library/react";
 
 import {
+  layoutCrossingLabels,
   PhaseTrajectoryStrip,
   type PhaseTrajectoryStripProps,
 } from "@/components/analyzer/PhaseTrajectoryStrip";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function baseProps(
   overrides: Partial<PhaseTrajectoryStripProps> = {},
@@ -32,6 +37,123 @@ function baseProps(
 }
 
 describe("PhaseTrajectoryStrip", () => {
+  it("stacks clustered crossing labels without moving their timeline anchors", () => {
+    const layout = layoutCrossingLabels(
+      [
+        { key: "earlyMidAt", anchorPx: 250, widthPx: 72 },
+        { key: "midAt", anchorPx: 850, widthPx: 40 },
+        { key: "midLateAt", anchorPx: 852, widthPx: 72 },
+        { key: "lateAt", anchorPx: 854, widthPx: 42 },
+      ],
+      1_000,
+    );
+
+    expect(layout.slice(1).map(({ lane }) => lane)).toEqual([0, 1, 2]);
+    expect(layout.slice(1).map(({ leftPx }) => leftPx)).toEqual([
+      850, 852, 854,
+    ]);
+  });
+
+  it("keeps crossing labels inside the timeline at either edge", () => {
+    const layout = layoutCrossingLabels(
+      [
+        { key: "earlyMidAt", anchorPx: 0, widthPx: 80 },
+        { key: "lateAt", anchorPx: 320, widthPx: 80 },
+      ],
+      320,
+    );
+
+    expect(layout[0].leftPx - 40).toBeGreaterThanOrEqual(4);
+    expect(layout[1].leftPx + 40).toBeLessThanOrEqual(316);
+  });
+
+  it("renders close phase crossings in separate label lanes", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get")
+      .mockReturnValue(320);
+
+    const { container } = render(
+      <PhaseTrajectoryStrip
+        {...baseProps({
+          crossings: {
+            earlyMidAt: 300,
+            midAt: 528,
+            midLateAt: 531,
+            lateAt: 534,
+          },
+          durationP95Sec: 540,
+        })}
+      />,
+    );
+
+    const clusteredLanes = ["midAt", "midLateAt", "lateAt"].map((key) =>
+      container
+        .querySelector(`[data-testid="phase-crossing-label"][data-key="${key}"]`)
+        ?.getAttribute("data-lane"),
+    );
+    expect(new Set(clusteredLanes).size).toBe(3);
+    expect(clusteredLanes).not.toContain(null);
+  });
+
+  it("reflows crossing labels when the timeline becomes narrower", () => {
+    let timelineWidth = 600;
+    let resizeCallback: ResizeObserverCallback | null = null;
+
+    vi.spyOn(
+      HTMLElement.prototype,
+      "clientWidth",
+      "get",
+    ).mockImplementation(() => timelineWidth);
+    vi.spyOn(
+      HTMLElement.prototype,
+      "getBoundingClientRect",
+    ).mockImplementation(function (this: HTMLElement) {
+      const width =
+        this.getAttribute("data-testid") === "phase-crossing-label" ? 72 : 0;
+      return {
+        x: 0,
+        y: 0,
+        width,
+        height: 32,
+        top: 0,
+        right: width,
+        bottom: 32,
+        left: 0,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
+
+    class MockResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback;
+      }
+
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
+
+    const { container } = render(
+      <PhaseTrajectoryStrip {...baseProps()} />,
+    );
+    const labelsHost = container.querySelector<HTMLElement>(
+      '[data-testid="phase-labels"]',
+    );
+    expect(labelsHost?.style.height).toBe("34px");
+
+    timelineWidth = 280;
+    act(() => {
+      const callback = resizeCallback;
+      if (callback) callback([], {} as ResizeObserver);
+    });
+
+    expect(labelsHost?.style.height).toBe("68px");
+    const lanes = Array.from(
+      container.querySelectorAll('[data-testid="phase-crossing-label"]'),
+    ).map((label) => label.getAttribute("data-lane"));
+    expect(new Set(lanes).size).toBe(2);
+  });
+
   it("renders all five phase bands", () => {
     const { container } = render(<PhaseTrajectoryStrip {...baseProps()} />);
     const bands = container.querySelectorAll('[data-testid="phase-band"]');

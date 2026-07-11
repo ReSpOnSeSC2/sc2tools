@@ -1,5 +1,7 @@
 "use client";
 
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+
 import { EmptyState } from "@/components/ui/Card";
 import { fmtMinutes } from "@/lib/format";
 
@@ -76,6 +78,79 @@ const CROSSING_ORDER: Array<{
   { key: "midLateAt", label: "Mid/Late", to: "midLate" },
   { key: "lateAt", label: "Late", to: "late" },
 ];
+
+type CrossingKey = keyof PhaseTrajectoryStripProps["crossings"];
+
+export type CrossingLabelLayoutInput = {
+  key: CrossingKey;
+  anchorPx: number;
+  widthPx: number;
+};
+
+export type CrossingLabelLayout = {
+  key: CrossingKey;
+  leftPx: number;
+  lane: number;
+};
+
+const CROSSING_LABEL_GAP_PX = 8;
+const CROSSING_LABEL_EDGE_PX = 4;
+const CROSSING_LABEL_LANE_HEIGHT_PX = 34;
+const CROSSING_LABEL_FALLBACK_WIDTH_PX = 72;
+
+/**
+ * Places crossing labels into the first vertical lane where their
+ * horizontal bounds do not collide. Marker lines remain anchored to the
+ * exact crossing percentage; labels are staggered vertically and clamped
+ * at the timeline edges.
+ */
+export function layoutCrossingLabels(
+  inputs: CrossingLabelLayoutInput[],
+  containerWidth: number,
+  gapPx = CROSSING_LABEL_GAP_PX,
+): CrossingLabelLayout[] {
+  if (!Number.isFinite(containerWidth) || containerWidth <= 0) {
+    return inputs.map(({ key, anchorPx }) => ({
+      key,
+      leftPx: anchorPx,
+      lane: 0,
+    }));
+  }
+
+  const positioned: CrossingLabelLayout[] = new Array(inputs.length);
+  const laneRightEdges: number[] = [];
+  const sorted = inputs
+    .map((input, index) => ({ input, index }))
+    .sort(
+      (a, b) =>
+        a.input.anchorPx - b.input.anchorPx || a.index - b.index,
+    );
+
+  for (const { input, index } of sorted) {
+    const width = Math.max(1, Math.min(input.widthPx, containerWidth));
+    const halfWidth = width / 2;
+    const minCenter = Math.min(
+      containerWidth / 2,
+      halfWidth + CROSSING_LABEL_EDGE_PX,
+    );
+    const maxCenter = Math.max(
+      containerWidth / 2,
+      containerWidth - halfWidth - CROSSING_LABEL_EDGE_PX,
+    );
+    const leftPx = Math.max(minCenter, Math.min(maxCenter, input.anchorPx));
+    const labelLeft = leftPx - halfWidth;
+    const labelRight = leftPx + halfWidth;
+
+    let lane = laneRightEdges.findIndex(
+      (rightEdge) => labelLeft >= rightEdge + gapPx,
+    );
+    if (lane === -1) lane = laneRightEdges.length;
+    laneRightEdges[lane] = labelRight;
+    positioned[index] = { key: input.key, leftPx, lane };
+  }
+
+  return positioned;
+}
 
 type BandSpec = { phase: Phase; start: number; end: number };
 
@@ -384,6 +459,93 @@ function MedianTimingLine({
       })
       .join(", ");
   const tickCount = Math.floor(ceiling / 60) + 1;
+  const visibleCrossings = useMemo(
+    () =>
+      CROSSING_ORDER.flatMap(({ key, label }) => {
+        const value = crossings[key];
+        if (value == null) return [];
+        const leftPct = Math.max(
+          0,
+          Math.min(100, (value / Math.max(1, ceiling)) * 100),
+        );
+        return [{ key, label, value, leftPct }];
+      }),
+    [ceiling, crossings],
+  );
+  const labelsHostRef = useRef<HTMLDivElement>(null);
+  const labelRefs = useRef<
+    Partial<Record<CrossingKey, HTMLSpanElement | null>>
+  >({});
+  const [crossingLabelLayout, setCrossingLabelLayout] = useState<
+    Partial<Record<CrossingKey, CrossingLabelLayout>>
+  >({});
+
+  useLayoutEffect(() => {
+    const host = labelsHostRef.current;
+    if (!host) return;
+
+    const measure = () => {
+      const width = host.clientWidth;
+      if (width <= 0) return;
+      const inputs = visibleCrossings.map(({ key, leftPct }) => {
+        const measuredWidth =
+          labelRefs.current[key]?.getBoundingClientRect().width ?? 0;
+        return {
+          key,
+          anchorPx: (leftPct / 100) * width,
+          widthPx:
+            measuredWidth > 0
+              ? measuredWidth
+              : CROSSING_LABEL_FALLBACK_WIDTH_PX,
+        };
+      });
+      const next = layoutCrossingLabels(inputs, width);
+
+      setCrossingLabelLayout((previous) => {
+        const previousKeys = Object.keys(previous);
+        const unchanged =
+          previousKeys.length === next.length &&
+          next.every(({ key, leftPx, lane }) => {
+            const current = previous[key];
+            return (
+              current?.lane === lane &&
+              Math.abs(current.leftPx - leftPx) < 0.5
+            );
+          });
+        if (unchanged) return previous;
+
+        return Object.fromEntries(
+          next.map((item) => [item.key, item]),
+        ) as Partial<Record<CrossingKey, CrossingLabelLayout>>;
+      });
+    };
+
+    measure();
+    window.addEventListener("resize", measure);
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measure);
+    resizeObserver?.observe(host);
+    for (const { key } of visibleCrossings) {
+      const label = labelRefs.current[key];
+      if (label) resizeObserver?.observe(label);
+    }
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [visibleCrossings]);
+
+  const crossingLabelLaneCount = visibleCrossings.length
+    ? Math.max(
+        ...visibleCrossings.map(
+          ({ key }) => (crossingLabelLayout[key]?.lane ?? 0) + 1,
+        ),
+      )
+    : 0;
 
   return (
     <div>
@@ -479,28 +641,34 @@ function MedianTimingLine({
         </div>
 
         <div
-          className="relative mt-1.5 h-7 w-full text-micro tabular-nums text-text-dim"
+          ref={labelsHostRef}
+          className="relative mt-1.5 w-full text-micro tabular-nums text-text-dim"
+          style={{
+            height: crossingLabelLaneCount * CROSSING_LABEL_LANE_HEIGHT_PX,
+          }}
           data-testid="phase-labels"
         >
-          <span
-            className="absolute left-0 hidden whitespace-nowrap md:inline"
-            aria-hidden="true"
-          >
-            0:00
-          </span>
-          {CROSSING_ORDER.map(({ key, label }) => {
-            const v = crossings[key];
-            if (v == null) return null;
-            const left = clampPct(v);
+          {visibleCrossings.map(({ key, label, value, leftPct }) => {
+            const layout = crossingLabelLayout[key];
+            const lane = layout?.lane ?? 0;
             return (
               <span
                 key={`label-${key}`}
                 className="absolute -translate-x-1/2 whitespace-nowrap text-center leading-tight"
-                style={{ left: `${left}%` }}
+                ref={(node) => {
+                  labelRefs.current[key] = node;
+                }}
+                style={{
+                  left: layout ? `${layout.leftPx}px` : `${leftPct}%`,
+                  top: lane * CROSSING_LABEL_LANE_HEIGHT_PX,
+                }}
                 title={`${label} crossing`}
+                data-testid="phase-crossing-label"
+                data-key={key}
+                data-lane={lane}
               >
                 <span className="block font-mono font-semibold text-text">
-                  {fmtMinutes(v)}
+                  {fmtMinutes(value)}
                 </span>
                 <span className="block text-micro uppercase tracking-wider">
                   {label}
@@ -508,12 +676,6 @@ function MedianTimingLine({
               </span>
             );
           })}
-          <span
-            className="absolute right-0 hidden whitespace-nowrap md:inline"
-            aria-hidden="true"
-          >
-            {fmtMinutes(ceiling)}
-          </span>
         </div>
       </div>
     </div>
