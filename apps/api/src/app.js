@@ -42,6 +42,7 @@ const { SpatialService } = require("./services/spatial");
 const { CatalogService } = require("./services/catalog");
 const { MLService } = require("./services/ml");
 const { AgentVersionService } = require("./services/agentVersion");
+const { GithubReleaseFeed } = require("./services/agentGithubReleases");
 const { GdprService } = require("./services/gdpr");
 const { CommunityService } = require("./services/community");
 const { SeasonsService } = require("./services/seasons");
@@ -266,7 +267,31 @@ function makeServices(deps) {
   const imports = new ImportService(deps.db, { io: deps.io });
   const spatial = new SpatialService(deps.db);
   const ml = new MLService(deps.db, { io: deps.io, gameDetails });
-  const agentVersion = new AgentVersionService(deps.db);
+  // The GitHub feed makes an `agent-v*` tag push a complete release:
+  // the updater's /v1/agent/version poll then sees the newest GitHub
+  // release even when nobody ran the manual POST /v1/agent/releases
+  // publish. Repo defaults to this monorepo; override or disable via
+  // env for forks / air-gapped deploys.
+  const githubReleaseRepo =
+    process.env.AGENT_RELEASE_GITHUB_REPO || "ReSpOnSeSC2/sc2tools";
+  const [ghOwner, ghRepo] = githubReleaseRepo.split("/");
+  // Off under jest (NODE_ENV=test) so route tests never fetch the live
+  // GitHub API; AGENT_RELEASE_GITHUB_FALLBACK=on re-enables for a test
+  // that wants the real feed, "off" force-disables it in production.
+  const githubFallbackSetting = process.env.AGENT_RELEASE_GITHUB_FALLBACK || "";
+  const githubFeedEnabled =
+    githubFallbackSetting === "on" ||
+    (githubFallbackSetting !== "off" && process.env.NODE_ENV !== "test");
+  const githubFeed =
+    !githubFeedEnabled || !ghOwner || !ghRepo
+      ? null
+      : new GithubReleaseFeed({
+          owner: ghOwner,
+          repo: ghRepo,
+          token: process.env.GITHUB_TOKEN || null,
+          logger: deps.logger,
+        });
+  const agentVersion = new AgentVersionService(deps.db, { githubFeed });
   const gdpr = new GdprService(deps.db, {
     opponents,
     logger: deps.logger,
