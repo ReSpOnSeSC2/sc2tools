@@ -31,6 +31,7 @@ const pino = require("pino");
 
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
+const { PulseMmrService } = require("../src/services/pulseMmr");
 
 jest.mock("@clerk/backend", () => ({
   verifyToken: jest.fn(async (token) => {
@@ -92,7 +93,22 @@ describe("/v1/admin", () => {
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create();
     db = await connect({ uri: mongo.getUri(), dbName: config.mongoDb });
-    const built = buildApp({ db, logger: pino({ level: "silent" }), config });
+    const built = buildApp({
+      db,
+      logger: pino({ level: "silent" }),
+      config,
+      // Network-disabled pulse service: the fixtures carry REAL pulse
+      // ids, so every ingest did a live SC2Pulse fetch — the
+      // listOpponents test seeds 6 games and its ~6 × 8s network
+      // budget rode right up to (and under load past) the 30s test
+      // timeout. Failures are swallowed as "SC2Pulse unavailable",
+      // same pattern as opponentsRecount.test.js.
+      pulseMmr: new PulseMmrService({
+        fetchImpl: async () => {
+          throw new Error("network_disabled_in_tests");
+        },
+      }),
+    });
     app = built.app;
     services = built.services;
   });
