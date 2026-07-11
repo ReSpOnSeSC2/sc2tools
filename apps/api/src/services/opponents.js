@@ -33,6 +33,7 @@ const MMR_PULSE_FRESH_MS = (() => {
 // Inverse of regionFromToonHandle. Used by the region filter so old
 // opponents rows (created before ``region`` was a stored field) still
 // match via their toonHandle prefix.
+/** @type {Record<string, string>} */
 const REGION_TO_HANDLE_PREFIX = { NA: "1", EU: "2", KR: "3", CN: "5", SEA: "6" };
 
 /**
@@ -214,6 +215,7 @@ class OpponentsService {
         ];
       }
     }
+    /** @type {Array<any>} */
     const items = await this.db.opponents
       .find(filter, { projection: { _id: 0 } })
       .sort({ lastSeen: -1 })
@@ -265,6 +267,7 @@ class OpponentsService {
       cursorMatch.lastPlayed = { $lt: opts.before };
     }
 
+    /** @type {any[]} */
     const pipeline = [
       { $match: match },
       { $match: { "opponent.pulseId": { $type: "string", $ne: "" } } },
@@ -332,6 +335,7 @@ class OpponentsService {
     pipeline.push({ $sort: { lastPlayed: -1 } });
     pipeline.push({ $limit: limit + 1 });
 
+    /** @type {Array<any>} */
     const items = await this.db.games.aggregate(pipeline).toArray();
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
@@ -886,6 +890,7 @@ class OpponentsService {
     const gamesFilter = idsFilter
       ? { userId, ...idsFilter }
       : { userId, "opponent.pulseId": pulseId };
+    /** @type {Array<any>} */
     const rawGames = await this.db.games
       .find(gamesFilter, { projection: PROFILE_GAME_PROJECTION })
       .sort({ date: -1 })
@@ -1031,9 +1036,10 @@ class OpponentsService {
       try {
         return computePerGameScouting(g);
       } catch (err) {
+        const e = /** @type {{ message?: unknown }} */ (err);
         console.warn(
           "perGameScouting failed for gameId=%s userId=%s: %s",
-          g && g.gameId, userId, (err && err.message) || err,
+          g && g.gameId, userId, (e && e.message) || e,
         );
         return null;
       }
@@ -1054,9 +1060,10 @@ class OpponentsService {
         try {
           return computePerGameScouting(g);
         } catch (err) {
+          const e = /** @type {{ message?: unknown }} */ (err);
           console.warn(
             "perGameScouting failed for gameId=%s userId=%s: %s",
-            g && g.gameId, userId, (err && err.message) || err,
+            g && g.gameId, userId, (e && e.message) || e,
           );
           return null;
         }
@@ -1143,8 +1150,10 @@ class OpponentsService {
    * @param {string} userId
    * @param {{
    *   pulseId: string,
+   *   gameId?: string,
    *   toonHandle?: string,
    *   pulseCharacterId?: string,
+   *   pulseLookupAttempted?: boolean,
    *   displayName: string,
    *   race: string,
    *   mmr?: number,
@@ -1348,8 +1357,10 @@ class OpponentsService {
    * @param {string} userId
    * @param {{
    *   pulseId: string,
+   *   gameId?: string,
    *   toonHandle?: string,
    *   pulseCharacterId?: string,
+   *   pulseLookupAttempted?: boolean,
    *   displayName?: string,
    *   race: string,
    *   mmr?: number,
@@ -1738,7 +1749,9 @@ class OpponentsService {
    *
    * @private
    * @param {string|null} pulseCharacterId
-   * @param {{mmrFetchedAt?: Date}|null} prior
+   * @param {Record<string, any>|null} prior the opponents-row pre-read
+   *   (or null on first encounter / forced paths); only ``mmrFetchedAt``
+   *   is consulted here, for the freshness window.
    * @param {string|null} [preferredRegion]
    * @param {string|null} [toonHandle]
    * @param {{ forceFresh?: boolean }} [opts] when ``forceFresh`` is set
@@ -1746,7 +1759,10 @@ class OpponentsService {
    *   per-row freshness window so the pull genuinely hits SC2Pulse — but
    *   still write the fresh result THROUGH to the shared cache so every
    *   user gets the refreshed value.
-   * @returns {Promise<{mmr: number, region: string|null, revealedName: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, revealedName?: string|null}|null>}
+   *   ``revealedName`` is only present on a live SC2Pulse pull — the
+   *   shared-directory fast path returns just ``mmr`` / ``region``, and
+   *   its callers treat the absent field as "no reveal captured".
    */
   async _fetchOpponentMmrFromPulse(pulseCharacterId, prior, preferredRegion, toonHandle, opts = {}) {
     const forceFresh = opts && opts.forceFresh === true;
@@ -2279,11 +2295,18 @@ class OpponentsService {
     const fetchedAt =
       row.mmrFetchedAt instanceof Date ? row.mmrFetchedAt : null;
 
+    /** @type {Array<{code: string, severity: string, message: string}>} */
     const findings = [];
+    /**
+     * @param {string} code
+     * @param {string} severity
+     * @param {string} message
+     */
     const add = (code, severity, message) =>
       findings.push({ code, severity, message });
 
     // --- Pulse ID ---
+    /** @type {"resolved"|"unresolved"|"none"} */
     let pulseIdStatus;
     if (charId) {
       pulseIdStatus = "resolved";
@@ -2705,6 +2728,9 @@ function clampLimit(raw, fallback) {
  * totals (they slice games by map / player count), and those fields
  * live on the games documents — not the opponents collection — so they
  * must force the aggregation path or they'd be silently ignored.
+ *
+ * @param {import('../util/parseQuery').GlobalFilters | null | undefined} f
+ * @returns {boolean}
  */
 function hasFilters(f) {
   if (!f || typeof f !== "object") return false;
@@ -2727,6 +2753,8 @@ function hasFilters(f) {
  * Normalise a stored game document into the shape consumed by the
  * legacy SPA profile renderers (lowercase ISO date string,
  * `opp_strategy`, `opp_race`, `my_build`, `game_length`).
+ *
+ * @param {any} g Mongo games-collection doc (post detail hydration).
  */
 function serializeGameForProfile(g) {
   if (!g) return g;
@@ -2758,9 +2786,10 @@ function serializeGameForProfile(g) {
  * with an unparseable date are kept (matches the rest of the pipeline,
  * which tolerates legacy rows without timestamps).
  *
- * @param {Array<object>} games
+ * @param {Array<any>} games
  * @param {Date|undefined} since
  * @param {Date|undefined} until
+ * @returns {Array<any>}
  */
 function filterGamesByDate(games, since, until) {
   if (!since && !until) return games;
@@ -2786,7 +2815,8 @@ function filterGamesByDate(games, since, until) {
 /**
  * Aggregate W/L by map and by opponent strategy from the games array.
  *
- * @param {Array<object>} games
+ * @param {Array<any>} games profile-serialized games (``opp_strategy``
+ *   / ``map`` / ``result`` fields).
  */
 function aggregateByMapAndStrategy(games) {
   /** @type {Record<string, {wins: number, losses: number}>} */
@@ -2816,6 +2846,10 @@ function aggregateByMapAndStrategy(games) {
  * Compute totals — prefer aggregated game W/L, fall back to the
  * opponent doc's stored counters when no individual games are
  * present (e.g. during partial imports).
+ *
+ * @param {Array<any>} games
+ * @param {any} doc opponents-collection row (or null-ish).
+ * @returns {{wins: number, losses: number, total: number, winRate: number}}
  */
 function computeTotals(games, doc) {
   let wins = 0;
@@ -2894,6 +2928,11 @@ function computeDnaFields(games) {
  * `OpponentDnaTimingsDrilldown`. The legacy-shaped payload still ships
  * under `medianTimingsLegacy` / `matchupTimingsLegacy` for the new
  * `MedianTimingsGrid`.
+ *
+ * @param {any} legacy ``Record<token, TokenTimingRow>`` map from
+ *   dnaTimings (``any`` so the null-tolerant ``legacy[k]`` reads keep
+ *   their runtime shape).
+ * @returns {Record<string, {key: string, median: number|null, count: number}>}
  */
 function projectMedianTimings(legacy) {
   /** @type {Record<string, {key: string, median: number|null, count: number}>} */
@@ -2917,11 +2956,13 @@ function projectMedianTimings(legacy) {
  * toon profile so the UI can branch on ``> 1``.
  *
  * @param {Array<{opponent?: {toonHandle?: string, pulseId?: string}}>} rawGames
- * @param {{toonHandle?: string, pulseId?: string}} doc
+ * @param {Record<string, any>} doc opponents-collection row (Mongo doc;
+ *   ``toonHandle`` / ``pulseId`` are the fields read).
  * @returns {string[]}
  */
 function collectMergedToonHandles(rawGames, doc) {
   const seen = new Set();
+  /** @type {string[]} */
   const ordered = [];
   /** @param {string|undefined} v */
   const consider = (v) => {
@@ -2945,6 +2986,14 @@ function collectMergedToonHandles(rawGames, doc) {
   return ordered;
 }
 
+/**
+ * Per-matchup projection of ``projectMedianTimings`` — maps each
+ * ``{ timings }`` bucket through the same compat shape.
+ *
+ * @param {any} legacy ``Record<matchup, {timings, order}>`` map (``any``
+ *   for the same null-tolerant reads as ``projectMedianTimings``).
+ * @returns {Record<string, Record<string, {key: string, median: number|null, count: number}>>}
+ */
 function projectMatchupTimings(legacy) {
   /** @type {Record<string, Record<string, {key: string, median: number|null, count: number}>>} */
   const out = {};

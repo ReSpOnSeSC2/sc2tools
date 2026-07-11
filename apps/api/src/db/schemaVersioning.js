@@ -21,12 +21,14 @@
 const { COLLECTIONS } = require("../config/constants");
 
 class SchemaMigrationError extends Error {
+  /** @param {string} msg */
   constructor(msg) {
     super(msg);
     this.name = "SchemaMigrationError";
   }
 }
 class SchemaTooNewError extends Error {
+  /** @param {string} msg */
   constructor(msg) {
     super(msg);
     this.name = "SchemaTooNewError";
@@ -35,11 +37,15 @@ class SchemaTooNewError extends Error {
 
 const VERSION_KEY = "_schemaVersion";
 
+/** @typedef {{ collection: string, currentVersion: number, versionKey: string }} SchemaSpec */
+
 /**
  * Registry of every collection the API writes to. Bump `currentVersion`
  * any time you change a collection's document shape, then register a
  * `{from_version, to_version, forward, backward}` migration via
  * `registerMigration` so existing documents can roll forward.
+ *
+ * @type {Readonly<Record<string, SchemaSpec>>}
  */
 const REGISTRY = Object.freeze({
   [COLLECTIONS.USERS]: {
@@ -252,6 +258,11 @@ function getOnDiskVersion(doc, collection) {
   return typeof v === "number" && Number.isInteger(v) ? v : null;
 }
 
+/**
+ * @param {string} collection
+ * @param {number} fromV
+ * @param {number} toV
+ */
 function _findStep(collection, fromV, toV) {
   for (const m of MIGRATIONS) {
     if (
@@ -265,6 +276,11 @@ function _findStep(collection, fromV, toV) {
   return null;
 }
 
+/**
+ * @param {string} collection
+ * @param {number} fromV
+ * @param {number} toV
+ */
 function _chainForward(collection, fromV, toV) {
   if (fromV === toV) return [];
   if (toV < fromV) {
@@ -287,6 +303,11 @@ function _chainForward(collection, fromV, toV) {
   return out;
 }
 
+/**
+ * @param {string} collection
+ * @param {number} fromV
+ * @param {number} toV
+ */
 function _chainBackward(collection, fromV, toV) {
   if (fromV === toV) return [];
   if (toV > fromV) {

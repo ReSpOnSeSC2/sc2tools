@@ -544,7 +544,9 @@ class CommunityService {
       { slug, removed: false },
       {
         $addToSet: { [arr]: userId },
-        $pull: { [opposite]: userId },
+        // Computed-key $pull fights the driver's PullOperator mapped
+        // type — the key is one of two literal array fields at runtime.
+        $pull: /** @type {any} */ ({ [opposite]: userId }),
       },
     );
     // Refresh the cached `votes` count.
@@ -674,7 +676,10 @@ class CommunityService {
 
   /**
    * @param {string} userId — reporter
-   * @param {{targetType: 'build'|'opponent', targetId: string, reason: string, note?: string}} input
+   * @param {{targetType: string, targetId: string, reason: string, note?: string}} input
+   *   ``targetType`` must be 'build'|'opponent'; anything else is
+   *   rejected with a 400 below. Typed wide because the route passes
+   *   the raw request-body string through for exactly that check.
    */
   async report(userId, input) {
     if (!["build", "opponent"].includes(input.targetType)) {

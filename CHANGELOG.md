@@ -12,6 +12,38 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Agent auto-update · a tag push is now a complete release** — the
+  installed agent's updater polls the API's `GET /v1/agent/version`,
+  which only served rows manually POSTed to `/v1/agent/releases`; the
+  website's download card, by contrast, reads the GitHub Releases feed
+  directly. So cutting an `agent-v*` tag *looked* fully published (the
+  site offered the new installer) while every installed agent silently
+  stayed on the old build until someone remembered the manual curl —
+  which is how the 0.13.3 building-death fix sat unshipped. The API now
+  merges a second release source (`services/agentGithubReleases.js`):
+  the newest eligible `agent-v*` GitHub release (semver-sorted,
+  drafts/prereleases skipped, sha256 read from the `.sha256` sidecar,
+  10-min cache with stale-on-error). `AgentVersionService.latest()`
+  serves whichever source is newer; Mongo rows win ties so a manual
+  publish can still override notes/minSupportedVersion. Disable with
+  `AGENT_RELEASE_GITHUB_FALLBACK=off`; repo override via
+  `AGENT_RELEASE_GITHUB_REPO`. Off under `NODE_ENV=test`.
+
+- **Agent 0.13.3 · building-death pipeline actually released** — the
+  two earlier fixes below (structure lifetimes on the upload payload,
+  opponent-side mirror, explicit destroyed bit) landed in source after
+  the 0.13.2 installer was built, and the agent version was never
+  bumped — so no release carried them and installed agents kept
+  uploading `macroBreakdown` payloads without `production_buildings` /
+  `opp_production_buildings`. The Macro Breakdown Buildings roster
+  therefore still fell back to cumulative build-order counts (the
+  "BUILD ORDER" badge), and the panel's Recompute button couldn't help
+  because the recompute runs on the same outdated installed agent.
+  Bumped the agent to 0.13.3 so a release can be cut
+  (`git tag agent-v0.13.3 && git push --tags`, then publish to the
+  release feed); after the agent updates, affected games need a
+  one-time Recompute (or agent Resync) to re-upload with lifetimes.
+
 - **Macro breakdown · total building wipes now reach zero** — structure
   lifetime records now carry an explicit destroyed/survived result. This
   prevents the latest (or only) real death from being mistaken for the

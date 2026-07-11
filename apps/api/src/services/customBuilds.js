@@ -201,13 +201,19 @@ class CustomBuildsService {
    * @returns {Promise<null | {
    *   slug: string,
    *   name: string,
+   *   perspective: "you"|"opponent",
    *   sampleSize: Record<string, number>,
-   *   perPhase: Record<string, object>,
+   *   perPhase: Record<string, import('./types').BuildPhaseRow>,
    *   finalPhaseDistribution: Record<string, number>,
-   *   medianCrossings: object,
+   *   medianCrossings: {
+   *     earlyMidAt: number|null,
+   *     midAt: number|null,
+   *     midLateAt: number|null,
+   *     lateAt: number|null,
+   *   },
    *   durationP95Sec: number,
    *   flags: string[],
-   *   transitions?: { nodes: object[], edges: object[], rare: object },
+   *   transitions?: import('./types').BuildTransitionsPayload["transitions"],
    * }>}
    */
   async evaluateBuildPhases(userId, slug, opts = {}) {
@@ -251,12 +257,19 @@ class CustomBuildsService {
     const matchPushdown = strategyName
       ? { "opponent.strategy": strategyName }
       : null;
-    const games = await this.perGame.listForRulePreview(userId, {
-      limit: STATS_GAME_SCAN_CAP,
-      includeMacroBreakdown: true,
-      filters: opts && opts.filters,
-      ...(matchPushdown ? { match: matchPushdown } : {}),
-    });
+    // ``filters`` is consumed by the real perGameCompute implementation
+    // (it feeds gamesMatchStage) but the trimmed PerGameComputeService
+    // interface in types.d.ts doesn't declare it yet — widen the opts
+    // literal locally so the pass-through stays typed.
+    const games = await this.perGame.listForRulePreview(
+      userId,
+      /** @type {{ limit?: number, includeMacroBreakdown?: boolean, match?: Record<string, unknown>, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters> }} */ ({
+        limit: STATS_GAME_SCAN_CAP,
+        includeMacroBreakdown: true,
+        filters: opts && opts.filters,
+        ...(matchPushdown ? { match: matchPushdown } : {}),
+      }),
+    );
     const inMatchup = games.filter((g) =>
       gameMatchesBuildMatchup(g, build, rulePerspective),
     );
@@ -274,7 +287,23 @@ class CustomBuildsService {
         })
       : ruleMatched;
     const comps = computeCompositions(matched, { perspective: phasePerspective });
-    /** @type {Record<string, any>} */
+    /** @type {{
+     *   slug: string,
+     *   name: string,
+     *   perspective: "you"|"opponent",
+     *   sampleSize: Record<string, number>,
+     *   perPhase: Record<string, import('./types').BuildPhaseRow>,
+     *   finalPhaseDistribution: Record<string, number>,
+     *   medianCrossings: {
+     *     earlyMidAt: number|null,
+     *     midAt: number|null,
+     *     midLateAt: number|null,
+     *     lateAt: number|null,
+     *   },
+     *   durationP95Sec: number,
+     *   flags: string[],
+     *   transitions?: import('./types').BuildTransitionsPayload["transitions"],
+     * }} */
     const out = {
       slug: build.slug,
       name: build.name || build.slug,
@@ -459,7 +488,7 @@ class CustomBuildsService {
     const perBuild = [];
 
     for (let i = 0; i < builds.length; i++) {
-      const b = builds[i];
+      const b = /** @type {any} */ (builds[i]);
       const rules = extractRules(b);
       const perspective = b.perspective === "opponent" ? "opponent" : "you";
       const buildName = b.name || b.slug;
@@ -707,16 +736,21 @@ async function tagGames(games, userId, gameIds, buildName) {
  * rules so old saved builds still match.
  *
  * @param {any} build
- * @returns {Array<{type: string, name: string, time_lt: number, count?: number}>}
+ * @returns {Array<import('./buildRulesEvaluator').BuildRule>}
  */
 function extractRules(build) {
   if (Array.isArray(build.rules) && build.rules.length > 0) {
-    return build.rules.filter((r) => r && typeof r === "object" && r.name);
+    return build.rules.filter(
+      /** @param {any} r */ (r) => r && typeof r === "object" && r.name,
+    );
   }
   if (Array.isArray(build.signature) && build.signature.length > 0) {
     return build.signature
-      .filter((s) => s && typeof s === "object" && typeof s.unit === "string")
-      .map((s) => ({
+      .filter(
+        /** @param {any} s */ (s) =>
+          s && typeof s === "object" && typeof s.unit === "string",
+      )
+      .map(/** @param {any} s */ (s) => ({
         type: "count_min",
         name: ruleNameFromUnit(s.unit),
         time_lt: Math.max(1, Number(s.beforeSec) || 60),
@@ -801,7 +835,7 @@ function raceStrictMatch(actual, requested, buildName, bucketPos) {
 
 /**
  * @param {Array<{events: any[], oppEvents: any[], myRace: string|null, oppRace: string|null, gameId: string, result: string|null, date: Date|null, map: string|null}>} games
- * @param {ReadonlyArray<{type: string, name: string, time_lt: number, count?: number}>} rules
+ * @param {ReadonlyArray<import('./buildRulesEvaluator').BuildRule>} rules
  * @param {'you'|'opponent'} perspective
  */
 function filterMatchingGames(games, rules, perspective) {

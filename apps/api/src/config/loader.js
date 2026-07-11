@@ -33,6 +33,23 @@ const VALID_GAME_DETAILS_STORES = new Set(["mongo", "r2"]);
  *   adminEmails: string[],
  *   keepaliveTargets: string[],
  *   keepaliveIntervalMs: number,
+ *   slowQueryMs: number,
+ *   metricsToken: string|null,
+ *   gameDetailsStore: "mongo"|"r2",
+ *   r2: {
+ *     endpoint: string,
+ *     region: string,
+ *     bucket: string,
+ *     accessKeyId: string,
+ *     secretAccessKey: string,
+ *     prefix: string,
+ *   }|null,
+ *   analytics: {
+ *     enabled: boolean,
+ *     propertyId: string|null,
+ *     credentials: { client_email: string, private_key: string }|null,
+ *     keyFile: string|null,
+ *   },
  * }}
  *
  * Example:
@@ -179,6 +196,7 @@ function parseServiceAccountKey(raw) {
  * has copied existing detail rows over.
  *
  * @param {string|undefined} raw
+ * @returns {"mongo"|"r2"}
  */
 function parseGameDetailsStore(raw) {
   const v = (raw || "mongo").trim().toLowerCase();
@@ -187,7 +205,8 @@ function parseGameDetailsStore(raw) {
       `GAME_DETAILS_STORE must be one of [mongo, r2]; got: ${raw}`,
     );
   }
-  return v;
+  // The Set guard above proves membership; TS can't narrow through it.
+  return /** @type {"mongo"|"r2"} */ (v);
 }
 
 /**

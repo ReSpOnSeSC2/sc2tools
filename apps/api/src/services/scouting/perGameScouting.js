@@ -101,7 +101,7 @@ const BUILD_ORDER_SKIP = new Set([
 /**
  * Compute the per-game scouting envelope from one stored game record.
  *
- * @param {object} game raw game record (NOT the serialized profile
+ * @param {any} game raw game record (NOT the serialized profile
  *   shape — needs ``macroBreakdown``, ``buildLog``, ``oppBuildLog``).
  * @returns {object} PerGameScoutingEnvelope
  */
@@ -380,7 +380,7 @@ function pickTransitions(crossings) {
  * map (LurkerMP + LurkerMPBurrowed → Lurker, etc.) before max-ing
  * so variants don't split the count.
  *
- * @param {Array<{time:number,my?:object,opp?:object}>} unitTimeline
+ * @param {Array<{time:number,my?:Record<string,number>,opp?:Record<string,number>}>} unitTimeline
  * @param {{earlyMidAt:number|null,midAt:number|null,midLateAt:number|null,lateAt:number|null}} crossings
  * @param {number} durationSec
  * @param {"my"|"opp"} side
@@ -436,10 +436,10 @@ function sampleCompositionsByPhase(
  * ``productionBuildings`` lifetimes are available. Falls back to the
  * cumulative-built count when they aren't.
  *
- * @param {Array<object>} buildEvents
+ * @param {Array<{time:number,complete_time?:number,name:string,display?:string,is_building?:boolean,category?:string}>} buildEvents
  * @param {{earlyMidAt:number|null,midAt:number|null,midLateAt:number|null,lateAt:number|null}} crossings
  * @param {number} durationSec
- * @param {Array<{name:string,born_time:number,died_time:number}>} [productionBuildings]
+ * @param {Array<{name:string,born_time:number,died_time:number}> | null} [productionBuildings]
  */
 function sampleBuildingsByPhase(buildEvents, crossings, durationSec, productionBuildings) {
   /** @type {Record<string,{reached:boolean,atTime:number|null,buildings:Array<{token:string,count:number}>}>} */
@@ -473,7 +473,7 @@ function sampleBuildingsByPhase(buildEvents, crossings, durationSec, productionB
  * ``countUpgradesAt`` snapshot — tiered weapons/armor families
  * collapse onto the highest tier reached (count value IS the tier).
  *
- * @param {Array<object>} buildEvents
+ * @param {Array<{time:number,complete_time?:number,name:string,display?:string,is_building?:boolean,category?:string}>} buildEvents
  * @param {{earlyMidAt:number|null,midAt:number|null,midLateAt:number|null,lateAt:number|null}} crossings
  * @param {number} durationSec
  */

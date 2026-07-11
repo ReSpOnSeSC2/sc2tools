@@ -69,6 +69,35 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   single-process and reliable; stale worker logs from previous sessions
   are pruned at startup.
 
+## 0.13.3
+
+### Fixed — destroyed buildings now drop off the Macro Breakdown rosters
+- **What.** The Macro Breakdown's Buildings roster showed the
+  cumulative count of every structure ever built ("36 Pylons",
+  "43 Spine Crawlers" late-game) with a "BUILD ORDER" badge, because
+  uploads carried no per-structure death data. The bundled replay
+  engine now records a lifetime (`born_time` / `died_time` / explicit
+  `destroyed` result) for **both players'** structures — including
+  buildings killed or cancelled while still under construction, e.g. a
+  cannon sniped mid-warp-in or a spine killed while morphing — and the
+  agent ships those records (`production_buildings`,
+  `opp_production_buildings`, `bases`, `opp_bases`) on every
+  `macroBreakdown` upload.
+- **Effect.** Both Buildings rosters remove destroyed structures at
+  the hovered timeline moment, exactly like the Units row; the
+  "BUILD ORDER" badge disappears once death-aware data is stored.
+  **Games uploaded by older agent builds keep their cumulative counts
+  until re-parsed** — after updating, click Recompute on that game's
+  Macro Breakdown panel, or run a full Resync from the agent app.
+- **Why a dedicated release for this.** The fix itself merged in two
+  earlier PRs (#502, #505), but both landed after the 0.13.2 installer
+  was built and the agent version was never bumped — so no installer
+  ever carried them, and Recompute couldn't help because it re-parses
+  with the same outdated installed agent. 0.13.3 exists to actually
+  deliver the pipeline. (The cloud API now also reads the GitHub
+  Releases feed directly, so future tag pushes reach installed agents
+  without a separate publish step.)
+
 ## 0.13.2
 
 ### Fixed — PvZ 2 Stargate Void Ray no longer mislabeled "Stargate into Robo" on a late support Robo

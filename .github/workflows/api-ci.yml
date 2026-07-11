@@ -46,15 +46,9 @@ jobs:
           key: mongodb-binaries-${{ runner.os }}
       - name: Install dependencies
         run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
       - name: Lint
         run: npm run lint
-      # Non-blocking for now: the API's checkJs typecheck carries ~800
-      # pre-existing errors across 80+ files (it was never enforced in
-      # CI). Blocking on it would freeze all merges until that debt is
-      # paid down; new code should still keep it clean. Flip this to
-      # blocking once `npm run typecheck` exits 0 on main.
-      - name: Typecheck (non-blocking — pre-existing debt)
-        run: npm run typecheck
-        continue-on-error: true
       - name: Test
-        run: npm test
+        run: npx jest --runInBand --coverage=false

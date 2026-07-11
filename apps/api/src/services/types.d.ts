@@ -4,6 +4,9 @@
 export interface UserProfile {
   battleTag?: string;
   pulseId?: string;
+  // Canonical pulse-identity list; ``pulseId`` mirrors ``pulseIds[0]``
+  // (see users.js getProfile / addPulseId).
+  pulseIds?: string[];
   region?: string;
   preferredRace?: string;
   displayName?: string;
@@ -31,20 +34,38 @@ export interface UsersService {
     grantedByClerkId: string,
   ): Promise<{ userId: string; clerkUserId: string } | null>;
   listDbAdminClerkIds(): Promise<string[]>;
+  setBattleTags(userId: string, tags: string[]): Promise<UserProfile>;
+  addPulseId(userId: string, pulseId: string): Promise<boolean>;
+  getPreferences(userId: string, type: string): Promise<Record<string, unknown>>;
+  updatePreferences(
+    userId: string,
+    type: string,
+    prefs: Record<string, unknown>,
+  ): Promise<Record<string, unknown>>;
+  patchLastKnownMmr(
+    userId: string,
+    update: { mmr: number; capturedAt?: string; region?: string },
+  ): Promise<boolean>;
 }
 
 export interface OpponentsService {
   list(
     userId: string,
-    opts?: { limit?: number; before?: Date },
+    opts?: { limit?: number; before?: Date; filters?: object },
   ): Promise<{ items: object[]; nextBefore: Date | null }>;
-  get(userId: string, pulseId: string): Promise<object | null>;
+  get(
+    userId: string,
+    pulseId: string,
+    opts?: { since?: Date; until?: Date },
+  ): Promise<object | null>;
   recordGame(
     userId: string,
     game: {
       pulseId: string;
+      gameId?: string;
       toonHandle?: string;
       pulseCharacterId?: string;
+      pulseLookupAttempted?: boolean;
       displayName: string;
       race: string;
       mmr?: number;
@@ -53,7 +74,34 @@ export interface OpponentsService {
       opening?: string;
       playedAt: Date;
     },
-  ): Promise<void>;
+  ): Promise<{
+    upgraded: boolean;
+    from: string | null;
+    to: string | null;
+    mmr: number | null;
+    region: string | null;
+  }>;
+  refreshMetadata(
+    userId: string,
+    game: {
+      pulseId: string;
+      gameId?: string;
+      toonHandle?: string;
+      pulseCharacterId?: string;
+      pulseLookupAttempted?: boolean;
+      displayName?: string;
+      race: string;
+      mmr?: number;
+      leagueId?: number;
+      playedAt: Date;
+    },
+  ): Promise<{
+    matched: number;
+    modified: number;
+    upgraded: boolean;
+    mmr: number | null;
+    region: string | null;
+  }>;
   diagnoseIdentity(
     userId: string,
     pulseId: string,
@@ -121,6 +169,7 @@ export interface GamesService {
     sessionStartedAt?: string;
     streak?: { kind: "win" | "loss"; count: number };
   }>;
+  distinctMyToonHandles(userId: string, limit?: number): Promise<string[]>;
 }
 
 /**
@@ -190,7 +239,7 @@ export interface BuildTransitionsPayload {
       id: string;
       label: string;
       column: 0 | 1 | 2 | 3;
-      kind: "build" | "oppStrategy" | "finalPhase" | "lateComp";
+      kind: "build" | "oppStrategy" | "finalPhase" | "lateComp" | "oppRace";
       games: number;
       wins: number;
       losses: number;
@@ -228,6 +277,11 @@ export interface CustomBuildsService {
        * as the matrix the user clicked.
        */
       strategyName?: string | null;
+      /**
+       * Parsed global filter bar (see util/parseQuery.parseFilters);
+       * restricts the game cohort the phases are computed over.
+       */
+      filters?: object;
     },
   ): Promise<
     | null
@@ -382,7 +436,7 @@ export interface AggregationsService {
   randomSummary(userId: string, filters: object): Promise<object>;
   timeseries(
     userId: string,
-    opts: { interval?: "day" | "week" | "month" },
+    opts: { interval?: "day" | "week" | "month"; tz?: string },
     filters: object,
   ): Promise<object>;
   gamesList(
@@ -396,6 +450,48 @@ export interface AggregationsService {
       resultBucket?: "win" | "loss";
     },
   ): Promise<object>;
+  distinctMaps(userId: string): Promise<
+    Array<{
+      map: string;
+      count: number;
+      firstSeen: Date | null;
+      lastSeen: Date | null;
+    }>
+  >;
+  mapMatchups(userId: string, filters: object): Promise<object>;
+  macroSummary(userId: string, filters: object): Promise<object>;
+  matchupTimeseries(
+    userId: string,
+    opts: object,
+    filters: object,
+  ): Promise<object>;
+  dayHourHeatmap(userId: string, opts: object, filters: object): Promise<object>;
+  lengthBuckets(userId: string, filters: object): Promise<object>;
+  activityCalendar(
+    userId: string,
+    opts: object,
+    filters: object,
+  ): Promise<object>;
+  mmrProgression(userId: string, opts: object, filters: object): Promise<object>;
+  momentum(userId: string, filters: object, opts?: object): Promise<object>;
+  oppMmrBuckets(userId: string, filters: object, opts?: object): Promise<object>;
+  oppMmrBucketGames(
+    userId: string,
+    filters: object,
+    opts?: object,
+  ): Promise<object>;
+  myBuildMixOverTime(
+    userId: string,
+    opts: object,
+    filters: object,
+  ): Promise<object>;
+  oppStrategyMixOverTime(
+    userId: string,
+    opts: object,
+    filters: object,
+  ): Promise<object>;
+  mapTrend(userId: string, opts: object, filters: object): Promise<object>;
+  netMmrByMatchup(userId: string, filters: object): Promise<object>;
 }
 
 export interface StreakService {
@@ -434,6 +530,11 @@ export interface StrategyPhasesService {
        * across every build the user plays.
        */
       buildName?: string | null;
+      /**
+       * Parsed global filter bar (see util/parseQuery.parseFilters);
+       * restricts the game cohort the phases are computed over.
+       */
+      filters?: object;
     },
   ): Promise<null | {
     name: string;
@@ -463,6 +564,11 @@ export interface StrategyPhasesService {
        * left column describes the build × strategy cell.
        */
       strategyName?: string | null;
+      /**
+       * Parsed global filter bar (see util/parseQuery.parseFilters);
+       * restricts the game cohort the phases are computed over.
+       */
+      filters?: object;
     },
   ): Promise<null | {
     name: string;
@@ -512,6 +618,11 @@ export interface PerGameComputeService {
        * analysis cohort doesn't get silently truncated by recency.
        */
       match?: Record<string, unknown>;
+      /**
+       * Parsed global filter bar (see util/parseQuery.parseFilters);
+       * translated to a Mongo predicate via gamesMatchStage.
+       */
+      filters?: object;
     },
   ): Promise<PerGameComputeServiceListedGame[]>;
 }
@@ -519,7 +630,7 @@ export interface PerGameComputeService {
 export interface MacroBackfillService {
   start(
     userId: string,
-    opts?: { limit?: number; force?: boolean },
+    opts?: { limit?: number; force?: boolean; reason?: string },
   ): Promise<{ jobId: string; total: number; status: string }>;
   reportProgress(
     userId: string,
@@ -560,6 +671,10 @@ export interface ImportService {
   ): Promise<object>;
   extractIdentities(userId: string, body: { folder?: string }): Promise<object>;
   pickFolder(userId: string): Promise<object>;
+  agentStart(
+    userId: string,
+    body: { total?: number; folder?: string },
+  ): Promise<{ ok: boolean; jobId: string; existing: boolean }>;
 }
 
 export interface SpatialService {

@@ -10,6 +10,28 @@
  * the SPA / desktop app shows.
  */
 
+/**
+ * @typedef {Readonly<{
+ *   token: string,
+ *   displayName: string,
+ *   internalName: string,
+ *   iconFile: string,
+ *   tier: 1|2|3,
+ *   category: "expansion"|"tech"|"production"|"defense",
+ * }>} CatalogToken
+ */
+
+/** @typedef {"Z"|"P"|"T"} RaceKey */
+
+/**
+ * @param {string} token
+ * @param {string} displayName
+ * @param {string} internalName
+ * @param {string} iconFile
+ * @param {1|2|3} tier
+ * @param {"expansion"|"tech"|"production"|"defense"} category
+ * @returns {CatalogToken}
+ */
 function tok(token, displayName, internalName, iconFile, tier, category) {
   return Object.freeze({
     token,
@@ -78,15 +100,17 @@ const TERRAN = Object.freeze([
 const RACE_BUILDINGS = Object.freeze({ Z: ZERG, P: PROTOSS, T: TERRAN });
 
 const BY_INTERNAL = (function () {
+  /** @type {Record<string, CatalogToken>} */
   const m = Object.create(null);
-  for (const race of Object.keys(RACE_BUILDINGS)) {
-    for (const t of RACE_BUILDINGS[race]) {
+  for (const list of Object.values(RACE_BUILDINGS)) {
+    for (const t of list) {
       m[t.internalName] = t;
     }
   }
   return Object.freeze(m);
 })();
 
+/** @type {Record<string, RaceKey>} */
 const RACE_ALIASES = {
   z: "Z",
   zerg: "Z",
@@ -97,6 +121,10 @@ const RACE_ALIASES = {
   terran: "T",
 };
 
+/**
+ * @param {unknown} race
+ * @returns {RaceKey|""}
+ */
 function normalizeRace(race) {
   if (race == null) return "";
   const s = String(race).trim().toLowerCase();
@@ -104,6 +132,11 @@ function normalizeRace(race) {
   return RACE_ALIASES[s] || "";
 }
 
+/**
+ * @param {unknown} myRace
+ * @param {unknown} oppRace
+ * @returns {string} e.g. "ZvP", or "" when either race is unknown.
+ */
 function matchupLabel(myRace, oppRace) {
   const my = normalizeRace(myRace);
   const opp = normalizeRace(oppRace);
@@ -111,8 +144,14 @@ function matchupLabel(myRace, oppRace) {
   return my + "v" + opp;
 }
 
+/** @type {Record<string, CatalogToken[]>} */
 const _relevantCache = Object.create(null);
 
+/**
+ * @param {unknown} myRace
+ * @param {unknown} oppRace
+ * @returns {CatalogToken[]}
+ */
 function relevantTokens(myRace, oppRace) {
   const my = normalizeRace(myRace);
   const opp = normalizeRace(oppRace);
@@ -133,6 +172,10 @@ function relevantTokens(myRace, oppRace) {
   return out.slice();
 }
 
+/**
+ * @param {string} internalName
+ * @returns {CatalogToken|null}
+ */
 function tokenByInternalName(internalName) {
   return BY_INTERNAL[internalName] || null;
 }
@@ -149,8 +192,8 @@ function tokenByInternalName(internalName) {
 function tierThreeInternalNames() {
   /** @type {Set<string>} */
   const seen = new Set();
-  for (const race of Object.keys(RACE_BUILDINGS)) {
-    for (const t of RACE_BUILDINGS[race]) {
+  for (const list of Object.values(RACE_BUILDINGS)) {
+    for (const t of list) {
       if (t.tier === 3) seen.add(t.internalName);
     }
   }

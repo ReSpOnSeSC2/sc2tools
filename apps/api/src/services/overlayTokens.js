@@ -72,12 +72,25 @@ class OverlayTokensService {
 
   /**
    * @param {string} userId
+   * @returns {Promise<Array<{
+   *   token: string,
+   *   label: string,
+   *   createdAt: Date,
+   *   lastSeenAt?: Date|null,
+   *   revokedAt?: Date|null,
+   *   enabledWidgets: string[],
+   * }>>}
    */
   async list(userId) {
-    const items = await this.db.overlayTokens
-      .find({ userId }, { projection: { _id: 0 } })
-      .sort({ createdAt: -1 })
-      .toArray();
+    // Driver rows are WithId<Document>, and the object spread below
+    // drops the index signature — treat rows as loose docs and let the
+    // declared @returns carry the known shape.
+    const items = /** @type {Array<any>} */ (
+      await this.db.overlayTokens
+        .find({ userId }, { projection: { _id: 0 } })
+        .sort({ createdAt: -1 })
+        .toArray()
+    );
     // Backfill default widgets for tokens minted before the toggle
     // shipped — keeps the UI stable without a one-shot migration.
     return items.map((it) => ({

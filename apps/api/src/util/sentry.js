@@ -8,7 +8,11 @@
  * production deploys keep working.
  */
 
-/** @type {typeof import("@sentry/node") | false | null} */
+/**
+ * The lazily-required module, ``false`` once a require attempt failed
+ * (or no DSN is set), ``null`` before the first attempt.
+ * @type {typeof import("@sentry/node") | false | null}
+ */
 let cached = null;
 
 function tryRequireSentry() {

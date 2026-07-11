@@ -3,10 +3,10 @@
 /**
  * Ladder map pool refresh worker.
  *
- * Calls LadderMapPoolService.refresh({ force: true }) on a fixed
- * interval (default 24h) so the bundled pool stays in sync with
- * Blizzard's Battle.net rotations without requiring a redeploy. Logs
- * the diff (added / removed maps) when the pool actually changes.
+ * Calls LadderMapPoolService.refresh() on a fixed interval (default
+ * 24h) so the bundled pool stays in sync with Blizzard's Battle.net
+ * rotations without requiring a redeploy. Logs the diff (added /
+ * removed maps) when the pool actually changes.
  *
  * Modeled on jobs/pulseBackfillJob.js — interval-based setInterval
  * rather than a cron expression so we don't add a node-cron dep, and
@@ -68,11 +68,14 @@ function buildLadderMapPoolRefreshJob(deps) {
     if (inflight) return;
     inflight = (async () => {
       try {
-        const res = await deps.ladderMapPool.refresh({ force: true });
+        // refresh() re-fetches unconditionally; it stopped taking a
+        // force flag when the conditional path was removed.
+        const res = await deps.ladderMapPool.refresh();
         logRefreshOutcome({ ladderMapPool: deps.ladderMapPool, logger, res });
       } catch (err) {
+        const e = /** @type {{ message?: unknown }} */ (err);
         logger.warn(
-          { err: err && err.message ? err.message : String(err) },
+          { err: e && e.message ? e.message : String(e) },
           "ladderMapPool_refresh_error",
         );
       } finally {

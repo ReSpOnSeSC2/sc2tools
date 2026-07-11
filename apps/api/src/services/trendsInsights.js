@@ -581,6 +581,7 @@ async function mapTrend(deps, userId, opts, filters) {
   });
 }
 
+/** @param {unknown} raw */
 function sanitizeGapMinutes(raw) {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return SESSION_GAP_MINUTES;

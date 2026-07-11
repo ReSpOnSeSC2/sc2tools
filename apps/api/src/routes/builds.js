@@ -31,6 +31,15 @@ function buildBuildsRouter(deps) {
   // endpoints behave the same way after a fresh upload.
   /** @type {Map<string, {expires: number, value: any}>} */
   const phaseCache = new Map();
+  /**
+   * @param {string} kind
+   * @param {string} userId
+   * @param {string} name
+   * @param {number} latestGameMs
+   * @param {string} perspective
+   * @param {string} crossAxis
+   * @param {string} filtersKey
+   */
   function phaseCacheKey(kind, userId, name, latestGameMs, perspective, crossAxis, filtersKey) {
     // ``crossAxis`` is the OTHER coordinate of the build × strategy
     // cell the BuildVsStrategyComparison drill-down passes through —
@@ -64,6 +73,7 @@ function buildBuildsRouter(deps) {
       .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
     return entries.map(([k, v]) => `${k}=${v}`).join("&");
   }
+  /** @param {string} key */
   function phaseCacheGet(key) {
     const hit = phaseCache.get(key);
     if (!hit) return null;
@@ -73,6 +83,7 @@ function buildBuildsRouter(deps) {
     }
     return hit.value;
   }
+  /** @param {string} key @param {unknown} value */
   function phaseCacheSet(key, value) {
     phaseCache.set(key, { value, expires: Date.now() + PHASE_CACHE_TTL_MS });
   }

@@ -120,6 +120,7 @@ function buildMeLiveRouter(deps) {
     let heartbeat = null;
     let unsubscribe = () => {};
 
+    /** @param {string} reason */
     const cleanup = (reason) => {
       if (done) return;
       done = true;
@@ -172,6 +173,7 @@ function buildMeLiveRouter(deps) {
       });
     };
 
+    /** @param {string} chunk */
     const writeChunk = (chunk) => {
       if (done) return;
       try {
@@ -182,6 +184,7 @@ function buildMeLiveRouter(deps) {
       }
     };
 
+    /** @param {unknown} envelope */
     const writeEnvelope = (envelope) => {
       writeChunk(`data: ${JSON.stringify(envelope)}\n\n`);
     };

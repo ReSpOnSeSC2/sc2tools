@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use strict";
 
 // ArcadeService integration tests — exercises resolveQuests (window

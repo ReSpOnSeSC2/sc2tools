@@ -39,6 +39,7 @@ const RACE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 // profile's pulse id simply doesn't resolve on SC2Pulse.
 const BTAG_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+/** @type {Record<number, string>} */
 const REGION_CODE_TO_LABEL = {
   1: "NA",
   2: "EU",
@@ -67,6 +68,7 @@ class PulseMmrService {
    *   now?: () => number,
    *   cacheTtlMs?: number,
    *   raceCacheTtlMs?: number,
+   *   btagCacheTtlMs?: number,
    * }} [opts]
    */
   constructor(opts = {}) {
@@ -84,7 +86,12 @@ class PulseMmrService {
         : BTAG_CACHE_TTL_MS;
     /** @type {Map<string, PulseMmrEntry>} */
     this._cache = new Map();
-    /** @type {Map<string, number>} */
+    /**
+     * Current-season ids keyed by numeric region code, plus one
+     * ``"__fetchedAt__"`` bookkeeping entry timestamping the last
+     * refresh — see ``_currentSeasonsByRegion``.
+     * @type {Map<string|number, number>}
+     */
     this._seasonCache = new Map();
     /**
      * Per-race breakdown cache, keyed like the ``any:`` MMR cache.
@@ -182,7 +189,7 @@ class PulseMmrService {
    *   - The character has no team in the active season for any region.
    *
    * @param {string|null|undefined} toonHandle
-   * @returns {Promise<{mmr: number, region: string|null, characterId: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, characterId: string|null, revealedName: string|null}|null>}
    */
   async getCurrentMmrByToon(toonHandle) {
     const handle = normaliseToonHandle(toonHandle);
@@ -469,7 +476,7 @@ class PulseMmrService {
     // session widget tracks whichever region the streamer is on now.
     const seasons = await this._currentSeasonsByRegion();
     if (seasons.size === 0) return [];
-    /** @type {Array<{rating: number, lastPlayedMs: number, region: string|null, race: string|null, games: number, league: string|null}>} */
+    /** @type {Array<{rating: number, lastPlayedMs: number, region: string|null, race: string|null, games: number, league: string|null, revealedName: string|null}>} */
     const candidates = [];
     // SC2Pulse's /group/team accepts repeated ``characterId`` query
     // params and returns the union — one HTTP call carries every id in
@@ -1084,6 +1091,7 @@ function pulseRegionCode(raw) {
     return REGION_CODE_TO_LABEL[raw] ? raw : null;
   }
   if (typeof raw !== "string") return null;
+  /** @type {Record<string, number>} */
   const map = { US: 1, NA: 1, EU: 2, KR: 3, CN: 5 };
   const code = map[raw.toUpperCase()];
   return typeof code === "number" ? code : null;

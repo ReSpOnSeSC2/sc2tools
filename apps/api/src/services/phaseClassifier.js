@@ -211,8 +211,9 @@ function nearestPrecedingIndex(times, t) {
  * `null` for each field so the score formula can drop the term
  * instead of multiplying by NaN.
  *
- * @param {Array<object>} statsEvents
+ * @param {Array<any>} statsEvents
  * @param {number} durationSec
+ * @returns {{empty: boolean, lookup: (t:number)=>{workers:number|null,supply:number|null,armyValue:number|null}}}
  */
 function buildStatsLookup(statsEvents, durationSec) {
   const list = Array.isArray(statsEvents) ? statsEvents : [];
@@ -303,13 +304,13 @@ function hasT3UnitByTime(timeline, t, perspective) {
 
 /**
  * @param {{
- *   bases: Array<object>,
- *   production_buildings: Array<object>,
+ *   bases: Array<{born_time:number,died_time:number}>,
+ *   production_buildings: Array<{name:string,born_time:number,died_time:number}>,
  *   stats: {empty: boolean, lookup: (t:number)=>{workers:number|null,supply:number|null,armyValue:number|null}},
  *   race: string,
  *   durationSec: number,
  *   t: number,
- *   unitTimeline?: Array<object>,
+ *   unitTimeline?: Array<{time:number,my?:Record<string,number>,opp?:Record<string,number>}>,
  *   perspective?: "you"|"opponent",
  * }} ctx
  */
@@ -416,7 +417,10 @@ function findCrossings(scoreFn, durationSec) {
     midLateAt: PHASES.midLate,
     lateAt: PHASES.late,
   };
-  /** @type {Record<string, number|null>} */
+  // Precise keys + string index: consumers read the four fixed
+  // crossings statically (per-game scouting) AND iterate them by
+  // dynamic key (buildCompositions' median aggregation).
+  /** @type {{earlyMidAt: number|null, midAt: number|null, midLateAt: number|null, lateAt: number|null} & Record<string, number|null>} */
   const out = {
     earlyMidAt: null,
     midAt: null,
@@ -449,7 +453,7 @@ function findCrossings(scoreFn, durationSec) {
  * replays — the hatchery rows are present, just not in the dedicated
  * bases stream).
  *
- * @param {object} macroBreakdown
+ * @param {any} macroBreakdown
  */
 function readOppLifetimes(macroBreakdown) {
   const rawBases = Array.isArray(macroBreakdown.opp_bases)
@@ -498,7 +502,7 @@ function sampleTrajectory(sampleFn, durationSec) {
  * macroBreakdown actually carries. Omits any field we can't observe
  * rather than zero-filling.
  *
- * @param {object} macroBreakdown
+ * @param {any} macroBreakdown
  * @param {string} race
  * @param {number} durationSec
  */
@@ -585,7 +589,7 @@ function synthesizeBasesFromProduction(prodBuildings) {
  * with ``basesFromExpansionFallback: true`` so the test suite can pin
  * that the fallback fired.
  *
- * @param {object} mb
+ * @param {any} mb
  * @param {number} durationSec
  * @param {"you"|"opponent"} perspective
  */
@@ -630,10 +634,14 @@ function pickClassifierInputs(mb, durationSec, perspective) {
  *
  * @param {{
  *   macroBreakdown: object,
- *   race: "Protoss"|"Terran"|"Zerg",
+ *   race: string,
  *   durationSec: number,
  *   perspective?: "you"|"opponent",
  * }} input
+ *
+ * ``race`` is nominally "Protoss"|"Terran"|"Zerg" but callers pass
+ * whatever the stored doc carries (legacy imports may be "" or a
+ * letter code); only the ``=== "Zerg"`` comparison is sensitive.
  *
  * ``perspective="opponent"`` rescores the trajectory from the
  * opponent's side: ``opp_bases``, ``opp_production_buildings``, and
@@ -648,6 +656,7 @@ function classifyGame(input) {
   const mb = (input && input.macroBreakdown) || {};
   const race = input && input.race;
   const durationSec = Math.max(0, Math.floor((input && input.durationSec) || 0));
+  /** @type {"you"|"opponent"} */
   const perspective = input && input.perspective === "opponent" ? "opponent" : "you";
   const {
     bases,
@@ -666,8 +675,8 @@ function classifyGame(input) {
     unitTimeline,
     perspective,
   };
-  const scoreFn = (t) => scoreAt({ ...ctx, t }).score;
-  const sampleFn = (t) => scoreAt({ ...ctx, t });
+  const scoreFn = /** @param {number} t */ (t) => scoreAt({ ...ctx, t }).score;
+  const sampleFn = /** @param {number} t */ (t) => scoreAt({ ...ctx, t });
 
   const crossings = findCrossings(scoreFn, durationSec);
   const finalScore = finalWindowScore(scoreFn, durationSec);

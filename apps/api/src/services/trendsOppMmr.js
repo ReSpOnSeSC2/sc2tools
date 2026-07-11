@@ -260,6 +260,11 @@ function oppMmrLookupStages(trustFloor) {
  * Pipeline that fans games into absolute-MMR bins of ``width``
  * plus an unknown rollup, in one $facet so the response is one
  * round trip.
+ *
+ * @param {Deps} deps
+ * @param {object} match
+ * @param {number} width
+ * @param {Date} trustFloor
  */
 function oppMmrPipeline(deps, match, width, trustFloor) {
   return [
@@ -306,7 +311,14 @@ function oppMmrPipeline(deps, match, width, trustFloor) {
   ];
 }
 
+/**
+ * Shape the raw $facet doc into the histogram wire payload.
+ *
+ * @param {Record<string, any> | undefined} facet
+ * @param {number} width
+ */
 function shapeOppMmrBuckets(facet, width) {
+  /** @type {Array<{_id: number, wins: number, losses: number, total: number, avgMmr: number | null, minMmr: number | null, maxMmr: number | null}>} */
   const binRows = (facet && facet.bins) || [];
   const unknownRow = (facet && facet.unknown && facet.unknown[0]) || null;
   const buckets = binRows.map((r) => ({
@@ -347,7 +359,9 @@ function shapeOppMmrBuckets(facet, width) {
  * @param {Deps} deps
  * @param {string} userId
  * @param {object} filters
- * @param {{ lo: number, hi: number }} opts
+ * @param {{ lo?: number, hi?: number }} [opts] Band edges; anything
+ *   non-finite (missing/undefined) fails the guard below and yields
+ *   the empty response.
  */
 async function oppMmrBucketGames(deps, userId, filters, opts = {}) {
   const lo = Number(opts.lo);

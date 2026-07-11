@@ -39,7 +39,9 @@ const DEFAULT_BATCH = 500;
 /**
  * @param {{
  *   db: import('../db/connect').DbContext,
- *   ladderMapPool: { get(): Promise<{ maps: string[], teamMaps?: string[] }> },
+ *   ladderMapPool: {
+ *     get(): Promise<{ maps: string[], teamMaps?: string[], source: string }>,
+ *   },
  *   logger: import('pino').Logger,
  *   batchSize?: number,
  * }} deps
@@ -71,6 +73,7 @@ function buildLadderMapBackfillJob(deps) {
       logger.info({ version: LADDER_CLASSIFY_VERSION }, "ladderMapBackfill_skip_complete");
       return { remaining: 0, scanned: 0, written: 0, skipped: true };
     }
+    /** @type {{ maps: string[], teamMaps?: string[], source: string }} */
     let pool = { maps: [], teamMaps: [], source: "unavailable" };
     try {
       pool = await deps.ladderMapPool.get();
@@ -78,8 +81,9 @@ function buildLadderMapBackfillJob(deps) {
       // The baked-in historical list still gives a comprehensive set,
       // so a pool fetch failure is non-fatal — we just miss any map
       // newer than the baked list until a later boot.
+      const e = /** @type {{ message?: unknown }} */ (err);
       logger.warn(
-        { err: err && err.message ? err.message : String(err) },
+        { err: e && e.message ? e.message : String(e) },
         "ladderMapBackfill_pool_unavailable",
       );
     }

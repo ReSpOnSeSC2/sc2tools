@@ -145,6 +145,7 @@ class PerGameComputeService {
     const blob = {};
     // Detail-store wins when it has a value (it's authoritative
     // post-cutover); the slim row supplies the legacy fallback.
+    /** @type {Array<any>} */
     const sources = [slim, fromStore];
     for (const k of HEAVY_FIELDS) {
       for (const src of sources) {

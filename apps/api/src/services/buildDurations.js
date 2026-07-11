@@ -303,6 +303,9 @@ const UPGRADE_BUILD_SECONDS = Object.freeze({
  * the agent (`"Spawning Pool"` vs `"SpawningPool"` vs `"pool"`) all
  * resolve to the same row. The non-alpha strip mirrors what
  * ``timingCatalog.normalizeName`` does in cloud + agent code.
+ *
+ * @param {string} name
+ * @returns {string}
  */
 function key(name) {
   return String(name || "")
@@ -340,7 +343,7 @@ const UPGRADE_BUILD_LOOKUP = new Map(
  *     drone consumption).
  *
  * @param {string} name
- * @param {{ isBuilding?: boolean, category?: string }} hints
+ * @param {{ isBuilding?: boolean, category?: string }} [hints]
  * @returns {boolean}
  */
 function isFinishTimeEvent(name, hints) {
