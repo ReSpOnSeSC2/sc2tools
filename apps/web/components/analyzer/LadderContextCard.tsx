@@ -7,6 +7,7 @@ import {
   LineChart,
   ResponsiveContainer,
   Tooltip,
+  XAxis,
   YAxis,
 } from "recharts";
 import { useApi } from "@/lib/clientApi";
@@ -218,12 +219,19 @@ export function LadderContextCard({ pulseId }: { pulseId: string }) {
                   data={spark}
                   margin={{ top: 6, right: 4, bottom: 2, left: 4 }}
                 >
+                  {/* Without an XAxis dataKey, recharts labels tooltip
+                      points by array index; Date("52") parses as the
+                      year 1952, so hovering showed 1950s dates. */}
+                  <XAxis dataKey="t" hide />
                   <YAxis domain={["dataMin - 50", "dataMax + 50"]} hide />
                   <Tooltip
                     formatter={(value) => [`${value} MMR`, ""]}
-                    labelFormatter={(label) =>
-                      new Date(String(label)).toLocaleDateString()
-                    }
+                    labelFormatter={(label) => {
+                      const d = new Date(String(label));
+                      return Number.isNaN(d.getTime())
+                        ? ""
+                        : d.toLocaleDateString();
+                    }}
                     contentStyle={{
                       background: "rgb(var(--bg-elevated))",
                       border: "1px solid rgb(var(--border))",
