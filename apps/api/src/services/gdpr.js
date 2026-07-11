@@ -241,6 +241,23 @@ class GdprService {
     if (buckets.size > 0) {
       const docs = [];
       for (const b of buckets.values()) {
+        /** @type {{
+         *   userId: string,
+         *   pulseId: string,
+         *   displayNameSample: string,
+         *   race: string,
+         *   firstSeen: Date,
+         *   lastSeen: Date,
+         *   gameCount: number,
+         *   wins: number,
+         *   losses: number,
+         *   openings: Record<string, number>,
+         *   pulseResolveAttemptedAt: null,
+         *   mmr?: number,
+         *   leagueId?: number,
+         *   toonHandle?: string,
+         *   pulseCharacterId?: string,
+         * }} */
         const doc = {
           userId: b.userId,
           pulseId: b.pulseId,
@@ -351,13 +368,18 @@ class GdprService {
    */
   async listSnapshots(userId) {
     const coll = this.db.db.collection("user_backups");
-    const items = await coll
-      .find(
-        { userId },
-        { projection: { _id: 0, id: 1, createdAt: 1, sizeBytes: 1, type: 1 } },
-      )
-      .sort({ createdAt: -1 })
-      .toArray();
+    const items =
+      /** @type {Array<{id: string, createdAt: Date, sizeBytes: number, type: string}>} */ (
+        /** @type {unknown} */ (
+          await coll
+            .find(
+              { userId },
+              { projection: { _id: 0, id: 1, createdAt: 1, sizeBytes: 1, type: 1 } },
+            )
+            .sort({ createdAt: -1 })
+            .toArray()
+        )
+      );
     return { items };
   }
 

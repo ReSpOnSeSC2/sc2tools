@@ -21,6 +21,10 @@ declare global {
         // a request body field.
         tokenHash?: string;
       };
+      // Set lazily by routes/games.js: per-request dedup of
+      // myToonHandle → users.pulseIds merge attempts so a batch upload
+      // doesn't repeat the users.findOne for every game in the batch.
+      _mergedToonHandles?: Set<string>;
     }
   }
 }

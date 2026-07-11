@@ -38,9 +38,15 @@ function buildMessagesRouter(deps) {
   // reports while making spam impractical. Sits on top of the global
   // per-minute limiter installed in app.js. Configurable so deploys
   // (and tests) can tune it; defaults to 5.
+  // ``Number.isFinite``'s lib signature returns a plain boolean (not a
+  // type guard), so TS can't narrow ``deps.maxPerWindow`` through it;
+  // probe via a number-typed view. The runtime guard is unchanged —
+  // ``Number.isFinite(undefined)`` is false, so the default still
+  // applies when the knob isn't injected.
+  const rawMaxPerWindow = /** @type {number} */ (deps.maxPerWindow);
   const maxPerWindow =
-    Number.isFinite(deps.maxPerWindow) && deps.maxPerWindow > 0
-      ? deps.maxPerWindow
+    Number.isFinite(rawMaxPerWindow) && rawMaxPerWindow > 0
+      ? rawMaxPerWindow
       : 5;
   const sendLimiter = rateLimit({
     windowMs: 10 * 60 * 1000,
@@ -51,8 +57,12 @@ function buildMessagesRouter(deps) {
     // request before it reaches this limiter, so req.auth.userId is
     // always present — key on it so the cap is per-account, and skip
     // express-rate-limit's IP-based key path entirely.
-    keyGenerator: (req) => req.auth.userId,
-    handler: (_req, res) => {
+    keyGenerator: (/** @type {import('express').Request} */ req) =>
+      /** @type {NonNullable<typeof req.auth>} */ (req.auth).userId,
+    handler: (
+      /** @type {import('express').Request} */ _req,
+      /** @type {import('express').Response} */ res,
+    ) => {
       res.status(429).json({
         error: {
           code: "rate_limited",
@@ -117,7 +127,11 @@ function buildMessagesRouter(deps) {
 
 /** @param {unknown} body */
 function normalizeBody(body) {
-  const src = body && typeof body === "object" ? body : {};
+  // Untrusted request body: hold it as a string-keyed record of
+  // unknowns; the ``typeof`` checks below stay the runtime gate.
+  const src = /** @type {Record<string, unknown>} */ (
+    body && typeof body === "object" ? body : {}
+  );
   return {
     subject: typeof src.subject === "string" ? src.subject.trim() : "",
     message: typeof src.message === "string" ? src.message.trim() : "",
@@ -132,6 +146,7 @@ function badRequest(message) {
   return err;
 }
 
+/** @param {import('express').Request} req */
 function requireAuth(req) {
   if (!req.auth) {
     const err = new Error("auth_required");

@@ -92,10 +92,16 @@ const {
 const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
 
 /**
+ * ``maxUserMessagesPerWindow`` is a test-injected override for the
+ * messages route's rate window (see __tests__/userMessages.test.js);
+ * loadConfig never produces it, so production always uses the route's
+ * built-in default.
+ *
  * @typedef {{
  *   db: import('./db/connect').DbContext,
  *   logger: import('pino').Logger,
- *   config: ReturnType<typeof import('./config/loader').loadConfig>,
+ *   config: ReturnType<typeof import('./config/loader').loadConfig>
+ *     & { maxUserMessagesPerWindow?: number },
  *   io?: import('socket.io').Server,
  * }} AppDeps
  */
@@ -408,6 +414,7 @@ function applyBaseMiddleware(app, deps) {
  * @param {AppDeps} deps
  * @param {ReturnType<typeof makeServices>} services
  * @param {import('./services/clerkClient').ClerkClient} clerk
+ * @param {Set<string>} adminClerkIds live admin set — see buildApp docs.
  */
 function mountRoutes(app, deps, services, clerk, adminClerkIds) {
   const auth = buildAuth({

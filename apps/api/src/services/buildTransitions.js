@@ -246,8 +246,17 @@ function pathForGame(g, buildLabel, perspective) {
     const win = lateWindow(classified.crossings, durationSec);
     if (win) {
       const midpoint = (win.start + win.end) / 2;
+      // NOTE: ``pickSignatureUnits`` is (macroBreakdown, windowStart,
+      // windowEnd, perspective) since the peak-alive refactor in
+      // buildCompositions.js; this call still passes the pre-refactor
+      // (macroBreakdown, midpoint, perspective) triple, so the
+      // perspective string lands in ``windowEnd`` (making the window
+      // extend to game end via a NaN comparison) and the 4th param is
+      // undefined (side always "my"). Cast kept to preserve the
+      // long-standing runtime behavior the snapshots pin — flagged as
+      // a suspected bug rather than silently changing output.
       const units = pickSignatureUnits(
-        macroBreakdown, midpoint, sidePerspective,
+        macroBreakdown, midpoint, /** @type {any} */ (sidePerspective),
       );
       const key = units.length > 0 ? signatureKey(units) : "Unknown";
       /** @type {TransitionPathNode} */

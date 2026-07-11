@@ -38,6 +38,7 @@ const { registerMigration, _internals } = require("../schemaVersioning");
  *     field at ``null`` to make the shape uniform without
  *     forcing a fake "we attempted at epoch" timestamp.
  */
+/** @param {Record<string, any>} doc */
 function opponentsV1toV2(doc) {
   const next = { ...doc };
   if (next.pulseCharacterId === "" || next.pulseCharacterId === null) {
@@ -49,7 +50,10 @@ function opponentsV1toV2(doc) {
   return next;
 }
 
-/** Inverse: drop pulseResolveAttemptedAt when rolling back. */
+/**
+ * Inverse: drop pulseResolveAttemptedAt when rolling back.
+ * @param {Record<string, any>} doc
+ */
 function opponentsV2toV1(doc) {
   const { pulseResolveAttemptedAt, ...rest } = doc;
   void pulseResolveAttemptedAt;
@@ -79,6 +83,7 @@ function loadAllMigrations() {
   }
 }
 
+/** @param {{ collection: string, fromVersion: number, toVersion: number }} m */
 function alreadyRegistered(m) {
   for (const existing of _internals.MIGRATIONS) {
     if (

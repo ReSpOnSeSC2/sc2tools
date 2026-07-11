@@ -24,11 +24,62 @@ const TIMING_LINE_RE = /^\[(\d+):(\d{2})\]\s+(\w+)/;
 const TREND_ABS_SECONDS = 5.0;
 const TREND_REL_FRACTION = 0.05;
 
+/** @typedef {import("./timingCatalog").CatalogToken} CatalogToken */
+/** @typedef {import("./timingCatalog").RaceKey} RaceKey */
+
+/**
+ * One first-occurrence observation of a catalog token in a single game.
+ * Carried (newest-first) on `TokenTimingRow.samples` for the SPA's
+ * per-token drill-down.
+ *
+ * @typedef {{
+ *   seconds: number,
+ *   display: string,
+ *   date: string|Date,
+ *   map: string,
+ *   result: string,
+ *   won: boolean,
+ *   gameId: string|number|null,
+ *   oppRace: RaceKey,
+ *   myRace: RaceKey,
+ * }} TimingSample
+ */
+
+/**
+ * Aggregated timing row for one catalog token — the value shape of the
+ * maps returned by `computeMatchupAwareMedianTimings` /
+ * `computeMedianTimingsForMatchup` (keyed by token `internalName`).
+ *
+ * @typedef {{
+ *   sampleCount: number,
+ *   medianSeconds: number|null,
+ *   medianDisplay: string,
+ *   p25Seconds: number|null,
+ *   p25Display: string,
+ *   p75Seconds: number|null,
+ *   p75Display: string,
+ *   minSeconds: number|null,
+ *   minDisplay: string,
+ *   maxSeconds: number|null,
+ *   maxDisplay: string,
+ *   lastSeenSeconds: number|null,
+ *   lastSeenDisplay: string,
+ *   winRateWhenBuilt: number|null,
+ *   trend: "unknown"|"stable"|"later"|"earlier",
+ *   source: "build_log"|"opp_build_log",
+ *   samples: TimingSample[],
+ *   displayName: string,
+ *   iconFile: string,
+ * }} TokenTimingRow
+ */
+
+/** @param {number} sec @returns {string} */
 function formatSeconds(sec) {
   const t = Math.max(0, Math.floor(sec));
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
 }
 
+/** @param {number[]} arr @returns {number|null} */
 function median(arr) {
   if (!arr.length) return null;
   const s = [...arr].sort((a, b) => a - b);
@@ -36,6 +87,7 @@ function median(arr) {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
+/** @param {number[]} sortedAsc @param {number} p @returns {number|null} */
 function percentileInclusive(sortedAsc, p) {
   const n = sortedAsc.length;
   if (n === 0) return null;
@@ -48,18 +100,25 @@ function percentileInclusive(sortedAsc, p) {
   return sortedAsc[lo] + frac * (sortedAsc[hi] - sortedAsc[lo]);
 }
 
+/** @param {number[]} secondsChrono @returns {"unknown"|"stable"|"later"|"earlier"} */
 function computeTrend(secondsChrono) {
   const n = secondsChrono.length;
   if (n < 4) return "unknown";
   const mid = Math.floor(n / 2);
-  const m1 = median(secondsChrono.slice(0, mid));
-  const m2 = median(secondsChrono.slice(mid));
+  // n >= 4 so both halves are non-empty — the medians cannot be null.
+  const m1 = /** @type {number} */ (median(secondsChrono.slice(0, mid)));
+  const m2 = /** @type {number} */ (median(secondsChrono.slice(mid)));
   const diff = m2 - m1;
   const threshold = Math.max(TREND_ABS_SECONDS, TREND_REL_FRACTION * (m1 || 0));
   if (Math.abs(diff) < threshold) return "stable";
   return diff > 0 ? "later" : "earlier";
 }
 
+/**
+ * @param {CatalogToken} token
+ * @param {"build_log"|"opp_build_log"} source
+ * @returns {TokenTimingRow}
+ */
 function emptyTokenRow(token, source) {
   return {
     sampleCount: 0,
@@ -84,6 +143,15 @@ function emptyTokenRow(token, source) {
   };
 }
 
+/**
+ * Read a build-log array off a game doc, tolerating both the cloud
+ * camelCase and legacy snake_case field spellings. Callers runtime-check
+ * the value with `Array.isArray` before use.
+ *
+ * @param {any} g
+ * @param {string} key
+ * @returns {unknown}
+ */
 function readBuildLog(g, key) {
   if (!g) return null;
   const cap = key.charAt(0).toUpperCase() + key.slice(1);
@@ -100,6 +168,11 @@ function readBuildLog(g, key) {
   );
 }
 
+/**
+ * @param {unknown} log
+ * @param {string} tokenSubstring
+ * @returns {number|null}
+ */
 function firstOccurrenceSeconds(log, tokenSubstring) {
   if (!Array.isArray(log) || log.length === 0) return null;
   const tokLower = tokenSubstring.toLowerCase();
@@ -122,6 +195,7 @@ function firstOccurrenceSeconds(log, tokenSubstring) {
   return best;
 }
 
+/** @param {any} g @returns {RaceKey|""} */
 function gameOppRace(g) {
   if (!g) return "";
   return TimingCatalog.normalizeRace(
@@ -129,51 +203,61 @@ function gameOppRace(g) {
   );
 }
 
+/** @param {any} g @returns {RaceKey|""} */
 function gameMyRace(g) {
   if (!g) return "";
   return TimingCatalog.normalizeRace(g.myRace || g.my_race || "");
 }
 
+/** @param {any} g @returns {string|Date} cloud docs carry Mongo Dates, legacy rows strings */
 function gameDate(g) {
   if (!g) return "";
   return g.date || g.Date || "";
 }
 
+/** @param {any} g @returns {string} */
 function gameMap(g) {
   if (!g) return "";
   return g.map || g.Map || "";
 }
 
+/** @param {any} g @returns {string|number|null} */
 function gameId(g) {
   if (!g) return null;
   return g.gameId || g.id || g.game_id || g.GameId || null;
 }
 
+/** @param {any} g @returns {string} */
 function gameResult(g) {
   if (!g) return "";
   return g.result || g.Result || "";
 }
 
+/** @param {unknown} result @returns {boolean} */
 function isWonResult(result) {
   return result === "Win" || result === "Victory";
 }
 
+/** @param {any} g @returns {string} */
 function gameMyBuild(g) {
   if (!g) return "";
   return g.myBuild || g.my_build || g.build || "";
 }
 
+/** @param {any} g @returns {string} */
 function gameOppStrategy(g) {
   if (!g) return "";
   return (g.opponent && g.opponent.strategy) || g.opp_strategy || "";
 }
 
+/** @param {any} g @returns {number} */
 function gameDurationSec(g) {
   if (!g) return 0;
   const v = g.durationSec || g.game_length || g.GameLength || 0;
   return typeof v === "number" ? v : 0;
 }
 
+/** @param {any} g @returns {RaceKey|""} */
 function resolveMyRaceFromGame(g) {
   if (!g) return "";
   const direct = gameMyRace(g);
@@ -203,12 +287,14 @@ function resolveMyRaceFromGame(g) {
   return "";
 }
 
+/** @param {Array<any>} games @returns {string} "Z" | "P" | "T", or "" when unresolvable */
 function resolveMyRace(games) {
   if (!games || games.length === 0) return "";
   for (const g of games) {
     const r = resolveMyRaceFromGame(g);
     if (r) return r;
   }
+  /** @type {Record<string, number>} */
   const c = Object.create(null);
   for (const g of games) {
     const r = resolveMyRaceFromGame(g);
@@ -225,8 +311,10 @@ function resolveMyRace(games) {
   return best;
 }
 
+/** @param {Array<any>} games @returns {string} "Z" | "P" | "T", or "" when unresolvable */
 function resolveModalOppRace(games) {
   if (!games || games.length === 0) return "";
+  /** @type {Record<string, number>} */
   const c = Object.create(null);
   for (const g of games) {
     const r = gameOppRace(g);
@@ -246,9 +334,9 @@ function resolveModalOppRace(games) {
 /**
  * Compute matchup-aware median first-occurrence timings.
  *
- * @param {Array<object>} games — newest-first list of game records
+ * @param {Array<any>} games — newest-first list of game records
  * @param {string} myRace — the user's race ("P" | "T" | "Z" | "")
- * @returns {Record<string, object>}
+ * @returns {Record<string, TokenTimingRow>} keyed by token internalName
  */
 function computeMatchupAwareMedianTimings(games, myRace) {
   const my = TimingCatalog.normalizeRace(myRace);
@@ -259,6 +347,7 @@ function computeMatchupAwareMedianTimings(games, myRace) {
     TimingCatalog.RACE_BUILDINGS[my].map((t) => t.internalName),
   );
   if (!modalOpp) {
+    /** @type {Record<string, TokenTimingRow>} */
     const out = {};
     for (const tk of TimingCatalog.RACE_BUILDINGS[my]) {
       out[tk.internalName] = emptyTokenRow(
@@ -270,6 +359,7 @@ function computeMatchupAwareMedianTimings(games, myRace) {
   }
   const ordering = TimingCatalog.relevantTokens(my, modalOpp);
   if (ordering.length === 0) return {};
+  /** @type {Record<string, TimingSample[]|undefined>} */
   const samples = Object.create(null);
   for (const tk of ordering) samples[tk.internalName] = [];
   for (const g of list) {
@@ -278,7 +368,9 @@ function computeMatchupAwareMedianTimings(games, myRace) {
   return finaliseSamples(samples, ordering, ownInternalSet);
 }
 
+/** @param {Array<any>} list @returns {string} modal opponent race, or "" when none known */
 function pickModalOppRace(list) {
+  /** @type {Record<string, number>} */
   const oppCount = Object.create(null);
   for (const g of list) {
     const r = gameOppRace(g);
@@ -295,6 +387,13 @@ function pickModalOppRace(list) {
   return modalOpp;
 }
 
+/**
+ * @param {any} g
+ * @param {Record<string, TimingSample[]|undefined>} samples keyed by
+ *   token internalName; tokens outside the pre-seeded ordering are skipped
+ * @param {Set<string>} ownInternalSet
+ * @param {RaceKey} my
+ */
 function collectSamples(g, samples, ownInternalSet, my) {
   const oppRace = gameOppRace(g);
   if (!oppRace) return;
@@ -317,7 +416,9 @@ function collectSamples(g, samples, ownInternalSet, my) {
     const log = ownInternalSet.has(tk.internalName) ? myLog : oppLog;
     const sec = firstOccurrenceSeconds(log, tk.token);
     if (sec === null) continue;
-    samples[tk.internalName].push({
+    // Non-null: the `=== undefined` guard above already skipped
+    // tokens missing from the pre-seeded map.
+    /** @type {TimingSample[]} */ (samples[tk.internalName]).push({
       seconds: sec,
       display: formatSeconds(sec),
       ...meta,
@@ -325,7 +426,14 @@ function collectSamples(g, samples, ownInternalSet, my) {
   }
 }
 
+/**
+ * @param {Record<string, TimingSample[]|undefined>} samples
+ * @param {CatalogToken[]} ordering
+ * @param {Set<string>} ownInternalSet
+ * @returns {Record<string, TokenTimingRow>}
+ */
 function finaliseSamples(samples, ordering, ownInternalSet) {
+  /** @type {Record<string, TokenTimingRow>} */
   const out = {};
   for (const tk of ordering) {
     const source = ownInternalSet.has(tk.internalName)
@@ -340,9 +448,15 @@ function finaliseSamples(samples, ordering, ownInternalSet) {
     const secondsList = list2.map((s) => s.seconds);
     const sortedAsc = [...secondsList].sort((a, b) => a - b);
     const n = secondsList.length;
-    const med = median(secondsList);
-    const p25 = Math.round(percentileInclusive(sortedAsc, 0.25));
-    const p75 = Math.round(percentileInclusive(sortedAsc, 0.75));
+    // list2 is non-empty on this path, so median / percentile cannot
+    // return null.
+    const med = /** @type {number} */ (median(secondsList));
+    const p25 = Math.round(
+      /** @type {number} */ (percentileInclusive(sortedAsc, 0.25)),
+    );
+    const p75 = Math.round(
+      /** @type {number} */ (percentileInclusive(sortedAsc, 0.75)),
+    );
     const mn = sortedAsc[0];
     const mx = sortedAsc[n - 1];
     const lastSeen = list2[list2.length - 1].seconds;
@@ -373,6 +487,15 @@ function finaliseSamples(samples, ordering, ownInternalSet) {
   return out;
 }
 
+/**
+ * Same as `computeMatchupAwareMedianTimings` but pinned to one opponent
+ * race instead of the modal one.
+ *
+ * @param {Array<any>} games — newest-first list of game records
+ * @param {string} myRace
+ * @param {string} oppRace
+ * @returns {Record<string, TokenTimingRow>} keyed by token internalName
+ */
 function computeMedianTimingsForMatchup(games, myRace, oppRace) {
   const my = TimingCatalog.normalizeRace(myRace);
   const opp = TimingCatalog.normalizeRace(oppRace);
@@ -380,6 +503,7 @@ function computeMedianTimingsForMatchup(games, myRace, oppRace) {
   if (!opp) return computeMatchupAwareMedianTimings(games, myRace);
   const filtered = (games || []).filter((g) => gameOppRace(g) === opp);
   if (filtered.length === 0) {
+    /** @type {Record<string, TokenTimingRow>} */
     const out = {};
     const ownInternalSet = new Set(
       TimingCatalog.RACE_BUILDINGS[my].map((t) => t.internalName),

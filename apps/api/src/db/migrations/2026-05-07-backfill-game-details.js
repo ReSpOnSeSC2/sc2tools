@@ -41,8 +41,10 @@ const { MongoClient } = require("mongodb");
 const { COLLECTIONS } = require(
   path.join(__dirname, "..", "..", "config", "constants"),
 );
-const { HEAVY_FIELDS } = require(
-  path.join(__dirname, "..", "..", "services", "gameDetails"),
+// path.join require keeps the script runnable from any CWD; the cast
+// restores the module type TS loses on a dynamic require path.
+const { HEAVY_FIELDS } = /** @type {typeof import("../../services/gameDetails")} */ (
+  require(path.join(__dirname, "..", "..", "services", "gameDetails"))
 );
 
 const DEFAULT_BATCH = 500;
@@ -75,7 +77,7 @@ async function main() {
     const details = db.collection(COLLECTIONS.GAME_DETAILS);
 
     // Project: only the keys we need to assemble a detail row.
-    /** @type {Record<string, 1>} */
+    /** @type {Record<string, 0|1>} */
     const projection = { _id: 0, userId: 1, gameId: 1, date: 1 };
     for (const k of HEAVY_FIELDS) projection[k] = 1;
 

@@ -77,7 +77,7 @@ class LadderMapPoolService {
     this.logger = opts.logger || NOOP_LOGGER;
     /** @type {{ maps: string[], teamMaps: string[], fetchedAt: number, source: 'liquipedia' | 'persisted' | 'fallback' } | null} */
     this._cache = null;
-    /** @type {Promise<{ maps: string[], source: string, fetchedAt: number | null }> | null} */
+    /** @type {Promise<{ maps: string[], teamMaps: string[], source: 'liquipedia' | 'persisted' | 'fallback', fetchedAt: number | null }> | null} */
     this._inflight = null;
   }
 
@@ -160,7 +160,7 @@ class LadderMapPoolService {
     };
   }
 
-  /** @returns {Promise<{ maps: string[], teamMaps: string[], source: string, fetchedAt: number | null }>} */
+  /** @returns {Promise<{ maps: string[], teamMaps: string[], source: 'liquipedia' | 'persisted' | 'fallback', fetchedAt: number | null }>} */
   async _resolve() {
     // 1) Try Liquipedia.
     const fromNet = await this._fetchFromLiquipedia();
@@ -239,7 +239,12 @@ class LadderMapPoolService {
       return parsed;
     } catch (err) {
       this.logger.warn(
-        { err: err && err.message ? err.message : String(err) },
+        {
+          err:
+            err && /** @type {{ message?: unknown }} */ (err).message
+              ? /** @type {{ message?: unknown }} */ (err).message
+              : String(err),
+        },
         "ladderMapPool_fetch_failed",
       );
       return null;
@@ -254,6 +259,7 @@ class LadderMapPoolService {
       const raw = await fs.readFile(this.persistPath, "utf8");
       const parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.maps)) return null;
+      /** @param {unknown} arr @returns {string[]} */
       const clean = (arr) =>
         (Array.isArray(arr) ? arr : []).filter(
           (m) => typeof m === "string" && m.trim().length > 0,
@@ -294,7 +300,12 @@ class LadderMapPoolService {
       await fs.rename(tmp, this.persistPath);
     } catch (err) {
       this.logger.warn(
-        { err: err && err.message ? err.message : String(err) },
+        {
+          err:
+            err && /** @type {{ message?: unknown }} */ (err).message
+              ? /** @type {{ message?: unknown }} */ (err).message
+              : String(err),
+        },
         "ladderMapPool_persist_failed",
       );
       // Try to clean up the tmp on failure.
@@ -336,7 +347,9 @@ const NOOP_LOGGER = {
 function parseLadderMaps(wikitext) {
   if (typeof wikitext !== "string") return { solo: [], team: [] };
 
+  /** @type {string[]} */
   const solo = [];
+  /** @type {string[]} */
   const team = [];
   const seenSolo = new Set();
   const seenTeam = new Set();

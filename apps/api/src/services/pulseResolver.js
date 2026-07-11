@@ -39,6 +39,7 @@
 
 const PULSE_API_ROOT = "https://sc2pulse.nephest.com/sc2/api";
 const QUEUE_1V1 = "LOTV_1V1";
+/** @type {Readonly<Record<number, string>>} */
 const REGION_CODE_TO_NAME = Object.freeze({
   1: "US", 2: "EU", 3: "KR", 5: "CN",
 });
@@ -167,6 +168,11 @@ function buildPulseResolver(opts = {}) {
     return promise;
   }
 
+  /**
+   * @param {{ region: number, realm: number, bnid: number }} parsed
+   * @param {string} displayName
+   * @returns {Promise<string|null>}
+   */
   async function doResolve(parsed, displayName) {
     const { region, bnid } = parsed;
     const seasonId = await getLatestSeason(region);
@@ -208,6 +214,10 @@ function buildPulseResolver(opts = {}) {
     return null;
   }
 
+  /**
+   * @param {number} region
+   * @returns {Promise<number|null>}
+   */
   async function getLatestSeason(region) {
     const cached = seasonCache.get(region);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
@@ -233,6 +243,10 @@ function buildPulseResolver(opts = {}) {
     return best;
   }
 
+  /**
+   * @param {{ region: number, seasonId: number, name: string }} args
+   * @returns {Promise<unknown[]>}
+   */
   async function searchCandidates({ region, seasonId, name }) {
     const regionName = REGION_CODE_TO_NAME[region];
     if (!regionName) return [];
@@ -247,6 +261,10 @@ function buildPulseResolver(opts = {}) {
     return Array.isArray(body) ? body : [];
   }
 
+  /**
+   * @param {{ candidateId: number, region: number, expectedBnid: number }} args
+   * @returns {Promise<boolean>}
+   */
   async function confirmByBnid({ candidateId, region, expectedBnid }) {
     const regionName = REGION_CODE_TO_NAME[region];
     if (!regionName) return false;
@@ -326,7 +344,10 @@ function buildPulseResolver(opts = {}) {
         clearTimeout(timeoutHandle);
       }
     }
-    logger.warn({ url, err: lastErr && lastErr.message }, "pulse_resolver_fetch_failed");
+    logger.warn(
+      { url, err: lastErr && /** @type {{ message?: unknown }} */ (lastErr).message },
+      "pulse_resolver_fetch_failed",
+    );
     return null;
   }
 
@@ -361,6 +382,10 @@ function parseToonHandle(toon) {
   return { region, realm, bnid };
 }
 
+/**
+ * @param {number} [raw]
+ * @returns {number}
+ */
 function clampTimeoutMs(raw) {
   const envRaw = (process.env.SC2TOOLS_API_PULSE_TIMEOUT_SEC || "").trim();
   if (envRaw) {
@@ -373,6 +398,11 @@ function clampTimeoutMs(raw) {
   return DEFAULT_TIMEOUT_MS;
 }
 
+/**
+ * @param {Response} res
+ * @param {number} attempt
+ * @returns {number}
+ */
 function retryAfterMs(res, attempt) {
   const header = res.headers && typeof res.headers.get === "function"
     ? res.headers.get("retry-after")
@@ -390,6 +420,7 @@ function retryAfterMs(res, attempt) {
   return BACKOFF_MS[attempt] || 8000;
 }
 
+/** @param {number} ms @returns {Promise<void>} */
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -442,6 +473,7 @@ class LruCache {
     /** @type {Map<any, any>} */
     this.map = new Map();
   }
+  /** @param {any} key @returns {any} */
   get(key) {
     if (!this.map.has(key)) return undefined;
     const v = this.map.get(key);
@@ -449,6 +481,7 @@ class LruCache {
     this.map.set(key, v);
     return v;
   }
+  /** @param {any} key @param {any} value */
   set(key, value) {
     if (this.map.has(key)) this.map.delete(key);
     this.map.set(key, value);
@@ -457,6 +490,7 @@ class LruCache {
       if (oldest !== undefined) this.map.delete(oldest);
     }
   }
+  /** @param {any} key */
   delete(key) {
     this.map.delete(key);
   }

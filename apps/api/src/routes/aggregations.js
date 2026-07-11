@@ -8,6 +8,7 @@ const { parseFilters, parseFiniteInt } = require("../util/parseQuery");
  *
  * @param {{
  *   aggregations: import('../services/types').AggregationsService,
+ *   macroReport: import('../services/macroReport').MacroReportService,
  *   streak: import('../services/streak').StreakService,
  *   auth: import('express').RequestHandler,
  * }} deps

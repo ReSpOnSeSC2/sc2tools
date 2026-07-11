@@ -207,6 +207,7 @@ async function lengthBuckets(deps, userId, filters) {
       },
     ])
     .toArray();
+  /** @type {Record<string, number>} */
   const order = {
     "0–3m": 0,
     "3–6m": 1,

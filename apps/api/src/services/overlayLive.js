@@ -33,6 +33,33 @@ const { bucketResult } = aggregations;
  */
 
 /**
+ * Synthetic Test-button payload shape (``buildSamplePayload``). The
+ * payload mirrors ``LiveGamePayload`` and is emitted wholesale to the
+ * overlay sockets; only two members are manipulated server-side by
+ * the /v1/overlay-events/test route, so they're pinned here and the
+ * rest of the widget fields ride under the index signature:
+ *   * ``isTest`` — stamped ``true`` before broadcast so widgets cap
+ *     their visibility timers;
+ *   * ``session`` — spread onto the dedicated ``overlay:session``
+ *     event for the session card (shape mirrors
+ *     ``GamesService.todaySession``).
+ *
+ * @typedef {Record<string, any> & {
+ *   isTest?: boolean,
+ *   session?: {
+ *     wins?: number,
+ *     losses?: number,
+ *     games?: number,
+ *     mmrStart?: number,
+ *     mmrCurrent?: number,
+ *     region?: string,
+ *     sessionStartedAt?: string,
+ *     streak?: { kind: string, count: number },
+ *   },
+ * }} SampleOverlayPayload
+ */
+
+/**
  * Strategy keywords that the cheese widget should highlight. Lowercase
  * match against ``opponent.strategy`` (substring) so variants like
  * "6 Pool" / "Pool first" / "Proxy 2 Gate" all light up. The threshold
@@ -61,6 +88,9 @@ const CHEESE_KEYWORDS = [
  * an upstream rank-resolver feeds us a real league later we can swap
  * this for the canonical mapping; for now this keeps the rank widget
  * rendering something plausible the second a game lands.
+ *
+ * @param {unknown} mmr
+ * @returns {{league: string, tier: number} | null}
  */
 function leagueFromMmr(mmr) {
   if (typeof mmr !== "number" || !Number.isFinite(mmr)) return null;
@@ -84,6 +114,14 @@ function leagueFromMmr(mmr) {
   return { league: "Bronze", tier: 3 };
 }
 
+/**
+ * Compose a "PvZ"-style matchup label from two race names/letters.
+ * Undefined when either side is missing so the widget can hide.
+ *
+ * @param {string} [myRace]
+ * @param {string} [oppRace]
+ * @returns {string | undefined}
+ */
 function matchupLabel(myRace, oppRace) {
   const m = (myRace || "").charAt(0).toUpperCase();
   const o = (oppRace || "").charAt(0).toUpperCase();
@@ -91,6 +129,14 @@ function matchupLabel(myRace, oppRace) {
   return `${m}v${o}`;
 }
 
+/**
+ * Probability the cheese widget renders for a stored opponent
+ * strategy. Keyword hits land at 0.7 (above the widget's 0.4
+ * threshold); everything else at the hide-me baseline 0.1.
+ *
+ * @param {unknown} strategy
+ * @returns {number}
+ */
 function cheeseProbability(strategy) {
   if (!strategy) return 0.1;
   const s = String(strategy).toLowerCase();
@@ -636,9 +682,10 @@ class OverlayLiveService {
       );
       if (scouting.length > 0) payload.last5GamesScouting = scouting;
     } catch (err) {
+      const e = /** @type {{ message?: unknown }} */ (err);
       console.warn(
         "overlayLive: last5GamesScouting failed for userId=%s: %s",
-        userId, (err && err.message) || err,
+        userId, (e && e.message) || e,
       );
     }
 
@@ -682,7 +729,9 @@ class OverlayLiveService {
    * subsequent 1 Hz ticks of the same match still use the cache.
    *
    * @param {string} userId
-   * @param {object} envelope
+   * @param {Record<string, any>} envelope inbound ``LiveGameState``
+   *   envelope (see ``overlayLiveEnrichment.LiveEnvelopeLike`` for the
+   *   fields the enrichment path reads; everything else rides through).
    * @returns {Promise<object>}
    */
   async enrichEnvelope(userId, envelope) {
@@ -737,11 +786,17 @@ class OverlayLiveService {
    * passthrough preserves the existing call site shape used by the
    * /v1/overlay-events/test route + unit tests.
    *
+   * The declared return shape pins the two members the test route
+   * manipulates before broadcasting: it stamps ``isTest`` onto the
+   * payload, and re-emits the ``session`` block (spread + test flag)
+   * on the dedicated ``overlay:session`` socket event. Every other
+   * widget field rides through untouched under the index signature.
+   *
    * @param {string} [widget]
-   * @returns {object}
+   * @returns {SampleOverlayPayload}
    */
   static buildSamplePayload(widget) {
-    return buildSamplePayload(widget);
+    return /** @type {SampleOverlayPayload} */ (buildSamplePayload(widget));
   }
 
   /* ============================================================
@@ -752,10 +807,20 @@ class OverlayLiveService {
    * extraction.
    * ============================================================ */
 
+  /**
+   * @param {string} userId
+   * @returns {Promise<{kind: 'win'|'loss', count: number} | null>}
+   */
   _computeStreak(userId) {
     return aggregations.computeStreak(this.db.games, userId);
   }
 
+  /**
+   * @param {string} userId
+   * @param {string} [excludeGameId]
+   * @param {Date|string} [beforeDate]
+   * @returns {Promise<number|null>}
+   */
   _previousGameMmr(userId, excludeGameId, beforeDate) {
     return aggregations.previousGameMmr(
       this.db.games,
@@ -765,6 +830,13 @@ class OverlayLiveService {
     );
   }
 
+  /**
+   * @param {string} userId
+   * @param {Record<string, any>} opp
+   * @param {string} [myRace]
+   * @param {string} [oppRace]
+   * @param {string} [excludeGameId]
+   */
   _recentGamesForOpponent(userId, opp, myRace, oppRace, excludeGameId) {
     return aggregations.recentGamesForOpponent(
       this.db.games,
@@ -776,10 +848,32 @@ class OverlayLiveService {
     );
   }
 
+  /**
+   * Race args may be undefined at the type level (both call sites sit
+   * behind an ``if (matchup)`` guard, which only holds when both races
+   * are non-empty strings — a correlation the checker can't see). The
+   * cast forwards them to the aggregation impl, which additionally
+   * no-ops on a falsy race at runtime.
+   *
+   * @param {string} userId
+   * @param {string|undefined} myRace
+   * @param {string|undefined} oppRace
+   */
   _topBuildsForMatchup(userId, myRace, oppRace) {
-    return aggregations.topBuildsForMatchup(this.db.games, userId, myRace, oppRace);
+    return aggregations.topBuildsForMatchup(
+      this.db.games,
+      userId,
+      /** @type {string} */ (myRace),
+      /** @type {string} */ (oppRace),
+    );
   }
 
+  /**
+   * @param {string} userId
+   * @param {string} myRace
+   * @param {string} oppRace
+   * @param {string} strategy
+   */
   _bestAnswerVsStrategy(userId, myRace, oppRace, strategy) {
     return aggregations.bestAnswerVsStrategy(
       this.db.games,
@@ -790,10 +884,28 @@ class OverlayLiveService {
     );
   }
 
+  /**
+   * Same guarded-``matchup`` cast rationale as ``_topBuildsForMatchup``.
+   *
+   * @param {string} userId
+   * @param {string|undefined} myRace
+   * @param {string|undefined} oppRace
+   */
   _metaForMatchup(userId, myRace, oppRace) {
-    return aggregations.metaForMatchup(this.db.games, userId, myRace, oppRace);
+    return aggregations.metaForMatchup(
+      this.db.games,
+      userId,
+      /** @type {string} */ (myRace),
+      /** @type {string} */ (oppRace),
+    );
   }
 
+  /**
+   * @param {string} userId
+   * @param {Record<string, any>} opp
+   * @param {string} [myRace]
+   * @param {string} [oppRace]
+   */
   _opponentPhaseProfile(userId, opp, myRace, oppRace) {
     return aggregations.opponentPhaseProfile(
       this.db.games, this.gameDetails, userId, opp, myRace, oppRace,

@@ -41,13 +41,14 @@ class SeasonsService {
    * about which seasons we have. Each entry is one season per region —
    * the SPA reduces by `number` to display "Season N" boundaries.
    *
-   * @returns {Promise<{items: SeasonEntry[], current: number | null, source: 'pulse' | 'fallback', fetchedAt: number | null}>}
+   * @returns {Promise<{items: SeasonEntry[], current: number | null, source: 'pulse' | 'fallback', fetchedAt: number | null, mapPool: string[]}>}
    */
   async list() {
     const now = this.now();
     // Map pool is fetched in parallel with the season catalog so a slow
     // Liquipedia response doesn't add latency to a cached seasons read.
     const mapPoolPromise = this._safeMapPool();
+    /** @type {{ items: SeasonEntry[], current: number | null, source: 'pulse' | 'fallback', fetchedAt: number | null }} */
     let payload;
     if (
       this._cache
@@ -87,6 +88,12 @@ class SeasonsService {
     return FALLBACK_POOL.slice();
   }
 
+  /**
+   * @param {SeasonEntry[]} items
+   * @param {number | null} fetchedAt
+   * @param {'pulse' | 'fallback'} source
+   * @returns {{ items: SeasonEntry[], current: number | null, source: 'pulse' | 'fallback', fetchedAt: number | null }}
+   */
   _respondBase(items, fetchedAt, source) {
     const current = items.reduce(
       (best, s) => (best == null || s.battlenetId > best ? s.battlenetId : best),
@@ -103,6 +110,7 @@ class SeasonsService {
     };
   }
 
+  /** @returns {Promise<SeasonEntry[] | null>} */
   async _fetchFromPulse() {
     if (!this.fetchImpl) return null;
     const controller = typeof AbortController === "function" ? new AbortController() : null;
@@ -133,7 +141,25 @@ class SeasonsService {
  *   end: string | null,
  * }} SeasonEntry */
 
-/** @returns {SeasonEntry | null} */
+/**
+ * One raw season row from the SC2Pulse ``/season/list/all`` JSON —
+ * only the fields this normaliser reads; every value is
+ * runtime-checked before use.
+ *
+ * @typedef {{
+ *   battlenetId?: unknown,
+ *   region?: unknown,
+ *   year?: unknown,
+ *   number?: unknown,
+ *   start?: unknown,
+ *   end?: unknown,
+ * }} PulseSeasonRaw
+ */
+
+/**
+ * @param {PulseSeasonRaw | null | undefined} raw
+ * @returns {SeasonEntry | null}
+ */
 function normalizeSeason(raw) {
   if (!raw || typeof raw !== "object") return null;
   const battlenetId = Number(raw.battlenetId);

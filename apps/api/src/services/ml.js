@@ -37,7 +37,10 @@ class MLService {
    *   mlModels: import('mongodb').Collection,
    *   mlJobs: import('mongodb').Collection,
    * }} db
-   * @param {{ io?: import('socket.io').Server }} [opts]
+   * @param {{
+   *   io?: import('socket.io').Server,
+   *   gameDetails?: import('./gameDetails').GameDetailsService,
+   * }} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;

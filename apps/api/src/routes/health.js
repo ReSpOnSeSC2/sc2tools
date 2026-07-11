@@ -43,7 +43,10 @@ function buildHealthRouter(deps) {
       await deps.db.db
         .collection("jobLocks")
         .updateOne(
-          { _id: "healthcheck" },
+          // jobLocks deliberately uses string _ids (see
+          // pulseBackfillJob's lock doc); the driver's default
+          // Document type pins _id to ObjectId, hence the cast.
+          { _id: /** @type {any} */ ("healthcheck") },
           { $set: { ts: new Date() } },
           { upsert: true },
         );

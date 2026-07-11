@@ -66,7 +66,7 @@ class LiveGameBroker {
   constructor(deps = {}) {
     /** @type {Map<string, Set<(env: object) => void>>} */
     this._subs = new Map();
-    /** @type {Map<string, {envelope: object, ts: number}>} */
+    /** @type {Map<string, {envelope: Record<string, unknown>, ts: number}>} */
     this._latest = new Map();
     // Per-user cache of the most recent ``overlay:live`` payload
     // (post-game derivation from ``OverlayLiveService.buildFromGame``).
@@ -176,7 +176,7 @@ class LiveGameBroker {
    * Either fan-out failing must not crash the other.
    *
    * @param {string} userId
-   * @param {object} envelope
+   * @param {Record<string, unknown>} envelope
    */
   publish(userId, envelope) {
     if (!userId || !envelope || typeof envelope !== "object") return;
@@ -239,7 +239,14 @@ class LiveGameBroker {
             }
           }
           this.counters.enrich_ok += 1;
-          this._broadcast(userId, enriched);
+          // The enrich hook's contract is intentionally opaque
+          // (``object`` in, ``object`` out — see the constructor
+          // typedef); re-view it as the JSON-shaped map the broker's
+          // fan-out path reads.
+          this._broadcast(
+            userId,
+            /** @type {Record<string, unknown>} */ (enriched),
+          );
         })
         .catch((err) => {
           this.counters.enrich_failed += 1;
@@ -260,7 +267,7 @@ class LiveGameBroker {
    * one.
    *
    * @param {string} userId
-   * @param {object} envelope
+   * @param {Record<string, unknown>} envelope
    */
   _broadcast(userId, envelope) {
     this._latest.set(userId, { envelope, ts: Date.now() });
@@ -344,7 +351,7 @@ class LiveGameBroker {
 
   /**
    * @param {string} userId
-   * @returns {object|null} the latest cached envelope or null.
+   * @returns {Record<string, unknown>|null} the latest cached envelope or null.
    */
   latest(userId) {
     const hit = this._latest.get(userId);
@@ -449,6 +456,7 @@ class LiveGameBroker {
     return hit.payload;
   }
 
+  /** @param {string} userId @returns {number} */
   subscriberCount(userId) {
     return this._subs.get(userId)?.size || 0;
   }

@@ -147,8 +147,11 @@ function outcome(g) {
   return "U";
 }
 
+/** @param {any} g */
 const isWin = (g) => outcome(g) === "W";
+/** @param {unknown} v */
 const lc = (v) => (typeof v === "string" ? v.toLowerCase() : "");
+/** @param {unknown} v */
 const raceLetter = (v) =>
   typeof v === "string" && v.length > 0 ? v.charAt(0).toUpperCase() : "";
 
@@ -222,6 +225,13 @@ function buildLogCount(log, needle) {
   return n;
 }
 
+/**
+ * First game's id, or null for an empty window. Predicates return it
+ * as the "which game ticked this cell" pointer.
+ *
+ * @param {Array<any>} games
+ * @returns {string | null}
+ */
 function firstId(games) {
   if (!games.length) return null;
   return String(games[0].gameId);

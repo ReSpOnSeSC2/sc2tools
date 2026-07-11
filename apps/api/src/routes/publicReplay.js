@@ -4,7 +4,7 @@ const express = require("express");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const rateLimit = require("express-rate-limit");
+const rateLimitModule = require("express-rate-limit");
 const {
   runPythonNdjson,
   pythonAvailable,
@@ -12,6 +12,36 @@ const {
   resolvePythonExe,
   PythonError,
 } = require("../util/pythonRunner");
+
+// express-rate-limit ships as either a default or a named export
+// depending on the bundler/version — mirror app.js's resolution.
+const rateLimit =
+  /** @type {any} */ (rateLimitModule).default || rateLimitModule;
+
+/**
+ * One parsed NDJSON record from ``scripts/preview_replay_cli.py``.
+ * ``runPythonNdjson`` can only promise "one JSON object per line"
+ * (``object[]``), so the fields the route reads are declared here to
+ * match the CLI's output contract: ``--trace`` step markers carry
+ * ``trace``/``step``; the final result record carries ``ok`` plus
+ * either the preview payload (``map``, ``duration_sec``, …) or
+ * ``code``/``message`` on failure; ``--self-test`` emits
+ * ``self_test``/``sc2reader_version``/``sc2reader_import_error``.
+ *
+ * @typedef {{
+ *   trace?: boolean,
+ *   step?: string,
+ *   ok?: boolean,
+ *   code?: string,
+ *   message?: string,
+ *   map?: string,
+ *   duration_sec?: number,
+ *   self_test?: boolean,
+ *   sc2reader_import_ok?: boolean,
+ *   sc2reader_import_error?: string,
+ *   sc2reader_version?: string,
+ * }} PreviewCliRecord
+ */
 
 /**
  * /v1/public/preview-replay — public, unauth'd, rate-limited replay
@@ -104,6 +134,10 @@ function buildPublicReplayRouter(deps = {}) {
       const t0 = process.hrtime.bigint();
       let tmpPath;
 
+      /**
+       * @param {string} step
+       * @param {Record<string, unknown>} [fields]
+       */
       const stepLog = (step, fields = {}) => {
         if (!log) return;
         log.info(
@@ -167,24 +201,27 @@ function buildPublicReplayRouter(deps = {}) {
         // every NDJSON record including step-markers and the final
         // ok:true|false record.
         const tSpawn = process.hrtime.bigint();
-        const records = await runPythonNdjson({
-          script: "scripts/preview_replay_cli.py",
-          args: ["--file", tmpPath, "--trace"],
-          timeoutMs: PREVIEW_TIMEOUT_MS,
-          onProgress: (rec) => {
-            if (rec && rec.trace === true && log) {
-              log.debug(
-                {
-                  route: "preview_replay",
-                  requestId,
-                  cliStep: rec.step,
-                  cliFields: rec,
-                },
-                "preview_replay_cli_trace",
-              );
-            }
-          },
-        });
+        const records = /** @type {PreviewCliRecord[]} */ (
+          await runPythonNdjson({
+            script: "scripts/preview_replay_cli.py",
+            args: ["--file", tmpPath, "--trace"],
+            timeoutMs: PREVIEW_TIMEOUT_MS,
+            onProgress: (rec) => {
+              const r = /** @type {PreviewCliRecord} */ (rec);
+              if (r && r.trace === true && log) {
+                log.debug(
+                  {
+                    route: "preview_replay",
+                    requestId,
+                    cliStep: r.step,
+                    cliFields: rec,
+                  },
+                  "preview_replay_cli_trace",
+                );
+              }
+            },
+          })
+        );
         stepLog("python_spawn", {
           status: "pass",
           spawnMs: hrToMs(tSpawn),
@@ -373,6 +410,18 @@ async function writeTempReplay(body) {
  */
 async function collectChainHealth(req) {
   const requestId = String(req.id || "");
+  /**
+   * @type {{
+   *   analyzer_dir: { ok: boolean, path: string | null, error: string | null },
+   *   python_exe: { ok: boolean, path: string | null, error: string | null },
+   *   cli_self_test: {
+   *     ok: boolean,
+   *     error: string | null,
+   *     output: PreviewCliRecord | null,
+   *     durationMs: number | null,
+   *   },
+   * }}
+   */
   const checks = {
     analyzer_dir: { ok: false, path: null, error: null },
     python_exe: { ok: false, path: null, error: null },
@@ -398,11 +447,13 @@ async function collectChainHealth(req) {
   if (checks.analyzer_dir.ok && checks.python_exe.ok) {
     const t = process.hrtime.bigint();
     try {
-      const records = await runPythonNdjson({
-        script: "scripts/preview_replay_cli.py",
-        args: ["--self-test"],
-        timeoutMs: HEALTH_TIMEOUT_MS,
-      });
+      const records = /** @type {PreviewCliRecord[]} */ (
+        await runPythonNdjson({
+          script: "scripts/preview_replay_cli.py",
+          args: ["--self-test"],
+          timeoutMs: HEALTH_TIMEOUT_MS,
+        })
+      );
       checks.cli_self_test.durationMs = hrToMs(t);
       const rec = records.find(
         (r) => r && typeof r === "object" && r.self_test === true,
@@ -423,7 +474,8 @@ async function collectChainHealth(req) {
         checks.cli_self_test.error =
           `${err.kind || "python_error"}: ${err.message}`;
       } else {
-        checks.cli_self_test.error = String(err && err.message ? err.message : err);
+        const e = /** @type {{ message?: unknown }} */ (err);
+        checks.cli_self_test.error = String(e && e.message ? e.message : err);
       }
     }
   }

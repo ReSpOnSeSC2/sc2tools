@@ -15,6 +15,7 @@ const { computePerGameScouting } = require("./scouting/perGameScouting");
  */
 const OPPONENT_PHASE_SCAN_CAP = 50;
 
+/** @type {ReadonlyArray<'early'|'earlyMid'|'mid'|'midLate'|'late'>} */
 const PHASE_ORDER = ["early", "earlyMid", "mid", "midLate", "late"];
 
 /**
@@ -30,6 +31,13 @@ const PHASE_ORDER = ["early", "earlyMid", "mid", "midLate", "late"];
  * projections, same identity-precedence rules.
  */
 
+/**
+ * Normalise a stored result string ("Victory"/"Defeat"/"Win"/"Loss",
+ * any casing) into the win/loss buckets the widgets consume.
+ *
+ * @param {unknown} raw
+ * @returns {'win'|'loss'|null}
+ */
 function bucketResult(raw) {
   if (!raw) return null;
   const s = String(raw).toLowerCase();
@@ -70,6 +78,7 @@ function chipResult(raw) {
   return null;
 }
 
+/** @param {unknown} s @returns {string} */
 function escapeRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -474,6 +483,7 @@ async function opponentPhaseProfile(games, gameDetails, userId, opp, myRace, opp
 
   const comps = computeCompositions(matched);
 
+  /** @type {'early'|'earlyMid'|'mid'|'midLate'|'late'} */
   let typicalFinalPhase = "early";
   let topCount = -1;
   for (const phase of PHASE_ORDER) {
@@ -507,7 +517,11 @@ async function opponentPhaseProfile(games, gameDetails, userId, opp, myRace, opp
       const top = sigs.find((s) => s.key !== "Other" && s.units && s.units.length > 0);
       if (top) {
         typicalLateComp = {
-          units: top.units.map((u) => u.token),
+          // Signature rows come out of ``finalizeSignatures`` in
+          // buildCompositions.js with this exact units shape.
+          units: /** @type {Array<{token: string, count: number}>} */ (
+            top.units
+          ).map((u) => u.token),
           sampleCount: top.sampleCount || 0,
           winRate: typeof top.winRate === "number" ? top.winRate : 0,
         };
@@ -516,7 +530,16 @@ async function opponentPhaseProfile(games, gameDetails, userId, opp, myRace, opp
     }
   }
 
-  /** @type {Record<string, any>} */
+  /** @type {{
+   *   typicalFinalPhase: 'early'|'earlyMid'|'mid'|'midLate'|'late',
+   *   trajectory: {
+   *     sampleSize: Record<string, number>,
+   *     crossings: { earlyMidAt: number|null, midAt: number|null, midLateAt: number|null, lateAt: number|null },
+   *     finalPhaseDistribution: Record<string, number>,
+   *     durationP95Sec: number,
+   *   },
+   *   typicalLateComp?: { units: string[], sampleCount: number, winRate: number },
+   * }} */
   const out = { typicalFinalPhase, trajectory };
   if (typicalLateComp) out.typicalLateComp = typicalLateComp;
   return out;
@@ -639,7 +662,8 @@ async function last5GamesScouting(games, gameDetails, userId, opp, myRace, oppRa
     } catch (err) {
       console.warn(
         "last5GamesScouting: skipping gameId=%s userId=%s: %s",
-        r && r.gameId, userId, (err && err.message) || err,
+        r && r.gameId, userId,
+        (err && /** @type {{ message?: unknown }} */ (err).message) || err,
       );
     }
   }

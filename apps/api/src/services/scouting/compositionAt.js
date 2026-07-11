@@ -170,6 +170,7 @@ function canonicalizeName(name) {
  * @returns {Record<string, number>}
  */
 function folded(composition) {
+  /** @type {Record<string, number>} */
   const out = {};
   if (!composition || typeof composition !== "object") return out;
   for (const name of Object.keys(composition)) {
@@ -297,9 +298,10 @@ function derivedDeathsFromTimeline(timeline, side) {
 /**
  * Closest unit_timeline entry to ``t``.
  *
- * @param {Array<{time:number}>} timeline
+ * @template {{time:number}} T
+ * @param {Array<T>} timeline
  * @param {number} t
- * @returns {object|null}
+ * @returns {T|null}
  */
 function nearestTimelineEntry(timeline, t) {
   if (!Array.isArray(timeline) || timeline.length === 0) return null;
@@ -336,6 +338,7 @@ function deriveUnitComposition(opts) {
 
   if (hasTimeline) {
     const entry = nearestTimelineEntry(timeline, t);
+    /** @type {Record<string, number>} */
     const composition = (side === "my" ? entry && entry.my : entry && entry.opp) || {};
     if (Object.keys(composition).length > 0) {
       return { units: folded(composition), source: "timeline" };
@@ -377,7 +380,7 @@ function deriveUnitComposition(opts) {
  * morph predecessor so a hatchery → lair → hive chain reads as
  * "1 Hive", not "1 Hatchery + 1 Lair + 1 Hive".
  *
- * @param {Array<{time:number,name:string,is_building?:boolean}>} events
+ * @param {Array<{time:number,complete_time?:number,name:string,display?:string,is_building?:boolean,category?:string}> | null | undefined} events
  * @param {number} t
  * @returns {Record<string, number>}
  */
@@ -479,7 +482,7 @@ function derivedBuildingDeaths(records) {
  * @returns {boolean}
  */
 function subtractBuildingDeath(counts, name, amount) {
-  const tryBucket = (key) => {
+  const tryBucket = /** @param {string} key */ (key) => {
     const cur = counts[key] || 0;
     if (cur <= 0) return false;
     const next = Math.max(0, cur - amount);
@@ -502,7 +505,7 @@ function subtractBuildingDeath(counts, name, amount) {
  * lifetimes are available.
  *
  * @param {{
- *   buildEvents: Array<object> | null | undefined,
+ *   buildEvents: Array<{time:number,complete_time?:number,name:string,display?:string,is_building?:boolean,category?:string}> | null | undefined,
  *   productionBuildings: Array<{name:string,born_time:number,died_time:number,destroyed?:boolean}> | null | undefined,
  *   t: number,
  * }} opts
@@ -554,7 +557,7 @@ function tieredUpgradeFamily(rawName) {
  * count IS the tier — "+2 Ground Weapons" reads as "Ground Weapons
  * x2"). Mirrors ``countUpgradesAt`` in compositionAt.ts.
  *
- * @param {Array<{time:number,complete_time?:number,name:string,is_building?:boolean,category?:string}>} events
+ * @param {Array<{time:number,complete_time?:number,name:string,display?:string,is_building?:boolean,category?:string}>} events
  * @param {number} t
  * @returns {Record<string, number>}
  */
@@ -653,7 +656,7 @@ module.exports = {
  * was in this phase" reading — not a single-tick snapshot, not a
  * cumulative-built count.
  *
- * @param {Array<{time:number,my?:object,opp?:object}>} timeline
+ * @param {Array<{time:number,my?:Record<string,number>,opp?:Record<string,number>}>} timeline
  * @param {number} start
  * @param {number} end
  * @param {"my"|"opp"} side

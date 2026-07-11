@@ -155,12 +155,14 @@ async function main() {
   // the live current pool (when reachable). The historical list keeps
   // the set comprehensive even if Liquipedia is down, so there's no
   // empty-pool or stale-fallback failure mode to guard against here.
+  /** @type {{ maps: string[], teamMaps?: string[], source: string }} */
   let pool = { maps: [], teamMaps: [], source: "unavailable" };
   try {
     pool = await new LadderMapPoolService().get();
   } catch (err) {
+    const e = /** @type {{ message?: unknown }} */ (err);
     console.warn(
-      `Live pool fetch failed (${err && err.message ? err.message : err}); ` +
+      `Live pool fetch failed (${e && e.message ? e.message : e}); ` +
         "classifying against the baked-in all-seasons list only.",
     );
   }

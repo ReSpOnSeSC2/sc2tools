@@ -130,7 +130,9 @@ class AggregationsService {
       ])
       .toArray();
     return finalizeRows(
-      await attachRecentByMatchup(this.db, userId, filters, rows),
+      // The $project in matchupFacet guarantees ``name`` on every row;
+      // the driver only knows ``Document``.
+      await attachRecentByMatchup(this.db, userId, filters, /** @type {Array<{name: string} & Record<string, any>>} */ (rows)),
     );
   }
 
@@ -172,7 +174,9 @@ class AggregationsService {
         { $sort: { count: -1 } },
       ])
       .toArray();
-    return rows;
+    // The $project above pins the row shape; the driver only knows
+    // ``Document``.
+    return /** @type {Array<{map: string, count: number, firstSeen: Date|null, lastSeen: Date|null}>} */ (rows);
   }
 
   /**
@@ -200,7 +204,9 @@ class AggregationsService {
       ])
       .toArray();
     return finalizeRows(
-      await attachRecentByMap(this.db, userId, filters, rows),
+      // The $project in mapFacet guarantees ``name`` on every row; the
+      // driver only knows ``Document``.
+      await attachRecentByMap(this.db, userId, filters, /** @type {Array<{name: string} & Record<string, any>>} */ (rows)),
     );
   }
 
@@ -622,35 +628,62 @@ class AggregationsService {
   // pickInterval / pickTimezone) so the helper module never needs to
   // know about the singleton service.
 
-  /** @see ./trendsAggregations.js */
+  /**
+   * Implementation in ``./trendsAggregations.js``.
+   * @param {string} userId
+   * @param {{interval?: 'day'|'week'|'month', tz?: string}} opts
+   * @param {object} filters
+   */
   async matchupTimeseries(userId, opts, filters) {
     return trendsAgg.matchupTimeseries(this._trendsDeps(), userId, opts, filters);
   }
 
-  /** @see ./trendsAggregations.js */
+  /**
+   * Implementation in ``./trendsAggregations.js``.
+   * @param {string} userId
+   * @param {{tz?: string}} opts
+   * @param {object} filters
+   */
   async dayHourHeatmap(userId, opts, filters) {
     return trendsAgg.dayHourHeatmap(this._trendsDeps(), userId, opts, filters);
   }
 
-  /** @see ./trendsAggregations.js */
+  /**
+   * Implementation in ``./trendsAggregations.js``.
+   * @param {string} userId
+   * @param {object} filters
+   */
   async lengthBuckets(userId, filters) {
     return trendsAgg.lengthBuckets(this._trendsDeps(), userId, filters);
   }
 
-  /** @see ./trendsAggregations.js */
+  /**
+   * Implementation in ``./trendsAggregations.js``.
+   * @param {string} userId
+   * @param {{tz?: string}} opts
+   * @param {object} filters
+   */
   async activityCalendar(userId, opts, filters) {
     return trendsAgg.activityCalendar(this._trendsDeps(), userId, opts, filters);
   }
 
   // v0.5+ "Player Insight" aggregations. All thin delegators —
   // implementation in ``./trendsInsights.js``.
+  /** @param {string} userId @param {{interval?: 'day'|'week'|'month', tz?: string}} opts @param {object} filters */
   async mmrProgression(userId, opts, filters) { return trendsInsights.mmrProgression(this._trendsDeps(), userId, opts, filters); }
+  /** @param {string} userId @param {object} filters @param {{sessionGapMinutes?: number}} [opts] */
   async momentum(userId, filters, opts) { return trendsInsights.momentum(this._trendsDeps(), userId, filters, opts); }
+  /** @param {string} userId @param {object} filters @param {{bucketWidth?: number | "auto"}} [opts] */
   async oppMmrBuckets(userId, filters, opts) { return trendsInsights.oppMmrBuckets(this._trendsDeps(), userId, filters, opts); }
+  /** @param {string} userId @param {object} filters @param {{lo?: number, hi?: number}} [opts] */
   async oppMmrBucketGames(userId, filters, opts) { return trendsInsights.oppMmrBucketGames(this._trendsDeps(), userId, filters, opts); }
+  /** @param {string} userId @param {{interval?: 'day'|'week'|'month', tz?: string}} opts @param {object} filters */
   async myBuildMixOverTime(userId, opts, filters) { return trendsInsights.mixOverTime(this._trendsDeps(), userId, opts, filters, { field: "myBuild", fallback: "Unknown" }); }
+  /** @param {string} userId @param {{interval?: 'day'|'week'|'month', tz?: string}} opts @param {object} filters */
   async oppStrategyMixOverTime(userId, opts, filters) { return trendsInsights.mixOverTime(this._trendsDeps(), userId, opts, filters, { field: "opponent.strategy", fallback: "Unknown" }); }
+  /** @param {string} userId @param {{interval?: 'day'|'week'|'month', tz?: string}} opts @param {object} filters */
   async mapTrend(userId, opts, filters) { return trendsInsights.mapTrend(this._trendsDeps(), userId, opts, filters); }
+  /** @param {string} userId @param {object} filters */
   async netMmrByMatchup(userId, filters) { return trendsInsights.netMmrByMatchup(this._trendsDeps(), userId, filters); }
 
   /** @private */

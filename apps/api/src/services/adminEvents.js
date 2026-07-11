@@ -10,6 +10,7 @@ const EVENT_TYPES = Object.freeze({
   USER_MESSAGE: "user_message",
 });
 
+/** @type {Set<string>} */
 const VALID_TYPES = new Set(Object.values(EVENT_TYPES));
 const VALID_PLATFORMS = new Set(["windows", "macos", "linux"]);
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -93,9 +94,11 @@ class AdminEventsService {
         // Idempotent retry path — Clerk re-delivered a user.created
         // webhook the dedupe index already accepted. Surface the
         // existing row so the caller can still log a hit.
-        const existing = await this.db.adminEvents.findOne(
-          { type, "payload.clerkUserId": safePayload.clerkUserId },
-          { projection: { _id: 0 } },
+        const existing = /** @type {AdminEventDoc | null} */ (
+          await this.db.adminEvents.findOne(
+            { type, "payload.clerkUserId": safePayload.clerkUserId },
+            { projection: { _id: 0 } },
+          )
         );
         return existing || null;
       }
@@ -128,11 +131,15 @@ class AdminEventsService {
     if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
       query.createdAt = { $lt: opts.before };
     }
-    const rows = await this.db.adminEvents
-      .find(query, { projection: { _id: 0 } })
-      .sort({ createdAt: -1 })
-      .limit(limit + 1)
-      .toArray();
+    const rows = /** @type {AdminEventDoc[]} */ (
+      /** @type {unknown} */ (
+        await this.db.adminEvents
+          .find(query, { projection: { _id: 0 } })
+          .sort({ createdAt: -1 })
+          .limit(limit + 1)
+          .toArray()
+      )
+    );
     const hasMore = rows.length > limit;
     const items = hasMore ? rows.slice(0, limit) : rows;
     const nextBefore = hasMore && items.length > 0
@@ -401,6 +408,7 @@ function clampLimit(raw, fallback) {
  *   downloadsThisWeek: number,
  *   downloadsByPlatform: Record<string, number>,
  *   unreadCount: number,
+ *   agents: { total: number, active24h: number, active7d: number },
  *   generatedAt: string,
  * }} EventCounts
  */

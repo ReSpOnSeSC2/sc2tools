@@ -133,7 +133,9 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
     // Bound the map so a burst of long-running commands can't grow it
     // unchecked if a terminal event is ever missed.
     if (targets.size > 1000) {
-      const first = targets.keys().next().value;
+      // size > 1000 guarantees the iterator yields a key; TS can't
+      // narrow ``.next().value`` through the size check.
+      const first = /** @type {number} */ (targets.keys().next().value);
       targets.delete(first);
     }
   });

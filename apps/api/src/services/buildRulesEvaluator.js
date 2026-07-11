@@ -50,6 +50,8 @@ const VERB_PREFIX_RE = /^(Build|Train|Research|Morph)(?=[A-Z])/;
  * Mirror of UNIT_TECH_PREREQUISITES in
  * reveal-sc2-opponent-main/core/strategy_detector.py and
  * apps/replay-engine/detectors/base.py — keep the three in sync.
+ *
+ * @type {Record<string, string[][]>}
  */
 const UNIT_TECH_PREREQUISITES = {
   // Protoss Stargate path
@@ -207,16 +209,17 @@ function eventToken(ev) {
 }
 
 /**
- * Evaluate a single rule against an event list.
+ * Count events whose token equals `name` with time strictly below
+ * `limit`, applying the hallucination filter when the rule's token
+ * has a known tech prerequisite.
  *
- * @param {BuildRule} rule
  * @param {ReadonlyArray<ParsedEvent>} events
- * @param {Map<string, number>} [earliestBuilds] Pre-computed earliest
- *   `Build<X>` time per structure. When provided, unit events whose
- *   tech prerequisite isn't satisfied at the event's own time are
- *   skipped (anti-hallucination filter). When absent, the index is
- *   built lazily here so direct callers still get the same behaviour.
- * @returns {{ pass: boolean, reason?: string }}
+ * @param {string} name
+ * @param {number} limit
+ * @param {Map<string, number> | undefined} prereqIndex Always defined
+ *   when `ruleNeedsPrereq` is true (the caller builds it lazily).
+ * @param {boolean} ruleNeedsPrereq
+ * @returns {number}
  */
 function _countMatches(events, name, limit, prereqIndex, ruleNeedsPrereq) {
   let n = 0;
@@ -230,12 +233,27 @@ function _countMatches(events, name, limit, prereqIndex, ruleNeedsPrereq) {
     // wasn't started by the unit's own time. Building/upgrade tokens
     // are unaffected because they are absent from
     // UNIT_TECH_PREREQUISITES.
-    if (ruleNeedsPrereq && !_unitPrereqMet(ev, prereqIndex)) continue;
+    if (
+      ruleNeedsPrereq &&
+      !_unitPrereqMet(ev, /** @type {Map<string, number>} */ (prereqIndex))
+    ) continue;
     n++;
   }
   return n;
 }
 
+/**
+ * Evaluate a single rule against an event list.
+ *
+ * @param {BuildRule} rule
+ * @param {ReadonlyArray<ParsedEvent>} events
+ * @param {Map<string, number>} [earliestBuilds] Pre-computed earliest
+ *   `Build<X>` time per structure. When provided, unit events whose
+ *   tech prerequisite isn't satisfied at the event's own time are
+ *   skipped (anti-hallucination filter). When absent, the index is
+ *   built lazily here so direct callers still get the same behaviour.
+ * @returns {{ pass: boolean, reason?: string }}
+ */
 function evaluateRule(rule, events, earliestBuilds) {
   if (!rule || typeof rule !== "object") {
     return { pass: false, reason: "invalid rule" };

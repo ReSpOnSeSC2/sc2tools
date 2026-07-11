@@ -168,6 +168,7 @@ async function netMmrByMatchup(deps, userId, filters) {
     .toArray();
   const root = facet[0] || {};
   const summaryRow = (root.summary && root.summary[0]) || null;
+  /** @type {Array<{_id: string, netMmr: number, avgDelta: number, games: number, wins: number, losses: number}>} */
   const keptRows = root.keptPairs || [];
   const droppedRow = (root.droppedPairs && root.droppedPairs[0]) || null;
   return {

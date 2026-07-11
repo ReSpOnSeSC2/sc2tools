@@ -51,6 +51,7 @@ function isStampableDate(playedAt, now = Date.now()) {
   return t >= now - STAMP_MAX_AGE_DAYS * DAY_MS;
 }
 
+/** @type {Record<string, "Protoss"|"Terran"|"Zerg"|"Random">} */
 const RACE_NAMES = { P: "Protoss", T: "Terran", Z: "Zerg", R: "Random" };
 
 /**
@@ -67,7 +68,9 @@ function canonicalRaceName(raw) {
 }
 
 /** First letter of the canonical race name, or null. Handy for a Mongo
- *  ``$regex: "^P"`` match against a mixed-spelling ``opponent.race``. */
+ *  ``$regex: "^P"`` match against a mixed-spelling ``opponent.race``.
+ *  @param {unknown} raw
+ *  @returns {string|null} */
 function canonicalRaceLetter(raw) {
   const name = canonicalRaceName(raw);
   return name ? name.charAt(0) : null;

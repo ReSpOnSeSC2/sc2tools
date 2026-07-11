@@ -38,7 +38,10 @@ const STATS_GAME_SCAN_CAP = 1000;
 class StrategyPhasesService {
   /**
    * @param {{games: import('mongodb').Collection}} db
-   * @param {{ perGame?: import('./types').PerGameComputeService }} [opts]
+   * @param {{ perGame?: import('./perGameCompute').PerGameComputeService }} [opts]
+   *   ``perGame`` is typed against the implementation class (not the
+   *   ``./types`` interface) because this service forwards the
+   *   ``filters`` push-down option the interface doesn't declare yet.
    */
   constructor(db, opts = {}) {
     this.db = db;
@@ -81,7 +84,7 @@ class StrategyPhasesService {
    *   sampleSize: Record<string, number>,
    *   perPhase: Record<string, object>,
    *   finalPhaseDistribution: Record<string, number>,
-   *   medianCrossings: object,
+   *   medianCrossings: {earlyMidAt: number|null, midAt: number|null, midLateAt: number|null, lateAt: number|null},
    *   durationP95Sec: number,
    *   flags: string[],
    * }>}
@@ -163,7 +166,7 @@ class StrategyPhasesService {
    *   sampleSize: Record<string, number>,
    *   perPhase: Record<string, object>,
    *   finalPhaseDistribution: Record<string, number>,
-   *   medianCrossings: object,
+   *   medianCrossings: {earlyMidAt: number|null, midAt: number|null, midLateAt: number|null, lateAt: number|null},
    *   durationP95Sec: number,
    *   flags: string[],
    * }>}
