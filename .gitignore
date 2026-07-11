@@ -200,3 +200,7 @@ calibration-replays/
 
 # Worktree-local CI venv (mirror of /.venv/ rule)
 /.venv-ci/
+
+# Playwright run artifacts (apps/web responsive e2e smoke)
+/apps/web/test-results/
+/apps/web/playwright-report/
