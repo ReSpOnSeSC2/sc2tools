@@ -2,7 +2,7 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
-## [Unreleased]
+## 0.13.4
 
 ### Changed — build classifier single-sourced (mirror tree collapsed)
 - **What.** The bundled replay-engine carried two hand-synced copies of

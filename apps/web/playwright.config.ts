@@ -41,10 +41,14 @@ export default defineConfig({
     // A system proxy (VPN/corporate) makes Chromium "resolve" even IP
     // literals through the proxy — ERR_NAME_NOT_RESOLVED on loopback.
     // The args pair forces direct connections and outranks policy
-    // proxies where --no-proxy-server alone does not. Harmless in CI.
+    // proxies where --no-proxy-server alone does not.
+    // LOCAL ONLY: on the GitHub ubuntu runners this exact pair makes
+    // Chromium fail every navigation with ERR_NAME_NOT_RESOLVED — the
+    // very symptom it fixes on policy-locked Windows — so CI (clean
+    // network, no system proxy) launches with stock proxy settings.
     // Chromium-only flags — Firefox rejects them at spawn.
     launchOptions:
-      BROWSER === "chromium"
+      BROWSER === "chromium" && !process.env.CI
         ? { args: ["--proxy-server=direct://", "--proxy-bypass-list=*"] }
         : {},
   },
