@@ -2,6 +2,7 @@
 
 import type { LiveGamePayload } from "../types";
 import { Dim, WidgetHeader, WidgetShell } from "../WidgetShell";
+import { GrudgeLineRow } from "./GrudgeLine";
 
 export function RematchWidget({ live }: { live: LiveGamePayload | null }) {
   if (!live?.rematch?.isRematch) return null;
@@ -19,6 +20,8 @@ export function RematchWidget({ live }: { live: LiveGamePayload | null }) {
             : "Same opponent as the previous game."}
         </Dim>
       </div>
+      {/* Additive rivalry storyline — renders nothing when there's no story. */}
+      <GrudgeLineRow live={live} />
     </WidgetShell>
   );
 }

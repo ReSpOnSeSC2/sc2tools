@@ -65,6 +65,16 @@ export function useToast(): ToastContextValue {
   return ctx;
 }
 
+/**
+ * Non-throwing variant of {@link useToast}. Returns null when no
+ * <ToastProvider> is above in the tree, so components that merely *nice-
+ * to-have* a toast (e.g. an additive share button dropped into a header)
+ * can render safely outside a provider instead of crashing.
+ */
+export function useToastOptional(): ToastContextValue | null {
+  return useContext(ToastContext);
+}
+
 const VARIANT_CLASSES: Record<ToastVariant, string> = {
   info: "border-accent/40 bg-bg-surface",
   success: "border-success/40 bg-bg-surface",

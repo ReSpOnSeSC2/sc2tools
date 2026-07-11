@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/Icon";
 import { fmtDate, fmtMinutes, fmtMmr, raceColour } from "@/lib/format";
+import { ShareGameButton } from "./ShareGameButton";
 import { isLossResult, isWinResult, type GameSummary } from "./types";
 
 /**
@@ -49,6 +50,7 @@ export function GameDetailShell({
               "Game details"
             )}
           </h1>
+          <ShareGameButton game={game} className="ml-auto" />
         </div>
 
         <dl className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-caption text-text-muted">
