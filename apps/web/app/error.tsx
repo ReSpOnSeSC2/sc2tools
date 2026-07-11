@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { captureException } from "@/lib/sentry";
 
 /**
  * Route-segment error boundary. Before this existed, a render-time
@@ -25,6 +26,7 @@ export default function RouteError({
     // Server components log server-side; this covers client crashes.
     // eslint-disable-next-line no-console
     console.error("route_error", error);
+    void captureException(error);
   }, [error]);
 
   return (

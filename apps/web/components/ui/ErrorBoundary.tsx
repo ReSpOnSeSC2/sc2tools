@@ -1,6 +1,7 @@
 "use client";
 
 import { Component, type ReactNode } from "react";
+import { captureException } from "@/lib/sentry";
 
 type Props = { label?: string; children: ReactNode };
 type State = { error: Error | null };
@@ -13,9 +14,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    if (typeof window !== "undefined" && (window as any).Sentry?.captureException) {
-      (window as any).Sentry.captureException(error);
-    }
+    void captureException(error);
   }
 
   render() {

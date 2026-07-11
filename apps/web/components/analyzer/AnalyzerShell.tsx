@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnalyzerProvider } from "@/components/AnalyzerProvider";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { Section } from "@/components/ui/Section";
 import { Tabs } from "@/components/ui/Tabs";
 import { ArcadeTab } from "./ArcadeTab";
@@ -62,11 +63,13 @@ export function AnalyzerShell({
               }
               description={activeTab.description}
             >
-              <TabPanel
-                tab={tab}
-                profileId={profileId}
-                setProfileId={setProfileId}
-              />
+              <ErrorBoundary label={`the ${activeTab.label} tab`}>
+                <TabPanel
+                  tab={tab}
+                  profileId={profileId}
+                  setProfileId={setProfileId}
+                />
+              </ErrorBoundary>
             </Section>
           </div>
         </div>

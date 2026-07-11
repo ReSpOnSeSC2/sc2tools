@@ -10,6 +10,7 @@ import { MobileSectionPicker } from "@/components/analyzer/MobileSectionPicker";
 import { TABS, type TabId } from "@/components/analyzer/tabs";
 import { SyncStatus } from "@/components/SyncStatus";
 import { LiveGamePanel } from "@/components/dashboard/LiveGamePanel";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { useApi } from "@/lib/clientApi";
 import {
   OnboardingChecklist,
@@ -120,8 +121,11 @@ export function DashboardLayout({ me }: { me: Me }) {
           subscription and renders only while the desktop agent is
           actively reporting a non-idle phase. Drops out automatically
           ~30s after the last envelope so a stopped agent doesn't
-          leave a stale card pinned to the dashboard. */}
-      <LiveGamePanel />
+          leave a stale card pinned to the dashboard. Boundary keeps a
+          malformed live envelope from taking the dashboard down. */}
+      <ErrorBoundary label="the live game panel">
+        <LiveGamePanel />
+      </ErrorBoundary>
 
       {/* Onboarding checklist until the funnel completes (paired +
           first games). While visible it replaces the NoGamesYet
