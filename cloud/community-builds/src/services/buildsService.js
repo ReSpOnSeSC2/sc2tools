@@ -1,6 +1,6 @@
 "use strict";
 
-const { LIMITS, SORT_OPTIONS } = require("../constants");
+const { SORT_OPTIONS } = require("../constants");
 const { toStored, toPublic, clampPageSize } = require("./buildSerialiser");
 const { encodeCursor, decodeCursor } = require("../util/cursor");
 const { httpError } = require("../util/httpError");
@@ -59,7 +59,12 @@ class BuildsService {
   async getById(id) {
     const doc = await this.builds.findOne({ id, deletedAt: null });
     if (!doc) return null;
-    if (doc.flagged > LIMITS.FLAG_HIDE_THRESHOLD) return null;
+    // Flags are a moderation SIGNAL, not an auto-hide switch. Hiding
+    // requires an operator-set ``removed: true`` (no API path writes
+    // it). The old auto-hide-at-N-flags was a censorship lever: client
+    // ids are self-asserted, so N forged ids could silently disappear
+    // any build.
+    if (doc.removed === true) return null;
     return toPublic(doc);
   }
 
@@ -86,8 +91,10 @@ class BuildsService {
 
 /** @param {{ race?: string, vsRace?: string, q?: string, since?: number }} query */
 function buildListFilter({ race, vsRace, q, since }) {
+  // ``removed`` is operator-set only — see getById for why flags no
+  // longer auto-hide.
   /** @type {Record<string, unknown>} */
-  const filter = { deletedAt: null, flagged: { $lte: LIMITS.FLAG_HIDE_THRESHOLD } };
+  const filter = { deletedAt: null, removed: { $ne: true } };
   if (race) filter.race = race;
   if (vsRace) filter.vsRace = vsRace;
   if (q) filter.name = { $regex: escapeRegex(q), $options: "i" };

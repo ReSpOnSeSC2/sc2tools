@@ -1,6 +1,5 @@
 "use strict";
 
-const { LIMITS } = require("../constants");
 const { toPublic, clampPageSize } = require("./buildSerialiser");
 
 /**
@@ -24,7 +23,9 @@ class SyncService {
     const upserts = await this.builds
       .find({
         deletedAt: null,
-        flagged: { $lte: LIMITS.FLAG_HIDE_THRESHOLD },
+        // Operator-set moderation flag; forged flags no longer hide
+        // builds (see buildsService.getById).
+        removed: { $ne: true },
         updatedAt: { $gt: since },
       })
       .sort({ updatedAt: 1 })

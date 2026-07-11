@@ -40,11 +40,25 @@ describe("builds list + filter + sort", () => {
     expect(res.body.builds.map((b) => b.id)).toEqual(["proto-blink-allin"]);
   });
 
-  test("hides flagged builds above threshold from list and getById", async () => {
+  test("flags alone never hide a build (anti-censorship)", async () => {
+    // Client ids are self-asserted, so N forged flags used to be a
+    // one-request censorship lever. Flags are now signal-only.
     await postBuild(sampleBuild());
     await env.db.builds.updateOne(
       { id: "proto-1-gate-expand" },
-      { $set: { flagged: 6 } },
+      { $set: { flagged: 60 } },
+    );
+    const list = await request(env.app).get("/v1/community-builds/");
+    expect(list.body.builds.length).toBe(1);
+    const single = await request(env.app).get("/v1/community-builds/proto-1-gate-expand");
+    expect(single.status).toBe(200);
+  });
+
+  test("operator-set removed:true hides from list and getById", async () => {
+    await postBuild(sampleBuild());
+    await env.db.builds.updateOne(
+      { id: "proto-1-gate-expand" },
+      { $set: { removed: true } },
     );
     const list = await request(env.app).get("/v1/community-builds/");
     expect(list.body.builds.length).toBe(0);
