@@ -2,6 +2,31 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.13.5
+
+### Fixed — uploads now carry the opponent's league (Ladder Meta Radar unblocked)
+- **What.** The upload payload has always had a slot for
+  `opponent.leagueId`, and `replay_pipeline` has always tried to fill
+  it from `opp.league_id` — but the bundled parser's `PlayerInfo`
+  never had a `league_id` field, so the `getattr` silently returned
+  `None` for every replay ever synced. No upload from any agent
+  version has ever carried a league.
+- **Effect.** The cloud bands its two corpus-wide aggregations — the
+  public Ladder Meta Radar (`/meta`, "which openers actually win") and
+  the league-percentile benchmarks — on `opponent.leagueId`. With the
+  field missing corpus-wide, every (league, matchup) bucket sat at
+  zero games, below the k-anonymity serve floor, and the /meta page
+  showed "Not enough games yet" no matter how many replays users
+  synced. The parser (replay-engine 1.5.1) now reads sc2reader's
+  `highest_league` from the replay's initData (1=Bronze..7=Grandmaster,
+  0/8 = unranked) and normalizes it onto the ladder enum the cloud and
+  SC2Pulse use (0=Bronze..6=Grandmaster). The pipeline stamps it for
+  ladder games only — matchmaking is what makes the opponent's league
+  a valid proxy for the game's bracket; custom lobbies don't get one.
+  Re-syncing existing replays backfills the field (game upserts
+  overwrite slim rows), after which the next nightly recompute
+  populates the radar.
+
 ## 0.13.4
 
 ### Changed — desktop window & tray polish (every control audited)

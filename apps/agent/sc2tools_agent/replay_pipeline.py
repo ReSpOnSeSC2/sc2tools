@@ -619,13 +619,23 @@ def parse_replay_for_cloud_ex(
     # tiles surface their "no spatial data" empty state.
     spatial = _compute_spatial_extract(ctx)
 
+    is_ladder = _is_ladder_game(ctx)
+
     opponent = {
         "displayName": _sanitize_name(opp.name),
         "race": opp.race or "U",
     }
     if opp.mmr is not None:
         opponent["mmr"] = int(opp.mmr)
-    if getattr(opp, "league_id", None) is not None:
+    # League banding signal for the cloud's ladder-meta / benchmark
+    # aggregations (both filter on ``opponent.leagueId``). The parser
+    # normalizes the replay's initData enum to 0=Bronze..6=Grandmaster
+    # (core.sc2_replay_parser._get_player_league_id). Ladder games only:
+    # the cloud treats the opponent's league as a proxy for the bracket
+    # the game was played in, which matchmaking guarantees on ladder but
+    # a custom lobby doesn't. Unknown (None) is trusted like elsewhere
+    # in this function — old parses shouldn't drop the field.
+    if is_ladder is not False and getattr(opp, "league_id", None) is not None:
         try:
             opponent["leagueId"] = int(opp.league_id)
         except (TypeError, ValueError):
@@ -760,7 +770,7 @@ def parse_replay_for_cloud_ex(
         my_mmr=my_mmr,
         my_toon_handle=my_toon_handle,
         player_count=_player_count(ctx),
-        is_ladder_game=_is_ladder_game(ctx),
+        is_ladder_game=is_ladder,
         opponent=opponent,
         build_log=my_build_log,
         early_build_log=early_build_log,

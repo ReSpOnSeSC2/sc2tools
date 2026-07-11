@@ -12,6 +12,29 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Ladder Meta Radar · agent finally uploads the opponent's league** —
+  the /meta page ("which openers actually win") showed "Not enough
+  games yet" for every league and matchup regardless of corpus size.
+  Root cause was on the agent side, not the API: the ladder-meta and
+  league-percentile aggregations band the games corpus on
+  `opponent.leagueId`, and `replay_pipeline` has always tried to stamp
+  that field from `opp.league_id` — but the replay-engine's
+  `PlayerInfo` never had a `league_id` field, so the `getattr`
+  silently produced `None` for every replay and no upload ever
+  carried a league (the pipeline test faked the opponent with a
+  `SimpleNamespace(league_id=5)`, which is why it never caught this).
+  With the field missing corpus-wide, every (league, matchup) bucket
+  held zero games — permanently below the k-anonymity serve floors in
+  `services/ladderMeta.js` / `services/leaguePercentiles.js`. The
+  parser (replay-engine 1.5.1, agent 0.13.5) now extracts sc2reader's
+  `highest_league` from replay initData and normalizes its enum
+  (1=Bronze..7=GM, 0/8=unranked) onto the ladder enum everything else
+  uses (0=Bronze..6=GM); the pipeline stamps it for ladder games only,
+  since matchmaking is what makes the opponent's league a valid proxy
+  for the game's bracket. Existing uploads backfill on resync (game
+  upserts overwrite slim rows), then the nightly recompute fills the
+  radar.
+
 - **Agent auto-update · a tag push is now a complete release** — the
   installed agent's updater polls the API's `GET /v1/agent/version`,
   which only served rows manually POSTed to `/v1/agent/releases`; the
