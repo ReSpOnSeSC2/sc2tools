@@ -40,13 +40,28 @@ export interface ShareCardInput {
   tag?: string;
 }
 
-const W = 1200;
-const H = 630;
-const PAD_L = 60;
-const PAD_R = 60;
+/** Canvas dimensions — the standard 1200×630 OpenGraph share size. */
+export const CARD_W = 1200;
+export const CARD_H = 630;
+/** Horizontal padding shared by every card layout. */
+export const CARD_PAD = 60;
+
+const W = CARD_W;
+const H = CARD_H;
+const PAD_L = CARD_PAD;
+const PAD_R = CARD_PAD;
 const CONTENT_W = W - PAD_L - PAD_R;
 
-const FONT_STACK = "system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+export const FONT_STACK = "system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+
+/**
+ * Link-back for every share payload. The share TEXT carries the full
+ * URL (so pasted shares are clickable) and the card itself carries the
+ * short label as a watermark (so screenshots still say where they came
+ * from).
+ */
+export const SHARE_LINK_URL = "https://sc2tools.com/arcade";
+export const SHARE_LINK_LABEL = "sc2tools.com/arcade";
 
 export async function shareCard(input: ShareCardInput): Promise<{ shared: boolean }> {
   if (typeof document === "undefined") return { shared: false };
@@ -57,17 +72,7 @@ export async function shareCard(input: ShareCardInput): Promise<{ shared: boolea
   if (!ctx) return { shared: false };
 
   const accent = pickAccent(input);
-
-  // Background gradient
-  const grad = ctx.createLinearGradient(0, 0, W, H);
-  grad.addColorStop(0, "#0e1218");
-  grad.addColorStop(1, "#161b22");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-
-  // Accent stripe
-  ctx.fillStyle = accent;
-  ctx.fillRect(0, 0, 12, H);
+  drawCardBackground(ctx, accent);
 
   // Title
   ctx.fillStyle = "#ffffff";
@@ -127,24 +132,13 @@ export async function shareCard(input: ShareCardInput): Promise<{ shared: boolea
     if (y >= footerTop - 4) break;
   }
 
-  // Footer brand (left) + tag (right)
-  ctx.fillStyle = "#7DC8FF";
-  ctx.font = `600 24px ${FONT_STACK}`;
-  ctx.fillText("SC2 Tools · Arcade", PAD_L, H - 50);
-
-  if (input.tag) {
-    ctx.fillStyle = "#8a96a8";
-    ctx.font = `400 20px ${FONT_STACK}`;
-    const w = ctx.measureText(input.tag).width;
-    ctx.fillText(input.tag, W - PAD_R - w, H - 46);
-  }
+  drawCardFooter(ctx, { tag: input.tag });
 
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob((b) => resolve(b), "image/png"),
   );
   if (!blob) return { shared: false };
 
-  const file = new File([blob], "arcade-share.png", { type: "image/png" });
   const shareText = [
     input.title,
     input.question ? `\nQ: ${input.question}` : "",
@@ -154,11 +148,92 @@ export async function shareCard(input: ShareCardInput): Promise<{ shared: boolea
     .join("")
     .trim();
 
+  return deliverShareCard({
+    blob,
+    title: input.title,
+    // Link-back: every text payload ends with the sc2tools.com URL so
+    // shares posted to Discord/Twitter/etc. point back at the site.
+    text: `${shareText}\n\n${SHARE_LINK_URL}`,
+    filename: "arcade-share.png",
+  });
+}
+
+/* ============================================================
+ * Shared canvas + delivery helpers — reused by SeasonRecap's
+ * card renderer (and any future share surface). Keep these free
+ * of arcade-round specifics.
+ * ============================================================ */
+
+/** Paint the standard dark gradient background + left accent stripe. */
+export function drawCardBackground(
+  ctx: CanvasRenderingContext2D,
+  accent: string,
+): void {
+  const grad = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
+  grad.addColorStop(0, "#0e1218");
+  grad.addColorStop(1, "#161b22");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+
+  ctx.fillStyle = accent;
+  ctx.fillRect(0, 0, 12, CARD_H);
+}
+
+/**
+ * Footer: brand (left), the sc2tools.com watermark right after it, and
+ * an optional context tag (right). The watermark is the on-image
+ * link-back — screenshots and re-uploads keep pointing home even when
+ * the share text gets stripped.
+ */
+export function drawCardFooter(
+  ctx: CanvasRenderingContext2D,
+  opts: { brand?: string; tag?: string } = {},
+): void {
+  const brand = opts.brand ?? "SC2 Tools · Arcade";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#7DC8FF";
+  ctx.font = `600 24px ${FONT_STACK}`;
+  ctx.fillText(brand, CARD_PAD, CARD_H - 50);
+  const brandW = ctx.measureText(brand).width;
+
+  ctx.fillStyle = "#8a96a8";
+  ctx.font = `400 20px ${FONT_STACK}`;
+  ctx.fillText(SHARE_LINK_LABEL, CARD_PAD + brandW + 18, CARD_H - 46);
+
+  if (opts.tag) {
+    ctx.fillStyle = "#8a96a8";
+    ctx.font = `400 20px ${FONT_STACK}`;
+    const w = ctx.measureText(opts.tag).width;
+    ctx.fillText(opts.tag, CARD_W - CARD_PAD - w, CARD_H - 46);
+  }
+}
+
+export interface DeliverShareInput {
+  blob: Blob;
+  title: string;
+  /** Plain-text payload. Callers must already include the link-back. */
+  text: string;
+  filename?: string;
+}
+
+/**
+ * Delivery pipeline shared by every share surface:
+ * Web Share (with PNG attached) → clipboard PNG → clipboard text →
+ * download. Resolves { shared: true } as soon as one path lands.
+ */
+export async function deliverShareCard({
+  blob,
+  title,
+  text,
+  filename = "arcade-share.png",
+}: DeliverShareInput): Promise<{ shared: boolean }> {
+  const file = new File([blob], filename, { type: "image/png" });
+
   if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
     try {
       const shareData: ShareData = {
-        title: input.title,
-        text: shareText,
+        title,
+        text,
         files: [file],
       };
       if (
@@ -183,7 +258,7 @@ export async function shareCard(input: ShareCardInput): Promise<{ shared: boolea
       return { shared: true };
     }
     if (navigator?.clipboard?.writeText) {
-      await navigator.clipboard.writeText(shareText);
+      await navigator.clipboard.writeText(text);
       return { shared: true };
     }
   } catch {
@@ -193,7 +268,7 @@ export async function shareCard(input: ShareCardInput): Promise<{ shared: boolea
   // Last-ditch: download the PNG so the user can attach it manually.
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "arcade-share.png";
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => {
@@ -221,7 +296,7 @@ function chipLabel(outcome: "correct" | "partial" | "wrong"): string {
   return "❌ Missed";
 }
 
-function roundRect(
+export function roundRect(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -249,7 +324,7 @@ function roundRect(
  * the y-coordinate immediately below the last rendered line so the
  * caller can stack the next section right under it.
  */
-function wrapText(
+export function wrapText(
   ctx: CanvasRenderingContext2D,
   text: string,
   x: number,
