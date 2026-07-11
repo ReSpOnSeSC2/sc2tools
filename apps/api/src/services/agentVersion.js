@@ -19,19 +19,54 @@ const VALID_CHANNELS = new Set(["stable", "beta", "dev"]);
  * admin tool.
  */
 class AgentVersionService {
-  /** @param {{agentReleases: import('mongodb').Collection}} db */
-  constructor(db) {
+  /**
+   * @param {{agentReleases: import('mongodb').Collection}} db
+   * @param {{
+   *   githubFeed?: { latest: (opts: object) => Promise<object | null> } | null,
+   * }} [opts]  githubFeed is a GithubReleaseFeed (or test double) used
+   *            as a second release source — see latest() for the merge
+   *            rule. Absent/null disables the fallback.
+   */
+  constructor(db, opts = {}) {
     this.db = db;
+    this.githubFeed = opts.githubFeed || null;
   }
 
   /**
    * Latest published release on `channel`. Defaults to "stable".
+   *
+   * Merges two sources and serves whichever version is newer:
+   *
+   *   1. The `agent_releases` collection (manual POST
+   *      /v1/agent/releases — curated notes, minSupportedVersion).
+   *   2. The GitHub Releases feed (`agent-v*` tag push → installer
+   *      workflow attaches the .exe). Wired via `githubFeed`.
+   *
+   * (2) is what makes a tag push a complete release: before it,
+   * installed agents only ever saw manually POSTed rows, so a cut
+   * release the website already offered could silently never reach
+   * the auto-updater. Mongo wins ties so a manual publish of the
+   * same version can override GitHub's generated release notes.
    *
    * @param {{ channel?: string, platform?: string }} [opts]
    */
   async latest(opts = {}) {
     const channel = pickChannel(opts.channel);
     const platform = pickPlatform(opts.platform);
+    const fromDb = await this._latestFromDb(channel, platform);
+    const fromGithub = await this._latestFromGithub(channel, platform);
+    if (!fromDb) return fromGithub;
+    if (!fromGithub) return fromDb;
+    return compareVersions(fromGithub.version, fromDb.version) > 0
+      ? fromGithub
+      : fromDb;
+  }
+
+  /**
+   * @param {string} channel
+   * @param {string} platform
+   */
+  async _latestFromDb(channel, platform) {
     const doc = await this.db.agentReleases.findOne(
       { channel, "artifacts.platform": platform },
       { sort: { publishedAt: -1 }, projection: { _id: 0 } },
@@ -56,6 +91,23 @@ class AgentVersionService {
         signature: artifact.signature || null,
       },
     };
+  }
+
+  /**
+   * GitHub side of the merge. Never throws — the feed already
+   * swallows fetch errors into null/stale, but a programming error in
+   * a test double must not 500 the public version route either.
+   *
+   * @param {string} channel
+   * @param {string} platform
+   */
+  async _latestFromGithub(channel, platform) {
+    if (!this.githubFeed) return null;
+    try {
+      return await this.githubFeed.latest({ channel, platform });
+    } catch {
+      return null;
+    }
   }
 
   /**

@@ -12,6 +12,23 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Agent auto-update · a tag push is now a complete release** — the
+  installed agent's updater polls the API's `GET /v1/agent/version`,
+  which only served rows manually POSTed to `/v1/agent/releases`; the
+  website's download card, by contrast, reads the GitHub Releases feed
+  directly. So cutting an `agent-v*` tag *looked* fully published (the
+  site offered the new installer) while every installed agent silently
+  stayed on the old build until someone remembered the manual curl —
+  which is how the 0.13.3 building-death fix sat unshipped. The API now
+  merges a second release source (`services/agentGithubReleases.js`):
+  the newest eligible `agent-v*` GitHub release (semver-sorted,
+  drafts/prereleases skipped, sha256 read from the `.sha256` sidecar,
+  10-min cache with stale-on-error). `AgentVersionService.latest()`
+  serves whichever source is newer; Mongo rows win ties so a manual
+  publish can still override notes/minSupportedVersion. Disable with
+  `AGENT_RELEASE_GITHUB_FALLBACK=off`; repo override via
+  `AGENT_RELEASE_GITHUB_REPO`. Off under `NODE_ENV=test`.
+
 - **Agent 0.13.3 · building-death pipeline actually released** — the
   two earlier fixes below (structure lifetimes on the upload payload,
   opponent-side mirror, explicit destroyed bit) landed in source after
