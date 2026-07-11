@@ -28,7 +28,11 @@ jobs:
   check:
     name: Lint + typecheck + test (apps/api)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The suite itself runs ~2 min runInBand (+ a couple of minutes of
+    # npm ci / cold mongod download). Earlier timeout-kills were NOT
+    # slowness: a leaked SSE socket in agentLive.test.js kept jest from
+    # ever exiting, so every run idled to death after "117 passed".
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/api

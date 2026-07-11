@@ -240,6 +240,44 @@ def test_upload_batch_size_payload_persists_to_state(tmp_path: Path) -> None:
     assert state.upload_batch_size_override == 42
 
 
+def test_auto_update_toggle_persists_to_state(tmp_path: Path) -> None:
+    """The Settings tab's auto-update checkbox lands in
+    ``state.auto_update_enabled`` (hot-applied: the updater's consent
+    gate reads state on every poll), and a None payload leaves the
+    flag untouched."""
+    state = AgentState(device_token="t")
+    assert state.auto_update_enabled is True  # default
+
+    _handle_save_settings(
+        _cfg(tmp_path),
+        state,
+        SettingsPayload(auto_update_enabled=False),
+        _cell(),
+        logging.getLogger("test"),
+    )
+    assert state.auto_update_enabled is False
+
+    # None = "no change" — a Save that doesn't carry the field must
+    # not flip the stored value back.
+    _handle_save_settings(
+        _cfg(tmp_path),
+        state,
+        SettingsPayload(log_level="INFO"),
+        _cell(),
+        logging.getLogger("test"),
+    )
+    assert state.auto_update_enabled is False
+
+    _handle_save_settings(
+        _cfg(tmp_path),
+        state,
+        SettingsPayload(auto_update_enabled=True),
+        _cell(),
+        logging.getLogger("test"),
+    )
+    assert state.auto_update_enabled is True
+
+
 def test_save_clamps_upload_concurrency_into_useful_range(
     tmp_path: Path,
 ) -> None:

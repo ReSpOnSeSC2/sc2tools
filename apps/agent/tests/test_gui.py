@@ -69,6 +69,17 @@ def test_settings_payload_defaults_to_none() -> None:
     assert p.replay_folders is None
     assert p.autostart_enabled is None
     assert p.start_minimized is None
+    assert p.auto_update_enabled is None
+
+
+def test_settings_payload_auto_update_round_trips() -> None:
+    """``auto_update_enabled`` must keep the None / True / False
+    trichotomy — None means "no change" to the runner, False turns the
+    updater notify-only, True restores automatic installs."""
+    from sc2tools_agent.ui.gui import SettingsPayload
+
+    assert SettingsPayload(auto_update_enabled=True).auto_update_enabled is True
+    assert SettingsPayload(auto_update_enabled=False).auto_update_enabled is False
 
 
 def test_settings_payload_round_trips_explicit_values(tmp_path: Path) -> None:

@@ -391,13 +391,29 @@ describe("POST /v1/agent/live + GET /v1/me/live", () => {
       // Subscribe alice, publish to bob — alice must NOT see bob's
       // envelope.
       const aliceChunks = [];
+      // Captured so the test body can close the stream when it's done
+      // watching — same res.destroy() pattern the SSE test above uses.
+      let aliceRes = null;
       const aliceReq = request(app)
         .get("/v1/me/live")
         .set("authorization", `Bearer ${TEST_TOKEN}`)
         .buffer(false)
         .parse((res, cb) => {
+          aliceRes = res;
+          // Settle exactly once: destroy() fires 'error'/'aborted'
+          // (and sometimes 'end' too), and an unhandled 'error' here
+          // escapes as a suite-level failure after every test passed.
+          let settled = false;
+          const settle = () => {
+            if (!settled) {
+              settled = true;
+              cb(null, aliceChunks.join(""));
+            }
+          };
           res.on("data", (c) => aliceChunks.push(c.toString("utf8")));
-          res.on("end", () => cb(null, aliceChunks.join("")));
+          res.on("end", settle);
+          res.on("error", settle);
+          res.on("aborted", settle);
         });
 
       const aliceProm = aliceReq.then(
@@ -418,18 +434,20 @@ describe("POST /v1/agent/live + GET /v1/me/live", () => {
 
       // Wait briefly to give SSE a chance to (incorrectly) leak.
       await new Promise((r) => setTimeout(r, 200));
-      // Tear down alice's stream.
       const aliceText = aliceChunks.join("");
       expect(aliceText).not.toContain("bob_match");
 
-      // Drain alice's request — supertest needs the response to end.
-      // We can't easily abort, but the test has already validated.
-      // Resolve by destroying the underlying socket: supertest exposes
-      // `req` on the chain; we just await the timeout race.
-      await Promise.race([
-        aliceProm,
-        new Promise((r) => setTimeout(r, 500)),
-      ]);
+      // Tear down alice's stream FOR REAL — destroy the response like
+      // the SSE test above does. Racing a timer and moving on — the
+      // previous approach — left the SSE socket (plus supertest's
+      // ephemeral server) alive after the suite: jest then never
+      // exited, and CI burned the rest of the job timeout doing
+      // nothing before being killed. That single leaked handle is why
+      // api-ci never completed a run. (Client-side aliceReq.abort()
+      // also closes the socket but surfaces an unhandled "aborted"
+      // error at the suite level — hence the response-side destroy.)
+      if (aliceRes) aliceRes.destroy();
+      await aliceProm;
     },
     8000,
   );

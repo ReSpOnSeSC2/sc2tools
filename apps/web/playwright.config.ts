@@ -41,10 +41,11 @@ export default defineConfig({
     // A system proxy (VPN/corporate) makes Chromium "resolve" even IP
     // literals through the proxy — ERR_NAME_NOT_RESOLVED on loopback.
     // The args pair forces direct connections and outranks policy
-    // proxies where --no-proxy-server alone does not. Harmless in CI.
+    // proxies where --no-proxy-server alone does not. Local-only
+    // because CI runners have no system proxy to defeat.
     // Chromium-only flags — Firefox rejects them at spawn.
     launchOptions:
-      BROWSER === "chromium"
+      BROWSER === "chromium" && !process.env.CI
         ? { args: ["--proxy-server=direct://", "--proxy-bypass-list=*"] }
         : {},
   },
@@ -73,10 +74,20 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
     env: {
-      // Format-valid dummy — decodes to clerk.example.com$. Public
-      // pages never call Clerk's API, so it's never exercised.
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_Y2xlcmsuZXhhbXBsZS5jb20k",
-      CLERK_SECRET_KEY: "sk_test_dummy",
+      // Format-valid dummies — decode to clerk.example.com$. Public
+      // pages never call Clerk's API, so they're never exercised.
+      // PRODUCTION-format (pk_live) on purpose: a pk_test key makes
+      // clerkMiddleware run the dev-instance "dev browser" handshake,
+      // redirecting every real-browser document request to the key's
+      // frontend-API domain (the nonexistent clerk.example.com) —
+      // browsers then die with ERR_NAME_NOT_RESOLVED while curl and
+      // Node fetch (not browsers) get a 200. On a dev machine whose
+      // apps/web/.env.local holds REAL pk_test keys the handshake
+      // bounces through the real Clerk domain and back, which is why
+      // this only ever failed in CI. Production instances skip the
+      // handshake entirely.
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_live_Y2xlcmsuZXhhbXBsZS5jb20k",
+      CLERK_SECRET_KEY: "sk_live_dummy",
       NEXT_PUBLIC_API_BASE: "http://localhost:8080",
     },
   },
