@@ -167,3 +167,36 @@ nsa*.tmp
 
 # Local replay corpus for optimizer calibration (not versioned)
 calibration-replays/
+
+# Root-level debug/scratch images from icon cutout experiments
+# (tools/icon_cutout.py writes its intermediates to the repo root).
+# Scoped to the root so real app assets under apps/web/public/ are
+# unaffected.
+/dbg_*.png
+/out_*.png
+/preview_*.png
+/crop_*.png
+/grid_*.png
+/soft_*.png
+/spinecrawler*.png
+/sporecrawler*.png
+
+# Root scratch dir + stray temp files
+/tmp/
+/err.tmp
+
+# Agent packaging logs written next to the build scripts
+/apps/agent/build-*.log
+
+# Legacy pre-cloud monolith trees. These live on disk for reference
+# only, are not part of the monorepo build, and contain per-user data
+# (MyOpponentHistory.json, character_ids.txt) that must never be
+# staged wholesale. Archive to their own repo, then delete.
+/SC2Replay-Analyzer/
+/reveal-sc2-opponent-main/
+/_portfolio-update/
+/_profile-repo/
+/.codex/
+
+# Worktree-local CI venv (mirror of /.venv/ rule)
+/.venv-ci/
