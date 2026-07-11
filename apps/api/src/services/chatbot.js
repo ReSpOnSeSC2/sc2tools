@@ -170,16 +170,16 @@ class ChatbotService {
     if (!userId) return null;
     try {
       const env = this.liveGameBroker ? this.liveGameBroker.latest(userId) : null;
-      if (
-        env
-        && env.opponent
-        && typeof env.opponent.name === "string"
-        && env.opponent.name.trim()
-      ) {
+      const opp = env
+        ? /** @type {Record<string, any>|undefined} */ (env.opponent)
+        : undefined;
+      if (env && opp && typeof opp.name === "string" && opp.name.trim()) {
         return clip(this._opponentLineFromEnvelope(env));
       }
       const post = this.liveGameBroker
-        ? this.liveGameBroker.latestOverlayLive(userId)
+        ? /** @type {Record<string, any>|null} */ (
+            this.liveGameBroker.latestOverlayLive(userId)
+          )
         : null;
       if (post && typeof post.oppName === "string" && post.oppName.trim()) {
         return clip(this._opponentLineFromPostGame(post));
@@ -513,7 +513,9 @@ class ChatbotService {
     if (env && typeof env.myBuild === "string" && env.myBuild.trim()) {
       return `Current build: ${clean(env.myBuild)}`;
     }
-    const post = this.liveGameBroker.latestOverlayLive(userId);
+    const post = /** @type {Record<string, any>|null} */ (
+      this.liveGameBroker.latestOverlayLive(userId)
+    );
     if (post && typeof post.myBuild === "string" && post.myBuild.trim()) {
       return `Last game's build: ${clean(post.myBuild)}`;
     }

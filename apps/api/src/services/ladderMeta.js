@@ -326,7 +326,9 @@ function shapeBandRow(row, updatedAt, priorByKey) {
   const matchup = String(row._id.matchup);
   const n = typeof row.n === "number" ? row.n : 0;
 
-  const openers = (Array.isArray(row.openers) ? row.openers : [])
+  /** @type {any[]} */
+  const rawOpeners = Array.isArray(row.openers) ? row.openers : [];
+  const openers = rawOpeners
     .filter((o) => typeof o.games === "number" && o.games >= OPENER_MIN_SAMPLE)
     .map((o) => shapeStoredOpener(o, n))
     .sort(compareOpeners)
@@ -385,7 +387,9 @@ function shapeServedRow(row) {
       if (p && typeof p.build === "string") prevByBuild.set(p.build, p);
     }
   }
-  const openers = (Array.isArray(row.openers) ? row.openers : []).map((o) => {
+  /** @type {any[]} */
+  const storedOpeners = Array.isArray(row.openers) ? row.openers : [];
+  const openers = storedOpeners.map((o) => {
     const prev = prevByBuild.get(o.build);
     return {
       build: o.build,
@@ -453,7 +457,10 @@ function num(v) {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
 
-/** Round to 4 decimals (winrate/frequency are fractions in 0..1). */
+/**
+ * Round to 4 decimals (winrate/frequency are fractions in 0..1).
+ * @param {number} v @returns {number}
+ */
 function round4(v) {
   return Math.round(v * 10000) / 10000;
 }

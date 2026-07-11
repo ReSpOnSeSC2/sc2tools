@@ -64,7 +64,7 @@ function buildLeaguePercentilesRecomputeJob(deps) {
         logger.info({ bands: res.bands }, "league_percentiles_recomputed");
       } catch (err) {
         logger.warn(
-          { err: err && err.message ? err.message : String(err) },
+          { err: err instanceof Error ? err.message : String(err) },
           "league_percentiles_recompute_error",
         );
       } finally {

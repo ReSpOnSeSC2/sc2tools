@@ -112,7 +112,9 @@ const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
  * ``maxUserMessagesPerWindow`` is a test-injected override for the
  * messages route's rate window (see __tests__/userMessages.test.js);
  * loadConfig never produces it, so production always uses the route's
- * built-in default.
+ * built-in default. ``pulseMmr`` / ``pulseIntel`` are likewise
+ * test-injected stand-ins (fetch disabled) so ingest suites never hit
+ * live SC2Pulse; production builds the real services below.
  *
  * @typedef {{
  *   db: import('./db/connect').DbContext,
@@ -120,6 +122,8 @@ const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
  *   config: ReturnType<typeof import('./config/loader').loadConfig>
  *     & { maxUserMessagesPerWindow?: number },
  *   io?: import('socket.io').Server,
+ *   pulseMmr?: import('./services/pulseMmr').PulseMmrService,
+ *   pulseIntel?: import('./services/pulseOpponentIntel').PulseOpponentIntelService,
  * }} AppDeps
  */
 

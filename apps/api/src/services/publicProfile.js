@@ -25,6 +25,7 @@ const SIGNATURE_LIMIT = 5;
  *  but the cap guards against a corrupt row producing a runaway list). */
 const MATCHUP_LIMIT = 8;
 
+/** @type {Readonly<Record<string, string>>} */
 const LETTER_TO_RACE = Object.freeze({
   P: "Protoss",
   T: "Terran",

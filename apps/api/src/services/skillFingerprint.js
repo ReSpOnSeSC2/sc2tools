@@ -128,38 +128,44 @@ const LEAGUE_NAMES = Object.freeze({
 function derivePlaystyle(ax) {
   /** @param {string} k */
   const has = (k) => typeof ax[k] === "number" && Number.isFinite(ax[k]);
+  /**
+   * Read an axis a rule has already ``has()``-guarded — the cast only
+   * asserts what the guard established.
+   * @param {string} k @returns {number}
+   */
+  const val = (k) => /** @type {number} */ (ax[k]);
   const present = AXES.map((a) => a.key).filter(has);
-  if (present.length >= 4 && present.every((k) => ax[k] >= 65)) {
+  if (present.length >= 4 && present.every((k) => val(k) >= 65)) {
     return "Complete Player";
   }
-  if (has("aggression") && has("macro") && ax.aggression >= 70 && ax.macro < 40) {
+  if (has("aggression") && has("macro") && val("aggression") >= 70 && val("macro") < 40) {
     return "All-in Gambler";
   }
-  if (has("macro") && has("aggression") && ax.macro >= 70 && ax.aggression < 40) {
+  if (has("macro") && has("aggression") && val("macro") >= 70 && val("aggression") < 40) {
     return "Greedy Macro Player";
   }
   if (
     has("aggression") && has("mechanics")
-    && ax.aggression >= 65 && ax.mechanics >= 65
+    && val("aggression") >= 65 && val("mechanics") >= 65
   ) {
     return "Tempo Attacker";
   }
-  if (has("spending") && has("macro") && ax.spending >= 70 && ax.macro >= 55) {
+  if (has("spending") && has("macro") && val("spending") >= 70 && val("macro") >= 55) {
     return "Economic Engine";
   }
   if (
     has("mechanics") && has("spending")
-    && ax.mechanics >= 70 && ax.spending < 40
+    && val("mechanics") >= 70 && val("spending") < 40
   ) {
     return "Busy Hands, Idle Bank";
   }
   if (
     has("consistency") && has("aggression")
-    && ax.consistency >= 70 && ax.aggression < 55
+    && val("consistency") >= 70 && val("aggression") < 55
   ) {
     return "Metronome";
   }
-  if (has("consistency") && ax.consistency < 35) {
+  if (has("consistency") && val("consistency") < 35) {
     return "Coin-Flip Player";
   }
   return "Jack of All Trades";

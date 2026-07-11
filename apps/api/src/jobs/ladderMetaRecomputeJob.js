@@ -63,7 +63,7 @@ function buildLadderMetaRecomputeJob(deps) {
         logger.info({ bands: res.bands }, "ladder_meta_recomputed");
       } catch (err) {
         logger.warn(
-          { err: err && err.message ? err.message : String(err) },
+          { err: err instanceof Error ? err.message : String(err) },
           "ladder_meta_recompute_error",
         );
       } finally {
