@@ -54,6 +54,8 @@ const {
   LeaguePercentilesService,
 } = require("./services/leaguePercentiles");
 const { buildBenchmarksRouter } = require("./routes/benchmarks");
+const { LadderMetaService } = require("./services/ladderMeta");
+const { buildLadderMetaRouter } = require("./routes/ladderMeta");
 const {
   SkillFingerprintService,
 } = require("./services/skillFingerprint");
@@ -216,6 +218,10 @@ function makeServices(deps) {
   const leaguePercentiles = new LeaguePercentilesService(deps.db, {
     logger: deps.logger,
   });
+  // Ladder Meta Radar — effectiveness-weighted opener meta by league
+  // band + matchup from the corpus (jobs/ladderMetaRecomputeJob),
+  // served PUBLICLY by routes/ladderMeta.js for the /meta SEO page.
+  const ladderMeta = new LadderMetaService(deps.db, { logger: deps.logger });
   // Skill Fingerprint — per-user multi-axis skill radar (percentiles
   // against the leaguePercentiles band tables + playstyle label),
   // served by routes/fingerprint.js for the Trends tab.
@@ -369,6 +375,7 @@ function makeServices(deps) {
     pulseIntel,
     leaguePercentiles,
     skillFingerprint,
+    ladderMeta,
     pulseDirectory,
   };
 }
@@ -452,6 +459,12 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
     );
   }
   app.use(SERVICE.ROUTE_PREFIX, buildSeasonsRouter({ seasons: services.seasons }));
+  // Public, corpus-wide, k-anonymous meta report (no user data) — SEO
+  // surface, mounts with the public routers.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildLadderMetaRouter({ ladderMeta: services.ladderMeta }),
+  );
   // Public marketing-page replay preview. Unauth'd by design — the
   // landing page demo accepts a single .SC2Replay upload and returns
   // a parsed dossier. Rate-limited per IP inside the router.

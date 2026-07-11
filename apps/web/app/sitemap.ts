@@ -17,6 +17,7 @@ const ROUTES: Route[] = [
   { path: "/community", priority: 0.8, changeFrequency: "daily" },
   { path: "/builds", priority: 0.7, changeFrequency: "daily" },
   { path: "/optimizer", priority: 0.6, changeFrequency: "monthly" },
+  { path: "/meta", priority: 0.7, changeFrequency: "daily" },
   { path: "/definitions", priority: 0.5, changeFrequency: "monthly" },
   { path: "/donate", priority: 0.4, changeFrequency: "monthly" },
   { path: "/legal/privacy", priority: 0.2, changeFrequency: "yearly" },

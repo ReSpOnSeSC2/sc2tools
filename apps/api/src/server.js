@@ -20,6 +20,9 @@ const { buildLadderMapBackfillJob } = require("./jobs/ladderMapBackfillJob");
 const {
   buildLeaguePercentilesRecomputeJob,
 } = require("./jobs/leaguePercentilesRecomputeJob");
+const {
+  buildLadderMetaRecomputeJob,
+} = require("./jobs/ladderMetaRecomputeJob");
 const sentry = require("./util/sentry");
 
 async function main() {
@@ -215,6 +218,13 @@ async function main() {
   });
   leaguePercentilesJob.start();
 
+  // Nightly effectiveness-weighted ladder meta rebuild (public /meta).
+  const ladderMetaJob = buildLadderMetaRecomputeJob({
+    ladderMeta: /** @type {any} */ (services).ladderMeta,
+    logger,
+  });
+  ladderMetaJob.start();
+
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
@@ -250,6 +260,7 @@ async function main() {
     await ladderMapPoolRefresh.stop();
     await ladderMapBackfill.stop();
     await leaguePercentilesJob.stop();
+    await ladderMetaJob.stop();
     await db.close();
     logger.info("shutdown_complete");
     process.exit(0);
