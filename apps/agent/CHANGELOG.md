@@ -4,28 +4,32 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## 0.13.3
 
-### Fixed — destroyed buildings finally drop off the Macro Breakdown rosters (release cut)
-- **What.** The death-aware Buildings roster needs per-structure
-  lifetime records (`production_buildings` /
-  `opp_production_buildings`, with `born_time` / `died_time` /
-  `destroyed`) in the `macroBreakdown` payload the agent uploads. The
-  code that ships them landed in the repo (extractor opponent-side
-  mirror, mid-construction death records, explicit `destroyed` bit,
-  and the payload fields themselves) **after** the 0.13.2 installer
-  was built — but the version was never bumped, so no 0.13.3 release
-  existed and installed agents kept uploading payloads without the
-  arrays. The web app then fell back to the cumulative build-order
-  count and showed the "BUILD ORDER" badge, and clicking Recompute
-  changed nothing because the recompute is performed by the same
-  outdated installed agent.
-- **Effect.** This release actually delivers the pipeline to users.
-  Once the agent auto-updates (or the installer is run manually),
-  every new upload carries both sides' structure lifetimes, and the
-  Macro Breakdown Buildings roster removes destroyed structures at the
-  hovered time exactly like the Units row. **Previously uploaded games
-  still show cumulative counts until re-parsed** — click Recompute on
-  the game's Macro Breakdown panel, or run a full Resync from the
-  agent app, after updating.
+### Fixed — destroyed buildings now drop off the Macro Breakdown rosters
+- **What.** The Macro Breakdown's Buildings roster showed the
+  cumulative count of every structure ever built ("36 Pylons",
+  "43 Spine Crawlers" late-game) with a "BUILD ORDER" badge, because
+  uploads carried no per-structure death data. The bundled replay
+  engine now records a lifetime (`born_time` / `died_time` / explicit
+  `destroyed` result) for **both players'** structures — including
+  buildings killed or cancelled while still under construction, e.g. a
+  cannon sniped mid-warp-in or a spine killed while morphing — and the
+  agent ships those records (`production_buildings`,
+  `opp_production_buildings`, `bases`, `opp_bases`) on every
+  `macroBreakdown` upload.
+- **Effect.** Both Buildings rosters remove destroyed structures at
+  the hovered timeline moment, exactly like the Units row; the
+  "BUILD ORDER" badge disappears once death-aware data is stored.
+  **Games uploaded by older agent builds keep their cumulative counts
+  until re-parsed** — after updating, click Recompute on that game's
+  Macro Breakdown panel, or run a full Resync from the agent app.
+- **Why a dedicated release for this.** The fix itself merged in two
+  earlier PRs (#502, #505), but both landed after the 0.13.2 installer
+  was built and the agent version was never bumped — so no installer
+  ever carried them, and Recompute couldn't help because it re-parses
+  with the same outdated installed agent. 0.13.3 exists to actually
+  deliver the pipeline. (The cloud API now also reads the GitHub
+  Releases feed directly, so future tag pushes reach installed agents
+  without a separate publish step.)
 
 ## 0.13.2
 
