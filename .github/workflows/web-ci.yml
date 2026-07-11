@@ -89,11 +89,19 @@ jobs:
           curl -sSi --max-time 10 http://127.0.0.1:3210/ -o /dev/null -D - || true
           echo "--- curl body first 300 bytes ---"
           curl -sS --max-time 10 http://127.0.0.1:3210/ | head -c 300; echo
-          echo "--- playwright CLI screenshot http://127.0.0.1:3210/ ---"
-          npx playwright screenshot --browser chromium http://127.0.0.1:3210/ /tmp/shot.png && echo "CLI-SHOT-IP-OK" || echo "CLI-SHOT-IP-FAILED"
-          echo "--- playwright CLI screenshot http://localhost:3210/ ---"
-          npx playwright screenshot --browser chromium http://localhost:3210/ /tmp/shot2.png && echo "CLI-SHOT-LOCALHOST-OK" || echo "CLI-SHOT-LOCALHOST-FAILED"
-          echo "--- next server log ---"; tail -20 /tmp/next.log || true
-          pkill -f "next start" || true
+          echo "--- PW chromium launch args (DEBUG=pw:browser) ---"
+          DEBUG=pw:browser npx playwright screenshot --browser chromium http://127.0.0.1:3210/ /tmp/shot.png 2>&1 | grep -E "<launching>|proxy" | head -5 || true
+          echo "--- PW chromium plain ---"
+          npx playwright screenshot --browser chromium http://127.0.0.1:3210/ /tmp/shot1.png && echo "CHROMIUM-OK" || echo "CHROMIUM-FAILED"
+          echo "--- PW chromium with PLAYWRIGHT_DISABLE_FORCED_CHROMIUM_PROXIED_LOOPBACK=1 ---"
+          PLAYWRIGHT_DISABLE_FORCED_CHROMIUM_PROXIED_LOOPBACK=1 npx playwright screenshot --browser chromium http://127.0.0.1:3210/ /tmp/shot2.png && echo "CHROMIUM-NOLOOPBACKFORCE-OK" || echo "CHROMIUM-NOLOOPBACKFORCE-FAILED"
+          echo "--- runner's stock google-chrome headless ---"
+          (google-chrome --headless=new --no-sandbox --dump-dom http://127.0.0.1:3210/ 2>&1 | head -c 200; echo) || echo "STOCK-CHROME-FAILED"
+          echo "--- PW firefox ---"
+          npx playwright install --with-deps firefox >/dev/null 2>&1 || true
+          npx playwright screenshot --browser firefox http://127.0.0.1:3210/ /tmp/shot3.png && echo "FIREFOX-OK" || echo "FIREFOX-FAILED"
+          echo "--- next server log ---"; tail -5 /tmp/next.log || true
+          fuser -k 3210/tcp 2>/dev/null || pkill -f "next-server" || pkill -f "next start" || true
+          sleep 2
       - name: Run responsive smoke
-        run: DEBUG=pw:browser npx playwright test
+        run: npx playwright test

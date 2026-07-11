@@ -28,7 +28,10 @@ jobs:
   check:
     name: Lint + typecheck + test (apps/api)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The merged #510 suite runs ~18-20 min runInBand on a cold
+    # mongodb-memory-server cache; 20 was killing the Test step on
+    # main's first full run.
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: apps/api
