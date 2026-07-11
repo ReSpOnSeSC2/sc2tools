@@ -290,12 +290,27 @@ export interface ArcadeState {
   bingo: BingoState | null;
   /** Buildle daily progress map: "YYYY-MM-DD" → guesses[]. */
   buildleByDay: Record<string, BuildleProgress>;
+  /**
+   * Daily Ladder Quests claim ledger: "YYYY-MM-DD" → questId → claim.
+   * One-time XP per quest per day — the claim mutator no-ops when the
+   * (day, questId) entry already exists, which keeps it idempotent
+   * across re-renders AND across the pre-hydrate mutation-queue replay
+   * (same pattern as buildleByDay). Optional for back-compat with
+   * blobs persisted before the field existed; readers coalesce to {}.
+   */
+  questClaimsByDay?: Record<string, Record<string, QuestClaim>>;
   /** Cosmetic preferences (mascot skin, card-back theme). */
   cosmetics: { mascotSkin: string; cardBackTheme: string };
   /** Opt-in flag for the Stock Market leaderboard. */
   leaderboardOptIn: boolean;
   /** Public display name (when opted-in); else used as anonymous. */
   leaderboardDisplayName: string;
+}
+
+/** One claimed Daily Ladder Quest reward (see questClaimsByDay). */
+export interface QuestClaim {
+  claimedAt: string;
+  xp: number;
 }
 
 export interface ModeRecord {
@@ -388,6 +403,7 @@ export const ARCADE_STATE_DEFAULT: ArcadeState = Object.freeze({
   stockMarket: null,
   bingo: null,
   buildleByDay: {},
+  questClaimsByDay: {},
   cosmetics: { mascotSkin: "default", cardBackTheme: "default" },
   leaderboardOptIn: true,
   leaderboardDisplayName: "",
