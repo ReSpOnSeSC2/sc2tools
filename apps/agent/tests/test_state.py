@@ -432,15 +432,22 @@ def test_save_state_tolerates_concurrent_uploaded_writes(
     stop = threading.Event()
 
     def writer() -> None:
+        # Insert + delete a rotating window of keys: forces continual
+        # dict resizes (what triggers the RuntimeError) WITHOUT growing
+        # the dict unboundedly — an earlier version of this test let
+        # the dict grow hot-loop-fast and each save serialised the
+        # ever-larger dict, ballooning the test to minutes and GBs.
         i = 0
         while not stop.is_set():
-            s.uploaded[f"w{i}.SC2Replay"] = "filtered"
+            s.uploaded[f"w{i % 512}.SC2Replay"] = "filtered"
+            stale = f"w{(i + 256) % 512}.SC2Replay"
+            s.uploaded.pop(stale, None)
             i += 1
 
     t = threading.Thread(target=writer, daemon=True)
     t.start()
     try:
-        for _ in range(200):
+        for _ in range(50):
             save_state(tmp_path, s)  # must never raise RuntimeError
     finally:
         stop.set()

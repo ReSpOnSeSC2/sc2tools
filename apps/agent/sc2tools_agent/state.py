@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, replace
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -321,17 +321,25 @@ def _snapshot(state: AgentState) -> dict:
 
     The watcher's FS-event/parse-callback threads write ``filtered`` /
     ``skipped`` markers into ``state.uploaded`` without holding the
-    upload queue's lock, so ``asdict`` (which iterates every dict) can
-    hit ``RuntimeError: dictionary changed size during iteration`` while
-    an upload worker persists a batch. Retry like ``count_synced`` does;
-    a marker that lands mid-copy is simply picked up by the next save.
+    upload queue's lock, so ``asdict`` (whose Python-level recursion
+    yields the GIL between bytecodes) can hit ``RuntimeError:
+    dictionary changed size during iteration`` while an upload worker
+    persists a batch — and under a hot writer a bounded retry of
+    ``asdict`` itself can keep losing that race. Instead, copy each
+    shared mutable container first: ``dict()`` / ``list()`` on
+    str-keyed/str-valued containers are single C-level calls that hold
+    the GIL, so they cannot interleave with another thread's insert.
+    ``asdict`` then walks only private copies. A marker that lands
+    after the copy is simply picked up by the next save.
     """
-    for _ in range(8):
-        try:
-            return asdict(state)
-        except RuntimeError:
-            continue
-    return asdict(state)
+    stable = replace(
+        state,
+        uploaded=dict(state.uploaded),
+        path_by_game_id=dict(state.path_by_game_id),
+        release_seen=dict(state.release_seen),
+        replay_folders_override=list(state.replay_folders_override),
+    )
+    return asdict(stable)
 
 
 def _coerce_mmr(value: object) -> Optional[int]:
