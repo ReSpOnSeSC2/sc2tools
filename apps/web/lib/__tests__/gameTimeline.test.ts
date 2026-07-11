@@ -50,6 +50,24 @@ describe("buildTimelinePoints", () => {
     expect(points[2].myArmy).toBeNull();
   });
 
+  it("clamps supply fields to the game's 200 ceiling", () => {
+    // Overbuilt overlords/depots keep incrementing raw food_made past
+    // 200 in tracker events, but in-game supply never exceeds 200 —
+    // the tooltip used to show "180/212".
+    const my = [
+      ev({ time: 985, food_used: 180, food_made: 212 }),
+      ev({ time: 995, food_used: 60, food_made: 98 }),
+    ];
+    const opp = [ev({ time: 985, food_used: 204 })];
+    const points = buildTimelinePoints(my, opp);
+    expect(points[0].mySupply).toBe(180);
+    expect(points[0].mySupplyCap).toBe(200);
+    expect(points[0].oppSupply).toBe(200);
+    // Values inside the ceiling pass through untouched.
+    expect(points[1].mySupply).toBe(60);
+    expect(points[1].mySupplyCap).toBe(98);
+  });
+
   it("returns [] for missing streams and skips samples without a time", () => {
     expect(buildTimelinePoints(undefined, null)).toEqual([]);
     const junk = [ev({ time: Number.NaN }), { army_value: 5 } as StatsEvent];

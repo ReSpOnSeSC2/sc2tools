@@ -12,6 +12,31 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Macro engine · chrono counter self-calibrates across SC2 patches** —
+  the Mechanics card showed "0 / N chronos · 0%" for Protoss games on
+  new game-data patches. Macro casts are classified by numeric
+  ability link against a hardcoded per-build table
+  (`core/event_extractor.py`), and every table shift Blizzard ships
+  moves the chrono link and zeroes the counter until a new cutoff is
+  hand-derived — the 722→723 (5.0.13→5.0.14) shift already required
+  one such fix. `extract_macro_events` now detects the chrono link
+  structurally when the table misses (zero chronos in a Protoss game,
+  or a candidate link out-casting the table's chrono 3:1): chrono
+  boost is the only Protoss ability repeatedly targeted at the
+  caster's own buildings, and Battery Overcharge — the only other
+  own-building-targeted cast — can exclusively hit Shield Batteries,
+  which chrono never can. Pinned against the real build-96883
+  reference replay under three simulated table shifts
+  (`test_chrono_link_self_calibration.py`).
+
+- **Game timeline · supply readout capped at the game's 200 ceiling** —
+  the deep-dive timeline tooltip/readout showed values like
+  "Supply 180/212". Raw tracker events keep counting `food_made` (and
+  `food_used`) past 200 when a player overbuilds overlords/depots,
+  but in-game supply never exceeds 200. `lib/gameTimeline.ts` now
+  clamps both fields at ingestion so the chart line, tooltip, readout
+  bar, and aria labels all agree with what the game displays.
+
 - **Ladder Meta Radar · agent finally uploads the opponent's league** —
   the /meta page ("which openers actually win") showed "Not enough
   games yet" for every league and matchup regardless of corpus size.

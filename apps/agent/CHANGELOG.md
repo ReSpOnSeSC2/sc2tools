@@ -4,6 +4,27 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## 0.13.5
 
+### Fixed — chrono counter self-calibrates across SC2 data patches
+- **What.** The Mechanics card read "0 / N chronos · 0%" on new-patch
+  Protoss games. The extractor classifies macro casts by numeric
+  ability link with a hardcoded per-build table (722 pre-5.0.14, 723
+  after), and every time Blizzard shifts the ability table the chrono
+  link moves and the counter silently zeroes until a new cutoff is
+  hand-derived from a fresh replay — this had already happened once
+  (the 722→723 saga) and was happening again.
+- **Effect.** The bundled replay-engine (1.5.1) now self-calibrates
+  instead of trusting the table blindly: when a Protoss game counts
+  zero chronos (or the table's chrono link is out-cast 3:1 by a better
+  candidate — a shifted neighbor like mass recall inheriting chrono's
+  old slot), it finds the real link structurally. Chrono boost is the
+  only Protoss ability repeatedly cast on the player's OWN buildings;
+  Battery Overcharge, the sole other own-building-targeted cast, can
+  only hit a Shield Battery, which chrono never can — so the
+  distinction is exact. Verified against the build-96883 reference
+  replay: with the table deliberately mis-pointed, the engine recovers
+  the identical 6 casts and per-building target breakdown. Future
+  ability-table shifts no longer need a code change.
+
 ### Fixed — uploads now carry the opponent's league (Ladder Meta Radar unblocked)
 - **What.** The upload payload has always had a slot for
   `opponent.leagueId`, and `replay_pipeline` has always tried to fill
