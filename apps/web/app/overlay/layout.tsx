@@ -21,6 +21,17 @@ export const metadata: Metadata = {
  * page — no nav, no user controls — and uses raw hex / CSS instead of
  * design tokens because OBS Browser Sources strip preferences and we
  * want predictable rendering.
+ *
+ * Streamer theming: pages under this layout accept an optional
+ * ``?theme=<base64url json>`` param (see lib/overlayTheme.ts). Layouts
+ * can't read search params, so propagation happens in the token/widget
+ * pages, which hand the raw string to OverlayClient /
+ * OverlayWidgetClient; those decode it (strict validation, hostile
+ * input falls back to the stock look) and set ``--ov-*`` CSS custom
+ * properties that WidgetShell consumes with stock-value fallbacks.
+ * The overlay stays broadcast-dark by contract — themes restyle the
+ * widget chrome (accent, opacity, radius, scale, font), never flip it
+ * to a light UI theme.
  */
 const FORCE_DARK_SCRIPT = `(function(){try{document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();`;
 

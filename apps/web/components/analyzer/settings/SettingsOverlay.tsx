@@ -27,7 +27,14 @@ import { useToast } from "@/components/ui/Toast";
 import { fmtAgo } from "@/lib/format";
 import { clientTimezone } from "@/lib/timeseries";
 import { TEST_DURATION_MS } from "@/components/overlay/widgetLifecycle";
+import { useLocalStorageState } from "@/lib/useLocalStorageState";
+import {
+  appendOverlayThemeToUrl,
+  normalizeOverlayTheme,
+  type OverlayTheme,
+} from "@/lib/overlayTheme";
 import { AgentStatusIndicator } from "./AgentStatusIndicator";
+import { OverlayThemeSection } from "./OverlayThemeSection";
 
 /**
  * Settings · Overlay tab.
@@ -109,6 +116,24 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
     [data],
   );
   const activeToken = items[0] ?? null;
+
+  // Overlay theme — persisted client-side per token (the theme itself
+  // travels in the copyable URLs as ?theme=…, so there's no server
+  // state to sync; localStorage just keeps the pickers stable across
+  // visits). Stored values are untrusted like any ?theme= string:
+  // everything funnels through normalizeOverlayTheme.
+  const [storedTheme, setStoredTheme] = useLocalStorageState<OverlayTheme>(
+    `sc2tools:overlay-theme:${activeToken?.token ?? "default"}`,
+    {},
+    (raw): raw is OverlayTheme =>
+      typeof raw === "object" && raw !== null && !Array.isArray(raw),
+  );
+  const theme = useMemo(
+    () => normalizeOverlayTheme(storedTheme),
+    [storedTheme],
+  );
+  const setTheme = (next: OverlayTheme) =>
+    setStoredTheme(normalizeOverlayTheme(next));
 
   // Auto-mint a default token on first visit so the user can copy URLs
   // immediately without clicking through a form.
@@ -349,10 +374,11 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
             testing={testingWidget === "all"}
             anyTesting={testingWidget !== null}
           />
-          <AllInOneRow token={activeToken} origin={origin} />
+          <AllInOneRow token={activeToken} origin={origin} theme={theme} />
           <WidgetList
             token={activeToken}
             origin={origin}
+            theme={theme}
             busy={busyToken === activeToken.token}
             onToggleWidget={(w, on) => toggleWidget(activeToken.token, w, on)}
             onTestWidget={(w) => void testWidget(activeToken.token, w)}
@@ -362,6 +388,8 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         <ConnectionCheck token={activeToken.token} lastSeenAt={activeToken.lastSeenAt} />
         <StuckWidgetHelp />
       </Section>
+
+      <OverlayThemeSection theme={theme} onChange={setTheme} />
 
       <Section
         title="Manage tokens"
@@ -507,11 +535,18 @@ function ActiveTokenHeader({
 function AllInOneRow({
   token,
   origin,
+  theme,
 }: {
   token: OverlayToken;
   origin?: string;
+  theme: OverlayTheme;
 }) {
-  const url = `${origin ?? ""}/overlay/${token.token}`;
+  // Non-default themes ride along in the URL itself so the OBS Browser
+  // Source needs no re-auth — default themes leave the URL untouched.
+  const url = appendOverlayThemeToUrl(
+    `${origin ?? ""}/overlay/${token.token}`,
+    theme,
+  );
   return (
     <div className="space-y-2 border-b border-border px-4 py-3">
       <div className="flex flex-wrap items-baseline gap-x-2">
@@ -530,6 +565,7 @@ function AllInOneRow({
 function WidgetList({
   token,
   origin,
+  theme,
   busy,
   onToggleWidget,
   onTestWidget,
@@ -537,6 +573,7 @@ function WidgetList({
 }: {
   token: OverlayToken;
   origin?: string;
+  theme: OverlayTheme;
   busy: boolean;
   onToggleWidget: (widget: string, enabled: boolean) => void;
   onTestWidget: (widget: string) => void;
@@ -555,7 +592,10 @@ function WidgetList({
       </p>
       <ul className="divide-y divide-border rounded-lg border border-border">
         {WIDGETS.map((w) => {
-          const url = `${origin ?? ""}/overlay/${token.token}/widget/${w.id}`;
+          const url = appendOverlayThemeToUrl(
+            `${origin ?? ""}/overlay/${token.token}/widget/${w.id}`,
+            theme,
+          );
           const isOn = enabled.has(w.id);
           const isTesting = testingWidget === w.id;
           const anyTesting = testingWidget !== null;

@@ -1,4 +1,5 @@
 import { OverlayWidgetClient } from "@/components/OverlayWidgetClient";
+import { OVERLAY_THEME_PARAM } from "@/lib/overlayTheme";
 
 export const metadata = {
   title: "Live overlay widget",
@@ -41,10 +42,19 @@ const VALID_WIDGETS = new Set([
 
 export default async function OverlayWidgetPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string; name: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { token, name } = await params;
+  // Optional ``?theme=`` styling param (see lib/overlayTheme.ts).
+  // Raw pass-through; the client strict-validates and falls back to
+  // the stock look silently on any malformed value.
+  const sp = await searchParams;
+  const themeParam = typeof sp[OVERLAY_THEME_PARAM] === "string"
+    ? (sp[OVERLAY_THEME_PARAM] as string)
+    : null;
   const widget = VALID_WIDGETS.has(name) ? name : null;
   if (!widget) {
     return (
@@ -59,5 +69,7 @@ export default async function OverlayWidgetPage({
       </div>
     );
   }
-  return <OverlayWidgetClient token={token} widget={widget} />;
+  return (
+    <OverlayWidgetClient token={token} widget={widget} themeParam={themeParam} />
+  );
 }

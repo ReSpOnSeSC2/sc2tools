@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { io, type Socket } from "socket.io-client";
 import { API_BASE } from "@/lib/clientApi";
 import type {
@@ -46,6 +53,7 @@ import {
 import type { RandomizerConfig } from "@/lib/randomizer/types";
 import { sanitizeRandomizerConfig } from "@/lib/randomizer/config";
 import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSound";
+import { decodeOverlayTheme, themeToCssVars } from "@/lib/overlayTheme";
 
 /**
  * Public OBS overlay (all-in-one). The token IS the auth — we trade
@@ -69,7 +77,19 @@ import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSoun
  *    so they can position them independently — same trick the legacy
  *    HTML overlay used.
  */
-export function OverlayClient({ token }: { token: string }) {
+export function OverlayClient({
+  token,
+  themeParam = null,
+}: {
+  token: string;
+  /**
+   * Raw ``?theme=`` search param forwarded by the server page. Decoded
+   * once (strict validation — hostile/malformed values fall back to the
+   * stock look) and applied as ``--ov-*`` CSS custom properties on the
+   * overlay root, where every WidgetShell picks them up.
+   */
+  themeParam?: string | null;
+}) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
@@ -122,6 +142,12 @@ export function OverlayClient({ token }: { token: string }) {
     setSessionVisible,
   });
 
+  // Theme vars, decoded once at mount. Default theme → empty object →
+  // zero style overrides, so untouched URLs render exactly as before.
+  const themeVars = useMemo(() => {
+    return themeToCssVars(decodeOverlayTheme(themeParam));
+  }, [themeParam]);
+
   // Single-widget mode (OBS users place each widget in its own
   // Browser Source). Read from URL search param, defaulting to "all".
   const singleWidget = useMemo<WidgetId | null>(() => {
@@ -164,7 +190,7 @@ export function OverlayClient({ token }: { token: string }) {
   return (
     <div
       className="relative h-screen w-screen"
-      style={{ background: "transparent" }}
+      style={{ background: "transparent", ...themeVars } as CSSProperties}
     >
       {shouldShow("opponent") && (
         <OpponentWidget live={live} liveGame={liveGame} />

@@ -76,6 +76,16 @@ export function raceToAccent(race?: string): Accent {
  *   - Inter system font, 14–18px content range
  *   - subtle fade-in transition; respects prefers-reduced-motion
  *     via the .widget-shell class scoped in app/overlay/layout.tsx
+ *
+ * THEMING: every piece of shell chrome reads a `--ov-*` CSS custom
+ * property with the stock value as the var() fallback. The overlay
+ * clients set those vars on their root when the URL carries a
+ * ``?theme=`` param (see lib/overlayTheme.ts) — when it doesn't, no
+ * var is defined and the fallbacks reproduce today's look at zero
+ * cost. A themed accent (`--ov-accent`) deliberately overrides the
+ * per-widget accent BAR/halo/rim only — semantic colours inside the
+ * widget content (VICTORY green, DEFEAT red, race tints) are content,
+ * not chrome, and stay untouched.
  */
 export function WidgetShell({
   slot = "top-center",
@@ -111,19 +121,24 @@ export function WidgetShell({
         transform: `${placement.transform || ""} ${visible ? "" : "translateY(-30px)"}`.trim(),
         transition: "opacity 220ms ease, transform 320ms cubic-bezier(.34,1.56,.64,1)",
         background:
-          "linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%)",
+          "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
         color: "#e6e8ee",
-        borderRadius: 12,
+        borderRadius: "var(--ov-radius, 12px)",
         border: "1px solid rgba(255,255,255,0.10)",
         boxShadow: [
           "0 6px 20px rgba(0,0,0,0.55)",
-          "0 0 0 1px rgba(62,192,199,0.10)",
-          `0 0 28px ${haloColor}`,
+          "0 0 0 1px var(--ov-rim, rgba(62,192,199,0.10))",
+          `0 0 28px var(--ov-halo, ${haloColor})`,
         ].join(", "),
+        // Theme font-scale. `zoom` (standardized, long-supported in the
+        // Chromium OBS/Streamlabs embed) scales layout AND the widgets'
+        // inline px font sizes without restyling any widget.
+        zoom: "var(--ov-scale, 1)",
         pointerEvents: "none",
         display: "flex",
         overflow: "hidden",
-        fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+        fontFamily:
+          "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
         fontFeatureSettings: '"tnum"',
       }}
     >
@@ -134,8 +149,8 @@ export function WidgetShell({
           style={{
             position: "absolute",
             inset: -2,
-            borderRadius: 14,
-            background: `radial-gradient(closest-side, ${haloColor} 0%, transparent 70%)`,
+            borderRadius: "calc(var(--ov-radius, 12px) + 2px)",
+            background: `radial-gradient(closest-side, var(--ov-halo, ${haloColor}) 0%, transparent 70%)`,
             opacity: 0.7,
             animation: "widgetHaloPulse 8s ease-in-out infinite",
             pointerEvents: "none",
@@ -146,7 +161,7 @@ export function WidgetShell({
       <div
         style={{
           width: 6,
-          background: ACCENT_BG[effectiveAccent],
+          background: `var(--ov-accent, ${ACCENT_BG[effectiveAccent]})`,
           position: "relative",
           zIndex: 1,
         }}

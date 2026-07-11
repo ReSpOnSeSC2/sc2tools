@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { io, type Socket } from "socket.io-client";
 import { API_BASE } from "@/lib/clientApi";
 import type {
@@ -45,6 +51,7 @@ import {
 import type { RandomizerConfig } from "@/lib/randomizer/types";
 import { sanitizeRandomizerConfig } from "@/lib/randomizer/config";
 import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSound";
+import { decodeOverlayTheme, themeToCssVars } from "@/lib/overlayTheme";
 
 /**
  * Per-widget Browser Source.
@@ -73,9 +80,17 @@ import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSoun
 export function OverlayWidgetClient({
   token,
   widget,
+  themeParam = null,
 }: {
   token: string;
   widget: string;
+  /**
+   * Raw ``?theme=`` search param forwarded by the server page. Decoded
+   * once (strict validation — hostile/malformed values fall back to the
+   * stock look) and applied as ``--ov-*`` CSS custom properties on the
+   * widget frame, where WidgetShell picks them up.
+   */
+  themeParam?: string | null;
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
@@ -111,6 +126,12 @@ export function OverlayWidgetClient({
   // silent on a cold page (see useRevealAudioUnlock).
   useRevealAudioUnlock(widget === "randomizer");
 
+  // Theme vars, decoded once at mount. Default theme → empty object →
+  // zero style overrides, so untouched URLs render exactly as before.
+  const themeVars = useMemo(() => {
+    return themeToCssVars(decodeOverlayTheme(themeParam));
+  }, [themeParam]);
+
   // Voice readout is only run from the scouting widget when each
   // widget is its own Browser Source — otherwise every Source would
   // race to speak the same payload and the streamer would hear the
@@ -145,12 +166,15 @@ export function OverlayWidgetClient({
   // shifting it down 40px or centring it inside an invisible frame.
   return (
     <div
-      style={{
-        position: "relative",
-        minHeight: "100vh",
-        width: "100%",
-        background: "transparent",
-      }}
+      style={
+        {
+          position: "relative",
+          minHeight: "100vh",
+          width: "100%",
+          background: "transparent",
+          ...themeVars,
+        } as CSSProperties
+      }
       className="overlay-widget-frame"
     >
       <style>{`
