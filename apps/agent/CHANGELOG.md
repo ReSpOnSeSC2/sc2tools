@@ -2,6 +2,22 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.13.6
+
+### Fixed — backfill progress counter no longer seesaws after a restart
+- **What.** When the agent restarted mid-backfill (exactly what the
+  0.13.5 auto-update did to every installed agent), it re-registered
+  with the cloud, was handed back its still-running import job, and
+  began re-reporting absolute counters from near zero — so the
+  dashboard's "games uploaded" number ran backwards, then forwards
+  again as the new run caught up.
+- **Effect.** `agentStart` now returns the running job's prior
+  progress, and `ImportController` seeds its counters from it (and
+  sets the job total to prior-processed + what's still on disk) so the
+  reported numbers continue the count instead of restarting it. Paired
+  server-side with a monotonic (`$max`) counter guard, so even a stale
+  or concurrent reporter can't drag the number down.
+
 ## 0.13.5
 
 ### Fixed — chrono counter self-calibrates across SC2 data patches

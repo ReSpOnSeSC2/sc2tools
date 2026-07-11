@@ -120,7 +120,19 @@ class ImportService {
       { sort: { startedAt: -1 } },
     );
     if (running) {
-      return { ok: true, jobId: String(running._id), existing: true };
+      // Hand the adopting agent the job's prior progress so it can
+      // seed its counters instead of re-reporting from zero — an
+      // agent restart mid-backfill (auto-update) re-registers here,
+      // and absolute reports starting at 0 yanked the progress card
+      // backwards before climbing again.
+      return {
+        ok: true,
+        jobId: String(running._id),
+        existing: true,
+        total: typeof running.total === "number" ? running.total : 0,
+        completed: typeof running.completed === "number" ? running.completed : 0,
+        errors: typeof running.errors === "number" ? running.errors : 0,
+      };
     }
     const job = makeJobDoc(userId, body || {}, "backfill");
     job.status = "running";
@@ -236,9 +248,19 @@ class ImportService {
     }
     /** @type {Record<string, any>} */
     const set = {};
-    if (typeof payload.completed === "number") set.completed = payload.completed;
+    // Counters are MONOTONIC per job ($max, not $set). Two real-world
+    // writers regress absolute counters: an agent that restarted
+    // mid-backfill (auto-update) re-adopts the running job via
+    // agentStart and re-reports from a low count until it catches up,
+    // and a second paired agent can report the same job concurrently.
+    // Pre-guard, each low report yanked the stored counters (and the
+    // web progress card) backwards, then forwards again — a visible
+    // seesaw. $max keeps the high-water mark; the stragglers no-op.
+    /** @type {Record<string, number>} */
+    const max = {};
+    if (typeof payload.completed === "number") max.completed = payload.completed;
+    if (typeof payload.errors === "number") max.errors = payload.errors;
     if (typeof payload.total === "number") set.total = payload.total;
-    if (typeof payload.errors === "number") set.errors = payload.errors;
     if (typeof payload.phase === "string") set.phase = payload.phase;
     if (typeof payload.message === "string") set.lastMessage = payload.message.slice(0, 1000);
     if (payload.errorBreakdown && typeof payload.errorBreakdown === "object") {
@@ -251,12 +273,32 @@ class ImportService {
       set.status = "done";
       set.finishedAt = new Date();
     }
-    if (Object.keys(set).length === 0) return { ok: true, noop: true };
-    await this.db.importJobs.updateOne({ _id, userId }, { $set: set });
+    /** @type {Record<string, any>} */
+    const update = {};
+    if (Object.keys(set).length > 0) update.$set = set;
+    if (Object.keys(max).length > 0) update.$max = max;
+    if (Object.keys(update).length === 0) return { ok: true, noop: true };
+    const doc = await this.db.importJobs.findOneAndUpdate(
+      { _id, userId },
+      update,
+      { returnDocument: "after" },
+    );
     if (this.io) {
+      // Emit the POST-update counters, not the raw report: after a
+      // $max no-op the stored value is higher than the report's, and
+      // sockets must carry the authoritative (monotonic) numbers.
+      /** @type {Record<string, any>} */
+      const authoritative = {};
+      if (doc) {
+        if (typeof doc.completed === "number") authoritative.completed = doc.completed;
+        if (typeof doc.errors === "number") authoritative.errors = doc.errors;
+        if (typeof doc.total === "number") authoritative.total = doc.total;
+      }
       this.io.to(`user:${userId}`).emit("import:progress", {
         jobId,
         ...set,
+        ...max,
+        ...authoritative,
       });
     }
     return { ok: true };

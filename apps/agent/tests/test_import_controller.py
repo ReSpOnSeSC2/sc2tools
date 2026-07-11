@@ -163,6 +163,51 @@ def test_auto_backfill_registers_job_at_threshold():
     ctl.stop()
 
 
+def test_auto_backfill_seeds_counters_when_adopting_existing_job(monkeypatch):
+    """An agent restart mid-backfill (auto-update) re-registers and the
+    cloud hands back the SAME running job with its prior progress. The
+    controller must continue counting from that progress — absolute
+    reports restarting at zero dragged the web card's numbers
+    backwards, then forwards again, as the new run caught up.
+    """
+    monkeypatch.setattr(
+        "sc2tools_agent.import_controller._REPORT_INTERVAL_SEC", 0.05,
+    )
+    api = FakeApi(agent_start_resp={
+        "ok": True, "jobId": "job-adopted", "existing": True,
+        "total": 12661, "completed": 3000, "errors": 18,
+    })
+    ctl, api, _w = make_controller(pending=AUTO_BACKFILL_MIN, api=api)
+    ctl.maybe_start_auto_backfill()
+    ctl.on_upload_success(Path("a.SC2Replay"))
+    assert wait_for(lambda: any(
+        c["jobId"] == "job-adopted" and c.get("completed") == 3001
+        for c in api.progress_calls
+    )), f"seeded counters never reported: {api.progress_calls!r}"
+    body = [c for c in api.progress_calls if c["jobId"] == "job-adopted"][-1]
+    assert body["errors"] == 18
+    # total = prior processed (3000 + 18) + what's still on disk — the
+    # cloud's stale total (12661) is NOT trusted, the disk recount is.
+    assert body["total"] == 3000 + 18 + AUTO_BACKFILL_MIN
+    ctl.stop()
+
+
+def test_auto_backfill_fresh_job_starts_at_zero():
+    """A brand-new backfill job (existing absent/false) seeds nothing."""
+    api = FakeApi(agent_start_resp={
+        "ok": True, "jobId": "job-new", "existing": False,
+    })
+    ctl, api, _w = make_controller(pending=AUTO_BACKFILL_MIN, api=api)
+    ctl.maybe_start_auto_backfill()
+    ctl.on_upload_success(Path("a.SC2Replay"))
+    assert wait_for(lambda: any(
+        c["jobId"] == "job-new" and c.get("completed") == 1
+        and c.get("total") == AUTO_BACKFILL_MIN
+        for c in api.progress_calls
+    )), f"fresh-job counters wrong: {api.progress_calls!r}"
+    ctl.stop()
+
+
 def test_auto_backfill_survives_missing_route():
     class Api404(FakeApi):
         def import_agent_start(self, body):  # noqa: ARG002

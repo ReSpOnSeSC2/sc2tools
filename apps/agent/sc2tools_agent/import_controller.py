@@ -249,8 +249,25 @@ class ImportController:
         if not job_id:
             log.info("auto_backfill_register_no_job_id resp=%r", out)
             return
-        log.info("auto_backfill_registered jobId=%s total=%d", job_id, total)
-        self._activate(str(job_id), total)
+        # Adopting a job that survived an agent restart (auto-update
+        # mid-backfill): seed our counters from the job's prior
+        # progress so our absolute reports continue the count instead
+        # of re-reporting from zero — which dragged the web card's
+        # numbers backwards, then forwards again as we caught up. The
+        # server also $max-guards the counters, but seeding keeps the
+        # reported numbers (and the card's ETA) continuous. ``total``
+        # becomes prior processed + what's still on disk.
+        completed = errors = 0
+        if out.get("existing"):
+            completed = _as_count(out.get("completed"))
+            errors = _as_count(out.get("errors"))
+            total = completed + errors + total
+        log.info(
+            "auto_backfill_registered jobId=%s total=%d seeded_completed=%d "
+            "seeded_errors=%d existing=%s",
+            job_id, total, completed, errors, bool(out.get("existing")),
+        )
+        self._activate(str(job_id), total, completed=completed, errors=errors)
 
     # ---------------- internals ----------------
 
@@ -266,12 +283,14 @@ class ImportController:
                 sample["message"] = message[:300]
             self._samples.append(sample)
 
-    def _activate(self, job_id: str, total: int) -> None:
+    def _activate(
+        self, job_id: str, total: int, *, completed: int = 0, errors: int = 0,
+    ) -> None:
         with self._lock:
             self._job_id = job_id
             self._total = total
-            self._completed = 0
-            self._errors = 0
+            self._completed = completed
+            self._errors = errors
             self._breakdown = {}
             self._samples = []
             self._dirty = False
@@ -382,6 +401,14 @@ class ImportController:
         except Exception:  # noqa: BLE001
             log.exception("count_pending_failed")
             return 0
+
+
+def _as_count(value: Any) -> int:
+    """Coerce a wire counter to a non-negative int (0 on junk)."""
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _job_id_of(payload: Any) -> Optional[str]:
