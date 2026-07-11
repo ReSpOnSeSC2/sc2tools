@@ -12,6 +12,23 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Import progress · the "games uploaded" counter no longer runs
+  backwards** — during a history backfill the dashboard's progress
+  card visibly bounced up and down. Root cause was a counter
+  regression across three layers whenever an agent restarted
+  mid-backfill (which the 0.13.5 auto-update did): the restarted agent
+  re-adopted its running job and re-reported absolute counters
+  starting near zero, `reportProgress` wrote them with `$set` (so the
+  stored count dropped, then climbed again), and the web hook merged
+  socket deltas from any job id including stale ones. Fixed at all
+  three: `services/import.js` now updates `completed`/`errors` with
+  `$max` (monotonic high-water mark) and broadcasts the post-update
+  authoritative numbers; the web `useImportStatus` hook drops
+  cross-job events and clamps counters to their max; and `agentStart`
+  hands an adopting agent its job's prior progress so the agent
+  (0.13.6) seeds its counters and continues the count instead of
+  restarting it.
+
 - **Macro engine · chrono counter self-calibrates across SC2 patches** —
   the Mechanics card showed "0 / N chronos · 0%" for Protoss games on
   new game-data patches. Macro casts are classified by numeric

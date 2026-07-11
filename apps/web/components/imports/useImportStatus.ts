@@ -62,6 +62,39 @@ export type ImportStatusState = {
 const ACTIVE_STATUSES = new Set(["scanning", "running", "pending"]);
 
 /**
+ * Merge one `import:progress` socket event into the accumulated live
+ * delta. Two hard rules, both learned from a real seesaw (agent
+ * auto-updated mid-backfill, restarted, and re-adopted its job):
+ *
+ *   1. An event for a DIFFERENT job never merges — mixing two jobs'
+ *      counters made the progress bar bounce between their numbers.
+ *   2. Counters are monotonic within a job. Socket delivery reorders
+ *      around reconnects, and a restarted agent re-reports from a
+ *      lower absolute count until it catches back up (the API also
+ *      guards with $max) — a lower value never wins.
+ */
+export function mergeProgressEvent(
+  prev: Partial<ImportJob> | null,
+  event: Partial<ImportJob> & { jobId?: string },
+  currentJobId: string | null,
+): Partial<ImportJob> | null {
+  if (event.jobId && currentJobId && event.jobId !== currentJobId) {
+    return prev;
+  }
+  const next: Partial<ImportJob> = { ...(prev || {}), ...event };
+  if (
+    typeof prev?.completed === "number" &&
+    typeof event.completed === "number"
+  ) {
+    next.completed = Math.max(prev.completed, event.completed);
+  }
+  if (typeof prev?.errors === "number" && typeof event.errors === "number") {
+    next.errors = Math.max(prev.errors, event.errors);
+  }
+  return next;
+}
+
+/**
  * Live import-job status: seeds from GET /v1/import/status, then
  * applies `import:progress` socket deltas (the cloud re-emits every
  * agent report to the user room), with the SWR poll as a fallback for
@@ -93,12 +126,16 @@ export function useImportStatus(): ImportStatusState {
       "import:progress": (payload: unknown) => {
         const p = payload as Partial<ImportJob> & { jobId?: string };
         if (!p || typeof p !== "object") return;
-        // A progress event for a NEW job (agent auto-backfill) — pull
-        // the full doc so kind/startedAt are right.
+        // A progress event for a DIFFERENT job (agent auto-backfill
+        // registered after a restart, or a stale reporter) — refetch
+        // so the card switches to the authoritative job, and do NOT
+        // merge its counters into the current one: cross-job merging
+        // is what made the numbers run backwards and forwards.
         if (p.jobId && p.jobId !== jobIdRef.current) {
           void mutate();
+          return;
         }
-        setLive((prev) => ({ ...(prev || {}), ...p }));
+        setLive((prev) => mergeProgressEvent(prev, p, jobIdRef.current));
         if ((p as { done?: boolean }).done) void mutate();
       },
     }),
@@ -109,7 +146,12 @@ export function useImportStatus(): ImportStatusState {
   const job = useMemo<ImportJob | null>(() => {
     if (!data || !data.jobId) return null;
     const merged = { ...data, ...(live || {}) } as ImportJob;
-    // The socket payload mirrors reportProgress's $set fields; `done`
+    // Counters take the max of the REST snapshot and the socket
+    // delta: whichever source lags (poll write-lag, dropped socket)
+    // must never drag the bar backwards.
+    merged.completed = Math.max(data.completed || 0, live?.completed ?? 0);
+    merged.errors = Math.max(data.errors || 0, live?.errors ?? 0);
+    // The socket payload mirrors reportProgress's fields; `done`
     // arrives as a flag rather than a status.
     if ((live as { done?: boolean } | null)?.done) merged.status = "done";
     return merged;
