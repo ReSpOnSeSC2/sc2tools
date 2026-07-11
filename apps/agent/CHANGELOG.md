@@ -4,6 +4,24 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## [Unreleased]
 
+### Changed — build classifier single-sourced (mirror tree collapsed)
+- **What.** The bundled replay-engine carried two hand-synced copies of
+  the build classifier: the canonical `core/strategy_detector_*` tree
+  (agent deep-parse path) and a fork under `detectors/` (bulk-import
+  path). The fork had drifted: it was missing the two
+  `PvZ - Adept Glaives` labels, its `PvZ - 7 Gate Glaive/Immortal
+  All-in` guard matched an upgrade-name spelling sc2reader never emits
+  (dead rule), it never produced the `… - Game Too Short` bucket, and
+  its opponent tree stopped at generic race labels instead of the
+  matchup-specific ones.
+- **Effect.** `detectors/` is now a thin re-export of the canonical
+  tree, so every rule fix lands exactly once. Bulk-imported replays
+  gain the missing labels, matchup-prefixed opponent strategies
+  (`Zerg - …` → e.g. `ZvT - Ling Bane Bust`) and the Game-Too-Short
+  bucket — an intentional relabel that aligns bulk imports with what
+  live parses have produced all along. The bulk importer also now
+  honours v3 (SPA-authored) custom builds like the live path does.
+
 ### Security — auto-updater hardening
 - **What.** The updater installed any release the version feed offered:
   the download host was unrestricted, `minSupportedVersion` was parsed
