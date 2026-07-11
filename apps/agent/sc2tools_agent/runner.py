@@ -31,8 +31,9 @@ import logging.handlers
 import os
 import sys
 import threading
+import urllib.parse
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Callable, List, Optional
 
 from . import __version__
 from . import autostart
@@ -78,7 +79,7 @@ from .ui import (
     can_use_gui,
     can_use_tray,
 )
-from .updater import ReleaseInfo, Updater, install_release
+from .updater import ReleaseInfo, Updater, install_release, update_is_mandatory
 from .uploader.queue import UploadQueue
 from .watcher import ReplayWatcher
 
@@ -402,6 +403,7 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
         state=state,
         on_update_available=lambda release: _handle_update_available(
             tray, console, None, release, log,
+            state=state, api_base=cfg.api_base, request_stop=request_stop,
         ),
     )
 
@@ -751,11 +753,20 @@ def _gui_boot_worker(
                 str(p) for p in _discover_replay_folders(cfg, state)
             ],
         )
+        def _request_stop_for_update() -> None:
+            # GUI mode shuts down by ending the Qt loop; the caller then
+            # runs the ordered service teardown (see _run_gui cleanup).
+            stop_event.set()
+            if cell.gui:
+                cell.gui.request_quit()
+
         updater = Updater(
             cfg=cfg,
             state=state,
             on_update_available=lambda release: _handle_update_available(
                 cell.tray, cell.console, cell.gui, release, log,
+                state=state, api_base=cfg.api_base,
+                request_stop=_request_stop_for_update,
             ),
         )
         heartbeat = Heartbeat(api)
@@ -1218,6 +1229,10 @@ def _handle_update_available(
     gui: Optional[GuiUI],
     release: ReleaseInfo,
     log: logging.Logger,
+    *,
+    state: Optional[AgentState] = None,
+    api_base: Optional[str] = None,
+    request_stop: Optional[Callable[[], None]] = None,
 ) -> None:
     if release.latest:
         log.info(
@@ -1230,21 +1245,50 @@ def _handle_update_available(
         tray.on_update_available(release.latest)
     if gui and release.latest:
         gui.on_update_available(release.latest)
-    if release.artifact and _running_frozen():
-        try:
-            log.info(
-                "update_install_starting artifact=%s",
-                release.artifact.platform,
+
+    if not (release.artifact and _running_frozen()):
+        if release.latest and console:
+            console.on_status(
+                f"update available: {release.latest} (run installer manually)",
             )
-            install_release(release)
-            if console:
-                console.on_status(f"installer launched for {release.latest}")
-        except Exception:  # noqa: BLE001
-            log.exception("update_install_failed")
-    elif release.latest and console:
-        console.on_status(
-            f"update available: {release.latest} (run installer manually)",
+        return
+
+    # Consent gate: honour the auto-update opt-out unless this build is
+    # below the cloud's compatibility floor (minSupportedVersion), in
+    # which case staying put means a broken agent anyway.
+    mandatory = update_is_mandatory(release)
+    if state is not None and not state.auto_update_enabled and not mandatory:
+        log.info("update_skipped_auto_update_disabled latest=%s", release.latest)
+        if console:
+            console.on_status(
+                f"update available: {release.latest} — auto-update is "
+                "disabled; run the installer manually",
+            )
+        return
+
+    try:
+        log.info(
+            "update_install_starting artifact=%s mandatory=%s",
+            release.artifact.platform,
+            mandatory,
         )
+        # Only the API host and GitHub release hosts may serve the
+        # installer — a compromised feed can't point us elsewhere.
+        trusted = []
+        if api_base:
+            host = urllib.parse.urlparse(api_base).hostname
+            if host:
+                trusted.append(host)
+        install_release(release, trusted_hosts=trusted)
+        if console:
+            console.on_status(f"installer launched for {release.latest}")
+        # Exit cleanly during the installer's launch delay so in-flight
+        # parses/uploads finish and NSIS's taskkill backstop is a no-op.
+        if request_stop is not None:
+            log.info("update_install_launched — stopping agent for installer")
+            request_stop()
+    except Exception:  # noqa: BLE001
+        log.exception("update_install_failed")
 
 
 # ---------------- helpers ----------------
@@ -1438,7 +1482,30 @@ def _configure_logging(cfg: AgentConfig) -> Path:
     )
     file_handler.setFormatter(fmt)
     root.addHandler(file_handler)
+    _prune_worker_logs(log_dir)
     return log_dir
+
+
+def _prune_worker_logs(log_dir: Path) -> None:
+    """Delete parse-worker log files left behind by previous sessions.
+
+    Workers write per-process ``agent-worker-<pid>.log`` files (see
+    watcher._install_worker_log_handler) so the parent's agent.log can
+    always rotate. The PIDs change every session, so without this sweep
+    the logs directory would accumulate a few small files per run
+    forever. Files from THIS session aren't open yet at logging-setup
+    time, so deleting everything matching the pattern is safe; a file
+    that's somehow still locked is skipped silently.
+    """
+    try:
+        candidates = list(log_dir.glob("agent-worker-*.log*"))
+    except OSError:
+        return
+    for path in candidates:
+        try:
+            path.unlink()
+        except OSError:
+            continue
 
 
 def _log_level_from_env() -> int:

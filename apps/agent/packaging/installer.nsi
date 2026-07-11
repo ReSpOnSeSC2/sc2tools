@@ -97,6 +97,13 @@ Section "Install"
     CreateShortCut "$DESKTOP\SC2 Tools Agent.lnk" \
         "$INSTDIR\${APP_EXECUTABLE}" "" "$INSTDIR\${APP_EXECUTABLE}"
 
+    ; Silent installs are the auto-updater path — the user is mid-
+    ; session (possibly mid-game on stream), so relaunch to the tray
+    ; instead of popping the main window. Interactive installs keep the
+    ; visible first-run window.
+    IfSilent 0 +3
+    Exec '"$INSTDIR\${APP_EXECUTABLE}" --start-minimized'
+    Goto +2
     Exec '"$INSTDIR\${APP_EXECUTABLE}"'
 SectionEnd
 
