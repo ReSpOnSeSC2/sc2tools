@@ -41,9 +41,7 @@ class SpatialService {
    * tells the heatmap viewer whether buildings/proxy/battle/death-zone
    * layers will produce results for that map.
    *
-   * @param {string} userId
-   * @param {object} filters
-   * @returns {Promise<Array<{
+   * @typedef {{
    *   name: string,
    *   total: number,
    *   wins: number,
@@ -52,7 +50,12 @@ class SpatialService {
    *   lastPlayed: Date | null,
    *   hasSpatial: boolean,
    *   bounds: object | null,
-   * }>>}
+   *   recent: Array<'win' | 'loss'>,
+   * }} SpatialMapRow
+   *
+   * @param {string} userId
+   * @param {object} filters
+   * @returns {Promise<SpatialMapRow[]>}
    */
   async maps(userId, filters) {
     const match = gamesMatchStage(userId, filters);
@@ -139,7 +142,12 @@ class SpatialService {
     // Attach the SPA's "form sparkline" data so Map Intel's trend
     // column matches the Battlefield/Maps tab's behaviour. Cheap
     // second pass — the SPA renders a single inline list per row.
-    return attachRecentByMap(this.db, userId, filters, rows);
+    // Casts: the driver types rows as ``Document`` even though the
+    // $project pins the shape, and attachRecentByMap echoes its loose
+    // ``{name} & Record`` row type back rather than the full row.
+    return /** @type {Promise<SpatialMapRow[]>} */ (
+      attachRecentByMap(this.db, userId, filters, /** @type {Array<{name: string} & Record<string, any>>} */ (rows))
+    );
   }
 
   /**

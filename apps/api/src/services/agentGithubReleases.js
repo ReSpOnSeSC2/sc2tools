@@ -34,6 +34,28 @@
  * caller falls back to Mongo alone.
  */
 
+/**
+ * The merged release descriptor the version route serves. Shared with
+ * ``agentVersion.js`` (the DB side produces the same shape minus
+ * ``source``).
+ *
+ * @typedef {{
+ *   channel: string,
+ *   version: string,
+ *   publishedAt: string | null,
+ *   releaseNotes: string,
+ *   minSupportedVersion: string | null,
+ *   source?: string,
+ *   artifact: {
+ *     platform: string,
+ *     downloadUrl: string,
+ *     sha256: string,
+ *     sizeBytes: number | null,
+ *     signature: string | null,
+ *   },
+ * }} AgentReleaseInfo
+ */
+
 const SEMVER_TAG_RE = /^agent-v(\d+)\.(\d+)\.(\d+)$/;
 const EXE_RE = /^SC2ToolsAgent-Setup-.*\.exe$/i;
 const SHA256_RE = /^([0-9a-f]{64})/i;
@@ -61,7 +83,7 @@ class GithubReleaseFeed {
     this.ttlMs = typeof opts.ttlMs === "number" ? opts.ttlMs : DEFAULT_TTL_MS;
     this.fetchImpl = opts.fetchImpl || fetch;
     this.logger = opts.logger || null;
-    /** @type {{at: number, value: object | null} | null} */
+    /** @type {{at: number, value: AgentReleaseInfo | null} | null} */
     this._cache = null;
   }
 
@@ -72,7 +94,7 @@ class GithubReleaseFeed {
    * resolves to null and the caller serves Mongo alone.
    *
    * @param {{ channel?: string, platform?: string }} [opts]
-   * @returns {Promise<object | null>}
+   * @returns {Promise<AgentReleaseInfo | null>}
    */
   async latest(opts = {}) {
     const channel = String(opts.channel || "stable");
@@ -103,26 +125,39 @@ class GithubReleaseFeed {
     }
   }
 
-  /** @returns {Promise<object | null>} */
+  /** @returns {Promise<AgentReleaseInfo | null>} */
   async _resolve() {
     const releases = await this._fetchJson(
       `https://api.github.com/repos/${this.owner}/${this.repo}/releases?per_page=30`,
     );
     if (!Array.isArray(releases)) return null;
     const eligible = releases
-      .map((r) => ({ release: r, semver: parseTag(r && r.tag_name) }))
+      .map(
+        /** @param {any} r */ (r) => ({
+          release: r,
+          semver: parseTag(r && r.tag_name),
+        }),
+      )
       .filter(
         ({ release, semver }) =>
           semver !== null &&
           !release.draft &&
           !release.prerelease &&
           Array.isArray(release.assets) &&
-          release.assets.some((a) => EXE_RE.test(a && a.name)),
+          release.assets.some(/** @param {any} a */ (a) => EXE_RE.test(a && a.name)),
       )
-      .sort((a, b) => compareSemverDesc(a.semver, b.semver));
+      // The filter above guarantees ``semver`` is non-null on every
+      // survivor; TS can't carry that narrowing onto the destructured
+      // object property.
+      .sort((a, b) =>
+        compareSemverDesc(
+          /** @type {[number, number, number]} */ (a.semver),
+          /** @type {[number, number, number]} */ (b.semver),
+        ),
+      );
     if (eligible.length === 0) return null;
     const { release } = eligible[0];
-    const exe = release.assets.find((a) => EXE_RE.test(a && a.name));
+    const exe = release.assets.find(/** @param {any} a */ (a) => EXE_RE.test(a && a.name));
     const sha256 = await this._fetchSha256(release.assets, exe.name);
     // The agent's updater hard-verifies sha256 before launching the
     // installer, so a release whose sidecar is missing or malformed

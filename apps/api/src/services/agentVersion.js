@@ -22,7 +22,10 @@ class AgentVersionService {
   /**
    * @param {{agentReleases: import('mongodb').Collection}} db
    * @param {{
-   *   githubFeed?: { latest: (opts: object) => Promise<object | null> } | null,
+   *   githubFeed?: {
+   *     latest: (opts: object) =>
+   *       Promise<import('./agentGithubReleases').AgentReleaseInfo | null>,
+   *   } | null,
    * }} [opts]  githubFeed is a GithubReleaseFeed (or test double) used
    *            as a second release source — see latest() for the merge
    *            rule. Absent/null disables the fallback.

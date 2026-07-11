@@ -44,8 +44,10 @@ const gzip = promisify(zlib.gzip);
 const { COLLECTIONS } = require(
   path.join(__dirname, "..", "..", "config", "constants"),
 );
-const { HEAVY_FIELDS } = require(
-  path.join(__dirname, "..", "..", "services", "gameDetails"),
+// path.join require keeps the script runnable from any CWD; the cast
+// restores the module type TS loses on a dynamic require path.
+const { HEAVY_FIELDS } = /** @type {typeof import("../../services/gameDetails")} */ (
+  require(path.join(__dirname, "..", "..", "services", "gameDetails"))
 );
 
 function parseArgs() {
@@ -63,6 +65,7 @@ function parseArgs() {
   return out;
 }
 
+/** @param {string} name @returns {string} */
 function requireEnv(name) {
   const v = process.env[name];
   if (!v) {
@@ -72,6 +75,11 @@ function requireEnv(name) {
   return v;
 }
 
+/**
+ * @param {string} prefix
+ * @param {string} userId
+ * @param {string} gameId
+ */
 function keyFor(prefix, userId, gameId) {
   const encGameId = encodeURIComponent(gameId);
   return `${prefix}/${userId}/${encGameId}.json.gz`;
@@ -175,9 +183,10 @@ async function main() {
           }
         } catch (err) {
           failed += 1;
+          const e = /** @type {{ message?: unknown }} */ (err);
           console.warn(
             `upload failed for ${doc.userId}/${doc.gameId}: `
-              + (err && err.message ? err.message : String(err)),
+              + (e && e.message ? e.message : String(e)),
           );
         }
       }

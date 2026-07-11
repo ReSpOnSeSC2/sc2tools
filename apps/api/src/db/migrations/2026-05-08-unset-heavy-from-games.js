@@ -38,8 +38,10 @@ const { MongoClient } = require("mongodb");
 const { COLLECTIONS } = require(
   path.join(__dirname, "..", "..", "config", "constants"),
 );
-const { HEAVY_FIELDS } = require(
-  path.join(__dirname, "..", "..", "services", "gameDetails"),
+// path.join require keeps the script runnable from any CWD; the cast
+// restores the module type TS loses on a dynamic require path.
+const { HEAVY_FIELDS } = /** @type {typeof import("../../services/gameDetails")} */ (
+  require(path.join(__dirname, "..", "..", "services", "gameDetails"))
 );
 
 const TARGET_VERSION = 4;

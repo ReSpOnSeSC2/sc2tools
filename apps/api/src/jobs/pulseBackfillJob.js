@@ -125,7 +125,8 @@ function buildPulseBackfillJob(deps) {
     } catch (err) {
       // E11000 = another replica won the race. That's fine; we'll
       // run next tick.
-      if (err && (err.code === 11000 || err.codeName === "DuplicateKey")) {
+      const e = /** @type {{ code?: unknown, codeName?: unknown }} */ (err);
+      if (e && (e.code === 11000 || e.codeName === "DuplicateKey")) {
         return false;
       }
       throw err;
@@ -360,12 +361,21 @@ async function pickRevealRecheckUsers(opponents, limit) {
   return distinct.map((d) => d._id).filter((id) => typeof id === "string" && id);
 }
 
+/**
+ * @param {unknown} raw
+ * @param {number} fallback
+ * @returns {number}
+ */
 function parsePositiveInt(raw, fallback) {
   const n = Number.parseInt(String(raw || ""), 10);
   if (!Number.isFinite(n) || n <= 0) return fallback;
   return n;
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {number} milliseconds, 0 when unset/invalid.
+ */
 function parseSeconds(raw) {
   if (!raw) return 0;
   const n = Number.parseFloat(String(raw));
@@ -373,6 +383,10 @@ function parseSeconds(raw) {
   return Math.floor(n * 1000);
 }
 
+/**
+ * @param {unknown} ms
+ * @returns {number}
+ */
 function clampInterval(ms) {
   if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) {
     return DEFAULT_INTERVAL_MS;

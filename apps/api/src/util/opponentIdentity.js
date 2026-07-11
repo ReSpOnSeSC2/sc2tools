@@ -98,6 +98,7 @@ function attachOpponentIdsToFilter(filter, ids) {
   return filter;
 }
 
+/** @param {unknown} v @returns {string | null} */
 function cleanId(v) {
   if (typeof v !== "string") return null;
   const t = v.trim();

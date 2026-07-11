@@ -313,7 +313,7 @@ class R2DetailsStore {
         try {
           const blob = await this.read(userId, gid);
           if (blob !== null) out.set(gid, blob);
-        } catch (err) {
+        } catch (/** @type {any} */ err) {
           // One failed object shouldn't fail the whole batch — the
           // caller's per-game logic empty-states for missing details.
           // Surface enough context that a real failure is debuggable.

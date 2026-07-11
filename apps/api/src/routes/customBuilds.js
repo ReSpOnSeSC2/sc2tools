@@ -32,13 +32,6 @@ function gameMatchesMatchup(g, race, vsRace) {
 }
 
 /**
- * @param {string|null|undefined} actual
- * @param {string|undefined} requested
- * @param {string|null|undefined} buildName
- * @param {number} bucketPos  0 = my-race char of "PvT" bucket, 2 = vs-race char
- * @returns {boolean}
- */
-/**
  * Coerce a query-string ``perspective`` value into the union the
  * service expects, or ``undefined`` so the service falls back to the
  * saved build's stored perspective. Unknown values silently fall
@@ -54,6 +47,13 @@ function pickPerspective(raw) {
   return undefined;
 }
 
+/**
+ * @param {string|null|undefined} actual
+ * @param {string|undefined} requested
+ * @param {string|null|undefined} buildName
+ * @param {number} bucketPos  0 = my-race char of "PvT" bucket, 2 = vs-race char
+ * @returns {boolean}
+ */
 function raceMatches(actual, requested, buildName, bucketPos) {
   if (!requested || requested === "Any") return true;
   if (!actual) {
@@ -95,6 +95,15 @@ function buildCustomBuildsRouter(deps) {
   // from the reclassify endpoint where the matched set may shift.
   /** @type {Map<string, {expires: number, value: any}>} */
   const phaseCache = new Map();
+  /**
+   * @param {string} userId
+   * @param {string} slug
+   * @param {number} latestGameMs
+   * @param {string} kind
+   * @param {string} perspective
+   * @param {string} [scope]
+   * @param {string} [filtersKey]
+   */
   function phaseCacheKey(userId, slug, latestGameMs, kind, perspective, scope, filtersKey) {
     // ``perspective`` is included so the comparison view's two
     // queries don't poison each other's cache slot — left ("you")
@@ -127,6 +136,7 @@ function buildCustomBuildsRouter(deps) {
       .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
     return entries.map(([k, v]) => `${k}=${v}`).join("&");
   }
+  /** @param {string} key */
   function phaseCacheGet(key) {
     const hit = phaseCache.get(key);
     if (!hit) return null;
@@ -136,15 +146,18 @@ function buildCustomBuildsRouter(deps) {
     }
     return hit.value;
   }
+  /** @param {string} key @param {unknown} value */
   function phaseCacheSet(key, value) {
     phaseCache.set(key, { value, expires: Date.now() + PHASE_CACHE_TTL_MS });
   }
+  /** @param {string} userId @param {string} slug */
   function phaseCacheBust(userId, slug) {
     const prefix = `${userId}|${slug}|`;
     for (const key of phaseCache.keys()) {
       if (key.startsWith(prefix)) phaseCache.delete(key);
     }
   }
+  /** @param {string} userId */
   function latestGameMs(userId) {
     // Cheap probe so a fresh upload invalidates the cache key without
     // waiting for the TTL.
@@ -180,6 +193,9 @@ function buildCustomBuildsRouter(deps) {
         return;
       }
       const body = req.body || {};
+      // ``any[]``: untrusted req.body payload — the filter below is the
+      // runtime validation (object with a non-empty string ``name``).
+      /** @type {any[]} */
       const rawRules = Array.isArray(body.rules) ? body.rules : [];
       // Drop placeholder rules (empty name) so the user sees a useful
       // preview while typing instead of zero matches + a 500.
@@ -518,10 +534,17 @@ function buildCustomBuildsRouter(deps) {
       // is kept in lock-step with the community collection here. A
       // publish hiccup is reported in the response but never fails the
       // save itself (the private build is already persisted).
+      // validateCustomBuild types ``value`` as plain ``object``;
+      // BUILD_SCHEMA guarantees ``name`` (required string) and
+      // ``description`` (optional string), so narrow the two fields
+      // the share payload reads.
+      const validated = /** @type {{ name: string, description?: string }} */ (
+        validation.value
+      );
       const community = await applyShareState(deps, auth.userId, slug, {
         wantPublic: desiredShareState(req.body),
-        title: validation.value.name,
-        description: validation.value.description,
+        title: validated.name,
+        description: validated.description,
         log: req.log,
       });
       res.status(200).json({ ok: true, reclassify, community });

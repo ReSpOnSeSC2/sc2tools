@@ -39,6 +39,7 @@ const ME_MMR_MAX_TOONS = 8;
  *     getCurrentMmr(pulseId: string): Promise<{
  *       mmr: number,
  *       region: string | null,
+ *       characterId?: string | null,
  *     } | null>,
  *     getBattleTags?(ids: string[]): Promise<string[]>,
  *   },
@@ -582,17 +583,20 @@ function buildMeRouter(deps) {
         res.json({ entries: [], truncated: false });
         return;
       }
+      // Hoisted past the guard so the narrowed (non-undefined) type
+      // survives into the per-id closure below.
+      const pulseMmr = deps.pulseMmr;
       const profile = await deps.users.getProfile(auth.userId);
       const ids = Array.isArray(profile && profile.pulseIds)
-        ? profile.pulseIds.slice(0, ME_MMR_MAX_TOONS)
+        ? /** @type {string[]} */ (profile.pulseIds).slice(0, ME_MMR_MAX_TOONS)
         : [];
       const truncated =
         Array.isArray(profile && profile.pulseIds)
-        && profile.pulseIds.length > ME_MMR_MAX_TOONS;
+        && /** @type {string[]} */ (profile.pulseIds).length > ME_MMR_MAX_TOONS;
       const settled = await Promise.all(
         ids.map(async (id) => {
           try {
-            const r = await deps.pulseMmr.getCurrentMmr(id);
+            const r = await pulseMmr.getCurrentMmr(id);
             if (!r || !Number.isFinite(Number(r.mmr)) || Number(r.mmr) <= 0) {
               return null;
             }
@@ -623,7 +627,9 @@ function buildMeRouter(deps) {
       // — so the fan-out would otherwise report one account twice. Both
       // resolve to the same ``characterId``, so dedupe on it. Running
       // after the sort means the highest-MMR row wins per account.
+      /** @type {Set<string>} */
       const seen = new Set();
+      /** @type {Array<{ pulseId: string, region: string | null, mmr: number }>} */
       const entries = [];
       for (const e of resolved) {
         const key = e.characterId || `pulse:${e.pulseId}`;

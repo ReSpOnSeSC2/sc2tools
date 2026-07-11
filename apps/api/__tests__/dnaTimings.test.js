@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use strict";
 
 const Dna = require("../src/services/dnaTimings");

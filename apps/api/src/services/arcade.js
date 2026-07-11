@@ -52,7 +52,12 @@ const RESOLVE_QUERY_LIMIT = 500;
 
 class ArcadeService {
   /**
-   * @param {import('../db/connect').DbContext & { arcadeLeaderboard?: any }} db
+   * @param {import('../db/connect').DbContext & {
+   *   arcadeLeaderboard?: any,
+   *   collection?: (name: string) => any,
+   * }} db
+   *   ``collection`` covers test harnesses that hand a raw ``Db``-like
+   *   object instead of the pre-bound DbContext handles.
    * @param {{
    *   games: import('../services/types').GamesService,
    *   gameDetails?: import('./gameDetails').GameDetailsService,
@@ -72,6 +77,7 @@ class ArcadeService {
     this._collection = null;
   }
 
+  /** @returns {import('mongodb').Collection} */
   _coll() {
     if (this._collection) return this._collection;
     if (this.db.arcadeLeaderboard) {
@@ -449,15 +455,24 @@ const STRUCTURE_NAMES = new Set([
   "UltraliskCavern", "Ultralisk Cavern", "CreepTumor", "Creep Tumor",
 ]);
 
-/** Validate a YYYY-Www ISO week key. */
+/**
+ * Validate a YYYY-Www ISO week key.
+ * @param {string} s
+ */
 function isWeekKey(s) {
   return /^\d{4}-W\d{2}$/.test(s);
 }
 
+/**
+ * @param {number} n
+ * @param {number} lo
+ * @param {number} hi
+ */
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
 }
 
+/** @param {unknown} s */
 function parseIso(s) {
   if (typeof s !== "string") return null;
   const d = new Date(s);

@@ -16,14 +16,7 @@ const RESULT_BUCKETS = new Set(["win", "loss"]);
 const REGION_CODES = new Set(["NA", "EU", "KR", "CN", "SEA"]);
 
 /**
- * Parse the standard global filter bar from `req.query`.
- *
- * Returns a normalised filter object the services consume directly.
- * Unknown / invalid params are dropped silently — never throws on bad
- * input from the browser.
- *
- * @param {Record<string, unknown>} q
- * @returns {{
+ * @typedef {{
  *   since?: Date,
  *   until?: Date,
  *   race?: 'P'|'T'|'Z'|'R',
@@ -34,9 +27,28 @@ const REGION_CODES = new Set(["NA", "EU", "KR", "CN", "SEA"]);
  *   oppStrategy?: string,
  *   groupByRacePlayed?: boolean,
  *   build?: string,
- * }}
+ *   leak?: string,
+ *   macroMin?: number,
+ *   macroMax?: number,
+ *   excludeTooShort?: boolean,
+ *   regions?: string[],
+ *   mapPool?: 'ladder'|'nonladder',
+ *   gameSize?: '1v1'|'team',
+ * }} GlobalFilters
+ */
+
+/**
+ * Parse the standard global filter bar from `req.query`.
+ *
+ * Returns a normalised filter object the services consume directly.
+ * Unknown / invalid params are dropped silently — never throws on bad
+ * input from the browser.
+ *
+ * @param {Record<string, unknown>} q
+ * @returns {GlobalFilters}
  */
 function parseFilters(q) {
+  /** @type {GlobalFilters} */
   const out = {};
   if (!q || typeof q !== "object") return out;
   const since = parseDate(q.since);
@@ -255,6 +267,7 @@ function gamesMatchStage(userId, filters) {
  * @returns {string[]}
  */
 function regionLabelsToHandlePrefixes(labels) {
+  /** @type {Record<string, string>} */
   const map = { NA: "1", EU: "2", KR: "3", CN: "5", SEA: "6" };
   /** @type {string[]} */
   const out = [];

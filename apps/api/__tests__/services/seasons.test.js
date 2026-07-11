@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use strict";
 
 const { SeasonsService } = require("../../src/services/seasons");

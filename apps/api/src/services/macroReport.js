@@ -121,6 +121,7 @@ async function macroReport(deps, userId, filters) {
   const scored = extremes?.scored || 0;
   const splitDate = trendSplitDate(extremes);
 
+  /** @type {Record<string, Array<Record<string, any>>>} */
   const facets = {
     coverage: [
       {
@@ -265,6 +266,7 @@ function lossSum() {
   return { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } };
 }
 
+/** @param {string} path Mongo field path, e.g. ``"$top3Leaks.penalty"``. */
 function numOrZero(path) {
   return { $cond: [{ $isNumber: path }, path, 0] };
 }
@@ -308,7 +310,8 @@ function durationBucketSwitch() {
   };
 }
 
-/** Shared segment sub-pipeline: scored games grouped by ``keyExpr``. */
+/** Shared segment sub-pipeline: scored games grouped by ``keyExpr``.
+ *  @param {Record<string, any>} keyExpr Mongo aggregation expression. */
 function segmentFacet(keyExpr) {
   return [
     { $match: { macroScore: { $type: "number" } } },
@@ -342,6 +345,7 @@ function trendSplitDate(extremes) {
   return new Date(min.getTime() + span / 2);
 }
 
+/** @param {unknown} v @returns {Date | null} */
 function toDate(v) {
   if (v instanceof Date && !Number.isNaN(v.getTime())) return v;
   if (typeof v === "string" || typeof v === "number") {
@@ -351,12 +355,14 @@ function toDate(v) {
   return null;
 }
 
+/** @param {unknown} v @returns {number | null} */
 function round1(v) {
   return typeof v === "number" && Number.isFinite(v)
     ? Math.round(v * 10) / 10
     : null;
 }
 
+/** @param {number} wins @param {number} total @returns {number | null} */
 function rate(wins, total) {
   return total > 0 ? Math.round((wins / total) * 1000) / 1000 : null;
 }
@@ -475,6 +481,10 @@ function shapeReport(doc, ctx) {
   };
 }
 
+/**
+ * @param {Array<Record<string, any>> | undefined} rows
+ * @param {(id: unknown) => string} labelOf
+ */
 function shapeSegments(rows, labelOf) {
   return (rows || [])
     .map((r) => ({
@@ -489,7 +499,8 @@ function shapeSegments(rows, labelOf) {
     .sort((a, b) => b.games - a.games);
 }
 
-/** Duration segments keep the canonical bucket order, zero-filled. */
+/** Duration segments keep the canonical bucket order, zero-filled.
+ *  @param {Array<Record<string, any>> | undefined} rows */
 function shapeDurationSegments(rows) {
   const byKey = new Map((rows || []).map((r) => [r._id, r]));
   return DURATION_BUCKETS.map((b) => {

@@ -57,6 +57,7 @@ function oppRaceSwitch() {
   };
 }
 
+/** @param {string} letter Upper-case race initial the $expr tests for. */
 function oppRaceFirstChar(letter) {
   return {
     $eq: [

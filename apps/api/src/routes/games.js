@@ -144,6 +144,7 @@ function buildGamesRouter(deps) {
       // reachable — so it spans 1v1 AND team maps from every season, and
       // still classifies correctly even if the pool lookup fails. The
       // 1v1-only ``maps`` field stays the Bingo / season-catalog pool.
+      /** @type {string[]} */
       let livePoolMaps = [];
       if (deps.ladderMapPool && typeof deps.ladderMapPool.get === "function") {
         try {
@@ -153,9 +154,10 @@ function buildGamesRouter(deps) {
             ...((pool && pool.teamMaps) || []),
           ];
         } catch (err) {
+          const e = /** @type {{ message?: unknown }} */ (err);
           if (req.log) {
             req.log.warn(
-              { err: err && err.message ? err.message : String(err) },
+              { err: e && e.message ? e.message : String(err) },
               "ingest_ladder_pool_unavailable",
             );
           }
@@ -239,6 +241,7 @@ function buildGamesRouter(deps) {
         try {
           created = await deps.games.upsert(userId, game);
         } catch (err) {
+          const e = /** @type {{ message?: unknown }} */ (err);
           if (req.log) {
             req.log.warn(
               { err, gameId: game.gameId, userId },
@@ -249,7 +252,7 @@ function buildGamesRouter(deps) {
             gameId: game.gameId || null,
             errors: [
               `upsert_failed: ${
-                err && err.message ? err.message : String(err)
+                e && e.message ? e.message : String(err)
               }`,
             ],
           });
@@ -626,6 +629,10 @@ async function emitOverlayLive(
   broker,
 ) {
   if (!io || !overlayLive || !overlayTokens || !userId || !game) return;
+  // ``buildFromGame`` is declared ``Promise<object|null>`` on the
+  // service; this route stamps/reads dynamic fields (``gameKey``,
+  // ``oppName``), so hold it as a string-keyed record locally.
+  /** @type {Record<string, any> | null} */
   const payload = await overlayLive.buildFromGame(userId, game);
   if (!payload) return;
   payload.gameKey = pickGameKey(broker, userId, game, payload);
@@ -667,7 +674,13 @@ async function emitOverlayLive(
 function pickGameKey(broker, userId, game, payload) {
   if (broker && typeof broker.latest === "function") {
     try {
-      const latest = broker.latest(userId);
+      // ``latest()`` returns a loosely-typed ``Record<string, unknown>``
+      // envelope; view the two fields this correlation reads through a
+      // typed lens (runtime guards below stay unchanged).
+      const latest =
+        /** @type {{ gameKey?: unknown, opponent?: { name?: unknown } } | null} */ (
+          broker.latest(userId)
+        );
       const latestKey =
         latest && typeof latest.gameKey === "string" ? latest.gameKey : null;
       const latestOppName =

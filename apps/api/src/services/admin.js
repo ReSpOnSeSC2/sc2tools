@@ -125,7 +125,7 @@ class AdminService {
             totalSize: Number(stats.size) || 0,
             indexSize: Number(stats.totalIndexSize) || 0,
           };
-        } catch (err) {
+        } catch (/** @type {any} */ err) {
           // Collection doesn't exist yet — return a zero row so the
           // dashboard renders the name with "—" placeholders rather
           // than dropping it from the table entirely. Mongo's error
@@ -198,7 +198,9 @@ class AdminService {
     const limit = clampLimit(opts.limit, 50);
     // Whitelist the filter so an unknown value can never inject a stage
     // or silently return the wrong set — anything unrecognised is "all".
-    const filter = USER_LIST_FILTERS.has(opts.filter) ? opts.filter : "all";
+    const filter = USER_LIST_FILTERS.has(/** @type {string} */ (opts.filter))
+      ? opts.filter
+      : "all";
     // Users-FIRST pipeline so signed-up users who have not uploaded any
     // games yet still appear (they show with 0 games). The older
     // games-first aggregation hid them entirely, which made the list
@@ -731,7 +733,7 @@ class AdminService {
       await this.db.client.db().admin().ping();
       mongo.ok = true;
       mongo.latencyMs = Date.now() - t0;
-    } catch (err) {
+    } catch (/** @type {any} */ err) {
       mongo.error = err && err.message ? err.message : String(err);
     }
     return {

@@ -58,7 +58,7 @@ class BuildsMmrStatsService {
    *
    * @param {string} userId
    * @param {object} filters
-   * @param {{ bucketWidth?: number, mmrDelta?: number }} [opts]
+   * @param {{ bucketWidth?: unknown, mmrDelta?: unknown }} [opts] raw URL values; clamped by parseBucketWidth/parseMmrDelta
    * @returns {Promise<{
    *   bucketWidth: number,
    *   buckets: Array<{ build: string, bucket: number, label: string,
@@ -123,7 +123,7 @@ class BuildsMmrStatsService {
    *
    * @param {string} userId
    * @param {object} filters
-   * @param {{ bucketWidth?: number, mmrDelta?: number }} [opts]
+   * @param {{ bucketWidth?: unknown, mmrDelta?: unknown }} [opts] raw URL values; clamped by parseBucketWidth/parseMmrDelta
    * @returns {Promise<{
    *   bucketWidth: number,
    *   buckets: Array<{ strategy: string, bucket: number, label: string,
@@ -209,7 +209,7 @@ class BuildsMmrStatsService {
    *
    * @param {string} userId
    * @param {object} filters
-   * @param {{ bucketWidth?: number, mmrDelta?: number }} [opts]
+   * @param {{ bucketWidth?: unknown, mmrDelta?: unknown }} [opts] raw URL values; clamped by parseBucketWidth/parseMmrDelta
    * @returns {Promise<{
    *   bucketWidth: number,
    *   cells: Array<{ build: string, strategy: string, bucket: number,
@@ -309,7 +309,7 @@ class BuildsMmrStatsService {
    *
    * @param {string} userId
    * @param {object} filters
-   * @param {{ maxGames?: number, mmrDelta?: number }} [opts]
+   * @param {{ maxGames?: number, mmrDelta?: unknown }} [opts]
    * @returns {Promise<Array<{
    *   build: string,
    *   curve: Array<{ n: number, wins: number, losses: number,
@@ -374,7 +374,7 @@ class BuildsMmrStatsService {
    *
    * @param {string} userId
    * @param {object} filters
-   * @param {{ maxPointsPerBuild?: number, mmrDelta?: number }} [opts]
+   * @param {{ maxPointsPerBuild?: number, mmrDelta?: unknown }} [opts]
    * @returns {Promise<Array<{
    *   build: string,
    *   points: Array<{ date: Date, mmr: number, result: 'win'|'loss' }>,
@@ -632,8 +632,9 @@ class BuildsMmrStatsService {
    * extra dimension.
    *
    * @private
-   * @param {Array<{ build: string, bucket: number, wins: number,
-   *   losses: number, games: number }>} rows
+   * @param {Array<any>} rows aggregation output rows, shaped
+   *   ``{ build, bucket, wins, losses, games }`` by the $project
+   *   stage upstream.
    * @param {number} bucketWidth
    */
   _enrichBuckets(rows, bucketWidth) {

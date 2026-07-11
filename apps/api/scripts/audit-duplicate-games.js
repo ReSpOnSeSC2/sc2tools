@@ -65,8 +65,12 @@ const { COLLECTIONS } = require(
   path.join(__dirname, "..", "src", "config", "constants"),
 );
 
+/**
+ * @param {string[]} argv
+ * @returns {{ userId?: string, topUsers: number, topOpps: number, samples: number }}
+ */
 function parseArgs(argv) {
-  /** @type {Record<string, string|number|undefined>} */
+  /** @type {{ userId?: string, topUsers?: number, topOpps?: number, samples?: number }} */
   const out = {};
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -84,7 +88,9 @@ function parseArgs(argv) {
   if (typeof out.samples !== "number" || !Number.isFinite(out.samples)) {
     out.samples = 5;
   }
-  return out;
+  // The guards above defaulted every numeric field; TS can't carry
+  // per-property narrowing through to the declared object type.
+  return /** @type {{ userId?: string, topUsers: number, topOpps: number, samples: number }} */ (out);
 }
 
 async function main() {

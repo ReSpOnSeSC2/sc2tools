@@ -33,6 +33,23 @@ const { regionFromToonHandle } = require("../util/regionFromToonHandle");
  */
 
 /**
+ * Minimal view of the agent's ``LiveGameState`` envelope — only the
+ * fields the enrichment path reads. Everything else rides through
+ * untouched, and every value is runtime-checked before use.
+ *
+ * @typedef {{
+ *   players?: unknown,
+ *   user?: { name?: unknown } | null,
+ *   opponent?: {
+ *     name?: unknown,
+ *     race?: unknown,
+ *     toonHandle?: unknown,
+ *     profile?: Record<string, any> | null,
+ *   } | null,
+ * }} LiveEnvelopeLike
+ */
+
+/**
  * Pull the streamer's own race out of the agent's envelope. The
  * envelope carries one entry per player on ``players[]``; the
  * streamer's row has ``type === "user"`` AND
@@ -41,7 +58,7 @@ const { regionFromToonHandle } = require("../util/regionFromToonHandle");
  * the player whose name matches the user when both players are
  * marked ``user`` in 1v1.
  *
- * @param {object} envelope
+ * @param {LiveEnvelopeLike} envelope
  * @returns {string | null}
  */
 function pickStreamerRace(envelope) {
@@ -160,14 +177,23 @@ function buildEnrichmentKey(parts) {
  * Returns the original envelope when there's nothing to enrich (no
  * opponent name / unknown opponent / no history).
  *
- * @param {object} service the ``OverlayLiveService`` instance, used
+ * @param {{
+ *   buildFromOpponentName: (
+ *     userId: string,
+ *     opponentName: string,
+ *     opponentRace?: string,
+ *     opponentPulseCharacterId?: string|number|null,
+ *     myRace?: string,
+ *     opponentToonHandle?: string|null
+ *   ) => Promise<object|null>,
+ * }} service the ``OverlayLiveService`` instance, used
  *   for its ``buildFromOpponentName`` method.
  * @param {Map<string, {payload: object|null, ts: number}>} cache
  *   The LRU cache map owned by the service.
  * @param {number} ttlMs
  * @param {number} maxSize
  * @param {string} userId
- * @param {object} envelope
+ * @param {LiveEnvelopeLike} envelope
  * @param {boolean} [isFirstForGameKey=false] when true, bypass the
  *   cache lookup and force a fresh Mongo query.
  * @returns {Promise<object>}

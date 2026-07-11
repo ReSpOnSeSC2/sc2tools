@@ -3,6 +3,33 @@
 const Dna = require("./dnaTimings");
 const TimingCatalog = require("./timingCatalog");
 
+/** @typedef {import("./dnaTimings").TokenTimingRow} TokenTimingRow */
+
+/**
+ * Slim per-token timing row exposed on `medianTimings` /
+ * `matchupTimings` (the non-legacy SPA consumers), projected from the
+ * full {@link TokenTimingRow}.
+ *
+ * @typedef {{key: string, median: number|null, count: number}} ProjectedTimingRow
+ */
+
+/**
+ * Snake_case row for the "last 5 games" widget — mirrors the legacy
+ * SPA field names.
+ *
+ * @typedef {{
+ *   id: string|null,
+ *   date: string|null,
+ *   result: string,
+ *   map: string,
+ *   opp_strategy: string|null,
+ *   opp_race: string|null,
+ *   my_build: string|null,
+ *   game_length: number|null,
+ *   macro_score: number|null,
+ * }} Last5GameRow
+ */
+
 /**
  * Shared helper that derives the "dossier extras" (DNA-style fields,
  * strategy predictions, macro aggregates) from a list of game documents
@@ -18,7 +45,7 @@ const TimingCatalog = require("./timingCatalog");
  * Newest-first is assumed for recency-weighted predictions and
  * "last 5 games" — caller should sort by date desc.
  *
- * @param {Array<object>} games
+ * @param {Array<any>} games
  * @returns {{
  *   topStrategies: Array<{strategy: string, wins: number, losses: number, count: number, winRate: number}>,
  *   predictedStrategies: Array<{strategy: string, probability: number}>,
@@ -26,12 +53,12 @@ const TimingCatalog = require("./timingCatalog");
  *   oppRaceModal: string,
  *   matchupLabel: string,
  *   matchupCounts: Record<string, number>,
- *   matchupTimings: Record<string, {key: string, median: number|null, count: number}>,
- *   matchupTimingsLegacy: Record<string, {timings: object, order: string[]}>,
- *   medianTimings: Record<string, {key: string, median: number|null, count: number}>,
- *   medianTimingsLegacy: Record<string, object>,
+ *   matchupTimings: Record<string, Record<string, ProjectedTimingRow>>,
+ *   matchupTimingsLegacy: Record<string, {timings: Record<string, TokenTimingRow>, order: string[]}>,
+ *   medianTimings: Record<string, ProjectedTimingRow>,
+ *   medianTimingsLegacy: Record<string, TokenTimingRow>,
  *   medianTimingsOrder: string[],
- *   last5Games: Array<object>,
+ *   last5Games: Last5GameRow[],
  *   macro: {
  *     gamesWithScore: number,
  *     avgMacroScore: number|null,
@@ -53,6 +80,7 @@ function computeDossierExtras(games) {
   );
   const medianTimingsOrder = Object.keys(medianTimingsLegacy);
 
+  /** @type {Record<string, number>} */
   const matchupCounts = {};
   if (myRace) {
     for (const g of list) {
@@ -64,6 +92,7 @@ function computeDossierExtras(games) {
     }
   }
 
+  /** @type {Record<string, {timings: Record<string, TokenTimingRow>, order: string[]}>} */
   const matchupTimingsLegacy = {};
   if (myRace) {
     for (const ml of Object.keys(matchupCounts)) {
@@ -100,10 +129,11 @@ function computeDossierExtras(games) {
  * Mirrors `aggregateByMapAndStrategy` in the opponents service but only
  * needs the byStrategy half.
  *
- * @param {Array<object>} games
+ * @param {Array<any>} games
  * @returns {Record<string, {wins: number, losses: number}>}
  */
 function aggregateByStrategy(games) {
+  /** @type {Record<string, {wins: number, losses: number}>} */
   const out = {};
   for (const g of games) {
     const strat =
@@ -118,12 +148,24 @@ function aggregateByStrategy(games) {
   return out;
 }
 
+/** @param {unknown} r @returns {boolean} */
 function isLossResult(r) {
   if (!r) return false;
   const s = String(r).toLowerCase();
   return s === "loss" || s === "defeat";
 }
 
+/**
+ * @param {Array<any>} games
+ * @returns {{
+ *   gamesWithScore: number,
+ *   avgMacroScore: number|null,
+ *   avgApm: number|null,
+ *   avgSpq: number|null,
+ *   avgDurationSec: number|null,
+ *   scoreDistribution: { excellent: number, good: number, poor: number },
+ * }}
+ */
 function aggregateMacro(games) {
   let scoreSum = 0;
   let scoreCount = 0;
@@ -167,6 +209,7 @@ function aggregateMacro(games) {
   };
 }
 
+/** @param {any} g @returns {Last5GameRow} */
 function serializeForLast5(g) {
   const opp = g.opponent || {};
   return {
@@ -182,9 +225,15 @@ function serializeForLast5(g) {
   };
 }
 
+/**
+ * @param {Record<string, TokenTimingRow>} legacy
+ * @returns {Record<string, ProjectedTimingRow>}
+ */
 function projectMedianTimings(legacy) {
+  /** @type {Record<string, ProjectedTimingRow>} */
   const out = {};
   for (const k of Object.keys(legacy || {})) {
+    /** @type {Partial<TokenTimingRow>} */
     const v = legacy[k] || {};
     out[k] = {
       key: k,
@@ -195,7 +244,12 @@ function projectMedianTimings(legacy) {
   return out;
 }
 
+/**
+ * @param {Record<string, {timings: Record<string, TokenTimingRow>, order: string[]}>} legacy
+ * @returns {Record<string, Record<string, ProjectedTimingRow>>}
+ */
 function projectMatchupTimings(legacy) {
+  /** @type {Record<string, Record<string, ProjectedTimingRow>>} */
   const out = {};
   for (const ml of Object.keys(legacy || {})) {
     out[ml] = projectMedianTimings(legacy[ml] && legacy[ml].timings);
