@@ -20,9 +20,12 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-const getJsonMock = vi.fn();
+// The page uses the status-aware fetch so a genuine API 404 (missing/
+// private) can 404 while an unreachable API renders a transient
+// "unavailable" state instead. Mock resolves {data, status} envelopes.
+const getJsonWithStatusMock = vi.fn();
 vi.mock("@/lib/serverApi", () => ({
-  getJson: (...args: unknown[]) => getJsonMock(...args),
+  getJsonWithStatus: (...args: unknown[]) => getJsonWithStatusMock(...args),
 }));
 
 // Imported after the mocks are declared so the page picks them up.
@@ -52,7 +55,7 @@ const PROFILE: PublicPlayerProfile = {
 
 afterEach(() => {
   cleanup();
-  getJsonMock.mockReset();
+  getJsonWithStatusMock.mockReset();
 });
 
 describe("PublicProfile (presentational)", () => {
@@ -77,38 +80,55 @@ describe("PublicProfile (presentational)", () => {
 });
 
 describe("PublicProfilePage (SSR data flow)", () => {
-  beforeEach(() => getJsonMock.mockReset());
+  beforeEach(() => getJsonWithStatusMock.mockReset());
 
   test("renders the profile when the API returns one", async () => {
-    getJsonMock.mockResolvedValue({ profile: PROFILE });
+    getJsonWithStatusMock.mockResolvedValue({
+      data: { profile: PROFILE },
+      status: 200,
+    });
     const ui = await PublicProfilePage({
       params: Promise.resolve({ handle: "u_a" }),
     });
     render(ui);
     expect(screen.getByText("Reaver")).toBeTruthy();
-    expect(getJsonMock).toHaveBeenCalledWith("/v1/public/profile/u_a");
+    expect(getJsonWithStatusMock).toHaveBeenCalledWith(
+      "/v1/public/profile/u_a",
+    );
   });
 
-  test("calls notFound() when the profile is private / missing", async () => {
-    getJsonMock.mockResolvedValue(null);
+  test("calls notFound() when the API positively 404s (private / missing)", async () => {
+    getJsonWithStatusMock.mockResolvedValue({ data: null, status: 404 });
     await expect(
       PublicProfilePage({ params: Promise.resolve({ handle: "u_private" }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   test("calls notFound() when the API returns an empty envelope", async () => {
-    getJsonMock.mockResolvedValue({});
+    getJsonWithStatusMock.mockResolvedValue({ data: {}, status: 200 });
     await expect(
       PublicProfilePage({ params: Promise.resolve({ handle: "u_a" }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
   });
+
+  test("renders the transient unavailable state (NOT a 404) when the API is unreachable", async () => {
+    getJsonWithStatusMock.mockResolvedValue({ data: null, status: null });
+    const ui = await PublicProfilePage({
+      params: Promise.resolve({ handle: "u_a" }),
+    });
+    render(ui);
+    expect(screen.getByText(/temporarily unavailable/i)).toBeTruthy();
+  });
 });
 
 describe("generateMetadata", () => {
-  beforeEach(() => getJsonMock.mockReset());
+  beforeEach(() => getJsonWithStatusMock.mockReset());
 
   test("indexable, name-bearing metadata for a public profile", async () => {
-    getJsonMock.mockResolvedValue({ profile: PROFILE });
+    getJsonWithStatusMock.mockResolvedValue({
+      data: { profile: PROFILE },
+      status: 200,
+    });
     const md = await generateMetadata({
       params: Promise.resolve({ handle: "u_a" }),
     });
@@ -118,14 +138,23 @@ describe("generateMetadata", () => {
     expect(md.robots).toBeUndefined();
   });
 
-  test("noindex, neutral metadata for a private / missing profile", async () => {
-    getJsonMock.mockResolvedValue(null);
+  test("throws notFound() pre-stream for a private / missing profile (real 404 status)", async () => {
+    // Raising in generateMetadata (before the loading.tsx Suspense
+    // boundary starts streaming) is what makes the response a genuine
+    // 404 instead of a soft-404 with a 200 status.
+    getJsonWithStatusMock.mockResolvedValue({ data: null, status: 404 });
+    await expect(
+      generateMetadata({ params: Promise.resolve({ handle: "u_private" }) }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  test("noindex, neutral metadata when the API is unreachable", async () => {
+    getJsonWithStatusMock.mockResolvedValue({ data: null, status: null });
     const md = await generateMetadata({
-      params: Promise.resolve({ handle: "u_private" }),
+      params: Promise.resolve({ handle: "u_a" }),
     });
     expect(md.robots).toMatchObject({ index: false });
-    expect(md.alternates?.canonical).toBe("/p/u_private");
-    // Wording must not reveal whether the handle exists.
-    expect(String(md.description)).toMatch(/private or doesn't exist/i);
+    expect(md.alternates?.canonical).toBe("/p/u_a");
+    expect(String(md.description)).toMatch(/unavailable right now/i);
   });
 });
