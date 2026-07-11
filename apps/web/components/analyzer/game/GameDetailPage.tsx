@@ -13,6 +13,7 @@ import { InteractiveTimeline } from "./InteractiveTimeline";
 import { MechanicsPanel } from "./MechanicsPanel";
 import { BuildOrderColumns } from "./BuildOrderColumns";
 import { LossAutopsyCard } from "./LossAutopsyCard";
+import { ArmGhostFromLogButton, GhostGradeCard } from "./GhostGradeCard";
 import {
   isLossResult,
   type GameBuildOrderResponse,
@@ -145,6 +146,11 @@ export function GameDetailPage({ gameId }: { gameId: string }) {
         )}
       </div>
 
+      {/* Ghost Build loop closer — grades this game's executed build
+          against the armed practice target. Renders nothing unless a
+          target is armed on this device AND a my-side log exists. */}
+      <GhostGradeCard buildLog={buildLogLines} />
+
       <BuildOrderColumns
         myEvents={buildReq.data?.events}
         oppEvents={buildReq.data?.opp_events}
@@ -153,6 +159,18 @@ export function GameDetailPage({ gameId }: { gameId: string }) {
         myStatus={buildReq.data?.my_status}
         oppStatus={buildReq.data?.opp_status}
         loading={buildReq.isLoading}
+        myAction={
+          buildLogLines && buildLogLines.length > 0 ? (
+            <ArmGhostFromLogButton
+              name={
+                buildReq.data?.my_build
+                ?? game.myBuild
+                ?? (game.map ? `Build from ${game.map}` : "My build")
+              }
+              lines={buildLogLines}
+            />
+          ) : null
+        }
       />
     </GameDetailShell>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -18,6 +18,9 @@ export interface BuildOrderColumnsProps {
   myStatus?: "ok" | "empty" | "not_extracted";
   oppStatus?: "ok" | "empty" | "not_extracted";
   loading?: boolean;
+  /** Optional action row rendered at the top of the MY column body
+   *  (e.g. the Ghost Build "Arm this build" affordance). */
+  myAction?: ReactNode;
 }
 
 const CATEGORY_DOT: Record<string, string> = {
@@ -46,6 +49,7 @@ export function BuildOrderColumns({
   myStatus,
   oppStatus,
   loading,
+  myAction,
 }: BuildOrderColumnsProps) {
   const myRows = useMemo(() => normalizeBuildEvents(myEvents), [myEvents]);
   const oppRows = useMemo(() => normalizeBuildEvents(oppEvents), [oppEvents]);
@@ -81,6 +85,7 @@ export function BuildOrderColumns({
           rows={myRows}
           status={myStatus}
           testId="build-column-me"
+          action={myAction}
         />
         <BuildColumn
           heading={`Opponent — ${(oppLabel || "").trim() || "Unknown"}`}
@@ -98,11 +103,13 @@ function BuildColumn({
   rows,
   status,
   testId,
+  action,
 }: {
   heading: string;
   rows: BuildEventRow[];
   status?: "ok" | "empty" | "not_extracted";
   testId: string;
+  action?: ReactNode;
 }) {
   // Collapsed state only applies below md — the body keeps `md:block`
   // so desktop always shows both columns expanded.
@@ -136,6 +143,9 @@ function BuildColumn({
           collapsed ? "hidden md:block" : "block",
         ].join(" ")}
       >
+        {action && rows.length > 0 ? (
+          <div className="flex justify-end pb-1">{action}</div>
+        ) : null}
         {rows.length === 0 ? (
           <p className="py-3 text-caption text-text-muted">
             {status === "not_extracted"

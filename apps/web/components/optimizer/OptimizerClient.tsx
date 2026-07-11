@@ -41,6 +41,7 @@ import { ComparisonView } from "./ComparisonView";
 import { EconomyCharts } from "./EconomyCharts";
 import { ExportToBuildsButton } from "./ExportToBuildsButton";
 import { CopySaltButton } from "./CopySaltButton";
+import { ArmGhostBuildButton } from "./ArmGhostBuildButton";
 import { MyGamesPanel } from "./MyGamesPanel";
 import { SavedBuildsPanel } from "./SavedBuildsPanel";
 import { UploadReplayPanel } from "./UploadReplayPanel";
@@ -260,6 +261,7 @@ function OptimizerInner() {
           <EconomyCharts result={result} />
           <ExportToBuildsButton result={result} vsRace={exportVsRace} />
           <CopySaltButton result={result} />
+          <ArmGhostBuildButton result={result} />
         </div>
       </div>
     </div>

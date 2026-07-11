@@ -38,7 +38,8 @@ export type WidgetId =
   | "best-answer"
   | "scouting"
   | "session"
-  | "randomizer";
+  | "randomizer"
+  | "ghost-build";
 
 export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "opponent",
@@ -57,6 +58,7 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "scouting",
   "session",
   "randomizer",
+  "ghost-build",
 ];
 
 /**
@@ -101,6 +103,12 @@ export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
   // Persistent panels — HUDs that should stay on screen.
   "topbuilds": null,
   "session": null,
+  // Ghost Build coach — a persistent practice HUD. The target build is
+  // armed via the widget URL's ``?ghost=`` param (see lib/ghostBuild),
+  // so the panel shows a compact "armed" card between games and the
+  // step coach during them; it must never flicker off on a timer.
+  // Test fires still cap it via the generic test-mode rule below.
+  "ghost-build": null,
   // Randomizer plays a one-shot reveal animation (up to ~11 s for the
   // fighter brawl / sumo styles) and shows the winner card for the
   // remaining window before clearing the scene.

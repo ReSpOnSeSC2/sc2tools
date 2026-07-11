@@ -1,5 +1,6 @@
 import { OverlayWidgetClient } from "@/components/OverlayWidgetClient";
 import { OVERLAY_THEME_PARAM } from "@/lib/overlayTheme";
+import { GHOST_BUILD_PARAM } from "@/lib/ghostBuild";
 
 export const metadata = {
   title: "Live overlay widget",
@@ -38,6 +39,7 @@ const VALID_WIDGETS = new Set([
   "scouting",
   "session",
   "randomizer",
+  "ghost-build",
 ]);
 
 export default async function OverlayWidgetPage({
@@ -55,6 +57,12 @@ export default async function OverlayWidgetPage({
   const themeParam = typeof sp[OVERLAY_THEME_PARAM] === "string"
     ? (sp[OVERLAY_THEME_PARAM] as string)
     : null;
+  // Optional ``?ghost=`` armed practice target (see lib/ghostBuild.ts).
+  // Raw pass-through like the theme — the client strict-validates and
+  // treats any malformed value as "not armed".
+  const ghostParam = typeof sp[GHOST_BUILD_PARAM] === "string"
+    ? (sp[GHOST_BUILD_PARAM] as string)
+    : null;
   const widget = VALID_WIDGETS.has(name) ? name : null;
   if (!widget) {
     return (
@@ -70,6 +78,11 @@ export default async function OverlayWidgetPage({
     );
   }
   return (
-    <OverlayWidgetClient token={token} widget={widget} themeParam={themeParam} />
+    <OverlayWidgetClient
+      token={token}
+      widget={widget}
+      themeParam={themeParam}
+      ghostParam={ghostParam}
+    />
   );
 }
