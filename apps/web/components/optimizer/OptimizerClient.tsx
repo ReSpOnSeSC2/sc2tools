@@ -40,6 +40,7 @@ import { BuildOrderTimeline } from "./BuildOrderTimeline";
 import { ComparisonView } from "./ComparisonView";
 import { EconomyCharts } from "./EconomyCharts";
 import { ExportToBuildsButton } from "./ExportToBuildsButton";
+import { CopySaltButton } from "./CopySaltButton";
 import { MyGamesPanel } from "./MyGamesPanel";
 import { SavedBuildsPanel } from "./SavedBuildsPanel";
 import { UploadReplayPanel } from "./UploadReplayPanel";
@@ -258,6 +259,7 @@ function OptimizerInner() {
           <ComparisonView result={result} />
           <EconomyCharts result={result} />
           <ExportToBuildsButton result={result} vsRace={exportVsRace} />
+          <CopySaltButton result={result} />
         </div>
       </div>
     </div>
