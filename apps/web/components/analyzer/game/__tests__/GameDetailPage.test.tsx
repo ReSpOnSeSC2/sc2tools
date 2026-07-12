@@ -208,6 +208,21 @@ describe("GameDetailPage", () => {
     expect(screen.getByText("Barracks")).toBeTruthy();
   });
 
+  it("returns to the originating opponent dossier when context is present", () => {
+    mockEndpoints();
+    render(
+      <GameDetailPage
+        gameId="g1"
+        opponentContext={{ pulseId: "1-S2-1-99", displayName: "Foe" }}
+      />,
+    );
+
+    const back = screen.getByRole("link", { name: "Back to Foe" });
+    expect(back.getAttribute("href")).toBe(
+      "/app?tab=opponents&opponent=1-S2-1-99",
+    );
+  });
+
   it("shows a branded not-found state with a back link on 404", () => {
     mockEndpoints({ slimError: { status: 404, message: "Not found." } });
     render(<GameDetailPage gameId="g1" />);

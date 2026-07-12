@@ -19,6 +19,10 @@ import {
   type GameBuildOrderResponse,
   type GameSummary,
 } from "./types";
+import {
+  opponentProfileHref,
+  type OpponentNavigationContext,
+} from "@/lib/opponentNavigation";
 
 /**
  * GameDetailPage — the per-replay deep dive ("I just lost a weird
@@ -35,7 +39,13 @@ import {
  * (pre-v0.5.11) keeps the mechanics/build panels and swaps the
  * timeline for an explanatory empty state. Never a blank page.
  */
-export function GameDetailPage({ gameId }: { gameId: string }) {
+export function GameDetailPage({
+  gameId,
+  opponentContext,
+}: {
+  gameId: string;
+  opponentContext?: OpponentNavigationContext | null;
+}) {
   const enc = encodeURIComponent(gameId);
   const gameReq = useApi<GameSummary>(gameId ? `/v1/games/${enc}` : null, {
     revalidateOnFocus: false,
@@ -84,6 +94,7 @@ export function GameDetailPage({ gameId }: { gameId: string }) {
     return (
       <GameNotFound
         title="Game not found"
+        opponentContext={opponentContext}
         description="This game isn't in your synced history — it may not have uploaded yet, or the link points at someone else's replay."
       />
     );
@@ -94,6 +105,7 @@ export function GameDetailPage({ gameId }: { gameId: string }) {
       <GameNotFound
         title="Couldn't load this game"
         description={gameReq.error.message}
+        opponentContext={opponentContext}
       />
     );
   }
@@ -115,7 +127,7 @@ export function GameDetailPage({ gameId }: { gameId: string }) {
     game.opponent?.displayName ?? breakdown?.player_stats?.opponent?.name ?? null;
 
   return (
-    <GameDetailShell game={game}>
+    <GameDetailShell game={game} opponentContext={opponentContext}>
       <InteractiveTimeline
         statsEvents={breakdown?.stats_events}
         oppStatsEvents={breakdown?.opp_stats_events}
@@ -179,10 +191,14 @@ export function GameDetailPage({ gameId }: { gameId: string }) {
 function GameNotFound({
   title,
   description,
+  opponentContext,
 }: {
   title: string;
   description: string;
+  opponentContext?: OpponentNavigationContext | null;
 }) {
+  const opponentName =
+    (opponentContext?.displayName || "").trim() || "opponent";
   return (
     <Card>
       <EmptyStatePanel
@@ -192,11 +208,13 @@ function GameNotFound({
         description={description}
         action={
           <Link
-            href="/app"
+            href={opponentProfileHref(opponentContext)}
             className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-border bg-bg-elevated px-4 text-body font-semibold text-text transition-colors hover:border-border-strong hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden />
-            Back to dashboard
+            {opponentContext
+              ? `Back to ${opponentName}`
+              : "Back to dashboard"}
           </Link>
         }
       />

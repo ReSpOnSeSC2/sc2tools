@@ -1,6 +1,7 @@
 import { apiFetch } from "@/lib/api";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Card } from "@/components/ui/Card";
+import { opponentContextFromQuery } from "@/lib/opponentNavigation";
 
 type Me = {
   userId: string;
@@ -11,7 +12,13 @@ type Me = {
   onboarding?: { downloadStartedAt?: string; dismissedAt?: string } | null;
 };
 
-export default async function AnalyzerHome() {
+export default async function AnalyzerHome({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const query = await searchParams;
+  const opponentContext = opponentContextFromQuery(query);
   const meRes = await apiFetch<Me>("/v1/me");
 
   if (!meRes.ok) {
@@ -27,5 +34,10 @@ export default async function AnalyzerHome() {
     );
   }
 
-  return <DashboardLayout me={meRes.data} />;
+  return (
+    <DashboardLayout
+      me={meRes.data}
+      initialOpponentId={opponentContext?.pulseId ?? null}
+    />
+  );
 }

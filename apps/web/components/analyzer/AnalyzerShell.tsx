@@ -22,16 +22,20 @@ export function AnalyzerShell({
   totalGames,
   tab,
   onTabChange,
+  initialOpponentId,
 }: {
   totalGames: number;
   tab: TabId;
   onTabChange: (next: string) => void;
+  initialOpponentId?: string | null;
 }) {
-  const [profileId, setProfileId] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(
+    initialOpponentId ?? null,
+  );
 
   useEffect(() => {
-    setProfileId(null);
-  }, [tab]);
+    setProfileId(tab === "opponents" ? (initialOpponentId ?? null) : null);
+  }, [tab, initialOpponentId]);
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
 

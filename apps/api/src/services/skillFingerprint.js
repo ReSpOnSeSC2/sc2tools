@@ -39,7 +39,10 @@
  *   Aggression  — 100 minus the mean of per-game ``durationSec``
  *                 percentiles (INVERTED: shorter games than the band's
  *                 norm = higher aggression).
- *   Ladder      — mean of per-game ``myMmr`` percentiles.
+ *   MMR context — mean of per-game ``myMmr`` percentiles (wire key remains
+ *                 ``ladder`` for compatibility). Returned as competitive
+ *                 context, but excluded from the playstyle decision because
+ *                 rating describes level, not style.
  *
  * Axes whose percentile cannot be computed (no band table, metric
  * below the k-anonymity floor, or no numeric samples) come back with
@@ -79,8 +82,14 @@ const AXES = Object.freeze([
   { key: "spending", label: "Spending" },
   { key: "consistency", label: "Consistency" },
   { key: "aggression", label: "Aggression" },
-  { key: "ladder", label: "Ladder" },
+  { key: "ladder", label: "MMR context" },
 ]);
+
+/** Signals that describe HOW the player performs. MMR is deliberately
+ * excluded: it is useful context, but it is not a playstyle trait. */
+const PLAYSTYLE_AXIS_KEYS = Object.freeze(
+  AXES.map((axis) => axis.key).filter((key) => key !== "ladder"),
+);
 
 /**
  * SC2 league enum → display label. Mirrors the (unexported) map in
@@ -105,7 +114,8 @@ const LEAGUE_NAMES = Object.freeze({
  *
  *   # | Rule (percentile thresholds)                      | Label
  *  ---+---------------------------------------------------+---------------------
- *   1 | ≥4 axes present AND every present axis ≥ 65       | Complete Player
+ *   1 | ≥4 style axes present AND every present style     | Complete Player
+ *     | axis ≥ 65 (MMR excluded)                          |
  *   2 | Aggression ≥ 70 AND Macro < 40                    | All-in Gambler
  *   3 | Macro ≥ 70 AND Aggression < 40                    | Greedy Macro Player
  *   4 | Aggression ≥ 65 AND Mechanics ≥ 65                | Tempo Attacker
@@ -118,9 +128,9 @@ const LEAGUE_NAMES = Object.freeze({
  * Rationale for the ordering: rule 1 celebrates all-round strength
  * before any single-dimension caricature can claim the player; the
  * strong identity splits (2/3) outrank the softer tendencies (4–7);
- * volatility (8) is a last resort before the neutral fallback. Ladder
- * (MMR) deliberately appears only in rule 1 — where you ARE on the
- * ladder is context, not a playstyle.
+ * volatility (8) is a last resort before the neutral fallback. MMR context
+ * is excluded from every rule: rating is competitive context, not a
+ * description of how you play.
  *
  * @param {Record<string, number | null>} ax axis key → percentile
  * @returns {string}
@@ -134,7 +144,7 @@ function derivePlaystyle(ax) {
    * @param {string} k @returns {number}
    */
   const val = (k) => /** @type {number} */ (ax[k]);
-  const present = AXES.map((a) => a.key).filter(has);
+  const present = PLAYSTYLE_AXIS_KEYS.filter(has);
   if (present.length >= 4 && present.every((k) => val(k) >= 65)) {
     return "Complete Player";
   }

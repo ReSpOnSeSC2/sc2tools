@@ -69,4 +69,32 @@ describe("AllGamesTable game analysis entry point", () => {
     fireEvent.click(desktopRow!);
     expect(useApiMock).toHaveBeenCalledWith("/v1/games/game%2F42/build-order");
   });
+
+  it("retains opponent dossier context in desktop and mobile links", () => {
+    useApiMock.mockReturnValue({ data: undefined, isLoading: true, error: null });
+    render(
+      <AllGamesTable
+        games={[
+          {
+            id: "game/42",
+            date: "2026-07-10T12:00:00.000Z",
+            result: "Win",
+            map: "Ancient Cistern",
+          },
+        ]}
+        opponentContext={{
+          pulseId: "1-S2-1-42/alt",
+          displayName: "Barcode Rival",
+        }}
+      />,
+    );
+
+    const links = screen.getAllByRole("link", { name: /Open game analysis:/i });
+    expect(links).toHaveLength(2);
+    links.forEach((link) => {
+      expect(link.getAttribute("href")).toBe(
+        "/app/game/game%2F42?opponent=1-S2-1-42%2Falt&opponentName=Barcode+Rival",
+      );
+    });
+  });
 });

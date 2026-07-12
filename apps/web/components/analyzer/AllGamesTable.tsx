@@ -13,6 +13,10 @@ import type { ProfileGame } from "./Last5GamesTimeline";
 import { MacroBreakdownPanel } from "./macro/MacroBreakdownPanel";
 import type { PanelHeaderMeta } from "./macro/MacroBreakdownPanel.types";
 import { BuildOrderDualTimeline } from "./charts/BuildOrderDualTimeline";
+import {
+  gameAnalysisHref,
+  type OpponentNavigationContext,
+} from "@/lib/opponentNavigation";
 
 type BuildOrderEvent = {
   time: number;
@@ -73,6 +77,7 @@ export function AllGamesTable({
   targetGameId,
   targetGameSeq,
   myName,
+  opponentContext,
 }: {
   games: ProfileGame[];
   targetGameId?: string | null;
@@ -80,6 +85,8 @@ export function AllGamesTable({
   /** Logged-in user's display name, for the "you" side of the
    *  Players column. Falls back to a neutral "You" label when absent. */
   myName?: string | null;
+  /** Present only when this table belongs to one opponent dossier. */
+  opponentContext?: OpponentNavigationContext | null;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -179,6 +186,7 @@ export function AllGamesTable({
                 showPlayers={showPlayers}
                 showOppMmr={showOppMmr}
                 myName={myName}
+                opponentContext={opponentContext}
               />
             ))}
           </tbody>
@@ -194,6 +202,7 @@ export function AllGamesTable({
             highlighted={!!g.id && highlightId === g.id}
             onToggle={() => toggle(g.id)}
             myName={myName}
+            opponentContext={opponentContext}
           />
         ))}
       </ul>
@@ -209,6 +218,7 @@ function GameRow({
   showPlayers,
   showOppMmr,
   myName,
+  opponentContext,
 }: {
   game: GameRowData;
   expanded: boolean;
@@ -217,6 +227,7 @@ function GameRow({
   showPlayers: boolean;
   showOppMmr: boolean;
   myName?: string | null;
+  opponentContext?: OpponentNavigationContext | null;
 }) {
   const expandable = !!game.id;
   const { macro, macroColour, resultBadge } = useGameMeta(game);
@@ -280,7 +291,10 @@ function GameRow({
         </td>
         <td className="px-2 py-1 text-right">{resultBadge}</td>
         <td className="px-2 py-1 text-right">
-          <GameDeepDiveLink gameId={game.id} />
+          <GameDeepDiveLink
+            gameId={game.id}
+            opponentContext={opponentContext}
+          />
         </td>
       </tr>
       {expanded && game.id ? (
@@ -331,14 +345,16 @@ function PlayersCell({
 function GameDeepDiveLink({
   gameId,
   mobile,
+  opponentContext,
 }: {
   gameId?: string | null;
   mobile?: boolean;
+  opponentContext?: OpponentNavigationContext | null;
 }) {
   if (!gameId) return null;
   return (
     <Link
-      href={`/app/game/${encodeURIComponent(gameId)}`}
+      href={gameAnalysisHref(gameId, opponentContext)}
       onClick={(e) => e.stopPropagation()}
       aria-label="Open game analysis: timeline, mechanics, build orders, and Ghost Build"
       title="Open game analysis"
@@ -430,12 +446,14 @@ function GameMobileCard({
   highlighted,
   onToggle,
   myName,
+  opponentContext,
 }: {
   game: GameRowData;
   expanded: boolean;
   highlighted: boolean;
   onToggle: () => void;
   myName?: string | null;
+  opponentContext?: OpponentNavigationContext | null;
 }) {
   const expandable = !!game.id;
   const { macro, macroColour, resultBadge } = useGameMeta(game);
@@ -519,7 +537,11 @@ function GameMobileCard({
       </div>
       {game.id ? (
         <div className="border-t border-border px-3 py-2">
-          <GameDeepDiveLink gameId={game.id} mobile />
+          <GameDeepDiveLink
+            gameId={game.id}
+            mobile
+            opponentContext={opponentContext}
+          />
         </div>
       ) : null}
       {expanded && game.id ? (

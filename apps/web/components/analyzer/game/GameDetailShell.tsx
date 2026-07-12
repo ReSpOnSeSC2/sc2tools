@@ -8,34 +8,48 @@ import { Icon } from "@/components/ui/Icon";
 import { fmtDate, fmtMinutes, fmtMmr, raceColour } from "@/lib/format";
 import { ShareGameButton } from "./ShareGameButton";
 import { isLossResult, isWinResult, type GameSummary } from "./types";
+import {
+  opponentProfileHref,
+  type OpponentNavigationContext,
+} from "@/lib/opponentNavigation";
 
 /**
  * GameDetailShell — header + responsive layout for the per-game
  * deep-dive page. The header answers "which game is this?" at a
  * glance: result, matchup, map, date, duration, MMRs, and the two
  * strategy labels (my build vs the opponent's classified strategy),
- * plus a back link to the analyzer dashboard.
+ * plus a back link to the source opponent dossier (or dashboard fallback).
  *
  * Layout: children stack vertically; the page decides what goes in.
  */
 export function GameDetailShell({
   game,
   children,
+  opponentContext,
 }: {
   game: GameSummary;
   children: ReactNode;
+  opponentContext?: OpponentNavigationContext | null;
 }) {
   const matchup = matchupLabel(game.myRace, game.opponent?.race);
   const oppName = (game.opponent?.displayName || "").trim() || "Opponent";
+  const backName =
+    (opponentContext?.displayName || "").trim() ||
+    (game.opponent?.displayName || "").trim() ||
+    "opponent";
+  const backHref = opponentProfileHref(opponentContext);
+  const backLabel = opponentContext
+    ? `Back to ${backName}`
+    : "Back to dashboard";
   return (
     <div className="space-y-6">
       <header className="space-y-3">
         <Link
-          href="/app"
+          href={backHref}
           className="inline-flex min-h-[44px] items-center gap-1.5 rounded text-caption font-medium text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
-          Back to dashboard
+          {backLabel}
         </Link>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
